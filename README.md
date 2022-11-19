@@ -24,3 +24,7 @@ RBAC-based And Policy-based Multi-Tenant Security Framework
 ## Modeling
 
 ![Modeling](document/design/assets/Modeling.png)
+
+## Thanks
+
+CoSec permission policy design refers to [AWS IAM](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html) .
