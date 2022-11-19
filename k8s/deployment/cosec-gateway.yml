@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cosec-gateway
+  labels:
+    app: cosec-gateway
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: cosec-gateway
+  template:
+    metadata:
+      labels:
+        app: cosec-gateway
+    spec:
+      containers:
+        - env:
+            - name: SPRING_REDIS_HOST
+              value: redis-uri:6379
+            - name: SPRING_REDIS_PASSWORD
+              value: redis-pwd
+            - name: SPRING_CLOUD_COSKY_NAMESPACE
+              value: '{dev}'
+            - name: TZ
+              value: Asia/Shanghai
+          image: ahoowang/cosec-gateway:lastVersion
+          livenessProbe:
+            httpGet:
+              port: 8080
+              path: /actuator/health
+          readinessProbe:
+            httpGet:
+              port: 8080
+              path: /actuator/health
+          startupProbe:
+            httpGet:
+              port: 8080
+              path: /actuator/health
+          name: cosec-gateway
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          resources:
+            limits:
+              cpu: "1"
+              memory: 2048Mi
+            requests:
+              cpu: 250m
+              memory: 1024Mi
+          volumeMounts:
+            - mountPath: /etc/localtime
+              name: volume-localtime
+      volumes:
+        - hostPath:
+            path: /etc/localtime
+            type: ""
+          name: volume-localtime
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cosec-gateway
+  labels:
+    app: cosec-gateway
+spec:
+  selector:
+    app: cosec-gateway
+  ports:
+    - name: rest
+      port: 80
+      protocol: TCP
+      targetPort: 8080
+
