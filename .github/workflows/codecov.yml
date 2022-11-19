@@ -3,11 +3,11 @@ on:
   push:
     paths-ignore:
       - 'document/**'
-      - 'cosec-gateway/**'
+      - 'cosec-gateway-server/**'
   pull_request:
     paths-ignore:
       - 'document/**'
-      - 'cosec-gateway/**'
+      - 'cosec-gateway-server/**'
 
 jobs:
   codecov:
