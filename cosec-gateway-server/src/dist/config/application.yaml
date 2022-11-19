@@ -1,0 +1,3 @@
+cosec:
+  authentication:
+    enabled: false

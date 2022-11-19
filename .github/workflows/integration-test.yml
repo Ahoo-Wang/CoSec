@@ -1,0 +1,177 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+name: Integration Test
+on: [ push, pull_request ]
+jobs:
+  cosec-core-test:
+    name: CoSec Core Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Test CoSec-Core
+        run: gradle cosec-core:clean cosec-core:check
+
+  cosec-jwt-test:
+    name: CoSec Jwt Test
+    needs: [ cosec-core-test ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Test CoSec-Jwt
+        run: gradle cosec-jwt:clean cosec-jwt:check
+
+  cosec-oauth-test:
+    name: CoSec OAuth Test
+    needs: [ cosec-core-test ]
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Test CoSec-OAuth
+        run: gradle cosec-oauth:clean cosec-oauth:check
+
+  cosec-redis-test:
+    name: CoSec Redis Test
+    needs: [ cosec-core-test ]
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Test CoSec-Redis
+        run: gradle cosec-redis:clean cosec-redis:check
+
+  cosec-webflux-test:
+    name: CoSec WebFlux Test
+    needs: [ cosec-core-test ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Test CoSec-WebFlux
+        run: gradle cosec-webflux:clean cosec-webflux:check
+
+  cosec-webmvc-test:
+    name: CoSec WebMvc Test
+    needs: [ cosec-core-test ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Test CoSec-WebMvc
+        run: gradle cosec-webmvc:clean cosec-webmvc:check
+
+  cosec-spring-boot-starter-test:
+    name: CoSec Spring Boot Starter Test
+    needs: [ cosec-core-test ]
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'adopt'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Test CoSec-Spring-Boot-Starter
+        run: gradle cosec-spring-boot-starter:clean cosec-spring-boot-starter:check

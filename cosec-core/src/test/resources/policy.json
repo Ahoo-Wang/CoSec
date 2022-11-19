@@ -1,0 +1,26 @@
+{
+  "name": "Anonymous",
+  "effect": "allow",
+  "description": "Anonymous",
+  "type": "global",
+  "statements": [
+    {
+      "actions": [
+        {
+          "path": "/",
+          "verbs": [
+            "*"
+          ]
+        }
+      ],
+//      "resources": [
+//        "my-app:*"
+//      ],
+//      "conditions": {
+//        "string_equals": {
+//          "aws:username": "my-user"
+//        }
+//      }
+    }
+  ]
+}

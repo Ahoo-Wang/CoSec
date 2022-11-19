@@ -1,0 +1,46 @@
+server:
+  port: 8080
+spring:
+  cloud:
+    gateway:
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            maxAge: 1800000
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+      routes:
+        - id: cosec-auth
+          uri: lb://cosec-auth
+          predicates:
+            - Path=/cosec-auth/**
+          filters:
+            - StripPrefix=1
+cosid:
+  namespace: ${spring.application.name}
+  machine:
+    enabled: true
+    distributor:
+      type: redis
+  snowflake:
+    enabled: true
+    share:
+      clock-sync: true
+      friendly: true
+      converter:
+        type: radix
+
+cosec:
+  authentication:
+    enabled: false
+  authorization:
+    jwt:
+      algorithm: hmac256
+      secret: FyN0Igd80Gas8stTavArGKOYnS9uLWGA_
+
+logging:
+  level:
+    root: info
