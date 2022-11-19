@@ -20,8 +20,6 @@ dependencies {
     api(platform("me.zhyd.oauth:JustAuth:1.16.5"))
     constraints {
         api("ognl:ognl:3.3.4")
-        api("org.mybatis:mybatis:3.5.11")
-        api("org.mybatis.spring.boot:mybatis-spring-boot-starter:2.2.2")
         api("com.auth0:java-jwt:4.2.1")
         api("com.google.guava:guava:31.1-jre")
         api("org.junit-pioneer:junit-pioneer:1.9.0")

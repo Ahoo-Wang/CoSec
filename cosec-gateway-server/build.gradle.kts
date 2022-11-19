@@ -58,7 +58,6 @@ application {
 dependencies {
     implementation(platform(project(":cosec-dependencies")))
     implementation("io.netty:netty-all")
-    implementation("com.google.guava:guava")
     implementation(project(":cosec-redis"))
     implementation(project(":cosec-webflux"))
     implementation(project(":cosec-gateway"))
