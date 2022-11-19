@@ -23,6 +23,10 @@ java {
         usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
         capability(group.toString(), "webflux-support", version.toString())
     }
+    registerFeature("gatewaySupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "gateway-support", version.toString())
+    }
     registerFeature("oauthSupport") {
         usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
         capability(group.toString(), "oauth-support", version.toString())
@@ -38,6 +42,7 @@ dependencies {
     api(project(":cosec-jwt"))
     "webmvcSupportImplementation"(project(":cosec-webmvc"))
     "webfluxSupportImplementation"(project(":cosec-webflux"))
+    "gatewaySupportImplementation"(project(":cosec-gateway"))
     "oauthSupportImplementation"(project(":cosec-oauth"))
     "cacheSupportImplementation"(project(":cosec-redis"))
     "cacheSupportImplementation"("me.ahoo.cocache:cocache-spring-boot-starter")

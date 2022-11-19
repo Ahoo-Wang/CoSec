@@ -18,10 +18,8 @@ import io.mockk.mockk
 import me.ahoo.cosec.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.jwt.Jwts
-import org.junit.jupiter.api.Assertions.*
 import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
-
+import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
 import javax.servlet.FilterChain
 import javax.servlet.http.HttpServletRequest

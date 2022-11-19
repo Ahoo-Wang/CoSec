@@ -10,9 +10,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.authorization
+package me.ahoo.cosec.spring.boot.starter.authorization.gateway
 
-import me.ahoo.cosec.CoSec
+import me.ahoo.cosec.spring.boot.starter.authorization.AuthorizationProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.ConstructorBinding
 
@@ -22,15 +22,9 @@ import org.springframework.boot.context.properties.ConstructorBinding
  * @author ahoo wang
  */
 @ConstructorBinding
-@ConfigurationProperties(prefix = CacheProperties.PREFIX)
-data class CacheProperties(val enabled: Boolean = true, val cacheKeyPrefix: CacheKeyPrefix = CacheKeyPrefix()) {
+@ConfigurationProperties(prefix = GatewayProperties.PREFIX)
+data class GatewayProperties(val enabled: Boolean = true) {
     companion object {
-        const val PREFIX: String = AuthorizationProperties.PREFIX + ".cache"
+        const val PREFIX: String = AuthorizationProperties.PREFIX + ".gateway"
     }
-
-    data class CacheKeyPrefix(
-        var globalPolicyIndex: String = CoSec.COSEC + ":global:policy",
-        var policy: String = CoSec.COSEC + ":policy:",
-        var rolePolicy: String = CoSec.COSEC + "role:policy:"
-    )
 }

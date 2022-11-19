@@ -10,7 +10,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.authorization
+package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cache.CacheConfig
 import me.ahoo.cache.CacheManager
@@ -31,6 +31,7 @@ import me.ahoo.cosec.redis.PolicyCache
 import me.ahoo.cosec.redis.RedisPermissionRepository
 import me.ahoo.cosec.redis.RolePolicyCache
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.starter.authorization.ConditionalOnAuthorizationEnabled
 import me.ahoo.cosid.IdGenerator
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration

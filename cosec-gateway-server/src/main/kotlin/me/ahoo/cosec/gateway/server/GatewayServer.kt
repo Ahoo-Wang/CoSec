@@ -10,19 +10,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.authorization
+package me.ahoo.cosec.gateway.server
 
-import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.SpringApplication
+import org.springframework.boot.autoconfigure.SpringBootApplication
 
 /**
- * Conditional On CoSec Enabled.
+ * Gateway Server .
  *
  * @author ahoo wang
  */
-@ConditionalOnProperty(value = [ConditionalOnCacheEnabled.ENABLED_KEY], matchIfMissing = true, havingValue = "true")
-annotation class ConditionalOnCacheEnabled {
-    companion object {
-        const val ENABLED_KEY = CacheProperties.PREFIX + ENABLED_SUFFIX_KEY
-    }
+@SpringBootApplication
+class GatewayServer
+
+fun main(args: Array<String>) {
+    SpringApplication.run(GatewayServer::class.java, *args)
 }

@@ -29,7 +29,7 @@ abstract class ReactiveSecurityFilter(
     val requestParser: RequestParser<ServerWebExchange>,
     val authorization: Authorization
 ) {
-    inline fun filterInternal(exchange: ServerWebExchange, crossinline chain: (ServerWebExchange) -> Mono<Void>): Mono<Void> {
+    fun filterInternal(exchange: ServerWebExchange, chain: (ServerWebExchange) -> Mono<Void>): Mono<Void> {
         return Mono.defer {
             val securityContext = securityContextParser.parse(exchange)
             val request = requestParser.parse(exchange)

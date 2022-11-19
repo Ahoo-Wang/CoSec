@@ -1,4 +1,4 @@
-# docker run --name cosec-gateway -d -p 8080:8080 --link redis -e SPRING_REDIS_URL=redis://redis:6379 ahoowang/cosec-gateway:0.8.0
+# docker run --name cosec-gateway-server -d -p 8080:8080 --link redis -e SPRING_REDIS_URL=redis://redis:6379 ahoowang/cosec-gateway-server:0.8.0
 
 ARG APP_NAME=cosec-gateway
 ARG WORK_HOME=/opt/${APP_NAME}
@@ -21,4 +21,4 @@ COPY --from=build ${WORK_HOME} ${WORK_HOME}
 WORKDIR ${WORK_HOME}
 EXPOSE 8080
 
-ENTRYPOINT ["bin/cosec-gateway"]
+ENTRYPOINT ["bin/cosec-gateway-server"]

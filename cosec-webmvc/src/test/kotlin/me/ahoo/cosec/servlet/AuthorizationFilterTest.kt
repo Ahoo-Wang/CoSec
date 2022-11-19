@@ -22,13 +22,10 @@ import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
-import org.junit.jupiter.api.Assertions.*
 import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
-
+import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpStatus
-import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 import javax.servlet.FilterChain
 import javax.servlet.http.HttpServletRequest

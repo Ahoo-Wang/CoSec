@@ -49,6 +49,5 @@ class SimpleRefreshTokenAuthenticationTest {
                     equalTo(TenantPrincipal.ANONYMOUS.tenant.tenantId)
                 )
             }.verifyComplete()
-
     }
 }

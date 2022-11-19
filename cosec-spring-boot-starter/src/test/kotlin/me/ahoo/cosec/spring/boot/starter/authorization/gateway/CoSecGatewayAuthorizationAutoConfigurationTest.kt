@@ -11,23 +11,21 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.authorization
+package me.ahoo.cosec.spring.boot.starter.authorization.gateway
 
-import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
-import me.ahoo.cosec.authorization.Authorization
-import me.ahoo.cosec.servlet.AuthorizationFilter
+import me.ahoo.cosec.gateway.AuthorizationGatewayFilter
+import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecCacheAutoConfiguration
-import me.ahoo.cosec.token.TokenConverter
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
-import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
+import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
-internal class CoSecAuthorizationAutoConfigurationTest {
+internal class CoSecGatewayAuthorizationAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
 
     @Test
@@ -38,23 +36,27 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 RedisAutoConfiguration::class.java,
                 CoCacheAutoConfiguration::class.java,
                 CoSecCacheAutoConfiguration::class.java,
-                CoSecAuthorizationAutoConfiguration::class.java
+                CoSecAuthorizationAutoConfiguration::class.java,
+                CoSecGatewayAuthorizationAutoConfiguration::class.java
             )
             .run { context: AssertableApplicationContext ->
-                assertThat(context)
-                    .hasSingleBean(AuthorizationProperties::class.java)
-                    .hasSingleBean(CoSecAuthorizationAutoConfiguration::class.java)
-                    .hasSingleBean(Algorithm::class.java)
-                    .hasSingleBean(TokenConverter::class.java)
-                    .hasSingleBean(Authorization::class.java)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.SERVLET_REQUEST_TENANT_ID_PARSER_BEAN_NAME)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.SERVLET_REQUEST_PARSER_BEAN_NAME)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.SERVLET_SECURITY_CONTEXT_PARSER_BEAN_NAME)
-                    .hasSingleBean(AuthorizationFilter::class.java)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.REACTIVE_REQUEST_TENANT_ID_PARSER_BEAN_NAME)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.REACTIVE_REQUEST_PARSER_BEAN_NAME)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.REACTIVE_SECURITY_CONTEXT_PARSER_BEAN_NAME)
-//                    .hasSingleBean(ReactiveAuthorizationFilter::class.java)
+                AssertionsForInterfaceTypes.assertThat(context)
+                    .hasSingleBean(GatewayProperties::class.java)
+                    .hasSingleBean(CoSecGatewayAuthorizationAutoConfiguration::class.java)
+                    .hasSingleBean(AuthorizationGatewayFilter::class.java)
+            }
+    }
+
+    @Test
+    fun contextLoadsWhenDisable() {
+        contextRunner
+            .withPropertyValues("${ConditionalOnGatewayEnabled.ENABLED_KEY}=false")
+            .withUserConfiguration(
+                CoSecGatewayAuthorizationAutoConfiguration::class.java
+            )
+            .run { context: AssertableApplicationContext ->
+                AssertionsForInterfaceTypes.assertThat(context)
+                    .doesNotHaveBean(GatewayProperties::class.java)
             }
     }
 }

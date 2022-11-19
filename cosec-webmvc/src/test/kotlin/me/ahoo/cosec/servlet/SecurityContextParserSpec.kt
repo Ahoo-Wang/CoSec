@@ -32,6 +32,7 @@ abstract class SecurityContextParserSpec {
     var jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, algorithm)
 
     abstract fun createSecurityContextParser(): SecurityContextParser<HttpServletRequest>
+
     @Test
     fun parseNone() {
         val request = mockk<HttpServletRequest>() {

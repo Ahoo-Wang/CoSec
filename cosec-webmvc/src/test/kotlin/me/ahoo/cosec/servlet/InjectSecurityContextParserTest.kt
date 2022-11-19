@@ -21,5 +21,4 @@ internal class InjectSecurityContextParserTest : SecurityContextParserSpec() {
     override fun createSecurityContextParser(): SecurityContextParser<HttpServletRequest> {
         return InjectSecurityContextParser
     }
-
 }

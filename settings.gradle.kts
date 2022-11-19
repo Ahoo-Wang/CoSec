@@ -23,6 +23,7 @@ include(":cosec-webmvc")
 include(":cosec-webflux")
 include(":cosec-spring-boot-starter")
 include(":cosec-gateway")
+include(":cosec-gateway-server")
 
 buildscript {
     repositories {

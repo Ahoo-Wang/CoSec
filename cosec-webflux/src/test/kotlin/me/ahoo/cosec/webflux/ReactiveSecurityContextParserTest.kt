@@ -14,14 +14,12 @@
 package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.context.SecurityContextParser
-import org.junit.jupiter.api.Assertions.*
-import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
+import org.junit.jupiter.api.Assertions.*
 import org.springframework.web.server.ServerWebExchange
 
 internal class ReactiveSecurityContextParserTest : SecurityContextParserSpec() {
     override fun createSecurityContextParser(): SecurityContextParser<ServerWebExchange> {
         return ReactiveSecurityContextParser(jwtTokenConverter)
     }
-
 }

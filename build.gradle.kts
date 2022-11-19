@@ -33,7 +33,7 @@ val bomProjects = setOf(
 )
 
 val serverProjects = setOf(
-    project(":cosec-gateway")
+    project(":cosec-gateway-server")
 )
 
 val publishProjects = subprojects - serverProjects

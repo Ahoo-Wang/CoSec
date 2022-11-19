@@ -18,8 +18,6 @@ import me.ahoo.cosec.servlet.InjectSecurityContextParser
 import me.ahoo.cosec.webflux.ReactiveInjectSecurityContextParser
 import me.ahoo.cosec.webflux.ReactiveInjectSecurityContextWebFilter
 import org.assertj.core.api.AssertionsForInterfaceTypes
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
@@ -37,6 +35,7 @@ internal class InjectSecurityContextAutoConfigurationTest {
                     .doesNotHaveBean(InjectSecurityContextAutoConfiguration::class.java)
             }
     }
+
     @Test
     fun contextLoadsWhenEnabled() {
         contextRunner

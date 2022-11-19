@@ -65,21 +65,21 @@ internal class JustAuthClientTest {
             every { login(oAuthClientCredentials) } returns mockk<AuthResponse<AuthUser>>() {
                 every { ok() } returns true
                 every { data } returns
-                        AuthUser(
-                            "uuid",
-                            "username",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            AuthUserGender.MALE,
-                            "",
-                            AuthToken(),
-                            JSONObject()
-                        )
+                    AuthUser(
+                        "uuid",
+                        "username",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        AuthUserGender.MALE,
+                        "",
+                        AuthToken(),
+                        JSONObject()
+                    )
             }
         }
         val authClient = JustAuthClient("clientId", authRequest, MockIdGenerator.INSTANCE)

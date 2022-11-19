@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.authorization
+package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.authorization.PermissionRepository
@@ -36,7 +36,7 @@ internal class CoSecCacheAutoConfigurationTest {
             .withUserConfiguration(
                 RedisAutoConfiguration::class.java,
                 CoCacheAutoConfiguration::class.java,
-                CoSecCacheAutoConfiguration::class.java,
+                CoSecCacheAutoConfiguration::class.java
             )
             .run { context: AssertableApplicationContext ->
                 assertThat(context)

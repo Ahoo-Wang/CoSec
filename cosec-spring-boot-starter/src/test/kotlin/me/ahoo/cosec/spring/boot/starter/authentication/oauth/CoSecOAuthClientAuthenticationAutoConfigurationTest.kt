@@ -44,13 +44,13 @@ internal class CoSecOAuthClientAuthenticationAutoConfigurationTest {
                 "${OAuthClientAuthenticationProperties.PREFIX}.registration.github.type=github",
                 "${OAuthClientAuthenticationProperties.PREFIX}.registration.github.client-id=client-id",
                 "${OAuthClientAuthenticationProperties.PREFIX}.registration.github.client-secret=client-secret",
-                "${OAuthClientAuthenticationProperties.PREFIX}.registration.github.redirect-uri=https://github.com/Ahoo-Wang/CoCache/oauth-client/callback/github",
+                "${OAuthClientAuthenticationProperties.PREFIX}.registration.github.redirect-uri=https://github.com/Ahoo-Wang/CoCache/oauth-client/callback/github"
             )
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
                 RedisAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,
-                CoSecOAuthClientAuthenticationAutoConfiguration::class.java,
+                CoSecOAuthClientAuthenticationAutoConfiguration::class.java
             )
             .run { context: AssertableApplicationContext ->
                 assertThat(context)
@@ -83,7 +83,7 @@ internal class CoSecOAuthClientAuthenticationAutoConfigurationTest {
             .withPropertyValues("${ConditionalOnAuthenticationEnabled.ENABLED_KEY}=false")
             .withUserConfiguration(
                 CoSecAuthenticationAutoConfiguration::class.java,
-                CoSecOAuthClientAuthenticationAutoConfiguration::class.java,
+                CoSecOAuthClientAuthenticationAutoConfiguration::class.java
             )
             .run { context: AssertableApplicationContext ->
                 assertThat(context)

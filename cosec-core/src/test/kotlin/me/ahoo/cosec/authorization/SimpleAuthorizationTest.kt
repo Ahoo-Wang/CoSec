@@ -45,7 +45,7 @@ internal class SimpleAuthorizationTest {
     fun authorizeWhenPrincipalNotMatchRequestTenantId() {
         val permissionRepository = mockk<PermissionRepository>()
         val authorization = SimpleAuthorization(permissionRepository)
-        val request = mockk<Request>(){
+        val request = mockk<Request>() {
             every { tenantId } returns "RequestTenantId"
         }
         val securityContext = mockk<SecurityContext>() {
@@ -125,7 +125,6 @@ internal class SimpleAuthorizationTest {
 
     @Test
     fun authorizeWhenGlobalPolicyIsEmptyAndPrincipalIsAllowAll() {
-
         val principalPolicy = mockk<Policy>() {
             every { statements } returns setOf(
                 StatementData(
@@ -182,7 +181,6 @@ internal class SimpleAuthorizationTest {
             .verifyComplete()
     }
 
-
     @Test
     fun authorizeWhenGlobalAndPrincipalPolicyIsEmptyAndRoleIsAllowAll() {
         val rolePolicy = mockk<Policy>() {
@@ -212,6 +210,7 @@ internal class SimpleAuthorizationTest {
             .expectNext(AuthorizeResult.ALLOW)
             .verifyComplete()
     }
+
     @Test
     fun authorizeWhenGlobalAndPrincipalPolicyIsEmptyAndRoleIsDenyAll() {
         val rolePolicy = mockk<Policy>() {

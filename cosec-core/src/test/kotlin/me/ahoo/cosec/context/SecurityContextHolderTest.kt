@@ -30,7 +30,5 @@ internal class SecurityContextHolderTest {
         Assertions.assertThrows(IllegalArgumentException::class.java) {
             SecurityContextHolder.requiredContext
         }
-
     }
-
 }

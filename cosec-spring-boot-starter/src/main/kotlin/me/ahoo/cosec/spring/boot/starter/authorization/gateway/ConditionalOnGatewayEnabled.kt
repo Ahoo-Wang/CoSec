@@ -10,15 +10,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package me.ahoo.cosec.spring.boot.starter.authorization.gateway
 
-package me.ahoo.cosec.servlet
+import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 
-import me.ahoo.cosec.context.SecurityContextParser
-import javax.servlet.http.HttpServletRequest
-
-internal class ServletRequestSecurityContextParserTest : SecurityContextParserSpec() {
-
-    override fun createSecurityContextParser(): SecurityContextParser<HttpServletRequest> {
-        return ServletRequestSecurityContextParser(jwtTokenConverter)
+/**
+ * Conditional On Gateway Enabled.
+ *
+ * @author ahoo wang
+ */
+@ConditionalOnProperty(value = [ConditionalOnGatewayEnabled.ENABLED_KEY], matchIfMissing = true, havingValue = "true")
+annotation class ConditionalOnGatewayEnabled {
+    companion object {
+        const val ENABLED_KEY = GatewayProperties.PREFIX + ENABLED_SUFFIX_KEY
     }
 }
