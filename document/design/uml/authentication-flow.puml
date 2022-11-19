@@ -1,0 +1,24 @@
+@startuml
+!include layout.puml
+title Authentication Flow
+
+actor User
+participant AuthenticationProvider
+participant Authentication
+participant TokenConverter
+participant SwitchTenantAuthentication
+
+
+User++
+
+User -> AuthenticationProvider++ : get(credentialsType)
+User <-- AuthenticationProvider-- : Authentication
+User -> Authentication++ : authenticate(Credentials)
+User <-- Authentication-- : Principal
+User -> TokenConverter++ : asToken(Principal)
+User <-- TokenConverter-- : Token
+opt
+    User -> SwitchTenantAuthentication++ : switchTenant(SwitchTenantCredentials)
+    User <-- SwitchTenantAuthentication-- : Target Tenant Principal
+end
+@enduml

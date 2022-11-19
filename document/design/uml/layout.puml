@@ -1,0 +1,11 @@
+@startuml
+
+!$watermark= "Wow: https://github.com/Ahoo-Wang/CoSec"
+
+header
+$watermark
+endheader
+
+center footer $watermark
+
+@enduml

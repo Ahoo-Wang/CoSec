@@ -1,0 +1,173 @@
+@startuml
+!include layout.puml
+
+title CoSec Modeling Class Diagram
+
+interface Named{
+    name: String
+}
+
+package tenant{
+    interface Tenant {
+       val tenantId: String
+       val isPlatform: Boolean
+    }
+    interface TenantCapable {
+        val tenant: Tenant
+    }
+
+    Tenant <--*  TenantCapable
+
+    note left of Tenant::isPlatform
+        Is it a root platform tenant?
+    end note
+}
+
+package policy{
+    enum PolicyType {
+        SYSTEM
+        CUSTOM
+        GLOBAL
+    }
+    interface Policy {
+        val id: String
+        val name: String
+        val type: PolicyType
+        val description: String
+        val tenantId:String
+        val statements: Set<Statement>
+    }
+    enum Effect {
+        ALLOW
+        DENY
+    }
+    interface RequestMatcher {
+        match(Request,SecurityContext): Boolean
+    }
+    interface ActionMatcher
+    interface ConditionMatcher
+    enum VerifyResult{
+        ALLOW
+        EXPLICIT_DENY
+        IMPLICIT_DENY
+    }
+    interface Statement{
+        val effect: Effect
+        val actions: Set<ActionMatcher>
+        val conditions: Set<ConditionMatcher>
+    }
+
+    interface PermissionVerifier {
+        verify(Request,SecurityContext): VerifyResult
+    }
+    interface PolicyEvaluator {
+        evaluate(Policy)
+    }
+    interface PolicyCapable {
+        val policies: Set<String>
+    }
+    RequestMatcher <|-- ActionMatcher
+    RequestMatcher <|-- ConditionMatcher
+    PermissionVerifier <|-- Statement
+    Effect <--*  Statement
+    ActionMatcher <--*  Statement
+    ConditionMatcher <--*  Statement
+    PolicyType <--*  Policy
+    Statement <--*  Policy
+
+    note top of PolicyEvaluator
+        Used to evaluate the effectiveness of the Policy
+    end note
+}
+
+package role{
+    interface Role {
+        val id: String
+        val name: String
+        val description: String
+        val tenantId:String
+    }
+
+    PolicyCapable <|-- Role
+}
+
+
+
+package principal{
+    interface RoleCapable {
+        val roles: Set<String>
+    }
+    interface CoSecPrincipal{
+        val id: String
+        val attrs: Map<String, String>
+        anonymous(): Boolean
+        authenticated(): Boolean
+    }
+    interface TenantPrincipal
+
+    TenantCapable <|-- TenantPrincipal
+    CoSecPrincipal <|-- TenantPrincipal
+    Named <|-- CoSecPrincipal
+    RoleCapable <|-- TenantPrincipal
+    PolicyCapable <|-- CoSecPrincipal
+    note right of RoleCapable::role
+        A set of roles
+    end note
+}
+
+package context{
+    interface SecurityContext {
+        val principal: CoSecPrincipal
+        setAttribute(String, Object): SecurityContext
+        getAttribute(String): T?
+        getRequiredAttribute(String): T
+    }
+    TenantCapable <|--  SecurityContext
+    CoSecPrincipal --* SecurityContext
+
+    interface Request<A : Any>{
+        val action: A
+    }
+
+    interface HttpRequest
+    TenantCapable <|-- Request
+    Request <|--  HttpRequest
+
+    note right of HttpRequest
+        HttpRequest::action
+        format: {url}:{method}
+    end note
+}
+
+package authorization{
+    interface AuthorizeResult {
+        val authorized: Boolean
+        val reason: String
+    }
+    interface Authorization {
+        authorize(Request,SecurityContext): Mono<AuthorizeResult>
+    }
+    Request <-[dashed]- Authorization
+    SecurityContext <-[dashed]- Authorization
+}
+
+package authentication{
+    interface Credentials
+    interface Authentication<C:Credentials,P:CoSecPrincipal>{
+       authenticate(C): Mono<P>
+       supportCredentials: Class<C>
+    }
+    interface AuthenticationProvider{
+       get(Class<Credentials>): A?
+       getRequired(Class<Credentials>): A
+       register(A): Unit
+       register(Class<C>, A): Unit
+       register(A): Unit
+       getRequired(Class<Credentials>): A
+    }
+    CoSecPrincipal <-[dashed]- Authentication
+    Credentials <-[dashed]- Authentication
+    Authentication <-* AuthenticationProvider
+}
+
+@enduml

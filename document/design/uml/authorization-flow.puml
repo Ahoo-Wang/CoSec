@@ -1,0 +1,71 @@
+@startuml
+!include layout.puml
+title Authorization Flow
+
+participant User
+participant AuthorizationFilter
+participant RequestParser
+participant TenantParser
+participant SecurityContextParser
+participant TokenConverter
+participant Authorization
+
+User++
+
+User -> AuthorizationFilter++: request()
+AuthorizationFilter -> RequestParser++: parse()
+RequestParser -> TenantParser++: parse()
+RequestParser <-- TenantParser--: Tenant
+AuthorizationFilter <-- RequestParser--: Request
+AuthorizationFilter -> SecurityContextParser++: parse()
+SecurityContextParser -> TokenConverter++: asPrincipal(AccessToken)
+SecurityContextParser <-- TokenConverter--: Principal
+AuthorizationFilter <-- SecurityContextParser--: SecurityContext
+AuthorizationFilter -> Authorization++: authorize(Request,SecurityContext)
+AuthorizationFilter <-- Authorization--: authorized?
+alt authorized is false
+    User <-- AuthorizationFilter: UNAUTHORIZED
+else authorized is true
+    AuthorizationFilter -> AuthorizationFilter ++ : proceed()
+    User <-- AuthorizationFilter--: response
+end
+@enduml
+
+@startuml
+!include layout.puml
+title Authorization.authorize(Request,SecurityContext)
+start
+:authorize(Request,SecurityContext);
+group Global Policies
+:get Global policies;
+:get Deny Statements;
+if (verify request using Deny policies) is (true) then
+  :deny request;
+  stop
+else (false)
+  :get Allow Statements;
+  if (verify request using Allow policies) is (true) then
+    :allow request;
+    stop
+  else (false)
+  :Role policies;
+  endif
+endif
+end group
+
+group Role Policies
+:get Role policies;
+:get Deny Statements;
+if (verify request using Deny policies) is (true) then
+  :deny request;
+else (false)
+  :get Allow Statements;
+  if (verify request using Allow policies) is (true) then
+    :allow request;
+  else (false)
+    :deny request;
+  endif
+endif
+end group
+stop
+@enduml
