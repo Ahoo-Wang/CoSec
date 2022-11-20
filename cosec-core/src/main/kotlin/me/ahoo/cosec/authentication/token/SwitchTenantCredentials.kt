@@ -14,7 +14,6 @@ package me.ahoo.cosec.authentication.token
 
 import me.ahoo.cosec.authentication.Credentials
 import me.ahoo.cosec.principal.CoSecPrincipal
-import javax.validation.constraints.NotBlank
 
 /**
  * Switch Tenant Credentials .
@@ -22,6 +21,6 @@ import javax.validation.constraints.NotBlank
  * @author ahoo wang
  */
 data class SwitchTenantCredentials(
-    @NotBlank val targetTenantId: String,
-    @NotBlank val principal: CoSecPrincipal
+    val targetTenantId: String,
+    val principal: CoSecPrincipal
 ) : Credentials
