@@ -17,7 +17,6 @@ dependencies {
     compileOnly("org.springframework:spring-expression")
     api("io.projectreactor:reactor-core")
     api("io.projectreactor.kotlin:reactor-kotlin-extensions")
-    implementation("javax.validation:validation-api")
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     testImplementation("ognl:ognl")

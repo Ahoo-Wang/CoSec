@@ -209,7 +209,7 @@ configure(publishProjects) {
         }
     }
     configure<SigningExtension> {
-        val isInCI = null != System.getenv("CI");
+        val isInCI = null != System.getenv("CI")
         if (isInCI) {
             val signingKeyId = System.getenv("SIGNING_KEYID")
             val signingKey = System.getenv("SIGNING_SECRETKEY")

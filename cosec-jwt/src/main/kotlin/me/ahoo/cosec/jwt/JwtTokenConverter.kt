@@ -20,7 +20,6 @@ import com.auth0.jwt.interfaces.JWTVerifier
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.principal.CoSecPrincipal
 import me.ahoo.cosec.principal.RoleCapable
-import me.ahoo.cosec.role.RoleConvert.asString
 import me.ahoo.cosec.tenant.TenantCapable
 import me.ahoo.cosec.token.AccessToken
 import me.ahoo.cosec.token.CompositeToken
@@ -58,7 +57,7 @@ class JwtTokenConverter(
             .withJWTId(accessTokenId)
             .withSubject(principal.id)
             .withClaim(CoSecPrincipal.NAME_KEY, principal.name)
-            .withClaim(RoleCapable.ROLE_KEY, asString(principal.roles))
+            .withClaim(RoleCapable.ROLE_KEY, principal.roles.joinToString(Jwts.ROLE_DELIMITER))
             .withPayload(payloadClaims)
             .withIssuedAt(now)
             .withExpiresAt(accessTokenExp)

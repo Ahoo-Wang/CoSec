@@ -20,7 +20,6 @@ import me.ahoo.cosec.policy.PolicyCapable
 import me.ahoo.cosec.principal.CoSecPrincipal
 import me.ahoo.cosec.principal.RoleCapable
 import me.ahoo.cosec.principal.SimplePrincipal
-import me.ahoo.cosec.role.RoleConvert.asSet
 import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.SimpleAccessToken
 import me.ahoo.cosec.token.SimpleTokenPrincipal
@@ -34,6 +33,7 @@ import me.ahoo.cosec.token.TokenTenantPrincipal
  * @author ahoo wang
  */
 object Jwts {
+    const val ROLE_DELIMITER = ","
     const val AUTHORIZATION_KEY = "authorization"
     const val TOKEN_PREFIX = "Bearer "
     private val jwtParser = JWT()
@@ -73,10 +73,12 @@ object Jwts {
         val attrs = decodedAccessToken
             .claims
             .filter { !isRegisteredClaim(it.key) }
+
         val policyStr = decodedAccessToken.getClaim(PolicyCapable.POLICY_KEY).asString()
-        val policies = if (policyStr.isNullOrEmpty()) emptySet() else asSet(policyStr)
+
+        val policies = if (policyStr.isNullOrEmpty()) emptySet() else policyStr.split(ROLE_DELIMITER).toSet()
         val rolesStr = decodedAccessToken.getClaim(RoleCapable.ROLE_KEY).asString()
-        val roles = if (rolesStr.isNullOrEmpty()) emptySet() else asSet(rolesStr)
+        val roles = if (rolesStr.isNullOrEmpty()) emptySet() else rolesStr.split(ROLE_DELIMITER).toSet()
         val principal = SimplePrincipal(principalId, name, policies, roles, attrs)
         val tenantId = decodedAccessToken.getClaim(RequestTenantIdParser.TENANT_ID_KEY).asString()
         val tokenPrincipal = SimpleTokenPrincipal(accessTokenId, principal)
