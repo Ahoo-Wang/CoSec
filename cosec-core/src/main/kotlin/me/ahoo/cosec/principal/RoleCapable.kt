@@ -23,8 +23,8 @@ interface RoleCapable {
      * relation:
      * <pre>
      * [CoSecPrincipal] 1:N [me.ahoo.cosec.tenant.Tenant]
-     * [me.ahoo.cosec.tenant.Tenant] 1:N [me.ahoo.cosec.role.Role]
-     * [CoSecPrincipal] 1:N [me.ahoo.cosec.role.Role]
+     * [me.ahoo.cosec.tenant.Tenant] 1:N Role
+     * [CoSecPrincipal] 1:N Role
      </pre> *
      *
      * @return role ids..
