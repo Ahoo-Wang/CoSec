@@ -20,7 +20,7 @@ import me.ahoo.cosec.principal.CoSecPrincipal
  *
  * @author ahoo wang
  */
-data class SwitchTenantCredentials(
-    val targetTenantId: String,
+interface SwitchTenantCredentials : Credentials {
+    val targetTenantId: String
     val principal: CoSecPrincipal
-) : Credentials
+}
