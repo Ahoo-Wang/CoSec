@@ -16,7 +16,6 @@ package me.ahoo.cosec.oauth.client
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.oauth.OAuthUser
-import me.ahoo.cosec.util.Internals
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
@@ -48,8 +47,12 @@ internal class OAuthClientAuthenticationTest {
         authentication.authenticate(OAuthClientCredentials("clientId"))
             .test()
             .consumeNextWith {
-                assertThat(it.id, `is`(Internals.format("clientId") + "id"))
-                assertThat(it.name, `is`("username"))
+                assertThat(
+                    it.id, `is`("id@clientId")
+                )
+                assertThat(
+                    it.name, `is`("username")
+                )
             }
             .verifyComplete()
     }

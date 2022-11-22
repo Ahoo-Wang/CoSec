@@ -10,11 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.util
+package me.ahoo.cosec.internal
 
-import me.ahoo.cosec.util.Internals.format
-import me.ahoo.cosec.util.Internals.isInternal
-import me.ahoo.cosec.util.Internals.parseRaw
+import me.ahoo.cosec.internal.InternalIds.isWrapped
+import me.ahoo.cosec.internal.InternalIds.unwrap
+import me.ahoo.cosec.internal.InternalIds.wrap
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Assertions
@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test
  *
  * @author ahoo wang
  */
-internal class InternalsTest {
+internal class InternalIdsTest {
     @Test
     fun compare() {
         Assertions.assertTrue('(' < '0')
@@ -34,20 +34,20 @@ internal class InternalsTest {
 
     @Test
     fun format() {
-        assertThat(format("id"), equalTo("(id)"))
+        assertThat(wrap("id"), equalTo("(id)"))
     }
 
     @Test
     fun parseRawId() {
-        assertThat(parseRaw("(id)"), equalTo("id"))
-        Assertions.assertEquals("id", parseRaw("(id)"))
+        assertThat(unwrap("(id)"), equalTo("id"))
+        Assertions.assertEquals("id", unwrap("(id)"))
     }
 
     @Test
     fun isInternal() {
-        assertThat(isInternal("(id)"), equalTo(true))
-        assertThat(isInternal("(i)"), equalTo(true))
-        assertThat(isInternal("()"), equalTo(false))
-        assertThat(isInternal("("), equalTo(false))
+        assertThat(isWrapped("(id)"), equalTo(true))
+        assertThat(isWrapped("(i)"), equalTo(true))
+        assertThat(isWrapped("()"), equalTo(false))
+        assertThat(isWrapped("("), equalTo(false))
     }
 }

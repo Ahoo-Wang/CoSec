@@ -14,7 +14,6 @@
 package me.ahoo.cosec.oauth.client
 
 import me.ahoo.cosec.oauth.OAuthUser
-import me.ahoo.cosec.util.Internals
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
@@ -28,7 +27,7 @@ internal class DirectOAuthClientPrincipalConverterTest {
         DirectOAuthClientPrincipalConverter.convert("clientId", authUser)
             .test()
             .consumeNextWith {
-                assertThat(it.id, `is`(Internals.format("clientId") + "id"))
+                assertThat(it.id, `is`("id@clientId"))
                 assertThat(it.name, `is`("username"))
             }
             .verifyComplete()

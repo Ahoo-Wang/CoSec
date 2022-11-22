@@ -14,7 +14,6 @@ package me.ahoo.cosec.oauth.client
 
 import me.ahoo.cosec.oauth.OAuthUser
 import me.ahoo.cosec.principal.CoSecPrincipal
-import me.ahoo.cosec.util.Internals.format
 import reactor.core.publisher.Mono
 
 /**
@@ -27,7 +26,6 @@ fun interface OAuthClientPrincipalConverter {
     fun convert(client: String, authUser: OAuthUser): Mono<CoSecPrincipal>
 
     companion object {
-        @JvmField
-        val OAUTH_CLIENT = format("oauth_client")
+        const val OAUTH_CLIENT = "cosec_oauth_client"
     }
 }

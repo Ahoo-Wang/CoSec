@@ -13,7 +13,7 @@
 package me.ahoo.cosec.tenant
 
 import me.ahoo.cosec.CoSec
-import me.ahoo.cosec.util.Internals.format
+import me.ahoo.cosec.internal.InternalIds.wrap
 
 /**
  * Tenant for splitting customer boundaries horizontally.
@@ -41,13 +41,13 @@ interface Tenant {
          * 根平台租户ID.
          */
         @JvmField
-        val PLATFORM_TENANT_ID = format("platform")
+        val PLATFORM_TENANT_ID = wrap("platform")
 
         @JvmField
         val PLATFORM: Tenant = SimpleTenant(PLATFORM_TENANT_ID)
 
         @JvmField
-        val DEFAULT_TENANT_ID = CoSec.EMPTY
+        val DEFAULT_TENANT_ID = CoSec.DEFAULT
 
         @JvmField
         val DEFAULT: Tenant = SimpleTenant(DEFAULT_TENANT_ID)

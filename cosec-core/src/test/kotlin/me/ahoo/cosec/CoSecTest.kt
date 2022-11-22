@@ -24,8 +24,8 @@ import org.junit.jupiter.api.Test
 internal class CoSecTest {
     @Test
     fun test() {
-        val reg = Regex("^order:[a-z]*:PUT$", RegexOption.IGNORE_CASE)
-
-        assertThat(reg.matches("order:create:PUT"), equalTo(true))
+        assertThat(CoSec.COSEC, equalTo("cosec"))
+        assertThat(CoSec.COSEC_PREFIX, equalTo("cosec."))
+        assertThat(CoSec.DEFAULT, equalTo("(0)"))
     }
 }

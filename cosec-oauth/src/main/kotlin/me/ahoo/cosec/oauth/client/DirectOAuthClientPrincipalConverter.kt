@@ -15,7 +15,6 @@ package me.ahoo.cosec.oauth.client
 import me.ahoo.cosec.oauth.OAuthUser
 import me.ahoo.cosec.principal.CoSecPrincipal
 import me.ahoo.cosec.principal.SimplePrincipal
-import me.ahoo.cosec.util.Internals.format
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
@@ -29,7 +28,7 @@ object DirectOAuthClientPrincipalConverter : OAuthClientPrincipalConverter {
     override fun convert(client: String, authUser: OAuthUser): Mono<CoSecPrincipal> {
         authUser.rawInfo[OAuthClientPrincipalConverter.OAUTH_CLIENT] = client
         return SimplePrincipal(
-            id = getCoSecClientUserId(client, authUser),
+            id = asClientUserId(client, authUser),
             name = authUser.username,
             policies = emptySet(),
             roles = emptySet(),
@@ -38,13 +37,13 @@ object DirectOAuthClientPrincipalConverter : OAuthClientPrincipalConverter {
     }
 
     /**
-     * format:{(client)authUser.getId()} as unique id.
+     * format: [OAuthUser.id]@[client] as unique id.
      *
      * @param client client
      * @param authUser authUser
      * @return unique id
      */
-    private fun getCoSecClientUserId(client: String, authUser: OAuthUser): String {
-        return format(client) + authUser.id
+    private fun asClientUserId(client: String, authUser: OAuthUser): String {
+        return authUser.id + "@" + client
     }
 }

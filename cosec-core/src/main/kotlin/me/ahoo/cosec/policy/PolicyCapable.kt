@@ -22,7 +22,7 @@ interface PolicyCapable {
      * get policy ids.
      * relation:
      *
-     * [CoSecPrincipal] 1:N [me.ahoo.cosec.policy.Policy]
+     * [me.ahoo.cosec.principal.CoSecPrincipal] 1:N [me.ahoo.cosec.policy.Policy]
      *
      * @return policy ids..
      */
