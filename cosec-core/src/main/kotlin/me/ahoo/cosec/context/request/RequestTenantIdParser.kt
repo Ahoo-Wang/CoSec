@@ -12,6 +12,8 @@
  */
 package me.ahoo.cosec.context.request
 
+import me.ahoo.cosec.tenant.Tenant
+
 /**
  * Request Tenant Id Parser.
  *
@@ -23,4 +25,17 @@ fun interface RequestTenantIdParser<R> {
     companion object {
         const val TENANT_ID_KEY = "tenant_id"
     }
+}
+
+abstract class AbstractRequestTenantIdParser<R> : RequestTenantIdParser<R> {
+    override fun parse(request: R): String {
+        val tenantId = parseTenantId(request)
+        return if (tenantId.isNullOrEmpty()) {
+            Tenant.DEFAULT_TENANT_ID
+        } else {
+            tenantId
+        }
+    }
+
+    abstract fun parseTenantId(request: R): String?
 }

@@ -14,20 +14,19 @@ package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.context.request.AbstractRequestTenantIdParser
 import me.ahoo.cosec.context.request.RequestTenantIdParser
-import org.springframework.web.server.ServerWebExchange
+import org.springframework.web.reactive.function.server.ServerRequest
 
 /**
- * ReactiveRequestTenantIdParser .
+ * ServerRequestTenantIdParser .
  *
  * @author ahoo wang
  */
-class ReactiveRequestTenantIdParser(private val tenantIdKey: String = RequestTenantIdParser.TENANT_ID_KEY) :
-    AbstractRequestTenantIdParser<ServerWebExchange>() {
-
-    override fun parseTenantId(request: ServerWebExchange): String? = request.request.headers.getFirst(tenantIdKey)
+class ServerRequestTenantIdParser(private val tenantIdKey: String = RequestTenantIdParser.TENANT_ID_KEY) :
+    AbstractRequestTenantIdParser<ServerRequest>() {
+    override fun parseTenantId(request: ServerRequest): String? = request.headers().firstHeader(tenantIdKey)
 
     companion object {
         @JvmField
-        val INSTANCE = ReactiveRequestTenantIdParser()
+        val INSTANCE = ServerRequestTenantIdParser()
     }
 }

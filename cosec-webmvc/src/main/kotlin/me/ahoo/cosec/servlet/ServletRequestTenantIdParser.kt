@@ -12,8 +12,8 @@
  */
 package me.ahoo.cosec.servlet
 
+import me.ahoo.cosec.context.request.AbstractRequestTenantIdParser
 import me.ahoo.cosec.context.request.RequestTenantIdParser
-import me.ahoo.cosec.tenant.Tenant
 import javax.servlet.http.HttpServletRequest
 
 /**
@@ -22,15 +22,9 @@ import javax.servlet.http.HttpServletRequest
  * @author ahoo wang
  */
 class ServletRequestTenantIdParser(private val tenantIdKey: String = RequestTenantIdParser.TENANT_ID_KEY) :
-    RequestTenantIdParser<HttpServletRequest> {
-    override fun parse(request: HttpServletRequest): String {
-        val tenantId = request.getHeader(tenantIdKey)
-        return if (tenantId.isNullOrEmpty()) {
-            Tenant.DEFAULT_TENANT_ID
-        } else {
-            tenantId
-        }
-    }
+    AbstractRequestTenantIdParser<HttpServletRequest>() {
+
+    override fun parseTenantId(request: HttpServletRequest): String? = request.getHeader(tenantIdKey)
 
     companion object {
         @JvmField
