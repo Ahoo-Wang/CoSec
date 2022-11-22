@@ -23,7 +23,7 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.policy.ConditionMatcher
 import me.ahoo.cosec.policy.ConditionMatcherFactory
 
-class JsonConditionMatcherSerializer : StdSerializer<ConditionMatcher>(ConditionMatcher::class.java) {
+object JsonConditionMatcherSerializer : StdSerializer<ConditionMatcher>(ConditionMatcher::class.java) {
     override fun serialize(value: ConditionMatcher, gen: JsonGenerator, provider: SerializerProvider) {
         gen.writeStartObject()
         gen.writeStringField(MATCHER_TYPE_KEY, value.type)
@@ -34,7 +34,7 @@ class JsonConditionMatcherSerializer : StdSerializer<ConditionMatcher>(Condition
     }
 }
 
-class JsonConditionMatcherDeserializer : StdDeserializer<ConditionMatcher>(ConditionMatcher::class.java) {
+object JsonConditionMatcherDeserializer : StdDeserializer<ConditionMatcher>(ConditionMatcher::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): ConditionMatcher {
         return p.codec.readTree<JsonNode>(p).let {
             ConditionMatcherFactory.create(

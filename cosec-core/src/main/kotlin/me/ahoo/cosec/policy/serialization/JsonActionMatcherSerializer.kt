@@ -23,7 +23,7 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.policy.ActionMatcher
 import me.ahoo.cosec.policy.ActionMatcherFactory
 
-class JsonActionMatcherSerializer : StdSerializer<ActionMatcher>(ActionMatcher::class.java) {
+object JsonActionMatcherSerializer : StdSerializer<ActionMatcher>(ActionMatcher::class.java) {
     override fun serialize(value: ActionMatcher, gen: JsonGenerator, provider: SerializerProvider) {
         gen.writeStartObject()
         gen.writeStringField(MATCHER_TYPE_KEY, value.type)
@@ -34,7 +34,7 @@ class JsonActionMatcherSerializer : StdSerializer<ActionMatcher>(ActionMatcher::
     }
 }
 
-class JsonActionMatcherDeserializer : StdDeserializer<ActionMatcher>(ActionMatcher::class.java) {
+object JsonActionMatcherDeserializer : StdDeserializer<ActionMatcher>(ActionMatcher::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): ActionMatcher {
         return p.codec.readTree<JsonNode>(p).let {
             ActionMatcherFactory.create(

@@ -21,16 +21,16 @@ import me.ahoo.cosec.policy.Statement
 
 class CoSecModule : SimpleModule() {
     init {
-        addSerializer(ActionMatcher::class.java, JsonActionMatcherSerializer())
-        addDeserializer(ActionMatcher::class.java, JsonActionMatcherDeserializer())
-        addSerializer(ConditionMatcher::class.java, JsonConditionMatcherSerializer())
-        addDeserializer(ConditionMatcher::class.java, JsonConditionMatcherDeserializer())
-        addSerializer(Statement::class.java, JsonStatementSerializer())
-        addDeserializer(Statement::class.java, JsonStatementDeserializer())
-        addSerializer(Statement::class.java, JsonStatementSerializer())
-        addDeserializer(Statement::class.java, JsonStatementDeserializer())
-        addSerializer(Policy::class.java, JsonPolicySerializer())
-        addDeserializer(Policy::class.java, JsonPolicyDeserializer())
+        addSerializer(ActionMatcher::class.java, JsonActionMatcherSerializer)
+        addDeserializer(ActionMatcher::class.java, JsonActionMatcherDeserializer)
+        addSerializer(ConditionMatcher::class.java, JsonConditionMatcherSerializer)
+        addDeserializer(ConditionMatcher::class.java, JsonConditionMatcherDeserializer)
+        addSerializer(Statement::class.java, JsonStatementSerializer)
+        addDeserializer(Statement::class.java, JsonStatementDeserializer)
+        addSerializer(Statement::class.java, JsonStatementSerializer)
+        addDeserializer(Statement::class.java, JsonStatementDeserializer)
+        addSerializer(Policy::class.java, JsonPolicySerializer)
+        addDeserializer(Policy::class.java, JsonPolicyDeserializer)
     }
 }
 

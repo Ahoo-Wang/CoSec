@@ -30,7 +30,7 @@ const val STATEMENT_EFFECT_KEY = "effect"
 const val STATEMENT_ACTIONS_KEY = "actions"
 const val STATEMENT_CONDITIONS_KEY = "conditions"
 
-class JsonStatementSerializer : StdSerializer<Statement>(Statement::class.java) {
+object JsonStatementSerializer : StdSerializer<Statement>(Statement::class.java) {
     override fun serialize(value: Statement, gen: JsonGenerator, provider: SerializerProvider) {
         gen.writeStartObject()
         gen.writeStringField(STATEMENT_EFFECT_KEY, value.effect.name)
@@ -52,7 +52,7 @@ class JsonStatementSerializer : StdSerializer<Statement>(Statement::class.java) 
     }
 }
 
-class JsonStatementDeserializer : StdDeserializer<Statement>(Statement::class.java) {
+object JsonStatementDeserializer : StdDeserializer<Statement>(Statement::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): Statement {
         val jsonNode = p.codec.readTree<JsonNode>(p)
         val actions = jsonNode.has(STATEMENT_ACTIONS_KEY).let { hasActions ->

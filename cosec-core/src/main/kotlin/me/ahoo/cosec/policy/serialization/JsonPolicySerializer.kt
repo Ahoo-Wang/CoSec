@@ -33,7 +33,7 @@ const val POLICY_DESCRIPTION_KEY = "description"
 const val POLICY_TYPE_KEY = "type"
 const val POLICY_STATEMENTS_KEY = "statements"
 
-class JsonPolicySerializer : StdSerializer<Policy>(Policy::class.java) {
+object JsonPolicySerializer : StdSerializer<Policy>(Policy::class.java) {
     override fun serialize(value: Policy, gen: JsonGenerator, provider: SerializerProvider) {
         gen.writeStartObject()
         gen.writeStringField(POLICY_ID_KEY, value.id)
@@ -53,7 +53,7 @@ class JsonPolicySerializer : StdSerializer<Policy>(Policy::class.java) {
     }
 }
 
-class JsonPolicyDeserializer : StdDeserializer<Policy>(Policy::class.java) {
+object JsonPolicyDeserializer : StdDeserializer<Policy>(Policy::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): Policy {
         val jsonNode = p.codec.readTree<JsonNode>(p)
         val statements = jsonNode.has(POLICY_STATEMENTS_KEY).let { hasStatements ->
