@@ -16,7 +16,6 @@ import me.ahoo.cosec.principal.CoSecPrincipal
 import me.ahoo.cosec.principal.TenantPrincipal
 import me.ahoo.cosec.tenant.Tenant
 import me.ahoo.cosec.tenant.TenantCapable
-import me.ahoo.cosec.util.Internals.format
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import javax.annotation.concurrent.ThreadSafe
@@ -32,8 +31,8 @@ class SecurityContext(
     override val tenant: Tenant = principal.tenant
 ) : TenantCapable {
     companion object {
+        const val KEY = "COSEC_SECURITY_CONTEXT"
         val ANONYMOUS: SecurityContext = SecurityContext(TenantPrincipal.ANONYMOUS)
-        val KEY = format("COSEC_SECURITY_CONTEXT")
     }
 
     private val attributes: MutableMap<String, Any> = ConcurrentHashMap()

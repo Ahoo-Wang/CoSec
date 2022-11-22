@@ -23,6 +23,6 @@ import me.ahoo.cosec.principal.CoSecPrincipal
 interface TokenPrincipal : TokenIdCapable, CoSecPrincipal {
     companion object {
         @JvmField
-        val ANONYMOUS: TokenPrincipal = SimpleTokenPrincipal(CoSec.EMPTY, CoSecPrincipal.ANONYMOUS)
+        val ANONYMOUS: TokenPrincipal = SimpleTokenPrincipal(CoSec.DEFAULT, CoSecPrincipal.ANONYMOUS)
     }
 }

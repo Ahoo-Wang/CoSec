@@ -10,39 +10,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.util
+package me.ahoo.cosec.internal
 
 /**
- * Internals .
+ * Internal Id Tool .
  *
  * @author ahoo wang
  */
-object Internals {
+object InternalIds {
     /**
-     * 为了避免排序问题选择'(' 作为前缀.
+     * 为了避免排序问题选择 `(` 作为前缀.
      * `'('<'0'`
      */
-    const val PREFIX = "("
+    private const val PREFIX = "("
 
     /**
-     * 为了避免排序问题选择')' 作为后缀.
+     * 为了避免排序问题选择 `)` 作为后缀.
      * `')'<'0'`
      */
     private const val SUFFIX = ")"
 
     @JvmStatic
-    fun format(raw: String): String {
+    fun wrap(raw: String): String {
         return "$PREFIX$raw$SUFFIX"
     }
 
     @JvmStatic
-    fun parseRaw(wrapped: String): String {
-        require(isInternal(wrapped)) { "wrapped:[$wrapped] is not internal." }
+    fun unwrap(wrapped: String): String {
+        require(isWrapped(wrapped)) { "wrapped:[$wrapped] is not internal." }
         return wrapped.substring(PREFIX.length, wrapped.length - 1)
     }
 
     @JvmStatic
-    fun isInternal(wrapped: String): Boolean {
+    fun isWrapped(wrapped: String): Boolean {
         return (wrapped.length > 2 && wrapped.startsWith(PREFIX) && wrapped.endsWith(SUFFIX))
     }
 }

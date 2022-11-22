@@ -12,8 +12,6 @@
  */
 package me.ahoo.cosec
 
-import me.ahoo.cosec.util.Internals
-
 /**
  * Named .
  *
@@ -21,11 +19,4 @@ import me.ahoo.cosec.util.Internals
  */
 interface Named {
     val name: String
-
-    companion object {
-
-        const val NAME_DELIMITER = ":"
-
-        val NAME_ALL = Internals.format("all")
-    }
 }

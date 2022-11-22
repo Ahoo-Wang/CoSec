@@ -13,8 +13,8 @@
 package me.ahoo.cosec.principal
 
 import me.ahoo.cosec.CoSec
+import me.ahoo.cosec.internal.InternalIds.wrap
 import me.ahoo.cosec.policy.PolicyCapable
-import me.ahoo.cosec.util.Internals.format
 import java.security.Principal
 
 /**
@@ -49,9 +49,9 @@ interface CoSecPrincipal : Principal, PolicyCapable, RoleCapable {
         //endregion
         //region ANONYMOUS 未认证状态下的用户
 
-        val ANONYMOUS_ID = CoSec.EMPTY
+        val ANONYMOUS_ID = CoSec.DEFAULT
 
-        val ANONYMOUS_NAME = format("anonymous")
+        val ANONYMOUS_NAME = wrap("anonymous")
 
         val ANONYMOUS: CoSecPrincipal = SimplePrincipal(ANONYMOUS_ID, ANONYMOUS_NAME)
 

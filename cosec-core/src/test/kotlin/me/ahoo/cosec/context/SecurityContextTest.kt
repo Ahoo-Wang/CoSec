@@ -26,7 +26,7 @@ internal class SecurityContextTest {
     fun test() {
         val context = SecurityContext(CoSecPrincipal.ANONYMOUS)
         context.setAttribute("key", "value")
-        assertThat(context.getAttribute("key"), `is`("value"))
+        assertThat(context.getAttribute<String>("key"), `is`("value"))
         assertThat(context.getRequiredAttribute("key"), `is`("value"))
         Assertions.assertThrows(IllegalArgumentException::class.java) {
             context.getRequiredAttribute("key1")

@@ -20,7 +20,7 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformJvmPlugin
 
 plugins {
     id("io.github.gradle-nexus.publish-plugin")
-    id("io.gitlab.arturbosch.detekt").version("1.21.0")
+    id("io.gitlab.arturbosch.detekt").version("1.22.0")
     kotlin("jvm") version "1.7.21"
     id("org.jetbrains.dokka") version "1.7.20"
     id("me.champeau.jmh")
@@ -66,7 +66,6 @@ configure(bomProjects) {
 configure(libraryProjects) {
     apply<DetektPlugin>()
     configure<DetektExtension> {
-        toolVersion = "1.21.0"
         source = files(DEFAULT_SRC_DIR_JAVA, DEFAULT_SRC_DIR_KOTLIN)
         config = files("${rootProject.rootDir}/config/detekt/detekt.yml")
         buildUponDefaultConfig = true
