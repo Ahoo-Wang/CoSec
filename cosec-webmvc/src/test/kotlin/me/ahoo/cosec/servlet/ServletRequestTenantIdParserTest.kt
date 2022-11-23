@@ -27,8 +27,19 @@ internal class ServletRequestTenantIdParserTest {
     @Test
     fun parse() {
         val servletRequestTenantIdParser = ServletRequestTenantIdParser()
-        val request = mockk<HttpServletRequest>() {
+        val request = mockk<HttpServletRequest> {
             every { getHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
+        }
+        val tenantId = servletRequestTenantIdParser.parse(request)
+        assertThat(tenantId, equalTo("tenantId"))
+    }
+
+    @Test
+    fun parseFromQueryString() {
+        val servletRequestTenantIdParser = ServletRequestTenantIdParser()
+        val request = mockk<HttpServletRequest>() {
+            every { getHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns null
+            every { queryString } returns "${RequestTenantIdParser.TENANT_ID_KEY}=tenantId"
         }
         val tenantId = servletRequestTenantIdParser.parse(request)
         assertThat(tenantId, equalTo("tenantId"))
@@ -39,6 +50,7 @@ internal class ServletRequestTenantIdParserTest {
         val servletRequestTenantIdParser = ServletRequestTenantIdParser()
         val request = mockk<HttpServletRequest>() {
             every { getHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns null
+            every { queryString } returns ""
         }
         val tenantId = servletRequestTenantIdParser.parse(request)
         assertThat(tenantId, equalTo(Tenant.DEFAULT_TENANT_ID))

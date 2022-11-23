@@ -29,11 +29,11 @@ fun interface RequestTenantIdParser<R> {
 
 abstract class AbstractRequestTenantIdParser<R> : RequestTenantIdParser<R> {
     override fun parse(request: R): String {
-        val tenantId = parseTenantId(request)
-        return if (tenantId.isNullOrEmpty()) {
-            Tenant.DEFAULT_TENANT_ID
-        } else {
-            tenantId
+        return parseTenantId(request).let {
+            if (it.isNullOrEmpty()) {
+                return Tenant.DEFAULT_TENANT_ID
+            }
+            it
         }
     }
 

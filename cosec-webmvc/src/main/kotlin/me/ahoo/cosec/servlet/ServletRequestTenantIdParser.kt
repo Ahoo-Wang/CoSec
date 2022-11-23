@@ -24,7 +24,18 @@ import javax.servlet.http.HttpServletRequest
 class ServletRequestTenantIdParser(private val tenantIdKey: String = RequestTenantIdParser.TENANT_ID_KEY) :
     AbstractRequestTenantIdParser<HttpServletRequest>() {
 
-    override fun parseTenantId(request: HttpServletRequest): String? = request.getHeader(tenantIdKey)
+    override fun parseTenantId(request: HttpServletRequest): String? {
+        val tenantId = request.getHeader(tenantIdKey)
+        if (tenantId.isNullOrEmpty()) {
+            request.queryString?.let { queryString ->
+                val queryParam = queryString.split("&").firstOrNull { it.startsWith("$tenantIdKey=") }
+                if (queryParam != null) {
+                    return queryParam.substringAfter("$tenantIdKey=")
+                }
+            }
+        }
+        return tenantId
+    }
 
     companion object {
         @JvmField

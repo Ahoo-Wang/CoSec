@@ -24,7 +24,14 @@ import org.springframework.web.server.ServerWebExchange
 class ReactiveRequestTenantIdParser(private val tenantIdKey: String = RequestTenantIdParser.TENANT_ID_KEY) :
     AbstractRequestTenantIdParser<ServerWebExchange>() {
 
-    override fun parseTenantId(request: ServerWebExchange): String? = request.request.headers.getFirst(tenantIdKey)
+    override fun parseTenantId(request: ServerWebExchange): String? {
+        val tenantId = request.request.headers.getFirst(tenantIdKey)
+        return if (tenantId.isNullOrEmpty()) {
+            request.request.queryParams.getFirst(tenantIdKey)
+        } else {
+            tenantId
+        }
+    }
 
     companion object {
         @JvmField
