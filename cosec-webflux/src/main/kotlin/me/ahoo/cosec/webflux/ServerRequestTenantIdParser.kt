@@ -15,6 +15,7 @@ package me.ahoo.cosec.webflux
 import me.ahoo.cosec.context.request.AbstractRequestTenantIdParser
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import org.springframework.web.reactive.function.server.ServerRequest
+import org.springframework.web.reactive.function.server.queryParamOrNull
 
 /**
  * ServerRequestTenantIdParser .
@@ -23,7 +24,13 @@ import org.springframework.web.reactive.function.server.ServerRequest
  */
 class ServerRequestTenantIdParser(private val tenantIdKey: String = RequestTenantIdParser.TENANT_ID_KEY) :
     AbstractRequestTenantIdParser<ServerRequest>() {
-    override fun parseTenantId(request: ServerRequest): String? = request.headers().firstHeader(tenantIdKey)
+    override fun parseTenantId(request: ServerRequest): String? {
+        val tenantId = request.headers().firstHeader(tenantIdKey)
+        if (tenantId.isNullOrEmpty()) {
+            return request.queryParamOrNull(tenantIdKey)
+        }
+        return tenantId
+    }
 
     companion object {
         @JvmField

@@ -18,8 +18,10 @@ import io.mockk.mockk
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.tenant.Tenant
 import org.hamcrest.MatcherAssert.assertThat
+import org.hamcrest.Matchers.equalTo
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
+import org.springframework.util.LinkedMultiValueMap
 import org.springframework.web.reactive.function.server.ServerRequest
 
 internal class ServerRequestTenantIdParserTest {
@@ -33,9 +35,20 @@ internal class ServerRequestTenantIdParserTest {
     }
 
     @Test
-    fun parseNull() {
+    fun parseFromQueryString() {
         val request = mockk<ServerRequest> {
             every { headers().firstHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns null
+            every { queryParams() } returns LinkedMultiValueMap(mapOf(RequestTenantIdParser.TENANT_ID_KEY to listOf("tenantId")))
+        }
+        val tenantId = ServerRequestTenantIdParser.INSTANCE.parse(request)
+        assertThat(tenantId, equalTo("tenantId"))
+    }
+
+    @Test
+    fun parseNone() {
+        val request = mockk<ServerRequest> {
+            every { headers().firstHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns null
+            every { queryParams() } returns LinkedMultiValueMap()
         }
         val tenantId = ServerRequestTenantIdParser.INSTANCE.parse(request)
         assertThat(tenantId, `is`(Tenant.DEFAULT_TENANT_ID))
