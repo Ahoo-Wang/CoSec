@@ -17,6 +17,7 @@ import me.ahoo.cosec.authorization.Authorization
 import me.ahoo.cosec.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ServerWebExchange
@@ -50,7 +51,10 @@ abstract class ReactiveSecurityFilter(
                     } else {
                         exchange.response.statusCode = HttpStatus.FORBIDDEN
                     }
-                    exchange.response.setComplete()
+                    val builder =
+                        exchange.response.bufferFactory().wrap(CoSecJsonSerializer.writeValueAsBytes(authorizeResult))
+                            .toMono()
+                    exchange.response.writeWith(builder)
                 }
         }
     }

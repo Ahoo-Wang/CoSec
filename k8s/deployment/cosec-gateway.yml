@@ -6,7 +6,6 @@ metadata:
     app: cosec-gateway
 spec:
   replicas: 1
-
   selector:
     matchLabels:
       app: cosec-gateway
