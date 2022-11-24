@@ -1,6 +1,7 @@
 @startuml
+skinparam hyperlinkColor grey
 
-!$watermark= "Wow: https://github.com/Ahoo-Wang/CoSec"
+!$watermark= "[[https://github.com/Ahoo-Wang/CoSec]]"
 
 header
 $watermark
