@@ -11,19 +11,19 @@ RBAC-based And Policy-based Multi-Tenant Security Framework
 
 ## Authentication
 
-![Authentication-Flow](document/design/assets/Authentication-Flow.png)
+![Authentication-Flow](document/design/assets/Authentication-Flow.svg)
 
 ## Authorization
 
-![Authorization-Flow](document/design/assets/Authorization-Flow.png)
+![Authorization-Flow](document/design/assets/Authorization-Flow.svg)
 
 ## OAuth
 
-![OAuth-Flow](document/design/assets/OAuth-Flow.png)
+![OAuth-Flow](document/design/assets/OAuth-Flow.svg)
 
 ## Modeling
 
-![Modeling](document/design/assets/Modeling.png)
+![Modeling](document/design/assets/Modeling.svg)
 
 ## Thanks
 

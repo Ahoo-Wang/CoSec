@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><!--
+  - Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -      http://www.apache.org/licenses/LICENSE-2.0
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  -->
+
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="627px" preserveAspectRatio="none" style="width:962px;height:627px;background:#FFFFFF;" version="1.1" viewBox="0 0 962 627" width="962px" zoomAndPan="magnify"><defs/><g><rect fill="none" height="26.4883" id="_title" style="stroke:none;stroke-width:1.0;" width="148" x="403" y="22.7773"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="138" x="408" y="41.3125">Authorization Flow</text><rect fill="#FFFFFF" height="470.6133" style="stroke:#181818;stroke-width:1.0;" width="10" x="37.5" y="96.7539"/><rect fill="#FFFFFF" height="449.3027" style="stroke:#181818;stroke-width:1.0;" width="10" x="173.5" y="118.0645"/><rect fill="#FFFFFF" height="34.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="178.5" y="517.0566"/><rect fill="#FFFFFF" height="87.9316" style="stroke:#181818;stroke-width:1.0;" width="10" x="311.5" y="147.375"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="430" y="176.6855"/><rect fill="#FFFFFF" height="87.9316" style="stroke:#181818;stroke-width:1.0;" width="10" x="575.5" y="264.6172"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="763.5" y="293.9277"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="890.5" y="381.8594"/><rect fill="none" height="133.1973" style="stroke:#000000;stroke-width:1.5;" width="255.5" x="10" y="426.1699"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="42" x2="42" y1="86.7539" y2="576.3672"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="178.5" x2="178.5" y1="86.7539" y2="576.3672"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="316.5" x2="316.5" y1="86.7539" y2="576.3672"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="434.5" x2="434.5" y1="86.7539" y2="576.3672"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="580.5" x2="580.5" y1="86.7539" y2="576.3672"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="768" x2="768" y1="86.7539" y2="576.3672"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="895" x2="895" y1="86.7539" y2="576.3672"/><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="45" x="20" y="55.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="31" x="27" y="75.8008">User</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="45" x="20" y="575.3672"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="31" x="27" y="595.9023">User</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="144" x="106.5" y="55.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="130" x="113.5" y="75.8008">AuthorizationFilter</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="144" x="106.5" y="575.3672"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="130" x="113.5" y="595.9023">AuthorizationFilter</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="112" x="260.5" y="55.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="98" x="267.5" y="75.8008">RequestParser</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="112" x="260.5" y="575.3672"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="98" x="267.5" y="595.9023">RequestParser</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="105" x="382.5" y="55.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="91" x="389.5" y="75.8008">TenantParser</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="105" x="382.5" y="575.3672"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="91" x="389.5" y="595.9023">TenantParser</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="166" x="497.5" y="55.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="152" x="504.5" y="75.8008">SecurityContextParser</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="166" x="497.5" y="575.3672"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="152" x="504.5" y="595.9023">SecurityContextParser</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="125" x="706" y="55.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="111" x="713" y="75.8008">TokenConverter</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="125" x="706" y="575.3672"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="111" x="713" y="595.9023">TokenConverter</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="109" x="841" y="55.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="95" x="848" y="75.8008">Authorization</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="109" x="841" y="575.3672"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="95" x="848" y="595.9023">Authorization</text><rect fill="#FFFFFF" height="470.6133" style="stroke:#181818;stroke-width:1.0;" width="10" x="37.5" y="96.7539"/><rect fill="#FFFFFF" height="449.3027" style="stroke:#181818;stroke-width:1.0;" width="10" x="173.5" y="118.0645"/><rect fill="#FFFFFF" height="34.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="178.5" y="517.0566"/><rect fill="#FFFFFF" height="87.9316" style="stroke:#181818;stroke-width:1.0;" width="10" x="311.5" y="147.375"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="430" y="176.6855"/><rect fill="#FFFFFF" height="87.9316" style="stroke:#181818;stroke-width:1.0;" width="10" x="575.5" y="264.6172"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="763.5" y="293.9277"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="890.5" y="381.8594"/><polygon fill="#181818" points="161.5,114.0645,171.5,118.0645,161.5,122.0645,165.5,118.0645" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="47.5" x2="167.5" y1="118.0645" y2="118.0645"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="55" x="54.5" y="113.3223">request()</text><polygon fill="#181818" points="299.5,143.375,309.5,147.375,299.5,151.375,303.5,147.375" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="183.5" x2="305.5" y1="147.375" y2="147.375"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="42" x="190.5" y="142.6328">parse()</text><polygon fill="#181818" points="418,172.6855,428,176.6855,418,180.6855,422,176.6855" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="321.5" x2="424" y1="176.6855" y2="176.6855"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="42" x="328.5" y="171.9434">parse()</text><polygon fill="#181818" points="332.5,201.9961,322.5,205.9961,332.5,209.9961,328.5,205.9961" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="326.5" x2="434" y1="205.9961" y2="205.9961"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="43" x="338.5" y="201.2539">Tenant</text><polygon fill="#181818" points="194.5,231.3066,184.5,235.3066,194.5,239.3066,190.5,235.3066" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="188.5" x2="315.5" y1="235.3066" y2="235.3066"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="50" x="200.5" y="230.5645">Request</text><polygon fill="#181818" points="563.5,260.6172,573.5,264.6172,563.5,268.6172,567.5,264.6172" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="183.5" x2="569.5" y1="264.6172" y2="264.6172"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="42" x="190.5" y="259.875">parse()</text><polygon fill="#181818" points="751.5,289.9277,761.5,293.9277,751.5,297.9277,755.5,293.9277" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="585.5" x2="757.5" y1="293.9277" y2="293.9277"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="159" x="592.5" y="289.1855">asPrincipal(AccessToken)</text><polygon fill="#181818" points="596.5,319.2383,586.5,323.2383,596.5,327.2383,592.5,323.2383" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="590.5" x2="767.5" y1="323.2383" y2="323.2383"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="54" x="602.5" y="318.4961">Principal</text><polygon fill="#181818" points="194.5,348.5488,184.5,352.5488,194.5,356.5488,190.5,352.5488" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="188.5" x2="579.5" y1="352.5488" y2="352.5488"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="100" x="200.5" y="347.8066">SecurityContext</text><polygon fill="#181818" points="878.5,377.8594,888.5,381.8594,878.5,385.8594,882.5,381.8594" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="183.5" x2="884.5" y1="381.8594" y2="381.8594"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="221" x="190.5" y="377.1172">authorize(Request,SecurityContext)</text><polygon fill="#181818" points="194.5,407.1699,184.5,411.1699,194.5,415.1699,190.5,411.1699" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="188.5" x2="894.5" y1="411.1699" y2="411.1699"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="72" x="200.5" y="406.4277">authorized?</text><path d="M10,426.1699 L72,426.1699 L72,433.4805 L62,443.4805 L10,443.4805 L10,426.1699 " fill="#EEEEEE" style="stroke:#000000;stroke-width:1.5;"/><rect fill="none" height="133.1973" style="stroke:#000000;stroke-width:1.5;" width="255.5" x="10" y="426.1699"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="17" x="25" y="439.7383">alt</text><text fill="#000000" font-family="sans-serif" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="112" x="87" y="438.8047">[authorized is false]</text><polygon fill="#181818" points="58.5,460.791,48.5,464.791,58.5,468.791,54.5,464.791" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="52.5" x2="172.5" y1="464.791" y2="464.791"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="102" x="64.5" y="460.0488">UNAUTHORIZED</text><line style="stroke:#000000;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="10" x2="265.5" y1="473.791" y2="473.791"/><text fill="#000000" font-family="sans-serif" font-size="11" font-weight="bold" lengthAdjust="spacing" textLength="107" x="15" y="484.4258">[authorized is true]</text><line style="stroke:#181818;stroke-width:1.0;" x1="183.5" x2="230.5" y1="504.0566" y2="504.0566"/><line style="stroke:#181818;stroke-width:1.0;" x1="230.5" x2="230.5" y1="504.0566" y2="517.0566"/><line style="stroke:#181818;stroke-width:1.0;" x1="189.5" x2="230.5" y1="517.0566" y2="517.0566"/><polygon fill="#181818" points="199.5,513.0566,189.5,517.0566,199.5,521.0566,195.5,517.0566" style="stroke:#181818;stroke-width:1.0;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="58" x="195.5" y="499.3145">proceed()</text><polygon fill="#181818" points="58.5,547.3672,48.5,551.3672,58.5,555.3672,54.5,551.3672" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="52.5" x2="172.5" y1="551.3672" y2="551.3672"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="57" x="64.5" y="546.625">response</text><rect fill="none" height="11.7773" id="_title" style="stroke:none;stroke-width:1.0;" width="218" x="736" y="5"/><text fill="#888888" font-family="sans-serif" font-size="10" lengthAdjust="spacing" textLength="218" x="736" y="14.668">Wow: https://github.com/Ahoo-Wang/CoSec</text><rect fill="none" height="11.7773" id="_title" style="stroke:none;stroke-width:1.0;" width="218" x="368" y="607.8555"/><text fill="#888888" font-family="sans-serif" font-size="10" lengthAdjust="spacing" textLength="218" x="368" y="617.5234">Wow: https://github.com/Ahoo-Wang/CoSec</text><!--MD5=[fc19d13c7b89456671106d07bab52ddf]
+@startuml
+!include layout.puml
+title Authorization Flow
+
+participant User
+participant AuthorizationFilter
+participant RequestParser
+participant TenantParser
+participant SecurityContextParser
+participant TokenConverter
+participant Authorization
+
+User++
+
+User -> AuthorizationFilter++: request()
+AuthorizationFilter -> RequestParser++: parse()
+RequestParser -> TenantParser++: parse()
+RequestParser <- - TenantParser- -: Tenant
+AuthorizationFilter <- - RequestParser- -: Request
+AuthorizationFilter -> SecurityContextParser++: parse()
+SecurityContextParser -> TokenConverter++: asPrincipal(AccessToken)
+SecurityContextParser <- - TokenConverter- -: Principal
+AuthorizationFilter <- - SecurityContextParser- -: SecurityContext
+AuthorizationFilter -> Authorization++: authorize(Request,SecurityContext)
+AuthorizationFilter <- - Authorization- -: authorized?
+alt authorized is false
+    User <- - AuthorizationFilter: UNAUTHORIZED
+else authorized is true
+    AuthorizationFilter -> AuthorizationFilter ++ : proceed()
+    User <- - AuthorizationFilter- -: response
+end
+@enduml
+
+@startuml
+
+
+header
+Wow: https://github.com/Ahoo-Wang/CoSec
+endheader
+
+center footer Wow: https://github.com/Ahoo-Wang/CoSec
+
+title Authorization Flow
+
+participant User
+participant AuthorizationFilter
+participant RequestParser
+participant TenantParser
+participant SecurityContextParser
+participant TokenConverter
+participant Authorization
+
+User++
+
+User -> AuthorizationFilter++: request()
+AuthorizationFilter -> RequestParser++: parse()
+RequestParser -> TenantParser++: parse()
+RequestParser <- - TenantParser- -: Tenant
+AuthorizationFilter <- - RequestParser- -: Request
+AuthorizationFilter -> SecurityContextParser++: parse()
+SecurityContextParser -> TokenConverter++: asPrincipal(AccessToken)
+SecurityContextParser <- - TokenConverter- -: Principal
+AuthorizationFilter <- - SecurityContextParser- -: SecurityContext
+AuthorizationFilter -> Authorization++: authorize(Request,SecurityContext)
+AuthorizationFilter <- - Authorization- -: authorized?
+alt authorized is false
+    User <- - AuthorizationFilter: UNAUTHORIZED
+else authorized is true
+    AuthorizationFilter -> AuthorizationFilter ++ : proceed()
+    User <- - AuthorizationFilter- -: response
+end
+@enduml
+
+PlantUML version 1.2022.12(Mon Oct 24 02:12:26 CST 2022)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Default Encoding: UTF-8
+Language: zh
+Country: CN
+--></g></svg>

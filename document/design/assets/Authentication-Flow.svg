@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><!--
+  - Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -      http://www.apache.org/licenses/LICENSE-2.0
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  -->
+
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="513px" preserveAspectRatio="none" style="width:784px;height:513px;background:#FFFFFF;" version="1.1" viewBox="0 0 784 513" width="784px" zoomAndPan="magnify"><defs/><g><rect fill="none" height="26.4883" id="_title" style="stroke:none;stroke-width:1.0;" width="155" x="310.75" y="22.7773"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="145" x="315.75" y="41.3125">Authentication Flow</text><rect fill="#FFFFFF" height="266.7949" style="stroke:#181818;stroke-width:1.0;" width="10" x="33.5" y="141.7539"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="189.5" y="163.0645"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="343" y="221.6855"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="473" y="280.3066"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="649" y="363.2383"/><rect fill="none" height="75.9316" style="stroke:#000000;stroke-width:1.5;" width="757.5" x="10" y="324.6172"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="38" x2="38" y1="131.7539" y2="417.5488"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="194.5" x2="194.5" y1="131.7539" y2="417.5488"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="347.5" x2="347.5" y1="131.7539" y2="417.5488"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="477.5" x2="477.5" y1="131.7539" y2="417.5488"/><line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="653.5" x2="653.5" y1="131.7539" y2="417.5488"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="31" x="20" y="128.8008">User</text><ellipse cx="38.5" cy="63.7656" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M38.5,71.7656 L38.5,98.7656 M25.5,79.7656 L51.5,79.7656 M38.5,98.7656 L25.5,113.7656 M38.5,98.7656 L51.5,113.7656 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="31" x="20" y="430.084">User</text><ellipse cx="38.5" cy="441.5371" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/><path d="M38.5,449.5371 L38.5,476.5371 M25.5,457.5371 L51.5,457.5371 M38.5,476.5371 L25.5,491.5371 M38.5,476.5371 L51.5,491.5371 " fill="none" style="stroke:#181818;stroke-width:0.5;"/><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="172" x="108.5" y="100.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="158" x="115.5" y="120.8008">AuthenticationProvider</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="172" x="108.5" y="416.5488"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="158" x="115.5" y="437.084">AuthenticationProvider</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="115" x="290.5" y="100.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="101" x="297.5" y="120.8008">Authentication</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="115" x="290.5" y="416.5488"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="101" x="297.5" y="437.084">Authentication</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="125" x="415.5" y="100.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="111" x="422.5" y="120.8008">TokenConverter</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="125" x="415.5" y="416.5488"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="111" x="422.5" y="437.084">TokenConverter</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="207" x="550.5" y="100.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="193" x="557.5" y="120.8008">SwitchTenantAuthentication</text><rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="207" x="550.5" y="416.5488"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="193" x="557.5" y="437.084">SwitchTenantAuthentication</text><rect fill="#FFFFFF" height="266.7949" style="stroke:#181818;stroke-width:1.0;" width="10" x="33.5" y="141.7539"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="189.5" y="163.0645"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="343" y="221.6855"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="473" y="280.3066"/><rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="649" y="363.2383"/><polygon fill="#181818" points="177.5,159.0645,187.5,163.0645,177.5,167.0645,181.5,163.0645" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="43.5" x2="183.5" y1="163.0645" y2="163.0645"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="127" x="50.5" y="158.3223">get(credentialsType)</text><polygon fill="#181818" points="54.5,188.375,44.5,192.375,54.5,196.375,50.5,192.375" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="48.5" x2="193.5" y1="192.375" y2="192.375"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="93" x="60.5" y="187.6328">Authentication</text><polygon fill="#181818" points="331,217.6855,341,221.6855,331,225.6855,335,221.6855" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="43.5" x2="337" y1="221.6855" y2="221.6855"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="157" x="50.5" y="216.9434">authenticate(Credentials)</text><polygon fill="#181818" points="54.5,246.9961,44.5,250.9961,54.5,254.9961,50.5,250.9961" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="48.5" x2="347" y1="250.9961" y2="250.9961"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="54" x="60.5" y="246.2539">Principal</text><polygon fill="#181818" points="461,276.3066,471,280.3066,461,284.3066,465,280.3066" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="43.5" x2="467" y1="280.3066" y2="280.3066"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="115" x="50.5" y="275.5645">asToken(Principal)</text><polygon fill="#181818" points="54.5,305.6172,44.5,309.6172,54.5,313.6172,50.5,309.6172" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="48.5" x2="477" y1="309.6172" y2="309.6172"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="39" x="60.5" y="304.875">Token</text><path d="M10,324.6172 L77,324.6172 L77,331.9277 L67,341.9277 L10,341.9277 L10,324.6172 " fill="#EEEEEE" style="stroke:#000000;stroke-width:1.5;"/><rect fill="none" height="75.9316" style="stroke:#000000;stroke-width:1.5;" width="757.5" x="10" y="324.6172"/><text fill="#000000" font-family="sans-serif" font-size="13" font-weight="bold" lengthAdjust="spacing" textLength="22" x="25" y="338.1855">opt</text><polygon fill="#181818" points="637,359.2383,647,363.2383,637,367.2383,641,363.2383" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="43.5" x2="643" y1="363.2383" y2="363.2383"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="247" x="50.5" y="358.4961">switchTenant(SwitchTenantCredentials)</text><polygon fill="#181818" points="54.5,388.5488,44.5,392.5488,54.5,396.5488,50.5,392.5488" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="48.5" x2="653" y1="392.5488" y2="392.5488"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="145" x="60.5" y="387.8066">Target Tenant Principal</text><rect fill="none" height="11.7773" id="_title" style="stroke:none;stroke-width:1.0;" width="218" x="558.5" y="5"/><text fill="#888888" font-family="sans-serif" font-size="10" lengthAdjust="spacing" textLength="218" x="558.5" y="14.668">Wow: https://github.com/Ahoo-Wang/CoSec</text><rect fill="none" height="11.7773" id="_title" style="stroke:none;stroke-width:1.0;" width="218" x="279.25" y="494.0371"/><text fill="#888888" font-family="sans-serif" font-size="10" lengthAdjust="spacing" textLength="218" x="279.25" y="503.7051">Wow: https://github.com/Ahoo-Wang/CoSec</text><!--MD5=[9b58cf842b5e3ad17fbce0aeb4759d30]
+@startuml
+!include layout.puml
+title Authentication Flow
+
+actor User
+participant AuthenticationProvider
+participant Authentication
+participant TokenConverter
+participant SwitchTenantAuthentication
+
+
+User++
+
+User -> AuthenticationProvider++ : get(credentialsType)
+User <- - AuthenticationProvider- - : Authentication
+User -> Authentication++ : authenticate(Credentials)
+User <- - Authentication- - : Principal
+User -> TokenConverter++ : asToken(Principal)
+User <- - TokenConverter- - : Token
+opt
+    User -> SwitchTenantAuthentication++ : switchTenant(SwitchTenantCredentials)
+    User <- - SwitchTenantAuthentication- - : Target Tenant Principal
+end
+@enduml
+
+@startuml
+
+
+header
+Wow: https://github.com/Ahoo-Wang/CoSec
+endheader
+
+center footer Wow: https://github.com/Ahoo-Wang/CoSec
+
+title Authentication Flow
+
+actor User
+participant AuthenticationProvider
+participant Authentication
+participant TokenConverter
+participant SwitchTenantAuthentication
+
+
+User++
+
+User -> AuthenticationProvider++ : get(credentialsType)
+User <- - AuthenticationProvider- - : Authentication
+User -> Authentication++ : authenticate(Credentials)
+User <- - Authentication- - : Principal
+User -> TokenConverter++ : asToken(Principal)
+User <- - TokenConverter- - : Token
+opt
+    User -> SwitchTenantAuthentication++ : switchTenant(SwitchTenantCredentials)
+    User <- - SwitchTenantAuthentication- - : Target Tenant Principal
+end
+@enduml
+
+PlantUML version 1.2022.12(Mon Oct 24 02:12:26 CST 2022)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Default Encoding: UTF-8
+Language: zh
+Country: CN
+--></g></svg>

@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><!--
+  - Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -      http://www.apache.org/licenses/LICENSE-2.0
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  -->
+
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="818px" preserveAspectRatio="none" style="width:3084px;height:818px;background:#FFFFFF;" version="1.1" viewBox="0 0 3084 818" width="3084px" zoomAndPan="magnify"><defs/><g><rect fill="none" height="11.7773" style="stroke:none;stroke-width:1.0;" width="218" x="2852" y="0"/><text fill="#888888" font-family="sans-serif" font-size="10" lengthAdjust="spacing" textLength="218" x="2852" y="9.668">Wow: https://github.com/Ahoo-Wang/CoSec</text><rect fill="none" height="26.4883" id="_title" style="stroke:none;stroke-width:1.0;" width="234" x="1418" y="17.7773"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="224" x="1423" y="36.3125">CoSec Modeling Class Diagram</text><!--MD5=[158ea172665500f9d1b87622b0f57e22]
+cluster tenant--><g id="cluster_tenant"><path d="M2566.5,64.2656 L2613.5,64.2656 A3.75,3.75 0 0 1 2616,66.7656 L2623,86.7539 L2989.5,86.7539 A2.5,2.5 0 0 1 2992,89.2539 L2992,350.7656 A2.5,2.5 0 0 1 2989.5,353.2656 L2566.5,353.2656 A2.5,2.5 0 0 1 2564,350.7656 L2564,66.7656 A2.5,2.5 0 0 1 2566.5,64.2656 " fill="none" style="stroke:#000000;stroke-width:1.5;"/><line style="stroke:#000000;stroke-width:1.5;" x1="2564" x2="2623" y1="86.7539" y2="86.7539"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="46" x="2568" y="79.8008">tenant</text></g><!--MD5=[73372e1614ca5de955321ff74365eabf]
+cluster policy--><g id="cluster_policy"><path d="M8.5,56.2656 L52.5,56.2656 A3.75,3.75 0 0 1 55,58.7656 L62,78.7539 L1048.5,78.7539 A2.5,2.5 0 0 1 1051,81.2539 L1051,789.7656 A2.5,2.5 0 0 1 1048.5,792.2656 L8.5,792.2656 A2.5,2.5 0 0 1 6,789.7656 L6,58.7656 A2.5,2.5 0 0 1 8.5,56.2656 " fill="none" style="stroke:#000000;stroke-width:1.5;"/><line style="stroke:#000000;stroke-width:1.5;" x1="6" x2="62" y1="78.7539" y2="78.7539"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="43" x="10" y="71.8008">policy</text></g><!--MD5=[8521e17ea422449b9b30926e5001066e]
+cluster role--><g id="cluster_role"><path d="M1740.5,213.2656 L1769.5,213.2656 A3.75,3.75 0 0 1 1772,215.7656 L1779,235.7539 L1929.5,235.7539 A2.5,2.5 0 0 1 1932,238.2539 L1932,375.7656 A2.5,2.5 0 0 1 1929.5,378.2656 L1740.5,378.2656 A2.5,2.5 0 0 1 1738,375.7656 L1738,215.7656 A2.5,2.5 0 0 1 1740.5,213.2656 " fill="none" style="stroke:#000000;stroke-width:1.5;"/><line style="stroke:#000000;stroke-width:1.5;" x1="1738" x2="1779" y1="235.7539" y2="235.7539"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="28" x="1742" y="228.8008">role</text></g><!--MD5=[d119c4a9d5e0dd9c185bd0ddda62ab2d]
+cluster principal--><g id="cluster_principal"><path d="M1958.5,213.2656 L2022.5,213.2656 A3.75,3.75 0 0 1 2025,215.7656 L2032,235.7539 L2537.5,235.7539 A2.5,2.5 0 0 1 2540,238.2539 L2540,533.2656 A2.5,2.5 0 0 1 2537.5,535.7656 L1958.5,535.7656 A2.5,2.5 0 0 1 1956,533.2656 L1956,215.7656 A2.5,2.5 0 0 1 1958.5,213.2656 " fill="none" style="stroke:#000000;stroke-width:1.5;"/><line style="stroke:#000000;stroke-width:1.5;" x1="1956" x2="2032" y1="235.7539" y2="235.7539"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="63" x="1960" y="228.8008">principal</text></g><!--MD5=[7f1db14b27b7629509c802e44e13c9c4]
+cluster context--><g id="cluster_context"><path d="M2566.5,403.7656 L2620.5,403.7656 A3.75,3.75 0 0 1 2623,406.2656 L2630,426.2539 L3074.5,426.2539 A2.5,2.5 0 0 1 3077,428.7539 L3077,740.2656 A2.5,2.5 0 0 1 3074.5,742.7656 L2566.5,742.7656 A2.5,2.5 0 0 1 2564,740.2656 L2564,406.2656 A2.5,2.5 0 0 1 2566.5,403.7656 " fill="none" style="stroke:#000000;stroke-width:1.5;"/><line style="stroke:#000000;stroke-width:1.5;" x1="2564" x2="2630" y1="426.2539" y2="426.2539"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="53" x="2568" y="419.3008">context</text></g><!--MD5=[df81d8a983ce68ee9869115533ee282f]
+cluster authorization--><g id="cluster_authorization"><path d="M1866.5,627.2656 L1964.5,627.2656 A3.75,3.75 0 0 1 1967,629.7656 L1974,649.7539 L2537.5,649.7539 A2.5,2.5 0 0 1 2540,652.2539 L2540,756.7656 A2.5,2.5 0 0 1 2537.5,759.2656 L1866.5,759.2656 A2.5,2.5 0 0 1 1864,756.7656 L1864,629.7656 A2.5,2.5 0 0 1 1866.5,627.2656 " fill="none" style="stroke:#000000;stroke-width:1.5;"/><line style="stroke:#000000;stroke-width:1.5;" x1="1864" x2="1974" y1="649.7539" y2="649.7539"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="97" x="1868" y="642.8008">authorization</text></g><!--MD5=[9866a4850b67e61c0bb8154df9df1072]
+cluster authentication--><g id="cluster_authentication"><path d="M1077.5,246.2656 L1182.5,246.2656 A3.75,3.75 0 0 1 1185,248.7656 L1192,268.7539 L1711.5,268.7539 A2.5,2.5 0 0 1 1714,271.2539 L1714,582.7656 A2.5,2.5 0 0 1 1711.5,585.2656 L1077.5,585.2656 A2.5,2.5 0 0 1 1075,582.7656 L1075,248.7656 A2.5,2.5 0 0 1 1077.5,246.2656 " fill="none" style="stroke:#000000;stroke-width:1.5;"/><line style="stroke:#000000;stroke-width:1.5;" x1="1075" x2="1192" y1="268.7539" y2="268.7539"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="104" x="1079" y="261.8008">authentication</text></g><!--MD5=[a8904d412b6bac905c960d0a15a57f60]
+class Tenant--><g id="elem_Tenant"><rect codeLine="10" fill="#F1F1F1" height="80.9766" id="Tenant" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="167" x="2808.5" y="99.2656"/><ellipse cx="2863.75" cy="115.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M2859.6777,111.0308 L2859.6777,108.8726 L2867.0571,108.8726 L2867.0571,111.0308 L2864.5918,111.0308 L2864.5918,119.1074 L2867.0571,119.1074 L2867.0571,121.2656 L2859.6777,121.2656 L2859.6777,119.1074 L2862.1431,119.1074 L2862.1431,111.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="48" x="2884.25" y="120.5566">Tenant</text><line style="stroke:#181818;stroke-width:0.5;" x1="2809.5" x2="2974.5" y1="131.2656" y2="131.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="129" x="2814.5" y="148.8008">val tenantId: String</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="155" x="2814.5" y="165.2891">val isPlatform: Boolean</text><line style="stroke:#181818;stroke-width:0.5;" x1="2809.5" x2="2974.5" y1="172.2422" y2="172.2422"/></g><!--MD5=[2ee7de80ccb219b57973144fcb0a9e81]
+class TenantCapable--><g id="elem_TenantCapable"><rect codeLine="14" fill="#F1F1F1" height="64.4883" id="TenantCapable" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="136" x="2746" y="273.2656"/><ellipse cx="2761" cy="289.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M2756.9277,285.0308 L2756.9277,282.8726 L2764.3071,282.8726 L2764.3071,285.0308 L2761.8418,285.0308 L2761.8418,293.1074 L2764.3071,293.1074 L2764.3071,295.2656 L2756.9277,295.2656 L2756.9277,293.1074 L2759.3931,293.1074 L2759.3931,285.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="104" x="2775" y="294.5566">TenantCapable</text><line style="stroke:#181818;stroke-width:0.5;" x1="2747" x2="2881" y1="305.2656" y2="305.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="123" x="2752" y="322.8008">val tenant: Tenant</text><line style="stroke:#181818;stroke-width:0.5;" x1="2747" x2="2881" y1="329.7539" y2="329.7539"/></g><path d="M2580.5,122.2656 L2580.5,147.5762 A0,0 0 0 0 2580.5,147.5762 L2773.5,147.5762 A0,0 0 0 0 2773.5,147.5762 L2773.5,140.2656 L2812.5,159.998 L2773.5,132.2656 L2773.5,132.2656 L2763.5,122.2656 L2580.5,122.2656 A0,0 0 0 0 2580.5,122.2656 " fill="#FEFFDD" style="stroke:#181818;stroke-width:0.5;"/><path d="M2763.5,122.2656 L2763.5,132.2656 L2773.5,132.2656 L2763.5,122.2656 " fill="#FEFFDD" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="172" x="2586.5" y="139.834">Is it a root platform tenant?</text><!--MD5=[891844a5ce18d50d477bdacc29a03b64]
+class PolicyType--><g id="elem_PolicyType"><rect codeLine="26" fill="#F1F1F1" height="97.4648" id="PolicyType" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="104" x="757" y="447.2656"/><ellipse cx="772" cy="463.2656" fill="#EB937F" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M776.1143,469.2656 L768.3945,469.2656 L768.3945,456.8726 L776.1143,456.8726 L776.1143,459.0308 L770.8433,459.0308 L770.8433,461.7036 L775.6162,461.7036 L775.6162,463.8618 L770.8433,463.8618 L770.8433,467.1074 L776.1143,467.1074 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="72" x="786" y="468.5566">PolicyType</text><line style="stroke:#181818;stroke-width:0.5;" x1="758" x2="860" y1="479.2656" y2="479.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="54" x="763" y="496.8008">SYSTEM</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="60" x="763" y="513.2891">CUSTOM</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="53" x="763" y="529.7773">GLOBAL</text><line style="stroke:#181818;stroke-width:0.5;" x1="758" x2="860" y1="536.7305" y2="536.7305"/></g><!--MD5=[9445d644bbe92584b3fa45e77778917b]
+class Policy--><g id="elem_Policy"><rect codeLine="31" fill="#F1F1F1" height="146.9297" id="Policy" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="230" x="580" y="629.2656"/><ellipse cx="671.25" cy="645.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M667.1777,641.0308 L667.1777,638.8726 L674.5571,638.8726 L674.5571,641.0308 L672.0918,641.0308 L672.0918,649.1074 L674.5571,649.1074 L674.5571,651.2656 L667.1777,651.2656 L667.1777,649.1074 L669.6431,649.1074 L669.6431,641.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="39" x="691.75" y="650.5566">Policy</text><line style="stroke:#181818;stroke-width:0.5;" x1="581" x2="809" y1="661.2656" y2="661.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="85" x="586" y="678.8008">val id: String</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="110" x="586" y="695.2891">val name: String</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="132" x="586" y="711.7773">val type: PolicyType</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="149" x="586" y="728.2656">val description: String</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="125" x="586" y="744.7539">val tenantId:String</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="218" x="586" y="761.2422">val statements: Set&lt;Statement&gt;</text><line style="stroke:#181818;stroke-width:0.5;" x1="581" x2="809" y1="768.1953" y2="768.1953"/></g><!--MD5=[354ba6fe2710e9f7c691253c66156a32]
+class Effect--><g id="elem_Effect"><rect codeLine="39" fill="#F1F1F1" height="80.9766" id="Effect" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="70" x="614" y="264.7656"/><ellipse cx="629" cy="280.7656" fill="#EB937F" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M633.1143,286.7656 L625.3945,286.7656 L625.3945,274.3726 L633.1143,274.3726 L633.1143,276.5308 L627.8433,276.5308 L627.8433,279.2036 L632.6162,279.2036 L632.6162,281.3618 L627.8433,281.3618 L627.8433,284.6074 L633.1143,284.6074 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="38" x="643" y="286.0566">Effect</text><line style="stroke:#181818;stroke-width:0.5;" x1="615" x2="683" y1="296.7656" y2="296.7656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="47" x="620" y="314.3008">ALLOW</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="37" x="620" y="330.7891">DENY</text><line style="stroke:#181818;stroke-width:0.5;" x1="615" x2="683" y1="337.7422" y2="337.7422"/></g><!--MD5=[dd3a6102b68975fd8f1a6314072b340a]
+class RequestMatcher--><g id="elem_RequestMatcher"><rect codeLine="43" fill="#F1F1F1" height="64.4883" id="RequestMatcher" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="295" x="375.5" y="107.7656"/><ellipse cx="463.75" cy="123.7656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M459.6777,119.5308 L459.6777,117.3726 L467.0571,117.3726 L467.0571,119.5308 L464.5918,119.5308 L464.5918,127.6074 L467.0571,127.6074 L467.0571,129.7656 L459.6777,129.7656 L459.6777,127.6074 L462.1431,127.6074 L462.1431,119.5308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="110" x="484.25" y="129.0566">RequestMatcher</text><line style="stroke:#181818;stroke-width:0.5;" x1="376.5" x2="669.5" y1="139.7656" y2="139.7656"/><line style="stroke:#181818;stroke-width:0.5;" x1="376.5" x2="669.5" y1="147.7656" y2="147.7656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="283" x="381.5" y="165.3008">match(Request,SecurityContext): Boolean</text></g><!--MD5=[226a4eef5279541003c62db16c270ea5]
+class ActionMatcher--><g id="elem_ActionMatcher"><rect codeLine="46" fill="#F1F1F1" height="48" id="ActionMatcher" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="131" x="447.5" y="281.2656"/><ellipse cx="462.5" cy="297.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M458.4277,293.0308 L458.4277,290.8726 L465.8071,290.8726 L465.8071,293.0308 L463.3418,293.0308 L463.3418,301.1074 L465.8071,301.1074 L465.8071,303.2656 L458.4277,303.2656 L458.4277,301.1074 L460.8931,301.1074 L460.8931,293.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="99" x="476.5" y="302.5566">ActionMatcher</text><line style="stroke:#181818;stroke-width:0.5;" x1="448.5" x2="577.5" y1="313.2656" y2="313.2656"/><line style="stroke:#181818;stroke-width:0.5;" x1="448.5" x2="577.5" y1="321.2656" y2="321.2656"/></g><!--MD5=[ce15d4ae5e7b4627c02fd240cc319742]
+class ConditionMatcher--><g id="elem_ConditionMatcher"><rect codeLine="47" fill="#F1F1F1" height="48" id="ConditionMatcher" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="155" x="257.5" y="281.2656"/><ellipse cx="272.5" cy="297.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M268.4277,293.0308 L268.4277,290.8726 L275.8071,290.8726 L275.8071,293.0308 L273.3418,293.0308 L273.3418,301.1074 L275.8071,301.1074 L275.8071,303.2656 L268.4277,303.2656 L268.4277,301.1074 L270.8931,301.1074 L270.8931,293.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="123" x="286.5" y="302.5566">ConditionMatcher</text><line style="stroke:#181818;stroke-width:0.5;" x1="258.5" x2="411.5" y1="313.2656" y2="313.2656"/><line style="stroke:#181818;stroke-width:0.5;" x1="258.5" x2="411.5" y1="321.2656" y2="321.2656"/></g><!--MD5=[a5f8f54a8c595155ff6d10bcb2300aea]
+class VerifyResult--><g id="elem_VerifyResult"><rect codeLine="48" fill="#F1F1F1" height="97.4648" id="VerifyResult" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="115" x="705.5" y="91.2656"/><ellipse cx="721.4" cy="107.2656" fill="#EB937F" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M725.5143,113.2656 L717.7945,113.2656 L717.7945,100.8726 L725.5143,100.8726 L725.5143,103.0308 L720.2433,103.0308 L720.2433,105.7036 L725.0162,105.7036 L725.0162,107.8618 L720.2433,107.8618 L720.2433,111.1074 L725.5143,111.1074 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="81" x="735.6" y="112.5566">VerifyResult</text><line style="stroke:#181818;stroke-width:0.5;" x1="706.5" x2="819.5" y1="123.2656" y2="123.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="47" x="711.5" y="140.8008">ALLOW</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="103" x="711.5" y="157.2891">EXPLICIT_DENY</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="102" x="711.5" y="173.7773">IMPLICIT_DENY</text><line style="stroke:#181818;stroke-width:0.5;" x1="706.5" x2="819.5" y1="180.7305" y2="180.7305"/></g><!--MD5=[a61a298976b7d1d94498f45c2ebfa10b]
+class Statement--><g id="elem_Statement"><rect codeLine="53" fill="#F1F1F1" height="97.4648" id="Statement" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="281" x="440.5" y="447.2656"/><ellipse cx="542.25" cy="463.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M538.1777,459.0308 L538.1777,456.8726 L545.5571,456.8726 L545.5571,459.0308 L543.0918,459.0308 L543.0918,467.1074 L545.5571,467.1074 L545.5571,469.2656 L538.1777,469.2656 L538.1777,467.1074 L540.6431,467.1074 L540.6431,459.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="69" x="562.75" y="468.5566">Statement</text><line style="stroke:#181818;stroke-width:0.5;" x1="441.5" x2="720.5" y1="479.2656" y2="479.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="107" x="446.5" y="496.8008">val effect: Effect</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="222" x="446.5" y="513.2891">val actions: Set&lt;ActionMatcher&gt;</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="269" x="446.5" y="529.7773">val conditions: Set&lt;ConditionMatcher&gt;</text><line style="stroke:#181818;stroke-width:0.5;" x1="441.5" x2="720.5" y1="536.7305" y2="536.7305"/></g><!--MD5=[25907446179e7e8284c1a5a6eb221e77]
+class PermissionVerifier--><g id="elem_PermissionVerifier"><rect codeLine="59" fill="#F1F1F1" height="64.4883" id="PermissionVerifier" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="316" x="719" y="273.2656"/><ellipse cx="810.25" cy="289.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M806.1777,285.0308 L806.1777,282.8726 L813.5571,282.8726 L813.5571,285.0308 L811.0918,285.0308 L811.0918,293.1074 L813.5571,293.1074 L813.5571,295.2656 L806.1777,295.2656 L806.1777,293.1074 L808.6431,293.1074 L808.6431,285.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="125" x="830.75" y="294.5566">PermissionVerifier</text><line style="stroke:#181818;stroke-width:0.5;" x1="720" x2="1034" y1="305.2656" y2="305.2656"/><line style="stroke:#181818;stroke-width:0.5;" x1="720" x2="1034" y1="313.2656" y2="313.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="304" x="725" y="330.8008">verify(Request,SecurityContext): VerifyResult</text></g><!--MD5=[4a8e06406f0c0425d99e01150b1292e5]
+class PolicyEvaluator--><g id="elem_PolicyEvaluator"><rect codeLine="62" fill="#F1F1F1" height="64.4883" id="PolicyEvaluator" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="135" x="87.5" y="273.2656"/><ellipse cx="102.5" cy="289.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M98.4277,285.0308 L98.4277,282.8726 L105.8071,282.8726 L105.8071,285.0308 L103.3418,285.0308 L103.3418,293.1074 L105.8071,293.1074 L105.8071,295.2656 L98.4277,295.2656 L98.4277,293.1074 L100.8931,293.1074 L100.8931,285.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="103" x="116.5" y="294.5566">PolicyEvaluator</text><line style="stroke:#181818;stroke-width:0.5;" x1="88.5" x2="221.5" y1="305.2656" y2="305.2656"/><line style="stroke:#181818;stroke-width:0.5;" x1="88.5" x2="221.5" y1="313.2656" y2="313.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="106" x="93.5" y="330.8008">evaluate(Policy)</text></g><!--MD5=[79431584796416a68bc6cb91e9d847cd]
+class PolicyCapable--><g id="elem_PolicyCapable"><rect codeLine="65" fill="#F1F1F1" height="64.4883" id="PolicyCapable" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="179" x="855.5" y="107.7656"/><ellipse cx="893.9" cy="123.7656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M889.8277,119.5308 L889.8277,117.3726 L897.2071,117.3726 L897.2071,119.5308 L894.7418,119.5308 L894.7418,127.6074 L897.2071,127.6074 L897.2071,129.7656 L889.8277,129.7656 L889.8277,127.6074 L892.2931,127.6074 L892.2931,119.5308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="95" x="913.1" y="129.0566">PolicyCapable</text><line style="stroke:#181818;stroke-width:0.5;" x1="856.5" x2="1033.5" y1="139.7656" y2="139.7656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="167" x="861.5" y="157.3008">val policies: Set&lt;String&gt;</text><line style="stroke:#181818;stroke-width:0.5;" x1="856.5" x2="1033.5" y1="164.2539" y2="164.2539"/></g><g id="elem_GMN29"><path d="M22,127.2656 L22,152.5762 A0,0 0 0 0 22,152.5762 L175.13,152.5762 L160,272.8256 L183.13,152.5762 L340,152.5762 A0,0 0 0 0 340,152.5762 L340,137.2656 L330,127.2656 L22,127.2656 A0,0 0 0 0 22,127.2656 " fill="#FEFFDD" style="stroke:#181818;stroke-width:0.5;"/><path d="M330,127.2656 L330,137.2656 L340,137.2656 L330,127.2656 " fill="#FEFFDD" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="297" x="28" y="144.834">Used to evaluate the effectiveness of the Policy</text></g><!--MD5=[a3638c1e5b65d287ecad7f06f5c0f212]
+class Role--><g id="elem_Role"><rect codeLine="83" fill="#F1F1F1" height="113.9531" id="Role" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="161" x="1754.5" y="248.2656"/><ellipse cx="1815.75" cy="264.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M1811.6777,260.0308 L1811.6777,257.8726 L1819.0571,257.8726 L1819.0571,260.0308 L1816.5918,260.0308 L1816.5918,268.1074 L1819.0571,268.1074 L1819.0571,270.2656 L1811.6777,270.2656 L1811.6777,268.1074 L1814.1431,268.1074 L1814.1431,260.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="30" x="1836.25" y="269.5566">Role</text><line style="stroke:#181818;stroke-width:0.5;" x1="1755.5" x2="1914.5" y1="280.2656" y2="280.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="85" x="1760.5" y="297.8008">val id: String</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="110" x="1760.5" y="314.2891">val name: String</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="149" x="1760.5" y="330.7773">val description: String</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="125" x="1760.5" y="347.2656">val tenantId:String</text><line style="stroke:#181818;stroke-width:0.5;" x1="1755.5" x2="1914.5" y1="354.2188" y2="354.2188"/></g><!--MD5=[52681581877b3e7248987c87e027ce58]
+class RoleCapable--><g id="elem_RoleCapable"><rect codeLine="96" fill="#F1F1F1" height="64.4883" id="RoleCapable" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="161" x="2222.5" y="273.2656"/><ellipse cx="2256.85" cy="289.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M2252.7777,285.0308 L2252.7777,282.8726 L2260.1571,282.8726 L2260.1571,285.0308 L2257.6918,285.0308 L2257.6918,293.1074 L2260.1571,293.1074 L2260.1571,295.2656 L2252.7777,295.2656 L2252.7777,293.1074 L2255.2431,293.1074 L2255.2431,285.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="86" x="2275.15" y="294.5566">RoleCapable</text><line style="stroke:#181818;stroke-width:0.5;" x1="2223.5" x2="2382.5" y1="305.2656" y2="305.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="149" x="2228.5" y="322.8008">val roles: Set&lt;String&gt;</text><line style="stroke:#181818;stroke-width:0.5;" x1="2223.5" x2="2382.5" y1="329.7539" y2="329.7539"/></g><!--MD5=[05e3ec1b6d12f04f2c7c7eb2dc3e534b]
+class CoSecPrincipal--><g id="elem_CoSecPrincipal"><rect codeLine="99" fill="#F1F1F1" height="113.9531" id="CoSecPrincipal" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="215" x="1972.5" y="248.2656"/><ellipse cx="2025.25" cy="264.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M2021.1777,260.0308 L2021.1777,257.8726 L2028.5571,257.8726 L2028.5571,260.0308 L2026.0918,260.0308 L2026.0918,268.1074 L2028.5571,268.1074 L2028.5571,270.2656 L2021.1777,270.2656 L2021.1777,268.1074 L2023.6431,268.1074 L2023.6431,260.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="101" x="2045.75" y="269.5566">CoSecPrincipal</text><line style="stroke:#181818;stroke-width:0.5;" x1="1973.5" x2="2186.5" y1="280.2656" y2="280.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="85" x="1978.5" y="297.8008">val id: String</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="203" x="1978.5" y="314.2891">val attrs: Map&lt;String, String&gt;</text><line style="stroke:#181818;stroke-width:0.5;" x1="1973.5" x2="2186.5" y1="321.2422" y2="321.2422"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="153" x="1978.5" y="338.7773">anonymous(): Boolean</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="167" x="1978.5" y="355.2656">authenticated(): Boolean</text></g><!--MD5=[dcd1c42ae96b3f450c53e1d5a4b38ac2]
+class TenantPrincipal--><g id="elem_TenantPrincipal"><rect codeLine="105" fill="#F1F1F1" height="48" id="TenantPrincipal" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="139" x="2233.5" y="471.7656"/><ellipse cx="2248.5" cy="487.7656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M2244.4277,483.5308 L2244.4277,481.3726 L2251.8071,481.3726 L2251.8071,483.5308 L2249.3418,483.5308 L2249.3418,491.6074 L2251.8071,491.6074 L2251.8071,493.7656 L2244.4277,493.7656 L2244.4277,491.6074 L2246.8931,491.6074 L2246.8931,483.5308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="107" x="2262.5" y="493.0566">TenantPrincipal</text><line style="stroke:#181818;stroke-width:0.5;" x1="2234.5" x2="2371.5" y1="503.7656" y2="503.7656"/><line style="stroke:#181818;stroke-width:0.5;" x1="2234.5" x2="2371.5" y1="511.7656" y2="511.7656"/></g><path d="M2418.5,287.7656 L2418.5,296.4209 L2377.5,317.5098 L2418.5,304.4209 L2418.5,313.0762 A0,0 0 0 0 2418.5,313.0762 L2523.5,313.0762 A0,0 0 0 0 2523.5,313.0762 L2523.5,297.7656 L2513.5,287.7656 L2418.5,287.7656 A0,0 0 0 0 2418.5,287.7656 " fill="#FEFFDD" style="stroke:#181818;stroke-width:0.5;"/><path d="M2513.5,287.7656 L2513.5,297.7656 L2523.5,297.7656 L2513.5,287.7656 " fill="#FEFFDD" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="84" x="2424.5" y="305.334">A set of roles</text><!--MD5=[86b30c3e0fe779331a576db045bd0856]
+class SecurityContext--><g id="elem_SecurityContext"><rect codeLine="118" fill="#F1F1F1" height="113.9531" id="SecurityContext" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="313" x="2580.5" y="438.7656"/><ellipse cx="2678.25" cy="454.7656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M2674.1777,450.5308 L2674.1777,448.3726 L2681.5571,448.3726 L2681.5571,450.5308 L2679.0918,450.5308 L2679.0918,458.6074 L2681.5571,458.6074 L2681.5571,460.7656 L2674.1777,460.7656 L2674.1777,458.6074 L2676.6431,458.6074 L2676.6431,450.5308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="109" x="2698.75" y="460.0566">SecurityContext</text><line style="stroke:#181818;stroke-width:0.5;" x1="2581.5" x2="2892.5" y1="470.7656" y2="470.7656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="192" x="2586.5" y="488.3008">val principal: CoSecPrincipal</text><line style="stroke:#181818;stroke-width:0.5;" x1="2581.5" x2="2892.5" y1="495.2539" y2="495.2539"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="301" x="2586.5" y="512.7891">setAttribute(String, Object): SecurityContext</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="157" x="2586.5" y="529.2773">getAttribute(String): T?</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="213" x="2586.5" y="545.7656">getRequiredAttribute(String): T</text></g><!--MD5=[0851f84a889f989e7bb0bebc385d0f09]
+class Request--><g id="elem_Request"><rect codeLine="127" fill="#F1F1F1" height="64.4883" id="Request" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="132" x="2929" y="463.7656"/><ellipse cx="2944" cy="479.7656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M2939.9277,475.5308 L2939.9277,473.3726 L2947.3071,473.3726 L2947.3071,475.5308 L2944.8418,475.5308 L2944.8418,483.6074 L2947.3071,483.6074 L2947.3071,485.7656 L2939.9277,485.7656 L2939.9277,483.6074 L2942.3931,483.6074 L2942.3931,475.5308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="55" x="2958" y="485.0566">Request</text><rect fill="#FFFFFF" height="16.1328" style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" width="43" x="3021" y="460.7656"/><text fill="#000000" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="41" x="3022" y="473.3672">A : Any</text><line style="stroke:#181818;stroke-width:0.5;" x1="2930" x2="3060" y1="495.7656" y2="495.7656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="83" x="2935" y="513.3008">val action: A</text><line style="stroke:#181818;stroke-width:0.5;" x1="2930" x2="3060" y1="520.2539" y2="520.2539"/></g><!--MD5=[4da09b18006e212e9efdc897e83005a4]
+class HttpRequest--><g id="elem_HttpRequest"><rect codeLine="131" fill="#F1F1F1" height="48" id="HttpRequest" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="116" x="2754" y="678.7656"/><ellipse cx="2769" cy="694.7656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M2764.9277,690.5308 L2764.9277,688.3726 L2772.3071,688.3726 L2772.3071,690.5308 L2769.8418,690.5308 L2769.8418,698.6074 L2772.3071,698.6074 L2772.3071,700.7656 L2764.9277,700.7656 L2764.9277,698.6074 L2767.3931,698.6074 L2767.3931,690.5308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="84" x="2783" y="700.0566">HttpRequest</text><line style="stroke:#181818;stroke-width:0.5;" x1="2755" x2="2869" y1="710.7656" y2="710.7656"/><line style="stroke:#181818;stroke-width:0.5;" x1="2755" x2="2869" y1="718.7656" y2="718.7656"/></g><g id="elem_GMN54"><path d="M2905,682.2656 L2905,698.7656 L2870.45,702.7656 L2905,706.7656 L2905,722.8867 A0,0 0 0 0 2905,722.8867 L3061,722.8867 A0,0 0 0 0 3061,722.8867 L3061,692.2656 L3051,682.2656 L2905,682.2656 A0,0 0 0 0 2905,682.2656 " fill="#FEFFDD" style="stroke:#181818;stroke-width:0.5;"/><path d="M3051,682.2656 L3051,692.2656 L3061,692.2656 L3051,682.2656 " fill="#FEFFDD" style="stroke:#181818;stroke-width:0.5;"/><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="125" x="2911" y="699.834">HttpRequest::action</text><text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="135" x="2911" y="715.1445">format: {url}:{method}</text></g><!--MD5=[eaab7d2ddd4405c2c7244fd25dd0c172]
+class AuthorizeResult--><g id="elem_AuthorizeResult"><rect codeLine="142" fill="#F1F1F1" height="80.9766" id="AuthorizeResult" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="173" x="2350.5" y="662.2656"/><ellipse cx="2379.45" cy="678.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M2375.3777,674.0308 L2375.3777,671.8726 L2382.7571,671.8726 L2382.7571,674.0308 L2380.2918,674.0308 L2380.2918,682.1074 L2382.7571,682.1074 L2382.7571,684.2656 L2375.3777,684.2656 L2375.3777,682.1074 L2377.8431,682.1074 L2377.8431,674.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="110" x="2396.55" y="683.5566">AuthorizeResult</text><line style="stroke:#181818;stroke-width:0.5;" x1="2351.5" x2="2522.5" y1="694.2656" y2="694.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="161" x="2356.5" y="711.8008">val authorized: Boolean</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="119" x="2356.5" y="728.2891">val reason: String</text><line style="stroke:#181818;stroke-width:0.5;" x1="2351.5" x2="2522.5" y1="735.2422" y2="735.2422"/></g><!--MD5=[16baea6be49bb9991e615d76903392b3]
+class Authorization--><g id="elem_Authorization"><rect codeLine="146" fill="#F1F1F1" height="64.4883" id="Authorization" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="435" x="1880.5" y="670.7656"/><ellipse cx="2046.25" cy="686.7656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M2042.1777,682.5308 L2042.1777,680.3726 L2049.5571,680.3726 L2049.5571,682.5308 L2047.0918,682.5308 L2047.0918,690.6074 L2049.5571,690.6074 L2049.5571,692.7656 L2042.1777,692.7656 L2042.1777,690.6074 L2044.6431,690.6074 L2044.6431,682.5308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="95" x="2066.75" y="692.0566">Authorization</text><line style="stroke:#181818;stroke-width:0.5;" x1="1881.5" x2="2314.5" y1="702.7656" y2="702.7656"/><line style="stroke:#181818;stroke-width:0.5;" x1="1881.5" x2="2314.5" y1="710.7656" y2="710.7656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="423" x="1886.5" y="728.3008">authorize(Request,SecurityContext): Mono&lt;AuthorizeResult&gt;</text></g><!--MD5=[63e7a34560323ddebc94de26bb3dfe24]
+class Credentials--><g id="elem_Credentials"><rect codeLine="154" fill="#F1F1F1" height="48" id="Credentials" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="110" x="1192" y="281.2656"/><ellipse cx="1207" cy="297.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M1202.9277,293.0308 L1202.9277,290.8726 L1210.3071,290.8726 L1210.3071,293.0308 L1207.8418,293.0308 L1207.8418,301.1074 L1210.3071,301.1074 L1210.3071,303.2656 L1202.9277,303.2656 L1202.9277,301.1074 L1205.3931,301.1074 L1205.3931,293.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="78" x="1221" y="302.5566">Credentials</text><line style="stroke:#181818;stroke-width:0.5;" x1="1193" x2="1301" y1="313.2656" y2="313.2656"/><line style="stroke:#181818;stroke-width:0.5;" x1="1193" x2="1301" y1="321.2656" y2="321.2656"/></g><!--MD5=[a139e992f8a77546bf37c14edd197f06]
+class Authentication--><g id="elem_Authentication"><rect codeLine="155" fill="#F1F1F1" height="80.9766" id="Authentication" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="312" x="1091" y="455.2656"/><ellipse cx="1106" cy="471.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M1101.9277,467.0308 L1101.9277,464.8726 L1109.3071,464.8726 L1109.3071,467.0308 L1106.8418,467.0308 L1106.8418,475.1074 L1109.3071,475.1074 L1109.3071,477.2656 L1101.9277,477.2656 L1101.9277,475.1074 L1104.3931,475.1074 L1104.3931,467.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="101" x="1120" y="476.5566">Authentication</text><rect fill="#FFFFFF" height="16.1328" style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" width="177" x="1229" y="452.2656"/><text fill="#000000" font-family="sans-serif" font-size="12" font-style="italic" lengthAdjust="spacing" textLength="175" x="1230" y="464.8672">C:Credentials,P:CoSecPrincipal</text><line style="stroke:#181818;stroke-width:0.5;" x1="1092" x2="1402" y1="487.2656" y2="487.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="208" x="1097" y="504.8008">supportCredentials: Class&lt;C&gt;</text><line style="stroke:#181818;stroke-width:0.5;" x1="1092" x2="1402" y1="511.7539" y2="511.7539"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="182" x="1097" y="529.2891">authenticate(C): Mono&lt;P&gt;</text></g><!--MD5=[f074fdee743888442a4f97901e556f9c]
+class AuthenticationProvider--><g id="elem_AuthenticationProvider"><rect codeLine="159" fill="#F1F1F1" height="146.9297" id="AuthenticationProvider" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="260" x="1438" y="422.2656"/><ellipse cx="1484.75" cy="438.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M1480.6777,434.0308 L1480.6777,431.8726 L1488.0571,431.8726 L1488.0571,434.0308 L1485.5918,434.0308 L1485.5918,442.1074 L1488.0571,442.1074 L1488.0571,444.2656 L1480.6777,444.2656 L1480.6777,442.1074 L1483.1431,442.1074 L1483.1431,434.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="158" x="1505.25" y="443.5566">AuthenticationProvider</text><line style="stroke:#181818;stroke-width:0.5;" x1="1439" x2="1697" y1="454.2656" y2="454.2656"/><line style="stroke:#181818;stroke-width:0.5;" x1="1439" x2="1697" y1="462.2656" y2="462.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="192" x="1444" y="479.8008">get(Class&lt;Credentials&gt;): A?</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="248" x="1444" y="496.2891">getRequired(Class&lt;Credentials&gt;): A</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="109" x="1444" y="512.7773">register(A): Unit</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="185" x="1444" y="529.2656">register(Class&lt;C&gt;, A): Unit</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="109" x="1444" y="545.7539">register(A): Unit</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="248" x="1444" y="562.2422">getRequired(Class&lt;Credentials&gt;): A</text></g><!--MD5=[7c5c88a606935469d5f89b0b5794816c]
+class Named--><g id="elem_Named"><rect codeLine="5" fill="#F1F1F1" height="64.4883" id="Named" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="99" x="2030.5" y="107.7656"/><ellipse cx="2054.05" cy="123.7656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M2049.9777,119.5308 L2049.9777,117.3726 L2057.3571,117.3726 L2057.3571,119.5308 L2054.8918,119.5308 L2054.8918,127.6074 L2057.3571,127.6074 L2057.3571,129.7656 L2049.9777,129.7656 L2049.9777,127.6074 L2052.4431,127.6074 L2052.4431,119.5308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="48" x="2069.95" y="129.0566">Named</text><line style="stroke:#181818;stroke-width:0.5;" x1="2031.5" x2="2128.5" y1="139.7656" y2="139.7656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="87" x="2036.5" y="157.3008">name: String</text><line style="stroke:#181818;stroke-width:0.5;" x1="2031.5" x2="2128.5" y1="164.2539" y2="164.2539"/></g><!--MD5=[d3fc1cb30f7bdcc9e19e497f9b6ed3e8]
+link Tenant to TenantCapable--><g id="link_Tenant_TenantCapable"><path codeLine="18" d="M2866.81,193.5756 C2856.57,215.0356 2834.7953,260.6642 2834.7953,260.6642 " fill="none" id="Tenant-TenantCapable" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="2829.63,271.4956,2835.8231,267.8017,2834.7953,260.6642,2828.6022,264.3581,2829.63,271.4956" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="2872.27,182.1256,2864.7855,188.5274,2870.1178,186.6387,2872.0065,191.971,2872.27,182.1256" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="2870.1178" x2="2866.67" y1="186.6387" y2="193.8656"/></g><!--MD5=[3a61d607afa5f9046415286ff45a7e54]
+reverse link RequestMatcher to ActionMatcher--><g id="link_RequestMatcher_ActionMatcher"><path codeLine="68" d="M519.8,193.0456 C517.99,222.6056 515.82,258.1056 514.43,280.9056 " fill="none" id="RequestMatcher-backto-ActionMatcher" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="512.8,192.9456,521,173.4156,526.77,193.8056,512.8,192.9456" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[bdb7cf9e45c1a2c85396bf792a7d7532]
+reverse link RequestMatcher to ConditionMatcher--><g id="link_RequestMatcher_ConditionMatcher"><path codeLine="69" d="M456.46,184.4756 C447.35,191.1656 438.29,198.1956 430,205.2656 C402.09,229.0756 373.38,260.0656 354.93,280.9756 " fill="none" id="RequestMatcher-backto-ConditionMatcher" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="452.26,178.8856,472.62,173.0256,460.35,190.3056,452.26,178.8856" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[99bd1ab024ee26fc6b7c63d9677fdb72]
+reverse link PermissionVerifier to Statement--><g id="link_PermissionVerifier_Statement"><path codeLine="70" d="M809.81,349.0556 C764.08,378.1756 703.51,416.7556 656.17,446.8956 " fill="none" id="PermissionVerifier-backto-Statement" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="805.88,343.2556,826.51,338.4156,813.4,355.0656,805.88,343.2556" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[e4eaaab51f62ef0fd17f62ea5476519c]
+link Effect to Statement--><g id="link_Effect_Statement"><path codeLine="71" d="M629.76,359.5956 C621.49,382.5356 602.8744,434.1185 602.8744,434.1185 " fill="none" id="Effect-Statement" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="598.8,445.4056,604.5996,441.1202,602.8744,434.1185,597.0748,438.4039,598.8,445.4056" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="634.07,347.6656,627.2518,354.7728,632.3723,352.3686,634.7765,357.4891,634.07,347.6656" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="632.3723" x2="629.65" y1="352.3686" y2="359.8906"/></g><!--MD5=[421c707edf9dcb67c653879c9588b357]
+link ActionMatcher to Statement--><g id="link_ActionMatcher_Statement"><path codeLine="72" d="M526.34,343.2556 C535.63,368.9956 559.1956,434.3285 559.1956,434.3285 " fill="none" id="ActionMatcher-Statement" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="563.27,445.6156,564.9952,438.6139,559.1956,434.3285,557.4704,441.3302,563.27,445.6156" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="521.99,331.1856,521.2835,341.0091,523.6877,335.8886,528.8082,338.2928,521.99,331.1856" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="523.6877" x2="526.4" y1="335.8886" y2="343.4106"/></g><!--MD5=[04f4abb29adabcf38a547a8eb9430c3b]
+link ConditionMatcher to Statement--><g id="link_ConditionMatcher_Statement"><path codeLine="73" d="M372.35,338.8556 C389.63,353.6456 410.6,371.1656 430,386.2656 C452.55,403.8256 501.1579,439.117 501.1579,439.117 " fill="none" id="ConditionMatcher-Statement" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="510.92,446.0956,508.3651,439.3523,501.1579,439.117,503.7127,445.8604,510.92,446.0956" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="362.72,330.5756,366.9321,339.4783,366.5097,333.8373,372.1507,333.4149,362.72,330.5756" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="366.5097" x2="372.575" y1="333.8373" y2="339.0506"/></g><!--MD5=[e3680ece5eb6e2539ae6dce9363554de]
+link PolicyType to Policy--><g id="link_PolicyType_Policy"><path codeLine="74" d="M775.47,557.0556 C765.15,575.6256 742.0611,617.1276 742.0611,617.1276 " fill="none" id="PolicyType-Policy" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="736.23,627.6156,742.6415,624.3153,742.0611,617.1276,735.6495,620.4279,736.23,627.6156" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="781.68,545.8956,773.8107,551.8179,779.2504,550.2656,780.8027,555.7053,781.68,545.8956" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="779.2504" x2="775.365" y1="550.2656" y2="557.2556"/></g><!--MD5=[a7b3af78aa4d03cb0e67dc6b5e1b33d1]
+link Statement to Policy--><g id="link_Statement_Policy"><path codeLine="75" d="M614.53,557.0556 C624.85,575.6256 647.9389,617.1276 647.9389,617.1276 " fill="none" id="Statement-Policy" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="653.77,627.6156,654.3505,620.4279,647.9389,617.1276,647.3585,624.3153,653.77,627.6156" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="608.32,545.8956,609.1973,555.7053,610.7496,550.2656,616.1893,551.8179,608.32,545.8956" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="610.7496" x2="614.635" y1="550.2656" y2="557.2556"/></g><!--MD5=[133bf989b0ef647bf7fd879a3c56ee06]
+reverse link PolicyCapable to Role--><g id="link_PolicyCapable_Role"><path codeLine="90" d="M1056.4,142.0356 C1240.08,145.4756 1597.73,158.1856 1714,205.2656 C1738.03,214.9956 1760.97,231.2356 1780.29,247.7856 " fill="none" id="PolicyCapable-backto-Role" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="1056.28,149.0356,1036.41,141.6856,1056.53,135.0356,1056.28,149.0356" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[5b5054689bf2020954aca84a99bf32ab]
+reverse link TenantCapable to TenantPrincipal--><g id="link_TenantCapable_TenantPrincipal"><path codeLine="107" d="M2725.64,337.4456 C2677.73,354.4656 2617.53,376.0356 2564,395.7656 C2495.22,421.1156 2416.61,451.0656 2363.79,471.3356 " fill="none" id="TenantCapable-backto-TenantPrincipal" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="2723.08,330.9256,2744.27,330.8356,2727.76,344.1156,2723.08,330.9256" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[e7f6508ff043c461a5f165263bc71b5b]
+reverse link CoSecPrincipal to TenantPrincipal--><g id="link_CoSecPrincipal_TenantPrincipal"><path codeLine="108" d="M2162.9,376.3456 C2202.48,409.7956 2247.22,447.6156 2275.27,471.3256 " fill="none" id="CoSecPrincipal-backto-TenantPrincipal" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="2158.52,381.8056,2147.76,363.5456,2167.55,371.1056,2158.52,381.8056" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[c7c8313ddc0bad273885a8234da768c1]
+reverse link Named to CoSecPrincipal--><g id="link_Named_CoSecPrincipal"><path codeLine="109" d="M2080,193.3756 C2080,210.8456 2080,230.3556 2080,248.0956 " fill="none" id="Named-backto-CoSecPrincipal" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="2073,193.4156,2080,173.4156,2087,193.4156,2073,193.4156" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[903468ed3f54634ff2089a3230707525]
+reverse link RoleCapable to TenantPrincipal--><g id="link_RoleCapable_TenantPrincipal"><path codeLine="110" d="M2303,358.7356 C2303,395.6756 2303,443.3556 2303,471.3456 " fill="none" id="RoleCapable-backto-TenantPrincipal" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="2296,358.9056,2303,338.9056,2310,358.9056,2296,358.9056" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[2e9dd4d24c620f4ef4c09958d90dc0d9]
+reverse link PolicyCapable to CoSecPrincipal--><g id="link_PolicyCapable_CoSecPrincipal"><path codeLine="111" d="M1056.07,140.8156 C1278.88,142.0956 1772.68,151.1556 1932,205.2656 C1960.1,214.8056 1987.94,231.1156 2011.76,247.7756 " fill="none" id="PolicyCapable-backto-CoSecPrincipal" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="1056.21,147.8156,1036.25,140.7156,1056.28,133.8156,1056.21,147.8156" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[b1a9f71c494fe876e4b85e22ffb61b43]
+reverse link TenantCapable to SecurityContext--><g id="link_TenantCapable_SecurityContext"><path codeLine="124" d="M2793.26,357.0456 C2782.99,382.1756 2770.57,412.5956 2760.01,438.4456 " fill="none" id="TenantCapable-backto-SecurityContext" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="2786.67,354.6656,2800.71,338.7956,2799.63,359.9556,2786.67,354.6656" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[0c4cc86a4eab11f0ad45d9e81ff75b78]
+link CoSecPrincipal to SecurityContext--><g id="link_CoSecPrincipal_SecurityContext"><path codeLine="125" d="M2153.76,362.5756 C2169.87,372.2056 2187.39,380.8456 2205,386.2656 C2276.17,408.1956 2467.79,377.5556 2540,395.7656 C2571.52,403.7156 2603.81,417.2856 2632.89,431.8756 " fill="none" id="CoSecPrincipal-to-SecurityContext" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="2644.23,437.7056,2640.7233,431.4046,2633.5582,432.218,2637.0649,438.5191,2644.23,437.7056" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[5580f7c607bc9e9a7ef763b2908a348b]
+reverse link TenantCapable to Request--><g id="link_TenantCapable_Request"><path codeLine="132" d="M2865.66,351.7756 C2880.64,365.5456 2896.79,380.9556 2911,395.7656 C2931.91,417.5656 2953.94,443.6656 2970.2,463.5956 " fill="none" id="TenantCapable-backto-Request" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="2861.24,357.2156,2851.12,338.5956,2870.64,346.8456,2861.24,357.2156" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[470b82225935e8c5a283dcd6e7016e9c]
+reverse link Request to HttpRequest--><g id="link_Request_HttpRequest"><path codeLine="133" d="M2953.98,544.3356 C2940.38,559.9956 2925.11,577.4356 2911,593.2656 C2884.53,622.9656 2853.56,656.7556 2833.4,678.6256 " fill="none" id="Request-backto-HttpRequest" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="2948.57,539.8956,2966.96,529.3656,2959.15,549.0656,2948.57,539.8956" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[30076c0053eee824d8d2442e12969676]
+reverse link Request to Authorization--><g id="link_Request_Authorization"><path codeLine="149" d="M2973.8,533.4156 C2959.16,554.9756 2937.55,580.4456 2911,593.2656 C2853.11,621.2156 2396.11,607.0456 2333,619.2656 C2276.75,630.1556 2215.78,651.8756 2170.03,670.2956 " fill="none" id="Request-backto-Authorization" style="stroke:#181818;stroke-width:1.0;stroke-dasharray:7.0,7.0;"/><polygon fill="#181818" points="2976.54,529.2956,2968.2321,534.5851,2973.7764,533.4625,2974.899,539.0068,2976.54,529.2956" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[7ca05d895fd4d3e3cb6ad83c182c7856]
+reverse link SecurityContext to Authorization--><g id="link_SecurityContext_Authorization"><path codeLine="150" d="M2632.09,556.0956 C2603.04,570.3056 2570.96,584.0156 2540,593.2656 C2451.15,619.7956 2423.25,598.0156 2333,619.2656 C2278.81,632.0256 2219.69,652.8156 2174.3,670.3356 " fill="none" id="SecurityContext-backto-Authorization" style="stroke:#181818;stroke-width:1.0;stroke-dasharray:7.0,7.0;"/><polygon fill="#181818" points="2636.5,553.9156,2626.6591,554.3126,2632.0165,556.1288,2630.2003,561.4862,2636.5,553.9156" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[6b6dcf69d22c7b7e80e54001a420a613]
+reverse link CoSecPrincipal to Authentication--><g id="link_CoSecPrincipal_Authentication"><path codeLine="167" d="M1985.83,365.6556 C1968.5,374.0856 1950.15,381.4956 1932,386.2656 C1877.08,400.7056 1475.76,380.7356 1421,395.7656 C1377.6,407.6856 1333.58,432.8756 1300.68,454.8656 " fill="none" id="CoSecPrincipal-backto-Authentication" style="stroke:#181818;stroke-width:1.0;stroke-dasharray:7.0,7.0;"/><polygon fill="#181818" points="1990.3,363.4256,1980.4597,363.835,1985.8193,365.6445,1984.0099,371.0042,1990.3,363.4256" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[615981591744dbfd257bd758771ab80b]
+reverse link Credentials to Authentication--><g id="link_Credentials_Authentication"><path codeLine="168" d="M1247,335.9056 C1247,367.9456 1247,419.2156 1247,454.8056 " fill="none" id="Credentials-backto-Authentication" style="stroke:#181818;stroke-width:1.0;stroke-dasharray:7.0,7.0;"/><polygon fill="#181818" points="1247,331.2756,1243,340.2756,1247,336.2756,1251,340.2756,1247,331.2756" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[40d5522495084d761aba8f9786b248b8]
+link Authentication to AuthenticationProvider--><g id="link_Authentication_AuthenticationProvider"><path codeLine="169" d="M1417.93,495.7656 C1419.8,495.7656 1424.3,495.7656 1424.3,495.7656 " fill="none" id="Authentication-AuthenticationProvider" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="1436.3,495.7656,1430.3,491.7656,1424.3,495.7656,1430.3,499.7656,1436.3,495.7656" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="1404.94,495.7656,1413.94,499.7656,1409.94,495.7656,1413.94,491.7656,1404.94,495.7656" style="stroke:#181818;stroke-width:1.0;"/><line style="stroke:#181818;stroke-width:1.0;" x1="1409.94" x2="1417.94" y1="495.7656" y2="495.7656"/></g><rect fill="none" height="11.7773" style="stroke:none;stroke-width:1.0;" width="218" x="1426" y="798.2656"/><text fill="#888888" font-family="sans-serif" font-size="10" lengthAdjust="spacing" textLength="218" x="1426" y="807.9336">Wow: https://github.com/Ahoo-Wang/CoSec</text><!--MD5=[e889b2a1744fa82493a34cbd5954635c]
+@startuml
+!include layout.puml
+
+title CoSec Modeling Class Diagram
+
+interface Named{
+    name: String
+}
+
+package tenant{
+    interface Tenant {
+       val tenantId: String
+       val isPlatform: Boolean
+    }
+    interface TenantCapable {
+        val tenant: Tenant
+    }
+
+    Tenant <- -*  TenantCapable
+
+    note left of Tenant::isPlatform
+        Is it a root platform tenant?
+    end note
+}
+
+package policy{
+    enum PolicyType {
+        SYSTEM
+        CUSTOM
+        GLOBAL
+    }
+    interface Policy {
+        val id: String
+        val name: String
+        val type: PolicyType
+        val description: String
+        val tenantId:String
+        val statements: Set<Statement>
+    }
+    enum Effect {
+        ALLOW
+        DENY
+    }
+    interface RequestMatcher {
+        match(Request,SecurityContext): Boolean
+    }
+    interface ActionMatcher
+    interface ConditionMatcher
+    enum VerifyResult{
+        ALLOW
+        EXPLICIT_DENY
+        IMPLICIT_DENY
+    }
+    interface Statement{
+        val effect: Effect
+        val actions: Set<ActionMatcher>
+        val conditions: Set<ConditionMatcher>
+    }
+
+    interface PermissionVerifier {
+        verify(Request,SecurityContext): VerifyResult
+    }
+    interface PolicyEvaluator {
+        evaluate(Policy)
+    }
+    interface PolicyCapable {
+        val policies: Set<String>
+    }
+    RequestMatcher <|- - ActionMatcher
+    RequestMatcher <|- - ConditionMatcher
+    PermissionVerifier <|- - Statement
+    Effect <- -*  Statement
+    ActionMatcher <- -*  Statement
+    ConditionMatcher <- -*  Statement
+    PolicyType <- -*  Policy
+    Statement <- -*  Policy
+
+    note top of PolicyEvaluator
+        Used to evaluate the effectiveness of the Policy
+    end note
+}
+
+package role{
+    interface Role {
+        val id: String
+        val name: String
+        val description: String
+        val tenantId:String
+    }
+
+    PolicyCapable <|- - Role
+}
+
+
+
+package principal{
+    interface RoleCapable {
+        val roles: Set<String>
+    }
+    interface CoSecPrincipal{
+        val id: String
+        val attrs: Map<String, String>
+        anonymous(): Boolean
+        authenticated(): Boolean
+    }
+    interface TenantPrincipal
+
+    TenantCapable <|- - TenantPrincipal
+    CoSecPrincipal <|- - TenantPrincipal
+    Named <|- - CoSecPrincipal
+    RoleCapable <|- - TenantPrincipal
+    PolicyCapable <|- - CoSecPrincipal
+    note right of RoleCapable::role
+        A set of roles
+    end note
+}
+
+package context{
+    interface SecurityContext {
+        val principal: CoSecPrincipal
+        setAttribute(String, Object): SecurityContext
+        getAttribute(String): T?
+        getRequiredAttribute(String): T
+    }
+    TenantCapable <|- -  SecurityContext
+    CoSecPrincipal - -* SecurityContext
+
+    interface Request<A : Any>{
+        val action: A
+    }
+
+    interface HttpRequest
+    TenantCapable <|- - Request
+    Request <|- -  HttpRequest
+
+    note right of HttpRequest
+        HttpRequest::action
+        format: {url}:{method}
+    end note
+}
+
+package authorization{
+    interface AuthorizeResult {
+        val authorized: Boolean
+        val reason: String
+    }
+    interface Authorization {
+        authorize(Request,SecurityContext): Mono<AuthorizeResult>
+    }
+    Request <-[dashed]- Authorization
+    SecurityContext <-[dashed]- Authorization
+}
+
+package authentication{
+    interface Credentials
+    interface Authentication<C:Credentials,P:CoSecPrincipal>{
+       authenticate(C): Mono<P>
+       supportCredentials: Class<C>
+    }
+    interface AuthenticationProvider{
+       get(Class<Credentials>): A?
+       getRequired(Class<Credentials>): A
+       register(A): Unit
+       register(Class<C>, A): Unit
+       register(A): Unit
+       getRequired(Class<Credentials>): A
+    }
+    CoSecPrincipal <-[dashed]- Authentication
+    Credentials <-[dashed]- Authentication
+    Authentication <-* AuthenticationProvider
+}
+
+@enduml
+
+@startuml
+
+
+header
+Wow: https://github.com/Ahoo-Wang/CoSec
+endheader
+
+center footer Wow: https://github.com/Ahoo-Wang/CoSec
+
+
+title CoSec Modeling Class Diagram
+
+interface Named{
+    name: String
+}
+
+package tenant{
+    interface Tenant {
+       val tenantId: String
+       val isPlatform: Boolean
+    }
+    interface TenantCapable {
+        val tenant: Tenant
+    }
+
+    Tenant <- -*  TenantCapable
+
+    note left of Tenant::isPlatform
+        Is it a root platform tenant?
+    end note
+}
+
+package policy{
+    enum PolicyType {
+        SYSTEM
+        CUSTOM
+        GLOBAL
+    }
+    interface Policy {
+        val id: String
+        val name: String
+        val type: PolicyType
+        val description: String
+        val tenantId:String
+        val statements: Set<Statement>
+    }
+    enum Effect {
+        ALLOW
+        DENY
+    }
+    interface RequestMatcher {
+        match(Request,SecurityContext): Boolean
+    }
+    interface ActionMatcher
+    interface ConditionMatcher
+    enum VerifyResult{
+        ALLOW
+        EXPLICIT_DENY
+        IMPLICIT_DENY
+    }
+    interface Statement{
+        val effect: Effect
+        val actions: Set<ActionMatcher>
+        val conditions: Set<ConditionMatcher>
+    }
+
+    interface PermissionVerifier {
+        verify(Request,SecurityContext): VerifyResult
+    }
+    interface PolicyEvaluator {
+        evaluate(Policy)
+    }
+    interface PolicyCapable {
+        val policies: Set<String>
+    }
+    RequestMatcher <|- - ActionMatcher
+    RequestMatcher <|- - ConditionMatcher
+    PermissionVerifier <|- - Statement
+    Effect <- -*  Statement
+    ActionMatcher <- -*  Statement
+    ConditionMatcher <- -*  Statement
+    PolicyType <- -*  Policy
+    Statement <- -*  Policy
+
+    note top of PolicyEvaluator
+        Used to evaluate the effectiveness of the Policy
+    end note
+}
+
+package role{
+    interface Role {
+        val id: String
+        val name: String
+        val description: String
+        val tenantId:String
+    }
+
+    PolicyCapable <|- - Role
+}
+
+
+
+package principal{
+    interface RoleCapable {
+        val roles: Set<String>
+    }
+    interface CoSecPrincipal{
+        val id: String
+        val attrs: Map<String, String>
+        anonymous(): Boolean
+        authenticated(): Boolean
+    }
+    interface TenantPrincipal
+
+    TenantCapable <|- - TenantPrincipal
+    CoSecPrincipal <|- - TenantPrincipal
+    Named <|- - CoSecPrincipal
+    RoleCapable <|- - TenantPrincipal
+    PolicyCapable <|- - CoSecPrincipal
+    note right of RoleCapable::role
+        A set of roles
+    end note
+}
+
+package context{
+    interface SecurityContext {
+        val principal: CoSecPrincipal
+        setAttribute(String, Object): SecurityContext
+        getAttribute(String): T?
+        getRequiredAttribute(String): T
+    }
+    TenantCapable <|- -  SecurityContext
+    CoSecPrincipal - -* SecurityContext
+
+    interface Request<A : Any>{
+        val action: A
+    }
+
+    interface HttpRequest
+    TenantCapable <|- - Request
+    Request <|- -  HttpRequest
+
+    note right of HttpRequest
+        HttpRequest::action
+        format: {url}:{method}
+    end note
+}
+
+package authorization{
+    interface AuthorizeResult {
+        val authorized: Boolean
+        val reason: String
+    }
+    interface Authorization {
+        authorize(Request,SecurityContext): Mono<AuthorizeResult>
+    }
+    Request <-[dashed]- Authorization
+    SecurityContext <-[dashed]- Authorization
+}
+
+package authentication{
+    interface Credentials
+    interface Authentication<C:Credentials,P:CoSecPrincipal>{
+       authenticate(C): Mono<P>
+       supportCredentials: Class<C>
+    }
+    interface AuthenticationProvider{
+       get(Class<Credentials>): A?
+       getRequired(Class<Credentials>): A
+       register(A): Unit
+       register(Class<C>, A): Unit
+       register(A): Unit
+       getRequired(Class<Credentials>): A
+    }
+    CoSecPrincipal <-[dashed]- Authentication
+    Credentials <-[dashed]- Authentication
+    Authentication <-* AuthenticationProvider
+}
+
+@enduml
+
+PlantUML version 1.2022.12(Mon Oct 24 02:12:26 CST 2022)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Default Encoding: UTF-8
+Language: zh
+Country: CN
+--></g></svg>
