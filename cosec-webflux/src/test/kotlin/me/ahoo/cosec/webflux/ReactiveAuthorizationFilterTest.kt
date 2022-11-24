@@ -22,6 +22,7 @@ import me.ahoo.cosec.authorization.Authorization
 import me.ahoo.cosec.authorization.AuthorizeResult
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.jwt.Jwts
+import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpStatus
@@ -29,6 +30,7 @@ import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
+import java.nio.ByteBuffer
 
 internal class ReactiveAuthorizationFilterTest {
 
@@ -80,8 +82,9 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { request.path.value() } returns "/path"
             every { request.methodValue } returns "GET"
-            every { response.setComplete() } returns Mono.empty()
             every { response.setStatusCode(HttpStatus.UNAUTHORIZED) } returns true
+            every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
+            every { response.writeWith(any()) } returns Mono.empty()
             every {
                 mutate()
                     .principal(any())
@@ -93,7 +96,8 @@ internal class ReactiveAuthorizationFilterTest {
         verify {
             authorization.authorize(any(), any())
             exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-            exchange.response.setComplete()
+            exchange.response.bufferFactory().wrap(any() as ByteArray)
+            exchange.response.writeWith(any())
         }
     }
 
@@ -114,8 +118,9 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { request.path.value() } returns "/path"
             every { request.methodValue } returns "GET"
-            every { response.setComplete() } returns Mono.empty()
             every { response.setStatusCode(HttpStatus.FORBIDDEN) } returns true
+            every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
+            every { response.writeWith(any()) } returns Mono.empty()
             every {
                 mutate()
                     .principal(any())
@@ -127,7 +132,8 @@ internal class ReactiveAuthorizationFilterTest {
         verify {
             authorization.authorize(any(), any())
             exchange.response.statusCode = HttpStatus.FORBIDDEN
-            exchange.response.setComplete()
+            exchange.response.bufferFactory().wrap(any() as ByteArray)
+            exchange.response.writeWith(any())
         }
     }
 }

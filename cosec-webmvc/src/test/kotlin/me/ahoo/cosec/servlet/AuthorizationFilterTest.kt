@@ -21,6 +21,7 @@ import me.ahoo.cosec.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.jwt.Jwts
+import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
@@ -74,8 +75,10 @@ internal class AuthorizationFilterTest {
             every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
             every { setSecurityContext(any()) } returns Unit
         }
-        val servletResponse = mockk<HttpServletResponse>() {
+        val servletResponse = mockk<HttpServletResponse> {
             every { status = HttpStatus.UNAUTHORIZED.value() } returns Unit
+            every { outputStream.write(any() as ByteArray) } returns Unit
+            every { outputStream.flush() } returns Unit
         }
         val filterChain = mockk<FilterChain>() {
             every { doFilter(servletRequest, any()) } returns Unit
