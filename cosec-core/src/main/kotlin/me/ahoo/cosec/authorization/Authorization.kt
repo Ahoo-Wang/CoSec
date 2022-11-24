@@ -37,9 +37,9 @@ interface AuthorizeResult {
     val reason: String
 
     companion object {
-        val ALLOW: AuthorizeResult = AuthorizeResultData(true, "Allowed")
-        val EXPLICIT_DENY: AuthorizeResult = AuthorizeResultData(false, "Explicit Denied")
-        val IMPLICIT_DENY: AuthorizeResult = AuthorizeResultData(false, "Implicit Denied")
+        val ALLOW: AuthorizeResult = allow("Allow")
+        val EXPLICIT_DENY: AuthorizeResult = deny("Explicit Deny")
+        val IMPLICIT_DENY: AuthorizeResult = deny("Implicit Deny")
         fun allow(reason: String): AuthorizeResult = AuthorizeResultData(true, reason)
         fun deny(reason: String): AuthorizeResult = AuthorizeResultData(false, reason)
     }

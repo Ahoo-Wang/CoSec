@@ -17,6 +17,7 @@ import me.ahoo.cosec.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -61,6 +62,8 @@ abstract class AbstractAuthorizationInterceptor(
                     } else {
                         response.status = HttpStatus.FORBIDDEN.value()
                     }
+                    response.outputStream.write(CoSecJsonSerializer.writeValueAsBytes(it))
+                    response.outputStream.flush()
                     return@map false
                 }
                 true
