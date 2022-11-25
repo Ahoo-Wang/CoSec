@@ -14,7 +14,7 @@
 dependencies {
     api(platform("org.springframework.boot:spring-boot-dependencies:2.7.6"))
     api(platform("org.springframework.cloud:spring-cloud-dependencies:2021.0.5"))
-    api(platform("me.ahoo.cosid:cosid-bom:1.16.5"))
+    api(platform("me.ahoo.cosid:cosid-bom:2.0.0"))
     api(platform("me.ahoo.cocache:cocache-bom:0.3.5"))
     api(platform("me.ahoo.cosky:cosky-bom:3.0.5"))
     api(platform("me.zhyd.oauth:JustAuth:1.16.5"))
