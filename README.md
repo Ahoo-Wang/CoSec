@@ -1,6 +1,6 @@
 # CoSec
 
-RBAC-based And Policy-based Multi-Tenant Security Framework
+RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
 
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![GitHub release](https://img.shields.io/github/release/Ahoo-Wang/CoSec.svg)](https://github.com/Ahoo-Wang/CoSec/releases)
