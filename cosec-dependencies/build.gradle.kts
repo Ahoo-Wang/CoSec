@@ -24,7 +24,7 @@ dependencies {
         api("com.google.guava:guava:31.1-jre")
         api("org.junit-pioneer:junit-pioneer:1.9.0")
         api("org.hamcrest:hamcrest:2.2")
-        api("io.mockk:mockk:1.13.2")
+        api("io.mockk:mockk:1.13.3")
         api("org.openjdk.jmh:jmh-core:1.36")
         api("org.openjdk.jmh:jmh-generator-annprocess:1.36")
         api("io.gitlab.arturbosch.detekt:detekt-formatting:1.22.0")
