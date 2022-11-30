@@ -22,7 +22,7 @@ dependencies {
         api("ognl:ognl:3.3.4")
         api("com.auth0:java-jwt:4.2.1")
         api("com.google.guava:guava:31.1-jre")
-        api("org.junit-pioneer:junit-pioneer:1.9.0")
+        api("org.junit-pioneer:junit-pioneer:1.9.1")
         api("org.hamcrest:hamcrest:2.2")
         api("io.mockk:mockk:1.13.3")
         api("org.openjdk.jmh:jmh-core:1.36")
