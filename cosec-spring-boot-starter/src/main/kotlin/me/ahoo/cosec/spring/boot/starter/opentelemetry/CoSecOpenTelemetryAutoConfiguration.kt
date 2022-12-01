@@ -20,21 +20,27 @@ import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 
 @AutoConfiguration
 @ConditionalOnCoSecEnabled
 @ConditionalOnOpenTelemetryEnabled
 class CoSecOpenTelemetryAutoConfiguration {
 
-    @Bean
+    @Configuration
     @ConditionalOnMissingClass("org.springframework.cloud.gateway.filter.GlobalFilter")
-    fun traceWebFilter(): TraceWebFilter {
-        return TraceWebFilter
+    class Webflux {
+        @Bean
+        fun traceWebFilter(): TraceWebFilter {
+            return TraceWebFilter
+        }
     }
-
-    @Bean
+    @Configuration
     @ConditionalOnClass(name = ["org.springframework.cloud.gateway.filter.GlobalFilter"])
-    fun traceGatewayFilter(): TraceGatewayFilter {
-        return TraceGatewayFilter
+    class Gateway {
+        @Bean
+        fun traceGatewayFilter(): TraceGatewayFilter {
+            return TraceGatewayFilter
+        }
     }
 }

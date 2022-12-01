@@ -15,6 +15,7 @@ package me.ahoo.cosec.webflux
 import me.ahoo.cosec.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
+import org.springframework.core.Ordered
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilter
 import org.springframework.web.server.WebFilterChain
@@ -30,7 +31,7 @@ import reactor.util.context.Context
 class ReactiveInjectSecurityContextWebFilter(
     private val securityContextParser: SecurityContextParser<ServerWebExchange>
 ) :
-    WebFilter {
+    WebFilter, Ordered {
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
         return Mono.defer {
             try {
@@ -43,5 +44,9 @@ class ReactiveInjectSecurityContextWebFilter(
             }
             chain.filter(exchange)
         }
+    }
+
+    override fun getOrder(): Int {
+        return Ordered.HIGHEST_PRECEDENCE
     }
 }
