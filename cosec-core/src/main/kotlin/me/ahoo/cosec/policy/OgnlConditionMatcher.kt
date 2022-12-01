@@ -19,7 +19,7 @@ import ognl.Ognl
 
 data class OgnlConditionMatcher(override val pattern: String) : ConditionMatcher {
     companion object {
-        const val TYPE = "OGNL"
+        const val TYPE = "ognl"
     }
 
     override val type: String

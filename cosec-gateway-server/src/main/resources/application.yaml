@@ -19,6 +19,12 @@ spring:
             - Path=/cosec-auth/**
           filters:
             - StripPrefix=1
+#        - id: baidu
+#          uri: https://www.baidu.com
+#          predicates:
+#            - Path=/baidu/**
+#          filters:
+#            - StripPrefix=1
 cosid:
   namespace: ${spring.application.name}
   machine:

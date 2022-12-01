@@ -19,7 +19,7 @@ import me.ahoo.cosec.context.request.Request
 interface ConditionMatcher : RequestMatcher
 
 object AllConditionMatcher : ConditionMatcher {
-    const val TYPE = "ALL"
+    const val TYPE = "all"
     override val type: String
         get() = TYPE
     override val pattern: String
@@ -31,7 +31,7 @@ object AllConditionMatcher : ConditionMatcher {
 }
 
 object NoneConditionMatcher : ConditionMatcher {
-    const val TYPE = "NONE"
+    const val TYPE = "none"
     override val type: String
         get() = TYPE
     override val pattern: String

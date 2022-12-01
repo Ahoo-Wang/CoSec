@@ -1,26 +1,56 @@
 {
-  "name": "Anonymous",
-  "effect": "allow",
-  "description": "Anonymous",
-  "type": "global",
+  "id": "2",
+  "name": "auth",
+  "category": "auth",
+  "description": "",
+  "type": "system",
+  "tenantId": "1",
   "statements": [
     {
+      "effect": "allow"
+    },
+    {
+      "effect": "deny",
       "actions": [
         {
-          "path": "/",
-          "verbs": [
-            "*"
-          ]
+          "type": "all"
+        },
+        {
+          "type": "none"
+        },
+        {
+          "type": "path",
+          "pattern": ".*"
+        },
+        {
+          "type": "path",
+          "pattern": "#{principal.id}.*"
+        },
+        {
+          "type": "reg",
+          "pattern": ".*"
+        },
+        {
+          "type": "reg",
+          "pattern": "#{principal.id}.*"
         }
       ],
-//      "resources": [
-//        "my-app:*"
-//      ],
-//      "conditions": {
-//        "string_equals": {
-//          "aws:username": "my-user"
-//        }
-//      }
+      "conditions": [
+        {
+          "type": "all"
+        },
+        {
+          "type": "none"
+        },
+        {
+          "type": "spel",
+          "pattern": "context.principal.id=='1'"
+        },
+        {
+          "type": "ognl",
+          "pattern": "action == \"auth/login:POST\""
+        }
+      ]
     }
   ]
 }

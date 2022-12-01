@@ -15,7 +15,7 @@ package me.ahoo.cosec.policy
 
 object ActionMatcherFactory {
     fun create(type: String, pattern: String): ActionMatcher {
-        return when (type.uppercase()) {
+        return when (type.lowercase()) {
             AllActionMatcher.TYPE -> AllActionMatcher
             NoneActionMatcher.TYPE -> NoneActionMatcher
             PathActionMatcher.TYPE -> if (ActionPatternReplacer.isTemplate(pattern)) {
