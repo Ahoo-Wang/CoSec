@@ -25,10 +25,10 @@ import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 
 private const val COSEC_TENANT_ID_KEY = CoSec.COSEC_PREFIX + RequestTenantIdParser.TENANT_ID_KEY
-private val COSEC_TENANT_ID_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_TENANT_ID_KEY)
+val COSEC_TENANT_ID_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_TENANT_ID_KEY)
 
 private const val COSEC_POLICY_KEY = CoSec.COSEC_PREFIX + PolicyCapable.POLICY_KEY
-private val COSEC_POLICY_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_POLICY_KEY)
+val COSEC_POLICY_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_POLICY_KEY)
 
 const val SEPARATOR = ","
 

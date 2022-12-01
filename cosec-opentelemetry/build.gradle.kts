@@ -17,4 +17,6 @@ dependencies {
     implementation("org.springframework.cloud:spring-cloud-gateway-server")
     implementation("io.opentelemetry:opentelemetry-api")
     implementation("io.opentelemetry:opentelemetry-semconv")
+    testImplementation("io.projectreactor:reactor-test")
+    testImplementation("io.opentelemetry:opentelemetry-sdk")
 }
