@@ -12,8 +12,11 @@
  */
 package me.ahoo.cosec.spring.boot.starter
 
+import me.ahoo.cosec.policy.serialization.CoSecModule
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.context.annotation.Bean
 
 /**
  * CoSec AutoConfiguration .
@@ -23,4 +26,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @AutoConfiguration
 @ConditionalOnCoSecEnabled
 @EnableConfigurationProperties(CoSecProperties::class)
-class CoSecAutoConfiguration
+class CoSecAutoConfiguration {
+    @Bean
+    @ConditionalOnMissingBean
+    fun coSecModule(): CoSecModule {
+        return CoSecModule()
+    }
+}
