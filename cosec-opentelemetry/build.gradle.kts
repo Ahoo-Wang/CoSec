@@ -19,4 +19,6 @@ dependencies {
     implementation("io.opentelemetry:opentelemetry-semconv")
     testImplementation("io.projectreactor:reactor-test")
     testImplementation("io.opentelemetry:opentelemetry-sdk")
+    testImplementation(project(":cosec-webflux"))
+    testImplementation("org.springframework.cloud:spring-cloud-gateway-server")
 }

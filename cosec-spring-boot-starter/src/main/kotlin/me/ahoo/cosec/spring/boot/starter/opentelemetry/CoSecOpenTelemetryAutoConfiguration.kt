@@ -35,6 +35,7 @@ class CoSecOpenTelemetryAutoConfiguration {
             return TraceWebFilter
         }
     }
+
     @Configuration
     @ConditionalOnClass(name = ["org.springframework.cloud.gateway.filter.GlobalFilter"])
     class Gateway {
