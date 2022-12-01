@@ -19,7 +19,7 @@ import org.springframework.expression.Expression
 
 data class SpelConditionMatcher(override val pattern: String) : ConditionMatcher {
     companion object {
-        const val TYPE = "SPEL"
+        const val TYPE = "spel"
     }
 
     override val type: String

@@ -15,7 +15,7 @@ package me.ahoo.cosec.policy
 
 object ConditionMatcherFactory {
     fun create(type: String, pattern: String): ConditionMatcher {
-        return when (type.uppercase()) {
+        return when (type.lowercase()) {
             AllConditionMatcher.TYPE -> AllConditionMatcher
             NoneConditionMatcher.TYPE -> NoneConditionMatcher
             SpelConditionMatcher.TYPE -> SpelConditionMatcher(pattern)

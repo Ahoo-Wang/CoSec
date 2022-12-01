@@ -18,7 +18,7 @@ import me.ahoo.cosec.context.request.Request
 
 data class RegularActionMatcher(override val pattern: String) : ActionMatcher {
     companion object {
-        const val TYPE = "REG"
+        const val TYPE = "reg"
     }
 
     private val matcher: Regex = pattern.toRegex(RegexOption.IGNORE_CASE)

@@ -20,7 +20,7 @@ import org.springframework.web.util.pattern.PathPatternParser
 
 data class PathActionMatcher(override val pattern: String) : ActionMatcher {
     companion object {
-        const val TYPE = "PATH"
+        const val TYPE = "path"
     }
 
     override val type: String

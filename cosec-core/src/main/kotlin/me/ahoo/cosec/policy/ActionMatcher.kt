@@ -22,7 +22,7 @@ import org.springframework.expression.spel.standard.SpelExpressionParser
 interface ActionMatcher : RequestMatcher
 
 object AllActionMatcher : ActionMatcher {
-    const val TYPE = "ALL"
+    const val TYPE = "all"
     override val type: String
         get() = TYPE
     override val pattern: String
@@ -34,7 +34,7 @@ object AllActionMatcher : ActionMatcher {
 }
 
 object NoneActionMatcher : ActionMatcher {
-    const val TYPE = "NONE"
+    const val TYPE = "none"
     override val type: String
         get() = TYPE
     override val pattern: String
