@@ -10,34 +10,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.webflux
 
-import me.ahoo.cosec.authorization.Authorization
-import me.ahoo.cosec.context.SecurityContextParser
-import me.ahoo.cosec.context.request.RequestParser
+package me.ahoo.cosec.opentelemetry.gateway
+
+import me.ahoo.cosec.opentelemetry.ReactiveTraceFilter
+import org.springframework.cloud.gateway.filter.GatewayFilterChain
+import org.springframework.cloud.gateway.filter.GlobalFilter
 import org.springframework.core.Ordered
 import org.springframework.web.server.ServerWebExchange
-import org.springframework.web.server.WebFilter
-import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 
-/**
- * Reactive Authorization Filter .
- *
- * @author ahoo wang
- */
-class ReactiveAuthorizationFilter(
-    securityContextParser: SecurityContextParser<ServerWebExchange>,
-    requestParser: RequestParser<ServerWebExchange>,
-    authorization: Authorization
-) : WebFilter, Ordered, ReactiveSecurityFilter(securityContextParser, requestParser, authorization) {
-    override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
-        return filterInternal(exchange) {
+object TraceGatewayFilter : GlobalFilter, Ordered {
+    override fun filter(
+        exchange: ServerWebExchange,
+        chain: GatewayFilterChain
+    ): Mono<Void> {
+        return ReactiveTraceFilter.filter(exchange) {
             chain.filter(it)
         }
     }
 
     override fun getOrder(): Int {
-        return Ordered.HIGHEST_PRECEDENCE
+        return Ordered.HIGHEST_PRECEDENCE + 1
     }
 }

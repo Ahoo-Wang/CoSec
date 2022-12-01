@@ -10,28 +10,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package me.ahoo.cosec.spring.boot.starter.opentelemetry
 
-rootProject.name = "CoSec"
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 
-include(":cosec-bom")
-include(":cosec-dependencies")
-include(":cosec-core")
-include(":cosec-jwt")
-include(":cosec-redis")
-include(":cosec-oauth")
-include(":cosec-webmvc")
-include(":cosec-webflux")
-include(":cosec-spring-boot-starter")
-include(":cosec-gateway")
-include(":cosec-gateway-server")
-include(":cosec-opentelemetry")
-
-buildscript {
-    repositories {
-        gradlePluginPortal()
-    }
-    dependencies {
-        classpath("me.champeau.jmh:jmh-gradle-plugin:0.6.8")
-        classpath("io.github.gradle-nexus:publish-plugin:1.1.0")
-    }
-}
+/**
+ * Conditional On Opentelemetry Enabled.
+ *
+ * @author ahoo wang
+ */
+@ConditionalOnClass(
+    name = [
+        "me.ahoo.cosec.opentelemetry.ReactiveTraceFilter",
+        "io.opentelemetry.api.trace.Span"
+    ]
+)
+annotation class ConditionalOnOpenTelemetryEnabled

@@ -18,10 +18,12 @@ dependencies {
     api(platform("me.ahoo.cocache:cocache-bom:0.3.5"))
     api(platform("me.ahoo.cosky:cosky-bom:3.0.5"))
     api(platform("me.zhyd.oauth:JustAuth:1.16.5"))
+    api(platform("io.opentelemetry:opentelemetry-bom:1.20.1"))
     constraints {
         api("ognl:ognl:3.3.4")
         api("com.auth0:java-jwt:4.2.1")
         api("com.google.guava:guava:31.1-jre")
+        api("io.opentelemetry:opentelemetry-semconv:1.20.1-alpha")
         api("org.junit-pioneer:junit-pioneer:1.9.1")
         api("org.hamcrest:hamcrest:2.2")
         api("io.mockk:mockk:1.13.3")

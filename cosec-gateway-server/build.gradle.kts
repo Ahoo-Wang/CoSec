@@ -61,6 +61,7 @@ dependencies {
     implementation(project(":cosec-redis"))
     implementation(project(":cosec-webflux"))
     implementation(project(":cosec-gateway"))
+    implementation(project(":cosec-opentelemetry"))
     implementation(project(":cosec-spring-boot-starter"))
     implementation("me.ahoo.cocache:cocache-spring-boot-starter")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
