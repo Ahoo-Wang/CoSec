@@ -33,6 +33,39 @@ import reactor.core.publisher.Mono
 import reactor.kotlin.test.test
 
 class ReactiveTraceFilterTest {
+    companion object {
+        val tracer: Tracer by lazy {
+            GlobalOpenTelemetry.getTracer("test")
+        }
+
+        init {
+            val sdkTracerProvider: SdkTracerProvider = SdkTracerProvider.builder()
+                .build()
+            OpenTelemetrySdk.builder()
+                .setTracerProvider(sdkTracerProvider)
+                .setPropagators(ContextPropagators.create(W3CTraceContextPropagator.getInstance()))
+                .buildAndRegisterGlobal()
+        }
+    }
+
+    @Test
+    fun filterWithError() {
+        val span = tracer.spanBuilder("test").startSpan()
+        try {
+            span.makeCurrent().use {
+                val exchange = mockk<ServerWebExchange>() {
+                    every { getSecurityContext() } throws RuntimeException("test")
+                }
+                ReactiveTraceFilter.filter(exchange) {
+                    Mono.empty()
+                }.test()
+                    .verifyComplete()
+            }
+        } finally {
+            span.end()
+        }
+
+    }
 
     @Test
     fun filterWithoutSecurityContext() {
@@ -60,13 +93,7 @@ class ReactiveTraceFilterTest {
 
     @Test
     fun filter() {
-        val sdkTracerProvider: SdkTracerProvider = SdkTracerProvider.builder()
-            .build()
-        OpenTelemetrySdk.builder()
-            .setTracerProvider(sdkTracerProvider)
-            .setPropagators(ContextPropagators.create(W3CTraceContextPropagator.getInstance()))
-            .buildAndRegisterGlobal()
-        val tracer: Tracer = GlobalOpenTelemetry.getTracer("test")
+
         val span = tracer.spanBuilder("test").startSpan()
         try {
             assertThat(span.isRecording, `is`(true))
