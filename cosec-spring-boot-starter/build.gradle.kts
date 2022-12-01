@@ -35,6 +35,10 @@ java {
         usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
         capability(group.toString(), "cache-support", version.toString())
     }
+    registerFeature("opentelemetrySupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "opentelemetry-support", version.toString())
+    }
 }
 dependencies {
     kapt(platform(project(":cosec-dependencies")))
@@ -46,6 +50,7 @@ dependencies {
     "oauthSupportImplementation"(project(":cosec-oauth"))
     "cacheSupportImplementation"(project(":cosec-redis"))
     "cacheSupportImplementation"("me.ahoo.cocache:cocache-spring-boot-starter")
+    "opentelemetrySupportImplementation"(project(":cosec-opentelemetry"))
     implementation("me.ahoo.cosid:cosid-spring-boot-starter")
     api("org.springframework.boot:spring-boot-starter")
     kapt("org.springframework.boot:spring-boot-configuration-processor")

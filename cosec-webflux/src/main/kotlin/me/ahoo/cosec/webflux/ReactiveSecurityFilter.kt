@@ -31,31 +31,29 @@ abstract class ReactiveSecurityFilter(
     val authorization: Authorization
 ) {
     fun filterInternal(exchange: ServerWebExchange, chain: (ServerWebExchange) -> Mono<Void>): Mono<Void> {
-        return Mono.defer {
-            val securityContext = securityContextParser.parse(exchange)
-            val request = requestParser.parse(exchange)
-            authorization.authorize(request, securityContext)
-                .flatMap { authorizeResult ->
-                    if (authorizeResult.authorized) {
-                        exchange.mutate()
-                            .principal(securityContext.principal.toMono())
-                            .build().let {
-                                exchange.setSecurityContext(securityContext)
-                                return@flatMap chain(it)
-                                    .contextWrite { ctx: Context -> ctx.put(SecurityContext.KEY, securityContext) }
-                            }
-                    }
-                    val principal = securityContext.principal
-                    if (!principal.authenticated()) {
-                        exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-                    } else {
-                        exchange.response.statusCode = HttpStatus.FORBIDDEN
-                    }
-                    val builder =
-                        exchange.response.bufferFactory().wrap(CoSecJsonSerializer.writeValueAsBytes(authorizeResult))
-                            .toMono()
-                    exchange.response.writeWith(builder)
+        val securityContext = securityContextParser.parse(exchange)
+        val request = requestParser.parse(exchange)
+        return authorization.authorize(request, securityContext)
+            .flatMap { authorizeResult ->
+                if (authorizeResult.authorized) {
+                    exchange.mutate()
+                        .principal(securityContext.principal.toMono())
+                        .build().let {
+                            exchange.setSecurityContext(securityContext)
+                            return@flatMap chain(it)
+                                .contextWrite { ctx: Context -> ctx.put(SecurityContext.KEY, securityContext) }
+                        }
                 }
-        }
+                val principal = securityContext.principal
+                if (!principal.authenticated()) {
+                    exchange.response.statusCode = HttpStatus.UNAUTHORIZED
+                } else {
+                    exchange.response.statusCode = HttpStatus.FORBIDDEN
+                }
+                val builder =
+                    exchange.response.bufferFactory().wrap(CoSecJsonSerializer.writeValueAsBytes(authorizeResult))
+                        .toMono()
+                exchange.response.writeWith(builder)
+            }
     }
 }

@@ -11,27 +11,12 @@
  * limitations under the License.
  */
 
-rootProject.name = "CoSec"
-
-include(":cosec-bom")
-include(":cosec-dependencies")
-include(":cosec-core")
-include(":cosec-jwt")
-include(":cosec-redis")
-include(":cosec-oauth")
-include(":cosec-webmvc")
-include(":cosec-webflux")
-include(":cosec-spring-boot-starter")
-include(":cosec-gateway")
-include(":cosec-gateway-server")
-include(":cosec-opentelemetry")
-
-buildscript {
-    repositories {
-        gradlePluginPortal()
-    }
-    dependencies {
-        classpath("me.champeau.jmh:jmh-gradle-plugin:0.6.8")
-        classpath("io.github.gradle-nexus:publish-plugin:1.1.0")
-    }
+dependencies {
+    api(project(":cosec-core"))
+    implementation(project(":cosec-webflux"))
+    implementation("org.springframework.cloud:spring-cloud-gateway-server")
+    implementation("io.opentelemetry:opentelemetry-api")
+    implementation("io.opentelemetry:opentelemetry-semconv")
+    testImplementation("io.projectreactor:reactor-test")
+    testImplementation("io.opentelemetry:opentelemetry-sdk")
 }
