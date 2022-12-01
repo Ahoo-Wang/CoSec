@@ -24,7 +24,10 @@ import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
+import org.hamcrest.MatcherAssert.assertThat
+import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
+import org.springframework.core.Ordered
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilterChain
@@ -44,6 +47,7 @@ internal class ReactiveAuthorizationFilterTest {
             ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE),
             authorization
         )
+        assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE + 1))
         val exchange = mockk<ServerWebExchange>() {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
             every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
