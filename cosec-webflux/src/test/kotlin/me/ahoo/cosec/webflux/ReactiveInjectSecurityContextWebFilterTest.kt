@@ -18,7 +18,10 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.verify
+import me.ahoo.cosec.authorization.Authorization
+import me.ahoo.cosec.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContext
+import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
@@ -28,6 +31,7 @@ import org.springframework.core.Ordered
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
+import reactor.kotlin.core.publisher.toMono
 
 internal class ReactiveInjectSecurityContextWebFilterTest {
 
@@ -37,12 +41,20 @@ internal class ReactiveInjectSecurityContextWebFilterTest {
         assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE))
         val exchange = mockk<ServerWebExchange>() {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
+            every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
+            every { request.path.value() } returns "/path"
+            every { request.methodValue } returns "GET"
             every { setSecurityContext(any()) } just runs
+            every {
+                mutate()
+                    .principal(any())
+                    .build()
+            } returns this
         }
-        val chain = mockk<WebFilterChain>() {
+        val filterChain = mockk<WebFilterChain> {
             every { filter(exchange) } returns Mono.empty()
         }
-        filter.filter(exchange, chain).block()
+        filter.filter(exchange, filterChain).block()
         verify {
             exchange.setSecurityContext(SecurityContext.ANONYMOUS)
         }

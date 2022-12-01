@@ -20,6 +20,7 @@ import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilter
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
+import reactor.kotlin.core.publisher.toMono
 import reactor.util.context.Context
 
 /**
@@ -33,17 +34,19 @@ class ReactiveInjectSecurityContextWebFilter(
 ) :
     WebFilter, Ordered {
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
-        return Mono.defer {
-            try {
-                val securityContext = securityContextParser.parse(exchange)
-                exchange.setSecurityContext(securityContext)
-                return@defer chain.filter(exchange)
-                    .contextWrite { ctx: Context -> ctx.put(SecurityContext.KEY, securityContext) }
-            } catch (ignored: Throwable) {
-                // ignored
-            }
-            chain.filter(exchange)
+        try {
+            val securityContext = securityContextParser.parse(exchange)
+            exchange.mutate()
+                .principal(securityContext.principal.toMono())
+                .build().let {
+                    exchange.setSecurityContext(securityContext)
+                    return chain.filter(it)
+                        .contextWrite { ctx: Context -> ctx.put(SecurityContext.KEY, securityContext) }
+                }
+        } catch (ignored: Throwable) {
+            // ignored
         }
+        return chain.filter(exchange)
     }
 
     override fun getOrder(): Int {
