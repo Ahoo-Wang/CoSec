@@ -47,7 +47,7 @@ internal class ReactiveAuthorizationFilterTest {
             ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE),
             authorization
         )
-        assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE + 1))
+        assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE))
         val exchange = mockk<ServerWebExchange>() {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
             every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
