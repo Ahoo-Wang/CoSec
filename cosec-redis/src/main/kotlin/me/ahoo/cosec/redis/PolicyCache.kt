@@ -14,7 +14,7 @@ package me.ahoo.cosec.redis
 
 import me.ahoo.cache.Cache
 import me.ahoo.cosec.Delegated
-import me.ahoo.cosec.policy.Policy
+import me.ahoo.cosec.api.policy.Policy
 
 /**
  * Policy Cache .

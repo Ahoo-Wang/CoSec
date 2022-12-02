@@ -12,8 +12,8 @@
  */
 package me.ahoo.cosec.servlet
 
-import me.ahoo.cosec.authorization.Authorization
-import me.ahoo.cosec.context.SecurityContext
+import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser

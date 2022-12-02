@@ -12,8 +12,9 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authentication
 
-import me.ahoo.cosec.authentication.Authentication
-import me.ahoo.cosec.authentication.AuthenticationProvider
+import me.ahoo.cosec.api.authentication.Authentication
+import me.ahoo.cosec.api.authentication.AuthenticationProvider
+import me.ahoo.cosec.authentication.DefaultAuthenticationProvider
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -37,12 +38,11 @@ class CoSecAuthenticationAutoConfiguration {
     fun authenticationProvider(
         authentications: List<Authentication<*, *>>
     ): AuthenticationProvider {
-        val authenticationProvider = AuthenticationProvider.DEFAULT
         authentications.forEach {
-            authenticationProvider.register(
+            DefaultAuthenticationProvider.register(
                 it
             )
         }
-        return authenticationProvider
+        return DefaultAuthenticationProvider
     }
 }

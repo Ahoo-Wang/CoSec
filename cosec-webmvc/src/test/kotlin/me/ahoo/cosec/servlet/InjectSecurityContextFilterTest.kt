@@ -15,8 +15,8 @@ package me.ahoo.cosec.servlet
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextHolder
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.jwt.Jwts
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
@@ -36,7 +36,7 @@ internal class InjectSecurityContextFilterTest {
             every { doFilter(request, any()) } returns Unit
         }
         filter.doFilter(request, mockk(), filterChain)
-        assertThat(SecurityContextHolder.requiredContext, equalTo(SecurityContext.ANONYMOUS))
+        assertThat(SecurityContextHolder.requiredContext, equalTo(SimpleSecurityContext.ANONYMOUS))
     }
 
     @Test

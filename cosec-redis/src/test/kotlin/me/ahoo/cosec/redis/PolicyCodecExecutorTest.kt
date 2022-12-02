@@ -15,9 +15,9 @@ package me.ahoo.cosec.redis
 import me.ahoo.cache.CacheValue
 import me.ahoo.cache.TtlAt
 import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
-import me.ahoo.cosec.policy.Policy
+import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.policy.PolicyData
-import me.ahoo.cosec.policy.PolicyType
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
 import me.ahoo.cosid.test.MockIdGenerator

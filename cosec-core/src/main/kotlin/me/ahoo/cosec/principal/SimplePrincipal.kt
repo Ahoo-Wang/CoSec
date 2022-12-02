@@ -12,6 +12,8 @@
  */
 package me.ahoo.cosec.principal
 
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+
 /**
  * Simple Principal.
  *
@@ -24,6 +26,12 @@ data class SimplePrincipal(
     override val roles: Set<String> = emptySet(),
     override val attrs: Map<String, Any> = emptyMap()
 ) : CoSecPrincipal {
+
+    companion object {
+        @JvmField
+        val ANONYMOUS: CoSecPrincipal = SimplePrincipal(CoSecPrincipal.ANONYMOUS_ID, CoSecPrincipal.ANONYMOUS_NAME)
+    }
+
     override fun getName(): String {
         return name
     }

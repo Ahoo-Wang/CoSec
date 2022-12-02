@@ -12,11 +12,11 @@
  */
 package me.ahoo.cosec.webflux
 
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.context.AbstractSecurityContextParser
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.jwt.Jwts.parseAccessToken
-import me.ahoo.cosec.principal.CoSecPrincipal
-import me.ahoo.cosec.token.AccessToken
 import me.ahoo.cosec.token.TokenConverter
 import org.springframework.web.server.ServerWebExchange
 

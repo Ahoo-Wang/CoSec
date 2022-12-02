@@ -15,7 +15,7 @@ package me.ahoo.cosec.policy
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.context.request.Request
+import me.ahoo.cosec.api.context.request.Request
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.params.ParameterizedTest

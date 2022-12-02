@@ -18,11 +18,10 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.verify
-import me.ahoo.cosec.authorization.Authorization
-import me.ahoo.cosec.authorization.AuthorizeResult
+import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.jwt.Jwts
-import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
@@ -33,7 +32,6 @@ import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
-import java.nio.ByteBuffer
 
 internal class ReactiveAuthorizationFilterTest {
 

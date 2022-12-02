@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.policy
 
+import me.ahoo.cosec.api.policy.Policy
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource

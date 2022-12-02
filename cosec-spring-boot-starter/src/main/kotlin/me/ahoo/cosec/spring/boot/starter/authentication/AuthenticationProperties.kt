@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authentication
 
-import me.ahoo.cosec.CoSec
+import me.ahoo.cosec.api.CoSec
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.ConstructorBinding
 

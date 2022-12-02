@@ -12,7 +12,10 @@
  */
 package me.ahoo.cosec.token
 
-import me.ahoo.cosec.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.token.AccessToken
+import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.api.token.TokenPrincipal
 
 /**
  * Token Converter.

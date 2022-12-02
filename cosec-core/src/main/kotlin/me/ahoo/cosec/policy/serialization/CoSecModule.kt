@@ -14,10 +14,10 @@
 package me.ahoo.cosec.policy.serialization
 
 import com.fasterxml.jackson.databind.module.SimpleModule
-import me.ahoo.cosec.policy.ActionMatcher
-import me.ahoo.cosec.policy.ConditionMatcher
-import me.ahoo.cosec.policy.Policy
-import me.ahoo.cosec.policy.Statement
+import me.ahoo.cosec.api.policy.ActionMatcher
+import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.policy.Statement
 
 class CoSecModule : SimpleModule() {
     init {

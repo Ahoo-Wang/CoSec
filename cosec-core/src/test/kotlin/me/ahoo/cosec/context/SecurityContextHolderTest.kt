@@ -24,8 +24,8 @@ internal class SecurityContextHolderTest {
     @Test
     fun test() {
         assertThat(SecurityContextHolder.context, nullValue())
-        SecurityContextHolder.setContext(SecurityContext.ANONYMOUS)
-        assertThat(SecurityContextHolder.context, equalTo(SecurityContext.ANONYMOUS))
+        SecurityContextHolder.setContext(SimpleSecurityContext.ANONYMOUS)
+        assertThat(SecurityContextHolder.context, equalTo(SimpleSecurityContext.ANONYMOUS))
         SecurityContextHolder.remove()
         Assertions.assertThrows(IllegalArgumentException::class.java) {
             SecurityContextHolder.requiredContext

@@ -16,13 +16,13 @@ package me.ahoo.cosec.webflux
 import com.auth0.jwt.algorithms.Algorithm
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosid.test.MockIdGenerator
-import org.hamcrest.MatcherAssert
+import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
 import org.springframework.web.server.ServerWebExchange
@@ -39,7 +39,7 @@ abstract class SecurityContextParserSpec {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
         }
         val securityContext = createSecurityContextParser().parse(exchange)
-        MatcherAssert.assertThat(securityContext, equalTo(SecurityContext.ANONYMOUS))
+        assertThat(securityContext, equalTo(SimpleSecurityContext.ANONYMOUS))
     }
 
     @Test
@@ -51,7 +51,7 @@ abstract class SecurityContextParserSpec {
         }
 
         val securityContext = createSecurityContextParser().parse(exchange)
-        MatcherAssert.assertThat(securityContext.principal.id, equalTo(principal.id))
-        MatcherAssert.assertThat(securityContext.principal.name, equalTo(principal.name))
+        assertThat(securityContext.principal.id, equalTo(principal.id))
+        assertThat(securityContext.principal.name, equalTo(principal.name))
     }
 }

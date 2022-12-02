@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.servlet
 
-import me.ahoo.cosec.context.SecurityContext
+import me.ahoo.cosec.api.context.SecurityContext
 import javax.servlet.http.HttpServletRequest
 
 /**

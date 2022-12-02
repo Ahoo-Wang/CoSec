@@ -15,13 +15,12 @@ package me.ahoo.cosec.servlet
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.authorization.Authorization
-import me.ahoo.cosec.authorization.AuthorizeResult
-import me.ahoo.cosec.context.SecurityContext
+import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextHolder
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.jwt.Jwts
-import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
@@ -55,7 +54,7 @@ internal class AuthorizationFilterTest {
             every { doFilter(servletRequest, any()) } returns Unit
         }
         filter.doFilter(servletRequest, mockk<HttpServletResponse>(), filterChain)
-        assertThat(SecurityContextHolder.requiredContext, equalTo(SecurityContext.ANONYMOUS))
+        assertThat(SecurityContextHolder.requiredContext, equalTo(SimpleSecurityContext.ANONYMOUS))
     }
 
     @Test
@@ -84,6 +83,6 @@ internal class AuthorizationFilterTest {
             every { doFilter(servletRequest, any()) } returns Unit
         }
         filter.doFilter(servletRequest, servletResponse, filterChain)
-        assertThat(SecurityContextHolder.requiredContext, equalTo(SecurityContext.ANONYMOUS))
+        assertThat(SecurityContextHolder.requiredContext, equalTo(SimpleSecurityContext.ANONYMOUS))
     }
 }

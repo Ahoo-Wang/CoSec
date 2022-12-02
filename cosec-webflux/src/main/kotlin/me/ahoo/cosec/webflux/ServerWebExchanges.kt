@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.webflux
 
-import me.ahoo.cosec.context.SecurityContext
+import me.ahoo.cosec.api.context.SecurityContext
 import org.springframework.web.server.ServerWebExchange
 
 /**

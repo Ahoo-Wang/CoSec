@@ -48,10 +48,12 @@ internal class OAuthClientAuthenticationTest {
             .test()
             .consumeNextWith {
                 assertThat(
-                    it.id, `is`("id@clientId")
+                    it.id,
+                    `is`("id@clientId")
                 )
                 assertThat(
-                    it.name, `is`("username")
+                    it.name,
+                    `is`("username")
                 )
             }
             .verifyComplete()

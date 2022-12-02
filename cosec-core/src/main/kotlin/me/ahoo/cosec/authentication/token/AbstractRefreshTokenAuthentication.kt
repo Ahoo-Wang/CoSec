@@ -13,9 +13,9 @@
 
 package me.ahoo.cosec.authentication.token
 
-import me.ahoo.cosec.authentication.Authentication
+import me.ahoo.cosec.api.authentication.Authentication
+import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.token.TokenConverter
-import me.ahoo.cosec.token.TokenPrincipal
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 

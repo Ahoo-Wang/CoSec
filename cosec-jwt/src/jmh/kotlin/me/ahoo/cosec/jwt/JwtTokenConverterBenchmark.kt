@@ -13,10 +13,10 @@
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
+import me.ahoo.cosec.api.principal.TenantPrincipal
+import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.api.token.TokenTenantPrincipal
 import me.ahoo.cosec.jwt.Jwts.asPrincipal
-import me.ahoo.cosec.principal.TenantPrincipal
-import me.ahoo.cosec.token.CompositeToken
-import me.ahoo.cosec.token.TokenTenantPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.Scope

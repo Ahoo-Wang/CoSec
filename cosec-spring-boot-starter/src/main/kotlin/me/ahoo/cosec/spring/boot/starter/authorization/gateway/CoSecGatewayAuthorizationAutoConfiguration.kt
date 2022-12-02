@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.gateway
 
-import me.ahoo.cosec.authorization.Authorization
+import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.gateway.AuthorizationGatewayFilter

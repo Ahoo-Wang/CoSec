@@ -13,8 +13,8 @@
 
 package me.ahoo.cosec.redis
 
+import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.PermissionRepository
-import me.ahoo.cosec.policy.Policy
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 

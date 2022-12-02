@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.authentication.token
 
-import me.ahoo.cosec.authentication.Credentials
-import me.ahoo.cosec.token.CompositeToken
+import me.ahoo.cosec.api.authentication.Credentials
+import me.ahoo.cosec.api.token.CompositeToken
 
 interface RefreshTokenCredentials : Credentials, CompositeToken

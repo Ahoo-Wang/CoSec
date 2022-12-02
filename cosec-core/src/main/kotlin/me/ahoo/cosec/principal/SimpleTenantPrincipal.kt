@@ -13,7 +13,10 @@
 package me.ahoo.cosec.principal
 
 import me.ahoo.cosec.Delegated
-import me.ahoo.cosec.tenant.Tenant
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.TenantPrincipal
+import me.ahoo.cosec.api.tenant.Tenant
+import me.ahoo.cosec.tenant.SimpleTenant
 
 /**
  * Simple Tenant Principal .
@@ -25,4 +28,9 @@ data class SimpleTenantPrincipal(
     override val tenant: Tenant
 ) : TenantPrincipal,
     CoSecPrincipal by delegate,
-    Delegated<CoSecPrincipal>
+    Delegated<CoSecPrincipal> {
+    companion object {
+        @JvmField
+        val ANONYMOUS: TenantPrincipal = SimpleTenantPrincipal(SimplePrincipal.ANONYMOUS, SimpleTenant.DEFAULT)
+    }
+}

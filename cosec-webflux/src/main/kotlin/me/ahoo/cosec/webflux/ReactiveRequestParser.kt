@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.webflux
 
-import me.ahoo.cosec.context.request.Request
+import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import org.springframework.web.server.ServerWebExchange

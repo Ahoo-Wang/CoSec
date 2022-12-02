@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.context
 
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.authorization.IllegalTenantContextException
 
 /**

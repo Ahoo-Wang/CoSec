@@ -15,8 +15,8 @@ package me.ahoo.cosec.servlet
 
 import io.mockk.every
 import io.mockk.mockk
+import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.context.request.RequestTenantIdParser
-import me.ahoo.cosec.tenant.Tenant
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test

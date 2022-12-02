@@ -13,7 +13,7 @@
 package me.ahoo.cosec.spring.boot.starter.authorization
 
 import com.auth0.jwt.algorithms.Algorithm
-import me.ahoo.cosec.authorization.Authorization
+import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.authorization.PermissionRepository
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.context.SecurityContextParser
