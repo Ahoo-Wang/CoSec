@@ -22,8 +22,8 @@ import me.ahoo.cache.distributed.DistributedCache
 import me.ahoo.cache.spring.redis.RedisDistributedCache
 import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
 import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
+import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.PermissionRepository
-import me.ahoo.cosec.policy.Policy
 import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.redis.GlobalPolicyIndexCache
 import me.ahoo.cosec.redis.GlobalPolicyIndexKey

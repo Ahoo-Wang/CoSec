@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.servlet
 
-import me.ahoo.cosec.context.request.Request
+import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import javax.servlet.http.HttpServletRequest

@@ -15,8 +15,8 @@ package me.ahoo.cosec.redis
 
 import io.mockk.every
 import io.mockk.mockk
+import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.policy.PolicyData
-import me.ahoo.cosec.policy.PolicyType
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
 

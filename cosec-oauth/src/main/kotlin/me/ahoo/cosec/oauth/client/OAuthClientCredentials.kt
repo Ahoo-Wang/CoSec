@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.oauth.client
 
-import me.ahoo.cosec.authentication.Credentials
+import me.ahoo.cosec.api.authentication.Credentials
 import me.zhyd.oauth.model.AuthCallback
 
 /**

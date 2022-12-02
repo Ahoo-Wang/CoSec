@@ -12,6 +12,8 @@
  */
 package me.ahoo.cosec.token
 
+import me.ahoo.cosec.api.token.CompositeToken
+
 /**
  * Simple Composite Token .
  *

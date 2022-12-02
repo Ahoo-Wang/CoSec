@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter
 
-import me.ahoo.cosec.CoSec
+import me.ahoo.cosec.api.CoSec
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 
 /**

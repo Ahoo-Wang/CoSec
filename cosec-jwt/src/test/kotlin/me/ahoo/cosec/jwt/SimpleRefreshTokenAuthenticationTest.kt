@@ -14,11 +14,11 @@
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.authentication.token.RefreshTokenCredentials
 import me.ahoo.cosec.authentication.token.SimpleRefreshTokenAuthentication
 import me.ahoo.cosec.context.tenant
-import me.ahoo.cosec.principal.TenantPrincipal
-import me.ahoo.cosec.token.CompositeToken
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
@@ -34,7 +34,7 @@ class SimpleRefreshTokenAuthenticationTest {
     fun authenticate() {
         val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(jwtTokenConverter)
         assertThat(refreshTokenAuthentication.supportCredentials, `is`(RefreshTokenCredentials::class.java))
-        val oldToken: CompositeToken = jwtTokenConverter.asToken(TenantPrincipal.ANONYMOUS)
+        val oldToken: CompositeToken = jwtTokenConverter.asToken(SimpleTenantPrincipal.ANONYMOUS)
 
         refreshTokenAuthentication.authenticate(object : RefreshTokenCredentials {
             override val accessToken: String
@@ -43,10 +43,10 @@ class SimpleRefreshTokenAuthenticationTest {
                 get() = oldToken.refreshToken
         }).test()
             .consumeNextWith {
-                assertThat(it.id, equalTo(TenantPrincipal.ANONYMOUS.id))
+                assertThat(it.id, equalTo(SimpleTenantPrincipal.ANONYMOUS.id))
                 assertThat(
                     it.tenant.tenantId,
-                    equalTo(TenantPrincipal.ANONYMOUS.tenant.tenantId)
+                    equalTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId)
                 )
             }.verifyComplete()
     }

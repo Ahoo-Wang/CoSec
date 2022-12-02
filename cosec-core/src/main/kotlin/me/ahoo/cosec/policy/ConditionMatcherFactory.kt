@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.policy
 
+import me.ahoo.cosec.api.policy.ConditionMatcher
+
 object ConditionMatcherFactory {
     fun create(type: String, pattern: String): ConditionMatcher {
         return when (type.lowercase()) {

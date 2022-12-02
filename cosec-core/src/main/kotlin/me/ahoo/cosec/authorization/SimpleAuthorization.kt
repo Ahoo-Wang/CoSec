@@ -12,13 +12,15 @@
  */
 package me.ahoo.cosec.authorization
 
-import me.ahoo.cosec.context.SecurityContext
-import me.ahoo.cosec.context.request.Request
-import me.ahoo.cosec.policy.Effect
-import me.ahoo.cosec.policy.Policy
-import me.ahoo.cosec.policy.Statement
-import me.ahoo.cosec.policy.VerifyResult
-import me.ahoo.cosec.principal.CoSecPrincipal.Companion.isRoot
+import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.policy.Effect
+import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.api.policy.VerifyResult
+import me.ahoo.cosec.api.principal.CoSecPrincipal.Companion.isRoot
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 

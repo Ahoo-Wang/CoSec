@@ -20,10 +20,10 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.SerializerProvider
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
-import me.ahoo.cosec.policy.Policy
+import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.policy.PolicyData
-import me.ahoo.cosec.policy.PolicyType
-import me.ahoo.cosec.policy.Statement
 
 const val POLICY_ID_KEY = "id"
 const val POLICY_NAME_KEY = "name"

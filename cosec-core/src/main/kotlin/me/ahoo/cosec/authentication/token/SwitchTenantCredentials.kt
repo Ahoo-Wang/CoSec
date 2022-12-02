@@ -12,8 +12,8 @@
  */
 package me.ahoo.cosec.authentication.token
 
-import me.ahoo.cosec.authentication.Credentials
-import me.ahoo.cosec.principal.CoSecPrincipal
+import me.ahoo.cosec.api.authentication.Credentials
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 
 /**
  * Switch Tenant Credentials .

@@ -18,8 +18,8 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.verify
-import me.ahoo.cosec.authorization.Authorization
-import me.ahoo.cosec.authorization.AuthorizeResult
+import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.webflux.ReactiveInjectSecurityContextParser

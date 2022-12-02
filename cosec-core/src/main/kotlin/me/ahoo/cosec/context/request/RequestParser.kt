@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.context.request
 
+import me.ahoo.cosec.api.context.request.Request
+
 interface RequestParser<R> {
     fun parse(request: R): Request
 }

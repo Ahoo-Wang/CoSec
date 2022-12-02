@@ -15,17 +15,17 @@ package me.ahoo.cosec.jwt
 import com.auth0.jwt.JWT
 import com.auth0.jwt.RegisteredClaims
 import com.auth0.jwt.interfaces.DecodedJWT
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.PolicyCapable
+import me.ahoo.cosec.api.principal.RoleCapable
+import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.api.token.TokenTenantPrincipal
 import me.ahoo.cosec.context.request.RequestTenantIdParser
-import me.ahoo.cosec.policy.PolicyCapable
-import me.ahoo.cosec.principal.CoSecPrincipal
-import me.ahoo.cosec.principal.RoleCapable
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.SimpleAccessToken
 import me.ahoo.cosec.token.SimpleTokenPrincipal
 import me.ahoo.cosec.token.SimpleTokenTenantPrincipal
-import me.ahoo.cosec.token.TokenPrincipal
-import me.ahoo.cosec.token.TokenTenantPrincipal
 
 /**
  * Jwts .

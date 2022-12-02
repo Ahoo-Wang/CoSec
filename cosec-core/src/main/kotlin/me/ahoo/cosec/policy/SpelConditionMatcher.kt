@@ -13,8 +13,9 @@
 
 package me.ahoo.cosec.policy
 
-import me.ahoo.cosec.context.SecurityContext
-import me.ahoo.cosec.context.request.Request
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.policy.ConditionMatcher
 import org.springframework.expression.Expression
 
 data class SpelConditionMatcher(override val pattern: String) : ConditionMatcher {

@@ -20,7 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.SerializerProvider
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
-import me.ahoo.cosec.policy.ActionMatcher
+import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.policy.ActionMatcherFactory
 
 object JsonActionMatcherSerializer : StdSerializer<ActionMatcher>(ActionMatcher::class.java) {

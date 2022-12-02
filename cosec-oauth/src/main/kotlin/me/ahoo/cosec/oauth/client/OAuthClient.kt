@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.oauth.client
 
-import me.ahoo.cosec.Named
+import me.ahoo.cosec.api.Named
 import me.ahoo.cosec.oauth.OAuthException
 import me.ahoo.cosec.oauth.OAuthUser
 import reactor.core.publisher.Mono

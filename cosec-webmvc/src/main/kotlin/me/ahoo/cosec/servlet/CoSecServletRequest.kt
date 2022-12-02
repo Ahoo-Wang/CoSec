@@ -14,7 +14,7 @@
 package me.ahoo.cosec.servlet
 
 import me.ahoo.cosec.Delegated
-import me.ahoo.cosec.context.request.Request
+import me.ahoo.cosec.api.context.request.Request
 import javax.servlet.http.HttpServletRequest
 
 data class CoSecServletRequest(

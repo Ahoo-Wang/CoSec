@@ -13,12 +13,12 @@
 
 package me.ahoo.cosec.spring.boot.starter.authentication.oauth
 
-import me.ahoo.cosec.authentication.AuthenticationProvider
+import me.ahoo.cosec.api.authentication.AuthenticationProvider
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.oauth.client.OAuthClientAuthentication
 import me.ahoo.cosec.oauth.client.OAuthClientCredentials
 import me.ahoo.cosec.oauth.client.OAuthClientManager
 import me.ahoo.cosec.oauth.client.OAuthClientPrincipalConverter
-import me.ahoo.cosec.principal.CoSecPrincipal
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnAuthenticationEnabled
 import me.ahoo.cosid.IdGenerator

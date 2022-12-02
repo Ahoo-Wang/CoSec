@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.policy
 
+import me.ahoo.cosec.api.policy.ActionMatcher
+
 object ActionMatcherFactory {
     fun create(type: String, pattern: String): ActionMatcher {
         return when (type.lowercase()) {

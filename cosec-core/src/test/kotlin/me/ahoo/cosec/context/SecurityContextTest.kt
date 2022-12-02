@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.context
 
-import me.ahoo.cosec.principal.CoSecPrincipal
+import me.ahoo.cosec.principal.SimplePrincipal
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.hamcrest.Matchers.`is`
@@ -24,14 +24,14 @@ internal class SecurityContextTest {
 
     @Test
     fun test() {
-        val context = SecurityContext(CoSecPrincipal.ANONYMOUS)
+        val context = SimpleSecurityContext(SimplePrincipal.ANONYMOUS)
         context.setAttribute("key", "value")
         assertThat(context.getAttribute<String>("key"), `is`("value"))
         assertThat(context.getRequiredAttribute("key"), `is`("value"))
         Assertions.assertThrows(IllegalArgumentException::class.java) {
             context.getRequiredAttribute("key1")
         }
-        assertThat(context.principal, equalTo(CoSecPrincipal.ANONYMOUS))
-        assertThat(context.tenant, equalTo(CoSecPrincipal.ANONYMOUS.tenant))
+        assertThat(context.principal, equalTo(SimplePrincipal.ANONYMOUS))
+        assertThat(context.tenant, equalTo(SimplePrincipal.ANONYMOUS.tenant))
     }
 }

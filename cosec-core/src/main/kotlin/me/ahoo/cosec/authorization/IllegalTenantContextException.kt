@@ -12,8 +12,8 @@
  */
 package me.ahoo.cosec.authorization
 
-import me.ahoo.cosec.context.SecurityContext
-import me.ahoo.cosec.tenant.Tenant
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.tenant.Tenant
 
 /**
  * Illegal Tenant Context Exception .

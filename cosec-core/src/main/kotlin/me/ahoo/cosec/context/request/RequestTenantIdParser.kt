@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.context.request
 
-import me.ahoo.cosec.tenant.Tenant
+import me.ahoo.cosec.api.tenant.Tenant
 
 /**
  * Request Tenant Id Parser.

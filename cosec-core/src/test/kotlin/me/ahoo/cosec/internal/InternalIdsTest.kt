@@ -12,9 +12,9 @@
  */
 package me.ahoo.cosec.internal
 
-import me.ahoo.cosec.internal.InternalIds.isWrapped
-import me.ahoo.cosec.internal.InternalIds.unwrap
-import me.ahoo.cosec.internal.InternalIds.wrap
+import me.ahoo.cosec.api.internal.InternalIds.isWrapped
+import me.ahoo.cosec.api.internal.InternalIds.unwrap
+import me.ahoo.cosec.api.internal.InternalIds.wrap
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Assertions

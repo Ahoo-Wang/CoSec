@@ -12,6 +12,8 @@
  */
 package me.ahoo.cosec.context
 
+import me.ahoo.cosec.api.context.SecurityContext
+
 /**
  * Security Context Holder.
  *

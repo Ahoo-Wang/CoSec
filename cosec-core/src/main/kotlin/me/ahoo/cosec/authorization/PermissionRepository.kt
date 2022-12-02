@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.authorization
 
-import me.ahoo.cosec.policy.Policy
+import me.ahoo.cosec.api.policy.Policy
 import reactor.core.publisher.Mono
 
 /**

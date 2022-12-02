@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.authentication
 
-import me.ahoo.cosec.authentication.AuthenticationProvider
+import me.ahoo.cosec.api.authentication.AuthenticationProvider
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext

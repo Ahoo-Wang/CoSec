@@ -23,7 +23,7 @@ import io.opentelemetry.context.propagation.ContextPropagators
 import io.opentelemetry.sdk.OpenTelemetrySdk
 import io.opentelemetry.sdk.trace.SdkTracerProvider
 import io.opentelemetry.semconv.trace.attributes.SemanticAttributes
-import me.ahoo.cosec.context.SecurityContext
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
@@ -64,7 +64,6 @@ class ReactiveTraceFilterTest {
         } finally {
             span.end()
         }
-
     }
 
     @Test
@@ -82,7 +81,7 @@ class ReactiveTraceFilterTest {
     @Test
     fun filterWithSecurityContext() {
         val exchange = mockk<ServerWebExchange>() {
-            every { getSecurityContext() } returns SecurityContext.ANONYMOUS
+            every { getSecurityContext() } returns SimpleSecurityContext.ANONYMOUS
         }
 
         ReactiveTraceFilter.filter(exchange) {
@@ -93,13 +92,12 @@ class ReactiveTraceFilterTest {
 
     @Test
     fun filter() {
-
         val span = tracer.spanBuilder("test").startSpan()
         try {
             assertThat(span.isRecording, `is`(true))
             span.makeCurrent().use {
                 val exchange = mockk<ServerWebExchange>() {
-                    every { getSecurityContext() } returns SecurityContext.ANONYMOUS
+                    every { getSecurityContext() } returns SimpleSecurityContext.ANONYMOUS
                 }
 
                 ReactiveTraceFilter.filter(exchange) {
@@ -111,10 +109,17 @@ class ReactiveTraceFilterTest {
                     it.name == "attributes"
                 }
                 attributesField.isAccessible = true
+                @Suppress("UNCHECKED_CAST")
                 val attributes = attributesField.get(span) as Map<AttributeKey<String>, String>
-                assertThat(attributes[SemanticAttributes.ENDUSER_ID], `is`(SecurityContext.ANONYMOUS.principal.id))
+                assertThat(
+                    attributes[SemanticAttributes.ENDUSER_ID],
+                    `is`(SimpleSecurityContext.ANONYMOUS.principal.id)
+                )
                 assertThat(attributes[SemanticAttributes.ENDUSER_ROLE], `is`(""))
-                assertThat(attributes[COSEC_TENANT_ID_ATTRIBUTE_KEY], `is`(SecurityContext.ANONYMOUS.tenant.tenantId))
+                assertThat(
+                    attributes[COSEC_TENANT_ID_ATTRIBUTE_KEY],
+                    `is`(SimpleSecurityContext.ANONYMOUS.tenant.tenantId)
+                )
                 assertThat(attributes[COSEC_POLICY_ATTRIBUTE_KEY], `is`(""))
             }
         } finally {

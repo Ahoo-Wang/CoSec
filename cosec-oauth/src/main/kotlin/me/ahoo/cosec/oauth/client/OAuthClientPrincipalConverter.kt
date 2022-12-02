@@ -12,8 +12,8 @@
  */
 package me.ahoo.cosec.oauth.client
 
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.oauth.OAuthUser
-import me.ahoo.cosec.principal.CoSecPrincipal
 import reactor.core.publisher.Mono
 
 /**

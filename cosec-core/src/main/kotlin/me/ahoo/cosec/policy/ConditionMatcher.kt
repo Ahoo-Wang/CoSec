@@ -13,10 +13,9 @@
 
 package me.ahoo.cosec.policy
 
-import me.ahoo.cosec.context.SecurityContext
-import me.ahoo.cosec.context.request.Request
-
-interface ConditionMatcher : RequestMatcher
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.policy.ConditionMatcher
 
 object AllConditionMatcher : ConditionMatcher {
     const val TYPE = "all"
@@ -36,6 +35,7 @@ object NoneConditionMatcher : ConditionMatcher {
         get() = TYPE
     override val pattern: String
         get() = "!"
+
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
         return false
     }

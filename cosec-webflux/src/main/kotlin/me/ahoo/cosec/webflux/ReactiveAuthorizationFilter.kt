@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.webflux
 
-import me.ahoo.cosec.authorization.Authorization
+import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
 import org.springframework.core.Ordered

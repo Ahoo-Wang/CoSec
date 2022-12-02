@@ -16,9 +16,9 @@ package me.ahoo.cosec.opentelemetry
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.trace.Span
 import io.opentelemetry.semconv.trace.attributes.SemanticAttributes
-import me.ahoo.cosec.CoSec
+import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.api.principal.PolicyCapable
 import me.ahoo.cosec.context.request.RequestTenantIdParser
-import me.ahoo.cosec.policy.PolicyCapable
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import org.slf4j.LoggerFactory
 import org.springframework.web.server.ServerWebExchange

@@ -16,8 +16,8 @@ package me.ahoo.cosec.servlet
 import com.auth0.jwt.algorithms.Algorithm
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.principal.SimplePrincipal
@@ -39,7 +39,7 @@ abstract class SecurityContextParserSpec {
             every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
         }
         val securityContext = createSecurityContextParser().parse(request)
-        MatcherAssert.assertThat(securityContext, equalTo(SecurityContext.ANONYMOUS))
+        MatcherAssert.assertThat(securityContext, equalTo(SimpleSecurityContext.ANONYMOUS))
     }
 
     @Test

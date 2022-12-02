@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.principal
 
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test

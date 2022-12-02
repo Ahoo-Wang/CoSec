@@ -12,6 +12,7 @@
  */
 
 dependencies {
+    api(project(":cosec-api"))
     compileOnly("ognl:ognl")
     compileOnly("org.springframework:spring-web")
     compileOnly("org.springframework:spring-expression")
