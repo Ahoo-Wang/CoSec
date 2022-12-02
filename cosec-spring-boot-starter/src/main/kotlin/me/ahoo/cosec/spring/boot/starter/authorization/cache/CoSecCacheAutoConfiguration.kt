@@ -31,10 +31,10 @@ import me.ahoo.cosec.redis.PolicyCache
 import me.ahoo.cosec.redis.RedisPermissionRepository
 import me.ahoo.cosec.redis.RolePolicyCache
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.authorization.ConditionalOnAuthorizationEnabled
 import me.ahoo.cosid.IdGenerator
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
@@ -47,8 +47,8 @@ import org.springframework.data.redis.core.StringRedisTemplate
  */
 @AutoConfiguration
 @ConditionalOnCoSecEnabled
-@ConditionalOnAuthorizationEnabled
 @ConditionalOnCacheEnabled
+@ConditionalOnClass(name = ["me.ahoo.cosec.redis.GlobalPolicyIndexCache"])
 @EnableConfigurationProperties(
     CacheProperties::class
 )
