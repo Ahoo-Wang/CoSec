@@ -21,5 +21,3 @@ interface Request : Tenant {
      */
     val action: String
 }
-
-data class SimpleRequest(override val action: String, override val tenantId: String) : Request
