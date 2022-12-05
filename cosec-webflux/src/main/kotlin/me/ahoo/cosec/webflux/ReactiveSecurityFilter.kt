@@ -14,16 +14,15 @@
 package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.api.authorization.Authorization
-import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
-import reactor.util.context.Context
 
 abstract class ReactiveSecurityFilter(
     val securityContextParser: SecurityContextParser<ServerWebExchange>,
@@ -40,8 +39,7 @@ abstract class ReactiveSecurityFilter(
                         .principal(securityContext.principal.toMono())
                         .build().let {
                             exchange.setSecurityContext(securityContext)
-                            return@flatMap chain(it)
-                                .contextWrite { ctx: Context -> ctx.put(SecurityContext.KEY, securityContext) }
+                            return@flatMap chain(it).writeSecurityContext(securityContext)
                         }
                 }
                 val principal = securityContext.principal
