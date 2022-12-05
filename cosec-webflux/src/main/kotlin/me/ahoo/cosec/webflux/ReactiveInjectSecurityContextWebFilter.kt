@@ -12,8 +12,8 @@
  */
 package me.ahoo.cosec.webflux
 
-import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.springframework.core.Ordered
 import org.springframework.web.server.ServerWebExchange
@@ -21,7 +21,6 @@ import org.springframework.web.server.WebFilter
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
-import reactor.util.context.Context
 
 /**
  * ReactiveInjectSecurityContextWebFilter .
@@ -41,7 +40,7 @@ class ReactiveInjectSecurityContextWebFilter(
                 .build().let {
                     exchange.setSecurityContext(securityContext)
                     return chain.filter(it)
-                        .contextWrite { ctx: Context -> ctx.put(SecurityContext.KEY, securityContext) }
+                        .writeSecurityContext(securityContext)
                 }
         } catch (ignored: Throwable) {
             // ignored

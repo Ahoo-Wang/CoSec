@@ -18,4 +18,5 @@ dependencies {
     api("org.springframework:spring-web")
     api("org.springframework:spring-webflux")
     testImplementation("me.ahoo.cosid:cosid-test")
+    testImplementation("io.projectreactor:reactor-test")
 }
