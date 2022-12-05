@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authentication.oauth
 
+import me.ahoo.cosec.oauth.OAuthUser
 import me.ahoo.cosec.oauth.client.DirectOAuthClientPrincipalConverter
 import me.ahoo.cosec.oauth.client.JustAuthClient
 import me.ahoo.cosec.oauth.client.OAuthClient
@@ -28,6 +29,7 @@ import me.zhyd.oauth.request.AuthDefaultRequest
 import me.zhyd.oauth.request.AuthRequest
 import org.springframework.beans.BeanUtils
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
@@ -43,6 +45,7 @@ import java.lang.reflect.Constructor
 @ConditionalOnCoSecEnabled
 @ConditionalOnAuthenticationEnabled
 @ConditionalOnOAuthAuthenticationEnabled
+@ConditionalOnClass(OAuthUser::class)
 @EnableConfigurationProperties(
     OAuthClientAuthenticationProperties::class
 )
