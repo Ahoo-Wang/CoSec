@@ -33,7 +33,6 @@ class SimpleSecurityContext(
     override val tenant: Tenant = principal.tenant
 ) : SecurityContext {
     companion object {
-        const val KEY = "COSEC_SECURITY_CONTEXT"
         val ANONYMOUS: SecurityContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
     }
 
