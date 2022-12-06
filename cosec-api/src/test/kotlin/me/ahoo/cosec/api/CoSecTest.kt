@@ -12,7 +12,6 @@
  */
 package me.ahoo.cosec.api
 
-import me.ahoo.cosec.api.CoSec
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test

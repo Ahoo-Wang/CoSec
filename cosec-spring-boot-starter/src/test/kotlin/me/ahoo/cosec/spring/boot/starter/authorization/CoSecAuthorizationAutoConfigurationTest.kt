@@ -17,7 +17,9 @@ import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.servlet.AuthorizationFilter
+import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecCacheAutoConfiguration
+import me.ahoo.cosec.token.TokenCompositeAuthentication
 import me.ahoo.cosec.token.TokenConverter
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
@@ -38,6 +40,7 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 RedisAutoConfiguration::class.java,
                 CoCacheAutoConfiguration::class.java,
                 CoSecCacheAutoConfiguration::class.java,
+                CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecAuthorizationAutoConfiguration::class.java
             )
             .run { context: AssertableApplicationContext ->
@@ -47,6 +50,7 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                     .hasSingleBean(Algorithm::class.java)
                     .hasSingleBean(TokenConverter::class.java)
                     .hasSingleBean(Authorization::class.java)
+                    .hasSingleBean(TokenCompositeAuthentication::class.java)
                     .hasBean(CoSecAuthorizationAutoConfiguration.SERVLET_REQUEST_TENANT_ID_PARSER_BEAN_NAME)
                     .hasBean(CoSecAuthorizationAutoConfiguration.SERVLET_REQUEST_PARSER_BEAN_NAME)
                     .hasBean(CoSecAuthorizationAutoConfiguration.SERVLET_SECURITY_CONTEXT_PARSER_BEAN_NAME)

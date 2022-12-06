@@ -14,12 +14,17 @@ package me.ahoo.cosec.spring.boot.starter.authentication
 
 import me.ahoo.cosec.api.authentication.Authentication
 import me.ahoo.cosec.api.authentication.AuthenticationProvider
+import me.ahoo.cosec.api.authentication.Credentials
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.authentication.CompositeAuthentication
 import me.ahoo.cosec.authentication.DefaultAuthenticationProvider
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Primary
 
 /**
  * CoSec AutoConfiguration .
@@ -36,13 +41,19 @@ class CoSecAuthenticationAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun authenticationProvider(
-        authentications: List<Authentication<*, *>>
+        applicationContext: ApplicationContext
     ): AuthenticationProvider {
-        authentications.forEach {
-            DefaultAuthenticationProvider.register(
-                it
-            )
+        applicationContext.getBeansOfType(Authentication::class.java).values.forEach {
+            @Suppress("UNCHECKED_CAST")
+            it as Authentication<Credentials, CoSecPrincipal>
+            DefaultAuthenticationProvider.register(it)
         }
         return DefaultAuthenticationProvider
+    }
+
+    @Bean
+    @Primary
+    fun compositeAuthentication(authenticationProvider: AuthenticationProvider): CompositeAuthentication {
+        return CompositeAuthentication(authenticationProvider)
     }
 }

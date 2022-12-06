@@ -14,6 +14,7 @@ package me.ahoo.cosec.spring.boot.starter.authorization
 
 import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.authentication.CompositeAuthentication
 import me.ahoo.cosec.authorization.PermissionRepository
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.context.SecurityContextParser
@@ -25,6 +26,7 @@ import me.ahoo.cosec.servlet.ServletRequestParser
 import me.ahoo.cosec.servlet.ServletRequestSecurityContextParser
 import me.ahoo.cosec.servlet.ServletRequestTenantIdParser
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.token.TokenCompositeAuthentication
 import me.ahoo.cosec.token.TokenConverter
 import me.ahoo.cosec.webflux.ReactiveAuthorizationFilter
 import me.ahoo.cosec.webflux.ReactiveRequestParser
@@ -33,6 +35,7 @@ import me.ahoo.cosec.webflux.ReactiveSecurityContextParser
 import me.ahoo.cosid.IdGenerator
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass
@@ -92,6 +95,15 @@ class CoSecAuthorizationAutoConfiguration(private val authorizationProperties: A
         permissionRepository: PermissionRepository
     ): Authorization {
         return SimpleAuthorization(permissionRepository)
+    }
+
+    @Bean
+    @ConditionalOnBean(CompositeAuthentication::class)
+    fun tokenCompositeAuthentication(
+        compositeAuthentication: CompositeAuthentication,
+        tokenConverter: TokenConverter
+    ): TokenCompositeAuthentication {
+        return TokenCompositeAuthentication(compositeAuthentication, tokenConverter)
     }
 
     companion object {
