@@ -16,6 +16,7 @@ import me.ahoo.cosec.api.authentication.Authentication
 import me.ahoo.cosec.api.authentication.AuthenticationProvider
 import me.ahoo.cosec.api.authentication.Credentials
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -24,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap
  * @author ahoo wang
  */
 object DefaultAuthenticationProvider : AuthenticationProvider {
+    private val log = LoggerFactory.getLogger(DefaultAuthenticationProvider::class.java)
     private val authenticationMaps: MutableMap<Class<out Credentials>, Authentication<out Credentials, out CoSecPrincipal>>
 
     init {
@@ -34,6 +36,9 @@ object DefaultAuthenticationProvider : AuthenticationProvider {
         credentialsType: Class<C>,
         authentication: A
     ) {
+        if (log.isInfoEnabled) {
+            log.info("Register Authentication: {} for Credentials: {}", authentication, credentialsType)
+        }
         authenticationMaps[credentialsType] = authentication
     }
 
