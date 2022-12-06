@@ -14,6 +14,7 @@
 package me.ahoo.cosec.spring.boot.starter.authentication
 
 import me.ahoo.cosec.api.authentication.AuthenticationProvider
+import me.ahoo.cosec.authentication.CompositeAuthentication
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
@@ -31,6 +32,7 @@ internal class CoSecAuthenticationAutoConfigurationTest {
                     .hasSingleBean(AuthenticationProperties::class.java)
                     .hasSingleBean(CoSecAuthenticationAutoConfiguration::class.java)
                     .hasSingleBean(AuthenticationProvider::class.java)
+                    .hasSingleBean(CompositeAuthentication::class.java)
             }
     }
 
@@ -44,6 +46,7 @@ internal class CoSecAuthenticationAutoConfigurationTest {
                     .doesNotHaveBean(AuthenticationProperties::class.java)
                     .doesNotHaveBean(CoSecAuthenticationAutoConfiguration::class.java)
                     .doesNotHaveBean(AuthenticationProvider::class.java)
+                    .doesNotHaveBean(CompositeAuthentication::class.java)
             }
     }
 }
