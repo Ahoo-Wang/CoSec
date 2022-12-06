@@ -45,5 +45,4 @@ class TokenCompositeAuthentication(
                 tokenConverter.asToken(it)
             }
     }
-
 }

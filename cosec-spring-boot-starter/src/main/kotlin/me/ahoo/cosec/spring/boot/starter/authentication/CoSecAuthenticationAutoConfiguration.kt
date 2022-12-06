@@ -44,6 +44,7 @@ class CoSecAuthenticationAutoConfiguration {
         applicationContext: ApplicationContext
     ): AuthenticationProvider {
         applicationContext.getBeansOfType(Authentication::class.java).values.forEach {
+            @Suppress("UNCHECKED_CAST")
             it as Authentication<Credentials, CoSecPrincipal>
             DefaultAuthenticationProvider.register(it)
         }
@@ -55,5 +56,4 @@ class CoSecAuthenticationAutoConfiguration {
     fun compositeAuthentication(authenticationProvider: AuthenticationProvider): CompositeAuthentication {
         return CompositeAuthentication(authenticationProvider)
     }
-
 }
