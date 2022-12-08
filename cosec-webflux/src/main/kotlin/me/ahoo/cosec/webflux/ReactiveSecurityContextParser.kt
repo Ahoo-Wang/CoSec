@@ -17,7 +17,7 @@ import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.context.AbstractSecurityContextParser
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.jwt.Jwts.parseAccessToken
-import me.ahoo.cosec.token.TokenConverter
+import me.ahoo.cosec.token.TokenVerifier
 import org.springframework.web.server.ServerWebExchange
 
 /**
@@ -26,12 +26,12 @@ import org.springframework.web.server.ServerWebExchange
  * @author ahoo wang
  */
 class ReactiveSecurityContextParser(
-    private val tokenConverter: TokenConverter
+    private val tokenVerifier: TokenVerifier
 ) : AbstractSecurityContextParser<ServerWebExchange>() {
     override fun getAccessToken(request: ServerWebExchange): AccessToken? {
         val authorization = request.request.headers.getFirst(Jwts.AUTHORIZATION_KEY)
         return parseAccessToken(authorization)
     }
 
-    override fun asPrincipal(accessToken: AccessToken): CoSecPrincipal = tokenConverter.asPrincipal(accessToken)
+    override fun asPrincipal(accessToken: AccessToken): CoSecPrincipal = tokenVerifier.verify(accessToken)
 }

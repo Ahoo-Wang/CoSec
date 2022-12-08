@@ -12,30 +12,24 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization
 
-import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.authorization.Authorization
-import me.ahoo.cosec.authentication.CompositeAuthentication
 import me.ahoo.cosec.authorization.PermissionRepository
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.context.request.RequestTenantIdParser
-import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.servlet.AuthorizationFilter
 import me.ahoo.cosec.servlet.ServletRequestParser
 import me.ahoo.cosec.servlet.ServletRequestSecurityContextParser
 import me.ahoo.cosec.servlet.ServletRequestTenantIdParser
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.token.TokenCompositeAuthentication
-import me.ahoo.cosec.token.TokenConverter
+import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosec.webflux.ReactiveAuthorizationFilter
 import me.ahoo.cosec.webflux.ReactiveRequestParser
 import me.ahoo.cosec.webflux.ReactiveRequestTenantIdParser
 import me.ahoo.cosec.webflux.ReactiveSecurityContextParser
-import me.ahoo.cosid.IdGenerator
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass
@@ -56,38 +50,7 @@ import javax.servlet.http.HttpServletRequest
 @EnableConfigurationProperties(
     AuthorizationProperties::class
 )
-class CoSecAuthorizationAutoConfiguration(private val authorizationProperties: AuthorizationProperties) {
-
-    @Bean
-    @ConditionalOnMissingBean
-    fun cosecTokenAlgorithm(): Algorithm {
-        val jwtProperties = authorizationProperties.jwt
-        return when (jwtProperties.algorithm) {
-            JwtProperties.Algorithm.HMAC256 -> Algorithm.HMAC256(
-                jwtProperties.secret
-            )
-
-            JwtProperties.Algorithm.HMAC384 -> Algorithm.HMAC384(
-                jwtProperties.secret
-            )
-
-            JwtProperties.Algorithm.HMAC512 -> Algorithm.HMAC512(
-                jwtProperties.secret
-            )
-        }
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    fun cosecTokenConverter(idGenerator: IdGenerator, algorithm: Algorithm): TokenConverter {
-        val jwtProperties = authorizationProperties.jwt
-        return JwtTokenConverter(
-            idGenerator,
-            algorithm,
-            jwtProperties.tokenValidity.access,
-            jwtProperties.tokenValidity.refresh
-        )
-    }
+class CoSecAuthorizationAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
@@ -95,15 +58,6 @@ class CoSecAuthorizationAutoConfiguration(private val authorizationProperties: A
         permissionRepository: PermissionRepository
     ): Authorization {
         return SimpleAuthorization(permissionRepository)
-    }
-
-    @Bean
-    @ConditionalOnBean(CompositeAuthentication::class)
-    fun tokenCompositeAuthentication(
-        compositeAuthentication: CompositeAuthentication,
-        tokenConverter: TokenConverter
-    ): TokenCompositeAuthentication {
-        return TokenCompositeAuthentication(compositeAuthentication, tokenConverter)
     }
 
     companion object {
@@ -134,9 +88,9 @@ class CoSecAuthorizationAutoConfiguration(private val authorizationProperties: A
         @Bean(SERVLET_SECURITY_CONTEXT_PARSER_BEAN_NAME)
         @ConditionalOnMissingBean(name = [SERVLET_SECURITY_CONTEXT_PARSER_BEAN_NAME])
         fun servletSecurityContextParser(
-            tokenConverter: TokenConverter
+            tokenVerifier: TokenVerifier
         ): SecurityContextParser<HttpServletRequest> {
-            return ServletRequestSecurityContextParser(tokenConverter)
+            return ServletRequestSecurityContextParser(tokenVerifier)
         }
 
         @Bean
@@ -168,9 +122,9 @@ class CoSecAuthorizationAutoConfiguration(private val authorizationProperties: A
         @Bean(REACTIVE_SECURITY_CONTEXT_PARSER_BEAN_NAME)
         @ConditionalOnMissingBean(name = [REACTIVE_SECURITY_CONTEXT_PARSER_BEAN_NAME])
         fun reactiveSecurityContextParser(
-            tokenConverter: TokenConverter
+            tokenVerifier: TokenVerifier
         ): SecurityContextParser<ServerWebExchange> {
-            return ReactiveSecurityContextParser(tokenConverter)
+            return ReactiveSecurityContextParser(tokenVerifier)
         }
 
         @Bean

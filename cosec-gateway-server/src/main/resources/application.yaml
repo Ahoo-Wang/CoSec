@@ -42,10 +42,9 @@ cosid:
 cosec:
   authentication:
     enabled: false
-  authorization:
-    jwt:
-      algorithm: hmac256
-      secret: FyN0Igd80Gas8stTavArGKOYnS9uLWGA_
+  jwt:
+    algorithm: hmac256
+    secret: FyN0Igd80Gas8stTavArGKOYnS9uLWGA_
 
 logging:
   level:

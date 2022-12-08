@@ -19,6 +19,7 @@ import io.mockk.mockk
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.jwt.JwtTokenConverter
+import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosid.test.MockIdGenerator
@@ -30,7 +31,7 @@ import javax.servlet.http.HttpServletRequest
 abstract class SecurityContextParserSpec {
     var algorithm = Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLWGA_")
     var jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, algorithm)
-
+    var jwtTokenVerifier = JwtTokenVerifier(algorithm)
     abstract fun createSecurityContextParser(): SecurityContextParser<HttpServletRequest>
 
     @Test

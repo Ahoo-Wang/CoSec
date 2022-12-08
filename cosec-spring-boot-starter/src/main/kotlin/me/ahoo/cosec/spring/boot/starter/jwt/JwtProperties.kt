@@ -10,8 +10,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.authorization
+package me.ahoo.cosec.spring.boot.starter.jwt
 
+import me.ahoo.cosec.api.CoSec
+import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.ConstructorBinding
 import org.springframework.boot.context.properties.NestedConfigurationProperty
 import java.time.Duration
@@ -22,12 +24,18 @@ import java.time.Duration
  * @author ahoo wang
  */
 @ConstructorBinding
+@ConfigurationProperties(prefix = JwtProperties.PREFIX)
 data class JwtProperties(
+    val enabled: Boolean = true,
     var algorithm: Algorithm = Algorithm.HMAC256,
-    var secret: String = "",
+    var secret: String,
     @NestedConfigurationProperty
     var tokenValidity: TokenValidity = TokenValidity()
 ) {
+    companion object {
+        const val PREFIX = CoSec.COSEC_PREFIX + "jwt"
+    }
+
     @ConstructorBinding
     data class TokenValidity(
         var access: Duration = Duration.ofMinutes(10),

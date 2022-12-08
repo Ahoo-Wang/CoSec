@@ -15,7 +15,7 @@ package me.ahoo.cosec.authentication.token
 
 import me.ahoo.cosec.api.authentication.Authentication
 import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.token.TokenConverter
+import me.ahoo.cosec.token.TokenVerifier
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
@@ -23,11 +23,11 @@ abstract class AbstractRefreshTokenAuthentication<C : RefreshTokenCredentials, P
     override val supportCredentials: Class<C>
 ) : Authentication<C, P>
 
-class SimpleRefreshTokenAuthentication(private val tokenConverter: TokenConverter) :
+class SimpleRefreshTokenAuthentication(private val tokenVerifier: TokenVerifier) :
     AbstractRefreshTokenAuthentication<RefreshTokenCredentials, TokenPrincipal>(RefreshTokenCredentials::class.java) {
     override fun authenticate(credentials: RefreshTokenCredentials): Mono<TokenPrincipal> {
         return Mono.defer {
-            tokenConverter.refresh<TokenPrincipal>(credentials).toMono()
+            tokenVerifier.refresh<TokenPrincipal>(credentials).toMono()
         }
     }
 }

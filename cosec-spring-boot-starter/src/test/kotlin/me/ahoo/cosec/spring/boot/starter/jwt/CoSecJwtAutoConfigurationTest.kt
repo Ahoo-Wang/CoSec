@@ -11,25 +11,32 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.authorization
+package me.ahoo.cosec.spring.boot.starter.jwt
 
+import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.servlet.AuthorizationFilter
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.authentication.oauth.OAuthClientAuthenticationProperties
+import me.ahoo.cosec.spring.boot.starter.authorization.AuthorizationProperties
+import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecCacheAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.cosec.token.TokenCompositeAuthentication
+import me.ahoo.cosec.token.TokenConverter
+import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
-import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
+import org.assertj.core.api.AssertionsForInterfaceTypes
+import org.junit.jupiter.api.Assertions.*
+import org.hamcrest.MatcherAssert.assertThat
+import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
-internal class CoSecAuthorizationAutoConfigurationTest {
+class CoSecJwtAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
 
     @Test
@@ -40,26 +47,33 @@ internal class CoSecAuthorizationAutoConfigurationTest {
             )
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
-                RedisAutoConfiguration::class.java,
-                CoCacheAutoConfiguration::class.java,
-                CoSecCacheAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,
-                CoSecJwtAutoConfiguration::class.java,
-                CoSecAuthorizationAutoConfiguration::class.java
+                CoSecJwtAutoConfiguration::class.java
             )
             .run { context: AssertableApplicationContext ->
-                assertThat(context)
-                    .hasSingleBean(AuthorizationProperties::class.java)
-                    .hasSingleBean(CoSecAuthorizationAutoConfiguration::class.java)
-                    .hasSingleBean(Authorization::class.java)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.SERVLET_REQUEST_TENANT_ID_PARSER_BEAN_NAME)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.SERVLET_REQUEST_PARSER_BEAN_NAME)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.SERVLET_SECURITY_CONTEXT_PARSER_BEAN_NAME)
-                    .hasSingleBean(AuthorizationFilter::class.java)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.REACTIVE_REQUEST_TENANT_ID_PARSER_BEAN_NAME)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.REACTIVE_REQUEST_PARSER_BEAN_NAME)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.REACTIVE_SECURITY_CONTEXT_PARSER_BEAN_NAME)
-//                    .hasSingleBean(ReactiveAuthorizationFilter::class.java)
+                AssertionsForInterfaceTypes.assertThat(context)
+                    .hasSingleBean(Algorithm::class.java)
+                    .hasSingleBean(TokenConverter::class.java)
+                    .hasSingleBean(TokenCompositeAuthentication::class.java)
+                    .hasSingleBean(TokenVerifier::class.java)
+            }
+    }
+
+    @Test
+    fun contextLoadsWhenDisable() {
+        contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.enabled=false",
+            )
+            .withUserConfiguration(
+                CoSecJwtAutoConfiguration::class.java
+            )
+            .run { context: AssertableApplicationContext ->
+                AssertionsForInterfaceTypes.assertThat(context)
+                    .doesNotHaveBean(Algorithm::class.java)
+                    .doesNotHaveBean(TokenConverter::class.java)
+                    .doesNotHaveBean(TokenCompositeAuthentication::class.java)
+                    .doesNotHaveBean(TokenVerifier::class.java)
             }
     }
 }
