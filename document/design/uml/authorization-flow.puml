@@ -7,7 +7,7 @@ participant AuthorizationFilter
 participant RequestParser
 participant TenantParser
 participant SecurityContextParser
-participant TokenConverter
+participant TokenVerifier
 participant Authorization
 
 User++
@@ -18,8 +18,8 @@ RequestParser -> TenantParser++: parse()
 RequestParser <-- TenantParser--: Tenant
 AuthorizationFilter <-- RequestParser--: Request
 AuthorizationFilter -> SecurityContextParser++: parse()
-SecurityContextParser -> TokenConverter++: asPrincipal(AccessToken)
-SecurityContextParser <-- TokenConverter--: Principal
+SecurityContextParser -> TokenVerifier++: verify(AccessToken)
+SecurityContextParser <-- TokenVerifier--: Principal
 AuthorizationFilter <-- SecurityContextParser--: SecurityContext
 AuthorizationFilter -> Authorization++: authorize(Request,SecurityContext)
 AuthorizationFilter <-- Authorization--: authorized?
