@@ -10,23 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.authorization
 
-import me.ahoo.cosec.api.CoSec
-import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.boot.context.properties.ConstructorBinding
+package me.ahoo.cosec.jwt
 
-/**
- * Authorization Properties .
- *
- * @author ahoo wang
- */
-@ConstructorBinding
-@ConfigurationProperties(prefix = AuthorizationProperties.PREFIX)
-data class AuthorizationProperties(
-    val enabled: Boolean = true
-) {
-    companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "authorization"
-    }
+import com.auth0.jwt.algorithms.Algorithm
+
+object JwtFixture {
+    var ALGORITHM = Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLWGA_")
 }

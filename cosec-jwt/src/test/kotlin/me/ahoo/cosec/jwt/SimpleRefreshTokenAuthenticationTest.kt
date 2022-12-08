@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.jwt
 
-import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.authentication.token.RefreshTokenCredentials
 import me.ahoo.cosec.authentication.token.SimpleRefreshTokenAuthentication
@@ -27,12 +26,12 @@ import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
 
 class SimpleRefreshTokenAuthenticationTest {
-    var algorithm = Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLWGA_")
-    var jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, algorithm)
+    var jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, JwtFixture.ALGORITHM)
+    private var jwtTokenVerifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
 
     @Test
     fun authenticate() {
-        val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(jwtTokenConverter)
+        val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(jwtTokenVerifier)
         assertThat(refreshTokenAuthentication.supportCredentials, `is`(RefreshTokenCredentials::class.java))
         val oldToken: CompositeToken = jwtTokenConverter.asToken(SimpleTenantPrincipal.ANONYMOUS)
 

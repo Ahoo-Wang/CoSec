@@ -14,15 +14,10 @@ package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import com.auth0.jwt.exceptions.TokenExpiredException
-import com.auth0.jwt.interfaces.DecodedJWT
-import com.auth0.jwt.interfaces.JWTVerifier
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.RoleCapable
 import me.ahoo.cosec.api.tenant.TenantCapable
-import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.token.SimpleCompositeToken
 import me.ahoo.cosec.token.TokenConverter
@@ -41,7 +36,6 @@ class JwtTokenConverter(
     private val accessTokenValidity: Duration = Duration.ofMinutes(10),
     private val refreshTokenValidity: Duration = Duration.ofDays(7)
 ) : TokenConverter {
-    private val jwtVerifier: JWTVerifier = JWT.require(algorithm).build()
 
     override fun asToken(principal: CoSecPrincipal): CompositeToken {
         val accessTokenId = idGenerator.generateAsString()
@@ -76,21 +70,5 @@ class JwtTokenConverter(
             .withExpiresAt(refreshTokenExp)
             .sign(algorithm)
         return SimpleCompositeToken(accessToken, refreshToken)
-    }
-
-    override fun <T : TokenPrincipal> asPrincipal(accessToken: AccessToken): T {
-        val decodedAccessToken = jwtVerifier.verify(accessToken.accessToken)
-        return Jwts.asPrincipal(decodedAccessToken)
-    }
-
-    override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {
-        val decodedRefreshToken: DecodedJWT = try {
-            jwtVerifier.verify(token.refreshToken)
-        } catch (tokenExpiredException: TokenExpiredException) {
-            throw me.ahoo.cosec.token.TokenExpiredException(tokenExpiredException.message!!, tokenExpiredException)
-        }
-        val decodedAccessToken = Jwts.decode(token.accessToken)
-        require(decodedRefreshToken.subject == decodedAccessToken.id) { "Illegal refreshToken." }
-        return Jwts.asPrincipal(decodedAccessToken)
     }
 }

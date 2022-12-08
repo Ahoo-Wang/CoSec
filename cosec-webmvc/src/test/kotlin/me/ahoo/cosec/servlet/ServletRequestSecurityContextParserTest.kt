@@ -19,6 +19,6 @@ import javax.servlet.http.HttpServletRequest
 internal class ServletRequestSecurityContextParserTest : SecurityContextParserSpec() {
 
     override fun createSecurityContextParser(): SecurityContextParser<HttpServletRequest> {
-        return ServletRequestSecurityContextParser(jwtTokenConverter)
+        return ServletRequestSecurityContextParser(jwtTokenVerifier)
     }
 }

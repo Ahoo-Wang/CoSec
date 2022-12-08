@@ -10,23 +10,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.authorization
+package me.ahoo.cosec.spring.boot.starter.jwt
 
-import me.ahoo.cosec.api.CoSec
-import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.boot.context.properties.ConstructorBinding
+import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 
 /**
- * Authorization Properties .
+ * Conditional On CoSec Enabled.
  *
  * @author ahoo wang
  */
-@ConstructorBinding
-@ConfigurationProperties(prefix = AuthorizationProperties.PREFIX)
-data class AuthorizationProperties(
-    val enabled: Boolean = true
-) {
+@ConditionalOnProperty(
+    value = [ConditionalOnJwtEnabled.ENABLED_KEY],
+    matchIfMissing = true,
+    havingValue = "true"
+)
+annotation class ConditionalOnJwtEnabled {
     companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "authorization"
+        const val ENABLED_KEY = JwtProperties.PREFIX + ENABLED_SUFFIX_KEY
     }
 }

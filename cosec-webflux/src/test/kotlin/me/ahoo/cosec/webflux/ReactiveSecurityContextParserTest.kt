@@ -20,6 +20,6 @@ import org.springframework.web.server.ServerWebExchange
 
 internal class ReactiveSecurityContextParserTest : SecurityContextParserSpec() {
     override fun createSecurityContextParser(): SecurityContextParser<ServerWebExchange> {
-        return ReactiveSecurityContextParser(jwtTokenConverter)
+        return ReactiveSecurityContextParser(jwtTokenVerifier)
     }
 }

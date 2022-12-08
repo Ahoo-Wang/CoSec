@@ -11,54 +11,69 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.authorization.gateway
+package me.ahoo.cosec.spring.boot.starter.jwt
 
+import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
-import me.ahoo.cosec.gateway.AuthorizationGatewayFilter
+import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.servlet.AuthorizationFilter
+import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.authentication.oauth.OAuthClientAuthenticationProperties
+import me.ahoo.cosec.spring.boot.starter.authorization.AuthorizationProperties
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecCacheAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
+import me.ahoo.cosec.token.TokenCompositeAuthentication
+import me.ahoo.cosec.token.TokenConverter
+import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import org.assertj.core.api.AssertionsForInterfaceTypes
+import org.junit.jupiter.api.Assertions.*
+import org.hamcrest.MatcherAssert.assertThat
+import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
-internal class CoSecGatewayAuthorizationAutoConfigurationTest {
+class CoSecJwtAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
 
     @Test
     fun contextLoads() {
         contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+            )
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
-                RedisAutoConfiguration::class.java,
-                CoCacheAutoConfiguration::class.java,
-                CoSecCacheAutoConfiguration::class.java,
-                CoSecAuthorizationAutoConfiguration::class.java,
-                CoSecGatewayAuthorizationAutoConfiguration::class.java,
+                CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecJwtAutoConfiguration::class.java
             )
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
-                    .hasSingleBean(GatewayProperties::class.java)
-                    .hasSingleBean(CoSecGatewayAuthorizationAutoConfiguration::class.java)
-                    .hasSingleBean(AuthorizationGatewayFilter::class.java)
+                    .hasSingleBean(Algorithm::class.java)
+                    .hasSingleBean(TokenConverter::class.java)
+                    .hasSingleBean(TokenCompositeAuthentication::class.java)
+                    .hasSingleBean(TokenVerifier::class.java)
             }
     }
 
     @Test
     fun contextLoadsWhenDisable() {
         contextRunner
-            .withPropertyValues("${ConditionalOnGatewayEnabled.ENABLED_KEY}=false")
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.enabled=false",
+            )
             .withUserConfiguration(
-                CoSecGatewayAuthorizationAutoConfiguration::class.java
+                CoSecJwtAutoConfiguration::class.java
             )
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
-                    .doesNotHaveBean(GatewayProperties::class.java)
+                    .doesNotHaveBean(Algorithm::class.java)
+                    .doesNotHaveBean(TokenConverter::class.java)
+                    .doesNotHaveBean(TokenCompositeAuthentication::class.java)
+                    .doesNotHaveBean(TokenVerifier::class.java)
             }
     }
 }
