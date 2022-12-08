@@ -18,6 +18,7 @@ import me.ahoo.cosec.gateway.AuthorizationGatewayFilter
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import org.assertj.core.api.AssertionsForInterfaceTypes
@@ -32,6 +33,9 @@ internal class CoSecGatewayAuthorizationAutoConfigurationTest {
     @Test
     fun contextLoads() {
         contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+            )
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
                 RedisAutoConfiguration::class.java,
