@@ -18,7 +18,7 @@ dependencies {
     api(platform("me.ahoo.cocache:cocache-bom:0.3.5"))
     api(platform("me.ahoo.cosky:cosky-bom:3.0.5"))
     api(platform("me.zhyd.oauth:JustAuth:1.16.5"))
-    api(platform("io.opentelemetry:opentelemetry-bom:1.20.1"))
+    api(platform("io.opentelemetry:opentelemetry-bom:1.21.0"))
     constraints {
         api("ognl:ognl:3.3.4")
         api("com.auth0:java-jwt:4.2.1")
