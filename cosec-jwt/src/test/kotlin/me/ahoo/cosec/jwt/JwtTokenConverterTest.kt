@@ -13,6 +13,7 @@
 package me.ahoo.cosec.jwt
 
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
 import org.hamcrest.MatcherAssert.assertThat
@@ -26,8 +27,16 @@ internal class JwtTokenConverterTest {
     var jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, JwtFixture.ALGORITHM)
 
     @Test
-    fun asToken() {
+    fun anonymousAsToken() {
         val token: CompositeToken = jwtTokenConverter.asToken(SimpleTenantPrincipal.ANONYMOUS)
+        assertThat(token, notNullValue())
+    }
+
+    @Test
+    fun asToken() {
+        val principal =
+            SimplePrincipal("id", "name", setOf("policyId"), setOf("roleId"), mapOf("attr_key" to "attr_value"))
+        val token: CompositeToken = jwtTokenConverter.asToken(principal)
         assertThat(token, notNullValue())
     }
 }
