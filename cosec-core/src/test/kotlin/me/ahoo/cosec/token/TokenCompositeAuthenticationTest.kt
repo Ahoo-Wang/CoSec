@@ -48,7 +48,9 @@ class TokenCompositeAuthenticationTest {
 
         tokenCompositeAuthentication.authenticateAsToken(credentials)
             .test()
-            .expectNext(compositeToken)
+            .consumeNextWith {
+                assertThat(it, `is`(compositeToken))
+            }
             .verifyComplete()
     }
 }

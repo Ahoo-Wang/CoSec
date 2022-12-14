@@ -14,7 +14,7 @@
 package me.ahoo.cosec.authentication
 
 import io.mockk.mockk
-import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.authentication.token.RefreshTokenCredentials
 import me.ahoo.cosec.authentication.token.SimpleRefreshTokenAuthentication
 import org.hamcrest.MatcherAssert.assertThat
@@ -27,14 +27,14 @@ internal class DefaultAuthenticationProviderTest {
     @Test
     fun register() {
         Assertions.assertThrows(IllegalArgumentException::class.java) {
-            DefaultAuthenticationProvider.getRequired<RefreshTokenCredentials, TokenPrincipal, SimpleRefreshTokenAuthentication>(
+            DefaultAuthenticationProvider.getRequired<RefreshTokenCredentials, CoSecPrincipal, SimpleRefreshTokenAuthentication>(
                 RefreshTokenCredentials::class.java
             )
         }
         val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(mockk())
         DefaultAuthenticationProvider.register(refreshTokenAuthentication)
         assertThat(
-            DefaultAuthenticationProvider.getRequired<RefreshTokenCredentials, TokenPrincipal, SimpleRefreshTokenAuthentication>(
+            DefaultAuthenticationProvider.getRequired<RefreshTokenCredentials, CoSecPrincipal, SimpleRefreshTokenAuthentication>(
                 RefreshTokenCredentials::class.java
             ),
             `is`(refreshTokenAuthentication)

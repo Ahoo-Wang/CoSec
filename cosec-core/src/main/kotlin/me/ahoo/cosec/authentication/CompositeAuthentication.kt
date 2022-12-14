@@ -25,12 +25,12 @@ class CompositeAuthentication(
     override val supportCredentials: Class<Credentials>
         get() = Credentials::class.java
 
-    override fun authenticate(credentials: Credentials): Mono<CoSecPrincipal> {
+    override fun authenticate(credentials: Credentials): Mono<out CoSecPrincipal> {
         val credentialsType = credentials.javaClass
         return authenticate(credentialsType, credentials)
     }
 
-    fun authenticate(credentialsType: Class<out Credentials>, credentials: Credentials): Mono<CoSecPrincipal> {
+    fun authenticate(credentialsType: Class<out Credentials>, credentials: Credentials): Mono<out CoSecPrincipal> {
         return authenticationProvider.getRequired<Credentials, CoSecPrincipal, Authentication<Credentials, CoSecPrincipal>>(
             credentialsType
         ).authenticate(credentials)

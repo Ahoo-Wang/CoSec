@@ -13,6 +13,7 @@
 package me.ahoo.cosec.authentication.token
 
 import me.ahoo.cosec.api.authentication.Authentication
+import me.ahoo.cosec.api.authentication.Credentials
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.TenantPrincipal
 import reactor.core.publisher.Mono
@@ -27,7 +28,7 @@ abstract class AbstractSwitchTenantAuthentication : Authentication<SwitchTenantC
     override val supportCredentials: Class<SwitchTenantCredentials>
         get() = SwitchTenantCredentials::class.java
 
-    override fun authenticate(credentials: SwitchTenantCredentials): Mono<TenantPrincipal> {
+    override fun authenticate(credentials: SwitchTenantCredentials): Mono<out TenantPrincipal> {
         return switchTenant(credentials.targetTenantId, credentials.principal)
     }
 
@@ -38,5 +39,18 @@ abstract class AbstractSwitchTenantAuthentication : Authentication<SwitchTenantC
      * @param previousPrincipal previous principal
      * @return new target tenant context principal
      */
-    protected abstract fun switchTenant(targetTenantId: String, previousPrincipal: CoSecPrincipal): Mono<TenantPrincipal>
+    protected abstract fun switchTenant(
+        targetTenantId: String,
+        previousPrincipal: CoSecPrincipal
+    ): Mono<out TenantPrincipal>
+}
+
+/**
+ * Switch Tenant Credentials .
+ *
+ * @author ahoo wang
+ */
+interface SwitchTenantCredentials : Credentials {
+    val targetTenantId: String
+    val principal: CoSecPrincipal
 }
