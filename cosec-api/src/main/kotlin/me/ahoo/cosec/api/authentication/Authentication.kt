@@ -21,7 +21,7 @@ import reactor.core.publisher.Mono
  *
  * @author ahoo wang
  */
-interface Authentication<C : Credentials, P : CoSecPrincipal> {
+interface Authentication<C : Credentials, out P : CoSecPrincipal> {
     val supportCredentials: Class<C>
-    fun authenticate(credentials: C): Mono<P>
+    fun authenticate(credentials: C): Mono<out P>
 }

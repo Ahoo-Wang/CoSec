@@ -27,19 +27,22 @@ class TokenCompositeAuthentication(
     override val supportCredentials: Class<Credentials>
         get() = Credentials::class.java
 
-    override fun authenticate(credentials: Credentials): Mono<CoSecPrincipal> {
+    override fun authenticate(credentials: Credentials): Mono<out CoSecPrincipal> {
         return authenticate(credentials.javaClass, credentials)
     }
 
-    fun authenticate(credentialsType: Class<out Credentials>, credentials: Credentials): Mono<CoSecPrincipal> {
+    fun authenticate(credentialsType: Class<out Credentials>, credentials: Credentials): Mono<out CoSecPrincipal> {
         return compositeAuthentication.authenticate(credentialsType, credentials)
     }
 
-    fun authenticateAsToken(credentials: Credentials): Mono<CompositeToken> {
+    fun authenticateAsToken(credentials: Credentials): Mono<out CompositeToken> {
         return authenticateAsToken(credentials.javaClass, credentials)
     }
 
-    fun authenticateAsToken(credentialsType: Class<out Credentials>, credentials: Credentials): Mono<CompositeToken> {
+    fun authenticateAsToken(
+        credentialsType: Class<out Credentials>,
+        credentials: Credentials
+    ): Mono<out CompositeToken> {
         return authenticate(credentialsType, credentials)
             .map {
                 tokenConverter.asToken(it)

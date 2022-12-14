@@ -43,7 +43,9 @@ class CompositeAuthenticationTest {
 
         compositeAuthentication.authenticate(credentials)
             .test()
-            .expectNext(SimplePrincipal.ANONYMOUS)
+            .consumeNextWith {
+                assertThat(it, `is`(SimplePrincipal.ANONYMOUS))
+            }
             .verifyComplete()
     }
 }
