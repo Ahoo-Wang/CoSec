@@ -30,8 +30,15 @@ import org.springframework.web.server.ServerWebExchange
 
 abstract class SecurityContextParserSpec {
 
-    val algorithm = Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLWGA_")
-    val jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, algorithm)
+    companion object {
+        val algorithm = Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLWGA_")
+        val jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, algorithm)
+        fun createAccessToken(principal: SimplePrincipal): String {
+            return jwtTokenConverter.asToken(principal).accessToken
+        }
+    }
+
+
     val jwtTokenVerifier = JwtTokenVerifier(algorithm)
     abstract fun createSecurityContextParser(): SecurityContextParser<ServerWebExchange>
 

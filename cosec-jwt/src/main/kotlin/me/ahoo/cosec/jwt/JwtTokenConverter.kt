@@ -15,6 +15,7 @@ package me.ahoo.cosec.jwt
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.PolicyCapable
 import me.ahoo.cosec.api.principal.RoleCapable
 import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.api.token.CompositeToken
@@ -51,7 +52,8 @@ class JwtTokenConverter(
             .withJWTId(accessTokenId)
             .withSubject(principal.id)
             .withClaim(CoSecPrincipal.NAME_KEY, principal.name)
-            .withClaim(RoleCapable.ROLE_KEY, principal.roles.joinToString(Jwts.ROLE_DELIMITER))
+            .withClaim(PolicyCapable.POLICY_KEY, principal.policies.toList())
+            .withClaim(RoleCapable.ROLE_KEY, principal.roles.toList())
             .withPayload(payloadClaims)
             .withIssuedAt(now)
             .withExpiresAt(accessTokenExp)

@@ -22,6 +22,7 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.jwt.Jwts
+import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
@@ -113,8 +114,10 @@ internal class ReactiveAuthorizationFilterTest {
             ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE),
             authorization
         )
+        val principal = SimplePrincipal("id", "name")
+        val accessToken = SecurityContextParserSpec.createAccessToken(principal)
         val tokenHeader =
-            Jwts.TOKEN_PREFIX + "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJpZCIsInJvbGVzIjoiIiwibmFtZSI6Im5hbWUiLCJleHAiOjE2Njg4MjU3NzksImlhdCI6MTY2ODgyNTE3OSwianRpIjoidGVzdF8zUjg5bENYVkIifQ.EystLtgrZDr61K4pjOHsMn0M0FyXOfqdAxNmcK3Nqnw"
+            Jwts.TOKEN_PREFIX + accessToken
         val exchange = mockk<ServerWebExchange>() {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns tokenHeader
             every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
