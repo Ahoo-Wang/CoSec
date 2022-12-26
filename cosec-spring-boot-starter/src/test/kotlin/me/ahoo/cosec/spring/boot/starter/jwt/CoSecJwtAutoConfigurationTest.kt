@@ -14,25 +14,14 @@
 package me.ahoo.cosec.spring.boot.starter.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
-import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
-import me.ahoo.cosec.api.authorization.Authorization
-import me.ahoo.cosec.servlet.AuthorizationFilter
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.authentication.oauth.OAuthClientAuthenticationProperties
-import me.ahoo.cosec.spring.boot.starter.authorization.AuthorizationProperties
-import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecCacheAutoConfiguration
 import me.ahoo.cosec.token.TokenCompositeAuthentication
 import me.ahoo.cosec.token.TokenConverter
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import org.assertj.core.api.AssertionsForInterfaceTypes
-import org.junit.jupiter.api.Assertions.*
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
-import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
@@ -43,7 +32,7 @@ class CoSecJwtAutoConfigurationTest {
     fun contextLoads() {
         contextRunner
             .withPropertyValues(
-                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_"
             )
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
@@ -63,7 +52,7 @@ class CoSecJwtAutoConfigurationTest {
     fun contextLoadsWhenDisable() {
         contextRunner
             .withPropertyValues(
-                "${JwtProperties.PREFIX}.enabled=false",
+                "${JwtProperties.PREFIX}.enabled=false"
             )
             .withUserConfiguration(
                 CoSecJwtAutoConfiguration::class.java

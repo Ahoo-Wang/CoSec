@@ -20,7 +20,6 @@ import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoC
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
-import me.ahoo.cosec.token.TokenCompositeAuthentication
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
@@ -36,7 +35,7 @@ internal class CoSecAuthorizationAutoConfigurationTest {
     fun contextLoads() {
         contextRunner
             .withPropertyValues(
-                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_"
             )
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(

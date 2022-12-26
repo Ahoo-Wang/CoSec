@@ -34,7 +34,7 @@ internal class CoSecGatewayAuthorizationAutoConfigurationTest {
     fun contextLoads() {
         contextRunner
             .withPropertyValues(
-                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_"
             )
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(

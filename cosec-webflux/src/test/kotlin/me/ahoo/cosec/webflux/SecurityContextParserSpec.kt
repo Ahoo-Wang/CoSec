@@ -38,7 +38,6 @@ abstract class SecurityContextParserSpec {
         }
     }
 
-
     val jwtTokenVerifier = JwtTokenVerifier(algorithm)
     abstract fun createSecurityContextParser(): SecurityContextParser<ServerWebExchange>
 

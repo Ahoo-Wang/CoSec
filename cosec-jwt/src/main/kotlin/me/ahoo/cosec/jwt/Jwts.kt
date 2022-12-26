@@ -53,12 +53,11 @@ object Jwts {
 
     @JvmStatic
     fun parseAccessToken(authorization: String?): SimpleAccessToken? {
-        if (authorization != null && authorization.startsWith(TOKEN_PREFIX)
-        ) {
-            val accessToken = authorization.substring(TOKEN_PREFIX.length)
-            return SimpleAccessToken(accessToken)
+        if (authorization?.startsWith(TOKEN_PREFIX) != true) {
+            return null
         }
-        return null
+        val accessToken = authorization.substring(TOKEN_PREFIX.length)
+        return SimpleAccessToken(accessToken)
     }
 
     fun decode(token: String): DecodedJWT {
