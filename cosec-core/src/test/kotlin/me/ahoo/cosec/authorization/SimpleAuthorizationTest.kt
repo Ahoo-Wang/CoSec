@@ -21,6 +21,7 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.AllActionMatcher
 import me.ahoo.cosec.policy.StatementData
@@ -51,7 +52,7 @@ internal class SimpleAuthorizationTest {
             every { tenantId } returns "RequestTenantId"
         }
         val securityContext = mockk<SecurityContext>() {
-            every { principal.name } returns "true"
+            every { principal.name } returns "name"
             every { principal.authenticated() } returns true
             every { tenant.tenantId } returns "contextTenantId"
         }
@@ -59,6 +60,31 @@ internal class SimpleAuthorizationTest {
             .test()
             .expectError(IllegalTenantContextException::class.java)
             .verify()
+    }
+
+    @Test
+    fun authorizeWhenPrincipalNotMatchRequestTenantIdButRequestTenantIdIsDefault() {
+        val permissionRepository = mockk<PermissionRepository>() {
+            every { getGlobalPolicy() } returns Mono.empty()
+            every { getRolePolicy(any()) } returns Mono.empty()
+            every { getPolicies(any()) } returns Mono.empty()
+        }
+        val authorization = SimpleAuthorization(permissionRepository)
+
+        val securityContext = mockk<SecurityContext> {
+            every { principal.name } returns "name"
+            every { principal.authenticated() } returns true
+            every { tenant.tenantId } returns "contextTenantId"
+            every { principal.policies } returns setOf()
+            every { principal.roles } returns setOf()
+        }
+        val request = mockk<Request> {
+            every { tenantId } returns Tenant.DEFAULT_TENANT_ID
+        }
+        authorization.authorize(request, securityContext)
+            .test()
+            .expectNext(AuthorizeResult.IMPLICIT_DENY)
+            .verifyComplete()
     }
 
     @Test
