@@ -29,6 +29,7 @@ import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
 import org.springframework.core.Ordered
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
@@ -86,6 +87,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.path.value() } returns "/path"
             every { request.methodValue } returns "GET"
             every { response.setStatusCode(HttpStatus.UNAUTHORIZED) } returns true
+            every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
             every { response.writeWith(any()) } returns Mono.empty()
             every {
@@ -124,6 +126,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.path.value() } returns "/path"
             every { request.methodValue } returns "GET"
             every { response.setStatusCode(HttpStatus.FORBIDDEN) } returns true
+            every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
             every { response.writeWith(any()) } returns Mono.empty()
             every {

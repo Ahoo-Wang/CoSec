@@ -27,8 +27,12 @@ class JwtTokenVerifier(algorithm: Algorithm) : TokenVerifier {
     private val jwtVerifier: JWTVerifier = JWT.require(algorithm).build()
 
     override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T {
-        val decodedAccessToken = jwtVerifier.verify(accessToken.accessToken)
-        return Jwts.asPrincipal(decodedAccessToken)
+        try {
+            val decodedAccessToken = jwtVerifier.verify(accessToken.accessToken)
+            return Jwts.asPrincipal(decodedAccessToken)
+        } catch (tokenExpiredException: TokenExpiredException) {
+            throw me.ahoo.cosec.token.TokenExpiredException(tokenExpiredException.message!!, tokenExpiredException)
+        }
     }
 
     override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {

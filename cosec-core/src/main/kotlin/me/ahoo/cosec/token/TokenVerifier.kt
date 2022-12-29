@@ -18,6 +18,7 @@ import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 
 interface TokenVerifier {
+    @Throws(TokenExpiredException::class)
     fun <T : TokenPrincipal> verify(accessToken: AccessToken): T
 
     @Throws(TokenExpiredException::class)

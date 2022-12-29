@@ -14,12 +14,17 @@
 package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.http.server.reactive.ServerHttpResponse
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
@@ -29,29 +34,46 @@ abstract class ReactiveSecurityFilter(
     val requestParser: RequestParser<ServerWebExchange>,
     val authorization: Authorization
 ) {
+    companion object {
+        private val log = LoggerFactory.getLogger(ReactiveSecurityFilter::class.java)
+        private val TOKEN_EXPIRED = AuthorizeResult.deny("Token Expired!")
+    }
+
     fun filterInternal(exchange: ServerWebExchange, chain: (ServerWebExchange) -> Mono<Void>): Mono<Void> {
-        val securityContext = securityContextParser.parse(exchange)
-        val request = requestParser.parse(exchange)
-        return authorization.authorize(request, securityContext)
-            .flatMap { authorizeResult ->
-                if (authorizeResult.authorized) {
-                    exchange.mutate()
-                        .principal(securityContext.principal.toMono())
-                        .build().let {
-                            exchange.setSecurityContext(securityContext)
-                            return@flatMap chain(it).writeSecurityContext(securityContext)
-                        }
+        try {
+            val securityContext = securityContextParser.parse(exchange)
+            val request = requestParser.parse(exchange)
+            return authorization.authorize(request, securityContext)
+                .flatMap { authorizeResult ->
+                    if (authorizeResult.authorized) {
+                        exchange.mutate()
+                            .principal(securityContext.principal.toMono())
+                            .build().let {
+                                exchange.setSecurityContext(securityContext)
+                                return@flatMap chain(it).writeSecurityContext(securityContext)
+                            }
+                    }
+                    val principal = securityContext.principal
+                    if (!principal.authenticated()) {
+                        exchange.response.statusCode = HttpStatus.UNAUTHORIZED
+                    } else {
+                        exchange.response.statusCode = HttpStatus.FORBIDDEN
+                    }
+                    exchange.response.writeWithAuthorizeResult(authorizeResult)
                 }
-                val principal = securityContext.principal
-                if (!principal.authenticated()) {
-                    exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-                } else {
-                    exchange.response.statusCode = HttpStatus.FORBIDDEN
-                }
-                val builder =
-                    exchange.response.bufferFactory().wrap(CoSecJsonSerializer.writeValueAsBytes(authorizeResult))
-                        .toMono()
-                exchange.response.writeWith(builder)
+        } catch (tokenExpiredException: TokenExpiredException) {
+            if (log.isDebugEnabled) {
+                log.debug("Token Expired!", tokenExpiredException)
             }
+            exchange.response.statusCode = HttpStatus.UNAUTHORIZED
+            return exchange.response.writeWithAuthorizeResult(TOKEN_EXPIRED)
+        }
+    }
+
+    private fun ServerHttpResponse.writeWithAuthorizeResult(authorizeResult: AuthorizeResult): Mono<Void> {
+        headers.contentType = MediaType.APPLICATION_JSON
+        val responseBodyBytes = CoSecJsonSerializer.writeValueAsBytes(authorizeResult)
+        val builder = bufferFactory().wrap(responseBodyBytes).toMono()
+        return writeWith(builder)
     }
 }

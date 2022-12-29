@@ -13,7 +13,6 @@
 package me.ahoo.cosec.context
 
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.authorization.IllegalTenantContextException
 
 /**
  * Security Context Parser .
@@ -21,6 +20,5 @@ import me.ahoo.cosec.authorization.IllegalTenantContextException
  * @author ahoo wang
  */
 fun interface SecurityContextParser<R> {
-    @Throws(IllegalTenantContextException::class)
     fun parse(request: R): SecurityContext
 }
