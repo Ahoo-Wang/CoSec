@@ -18,7 +18,6 @@ import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnAuthenticationEnabled
-import me.ahoo.cosec.spring.boot.starter.authorization.ConditionalOnAuthorizationEnabled
 import me.ahoo.cosec.token.TokenCompositeAuthentication
 import me.ahoo.cosec.token.TokenConverter
 import me.ahoo.cosec.token.TokenVerifier
@@ -63,24 +62,32 @@ class CoSecJwtAutoConfiguration {
         }
     }
 
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecJwtTokenVerifier(
+        algorithm: Algorithm
+    ): TokenVerifier {
+        return JwtTokenVerifier(algorithm)
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecTokenConverter(
+        idGenerator: IdGenerator,
+        algorithm: Algorithm,
+        jwtProperties: JwtProperties
+    ): TokenConverter {
+        return JwtTokenConverter(
+            idGenerator,
+            algorithm,
+            jwtProperties.tokenValidity.access,
+            jwtProperties.tokenValidity.refresh
+        )
+    }
+
     @Configuration
     @ConditionalOnAuthenticationEnabled
     class OnAuthentication {
-
-        @Bean
-        @ConditionalOnMissingBean
-        fun cosecTokenConverter(
-            idGenerator: IdGenerator,
-            algorithm: Algorithm,
-            jwtProperties: JwtProperties
-        ): TokenConverter {
-            return JwtTokenConverter(
-                idGenerator,
-                algorithm,
-                jwtProperties.tokenValidity.access,
-                jwtProperties.tokenValidity.refresh
-            )
-        }
 
         @Bean
         @ConditionalOnBean(CompositeAuthentication::class)
@@ -89,18 +96,6 @@ class CoSecJwtAutoConfiguration {
             tokenConverter: TokenConverter
         ): TokenCompositeAuthentication {
             return TokenCompositeAuthentication(compositeAuthentication, tokenConverter)
-        }
-    }
-
-    @Configuration
-    @ConditionalOnAuthorizationEnabled
-    class OnAuthorization {
-        @Bean
-        @ConditionalOnMissingBean
-        fun cosecJwtTokenVerifier(
-            algorithm: Algorithm
-        ): TokenVerifier {
-            return JwtTokenVerifier(algorithm)
         }
     }
 }
