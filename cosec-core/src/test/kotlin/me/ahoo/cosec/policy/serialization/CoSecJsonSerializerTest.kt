@@ -102,6 +102,27 @@ internal class CoSecJsonSerializerTest {
         assertThat(input, `is`(input))
     }
 
+    @Test
+    fun serializePolicyType() {
+        val output = CoSecJsonSerializer.writeValueAsString(PolicyType.GLOBAL)
+        val input = CoSecJsonSerializer.readValue(
+            output,
+            PolicyType::class.java
+        )
+        assertThat(input, `is`(input))
+    }
+
+    @Test
+    fun serializeWithPolicyType() {
+        val pojo = WithPolicyType(PolicyType.GLOBAL, "name")
+        val output = CoSecJsonSerializer.writeValueAsString(pojo)
+        val input = CoSecJsonSerializer.readValue(
+            output,
+            WithPolicyType::class.java
+        )
+        assertThat(input, `is`(input))
+    }
+
     companion object {
         @JvmStatic
         fun serializeActionMatcherProvider(): Stream<ActionMatcher> {
@@ -165,4 +186,7 @@ internal class CoSecJsonSerializerTest {
             )
         }
     }
+
+
+    data class WithPolicyType(val type: PolicyType, val name: String)
 }
