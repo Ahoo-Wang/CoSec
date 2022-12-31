@@ -16,13 +16,10 @@ package me.ahoo.cosec.webflux
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextParser
-import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
-import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.server.reactive.ServerHttpResponse
@@ -35,19 +32,9 @@ abstract class ReactiveSecurityFilter(
     val requestParser: RequestParser<ServerWebExchange>,
     val authorization: Authorization
 ) {
-    companion object {
-        private val log = LoggerFactory.getLogger(ReactiveSecurityFilter::class.java)
-    }
 
     fun filterInternal(exchange: ServerWebExchange, chain: (ServerWebExchange) -> Mono<Void>): Mono<Void> {
-        val securityContext = try {
-            securityContextParser.parse(exchange)
-        } catch (tokenExpiredException: TokenExpiredException) {
-            if (log.isDebugEnabled) {
-                log.debug("Token Expired!", tokenExpiredException)
-            }
-            SimpleSecurityContext.ANONYMOUS
-        }
+        val securityContext = securityContextParser.ensureParse(exchange)
         val request = requestParser.parse(exchange)
         return authorization.authorize(request, securityContext)
             .flatMap { authorizeResult ->

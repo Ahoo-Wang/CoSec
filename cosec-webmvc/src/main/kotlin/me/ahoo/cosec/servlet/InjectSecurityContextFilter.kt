@@ -16,7 +16,6 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
-import org.slf4j.LoggerFactory
 import java.io.IOException
 import javax.servlet.Filter
 import javax.servlet.FilterChain
@@ -33,9 +32,6 @@ import javax.servlet.http.HttpServletRequest
  */
 class InjectSecurityContextFilter(private val securityContextParser: SecurityContextParser<HttpServletRequest>) :
     Filter {
-    companion object {
-        private val log = LoggerFactory.getLogger(InjectSecurityContextFilter::class.java)
-    }
 
     @Throws(IOException::class, ServletException::class)
     override fun doFilter(servletRequest: ServletRequest, servletResponse: ServletResponse, filterChain: FilterChain) {
@@ -44,15 +40,9 @@ class InjectSecurityContextFilter(private val securityContextParser: SecurityCon
     }
 
     private fun tryInjectSecurityContext(servletRequest: ServletRequest) {
-        try {
-            val httpServletRequest = servletRequest as HttpServletRequest
-            val securityContext: SecurityContext = securityContextParser.parse(httpServletRequest)
-            SecurityContextHolder.setContext(securityContext)
-            httpServletRequest.setSecurityContext(securityContext)
-        } catch (throwable: Throwable) {
-            if (log.isInfoEnabled) {
-                log.info(throwable.message, throwable)
-            }
-        }
+        val httpServletRequest = servletRequest as HttpServletRequest
+        val securityContext: SecurityContext = securityContextParser.ensureParse(httpServletRequest)
+        SecurityContextHolder.setContext(securityContext)
+        httpServletRequest.setSecurityContext(securityContext)
     }
 }

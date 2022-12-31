@@ -32,20 +32,16 @@ class ReactiveInjectSecurityContextWebFilter(
     private val securityContextParser: SecurityContextParser<ServerWebExchange>
 ) :
     WebFilter, Ordered {
+
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
-        try {
-            val securityContext = securityContextParser.parse(exchange)
-            exchange.mutate()
-                .principal(securityContext.principal.toMono())
-                .build().let {
-                    exchange.setSecurityContext(securityContext)
-                    return chain.filter(it)
-                        .writeSecurityContext(securityContext)
-                }
-        } catch (ignored: Throwable) {
-            // ignored
-        }
-        return chain.filter(exchange)
+        val securityContext = securityContextParser.ensureParse(exchange)
+        exchange.mutate()
+            .principal(securityContext.principal.toMono())
+            .build().let {
+                exchange.setSecurityContext(securityContext)
+                return chain.filter(it)
+                    .writeSecurityContext(securityContext)
+            }
     }
 
     override fun getOrder(): Int {

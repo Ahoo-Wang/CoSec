@@ -13,12 +13,26 @@
 package me.ahoo.cosec.context
 
 import me.ahoo.cosec.api.context.SecurityContext
+import org.slf4j.LoggerFactory
 
 /**
  * Security Context Parser .
  *
  * @author ahoo wang
  */
+private val LOG = LoggerFactory.getLogger(SecurityContextParser::class.java)
+
 fun interface SecurityContextParser<R> {
     fun parse(request: R): SecurityContext
+
+    fun ensureParse(request: R): SecurityContext {
+        return try {
+            parse(request)
+        } catch (ignored: Throwable) {
+            if (LOG.isDebugEnabled) {
+                LOG.debug(ignored.message, ignored)
+            }
+            SimpleSecurityContext.ANONYMOUS
+        }
+    }
 }

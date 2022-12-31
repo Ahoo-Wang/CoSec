@@ -18,6 +18,7 @@ import io.mockk.mockk
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.jwt.Jwts
+import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
@@ -31,6 +32,7 @@ internal class InjectSecurityContextFilterTest {
         val filter = InjectSecurityContextFilter(InjectSecurityContextParser)
         val request = mockk<HttpServletRequest>() {
             every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
+            every { setSecurityContext(any()) } returns Unit
         }
         val filterChain = mockk<FilterChain>() {
             every { doFilter(request, any()) } returns Unit
@@ -42,7 +44,10 @@ internal class InjectSecurityContextFilterTest {
     @Test
     fun doFilterThrow() {
         val filter = InjectSecurityContextFilter(InjectSecurityContextParser)
-        val request = mockk<HttpServletRequest>()
+        val request = mockk<HttpServletRequest>() {
+            every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
+            every { setSecurityContext(any()) } returns Unit
+        }
         val filterChain = mockk<FilterChain>() {
             every { doFilter(request, any()) } returns Unit
         }
