@@ -103,8 +103,20 @@ internal class CoSecJsonSerializerTest {
     }
 
     @Test
+    fun serializeEffect() {
+        val output = CoSecJsonSerializer.writeValueAsString(Effect.DENY)
+        assertThat(output, `is`("\"${Effect.DENY.name.lowercase()}\""))
+        val input = CoSecJsonSerializer.readValue(
+            output,
+            Effect::class.java
+        )
+        assertThat(input, `is`(input))
+    }
+
+    @Test
     fun serializePolicyType() {
         val output = CoSecJsonSerializer.writeValueAsString(PolicyType.GLOBAL)
+        assertThat(output, `is`("\"${PolicyType.GLOBAL.name.lowercase()}\""))
         val input = CoSecJsonSerializer.readValue(
             output,
             PolicyType::class.java

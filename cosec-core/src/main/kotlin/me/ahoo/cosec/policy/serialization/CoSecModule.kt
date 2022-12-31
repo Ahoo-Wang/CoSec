@@ -16,6 +16,7 @@ package me.ahoo.cosec.policy.serialization
 import com.fasterxml.jackson.databind.module.SimpleModule
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
@@ -26,8 +27,8 @@ class CoSecModule : SimpleModule() {
         addDeserializer(ActionMatcher::class.java, JsonActionMatcherDeserializer)
         addSerializer(ConditionMatcher::class.java, JsonConditionMatcherSerializer)
         addDeserializer(ConditionMatcher::class.java, JsonConditionMatcherDeserializer)
-        addSerializer(Statement::class.java, JsonStatementSerializer)
-        addDeserializer(Statement::class.java, JsonStatementDeserializer)
+        addSerializer(Effect::class.java, JsonEffectSerializer)
+        addDeserializer(Effect::class.java, JsonEffectDeserializer)
         addSerializer(Statement::class.java, JsonStatementSerializer)
         addDeserializer(Statement::class.java, JsonStatementDeserializer)
         addSerializer(PolicyType::class.java, JsonPolicyTypeSerializer)
