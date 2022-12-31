@@ -40,3 +40,51 @@ object NoneConditionMatcher : ConditionMatcher {
         return false
     }
 }
+
+object AuthenticatedConditionMatcher : ConditionMatcher {
+    const val TYPE = "authenticated"
+    override val type: String
+        get() = TYPE
+    override val pattern: String
+        get() = ""
+
+    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+        return securityContext.principal.authenticated()
+    }
+}
+
+object InDefaultTenantConditionMatcher : ConditionMatcher {
+    const val TYPE = "in_default_tenant"
+    override val type: String
+        get() = TYPE
+    override val pattern: String
+        get() = ""
+
+    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+        return securityContext.tenant.isDefaultTenant
+    }
+}
+
+object InPlatformTenantConditionMatcher : ConditionMatcher {
+    const val TYPE = "in_platform_tenant"
+    override val type: String
+        get() = TYPE
+    override val pattern: String
+        get() = ""
+
+    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+        return securityContext.tenant.isPlatformTenant
+    }
+}
+
+object InUserTenantConditionMatcher : ConditionMatcher {
+    const val TYPE = "in_user_tenant"
+    override val type: String
+        get() = TYPE
+    override val pattern: String
+        get() = ""
+
+    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+        return securityContext.tenant.isUserTenant
+    }
+}

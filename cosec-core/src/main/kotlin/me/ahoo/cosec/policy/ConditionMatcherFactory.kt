@@ -20,6 +20,10 @@ object ConditionMatcherFactory {
         return when (type.lowercase()) {
             AllConditionMatcher.TYPE -> AllConditionMatcher
             NoneConditionMatcher.TYPE -> NoneConditionMatcher
+            AuthenticatedConditionMatcher.TYPE -> AuthenticatedConditionMatcher
+            InDefaultTenantConditionMatcher.TYPE -> InDefaultTenantConditionMatcher
+            InPlatformTenantConditionMatcher.TYPE -> InPlatformTenantConditionMatcher
+            InUserTenantConditionMatcher.TYPE -> InUserTenantConditionMatcher
             SpelConditionMatcher.TYPE -> SpelConditionMatcher(pattern)
             OgnlConditionMatcher.TYPE -> OgnlConditionMatcher(pattern)
 

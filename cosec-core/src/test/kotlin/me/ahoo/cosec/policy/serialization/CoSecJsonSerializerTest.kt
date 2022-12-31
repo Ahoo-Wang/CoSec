@@ -22,6 +22,10 @@ import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.policy.AllActionMatcher
 import me.ahoo.cosec.policy.AllConditionMatcher
+import me.ahoo.cosec.policy.AuthenticatedConditionMatcher
+import me.ahoo.cosec.policy.InDefaultTenantConditionMatcher
+import me.ahoo.cosec.policy.InPlatformTenantConditionMatcher
+import me.ahoo.cosec.policy.InUserTenantConditionMatcher
 import me.ahoo.cosec.policy.NoneActionMatcher
 import me.ahoo.cosec.policy.NoneConditionMatcher
 import me.ahoo.cosec.policy.OgnlConditionMatcher
@@ -116,6 +120,10 @@ internal class CoSecJsonSerializerTest {
             return Stream.of(
                 AllConditionMatcher,
                 NoneConditionMatcher,
+                AuthenticatedConditionMatcher,
+                InDefaultTenantConditionMatcher,
+                InPlatformTenantConditionMatcher,
+                InUserTenantConditionMatcher,
                 SpelConditionMatcher("context.principal.id=='1'"),
                 OgnlConditionMatcher("action == \"auth/login:POST\"")
             )
