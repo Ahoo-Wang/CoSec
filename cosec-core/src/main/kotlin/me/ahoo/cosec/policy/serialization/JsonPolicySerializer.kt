@@ -40,7 +40,7 @@ object JsonPolicySerializer : StdSerializer<Policy>(Policy::class.java) {
         gen.writeStringField(POLICY_NAME_KEY, value.name)
         gen.writeStringField(POLICY_CATEGORY_KEY, value.category)
         gen.writeStringField(POLICY_DESCRIPTION_KEY, value.description)
-        gen.writeStringField(POLICY_TYPE_KEY, value.type.name.lowercase())
+        gen.writePOJOField(POLICY_TYPE_KEY, value.type)
         gen.writeStringField(TENANT_ID_KEY, value.tenantId)
         if (value.statements.isNotEmpty()) {
             gen.writeArrayFieldStart(POLICY_STATEMENTS_KEY)
@@ -65,12 +65,13 @@ object JsonPolicyDeserializer : StdDeserializer<Policy>(Policy::class.java) {
                 emptySet()
             }
         }
+
         return PolicyData(
             id = jsonNode.get(POLICY_ID_KEY).asText(),
             name = jsonNode.get(POLICY_NAME_KEY).asText(),
             category = jsonNode.get(POLICY_CATEGORY_KEY).asText(),
             description = jsonNode.get(POLICY_DESCRIPTION_KEY).asText(),
-            type = PolicyType.valueOf(jsonNode.get(POLICY_TYPE_KEY).asText().uppercase()),
+            type = jsonNode.get(POLICY_TYPE_KEY).traverse(p.codec).readValueAs(PolicyType::class.java),
             tenantId = jsonNode.get(TENANT_ID_KEY).asText(),
             statements = statements
         )
