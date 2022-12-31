@@ -33,7 +33,7 @@ const val STATEMENT_CONDITIONS_KEY = "conditions"
 object JsonStatementSerializer : StdSerializer<Statement>(Statement::class.java) {
     override fun serialize(value: Statement, gen: JsonGenerator, provider: SerializerProvider) {
         gen.writeStartObject()
-        gen.writeStringField(STATEMENT_EFFECT_KEY, value.effect.name.lowercase())
+        gen.writePOJOField(STATEMENT_EFFECT_KEY, value.effect)
         if (value.actions.isNotEmpty()) {
             gen.writeArrayFieldStart(STATEMENT_ACTIONS_KEY)
             value.actions.forEach {
@@ -73,8 +73,9 @@ object JsonStatementDeserializer : StdDeserializer<Statement>(Statement::class.j
                 emptySet()
             }
         }
+
         return StatementData(
-            effect = Effect.valueOf(jsonNode.get(STATEMENT_EFFECT_KEY).asText().uppercase()),
+            effect = jsonNode.get(STATEMENT_EFFECT_KEY).traverse(p.codec).readValueAs(Effect::class.java),
             actions = actions,
             conditions = conditions
         )
