@@ -21,7 +21,6 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.AllActionMatcher
 import me.ahoo.cosec.policy.StatementData
@@ -48,7 +47,8 @@ internal class SimpleAuthorizationTest {
     fun authorizeWhenPrincipalNotMatchRequestTenantId() {
         val permissionRepository = mockk<PermissionRepository>()
         val authorization = SimpleAuthorization(permissionRepository)
-        val request = mockk<Request>() {
+        val request = mockk<Request> {
+            every { isDefaultTenant } returns false
             every { tenantId } returns "RequestTenantId"
         }
         val securityContext = mockk<SecurityContext>() {
@@ -79,7 +79,7 @@ internal class SimpleAuthorizationTest {
             every { principal.roles } returns setOf()
         }
         val request = mockk<Request> {
-            every { tenantId } returns Tenant.DEFAULT_TENANT_ID
+            every { isDefaultTenant } returns true
         }
         authorization.authorize(request, securityContext)
             .test()

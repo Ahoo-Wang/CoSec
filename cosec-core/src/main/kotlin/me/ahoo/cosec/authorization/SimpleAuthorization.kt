@@ -21,7 +21,6 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.CoSecPrincipal.Companion.isRoot
-import me.ahoo.cosec.api.tenant.Tenant
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
@@ -104,7 +103,7 @@ class SimpleAuthorization(private val permissionRepository: PermissionRepository
 
         if (
             context.principal.authenticated() &&
-            Tenant.DEFAULT_TENANT_ID != request.tenantId &&
+            !request.isDefaultTenant &&
             request.tenantId != context.tenant.tenantId
         ) {
             return IllegalTenantContextException(request, context).toMono()

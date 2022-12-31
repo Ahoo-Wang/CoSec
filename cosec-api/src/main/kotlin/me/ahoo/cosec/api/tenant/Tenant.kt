@@ -33,8 +33,20 @@ interface Tenant {
      *
      * @return If it returns true, the current Tenant is the root Tenant.
      */
-    val isPlatform: Boolean
-        get() = PLATFORM_TENANT_ID == tenantId
+    val isPlatformTenant: Boolean
+        get() = isPlatform(tenantId)
+
+    /**
+     * 是否是默认租户
+     */
+    val isDefaultTenant: Boolean
+        get() = isDefault(tenantId)
+
+    /**
+     * 是否是用户租户环境
+     */
+    val isUserTenant: Boolean
+        get() = !isDefaultTenant && !isPlatformTenant
 
     companion object {
         /**
@@ -45,5 +57,14 @@ interface Tenant {
 
         @JvmField
         val DEFAULT_TENANT_ID = CoSec.DEFAULT
+
+        @JvmStatic
+        fun isPlatform(tenantId: String): Boolean {
+            return PLATFORM_TENANT_ID == tenantId
+        }
+
+        fun isDefault(tenantId: String): Boolean {
+            return DEFAULT_TENANT_ID == tenantId
+        }
     }
 }
