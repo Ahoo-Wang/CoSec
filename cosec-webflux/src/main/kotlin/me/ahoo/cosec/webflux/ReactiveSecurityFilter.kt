@@ -16,6 +16,7 @@ package me.ahoo.cosec.webflux
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.token.TokenExpiredException
@@ -36,38 +37,36 @@ abstract class ReactiveSecurityFilter(
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(ReactiveSecurityFilter::class.java)
-        private val TOKEN_EXPIRED = AuthorizeResult.deny("Token Expired!")
     }
 
     fun filterInternal(exchange: ServerWebExchange, chain: (ServerWebExchange) -> Mono<Void>): Mono<Void> {
-        try {
-            val securityContext = securityContextParser.parse(exchange)
-            val request = requestParser.parse(exchange)
-            return authorization.authorize(request, securityContext)
-                .flatMap { authorizeResult ->
-                    if (authorizeResult.authorized) {
-                        exchange.mutate()
-                            .principal(securityContext.principal.toMono())
-                            .build().let {
-                                exchange.setSecurityContext(securityContext)
-                                return@flatMap chain(it).writeSecurityContext(securityContext)
-                            }
-                    }
-                    val principal = securityContext.principal
-                    if (!principal.authenticated()) {
-                        exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-                    } else {
-                        exchange.response.statusCode = HttpStatus.FORBIDDEN
-                    }
-                    exchange.response.writeWithAuthorizeResult(authorizeResult)
-                }
+        val securityContext = try {
+            securityContextParser.parse(exchange)
         } catch (tokenExpiredException: TokenExpiredException) {
             if (log.isDebugEnabled) {
                 log.debug("Token Expired!", tokenExpiredException)
             }
-            exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-            return exchange.response.writeWithAuthorizeResult(TOKEN_EXPIRED)
+            SimpleSecurityContext.ANONYMOUS
         }
+        val request = requestParser.parse(exchange)
+        return authorization.authorize(request, securityContext)
+            .flatMap { authorizeResult ->
+                if (authorizeResult.authorized) {
+                    exchange.mutate()
+                        .principal(securityContext.principal.toMono())
+                        .build().let {
+                            exchange.setSecurityContext(securityContext)
+                            return@flatMap chain(it).writeSecurityContext(securityContext)
+                        }
+                }
+                val principal = securityContext.principal
+                if (!principal.authenticated()) {
+                    exchange.response.statusCode = HttpStatus.UNAUTHORIZED
+                } else {
+                    exchange.response.statusCode = HttpStatus.FORBIDDEN
+                }
+                exchange.response.writeWithAuthorizeResult(authorizeResult)
+            }
     }
 
     private fun ServerHttpResponse.writeWithAuthorizeResult(authorizeResult: AuthorizeResult): Mono<Void> {

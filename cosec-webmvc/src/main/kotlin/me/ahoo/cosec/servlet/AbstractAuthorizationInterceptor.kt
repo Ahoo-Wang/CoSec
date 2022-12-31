@@ -13,12 +13,13 @@
 package me.ahoo.cosec.servlet
 
 import me.ahoo.cosec.api.authorization.Authorization
-import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
+import me.ahoo.cosec.token.TokenExpiredException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import javax.servlet.http.HttpServletRequest
@@ -42,16 +43,15 @@ abstract class AbstractAuthorizationInterceptor(
         request: HttpServletRequest,
         response: HttpServletResponse
     ): Boolean {
-        val securityContext: SecurityContext
-        try {
-            securityContext = securityContextParser.parse(request)
-        } catch (throwable: Throwable) {
-            if (log.isInfoEnabled) {
-                log.info(throwable.message, throwable)
+        val securityContext = try {
+            securityContextParser.parse(request)
+        } catch (tokenExpiredException: TokenExpiredException) {
+            if (log.isDebugEnabled) {
+                log.debug("Token Expired!", tokenExpiredException)
             }
-            response.status = HttpStatus.UNAUTHORIZED.value()
-            return false
+            SimpleSecurityContext.ANONYMOUS
         }
+
         SecurityContextHolder.setContext(securityContext)
         request.setSecurityContext(securityContext)
         return authorization.authorize(requestParser.parse(request), securityContext)
