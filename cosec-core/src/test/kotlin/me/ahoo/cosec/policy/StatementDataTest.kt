@@ -19,6 +19,9 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.VerifyResult
+import me.ahoo.cosec.policy.action.AllActionMatcher
+import me.ahoo.cosec.policy.action.PathActionMatcherFactory
+import me.ahoo.cosec.policy.condition.SpelConditionMatcherFactory
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
@@ -33,7 +36,7 @@ internal class StatementDataTest {
 
     @Test
     fun verify() {
-        val statementData = StatementData(actions = setOf(PathActionMatcher("auth/*")))
+        val statementData = StatementData(actions = setOf(PathActionMatcherFactory().create("auth/*")))
         val request = mockk<Request> {
             every { action } returns "auth/login:POST"
         }
@@ -43,8 +46,8 @@ internal class StatementDataTest {
     @Test
     fun verifyWithCondition() {
         val statementData = StatementData(
-            actions = setOf(ReplaceablePathActionMatcher("order/#{principal.id}/*")),
-            conditions = setOf(SpelConditionMatcher("context.principal.authenticated()"))
+            actions = setOf(PathActionMatcherFactory().create("order/#{principal.id}/*")),
+            conditions = setOf(SpelConditionMatcherFactory().create("context.principal.authenticated()"))
         )
         val request = mockk<Request> {
             every { action } returns "order/1/search:POST"
