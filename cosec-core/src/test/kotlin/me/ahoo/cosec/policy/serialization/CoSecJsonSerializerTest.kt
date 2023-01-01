@@ -33,6 +33,7 @@ import me.ahoo.cosec.policy.OgnlConditionMatcher
 import me.ahoo.cosec.policy.PathActionMatcher
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.RegularActionMatcher
+import me.ahoo.cosec.policy.RegularIpConditionMatcher
 import me.ahoo.cosec.policy.ReplaceablePathActionMatcher
 import me.ahoo.cosec.policy.ReplaceableRegularActionMatcher
 import me.ahoo.cosec.policy.SpelConditionMatcher
@@ -159,6 +160,7 @@ internal class CoSecJsonSerializerTest {
                 InPlatformTenantConditionMatcher,
                 InUserTenantConditionMatcher,
                 InIpConditionMatcher("ip0,ip1"),
+                RegularIpConditionMatcher("192\\.168\\.0\\.[0-9]*"),
                 SpelConditionMatcher("context.principal.id=='1'"),
                 OgnlConditionMatcher("action == \"auth/login:POST\"")
             )

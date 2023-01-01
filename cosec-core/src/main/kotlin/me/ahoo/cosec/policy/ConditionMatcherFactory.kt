@@ -25,6 +25,7 @@ object ConditionMatcherFactory {
             InPlatformTenantConditionMatcher.TYPE -> InPlatformTenantConditionMatcher
             InUserTenantConditionMatcher.TYPE -> InUserTenantConditionMatcher
             InIpConditionMatcher.TYPE -> InIpConditionMatcher(pattern)
+            RegularIpConditionMatcher.TYPE -> RegularIpConditionMatcher(pattern)
             SpelConditionMatcher.TYPE -> SpelConditionMatcher(pattern)
             OgnlConditionMatcher.TYPE -> OgnlConditionMatcher(pattern)
 
