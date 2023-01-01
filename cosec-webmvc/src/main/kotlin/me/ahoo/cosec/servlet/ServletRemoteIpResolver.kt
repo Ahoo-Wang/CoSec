@@ -17,7 +17,7 @@ import me.ahoo.cosec.context.request.RemoteIpResolver
 import javax.servlet.http.HttpServletRequest
 
 object ServletRemoteIpResolver : RemoteIpResolver<HttpServletRequest> {
-    override fun resolve(request: HttpServletRequest): String? {
-        return request.remoteHost
+    override fun resolve(request: HttpServletRequest): String {
+        return request.remoteHost.orEmpty()
     }
 }

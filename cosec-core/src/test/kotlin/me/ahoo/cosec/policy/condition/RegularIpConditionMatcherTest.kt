@@ -27,7 +27,7 @@ class RegularIpConditionMatcherTest {
     @Test
     fun matchWhenRemoteIpIsNull() {
         val request = mockk<Request> {
-            every { remoteIp } returns null
+            every { remoteIp } returns "remoteIp"
         }
         assertThat(conditionMatcher.match(request, mockk()), `is`(false))
     }

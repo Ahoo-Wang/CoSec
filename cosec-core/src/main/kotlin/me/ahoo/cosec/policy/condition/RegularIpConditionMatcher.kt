@@ -23,8 +23,10 @@ data class RegularIpConditionMatcher(override val pattern: String) : ConditionMa
     private val matcher: Regex = pattern.toRegex(RegexOption.IGNORE_CASE)
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        val remoteIp = request.remoteIp ?: return false
-        return matcher.matches(remoteIp)
+        if (request.remoteIp.isEmpty()) {
+            return false
+        }
+        return matcher.matches(request.remoteIp)
     }
 }
 

@@ -19,6 +19,7 @@ import me.ahoo.cosec.context.request.RequestTenantIdParser
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
+import org.springframework.http.HttpHeaders
 import org.springframework.web.server.ServerWebExchange
 
 internal class ReactiveRequestParserTest {
@@ -31,6 +32,8 @@ internal class ReactiveRequestParserTest {
             every { request.path.value() } returns "/path"
             every { request.methodValue } returns "GET"
             every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.headers.origin } returns null
+            every { request.headers.getFirst(HttpHeaders.REFERER) } returns null
         }
         val request = requestParser.parse(exchange)
         assertThat(request.action, `is`("/path:GET"))

@@ -17,7 +17,7 @@ import me.ahoo.cosec.context.request.RemoteIpResolver
 import org.springframework.web.server.ServerWebExchange
 
 object ReactiveRemoteIpResolver : RemoteIpResolver<ServerWebExchange> {
-    override fun resolve(request: ServerWebExchange): String? {
-        return request.request.remoteAddress?.hostName
+    override fun resolve(request: ServerWebExchange): String {
+        return request.request.remoteAddress?.hostName.orEmpty()
     }
 }

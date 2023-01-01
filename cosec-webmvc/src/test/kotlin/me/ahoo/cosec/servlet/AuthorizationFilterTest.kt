@@ -25,6 +25,7 @@ import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import reactor.kotlin.core.publisher.toMono
 import javax.servlet.FilterChain
@@ -49,6 +50,8 @@ internal class AuthorizationFilterTest {
             every { remoteHost } returns "remoteHost"
             every { getHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
+            every { getHeader(HttpHeaders.ORIGIN) } returns null
+            every { getHeader(HttpHeaders.REFERER) } returns null
             every { setSecurityContext(any()) } returns Unit
         }
         val filterChain = mockk<FilterChain> {
@@ -74,6 +77,8 @@ internal class AuthorizationFilterTest {
             every { remoteHost } returns "remoteHost"
             every { getHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
+            every { getHeader(HttpHeaders.ORIGIN) } returns "ORIGIN"
+            every { getHeader(HttpHeaders.REFERER) } returns "REFERER"
             every { setSecurityContext(any()) } returns Unit
         }
         val servletResponse = mockk<HttpServletResponse> {

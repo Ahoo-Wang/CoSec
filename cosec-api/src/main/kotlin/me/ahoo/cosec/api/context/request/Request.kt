@@ -21,5 +21,7 @@ interface Request : Tenant {
      */
     val action: String
 
-    val remoteIp: String?
+    val remoteIp: String
+    val origin: String
+    val referer: String
 }

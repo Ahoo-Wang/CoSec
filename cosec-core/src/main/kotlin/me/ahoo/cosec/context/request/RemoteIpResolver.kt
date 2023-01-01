@@ -14,5 +14,5 @@
 package me.ahoo.cosec.context.request
 
 fun interface RemoteIpResolver<R> {
-    fun resolve(request: R): String?
+    fun resolve(request: R): String
 }

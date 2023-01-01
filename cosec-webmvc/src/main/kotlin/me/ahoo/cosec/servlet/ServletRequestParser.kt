@@ -16,6 +16,7 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.context.request.RequestTenantIdParser
+import org.springframework.http.HttpHeaders
 import javax.servlet.http.HttpServletRequest
 
 /**
@@ -30,11 +31,15 @@ class ServletRequestParser(
     override fun parse(request: HttpServletRequest): Request {
         val tenantId = requestTenantIdParser.parse(request)
         val action = "${request.servletPath}:${request.method}"
+        val origin = request.getHeader(HttpHeaders.ORIGIN).orEmpty()
+        val referer = request.getHeader(HttpHeaders.REFERER).orEmpty()
         return CoSecServletRequest(
             delegate = request,
             action = action,
             tenantId = tenantId,
-            remoteIp = remoteIPResolver.resolve(request)
+            remoteIp = remoteIPResolver.resolve(request),
+            origin = origin,
+            referer = referer
         )
     }
 }
