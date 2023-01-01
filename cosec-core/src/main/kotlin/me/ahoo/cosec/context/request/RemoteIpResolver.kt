@@ -11,16 +11,8 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.webflux
+package me.ahoo.cosec.context.request
 
-import me.ahoo.cosec.Delegated
-import me.ahoo.cosec.api.context.request.Request
-import org.springframework.web.server.ServerWebExchange
-
-data class ReactiveRequest(
-    override val delegate: ServerWebExchange,
-    override val action: String,
-    override val tenantId: String,
-    override val remoteIp: String?
-) : Request,
-    Delegated<ServerWebExchange>
+fun interface RemoteIpResolver<R> {
+    fun resolve(request: R): String?
+}

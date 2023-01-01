@@ -14,15 +14,24 @@
 package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import org.springframework.web.server.ServerWebExchange
 
-class ReactiveRequestParser(private val requestTenantIdParser: RequestTenantIdParser<ServerWebExchange>) :
+class ReactiveRequestParser(
+    private val requestTenantIdParser: RequestTenantIdParser<ServerWebExchange>,
+    private val remoteIPResolver: RemoteIpResolver<ServerWebExchange>
+) :
     RequestParser<ServerWebExchange> {
     override fun parse(request: ServerWebExchange): Request {
         val tenantId = requestTenantIdParser.parse(request)
         val action = "${request.request.path.value()}:${request.request.methodValue}"
-        return ReactiveRequest(request, action, tenantId)
+        return ReactiveRequest(
+            delegate = request,
+            action = action,
+            tenantId = tenantId,
+            remoteIp = remoteIPResolver.resolve(request)
+        )
     }
 }

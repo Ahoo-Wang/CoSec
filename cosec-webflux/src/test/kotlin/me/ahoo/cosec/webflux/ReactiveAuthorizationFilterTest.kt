@@ -44,15 +44,16 @@ internal class ReactiveAuthorizationFilterTest {
         }
         val filter = ReactiveAuthorizationFilter(
             ReactiveInjectSecurityContextParser,
-            ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE),
+            ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE, ReactiveRemoteIpResolver),
             authorization
         )
         assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE))
-        val exchange = mockk<ServerWebExchange>() {
+        val exchange = mockk<ServerWebExchange> {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
             every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { request.path.value() } returns "/path"
             every { request.methodValue } returns "GET"
+            every { request.remoteAddress?.hostName } returns "hostName"
             every { setSecurityContext(any()) } just runs
             every {
                 mutate()
@@ -78,14 +79,15 @@ internal class ReactiveAuthorizationFilterTest {
         }
         val filter = ReactiveAuthorizationFilter(
             ReactiveInjectSecurityContextParser,
-            ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE),
+            ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE, ReactiveRemoteIpResolver),
             authorization
         )
-        val exchange = mockk<ServerWebExchange>() {
+        val exchange = mockk<ServerWebExchange> {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
             every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { request.path.value() } returns "/path"
             every { request.methodValue } returns "GET"
+            every { request.remoteAddress?.hostName } returns "hostName"
             every { response.setStatusCode(HttpStatus.UNAUTHORIZED) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
@@ -113,7 +115,7 @@ internal class ReactiveAuthorizationFilterTest {
         }
         val filter = ReactiveAuthorizationFilter(
             ReactiveInjectSecurityContextParser,
-            ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE),
+            ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE, ReactiveRemoteIpResolver),
             authorization
         )
         val principal = SimplePrincipal("id", "name")
@@ -125,6 +127,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { request.path.value() } returns "/path"
             every { request.methodValue } returns "GET"
+            every { request.remoteAddress?.hostName } returns "hostName"
             every { response.setStatusCode(HttpStatus.FORBIDDEN) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()

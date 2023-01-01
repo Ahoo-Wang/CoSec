@@ -13,6 +13,7 @@
 package me.ahoo.cosec.servlet
 
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import javax.servlet.http.HttpServletRequest
@@ -22,11 +23,18 @@ import javax.servlet.http.HttpServletRequest
  *
  * @author ahoo wang
  */
-class ServletRequestParser(private val requestTenantIdParser: RequestTenantIdParser<HttpServletRequest>) :
-    RequestParser<HttpServletRequest> {
+class ServletRequestParser(
+    private val requestTenantIdParser: RequestTenantIdParser<HttpServletRequest>,
+    private val remoteIPResolver: RemoteIpResolver<HttpServletRequest>
+) : RequestParser<HttpServletRequest> {
     override fun parse(request: HttpServletRequest): Request {
         val tenantId = requestTenantIdParser.parse(request)
         val action = "${request.servletPath}:${request.method}"
-        return CoSecServletRequest(request, action, tenantId)
+        return CoSecServletRequest(
+            delegate = request,
+            action = action,
+            tenantId = tenantId,
+            remoteIp = remoteIPResolver.resolve(request)
+        )
     }
 }

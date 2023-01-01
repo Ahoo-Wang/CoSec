@@ -11,16 +11,18 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.webflux
+package me.ahoo.cosec.servlet
 
-import me.ahoo.cosec.Delegated
-import me.ahoo.cosec.api.context.request.Request
-import org.springframework.web.server.ServerWebExchange
+import me.ahoo.cosec.context.request.XForwardedRemoteIpResolver
+import javax.servlet.http.HttpServletRequest
 
-data class ReactiveRequest(
-    override val delegate: ServerWebExchange,
-    override val action: String,
-    override val tenantId: String,
-    override val remoteIp: String?
-) : Request,
-    Delegated<ServerWebExchange>
+class ServletXForwardedRemoteIpResolver(override val maxTrustedIndex: Int = Int.MAX_VALUE) :
+    XForwardedRemoteIpResolver<HttpServletRequest>(ServletRemoteIpResolver) {
+    companion object {
+        val TRUST_ALL = ServletXForwardedRemoteIpResolver(Int.MAX_VALUE)
+    }
+
+    override fun extractXForwardedHeaderValues(request: HttpServletRequest): List<String>? {
+        return request.getHeaders(X_FORWARDED_FOR)?.toList()
+    }
+}

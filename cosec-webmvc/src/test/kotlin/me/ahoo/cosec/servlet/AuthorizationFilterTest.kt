@@ -35,22 +35,23 @@ internal class AuthorizationFilterTest {
 
     @Test
     fun doFilter() {
-        val authorization = mockk<Authorization>() {
+        val authorization = mockk<Authorization> {
             every { authorize(any(), any()) } returns AuthorizeResult.ALLOW.toMono()
         }
         val filter = AuthorizationFilter(
             InjectSecurityContextParser,
             authorization,
-            ServletRequestParser(ServletRequestTenantIdParser.INSTANCE)
+            ServletRequestParser(ServletRequestTenantIdParser.INSTANCE, ServletRemoteIpResolver)
         )
-        val servletRequest = mockk<HttpServletRequest>() {
+        val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
             every { method } returns "GET"
+            every { remoteHost } returns "remoteHost"
             every { getHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
             every { setSecurityContext(any()) } returns Unit
         }
-        val filterChain = mockk<FilterChain>() {
+        val filterChain = mockk<FilterChain> {
             every { doFilter(servletRequest, any()) } returns Unit
         }
         filter.doFilter(servletRequest, mockk<HttpServletResponse>(), filterChain)
@@ -59,17 +60,18 @@ internal class AuthorizationFilterTest {
 
     @Test
     fun doFilterDeny() {
-        val authorization = mockk<Authorization>() {
+        val authorization = mockk<Authorization> {
             every { authorize(any(), any()) } returns AuthorizeResult.EXPLICIT_DENY.toMono()
         }
         val filter = AuthorizationFilter(
             InjectSecurityContextParser,
             authorization,
-            ServletRequestParser(ServletRequestTenantIdParser.INSTANCE)
+            ServletRequestParser(ServletRequestTenantIdParser.INSTANCE, ServletRemoteIpResolver)
         )
-        val servletRequest = mockk<HttpServletRequest>() {
+        val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
             every { method } returns "GET"
+            every { remoteHost } returns "remoteHost"
             every { getHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
             every { setSecurityContext(any()) } returns Unit
@@ -79,7 +81,7 @@ internal class AuthorizationFilterTest {
             every { outputStream.write(any() as ByteArray) } returns Unit
             every { outputStream.flush() } returns Unit
         }
-        val filterChain = mockk<FilterChain>() {
+        val filterChain = mockk<FilterChain> {
             every { doFilter(servletRequest, any()) } returns Unit
         }
         filter.doFilter(servletRequest, servletResponse, filterChain)

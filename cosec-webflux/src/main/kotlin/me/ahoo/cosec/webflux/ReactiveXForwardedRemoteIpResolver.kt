@@ -13,14 +13,16 @@
 
 package me.ahoo.cosec.webflux
 
-import me.ahoo.cosec.Delegated
-import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.context.request.XForwardedRemoteIpResolver
 import org.springframework.web.server.ServerWebExchange
 
-data class ReactiveRequest(
-    override val delegate: ServerWebExchange,
-    override val action: String,
-    override val tenantId: String,
-    override val remoteIp: String?
-) : Request,
-    Delegated<ServerWebExchange>
+class ReactiveXForwardedRemoteIpResolver(override val maxTrustedIndex: Int = Int.MAX_VALUE) :
+    XForwardedRemoteIpResolver<ServerWebExchange>(ReactiveRemoteIpResolver) {
+    companion object {
+        val TRUST_ALL = ReactiveXForwardedRemoteIpResolver(Int.MAX_VALUE)
+    }
+
+    override fun extractXForwardedHeaderValues(request: ServerWebExchange): List<String>? {
+        return request.request.headers[X_FORWARDED_FOR]
+    }
+}
