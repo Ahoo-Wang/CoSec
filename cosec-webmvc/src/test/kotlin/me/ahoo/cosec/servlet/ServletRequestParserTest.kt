@@ -25,10 +25,11 @@ internal class ServletRequestParserTest {
 
     @Test
     fun parse() {
-        val servletRequestParser = ServletRequestParser(ServletRequestTenantIdParser.INSTANCE)
-        val servletRequest = mockk<HttpServletRequest>() {
+        val servletRequestParser = ServletRequestParser(ServletRequestTenantIdParser.INSTANCE, ServletRemoteIpResolver)
+        val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
             every { method } returns "GET"
+            every { remoteHost } returns "remoteHost"
             every { getHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
         }
         val request = servletRequestParser.parse(servletRequest)

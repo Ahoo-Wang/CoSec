@@ -23,6 +23,7 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.webflux.ReactiveInjectSecurityContextParser
+import me.ahoo.cosec.webflux.ReactiveRemoteIpResolver
 import me.ahoo.cosec.webflux.ReactiveRequestParser
 import me.ahoo.cosec.webflux.ReactiveRequestTenantIdParser
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
@@ -34,6 +35,7 @@ import org.springframework.core.Ordered
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
+import java.net.InetSocketAddress
 
 class AuthorizationGatewayFilterTest {
 
@@ -44,7 +46,7 @@ class AuthorizationGatewayFilterTest {
         }
         val filter = AuthorizationGatewayFilter(
             ReactiveInjectSecurityContextParser,
-            ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE),
+            ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE, ReactiveRemoteIpResolver),
             authorization
         )
         assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE))
@@ -53,6 +55,7 @@ class AuthorizationGatewayFilterTest {
             every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { request.path.value() } returns "/path"
             every { request.methodValue } returns "GET"
+            every { request.remoteAddress } returns InetSocketAddress("hostname", 0)
             every { setSecurityContext(any()) } just runs
             every {
                 mutate()
