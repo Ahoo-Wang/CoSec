@@ -22,8 +22,8 @@ import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.context.SimpleSecurityContext
-import me.ahoo.cosec.policy.AllActionMatcher
 import me.ahoo.cosec.policy.StatementData
+import me.ahoo.cosec.policy.action.AllActionMatcher
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
 import reactor.kotlin.test.test

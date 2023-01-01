@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.SerializerProvider
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.api.policy.ActionMatcher
-import me.ahoo.cosec.policy.ActionMatcherFactory
+import me.ahoo.cosec.policy.action.ActionMatcherFactoryProvider
 
 object JsonActionMatcherSerializer : StdSerializer<ActionMatcher>(ActionMatcher::class.java) {
     override fun serialize(value: ActionMatcher, gen: JsonGenerator, provider: SerializerProvider) {
@@ -37,16 +37,15 @@ object JsonActionMatcherSerializer : StdSerializer<ActionMatcher>(ActionMatcher:
 object JsonActionMatcherDeserializer : StdDeserializer<ActionMatcher>(ActionMatcher::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): ActionMatcher {
         return p.codec.readTree<JsonNode>(p).let {
-            ActionMatcherFactory.create(
-                requireNotNull(it.get(MATCHER_TYPE_KEY).asText()),
-                it.has(MATCHER_PATTERN_KEY).let { hasPattern ->
-                    if (hasPattern) {
-                        it.get(MATCHER_PATTERN_KEY).asText()
-                    } else {
-                        ""
-                    }
+            val type = requireNotNull(it.get(MATCHER_TYPE_KEY).asText())
+            val pattern = it.has(MATCHER_PATTERN_KEY).let { hasPattern ->
+                if (hasPattern) {
+                    it.get(MATCHER_PATTERN_KEY).asText()
+                } else {
+                    ""
                 }
-            )
+            }
+            ActionMatcherFactoryProvider.getRequired(type).create(pattern)
         }
     }
 }

@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.SerializerProvider
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.api.policy.ConditionMatcher
-import me.ahoo.cosec.policy.ConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.ConditionMatcherFactoryProvider
 
 object JsonConditionMatcherSerializer : StdSerializer<ConditionMatcher>(ConditionMatcher::class.java) {
     override fun serialize(value: ConditionMatcher, gen: JsonGenerator, provider: SerializerProvider) {
@@ -37,16 +37,15 @@ object JsonConditionMatcherSerializer : StdSerializer<ConditionMatcher>(Conditio
 object JsonConditionMatcherDeserializer : StdDeserializer<ConditionMatcher>(ConditionMatcher::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): ConditionMatcher {
         return p.codec.readTree<JsonNode>(p).let {
-            ConditionMatcherFactory.create(
-                requireNotNull(it.get(MATCHER_TYPE_KEY).asText()),
-                it.has(MATCHER_PATTERN_KEY).let { hasPattern ->
-                    if (hasPattern) {
-                        it.get(MATCHER_PATTERN_KEY).asText()
-                    } else {
-                        ""
-                    }
+            val type = requireNotNull(it.get(MATCHER_TYPE_KEY).asText())
+            val pattern = it.has(MATCHER_PATTERN_KEY).let { hasPattern ->
+                if (hasPattern) {
+                    it.get(MATCHER_PATTERN_KEY).asText()
+                } else {
+                    ""
                 }
-            )
+            }
+            ConditionMatcherFactoryProvider.getRequired(type).create(pattern)
         }
     }
 }

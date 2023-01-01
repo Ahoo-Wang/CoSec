@@ -20,24 +20,22 @@ import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
-import me.ahoo.cosec.policy.AllActionMatcher
-import me.ahoo.cosec.policy.AllConditionMatcher
-import me.ahoo.cosec.policy.AuthenticatedConditionMatcher
-import me.ahoo.cosec.policy.InDefaultTenantConditionMatcher
-import me.ahoo.cosec.policy.InIpConditionMatcher
-import me.ahoo.cosec.policy.InPlatformTenantConditionMatcher
-import me.ahoo.cosec.policy.InUserTenantConditionMatcher
-import me.ahoo.cosec.policy.NoneActionMatcher
-import me.ahoo.cosec.policy.NoneConditionMatcher
-import me.ahoo.cosec.policy.OgnlConditionMatcher
-import me.ahoo.cosec.policy.PathActionMatcher
 import me.ahoo.cosec.policy.PolicyData
-import me.ahoo.cosec.policy.RegularActionMatcher
-import me.ahoo.cosec.policy.RegularIpConditionMatcher
-import me.ahoo.cosec.policy.ReplaceablePathActionMatcher
-import me.ahoo.cosec.policy.ReplaceableRegularActionMatcher
-import me.ahoo.cosec.policy.SpelConditionMatcher
 import me.ahoo.cosec.policy.StatementData
+import me.ahoo.cosec.policy.action.AllActionMatcherFactory
+import me.ahoo.cosec.policy.action.NoneActionMatcherFactory
+import me.ahoo.cosec.policy.action.PathActionMatcherFactory
+import me.ahoo.cosec.policy.action.RegularActionMatcherFactory
+import me.ahoo.cosec.policy.condition.AllConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.AuthenticatedConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.InDefaultTenantConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.InIpConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.InPlatformTenantConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.InUserTenantConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.NoneConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.OgnlConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.RegularIpConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.SpelConditionMatcherFactory
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
@@ -141,28 +139,28 @@ internal class CoSecJsonSerializerTest {
         @JvmStatic
         fun serializeActionMatcherProvider(): Stream<ActionMatcher> {
             return Stream.of(
-                AllActionMatcher,
-                NoneActionMatcher,
-                PathActionMatcher(".*"),
-                ReplaceablePathActionMatcher("#{principal.id}.*"),
-                RegularActionMatcher(".*"),
-                ReplaceableRegularActionMatcher("#{principal.id}.*")
+                AllActionMatcherFactory().create(""),
+                NoneActionMatcherFactory().create(""),
+                PathActionMatcherFactory().create(".*"),
+                PathActionMatcherFactory().create("#{principal.id}.*"),
+                RegularActionMatcherFactory().create(".*"),
+                RegularActionMatcherFactory().create("#{principal.id}.*")
             )
         }
 
         @JvmStatic
         fun serializeConditionMatcherProvider(): Stream<ConditionMatcher> {
             return Stream.of(
-                AllConditionMatcher,
-                NoneConditionMatcher,
-                AuthenticatedConditionMatcher,
-                InDefaultTenantConditionMatcher,
-                InPlatformTenantConditionMatcher,
-                InUserTenantConditionMatcher,
-                InIpConditionMatcher("ip0,ip1"),
-                RegularIpConditionMatcher("192\\.168\\.0\\.[0-9]*"),
-                SpelConditionMatcher("context.principal.id=='1'"),
-                OgnlConditionMatcher("action == \"auth/login:POST\"")
+                AllConditionMatcherFactory().create(""),
+                NoneConditionMatcherFactory().create(""),
+                AuthenticatedConditionMatcherFactory().create(""),
+                InDefaultTenantConditionMatcherFactory().create(""),
+                InPlatformTenantConditionMatcherFactory().create(""),
+                InUserTenantConditionMatcherFactory().create(""),
+                InIpConditionMatcherFactory().create("ip0,ip1"),
+                RegularIpConditionMatcherFactory().create("192\\.168\\.0\\.[0-9]*"),
+                SpelConditionMatcherFactory().create("context.principal.id=='1'"),
+                OgnlConditionMatcherFactory().create("action == \"auth/login:POST\"")
             )
         }
 
