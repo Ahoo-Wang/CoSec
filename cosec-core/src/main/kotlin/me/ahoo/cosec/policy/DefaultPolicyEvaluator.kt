@@ -24,8 +24,12 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
     private val mockRequest = object : Request {
         override val action: String
             get() = "/policies/test:POST"
-        override val remoteIp: String?
+        override val remoteIp: String
             get() = "mockRemoteIp"
+        override val origin: String
+            get() = "mockOrigin"
+        override val referer: String
+            get() = "mockReferer"
         override val tenantId: String
             get() = Tenant.DEFAULT_TENANT_ID
     }

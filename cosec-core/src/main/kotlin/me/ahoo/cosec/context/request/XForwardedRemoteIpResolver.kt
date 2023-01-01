@@ -31,7 +31,7 @@ abstract class XForwardedRemoteIpResolver<R>(
     open val maxTrustedIndex: Int
         get() = Int.MAX_VALUE
 
-    override fun resolve(request: R): String? {
+    override fun resolve(request: R): String {
         val xForwardedHeaderValues: List<String>? = extractXForwardedHeaderValues(request)
         if (xForwardedHeaderValues.isNullOrEmpty()) {
             return defaultRemoteIpResolver.resolve(request)

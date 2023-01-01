@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.context.request.RequestTenantIdParser
+import org.springframework.http.HttpHeaders
 import org.springframework.web.server.ServerWebExchange
 
 class ReactiveRequestParser(
@@ -27,11 +28,15 @@ class ReactiveRequestParser(
     override fun parse(request: ServerWebExchange): Request {
         val tenantId = requestTenantIdParser.parse(request)
         val action = "${request.request.path.value()}:${request.request.methodValue}"
+        val origin = request.request.headers.origin.orEmpty()
+        val referer = request.request.headers.getFirst(HttpHeaders.REFERER).orEmpty()
         return ReactiveRequest(
             delegate = request,
             action = action,
             tenantId = tenantId,
-            remoteIp = remoteIPResolver.resolve(request)
+            remoteIp = remoteIPResolver.resolve(request),
+            origin = origin,
+            referer = referer
         )
     }
 }

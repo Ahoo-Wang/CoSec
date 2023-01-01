@@ -19,6 +19,7 @@ import me.ahoo.cosec.context.request.RequestTenantIdParser
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
+import org.springframework.http.HttpHeaders
 import javax.servlet.http.HttpServletRequest
 
 internal class ServletRequestParserTest {
@@ -31,6 +32,8 @@ internal class ServletRequestParserTest {
             every { method } returns "GET"
             every { remoteHost } returns "remoteHost"
             every { getHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
+            every { getHeader(HttpHeaders.ORIGIN) } returns "ORIGIN"
+            every { getHeader(HttpHeaders.REFERER) } returns "REFERER"
         }
         val request = servletRequestParser.parse(servletRequest)
         assertThat(request.action, equalTo("/path:GET"))

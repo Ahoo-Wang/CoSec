@@ -32,6 +32,7 @@ import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
 import org.springframework.cloud.gateway.filter.GatewayFilterChain
 import org.springframework.core.Ordered
+import org.springframework.http.HttpHeaders
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
@@ -53,6 +54,8 @@ class AuthorizationGatewayFilterTest {
         val exchange = mockk<ServerWebExchange>() {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
             every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
+            every { request.headers.origin } returns "origin"
+            every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
             every { request.methodValue } returns "GET"
             every { request.remoteAddress } returns InetSocketAddress("hostname", 0)

@@ -21,6 +21,8 @@ data class ReactiveRequest(
     override val delegate: ServerWebExchange,
     override val action: String,
     override val tenantId: String,
-    override val remoteIp: String?
+    override val remoteIp: String,
+    override val origin: String,
+    override val referer: String
 ) : Request,
     Delegated<ServerWebExchange>
