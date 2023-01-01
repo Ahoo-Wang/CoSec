@@ -73,6 +73,7 @@
         "in_default_tenant",
         "in_platform_tenant",
         "in_user_tenant",
+        "in_ip",
         "spel",
         "ognl"
       ]

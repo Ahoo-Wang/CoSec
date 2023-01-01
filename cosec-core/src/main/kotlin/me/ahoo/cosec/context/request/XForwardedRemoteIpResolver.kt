@@ -24,6 +24,7 @@ abstract class XForwardedRemoteIpResolver<R>(
     RemoteIpResolver<R> {
     companion object {
         const val X_FORWARDED_FOR = "X-Forwarded-For"
+        const val DELIMITER = ','
         private val log = LoggerFactory.getLogger(XForwardedRemoteIpResolver::class.java)
     }
 
@@ -44,7 +45,7 @@ abstract class XForwardedRemoteIpResolver<R>(
         }
 
         val xForwardedValues = xForwardedHeaderValues[0]
-            .split(',')
+            .split(DELIMITER)
             .dropWhile { it.isBlank() }
             .reversed()
         if (xForwardedValues.isEmpty()) {
