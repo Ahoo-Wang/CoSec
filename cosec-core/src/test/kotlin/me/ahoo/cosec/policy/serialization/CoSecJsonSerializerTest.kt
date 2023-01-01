@@ -24,6 +24,7 @@ import me.ahoo.cosec.policy.AllActionMatcher
 import me.ahoo.cosec.policy.AllConditionMatcher
 import me.ahoo.cosec.policy.AuthenticatedConditionMatcher
 import me.ahoo.cosec.policy.InDefaultTenantConditionMatcher
+import me.ahoo.cosec.policy.InIpConditionMatcher
 import me.ahoo.cosec.policy.InPlatformTenantConditionMatcher
 import me.ahoo.cosec.policy.InUserTenantConditionMatcher
 import me.ahoo.cosec.policy.NoneActionMatcher
@@ -157,6 +158,7 @@ internal class CoSecJsonSerializerTest {
                 InDefaultTenantConditionMatcher,
                 InPlatformTenantConditionMatcher,
                 InUserTenantConditionMatcher,
+                InIpConditionMatcher("ip0,ip1"),
                 SpelConditionMatcher("context.principal.id=='1'"),
                 OgnlConditionMatcher("action == \"auth/login:POST\"")
             )
@@ -198,7 +200,6 @@ internal class CoSecJsonSerializerTest {
             )
         }
     }
-
 
     data class WithPolicyType(val type: PolicyType, val name: String)
 }
