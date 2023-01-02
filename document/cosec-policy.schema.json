@@ -65,6 +65,18 @@
         "reg"
       ]
     },
+    "method": {
+      "enum": [
+        "GET",
+        "HEAD",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+        "TRACE"
+      ]
+    },
     "conditionType": {
       "enum": [
         "all",
@@ -73,19 +85,23 @@
         "in_default_tenant",
         "in_platform_tenant",
         "in_user_tenant",
-        "in_ip",
-        "reg_ip",
+        "in",
+        "reg",
         "spel",
         "ognl"
       ]
     },
-    "requestPart": {
+    "part": {
       "enum": [
-        "action",
-        "tenantId",
-        "remoteIp",
-        "origin",
-        "referer"
+        "request.path",
+        "request.method",
+        "request.remoteIp",
+        "request.origin",
+        "request.referer",
+        "request.tenantId",
+        "context.tenantId",
+        "context.principal.id",
+        "context.principal.name"
       ]
     },
     "actionMatcher": {
@@ -103,6 +119,19 @@
               "type": "string"
             }
           ]
+        },
+        "methods": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/method"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
         },
         "pattern": {
           "type": "string"
@@ -128,8 +157,14 @@
             }
           ]
         },
+        "part": {
+          "$ref": "#/definitions/part"
+        },
         "pattern": {
           "type": "string"
+        },
+        "in": {
+          "type": "array"
         }
       },
       "required": [

@@ -11,36 +11,31 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.condition
+package me.ahoo.cosec.policy.condition.part
 
 import me.ahoo.cosec.api.configuration.Configuration
-import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 import me.ahoo.cosec.policy.getMatcherPattern
 
-class RegularIpConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
-    override val type: String
-        get() = RegularIpConditionMatcherFactory.TYPE
+class RegularConditionMatcher(configuration: Configuration) :
+    PartConditionMatcher(RegularConditionMatcherFactory.TYPE, configuration) {
     private val matcher: Regex = configuration.getMatcherPattern().toRegex(RegexOption.IGNORE_CASE)
 
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        if (request.remoteIp.isEmpty()) {
-            return false
-        }
-        return matcher.matches(request.remoteIp)
+    override fun matchPart(partValue: String): Boolean {
+        return matcher.matches(partValue)
     }
 }
 
-class RegularIpConditionMatcherFactory : ConditionMatcherFactory {
+class RegularConditionMatcherFactory : ConditionMatcherFactory {
     companion object {
-        const val TYPE = "reg_ip"
+        const val TYPE = "reg"
     }
 
     override val type: String
         get() = TYPE
 
     override fun create(configuration: Configuration): ConditionMatcher {
-        return RegularIpConditionMatcher(configuration)
+        return RegularConditionMatcher(configuration)
     }
 }

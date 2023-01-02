@@ -18,11 +18,10 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
 
-class AllActionMatcher(override val configuration: Configuration) : ActionMatcher {
-    override val type: String
-        get() = AllActionMatcherFactory.TYPE
+class AllActionMatcher(configuration: Configuration) :
+    AbstractActionMatcher(AllActionMatcherFactory.TYPE, configuration) {
 
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         return true
     }
 }

@@ -36,7 +36,8 @@ internal class ReactiveRequestParserTest {
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns null
         }
         val request = requestParser.parse(exchange)
-        assertThat(request.action, `is`("/path:GET"))
+        assertThat(request.path, `is`("/path"))
+        assertThat(request.method, `is`("GET"))
         assertThat(request.tenantId, `is`("tenantId"))
     }
 }

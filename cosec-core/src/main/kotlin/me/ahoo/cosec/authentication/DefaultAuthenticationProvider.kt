@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object DefaultAuthenticationProvider : AuthenticationProvider {
     private val log = LoggerFactory.getLogger(DefaultAuthenticationProvider::class.java)
-    private val authenticationMaps: MutableMap<Class<out Credentials>, Authentication<out Credentials, out CoSecPrincipal>>
+    private val authenticationMaps: MutableMap<Class<out Credentials>, Authentication<out Credentials, CoSecPrincipal>>
 
     init {
         authenticationMaps = ConcurrentHashMap()

@@ -42,6 +42,8 @@ object ConditionMatcherFactoryProvider {
     }
 
     fun getRequired(type: String): ConditionMatcherFactory {
-        return get(type) ?: throw IllegalArgumentException("Unsupported ConditionMatcherFactory type: $type")
+        return requireNotNull(get(type)) {
+            "ConditionMatcherFactory[$type] not found."
+        }
     }
 }

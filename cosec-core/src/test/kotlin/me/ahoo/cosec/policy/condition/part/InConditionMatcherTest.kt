@@ -11,41 +11,39 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.condition
+package me.ahoo.cosec.policy.condition.part
 
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
-import me.ahoo.cosec.policy.MATCHER_PATTERN_KEY
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
 
-class RegularIpConditionMatcherTest {
+class InConditionMatcherTest {
     private val conditionMatcher =
-        RegularIpConditionMatcher(mapOf(MATCHER_PATTERN_KEY to "192\\.168\\.0\\.[0-9]*").asConfiguration())
-
-    @Test
-    fun matchWhenRemoteIpIsNull() {
-        val request = mockk<Request> {
-            every { remoteIp } returns "remoteIp"
-        }
-        assertThat(conditionMatcher.match(request, mockk()), `is`(false))
-    }
+        InConditionMatcher(
+            mapOf(
+                CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
+                "in" to setOf("remoteIp", "remoteIp1")
+            ).asConfiguration()
+        )
 
     @Test
     fun match() {
-        val request = mockk<Request> {
-            every { remoteIp } returns "192.168.0.1"
+        val request: Request = mockk {
+            every { remoteIp } returns "remoteIp"
         }
+        assertThat(conditionMatcher.type, `is`(InConditionMatcherFactory.TYPE))
+        assertThat(conditionMatcher.values, `is`(setOf("remoteIp", "remoteIp1")))
         assertThat(conditionMatcher.match(request, mockk()), `is`(true))
     }
 
     @Test
     fun notMatch() {
-        val requestNotMatch = mockk<Request> {
-            every { remoteIp } returns "192.168.1.1"
+        val requestNotMatch: Request = mockk {
+            every { remoteIp } returns "remoteIp2"
         }
         assertThat(conditionMatcher.match(requestNotMatch, mockk()), `is`(false))
     }

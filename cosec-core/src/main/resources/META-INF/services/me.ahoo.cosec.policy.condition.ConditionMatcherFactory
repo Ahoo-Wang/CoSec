@@ -13,12 +13,12 @@
 
 me.ahoo.cosec.policy.condition.AllConditionMatcherFactory
 me.ahoo.cosec.policy.condition.NoneConditionMatcherFactory
-me.ahoo.cosec.policy.condition.AuthenticatedConditionMatcherFactory
-me.ahoo.cosec.policy.condition.InDefaultTenantConditionMatcherFactory
-me.ahoo.cosec.policy.condition.InPlatformTenantConditionMatcherFactory
-me.ahoo.cosec.policy.condition.InUserTenantConditionMatcherFactory
-me.ahoo.cosec.policy.condition.InIpConditionMatcherFactory
-me.ahoo.cosec.policy.condition.RegularIpConditionMatcherFactory
+me.ahoo.cosec.policy.condition.context.AuthenticatedConditionMatcherFactory
+me.ahoo.cosec.policy.condition.context.InDefaultTenantConditionMatcherFactory
+me.ahoo.cosec.policy.condition.context.InPlatformTenantConditionMatcherFactory
+me.ahoo.cosec.policy.condition.context.InUserTenantConditionMatcherFactory
+me.ahoo.cosec.policy.condition.part.InConditionMatcherFactory
+me.ahoo.cosec.policy.condition.part.RegularConditionMatcherFactory
 me.ahoo.cosec.policy.condition.SpelConditionMatcherFactory
 me.ahoo.cosec.policy.condition.OgnlConditionMatcherFactory
 

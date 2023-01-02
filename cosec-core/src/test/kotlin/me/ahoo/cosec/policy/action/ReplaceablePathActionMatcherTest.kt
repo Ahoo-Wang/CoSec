@@ -37,13 +37,13 @@ internal class ReplaceablePathActionMatcherTest {
             ReplaceablePathActionMatcher(mapOf(MATCHER_PATTERN_KEY to "order/#{principal.id}/*").asConfiguration())
         val request1 = mockk<Request>() {
             every {
-                action
+                path
             } returns "order/1/1"
         }
         assertThat(actionMatcher.match(request1, securityContext), equalTo(true))
         val request2 = mockk<Request>() {
             every {
-                action
+                path
             } returns "order/1/1/hi"
         }
         assertThat(actionMatcher.match(request2, securityContext), equalTo(false))

@@ -19,14 +19,13 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.policy.getMatcherPattern
 
-class RegularActionMatcher(override val configuration: Configuration) : ActionMatcher {
+class RegularActionMatcher(configuration: Configuration) :
+    AbstractActionMatcher(RegularActionMatcherFactory.TYPE, configuration) {
 
     private val matcher: Regex = configuration.getMatcherPattern().toRegex(RegexOption.IGNORE_CASE)
-    override val type: String
-        get() = RegularActionMatcherFactory.TYPE
 
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        return matcher.matches(request.action)
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
+        return matcher.matches(request.path)
     }
 
     override fun toString(): String {
@@ -34,13 +33,12 @@ class RegularActionMatcher(override val configuration: Configuration) : ActionMa
     }
 }
 
-class ReplaceableRegularActionMatcher(override val configuration: Configuration) : ActionMatcher {
-    override val type: String
-        get() = RegularActionMatcherFactory.TYPE
+class ReplaceableRegularActionMatcher(configuration: Configuration) :
+    AbstractActionMatcher(RegularActionMatcherFactory.TYPE, configuration) {
 
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         val pattern = ActionPatternReplacer.replace(configuration.getMatcherPattern(), securityContext)
-        return pattern.toRegex(RegexOption.IGNORE_CASE).matches(request.action)
+        return pattern.toRegex(RegexOption.IGNORE_CASE).matches(request.path)
     }
 }
 

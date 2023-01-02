@@ -11,30 +11,32 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.action
+package me.ahoo.cosec.policy.condition.context
 
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.api.policy.ActionMatcher
+import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
-class NoneActionMatcher(configuration: Configuration) :
-    AbstractActionMatcher(NoneActionMatcherFactory.TYPE, configuration) {
+class InPlatformTenantConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
+    override val type: String
+        get() = InPlatformTenantConditionMatcherFactory.TYPE
 
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        return false
+    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+        return securityContext.tenant.isPlatformTenant
     }
 }
 
-class NoneActionMatcherFactory : ActionMatcherFactory {
+class InPlatformTenantConditionMatcherFactory : ConditionMatcherFactory {
     companion object {
-        const val TYPE = "none"
+        const val TYPE = "in_platform_tenant"
     }
 
     override val type: String
         get() = TYPE
 
-    override fun create(configuration: Configuration): ActionMatcher {
-        return NoneActionMatcher(configuration)
+    override fun create(configuration: Configuration): ConditionMatcher {
+        return InPlatformTenantConditionMatcher(configuration)
     }
 }

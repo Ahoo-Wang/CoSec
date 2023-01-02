@@ -19,10 +19,11 @@ import org.springframework.web.server.ServerWebExchange
 
 data class ReactiveRequest(
     override val delegate: ServerWebExchange,
-    override val action: String,
+    override val path: String,
+    override val method: String,
     override val tenantId: String,
     override val remoteIp: String,
     override val origin: String,
-    override val referer: String
+    override val referer: String,
 ) : Request,
     Delegated<ServerWebExchange>

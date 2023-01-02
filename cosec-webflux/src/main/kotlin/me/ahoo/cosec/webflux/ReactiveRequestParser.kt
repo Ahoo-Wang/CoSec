@@ -26,17 +26,14 @@ class ReactiveRequestParser(
 ) :
     RequestParser<ServerWebExchange> {
     override fun parse(request: ServerWebExchange): Request {
-        val tenantId = requestTenantIdParser.parse(request)
-        val action = "${request.request.path.value()}:${request.request.methodValue}"
-        val origin = request.request.headers.origin.orEmpty()
-        val referer = request.request.headers.getFirst(HttpHeaders.REFERER).orEmpty()
         return ReactiveRequest(
             delegate = request,
-            action = action,
-            tenantId = tenantId,
+            path = request.request.path.value(),
+            method = request.request.methodValue,
+            tenantId = requestTenantIdParser.parse(request),
             remoteIp = remoteIPResolver.resolve(request),
-            origin = origin,
-            referer = referer
+            origin = request.request.headers.origin.orEmpty(),
+            referer = request.request.headers.getFirst(HttpHeaders.REFERER).orEmpty()
         )
     }
 }

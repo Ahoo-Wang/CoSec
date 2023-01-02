@@ -48,7 +48,7 @@ internal class StatementDataTest {
             )
         )
         val request = mockk<Request> {
-            every { action } returns "auth/login:POST"
+            every { path } returns "auth/login:POST"
         }
         assertThat(statementData.verify(request, mockk()), `is`(VerifyResult.ALLOW))
     }
@@ -72,7 +72,7 @@ internal class StatementDataTest {
             )
         )
         val request = mockk<Request> {
-            every { action } returns "order/1/search:POST"
+            every { path } returns "order/1/search:POST"
         }
         val securityContext = mockk<SecurityContext> {
             every { principal } returns mockk {

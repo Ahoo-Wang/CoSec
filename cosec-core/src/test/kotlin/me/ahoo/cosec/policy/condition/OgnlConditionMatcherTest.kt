@@ -34,7 +34,7 @@ internal class OgnlConditionMatcherTest {
         val conditionMatcher = OgnlConditionMatcher(mapOf(MATCHER_PATTERN_KEY to expression).asConfiguration())
         actions.forEach {
             val request = mockk<Request> {
-                every { action } returns it
+                every { path } returns it
             }
             assertThat(conditionMatcher.match(request, mockk()), `is`(expected))
         }
@@ -58,8 +58,8 @@ internal class OgnlConditionMatcherTest {
         @JvmStatic
         fun parametersForActions(): Stream<Arguments> {
             return Stream.of(
-                Arguments.of("action == \"auth/login:POST\"", listOf("auth/login:POST"), true),
-                Arguments.of("action == \"auth/login:POST\"", listOf("auth/logout"), false)
+                Arguments.of("path == \"auth/login\"", listOf("auth/login"), true),
+                Arguments.of("path == \"auth/login\"", listOf("auth/logout"), false)
             )
         }
 
