@@ -45,12 +45,10 @@ class PathPatternParsersTest {
         assertThat(pathPatternParser.pathOptions.shouldDecodeAndParseSegments(), equalTo(false))
     }
 
-
     @Test
     fun asPathPatternParserWhenDefault() {
         val pathPatternParser = mapOf(
-            PathConditionMatcherFactory.TYPE to mapOf<String, Any>(
-            )
+            PathConditionMatcherFactory.TYPE to mapOf<String, Any>()
         ).asConfiguration().asPathPatternParser()
         assertThat(pathPatternParser.isCaseSensitive, equalTo(PathPatternParser.defaultInstance.isCaseSensitive))
         assertThat(
