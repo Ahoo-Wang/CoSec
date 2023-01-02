@@ -3,11 +3,41 @@
   "name": "auth",
   "category": "auth",
   "description": "",
-  "type": "system",
+  "type": "global",
   "tenantId": "1",
   "statements": [
     {
-      "effect": "allow"
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "all"
+        },
+        {
+          "type": "none"
+        },
+        {
+          "type": "path",
+          "methods": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
+          "pattern": "/user/{userId}/*"
+        }
+      ],
+      "conditions": [
+        {
+          "type": "authenticated"
+        },
+        {
+          "type": "in",
+          "part": "context.principal.id",
+          "in": [
+            "userId"
+          ]
+        }
+      ]
     },
     {
       "effect": "deny",
