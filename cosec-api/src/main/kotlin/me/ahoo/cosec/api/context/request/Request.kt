@@ -20,7 +20,6 @@ interface Request : Tenant {
      * Http Request: {url}:{method}
      */
     val action: String
-
     val remoteIp: String
     val origin: String
     val referer: String

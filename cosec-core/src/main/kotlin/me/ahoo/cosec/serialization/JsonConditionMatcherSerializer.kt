@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.serialization
+package me.ahoo.cosec.serialization
 
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.core.JsonParser
@@ -19,16 +19,21 @@ import com.fasterxml.jackson.databind.DeserializationContext
 import com.fasterxml.jackson.databind.SerializerProvider
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
-import me.ahoo.cosec.api.policy.Effect
+import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.configuration.JsonConfiguration
+import me.ahoo.cosec.policy.condition.ConditionMatcherFactoryProvider
+import me.ahoo.cosec.policy.getMatcherType
 
-object JsonEffectSerializer : StdSerializer<Effect>(Effect::class.java) {
-    override fun serialize(value: Effect, gen: JsonGenerator, provider: SerializerProvider) {
-        gen.writeString(value.name.lowercase())
+object JsonConditionMatcherSerializer : StdSerializer<ConditionMatcher>(ConditionMatcher::class.java) {
+    override fun serialize(value: ConditionMatcher, gen: JsonGenerator, provider: SerializerProvider) {
+        gen.writePOJO(value.configuration)
     }
 }
 
-object JsonEffectDeserializer : StdDeserializer<Effect>(Effect::class.java) {
-    override fun deserialize(p: JsonParser, ctxt: DeserializationContext): Effect {
-        return Effect.valueOf(p.text.uppercase())
+object JsonConditionMatcherDeserializer : StdDeserializer<ConditionMatcher>(ConditionMatcher::class.java) {
+    override fun deserialize(p: JsonParser, ctxt: DeserializationContext): ConditionMatcher {
+        return p.codec.readValue(p, JsonConfiguration::class.java).let {
+            ConditionMatcherFactoryProvider.getRequired(it.getMatcherType()).create(it)
+        }
     }
 }

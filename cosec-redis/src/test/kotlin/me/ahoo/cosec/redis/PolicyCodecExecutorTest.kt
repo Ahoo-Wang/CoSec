@@ -19,7 +19,7 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.StatementData
-import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosid.test.MockIdGenerator
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`

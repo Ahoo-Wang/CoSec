@@ -13,16 +13,15 @@
 
 package me.ahoo.cosec.policy.condition
 
+import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
 
-object AllConditionMatcher : ConditionMatcher {
+class AllConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
 
     override val type: String
         get() = AllConditionMatcherFactory.TYPE
-    override val pattern: String
-        get() = "*"
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
         return true
@@ -37,7 +36,7 @@ class AllConditionMatcherFactory : ConditionMatcherFactory {
     override val type: String
         get() = TYPE
 
-    override fun create(pattern: String): ConditionMatcher {
-        return AllConditionMatcher
+    override fun create(configuration: Configuration): ConditionMatcher {
+        return AllConditionMatcher(configuration)
     }
 }

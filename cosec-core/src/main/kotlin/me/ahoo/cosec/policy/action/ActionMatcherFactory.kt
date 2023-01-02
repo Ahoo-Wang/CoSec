@@ -13,9 +13,10 @@
 
 package me.ahoo.cosec.policy.action
 
+import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.policy.ActionMatcher
 
 interface ActionMatcherFactory {
     val type: String
-    fun create(pattern: String): ActionMatcher
+    fun create(configuration: Configuration): ActionMatcher
 }

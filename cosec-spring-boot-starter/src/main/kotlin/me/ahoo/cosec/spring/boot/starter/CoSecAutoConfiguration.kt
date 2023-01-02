@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter
 
-import me.ahoo.cosec.policy.serialization.CoSecModule
+import me.ahoo.cosec.serialization.CoSecModule
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties

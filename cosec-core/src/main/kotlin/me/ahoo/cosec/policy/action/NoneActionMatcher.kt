@@ -13,15 +13,14 @@
 
 package me.ahoo.cosec.policy.action
 
+import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
 
-object NoneActionMatcher : ActionMatcher {
+class NoneActionMatcher(override val configuration: Configuration) : ActionMatcher {
     override val type: String
         get() = NoneActionMatcherFactory.TYPE
-    override val pattern: String
-        get() = "!"
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
         return false
@@ -36,7 +35,7 @@ class NoneActionMatcherFactory : ActionMatcherFactory {
     override val type: String
         get() = TYPE
 
-    override fun create(pattern: String): ActionMatcher {
-        return NoneActionMatcher
+    override fun create(configuration: Configuration): ActionMatcher {
+        return NoneActionMatcher(configuration)
     }
 }

@@ -11,41 +11,29 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.serialization
+package me.ahoo.cosec.serialization
 
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.databind.DeserializationContext
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.SerializerProvider
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.api.policy.ActionMatcher
+import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.policy.action.ActionMatcherFactoryProvider
+import me.ahoo.cosec.policy.getMatcherType
 
 object JsonActionMatcherSerializer : StdSerializer<ActionMatcher>(ActionMatcher::class.java) {
     override fun serialize(value: ActionMatcher, gen: JsonGenerator, provider: SerializerProvider) {
-        gen.writeStartObject()
-        gen.writeStringField(MATCHER_TYPE_KEY, value.type)
-        if (value != value::class.objectInstance) {
-            gen.writeStringField(MATCHER_PATTERN_KEY, value.pattern)
-        }
-        gen.writeEndObject()
+        gen.writePOJO(value.configuration)
     }
 }
 
 object JsonActionMatcherDeserializer : StdDeserializer<ActionMatcher>(ActionMatcher::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): ActionMatcher {
-        return p.codec.readTree<JsonNode>(p).let {
-            val type = requireNotNull(it.get(MATCHER_TYPE_KEY).asText())
-            val pattern = it.has(MATCHER_PATTERN_KEY).let { hasPattern ->
-                if (hasPattern) {
-                    it.get(MATCHER_PATTERN_KEY).asText()
-                } else {
-                    ""
-                }
-            }
-            ActionMatcherFactoryProvider.getRequired(type).create(pattern)
+        return p.codec.readValue(p, JsonConfiguration::class.java).let {
+            ActionMatcherFactoryProvider.getRequired(it.getMatcherType()).create(it)
         }
     }
 }

@@ -13,9 +13,10 @@
 
 package me.ahoo.cosec.policy.condition
 
+import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.policy.ConditionMatcher
 
 interface ConditionMatcherFactory {
     val type: String
-    fun create(pattern: String): ConditionMatcher
+    fun create(configuration: Configuration): ConditionMatcher
 }

@@ -14,6 +14,7 @@
 package me.ahoo.cosec.policy.condition
 
 import io.mockk.mockk
+import me.ahoo.cosec.configuration.JsonConfiguration
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
@@ -22,8 +23,9 @@ internal class AllConditionMatcherTest {
 
     @Test
     fun match() {
-        assertThat(AllConditionMatcher.type, `is`(AllConditionMatcherFactory.TYPE))
-        assertThat(AllConditionMatcher.pattern, `is`("*"))
-        assertThat(AllConditionMatcher.match(mockk(), mockk()), `is`(true))
+        val conditionMatcher = AllConditionMatcher(JsonConfiguration.EMPTY)
+        assertThat(conditionMatcher.type, `is`(AllConditionMatcherFactory.TYPE))
+        assertThat(conditionMatcher.configuration, `is`(JsonConfiguration.EMPTY))
+        assertThat(conditionMatcher.match(mockk(), mockk()), `is`(true))
     }
 }

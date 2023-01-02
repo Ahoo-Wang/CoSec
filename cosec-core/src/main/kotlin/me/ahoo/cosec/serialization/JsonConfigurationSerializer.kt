@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.serialization
+package me.ahoo.cosec.serialization
 
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.core.JsonParser
@@ -19,16 +19,16 @@ import com.fasterxml.jackson.databind.DeserializationContext
 import com.fasterxml.jackson.databind.SerializerProvider
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
-import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.configuration.JsonConfiguration
 
-object JsonPolicyTypeSerializer : StdSerializer<PolicyType>(PolicyType::class.java) {
-    override fun serialize(value: PolicyType, gen: JsonGenerator, provider: SerializerProvider) {
-        gen.writeString(value.name.lowercase())
+object JsonConfigurationSerializer : StdSerializer<JsonConfiguration>(JsonConfiguration::class.java) {
+    override fun serialize(value: JsonConfiguration, gen: JsonGenerator, provider: SerializerProvider) {
+        gen.writeTree(value.delegate)
     }
 }
 
-object JsonPolicyTypeDeserializer : StdDeserializer<PolicyType>(PolicyType::class.java) {
-    override fun deserialize(p: JsonParser, ctxt: DeserializationContext): PolicyType {
-        return PolicyType.valueOf(p.text.uppercase())
+object JsonConfigurationDeserializer : StdDeserializer<JsonConfiguration>(JsonConfiguration::class.java) {
+    override fun deserialize(p: JsonParser, ctxt: DeserializationContext): JsonConfiguration {
+        return JsonConfiguration(p.readValueAsTree(), p.codec)
     }
 }

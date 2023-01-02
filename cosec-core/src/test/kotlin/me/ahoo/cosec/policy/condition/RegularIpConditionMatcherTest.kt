@@ -16,13 +16,15 @@ package me.ahoo.cosec.policy.condition
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.policy.condition.RegularIpConditionMatcher
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.policy.MATCHER_PATTERN_KEY
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
 
 class RegularIpConditionMatcherTest {
-    private val conditionMatcher = RegularIpConditionMatcher("192\\.168\\.0\\.[0-9]*")
+    private val conditionMatcher =
+        RegularIpConditionMatcher(mapOf(MATCHER_PATTERN_KEY to "192\\.168\\.0\\.[0-9]*").asConfiguration())
 
     @Test
     fun matchWhenRemoteIpIsNull() {

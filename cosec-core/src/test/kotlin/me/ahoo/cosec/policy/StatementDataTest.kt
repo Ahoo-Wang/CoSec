@@ -19,6 +19,8 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.VerifyResult
+import me.ahoo.cosec.configuration.JsonConfiguration
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 import me.ahoo.cosec.policy.condition.SpelConditionMatcherFactory
@@ -36,7 +38,15 @@ internal class StatementDataTest {
 
     @Test
     fun verify() {
-        val statementData = StatementData(actions = setOf(PathActionMatcherFactory().create("auth/*")))
+        val statementData = StatementData(
+            actions = setOf(
+                PathActionMatcherFactory().create(
+                    mapOf(
+                        MATCHER_PATTERN_KEY to "auth/*"
+                    ).asConfiguration()
+                )
+            )
+        )
         val request = mockk<Request> {
             every { action } returns "auth/login:POST"
         }
@@ -46,8 +56,20 @@ internal class StatementDataTest {
     @Test
     fun verifyWithCondition() {
         val statementData = StatementData(
-            actions = setOf(PathActionMatcherFactory().create("order/#{principal.id}/*")),
-            conditions = setOf(SpelConditionMatcherFactory().create("context.principal.authenticated()"))
+            actions = setOf(
+                PathActionMatcherFactory().create(
+                    mapOf(
+                        MATCHER_PATTERN_KEY to "order/#{principal.id}/*"
+                    ).asConfiguration()
+                )
+            ),
+            conditions = setOf(
+                SpelConditionMatcherFactory().create(
+                    mapOf(
+                        MATCHER_PATTERN_KEY to "context.principal.authenticated()"
+                    ).asConfiguration()
+                )
+            )
         )
         val request = mockk<Request> {
             every { action } returns "order/1/search:POST"
@@ -73,7 +95,7 @@ internal class StatementDataTest {
     fun verifyDeny() {
         val statementData = StatementData(
             effect = Effect.DENY,
-            actions = setOf(AllActionMatcher)
+            actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
         )
         assertThat(statementData.verify(mockk(), mockk()), `is`(VerifyResult.EXPLICIT_DENY))
     }

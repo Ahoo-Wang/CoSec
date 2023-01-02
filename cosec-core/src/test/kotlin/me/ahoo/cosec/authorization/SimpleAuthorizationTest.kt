@@ -21,6 +21,7 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcher
@@ -111,7 +112,7 @@ internal class SimpleAuthorizationTest {
             every { statements } returns setOf(
                 StatementData(
                     effect = Effect.ALLOW,
-                    actions = setOf(AllActionMatcher)
+                    actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
                 )
             )
         }
@@ -137,7 +138,7 @@ internal class SimpleAuthorizationTest {
             every { statements } returns setOf(
                 StatementData(
                     effect = Effect.DENY,
-                    actions = setOf(AllActionMatcher)
+                    actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
                 )
             )
         }
@@ -161,7 +162,7 @@ internal class SimpleAuthorizationTest {
             every { statements } returns setOf(
                 StatementData(
                     effect = Effect.ALLOW,
-                    actions = setOf(AllActionMatcher)
+                    actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
                 )
             )
         }
@@ -192,7 +193,7 @@ internal class SimpleAuthorizationTest {
             every { statements } returns setOf(
                 StatementData(
                     effect = Effect.DENY,
-                    actions = setOf(AllActionMatcher)
+                    actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
                 )
             )
         }
@@ -223,7 +224,7 @@ internal class SimpleAuthorizationTest {
             every { statements } returns setOf(
                 StatementData(
                     effect = Effect.ALLOW,
-                    actions = setOf(AllActionMatcher)
+                    actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
                 )
             )
         }
@@ -255,7 +256,7 @@ internal class SimpleAuthorizationTest {
             every { statements } returns setOf(
                 StatementData(
                     effect = Effect.DENY,
-                    actions = setOf(AllActionMatcher)
+                    actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
                 )
             )
         }

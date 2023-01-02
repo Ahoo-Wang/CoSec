@@ -14,6 +14,7 @@
 package me.ahoo.cosec.policy.action
 
 import io.mockk.mockk
+import me.ahoo.cosec.configuration.JsonConfiguration
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
@@ -21,8 +22,9 @@ import org.junit.jupiter.api.Test
 internal class AllActionMatcherTest {
     @Test
     fun match() {
-        assertThat(AllActionMatcher.type, `is`(AllActionMatcherFactory.TYPE))
-        assertThat(AllActionMatcher.pattern, `is`("*"))
-        assertThat(AllActionMatcher.match(mockk(), mockk()), `is`(true))
+        val allActionMatcher = AllActionMatcher(JsonConfiguration.EMPTY)
+        assertThat(allActionMatcher.type, `is`(AllActionMatcherFactory.TYPE))
+        assertThat(allActionMatcher.configuration, `is`(JsonConfiguration.EMPTY))
+        assertThat(allActionMatcher.match(mockk(), mockk()), `is`(true))
     }
 }
