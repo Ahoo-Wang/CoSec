@@ -29,7 +29,7 @@ class SpelConditionMatcher(override val configuration: Configuration) : Conditio
     private val expression: Expression = SPEL_PARSER.parseExpression(configuration.getMatcherPattern())
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        val root = Root(request, context = securityContext)
+        val root = Root(request = request, context = securityContext)
         return expression.getValue(root, Boolean::class.java) ?: false
     }
 

@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test
 internal class AllActionMatcherTest {
     @Test
     fun match() {
-        val allActionMatcher = AllActionMatcher(JsonConfiguration.EMPTY)
+        val allActionMatcher = AllActionMatcherFactory().create(JsonConfiguration.EMPTY)
         assertThat(allActionMatcher.type, `is`(AllActionMatcherFactory.TYPE))
         assertThat(allActionMatcher.configuration, `is`(JsonConfiguration.EMPTY))
         assertThat(allActionMatcher.match(mockk(), mockk()), `is`(true))

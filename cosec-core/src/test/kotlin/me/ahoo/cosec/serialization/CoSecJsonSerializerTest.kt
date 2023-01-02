@@ -60,6 +60,7 @@ internal class CoSecJsonSerializerTest {
             ActionMatcher::class.java
         )
         assertThat(input, instanceOf(actionMatcher.javaClass))
+        assertThat(input.type, `is`(actionMatcher.type))
     }
 
     @ParameterizedTest
@@ -71,6 +72,7 @@ internal class CoSecJsonSerializerTest {
             ConditionMatcher::class.java
         )
         assertThat(input, instanceOf(conditionMatcher.javaClass))
+        assertThat(input.type, `is`(conditionMatcher.type))
     }
 
     @ParameterizedTest
@@ -82,6 +84,9 @@ internal class CoSecJsonSerializerTest {
             Statement::class.java
         )
         assertThat(input, instanceOf(statement.javaClass))
+        assertThat(input.effect, `is`(statement.effect))
+        assertThat(input.actions, hasSize(statement.actions.size))
+        assertThat(input.conditions, hasSize(statement.conditions.size))
     }
 
     @ParameterizedTest
@@ -93,6 +98,11 @@ internal class CoSecJsonSerializerTest {
             Policy::class.java
         )
         assertThat(input, instanceOf(policy.javaClass))
+        assertThat(input.id, `is`(policy.id))
+        assertThat(input.name, `is`(policy.name))
+        assertThat(input.category, `is`(policy.category))
+        assertThat(input.description, `is`(policy.description))
+        assertThat(input.type, `is`(policy.type))
     }
 
     @Test

@@ -26,7 +26,7 @@ internal class PathActionMatcherTest {
 
     @Test
     fun match() {
-        val actionMatcher = PathActionMatcher(mapOf(MATCHER_PATTERN_KEY to "auth/*:POST").asConfiguration())
+        val actionMatcher = PathActionMatcherFactory().create(mapOf(MATCHER_PATTERN_KEY to "auth/*:POST").asConfiguration())
         val request = mockk<Request> {
             every { path } returns "auth/login:POST"
         }

@@ -11,28 +11,28 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.condition
+package me.ahoo.cosec.policy.condition.context
 
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.configuration.JsonConfiguration
-import me.ahoo.cosec.policy.condition.context.InUserTenantConditionMatcher
-import me.ahoo.cosec.policy.condition.context.InUserTenantConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.context.InDefaultTenantConditionMatcher
+import me.ahoo.cosec.policy.condition.context.InDefaultTenantConditionMatcherFactory
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
 
-class InUserTenantConditionMatcherTest {
+class InDefaultTenantConditionMatcherTest {
     @Test
     fun match() {
         val request: Request = mockk()
-        val context: SecurityContext = mockk {
-            every { tenant.isUserTenant } returns true
+        val context: SecurityContext = mockk() {
+            every { tenant.isDefaultTenant } returns true
         }
-        val conditionMatcher = InUserTenantConditionMatcher(JsonConfiguration.EMPTY)
-        assertThat(conditionMatcher.type, `is`(InUserTenantConditionMatcherFactory.TYPE))
+        val conditionMatcher = InDefaultTenantConditionMatcherFactory().create(JsonConfiguration.EMPTY)
+        assertThat(conditionMatcher.type, `is`(InDefaultTenantConditionMatcherFactory.TYPE))
         assertThat(conditionMatcher.configuration, `is`(JsonConfiguration.EMPTY))
         assertThat(conditionMatcher.match(request, context), `is`(true))
     }

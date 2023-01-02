@@ -11,29 +11,39 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.condition
+package me.ahoo.cosec.policy.condition.part
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.configuration.JsonConfiguration
-import me.ahoo.cosec.policy.condition.context.InPlatformTenantConditionMatcher
-import me.ahoo.cosec.policy.condition.context.InPlatformTenantConditionMatcherFactory
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
 
-class InPlatformTenantConditionMatcherTest {
+class EqConditionMatcherTest {
+    private val conditionMatcher =
+        EqConditionMatcherFactory().create(
+            mapOf(
+                CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
+                EqConditionMatcherFactory.TYPE to "remoteIp"
+            ).asConfiguration()
+        )
+
     @Test
     fun match() {
-        val request: Request = mockk()
-        val context: SecurityContext = mockk {
-            every { tenant.isPlatformTenant } returns true
+        val request: Request = mockk {
+            every { remoteIp } returns "remoteIp"
         }
-        val conditionMatcher = InPlatformTenantConditionMatcher(JsonConfiguration.EMPTY)
-        assertThat(conditionMatcher.type, `is`(InPlatformTenantConditionMatcherFactory.TYPE))
-        assertThat(conditionMatcher.configuration, `is`(JsonConfiguration.EMPTY))
-        assertThat(conditionMatcher.match(request, context), `is`(true))
+        assertThat(conditionMatcher.type, `is`(EqConditionMatcherFactory.TYPE))
+        assertThat(conditionMatcher.match(request, mockk()), `is`(true))
+    }
+
+    @Test
+    fun notMatch() {
+        val requestNotMatch: Request = mockk {
+            every { remoteIp } returns "remoteIp2"
+        }
+        assertThat(conditionMatcher.match(requestNotMatch, mockk()), `is`(false))
     }
 }

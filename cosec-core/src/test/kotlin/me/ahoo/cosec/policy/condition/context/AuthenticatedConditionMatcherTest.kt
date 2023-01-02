@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.condition
+package me.ahoo.cosec.policy.condition.context
 
 import io.mockk.every
 import io.mockk.mockk
@@ -31,7 +31,7 @@ class AuthenticatedConditionMatcherTest {
         val context: SecurityContext = mockk() {
             every { principal.authenticated() } returns true
         }
-        val conditionMatcher = AuthenticatedConditionMatcher(JsonConfiguration.EMPTY)
+        val conditionMatcher = AuthenticatedConditionMatcherFactory().create(JsonConfiguration.EMPTY)
         assertThat(conditionMatcher.type, `is`(AuthenticatedConditionMatcherFactory.TYPE))
         assertThat(conditionMatcher.configuration, `is`(JsonConfiguration.EMPTY))
         assertThat(conditionMatcher.match(request, context), `is`(true))
