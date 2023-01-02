@@ -13,7 +13,10 @@
       "effect": "deny",
       "actions": [
         {
-          "type": "all"
+          "type": "all",
+          "methods": [
+            "GET"
+          ]
         },
         {
           "type": "none"
@@ -48,7 +51,7 @@
         },
         {
           "type": "ognl",
-          "pattern": "action == \"auth/login:POST\""
+          "pattern": "path == \"auth/login\""
         }
       ]
     }

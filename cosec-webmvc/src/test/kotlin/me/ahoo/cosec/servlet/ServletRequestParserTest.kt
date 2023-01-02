@@ -36,7 +36,8 @@ internal class ServletRequestParserTest {
             every { getHeader(HttpHeaders.REFERER) } returns "REFERER"
         }
         val request = servletRequestParser.parse(servletRequest)
-        assertThat(request.action, equalTo("/path:GET"))
+        assertThat(request.path, equalTo("/path"))
+        assertThat(request.method, equalTo("GET"))
         assertThat(request.tenantId, equalTo("tenantId"))
     }
 }

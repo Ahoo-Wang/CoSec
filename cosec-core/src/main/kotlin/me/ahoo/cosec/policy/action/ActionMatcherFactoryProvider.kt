@@ -42,6 +42,8 @@ object ActionMatcherFactoryProvider {
     }
 
     fun getRequired(type: String): ActionMatcherFactory {
-        return get(type) ?: throw IllegalArgumentException("Unsupported ActionMatcherFactory type: $type")
+        return requireNotNull(get(type)) {
+            "ActionMatcherFactory[$type] not found."
+        }
     }
 }

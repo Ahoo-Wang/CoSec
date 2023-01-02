@@ -11,30 +11,27 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.action
+package me.ahoo.cosec.policy.condition.part
 
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.api.policy.ActionMatcher
+import me.ahoo.cosec.api.policy.ConditionMatcher
 
-class NoneActionMatcher(configuration: Configuration) :
-    AbstractActionMatcher(NoneActionMatcherFactory.TYPE, configuration) {
+abstract class PartConditionMatcher(
+    override val type: String,
+    final override val configuration: Configuration
+) : ConditionMatcher {
+    val partExtractor: PartExtractor = configuration
+        .getRequired(CONDITION_MATCHER_PART_KEY).asString()
+        .let {
+            DefaultPartExtractor(it)
+        }
 
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        return false
+    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+        val partValue = partExtractor.extract(request, securityContext)
+        return matchPart(partValue)
     }
-}
 
-class NoneActionMatcherFactory : ActionMatcherFactory {
-    companion object {
-        const val TYPE = "none"
-    }
-
-    override val type: String
-        get() = TYPE
-
-    override fun create(configuration: Configuration): ActionMatcher {
-        return NoneActionMatcher(configuration)
-    }
+    abstract fun matchPart(partValue: String): Boolean
 }

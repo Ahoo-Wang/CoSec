@@ -11,34 +11,28 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.condition
+package me.ahoo.cosec.policy.condition.part
 
 import me.ahoo.cosec.api.configuration.Configuration
-import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
-import me.ahoo.cosec.context.request.XForwardedRemoteIpResolver
-import me.ahoo.cosec.policy.getMatcherPattern
+import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.context.InDefaultTenantConditionMatcher
 
-class InIpConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
+class InConditionMatcher(configuration: Configuration) :
+    PartConditionMatcher(InConditionMatcherFactory.TYPE, configuration) {
     override val type: String
-        get() = InIpConditionMatcherFactory.TYPE
-    val ips: Set<String> = configuration.getMatcherPattern()
-        .split(XForwardedRemoteIpResolver.DELIMITER)
-        .dropWhile { it.isBlank() }
-        .toSet()
+        get() = InConditionMatcherFactory.TYPE
+    val values: Set<String> = configuration.getRequired("in")
+        .asStringList().toSet()
 
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        if (request.remoteIp.isNullOrBlank()) {
-            return false
-        }
-        return ips.contains(request.remoteIp)
+    override fun matchPart(partValue: String): Boolean {
+        return values.contains(partValue)
     }
 }
 
-class InIpConditionMatcherFactory : ConditionMatcherFactory {
+class InConditionMatcherFactory : ConditionMatcherFactory {
     companion object {
-        const val TYPE = "in_ip"
+        const val TYPE = "in"
     }
 
     override val type: String

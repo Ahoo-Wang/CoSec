@@ -29,17 +29,14 @@ class ServletRequestParser(
     private val remoteIPResolver: RemoteIpResolver<HttpServletRequest>
 ) : RequestParser<HttpServletRequest> {
     override fun parse(request: HttpServletRequest): Request {
-        val tenantId = requestTenantIdParser.parse(request)
-        val action = "${request.servletPath}:${request.method}"
-        val origin = request.getHeader(HttpHeaders.ORIGIN).orEmpty()
-        val referer = request.getHeader(HttpHeaders.REFERER).orEmpty()
         return CoSecServletRequest(
             delegate = request,
-            action = action,
-            tenantId = tenantId,
+            path = request.servletPath,
+            method = request.method,
+            tenantId = requestTenantIdParser.parse(request),
             remoteIp = remoteIPResolver.resolve(request),
-            origin = origin,
-            referer = referer
+            origin = request.getHeader(HttpHeaders.ORIGIN).orEmpty(),
+            referer = request.getHeader(HttpHeaders.REFERER).orEmpty()
         )
     }
 }

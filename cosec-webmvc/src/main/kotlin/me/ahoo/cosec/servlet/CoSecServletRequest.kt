@@ -19,7 +19,8 @@ import javax.servlet.http.HttpServletRequest
 
 data class CoSecServletRequest(
     override val delegate: HttpServletRequest,
-    override val action: String,
+    override val path: String,
+    override val method: String,
     override val tenantId: String,
     override val remoteIp: String,
     override val origin: String,

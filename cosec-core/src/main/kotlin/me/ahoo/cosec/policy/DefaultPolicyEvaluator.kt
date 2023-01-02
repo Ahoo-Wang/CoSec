@@ -22,8 +22,10 @@ import me.ahoo.cosec.principal.SimpleTenantPrincipal
 
 object DefaultPolicyEvaluator : PolicyEvaluator {
     private val mockRequest = object : Request {
-        override val action: String
-            get() = "/policies/test:POST"
+        override val path: String
+            get() = "/policies/test"
+        override val method: String
+            get() = "POST"
         override val remoteIp: String
             get() = "mockRemoteIp"
         override val origin: String

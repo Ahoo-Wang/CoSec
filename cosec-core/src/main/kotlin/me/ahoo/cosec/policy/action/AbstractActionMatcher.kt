@@ -11,31 +11,28 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.condition
+package me.ahoo.cosec.policy.action
 
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.api.policy.ActionMatcher
 
-class InPlatformTenantConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
-    override val type: String
-        get() = InPlatformTenantConditionMatcherFactory.TYPE
+const val ACTION_MATCHER_METHODS_KEY = "methods"
+
+abstract class AbstractActionMatcher(
+    override val type: String,
+    final override val configuration: Configuration
+) : ActionMatcher {
+    val methods: Set<String> = configuration
+        .get(ACTION_MATCHER_METHODS_KEY)?.asStringList()?.map { it.uppercase() }?.toSet() ?: emptySet()
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        return securityContext.tenant.isPlatformTenant
-    }
-}
-
-class InPlatformTenantConditionMatcherFactory : ConditionMatcherFactory {
-    companion object {
-        const val TYPE = "in_platform_tenant"
+        if (methods.isNotEmpty() && !methods.contains(request.method.uppercase())) {
+            return false
+        }
+        return internalMatch(request, securityContext)
     }
 
-    override val type: String
-        get() = TYPE
-
-    override fun create(configuration: Configuration): ConditionMatcher {
-        return InPlatformTenantConditionMatcher(configuration)
-    }
+    abstract fun internalMatch(request: Request, securityContext: SecurityContext): Boolean
 }

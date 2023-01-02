@@ -11,31 +11,32 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.condition
+package me.ahoo.cosec.policy.condition.context
 
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
-class AuthenticatedConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
+class InUserTenantConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
     override val type: String
-        get() = AuthenticatedConditionMatcherFactory.TYPE
+        get() = InUserTenantConditionMatcherFactory.TYPE
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        return securityContext.principal.authenticated()
+        return securityContext.tenant.isUserTenant
     }
 }
 
-class AuthenticatedConditionMatcherFactory : ConditionMatcherFactory {
+class InUserTenantConditionMatcherFactory : ConditionMatcherFactory {
     companion object {
-        const val TYPE = "authenticated"
+        const val TYPE = "in_user_tenant"
     }
 
     override val type: String
         get() = TYPE
 
     override fun create(configuration: Configuration): ConditionMatcher {
-        return AuthenticatedConditionMatcher(configuration)
+        return InUserTenantConditionMatcher(configuration)
     }
 }

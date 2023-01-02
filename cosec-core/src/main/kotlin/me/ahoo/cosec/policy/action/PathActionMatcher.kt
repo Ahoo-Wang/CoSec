@@ -21,25 +21,23 @@ import me.ahoo.cosec.policy.getMatcherPattern
 import org.springframework.http.server.PathContainer
 import org.springframework.web.util.pattern.PathPatternParser
 
-class PathActionMatcher(override val configuration: Configuration) : ActionMatcher {
-    override val type: String
-        get() = PathActionMatcherFactory.TYPE
+class PathActionMatcher(configuration: Configuration) :
+    AbstractActionMatcher(PathActionMatcherFactory.TYPE, configuration) {
     private val pathPattern = PathPatternParser.defaultInstance.parse(configuration.getMatcherPattern())
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        PathContainer.parsePath(request.action).let {
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
+        PathContainer.parsePath(request.path).let {
             return pathPattern.matches(it)
         }
     }
 }
 
-class ReplaceablePathActionMatcher(override val configuration: Configuration) : ActionMatcher {
-    override val type: String
-        get() = PathActionMatcherFactory.TYPE
-
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+class ReplaceablePathActionMatcher(configuration: Configuration) :
+    AbstractActionMatcher(PathActionMatcherFactory.TYPE, configuration) {
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         val pathPattern = ActionPatternReplacer.replace(configuration.getMatcherPattern(), securityContext)
+        val pathContainer = PathContainer.parsePath(request.path)
         PathPatternParser.defaultInstance.parse(pathPattern).let {
-            return it.matches(PathContainer.parsePath(request.action))
+            return it.matches(pathContainer)
         }
     }
 }

@@ -16,10 +16,8 @@ package me.ahoo.cosec.api.context.request
 import me.ahoo.cosec.api.tenant.Tenant
 
 interface Request : Tenant {
-    /**
-     * Http Request: {url}:{method}
-     */
-    val action: String
+    val path: String
+    val method: String
     val remoteIp: String
     val origin: String
     val referer: String

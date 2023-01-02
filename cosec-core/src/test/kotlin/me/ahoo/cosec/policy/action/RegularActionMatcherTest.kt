@@ -33,7 +33,7 @@ internal class RegularActionMatcherTest {
         val actionMatcher = RegularActionMatcher(mapOf(MATCHER_PATTERN_KEY to pattern).asConfiguration())
         actions.forEach {
             val request = mockk<Request> {
-                every { action } returns it
+                every { path } returns it
             }
             assertThat(actionMatcher.match(request, mockk()), `is`(expected))
         }
