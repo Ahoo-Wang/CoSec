@@ -17,7 +17,7 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
-import me.ahoo.cosec.policy.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.springframework.http.HttpStatus

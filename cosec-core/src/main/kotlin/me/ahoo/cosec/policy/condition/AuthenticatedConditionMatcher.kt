@@ -13,15 +13,14 @@
 
 package me.ahoo.cosec.policy.condition
 
+import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
 
-object AuthenticatedConditionMatcher : ConditionMatcher {
+class AuthenticatedConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
     override val type: String
         get() = AuthenticatedConditionMatcherFactory.TYPE
-    override val pattern: String
-        get() = ""
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
         return securityContext.principal.authenticated()
@@ -36,7 +35,7 @@ class AuthenticatedConditionMatcherFactory : ConditionMatcherFactory {
     override val type: String
         get() = TYPE
 
-    override fun create(pattern: String): ConditionMatcher {
-        return AuthenticatedConditionMatcher
+    override fun create(configuration: Configuration): ConditionMatcher {
+        return AuthenticatedConditionMatcher(configuration)
     }
 }

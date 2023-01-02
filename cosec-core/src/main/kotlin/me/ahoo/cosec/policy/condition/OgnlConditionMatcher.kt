@@ -13,15 +13,17 @@
 
 package me.ahoo.cosec.policy.condition
 
+import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.policy.getMatcherPattern
 import ognl.Ognl
 
-data class OgnlConditionMatcher(override val pattern: String) : ConditionMatcher {
+class OgnlConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
     override val type: String
         get() = OgnlConditionMatcherFactory.TYPE
-    private val ognlExpression = Ognl.parseExpression(pattern)
+    private val ognlExpression = Ognl.parseExpression(configuration.getMatcherPattern())
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
         val ognlContext = mapOf(
             "request" to request,
@@ -39,7 +41,7 @@ class OgnlConditionMatcherFactory : ConditionMatcherFactory {
     override val type: String
         get() = "ognl"
 
-    override fun create(pattern: String): ConditionMatcher {
-        return OgnlConditionMatcher(pattern)
+    override fun create(configuration: Configuration): ConditionMatcher {
+        return OgnlConditionMatcher(configuration)
     }
 }

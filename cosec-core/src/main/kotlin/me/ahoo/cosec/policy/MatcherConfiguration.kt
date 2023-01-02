@@ -11,14 +11,17 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.api.principal
+package me.ahoo.cosec.policy
 
 import me.ahoo.cosec.api.configuration.Configuration
-import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.request.Request
 
-interface RequestMatcher {
-    val type: String
-    val configuration: Configuration
-    fun match(request: Request, securityContext: SecurityContext): Boolean
+const val MATCHER_TYPE_KEY = "type"
+const val MATCHER_PATTERN_KEY = "pattern"
+
+fun Configuration.getMatcherType(): String {
+    return getRequired(MATCHER_TYPE_KEY).asString()
+}
+
+fun Configuration.getMatcherPattern(): String {
+    return getRequired(MATCHER_PATTERN_KEY).asString()
 }

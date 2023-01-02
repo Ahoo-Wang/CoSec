@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.serialization
+package me.ahoo.cosec.serialization
 
 import com.fasterxml.jackson.core.type.TypeReference
 import me.ahoo.cosec.api.policy.ActionMatcher
@@ -20,6 +20,9 @@ import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.policy.MATCHER_PATTERN_KEY
+import me.ahoo.cosec.policy.MATCHER_TYPE_KEY
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcherFactory
@@ -54,7 +57,7 @@ internal class CoSecJsonSerializerTest {
             output,
             ActionMatcher::class.java
         )
-        assertThat(input, `is`(actionMatcher))
+        assertThat(input, instanceOf(actionMatcher.javaClass))
     }
 
     @ParameterizedTest
@@ -65,7 +68,7 @@ internal class CoSecJsonSerializerTest {
             output,
             ConditionMatcher::class.java
         )
-        assertThat(input, `is`(conditionMatcher))
+        assertThat(input, instanceOf(conditionMatcher.javaClass))
     }
 
     @ParameterizedTest
@@ -76,7 +79,7 @@ internal class CoSecJsonSerializerTest {
             output,
             Statement::class.java
         )
-        assertThat(input, `is`(statement))
+        assertThat(input, instanceOf(statement.javaClass))
     }
 
     @ParameterizedTest
@@ -87,7 +90,7 @@ internal class CoSecJsonSerializerTest {
             output,
             Policy::class.java
         )
-        assertThat(input, `is`(policy))
+        assertThat(input, instanceOf(policy.javaClass))
     }
 
     @Test
@@ -99,7 +102,8 @@ internal class CoSecJsonSerializerTest {
             output,
             policySetType
         )
-        assertThat(input, `is`(input))
+        assertThat(input, instanceOf(input.javaClass))
+        assertThat(input, hasSize(input.size))
     }
 
     @Test
@@ -121,7 +125,7 @@ internal class CoSecJsonSerializerTest {
             output,
             PolicyType::class.java
         )
-        assertThat(input, `is`(input))
+        assertThat(input, sameInstance(input))
     }
 
     @Test
@@ -132,35 +136,75 @@ internal class CoSecJsonSerializerTest {
             output,
             WithPolicyType::class.java
         )
-        assertThat(input, `is`(input))
+        assertThat(input, sameInstance(input))
     }
 
     companion object {
         @JvmStatic
         fun serializeActionMatcherProvider(): Stream<ActionMatcher> {
             return Stream.of(
-                AllActionMatcherFactory().create(""),
-                NoneActionMatcherFactory().create(""),
-                PathActionMatcherFactory().create(".*"),
-                PathActionMatcherFactory().create("#{principal.id}.*"),
-                RegularActionMatcherFactory().create(".*"),
-                RegularActionMatcherFactory().create("#{principal.id}.*")
+                AllActionMatcherFactory().create(mapOf(MATCHER_TYPE_KEY to AllActionMatcherFactory.TYPE).asConfiguration()),
+                NoneActionMatcherFactory().create(mapOf(MATCHER_TYPE_KEY to NoneActionMatcherFactory.TYPE).asConfiguration()),
+                PathActionMatcherFactory().create(
+                    mapOf(
+                        MATCHER_TYPE_KEY to PathActionMatcherFactory.TYPE,
+                        MATCHER_PATTERN_KEY to ".*"
+                    ).asConfiguration()
+                ),
+                PathActionMatcherFactory().create(
+                    mapOf(
+                        MATCHER_TYPE_KEY to PathActionMatcherFactory.TYPE,
+                        MATCHER_PATTERN_KEY to "#{principal.id}.*"
+                    ).asConfiguration()
+                ),
+                RegularActionMatcherFactory().create(
+                    mapOf(
+                        MATCHER_TYPE_KEY to RegularActionMatcherFactory.TYPE,
+                        MATCHER_PATTERN_KEY to ".*"
+                    ).asConfiguration()
+                ),
+                RegularActionMatcherFactory().create(
+                    mapOf(
+                        MATCHER_TYPE_KEY to RegularActionMatcherFactory.TYPE,
+                        MATCHER_PATTERN_KEY to "#{principal.id}.*"
+                    ).asConfiguration()
+                )
             )
         }
 
         @JvmStatic
         fun serializeConditionMatcherProvider(): Stream<ConditionMatcher> {
             return Stream.of(
-                AllConditionMatcherFactory().create(""),
-                NoneConditionMatcherFactory().create(""),
-                AuthenticatedConditionMatcherFactory().create(""),
-                InDefaultTenantConditionMatcherFactory().create(""),
-                InPlatformTenantConditionMatcherFactory().create(""),
-                InUserTenantConditionMatcherFactory().create(""),
-                InIpConditionMatcherFactory().create("ip0,ip1"),
-                RegularIpConditionMatcherFactory().create("192\\.168\\.0\\.[0-9]*"),
-                SpelConditionMatcherFactory().create("context.principal.id=='1'"),
-                OgnlConditionMatcherFactory().create("action == \"auth/login:POST\"")
+                AllConditionMatcherFactory().create(mapOf(MATCHER_TYPE_KEY to AllConditionMatcherFactory.TYPE).asConfiguration()),
+                NoneConditionMatcherFactory().create(mapOf(MATCHER_TYPE_KEY to NoneConditionMatcherFactory.TYPE).asConfiguration()),
+                AuthenticatedConditionMatcherFactory().create(mapOf(MATCHER_TYPE_KEY to AuthenticatedConditionMatcherFactory.TYPE).asConfiguration()),
+                InDefaultTenantConditionMatcherFactory().create(mapOf(MATCHER_TYPE_KEY to InDefaultTenantConditionMatcherFactory.TYPE).asConfiguration()),
+                InPlatformTenantConditionMatcherFactory().create(mapOf(MATCHER_TYPE_KEY to InPlatformTenantConditionMatcherFactory.TYPE).asConfiguration()),
+                InUserTenantConditionMatcherFactory().create(mapOf(MATCHER_TYPE_KEY to InUserTenantConditionMatcherFactory.TYPE).asConfiguration()),
+                InIpConditionMatcherFactory().create(
+                    mapOf(
+                        MATCHER_TYPE_KEY to InIpConditionMatcherFactory.TYPE,
+                        MATCHER_PATTERN_KEY to "ip0,ip1"
+                    ).asConfiguration()
+                ),
+                RegularIpConditionMatcherFactory().create(
+                    mapOf(
+                        MATCHER_TYPE_KEY to RegularIpConditionMatcherFactory.TYPE,
+                        MATCHER_PATTERN_KEY to "192\\.168\\.0\\.[0-9]*"
+                    ).asConfiguration()
+                ),
+                SpelConditionMatcherFactory().create(
+                    mapOf(
+                        MATCHER_TYPE_KEY to SpelConditionMatcherFactory.TYPE,
+                        MATCHER_PATTERN_KEY to "context.principal.id=='1'"
+                    ).asConfiguration()
+                ),
+                OgnlConditionMatcherFactory().create(
+                    mapOf(
+                        MATCHER_TYPE_KEY to OgnlConditionMatcherFactory.TYPE,
+                        MATCHER_PATTERN_KEY to "action == \"auth/login:POST\""
+                    ).asConfiguration()
+                )
             )
         }
 

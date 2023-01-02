@@ -13,15 +13,17 @@
 
 package me.ahoo.cosec.policy.condition
 
+import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.context.request.XForwardedRemoteIpResolver
+import me.ahoo.cosec.policy.getMatcherPattern
 
-data class InIpConditionMatcher(override val pattern: String) : ConditionMatcher {
+class InIpConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
     override val type: String
         get() = InIpConditionMatcherFactory.TYPE
-    val ips: Set<String> = pattern
+    val ips: Set<String> = configuration.getMatcherPattern()
         .split(XForwardedRemoteIpResolver.DELIMITER)
         .dropWhile { it.isBlank() }
         .toSet()
@@ -42,7 +44,7 @@ class InIpConditionMatcherFactory : ConditionMatcherFactory {
     override val type: String
         get() = TYPE
 
-    override fun create(pattern: String): ConditionMatcher {
-        return InIpConditionMatcher(pattern)
+    override fun create(configuration: Configuration): ConditionMatcher {
+        return InDefaultTenantConditionMatcher(configuration)
     }
 }

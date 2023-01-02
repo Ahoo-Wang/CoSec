@@ -21,7 +21,7 @@ import org.junit.jupiter.params.provider.MethodSource
 internal class DefaultPolicyEvaluatorTest {
 
     @ParameterizedTest
-    @MethodSource("me.ahoo.cosec.policy.serialization.CoSecJsonSerializerTest#serializePolicyProvider")
+    @MethodSource("me.ahoo.cosec.serialization.CoSecJsonSerializerTest#serializePolicyProvider")
     fun evaluate(policy: Policy) {
         DefaultPolicyEvaluator.evaluate(policy)
     }

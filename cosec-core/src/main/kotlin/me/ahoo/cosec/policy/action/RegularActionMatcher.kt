@@ -13,13 +13,15 @@
 
 package me.ahoo.cosec.policy.action
 
+import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
+import me.ahoo.cosec.policy.getMatcherPattern
 
-data class RegularActionMatcher(override val pattern: String) : ActionMatcher {
+class RegularActionMatcher(override val configuration: Configuration) : ActionMatcher {
 
-    private val matcher: Regex = pattern.toRegex(RegexOption.IGNORE_CASE)
+    private val matcher: Regex = configuration.getMatcherPattern().toRegex(RegexOption.IGNORE_CASE)
     override val type: String
         get() = RegularActionMatcherFactory.TYPE
 
@@ -32,12 +34,12 @@ data class RegularActionMatcher(override val pattern: String) : ActionMatcher {
     }
 }
 
-data class ReplaceableRegularActionMatcher(override val pattern: String) : ActionMatcher {
+class ReplaceableRegularActionMatcher(override val configuration: Configuration) : ActionMatcher {
     override val type: String
         get() = RegularActionMatcherFactory.TYPE
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        val pattern = ActionPatternReplacer.replace(pattern, securityContext)
+        val pattern = ActionPatternReplacer.replace(configuration.getMatcherPattern(), securityContext)
         return pattern.toRegex(RegexOption.IGNORE_CASE).matches(request.action)
     }
 }
@@ -50,14 +52,15 @@ class RegularActionMatcherFactory : ActionMatcherFactory {
     override val type: String
         get() = TYPE
 
-    override fun create(pattern: String): ActionMatcher {
+    override fun create(configuration: Configuration): ActionMatcher {
+        val pattern = configuration.getMatcherPattern()
         return if (ActionPatternReplacer.isTemplate(pattern)) {
             ReplaceableRegularActionMatcher(
-                pattern
+                configuration
             )
         } else {
             RegularActionMatcher(
-                pattern
+                configuration
             )
         }
     }

@@ -16,13 +16,16 @@ package me.ahoo.cosec.policy.condition
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.policy.condition.InIpConditionMatcher
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.policy.MATCHER_PATTERN_KEY
+import me.ahoo.cosec.policy.getMatcherPattern
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
 
 class InIpConditionMatcherTest {
-    private val conditionMatcher = InIpConditionMatcher("remoteIp,remoteIp1")
+    private val conditionMatcher =
+        InIpConditionMatcher(mapOf(MATCHER_PATTERN_KEY to "remoteIp,remoteIp1").asConfiguration())
 
     @Test
     fun match() {
@@ -30,7 +33,7 @@ class InIpConditionMatcherTest {
             every { remoteIp } returns "remoteIp"
         }
         assertThat(conditionMatcher.type, `is`(InIpConditionMatcherFactory.TYPE))
-        assertThat(conditionMatcher.pattern, `is`("remoteIp,remoteIp1"))
+        assertThat(conditionMatcher.configuration.getMatcherPattern(), `is`("remoteIp,remoteIp1"))
         assertThat(conditionMatcher.ips, `is`(setOf("remoteIp", "remoteIp1")))
         assertThat(conditionMatcher.match(request, mockk()), `is`(true))
     }

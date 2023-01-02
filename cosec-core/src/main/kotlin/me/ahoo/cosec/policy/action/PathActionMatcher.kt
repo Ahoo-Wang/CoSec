@@ -13,16 +13,18 @@
 
 package me.ahoo.cosec.policy.action
 
+import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
+import me.ahoo.cosec.policy.getMatcherPattern
 import org.springframework.http.server.PathContainer
 import org.springframework.web.util.pattern.PathPatternParser
 
-data class PathActionMatcher(override val pattern: String) : ActionMatcher {
+class PathActionMatcher(override val configuration: Configuration) : ActionMatcher {
     override val type: String
         get() = PathActionMatcherFactory.TYPE
-    private val pathPattern = PathPatternParser.defaultInstance.parse(pattern)
+    private val pathPattern = PathPatternParser.defaultInstance.parse(configuration.getMatcherPattern())
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
         PathContainer.parsePath(request.action).let {
             return pathPattern.matches(it)
@@ -30,12 +32,12 @@ data class PathActionMatcher(override val pattern: String) : ActionMatcher {
     }
 }
 
-data class ReplaceablePathActionMatcher(override val pattern: String) : ActionMatcher {
+class ReplaceablePathActionMatcher(override val configuration: Configuration) : ActionMatcher {
     override val type: String
         get() = PathActionMatcherFactory.TYPE
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        val pathPattern = ActionPatternReplacer.replace(pattern, securityContext)
+        val pathPattern = ActionPatternReplacer.replace(configuration.getMatcherPattern(), securityContext)
         PathPatternParser.defaultInstance.parse(pathPattern).let {
             return it.matches(PathContainer.parsePath(request.action))
         }
@@ -50,14 +52,15 @@ class PathActionMatcherFactory : ActionMatcherFactory {
     override val type: String
         get() = TYPE
 
-    override fun create(pattern: String): ActionMatcher {
+    override fun create(configuration: Configuration): ActionMatcher {
+        val pattern = configuration.getMatcherPattern()
         return if (ActionPatternReplacer.isTemplate(pattern)) {
             ReplaceablePathActionMatcher(
-                pattern
+                configuration
             )
         } else {
             PathActionMatcher(
-                pattern
+                configuration
             )
         }
     }

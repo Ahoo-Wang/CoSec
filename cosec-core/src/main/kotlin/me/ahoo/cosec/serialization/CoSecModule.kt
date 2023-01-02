@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.serialization
+package me.ahoo.cosec.serialization
 
 import com.fasterxml.jackson.databind.module.SimpleModule
 import me.ahoo.cosec.api.policy.ActionMatcher
@@ -20,6 +20,7 @@ import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.configuration.JsonConfiguration
 
 class CoSecModule : SimpleModule() {
     init {
@@ -35,8 +36,7 @@ class CoSecModule : SimpleModule() {
         addDeserializer(PolicyType::class.java, JsonPolicyTypeDeserializer)
         addSerializer(Policy::class.java, JsonPolicySerializer)
         addDeserializer(Policy::class.java, JsonPolicyDeserializer)
+        addSerializer(JsonConfiguration::class.java, JsonConfigurationSerializer)
+        addDeserializer(JsonConfiguration::class.java, JsonConfigurationDeserializer)
     }
 }
-
-const val MATCHER_TYPE_KEY = "type"
-const val MATCHER_PATTERN_KEY = "pattern"

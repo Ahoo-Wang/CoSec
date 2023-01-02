@@ -16,6 +16,8 @@ package me.ahoo.cosec.policy.action
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.policy.MATCHER_PATTERN_KEY
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.params.ParameterizedTest
@@ -28,7 +30,7 @@ internal class RegularActionMatcherTest {
     @ParameterizedTest
     @MethodSource("parameters")
     fun match(pattern: String, actions: List<String>, expected: Boolean) {
-        val actionMatcher = RegularActionMatcher(pattern)
+        val actionMatcher = RegularActionMatcher(mapOf(MATCHER_PATTERN_KEY to pattern).asConfiguration())
         actions.forEach {
             val request = mockk<Request> {
                 every { action } returns it

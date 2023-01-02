@@ -16,6 +16,8 @@ package me.ahoo.cosec.policy.action
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.policy.MATCHER_PATTERN_KEY
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
@@ -24,7 +26,7 @@ internal class PathActionMatcherTest {
 
     @Test
     fun match() {
-        val actionMatcher = PathActionMatcher("auth/*:POST")
+        val actionMatcher = PathActionMatcher(mapOf(MATCHER_PATTERN_KEY to "auth/*:POST").asConfiguration())
         val request = mockk<Request> {
             every { action } returns "auth/login:POST"
         }

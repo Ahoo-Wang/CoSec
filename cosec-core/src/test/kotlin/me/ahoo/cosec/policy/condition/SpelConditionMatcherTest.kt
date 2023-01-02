@@ -16,6 +16,8 @@ package me.ahoo.cosec.policy.condition
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.policy.MATCHER_PATTERN_KEY
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
@@ -23,13 +25,14 @@ import org.junit.jupiter.api.Test
 internal class SpelConditionMatcherTest {
     @Test
     fun simpleMatch() {
-        val conditionMatcher = SpelConditionMatcher("1==1")
+        val conditionMatcher = SpelConditionMatcher(mapOf(MATCHER_PATTERN_KEY to "1==1").asConfiguration())
         assertThat(conditionMatcher.match(mockk(), mockk()), `is`(true))
     }
 
     @Test
     fun match() {
-        val conditionMatcher = SpelConditionMatcher("context.principal.id=='1'")
+        val conditionMatcher =
+            SpelConditionMatcher(mapOf(MATCHER_PATTERN_KEY to "context.principal.id=='1'").asConfiguration())
         val securityContext = mockk<SecurityContext>() {
             every { principal } returns mockk {
                 every { id } returns "1"

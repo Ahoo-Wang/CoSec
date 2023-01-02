@@ -13,14 +13,16 @@
 
 package me.ahoo.cosec.policy.condition
 
+import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.policy.getMatcherPattern
 
-data class RegularIpConditionMatcher(override val pattern: String) : ConditionMatcher {
+class RegularIpConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
     override val type: String
         get() = RegularIpConditionMatcherFactory.TYPE
-    private val matcher: Regex = pattern.toRegex(RegexOption.IGNORE_CASE)
+    private val matcher: Regex = configuration.getMatcherPattern().toRegex(RegexOption.IGNORE_CASE)
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
         if (request.remoteIp.isEmpty()) {
@@ -38,7 +40,7 @@ class RegularIpConditionMatcherFactory : ConditionMatcherFactory {
     override val type: String
         get() = TYPE
 
-    override fun create(pattern: String): ConditionMatcher {
-        return RegularIpConditionMatcher(pattern)
+    override fun create(configuration: Configuration): ConditionMatcher {
+        return RegularIpConditionMatcher(configuration)
     }
 }

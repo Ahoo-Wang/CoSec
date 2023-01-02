@@ -17,6 +17,7 @@ import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.configuration.JsonConfiguration
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
@@ -28,8 +29,9 @@ class AuthenticatedConditionMatcherTest {
         val context: SecurityContext = mockk() {
             every { principal.authenticated() } returns true
         }
-        assertThat(AuthenticatedConditionMatcher.type, `is`(AuthenticatedConditionMatcherFactory.TYPE))
-        assertThat(AuthenticatedConditionMatcher.pattern, `is`(""))
-        assertThat(AuthenticatedConditionMatcher.match(request, context), `is`(true))
+        val conditionMatcher = AuthenticatedConditionMatcher(JsonConfiguration.EMPTY)
+        assertThat(conditionMatcher.type, `is`(AuthenticatedConditionMatcherFactory.TYPE))
+        assertThat(conditionMatcher.configuration, `is`(JsonConfiguration.EMPTY))
+        assertThat(conditionMatcher.match(request, context), `is`(true))
     }
 }

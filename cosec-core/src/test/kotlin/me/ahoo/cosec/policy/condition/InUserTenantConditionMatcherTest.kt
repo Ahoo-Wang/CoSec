@@ -17,7 +17,7 @@ import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import org.junit.jupiter.api.Assertions.*
+import me.ahoo.cosec.configuration.JsonConfiguration
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
@@ -29,8 +29,9 @@ class InUserTenantConditionMatcherTest {
         val context: SecurityContext = mockk {
             every { tenant.isUserTenant } returns true
         }
-        assertThat(InUserTenantConditionMatcher.type, `is`(InUserTenantConditionMatcherFactory.TYPE))
-        assertThat(InUserTenantConditionMatcher.pattern, `is`(""))
-        assertThat(InUserTenantConditionMatcher.match(request, context), `is`(true))
+        val conditionMatcher = InUserTenantConditionMatcher(JsonConfiguration.EMPTY)
+        assertThat(conditionMatcher.type, `is`(InUserTenantConditionMatcherFactory.TYPE))
+        assertThat(conditionMatcher.configuration, `is`(JsonConfiguration.EMPTY))
+        assertThat(conditionMatcher.match(request, context), `is`(true))
     }
 }

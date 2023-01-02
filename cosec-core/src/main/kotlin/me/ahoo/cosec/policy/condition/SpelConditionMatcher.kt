@@ -13,22 +13,24 @@
 
 package me.ahoo.cosec.policy.condition
 
+import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.action.SPEL_PARSER
+import me.ahoo.cosec.policy.getMatcherPattern
 import org.springframework.expression.Expression
 
-data class SpelConditionMatcher(override val pattern: String) : ConditionMatcher {
+class SpelConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
 
     override val type: String
         get() = SpelConditionMatcherFactory.TYPE
 
-    private val expression: Expression = SPEL_PARSER.parseExpression(pattern)
+    private val expression: Expression = SPEL_PARSER.parseExpression(configuration.getMatcherPattern())
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
         val root = Root(request, context = securityContext)
-        return expression.getValue(root, Boolean::class.java)!!
+        return expression.getValue(root, Boolean::class.java) ?: false
     }
 
     data class Root(
@@ -45,7 +47,7 @@ class SpelConditionMatcherFactory : ConditionMatcherFactory {
     override val type: String
         get() = TYPE
 
-    override fun create(pattern: String): ConditionMatcher {
-        return SpelConditionMatcher(pattern)
+    override fun create(configuration: Configuration): ConditionMatcher {
+        return SpelConditionMatcher(configuration)
     }
 }

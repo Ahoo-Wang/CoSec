@@ -17,6 +17,8 @@ import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.policy.MATCHER_PATTERN_KEY
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
@@ -31,7 +33,8 @@ internal class ReplaceableRegularActionMatcherTest {
             }
         }
 
-        val replaceableRegularActionMatcher = ReplaceableRegularActionMatcher("order/#{principal.id}/1")
+        val replaceableRegularActionMatcher =
+            ReplaceableRegularActionMatcher(mapOf(MATCHER_PATTERN_KEY to "order/#{principal.id}/1").asConfiguration())
         val request1 = mockk<Request>() {
             every {
                 action

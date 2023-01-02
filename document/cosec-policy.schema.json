@@ -79,11 +79,30 @@
         "ognl"
       ]
     },
+    "requestPart": {
+      "enum": [
+        "action",
+        "tenantId",
+        "remoteIp",
+        "origin",
+        "referer"
+      ]
+    },
     "actionMatcher": {
       "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
       "properties": {
         "type": {
-          "$ref": "#/definitions/actionType"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/actionType"
+            },
+            {
+              "type": "string"
+            }
+          ]
         },
         "pattern": {
           "type": "string"
@@ -95,9 +114,19 @@
     },
     "conditionMatcher": {
       "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
       "properties": {
         "type": {
-          "$ref": "#/definitions/conditionType"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/conditionType"
+            },
+            {
+              "type": "string"
+            }
+          ]
         },
         "pattern": {
           "type": "string"

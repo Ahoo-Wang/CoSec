@@ -11,14 +11,12 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.api.principal
+package me.ahoo.cosec.policy.condition
 
-import me.ahoo.cosec.api.configuration.Configuration
-import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.request.Request
-
-interface RequestMatcher {
-    val type: String
-    val configuration: Configuration
-    fun match(request: Request, securityContext: SecurityContext): Boolean
+object RequestPart {
+    const val ACTION = "action"
+    const val REMOTE_IP = "remoteIp"
+    const val ORIGIN = "origin"
+    const val REFERER = "referer"
+    const val TENANT_ID = "tenantId"
 }
