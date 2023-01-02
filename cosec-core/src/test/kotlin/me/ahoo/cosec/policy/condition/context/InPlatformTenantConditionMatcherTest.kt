@@ -18,8 +18,6 @@ import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.configuration.JsonConfiguration
-import me.ahoo.cosec.policy.condition.context.InPlatformTenantConditionMatcher
-import me.ahoo.cosec.policy.condition.context.InPlatformTenantConditionMatcherFactory
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test

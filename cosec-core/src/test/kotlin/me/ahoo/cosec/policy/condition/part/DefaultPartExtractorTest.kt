@@ -19,7 +19,6 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
-
 import org.junit.jupiter.api.Test
 
 class DefaultPartExtractorTest {
