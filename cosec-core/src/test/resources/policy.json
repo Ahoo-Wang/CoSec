@@ -36,6 +36,16 @@
           "in": [
             "userId"
           ]
+        },
+        {
+          "type": "path",
+          "part": "request.remoteIp",
+          "path": {
+            "caseSensitive": false,
+            "separator": ".",
+            "decodeAndParseSegments": false
+          },
+          "pattern": "192.168.0.*"
         }
       ]
     },

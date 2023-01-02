@@ -88,6 +88,7 @@
         "eq",
         "in",
         "reg",
+        "path",
         "spel",
         "ognl"
       ]
@@ -104,6 +105,22 @@
         "context.principal.id",
         "context.principal.name"
       ]
+    },
+    "pathOptions": {
+      "type": "object",
+      "properties": {
+        "caseSensitive": {
+          "type": "boolean"
+        },
+        "separator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1
+        },
+        "decodeAndParseSegments": {
+          "type": "boolean"
+        }
+      }
     },
     "actionMatcher": {
       "type": "object",
@@ -136,6 +153,9 @@
         },
         "pattern": {
           "type": "string"
+        },
+        "path": {
+          "$ref": "#/definitions/pathOptions"
         }
       },
       "required": [
@@ -166,6 +186,9 @@
         },
         "eq": {
           "type": "string"
+        },
+        "path": {
+          "$ref": "#/definitions/pathOptions"
         },
         "in": {
           "type": "array"
