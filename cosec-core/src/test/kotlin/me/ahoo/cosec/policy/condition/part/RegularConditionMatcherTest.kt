@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test
 
 class RegularConditionMatcherTest {
     private val conditionMatcher =
-        RegularConditionMatcher(
+        RegularConditionMatcherFactory().create(
             mapOf(
                 CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
                 MATCHER_PATTERN_KEY to "192\\.168\\.0\\.[0-9]*"

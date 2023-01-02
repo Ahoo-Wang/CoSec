@@ -25,14 +25,14 @@ import org.junit.jupiter.api.Test
 internal class SpelConditionMatcherTest {
     @Test
     fun simpleMatch() {
-        val conditionMatcher = SpelConditionMatcher(mapOf(MATCHER_PATTERN_KEY to "1==1").asConfiguration())
+        val conditionMatcher = SpelConditionMatcherFactory().create(mapOf(MATCHER_PATTERN_KEY to "1==1").asConfiguration())
         assertThat(conditionMatcher.match(mockk(), mockk()), `is`(true))
     }
 
     @Test
     fun match() {
         val conditionMatcher =
-            SpelConditionMatcher(mapOf(MATCHER_PATTERN_KEY to "context.principal.id=='1'").asConfiguration())
+            SpelConditionMatcherFactory().create(mapOf(MATCHER_PATTERN_KEY to "context.principal.id=='1'").asConfiguration())
         val securityContext = mockk<SecurityContext>() {
             every { principal } returns mockk {
                 every { id } returns "1"

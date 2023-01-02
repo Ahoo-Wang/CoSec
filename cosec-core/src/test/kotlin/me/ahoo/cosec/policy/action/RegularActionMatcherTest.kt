@@ -30,7 +30,7 @@ internal class RegularActionMatcherTest {
     @ParameterizedTest
     @MethodSource("parameters")
     fun match(pattern: String, actions: List<String>, expected: Boolean) {
-        val actionMatcher = RegularActionMatcher(mapOf(MATCHER_PATTERN_KEY to pattern).asConfiguration())
+        val actionMatcher = RegularActionMatcherFactory().create(mapOf(MATCHER_PATTERN_KEY to pattern).asConfiguration())
         actions.forEach {
             val request = mockk<Request> {
                 every { path } returns it

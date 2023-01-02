@@ -23,7 +23,7 @@ internal class NoneActionMatcherTest {
 
     @Test
     fun match() {
-        val actionMatcher = NoneActionMatcher(JsonConfiguration.EMPTY)
+        val actionMatcher = NoneActionMatcherFactory().create(JsonConfiguration.EMPTY)
         assertThat(actionMatcher.type, `is`(NoneActionMatcherFactory.TYPE))
         assertThat(actionMatcher.configuration, `is`(JsonConfiguration.EMPTY))
         assertThat(actionMatcher.match(mockk(), mockk()), `is`(false))

@@ -34,7 +34,8 @@ internal class ReplaceableRegularActionMatcherTest {
         }
 
         val replaceableRegularActionMatcher =
-            ReplaceableRegularActionMatcher(mapOf(MATCHER_PATTERN_KEY to "order/#{principal.id}/1").asConfiguration())
+            RegularActionMatcherFactory().create(mapOf(MATCHER_PATTERN_KEY to "order/#{principal.id}/1").asConfiguration())
+        assertThat(replaceableRegularActionMatcher, instanceOf(ReplaceableRegularActionMatcher::class.java))
         val request1 = mockk<Request>() {
             every {
                 path

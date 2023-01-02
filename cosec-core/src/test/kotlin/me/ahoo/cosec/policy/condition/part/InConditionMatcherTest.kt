@@ -23,10 +23,10 @@ import org.junit.jupiter.api.Test
 
 class InConditionMatcherTest {
     private val conditionMatcher =
-        InConditionMatcher(
+        InConditionMatcherFactory().create(
             mapOf(
                 CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
-                "in" to setOf("remoteIp", "remoteIp1")
+                InConditionMatcherFactory.TYPE to setOf("remoteIp", "remoteIp1")
             ).asConfiguration()
         )
 
@@ -36,7 +36,6 @@ class InConditionMatcherTest {
             every { remoteIp } returns "remoteIp"
         }
         assertThat(conditionMatcher.type, `is`(InConditionMatcherFactory.TYPE))
-        assertThat(conditionMatcher.values, `is`(setOf("remoteIp", "remoteIp1")))
         assertThat(conditionMatcher.match(request, mockk()), `is`(true))
     }
 

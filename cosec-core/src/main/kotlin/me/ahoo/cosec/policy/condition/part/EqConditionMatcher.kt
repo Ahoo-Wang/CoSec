@@ -17,27 +17,24 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
-class InConditionMatcher(configuration: Configuration) :
-    PartConditionMatcher(InConditionMatcherFactory.TYPE, configuration) {
-    override val type: String
-        get() = InConditionMatcherFactory.TYPE
-    private val values: Set<String> = configuration.getRequired(InConditionMatcherFactory.TYPE)
-        .asStringList().toSet()
+class EqConditionMatcher(configuration: Configuration) :
+    PartConditionMatcher(EqConditionMatcherFactory.TYPE, configuration) {
+    private val eq: String = configuration.getRequired(EqConditionMatcherFactory.TYPE).asString()
 
     override fun matchPart(partValue: String): Boolean {
-        return values.contains(partValue)
+        return eq == partValue
     }
 }
 
-class InConditionMatcherFactory : ConditionMatcherFactory {
+class EqConditionMatcherFactory : ConditionMatcherFactory {
     companion object {
-        const val TYPE = "in"
+        const val TYPE = "eq"
     }
 
     override val type: String
         get() = TYPE
 
     override fun create(configuration: Configuration): ConditionMatcher {
-        return InConditionMatcher(configuration)
+        return EqConditionMatcher(configuration)
     }
 }

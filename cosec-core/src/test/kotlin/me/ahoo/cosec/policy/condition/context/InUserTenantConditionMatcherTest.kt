@@ -11,21 +11,29 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.condition
+package me.ahoo.cosec.policy.condition.context
 
+import io.mockk.every
 import io.mockk.mockk
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.configuration.JsonConfiguration
+import me.ahoo.cosec.policy.condition.context.InUserTenantConditionMatcher
+import me.ahoo.cosec.policy.condition.context.InUserTenantConditionMatcherFactory
 import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.`is`
+import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
 
-internal class AllConditionMatcherTest {
-
+class InUserTenantConditionMatcherTest {
     @Test
     fun match() {
-        val conditionMatcher = AllConditionMatcherFactory().create(JsonConfiguration.EMPTY)
-        assertThat(conditionMatcher.type, `is`(AllConditionMatcherFactory.TYPE))
+        val request: Request = mockk()
+        val context: SecurityContext = mockk {
+            every { tenant.isUserTenant } returns true
+        }
+        val conditionMatcher = InUserTenantConditionMatcherFactory().create(JsonConfiguration.EMPTY)
+        assertThat(conditionMatcher.type, `is`(InUserTenantConditionMatcherFactory.TYPE))
         assertThat(conditionMatcher.configuration, `is`(JsonConfiguration.EMPTY))
-        assertThat(conditionMatcher.match(mockk(), mockk()), `is`(true))
+        assertThat(conditionMatcher.match(request, context), `is`(true))
     }
 }

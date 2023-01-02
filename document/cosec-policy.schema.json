@@ -85,6 +85,7 @@
         "in_default_tenant",
         "in_platform_tenant",
         "in_user_tenant",
+        "eq",
         "in",
         "reg",
         "spel",
@@ -161,6 +162,9 @@
           "$ref": "#/definitions/part"
         },
         "pattern": {
+          "type": "string"
+        },
+        "eq": {
           "type": "string"
         },
         "in": {
