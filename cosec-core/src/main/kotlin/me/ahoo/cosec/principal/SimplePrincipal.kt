@@ -23,7 +23,7 @@ data class SimplePrincipal(
     override val id: String,
     override val policies: Set<String> = emptySet(),
     override val roles: Set<String> = emptySet(),
-    override val attrs: Map<String, Any> = emptyMap()
+    override val attributes: Map<String, String> = emptyMap()
 ) : CoSecPrincipal {
 
     companion object {
