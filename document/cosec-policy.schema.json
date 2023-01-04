@@ -188,6 +188,9 @@
             }
           ]
         },
+        "negate": {
+          "type": "boolean"
+        },
         "pattern": {
           "type": "string"
         },

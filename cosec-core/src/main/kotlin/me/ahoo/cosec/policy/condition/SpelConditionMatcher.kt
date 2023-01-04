@@ -21,14 +21,14 @@ import me.ahoo.cosec.policy.action.SPEL_PARSER
 import me.ahoo.cosec.policy.getMatcherPattern
 import org.springframework.expression.Expression
 
-class SpelConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
+class SpelConditionMatcher(configuration: Configuration) : AbstractConditionMatcher(configuration) {
 
     override val type: String
         get() = SpelConditionMatcherFactory.TYPE
 
     private val expression: Expression = SPEL_PARSER.parseExpression(configuration.getMatcherPattern())
 
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         val root = Root(request = request, context = securityContext)
         return expression.getValue(root, Boolean::class.java) ?: false
     }
