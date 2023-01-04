@@ -18,11 +18,11 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
 
-class NoneConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
+class NoneConditionMatcher(configuration: Configuration) : AbstractConditionMatcher(configuration) {
     override val type: String
         get() = NoneConditionMatcherFactory.TYPE
 
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         return false
     }
 }

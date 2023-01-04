@@ -27,15 +27,15 @@ class CoSecPrincipalTest {
                 get() = ANONYMOUS_ID
 
             override fun getName(): String {
-                TODO("Not yet implemented")
+                throw UnsupportedOperationException()
             }
 
             override val attrs: Map<String, Any>
-                get() = TODO("Not yet implemented")
+                get() = throw UnsupportedOperationException()
             override val policies: Set<String>
-                get() = TODO("Not yet implemented")
+                get() = throw UnsupportedOperationException()
             override val roles: Set<String>
-                get() = TODO("Not yet implemented")
+                get() = throw UnsupportedOperationException()
         }
         assertThat(anonymous.anonymous(), equalTo(true))
     }
@@ -47,15 +47,15 @@ class CoSecPrincipalTest {
                 get() = "id"
 
             override fun getName(): String {
-                TODO("Not yet implemented")
+                throw UnsupportedOperationException()
             }
 
             override val attrs: Map<String, Any>
-                get() = TODO("Not yet implemented")
+                get() = throw UnsupportedOperationException()
             override val policies: Set<String>
-                get() = TODO("Not yet implemented")
+                get() = throw UnsupportedOperationException()
             override val roles: Set<String>
-                get() = TODO("Not yet implemented")
+                get() = throw UnsupportedOperationException()
         }
         assertThat(authenticated.authenticated(), equalTo(true))
     }

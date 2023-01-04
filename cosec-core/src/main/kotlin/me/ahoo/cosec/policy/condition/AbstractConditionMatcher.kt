@@ -11,27 +11,22 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.condition.part
+package me.ahoo.cosec.policy.condition
 
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.policy.condition.AbstractConditionMatcher
+import me.ahoo.cosec.api.policy.ConditionMatcher
 
-abstract class PartConditionMatcher(
-    override val type: String,
-    configuration: Configuration
-) : AbstractConditionMatcher(configuration) {
-    private val partExtractor: PartExtractor = configuration
-        .getRequired(CONDITION_MATCHER_PART_KEY).asString()
-        .let {
-            DefaultPartExtractor(it)
-        }
+const val CONDITION_MATCHER_NEGATE_KEY = "negate"
 
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        val partValue = partExtractor.extract(request, securityContext)
-        return matchPart(partValue)
+abstract class AbstractConditionMatcher(final override val configuration: Configuration) : ConditionMatcher {
+    protected val negate: Boolean = configuration.get(CONDITION_MATCHER_NEGATE_KEY)?.asBoolean() ?: false
+
+    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+        val match = internalMatch(request, securityContext)
+        return if (negate) !match else match
     }
 
-    abstract fun matchPart(partValue: String): Boolean
+    protected abstract fun internalMatch(request: Request, securityContext: SecurityContext): Boolean
 }

@@ -25,10 +25,10 @@ class SecurityContextTest {
     fun getRequiredAttribute() {
         val securityContext: SecurityContext = object : SecurityContext {
             override val principal: CoSecPrincipal
-                get() = TODO("Not yet implemented")
+                get() = throw UnsupportedOperationException()
 
             override fun setAttribute(key: String, value: Any): SecurityContext {
-                TODO("Not yet implemented")
+                throw UnsupportedOperationException()
             }
 
             override fun <T> getAttribute(key: String): T? {
@@ -39,7 +39,7 @@ class SecurityContextTest {
             }
 
             override val tenant: Tenant
-                get() = TODO("Not yet implemented")
+                get() = throw UnsupportedOperationException()
         }
         assertThat(securityContext.getAttribute("key"), equalTo("key"))
         assertThat(securityContext.getRequiredAttribute("key"), equalTo("key"))
