@@ -19,6 +19,7 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 
 class DefaultPartExtractorTest {
@@ -64,11 +65,14 @@ class DefaultPartExtractorTest {
     }
 
     @Test
-    fun extractRequestTenantId() {
+    fun extractRequestHeader() {
         val request: Request = mockk {
-            every { tenantId } returns "tenantId"
+            every { getHeader("key") } returns "value"
         }
-        assertThat(DefaultPartExtractor(RequestParts.TENANT_ID).extract(request, mockk()), equalTo("tenantId"))
+        assertThat(
+            DefaultPartExtractor(RequestParts.HEADER_PREFIX + "key").extract(request, mockk()),
+            equalTo("value")
+        )
     }
 
     @Test
@@ -99,5 +103,12 @@ class DefaultPartExtractorTest {
             DefaultPartExtractor(SecurityContextParts.PRINCIPAL_NAME).extract(mockk(), context),
             equalTo("principal.name")
         )
+    }
+
+    @Test
+    fun extractWhenWrongPart() {
+        Assertions.assertThrows(IllegalArgumentException::class.java) {
+            DefaultPartExtractor("wrongPart").extract(mockk(), mockk())
+        }
     }
 }

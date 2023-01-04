@@ -101,14 +101,6 @@ class SimpleAuthorization(private val permissionRepository: PermissionRepository
             return AuthorizeResult.ALLOW.toMono()
         }
 
-        if (
-            context.principal.authenticated() &&
-            !request.isDefaultTenant &&
-            request.tenantId != context.tenant.tenantId
-        ) {
-            return IllegalTenantContextException(request, context).toMono()
-        }
-
         return verifyGlobalPolicies(request, context)
             .flatMap { globalVerifyResult: VerifyResult ->
                 if (globalVerifyResult == VerifyResult.IMPLICIT_DENY) {

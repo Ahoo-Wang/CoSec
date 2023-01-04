@@ -13,7 +13,6 @@
 package me.ahoo.cosec.api.principal
 
 import me.ahoo.cosec.api.CoSec
-import me.ahoo.cosec.api.internal.InternalIds.wrap
 import java.security.Principal
 
 /**
@@ -26,7 +25,12 @@ interface CoSecPrincipal : Principal, PolicyCapable, RoleCapable {
     //endregion
     val id: String
 
-    override fun getName(): String
+    /**
+     * @see id
+     */
+    override fun getName(): String {
+        return id
+    }
 
     val attrs: Map<String, Any>
     fun anonymous(): Boolean {
@@ -38,22 +42,19 @@ interface CoSecPrincipal : Principal, PolicyCapable, RoleCapable {
     }
 
     companion object {
-        const val NAME_KEY = "name"
 
         //region ROOT 根账号拥有所有权限
         const val ROOT_KEY = "cosec.root"
 
-        val ROOT_NAME: String = System.getProperty(ROOT_KEY, CoSec.COSEC)
+        val ROOT_ID: String = System.getProperty(ROOT_KEY, CoSec.COSEC)
 
         //endregion
         //region ANONYMOUS 未认证状态下的用户
 
         val ANONYMOUS_ID = CoSec.DEFAULT
 
-        val ANONYMOUS_NAME = wrap("anonymous")
-
         fun CoSecPrincipal.isRoot(): Boolean {
-            return ROOT_NAME == name
+            return ROOT_ID == id
         }
     }
 }

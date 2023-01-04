@@ -52,7 +52,7 @@ abstract class SecurityContextParserSpec {
 
     @Test
     fun parse() {
-        val principal = SimplePrincipal("id", "name")
+        val principal = SimplePrincipal("id")
         val token = jwtTokenConverter.asToken(principal).accessToken
         val exchange = mockk<ServerWebExchange>() {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns Jwts.TOKEN_PREFIX + token

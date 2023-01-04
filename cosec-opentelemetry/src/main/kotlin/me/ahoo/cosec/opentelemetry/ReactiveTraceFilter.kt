@@ -18,13 +18,13 @@ import io.opentelemetry.api.trace.Span
 import io.opentelemetry.semconv.trace.attributes.SemanticAttributes
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.api.principal.PolicyCapable
-import me.ahoo.cosec.context.request.RequestTenantIdParser
+import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import org.slf4j.LoggerFactory
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 
-private const val COSEC_TENANT_ID_KEY = CoSec.COSEC_PREFIX + RequestTenantIdParser.TENANT_ID_KEY
+private const val COSEC_TENANT_ID_KEY = CoSec.COSEC_PREFIX + TENANT_ID_KEY
 val COSEC_TENANT_ID_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_TENANT_ID_KEY)
 
 private const val COSEC_POLICY_KEY = CoSec.COSEC_PREFIX + PolicyCapable.POLICY_KEY

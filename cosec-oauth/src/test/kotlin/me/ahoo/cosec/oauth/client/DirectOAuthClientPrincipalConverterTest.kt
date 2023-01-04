@@ -28,7 +28,6 @@ internal class DirectOAuthClientPrincipalConverterTest {
             .test()
             .consumeNextWith {
                 assertThat(it.id, `is`("id@clientId"))
-                assertThat(it.name, `is`("username"))
             }
             .verifyComplete()
     }

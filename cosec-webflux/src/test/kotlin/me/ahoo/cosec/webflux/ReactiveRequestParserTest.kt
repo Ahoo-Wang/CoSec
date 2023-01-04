@@ -15,7 +15,6 @@ package me.ahoo.cosec.webflux
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.context.request.RequestTenantIdParser
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
@@ -26,9 +25,8 @@ internal class ReactiveRequestParserTest {
 
     @Test
     fun parse() {
-        val requestParser = ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE, ReactiveRemoteIpResolver)
+        val requestParser = ReactiveRequestParser(ReactiveRemoteIpResolver)
         val exchange = mockk<ServerWebExchange>() {
-            every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { request.path.value() } returns "/path"
             every { request.methodValue } returns "GET"
             every { request.remoteAddress?.hostName } returns "hostName"
@@ -38,6 +36,5 @@ internal class ReactiveRequestParserTest {
         val request = requestParser.parse(exchange)
         assertThat(request.path, `is`("/path"))
         assertThat(request.method, `is`("GET"))
-        assertThat(request.tenantId, `is`("tenantId"))
     }
 }

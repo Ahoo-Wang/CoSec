@@ -36,7 +36,7 @@ class JwtTokenVerifierTest {
     fun verify() {
         val token: CompositeToken = jwtTokenConverter.asToken(SimpleTenantPrincipal.ANONYMOUS)
         val principal: TokenTenantPrincipal = jwtTokenVerifier.verify(token)
-        assertThat(principal.name, equalTo(CoSecPrincipal.ANONYMOUS_NAME))
+        assertThat(principal.name, equalTo(CoSecPrincipal.ANONYMOUS_ID))
     }
 
     @Test

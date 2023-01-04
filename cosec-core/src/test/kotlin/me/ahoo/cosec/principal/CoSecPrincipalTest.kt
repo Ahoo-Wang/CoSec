@@ -28,6 +28,6 @@ internal class CoSecPrincipalTest {
     @SetSystemProperty(key = CoSecPrincipal.ROOT_KEY, value = "root")
     @Test
     fun rootWhenSetSystemProperty() {
-        Assertions.assertEquals("root", CoSecPrincipal.ROOT_NAME)
+        Assertions.assertEquals("root", CoSecPrincipal.ROOT_ID)
     }
 }

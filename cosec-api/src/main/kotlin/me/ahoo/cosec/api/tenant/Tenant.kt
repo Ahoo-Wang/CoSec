@@ -13,7 +13,6 @@
 package me.ahoo.cosec.api.tenant
 
 import me.ahoo.cosec.api.CoSec
-import me.ahoo.cosec.api.internal.InternalIds.wrap
 
 /**
  * Tenant for splitting customer boundaries horizontally.
@@ -49,20 +48,20 @@ interface Tenant {
         get() = !isDefaultTenant && !isPlatformTenant
 
     companion object {
+        const val TENANT_ID_KEY = "tenantId"
+
         /**
          * 根平台租户ID.
          */
-        @JvmField
-        val PLATFORM_TENANT_ID = wrap("platform")
-
-        @JvmField
-        val DEFAULT_TENANT_ID = CoSec.DEFAULT
+        const val PLATFORM_TENANT_ID = "(platform)"
+        const val DEFAULT_TENANT_ID = CoSec.DEFAULT
 
         @JvmStatic
         fun isPlatform(tenantId: String): Boolean {
             return PLATFORM_TENANT_ID == tenantId
         }
 
+        @JvmStatic
         fun isDefault(tenantId: String): Boolean {
             return DEFAULT_TENANT_ID == tenantId
         }

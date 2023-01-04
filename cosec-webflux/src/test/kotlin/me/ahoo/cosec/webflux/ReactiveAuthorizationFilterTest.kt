@@ -20,7 +20,6 @@ import io.mockk.runs
 import io.mockk.verify
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
-import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
@@ -45,13 +44,12 @@ internal class ReactiveAuthorizationFilterTest {
         }
         val filter = ReactiveAuthorizationFilter(
             ReactiveInjectSecurityContextParser,
-            ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE, ReactiveRemoteIpResolver),
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
             authorization
         )
         assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE))
         val exchange = mockk<ServerWebExchange> {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
-            every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { request.headers.origin } returns "origin"
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
@@ -82,12 +80,11 @@ internal class ReactiveAuthorizationFilterTest {
         }
         val filter = ReactiveAuthorizationFilter(
             ReactiveInjectSecurityContextParser,
-            ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE, ReactiveRemoteIpResolver),
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
             authorization
         )
         val exchange = mockk<ServerWebExchange> {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
-            every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { request.headers.origin } returns "origin"
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
@@ -120,16 +117,15 @@ internal class ReactiveAuthorizationFilterTest {
         }
         val filter = ReactiveAuthorizationFilter(
             ReactiveInjectSecurityContextParser,
-            ReactiveRequestParser(ReactiveRequestTenantIdParser.INSTANCE, ReactiveRemoteIpResolver),
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
             authorization
         )
-        val principal = SimplePrincipal("id", "name")
+        val principal = SimplePrincipal("id")
         val accessToken = SecurityContextParserSpec.createAccessToken(principal)
         val tokenHeader =
             Jwts.TOKEN_PREFIX + accessToken
         val exchange = mockk<ServerWebExchange>() {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns tokenHeader
-            every { request.headers.getFirst(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { request.headers.origin } returns "origin"
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"

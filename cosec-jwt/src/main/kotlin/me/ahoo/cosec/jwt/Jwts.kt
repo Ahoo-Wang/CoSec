@@ -15,12 +15,11 @@ package me.ahoo.cosec.jwt
 import com.auth0.jwt.JWT
 import com.auth0.jwt.RegisteredClaims
 import com.auth0.jwt.interfaces.DecodedJWT
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.PolicyCapable
 import me.ahoo.cosec.api.principal.RoleCapable
+import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
-import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.SimpleAccessToken
@@ -45,8 +44,7 @@ object Jwts {
             RegisteredClaims.ISSUED_AT == key ||
             RegisteredClaims.JWT_ID == key ||
             RegisteredClaims.AUDIENCE == key ||
-            CoSecPrincipal.NAME_KEY == key ||
-            RequestTenantIdParser.TENANT_ID_KEY == key ||
+            TENANT_ID_KEY == key ||
             PolicyCapable.POLICY_KEY == key ||
             RoleCapable.ROLE_KEY == key
     }
@@ -67,7 +65,6 @@ object Jwts {
     fun <T : TokenPrincipal> asPrincipal(decodedAccessToken: DecodedJWT): T {
         val accessTokenId = decodedAccessToken.id
         val principalId = decodedAccessToken.subject
-        val name = decodedAccessToken.getClaim(CoSecPrincipal.NAME_KEY).asString()
         val attrs = decodedAccessToken
             .claims
             .filter { !isRegisteredClaim(it.key) }
@@ -77,8 +74,8 @@ object Jwts {
 
         val rolesClaim = decodedAccessToken.getClaim(RoleCapable.ROLE_KEY)
         val roles = if (rolesClaim.isMissing) emptySet() else rolesClaim.asList(String::class.java).toSet()
-        val principal = SimplePrincipal(principalId, name, policies, roles, attrs)
-        val tenantId = decodedAccessToken.getClaim(RequestTenantIdParser.TENANT_ID_KEY).asString()
+        val principal = SimplePrincipal(principalId, policies, roles, attrs)
+        val tenantId = decodedAccessToken.getClaim(TENANT_ID_KEY).asString()
         val tokenPrincipal = SimpleTokenPrincipal(accessTokenId, principal)
         if (tenantId.isNullOrEmpty()) {
             @Suppress("UNCHECKED_CAST")

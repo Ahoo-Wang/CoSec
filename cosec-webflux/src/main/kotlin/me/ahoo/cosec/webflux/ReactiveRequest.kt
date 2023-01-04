@@ -21,9 +21,12 @@ data class ReactiveRequest(
     override val delegate: ServerWebExchange,
     override val path: String,
     override val method: String,
-    override val tenantId: String,
     override val remoteIp: String,
     override val origin: String,
     override val referer: String
 ) : Request,
-    Delegated<ServerWebExchange>
+    Delegated<ServerWebExchange> {
+    override fun getHeader(key: String): String {
+        return delegate.request.headers.getFirst(key).orEmpty()
+    }
+}
