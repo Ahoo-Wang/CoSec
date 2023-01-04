@@ -103,7 +103,7 @@
         "request.header.",
         "context.tenantId",
         "context.principal.id",
-        "context.principal.name"
+        "context.principal.attributes."
       ]
     },
     "pathOptions": {

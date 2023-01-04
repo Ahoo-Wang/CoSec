@@ -95,13 +95,18 @@ class DefaultPartExtractorTest {
     }
 
     @Test
-    fun extractContextPrincipalName() {
+    fun extractContextPrincipalAttributes() {
         val context: SecurityContext = mockk {
-            every { principal.name } returns "principal.name"
+            every { principal.attributes["key"] } returns "value"
+            every { principal.attributes["not_exist"] } returns null
         }
         assertThat(
-            DefaultPartExtractor(SecurityContextParts.PRINCIPAL_NAME).extract(mockk(), context),
-            equalTo("principal.name")
+            DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX + "key").extract(mockk(), context),
+            equalTo("value")
+        )
+                assertThat(
+            DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX + "not_exist").extract(mockk(), context),
+            equalTo("")
         )
     }
 

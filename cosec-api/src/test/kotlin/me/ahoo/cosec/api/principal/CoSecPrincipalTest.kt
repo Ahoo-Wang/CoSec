@@ -30,7 +30,7 @@ class CoSecPrincipalTest {
                 throw UnsupportedOperationException()
             }
 
-            override val attrs: Map<String, Any>
+            override val attributes: Map<String, String>
                 get() = throw UnsupportedOperationException()
             override val policies: Set<String>
                 get() = throw UnsupportedOperationException()
@@ -50,7 +50,7 @@ class CoSecPrincipalTest {
                 throw UnsupportedOperationException()
             }
 
-            override val attrs: Map<String, Any>
+            override val attributes: Map<String, String>
                 get() = throw UnsupportedOperationException()
             override val policies: Set<String>
                 get() = throw UnsupportedOperationException()

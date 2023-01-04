@@ -65,16 +65,18 @@ object Jwts {
     fun <T : TokenPrincipal> asPrincipal(decodedAccessToken: DecodedJWT): T {
         val accessTokenId = decodedAccessToken.id
         val principalId = decodedAccessToken.subject
-        val attrs = decodedAccessToken
+        val attributes = decodedAccessToken
             .claims
             .filter { !isRegisteredClaim(it.key) }
-
+            .mapValues {
+                it.value.asString()
+            }
         val policyClaim = decodedAccessToken.getClaim(PolicyCapable.POLICY_KEY)
         val policies = if (policyClaim.isMissing) emptySet() else policyClaim.asList(String::class.java).toSet()
 
         val rolesClaim = decodedAccessToken.getClaim(RoleCapable.ROLE_KEY)
         val roles = if (rolesClaim.isMissing) emptySet() else rolesClaim.asList(String::class.java).toSet()
-        val principal = SimplePrincipal(principalId, policies, roles, attrs)
+        val principal = SimplePrincipal(principalId, policies, roles, attributes)
         val tenantId = decodedAccessToken.getClaim(TENANT_ID_KEY).asString()
         val tokenPrincipal = SimpleTokenPrincipal(accessTokenId, principal)
         if (tenantId.isNullOrEmpty()) {

@@ -42,7 +42,7 @@ class JwtTokenConverter(
         val accessTokenId = idGenerator.generateAsString()
         val now = Date()
         val accessTokenExp = Date(System.currentTimeMillis() + accessTokenValidity.toMillis())
-        val payloadClaims: Map<String, *> = principal.attrs
+        val payloadClaims: Map<String, *> = principal.attributes
             .filter {
                 !Jwts.isRegisteredClaim(it.key)
             }

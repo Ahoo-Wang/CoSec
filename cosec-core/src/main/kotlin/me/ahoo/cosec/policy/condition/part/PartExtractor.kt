@@ -37,7 +37,7 @@ object SecurityContextParts {
     const val TENANT_ID = PREFIX + "tenantId"
     const val PRINCIPAL_PREFIX = PREFIX + "principal."
     const val PRINCIPAL_ID = PRINCIPAL_PREFIX + "id"
-    const val PRINCIPAL_NAME = PRINCIPAL_PREFIX + "name"
+    const val PRINCIPAL_ATTRIBUTES_PREFIX = PRINCIPAL_PREFIX + "attributes."
 }
 
 data class DefaultPartExtractor(val part: String) : PartExtractor {
@@ -51,12 +51,16 @@ data class DefaultPartExtractor(val part: String) : PartExtractor {
             RequestParts.REFERER -> request.referer
             SecurityContextParts.TENANT_ID -> securityContext.tenant.tenantId
             SecurityContextParts.PRINCIPAL_ID -> securityContext.principal.id
-            SecurityContextParts.PRINCIPAL_NAME -> securityContext.principal.name
             else -> {
                 if (part.startsWith(RequestParts.HEADER_PREFIX)) {
                     val headerKey = part.substring(RequestParts.HEADER_PREFIX.length)
                     return request.getHeader(headerKey)
                 }
+                if (part.startsWith(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX)) {
+                    val headerKey = part.substring(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX.length)
+                    return securityContext.principal.attributes[headerKey].orEmpty()
+                }
+
                 throw IllegalArgumentException("Unsupported part: $part")
             }
         }
