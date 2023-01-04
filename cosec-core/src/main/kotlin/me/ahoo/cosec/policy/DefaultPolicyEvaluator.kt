@@ -16,7 +16,6 @@ package me.ahoo.cosec.policy
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyEvaluator
-import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 
@@ -32,8 +31,10 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
             get() = "mockOrigin"
         override val referer: String
             get() = "mockReferer"
-        override val tenantId: String
-            get() = Tenant.DEFAULT_TENANT_ID
+
+        override fun getHeader(key: String): String {
+            return ""
+        }
     }
     private val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
 

@@ -19,7 +19,6 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SimpleSecurityContext
-import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
@@ -42,13 +41,12 @@ internal class AuthorizationFilterTest {
         val filter = AuthorizationFilter(
             InjectSecurityContextParser,
             authorization,
-            ServletRequestParser(ServletRequestTenantIdParser.INSTANCE, ServletRemoteIpResolver)
+            ServletRequestParser( ServletRemoteIpResolver)
         )
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
             every { method } returns "GET"
             every { remoteHost } returns "remoteHost"
-            every { getHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
             every { getHeader(HttpHeaders.ORIGIN) } returns null
             every { getHeader(HttpHeaders.REFERER) } returns null
@@ -69,13 +67,12 @@ internal class AuthorizationFilterTest {
         val filter = AuthorizationFilter(
             InjectSecurityContextParser,
             authorization,
-            ServletRequestParser(ServletRequestTenantIdParser.INSTANCE, ServletRemoteIpResolver)
+            ServletRequestParser( ServletRemoteIpResolver)
         )
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
             every { method } returns "GET"
             every { remoteHost } returns "remoteHost"
-            every { getHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
             every { getHeader(HttpHeaders.ORIGIN) } returns "ORIGIN"
             every { getHeader(HttpHeaders.REFERER) } returns "REFERER"

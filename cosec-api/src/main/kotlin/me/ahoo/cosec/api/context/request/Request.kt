@@ -13,12 +13,12 @@
 
 package me.ahoo.cosec.api.context.request
 
-import me.ahoo.cosec.api.tenant.Tenant
-
-interface Request : Tenant {
+interface Request {
     val path: String
     val method: String
     val remoteIp: String
     val origin: String
     val referer: String
+
+    fun getHeader(key: String): String
 }

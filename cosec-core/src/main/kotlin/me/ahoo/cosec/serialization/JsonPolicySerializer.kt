@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.policy.PolicyData
 
 const val POLICY_ID_KEY = "id"
@@ -30,7 +31,6 @@ const val POLICY_NAME_KEY = "name"
 const val POLICY_CATEGORY_KEY = "category"
 const val POLICY_DESCRIPTION_KEY = "description"
 const val POLICY_TYPE_KEY = "type"
-const val TENANT_ID_KEY = "tenantId"
 const val POLICY_STATEMENTS_KEY = "statements"
 
 object JsonPolicySerializer : StdSerializer<Policy>(Policy::class.java) {

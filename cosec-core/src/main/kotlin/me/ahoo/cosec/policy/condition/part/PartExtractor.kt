@@ -29,7 +29,7 @@ object RequestParts {
     const val REMOTE_IP = PREFIX + "remoteIp"
     const val ORIGIN = PREFIX + "origin"
     const val REFERER = PREFIX + "referer"
-    const val TENANT_ID = PREFIX + "tenantId"
+    const val HEADER_PREFIX = PREFIX + "header."
 }
 
 object SecurityContextParts {
@@ -49,11 +49,16 @@ data class DefaultPartExtractor(val part: String) : PartExtractor {
             RequestParts.REMOTE_IP -> request.remoteIp
             RequestParts.ORIGIN -> request.origin
             RequestParts.REFERER -> request.referer
-            RequestParts.TENANT_ID -> request.tenantId
             SecurityContextParts.TENANT_ID -> securityContext.tenant.tenantId
             SecurityContextParts.PRINCIPAL_ID -> securityContext.principal.id
             SecurityContextParts.PRINCIPAL_NAME -> securityContext.principal.name
-            else -> throw IllegalArgumentException("Unsupported part: $part")
+            else -> {
+                if (part.startsWith(RequestParts.HEADER_PREFIX)) {
+                    val headerKey = part.substring(RequestParts.HEADER_PREFIX.length)
+                    return request.getHeader(headerKey)
+                }
+                throw IllegalArgumentException("Unsupported part: $part")
+            }
         }
     }
 }

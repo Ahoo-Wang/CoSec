@@ -22,7 +22,7 @@ abstract class PartConditionMatcher(
     override val type: String,
     final override val configuration: Configuration
 ) : ConditionMatcher {
-    val partExtractor: PartExtractor = configuration
+    private val partExtractor: PartExtractor = configuration
         .getRequired(CONDITION_MATCHER_PART_KEY).asString()
         .let {
             DefaultPartExtractor(it)

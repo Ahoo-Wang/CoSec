@@ -16,12 +16,10 @@ package me.ahoo.cosec.webflux
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.context.request.RequestParser
-import me.ahoo.cosec.context.request.RequestTenantIdParser
 import org.springframework.http.HttpHeaders
 import org.springframework.web.server.ServerWebExchange
 
 class ReactiveRequestParser(
-    private val requestTenantIdParser: RequestTenantIdParser<ServerWebExchange>,
     private val remoteIPResolver: RemoteIpResolver<ServerWebExchange>
 ) :
     RequestParser<ServerWebExchange> {
@@ -30,7 +28,6 @@ class ReactiveRequestParser(
             delegate = request,
             path = request.request.path.value(),
             method = request.request.methodValue,
-            tenantId = requestTenantIdParser.parse(request),
             remoteIp = remoteIPResolver.resolve(request),
             origin = request.request.headers.origin.orEmpty(),
             referer = request.request.headers.getFirst(HttpHeaders.REFERER).orEmpty()

@@ -15,7 +15,6 @@ package me.ahoo.cosec.servlet
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.context.request.RequestTenantIdParser
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
@@ -26,18 +25,16 @@ internal class ServletRequestParserTest {
 
     @Test
     fun parse() {
-        val servletRequestParser = ServletRequestParser(ServletRequestTenantIdParser.INSTANCE, ServletRemoteIpResolver)
+        val servletRequestParser = ServletRequestParser( ServletRemoteIpResolver)
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
             every { method } returns "GET"
             every { remoteHost } returns "remoteHost"
-            every { getHeader(RequestTenantIdParser.TENANT_ID_KEY) } returns "tenantId"
             every { getHeader(HttpHeaders.ORIGIN) } returns "ORIGIN"
             every { getHeader(HttpHeaders.REFERER) } returns "REFERER"
         }
         val request = servletRequestParser.parse(servletRequest)
         assertThat(request.path, equalTo("/path"))
         assertThat(request.method, equalTo("GET"))
-        assertThat(request.tenantId, equalTo("tenantId"))
     }
 }

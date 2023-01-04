@@ -17,9 +17,9 @@ import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.PolicyCapable
 import me.ahoo.cosec.api.principal.RoleCapable
+import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.context.request.RequestTenantIdParser
 import me.ahoo.cosec.token.SimpleCompositeToken
 import me.ahoo.cosec.token.TokenConverter
 import me.ahoo.cosid.IdGenerator
@@ -60,7 +60,7 @@ class JwtTokenConverter(
         if (principal is TenantCapable) {
             val tenantCapable = principal as TenantCapable
             accessTokenBuilder
-                .withClaim(RequestTenantIdParser.TENANT_ID_KEY, tenantCapable.tenant.tenantId)
+                .withClaim(TENANT_ID_KEY, tenantCapable.tenant.tenantId)
         }
         val accessToken = accessTokenBuilder.sign(algorithm)
         val refreshTokenId = idGenerator.generateAsString()

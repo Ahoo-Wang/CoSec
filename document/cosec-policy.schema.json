@@ -100,7 +100,7 @@
         "request.remoteIp",
         "request.origin",
         "request.referer",
-        "request.tenantId",
+        "request.header.",
         "context.tenantId",
         "context.principal.id",
         "context.principal.name"
@@ -179,7 +179,14 @@
           ]
         },
         "part": {
-          "$ref": "#/definitions/part"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/part"
+            },
+            {
+              "type": "string"
+            }
+          ]
         },
         "pattern": {
           "type": "string"

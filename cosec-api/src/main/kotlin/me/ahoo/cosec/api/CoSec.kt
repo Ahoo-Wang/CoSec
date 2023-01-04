@@ -12,8 +12,6 @@
  */
 package me.ahoo.cosec.api
 
-import me.ahoo.cosec.api.internal.InternalIds
-
 /**
  * CoSec const.
  *
@@ -23,6 +21,5 @@ object CoSec {
     const val COSEC = "cosec"
     const val COSEC_PREFIX = "$COSEC."
 
-    @JvmField
-    val DEFAULT = InternalIds.wrap("0")
+    const val DEFAULT = "(0)"
 }
