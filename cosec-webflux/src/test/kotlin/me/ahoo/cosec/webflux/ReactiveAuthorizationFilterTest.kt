@@ -44,7 +44,7 @@ internal class ReactiveAuthorizationFilterTest {
         }
         val filter = ReactiveAuthorizationFilter(
             ReactiveInjectSecurityContextParser,
-            ReactiveRequestParser( ReactiveRemoteIpResolver),
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
             authorization
         )
         assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE))
@@ -120,7 +120,7 @@ internal class ReactiveAuthorizationFilterTest {
             ReactiveRequestParser(ReactiveRemoteIpResolver),
             authorization
         )
-        val principal = SimplePrincipal("id", "name")
+        val principal = SimplePrincipal("id")
         val accessToken = SecurityContextParserSpec.createAccessToken(principal)
         val tokenHeader =
             Jwts.TOKEN_PREFIX + accessToken

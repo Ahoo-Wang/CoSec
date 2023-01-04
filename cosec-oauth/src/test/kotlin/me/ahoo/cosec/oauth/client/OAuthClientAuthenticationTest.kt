@@ -51,10 +51,6 @@ internal class OAuthClientAuthenticationTest {
                     it.id,
                     `is`("id@clientId")
                 )
-                assertThat(
-                    it.name,
-                    `is`("username")
-                )
             }
             .verifyComplete()
     }

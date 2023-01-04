@@ -25,7 +25,7 @@ internal class ServletRequestParserTest {
 
     @Test
     fun parse() {
-        val servletRequestParser = ServletRequestParser( ServletRemoteIpResolver)
+        val servletRequestParser = ServletRequestParser(ServletRemoteIpResolver)
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
             every { method } returns "GET"

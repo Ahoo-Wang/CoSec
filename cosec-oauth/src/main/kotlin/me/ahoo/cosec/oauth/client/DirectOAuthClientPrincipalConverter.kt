@@ -29,7 +29,6 @@ object DirectOAuthClientPrincipalConverter : OAuthClientPrincipalConverter {
         authUser.rawInfo[OAuthClientPrincipalConverter.OAUTH_CLIENT] = client
         return SimplePrincipal(
             id = asClientUserId(client, authUser),
-            name = authUser.username,
             policies = emptySet(),
             roles = emptySet(),
             attrs = authUser.rawInfo

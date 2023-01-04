@@ -36,7 +36,7 @@ internal class SimpleAuthorizationTest {
         val authorization = SimpleAuthorization(permissionRepository)
         val request = mockk<Request>()
         val securityContext = mockk<SecurityContext> {
-            every { principal.name } returns CoSecPrincipal.ROOT_NAME
+            every { principal.id } returns CoSecPrincipal.ROOT_ID
         }
         authorization.authorize(request, securityContext)
             .test()
@@ -122,7 +122,7 @@ internal class SimpleAuthorizationTest {
         }
         val securityContext = mockk<SecurityContext>() {
             every { principal.authenticated() } returns false
-            every { principal.name } returns ""
+            every { principal.id } returns ""
             every { principal.policies } returns setOf("principalPolicy")
         }
         val permissionRepository = mockk<PermissionRepository>() {
@@ -152,7 +152,7 @@ internal class SimpleAuthorizationTest {
         }
         val securityContext = mockk<SecurityContext>() {
             every { principal.authenticated() } returns false
-            every { principal.name } returns ""
+            every { principal.id } returns ""
             every { principal.policies } returns setOf("principalPolicy")
         }
         val permissionRepository = mockk<PermissionRepository>() {
@@ -182,7 +182,7 @@ internal class SimpleAuthorizationTest {
         }
         val securityContext = mockk<SecurityContext>() {
             every { principal.authenticated() } returns false
-            every { principal.name } returns ""
+            every { principal.id } returns ""
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy")
         }
@@ -213,7 +213,7 @@ internal class SimpleAuthorizationTest {
         }
         val securityContext = mockk<SecurityContext>() {
             every { principal.authenticated() } returns false
-            every { principal.name } returns ""
+            every { principal.id } returns ""
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy")
         }

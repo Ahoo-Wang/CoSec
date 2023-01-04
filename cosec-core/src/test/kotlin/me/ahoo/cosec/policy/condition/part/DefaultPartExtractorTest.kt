@@ -105,7 +105,6 @@ class DefaultPartExtractorTest {
         )
     }
 
-
     @Test
     fun extractWhenWrongPart() {
         Assertions.assertThrows(IllegalArgumentException::class.java) {

@@ -35,7 +35,7 @@ internal class JwtTokenConverterTest {
     @Test
     fun asToken() {
         val principal =
-            SimplePrincipal("id", "name", setOf("policyId"), setOf("roleId"), mapOf("attr_key" to "attr_value"))
+            SimplePrincipal("id", setOf("policyId"), setOf("roleId"), mapOf("attr_key" to "attr_value"))
         val token: CompositeToken = jwtTokenConverter.asToken(principal)
         assertThat(token, notNullValue())
     }

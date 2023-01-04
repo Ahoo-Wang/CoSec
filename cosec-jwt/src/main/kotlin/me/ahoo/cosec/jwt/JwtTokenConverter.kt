@@ -51,7 +51,6 @@ class JwtTokenConverter(
         val accessTokenBuilder = JWT.create()
             .withJWTId(accessTokenId)
             .withSubject(principal.id)
-            .withClaim(CoSecPrincipal.NAME_KEY, principal.name)
             .withClaim(PolicyCapable.POLICY_KEY, principal.policies.toList())
             .withClaim(RoleCapable.ROLE_KEY, principal.roles.toList())
             .withPayload(payloadClaims)
