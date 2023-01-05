@@ -20,7 +20,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.web.server.ServerWebExchange
 
 class ReactiveRequestParser(
-    private val remoteIPResolver: RemoteIpResolver<ServerWebExchange>
+    private val remoteIpResolver: RemoteIpResolver<ServerWebExchange>
 ) :
     RequestParser<ServerWebExchange> {
     override fun parse(request: ServerWebExchange): Request {
@@ -28,7 +28,7 @@ class ReactiveRequestParser(
             delegate = request,
             path = request.request.path.value(),
             method = request.request.methodValue,
-            remoteIp = remoteIPResolver.resolve(request),
+            remoteIp = remoteIpResolver.resolve(request),
             origin = request.request.headers.origin.orEmpty(),
             referer = request.request.headers.getFirst(HttpHeaders.REFERER).orEmpty()
         )
