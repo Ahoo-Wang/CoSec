@@ -5,7 +5,6 @@ title Authorization Flow
 participant User
 participant AuthorizationFilter
 participant RequestParser
-participant TenantParser
 participant SecurityContextParser
 participant TokenVerifier
 participant Authorization
@@ -14,8 +13,6 @@ User++
 
 User -> AuthorizationFilter++: request()
 AuthorizationFilter -> RequestParser++: parse()
-RequestParser -> TenantParser++: parse()
-RequestParser <-- TenantParser--: Tenant
 AuthorizationFilter <-- RequestParser--: Request
 AuthorizationFilter -> SecurityContextParser++: parse()
 SecurityContextParser -> TokenVerifier++: verify(AccessToken)

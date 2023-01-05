@@ -1,0 +1,48 @@
+@startuml
+
+!include layout.puml
+
+title Build In ConditionMatcher
+
+interface RequestMatcher{
+    val type: String
+    val configuration: Configuration
+    match(request: Request, securityContext: SecurityContext): Boolean
+}
+
+interface ConditionMatcher
+abstract class AbstractConditionMatcher{
+    val negate: Boolean
+}
+abstract class PartConditionMatcher{
+    val partExtractor: PartExtractor
+}
+class AllConditionMatcher
+class AuthenticatedConditionMatcher
+class EqConditionMatcher
+class InConditionMatcher
+class InDefaultTenantConditionMatcher
+class InPlatformTenantConditionMatcher
+class InUserTenantConditionMatcher
+class NoneConditionMatcher
+class OgnlConditionMatcher
+class PathConditionMatcher
+class RegularConditionMatcher
+class SpelConditionMatcher
+
+RequestMatcher <|-- ConditionMatcher
+ConditionMatcher <|-- AbstractConditionMatcher
+AbstractConditionMatcher <|-- PartConditionMatcher
+PartConditionMatcher <|-- InConditionMatcher
+PartConditionMatcher <|-- EqConditionMatcher
+PartConditionMatcher <|-- PathConditionMatcher
+PartConditionMatcher <|-- RegularConditionMatcher
+AbstractConditionMatcher <|-- AuthenticatedConditionMatcher
+AbstractConditionMatcher <|-- InDefaultTenantConditionMatcher
+AbstractConditionMatcher <|-- SpelConditionMatcher
+AbstractConditionMatcher <|-- OgnlConditionMatcher
+AbstractConditionMatcher <|-- InUserTenantConditionMatcher
+AbstractConditionMatcher <|-- NoneConditionMatcher
+AbstractConditionMatcher <|-- AllConditionMatcher
+AbstractConditionMatcher <|-- InPlatformTenantConditionMatcher
+@enduml

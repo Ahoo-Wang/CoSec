@@ -29,6 +29,17 @@
 
 ![Gateway](document/design/assets/Gateway.svg)
 
+## 内置策略匹配器
+
+### ActionMatcher
+
+![ActionMatcher](document/design/assets/ActionMatcher.svg)
+
+### ConditionMatcher
+
+![ConditionMatcher](document/design/assets/ConditionMatcher.svg)
+
+
 ## 策略 Schema
 
 [Policy Schema](document/cosec-policy.schema.json)
