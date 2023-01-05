@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><!--
+  - Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -      http://www.apache.org/licenses/LICENSE-2.0
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  -->
+
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="520px" preserveAspectRatio="none" style="width:1360px;height:520px;background:#FFFFFF;" version="1.1" viewBox="0 0 1360 520" width="1360px" zoomAndPan="magnify"><defs/><g><a href="https://github.com/Ahoo-Wang/CoSec" target="_top" title="https://github.com/Ahoo-Wang/CoSec" xlink:actuate="onRequest" xlink:href="https://github.com/Ahoo-Wang/CoSec" xlink:show="new" xlink:title="https://github.com/Ahoo-Wang/CoSec" xlink:type="simple"><text fill="#808080" font-family="sans-serif" font-size="10" lengthAdjust="spacing" text-decoration="underline" textLength="189" x="1157.5" y="9.668">https://github.com/Ahoo-Wang/CoSec</text></a><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="164" x="591.25" y="36.3125">Build In ActionMatcher</text><!--MD5=[dd3a6102b68975fd8f1a6314072b340a]
+class RequestMatcher--><g id="elem_RequestMatcher"><rect codeLine="6" fill="#F1F1F1" height="97.4648" id="RequestMatcher" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="475" x="340" y="57.2656"/><ellipse cx="518.25" cy="73.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M514.1777,69.0308 L514.1777,66.8726 L521.5571,66.8726 L521.5571,69.0308 L519.0918,69.0308 L519.0918,77.1074 L521.5571,77.1074 L521.5571,79.2656 L514.1777,79.2656 L514.1777,77.1074 L516.6431,77.1074 L516.6431,69.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="110" x="538.75" y="78.5566">RequestMatcher</text><line style="stroke:#181818;stroke-width:0.5;" x1="341" x2="814" y1="89.2656" y2="89.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="101" x="346" y="106.8008">val type: String</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="220" x="346" y="123.2891">val configuration: Configuration</text><line style="stroke:#181818;stroke-width:0.5;" x1="341" x2="814" y1="130.2422" y2="130.2422"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="463" x="346" y="147.7773">match(request: Request, securityContext: SecurityContext): Boolean</text></g><!--MD5=[226a4eef5279541003c62db16c270ea5]
+class ActionMatcher--><g id="elem_ActionMatcher"><rect codeLine="11" fill="#F1F1F1" height="48" id="ActionMatcher" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="131" x="512" y="214.2656"/><ellipse cx="527" cy="230.2656" fill="#B4A7E5" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M522.9277,226.0308 L522.9277,223.8726 L530.3071,223.8726 L530.3071,226.0308 L527.8418,226.0308 L527.8418,234.1074 L530.3071,234.1074 L530.3071,236.2656 L522.9277,236.2656 L522.9277,234.1074 L525.3931,234.1074 L525.3931,226.0308 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="99" x="541" y="235.5566">ActionMatcher</text><line style="stroke:#181818;stroke-width:0.5;" x1="513" x2="642" y1="246.2656" y2="246.2656"/><line style="stroke:#181818;stroke-width:0.5;" x1="513" x2="642" y1="254.2656" y2="254.2656"/></g><!--MD5=[91b838e1b11e2b49258e002ef36ab072]
+class AbstractActionMatcher--><g id="elem_AbstractActionMatcher"><rect codeLine="12" fill="#F1F1F1" height="64.4883" id="AbstractActionMatcher" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="188" x="483.5" y="322.2656"/><ellipse cx="498.5" cy="338.2656" fill="#A9DCDF" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M498.6133,333.6138 L497.4595,338.6855 L499.7754,338.6855 Z M497.1191,331.3726 L500.1157,331.3726 L503.4609,343.7656 L501.0122,343.7656 L500.2485,340.7026 L496.9697,340.7026 L496.2227,343.7656 L493.7739,343.7656 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" font-style="italic" lengthAdjust="spacing" textLength="156" x="512.5" y="343.5566">AbstractActionMatcher</text><line style="stroke:#181818;stroke-width:0.5;" x1="484.5" x2="670.5" y1="354.2656" y2="354.2656"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="175" x="489.5" y="371.8008">val methods: Set&lt;String&gt;</text><line style="stroke:#181818;stroke-width:0.5;" x1="484.5" x2="670.5" y1="378.7539" y2="378.7539"/></g><!--MD5=[faea571b05e8c07b6e08f1a38f22bc17]
+class AllActionMatcher--><g id="elem_AllActionMatcher"><rect codeLine="15" fill="#F1F1F1" height="48" id="AllActionMatcher" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="149" x="7" y="446.2656"/><ellipse cx="22" cy="462.2656" fill="#ADD1B2" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M24.9731,467.9087 Q24.3921,468.2075 23.7529,468.3569 Q23.1138,468.5063 22.4082,468.5063 Q19.9014,468.5063 18.5815,466.8545 Q17.2617,465.2026 17.2617,462.0815 Q17.2617,458.9521 18.5815,457.3003 Q19.9014,455.6484 22.4082,455.6484 Q23.1138,455.6484 23.7612,455.7979 Q24.4087,455.9473 24.9731,456.2461 L24.9731,458.9688 Q24.3423,458.3877 23.7488,458.1179 Q23.1553,457.8481 22.5244,457.8481 Q21.1797,457.8481 20.4949,458.9148 Q19.8101,459.9814 19.8101,462.0815 Q19.8101,464.1733 20.4949,465.24 Q21.1797,466.3066 22.5244,466.3066 Q23.1553,466.3066 23.7488,466.0369 Q24.3423,465.7671 24.9731,465.186 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="117" x="36" y="467.5566">AllActionMatcher</text><line style="stroke:#181818;stroke-width:0.5;" x1="8" x2="155" y1="478.2656" y2="478.2656"/><line style="stroke:#181818;stroke-width:0.5;" x1="8" x2="155" y1="486.2656" y2="486.2656"/></g><!--MD5=[b49d09359dadb90a6dd07b164753b895]
+class NoneActionMatcher--><g id="elem_NoneActionMatcher"><rect codeLine="16" fill="#F1F1F1" height="48" id="NoneActionMatcher" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="167" x="191" y="446.2656"/><ellipse cx="206" cy="462.2656" fill="#ADD1B2" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M208.9731,467.9087 Q208.3921,468.2075 207.7529,468.3569 Q207.1138,468.5063 206.4082,468.5063 Q203.9014,468.5063 202.5815,466.8545 Q201.2617,465.2026 201.2617,462.0815 Q201.2617,458.9521 202.5815,457.3003 Q203.9014,455.6484 206.4082,455.6484 Q207.1138,455.6484 207.7612,455.7979 Q208.4087,455.9473 208.9731,456.2461 L208.9731,458.9688 Q208.3423,458.3877 207.7488,458.1179 Q207.1553,457.8481 206.5244,457.8481 Q205.1797,457.8481 204.4949,458.9148 Q203.8101,459.9814 203.8101,462.0815 Q203.8101,464.1733 204.4949,465.24 Q205.1797,466.3066 206.5244,466.3066 Q207.1553,466.3066 207.7488,466.0369 Q208.3423,465.7671 208.9731,465.186 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="135" x="220" y="467.5566">NoneActionMatcher</text><line style="stroke:#181818;stroke-width:0.5;" x1="192" x2="357" y1="478.2656" y2="478.2656"/><line style="stroke:#181818;stroke-width:0.5;" x1="192" x2="357" y1="486.2656" y2="486.2656"/></g><!--MD5=[60d20bd7de2528fd1f17c82f5edfcf76]
+class PathActionMatcher--><g id="elem_PathActionMatcher"><rect codeLine="17" fill="#F1F1F1" height="48" id="PathActionMatcher" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="161" x="393" y="446.2656"/><ellipse cx="408" cy="462.2656" fill="#ADD1B2" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M410.9731,467.9087 Q410.3921,468.2075 409.7529,468.3569 Q409.1138,468.5063 408.4082,468.5063 Q405.9014,468.5063 404.5815,466.8545 Q403.2617,465.2026 403.2617,462.0815 Q403.2617,458.9521 404.5815,457.3003 Q405.9014,455.6484 408.4082,455.6484 Q409.1138,455.6484 409.7612,455.7979 Q410.4087,455.9473 410.9731,456.2461 L410.9731,458.9688 Q410.3423,458.3877 409.7488,458.1179 Q409.1553,457.8481 408.5244,457.8481 Q407.1797,457.8481 406.4949,458.9148 Q405.8101,459.9814 405.8101,462.0815 Q405.8101,464.1733 406.4949,465.24 Q407.1797,466.3066 408.5244,466.3066 Q409.1553,466.3066 409.7488,466.0369 Q410.3423,465.7671 410.9731,465.186 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="129" x="422" y="467.5566">PathActionMatcher</text><line style="stroke:#181818;stroke-width:0.5;" x1="394" x2="553" y1="478.2656" y2="478.2656"/><line style="stroke:#181818;stroke-width:0.5;" x1="394" x2="553" y1="486.2656" y2="486.2656"/></g><!--MD5=[b4c371aeb3934529921aa8d3f78076b9]
+class RegularActionMatcher--><g id="elem_RegularActionMatcher"><rect codeLine="18" fill="#F1F1F1" height="48" id="RegularActionMatcher" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="184" x="589.5" y="446.2656"/><ellipse cx="604.5" cy="462.2656" fill="#ADD1B2" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M607.4731,467.9087 Q606.8921,468.2075 606.2529,468.3569 Q605.6138,468.5063 604.9082,468.5063 Q602.4014,468.5063 601.0815,466.8545 Q599.7617,465.2026 599.7617,462.0815 Q599.7617,458.9521 601.0815,457.3003 Q602.4014,455.6484 604.9082,455.6484 Q605.6138,455.6484 606.2612,455.7979 Q606.9087,455.9473 607.4731,456.2461 L607.4731,458.9688 Q606.8423,458.3877 606.2488,458.1179 Q605.6553,457.8481 605.0244,457.8481 Q603.6797,457.8481 602.9949,458.9148 Q602.3101,459.9814 602.3101,462.0815 Q602.3101,464.1733 602.9949,465.24 Q603.6797,466.3066 605.0244,466.3066 Q605.6553,466.3066 606.2488,466.0369 Q606.8423,465.7671 607.4731,465.186 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="152" x="618.5" y="467.5566">RegularActionMatcher</text><line style="stroke:#181818;stroke-width:0.5;" x1="590.5" x2="772.5" y1="478.2656" y2="478.2656"/><line style="stroke:#181818;stroke-width:0.5;" x1="590.5" x2="772.5" y1="486.2656" y2="486.2656"/></g><!--MD5=[ee119554e15186f57af48655bc6179ed]
+class ReplaceablePathActionMatcher--><g id="elem_ReplaceablePathActionMatcher"><rect codeLine="19" fill="#F1F1F1" height="48" id="ReplaceablePathActionMatcher" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="243" x="809" y="446.2656"/><ellipse cx="824" cy="462.2656" fill="#ADD1B2" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M826.9731,467.9087 Q826.3921,468.2075 825.7529,468.3569 Q825.1138,468.5063 824.4082,468.5063 Q821.9014,468.5063 820.5815,466.8545 Q819.2617,465.2026 819.2617,462.0815 Q819.2617,458.9521 820.5815,457.3003 Q821.9014,455.6484 824.4082,455.6484 Q825.1138,455.6484 825.7612,455.7979 Q826.4087,455.9473 826.9731,456.2461 L826.9731,458.9688 Q826.3423,458.3877 825.7488,458.1179 Q825.1553,457.8481 824.5244,457.8481 Q823.1797,457.8481 822.4949,458.9148 Q821.8101,459.9814 821.8101,462.0815 Q821.8101,464.1733 822.4949,465.24 Q823.1797,466.3066 824.5244,466.3066 Q825.1553,466.3066 825.7488,466.0369 Q826.3423,465.7671 826.9731,465.186 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="211" x="838" y="467.5566">ReplaceablePathActionMatcher</text><line style="stroke:#181818;stroke-width:0.5;" x1="810" x2="1051" y1="478.2656" y2="478.2656"/><line style="stroke:#181818;stroke-width:0.5;" x1="810" x2="1051" y1="486.2656" y2="486.2656"/></g><!--MD5=[f9cc743233041d47de85c068990e30c1]
+class ReplaceableRegularActionMatcher--><g id="elem_ReplaceableRegularActionMatcher"><rect codeLine="20" fill="#F1F1F1" height="48" id="ReplaceableRegularActionMatcher" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="266" x="1087.5" y="446.2656"/><ellipse cx="1102.5" cy="462.2656" fill="#ADD1B2" rx="11" ry="11" style="stroke:#181818;stroke-width:1.0;"/><path d="M1105.4731,467.9087 Q1104.8921,468.2075 1104.2529,468.3569 Q1103.6138,468.5063 1102.9082,468.5063 Q1100.4014,468.5063 1099.0815,466.8545 Q1097.7617,465.2026 1097.7617,462.0815 Q1097.7617,458.9521 1099.0815,457.3003 Q1100.4014,455.6484 1102.9082,455.6484 Q1103.6138,455.6484 1104.2612,455.7979 Q1104.9087,455.9473 1105.4731,456.2461 L1105.4731,458.9688 Q1104.8423,458.3877 1104.2488,458.1179 Q1103.6553,457.8481 1103.0244,457.8481 Q1101.6797,457.8481 1100.9949,458.9148 Q1100.3101,459.9814 1100.3101,462.0815 Q1100.3101,464.1733 1100.9949,465.24 Q1101.6797,466.3066 1103.0244,466.3066 Q1103.6553,466.3066 1104.2488,466.0369 Q1104.8423,465.7671 1105.4731,465.186 Z " fill="#000000"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="234" x="1116.5" y="467.5566">ReplaceableRegularActionMatcher</text><line style="stroke:#181818;stroke-width:0.5;" x1="1088.5" x2="1352.5" y1="478.2656" y2="478.2656"/><line style="stroke:#181818;stroke-width:0.5;" x1="1088.5" x2="1352.5" y1="486.2656" y2="486.2656"/></g><!--MD5=[3a61d607afa5f9046415286ff45a7e54]
+reverse link RequestMatcher to ActionMatcher--><g id="link_RequestMatcher_ActionMatcher"><path codeLine="22" d="M577.5,175.9756 C577.5,189.6656 577.5,203.1256 577.5,213.9256 " fill="none" id="RequestMatcher-backto-ActionMatcher" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="570.5,176.1356,577.5,156.1356,584.5,176.1356,570.5,176.1356" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[f5cbbe8e09dcc6eae29e3930518b798f]
+reverse link ActionMatcher to AbstractActionMatcher--><g id="link_ActionMatcher_AbstractActionMatcher"><path codeLine="23" d="M577.5,284.0556 C577.5,296.8056 577.5,310.4156 577.5,322.1656 " fill="none" id="ActionMatcher-backto-AbstractActionMatcher" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="570.5,284.1256,577.5,264.1256,584.5,284.1256,570.5,284.1256" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[ecb87ce1f05a4a61303b277f4a0c071a]
+reverse link AbstractActionMatcher to AllActionMatcher--><g id="link_AbstractActionMatcher_AllActionMatcher"><path codeLine="24" d="M462.13,380.4956 C381.23,398.3756 270.62,423.1956 173.5,446.2656 C167.89,447.5956 162.1,448.9956 156.28,450.4156 " fill="none" id="AbstractActionMatcher-backto-AllActionMatcher" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="460.56,373.6756,481.59,376.2056,463.57,387.3456,460.56,373.6756" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[f52afb0dd7db50d5a9cd16c222cb03fd]
+reverse link AbstractActionMatcher to NoneActionMatcher--><g id="link_AbstractActionMatcher_NoneActionMatcher"><path codeLine="25" d="M473.8,394.2756 C428.2,411.4356 376.15,431.0256 336.68,445.8756 " fill="none" id="AbstractActionMatcher-backto-NoneActionMatcher" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="471.3,387.7456,492.49,387.2556,476.23,400.8456,471.3,387.7456" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[51024f1aadb26ace3c89a48d229fada7]
+reverse link AbstractActionMatcher to PathActionMatcher--><g id="link_AbstractActionMatcher_PathActionMatcher"><path codeLine="26" d="M534.49,402.4056 C520.82,417.3956 506.29,433.3256 494.84,445.8756 " fill="none" id="AbstractActionMatcher-backto-PathActionMatcher" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="529.14,397.8956,547.79,387.8356,539.48,407.3256,529.14,397.8956" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[559e8b52e24c8b06961f914032fdb304]
+reverse link AbstractActionMatcher to RegularActionMatcher--><g id="link_AbstractActionMatcher_RegularActionMatcher"><path codeLine="27" d="M620.51,402.4056 C634.18,417.3956 648.71,433.3256 660.16,445.8756 " fill="none" id="AbstractActionMatcher-backto-RegularActionMatcher" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="615.52,407.3256,607.21,387.8356,625.86,397.8956,615.52,407.3256" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[04c2e9d05d37f8e9a3ccc472a649837c]
+reverse link AbstractActionMatcher to ReplaceablePathActionMatcher--><g id="link_AbstractActionMatcher_ReplaceablePathActionMatcher"><path codeLine="28" d="M692.03,392.2556 C746.54,409.8556 810.08,430.3756 857.86,445.8056 " fill="none" id="AbstractActionMatcher-backto-ReplaceablePathActionMatcher" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="689.96,398.9356,673.07,386.1356,694.26,385.6156,689.96,398.9356" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[199de6d7ee7a615f92bc61203f65173d]
+reverse link AbstractActionMatcher to ReplaceableRegularActionMatcher--><g id="link_AbstractActionMatcher_ReplaceableRegularActionMatcher"><path codeLine="29" d="M692.76,375.6956 C803.79,395.3856 971.61,425.1356 1088.08,445.7856 " fill="none" id="AbstractActionMatcher-backto-ReplaceableRegularActionMatcher" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="none" points="691.65,382.6156,673.18,372.2256,694.09,368.8256,691.65,382.6156" style="stroke:#181818;stroke-width:1.0;"/></g><a href="https://github.com/Ahoo-Wang/CoSec" target="_top" title="https://github.com/Ahoo-Wang/CoSec" xlink:actuate="onRequest" xlink:href="https://github.com/Ahoo-Wang/CoSec" xlink:show="new" xlink:title="https://github.com/Ahoo-Wang/CoSec" xlink:type="simple"><text fill="#808080" font-family="sans-serif" font-size="10" lengthAdjust="spacing" text-decoration="underline" textLength="189" x="578.75" y="509.9336">https://github.com/Ahoo-Wang/CoSec</text></a><!--MD5=[28b1f86249f6d93599c2baab3545d368]
+@startuml
+
+!include layout.puml
+
+title Build In ActionMatcher
+
+interface RequestMatcher{
+    val type: String
+    val configuration: Configuration
+    match(request: Request, securityContext: SecurityContext): Boolean
+}
+interface ActionMatcher
+abstract class AbstractActionMatcher{
+    val methods: Set<String>
+}
+class AllActionMatcher
+class NoneActionMatcher
+class PathActionMatcher
+class RegularActionMatcher
+class ReplaceablePathActionMatcher
+class ReplaceableRegularActionMatcher
+
+RequestMatcher <|- - ActionMatcher
+ActionMatcher  <|- - AbstractActionMatcher
+AbstractActionMatcher <|- - AllActionMatcher
+AbstractActionMatcher <|- - NoneActionMatcher
+AbstractActionMatcher <|- - PathActionMatcher
+AbstractActionMatcher <|- - RegularActionMatcher
+AbstractActionMatcher <|- - ReplaceablePathActionMatcher
+AbstractActionMatcher <|- - ReplaceableRegularActionMatcher
+@enduml
+
+@startuml
+
+skinparam hyperlinkColor grey
+
+
+header
+[[https://github.com/Ahoo-Wang/CoSec]]
+endheader
+
+center footer [[https://github.com/Ahoo-Wang/CoSec]]
+
+
+title Build In ActionMatcher
+
+interface RequestMatcher{
+    val type: String
+    val configuration: Configuration
+    match(request: Request, securityContext: SecurityContext): Boolean
+}
+interface ActionMatcher
+abstract class AbstractActionMatcher{
+    val methods: Set<String>
+}
+class AllActionMatcher
+class NoneActionMatcher
+class PathActionMatcher
+class RegularActionMatcher
+class ReplaceablePathActionMatcher
+class ReplaceableRegularActionMatcher
+
+RequestMatcher <|- - ActionMatcher
+ActionMatcher  <|- - AbstractActionMatcher
+AbstractActionMatcher <|- - AllActionMatcher
+AbstractActionMatcher <|- - NoneActionMatcher
+AbstractActionMatcher <|- - PathActionMatcher
+AbstractActionMatcher <|- - RegularActionMatcher
+AbstractActionMatcher <|- - ReplaceablePathActionMatcher
+AbstractActionMatcher <|- - ReplaceableRegularActionMatcher
+@enduml
+
+PlantUML version 1.2022.13(Sat Nov 19 21:22:17 CST 2022)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Default Encoding: UTF-8
+Language: zh
+Country: CN
+--></g></svg>

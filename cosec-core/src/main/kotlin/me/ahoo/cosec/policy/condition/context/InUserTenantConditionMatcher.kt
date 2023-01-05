@@ -17,13 +17,14 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.policy.condition.AbstractConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
-class InUserTenantConditionMatcher(override val configuration: Configuration) : ConditionMatcher {
+class InUserTenantConditionMatcher(configuration: Configuration) : AbstractConditionMatcher(configuration) {
     override val type: String
         get() = InUserTenantConditionMatcherFactory.TYPE
 
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         return securityContext.tenant.isUserTenant
     }
 }

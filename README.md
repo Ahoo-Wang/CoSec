@@ -29,6 +29,16 @@ RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
 
 ![Gateway](document/design/assets/Gateway.svg)
 
+## Build In Policy
+
+### ActionMatcher
+
+![ActionMatcher](document/design/assets/ActionMatcher.svg)
+
+### ConditionMatcher
+
+![ConditionMatcher](document/design/assets/ConditionMatcher.svg)
+
 ## Policy Schema
 
 [Policy Schema](document/cosec-policy.schema.json)

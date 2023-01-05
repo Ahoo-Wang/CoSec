@@ -125,18 +125,14 @@ package context{
     TenantCapable <|--  SecurityContext
     CoSecPrincipal --* SecurityContext
 
-    interface Request<A : Any>{
-        val action: A
+    interface Request{
+        val path: String
+        val method: String
+        val remoteIp: String
+        val origin: String
+        val referer: String
+        getHeader(key: String): String
     }
-
-    interface HttpRequest
-    TenantCapable <|-- Request
-    Request <|--  HttpRequest
-
-    note right of HttpRequest
-        HttpRequest::action
-        format: {url}:{method}
-    end note
 }
 
 package authorization{
