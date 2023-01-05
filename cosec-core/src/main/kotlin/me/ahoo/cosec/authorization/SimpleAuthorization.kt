@@ -21,6 +21,7 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.CoSecPrincipal.Companion.isRoot
+import org.slf4j.LoggerFactory
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
@@ -30,6 +31,9 @@ import reactor.kotlin.core.publisher.toMono
  * @author ahoo wang
  */
 class SimpleAuthorization(private val policyRepository: PolicyRepository) : Authorization {
+    companion object {
+        private val log = LoggerFactory.getLogger(SimpleAuthorization::class.java)
+    }
 
     private fun verifyPolicies(policies: Set<Policy>, request: Request, context: SecurityContext): VerifyResult {
         policies.forEach { policy: Policy ->
@@ -38,6 +42,9 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
             }.forEach { statement: Statement ->
                 val verifyResult = statement.verify(request, context)
                 if (verifyResult == VerifyResult.EXPLICIT_DENY) {
+                    if (log.isDebugEnabled) {
+                        log.debug("Verify [$request] [$context] matched Policy[${policy.id}] - [Explicit Deny].")
+                    }
                     return VerifyResult.EXPLICIT_DENY
                 }
             }
@@ -49,6 +56,9 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
             }.forEach { statement: Statement ->
                 val verifyResult = statement.verify(request, context)
                 if (verifyResult == VerifyResult.ALLOW) {
+                    if (log.isDebugEnabled) {
+                        log.debug("Verify [$request] [$context] matched Policy[${policy.id}] - [Allow].")
+                    }
                     return VerifyResult.ALLOW
                 }
             }
@@ -59,6 +69,9 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
 
     private fun verifyRoot(context: SecurityContext): VerifyResult {
         return if (context.principal.isRoot()) {
+            if (log.isDebugEnabled) {
+                log.debug("Verify [$context] matched Root - [Allow].")
+            }
             VerifyResult.ALLOW
         } else {
             VerifyResult.IMPLICIT_DENY
@@ -118,7 +131,14 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
                                 when (roleVerifyResult) {
                                     VerifyResult.ALLOW -> AuthorizeResult.ALLOW
                                     VerifyResult.EXPLICIT_DENY -> AuthorizeResult.EXPLICIT_DENY
-                                    VerifyResult.IMPLICIT_DENY -> AuthorizeResult.IMPLICIT_DENY
+                                    VerifyResult.IMPLICIT_DENY -> {
+                                        if (log.isDebugEnabled) {
+                                            log.debug(
+                                                "Verify [$request] [$context] No policies matched - [Implicit Deny]."
+                                            )
+                                        }
+                                        AuthorizeResult.IMPLICIT_DENY
+                                    }
                                 }
                             }
                     }

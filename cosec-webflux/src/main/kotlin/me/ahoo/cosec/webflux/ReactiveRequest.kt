@@ -29,4 +29,8 @@ data class ReactiveRequest(
     override fun getHeader(key: String): String {
         return delegate.request.headers.getFirst(key).orEmpty()
     }
+
+    override fun toString(): String {
+        return "ReactiveRequest(path='$path', method='$method', remoteIp='$remoteIp', origin='$origin', referer='$referer')"
+    }
 }

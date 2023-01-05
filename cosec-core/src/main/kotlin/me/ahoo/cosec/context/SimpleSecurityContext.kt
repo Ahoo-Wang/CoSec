@@ -47,6 +47,10 @@ class SimpleSecurityContext(
         @Suppress("UNCHECKED_CAST")
         return attributes[key] as T?
     }
+
+    override fun toString(): String {
+        return "SimpleSecurityContext(principal.id=${principal.id}, tenantId=${tenant.tenantId})"
+    }
 }
 
 val CoSecPrincipal.tenant: Tenant

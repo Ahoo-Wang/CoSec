@@ -28,4 +28,8 @@ data class CoSecServletRequest(
     override fun getHeader(key: String): String {
         return delegate.getHeader(key).orEmpty()
     }
+
+    override fun toString(): String {
+        return "CoSecServletRequest(path='$path', method='$method', remoteIp='$remoteIp', origin='$origin', referer='$referer')"
+    }
 }
