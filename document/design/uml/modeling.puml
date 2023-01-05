@@ -94,17 +94,20 @@ package role{
 
 
 package principal{
+    interface java.security.Principal{
+        getName():String
+    }
     interface RoleCapable {
         val roles: Set<String>
     }
     interface CoSecPrincipal{
         val id: String
-        val attrs: Map<String, String>
+        val attributes: Map<String, String>
         anonymous(): Boolean
         authenticated(): Boolean
     }
     interface TenantPrincipal
-
+    java.security.Principal <|-- CoSecPrincipal
     TenantCapable <|-- TenantPrincipal
     CoSecPrincipal <|-- TenantPrincipal
     Named <|-- CoSecPrincipal
