@@ -64,6 +64,7 @@ internal class SimpleAuthorizationTest {
     @Test
     fun authorizeWhenGlobalPolicyIsAllowAll() {
         val globalPolicy = mockk<Policy>() {
+            every { id } returns "globalPolicy"
             every { statements } returns setOf(
                 StatementData(
                     effect = Effect.ALLOW,
@@ -89,6 +90,7 @@ internal class SimpleAuthorizationTest {
     @Test
     fun authorizeWhenGlobalPolicyIsDenyAll() {
         val globalPolicy = mockk<Policy>() {
+            every { id } returns "globalPolicy"
             every { statements } returns setOf(
                 StatementData(
                     effect = Effect.DENY,
@@ -113,6 +115,7 @@ internal class SimpleAuthorizationTest {
     @Test
     fun authorizeWhenGlobalPolicyIsEmptyAndPrincipalIsAllowAll() {
         val principalPolicy = mockk<Policy>() {
+            every { id } returns "policyId"
             every { statements } returns setOf(
                 StatementData(
                     effect = Effect.ALLOW,
@@ -143,6 +146,7 @@ internal class SimpleAuthorizationTest {
     @Test
     fun authorizeWhenGlobalPolicyIsEmptyAndPrincipalIsDenyAll() {
         val principalPolicy = mockk<Policy>() {
+            every { id } returns "policyId"
             every { statements } returns setOf(
                 StatementData(
                     effect = Effect.DENY,
@@ -173,6 +177,7 @@ internal class SimpleAuthorizationTest {
     @Test
     fun authorizeWhenGlobalAndPrincipalPolicyIsEmptyAndRoleIsAllowAll() {
         val rolePolicy = mockk<Policy>() {
+            every { id } returns "policyId"
             every { statements } returns setOf(
                 StatementData(
                     effect = Effect.ALLOW,
@@ -204,6 +209,7 @@ internal class SimpleAuthorizationTest {
     @Test
     fun authorizeWhenGlobalAndPrincipalPolicyIsEmptyAndRoleIsDenyAll() {
         val rolePolicy = mockk<Policy>() {
+            every { id } returns "policyId"
             every { statements } returns setOf(
                 StatementData(
                     effect = Effect.DENY,
