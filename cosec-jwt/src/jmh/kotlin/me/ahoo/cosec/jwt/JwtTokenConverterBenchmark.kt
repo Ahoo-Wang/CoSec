@@ -13,10 +13,10 @@
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
-import me.ahoo.cosec.api.principal.TenantPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
 import me.ahoo.cosec.jwt.Jwts.asPrincipal
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.Scope
@@ -55,18 +55,20 @@ import org.openjdk.jmh.annotations.Threads
 open class JwtTokenConverterBenchmark {
     private lateinit var algorithm: Algorithm
     private lateinit var jwtTokenConverter: JwtTokenConverter
+    private lateinit var jwtTokenVerifier: JwtTokenVerifier
     private lateinit var token: CompositeToken
 
     @Setup
     fun init() {
         algorithm = Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLWGA_")
         jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, algorithm)
-        token = jwtTokenConverter.asToken(TenantPrincipal.ANONYMOUS)
+        jwtTokenVerifier = JwtTokenVerifier(algorithm)
+        token = jwtTokenConverter.asToken(SimpleTenantPrincipal.ANONYMOUS)
     }
 
     @Benchmark
     fun asPrincipalWithVerify(): TokenTenantPrincipal {
-        return jwtTokenConverter.asPrincipal(token)
+        return jwtTokenVerifier.verify(token)
     }
 
     @Benchmark

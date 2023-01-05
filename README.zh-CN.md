@@ -29,6 +29,10 @@
 
 ![Gateway](document/design/assets/Gateway.svg)
 
+## 授权策略流程
+
+![Authorization Policy](document/design/assets/Authorization-Policy.svg)
+
 ## 内置策略匹配器
 
 ### ActionMatcher
@@ -38,7 +42,6 @@
 ### ConditionMatcher
 
 ![ConditionMatcher](document/design/assets/ConditionMatcher.svg)
-
 
 ## 策略 Schema
 

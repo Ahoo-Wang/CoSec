@@ -29,6 +29,10 @@ RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
 
 ![Gateway](document/design/assets/Gateway.svg)
 
+## Authorization Policy
+
+![Authorization Policy](document/design/assets/Authorization-Policy.svg)
+
 ## Build In Policy
 
 ### ActionMatcher
