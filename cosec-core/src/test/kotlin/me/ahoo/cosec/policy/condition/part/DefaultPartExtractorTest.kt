@@ -104,7 +104,7 @@ class DefaultPartExtractorTest {
             DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX + "key").extract(mockk(), context),
             equalTo("value")
         )
-                assertThat(
+        assertThat(
             DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX + "not_exist").extract(mockk(), context),
             equalTo("")
         )

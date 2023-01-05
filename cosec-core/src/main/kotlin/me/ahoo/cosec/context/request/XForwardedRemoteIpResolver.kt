@@ -46,7 +46,7 @@ abstract class XForwardedRemoteIpResolver<R>(
 
         val xForwardedValues = xForwardedHeaderValues[0]
             .split(DELIMITER)
-            .dropWhile { it.isBlank() }
+            .filter { it.isNotBlank() }
             .reversed()
         if (xForwardedValues.isEmpty()) {
             return defaultRemoteIpResolver.resolve(request)
