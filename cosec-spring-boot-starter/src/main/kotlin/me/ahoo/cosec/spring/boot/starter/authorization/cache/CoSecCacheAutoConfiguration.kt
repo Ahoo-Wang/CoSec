@@ -23,11 +23,11 @@ import me.ahoo.cache.spring.redis.RedisDistributedCache
 import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
 import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
 import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.authorization.PermissionRepository
+import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.redis.GlobalPolicyIndexCache
 import me.ahoo.cosec.redis.GlobalPolicyIndexKey
 import me.ahoo.cosec.redis.PolicyCache
-import me.ahoo.cosec.redis.RedisPermissionRepository
+import me.ahoo.cosec.redis.RedisPolicyRepository
 import me.ahoo.cosec.redis.RolePolicyCache
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
@@ -65,12 +65,12 @@ class CoSecCacheAutoConfiguration(private val cacheProperties: CacheProperties) 
 
     @Bean
     @ConditionalOnMissingBean
-    fun redisPermissionRepository(
+    fun redisPolicyRepository(
         globalPolicyIndexCache: GlobalPolicyIndexCache,
         rolePolicyCache: RolePolicyCache,
         policyCache: PolicyCache
-    ): PermissionRepository {
-        return RedisPermissionRepository(
+    ): PolicyRepository {
+        return RedisPolicyRepository(
             globalPolicyIndexCache,
             rolePolicyCache,
             policyCache

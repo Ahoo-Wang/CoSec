@@ -24,16 +24,16 @@ interface Statement : PermissionVerifier {
     override fun verify(request: Request, securityContext: SecurityContext): VerifyResult {
         conditions.all {
             it.match(request, securityContext)
-        }.let { conditionMatched ->
-            if (!conditionMatched) {
+        }.let { allMatched ->
+            if (!allMatched) {
                 return VerifyResult.IMPLICIT_DENY
             }
         }
 
         actions.any {
             it.match(request, securityContext)
-        }.let { actionMatched ->
-            if (!actionMatched) {
+        }.let { anyMatched ->
+            if (!anyMatched) {
                 return VerifyResult.IMPLICIT_DENY
             }
         }

@@ -14,15 +14,15 @@
 package me.ahoo.cosec.redis
 
 import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.authorization.PermissionRepository
+import me.ahoo.cosec.authorization.PolicyRepository
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
-class RedisPermissionRepository(
+class RedisPolicyRepository(
     private val globalPolicyIndexCache: GlobalPolicyIndexCache,
     private val rolePolicyCache: RolePolicyCache,
     private val policyCache: PolicyCache
-) : PermissionRepository {
+) : PolicyRepository {
     override fun getGlobalPolicy(): Mono<Set<Policy>> {
         return globalPolicyIndexCache[GlobalPolicyIndexKey]
             .orEmpty()

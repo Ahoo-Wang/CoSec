@@ -13,7 +13,7 @@
 package me.ahoo.cosec.spring.boot.starter.authorization
 
 import me.ahoo.cosec.api.authorization.Authorization
-import me.ahoo.cosec.authorization.PermissionRepository
+import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RemoteIpResolver
@@ -55,9 +55,9 @@ class CoSecAuthorizationAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecAuthorization(
-        permissionRepository: PermissionRepository
+        policyRepository: PolicyRepository
     ): Authorization {
-        return SimpleAuthorization(permissionRepository)
+        return SimpleAuthorization(policyRepository)
     }
 
     companion object {
