@@ -80,19 +80,6 @@ package policy{
     end note
 }
 
-package role{
-    interface Role {
-        val id: String
-        val name: String
-        val description: String
-        val tenantId:String
-    }
-
-    PolicyCapable <|-- Role
-}
-
-
-
 package principal{
     interface java.security.Principal{
         getName():String
