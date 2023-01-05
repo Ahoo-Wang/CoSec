@@ -17,13 +17,12 @@ import me.ahoo.cosec.api.policy.Policy
 import reactor.core.publisher.Mono
 
 /**
- * TODO rename? PolicyRepository?
  *
- * Permission Repository .
+ * Policy Repository .
  *
  * @author ahoo wang
  */
-interface PermissionRepository {
+interface PolicyRepository {
     fun getGlobalPolicy(): Mono<Set<Policy>>
     fun getRolePolicy(roleIds: Set<String>): Mono<Set<Policy>>
     fun getPolicies(policyIds: Set<String>): Mono<Set<Policy>>

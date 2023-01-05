@@ -20,7 +20,7 @@ import me.ahoo.cosec.policy.PolicyData
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
 
-internal class RedisPermissionRepositoryTest {
+internal class RedisPolicyRepositoryTest {
 
     private val policyData = PolicyData(
         "policyId",
@@ -36,7 +36,7 @@ internal class RedisPermissionRepositoryTest {
     fun getGlobalPolicyWhenIsEmpty() {
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
         every { globalPolicyIndexCache.get(GlobalPolicyIndexKey) } returns emptySet()
-        val permissionRepository = RedisPermissionRepository(globalPolicyIndexCache, mockk(), mockPolicyCache())
+        val permissionRepository = RedisPolicyRepository(globalPolicyIndexCache, mockk(), mockPolicyCache())
         permissionRepository.getGlobalPolicy()
             .test()
             .expectNext(emptySet())
@@ -47,7 +47,7 @@ internal class RedisPermissionRepositoryTest {
     fun getGlobalPolicy() {
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
         every { globalPolicyIndexCache.get(GlobalPolicyIndexKey) } returns setOf("policyId")
-        val permissionRepository = RedisPermissionRepository(globalPolicyIndexCache, mockk(), mockPolicyCache())
+        val permissionRepository = RedisPolicyRepository(globalPolicyIndexCache, mockk(), mockPolicyCache())
         permissionRepository.getGlobalPolicy()
             .test()
             .expectNext(setOf(policyData))
@@ -58,7 +58,7 @@ internal class RedisPermissionRepositoryTest {
     fun getRolePolicyWhenIsEmpty() {
         val rolePolicyCache = mockk<RolePolicyCache>()
         every { rolePolicyCache.get("roleId") } returns emptySet()
-        val permissionRepository = RedisPermissionRepository(mockk(), rolePolicyCache, mockPolicyCache())
+        val permissionRepository = RedisPolicyRepository(mockk(), rolePolicyCache, mockPolicyCache())
         permissionRepository.getRolePolicy(setOf("roleId"))
             .test()
             .expectNext(emptySet())
@@ -69,7 +69,7 @@ internal class RedisPermissionRepositoryTest {
     fun getRolePolicy() {
         val rolePolicyCache = mockk<RolePolicyCache>()
         every { rolePolicyCache.get("roleId") } returns setOf("policyId")
-        val permissionRepository = RedisPermissionRepository(mockk(), rolePolicyCache, mockPolicyCache())
+        val permissionRepository = RedisPolicyRepository(mockk(), rolePolicyCache, mockPolicyCache())
         permissionRepository.getRolePolicy(setOf("roleId"))
             .test()
             .expectNext(setOf(policyData))
@@ -78,7 +78,7 @@ internal class RedisPermissionRepositoryTest {
 
     @Test
     fun getPoliciesWhenPolicyIsEmpty() {
-        val permissionRepository = RedisPermissionRepository(mockk(), mockk(), mockk())
+        val permissionRepository = RedisPolicyRepository(mockk(), mockk(), mockk())
         permissionRepository.getPolicies(emptySet())
             .test()
             .expectNext(emptySet())
@@ -87,7 +87,7 @@ internal class RedisPermissionRepositoryTest {
 
     @Test
     fun getPolicies() {
-        val permissionRepository = RedisPermissionRepository(mockk(), mockk(), mockPolicyCache())
+        val permissionRepository = RedisPolicyRepository(mockk(), mockk(), mockPolicyCache())
         permissionRepository.getPolicies(setOf("policyId"))
             .test()
             .expectNext(setOf(policyData))

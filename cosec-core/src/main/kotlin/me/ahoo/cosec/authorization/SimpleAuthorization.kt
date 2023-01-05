@@ -29,7 +29,7 @@ import reactor.kotlin.core.publisher.toMono
  *
  * @author ahoo wang
  */
-class SimpleAuthorization(private val permissionRepository: PermissionRepository) : Authorization {
+class SimpleAuthorization(private val policyRepository: PolicyRepository) : Authorization {
 
     private fun verifyPolicies(policies: Set<Policy>, request: Request, context: SecurityContext): VerifyResult {
         policies.forEach { policy: Policy ->
@@ -66,7 +66,7 @@ class SimpleAuthorization(private val permissionRepository: PermissionRepository
     }
 
     private fun verifyGlobalPolicies(request: Request, context: SecurityContext): Mono<VerifyResult> {
-        return permissionRepository.getGlobalPolicy()
+        return policyRepository.getGlobalPolicy()
             .defaultIfEmpty(emptySet())
             .map { policies: Set<Policy> ->
                 verifyPolicies(policies, request, context)
@@ -77,7 +77,7 @@ class SimpleAuthorization(private val permissionRepository: PermissionRepository
         if (context.principal.policies.isEmpty()) {
             return VerifyResult.IMPLICIT_DENY.toMono()
         }
-        return permissionRepository.getPolicies(context.principal.policies)
+        return policyRepository.getPolicies(context.principal.policies)
             .defaultIfEmpty(emptySet())
             .map { policies: Set<Policy> ->
                 verifyPolicies(policies, request, context)
@@ -88,7 +88,7 @@ class SimpleAuthorization(private val permissionRepository: PermissionRepository
         if (context.principal.roles.isEmpty()) {
             return VerifyResult.IMPLICIT_DENY.toMono()
         }
-        return permissionRepository.getRolePolicy(context.principal.roles)
+        return policyRepository.getRolePolicy(context.principal.roles)
             .defaultIfEmpty(emptySet())
             .map { policies: Set<Policy> ->
                 verifyPolicies(policies, request, context)

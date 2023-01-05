@@ -14,7 +14,7 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
-import me.ahoo.cosec.authorization.PermissionRepository
+import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.redis.GlobalPolicyIndexCache
 import me.ahoo.cosec.redis.PolicyCache
 import me.ahoo.cosec.redis.RolePolicyCache
@@ -48,7 +48,7 @@ internal class CoSecCacheAutoConfigurationTest {
                     .hasSingleBean(RolePolicyCache::class.java)
                     .hasBean(CoSecCacheAutoConfiguration.POLICY_CACHE_SOURCE_BEAN_NAME)
                     .hasSingleBean(PolicyCache::class.java)
-                    .hasSingleBean(PermissionRepository::class.java)
+                    .hasSingleBean(PolicyRepository::class.java)
             }
     }
 }
