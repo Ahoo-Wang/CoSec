@@ -142,7 +142,7 @@ RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
       ]
     },
     {
-      "name": "RegionBlacklist",
+      "name": "RegionWhitelist",
       "effect": "deny",
       "actions": [
         {
@@ -151,6 +151,7 @@ RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
       ],
       "conditions": [
         {
+          "negate": true,
           "type": "reg",
           "part": "request.attributes.ipRegion",
           "pattern": "^中国\\|0\\|(上海|广东省)\\|.*"
@@ -159,7 +160,6 @@ RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
     }
   ]
 }
-
 ```
 
 ## Thanks

@@ -142,7 +142,7 @@
       ]
     },
     {
-      "name": "RegionBlacklist",
+      "name": "RegionWhitelist",
       "effect": "deny",
       "actions": [
         {
@@ -151,6 +151,7 @@
       ],
       "conditions": [
         {
+          "negate": true,
           "type": "reg",
           "part": "request.attributes.ipRegion",
           "pattern": "^中国\\|0\\|(上海|广东省)\\|.*"
@@ -159,7 +160,6 @@
     }
   ]
 }
-
 ```
 
 ## 感谢
