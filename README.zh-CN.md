@@ -140,9 +140,26 @@
           "pattern": "192.168.0.*"
         }
       ]
+    },
+    {
+      "name": "RegionBlacklist",
+      "effect": "deny",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "type": "reg",
+          "part": "request.attributes.ipRegion",
+          "pattern": "^中国\\|0\\|(上海|广东省)\\|.*"
+        }
+      ]
     }
   ]
 }
+
 ```
 
 ## 感谢
