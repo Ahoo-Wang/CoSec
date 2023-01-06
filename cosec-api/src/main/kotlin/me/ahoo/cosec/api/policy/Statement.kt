@@ -13,13 +13,15 @@
 
 package me.ahoo.cosec.api.policy
 
+import me.ahoo.cosec.api.Named
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 
-interface Statement : PermissionVerifier {
+interface Statement : Named, PermissionVerifier {
+    override val name: String
     val effect: Effect
-    val actions: Set<ActionMatcher>
-    val conditions: Set<ConditionMatcher>
+    val actions: List<ActionMatcher>
+    val conditions: List<ConditionMatcher>
 
     override fun verify(request: Request, securityContext: SecurityContext): VerifyResult {
         conditions.all {

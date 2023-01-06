@@ -56,23 +56,30 @@ object JsonPolicySerializer : StdSerializer<Policy>(Policy::class.java) {
 object JsonPolicyDeserializer : StdDeserializer<Policy>(Policy::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): Policy {
         val jsonNode = p.codec.readTree<JsonNode>(p)
-        val statements = jsonNode.has(POLICY_STATEMENTS_KEY).let { hasStatements ->
-            if (hasStatements) {
-                jsonNode.get(POLICY_STATEMENTS_KEY).map {
-                    it.traverse(p.codec).readValueAs(Statement::class.java)
-                }.toSet()
-            } else {
-                emptySet()
-            }
-        }
+
+        val statements = jsonNode.get(POLICY_STATEMENTS_KEY)?.map {
+            it.traverse(p.codec).readValueAs(Statement::class.java)
+        }.orEmpty()
 
         return PolicyData(
-            id = jsonNode.get(POLICY_ID_KEY).asText(),
-            name = jsonNode.get(POLICY_NAME_KEY).asText(),
-            category = jsonNode.get(POLICY_CATEGORY_KEY).asText(),
-            description = jsonNode.get(POLICY_DESCRIPTION_KEY).asText(),
-            type = jsonNode.get(POLICY_TYPE_KEY).traverse(p.codec).readValueAs(PolicyType::class.java),
-            tenantId = jsonNode.get(TENANT_ID_KEY).asText(),
+            id = requireNotNull(jsonNode.get(POLICY_ID_KEY)) {
+                "$POLICY_ID_KEY is required!"
+            }.asText(),
+            name = requireNotNull(jsonNode.get(POLICY_NAME_KEY)) {
+                "$POLICY_NAME_KEY is required!"
+            }.asText(),
+            category = requireNotNull(jsonNode.get(POLICY_CATEGORY_KEY)) {
+                "$POLICY_CATEGORY_KEY is required!"
+            }.asText(),
+            description = requireNotNull(jsonNode.get(POLICY_DESCRIPTION_KEY)) {
+                "$POLICY_DESCRIPTION_KEY is required!"
+            }.asText(),
+            type = requireNotNull(jsonNode.get(POLICY_TYPE_KEY)) {
+                "$POLICY_TYPE_KEY is required!"
+            }.traverse(p.codec).readValueAs(PolicyType::class.java),
+            tenantId = requireNotNull(jsonNode.get(TENANT_ID_KEY)) {
+                "$TENANT_ID_KEY is required!"
+            }.asText(),
             statements = statements
         )
     }

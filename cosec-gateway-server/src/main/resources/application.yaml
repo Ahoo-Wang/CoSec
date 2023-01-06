@@ -52,3 +52,4 @@ cosec:
 logging:
   level:
     root: info
+    me.ahoo.cosec.authorization.SimpleAuthorization: debug

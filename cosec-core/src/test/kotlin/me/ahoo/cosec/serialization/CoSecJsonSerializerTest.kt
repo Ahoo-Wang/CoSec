@@ -51,6 +51,16 @@ import kotlin.streams.toList
 
 internal class CoSecJsonSerializerTest {
 
+    @Test
+    fun serializeTestResource() {
+        val testPolicy = requireNotNull(javaClass.classLoader.getResource("test-policy.json")).let { resource ->
+            resource.openStream().use {
+                CoSecJsonSerializer.readValue(it, Policy::class.java)
+            }
+        }
+        assertThat(testPolicy, `is`(notNullValue()))
+    }
+
     @ParameterizedTest
     @MethodSource("serializeActionMatcherProvider")
     fun serializeActionMatcher(actionMatcher: ActionMatcher) {
@@ -108,7 +118,7 @@ internal class CoSecJsonSerializerTest {
     @Test
     fun serializePolicySet() {
         val policySetType = object : TypeReference<Set<Policy>>() {}
-        val policySet = serializePolicyProvider().toList().toSet()
+        val policySet = serializePolicyProvider().toList()
         val output = CoSecJsonSerializer.writeValueAsString(policySet)
         val input = CoSecJsonSerializer.readValue(
             output,
@@ -252,8 +262,8 @@ internal class CoSecJsonSerializerTest {
                 StatementData(),
                 StatementData(
                     effect = Effect.DENY,
-                    actions = serializeActionMatcherProvider().toList().toSet(),
-                    conditions = serializeConditionMatcherProvider().toList().toSet()
+                    actions = serializeActionMatcherProvider().toList(),
+                    conditions = serializeConditionMatcherProvider().toList()
                 )
             )
         }
@@ -268,7 +278,7 @@ internal class CoSecJsonSerializerTest {
                     description = "",
                     type = PolicyType.CUSTOM,
                     tenantId = "1",
-                    statements = emptySet()
+                    statements = listOf()
                 ),
                 PolicyData(
                     id = "2",
@@ -277,7 +287,7 @@ internal class CoSecJsonSerializerTest {
                     description = "",
                     type = PolicyType.SYSTEM,
                     tenantId = "1",
-                    statements = serializeStatementProvider().toList().toSet()
+                    statements = serializeStatementProvider().toList()
                 )
             )
         }

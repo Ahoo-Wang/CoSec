@@ -19,7 +19,8 @@ import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Statement
 
 data class StatementData(
+    override val name: String = "",
     override val effect: Effect = Effect.ALLOW,
-    override val actions: Set<ActionMatcher> = emptySet(),
-    override val conditions: Set<ConditionMatcher> = emptySet()
+    override val actions: List<ActionMatcher> = listOf(),
+    override val conditions: List<ConditionMatcher> = listOf()
 ) : Statement

@@ -10,7 +10,9 @@ interface Named{
 package tenant{
     interface Tenant {
        val tenantId: String
-       val isPlatform: Boolean
+       val isPlatformTenant: Boolean
+       val isDefaultTenant: Boolean
+       val isUserTenant: Boolean
     }
     interface TenantCapable {
         val tenant: Tenant
@@ -52,6 +54,7 @@ package policy{
         IMPLICIT_DENY
     }
     interface Statement{
+        val name: String
         val effect: Effect
         val actions: Set<ActionMatcher>
         val conditions: Set<ConditionMatcher>

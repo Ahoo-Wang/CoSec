@@ -1,0 +1,95 @@
+{
+  "id": "id",
+  "name": "name",
+  "category": "category",
+  "description": "description",
+  "type": "global",
+  "tenantId": "tenantId",
+  "statements": [
+    {
+      "name": "Anonymous",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "path",
+          "pattern": "/auth/register"
+        },
+        {
+          "type": "path",
+          "pattern": "/auth/login"
+        }
+      ]
+    },
+    {
+      "name": "UserScope",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "path",
+          "pattern": "/user/#{principal.id}/*"
+        }
+      ],
+      "conditions": [
+        {
+          "type": "authenticated"
+        }
+      ]
+    },
+    {
+      "name": "Developer",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "type": "in",
+          "part": "context.principal.id",
+          "in": [
+            "developerId"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "RequestOriginDeny",
+      "effect": "deny",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "type": "reg",
+          "negate": true,
+          "part": "request.origin",
+          "pattern": "^(http|https)://github.com"
+        }
+      ]
+    },
+    {
+      "name": "IpBlacklist",
+      "effect": "deny",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "type": "path",
+          "part": "request.remoteIp",
+          "path": {
+            "caseSensitive": false,
+            "separator": ".",
+            "decodeAndParseSegments": false
+          },
+          "pattern": "192.168.0.*"
+        }
+      ]
+    }
+  ]
+}
