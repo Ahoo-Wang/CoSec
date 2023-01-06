@@ -23,12 +23,15 @@ data class ReactiveRequest(
     override val method: String,
     override val remoteIp: String,
     override val origin: String,
-    override val referer: String
+    override val referer: String,
+    override val attributes: Map<String, String> = mapOf()
 ) : Request,
     Delegated<ServerWebExchange> {
     override fun getHeader(key: String): String {
         return delegate.request.headers.getFirst(key).orEmpty()
     }
+
+    override fun withAttributes(attributes: Map<String, String>): Request = copy(attributes = attributes)
 
     override fun toString(): String {
         return "ReactiveRequest(path='$path', method='$method', remoteIp='$remoteIp', origin='$origin', referer='$referer')"

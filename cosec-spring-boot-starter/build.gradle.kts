@@ -35,6 +35,10 @@ java {
         usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
         capability(group.toString(), "cache-support", version.toString())
     }
+    registerFeature("ip2regionSupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "ip2region-support", version.toString())
+    }
     registerFeature("opentelemetrySupport") {
         usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
         capability(group.toString(), "opentelemetry-support", version.toString())
@@ -51,6 +55,7 @@ dependencies {
     "cacheSupportImplementation"(project(":cosec-redis"))
     "cacheSupportImplementation"("me.ahoo.cocache:cocache-spring-boot-starter")
     "opentelemetrySupportImplementation"(project(":cosec-opentelemetry"))
+    "ip2regionSupportImplementation"(project(":cosec-ip2region"))
     implementation("me.ahoo.cosid:cosid-spring-boot-starter")
     api("org.springframework.boot:spring-boot-starter")
     kapt("org.springframework.boot:spring-boot-configuration-processor")

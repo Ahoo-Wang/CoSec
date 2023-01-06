@@ -18,6 +18,7 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.servlet.AuthorizationFilter
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecCacheAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.cosid.IdGenerator
@@ -44,7 +45,8 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 CoSecCacheAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecJwtAutoConfiguration::class.java,
-                CoSecAuthorizationAutoConfiguration::class.java
+                Ip2RegionAutoConfiguration::class.java,
+                CoSecAuthorizationAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
                 assertThat(context)

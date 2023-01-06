@@ -35,6 +35,13 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
         override fun getHeader(key: String): String {
             return ""
         }
+
+        override val attributes: Map<String, String>
+            get() = mapOf()
+
+        override fun withAttributes(attributes: Map<String, String>): Request {
+            throw UnsupportedOperationException()
+        }
     }
     private val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
 

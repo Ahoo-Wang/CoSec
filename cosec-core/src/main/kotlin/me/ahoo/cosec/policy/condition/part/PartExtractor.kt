@@ -30,6 +30,7 @@ object RequestParts {
     const val ORIGIN = PREFIX + "origin"
     const val REFERER = PREFIX + "referer"
     const val HEADER_PREFIX = PREFIX + "header."
+    const val ATTRIBUTES_PREFIX = PREFIX + "attributes."
 }
 
 object SecurityContextParts {
@@ -55,6 +56,10 @@ data class DefaultPartExtractor(val part: String) : PartExtractor {
                 if (part.startsWith(RequestParts.HEADER_PREFIX)) {
                     val headerKey = part.substring(RequestParts.HEADER_PREFIX.length)
                     return request.getHeader(headerKey)
+                }
+                if (part.startsWith(RequestParts.ATTRIBUTES_PREFIX)) {
+                    val attributeKey = part.substring(RequestParts.ATTRIBUTES_PREFIX.length)
+                    return request.attributes[attributeKey].orEmpty()
                 }
                 if (part.startsWith(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX)) {
                     val headerKey = part.substring(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX.length)
