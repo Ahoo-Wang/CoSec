@@ -47,6 +47,8 @@ RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
 
 [Policy Schema](document/cosec-policy.schema.json)
 
+> Policy Demo
+
 ```json
 {
   "id": "id",

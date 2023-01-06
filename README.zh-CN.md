@@ -47,6 +47,8 @@
 
 [Policy Schema](document/cosec-policy.schema.json)
 
+> 策略 Demo
+
 ```json
 {
   "id": "id",
