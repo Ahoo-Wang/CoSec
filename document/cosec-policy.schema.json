@@ -211,6 +211,10 @@
     "statement": {
       "type": "object",
       "properties": {
+        "name": {
+          "description": "The name of the Statement",
+          "type": "string"
+        },
         "effect": {
           "$ref": "#/definitions/effect"
         },

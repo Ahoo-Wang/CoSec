@@ -65,10 +65,10 @@ internal class SimpleAuthorizationTest {
     fun authorizeWhenGlobalPolicyIsAllowAll() {
         val globalPolicy = mockk<Policy>() {
             every { id } returns "globalPolicy"
-            every { statements } returns setOf(
+            every { statements } returns listOf(
                 StatementData(
                     effect = Effect.ALLOW,
-                    actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
+                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
                 )
             )
         }
@@ -91,10 +91,10 @@ internal class SimpleAuthorizationTest {
     fun authorizeWhenGlobalPolicyIsDenyAll() {
         val globalPolicy = mockk<Policy>() {
             every { id } returns "globalPolicy"
-            every { statements } returns setOf(
+            every { statements } returns listOf(
                 StatementData(
                     effect = Effect.DENY,
-                    actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
+                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
                 )
             )
         }
@@ -116,10 +116,10 @@ internal class SimpleAuthorizationTest {
     fun authorizeWhenGlobalPolicyIsEmptyAndPrincipalIsAllowAll() {
         val principalPolicy = mockk<Policy>() {
             every { id } returns "policyId"
-            every { statements } returns setOf(
+            every { statements } returns listOf(
                 StatementData(
                     effect = Effect.ALLOW,
-                    actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
+                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
                 )
             )
         }
@@ -147,10 +147,10 @@ internal class SimpleAuthorizationTest {
     fun authorizeWhenGlobalPolicyIsEmptyAndPrincipalIsDenyAll() {
         val principalPolicy = mockk<Policy>() {
             every { id } returns "policyId"
-            every { statements } returns setOf(
+            every { statements } returns listOf(
                 StatementData(
                     effect = Effect.DENY,
-                    actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
+                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
                 )
             )
         }
@@ -178,10 +178,10 @@ internal class SimpleAuthorizationTest {
     fun authorizeWhenGlobalAndPrincipalPolicyIsEmptyAndRoleIsAllowAll() {
         val rolePolicy = mockk<Policy>() {
             every { id } returns "policyId"
-            every { statements } returns setOf(
+            every { statements } returns listOf(
                 StatementData(
                     effect = Effect.ALLOW,
-                    actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
+                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
                 )
             )
         }
@@ -210,10 +210,10 @@ internal class SimpleAuthorizationTest {
     fun authorizeWhenGlobalAndPrincipalPolicyIsEmptyAndRoleIsDenyAll() {
         val rolePolicy = mockk<Policy>() {
             every { id } returns "policyId"
-            every { statements } returns setOf(
+            every { statements } returns listOf(
                 StatementData(
                     effect = Effect.DENY,
-                    actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
+                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
                 )
             )
         }

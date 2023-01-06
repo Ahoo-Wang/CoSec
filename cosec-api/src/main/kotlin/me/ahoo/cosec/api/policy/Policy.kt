@@ -24,5 +24,5 @@ interface Policy : Named, Tenant {
     val category: String
     val description: String
     val type: PolicyType
-    val statements: Set<Statement>
+    val statements: List<Statement>
 }

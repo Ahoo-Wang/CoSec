@@ -33,13 +33,17 @@ internal class StatementDataTest {
     @Test
     fun verifyDefault() {
         val statementData = StatementData()
+        assertThat(statementData.name, equalTo(""))
+        assertThat(statementData.effect, equalTo(Effect.ALLOW))
+        assertThat(statementData.actions, equalTo(listOf()))
+        assertThat(statementData.conditions, equalTo(listOf()))
         assertThat(statementData.verify(mockk(), mockk()), `is`(VerifyResult.IMPLICIT_DENY))
     }
 
     @Test
     fun verify() {
         val statementData = StatementData(
-            actions = setOf(
+            actions = listOf(
                 PathActionMatcherFactory().create(
                     mapOf(
                         MATCHER_PATTERN_KEY to "auth/*"
@@ -56,14 +60,14 @@ internal class StatementDataTest {
     @Test
     fun verifyWithCondition() {
         val statementData = StatementData(
-            actions = setOf(
+            actions = listOf(
                 PathActionMatcherFactory().create(
                     mapOf(
                         MATCHER_PATTERN_KEY to "order/#{principal.id}/*"
                     ).asConfiguration()
                 )
             ),
-            conditions = setOf(
+            conditions = listOf(
                 SpelConditionMatcherFactory().create(
                     mapOf(
                         MATCHER_PATTERN_KEY to "context.principal.authenticated()"
@@ -95,7 +99,7 @@ internal class StatementDataTest {
     fun verifyDeny() {
         val statementData = StatementData(
             effect = Effect.DENY,
-            actions = setOf(AllActionMatcher(JsonConfiguration.EMPTY))
+            actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
         )
         assertThat(statementData.verify(mockk(), mockk()), `is`(VerifyResult.EXPLICIT_DENY))
     }

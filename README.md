@@ -49,95 +49,100 @@ RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
 
 ```json
 {
-  "id": "2",
-  "name": "auth",
-  "category": "auth",
-  "description": "",
+  "id": "id",
+  "name": "name",
+  "category": "category",
+  "description": "description",
   "type": "global",
-  "tenantId": "1",
+  "tenantId": "tenantId",
   "statements": [
     {
+      "name": "Anonymous",
       "effect": "allow",
       "actions": [
         {
-          "type": "all"
-        },
-        {
-          "type": "none"
+          "type": "path",
+          "pattern": "/auth/register"
         },
         {
           "type": "path",
-          "methods": [
-            "GET",
-            "POST",
-            "PUT",
-            "DELETE"
-          ],
-          "pattern": "/user/{userId}/*"
+          "pattern": "/auth/login"
+        }
+      ]
+    },
+    {
+      "name": "UserScope",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "path",
+          "pattern": "/user/#{principal.id}/*"
         }
       ],
       "conditions": [
         {
           "type": "authenticated"
-        },
+        }
+      ]
+    },
+    {
+      "name": "Developer",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "conditions": [
         {
           "type": "in",
           "part": "context.principal.id",
           "in": [
-            "userId"
+            "developerId"
           ]
         }
       ]
     },
     {
+      "name": "RequestOriginDeny",
       "effect": "deny",
       "actions": [
         {
-          "type": "all",
-          "methods": [
-            "GET"
-          ]
-        },
-        {
-          "type": "none"
-        },
-        {
-          "type": "path",
-          "pattern": ".*"
-        },
-        {
-          "type": "path",
-          "pattern": "#{principal.id}.*"
-        },
-        {
-          "type": "reg",
-          "pattern": ".*"
-        },
-        {
-          "type": "reg",
-          "pattern": "#{principal.id}.*"
+          "type": "all"
         }
       ],
       "conditions": [
         {
+          "type": "reg",
+          "negate": true,
+          "part": "request.origin",
+          "pattern": "^(http|https)://github.com"
+        }
+      ]
+    },
+    {
+      "name": "IpBlacklist",
+      "effect": "deny",
+      "actions": [
+        {
           "type": "all"
-        },
+        }
+      ],
+      "conditions": [
         {
-          "type": "none"
-        },
-        {
-          "type": "spel",
-          "pattern": "context.principal.id=='1'"
-        },
-        {
-          "type": "ognl",
-          "pattern": "path == \"auth/login\""
+          "type": "path",
+          "part": "request.remoteIp",
+          "path": {
+            "caseSensitive": false,
+            "separator": ".",
+            "decodeAndParseSegments": false
+          },
+          "pattern": "192.168.0.*"
         }
       ]
     }
   ]
 }
-
 ```
 
 ## Thanks

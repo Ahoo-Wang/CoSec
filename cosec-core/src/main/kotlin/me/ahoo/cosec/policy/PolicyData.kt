@@ -17,12 +17,31 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
 
-data class PolicyData(
+class PolicyData(
     override val id: String,
     override val category: String,
     override val name: String,
     override val description: String,
     override val type: PolicyType,
     override val tenantId: String,
-    override val statements: Set<Statement> = emptySet()
-) : Policy
+    override val statements: List<Statement> = listOf()
+) : Policy {
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as PolicyData
+
+        if (id != other.id) return false
+        if (tenantId != other.tenantId) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = id.hashCode()
+        result = 31 * result + tenantId.hashCode()
+        return result
+    }
+}

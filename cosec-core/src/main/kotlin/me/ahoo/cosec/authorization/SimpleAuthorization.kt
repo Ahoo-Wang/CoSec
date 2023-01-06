@@ -39,11 +39,13 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
         policies.forEach { policy: Policy ->
             policy.statements.filter { statement: Statement ->
                 statement.effect == Effect.DENY
-            }.forEach { statement: Statement ->
+            }.forEachIndexed { index, statement ->
                 val verifyResult = statement.verify(request, context)
                 if (verifyResult == VerifyResult.EXPLICIT_DENY) {
                     if (log.isDebugEnabled) {
-                        log.debug("Verify [$request] [$context] matched Policy[${policy.id}] - [Explicit Deny].")
+                        log.debug(
+                            "Verify [$request] [$context] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Explicit Deny]."
+                        )
                     }
                     return VerifyResult.EXPLICIT_DENY
                 }
@@ -53,11 +55,13 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
         policies.forEach { policy: Policy ->
             policy.statements.filter { statement: Statement ->
                 statement.effect == Effect.ALLOW
-            }.forEach { statement: Statement ->
+            }.forEachIndexed { index, statement ->
                 val verifyResult = statement.verify(request, context)
                 if (verifyResult == VerifyResult.ALLOW) {
                     if (log.isDebugEnabled) {
-                        log.debug("Verify [$request] [$context] matched Policy[${policy.id}] - [Allow].")
+                        log.debug(
+                            "Verify [$request] [$context] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Allow]."
+                        )
                     }
                     return VerifyResult.ALLOW
                 }
