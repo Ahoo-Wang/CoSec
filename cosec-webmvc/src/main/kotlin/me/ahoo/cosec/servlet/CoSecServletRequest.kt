@@ -23,11 +23,14 @@ data class CoSecServletRequest(
     override val method: String,
     override val remoteIp: String,
     override val origin: String,
-    override val referer: String
+    override val referer: String,
+    override val attributes: Map<String, String> = mapOf()
 ) : Request, Delegated<HttpServletRequest> {
     override fun getHeader(key: String): String {
         return delegate.getHeader(key).orEmpty()
     }
+
+    override fun withAttributes(attributes: Map<String, String>): Request = copy(attributes = attributes)
 
     override fun toString(): String {
         return "CoSecServletRequest(path='$path', method='$method', remoteIp='$remoteIp', origin='$origin', referer='$referer')"

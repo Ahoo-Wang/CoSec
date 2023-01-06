@@ -16,15 +16,10 @@ package me.ahoo.cosec.api.context
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.tenant.TenantCapable
 
-interface SecurityContext : TenantCapable {
+interface SecurityContext : TenantCapable, Attributes<SecurityContext, String, Any> {
     companion object {
         const val KEY = "COSEC_SECURITY_CONTEXT"
     }
 
     val principal: CoSecPrincipal
-    fun setAttribute(key: String, value: Any): SecurityContext
-    fun <T> getAttribute(key: String): T?
-    fun <T> getRequiredAttribute(key: String): T {
-        return requireNotNull(value = getAttribute(key)) { "The required attribute:$key is not found." }
-    }
 }

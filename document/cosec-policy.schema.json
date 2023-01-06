@@ -101,6 +101,8 @@
         "request.origin",
         "request.referer",
         "request.header.",
+        "request.attributes.",
+        "request.attributes.ipRegion",
         "context.tenantId",
         "context.principal.id",
         "context.principal.attributes."

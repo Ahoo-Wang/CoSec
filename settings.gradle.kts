@@ -26,6 +26,7 @@ include(":cosec-spring-boot-starter")
 include(":cosec-gateway")
 include(":cosec-gateway-server")
 include(":cosec-opentelemetry")
+include(":cosec-ip2region")
 
 buildscript {
     repositories {
@@ -36,3 +37,4 @@ buildscript {
         classpath("io.github.gradle-nexus:publish-plugin:1.1.0")
     }
 }
+

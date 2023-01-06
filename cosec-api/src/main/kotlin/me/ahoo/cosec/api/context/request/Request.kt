@@ -13,12 +13,13 @@
 
 package me.ahoo.cosec.api.context.request
 
-interface Request {
+import me.ahoo.cosec.api.context.Attributes
+
+interface Request : Attributes<Request, String, String> {
     val path: String
     val method: String
     val remoteIp: String
     val origin: String
     val referer: String
-
     fun getHeader(key: String): String
 }

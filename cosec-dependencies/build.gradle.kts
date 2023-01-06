@@ -22,6 +22,7 @@ dependencies {
     constraints {
         api("ognl:ognl:3.3.4")
         api("com.auth0:java-jwt:4.2.1")
+        api("org.lionsoul:ip2region:2.6.6")
         api("com.google.guava:guava:31.1-jre")
         api("io.opentelemetry:opentelemetry-semconv:1.20.1-alpha")
         api("org.junit-pioneer:junit-pioneer:1.9.1")

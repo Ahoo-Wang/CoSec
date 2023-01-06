@@ -63,6 +63,7 @@ dependencies {
     implementation(project(":cosec-gateway"))
     implementation(project(":cosec-opentelemetry"))
     implementation(project(":cosec-spring-boot-starter"))
+    implementation(project(":cosec-ip2region"))
     implementation("me.ahoo.cocache:cocache-spring-boot-starter")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("me.ahoo.cosid:cosid-spring-redis")

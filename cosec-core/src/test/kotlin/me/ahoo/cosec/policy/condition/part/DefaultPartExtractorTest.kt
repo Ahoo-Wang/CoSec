@@ -95,6 +95,22 @@ class DefaultPartExtractorTest {
     }
 
     @Test
+    fun extractRequestAttributes() {
+        val request: Request = mockk {
+            every { attributes["key"] } returns "value"
+            every { attributes["not_exist"] } returns null
+        }
+        assertThat(
+            DefaultPartExtractor(RequestParts.ATTRIBUTES_PREFIX + "key").extract(request, mockk()),
+            equalTo("value")
+        )
+        assertThat(
+            DefaultPartExtractor(RequestParts.ATTRIBUTES_PREFIX + "not_exist").extract(request, mockk()),
+            equalTo("")
+        )
+    }
+
+    @Test
     fun extractContextPrincipalAttributes() {
         val context: SecurityContext = mockk {
             every { principal.attributes["key"] } returns "value"
@@ -105,7 +121,10 @@ class DefaultPartExtractorTest {
             equalTo("value")
         )
         assertThat(
-            DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX + "not_exist").extract(mockk(), context),
+            DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX + "not_exist").extract(
+                mockk(),
+                context
+            ),
             equalTo("")
         )
     }

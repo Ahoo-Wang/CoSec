@@ -17,6 +17,7 @@ import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RemoteIpResolver
+import me.ahoo.cosec.context.request.RequestAttributesAppender
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.servlet.AuthorizationFilter
 import me.ahoo.cosec.servlet.ServletRequestParser
@@ -28,6 +29,7 @@ import me.ahoo.cosec.webflux.ReactiveAuthorizationFilter
 import me.ahoo.cosec.webflux.ReactiveRequestParser
 import me.ahoo.cosec.webflux.ReactiveSecurityContextParser
 import me.ahoo.cosec.webflux.ReactiveXForwardedRemoteIpResolver
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -82,9 +84,10 @@ class CoSecAuthorizationAutoConfiguration {
         @Bean(SERVLET_REQUEST_PARSER_BEAN_NAME)
         @ConditionalOnMissingBean(name = [SERVLET_REQUEST_PARSER_BEAN_NAME])
         fun servletRequestParser(
-            servletRemoteIpResolver: RemoteIpResolver<HttpServletRequest>
+            servletRemoteIpResolver: RemoteIpResolver<HttpServletRequest>,
+            requestAttributesAppenderObjectProvider: ObjectProvider<RequestAttributesAppender>
         ): RequestParser<HttpServletRequest> {
-            return ServletRequestParser(servletRemoteIpResolver)
+            return ServletRequestParser(servletRemoteIpResolver, requestAttributesAppenderObjectProvider.toList())
         }
 
         @Bean(SERVLET_SECURITY_CONTEXT_PARSER_BEAN_NAME)
@@ -119,9 +122,10 @@ class CoSecAuthorizationAutoConfiguration {
         @Bean(REACTIVE_REQUEST_PARSER_BEAN_NAME)
         @ConditionalOnMissingBean(name = [REACTIVE_REQUEST_PARSER_BEAN_NAME])
         fun reactiveRequestParser(
-            reactiveRemoteIpResolver: RemoteIpResolver<ServerWebExchange>
+            reactiveRemoteIpResolver: RemoteIpResolver<ServerWebExchange>,
+            requestAttributesAppenderObjectProvider: ObjectProvider<RequestAttributesAppender>
         ): RequestParser<ServerWebExchange> {
-            return ReactiveRequestParser(reactiveRemoteIpResolver)
+            return ReactiveRequestParser(reactiveRemoteIpResolver, requestAttributesAppenderObjectProvider.toList())
         }
 
         @Bean(REACTIVE_SECURITY_CONTEXT_PARSER_BEAN_NAME)
