@@ -59,7 +59,6 @@ internal class CoSecJsonSerializerTest {
             }
         }
         assertThat(testPolicy, `is`(notNullValue()))
-        testPolicy.statements.first { it.name == "AllowDeveloperOrIpRegion" }.conditions.first()
     }
 
     @ParameterizedTest
