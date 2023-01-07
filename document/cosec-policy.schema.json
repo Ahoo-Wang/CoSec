@@ -77,6 +77,22 @@
         "TRACE"
       ]
     },
+    "boolCondition": {
+      "properties": {
+        "and": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/conditionMatcher"
+          }
+        },
+        "or": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/conditionMatcher"
+          }
+        }
+      }
+    },
     "conditionType": {
       "enum": [
         "all",
@@ -90,7 +106,8 @@
         "reg",
         "path",
         "spel",
-        "ognl"
+        "ognl",
+        "bool"
       ]
     },
     "part": {
@@ -204,6 +221,9 @@
         },
         "in": {
           "type": "array"
+        },
+        "bool": {
+          "$ref": "#/definitions/boolCondition"
         }
       },
       "required": [

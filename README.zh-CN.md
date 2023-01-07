@@ -159,9 +159,50 @@
           "pattern": "^中国\\|0\\|(上海|广东省)\\|.*"
         }
       ]
+    },
+    {
+      "name": "AllowDeveloperOrIpRange",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "conditions": [
+        {
+          "type": "bool",
+          "bool": {
+            "and": [
+              {
+                "type": "authenticated"
+              }
+            ],
+            "or": [
+              {
+                "type": "in",
+                "part": "context.principal.id",
+                "in": [
+                  "developerId"
+                ]
+              },
+              {
+                "type": "path",
+                "part": "request.remoteIp",
+                "path": {
+                  "caseSensitive": false,
+                  "separator": ".",
+                  "decodeAndParseSegments": false
+                },
+                "pattern": "192.168.0.*"
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }
+
 ```
 
 ## 感谢

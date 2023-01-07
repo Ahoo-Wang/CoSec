@@ -25,10 +25,11 @@ class PathConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(PathConditionMatcherFactory.TYPE, configuration) {
     override val type: String
         get() = PathConditionMatcherFactory.TYPE
-    private val pathPattern: PathPattern = configuration.asPathPatternParser().parse(configuration.getMatcherPattern())
+    private val patternParser = configuration.asPathPatternParser()
+    private val pathPattern: PathPattern = patternParser.parse(configuration.getMatcherPattern())
 
     override fun matchPart(partValue: String): Boolean {
-        PathContainer.parsePath(partValue).let {
+        PathContainer.parsePath(partValue, patternParser.pathOptions).let {
             return pathPattern.matches(it)
         }
     }
