@@ -81,11 +81,9 @@
           "pattern": "/user/#{principal.id}/*"
         }
       ],
-      "conditions": [
-        {
-          "type": "authenticated"
-        }
-      ]
+      "condition": {
+        "type": "authenticated"
+      }
     },
     {
       "name": "Developer",
@@ -95,15 +93,13 @@
           "type": "all"
         }
       ],
-      "conditions": [
-        {
-          "type": "in",
-          "part": "context.principal.id",
-          "in": [
-            "developerId"
-          ]
-        }
-      ]
+      "condition": {
+        "type": "in",
+        "part": "context.principal.id",
+        "in": [
+          "developerId"
+        ]
+      }
     },
     {
       "name": "RequestOriginDeny",
@@ -113,14 +109,12 @@
           "type": "all"
         }
       ],
-      "conditions": [
-        {
-          "type": "reg",
-          "negate": true,
-          "part": "request.origin",
-          "pattern": "^(http|https)://github.com"
-        }
-      ]
+      "condition": {
+        "type": "reg",
+        "negate": true,
+        "part": "request.origin",
+        "pattern": "^(http|https)://github.com"
+      }
     },
     {
       "name": "IpBlacklist",
@@ -130,18 +124,16 @@
           "type": "all"
         }
       ],
-      "conditions": [
-        {
-          "type": "path",
-          "part": "request.remoteIp",
-          "path": {
-            "caseSensitive": false,
-            "separator": ".",
-            "decodeAndParseSegments": false
-          },
-          "pattern": "192.168.0.*"
-        }
-      ]
+      "condition": {
+        "type": "path",
+        "part": "request.remoteIp",
+        "path": {
+          "caseSensitive": false,
+          "separator": ".",
+          "decodeAndParseSegments": false
+        },
+        "pattern": "192.168.0.*"
+      }
     },
     {
       "name": "RegionWhitelist",
@@ -151,14 +143,12 @@
           "type": "all"
         }
       ],
-      "conditions": [
-        {
-          "negate": true,
-          "type": "reg",
-          "part": "request.attributes.ipRegion",
-          "pattern": "^中国\\|0\\|(上海|广东省)\\|.*"
-        }
-      ]
+      "condition": {
+        "negate": true,
+        "type": "reg",
+        "part": "request.attributes.ipRegion",
+        "pattern": "^中国\\|0\\|(上海|广东省)\\|.*"
+      }
     },
     {
       "name": "AllowDeveloperOrIpRange",
@@ -168,37 +158,35 @@
           "type": "all"
         }
       ],
-      "conditions": [
-        {
-          "type": "bool",
-          "bool": {
-            "and": [
-              {
-                "type": "authenticated"
-              }
-            ],
-            "or": [
-              {
-                "type": "in",
-                "part": "context.principal.id",
-                "in": [
-                  "developerId"
-                ]
+      "condition": {
+        "type": "bool",
+        "bool": {
+          "and": [
+            {
+              "type": "authenticated"
+            }
+          ],
+          "or": [
+            {
+              "type": "in",
+              "part": "context.principal.id",
+              "in": [
+                "developerId"
+              ]
+            },
+            {
+              "type": "path",
+              "part": "request.remoteIp",
+              "path": {
+                "caseSensitive": false,
+                "separator": ".",
+                "decodeAndParseSegments": false
               },
-              {
-                "type": "path",
-                "part": "request.remoteIp",
-                "path": {
-                  "caseSensitive": false,
-                  "separator": ".",
-                  "decodeAndParseSegments": false
-                },
-                "pattern": "192.168.0.*"
-              }
-            ]
-          }
+              "pattern": "192.168.0.*"
+            }
+          ]
         }
-      ]
+      }
     }
   ]
 }

@@ -23,6 +23,7 @@ import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.action.PathActionMatcherFactory
+import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.policy.condition.SpelConditionMatcherFactory
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
@@ -36,7 +37,7 @@ internal class StatementDataTest {
         assertThat(statementData.name, equalTo(""))
         assertThat(statementData.effect, equalTo(Effect.ALLOW))
         assertThat(statementData.actions, equalTo(listOf()))
-        assertThat(statementData.conditions, equalTo(listOf()))
+        assertThat(statementData.condition, instanceOf(AllConditionMatcher::class.java))
         assertThat(statementData.verify(mockk(), mockk()), `is`(VerifyResult.IMPLICIT_DENY))
     }
 
@@ -67,12 +68,10 @@ internal class StatementDataTest {
                     ).asConfiguration()
                 )
             ),
-            conditions = listOf(
-                SpelConditionMatcherFactory().create(
-                    mapOf(
-                        MATCHER_PATTERN_KEY to "context.principal.authenticated()"
-                    ).asConfiguration()
-                )
+            condition = SpelConditionMatcherFactory().create(
+                mapOf(
+                    MATCHER_PATTERN_KEY to "context.principal.authenticated()"
+                ).asConfiguration()
             )
         )
         val request = mockk<Request> {

@@ -53,9 +53,7 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
                 it.match(mockRequest, mockContext)
             }
 
-            statement.conditions.forEach {
-                it.match(mockRequest, mockContext)
-            }
+            statement.condition.match(mockRequest, mockContext)
         }
     }
 }
