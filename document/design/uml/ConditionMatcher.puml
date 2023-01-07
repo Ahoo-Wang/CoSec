@@ -29,6 +29,7 @@ class OgnlConditionMatcher
 class PathConditionMatcher
 class RegularConditionMatcher
 class SpelConditionMatcher
+class BoolConditionMatcher
 
 RequestMatcher <|-- ConditionMatcher
 ConditionMatcher <|-- AbstractConditionMatcher
@@ -45,4 +46,5 @@ AbstractConditionMatcher <|-- InUserTenantConditionMatcher
 AbstractConditionMatcher <|-- NoneConditionMatcher
 AbstractConditionMatcher <|-- AllConditionMatcher
 AbstractConditionMatcher <|-- InPlatformTenantConditionMatcher
+AbstractConditionMatcher <|-- BoolConditionMatcher
 @enduml
