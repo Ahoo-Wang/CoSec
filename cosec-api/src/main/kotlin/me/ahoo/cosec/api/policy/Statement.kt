@@ -24,10 +24,10 @@ interface Statement : Named, PermissionVerifier {
     val conditions: List<ConditionMatcher>
 
     override fun verify(request: Request, securityContext: SecurityContext): VerifyResult {
-        conditions.all {
-            it.match(request, securityContext)
-        }.let { allMatched ->
-            if (!allMatched) {
+        conditions.any {
+            !it.match(request, securityContext)
+        }.let { anyNotMatched ->
+            if (anyNotMatched) {
                 return VerifyResult.IMPLICIT_DENY
             }
         }

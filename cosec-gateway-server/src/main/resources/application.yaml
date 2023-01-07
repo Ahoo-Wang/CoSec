@@ -48,7 +48,8 @@ cosec:
   jwt:
     algorithm: hmac256
     secret: FyN0Igd80Gas8stTavArGKOYnS9uLWGA_
-
+  ip2region:
+    enabled: false
 logging:
   level:
     root: info
