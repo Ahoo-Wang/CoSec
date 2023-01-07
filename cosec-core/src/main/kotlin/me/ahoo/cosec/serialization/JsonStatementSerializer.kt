@@ -25,10 +25,12 @@ import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.policy.StatementData
+import me.ahoo.cosec.policy.condition.AllConditionMatcher
 
 const val STATEMENT_NAME = "name"
 const val STATEMENT_EFFECT_KEY = "effect"
 const val STATEMENT_ACTIONS_KEY = "actions"
+const val STATEMENT_CONDITION_KEY = "condition"
 const val STATEMENT_CONDITIONS_KEY = "conditions"
 
 object JsonStatementSerializer : StdSerializer<Statement>(Statement::class.java) {
@@ -43,6 +45,7 @@ object JsonStatementSerializer : StdSerializer<Statement>(Statement::class.java)
             }
             gen.writeEndArray()
         }
+        gen.writePOJOField(STATEMENT_CONDITION_KEY, value.condition)
         if (value.conditions.isNotEmpty()) {
             gen.writeArrayFieldStart(STATEMENT_CONDITIONS_KEY)
             value.conditions.forEach {
@@ -60,7 +63,9 @@ object JsonStatementDeserializer : StdDeserializer<Statement>(Statement::class.j
         val actions = jsonNode.get(STATEMENT_ACTIONS_KEY)?.map {
             it.traverse(p.codec).readValueAs(ActionMatcher::class.java)
         }.orEmpty()
-
+        val condition =
+            jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.codec)?.readValueAs(ConditionMatcher::class.java)
+                ?: AllConditionMatcher.INSTANCE
         val conditions = jsonNode.get(STATEMENT_CONDITIONS_KEY)?.map {
             it.traverse(p.codec).readValueAs(ConditionMatcher::class.java)
         }.orEmpty()
@@ -71,6 +76,7 @@ object JsonStatementDeserializer : StdDeserializer<Statement>(Statement::class.j
                 "$STATEMENT_EFFECT_KEY is required!"
             }.traverse(p.codec).readValueAs(Effect::class.java),
             actions = actions,
+            condition = condition,
             conditions = conditions
         )
     }

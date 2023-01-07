@@ -21,9 +21,13 @@ interface Statement : Named, PermissionVerifier {
     override val name: String
     val effect: Effect
     val actions: List<ActionMatcher>
+    val condition: ConditionMatcher
     val conditions: List<ConditionMatcher>
 
     override fun verify(request: Request, securityContext: SecurityContext): VerifyResult {
+        if (!condition.match(request, securityContext)) {
+            return VerifyResult.IMPLICIT_DENY
+        }
         conditions.any {
             !it.match(request, securityContext)
         }.let { anyNotMatched ->
@@ -31,7 +35,6 @@ interface Statement : Named, PermissionVerifier {
                 return VerifyResult.IMPLICIT_DENY
             }
         }
-
         actions.any {
             it.match(request, securityContext)
         }.let { anyMatched ->

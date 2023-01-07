@@ -17,10 +17,12 @@ import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.policy.condition.AllConditionMatcher
 
 data class StatementData(
     override val name: String = "",
     override val effect: Effect = Effect.ALLOW,
     override val actions: List<ActionMatcher> = listOf(),
-    override val conditions: List<ConditionMatcher> = listOf()
+    override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
+    override val conditions: List<ConditionMatcher> = listOf(),
 ) : Statement
