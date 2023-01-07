@@ -23,9 +23,10 @@ import org.springframework.http.server.PathContainer
 
 class PathActionMatcher(configuration: Configuration) :
     AbstractActionMatcher(PathActionMatcherFactory.TYPE, configuration) {
-    private val pathPattern = configuration.asPathPatternParser().parse(configuration.getMatcherPattern())
+    private val patternParser = configuration.asPathPatternParser()
+    private val pathPattern = patternParser.parse(configuration.getMatcherPattern())
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        PathContainer.parsePath(request.path).let {
+        PathContainer.parsePath(request.path, patternParser.pathOptions).let {
             return pathPattern.matches(it)
         }
     }
