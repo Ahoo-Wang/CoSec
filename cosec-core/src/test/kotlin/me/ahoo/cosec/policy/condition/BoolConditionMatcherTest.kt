@@ -112,7 +112,7 @@ class BoolConditionMatcherTest {
             }
         }
 
-        val conditionMatcher = testPolicy.statements.first { it.name == "AllowDeveloperOrIpRange" }.conditions.first()
+        val conditionMatcher = testPolicy.statements.first { it.name == "AllowDeveloperOrIpRange" }.condition
         assertThat(conditionMatcher, instanceOf(BoolConditionMatcher::class.java))
         val developerId = "developerId"
         val matchedContext: SecurityContext = mockk {

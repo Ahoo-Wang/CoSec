@@ -247,6 +247,9 @@
             "minItems": 1
           }
         },
+        "condition": {
+          "$ref": "#/definitions/conditionMatcher"
+        },
         "conditions": {
           "type": "array",
           "items": {
