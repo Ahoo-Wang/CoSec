@@ -249,12 +249,6 @@
         },
         "condition": {
           "$ref": "#/definitions/conditionMatcher"
-        },
-        "conditions": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/conditionMatcher"
-          }
         }
       }
     }

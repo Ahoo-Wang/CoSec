@@ -31,7 +31,6 @@ const val STATEMENT_NAME = "name"
 const val STATEMENT_EFFECT_KEY = "effect"
 const val STATEMENT_ACTIONS_KEY = "actions"
 const val STATEMENT_CONDITION_KEY = "condition"
-const val STATEMENT_CONDITIONS_KEY = "conditions"
 
 object JsonStatementSerializer : StdSerializer<Statement>(Statement::class.java) {
     override fun serialize(value: Statement, gen: JsonGenerator, provider: SerializerProvider) {
@@ -46,13 +45,6 @@ object JsonStatementSerializer : StdSerializer<Statement>(Statement::class.java)
             gen.writeEndArray()
         }
         gen.writePOJOField(STATEMENT_CONDITION_KEY, value.condition)
-        if (value.conditions.isNotEmpty()) {
-            gen.writeArrayFieldStart(STATEMENT_CONDITIONS_KEY)
-            value.conditions.forEach {
-                gen.writeObject(it)
-            }
-            gen.writeEndArray()
-        }
         gen.writeEndObject()
     }
 }
@@ -66,9 +58,6 @@ object JsonStatementDeserializer : StdDeserializer<Statement>(Statement::class.j
         val condition =
             jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.codec)?.readValueAs(ConditionMatcher::class.java)
                 ?: AllConditionMatcher.INSTANCE
-        val conditions = jsonNode.get(STATEMENT_CONDITIONS_KEY)?.map {
-            it.traverse(p.codec).readValueAs(ConditionMatcher::class.java)
-        }.orEmpty()
 
         return StatementData(
             name = jsonNode.get(STATEMENT_NAME)?.asText().orEmpty(),
@@ -77,7 +66,6 @@ object JsonStatementDeserializer : StdDeserializer<Statement>(Statement::class.j
             }.traverse(p.codec).readValueAs(Effect::class.java),
             actions = actions,
             condition = condition,
-            conditions = conditions
         )
     }
 }

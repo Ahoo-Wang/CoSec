@@ -23,6 +23,5 @@ data class StatementData(
     override val name: String = "",
     override val effect: Effect = Effect.ALLOW,
     override val actions: List<ActionMatcher> = listOf(),
-    override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
-    override val conditions: List<ConditionMatcher> = listOf(),
+    override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE
 ) : Statement

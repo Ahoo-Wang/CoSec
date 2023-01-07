@@ -57,7 +57,7 @@ package policy{
         val name: String
         val effect: Effect
         val actions: Set<ActionMatcher>
-        val conditions: Set<ConditionMatcher>
+        val condition: ConditionMatcher
     }
 
     interface PermissionVerifier {
