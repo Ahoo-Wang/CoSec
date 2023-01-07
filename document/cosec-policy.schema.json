@@ -223,7 +223,8 @@
         "actions": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/actionMatcher"
+            "$ref": "#/definitions/actionMatcher",
+            "minItems": 1
           }
         },
         "conditions": {
