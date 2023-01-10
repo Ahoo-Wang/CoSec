@@ -20,7 +20,11 @@ import me.ahoo.cosec.api.policy.ConditionMatcher
 
 const val CONDITION_MATCHER_NEGATE_KEY = "negate"
 
-abstract class AbstractConditionMatcher(final override val configuration: Configuration) : ConditionMatcher {
+abstract class AbstractConditionMatcher(
+    final override val type: String,
+    final override val configuration: Configuration,
+) :
+    ConditionMatcher {
     protected val negate: Boolean = configuration.get(CONDITION_MATCHER_NEGATE_KEY)?.asBoolean() ?: false
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {

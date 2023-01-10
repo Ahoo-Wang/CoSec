@@ -20,9 +20,8 @@ import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.AbstractConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
-class InDefaultTenantConditionMatcher(configuration: Configuration) : AbstractConditionMatcher(configuration) {
-    override val type: String
-        get() = InDefaultTenantConditionMatcherFactory.TYPE
+class InDefaultTenantConditionMatcher(configuration: Configuration) :
+    AbstractConditionMatcher(InDefaultTenantConditionMatcherFactory.TYPE, configuration) {
 
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         return securityContext.tenant.isDefaultTenant

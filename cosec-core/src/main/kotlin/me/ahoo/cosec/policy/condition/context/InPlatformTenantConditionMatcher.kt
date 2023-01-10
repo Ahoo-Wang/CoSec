@@ -20,9 +20,8 @@ import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.AbstractConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
-class InPlatformTenantConditionMatcher(configuration: Configuration) : AbstractConditionMatcher(configuration) {
-    override val type: String
-        get() = InPlatformTenantConditionMatcherFactory.TYPE
+class InPlatformTenantConditionMatcher(configuration: Configuration) :
+    AbstractConditionMatcher(InPlatformTenantConditionMatcherFactory.TYPE, configuration) {
 
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         return securityContext.tenant.isPlatformTenant

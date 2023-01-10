@@ -58,8 +58,6 @@ class CustomActionMatcherFactory : ActionMatcherFactory {
 }
 class CustomActionMatcher(configuration: Configuration) :
     AbstractActionMatcher(CustomActionMatcherFactory.TYPE, configuration) {
-    override val type: String
-        get() = CustomActionMatcherFactory.TYPE
 
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         //Custom matching logic
@@ -96,8 +94,6 @@ class CustomConditionMatcherFactory : ConditionMatcherFactory {
 }
 class CustomConditionMatcher(configuration: Configuration) :
     AbstractActionMatcher(CustomActionMatcherFactory.TYPE, configuration) {
-    override val type: String
-        get() = CustomConditionMatcherFactory.TYPE
 
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         //Custom matching logic

@@ -27,27 +27,23 @@ class AbstractConditionMatcherTest {
     @Test
     fun match() {
         val conditionMatcher =
-            object : AbstractConditionMatcher(mapOf(CONDITION_MATCHER_NEGATE_KEY to true).asConfiguration()) {
+            object : AbstractConditionMatcher("test", mapOf(CONDITION_MATCHER_NEGATE_KEY to true).asConfiguration()) {
                 override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
                     return true
                 }
-
-                override val type: String
-                    get() = throw UnsupportedOperationException()
             }
+        assertThat(conditionMatcher.type, equalTo("test"))
         assertThat(conditionMatcher.match(mockk(), mockk()), equalTo(false))
     }
 
     @Test
     fun matchWhenNegateIsNull() {
-        val conditionMatcher = object : AbstractConditionMatcher(JsonConfiguration.EMPTY) {
+        val conditionMatcher = object : AbstractConditionMatcher("test", JsonConfiguration.EMPTY) {
             override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
                 return true
             }
-
-            override val type: String
-                get() = throw UnsupportedOperationException()
         }
+        assertThat(conditionMatcher.type, equalTo("test"))
         assertThat(conditionMatcher.match(mockk(), mockk()), equalTo(true))
     }
 }

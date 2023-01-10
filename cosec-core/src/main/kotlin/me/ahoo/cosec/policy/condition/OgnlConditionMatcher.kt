@@ -20,9 +20,8 @@ import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.getMatcherPattern
 import ognl.Ognl
 
-class OgnlConditionMatcher(configuration: Configuration) : AbstractConditionMatcher(configuration) {
-    override val type: String
-        get() = OgnlConditionMatcherFactory.TYPE
+class OgnlConditionMatcher(configuration: Configuration) :
+    AbstractConditionMatcher(OgnlConditionMatcherFactory.TYPE, configuration) {
     private val ognlExpression = Ognl.parseExpression(configuration.getMatcherPattern())
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         val ognlContext = mapOf(

@@ -23,8 +23,6 @@ import org.springframework.web.util.pattern.PathPattern
 
 class PathConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(PathConditionMatcherFactory.TYPE, configuration) {
-    override val type: String
-        get() = PathConditionMatcherFactory.TYPE
     private val patternParser = configuration.asPathPatternParser()
     private val pathPattern: PathPattern = patternParser.parse(configuration.getMatcherPattern())
 

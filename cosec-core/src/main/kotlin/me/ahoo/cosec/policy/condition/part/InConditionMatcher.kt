@@ -19,8 +19,6 @@ import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
 class InConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(InConditionMatcherFactory.TYPE, configuration) {
-    override val type: String
-        get() = InConditionMatcherFactory.TYPE
     private val values: Set<String> = configuration.getRequired(InConditionMatcherFactory.TYPE)
         .asStringList().toSet()
 

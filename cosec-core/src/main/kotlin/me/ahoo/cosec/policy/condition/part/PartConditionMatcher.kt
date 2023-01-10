@@ -19,9 +19,9 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.policy.condition.AbstractConditionMatcher
 
 abstract class PartConditionMatcher(
-    override val type: String,
+    type: String,
     configuration: Configuration,
-) : AbstractConditionMatcher(configuration) {
+) : AbstractConditionMatcher(type, configuration) {
     private val partExtractor: PartExtractor = configuration
         .getRequired(CONDITION_MATCHER_PART_KEY).asString()
         .let {

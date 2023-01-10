@@ -21,10 +21,8 @@ import me.ahoo.cosec.policy.action.SPEL_PARSER
 import me.ahoo.cosec.policy.getMatcherPattern
 import org.springframework.expression.Expression
 
-class SpelConditionMatcher(configuration: Configuration) : AbstractConditionMatcher(configuration) {
-
-    override val type: String
-        get() = SpelConditionMatcherFactory.TYPE
+class SpelConditionMatcher(configuration: Configuration) :
+    AbstractConditionMatcher(SpelConditionMatcherFactory.TYPE, configuration) {
 
     private val expression: Expression = SPEL_PARSER.parseExpression(configuration.getMatcherPattern())
 

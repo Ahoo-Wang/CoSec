@@ -22,9 +22,10 @@ import me.ahoo.cosec.api.policy.ConditionMatcher
 const val BOOL_CONDITION_MATCHER_AND_KEY = "and"
 const val BOOL_CONDITION_MATCHER_OR_KEY = "or"
 
-class BoolConditionMatcher(configuration: Configuration) : AbstractConditionMatcher(configuration) {
-    override val type: String
-        get() = BoolConditionMatcherFactory.TYPE
+class BoolConditionMatcher(configuration: Configuration) : AbstractConditionMatcher(
+    BoolConditionMatcherFactory.TYPE,
+    configuration,
+) {
     val and: List<ConditionMatcher> =
         configuration.get(BoolConditionMatcherFactory.TYPE)
             ?.get(BOOL_CONDITION_MATCHER_AND_KEY)
