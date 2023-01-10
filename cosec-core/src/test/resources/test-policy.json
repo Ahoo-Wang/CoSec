@@ -135,6 +135,34 @@
           ]
         }
       }
+    },
+    {
+      "name": "TestContains",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "condition": {
+        "type": "contains",
+        "part": "request.attributes.ipRegion",
+        "pattern": "上海"
+      }
+    },
+    {
+      "name": "TestStartsWith",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "condition": {
+        "type": "starts_with",
+        "part": "request.attributes.ipRegion",
+        "pattern": "中国"
+      }
     }
   ]
 }
