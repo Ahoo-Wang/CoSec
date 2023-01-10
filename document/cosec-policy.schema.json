@@ -256,7 +256,11 @@
         "condition": {
           "$ref": "#/definitions/conditionMatcher"
         }
-      }
+      },
+      "required": [
+        "effect",
+        "actions"
+      ]
     }
   }
 }
