@@ -17,6 +17,7 @@ me.ahoo.cosec.policy.condition.context.AuthenticatedConditionMatcherFactory
 me.ahoo.cosec.policy.condition.context.InDefaultTenantConditionMatcherFactory
 me.ahoo.cosec.policy.condition.context.InPlatformTenantConditionMatcherFactory
 me.ahoo.cosec.policy.condition.context.InUserTenantConditionMatcherFactory
+me.ahoo.cosec.policy.condition.part.ContainsConditionMatcherFactory
 me.ahoo.cosec.policy.condition.part.InConditionMatcherFactory
 me.ahoo.cosec.policy.condition.part.EqConditionMatcherFactory
 me.ahoo.cosec.policy.condition.part.RegularConditionMatcherFactory

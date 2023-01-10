@@ -101,6 +101,7 @@
         "in_default_tenant",
         "in_platform_tenant",
         "in_user_tenant",
+        "contains",
         "eq",
         "in",
         "reg",
