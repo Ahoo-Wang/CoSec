@@ -39,9 +39,77 @@
 
 ![ActionMatcher](document/design/assets/ActionMatcher.svg)
 
+#### 如何自定义 `ActionMatcher` (SPI)
+
+> 参考 [RegularActionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/RegularActionMatcher.kt)
+
+```kotlin
+class CustomActionMatcherFactory : ActionMatcherFactory {
+    companion object {
+        const val TYPE = "[CustomActionType]"
+    }
+
+    override val type: String
+        get() = TYPE
+
+    override fun create(onfiguration: Configuration): ActionMatcher {
+        return CustomActionMatcher(onfiguration)
+    }
+}
+class CustomActionMatcher(configuration: Configuration) :
+    AbstractActionMatcher(CustomActionMatcherFactory.TYPE, configuration) {
+    override val type: String
+        get() = CustomActionMatcherFactory.TYPE
+
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
+        //Custom matching logic
+    }
+}
+```
+
+> META-INF/services/me.ahoo.cosec.policy.action.ActionMatcherFactory
+
+```properties
+# CustomActionMatcherFactory fully qualified name
+```
+
 ### ConditionMatcher
 
 ![ConditionMatcher](document/design/assets/ConditionMatcher.svg)
+
+#### 如何自定义 `ConditionMatcher` (SPI)
+
+> 参考 [ContainsConditionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/part/ContainsConditionMatcher.kt)
+
+```kotlin
+class CustomConditionMatcherFactory : ConditionMatcherFactory {
+    companion object {
+        const val TYPE = "[CustomConditionType]"
+    }
+
+    override val type: String
+        get() = TYPE
+
+    override fun create(configuration: Configuration): ConditionMatcher {
+        return CustomConditionMatcher(configuration)
+    }
+}
+class CustomConditionMatcher(configuration: Configuration) :
+    AbstractActionMatcher(CustomActionMatcherFactory.TYPE, configuration) {
+    override val type: String
+        get() = CustomConditionMatcherFactory.TYPE
+
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
+        //Custom matching logic
+    }
+}
+```
+
+> META-INF/services/me.ahoo.cosec.policy.condition.ConditionMatcherFactory
+
+```properties
+# CustomConditionMatcherFactory fully qualified name
+```
 
 ## 策略 Schema
 
