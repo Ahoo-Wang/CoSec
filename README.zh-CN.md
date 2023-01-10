@@ -113,7 +113,8 @@ class CustomConditionMatcher(configuration: Configuration) :
 
 ## 策略 Schema
 
-[Policy Schema](document/cosec-policy.schema.json)
+添加 [Policy Schema](document/cosec-policy.schema.json) 以支持 IDE ([IntelliJ IDEA](https://www.jetbrains.com/help/idea/json.html#ws_json_using_schemas)) 输入自动完成。
+
 
 > 策略 Demo
 

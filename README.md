@@ -113,7 +113,7 @@ class CustomConditionMatcher(configuration: Configuration) :
 
 ## Policy Schema
 
-[Policy Schema](document/cosec-policy.schema.json)
+Add [Policy Schema](document/cosec-policy.schema.json) to support IDE ([IntelliJ IDEA](https://www.jetbrains.com/help/idea/json.html#ws_json_using_schemas)) input autocompletion.
 
 > Policy Demo
 
