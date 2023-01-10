@@ -22,12 +22,12 @@ import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
 
-class RegularConditionMatcherTest {
+class EndsWithConditionMatcherTest {
     private val conditionMatcher =
-        RegularConditionMatcherFactory().create(
+        EndsWithConditionMatcherFactory().create(
             mapOf(
                 CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
-                MATCHER_PATTERN_KEY to "192\\.168\\.0\\.[0-9]*",
+                MATCHER_PATTERN_KEY to ".168.0.1",
             ).asConfiguration(),
         )
 
@@ -36,14 +36,14 @@ class RegularConditionMatcherTest {
         val request = mockk<Request> {
             every { remoteIp } returns "192.168.0.1"
         }
-        assertThat(conditionMatcher.type, `is`(RegularConditionMatcherFactory.TYPE))
+        assertThat(conditionMatcher.type, `is`(EndsWithConditionMatcherFactory.TYPE))
         assertThat(conditionMatcher.match(request, mockk()), `is`(true))
     }
 
     @Test
     fun notMatch() {
         val requestNotMatch = mockk<Request> {
-            every { remoteIp } returns "192.168.1.1"
+            every { remoteIp } returns "10.168.1.1"
         }
         assertThat(conditionMatcher.match(requestNotMatch, mockk()), `is`(false))
     }

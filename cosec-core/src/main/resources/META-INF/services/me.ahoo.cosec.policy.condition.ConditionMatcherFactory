@@ -23,6 +23,7 @@ me.ahoo.cosec.policy.condition.part.EqConditionMatcherFactory
 me.ahoo.cosec.policy.condition.part.RegularConditionMatcherFactory
 me.ahoo.cosec.policy.condition.part.PathConditionMatcherFactory
 me.ahoo.cosec.policy.condition.part.StartsWithConditionMatcherFactory
+me.ahoo.cosec.policy.condition.part.EndsWithConditionMatcherFactory
 me.ahoo.cosec.policy.condition.SpelConditionMatcherFactory
 me.ahoo.cosec.policy.condition.OgnlConditionMatcherFactory
 me.ahoo.cosec.policy.condition.BoolConditionMatcherFactory

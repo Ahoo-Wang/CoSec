@@ -163,6 +163,20 @@
         "part": "request.attributes.ipRegion",
         "pattern": "中国"
       }
+    },
+    {
+      "name": "TestEndsWith",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "condition": {
+        "type": "ends_with",
+        "part": "request.attributes.remoteIp",
+        "pattern": ".168.0.1"
+      }
     }
   ]
 }

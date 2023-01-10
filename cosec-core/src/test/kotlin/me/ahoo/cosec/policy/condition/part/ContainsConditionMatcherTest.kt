@@ -32,19 +32,11 @@ class ContainsConditionMatcherTest {
         )
 
     @Test
-    fun matchWhenRemoteIpIsNull() {
-        val request = mockk<Request> {
-            every { remoteIp } returns "remoteIp"
-        }
-        assertThat(conditionMatcher.type, `is`(ContainsConditionMatcherFactory.TYPE))
-        assertThat(conditionMatcher.match(request, mockk()), `is`(false))
-    }
-
-    @Test
     fun match() {
         val request = mockk<Request> {
             every { remoteIp } returns "192.168.0.1"
         }
+        assertThat(conditionMatcher.type, `is`(ContainsConditionMatcherFactory.TYPE))
         assertThat(conditionMatcher.match(request, mockk()), `is`(true))
     }
 

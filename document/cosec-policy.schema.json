@@ -103,6 +103,7 @@
         "in_user_tenant",
         "contains",
         "starts_with",
+        "ends_with",
         "eq",
         "in",
         "reg",
