@@ -258,6 +258,14 @@ class CustomConditionMatcher(configuration: Configuration) :
 
 ```
 
+## OpenTelemetry
+
+[CoSec-OpenTelemetry](cosec-opentelemetry)
+
+> CoSec 遵循 OpenTelemetry [General identity attributes](https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/#general-identity-attributes) 规范。
+
+![CoSec-OpenTelemetry](document/design/assets/CoSec-OpenTelemetry.png)
+
 ## 感谢
 
 CoSec 权限策略设计参考 [AWS IAM](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html) 。

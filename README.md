@@ -257,6 +257,14 @@ Configure [Policy Schema](document/cosec-policy.schema.json) to support IDE ([In
 
 ```
 
+## OpenTelemetry
+
+[CoSec-OpenTelemetry](cosec-opentelemetry)
+
+> CoSec follows the OpenTelemetry [General identity attributes](https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/#general-identity-attributes) specification。
+
+![CoSec-OpenTelemetry](document/design/assets/CoSec-OpenTelemetry.png)
+
 ## Thanks
 
 CoSec permission policy design refers to [AWS IAM](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html) .
