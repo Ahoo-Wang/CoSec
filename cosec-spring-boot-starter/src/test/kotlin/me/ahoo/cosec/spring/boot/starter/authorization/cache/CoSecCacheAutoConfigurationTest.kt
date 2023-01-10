@@ -36,7 +36,7 @@ internal class CoSecCacheAutoConfigurationTest {
             .withUserConfiguration(
                 RedisAutoConfiguration::class.java,
                 CoCacheAutoConfiguration::class.java,
-                CoSecCacheAutoConfiguration::class.java
+                CoSecCacheAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
                 assertThat(context)

@@ -47,10 +47,10 @@ import java.lang.reflect.Constructor
 @ConditionalOnOAuthAuthenticationEnabled
 @ConditionalOnClass(OAuthUser::class)
 @EnableConfigurationProperties(
-    OAuthClientAuthenticationProperties::class
+    OAuthClientAuthenticationProperties::class,
 )
 class CoSecOAuthClientAuthenticationAutoConfiguration(
-    private val authenticationProperties: OAuthClientAuthenticationProperties
+    private val authenticationProperties: OAuthClientAuthenticationProperties,
 ) {
     @Bean
     @ConditionalOnMissingBean
@@ -65,7 +65,7 @@ class CoSecOAuthClientAuthenticationAutoConfiguration(
             val authRequestClass: Class<out AuthDefaultRequest> = client.type.targetClass
             val authRequestCtor: Constructor<out AuthDefaultRequest> = authRequestClass.getConstructor(
                 AuthConfig::class.java,
-                AuthStateCache::class.java
+                AuthStateCache::class.java,
             )
             val authRequest: AuthRequest = BeanUtils.instantiateClass(authRequestCtor, client, authStateCache)
             val authProvider: OAuthClient = JustAuthClient(key, authRequest, idGenerator)
@@ -84,7 +84,7 @@ class CoSecOAuthClientAuthenticationAutoConfiguration(
     @ConditionalOnMissingBean
     fun authAuthentication(
         authProvider: OAuthClientManager,
-        principalConverter: OAuthClientPrincipalConverter
+        principalConverter: OAuthClientPrincipalConverter,
     ): OAuthClientAuthentication {
         return OAuthClientAuthentication(authProvider, principalConverter)
     }

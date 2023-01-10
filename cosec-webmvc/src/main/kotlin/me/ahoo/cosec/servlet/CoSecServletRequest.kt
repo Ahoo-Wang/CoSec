@@ -24,7 +24,7 @@ data class CoSecServletRequest(
     override val remoteIp: String,
     override val origin: String,
     override val referer: String,
-    override val attributes: Map<String, String> = mapOf()
+    override val attributes: Map<String, String> = mapOf(),
 ) : Request, Delegated<HttpServletRequest> {
     override fun getHeader(key: String): String {
         return delegate.getHeader(key).orEmpty()

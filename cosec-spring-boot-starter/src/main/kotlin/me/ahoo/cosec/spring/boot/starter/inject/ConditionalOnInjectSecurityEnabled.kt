@@ -23,7 +23,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 @ConditionalOnProperty(
     value = [ConditionalOnInjectSecurityEnabled.ENABLED_KEY],
     matchIfMissing = false,
-    havingValue = "true"
+    havingValue = "true",
 )
 annotation class ConditionalOnInjectSecurityEnabled {
     companion object {

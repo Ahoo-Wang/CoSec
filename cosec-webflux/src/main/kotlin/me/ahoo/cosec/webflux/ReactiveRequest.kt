@@ -24,7 +24,7 @@ data class ReactiveRequest(
     override val remoteIp: String,
     override val origin: String,
     override val referer: String,
-    override val attributes: Map<String, String> = mapOf()
+    override val attributes: Map<String, String> = mapOf(),
 ) : Request,
     Delegated<ServerWebExchange> {
     override fun getHeader(key: String): String {

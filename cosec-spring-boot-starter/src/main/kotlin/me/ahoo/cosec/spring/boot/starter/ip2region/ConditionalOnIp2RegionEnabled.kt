@@ -23,7 +23,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 @ConditionalOnProperty(
     value = [ConditionalOnIp2RegionEnabled.ENABLED_KEY],
     matchIfMissing = true,
-    havingValue = "true"
+    havingValue = "true",
 )
 annotation class ConditionalOnIp2RegionEnabled {
     companion object {

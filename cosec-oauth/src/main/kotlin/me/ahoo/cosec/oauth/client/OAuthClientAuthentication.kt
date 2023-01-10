@@ -23,7 +23,7 @@ import reactor.core.publisher.Mono
  */
 class OAuthClientAuthentication(
     private val authClientManager: OAuthClientManager,
-    private val principalConverter: OAuthClientPrincipalConverter = DirectOAuthClientPrincipalConverter
+    private val principalConverter: OAuthClientPrincipalConverter = DirectOAuthClientPrincipalConverter,
 ) : Authentication<OAuthClientCredentials, CoSecPrincipal> {
     override val supportCredentials: Class<OAuthClientCredentials>
         get() {

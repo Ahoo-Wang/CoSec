@@ -63,7 +63,7 @@ internal class PolicyCodecExecutorTest {
             description = "",
             type = PolicyType.SYSTEM,
             tenantId = "1",
-            statements = listOf(StatementData())
+            statements = listOf(StatementData()),
         )
         val roleId = MockIdGenerator.INSTANCE.generateAsString()
         val cacheValue: CacheValue<Policy> = CacheValue.forever(policy)

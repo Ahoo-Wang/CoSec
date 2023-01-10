@@ -23,7 +23,7 @@ import reactor.core.publisher.Mono
 object TraceGatewayFilter : GlobalFilter, Ordered {
     override fun filter(
         exchange: ServerWebExchange,
-        chain: GatewayFilterChain
+        chain: GatewayFilterChain,
     ): Mono<Void> {
         return ReactiveTraceFilter.filter(exchange) {
             chain.filter(it)

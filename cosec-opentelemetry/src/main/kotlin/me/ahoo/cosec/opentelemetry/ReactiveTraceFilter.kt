@@ -36,7 +36,7 @@ object ReactiveTraceFilter {
     private val log = LoggerFactory.getLogger(ReactiveTraceFilter::class.java)
     fun filter(
         exchange: ServerWebExchange,
-        chain: (ServerWebExchange) -> Mono<Void>
+        chain: (ServerWebExchange) -> Mono<Void>,
     ): Mono<Void> {
         val parentSpan = Span.current()
         if (!parentSpan.isRecording) {

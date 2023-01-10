@@ -57,11 +57,11 @@ class PathActionMatcherFactory : ActionMatcherFactory {
         val pattern = configuration.getMatcherPattern()
         return if (ActionPatternReplacer.isTemplate(pattern)) {
             ReplaceablePathActionMatcher(
-                configuration
+                configuration,
             )
         } else {
             PathActionMatcher(
-                configuration
+                configuration,
             )
         }
     }

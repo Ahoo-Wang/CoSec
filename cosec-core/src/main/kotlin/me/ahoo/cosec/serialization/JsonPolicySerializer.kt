@@ -80,7 +80,7 @@ object JsonPolicyDeserializer : StdDeserializer<Policy>(Policy::class.java) {
             tenantId = requireNotNull(jsonNode.get(TENANT_ID_KEY)) {
                 "$TENANT_ID_KEY is required!"
             }.asText(),
-            statements = statements
+            statements = statements,
         )
     }
 }

@@ -22,7 +22,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 @ConditionalOnClass(
     name = [
         "me.ahoo.cosec.opentelemetry.ReactiveTraceFilter",
-        "io.opentelemetry.api.trace.Span"
-    ]
+        "io.opentelemetry.api.trace.Span",
+    ],
 )
 annotation class ConditionalOnOpenTelemetryEnabled

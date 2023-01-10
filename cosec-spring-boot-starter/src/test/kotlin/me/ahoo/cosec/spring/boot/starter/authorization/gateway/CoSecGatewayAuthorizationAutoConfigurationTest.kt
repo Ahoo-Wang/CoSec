@@ -34,7 +34,7 @@ internal class CoSecGatewayAuthorizationAutoConfigurationTest {
     fun contextLoads() {
         contextRunner
             .withPropertyValues(
-                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_"
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
@@ -43,7 +43,7 @@ internal class CoSecGatewayAuthorizationAutoConfigurationTest {
                 CoSecCacheAutoConfiguration::class.java,
                 CoSecAuthorizationAutoConfiguration::class.java,
                 CoSecGatewayAuthorizationAutoConfiguration::class.java,
-                CoSecJwtAutoConfiguration::class.java
+                CoSecJwtAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
@@ -58,7 +58,7 @@ internal class CoSecGatewayAuthorizationAutoConfigurationTest {
         contextRunner
             .withPropertyValues("${ConditionalOnGatewayEnabled.ENABLED_KEY}=false")
             .withUserConfiguration(
-                CoSecGatewayAuthorizationAutoConfiguration::class.java
+                CoSecGatewayAuthorizationAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)

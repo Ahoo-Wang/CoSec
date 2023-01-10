@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory
  * Refer to `org.springframework.cloud.gateway.support.ipresolver.XForwardedRemoteAddressResolver`
  */
 abstract class XForwardedRemoteIpResolver<R>(
-    private val defaultRemoteIpResolver: RemoteIpResolver<R>
+    private val defaultRemoteIpResolver: RemoteIpResolver<R>,
 ) :
     RemoteIpResolver<R> {
     companion object {

@@ -29,7 +29,7 @@ internal class RedisPolicyRepositoryTest {
         "policyType",
         PolicyType.SYSTEM,
         "tenantId",
-        listOf()
+        listOf(),
     )
 
     @Test

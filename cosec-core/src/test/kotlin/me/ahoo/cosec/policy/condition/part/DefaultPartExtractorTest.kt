@@ -71,7 +71,7 @@ class DefaultPartExtractorTest {
         }
         assertThat(
             DefaultPartExtractor(RequestParts.HEADER_PREFIX + "key").extract(request, mockk()),
-            equalTo("value")
+            equalTo("value"),
         )
     }
 
@@ -90,7 +90,7 @@ class DefaultPartExtractorTest {
         }
         assertThat(
             DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ID).extract(mockk(), context),
-            equalTo("principal.id")
+            equalTo("principal.id"),
         )
     }
 
@@ -102,11 +102,11 @@ class DefaultPartExtractorTest {
         }
         assertThat(
             DefaultPartExtractor(RequestParts.ATTRIBUTES_PREFIX + "key").extract(request, mockk()),
-            equalTo("value")
+            equalTo("value"),
         )
         assertThat(
             DefaultPartExtractor(RequestParts.ATTRIBUTES_PREFIX + "not_exist").extract(request, mockk()),
-            equalTo("")
+            equalTo(""),
         )
     }
 
@@ -118,14 +118,14 @@ class DefaultPartExtractorTest {
         }
         assertThat(
             DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX + "key").extract(mockk(), context),
-            equalTo("value")
+            equalTo("value"),
         )
         assertThat(
             DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX + "not_exist").extract(
                 mockk(),
-                context
+                context,
             ),
-            equalTo("")
+            equalTo(""),
         )
     }
 

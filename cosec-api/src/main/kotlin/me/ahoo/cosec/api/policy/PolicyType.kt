@@ -28,5 +28,5 @@ enum class PolicyType {
     /**
      * User-defined policies.
      */
-    CUSTOM
+    CUSTOM,
 }

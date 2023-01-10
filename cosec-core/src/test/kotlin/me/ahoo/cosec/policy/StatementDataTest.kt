@@ -47,10 +47,10 @@ internal class StatementDataTest {
             actions = listOf(
                 PathActionMatcherFactory().create(
                     mapOf(
-                        MATCHER_PATTERN_KEY to "auth/*"
-                    ).asConfiguration()
-                )
-            )
+                        MATCHER_PATTERN_KEY to "auth/*",
+                    ).asConfiguration(),
+                ),
+            ),
         )
         val request = mockk<Request> {
             every { path } returns "auth/login:POST"
@@ -64,15 +64,15 @@ internal class StatementDataTest {
             actions = listOf(
                 PathActionMatcherFactory().create(
                     mapOf(
-                        MATCHER_PATTERN_KEY to "order/#{principal.id}/*"
-                    ).asConfiguration()
-                )
+                        MATCHER_PATTERN_KEY to "order/#{principal.id}/*",
+                    ).asConfiguration(),
+                ),
             ),
             condition = SpelConditionMatcherFactory().create(
                 mapOf(
-                    MATCHER_PATTERN_KEY to "context.principal.authenticated()"
-                ).asConfiguration()
-            )
+                    MATCHER_PATTERN_KEY to "context.principal.authenticated()",
+                ).asConfiguration(),
+            ),
         )
         val request = mockk<Request> {
             every { path } returns "order/1/search:POST"
@@ -98,7 +98,7 @@ internal class StatementDataTest {
     fun verifyDeny() {
         val statementData = StatementData(
             effect = Effect.DENY,
-            actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
+            actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY)),
         )
         assertThat(statementData.verify(mockk(), mockk()), `is`(VerifyResult.EXPLICIT_DENY))
     }

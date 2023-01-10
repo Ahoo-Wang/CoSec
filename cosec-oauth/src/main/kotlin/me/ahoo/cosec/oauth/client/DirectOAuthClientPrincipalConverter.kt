@@ -31,7 +31,7 @@ object DirectOAuthClientPrincipalConverter : OAuthClientPrincipalConverter {
             id = asClientUserId(client, authUser),
             policies = emptySet(),
             roles = emptySet(),
-            attributes = authUser.rawInfo.mapValues { it.value.toString() }
+            attributes = authUser.rawInfo.mapValues { it.value.toString() },
         ).toMono()
     }
 

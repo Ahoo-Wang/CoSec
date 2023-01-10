@@ -42,7 +42,7 @@ class Ip2RegionRequestAttributesAppender(ip2regionFile: File = LOCAL_IP2REGION_F
                 log.trace(
                     "remoteIp:[{}],searchedRegion:[{}]",
                     request.remoteIp,
-                    searchedRegion
+                    searchedRegion,
                 )
             }
             searchedRegion

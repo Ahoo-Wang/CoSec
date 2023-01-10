@@ -21,7 +21,7 @@ import reactor.kotlin.core.publisher.toMono
 class RedisPolicyRepository(
     private val globalPolicyIndexCache: GlobalPolicyIndexCache,
     private val rolePolicyCache: RolePolicyCache,
-    private val policyCache: PolicyCache
+    private val policyCache: PolicyCache,
 ) : PolicyRepository {
     override fun getGlobalPolicy(): Mono<Set<Policy>> {
         return globalPolicyIndexCache[GlobalPolicyIndexKey]

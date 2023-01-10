@@ -31,7 +31,7 @@ import reactor.kotlin.core.publisher.toMono
 class JustAuthClient(
     override val name: String,
     private val authRequest: AuthRequest,
-    private val idGenerator: IdGenerator
+    private val idGenerator: IdGenerator,
 ) : OAuthClient {
     override fun authorizeUrl(): String {
         return authRequest.authorize(idGenerator.generateAsString())
@@ -54,7 +54,7 @@ class JustAuthClient(
                 location = authUser.location,
                 gender = asGender(authUser.gender),
                 rawInfo = authUser.rawUserInfo,
-                provider = name
+                provider = name,
             ).toMono()
         }
     }

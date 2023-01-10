@@ -27,8 +27,8 @@ class PathConditionMatcherTest {
         PathConditionMatcherFactory().create(
             mapOf(
                 CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
-                MATCHER_PATTERN_KEY to "192.168.*.*"
-            ).asConfiguration()
+                MATCHER_PATTERN_KEY to "192.168.*.*",
+            ).asConfiguration(),
         )
 
     @Test

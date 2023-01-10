@@ -113,12 +113,12 @@ class ReactiveTraceFilterTest {
                 val attributes = attributesField.get(span) as Map<AttributeKey<String>, String>
                 assertThat(
                     attributes[SemanticAttributes.ENDUSER_ID],
-                    `is`(SimpleSecurityContext.ANONYMOUS.principal.id)
+                    `is`(SimpleSecurityContext.ANONYMOUS.principal.id),
                 )
                 assertThat(attributes[SemanticAttributes.ENDUSER_ROLE], `is`(""))
                 assertThat(
                     attributes[COSEC_TENANT_ID_ATTRIBUTE_KEY],
-                    `is`(SimpleSecurityContext.ANONYMOUS.tenant.tenantId)
+                    `is`(SimpleSecurityContext.ANONYMOUS.tenant.tenantId),
                 )
                 assertThat(attributes[COSEC_POLICY_ATTRIBUTE_KEY], `is`(""))
             }

@@ -23,7 +23,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 @ConditionalOnProperty(
     value = [ConditionalOnAuthenticationEnabled.ENABLED_KEY],
     matchIfMissing = true,
-    havingValue = "true"
+    havingValue = "true",
 )
 annotation class ConditionalOnAuthenticationEnabled {
     companion object {

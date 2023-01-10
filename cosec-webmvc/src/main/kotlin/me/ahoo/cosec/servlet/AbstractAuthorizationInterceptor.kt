@@ -30,12 +30,12 @@ import javax.servlet.http.HttpServletResponse
 abstract class AbstractAuthorizationInterceptor(
     private val requestParser: RequestParser<HttpServletRequest>,
     private val securityContextParser: SecurityContextParser<HttpServletRequest>,
-    private val authorization: Authorization
+    private val authorization: Authorization,
 ) {
 
     protected fun authorize(
         request: HttpServletRequest,
-        response: HttpServletResponse
+        response: HttpServletResponse,
     ): Boolean {
         val securityContext = securityContextParser.ensureParse(request)
 

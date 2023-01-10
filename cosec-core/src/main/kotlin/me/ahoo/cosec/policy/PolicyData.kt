@@ -24,7 +24,7 @@ class PolicyData(
     override val description: String,
     override val type: PolicyType,
     override val tenantId: String,
-    override val statements: List<Statement> = listOf()
+    override val statements: List<Statement> = listOf(),
 ) : Policy {
 
     override fun equals(other: Any?): Boolean {

@@ -22,7 +22,7 @@ const val ACTION_MATCHER_METHODS_KEY = "methods"
 
 abstract class AbstractActionMatcher(
     override val type: String,
-    final override val configuration: Configuration
+    final override val configuration: Configuration,
 ) : ActionMatcher {
     val methods: Set<String> = configuration
         .get(ACTION_MATCHER_METHODS_KEY)?.asStringList()?.map { it.uppercase() }?.toSet() ?: emptySet()

@@ -27,7 +27,7 @@ class PathPatternParsersTest {
     fun asPathPatternParserWhenPathIsNull() {
         assertThat(
             mapOf<String, String>().asConfiguration().asPathPatternParser(),
-            equalTo(PathPatternParser.defaultInstance)
+            equalTo(PathPatternParser.defaultInstance),
         )
     }
 
@@ -37,8 +37,8 @@ class PathPatternParsersTest {
             PathConditionMatcherFactory.TYPE to mapOf<String, Any>(
                 "caseSensitive" to false,
                 "separator" to ".",
-                "decodeAndParseSegments" to false
-            )
+                "decodeAndParseSegments" to false,
+            ),
         ).asConfiguration().asPathPatternParser()
         assertThat(pathPatternParser.isCaseSensitive, equalTo(false))
         assertThat(pathPatternParser.pathOptions.separator(), equalTo('.'))
@@ -48,16 +48,16 @@ class PathPatternParsersTest {
     @Test
     fun asPathPatternParserWhenDefault() {
         val pathPatternParser = mapOf(
-            PathConditionMatcherFactory.TYPE to mapOf<String, Any>()
+            PathConditionMatcherFactory.TYPE to mapOf<String, Any>(),
         ).asConfiguration().asPathPatternParser()
         assertThat(pathPatternParser.isCaseSensitive, equalTo(PathPatternParser.defaultInstance.isCaseSensitive))
         assertThat(
             pathPatternParser.pathOptions.separator(),
-            equalTo(PathPatternParser.defaultInstance.pathOptions.separator())
+            equalTo(PathPatternParser.defaultInstance.pathOptions.separator()),
         )
         assertThat(
             pathPatternParser.pathOptions.shouldDecodeAndParseSegments(),
-            equalTo(PathPatternParser.defaultInstance.pathOptions.shouldDecodeAndParseSegments())
+            equalTo(PathPatternParser.defaultInstance.pathOptions.shouldDecodeAndParseSegments()),
         )
     }
 }

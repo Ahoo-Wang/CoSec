@@ -35,11 +35,11 @@ class JsonConfigurationSerializerTest {
         assertThat(jsonConfiguration.getRequired("pattern").asString(), equalTo("#{principal.id}.*"))
         assertThat(
             jsonConfiguration.getRequired("part").asStringMap(),
-            equalTo(mapOf("kind" to "request", "name" to "remoteIp"))
+            equalTo(mapOf("kind" to "request", "name" to "remoteIp")),
         )
         assertThat(
             jsonConfiguration.getRequired("part").asPojo<Part>(),
-            equalTo(Part("request", "remoteIp"))
+            equalTo(Part("request", "remoteIp")),
         )
         val jsonString = CoSecJsonSerializer.writeValueAsString(jsonConfiguration)
         assertThat(jsonString, equalTo(json))

@@ -29,7 +29,7 @@ import javax.annotation.concurrent.ThreadSafe
 class SimpleSecurityContext(
     override val principal: CoSecPrincipal,
     override val tenant: Tenant = principal.tenant,
-    override val attributes: Map<String, Any> = emptyMap()
+    override val attributes: Map<String, Any> = emptyMap(),
 ) : SecurityContext {
     companion object {
         val ANONYMOUS: SecurityContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
@@ -39,7 +39,7 @@ class SimpleSecurityContext(
         SimpleSecurityContext(
             principal = principal,
             tenant = tenant,
-            attributes = attributes
+            attributes = attributes,
         )
 
     override fun toString(): String {

@@ -78,7 +78,7 @@ internal class JustAuthClientTest {
                         AuthUserGender.MALE,
                         "",
                         AuthToken(),
-                        JSONObject()
+                        JSONObject(),
                     )
             }
         }

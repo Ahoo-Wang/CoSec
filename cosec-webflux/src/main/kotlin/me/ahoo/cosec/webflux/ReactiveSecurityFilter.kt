@@ -30,7 +30,7 @@ import reactor.kotlin.core.publisher.toMono
 abstract class ReactiveSecurityFilter(
     val securityContextParser: SecurityContextParser<ServerWebExchange>,
     val requestParser: RequestParser<ServerWebExchange>,
-    val authorization: Authorization
+    val authorization: Authorization,
 ) {
 
     fun filterInternal(exchange: ServerWebExchange, chain: (ServerWebExchange) -> Mono<Void>): Mono<Void> {

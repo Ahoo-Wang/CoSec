@@ -45,7 +45,7 @@ internal class ReactiveAuthorizationFilterTest {
         val filter = ReactiveAuthorizationFilter(
             ReactiveInjectSecurityContextParser,
             ReactiveRequestParser(ReactiveRemoteIpResolver),
-            authorization
+            authorization,
         )
         assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE))
         val exchange = mockk<ServerWebExchange> {
@@ -81,7 +81,7 @@ internal class ReactiveAuthorizationFilterTest {
         val filter = ReactiveAuthorizationFilter(
             ReactiveInjectSecurityContextParser,
             ReactiveRequestParser(ReactiveRemoteIpResolver),
-            authorization
+            authorization,
         )
         val exchange = mockk<ServerWebExchange> {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
@@ -118,7 +118,7 @@ internal class ReactiveAuthorizationFilterTest {
         val filter = ReactiveAuthorizationFilter(
             ReactiveInjectSecurityContextParser,
             ReactiveRequestParser(ReactiveRemoteIpResolver),
-            authorization
+            authorization,
         )
         val principal = SimplePrincipal("id")
         val accessToken = SecurityContextParserSpec.createAccessToken(principal)

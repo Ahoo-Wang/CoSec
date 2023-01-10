@@ -49,7 +49,7 @@ internal class OAuthClientAuthenticationTest {
             .consumeNextWith {
                 assertThat(
                     it.id,
-                    `is`("id@clientId")
+                    `is`("id@clientId"),
                 )
             }
             .verifyComplete()

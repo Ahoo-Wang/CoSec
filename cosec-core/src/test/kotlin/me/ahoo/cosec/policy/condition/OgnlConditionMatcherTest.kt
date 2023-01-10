@@ -59,7 +59,7 @@ internal class OgnlConditionMatcherTest {
         fun parametersForActions(): Stream<Arguments> {
             return Stream.of(
                 Arguments.of("path == \"auth/login\"", listOf("auth/login"), true),
-                Arguments.of("path == \"auth/login\"", listOf("auth/logout"), false)
+                Arguments.of("path == \"auth/login\"", listOf("auth/logout"), false),
             )
         }
 
@@ -67,7 +67,7 @@ internal class OgnlConditionMatcherTest {
         fun parametersForContext(): Stream<Arguments> {
             return Stream.of(
                 Arguments.of("#context.principal.id == \"1\"", listOf("1"), true),
-                Arguments.of("#context.principal.id == \"1\"", listOf("2"), false)
+                Arguments.of("#context.principal.id == \"1\"", listOf("2"), false),
             )
         }
     }

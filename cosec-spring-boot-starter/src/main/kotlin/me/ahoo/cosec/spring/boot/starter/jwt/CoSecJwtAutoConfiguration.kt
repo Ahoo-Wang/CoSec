@@ -40,7 +40,7 @@ import org.springframework.context.annotation.Configuration
 @ConditionalOnJwtEnabled
 @ConditionalOnClass(JwtTokenConverter::class)
 @EnableConfigurationProperties(
-    JwtProperties::class
+    JwtProperties::class,
 )
 class CoSecJwtAutoConfiguration {
 
@@ -49,15 +49,15 @@ class CoSecJwtAutoConfiguration {
     fun cosecTokenAlgorithm(jwtProperties: JwtProperties): Algorithm {
         return when (jwtProperties.algorithm) {
             JwtProperties.Algorithm.HMAC256 -> Algorithm.HMAC256(
-                jwtProperties.secret
+                jwtProperties.secret,
             )
 
             JwtProperties.Algorithm.HMAC384 -> Algorithm.HMAC384(
-                jwtProperties.secret
+                jwtProperties.secret,
             )
 
             JwtProperties.Algorithm.HMAC512 -> Algorithm.HMAC512(
-                jwtProperties.secret
+                jwtProperties.secret,
             )
         }
     }
@@ -65,7 +65,7 @@ class CoSecJwtAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecJwtTokenVerifier(
-        algorithm: Algorithm
+        algorithm: Algorithm,
     ): TokenVerifier {
         return JwtTokenVerifier(algorithm)
     }
@@ -75,13 +75,13 @@ class CoSecJwtAutoConfiguration {
     fun cosecTokenConverter(
         idGenerator: IdGenerator,
         algorithm: Algorithm,
-        jwtProperties: JwtProperties
+        jwtProperties: JwtProperties,
     ): TokenConverter {
         return JwtTokenConverter(
             idGenerator,
             algorithm,
             jwtProperties.tokenValidity.access,
-            jwtProperties.tokenValidity.refresh
+            jwtProperties.tokenValidity.refresh,
         )
     }
 
@@ -93,7 +93,7 @@ class CoSecJwtAutoConfiguration {
         @ConditionalOnBean(CompositeAuthentication::class)
         fun tokenCompositeAuthentication(
             compositeAuthentication: CompositeAuthentication,
-            tokenConverter: TokenConverter
+            tokenConverter: TokenConverter,
         ): TokenCompositeAuthentication {
             return TokenCompositeAuthentication(compositeAuthentication, tokenConverter)
         }

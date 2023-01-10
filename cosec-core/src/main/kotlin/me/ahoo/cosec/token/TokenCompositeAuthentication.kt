@@ -22,7 +22,7 @@ import reactor.core.publisher.Mono
 
 class TokenCompositeAuthentication(
     private val compositeAuthentication: CompositeAuthentication,
-    private val tokenConverter: TokenConverter
+    private val tokenConverter: TokenConverter,
 ) : Authentication<Credentials, CoSecPrincipal> {
     override val supportCredentials: Class<Credentials>
         get() = Credentials::class.java
@@ -41,7 +41,7 @@ class TokenCompositeAuthentication(
 
     fun authenticateAsToken(
         credentialsType: Class<out Credentials>,
-        credentials: Credentials
+        credentials: Credentials,
     ): Mono<out CompositeToken> {
         return authenticate(credentialsType, credentials)
             .map {

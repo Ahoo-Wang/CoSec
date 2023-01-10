@@ -26,7 +26,7 @@ import org.springframework.web.server.ServerWebExchange
  * @author ahoo wang
  */
 class ReactiveSecurityContextParser(
-    private val tokenVerifier: TokenVerifier
+    private val tokenVerifier: TokenVerifier,
 ) : AbstractSecurityContextParser<ServerWebExchange>() {
     override fun getAccessToken(request: ServerWebExchange): AccessToken? {
         val authorization = request.request.headers.getFirst(Jwts.AUTHORIZATION_KEY)

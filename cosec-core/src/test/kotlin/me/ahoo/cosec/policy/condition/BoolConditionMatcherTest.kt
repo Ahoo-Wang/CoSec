@@ -44,10 +44,10 @@ class BoolConditionMatcherTest {
                     BOOL_CONDITION_MATCHER_AND_KEY to listOf(
                         mapOf<String, Any>(
                             MATCHER_TYPE_KEY to AllConditionMatcherFactory.TYPE,
-                        )
-                    )
-                )
-            ).asConfiguration()
+                        ),
+                    ),
+                ),
+            ).asConfiguration(),
         ) as BoolConditionMatcher
         assertThat(conditionMatcher.type, `is`(BoolConditionMatcherFactory.TYPE))
         assertThat(conditionMatcher.and, hasSize(1))
@@ -65,10 +65,10 @@ class BoolConditionMatcherTest {
                     BOOL_CONDITION_MATCHER_OR_KEY to listOf(
                         mapOf<String, Any>(
                             MATCHER_TYPE_KEY to AllConditionMatcherFactory.TYPE,
-                        )
-                    )
-                )
-            ).asConfiguration()
+                        ),
+                    ),
+                ),
+            ).asConfiguration(),
         ) as BoolConditionMatcher
         assertThat(conditionMatcher.type, `is`(BoolConditionMatcherFactory.TYPE))
         assertThat(conditionMatcher.or, hasSize(1))
@@ -86,15 +86,15 @@ class BoolConditionMatcherTest {
                     BOOL_CONDITION_MATCHER_AND_KEY to listOf(
                         mapOf<String, Any>(
                             MATCHER_TYPE_KEY to AllConditionMatcherFactory.TYPE,
-                        )
+                        ),
                     ),
                     BOOL_CONDITION_MATCHER_OR_KEY to listOf(
                         mapOf<String, Any>(
                             MATCHER_TYPE_KEY to AllConditionMatcherFactory.TYPE,
-                        )
-                    )
-                )
-            ).asConfiguration()
+                        ),
+                    ),
+                ),
+            ).asConfiguration(),
         ) as BoolConditionMatcher
         assertThat(conditionMatcher.type, `is`(BoolConditionMatcherFactory.TYPE))
         assertThat(conditionMatcher.and, hasSize(1))

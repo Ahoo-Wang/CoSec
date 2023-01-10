@@ -54,11 +54,11 @@ class RegularActionMatcherFactory : ActionMatcherFactory {
         val pattern = configuration.getMatcherPattern()
         return if (ActionPatternReplacer.isTemplate(pattern)) {
             ReplaceableRegularActionMatcher(
-                configuration
+                configuration,
             )
         } else {
             RegularActionMatcher(
-                configuration
+                configuration,
             )
         }
     }

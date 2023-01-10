@@ -45,7 +45,7 @@ class SimpleRefreshTokenAuthenticationTest {
                 assertThat(it.id, equalTo(SimpleTenantPrincipal.ANONYMOUS.id))
                 assertThat(
                     it.tenant.tenantId,
-                    equalTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId)
+                    equalTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId),
                 )
             }.verifyComplete()
     }

@@ -27,7 +27,7 @@ class OgnlConditionMatcher(configuration: Configuration) : AbstractConditionMatc
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         val ognlContext = mapOf(
             "request" to request,
-            "context" to securityContext
+            "context" to securityContext,
         )
         return Ognl.getValue(ognlExpression, ognlContext, request) as Boolean
     }

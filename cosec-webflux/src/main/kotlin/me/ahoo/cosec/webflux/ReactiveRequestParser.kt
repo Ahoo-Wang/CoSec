@@ -22,7 +22,7 @@ import org.springframework.web.server.ServerWebExchange
 
 class ReactiveRequestParser(
     private val remoteIpResolver: RemoteIpResolver<ServerWebExchange>,
-    private val requestAttributesAppends: List<RequestAttributesAppender> = listOf()
+    private val requestAttributesAppends: List<RequestAttributesAppender> = listOf(),
 ) :
     RequestParser<ServerWebExchange> {
     override fun parse(request: ServerWebExchange): Request {
@@ -32,7 +32,7 @@ class ReactiveRequestParser(
             method = request.request.methodValue,
             remoteIp = remoteIpResolver.resolve(request),
             origin = request.request.headers.origin.orEmpty(),
-            referer = request.request.headers.getFirst(HttpHeaders.REFERER).orEmpty()
+            referer = request.request.headers.getFirst(HttpHeaders.REFERER).orEmpty(),
         )
 
         for (requestAttributesAppender in requestAttributesAppends) {

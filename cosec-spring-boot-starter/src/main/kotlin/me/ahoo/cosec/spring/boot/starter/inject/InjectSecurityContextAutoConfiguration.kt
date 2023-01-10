@@ -37,7 +37,7 @@ import javax.servlet.http.HttpServletRequest
 @ConditionalOnCoSecEnabled
 @ConditionalOnInjectSecurityEnabled
 @EnableConfigurationProperties(
-    InjectSecurityContextProperties::class
+    InjectSecurityContextProperties::class,
 )
 class InjectSecurityContextAutoConfiguration {
     companion object {
@@ -58,7 +58,7 @@ class InjectSecurityContextAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         fun injectSecurityContextFilter(
-            @Qualifier(INJECT_SECURITY_CONTEXT_PARSER_BEAN_NAME) securityContextParser: SecurityContextParser<HttpServletRequest>
+            @Qualifier(INJECT_SECURITY_CONTEXT_PARSER_BEAN_NAME) securityContextParser: SecurityContextParser<HttpServletRequest>,
         ): InjectSecurityContextFilter {
             return InjectSecurityContextFilter(securityContextParser)
         }
@@ -77,7 +77,7 @@ class InjectSecurityContextAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         fun reactiveInjectSecurityContextWebFilter(
-            @Qualifier(REACTIVE_INJECT_SECURITY_CONTEXT_PARSER_BEAN_NAME) securityContextParser: SecurityContextParser<ServerWebExchange>
+            @Qualifier(REACTIVE_INJECT_SECURITY_CONTEXT_PARSER_BEAN_NAME) securityContextParser: SecurityContextParser<ServerWebExchange>,
         ): ReactiveInjectSecurityContextWebFilter {
             return ReactiveInjectSecurityContextWebFilter(securityContextParser)
         }

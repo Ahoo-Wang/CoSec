@@ -68,8 +68,8 @@ internal class SimpleAuthorizationTest {
             every { statements } returns listOf(
                 StatementData(
                     effect = Effect.ALLOW,
-                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
-                )
+                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY)),
+                ),
             )
         }
         val policyRepository = mockk<PolicyRepository>() {
@@ -94,8 +94,8 @@ internal class SimpleAuthorizationTest {
             every { statements } returns listOf(
                 StatementData(
                     effect = Effect.DENY,
-                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
-                )
+                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY)),
+                ),
             )
         }
         val policyRepository = mockk<PolicyRepository>() {
@@ -119,8 +119,8 @@ internal class SimpleAuthorizationTest {
             every { statements } returns listOf(
                 StatementData(
                     effect = Effect.ALLOW,
-                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
-                )
+                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY)),
+                ),
             )
         }
         val securityContext = mockk<SecurityContext>() {
@@ -150,8 +150,8 @@ internal class SimpleAuthorizationTest {
             every { statements } returns listOf(
                 StatementData(
                     effect = Effect.DENY,
-                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
-                )
+                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY)),
+                ),
             )
         }
         val securityContext = mockk<SecurityContext>() {
@@ -181,8 +181,8 @@ internal class SimpleAuthorizationTest {
             every { statements } returns listOf(
                 StatementData(
                     effect = Effect.ALLOW,
-                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
-                )
+                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY)),
+                ),
             )
         }
         val securityContext = mockk<SecurityContext>() {
@@ -213,8 +213,8 @@ internal class SimpleAuthorizationTest {
             every { statements } returns listOf(
                 StatementData(
                     effect = Effect.DENY,
-                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY))
-                )
+                    actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY)),
+                ),
             )
         }
         val securityContext = mockk<SecurityContext>() {

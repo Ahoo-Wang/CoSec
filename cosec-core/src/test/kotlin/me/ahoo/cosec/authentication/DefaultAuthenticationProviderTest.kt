@@ -28,16 +28,16 @@ internal class DefaultAuthenticationProviderTest {
     fun register() {
         Assertions.assertThrows(IllegalArgumentException::class.java) {
             DefaultAuthenticationProvider.getRequired<RefreshTokenCredentials, CoSecPrincipal, SimpleRefreshTokenAuthentication>(
-                RefreshTokenCredentials::class.java
+                RefreshTokenCredentials::class.java,
             )
         }
         val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(mockk())
         DefaultAuthenticationProvider.register(refreshTokenAuthentication)
         assertThat(
             DefaultAuthenticationProvider.getRequired<RefreshTokenCredentials, CoSecPrincipal, SimpleRefreshTokenAuthentication>(
-                RefreshTokenCredentials::class.java
+                RefreshTokenCredentials::class.java,
             ),
-            `is`(refreshTokenAuthentication)
+            `is`(refreshTokenAuthentication),
         )
     }
 }

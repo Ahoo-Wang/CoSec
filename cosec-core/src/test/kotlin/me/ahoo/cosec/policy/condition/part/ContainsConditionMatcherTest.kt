@@ -27,8 +27,8 @@ class ContainsConditionMatcherTest {
         ContainsConditionMatcherFactory().create(
             mapOf(
                 CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
-                MATCHER_PATTERN_KEY to "192"
-            ).asConfiguration()
+                MATCHER_PATTERN_KEY to "192",
+            ).asConfiguration(),
         )
 
     @Test

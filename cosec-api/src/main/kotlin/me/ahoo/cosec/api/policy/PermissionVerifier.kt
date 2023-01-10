@@ -23,5 +23,5 @@ interface PermissionVerifier {
 enum class VerifyResult {
     ALLOW,
     EXPLICIT_DENY,
-    IMPLICIT_DENY
+    IMPLICIT_DENY,
 }

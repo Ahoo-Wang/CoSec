@@ -32,12 +32,12 @@ class CoSecJwtAutoConfigurationTest {
     fun contextLoads() {
         contextRunner
             .withPropertyValues(
-                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_"
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
                 CoSecAuthenticationAutoConfiguration::class.java,
-                CoSecJwtAutoConfiguration::class.java
+                CoSecJwtAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
@@ -52,10 +52,10 @@ class CoSecJwtAutoConfigurationTest {
     fun contextLoadsWhenDisable() {
         contextRunner
             .withPropertyValues(
-                "${JwtProperties.PREFIX}.enabled=false"
+                "${JwtProperties.PREFIX}.enabled=false",
             )
             .withUserConfiguration(
-                CoSecJwtAutoConfiguration::class.java
+                CoSecJwtAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)

@@ -46,7 +46,7 @@ internal class RegularActionMatcherTest {
                 Arguments.of("auth/login:POST", listOf("auth/login:POST"), true),
                 Arguments.of("auth/login:POST", listOf("auth/logout:POST"), false),
                 Arguments.of("auth/[a-zA-Z]+", listOf("auth/login", "auth/logout"), true),
-                Arguments.of("auth/[a-zA-Z]+", listOf("auth/", "auth/login/"), false)
+                Arguments.of("auth/[a-zA-Z]+", listOf("auth/", "auth/login/"), false),
             )
         }
     }

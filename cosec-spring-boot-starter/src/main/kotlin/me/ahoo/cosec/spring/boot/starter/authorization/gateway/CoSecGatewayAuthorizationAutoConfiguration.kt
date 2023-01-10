@@ -38,7 +38,7 @@ import org.springframework.web.server.ServerWebExchange
 @ConditionalOnGatewayEnabled
 @ConditionalOnClass(AuthorizationGatewayFilter::class)
 @EnableConfigurationProperties(
-    GatewayProperties::class
+    GatewayProperties::class,
 )
 class CoSecGatewayAuthorizationAutoConfiguration {
 
@@ -49,7 +49,7 @@ class CoSecGatewayAuthorizationAutoConfiguration {
         securityContextParser: SecurityContextParser<ServerWebExchange>,
         @Qualifier(CoSecAuthorizationAutoConfiguration.REACTIVE_REQUEST_PARSER_BEAN_NAME)
         requestParser: RequestParser<ServerWebExchange>,
-        authorization: Authorization
+        authorization: Authorization,
     ): AuthorizationGatewayFilter {
         return AuthorizationGatewayFilter(securityContextParser, requestParser, authorization)
     }

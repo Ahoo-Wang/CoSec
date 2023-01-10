@@ -46,7 +46,7 @@ class AuthorizationGatewayFilterTest {
         val filter = AuthorizationGatewayFilter(
             ReactiveInjectSecurityContextParser,
             ReactiveRequestParser(ReactiveRemoteIpResolver),
-            authorization
+            authorization,
         )
         assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE))
         val exchange = mockk<ServerWebExchange>() {

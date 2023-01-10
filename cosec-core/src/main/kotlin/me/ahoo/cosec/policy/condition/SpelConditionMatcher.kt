@@ -35,7 +35,7 @@ class SpelConditionMatcher(configuration: Configuration) : AbstractConditionMatc
 
     data class Root(
         val request: Request,
-        val context: SecurityContext
+        val context: SecurityContext,
     )
 }
 

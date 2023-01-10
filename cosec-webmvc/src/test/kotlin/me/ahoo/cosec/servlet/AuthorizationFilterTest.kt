@@ -41,7 +41,7 @@ internal class AuthorizationFilterTest {
         val filter = AuthorizationFilter(
             InjectSecurityContextParser,
             authorization,
-            ServletRequestParser(ServletRemoteIpResolver)
+            ServletRequestParser(ServletRemoteIpResolver),
         )
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
@@ -67,7 +67,7 @@ internal class AuthorizationFilterTest {
         val filter = AuthorizationFilter(
             InjectSecurityContextParser,
             authorization,
-            ServletRequestParser(ServletRemoteIpResolver)
+            ServletRequestParser(ServletRemoteIpResolver),
         )
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"

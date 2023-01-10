@@ -29,11 +29,11 @@ plugins {
 
 val bomProjects = setOf(
     project(":cosec-bom"),
-    project(":cosec-dependencies")
+    project(":cosec-dependencies"),
 )
 
 val serverProjects = setOf(
-    project(":cosec-gateway-server")
+    project(":cosec-gateway-server"),
 )
 
 val publishProjects = subprojects - serverProjects
@@ -111,7 +111,7 @@ configure(libraryProjects) {
         resultFormat.set("json")
 
         var jmhMode = listOf(
-            "thrpt"
+            "thrpt",
         )
         if (project.hasProperty(jmhModeKey)) {
             jmhMode = project.properties[jmhModeKey].toString().split(delimiter)

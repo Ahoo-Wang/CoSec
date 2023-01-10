@@ -44,7 +44,7 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
                 if (verifyResult == VerifyResult.EXPLICIT_DENY) {
                     if (log.isDebugEnabled) {
                         log.debug(
-                            "Verify [$request] [$context] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Explicit Deny]."
+                            "Verify [$request] [$context] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Explicit Deny].",
                         )
                     }
                     return VerifyResult.EXPLICIT_DENY
@@ -60,7 +60,7 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
                 if (verifyResult == VerifyResult.ALLOW) {
                     if (log.isDebugEnabled) {
                         log.debug(
-                            "Verify [$request] [$context] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Allow]."
+                            "Verify [$request] [$context] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Allow].",
                         )
                     }
                     return VerifyResult.ALLOW
@@ -138,7 +138,7 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
                                     VerifyResult.IMPLICIT_DENY -> {
                                         if (log.isDebugEnabled) {
                                             log.debug(
-                                                "Verify [$request] [$context] No policies matched - [Implicit Deny]."
+                                                "Verify [$request] [$context] No policies matched - [Implicit Deny].",
                                             )
                                         }
                                         AuthorizeResult.IMPLICIT_DENY

@@ -50,7 +50,7 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @ConditionalOnCacheEnabled
 @ConditionalOnClass(name = ["me.ahoo.cosec.redis.GlobalPolicyIndexCache"])
 @EnableConfigurationProperties(
-    CacheProperties::class
+    CacheProperties::class,
 )
 class CoSecCacheAutoConfiguration(private val cacheProperties: CacheProperties) {
 
@@ -68,12 +68,12 @@ class CoSecCacheAutoConfiguration(private val cacheProperties: CacheProperties) 
     fun redisPolicyRepository(
         globalPolicyIndexCache: GlobalPolicyIndexCache,
         rolePolicyCache: RolePolicyCache,
-        policyCache: PolicyCache
+        policyCache: PolicyCache,
     ): PolicyRepository {
         return RedisPolicyRepository(
             globalPolicyIndexCache,
             rolePolicyCache,
-            policyCache
+            policyCache,
         )
     }
 
@@ -89,7 +89,7 @@ class CoSecCacheAutoConfiguration(private val cacheProperties: CacheProperties) 
         @Qualifier(GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<GlobalPolicyIndexKey, Set<String>>,
         redisTemplate: StringRedisTemplate,
         cacheManager: CacheManager,
-        idGenerator: IdGenerator
+        idGenerator: IdGenerator,
     ): GlobalPolicyIndexCache {
         val clientId = idGenerator.generateAsString()
         val cacheKeyPrefix = cacheProperties.cacheKeyPrefix.globalPolicyIndex
@@ -105,8 +105,8 @@ class CoSecCacheAutoConfiguration(private val cacheProperties: CacheProperties) 
                     }
                 },
                 distributedCaching = distributedCaching,
-                cacheSource = cacheSource
-            )
+                cacheSource = cacheSource,
+            ),
         )
         return GlobalPolicyIndexCache(delegate)
     }
@@ -123,7 +123,7 @@ class CoSecCacheAutoConfiguration(private val cacheProperties: CacheProperties) 
         @Qualifier(ROLE_POLICY_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<String, Set<String>>,
         redisTemplate: StringRedisTemplate,
         cacheManager: CacheManager,
-        idGenerator: IdGenerator
+        idGenerator: IdGenerator,
     ): RolePolicyCache {
         val clientId = idGenerator.generateAsString()
         val cacheKeyPrefix = cacheProperties.cacheKeyPrefix.rolePolicy
@@ -135,8 +135,8 @@ class CoSecCacheAutoConfiguration(private val cacheProperties: CacheProperties) 
                 clientId = clientId,
                 keyConverter = ToStringKeyConverter(cacheKeyPrefix),
                 distributedCaching = distributedCaching,
-                cacheSource = cacheSource
-            )
+                cacheSource = cacheSource,
+            ),
         )
         return RolePolicyCache(delegate)
     }
@@ -153,7 +153,7 @@ class CoSecCacheAutoConfiguration(private val cacheProperties: CacheProperties) 
         @Qualifier(POLICY_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<String, Policy>,
         redisTemplate: StringRedisTemplate,
         cacheManager: CacheManager,
-        idGenerator: IdGenerator
+        idGenerator: IdGenerator,
     ): PolicyCache {
         val clientId = idGenerator.generateAsString()
         val cacheKeyPrefix = cacheProperties.cacheKeyPrefix.policy
@@ -165,8 +165,8 @@ class CoSecCacheAutoConfiguration(private val cacheProperties: CacheProperties) 
                 clientId = clientId,
                 keyConverter = ToStringKeyConverter(cacheKeyPrefix),
                 distributedCaching = distributedCaching,
-                cacheSource = cacheSource
-            )
+                cacheSource = cacheSource,
+            ),
         )
         return PolicyCache(delegate)
     }
