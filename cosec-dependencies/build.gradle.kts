@@ -27,7 +27,7 @@ dependencies {
         api("io.opentelemetry:opentelemetry-semconv:1.20.1-alpha")
         api("org.junit-pioneer:junit-pioneer:1.9.1")
         api("org.hamcrest:hamcrest:2.2")
-        api("io.mockk:mockk:1.13.3")
+        api("io.mockk:mockk:1.13.4")
         api("org.openjdk.jmh:jmh-core:1.36")
         api("org.openjdk.jmh:jmh-generator-annprocess:1.36")
         api("io.gitlab.arturbosch.detekt:detekt-formatting:1.22.0")
