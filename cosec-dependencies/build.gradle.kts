@@ -25,7 +25,7 @@ dependencies {
         api("org.lionsoul:ip2region:2.6.6")
         api("com.google.guava:guava:31.1-jre")
         api("io.opentelemetry:opentelemetry-semconv:1.20.1-alpha")
-        api("org.junit-pioneer:junit-pioneer:1.9.1")
+        api("org.junit-pioneer:junit-pioneer:2.0.0")
         api("org.hamcrest:hamcrest:2.2")
         api("io.mockk:mockk:1.13.4")
         api("org.openjdk.jmh:jmh-core:1.36")
