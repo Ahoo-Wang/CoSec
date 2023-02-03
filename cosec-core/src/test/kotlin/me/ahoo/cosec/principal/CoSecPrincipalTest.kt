@@ -13,10 +13,10 @@
 package me.ahoo.cosec.principal
 
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import org.junit.jupiter.api.Assertions
+import org.hamcrest.MatcherAssert.assertThat
+import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
-import org.junitpioneer.jupiter.SetSystemProperty
 
 /**
  * CoSecPrincipalTest .
@@ -25,9 +25,10 @@ import org.junitpioneer.jupiter.SetSystemProperty
  */
 internal class CoSecPrincipalTest {
     @Disabled
-    @SetSystemProperty(key = CoSecPrincipal.ROOT_KEY, value = "root")
     @Test
     fun rootWhenSetSystemProperty() {
-        Assertions.assertEquals("root", CoSecPrincipal.ROOT_ID)
+        System.setProperty(CoSecPrincipal.ROOT_KEY, "root")
+        assertThat(CoSecPrincipal.ROOT_ID, equalTo("root"))
+        System.clearProperty(CoSecPrincipal.ROOT_KEY)
     }
 }
