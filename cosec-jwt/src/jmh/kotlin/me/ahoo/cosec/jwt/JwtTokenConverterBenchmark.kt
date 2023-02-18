@@ -35,18 +35,18 @@ import org.openjdk.jmh.annotations.Threads
  * # VM version: JDK 11.0.13, OpenJDK 64-Bit Server VM, 11.0.13+8-LTS
  * # VM invoker: /Library/Java/JavaVirtualMachines/zulu-11.jdk/Contents/Home/bin/java
  * # VM options: <none>
- * # Blackhole mode: full + dont-inline hint (default, use -Djmh.blackhole.autoDetect=true to auto-detect)
- * # Warmup: 1 iterations, 10 s each
+ * # Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+ * # Warmup: 5 iterations, 10 s each
  * # Measurement: 5 iterations, 10 s each
  * # Timeout: 10 min per iteration
  * # Threads: 6 threads, will synchronize iterations
  * # Benchmark mode: Throughput, ops/time
  * ---------------------------------------------------------------------
- * Benchmark                   Mode  Cnt        Score       Error  Units
- * asPrincipalWithNoneVerify  thrpt    5  2810825.398 ± 38403.408  ops/s
- * asPrincipalWithVerify      thrpt    5   808168.565 ± 45889.993  ops/s
+ * Benchmark                   Mode  Cnt        Score        Error  Units
+ * asPrincipalWithNoneVerify  thrpt   25  3413361.362 ± 274500.733  ops/s
+ * asPrincipalWithVerify      thrpt   25   963915.375 ±  80948.670  ops/s
  * ---------------------------------------------------------------------
-</none></pre> *
+ * </pre>
  *
  * @author ahoo wang
  */
