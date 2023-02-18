@@ -24,7 +24,7 @@ plugins {
     kotlin("jvm")
     id("org.jetbrains.dokka")
     id("me.champeau.jmh")
-    id("jacoco-report-aggregation")
+    jacoco
 }
 
 val bomProjects = setOf(
@@ -35,8 +35,8 @@ val bomProjects = setOf(
 val serverProjects = setOf(
     project(":cosec-gateway-server"),
 )
-
-val publishProjects = subprojects - serverProjects
+val codeCoverageReportProject = project(":code-coverage-report")
+val publishProjects = subprojects - serverProjects - codeCoverageReportProject
 val libraryProjects = publishProjects - bomProjects
 
 ext {
@@ -72,6 +72,7 @@ configure(libraryProjects) {
         autoCorrect = true
     }
     apply<DokkaPlugin>()
+    apply<JacocoPlugin>()
     apply<JavaLibraryPlugin>()
     configure<JavaPluginExtension> {
         withJavadocJar()
@@ -215,9 +216,9 @@ configure(publishProjects) {
         }
 
         if (isBom) {
-            sign(extensions.getByType(PublishingExtension::class).publications.get("mavenBom"))
+            sign(extensions.getByType(PublishingExtension::class).publications["mavenBom"])
         } else {
-            sign(extensions.getByType(PublishingExtension::class).publications.get("mavenLibrary"))
+            sign(extensions.getByType(PublishingExtension::class).publications["mavenLibrary"])
         }
     }
 }
@@ -232,18 +233,3 @@ nexusPublishing {
 }
 
 fun getPropertyOf(name: String) = project.properties[name]?.toString()
-dependencies {
-    libraryProjects.forEach {
-        jacocoAggregation(it)
-    }
-}
-reporting {
-    reports {
-        val codeCoverageReport by creating(JacocoCoverageReport::class) {
-            testType.set(TestSuiteType.UNIT_TEST)
-        }
-    }
-}
-tasks.check {
-    dependsOn(tasks.named<JacocoReport>("codeCoverageReport"))
-}

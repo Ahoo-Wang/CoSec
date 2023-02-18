@@ -27,6 +27,7 @@ include(":cosec-gateway")
 include(":cosec-gateway-server")
 include(":cosec-opentelemetry")
 include(":cosec-ip2region")
+include(":code-coverage-report")
 
 pluginManagement {
     plugins {
@@ -38,3 +39,4 @@ pluginManagement {
         id("io.github.gradle-nexus.publish-plugin") version "1.1.0" apply false
     }
 }
+
