@@ -19,15 +19,19 @@ import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 internal class SecurityContextTest {
 
     @Test
     fun test() {
-        var context: SecurityContext = SimpleSecurityContext(SimplePrincipal.ANONYMOUS)
+        val context: SecurityContext = SimpleSecurityContext(SimplePrincipal.ANONYMOUS)
         context.setAttributeValue("key", "value")
-        assertThat(context.attributes["key"], `is`("value"))
+        assertThat(context.getRequiredAttributeValue("key"), `is`("value"))
         assertThat(context.principal, equalTo(SimplePrincipal.ANONYMOUS))
         assertThat(context.tenant, equalTo(SimplePrincipal.ANONYMOUS.tenant))
+        assertThrows<IllegalArgumentException> {
+            context.getRequiredAttributeValue("not-exists")
+        }
     }
 }
