@@ -21,8 +21,10 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.CoSecPrincipal.Companion.isRoot
+import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import org.slf4j.LoggerFactory
 import reactor.core.publisher.Mono
+import reactor.kotlin.core.publisher.switchIfEmpty
 import reactor.kotlin.core.publisher.toMono
 
 /**
@@ -35,7 +37,7 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
         private val log = LoggerFactory.getLogger(SimpleAuthorization::class.java)
     }
 
-    private fun verifyPolicies(policies: Set<Policy>, request: Request, context: SecurityContext): VerifyResult {
+    private fun verifyPolicies(policies: Set<Policy>, request: Request, context: SecurityContext): VerifyContext? {
         policies.forEach { policy: Policy ->
             policy.statements.filter { statement: Statement ->
                 statement.effect == Effect.DENY
@@ -47,7 +49,12 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
                             "Verify [$request] [$context] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Explicit Deny].",
                         )
                     }
-                    return VerifyResult.EXPLICIT_DENY
+                    return VerifyContext(
+                        policy = policy,
+                        statementIndex = index,
+                        statement = statement,
+                        result = verifyResult
+                    )
                 }
             }
         }
@@ -63,12 +70,19 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
                             "Verify [$request] [$context] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Allow].",
                         )
                     }
-                    return VerifyResult.ALLOW
+                    return VerifyContext(
+                        policy = policy,
+                        statementIndex = index,
+                        statement = statement,
+                        result = verifyResult
+                    )
                 }
             }
         }
-
-        return VerifyResult.IMPLICIT_DENY
+        /**
+         * [VerifyResult.IMPLICIT_DENY]
+         */
+        return null
     }
 
     private fun verifyRoot(context: SecurityContext): VerifyResult {
@@ -82,32 +96,29 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
         }
     }
 
-    private fun verifyGlobalPolicies(request: Request, context: SecurityContext): Mono<VerifyResult> {
+    private fun verifyGlobalPolicies(request: Request, context: SecurityContext): Mono<VerifyContext> {
         return policyRepository.getGlobalPolicy()
-            .defaultIfEmpty(emptySet())
-            .map { policies: Set<Policy> ->
+            .mapNotNull { policies: Set<Policy> ->
                 verifyPolicies(policies, request, context)
             }
     }
 
-    private fun verifyPrincipalPolicies(request: Request, context: SecurityContext): Mono<VerifyResult> {
+    private fun verifyPrincipalPolicies(request: Request, context: SecurityContext): Mono<VerifyContext> {
         if (context.principal.policies.isEmpty()) {
-            return VerifyResult.IMPLICIT_DENY.toMono()
+            return Mono.empty()
         }
         return policyRepository.getPolicies(context.principal.policies)
-            .defaultIfEmpty(emptySet())
-            .map { policies: Set<Policy> ->
+            .mapNotNull { policies: Set<Policy> ->
                 verifyPolicies(policies, request, context)
             }
     }
 
-    private fun verifyRolePolicies(request: Request, context: SecurityContext): Mono<VerifyResult> {
+    private fun verifyRolePolicies(request: Request, context: SecurityContext): Mono<VerifyContext> {
         if (context.principal.roles.isEmpty()) {
-            return VerifyResult.IMPLICIT_DENY.toMono()
+            return Mono.empty()
         }
         return policyRepository.getRolePolicy(context.principal.roles)
-            .defaultIfEmpty(emptySet())
-            .map { policies: Set<Policy> ->
+            .mapNotNull { policies: Set<Policy> ->
                 verifyPolicies(policies, request, context)
             }
     }
@@ -119,34 +130,26 @@ class SimpleAuthorization(private val policyRepository: PolicyRepository) : Auth
         }
 
         return verifyGlobalPolicies(request, context)
-            .flatMap { globalVerifyResult: VerifyResult ->
-                if (globalVerifyResult == VerifyResult.IMPLICIT_DENY) {
-                    return@flatMap verifyPrincipalPolicies(request, context)
-                }
-                globalVerifyResult.toMono()
+            .switchIfEmpty {
+                verifyPrincipalPolicies(request, context)
             }
-            .flatMap { principalVerifyResult: VerifyResult ->
-                when (principalVerifyResult) {
-                    VerifyResult.ALLOW -> AuthorizeResult.ALLOW.toMono()
-                    VerifyResult.EXPLICIT_DENY -> AuthorizeResult.EXPLICIT_DENY.toMono()
-                    VerifyResult.IMPLICIT_DENY -> {
-                        verifyRolePolicies(request, context)
-                            .map { roleVerifyResult: VerifyResult ->
-                                when (roleVerifyResult) {
-                                    VerifyResult.ALLOW -> AuthorizeResult.ALLOW
-                                    VerifyResult.EXPLICIT_DENY -> AuthorizeResult.EXPLICIT_DENY
-                                    VerifyResult.IMPLICIT_DENY -> {
-                                        if (log.isDebugEnabled) {
-                                            log.debug(
-                                                "Verify [$request] [$context] No policies matched - [Implicit Deny].",
-                                            )
-                                        }
-                                        AuthorizeResult.IMPLICIT_DENY
-                                    }
-                                }
-                            }
-                    }
+            .switchIfEmpty {
+                verifyRolePolicies(request, context)
+            }
+            .map {
+                context.setVerifyContext(it)
+                when (it.result) {
+                    VerifyResult.ALLOW -> AuthorizeResult.ALLOW
+                    VerifyResult.EXPLICIT_DENY -> AuthorizeResult.EXPLICIT_DENY
+                    VerifyResult.IMPLICIT_DENY -> throw IllegalStateException("VerifyResult.IMPLICIT_DENY")
                 }
+            }.switchIfEmpty {
+                if (log.isDebugEnabled) {
+                    log.debug(
+                        "Verify [$request] [$context] No policies matched - [Implicit Deny].",
+                    )
+                }
+                AuthorizeResult.IMPLICIT_DENY.toMono()
             }
     }
 }

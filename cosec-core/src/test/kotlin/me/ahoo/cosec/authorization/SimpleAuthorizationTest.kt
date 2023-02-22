@@ -55,7 +55,7 @@ internal class SimpleAuthorizationTest {
         val request = mockk<Request> {
         }
 
-        authorization.authorize(request, SimpleSecurityContext.ANONYMOUS)
+        authorization.authorize(request, SimpleSecurityContext.anonymous())
             .test()
             .expectNext(AuthorizeResult.IMPLICIT_DENY)
             .verifyComplete()
@@ -81,7 +81,7 @@ internal class SimpleAuthorizationTest {
         val request = mockk<Request> {
         }
 
-        authorization.authorize(request, SimpleSecurityContext.ANONYMOUS)
+        authorization.authorize(request, SimpleSecurityContext.anonymous())
             .test()
             .expectNext(AuthorizeResult.ALLOW)
             .verifyComplete()
@@ -106,7 +106,7 @@ internal class SimpleAuthorizationTest {
         val authorization = SimpleAuthorization(policyRepository)
         val request = mockk<Request>()
 
-        authorization.authorize(request, SimpleSecurityContext.ANONYMOUS)
+        authorization.authorize(request, SimpleSecurityContext.anonymous())
             .test()
             .expectNext(AuthorizeResult.EXPLICIT_DENY)
             .verifyComplete()
@@ -123,10 +123,11 @@ internal class SimpleAuthorizationTest {
                 ),
             )
         }
-        val securityContext = mockk<SecurityContext>() {
+        val securityContext = mockk<SecurityContext> {
             every { principal.authenticated() } returns false
             every { principal.id } returns ""
             every { principal.policies } returns setOf("principalPolicy")
+            every { setAttributeValue(any(), any()) } returns this
         }
         val policyRepository = mockk<PolicyRepository>() {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -158,8 +159,9 @@ internal class SimpleAuthorizationTest {
             every { principal.authenticated() } returns false
             every { principal.id } returns ""
             every { principal.policies } returns setOf("principalPolicy")
+            every { setAttributeValue(any(), any()) } returns this
         }
-        val policyRepository = mockk<PolicyRepository>() {
+        val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
             every { getPolicies(any()) } returns Mono.just(setOf(principalPolicy))
             every { getRolePolicy(any()) } returns Mono.empty()
@@ -185,13 +187,14 @@ internal class SimpleAuthorizationTest {
                 ),
             )
         }
-        val securityContext = mockk<SecurityContext>() {
+        val securityContext = mockk<SecurityContext> {
             every { principal.authenticated() } returns false
             every { principal.id } returns ""
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy")
+            every { setAttributeValue(any(), any()) } returns this
         }
-        val policyRepository = mockk<PolicyRepository>() {
+        val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
             every { getPolicies(any()) } returns Mono.empty()
             every { getRolePolicy(any()) } returns Mono.just(setOf(rolePolicy))
@@ -217,11 +220,12 @@ internal class SimpleAuthorizationTest {
                 ),
             )
         }
-        val securityContext = mockk<SecurityContext>() {
+        val securityContext = mockk<SecurityContext> {
             every { principal.authenticated() } returns false
             every { principal.id } returns ""
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy")
+            every { setAttributeValue(any(), any()) } returns this
         }
         val policyRepository = mockk<PolicyRepository>() {
             every { getGlobalPolicy() } returns Mono.empty()

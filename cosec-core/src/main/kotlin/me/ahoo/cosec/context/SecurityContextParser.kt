@@ -32,7 +32,7 @@ fun interface SecurityContextParser<R> {
             if (LOG.isDebugEnabled) {
                 LOG.debug(ignored.message, ignored)
             }
-            SimpleSecurityContext.ANONYMOUS
+            SimpleSecurityContext.anonymous()
         }
     }
 }

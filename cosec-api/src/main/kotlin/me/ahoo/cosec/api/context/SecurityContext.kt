@@ -16,10 +16,25 @@ package me.ahoo.cosec.api.context
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.tenant.TenantCapable
 
-interface SecurityContext : TenantCapable, Attributes<SecurityContext, String, Any> {
+interface SecurityContext : TenantCapable {
     companion object {
         const val KEY = "COSEC_SECURITY_CONTEXT"
     }
 
+    val attributes: MutableMap<String, Any>
     val principal: CoSecPrincipal
+
+    fun <V> getAttributeValue(attributeKey: String): V? {
+        @Suppress("UNCHECKED_CAST")
+        return attributes[attributeKey] as V?
+    }
+
+    fun <V> getRequiredAttributeValue(attributeKey: String): V {
+        return requireNotNull(getAttributeValue(attributeKey))
+    }
+
+    fun setAttributeValue(attributeKey: String, value: Any): SecurityContext {
+        attributes[attributeKey] = value
+        return this
+    }
 }

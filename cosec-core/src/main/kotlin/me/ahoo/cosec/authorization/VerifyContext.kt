@@ -11,23 +11,28 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.context
+package me.ahoo.cosec.authorization
 
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.principal.SimplePrincipal
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
-import org.hamcrest.Matchers.`is`
-import org.junit.jupiter.api.Test
+import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.api.policy.VerifyResult
 
-internal class SecurityContextTest {
+data class VerifyContext(
+    val policy: Policy,
+    val statementIndex: Int,
+    val statement: Statement,
+    val result: VerifyResult
+) {
+    companion object {
+        private const val KEY = "COSEC_AUTHORIZATION_VERIFY_CONTEXT"
 
-    @Test
-    fun test() {
-        var context: SecurityContext = SimpleSecurityContext(SimplePrincipal.ANONYMOUS)
-        context.setAttributeValue("key", "value")
-        assertThat(context.attributes["key"], `is`("value"))
-        assertThat(context.principal, equalTo(SimplePrincipal.ANONYMOUS))
-        assertThat(context.tenant, equalTo(SimplePrincipal.ANONYMOUS.tenant))
+        fun SecurityContext.setVerifyContext(verifyContext: VerifyContext) {
+            this.setAttributeValue(KEY, verifyContext)
+        }
+
+        fun SecurityContext.getVerifyContext(): VerifyContext? {
+            return this.getAttributeValue(KEY)
+        }
     }
 }

@@ -24,7 +24,7 @@ import me.ahoo.cosec.api.token.AccessToken
 abstract class AbstractSecurityContextParser<R> :
     SecurityContextParser<R> {
     override fun parse(request: R): SecurityContext {
-        val accessToken = getAccessToken(request) ?: return SimpleSecurityContext.ANONYMOUS
+        val accessToken = getAccessToken(request) ?: return SimpleSecurityContext.anonymous()
         val principal = asPrincipal(accessToken)
         return SimpleSecurityContext(principal)
     }

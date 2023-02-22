@@ -22,8 +22,10 @@ import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
 import org.hamcrest.MatcherAssert
+import org.hamcrest.MatcherAssert.*
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
 import javax.servlet.http.HttpServletRequest
@@ -40,7 +42,7 @@ abstract class SecurityContextParserSpec {
             every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
         }
         val securityContext = createSecurityContextParser().parse(request)
-        MatcherAssert.assertThat(securityContext, equalTo(SimpleSecurityContext.ANONYMOUS))
+        assertThat(securityContext.principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
     }
 
     @Test
@@ -51,7 +53,7 @@ abstract class SecurityContextParserSpec {
             every { getHeader(Jwts.AUTHORIZATION_KEY) } returns Jwts.TOKEN_PREFIX + token
         }
         val securityContext = createSecurityContextParser().parse(request)
-        MatcherAssert.assertThat(securityContext.principal.id, equalTo(principal.id))
-        MatcherAssert.assertThat(securityContext.principal.name, equalTo(principal.name))
+        assertThat(securityContext.principal.id, equalTo(principal.id))
+        assertThat(securityContext.principal.name, equalTo(principal.name))
     }
 }

@@ -15,6 +15,7 @@ package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
@@ -28,11 +29,11 @@ class ReactiveSecurityContextsTest {
     @Test
     fun writeSecurityContext() {
         Mono.empty<Void>()
-            .writeSecurityContext(SimpleSecurityContext.ANONYMOUS)
+            .writeSecurityContext(SimpleSecurityContext.anonymous())
             .test()
             .expectAccessibleContext()
             .assertThat {
-                assertThat(it.getSecurityContext(), equalTo(SimpleSecurityContext.ANONYMOUS))
+                assertThat(it.getSecurityContext().principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
             }
             .hasKey(SecurityContext.KEY)
             .then()
