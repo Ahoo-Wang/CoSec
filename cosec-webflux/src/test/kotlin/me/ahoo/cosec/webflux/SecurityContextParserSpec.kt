@@ -22,6 +22,7 @@ import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
@@ -47,7 +48,7 @@ abstract class SecurityContextParserSpec {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
         }
         val securityContext = createSecurityContextParser().parse(exchange)
-        assertThat(securityContext, equalTo(SimpleSecurityContext.ANONYMOUS))
+        assertThat(securityContext.principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
     }
 
     @Test

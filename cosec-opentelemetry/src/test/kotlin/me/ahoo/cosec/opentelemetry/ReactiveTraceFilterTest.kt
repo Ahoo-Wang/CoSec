@@ -23,7 +23,11 @@ import io.opentelemetry.context.propagation.ContextPropagators
 import io.opentelemetry.sdk.OpenTelemetrySdk
 import io.opentelemetry.sdk.trace.SdkTracerProvider
 import io.opentelemetry.semconv.trace.attributes.SemanticAttributes
+import me.ahoo.cosec.api.policy.VerifyResult
+import me.ahoo.cosec.authorization.VerifyContext
+import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
@@ -81,7 +85,7 @@ class ReactiveTraceFilterTest {
     @Test
     fun filterWithSecurityContext() {
         val exchange = mockk<ServerWebExchange>() {
-            every { getSecurityContext() } returns SimpleSecurityContext.ANONYMOUS
+            every { getSecurityContext() } returns SimpleSecurityContext.anonymous()
         }
 
         ReactiveTraceFilter.filter(exchange) {
@@ -95,9 +99,17 @@ class ReactiveTraceFilterTest {
         val span = tracer.spanBuilder("test").startSpan()
         try {
             assertThat(span.isRecording, `is`(true))
+            val verifyContext = mockk<VerifyContext>() {
+                every { policy.id } returns "policyId"
+                every { statementIndex } returns 1
+                every { statement.name } returns "statementName"
+                every { result } returns VerifyResult.IMPLICIT_DENY
+            }
+            val securityContext = SimpleSecurityContext.anonymous()
+            securityContext.setVerifyContext(verifyContext)
             span.makeCurrent().use {
-                val exchange = mockk<ServerWebExchange>() {
-                    every { getSecurityContext() } returns SimpleSecurityContext.ANONYMOUS
+                val exchange = mockk<ServerWebExchange> {
+                    every { getSecurityContext() } returns securityContext
                 }
 
                 ReactiveTraceFilter.filter(exchange) {
@@ -110,17 +122,28 @@ class ReactiveTraceFilterTest {
                 }
                 attributesField.isAccessible = true
                 @Suppress("UNCHECKED_CAST")
-                val attributes = attributesField.get(span) as Map<AttributeKey<String>, String>
+                val attributes = attributesField.get(span) as Map<AttributeKey<*>, *>
                 assertThat(
                     attributes[SemanticAttributes.ENDUSER_ID],
-                    `is`(SimpleSecurityContext.ANONYMOUS.principal.id),
+                    `is`(SimpleTenantPrincipal.ANONYMOUS.id),
                 )
                 assertThat(attributes[SemanticAttributes.ENDUSER_ROLE], `is`(""))
                 assertThat(
                     attributes[COSEC_TENANT_ID_ATTRIBUTE_KEY],
-                    `is`(SimpleSecurityContext.ANONYMOUS.tenant.tenantId),
+                    `is`(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId),
                 )
                 assertThat(attributes[COSEC_POLICY_ATTRIBUTE_KEY], `is`(""))
+
+                assertThat(attributes[COSEC_AUTHORIZATION_POLICY_ID_ATTRIBUTE_KEY], `is`(verifyContext.policy.id))
+                assertThat(
+                    attributes[COSEC_AUTHORIZATION_STATEMENT_IDX_ATTRIBUTE_KEY],
+                    `is`(verifyContext.statementIndex.toLong())
+                )
+                assertThat(
+                    attributes[COSEC_AUTHORIZATION_STATEMENT_NAME_ATTRIBUTE_KEY],
+                    `is`(verifyContext.statement.name)
+                )
+                assertThat(attributes[COSEC_AUTHORIZATION_RESULT_ATTRIBUTE_KEY], `is`(verifyContext.result.name))
             }
         } finally {
             span.end()

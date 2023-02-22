@@ -11,25 +11,25 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.context
+package me.ahoo.cosec.api.context
 
-import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
-import org.hamcrest.Matchers.nullValue
-import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 
-internal class SecurityContextHolderTest {
+class AttributesTest {
 
     @Test
-    fun test() {
-        assertThat(SecurityContextHolder.context, nullValue())
-        SecurityContextHolder.setContext(SimpleSecurityContext.anonymous())
-        assertThat(SecurityContextHolder.context!!.principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
-        SecurityContextHolder.remove()
-        Assertions.assertThrows(IllegalArgumentException::class.java) {
-            SecurityContextHolder.requiredContext
+    fun mergeAttributes() {
+        val attributes = MockAttributes().mergeAttributes(additionalAttributes = mapOf("a" to "a"))
+        assertThat(attributes.attributes["a"], equalTo("a"))
+        assertThat(attributes, equalTo(attributes.mergeAttributes(emptyMap())))
+    }
+
+    data class MockAttributes(override val attributes: Map<String, String> = emptyMap()) :
+        Attributes<MockAttributes, String, String> {
+        override fun withAttributes(attributes: Map<String, String>): MockAttributes {
+            return copy(attributes = attributes)
         }
     }
 }

@@ -20,6 +20,7 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.jwt.Jwts
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
@@ -56,7 +57,7 @@ internal class AuthorizationFilterTest {
             every { doFilter(servletRequest, any()) } returns Unit
         }
         filter.doFilter(servletRequest, mockk<HttpServletResponse>(), filterChain)
-        assertThat(SecurityContextHolder.requiredContext, equalTo(SimpleSecurityContext.ANONYMOUS))
+        assertThat(SecurityContextHolder.requiredContext.principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
     }
 
     @Test
@@ -87,6 +88,6 @@ internal class AuthorizationFilterTest {
             every { doFilter(servletRequest, any()) } returns Unit
         }
         filter.doFilter(servletRequest, servletResponse, filterChain)
-        assertThat(SecurityContextHolder.requiredContext, equalTo(SimpleSecurityContext.ANONYMOUS))
+        assertThat(SecurityContextHolder.requiredContext.principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
     }
 }

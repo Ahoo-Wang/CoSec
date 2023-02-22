@@ -10,26 +10,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.context
+
+package me.ahoo.cosec.authorization
 
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.token.AccessToken
+import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.api.policy.VerifyResult
 
-/**
- * Abstract Security Context Parser .
- *
- * @author ahoo wang
- */
-abstract class AbstractSecurityContextParser<R> :
-    SecurityContextParser<R> {
-    override fun parse(request: R): SecurityContext {
-        val accessToken = getAccessToken(request) ?: return SimpleSecurityContext.anonymous()
-        val principal = asPrincipal(accessToken)
-        return SimpleSecurityContext(principal)
+data class VerifyContext(
+    val policy: Policy,
+    val statementIndex: Int,
+    val statement: Statement,
+    val result: VerifyResult
+) {
+    companion object {
+        private const val KEY = "COSEC_AUTHORIZATION_VERIFY_CONTEXT"
+
+        fun SecurityContext.setVerifyContext(verifyContext: VerifyContext) {
+            this.setAttributeValue(KEY, verifyContext)
+        }
+
+        fun SecurityContext.getVerifyContext(): VerifyContext? {
+            return this.getAttributeValue(KEY)
+        }
     }
-
-    protected abstract fun getAccessToken(request: R): AccessToken?
-
-    protected abstract fun asPrincipal(accessToken: AccessToken): CoSecPrincipal
 }
