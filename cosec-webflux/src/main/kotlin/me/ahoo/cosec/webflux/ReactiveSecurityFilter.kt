@@ -18,6 +18,7 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.springframework.http.HttpStatus
@@ -34,7 +35,12 @@ abstract class ReactiveSecurityFilter(
 ) {
 
     fun filterInternal(exchange: ServerWebExchange, chain: (ServerWebExchange) -> Mono<Void>): Mono<Void> {
-        val securityContext = securityContextParser.ensureParse(exchange)
+        val securityContext = try {
+            securityContextParser.parse(exchange)
+        } catch (tokenExpiredException: TokenExpiredException) {
+            exchange.response.statusCode = HttpStatus.UNAUTHORIZED
+            return exchange.response.writeWithAuthorizeResult(AuthorizeResult.TOKEN_EXPIRED)
+        }
         val request = requestParser.parse(exchange)
         return authorization.authorize(request, securityContext)
             .flatMap { authorizeResult ->

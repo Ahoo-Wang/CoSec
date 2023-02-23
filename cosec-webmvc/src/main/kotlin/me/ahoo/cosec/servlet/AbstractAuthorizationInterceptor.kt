@@ -13,12 +13,15 @@
 package me.ahoo.cosec.servlet
 
 import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
+import me.ahoo.cosec.token.TokenExpiredException
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
 
@@ -37,7 +40,13 @@ abstract class AbstractAuthorizationInterceptor(
         request: HttpServletRequest,
         response: HttpServletResponse,
     ): Boolean {
-        val securityContext = securityContextParser.ensureParse(request)
+        val securityContext = try {
+            securityContextParser.parse(request)
+        } catch (tokenExpiredException: TokenExpiredException) {
+            response.status = HttpStatus.UNAUTHORIZED.value()
+            response.writeWithAuthorizeResult(AuthorizeResult.TOKEN_EXPIRED)
+            return false
+        }
 
         SecurityContextHolder.setContext(securityContext)
         request.setSecurityContext(securityContext)
@@ -49,11 +58,17 @@ abstract class AbstractAuthorizationInterceptor(
                     } else {
                         response.status = HttpStatus.FORBIDDEN.value()
                     }
-                    response.outputStream.write(CoSecJsonSerializer.writeValueAsBytes(it))
-                    response.outputStream.flush()
+
+                    response.writeWithAuthorizeResult(it)
                     return@map false
                 }
                 true
             }.block()!!
+    }
+
+    private fun HttpServletResponse.writeWithAuthorizeResult(authorizeResult: AuthorizeResult) {
+        contentType = MediaType.APPLICATION_JSON_VALUE
+        outputStream.write(CoSecJsonSerializer.writeValueAsBytes(authorizeResult))
+        outputStream.flush()
     }
 }
