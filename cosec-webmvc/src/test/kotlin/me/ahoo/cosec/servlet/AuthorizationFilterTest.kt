@@ -14,11 +14,12 @@
 package me.ahoo.cosec.servlet
 
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextHolder
-import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
@@ -27,6 +28,7 @@ import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import reactor.kotlin.core.publisher.toMono
 import javax.servlet.FilterChain
 import javax.servlet.http.HttpServletRequest
@@ -80,6 +82,7 @@ internal class AuthorizationFilterTest {
             every { setSecurityContext(any()) } returns Unit
         }
         val servletResponse = mockk<HttpServletResponse> {
+            every { contentType = MediaType.APPLICATION_JSON_VALUE } just runs
             every { status = HttpStatus.UNAUTHORIZED.value() } returns Unit
             every { outputStream.write(any() as ByteArray) } returns Unit
             every { outputStream.flush() } returns Unit

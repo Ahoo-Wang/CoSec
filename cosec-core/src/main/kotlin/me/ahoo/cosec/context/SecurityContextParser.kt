@@ -13,7 +13,9 @@
 package me.ahoo.cosec.context
 
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.token.TokenExpiredException
 import org.slf4j.LoggerFactory
+import kotlin.jvm.Throws
 
 /**
  * Security Context Parser .
@@ -23,6 +25,7 @@ import org.slf4j.LoggerFactory
 private val LOG = LoggerFactory.getLogger(SecurityContextParser::class.java)
 
 fun interface SecurityContextParser<R> {
+    @Throws(TokenExpiredException::class)
     fun parse(request: R): SecurityContext
 
     fun ensureParse(request: R): SecurityContext {
