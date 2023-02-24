@@ -22,7 +22,7 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.principal.SimplePrincipal
-import me.ahoo.cosec.token.TokenExpiredException
+import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
@@ -75,47 +75,33 @@ internal class ReactiveAuthorizationFilterTest {
     }
 
     @Test
-    fun filterWhenTokenExpired() {
-        val securityContextParser = mockk<ReactiveSecurityContextParser> {
-            every { parse(any()) } throws TokenExpiredException()
-        }
-        val filter = ReactiveAuthorizationFilter(
-            securityContextParser,
-            mockk(),
-            mockk()
-        )
-        val exchange = mockk<ServerWebExchange> {
-            every { response.setStatusCode(HttpStatus.UNAUTHORIZED) } returns true
-            every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
-            every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
-            every { response.writeWith(any()) } returns Mono.empty()
-        }
-        val filterChain = mockk<WebFilterChain>()
-        filter.filter(exchange, filterChain).block()
-
-        verify {
-            securityContextParser.parse(any())
-            exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-            exchange.response.bufferFactory().wrap(any() as ByteArray)
-            exchange.response.writeWith(any())
-        }
-    }
-
-    @Test
     fun filterWhenTokenInvalid() {
+        val authorization = mockk<Authorization> {
+            every { authorize(any(), any()) } returns AuthorizeResult.EXPLICIT_DENY.toMono()
+        }
         val securityContextParser = mockk<ReactiveSecurityContextParser> {
-            every { parse(any()) } throws RuntimeException()
+            every { parse(any()) } throws TokenVerificationException()
         }
         val filter = ReactiveAuthorizationFilter(
             securityContextParser,
-            mockk(),
-            mockk()
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
+            authorization,
         )
         val exchange = mockk<ServerWebExchange> {
+            every { request.headers.origin } returns "origin"
+            every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
+            every { request.path.value() } returns "/path"
+            every { request.methodValue } returns "GET"
+            every { request.remoteAddress?.hostName } returns "hostName"
             every { response.setStatusCode(HttpStatus.UNAUTHORIZED) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
             every { response.writeWith(any()) } returns Mono.empty()
+            every {
+                mutate()
+                    .principal(any())
+                    .build()
+            } returns this
         }
         val filterChain = mockk<WebFilterChain>()
         filter.filter(exchange, filterChain).block()
@@ -125,6 +111,7 @@ internal class ReactiveAuthorizationFilterTest {
             exchange.response.statusCode = HttpStatus.UNAUTHORIZED
             exchange.response.bufferFactory().wrap(any() as ByteArray)
             exchange.response.writeWith(any())
+            authorization.authorize(any(), any())
         }
     }
 

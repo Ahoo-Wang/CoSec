@@ -13,14 +13,19 @@
 
 package me.ahoo.cosec.token
 
-import me.ahoo.cosec.api.token.AccessToken
-import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.CoSecException
+import me.ahoo.cosec.api.authorization.AuthorizeResult
 
-interface TokenVerifier {
-    @Throws(TokenVerificationException::class)
-    fun <T : TokenPrincipal> verify(accessToken: AccessToken): T
+open class TokenVerificationException : CoSecException {
+    constructor()
+    constructor(s: String) : super(s)
+    constructor(message: String, cause: Throwable) : super(message, cause)
+    constructor(cause: Throwable) : super(cause)
+}
 
-    @Throws(TokenVerificationException::class)
-    fun <T : TokenPrincipal> refresh(token: CompositeToken): T
+fun TokenVerificationException.asAuthorizeResult(): AuthorizeResult {
+    if (this is TokenExpiredException) {
+        return AuthorizeResult.TOKEN_EXPIRED
+    }
+    return AuthorizeResult.deny(this.message ?: "Token Invalid")
 }
