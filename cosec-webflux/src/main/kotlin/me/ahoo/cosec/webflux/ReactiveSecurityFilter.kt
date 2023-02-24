@@ -40,6 +40,13 @@ abstract class ReactiveSecurityFilter(
         } catch (tokenExpiredException: TokenExpiredException) {
             exchange.response.statusCode = HttpStatus.UNAUTHORIZED
             return exchange.response.writeWithAuthorizeResult(AuthorizeResult.TOKEN_EXPIRED)
+        } catch (runtimeException: RuntimeException) {
+            exchange.response.statusCode = HttpStatus.UNAUTHORIZED
+            return exchange.response.writeWithAuthorizeResult(
+                AuthorizeResult.deny(
+                    runtimeException.message ?: "Invalid Token"
+                )
+            )
         }
         val request = requestParser.parse(exchange)
         return authorization.authorize(request, securityContext)
