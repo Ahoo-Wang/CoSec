@@ -17,18 +17,24 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
+import io.mockk.verify
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextHolder
+import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
+import me.ahoo.cosec.token.TokenExpiredException
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.web.server.ServerWebExchange
+import org.springframework.web.server.WebFilterChain
+import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 import javax.servlet.FilterChain
 import javax.servlet.http.HttpServletRequest
@@ -92,5 +98,61 @@ internal class AuthorizationFilterTest {
         }
         filter.doFilter(servletRequest, servletResponse, filterChain)
         assertThat(SecurityContextHolder.requiredContext.principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
+    }
+
+    @Test
+    fun doFilterWhenTokenExpired() {
+        val securityContextParser = mockk<SecurityContextParser<HttpServletRequest>> {
+            every { parse(any()) } throws TokenExpiredException()
+        }
+        val filter = AuthorizationFilter(
+            securityContextParser,
+            mockk(),
+            mockk()
+        )
+        val servletResponse = mockk<HttpServletResponse> {
+            every { contentType = MediaType.APPLICATION_JSON_VALUE } just runs
+            every { status = HttpStatus.UNAUTHORIZED.value() } returns Unit
+            every { outputStream.write(any() as ByteArray) } returns Unit
+            every { outputStream.flush() } returns Unit
+        }
+        val filterChain = mockk<FilterChain>()
+        filter.doFilter(mockk<HttpServletRequest>(), servletResponse, filterChain)
+
+        verify {
+            securityContextParser.parse(any())
+            servletResponse.contentType = MediaType.APPLICATION_JSON_VALUE
+            servletResponse.status = HttpStatus.UNAUTHORIZED.value()
+            servletResponse.outputStream.write(any() as ByteArray)
+            servletResponse.outputStream.flush()
+        }
+    }
+
+    @Test
+    fun doFilterWhenTokenInvalid() {
+        val securityContextParser = mockk<SecurityContextParser<HttpServletRequest>> {
+            every { parse(any()) } throws RuntimeException()
+        }
+        val filter = AuthorizationFilter(
+            securityContextParser,
+            mockk(),
+            mockk()
+        )
+        val servletResponse = mockk<HttpServletResponse> {
+            every { contentType = MediaType.APPLICATION_JSON_VALUE } just runs
+            every { status = HttpStatus.UNAUTHORIZED.value() } returns Unit
+            every { outputStream.write(any() as ByteArray) } returns Unit
+            every { outputStream.flush() } returns Unit
+        }
+        val filterChain = mockk<FilterChain>()
+        filter.doFilter(mockk<HttpServletRequest>(), servletResponse, filterChain)
+
+        verify {
+            securityContextParser.parse(any())
+            servletResponse.contentType = MediaType.APPLICATION_JSON_VALUE
+            servletResponse.status = HttpStatus.UNAUTHORIZED.value()
+            servletResponse.outputStream.write(any() as ByteArray)
+            servletResponse.outputStream.flush()
+        }
     }
 }
