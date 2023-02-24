@@ -46,6 +46,14 @@ abstract class AbstractAuthorizationInterceptor(
             response.status = HttpStatus.UNAUTHORIZED.value()
             response.writeWithAuthorizeResult(AuthorizeResult.TOKEN_EXPIRED)
             return false
+        } catch (runtimeException: RuntimeException) {
+            response.status = HttpStatus.UNAUTHORIZED.value()
+            response.writeWithAuthorizeResult(
+                AuthorizeResult.deny(
+                    runtimeException.message ?: "Invalid Token"
+                )
+            )
+            return false
         }
 
         SecurityContextHolder.setContext(securityContext)
