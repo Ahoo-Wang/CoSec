@@ -16,10 +16,12 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
-import me.ahoo.cosec.token.TokenExpiredException
+import me.ahoo.cosec.token.TokenVerificationException
+import me.ahoo.cosec.token.asAuthorizeResult
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import javax.servlet.http.HttpServletRequest
@@ -40,20 +42,12 @@ abstract class AbstractAuthorizationInterceptor(
         request: HttpServletRequest,
         response: HttpServletResponse,
     ): Boolean {
+        var tokenVerificationException: TokenVerificationException? = null
         val securityContext = try {
             securityContextParser.parse(request)
-        } catch (tokenExpiredException: TokenExpiredException) {
-            response.status = HttpStatus.UNAUTHORIZED.value()
-            response.writeWithAuthorizeResult(AuthorizeResult.TOKEN_EXPIRED)
-            return false
-        } catch (runtimeException: RuntimeException) {
-            response.status = HttpStatus.UNAUTHORIZED.value()
-            response.writeWithAuthorizeResult(
-                AuthorizeResult.deny(
-                    runtimeException.message ?: "Invalid Token"
-                )
-            )
-            return false
+        } catch (verificationException: TokenVerificationException) {
+            tokenVerificationException = verificationException
+            SimpleSecurityContext.anonymous()
         }
 
         SecurityContextHolder.setContext(securityContext)
@@ -67,7 +61,9 @@ abstract class AbstractAuthorizationInterceptor(
                         response.status = HttpStatus.FORBIDDEN.value()
                     }
 
-                    response.writeWithAuthorizeResult(it)
+                    response.writeWithAuthorizeResult(
+                        tokenVerificationException?.asAuthorizeResult() ?: it
+                    )
                     return@map false
                 }
                 true

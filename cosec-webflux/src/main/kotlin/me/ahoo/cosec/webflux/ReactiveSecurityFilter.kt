@@ -16,9 +16,11 @@ package me.ahoo.cosec.webflux
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.token.TokenExpiredException
+import me.ahoo.cosec.token.TokenVerificationException
+import me.ahoo.cosec.token.asAuthorizeResult
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.springframework.http.HttpStatus
@@ -35,19 +37,14 @@ abstract class ReactiveSecurityFilter(
 ) {
 
     fun filterInternal(exchange: ServerWebExchange, chain: (ServerWebExchange) -> Mono<Void>): Mono<Void> {
+        var tokenVerificationException: TokenVerificationException? = null
         val securityContext = try {
             securityContextParser.parse(exchange)
-        } catch (tokenExpiredException: TokenExpiredException) {
-            exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-            return exchange.response.writeWithAuthorizeResult(AuthorizeResult.TOKEN_EXPIRED)
-        } catch (runtimeException: RuntimeException) {
-            exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-            return exchange.response.writeWithAuthorizeResult(
-                AuthorizeResult.deny(
-                    runtimeException.message ?: "Invalid Token"
-                )
-            )
+        } catch (verificationException: TokenVerificationException) {
+            tokenVerificationException = verificationException
+            SimpleSecurityContext.anonymous()
         }
+
         val request = requestParser.parse(exchange)
         return authorization.authorize(request, securityContext)
             .flatMap { authorizeResult ->
@@ -65,7 +62,9 @@ abstract class ReactiveSecurityFilter(
                 } else {
                     exchange.response.statusCode = HttpStatus.FORBIDDEN
                 }
-                exchange.response.writeWithAuthorizeResult(authorizeResult)
+                exchange.response.writeWithAuthorizeResult(
+                    tokenVerificationException?.asAuthorizeResult() ?: authorizeResult
+                )
             }
     }
 

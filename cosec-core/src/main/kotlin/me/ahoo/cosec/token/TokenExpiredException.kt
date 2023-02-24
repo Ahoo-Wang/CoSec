@@ -12,14 +12,12 @@
  */
 package me.ahoo.cosec.token
 
-import me.ahoo.cosec.CoSecException
-
 /**
  * Token Expired Exception.
  *
  * @author ahoo wang
  */
-class TokenExpiredException : CoSecException {
+class TokenExpiredException : TokenVerificationException {
     constructor()
     constructor(s: String) : super(s)
     constructor(message: String, cause: Throwable) : super(message, cause)

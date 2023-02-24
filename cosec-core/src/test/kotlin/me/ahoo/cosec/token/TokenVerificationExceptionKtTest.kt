@@ -13,14 +13,16 @@
 
 package me.ahoo.cosec.token
 
-import me.ahoo.cosec.api.token.AccessToken
-import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.api.authorization.AuthorizeResult
+import org.hamcrest.MatcherAssert.assertThat
+import org.hamcrest.Matchers.*
+import org.junit.jupiter.api.Test
 
-interface TokenVerifier {
-    @Throws(TokenVerificationException::class)
-    fun <T : TokenPrincipal> verify(accessToken: AccessToken): T
+class TokenVerificationExceptionKtTest {
 
-    @Throws(TokenVerificationException::class)
-    fun <T : TokenPrincipal> refresh(token: CompositeToken): T
+    @Test
+    fun asAuthorizeResult() {
+        assertThat(TokenVerificationException().asAuthorizeResult().reason, equalTo("Token Invalid"))
+        assertThat(TokenExpiredException().asAuthorizeResult(), sameInstance(AuthorizeResult.TOKEN_EXPIRED))
+    }
 }

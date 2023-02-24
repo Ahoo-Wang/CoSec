@@ -53,6 +53,6 @@ class JwtTokenVerifierTest {
             JwtTokenConverter(MockIdGenerator.INSTANCE, JwtFixture.ALGORITHM, Duration.ofMillis(1), Duration.ofMillis(1))
         val oldToken: CompositeToken = converter.asToken(SimpleTenantPrincipal.ANONYMOUS)
         TimeUnit.SECONDS.sleep(1)
-        Assertions.assertThrows(TokenExpiredException::class.java) { jwtTokenVerifier.refresh<TokenPrincipal>(oldToken) }
+        assertThrows(TokenExpiredException::class.java) { jwtTokenVerifier.refresh<TokenPrincipal>(oldToken) }
     }
 }
