@@ -20,40 +20,39 @@ import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 
 object DefaultPolicyEvaluator : PolicyEvaluator {
-    private val mockRequest = object : Request {
-        override val path: String
-            get() = "/policies/test"
-        override val method: String
-            get() = "POST"
-        override val remoteIp: String
-            get() = "mockRemoteIp"
-        override val origin: String
-            get() = "mockOrigin"
-        override val referer: String
-            get() = "mockReferer"
-
-        override fun getHeader(key: String): String {
-            return ""
-        }
-
-        override val attributes: Map<String, String>
-            get() = mapOf()
-
-        override fun withAttributes(attributes: Map<String, String>): Request {
-            throw UnsupportedOperationException()
-        }
-    }
-    private val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
 
     override fun evaluate(policy: Policy) {
+        val evaluateRequest = EvaluateRequest()
+        val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
         policy.statements.forEach { statement ->
-            statement.verify(mockRequest, mockContext)
+            statement.verify(evaluateRequest, mockContext)
 
             statement.actions.forEach {
-                it.match(mockRequest, mockContext)
+                it.match(evaluateRequest, mockContext)
             }
 
-            statement.condition.match(mockRequest, mockContext)
+            statement.condition.match(evaluateRequest, mockContext)
         }
+    }
+}
+
+data class EvaluateRequest(override val attributes: Map<String, String> = mapOf()) : Request {
+    override val path: String
+        get() = "/policies/test"
+    override val method: String
+        get() = "POST"
+    override val remoteIp: String
+        get() = "127.0.0.1"
+    override val origin: String
+        get() = "mockOrigin"
+    override val referer: String
+        get() = "mockReferer"
+
+    override fun getHeader(key: String): String {
+        return key
+    }
+
+    override fun withAttributes(attributes: Map<String, String>): Request {
+        return copy(attributes = attributes)
     }
 }
