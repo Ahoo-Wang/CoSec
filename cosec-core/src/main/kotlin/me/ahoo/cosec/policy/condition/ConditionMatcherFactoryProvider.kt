@@ -15,10 +15,11 @@ package me.ahoo.cosec.policy.condition
 
 import org.slf4j.LoggerFactory
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 object ConditionMatcherFactoryProvider {
     private val log = LoggerFactory.getLogger(ConditionMatcherFactoryProvider::class.java)
-    private val actionMatcherFactories: MutableMap<String, ConditionMatcherFactory> = mutableMapOf()
+    private val actionMatcherFactories: ConcurrentHashMap<String, ConditionMatcherFactory> = ConcurrentHashMap()
 
     init {
         ServiceLoader.load(ConditionMatcherFactory::class.java)

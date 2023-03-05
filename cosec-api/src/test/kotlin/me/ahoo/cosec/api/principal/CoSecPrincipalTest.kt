@@ -26,10 +26,6 @@ class CoSecPrincipalTest {
             override val id: String
                 get() = ANONYMOUS_ID
 
-            override fun getName(): String {
-                throw UnsupportedOperationException()
-            }
-
             override val attributes: Map<String, String>
                 get() = throw UnsupportedOperationException()
             override val policies: Set<String>
@@ -38,6 +34,9 @@ class CoSecPrincipalTest {
                 get() = throw UnsupportedOperationException()
         }
         assertThat(anonymous.anonymous(), equalTo(true))
+        assertThat(anonymous.authenticated(), equalTo(false))
+        assertThat(anonymous.id, equalTo(ANONYMOUS_ID))
+        assertThat(anonymous.name, equalTo(ANONYMOUS_ID))
     }
 
     @Test
@@ -45,10 +44,6 @@ class CoSecPrincipalTest {
         val authenticated = object : CoSecPrincipal {
             override val id: String
                 get() = "id"
-
-            override fun getName(): String {
-                throw UnsupportedOperationException()
-            }
 
             override val attributes: Map<String, String>
                 get() = throw UnsupportedOperationException()
@@ -58,5 +53,6 @@ class CoSecPrincipalTest {
                 get() = throw UnsupportedOperationException()
         }
         assertThat(authenticated.authenticated(), equalTo(true))
+        assertThat(authenticated.anonymous(), equalTo(false))
     }
 }
