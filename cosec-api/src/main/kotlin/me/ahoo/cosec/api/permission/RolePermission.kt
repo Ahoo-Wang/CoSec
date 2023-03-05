@@ -20,5 +20,5 @@ interface RolePermission {
      * appId:Set<permissionId>
      * @see me.ahoo.cosec.api.permission.Permission.id
      */
-    val permissions: Map<String, Set<String>>
+    val permissions: Set<String>
 }

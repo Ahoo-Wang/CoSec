@@ -14,10 +14,16 @@
 package me.ahoo.cosec.permission
 
 import me.ahoo.cosec.api.permission.Permission
-import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.api.policy.ActionMatcher
+import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.api.policy.Effect
+import me.ahoo.cosec.policy.condition.AllConditionMatcher
 
 data class PermissionData(
     override val id: String,
+    override val name: String,
     override val description: String = "",
-    val delegate: Statement,
-) : Permission, Statement by delegate
+    override val effect: Effect = Effect.ALLOW,
+    override val actions: List<ActionMatcher> = listOf(),
+    override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
+) : Permission

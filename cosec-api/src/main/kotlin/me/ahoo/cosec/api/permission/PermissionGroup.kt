@@ -13,7 +13,10 @@
 
 package me.ahoo.cosec.api.permission
 
-interface PermissionGroup {
-    val name: String
+import me.ahoo.cosec.api.Named
+
+interface PermissionGroup : Named {
+    override val name: String
+    val description: String
     val permissions: List<Permission>
 }

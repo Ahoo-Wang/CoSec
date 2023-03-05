@@ -23,6 +23,7 @@ interface Statement : Named, PermissionVerifier {
     val actions: List<ActionMatcher>
     val condition: ConditionMatcher
 
+    @Suppress("ReturnCount")
     override fun verify(request: Request, securityContext: SecurityContext): VerifyResult {
         if (!condition.match(request, securityContext)) {
             return VerifyResult.IMPLICIT_DENY
