@@ -18,6 +18,6 @@ import me.ahoo.cosec.api.permission.PermissionGroup
 
 data class PermissionGroupData(
     override val name: String,
-    override val description: String,
-    override val permissions: List<Permission>,
+    override val description: String = "",
+    override val permissions: List<Permission> = listOf(),
 ) : PermissionGroup

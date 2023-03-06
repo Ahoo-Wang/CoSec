@@ -26,8 +26,7 @@ const val PERMISSION_ID = "id"
 const val PERMISSION_DESCRIPTION = "description"
 
 object JsonPermissionSerializer : AbstractJsonStatementSerializer<Permission>(Permission::class.java) {
-    override fun serialize(value: Permission, gen: JsonGenerator, provider: SerializerProvider) {
-        super.serialize(value, gen, provider)
+    override fun writeExtend(value: Permission, gen: JsonGenerator, provider: SerializerProvider) {
         gen.writeStringField(PERMISSION_ID, value.id)
         gen.writeStringField(PERMISSION_DESCRIPTION, value.description)
     }
@@ -42,7 +41,7 @@ object JsonPermissionDeserializer : AbstractJsonStatementDeserializer<Permission
         condition: ConditionMatcher
     ): Permission {
         val permissionId = requireNotNull(jsonNode.get(PERMISSION_ID).asText())
-        val description = jsonNode.get(PERMISSION_DESCRIPTION).asText().orEmpty()
+        val description = jsonNode.get(PERMISSION_DESCRIPTION)?.asText().orEmpty()
         return PermissionData(
             id = permissionId,
             name = name,

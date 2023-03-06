@@ -11,13 +11,13 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.authorization
+package me.ahoo.cosec.permission
 
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.RolePermission
 import reactor.core.publisher.Mono
 
 interface PermissionRepository {
-    fun getAppPermission(): Mono<Set<AppPermission>>
-    fun getRolePermission(roleIds: Set<String>): Mono<Set<RolePermission>>
+    fun getAppPermission(): Mono<List<AppPermission>>
+    fun getRolePermission(roleIds: Set<String>): Mono<List<RolePermission>>
 }

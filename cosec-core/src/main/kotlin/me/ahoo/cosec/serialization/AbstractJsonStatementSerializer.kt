@@ -32,8 +32,11 @@ abstract class AbstractJsonStatementSerializer<T : Statement>(statementType: Cla
             gen.writeEndArray()
         }
         gen.writePOJOField(STATEMENT_CONDITION_KEY, value.condition)
+        writeExtend(value, gen, provider)
         gen.writeEndObject()
     }
+
+    protected open fun writeExtend(value: T, gen: JsonGenerator, provider: SerializerProvider) = Unit
 }
 
 abstract class AbstractJsonStatementDeserializer<T : Statement>(statementType: Class<T>) :

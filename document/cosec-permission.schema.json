@@ -1,0 +1,244 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema",
+  "$id": "https://github.com/Ahoo-Wang/CoSec/blob/main/document/cosec-permission.schema.json",
+  "title": "CoSec App Permission Schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "description": "The id of the app permission",
+      "type": "string"
+    },
+    "statements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/statement"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "statements"
+  ],
+  "definitions": {
+    "policyType": {
+      "enum": [
+        "global",
+        "system",
+        "custom"
+      ]
+    },
+    "effect": {
+      "enum": [
+        "allow",
+        "deny"
+      ]
+    },
+    "actionType": {
+      "enum": [
+        "all",
+        "none",
+        "path",
+        "reg"
+      ]
+    },
+    "method": {
+      "enum": [
+        "GET",
+        "HEAD",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+        "TRACE"
+      ]
+    },
+    "boolCondition": {
+      "properties": {
+        "and": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/conditionMatcher"
+          }
+        },
+        "or": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/conditionMatcher"
+          }
+        }
+      }
+    },
+    "conditionType": {
+      "enum": [
+        "all",
+        "none",
+        "authenticated",
+        "in_default_tenant",
+        "in_platform_tenant",
+        "in_user_tenant",
+        "contains",
+        "starts_with",
+        "ends_with",
+        "eq",
+        "in",
+        "reg",
+        "path",
+        "spel",
+        "ognl",
+        "bool"
+      ]
+    },
+    "part": {
+      "enum": [
+        "request.path",
+        "request.method",
+        "request.remoteIp",
+        "request.origin",
+        "request.referer",
+        "request.header.",
+        "request.attributes.",
+        "request.attributes.ipRegion",
+        "context.tenantId",
+        "context.principal.id",
+        "context.principal.attributes."
+      ]
+    },
+    "pathOptions": {
+      "type": "object",
+      "properties": {
+        "caseSensitive": {
+          "type": "boolean"
+        },
+        "separator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1
+        },
+        "decodeAndParseSegments": {
+          "type": "boolean"
+        }
+      }
+    },
+    "actionMatcher": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "properties": {
+        "type": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/actionType"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "methods": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/method"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "path": {
+          "$ref": "#/definitions/pathOptions"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "conditionMatcher": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "properties": {
+        "type": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/conditionType"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "part": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/part"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "negate": {
+          "type": "boolean"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "eq": {
+          "type": "string"
+        },
+        "path": {
+          "$ref": "#/definitions/pathOptions"
+        },
+        "in": {
+          "type": "array"
+        },
+        "bool": {
+          "$ref": "#/definitions/boolCondition"
+        },
+        "ignoreCase": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "statement": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The name of the Statement",
+          "type": "string"
+        },
+        "effect": {
+          "$ref": "#/definitions/effect"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/actionMatcher",
+            "minItems": 1
+          }
+        },
+        "condition": {
+          "$ref": "#/definitions/conditionMatcher"
+        }
+      },
+      "required": [
+        "effect",
+        "actions"
+      ]
+    }
+  }
+}
+
+
