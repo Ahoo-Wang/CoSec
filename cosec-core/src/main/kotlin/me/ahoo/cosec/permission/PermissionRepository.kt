@@ -18,6 +18,7 @@ import me.ahoo.cosec.api.permission.RolePermission
 import reactor.core.publisher.Mono
 
 interface PermissionRepository {
-    fun getAppPermission(): Mono<List<AppPermission>>
-    fun getRolePermission(roleIds: Set<String>): Mono<List<RolePermission>>
+    fun getApps(): Mono<Set<String>>
+    fun getAppPermission(appId: String): Mono<AppPermission>
+    fun getRolePermission(roleId: String): Mono<RolePermission>
 }
