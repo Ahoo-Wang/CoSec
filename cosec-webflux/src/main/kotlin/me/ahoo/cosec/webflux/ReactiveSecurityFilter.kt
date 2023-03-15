@@ -47,7 +47,7 @@ abstract class ReactiveSecurityFilter(
             tokenVerificationException = verificationException
             SimpleSecurityContext.anonymous()
         }
-
+        exchange.setSecurityContext(securityContext)
         val request = requestParser.parse(exchange)
         return authorization.authorize(request, securityContext)
             .flatMap { authorizeResult ->
@@ -55,7 +55,6 @@ abstract class ReactiveSecurityFilter(
                     exchange.mutate()
                         .principal(securityContext.principal.toMono())
                         .build().let {
-                            exchange.setSecurityContext(securityContext)
                             return@flatMap chain(it).writeSecurityContext(securityContext)
                         }
                 }

@@ -40,6 +40,6 @@ class TraceWebFilterTest {
 
     @Test
     fun getOrder() {
-        assertThat(TraceWebFilter.order, equalTo(Ordered.HIGHEST_PRECEDENCE + 1))
+        assertThat(TraceWebFilter.order, equalTo(Ordered.HIGHEST_PRECEDENCE))
     }
 }

@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.opentelemetry.webflux
 
-import me.ahoo.cosec.opentelemetry.ReactiveTraceFilter
+import me.ahoo.cosec.opentelemetry.CoSecMonoTrace
 import org.springframework.core.Ordered
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilter
@@ -22,9 +22,7 @@ import reactor.core.publisher.Mono
 
 object TraceWebFilter : WebFilter, Ordered {
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
-        return ReactiveTraceFilter.filter(exchange) {
-            chain.filter(it)
-        }
+        return CoSecMonoTrace(exchange, chain.filter(exchange))
     }
 
     override fun getOrder(): Int {

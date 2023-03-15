@@ -40,6 +40,6 @@ class TraceGatewayFilterTest {
 
     @Test
     fun getOrder() {
-        assertThat(TraceGatewayFilter.order, equalTo(Ordered.HIGHEST_PRECEDENCE + 1))
+        assertThat(TraceGatewayFilter.order, equalTo(Ordered.HIGHEST_PRECEDENCE))
     }
 }
