@@ -29,7 +29,10 @@ import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import org.junit.jupiter.api.Test
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
+import reactor.core.publisher.Sinks
+import reactor.core.scheduler.Schedulers
 import reactor.kotlin.test.test
+import java.time.Duration
 
 class CoSecMonoTraceTest {
     companion object {
@@ -94,5 +97,15 @@ class CoSecMonoTraceTest {
 
         CoSecMonoTrace(exchange, Mono.empty()).test()
             .verifyComplete()
+    }
+
+    @Test
+    fun traceWhenError() {
+        val exchange = mockk<ServerWebExchange> {
+            every { getSecurityContext() } returns null
+        }
+
+        CoSecMonoTrace(exchange, Mono.error(RuntimeException())).test()
+            .verifyError()
     }
 }
