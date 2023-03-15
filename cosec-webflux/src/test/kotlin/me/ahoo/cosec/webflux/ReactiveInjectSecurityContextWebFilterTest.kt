@@ -35,7 +35,7 @@ internal class ReactiveInjectSecurityContextWebFilterTest {
     @Test
     fun filter() {
         val filter = ReactiveInjectSecurityContextWebFilter(ReactiveInjectSecurityContextParser)
-        assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE))
+        assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE + 10))
         val exchange = mockk<ServerWebExchange>() {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
             every { request.path.value() } returns "/path"

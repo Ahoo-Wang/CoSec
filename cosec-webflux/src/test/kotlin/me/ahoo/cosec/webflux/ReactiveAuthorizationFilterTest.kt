@@ -48,7 +48,7 @@ internal class ReactiveAuthorizationFilterTest {
             ReactiveRequestParser(ReactiveRemoteIpResolver),
             authorization,
         )
-        assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE))
+        assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE + 10))
         val exchange = mockk<ServerWebExchange> {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
             every { request.headers.origin } returns "origin"
@@ -97,6 +97,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
             every { response.writeWith(any()) } returns Mono.empty()
+            every { setSecurityContext(any()) } just runs
             every {
                 mutate()
                     .principal(any())
@@ -112,6 +113,7 @@ internal class ReactiveAuthorizationFilterTest {
             exchange.response.bufferFactory().wrap(any() as ByteArray)
             exchange.response.writeWith(any())
             authorization.authorize(any(), any())
+            exchange.setSecurityContext(any())
         }
     }
 
@@ -136,6 +138,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
             every { response.writeWith(any()) } returns Mono.empty()
+            every { setSecurityContext(any()) } just runs
             every {
                 mutate()
                     .principal(any())
@@ -149,6 +152,7 @@ internal class ReactiveAuthorizationFilterTest {
             exchange.response.statusCode = HttpStatus.UNAUTHORIZED
             exchange.response.bufferFactory().wrap(any() as ByteArray)
             exchange.response.writeWith(any())
+            exchange.setSecurityContext(any())
         }
     }
 
@@ -177,6 +181,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
             every { response.writeWith(any()) } returns Mono.empty()
+            every { setSecurityContext(any()) } just runs
             every {
                 mutate()
                     .principal(any())
@@ -190,6 +195,7 @@ internal class ReactiveAuthorizationFilterTest {
             exchange.response.statusCode = HttpStatus.FORBIDDEN
             exchange.response.bufferFactory().wrap(any() as ByteArray)
             exchange.response.writeWith(any())
+            exchange.setSecurityContext(any())
         }
     }
 }

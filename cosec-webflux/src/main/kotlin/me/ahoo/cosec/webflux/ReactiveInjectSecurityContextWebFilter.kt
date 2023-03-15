@@ -45,6 +45,6 @@ class ReactiveInjectSecurityContextWebFilter(
     }
 
     override fun getOrder(): Int {
-        return Ordered.HIGHEST_PRECEDENCE
+        return Ordered.HIGHEST_PRECEDENCE + 10
     }
 }

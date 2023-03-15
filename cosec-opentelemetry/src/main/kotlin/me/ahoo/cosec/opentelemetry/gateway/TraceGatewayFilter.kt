@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.opentelemetry.gateway
 
-import me.ahoo.cosec.opentelemetry.ReactiveTraceFilter
+import me.ahoo.cosec.opentelemetry.CoSecMonoTrace
 import org.springframework.cloud.gateway.filter.GatewayFilterChain
 import org.springframework.cloud.gateway.filter.GlobalFilter
 import org.springframework.core.Ordered
@@ -25,12 +25,10 @@ object TraceGatewayFilter : GlobalFilter, Ordered {
         exchange: ServerWebExchange,
         chain: GatewayFilterChain,
     ): Mono<Void> {
-        return ReactiveTraceFilter.filter(exchange) {
-            chain.filter(it)
-        }
+        return CoSecMonoTrace(exchange, chain.filter(exchange))
     }
 
     override fun getOrder(): Int {
-        return Ordered.HIGHEST_PRECEDENCE + 1
+        return Ordered.HIGHEST_PRECEDENCE
     }
 }

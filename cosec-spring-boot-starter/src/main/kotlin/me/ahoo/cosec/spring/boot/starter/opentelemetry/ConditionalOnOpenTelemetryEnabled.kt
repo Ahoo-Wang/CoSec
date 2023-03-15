@@ -21,7 +21,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
  */
 @ConditionalOnClass(
     name = [
-        "me.ahoo.cosec.opentelemetry.ReactiveTraceFilter",
+        "me.ahoo.cosec.opentelemetry.CoSecInstrumenter",
         "io.opentelemetry.api.trace.Span",
     ],
 )
