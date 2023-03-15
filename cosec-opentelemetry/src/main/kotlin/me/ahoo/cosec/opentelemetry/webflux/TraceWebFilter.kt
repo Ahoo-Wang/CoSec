@@ -28,6 +28,6 @@ object TraceWebFilter : WebFilter, Ordered {
     }
 
     override fun getOrder(): Int {
-        return Ordered.HIGHEST_PRECEDENCE + 1
+        return Ordered.HIGHEST_PRECEDENCE
     }
 }

@@ -28,7 +28,7 @@ class TraceWebFilterTest {
 
     @Test
     fun filter() {
-        val exchange = mockk<ServerWebExchange>() {
+        val exchange = mockk<ServerWebExchange> {
             every { getSecurityContext() } returns null
         }
 

@@ -20,6 +20,7 @@ import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.api.principal.PolicyCapable
 import me.ahoo.cosec.authorization.VerifyContext.Companion.getVerifyContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
@@ -48,16 +49,26 @@ val COSEC_AUTHORIZATION_RESULT_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_AUTH
 const val SEPARATOR = ","
 
 object ReactiveTraceFilter {
-    private val log = LoggerFactory.getLogger(ReactiveTraceFilter::class.java)
-    fun filter(
+    val log: Logger = LoggerFactory.getLogger(ReactiveTraceFilter::class.java)
+    inline fun filter(
         exchange: ServerWebExchange,
-        chain: (ServerWebExchange) -> Mono<Void>,
+        crossinline chain: (ServerWebExchange) -> Mono<Void>,
+    ): Mono<Void> {
+        return chain(exchange).then(
+            Mono.defer {
+                recordCosecAttributes(exchange, chain)
+            }
+        )
+    }
+
+    inline fun recordCosecAttributes(
+        exchange: ServerWebExchange,
+        crossinline chain: (ServerWebExchange) -> Mono<Void>,
     ): Mono<Void> {
         val parentSpan = Span.current()
         if (!parentSpan.isRecording) {
             return chain(exchange)
         }
-
         try {
             val securityContext = exchange.getSecurityContext() ?: return chain(exchange)
             val principal = securityContext.principal
@@ -69,8 +80,14 @@ object ReactiveTraceFilter {
             parentSpan.setAttribute(COSEC_POLICY_ATTRIBUTE_KEY, policyStr)
             securityContext.getVerifyContext()?.let { verifyContext ->
                 parentSpan.setAttribute(COSEC_AUTHORIZATION_POLICY_ID_ATTRIBUTE_KEY, verifyContext.policy.id)
-                parentSpan.setAttribute(COSEC_AUTHORIZATION_STATEMENT_IDX_ATTRIBUTE_KEY, verifyContext.statementIndex)
-                parentSpan.setAttribute(COSEC_AUTHORIZATION_STATEMENT_NAME_ATTRIBUTE_KEY, verifyContext.statement.name)
+                parentSpan.setAttribute(
+                    COSEC_AUTHORIZATION_STATEMENT_IDX_ATTRIBUTE_KEY,
+                    verifyContext.statementIndex
+                )
+                parentSpan.setAttribute(
+                    COSEC_AUTHORIZATION_STATEMENT_NAME_ATTRIBUTE_KEY,
+                    verifyContext.statement.name
+                )
                 parentSpan.setAttribute(COSEC_AUTHORIZATION_RESULT_ATTRIBUTE_KEY, verifyContext.result.name)
             }
         } catch (throwable: Throwable) {

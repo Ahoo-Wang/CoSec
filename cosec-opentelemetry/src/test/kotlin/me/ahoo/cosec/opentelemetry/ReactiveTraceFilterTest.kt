@@ -57,7 +57,7 @@ class ReactiveTraceFilterTest {
         val span = tracer.spanBuilder("test").startSpan()
         try {
             span.makeCurrent().use {
-                val exchange = mockk<ServerWebExchange>() {
+                val exchange = mockk<ServerWebExchange> {
                     every { getSecurityContext() } throws RuntimeException("test")
                 }
                 ReactiveTraceFilter.filter(exchange) {
@@ -72,7 +72,7 @@ class ReactiveTraceFilterTest {
 
     @Test
     fun filterWithoutSecurityContext() {
-        val exchange = mockk<ServerWebExchange>() {
+        val exchange = mockk<ServerWebExchange> {
             every { getSecurityContext() } returns null
         }
 
@@ -84,7 +84,7 @@ class ReactiveTraceFilterTest {
 
     @Test
     fun filterWithSecurityContext() {
-        val exchange = mockk<ServerWebExchange>() {
+        val exchange = mockk<ServerWebExchange> {
             every { getSecurityContext() } returns SimpleSecurityContext.anonymous()
         }
 
