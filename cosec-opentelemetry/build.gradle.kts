@@ -15,7 +15,7 @@ dependencies {
     implementation(project(":cosec-core"))
     compileOnly(project(":cosec-webflux"))
     compileOnly("org.springframework.cloud:spring-cloud-gateway-server")
-    implementation("io.opentelemetry:opentelemetry-api")
+    implementation("io.opentelemetry.instrumentation:opentelemetry-instrumentation-api")
     implementation("io.opentelemetry:opentelemetry-semconv")
     testImplementation("io.projectreactor:reactor-test")
     testImplementation("io.opentelemetry:opentelemetry-sdk")

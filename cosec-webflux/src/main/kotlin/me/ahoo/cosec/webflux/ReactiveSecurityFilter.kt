@@ -36,7 +36,10 @@ abstract class ReactiveSecurityFilter(
     val authorization: Authorization,
 ) {
 
-    fun filterInternal(exchange: ServerWebExchange, chain: (ServerWebExchange) -> Mono<Void>): Mono<Void> {
+    inline fun filterInternal(
+        exchange: ServerWebExchange,
+        crossinline chain: (ServerWebExchange) -> Mono<Void>
+    ): Mono<Void> {
         var tokenVerificationException: TokenVerificationException? = null
         val securityContext = try {
             securityContextParser.parse(exchange)
@@ -44,7 +47,7 @@ abstract class ReactiveSecurityFilter(
             tokenVerificationException = verificationException
             SimpleSecurityContext.anonymous()
         }
-
+        exchange.setSecurityContext(securityContext)
         val request = requestParser.parse(exchange)
         return authorization.authorize(request, securityContext)
             .flatMap { authorizeResult ->
@@ -52,7 +55,6 @@ abstract class ReactiveSecurityFilter(
                     exchange.mutate()
                         .principal(securityContext.principal.toMono())
                         .build().let {
-                            exchange.setSecurityContext(securityContext)
                             return@flatMap chain(it).writeSecurityContext(securityContext)
                         }
                 }
@@ -68,7 +70,7 @@ abstract class ReactiveSecurityFilter(
             }
     }
 
-    private fun ServerHttpResponse.writeWithAuthorizeResult(authorizeResult: AuthorizeResult): Mono<Void> {
+    fun ServerHttpResponse.writeWithAuthorizeResult(authorizeResult: AuthorizeResult): Mono<Void> {
         headers.contentType = MediaType.APPLICATION_JSON
         val responseBodyBytes = CoSecJsonSerializer.writeValueAsBytes(authorizeResult)
         val builder = bufferFactory().wrap(responseBodyBytes).toMono()
