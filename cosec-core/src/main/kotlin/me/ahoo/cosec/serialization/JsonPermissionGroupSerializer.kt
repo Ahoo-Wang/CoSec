@@ -42,12 +42,11 @@ object JsonPermissionGroupSerializer : StdSerializer<PermissionGroup>(Permission
         }
         gen.writeEndObject()
     }
-
 }
 
 object JsonPermissionGroupDeserializer : StdDeserializer<PermissionGroup>(PermissionGroup::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): PermissionGroup {
-         val jsonNode = p.codec.readTree<JsonNode>(p)
+        val jsonNode = p.codec.readTree<JsonNode>(p)
         val permissions = jsonNode.get(PERMISSION_GROUP_PERMISSIONS_KEY)?.map {
             it.traverse(p.codec).readValueAs(Permission::class.java)
         }.orEmpty()
@@ -59,5 +58,4 @@ object JsonPermissionGroupDeserializer : StdDeserializer<PermissionGroup>(Permis
             permissions = permissions,
         )
     }
-
 }
