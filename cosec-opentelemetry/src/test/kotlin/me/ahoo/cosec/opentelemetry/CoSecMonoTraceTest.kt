@@ -23,6 +23,7 @@ import io.opentelemetry.sdk.OpenTelemetrySdk
 import io.opentelemetry.sdk.trace.SdkTracerProvider
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.authorization.PolicyVerifyContext
+import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
@@ -104,5 +105,24 @@ class CoSecMonoTraceTest {
 
         CoSecMonoTrace(exchange, Mono.error(RuntimeException())).test()
             .verifyError()
+    }
+
+    @Test
+    fun traceRoleVerifyContext() {
+        val verifyContext = mockk<RoleVerifyContext> {
+            every { roleId } returns "roleId"
+            every { permission } returns mockk {
+                every { id } returns "permissionId"
+            }
+            every { result } returns VerifyResult.IMPLICIT_DENY
+        }
+        val securityContext = SimpleSecurityContext.anonymous()
+        securityContext.setVerifyContext(verifyContext)
+        val exchange = mockk<ServerWebExchange> {
+            every { getSecurityContext() } returns securityContext
+        }
+
+        CoSecMonoTrace(exchange, Mono.empty()).test()
+            .verifyComplete()
     }
 }

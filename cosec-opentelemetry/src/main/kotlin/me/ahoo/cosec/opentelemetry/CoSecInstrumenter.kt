@@ -32,7 +32,7 @@ import org.springframework.web.server.ServerWebExchange
 
 object CoSecInstrumenter {
     private const val INSTRUMENTATION_NAME = "me.ahoo.cosec"
-    private const val INSTRUMENTATION_VERSION = "1.13.0"
+    private const val INSTRUMENTATION_VERSION = "1.15.0"
     val INSTRUMENTER: Instrumenter<ServerWebExchange, Unit> =
         Instrumenter.builder<ServerWebExchange, Unit>(
             GlobalOpenTelemetry.get(),
