@@ -11,18 +11,16 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.authorization
+package me.ahoo.cosec.api.permission
 
-import me.ahoo.cosec.api.policy.Policy
-import reactor.core.publisher.Mono
+interface RolePermission {
+    /**
+     * role id
+     */
+    val id: String
 
-/**
- *
- * Policy Repository .
- *
- * @author ahoo wang
- */
-interface PolicyRepository {
-    fun getGlobalPolicy(): Mono<List<Policy>>
-    fun getPolicies(policyIds: Set<String>): Mono<List<Policy>>
+    /**
+     * @see me.ahoo.cosec.api.permission.Permission
+     */
+    val permissions: List<Permission>
 }

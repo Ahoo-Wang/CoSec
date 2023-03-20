@@ -1,0 +1,27 @@
+{
+  "id": "appId",
+  "groups": [
+    {
+      "name": "groupName",
+      "description": "groupDescription",
+      "permissions": [
+        {
+          "id": "permissionId",
+          "name": "Anonymous",
+          "description": "description",
+          "effect": "allow",
+          "actions": [
+            {
+              "type": "path",
+              "pattern": "/auth/register"
+            },
+            {
+              "type": "path",
+              "pattern": "/auth/login"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

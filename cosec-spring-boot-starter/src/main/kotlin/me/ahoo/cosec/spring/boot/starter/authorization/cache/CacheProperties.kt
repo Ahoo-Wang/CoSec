@@ -32,6 +32,7 @@ data class CacheProperties(val enabled: Boolean = true, val cacheKeyPrefix: Cach
     data class CacheKeyPrefix(
         var globalPolicyIndex: String = CoSec.COSEC + ":global:policy",
         var policy: String = CoSec.COSEC + ":policy:",
-        var rolePolicy: String = CoSec.COSEC + ":role:policy:",
+        var appPermission: String = CoSec.COSEC + "app:permission:",
+        var rolePermission: String = CoSec.COSEC + ":role:permission:",
     )
 }

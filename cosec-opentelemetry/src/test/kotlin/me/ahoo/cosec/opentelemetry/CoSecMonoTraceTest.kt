@@ -22,17 +22,15 @@ import io.opentelemetry.context.propagation.ContextPropagators
 import io.opentelemetry.sdk.OpenTelemetrySdk
 import io.opentelemetry.sdk.trace.SdkTracerProvider
 import me.ahoo.cosec.api.policy.VerifyResult
-import me.ahoo.cosec.authorization.VerifyContext
+import me.ahoo.cosec.authorization.PolicyVerifyContext
+import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import org.junit.jupiter.api.Test
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
-import reactor.core.publisher.Sinks
-import reactor.core.scheduler.Schedulers
 import reactor.kotlin.test.test
-import java.time.Duration
 
 class CoSecMonoTraceTest {
     companion object {
@@ -72,7 +70,7 @@ class CoSecMonoTraceTest {
 
     @Test
     fun trace() {
-        val verifyContext = mockk<VerifyContext> {
+        val verifyContext = mockk<PolicyVerifyContext> {
             every { policy.id } returns "policyId"
             every { statementIndex } returns 1
             every { statement.name } returns "statementName"
@@ -107,5 +105,24 @@ class CoSecMonoTraceTest {
 
         CoSecMonoTrace(exchange, Mono.error(RuntimeException())).test()
             .verifyError()
+    }
+
+    @Test
+    fun traceRoleVerifyContext() {
+        val verifyContext = mockk<RoleVerifyContext> {
+            every { roleId } returns "roleId"
+            every { permission } returns mockk {
+                every { id } returns "permissionId"
+            }
+            every { result } returns VerifyResult.IMPLICIT_DENY
+        }
+        val securityContext = SimpleSecurityContext.anonymous()
+        securityContext.setVerifyContext(verifyContext)
+        val exchange = mockk<ServerWebExchange> {
+            every { getSecurityContext() } returns securityContext
+        }
+
+        CoSecMonoTrace(exchange, Mono.empty()).test()
+            .verifyComplete()
     }
 }

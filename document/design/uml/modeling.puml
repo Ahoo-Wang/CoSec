@@ -119,6 +119,7 @@ package context{
     CoSecPrincipal --* SecurityContext
 
     interface Request{
+        val appId:String
         val path: String
         val method: String
         val remoteIp: String

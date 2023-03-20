@@ -13,26 +13,10 @@
 
 package me.ahoo.cosec.authorization
 
-import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.api.policy.Statement
-import me.ahoo.cosec.api.policy.VerifyResult
+import me.ahoo.cosec.api.permission.RolePermission
+import reactor.core.publisher.Mono
 
-data class VerifyContext(
-    val policy: Policy,
-    val statementIndex: Int,
-    val statement: Statement,
-    val result: VerifyResult
-) {
-    companion object {
-        private const val KEY = "COSEC_AUTHORIZATION_VERIFY_CONTEXT"
+interface RolePermissionRepository {
 
-        fun SecurityContext.setVerifyContext(verifyContext: VerifyContext) {
-            this.setAttributeValue(KEY, verifyContext)
-        }
-
-        fun SecurityContext.getVerifyContext(): VerifyContext? {
-            return this.getAttributeValue(KEY)
-        }
-    }
+    fun getRolePermissions(appId: String, roleIds: Set<String>): Mono<List<RolePermission>>
 }

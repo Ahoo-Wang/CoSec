@@ -11,14 +11,19 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.redis
+package me.ahoo.cosec.permission
 
-import me.ahoo.cache.Cache
-import me.ahoo.cosec.Delegated
+import me.ahoo.cosec.api.permission.Permission
+import me.ahoo.cosec.api.policy.ActionMatcher
+import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.api.policy.Effect
+import me.ahoo.cosec.policy.condition.AllConditionMatcher
 
-/***
- * Role 1 : N Policy
- */
-class RolePolicyCache(override val delegate: Cache<String, Set<String>>) :
-    Cache<String, Set<String>> by delegate,
-    Delegated<Cache<String, Set<String>>>
+data class PermissionData(
+    override val id: String,
+    override val name: String,
+    override val description: String = "",
+    override val effect: Effect = Effect.ALLOW,
+    override val actions: List<ActionMatcher> = listOf(),
+    override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
+) : Permission

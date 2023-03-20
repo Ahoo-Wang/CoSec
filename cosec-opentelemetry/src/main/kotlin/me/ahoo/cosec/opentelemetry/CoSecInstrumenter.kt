@@ -24,13 +24,15 @@ import io.opentelemetry.semconv.trace.attributes.SemanticAttributes
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.PolicyCapable
+import me.ahoo.cosec.authorization.PolicyVerifyContext
+import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.getVerifyContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import org.springframework.web.server.ServerWebExchange
 
 object CoSecInstrumenter {
     private const val INSTRUMENTATION_NAME = "me.ahoo.cosec"
-    private const val INSTRUMENTATION_VERSION = "1.12.4"
+    private const val INSTRUMENTATION_VERSION = "1.15.0"
     val INSTRUMENTER: Instrumenter<ServerWebExchange, Unit> =
         Instrumenter.builder<ServerWebExchange, Unit>(
             GlobalOpenTelemetry.get(),
@@ -67,6 +69,12 @@ object CoSecAttributesExtractor : AttributesExtractor<ServerWebExchange, Unit> {
     val COSEC_AUTHORIZATION_STATEMENT_NAME_ATTRIBUTE_KEY =
         AttributeKey.stringKey(COSEC_AUTHORIZATION_STATEMENT_NAME_KEY)
 
+    private const val COSEC_AUTHORIZATION_ROLE_ID_KEY = COSEC_AUTHORIZE_PREFIX + "role.id"
+    val COSEC_AUTHORIZATION_ROLE_ID_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_AUTHORIZATION_ROLE_ID_KEY)
+
+    private const val COSEC_AUTHORIZATION_PERMISSION_ID_KEY = COSEC_AUTHORIZE_PREFIX + "permission.id"
+    val COSEC_AUTHORIZATION_PERMISSION_ID_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_AUTHORIZATION_PERMISSION_ID_KEY)
+
     private const val COSEC_AUTHORIZATION_RESULT_KEY = COSEC_AUTHORIZE_PREFIX + "result"
     val COSEC_AUTHORIZATION_RESULT_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_AUTHORIZATION_RESULT_KEY)
 
@@ -93,15 +101,25 @@ object CoSecAttributesExtractor : AttributesExtractor<ServerWebExchange, Unit> {
             attributes.put(COSEC_AUTHORIZATION_RESULT_ATTRIBUTE_KEY, VerifyResult.IMPLICIT_DENY.name)
             return
         }
-        attributes.put(COSEC_AUTHORIZATION_POLICY_ID_ATTRIBUTE_KEY, verifyContext.policy.id)
-        attributes.put(
-            COSEC_AUTHORIZATION_STATEMENT_IDX_ATTRIBUTE_KEY,
-            verifyContext.statementIndex.toLong()
-        )
-        attributes.put(
-            COSEC_AUTHORIZATION_STATEMENT_NAME_ATTRIBUTE_KEY,
-            verifyContext.statement.name
-        )
         attributes.put(COSEC_AUTHORIZATION_RESULT_ATTRIBUTE_KEY, verifyContext.result.name)
+
+        when (verifyContext) {
+            is PolicyVerifyContext -> {
+                attributes.put(COSEC_AUTHORIZATION_POLICY_ID_ATTRIBUTE_KEY, verifyContext.policy.id)
+                attributes.put(
+                    COSEC_AUTHORIZATION_STATEMENT_IDX_ATTRIBUTE_KEY,
+                    verifyContext.statementIndex.toLong()
+                )
+                attributes.put(
+                    COSEC_AUTHORIZATION_STATEMENT_NAME_ATTRIBUTE_KEY,
+                    verifyContext.statement.name
+                )
+            }
+
+            is RoleVerifyContext -> {
+                attributes.put(COSEC_AUTHORIZATION_ROLE_ID_ATTRIBUTE_KEY, verifyContext.roleId)
+                attributes.put(COSEC_AUTHORIZATION_PERMISSION_ID_ATTRIBUTE_KEY, verifyContext.permission.id)
+            }
+        }
     }
 }

@@ -36,10 +36,10 @@ internal class RedisPolicyRepositoryTest {
     fun getGlobalPolicyWhenIsEmpty() {
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
         every { globalPolicyIndexCache.get(GlobalPolicyIndexKey) } returns emptySet()
-        val permissionRepository = RedisPolicyRepository(globalPolicyIndexCache, mockk(), mockPolicyCache())
+        val permissionRepository = RedisPolicyRepository(globalPolicyIndexCache, mockk())
         permissionRepository.getGlobalPolicy()
             .test()
-            .expectNext(emptySet())
+            .expectNext(listOf())
             .verifyComplete()
     }
 
@@ -47,50 +47,28 @@ internal class RedisPolicyRepositoryTest {
     fun getGlobalPolicy() {
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
         every { globalPolicyIndexCache.get(GlobalPolicyIndexKey) } returns setOf("policyId")
-        val permissionRepository = RedisPolicyRepository(globalPolicyIndexCache, mockk(), mockPolicyCache())
+        val permissionRepository = RedisPolicyRepository(globalPolicyIndexCache, mockPolicyCache())
         permissionRepository.getGlobalPolicy()
             .test()
-            .expectNext(setOf(policyData))
-            .verifyComplete()
-    }
-
-    @Test
-    fun getRolePolicyWhenIsEmpty() {
-        val rolePolicyCache = mockk<RolePolicyCache>()
-        every { rolePolicyCache.get("roleId") } returns emptySet()
-        val permissionRepository = RedisPolicyRepository(mockk(), rolePolicyCache, mockPolicyCache())
-        permissionRepository.getRolePolicy(setOf("roleId"))
-            .test()
-            .expectNext(emptySet())
-            .verifyComplete()
-    }
-
-    @Test
-    fun getRolePolicy() {
-        val rolePolicyCache = mockk<RolePolicyCache>()
-        every { rolePolicyCache.get("roleId") } returns setOf("policyId")
-        val permissionRepository = RedisPolicyRepository(mockk(), rolePolicyCache, mockPolicyCache())
-        permissionRepository.getRolePolicy(setOf("roleId"))
-            .test()
-            .expectNext(setOf(policyData))
+            .expectNext(listOf(policyData))
             .verifyComplete()
     }
 
     @Test
     fun getPoliciesWhenPolicyIsEmpty() {
-        val permissionRepository = RedisPolicyRepository(mockk(), mockk(), mockk())
+        val permissionRepository = RedisPolicyRepository(mockk(), mockk())
         permissionRepository.getPolicies(emptySet())
             .test()
-            .expectNext(emptySet())
+            .expectNext(listOf())
             .verifyComplete()
     }
 
     @Test
     fun getPolicies() {
-        val permissionRepository = RedisPolicyRepository(mockk(), mockk(), mockPolicyCache())
+        val permissionRepository = RedisPolicyRepository(mockk(), mockPolicyCache())
         permissionRepository.getPolicies(setOf("policyId"))
             .test()
-            .expectNext(setOf(policyData))
+            .expectNext(listOf(policyData))
             .verifyComplete()
     }
 

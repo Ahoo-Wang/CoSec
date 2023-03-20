@@ -11,18 +11,13 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.authorization
+package me.ahoo.cosec.permission
 
-import me.ahoo.cosec.api.policy.Policy
-import reactor.core.publisher.Mono
+import me.ahoo.cosec.api.permission.Permission
+import me.ahoo.cosec.api.permission.PermissionGroup
 
-/**
- *
- * Policy Repository .
- *
- * @author ahoo wang
- */
-interface PolicyRepository {
-    fun getGlobalPolicy(): Mono<List<Policy>>
-    fun getPolicies(policyIds: Set<String>): Mono<List<Policy>>
-}
+data class PermissionGroupData(
+    override val name: String,
+    override val description: String = "",
+    override val permissions: List<Permission> = listOf(),
+) : PermissionGroup
