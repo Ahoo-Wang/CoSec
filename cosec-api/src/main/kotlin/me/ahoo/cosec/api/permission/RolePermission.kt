@@ -13,6 +13,9 @@
 
 package me.ahoo.cosec.api.permission
 
+/**
+ * Role Permissions.
+ */
 interface RolePermission {
     /**
      * role id

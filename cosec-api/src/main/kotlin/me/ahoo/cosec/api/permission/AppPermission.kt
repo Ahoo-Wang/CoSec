@@ -1,5 +1,8 @@
 package me.ahoo.cosec.api.permission
 
+/**
+ * App permissions metadata.
+ */
 interface AppPermission {
     val id: String
     val groups: List<PermissionGroup>

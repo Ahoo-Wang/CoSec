@@ -15,6 +15,9 @@ package me.ahoo.cosec.api.permission
 
 import me.ahoo.cosec.api.policy.Statement
 
+/**
+ * Permission metadata.
+ */
 interface Permission : Statement {
     val id: String
     val description: String
