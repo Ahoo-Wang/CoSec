@@ -2,8 +2,8 @@
   "id": "appId",
   "groups": [
     {
-      "name": "name",
-      "description": "description",
+      "name": "groupName",
+      "description": "groupDescription",
       "permissions": [
         {
           "id": "permissionId",

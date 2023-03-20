@@ -16,6 +16,5 @@ class PermissionSerializerTest {
         assertThat(appPermission.id, equalTo("appId"))
         val serializedJson = CoSecJsonSerializer.writeValueAsString(appPermission)
         assertThat(serializedJson, equalTo(json))
-
     }
 }
