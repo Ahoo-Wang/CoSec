@@ -34,31 +34,50 @@ title Authorization.authorize(Request,SecurityContext)
 start
 :authorize(Request,SecurityContext);
 group Global Policies
-:get Global policies;
+:get Global Policies;
 :get Deny Statements;
-if (verify request using Deny policies) is (true) then
+if (verify request using Deny Statements) is (true) then
   :deny request;
   stop
 else (false)
   :get Allow Statements;
-  if (verify request using Allow policies) is (true) then
+  if (verify request using Allow Statements) is (true) then
     :allow request;
     stop
   else (false)
-  :Role policies;
+  :Principal Policies;
   endif
 endif
 end group
 
-group Role Policies
-:get Role policies;
+group Principal Policies
+:get Principal Policies;
 :get Deny Statements;
-if (verify request using Deny policies) is (true) then
+if (verify request using Deny Statements) is (true) then
   :deny request;
+  stop
 else (false)
   :get Allow Statements;
-  if (verify request using Allow policies) is (true) then
+  if (verify request using Allow Statements) is (true) then
     :allow request;
+    stop
+  else (false)
+  :Role Permissions;
+  endif
+endif
+end group
+
+group Role Permissions
+:get Role Permissions;
+:get Deny Permissions;
+if (verify request using Deny Permissions) is (true) then
+  :deny request;
+  stop
+else (false)
+  :get Allow Permissions;
+  if (verify request using Allow Permissions) is (true) then
+    :allow request;
+    stop
   else (false)
     :deny request;
   endif

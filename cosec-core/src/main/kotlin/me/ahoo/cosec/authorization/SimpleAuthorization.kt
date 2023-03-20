@@ -172,7 +172,7 @@ class SimpleAuthorization(
             }
     }
 
-    private fun verifyRolePolicies(request: Request, context: SecurityContext): Mono<VerifyContext> {
+    private fun verifyRolePermissions(request: Request, context: SecurityContext): Mono<VerifyContext> {
         if (context.principal.roles.isEmpty()) {
             return Mono.empty()
         }
@@ -193,7 +193,7 @@ class SimpleAuthorization(
                 verifyPrincipalPolicies(request, context)
             }
             .switchIfEmpty {
-                verifyRolePolicies(request, context)
+                verifyRolePermissions(request, context)
             }
             .map {
                 context.setVerifyContext(it)
