@@ -17,7 +17,6 @@ import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.redis.GlobalPolicyIndexCache
 import me.ahoo.cosec.redis.PolicyCache
-import me.ahoo.cosec.redis.RolePolicyCache
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
@@ -26,7 +25,7 @@ import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
-internal class CoSecCacheAutoConfigurationTest {
+internal class CoSecPolicyCacheAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
 
     @Test
@@ -36,17 +35,15 @@ internal class CoSecCacheAutoConfigurationTest {
             .withUserConfiguration(
                 RedisAutoConfiguration::class.java,
                 CoCacheAutoConfiguration::class.java,
-                CoSecCacheAutoConfiguration::class.java,
+                CoSecPolicyCacheAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
                 assertThat(context)
                     .hasSingleBean(CacheProperties::class.java)
-                    .hasSingleBean(CoSecCacheAutoConfiguration::class.java)
-                    .hasBean(CoSecCacheAutoConfiguration.GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME)
+                    .hasSingleBean(CoSecPolicyCacheAutoConfiguration::class.java)
+                    .hasBean(CoSecPolicyCacheAutoConfiguration.GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME)
                     .hasSingleBean(GlobalPolicyIndexCache::class.java)
-                    .hasBean(CoSecCacheAutoConfiguration.ROLE_POLICY_CACHE_SOURCE_BEAN_NAME)
-                    .hasSingleBean(RolePolicyCache::class.java)
-                    .hasBean(CoSecCacheAutoConfiguration.POLICY_CACHE_SOURCE_BEAN_NAME)
+                    .hasBean(CoSecPolicyCacheAutoConfiguration.POLICY_CACHE_SOURCE_BEAN_NAME)
                     .hasSingleBean(PolicyCache::class.java)
                     .hasSingleBean(PolicyRepository::class.java)
             }

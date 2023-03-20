@@ -8,25 +8,18 @@
       "description": "The id of the app permission",
       "type": "string"
     },
-    "statements": {
+    "groups": {
       "type": "array",
       "items": {
-        "$ref": "#/definitions/statement"
+        "$ref": "#/definitions/permissionGroup"
       }
     }
   },
   "required": [
     "id",
-    "statements"
+    "groups"
   ],
   "definitions": {
-    "policyType": {
-      "enum": [
-        "global",
-        "system",
-        "custom"
-      ]
-    },
     "effect": {
       "enum": [
         "allow",
@@ -212,11 +205,42 @@
         "type"
       ]
     },
-    "statement": {
+    "permissionGroup": {
       "type": "object",
       "properties": {
         "name": {
-          "description": "The name of the Statement",
+          "description": "The name of the permission group",
+          "type": "string"
+        },
+        "description": {
+          "description": "The description of permission group",
+          "type": "string"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/permission"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "permissions"
+      ]
+    },
+    "permission": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The id of the permission",
+          "type": "string"
+        },
+        "name": {
+          "description": "The name of the permission",
+          "type": "string"
+        },
+        "description": {
+          "description": "The description of the permission",
           "type": "string"
         },
         "effect": {

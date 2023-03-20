@@ -16,7 +16,8 @@ package me.ahoo.cosec.spring.boot.starter.authorization.gateway
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.gateway.AuthorizationGatewayFilter
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecCacheAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPermissionCacheAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPolicyCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.cosid.IdGenerator
@@ -40,7 +41,8 @@ internal class CoSecGatewayAuthorizationAutoConfigurationTest {
             .withUserConfiguration(
                 RedisAutoConfiguration::class.java,
                 CoCacheAutoConfiguration::class.java,
-                CoSecCacheAutoConfiguration::class.java,
+                CoSecPolicyCacheAutoConfiguration::class.java,
+                CoSecPermissionCacheAutoConfiguration::class.java,
                 CoSecAuthorizationAutoConfiguration::class.java,
                 CoSecGatewayAuthorizationAutoConfiguration::class.java,
                 CoSecJwtAutoConfiguration::class.java,

@@ -20,10 +20,9 @@ import reactor.kotlin.core.publisher.toMono
 
 class RedisPolicyRepository(
     private val globalPolicyIndexCache: GlobalPolicyIndexCache,
-    private val rolePolicyCache: RolePolicyCache,
     private val policyCache: PolicyCache,
 ) : PolicyRepository {
-    override fun getGlobalPolicy(): Mono<Set<Policy>> {
+    override fun getGlobalPolicy(): Mono<List<Policy>> {
         return globalPolicyIndexCache[GlobalPolicyIndexKey]
             .orEmpty()
             .let {
@@ -31,18 +30,9 @@ class RedisPolicyRepository(
             }
     }
 
-    override fun getRolePolicy(roleIds: Set<String>): Mono<Set<Policy>> {
-        return roleIds.flatMap {
-            rolePolicyCache[it].orEmpty()
-        }.toSet()
-            .let {
-                getPolicies(it)
-            }
-    }
-
-    override fun getPolicies(policyIds: Set<String>): Mono<Set<Policy>> {
+    override fun getPolicies(policyIds: Set<String>): Mono<List<Policy>> {
         return policyIds.mapNotNull {
             policyCache[it]
-        }.toSet().toMono()
+        }.toMono()
     }
 }

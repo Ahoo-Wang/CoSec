@@ -15,10 +15,10 @@ package me.ahoo.cosec.redis
 import me.ahoo.cache.CacheValue
 import me.ahoo.cache.TtlAt
 import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
-import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.policy.PolicyData
-import me.ahoo.cosec.policy.StatementData
+import me.ahoo.cosec.api.permission.AppPermission
+import me.ahoo.cosec.permission.AppPermissionData
+import me.ahoo.cosec.permission.PermissionData
+import me.ahoo.cosec.permission.PermissionGroupData
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosid.test.MockIdGenerator
 import org.hamcrest.MatcherAssert.assertThat
@@ -31,13 +31,13 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.data.redis.core.StringRedisTemplate
 
 /**
- * PolicyCodecExecutorTest .
+ * AppPermissionCodecExecutorTest .
  *
  * @author ahoo wang
  */
-internal class PolicyCodecExecutorTest {
+internal class AppPermissionCodecExecutorTest {
     lateinit var stringRedisTemplate: StringRedisTemplate
-    lateinit var codecExecutor: ObjectToJsonCodecExecutor<Policy>
+    lateinit var codecExecutor: ObjectToJsonCodecExecutor<AppPermission>
     lateinit var lettuceConnectionFactory: LettuceConnectionFactory
 
     @BeforeEach
@@ -46,7 +46,7 @@ internal class PolicyCodecExecutorTest {
         lettuceConnectionFactory = LettuceConnectionFactory(redisStandaloneConfiguration)
         lettuceConnectionFactory.afterPropertiesSet()
         stringRedisTemplate = StringRedisTemplate(lettuceConnectionFactory)
-        codecExecutor = ObjectToJsonCodecExecutor(Policy::class.java, stringRedisTemplate, CoSecJsonSerializer)
+        codecExecutor = ObjectToJsonCodecExecutor(AppPermission::class.java, stringRedisTemplate, CoSecJsonSerializer)
     }
 
     @AfterEach
@@ -56,26 +56,23 @@ internal class PolicyCodecExecutorTest {
 
     @Test
     fun executeAndEncode() {
-        val policy = PolicyData(
+        val appPermission = AppPermissionData(
             id = "2",
-            category = "auth",
-            name = "auth",
-            description = "",
-            type = PolicyType.SYSTEM,
-            tenantId = "1",
-            statements = listOf(StatementData()),
+            groups = listOf(
+                PermissionGroupData("groupName", permissions = listOf(PermissionData("id", "name")))
+            )
         )
-        val key = "policy:" + MockIdGenerator.INSTANCE.generateAsString()
-        val cacheValue: CacheValue<Policy> = CacheValue.forever(policy)
+        val key = "app:" + MockIdGenerator.INSTANCE.generateAsString()
+        val cacheValue: CacheValue<AppPermission> = CacheValue.forever(appPermission)
         codecExecutor.executeAndEncode(key, cacheValue)
         val (value) = codecExecutor.executeAndDecode(key, TtlAt.FOREVER)
-        assertThat(value, `is`(policy))
+        assertThat(value, `is`(appPermission))
     }
 
     @Test
     fun executeAndEncodeMissing() {
-        val key = "policy:" + MockIdGenerator.INSTANCE.generateAsString()
-        val cacheValue: CacheValue<Policy> = CacheValue.missingGuard()
+        val key = "app:" + MockIdGenerator.INSTANCE.generateAsString()
+        val cacheValue: CacheValue<AppPermission> = CacheValue.missingGuard()
         codecExecutor.executeAndEncode(key, cacheValue)
         val actual = codecExecutor.executeAndDecode(key, TtlAt.FOREVER)
         assertThat(actual, `is`(cacheValue))

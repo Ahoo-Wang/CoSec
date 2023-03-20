@@ -28,7 +28,6 @@ import me.ahoo.cosec.redis.GlobalPolicyIndexCache
 import me.ahoo.cosec.redis.GlobalPolicyIndexKey
 import me.ahoo.cosec.redis.PolicyCache
 import me.ahoo.cosec.redis.RedisPolicyRepository
-import me.ahoo.cosec.redis.RolePolicyCache
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosid.IdGenerator
@@ -41,7 +40,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.data.redis.core.StringRedisTemplate
 
 /**
- * CoSec Authorization AutoConfiguration.
+ * CoSec Policy Cache AutoConfiguration.
  *
  * @author ahoo wang
  */
@@ -52,13 +51,11 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @EnableConfigurationProperties(
     CacheProperties::class,
 )
-class CoSecCacheAutoConfiguration(private val cacheProperties: CacheProperties) {
+class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProperties) {
 
     companion object {
         const val GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME = "globalPolicyIndexCache"
         const val GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME = "${GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME}Source"
-        const val ROLE_POLICY_CACHE_BEAN_NAME = "rolePolicyCache"
-        const val ROLE_POLICY_CACHE_SOURCE_BEAN_NAME = "${ROLE_POLICY_CACHE_BEAN_NAME}Source"
         const val POLICY_CACHE_BEAN_NAME = "policyCache"
         const val POLICY_CACHE_SOURCE_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}Source"
     }
@@ -67,12 +64,10 @@ class CoSecCacheAutoConfiguration(private val cacheProperties: CacheProperties) 
     @ConditionalOnMissingBean
     fun redisPolicyRepository(
         globalPolicyIndexCache: GlobalPolicyIndexCache,
-        rolePolicyCache: RolePolicyCache,
         policyCache: PolicyCache,
     ): PolicyRepository {
         return RedisPolicyRepository(
             globalPolicyIndexCache,
-            rolePolicyCache,
             policyCache,
         )
     }
@@ -109,36 +104,6 @@ class CoSecCacheAutoConfiguration(private val cacheProperties: CacheProperties) 
             ),
         )
         return GlobalPolicyIndexCache(delegate)
-    }
-
-    @Bean(ROLE_POLICY_CACHE_SOURCE_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [ROLE_POLICY_CACHE_SOURCE_BEAN_NAME])
-    fun rolePolicyCacheSource(): CacheSource<String, Set<String>> {
-        return noOp()
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    fun rolePolicyCache(
-        @Qualifier(ROLE_POLICY_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<String, Set<String>>,
-        redisTemplate: StringRedisTemplate,
-        cacheManager: CacheManager,
-        idGenerator: IdGenerator,
-    ): RolePolicyCache {
-        val clientId = idGenerator.generateAsString()
-        val cacheKeyPrefix = cacheProperties.cacheKeyPrefix.rolePolicy
-        val codecExecutor = SetToSetCodecExecutor(redisTemplate)
-        val distributedCaching: DistributedCache<Set<String>> = RedisDistributedCache(redisTemplate, codecExecutor)
-        val delegate = cacheManager.getOrCreateCache(
-            CacheConfig(
-                cacheName = ROLE_POLICY_CACHE_BEAN_NAME,
-                clientId = clientId,
-                keyConverter = ToStringKeyConverter(cacheKeyPrefix),
-                distributedCaching = distributedCaching,
-                cacheSource = cacheSource,
-            ),
-        )
-        return RolePolicyCache(delegate)
     }
 
     @Bean(POLICY_CACHE_SOURCE_BEAN_NAME)

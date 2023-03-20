@@ -17,7 +17,8 @@ import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.servlet.AuthorizationFilter
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecCacheAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPermissionCacheAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPolicyCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
@@ -42,7 +43,8 @@ internal class CoSecAuthorizationAutoConfigurationTest {
             .withUserConfiguration(
                 RedisAutoConfiguration::class.java,
                 CoCacheAutoConfiguration::class.java,
-                CoSecCacheAutoConfiguration::class.java,
+                CoSecPolicyCacheAutoConfiguration::class.java,
+                CoSecPermissionCacheAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecJwtAutoConfiguration::class.java,
                 Ip2RegionAutoConfiguration::class.java,

@@ -13,9 +13,18 @@
 
 package me.ahoo.cosec.api.context.request
 
+import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.api.context.Attributes
 
 interface Request : Attributes<Request, String, String> {
+    companion object {
+        const val APP_ID = "${CoSec.COSEC}-app-id"
+    }
+
+    val appId: String
+        get() {
+            return getHeader(APP_ID)
+        }
     val path: String
     val method: String
     val remoteIp: String

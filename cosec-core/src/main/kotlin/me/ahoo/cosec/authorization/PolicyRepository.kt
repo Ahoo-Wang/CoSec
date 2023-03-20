@@ -23,7 +23,6 @@ import reactor.core.publisher.Mono
  * @author ahoo wang
  */
 interface PolicyRepository {
-    fun getGlobalPolicy(): Mono<Set<Policy>>
-    fun getRolePolicy(roleIds: Set<String>): Mono<Set<Policy>>
-    fun getPolicies(policyIds: Set<String>): Mono<Set<Policy>>
+    fun getGlobalPolicy(): Mono<List<Policy>>
+    fun getPolicies(policyIds: Set<String>): Mono<List<Policy>>
 }
