@@ -13,8 +13,11 @@
 package me.ahoo.cosec.servlet
 
 import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
+import org.springframework.http.HttpStatus
 import java.io.IOException
 import javax.servlet.Filter
 import javax.servlet.FilterChain
@@ -39,8 +42,13 @@ class AuthorizationFilter(
     override fun doFilter(request: ServletRequest, response: ServletResponse, chain: FilterChain) {
         val httpServletRequest = request as HttpServletRequest
         val httpServletResponse = response as HttpServletResponse
-        if (authorize(httpServletRequest, httpServletResponse)) {
-            chain.doFilter(request, response)
+        try {
+            if (authorize(httpServletRequest, httpServletResponse)) {
+                chain.doFilter(request, response)
+            }
+        } catch (tooManyRequestsException: TooManyRequestsException) {
+            response.status = HttpStatus.TOO_MANY_REQUESTS.value()
+            httpServletResponse.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
         }
     }
 }

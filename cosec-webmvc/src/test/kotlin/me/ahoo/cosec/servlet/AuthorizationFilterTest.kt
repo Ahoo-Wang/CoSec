@@ -23,6 +23,7 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.jwt.Jwts
+import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import me.ahoo.cosec.token.TokenVerificationException
@@ -131,6 +132,44 @@ internal class AuthorizationFilterTest {
             securityContextParser.parse(any())
             servletResponse.contentType = MediaType.APPLICATION_JSON_VALUE
             servletResponse.status = HttpStatus.UNAUTHORIZED.value()
+            servletResponse.outputStream.write(any() as ByteArray)
+            servletResponse.outputStream.flush()
+        }
+    }
+
+    @Test
+    fun doFilterWhenTooManyRequests() {
+        val authorization = mockk<Authorization> {
+            every { authorize(any(), any()) } throws TooManyRequestsException()
+        }
+        val filter = AuthorizationFilter(
+            InjectSecurityContextParser,
+            authorization,
+            ServletRequestParser(ServletRemoteIpResolver),
+        )
+        val servletRequest = mockk<HttpServletRequest> {
+            every { servletPath } returns "/path"
+            every { method } returns "GET"
+            every { remoteHost } returns "remoteHost"
+            every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
+            every { getHeader(HttpHeaders.ORIGIN) } returns null
+            every { getHeader(HttpHeaders.REFERER) } returns null
+            every { setSecurityContext(any()) } returns Unit
+        }
+        val servletResponse = mockk<HttpServletResponse> {
+            every { contentType = MediaType.APPLICATION_JSON_VALUE } just runs
+            every { status = HttpStatus.TOO_MANY_REQUESTS.value() } returns Unit
+            every { outputStream.write(any() as ByteArray) } returns Unit
+            every { outputStream.flush() } returns Unit
+        }
+        val filterChain = mockk<FilterChain> {
+            every { doFilter(servletRequest, any()) } returns Unit
+        }
+        filter.doFilter(servletRequest, servletResponse, filterChain)
+
+        verify {
+            servletResponse.contentType = MediaType.APPLICATION_JSON_VALUE
+            servletResponse.status = HttpStatus.TOO_MANY_REQUESTS.value()
             servletResponse.outputStream.write(any() as ByteArray)
             servletResponse.outputStream.flush()
         }
