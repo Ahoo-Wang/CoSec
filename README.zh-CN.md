@@ -122,10 +122,23 @@ class CustomConditionMatcher(configuration: Configuration) :
   "description": "description",
   "type": "global",
   "tenantId": "tenantId",
+  "condition": {
+    "type": "bool",
+    "bool": {
+      "and": [
+        {
+          "type": "authenticated"
+        },
+        {
+          "type": "rate_limiter",
+          "permitsPerSecond": 10
+        }
+      ]
+    }
+  },
   "statements": [
     {
       "name": "Anonymous",
-      "effect": "allow",
       "actions": [
         {
           "type": "path",
@@ -139,7 +152,6 @@ class CustomConditionMatcher(configuration: Configuration) :
     },
     {
       "name": "UserScope",
-      "effect": "allow",
       "actions": [
         {
           "type": "path",
@@ -152,7 +164,6 @@ class CustomConditionMatcher(configuration: Configuration) :
     },
     {
       "name": "Developer",
-      "effect": "allow",
       "actions": [
         {
           "type": "all"
@@ -217,7 +228,6 @@ class CustomConditionMatcher(configuration: Configuration) :
     },
     {
       "name": "AllowDeveloperOrIpRange",
-      "effect": "allow",
       "actions": [
         {
           "type": "all"
@@ -252,12 +262,52 @@ class CustomConditionMatcher(configuration: Configuration) :
           ]
         }
       }
+    },
+    {
+      "name": "TestContains",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "condition": {
+        "type": "contains",
+        "part": "request.attributes.ipRegion",
+        "pattern": "上海"
+      }
+    },
+    {
+      "name": "TestStartsWith",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "condition": {
+        "type": "starts_with",
+        "part": "request.attributes.ipRegion",
+        "pattern": "中国"
+      }
+    },
+    {
+      "name": "TestEndsWith",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "condition": {
+        "type": "ends_with",
+        "part": "request.attributes.remoteIp",
+        "pattern": ".168.0.1"
+      }
     }
   ]
 }
-
 ```
-
 ## 应用权限元数据 Schema
 
 配置 [App Permission Schema](document/cosec-app-permission.schema.json) 以支持 IDE ([IntelliJ IDEA](https://www.jetbrains.com/help/idea/json.html#ws_json_using_schemas)) 输入自动完成。
@@ -273,6 +323,10 @@ class CustomConditionMatcher(configuration: Configuration) :
       "and": [
         {
           "type": "authenticated"
+        },
+        {
+          "type": "rate_limiter",
+          "permitsPerSecond": 10
         }
       ]
     }

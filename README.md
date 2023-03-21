@@ -121,10 +121,23 @@ Configure [Policy Schema](document/cosec-policy.schema.json) to support IDE ([In
   "description": "description",
   "type": "global",
   "tenantId": "tenantId",
+  "condition": {
+    "type": "bool",
+    "bool": {
+      "and": [
+        {
+          "type": "authenticated"
+        },
+        {
+          "type": "rate_limiter",
+          "permitsPerSecond": 10
+        }
+      ]
+    }
+  },
   "statements": [
     {
       "name": "Anonymous",
-      "effect": "allow",
       "actions": [
         {
           "type": "path",
@@ -138,7 +151,6 @@ Configure [Policy Schema](document/cosec-policy.schema.json) to support IDE ([In
     },
     {
       "name": "UserScope",
-      "effect": "allow",
       "actions": [
         {
           "type": "path",
@@ -151,7 +163,6 @@ Configure [Policy Schema](document/cosec-policy.schema.json) to support IDE ([In
     },
     {
       "name": "Developer",
-      "effect": "allow",
       "actions": [
         {
           "type": "all"
@@ -216,7 +227,6 @@ Configure [Policy Schema](document/cosec-policy.schema.json) to support IDE ([In
     },
     {
       "name": "AllowDeveloperOrIpRange",
-      "effect": "allow",
       "actions": [
         {
           "type": "all"
@@ -251,10 +261,51 @@ Configure [Policy Schema](document/cosec-policy.schema.json) to support IDE ([In
           ]
         }
       }
+    },
+    {
+      "name": "TestContains",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "condition": {
+        "type": "contains",
+        "part": "request.attributes.ipRegion",
+        "pattern": "上海"
+      }
+    },
+    {
+      "name": "TestStartsWith",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "condition": {
+        "type": "starts_with",
+        "part": "request.attributes.ipRegion",
+        "pattern": "中国"
+      }
+    },
+    {
+      "name": "TestEndsWith",
+      "effect": "allow",
+      "actions": [
+        {
+          "type": "all"
+        }
+      ],
+      "condition": {
+        "type": "ends_with",
+        "part": "request.attributes.remoteIp",
+        "pattern": ".168.0.1"
+      }
     }
   ]
 }
-
 ```
 
 ## App Permission Metadata Schema
@@ -272,6 +323,10 @@ Configure [App Permission Schema](document/cosec-app-permission.schema.json) to 
       "and": [
         {
           "type": "authenticated"
+        },
+        {
+          "type": "rate_limiter",
+          "permitsPerSecond": 10
         }
       ]
     }
