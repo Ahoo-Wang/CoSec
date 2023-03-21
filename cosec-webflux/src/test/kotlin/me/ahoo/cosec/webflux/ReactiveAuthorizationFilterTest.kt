@@ -21,6 +21,7 @@ import io.mockk.verify
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.jwt.Jwts
+import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
@@ -193,6 +194,45 @@ internal class ReactiveAuthorizationFilterTest {
         verify {
             authorization.authorize(any(), any())
             exchange.response.statusCode = HttpStatus.FORBIDDEN
+            exchange.response.bufferFactory().wrap(any() as ByteArray)
+            exchange.response.writeWith(any())
+            exchange.setSecurityContext(any())
+        }
+    }
+
+    @Test
+    fun filterWhenTooManyRequests() {
+        val authorization = mockk<Authorization> {
+            every { authorize(any(), any()) } returns TooManyRequestsException().toMono()
+        }
+        val filter = ReactiveAuthorizationFilter(
+            ReactiveInjectSecurityContextParser,
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
+            authorization,
+        )
+        val exchange = mockk<ServerWebExchange>() {
+            every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
+            every { request.headers.origin } returns "origin"
+            every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
+            every { request.path.value() } returns "/path"
+            every { request.methodValue } returns "GET"
+            every { request.remoteAddress?.hostName } returns "hostName"
+            every { response.setStatusCode(HttpStatus.TOO_MANY_REQUESTS) } returns true
+            every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
+            every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
+            every { response.writeWith(any()) } returns Mono.empty()
+            every { setSecurityContext(any()) } just runs
+            every {
+                mutate()
+                    .principal(any())
+                    .build()
+            } returns this
+        }
+
+        filter.filter(exchange, mockk()).block()
+        verify {
+            authorization.authorize(any(), any())
+            exchange.response.statusCode = HttpStatus.TOO_MANY_REQUESTS
             exchange.response.bufferFactory().wrap(any() as ByteArray)
             exchange.response.writeWith(any())
             exchange.setSecurityContext(any())

@@ -6,7 +6,18 @@
   "type": "global",
   "tenantId": "tenantId",
   "condition": {
-    "type": "authenticated"
+    "type": "bool",
+    "bool": {
+      "and": [
+        {
+          "type": "authenticated"
+        },
+        {
+          "type": "rate_limiter",
+          "permitsPerSecond": 10
+        }
+      ]
+    }
   },
   "statements": [
     {

@@ -22,10 +22,12 @@ interface AuthorizeResult {
         private const val EXPLICIT_DENY_REASON = "Explicit Deny"
         private const val IMPLICIT_DENY_REASON = "Implicit Deny"
         private const val TOKEN_EXPIRED_REASON = "Token Expired"
+        private const val TOO_MANY_REQUESTS_REASON = "Too Many Requests"
         val ALLOW: AuthorizeResult = allow(ALLOW_REASON)
         val EXPLICIT_DENY: AuthorizeResult = deny(EXPLICIT_DENY_REASON)
         val IMPLICIT_DENY: AuthorizeResult = deny(IMPLICIT_DENY_REASON)
         val TOKEN_EXPIRED: AuthorizeResult = deny(TOKEN_EXPIRED_REASON)
+        val TOO_MANY_REQUESTS: AuthorizeResult = deny(TOO_MANY_REQUESTS_REASON)
         fun allow(reason: String): AuthorizeResult = AuthorizeResultData(true, reason)
         fun deny(reason: String): AuthorizeResult = AuthorizeResultData(false, reason)
     }

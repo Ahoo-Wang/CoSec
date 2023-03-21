@@ -77,6 +77,7 @@
         "contains",
         "starts_with",
         "ends_with",
+        "rate_limiter",
         "eq",
         "in",
         "reg",
@@ -206,6 +207,9 @@
         },
         "ignoreCase": {
           "type": "boolean"
+        },
+        "permitsPerSecond": {
+          "type": "number"
         }
       },
       "required": [

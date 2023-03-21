@@ -70,7 +70,7 @@ abstract class AbstractAuthorizationInterceptor(
             }.block()!!
     }
 
-    private fun HttpServletResponse.writeWithAuthorizeResult(authorizeResult: AuthorizeResult) {
+    fun HttpServletResponse.writeWithAuthorizeResult(authorizeResult: AuthorizeResult) {
         contentType = MediaType.APPLICATION_JSON_VALUE
         outputStream.write(CoSecJsonSerializer.writeValueAsBytes(authorizeResult))
         outputStream.flush()
