@@ -28,6 +28,10 @@
       "description": "The type of the policy",
       "$ref": "#/definitions/policyType"
     },
+    "condition": {
+      "description": "The condition of the policy",
+      "$ref": "#/definitions/conditionMatcher"
+    },
     "statements": {
       "type": "array",
       "items": {
@@ -254,6 +258,7 @@
           }
         },
         "condition": {
+          "description": "The condition of the statement",
           "$ref": "#/definitions/conditionMatcher"
         }
       },

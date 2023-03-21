@@ -5,6 +5,9 @@
   "description": "description",
   "type": "global",
   "tenantId": "tenantId",
+  "condition": {
+    "type": "authenticated"
+  },
   "statements": [
     {
       "name": "Anonymous",

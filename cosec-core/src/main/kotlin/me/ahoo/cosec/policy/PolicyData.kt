@@ -13,9 +13,11 @@
 
 package me.ahoo.cosec.policy
 
+import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.policy.condition.AllConditionMatcher
 
 class PolicyData(
     override val id: String,
@@ -24,6 +26,7 @@ class PolicyData(
     override val description: String,
     override val type: PolicyType,
     override val tenantId: String,
+    override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
     override val statements: List<Statement> = listOf(),
 ) : Policy {
 

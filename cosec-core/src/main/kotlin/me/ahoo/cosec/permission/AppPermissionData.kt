@@ -15,13 +15,16 @@ package me.ahoo.cosec.permission
 
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.PermissionGroup
+import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.policy.condition.AllConditionMatcher
 
 data class AppPermissionData(
     override val id: String,
+    override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
     override val groups: List<PermissionGroup> = listOf()
 ) : AppPermission {
-    override val permissionIndex: Map<String, me.ahoo.cosec.api.permission.Permission> by lazy(this) {
-        super.permissionIndex
+    override val permissionIndexer: Map<String, me.ahoo.cosec.api.permission.Permission> by lazy(this) {
+        super.permissionIndexer
     }
 
     override fun equals(other: Any?): Boolean {

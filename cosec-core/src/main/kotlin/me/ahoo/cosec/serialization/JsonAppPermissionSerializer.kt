@@ -22,7 +22,9 @@ import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.PermissionGroup
+import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.permission.AppPermissionData
+import me.ahoo.cosec.policy.condition.AllConditionMatcher
 
 const val APP_PERMISSION_ID_KEY = "id"
 const val APP_PERMISSION_GROUPS_KEY = "groups"
@@ -31,6 +33,7 @@ object JsonAppPermissionSerializer : StdSerializer<AppPermission>(AppPermission:
     override fun serialize(value: AppPermission, gen: JsonGenerator, provider: SerializerProvider) {
         gen.writeStartObject()
         gen.writeStringField(APP_PERMISSION_ID_KEY, value.id)
+        gen.writePOJOField(STATEMENT_CONDITION_KEY, value.condition)
         if (value.groups.isNotEmpty()) {
             gen.writeArrayFieldStart(APP_PERMISSION_GROUPS_KEY)
             value.groups.forEach {
@@ -45,6 +48,9 @@ object JsonAppPermissionSerializer : StdSerializer<AppPermission>(AppPermission:
 object JsonAppPermissionDeserializer : StdDeserializer<AppPermission>(AppPermission::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): AppPermission {
         val jsonNode = p.codec.readTree<JsonNode>(p)
+        val condition =
+            jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.codec)?.readValueAs(ConditionMatcher::class.java)
+                ?: AllConditionMatcher.INSTANCE
         val groups = jsonNode.get(APP_PERMISSION_GROUPS_KEY)?.map {
             it.traverse(p.codec).readValueAs(PermissionGroup::class.java)
         }.orEmpty()
@@ -52,6 +58,7 @@ object JsonAppPermissionDeserializer : StdDeserializer<AppPermission>(AppPermiss
             id = requireNotNull(jsonNode.get(APP_PERMISSION_ID_KEY)) {
                 "$APP_PERMISSION_ID_KEY is required!"
             }.asText(),
+            condition = condition,
             groups = groups,
         )
     }

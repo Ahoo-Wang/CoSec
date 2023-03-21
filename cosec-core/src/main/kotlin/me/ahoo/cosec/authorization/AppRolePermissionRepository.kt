@@ -13,10 +13,10 @@
 
 package me.ahoo.cosec.authorization
 
-import me.ahoo.cosec.api.permission.RolePermission
+import me.ahoo.cosec.api.permission.AppRolePermission
 import reactor.core.publisher.Mono
 
-interface RolePermissionRepository {
+interface AppRolePermissionRepository {
 
-    fun getRolePermissions(appId: String, roleIds: Set<String>): Mono<List<RolePermission>>
+    fun getAppRolePermission(appId: String, roleIds: Set<String>): Mono<AppRolePermission>
 }

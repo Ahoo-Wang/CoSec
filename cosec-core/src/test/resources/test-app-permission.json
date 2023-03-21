@@ -1,5 +1,8 @@
 {
   "id": "appId",
+  "condition": {
+    "type": "in_user_tenant"
+  },
   "groups": [
     {
       "name": "groupName",
