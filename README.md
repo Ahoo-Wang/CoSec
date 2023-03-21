@@ -257,6 +257,58 @@ Configure [Policy Schema](document/cosec-policy.schema.json) to support IDE ([In
 
 ```
 
+## App Permission Metadata Schema
+
+Configure [App Permission Schema](document/cosec-app-permission.schema.json) to support IDE ([IntelliJ IDEA](https://www.jetbrains.com/help/idea/json.html#ws_json_using_schemas)) input autocompletion.
+
+> App Permission Demo
+
+```json
+{
+  "id": "manage",
+  "condition": {
+    "type": "bool",
+    "bool": {
+      "and": [
+        {
+          "type": "authenticated"
+        }
+      ]
+    }
+  },
+  "groups": [
+    {
+      "name": "order",
+      "description": "order management",
+      "permissions": [
+        {
+          "id": "manage.order.ship",
+          "name": "Ship",
+          "description": "Ship",
+          "actions": [
+            {
+              "type": "path",
+              "pattern": "/order/ship"
+            }
+          ]
+        },
+        {
+          "id": "manage.order.issueInvoice",
+          "name": "Issue an invoice",
+          "description": "Issue an invoice",
+          "actions": [
+            {
+              "type": "path",
+              "pattern": "/order/issueInvoice"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
 ## OpenTelemetry
 
 [CoSec-OpenTelemetry](cosec-opentelemetry)

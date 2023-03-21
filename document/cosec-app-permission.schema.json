@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema",
-  "$id": "https://github.com/Ahoo-Wang/CoSec/blob/main/document/cosec-permission.schema.json",
+  "$id": "https://github.com/Ahoo-Wang/CoSec/blob/main/document/cosec-app-permission.schema.json",
   "title": "CoSec App Permission Schema",
   "type": "object",
   "properties": {
