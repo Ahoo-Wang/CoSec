@@ -22,9 +22,9 @@ import me.ahoo.cache.spring.redis.RedisDistributedCache
 import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
 import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
 import me.ahoo.cosec.api.permission.AppPermission
-import me.ahoo.cosec.authorization.RolePermissionRepository
+import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.redis.AppPermissionCache
-import me.ahoo.cosec.redis.RedisRolePermissionRepository
+import me.ahoo.cosec.redis.RedisAppRolePermissionRepository
 import me.ahoo.cosec.redis.RolePermissionCache
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
@@ -63,8 +63,8 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
     fun rolePermissionRepository(
         appPermissionCache: AppPermissionCache,
         rolePermissionCache: RolePermissionCache
-    ): RolePermissionRepository {
-        return RedisRolePermissionRepository(appPermissionCache, rolePermissionCache)
+    ): AppRolePermissionRepository {
+        return RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
     }
 
     @Bean(APP_PERMISSION_CACHE_SOURCE_BEAN_NAME)

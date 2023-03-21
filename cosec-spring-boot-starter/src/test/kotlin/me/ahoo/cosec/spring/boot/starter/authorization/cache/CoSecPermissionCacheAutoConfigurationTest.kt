@@ -14,11 +14,8 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
-import me.ahoo.cosec.authorization.PolicyRepository
-import me.ahoo.cosec.authorization.RolePermissionRepository
+import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.redis.AppPermissionCache
-import me.ahoo.cosec.redis.GlobalPolicyIndexCache
-import me.ahoo.cosec.redis.PolicyCache
 import me.ahoo.cosec.redis.RolePermissionCache
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
@@ -48,7 +45,7 @@ internal class CoSecPermissionCacheAutoConfigurationTest {
                     .hasSingleBean(AppPermissionCache::class.java)
                     .hasBean(CoSecPermissionCacheAutoConfiguration.Role_PERMISSION_CACHE_BEAN_NAME)
                     .hasSingleBean(RolePermissionCache::class.java)
-                    .hasSingleBean(RolePermissionRepository::class.java)
+                    .hasSingleBean(AppRolePermissionRepository::class.java)
             }
     }
 }

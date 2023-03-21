@@ -11,19 +11,18 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.api.policy
+package me.ahoo.cosec.permission
 
-import me.ahoo.cosec.api.Named
-import me.ahoo.cosec.api.tenant.Tenant
+import me.ahoo.cosec.api.permission.AppPermission
+import me.ahoo.cosec.api.permission.AppRolePermission
+import me.ahoo.cosec.api.permission.Permission
+import me.ahoo.cosec.api.permission.RolePermission
 
-/**
- * Permission Policy
- */
-interface Policy : Named, Tenant {
-    val id: String
-    val category: String
-    val description: String
-    val type: PolicyType
-    val condition: ConditionMatcher
-    val statements: List<Statement>
+data class AppRolePermissionData(
+    override val appPermission: AppPermission,
+    override val rolePermissions: List<RolePermission>
+) : AppRolePermission {
+    override val rolePermissionIndexer: Map<String, List<Permission>> by lazy(this) {
+        super.rolePermissionIndexer
+    }
 }

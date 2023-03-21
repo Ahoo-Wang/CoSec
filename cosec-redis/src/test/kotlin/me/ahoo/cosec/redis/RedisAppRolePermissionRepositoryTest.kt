@@ -14,16 +14,15 @@ import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
 import java.util.*
 
-class RedisRolePermissionRepositoryTest {
+class RedisAppRolePermissionRepositoryTest {
 
     @Test
     fun getRolePermissionsWhenIsEmpty() {
         val appPermissionCache = mockk<AppPermissionCache>()
         every { appPermissionCache.get("appId") } returns null
-        val permissionRepository = RedisRolePermissionRepository(appPermissionCache, mockk())
-        permissionRepository.getRolePermissions("appId", setOf("roleId"))
+        val permissionRepository = RedisAppRolePermissionRepository(appPermissionCache, mockk())
+        permissionRepository.getAppRolePermission("appId", setOf("roleId"))
             .test()
-            .expectNext(listOf())
             .verifyComplete()
     }
 
@@ -35,19 +34,22 @@ class RedisRolePermissionRepositoryTest {
             effect = Effect.DENY,
             actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY)),
         )
-
-        val appPermissionCache = mockk<AppPermissionCache>()
-        every { appPermissionCache.get("appId") } returns AppPermissionData(
+        val appPermission = AppPermissionData(
             "appId",
-            listOf(PermissionGroupData(name = "", permissions = listOf(permission)))
+            groups = listOf(PermissionGroupData(name = "", permissions = listOf(permission)))
         )
+        val appPermissionCache = mockk<AppPermissionCache>()
+        every { appPermissionCache.get("appId") } returns appPermission
+
         val rolePermissionCache = mockk<RolePermissionCache>()
         every { rolePermissionCache.get("roleId") } returns setOf(permission.id)
-        val permissionRepository = RedisRolePermissionRepository(appPermissionCache, rolePermissionCache)
-        permissionRepository.getRolePermissions("appId", setOf("roleId"))
+
+        val permissionRepository = RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
+        permissionRepository.getAppRolePermission("appId", setOf("roleId"))
             .test()
             .consumeNextWith {
-                assertThat(it.first().permissions.first(), equalTo(permission))
+                assertThat(it.appPermission, equalTo(appPermission))
+                assertThat(it.rolePermissions.first().permissions.first(), equalTo(permission.id))
             }
             .verifyComplete()
     }
