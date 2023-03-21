@@ -18,6 +18,7 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.asAuthorizeResult
@@ -67,6 +68,9 @@ abstract class ReactiveSecurityFilter(
                 exchange.response.writeWithAuthorizeResult(
                     tokenVerificationException?.asAuthorizeResult() ?: authorizeResult
                 )
+            }.onErrorResume(TooManyRequestsException::class.java) { _ ->
+                exchange.response.statusCode = HttpStatus.TOO_MANY_REQUESTS
+                exchange.response.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
             }
     }
 

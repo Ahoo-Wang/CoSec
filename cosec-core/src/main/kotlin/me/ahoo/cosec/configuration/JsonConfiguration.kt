@@ -76,6 +76,10 @@ class JsonConfiguration(
         return delegate.asLong()
     }
 
+    override fun asDouble(): Double {
+        return delegate.asDouble()
+    }
+
     override fun <T> asPojo(pojoClass: Class<T>): T {
         return delegate.traverse(objectCodec).use {
             it.readValueAs(pojoClass)

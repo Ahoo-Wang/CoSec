@@ -25,6 +25,7 @@ interface Configuration {
     fun asBoolean(): Boolean
     fun asInt(): Int
     fun asLong(): Long
+    fun asDouble(): Double
     fun <T> asPojo(pojoClass: Class<T>): T
 
     fun has(key: String): Boolean = get(key) != null

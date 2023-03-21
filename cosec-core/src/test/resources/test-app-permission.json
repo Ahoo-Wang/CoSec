@@ -6,6 +6,10 @@
       "and": [
         {
           "type": "authenticated"
+        },
+        {
+          "type": "rate_limiter",
+          "permitsPerSecond": 10
         }
       ]
     }
