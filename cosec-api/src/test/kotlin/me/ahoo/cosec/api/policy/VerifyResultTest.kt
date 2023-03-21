@@ -14,23 +14,16 @@
 package me.ahoo.cosec.api.policy
 
 import me.ahoo.cosec.api.authorization.AuthorizeResult
-import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.request.Request
+import org.hamcrest.MatcherAssert.assertThat
+import org.hamcrest.Matchers.`is`
+import org.junit.jupiter.api.Test
 
-interface PermissionVerifier {
-    fun verify(request: Request, securityContext: SecurityContext): VerifyResult
-}
+class VerifyResultTest {
 
-enum class VerifyResult {
-    ALLOW,
-    EXPLICIT_DENY,
-    IMPLICIT_DENY;
-
-    fun asAuthorizeResult(): AuthorizeResult {
-        return when (this) {
-            ALLOW -> AuthorizeResult.ALLOW
-            EXPLICIT_DENY -> AuthorizeResult.EXPLICIT_DENY
-            IMPLICIT_DENY -> AuthorizeResult.IMPLICIT_DENY
-        }
+    @Test
+    fun asAuthorizeResult() {
+        assertThat(VerifyResult.ALLOW.asAuthorizeResult(), `is`(AuthorizeResult.ALLOW))
+        assertThat(VerifyResult.EXPLICIT_DENY.asAuthorizeResult(), `is`(AuthorizeResult.EXPLICIT_DENY))
+        assertThat(VerifyResult.IMPLICIT_DENY.asAuthorizeResult(), `is`(AuthorizeResult.IMPLICIT_DENY))
     }
 }

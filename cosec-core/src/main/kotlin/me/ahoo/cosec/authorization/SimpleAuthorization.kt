@@ -208,11 +208,7 @@ class SimpleAuthorization(
             }
             .map {
                 context.setVerifyContext(it)
-                when (it.result) {
-                    VerifyResult.ALLOW -> AuthorizeResult.ALLOW
-                    VerifyResult.EXPLICIT_DENY -> AuthorizeResult.EXPLICIT_DENY
-                    VerifyResult.IMPLICIT_DENY -> throw IllegalStateException("VerifyResult.IMPLICIT_DENY")
-                }
+                it.result.asAuthorizeResult()
             }.switchIfEmpty {
                 if (log.isDebugEnabled) {
                     log.debug(
