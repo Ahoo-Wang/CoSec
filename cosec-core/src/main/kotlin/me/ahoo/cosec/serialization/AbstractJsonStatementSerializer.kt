@@ -43,6 +43,9 @@ abstract class AbstractJsonStatementDeserializer<T : Statement>(statementType: C
     StdDeserializer<T>(statementType) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): T {
         val jsonNode = p.codec.readTree<JsonNode>(p)
+        val effect = jsonNode.get(STATEMENT_EFFECT_KEY)?.traverse(p.codec)
+            ?.readValueAs(Effect::class.java)
+            ?: Effect.ALLOW
         val actions = jsonNode.get(STATEMENT_ACTIONS_KEY)?.map {
             it.traverse(p.codec).readValueAs(ActionMatcher::class.java)
         }.orEmpty()
@@ -53,9 +56,7 @@ abstract class AbstractJsonStatementDeserializer<T : Statement>(statementType: C
         return createStatement(
             jsonNode = jsonNode,
             name = jsonNode.get(STATEMENT_NAME)?.asText().orEmpty(),
-            effect = requireNotNull(jsonNode.get(STATEMENT_EFFECT_KEY)) {
-                "$STATEMENT_EFFECT_KEY is required!"
-            }.traverse(p.codec).readValueAs(Effect::class.java),
+            effect = effect,
             actions = actions,
             condition = condition,
         )

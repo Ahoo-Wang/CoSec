@@ -11,7 +11,6 @@
   "statements": [
     {
       "name": "Anonymous",
-      "effect": "allow",
       "actions": [
         {
           "type": "path",
@@ -25,7 +24,6 @@
     },
     {
       "name": "UserScope",
-      "effect": "allow",
       "actions": [
         {
           "type": "path",
@@ -38,7 +36,6 @@
     },
     {
       "name": "Developer",
-      "effect": "allow",
       "actions": [
         {
           "type": "all"
@@ -103,7 +100,6 @@
     },
     {
       "name": "AllowDeveloperOrIpRange",
-      "effect": "allow",
       "actions": [
         {
           "type": "all"
