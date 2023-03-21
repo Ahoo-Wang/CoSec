@@ -125,6 +125,7 @@
         "request.origin",
         "request.referer",
         "request.header.",
+        "request.header.cosec-app-id",
         "request.attributes.",
         "request.attributes.ipRegion",
         "context.tenantId",
@@ -162,7 +163,8 @@
             {
               "type": "string"
             }
-          ]
+          ],
+          "default": "path"
         },
         "methods": {
           "type": "array",
@@ -202,7 +204,8 @@
             {
               "type": "string"
             }
-          ]
+          ],
+          "default": "bool"
         },
         "part": {
           "anyOf": [
@@ -248,7 +251,8 @@
           "type": "string"
         },
         "effect": {
-          "$ref": "#/definitions/effect"
+          "$ref": "#/definitions/effect",
+          "default": "allow"
         },
         "actions": {
           "type": "array",
@@ -263,7 +267,6 @@
         }
       },
       "required": [
-        "effect",
         "actions"
       ]
     }

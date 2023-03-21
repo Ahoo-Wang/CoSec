@@ -11,17 +11,16 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.api.permission
+package me.ahoo.cosec.api.context
 
-import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.api.context.request.Request
+import org.hamcrest.MatcherAssert.assertThat
+import org.hamcrest.Matchers.equalTo
+import org.junit.jupiter.api.Test
 
-/**
- * Permission metadata.
- */
-interface Permission : Statement {
-    /**
-     * format : appId.group.permission
-     */
-    val id: String
-    val description: String
+class RequestTest {
+    @Test
+    fun appIdKey() {
+        assertThat(Request.APP_ID, equalTo("cosec-app-id"))
+    }
 }
