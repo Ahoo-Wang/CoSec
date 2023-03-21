@@ -266,6 +266,8 @@
         }
       },
       "required": [
+        "id",
+        "name",
         "actions"
       ]
     }
