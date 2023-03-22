@@ -38,7 +38,7 @@ class AbstractConditionMatcherTest {
 
     @Test
     fun matchWhenNegateIsNull() {
-        val conditionMatcher = object : AbstractConditionMatcher("test", JsonConfiguration.EMPTY) {
+        val conditionMatcher = object : AbstractConditionMatcher("test", JsonConfiguration.NULL) {
             override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
                 return true
             }

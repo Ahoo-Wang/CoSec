@@ -26,7 +26,7 @@ class EqConditionMatcherTest {
         EqConditionMatcherFactory().create(
             mapOf(
                 CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
-                EqConditionMatcherFactory.TYPE to "remoteIp",
+                STARTS_WITH_CONDITION_MATCHER_VALUE_KEY to "remoteIp",
             ).asConfiguration(),
         )
 

@@ -27,12 +27,6 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
         policy.condition.match(evaluateRequest, mockContext)
         policy.statements.forEach { statement ->
             statement.verify(evaluateRequest, mockContext)
-
-            statement.actions.forEach {
-                it.match(evaluateRequest, mockContext)
-            }
-
-            statement.condition.match(evaluateRequest, mockContext)
         }
     }
 }

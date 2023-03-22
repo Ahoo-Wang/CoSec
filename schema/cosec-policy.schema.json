@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema",
+  "$id": "https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-policy.schema.json",
+  "title": "CoSec Policy Schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "description": "The id of the policy",
+      "type": "string"
+    },
+    "category": {
+      "description": "The category of the policy",
+      "type": "string"
+    },
+    "name": {
+      "description": "The name of the policy",
+      "type": "string"
+    },
+    "description": {
+      "description": "The description of the policy",
+      "type": "string"
+    },
+    "tenantId": {
+      "description": "The tenantId of the policy",
+      "type": "string"
+    },
+    "type": {
+      "description": "The type of the policy",
+      "$ref": "#/definitions/policyType"
+    },
+    "condition": {
+      "description": "The condition of the policy",
+      "$ref": "condition.schema.json"
+    },
+    "statements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/statement"
+      }
+    }
+  },
+  "required": [
+    "category",
+    "name",
+    "description",
+    "tenantId",
+    "type",
+    "statements"
+  ],
+  "definitions": {
+    "policyType": {
+      "enum": [
+        "global",
+        "system",
+        "custom"
+      ]
+    },
+    "effect": {
+      "$ref": "definitions.schema.json#/definitions/effect",
+      "default": "allow"
+    },
+    "statement": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The name of the Statement",
+          "type": "string"
+        },
+        "effect": {
+          "$ref": "#/definitions/effect",
+          "default": "allow"
+        },
+        "action": {
+          "$ref": "action.schema.json"
+        },
+        "condition": {
+          "$ref": "condition.schema.json"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  }
+}
+
+

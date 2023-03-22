@@ -17,24 +17,18 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 
-class AllActionMatcher(configuration: Configuration) :
-    AbstractActionMatcher(AllActionMatcherFactory.TYPE, configuration) {
-
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        return true
-    }
-}
-
-class AllActionMatcherFactory : ActionMatcherFactory {
-    companion object {
-        const val TYPE = "all"
-    }
-
+object AllActionMatcher : ActionMatcher {
+    const val TYPE = "all"
+    const val ALL = "*"
     override val type: String
         get() = TYPE
+    override val configuration: Configuration by lazy {
+        ALL.asConfiguration()
+    }
 
-    override fun create(configuration: Configuration): ActionMatcher {
-        return AllActionMatcher(configuration)
+    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+        return true
     }
 }

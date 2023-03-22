@@ -1,0 +1,313 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema",
+  "$id": "https://github.com/Ahoo-Wang/CoSec/blob/main/schema/condition.schema.json",
+  "title": "CoSec Condition Matcher Schema",
+  "type": "object",
+  "properties": {
+    "bool": {
+      "$ref": "#/definitions/boolConditionMatcher"
+    },
+    "all": {
+      "$ref": "#/definitions/allConditionMatcher"
+    },
+    "authenticated": {
+      "$ref": "#/definitions/authenticatedConditionMatcher"
+    },
+    "inTenant": {
+      "$ref": "#/definitions/inTenantConditionMatcher"
+    },
+    "path": {
+      "$ref": "#/definitions/pathConditionMatcher"
+    },
+    "rateLimiter": {
+      "$ref": "#/definitions/rateLimiterConditionMatcher"
+    },
+    "ognl": {
+      "$ref": "#/definitions/ognlConditionMatcher"
+    },
+    "spel": {
+      "$ref": "#/definitions/spelConditionMatcher"
+    },
+    "contains": {
+      "$ref": "#/definitions/containsConditionMatcher"
+    },
+    "endsWith": {
+      "$ref": "#/definitions/endsWithConditionMatcher"
+    },
+    "startsWith": {
+      "$ref": "#/definitions/startsWithConditionMatcher"
+    },
+    "eq": {
+      "$ref": "#/definitions/eqConditionMatcher"
+    },
+    "in": {
+      "$ref": "#/definitions/inConditionMatcher"
+    },
+    "regular": {
+      "$ref": "#/definitions/regularConditionMatcher"
+    }
+  },
+  "maxProperties": 1,
+  "definitions": {
+    "tenantType": {
+      "enum": [
+        "default",
+        "user",
+        "platform"
+      ]
+    },
+    "part": {
+      "enum": [
+        "request.path",
+        "request.method",
+        "request.remoteIp",
+        "request.origin",
+        "request.referer",
+        "request.header.",
+        "request.header.cosec-app-id",
+        "request.attributes.",
+        "request.attributes.ipRegion",
+        "context.tenantId",
+        "context.principal.id",
+        "context.principal.attributes."
+      ]
+    },
+    "partValue": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/part"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "allConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        }
+      }
+    },
+    "authenticatedConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        }
+      }
+    },
+    "inTenantConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        },
+        "value": {
+          "$ref": "#/definitions/tenantType"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "rateLimiterConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "permitsPerSecond": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "permitsPerSecond"
+      ]
+    },
+    "ognlConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        },
+        "expression": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "expression"
+      ]
+    },
+    "spelConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        },
+        "expression": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "expression"
+      ]
+    },
+    "containsConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        },
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "value": {
+          "type": "string"
+        },
+        "ignoreCase": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "part",
+        "value"
+      ]
+    },
+    "endsWithConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        },
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "value": {
+          "type": "string"
+        },
+        "ignoreCase": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "part",
+        "value"
+      ]
+    },
+    "startsWithConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        },
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "value": {
+          "type": "string"
+        },
+        "ignoreCase": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "part",
+        "value"
+      ]
+    },
+    "eqConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        },
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "part",
+        "value"
+      ]
+    },
+    "inConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        },
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "value": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "part",
+        "value"
+      ]
+    },
+    "regularConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        },
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "pattern": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "part",
+        "pattern"
+      ]
+    },
+    "pathConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        },
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "options": {
+          "$ref": "definitions.schema.json#/definitions/pathOptions"
+        }
+      },
+      "required": [
+        "part",
+        "pattern"
+      ]
+    },
+    "boolConditionMatcher": {
+      "properties": {
+        "and": {
+          "type": "array",
+          "items": {
+            "$ref": "#"
+          }
+        },
+        "or": {
+          "type": "array",
+          "items": {
+            "$ref": "#"
+          }
+        }
+      }
+    }
+  }
+}
+

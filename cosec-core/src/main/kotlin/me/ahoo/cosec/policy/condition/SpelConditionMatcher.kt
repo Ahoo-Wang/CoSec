@@ -18,13 +18,16 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.action.SPEL_PARSER
-import me.ahoo.cosec.policy.getMatcherPattern
 import org.springframework.expression.Expression
+
+const val SPEL_CONDITION_MATCHER_EXPRESSION_KEY = "expression"
 
 class SpelConditionMatcher(configuration: Configuration) :
     AbstractConditionMatcher(SpelConditionMatcherFactory.TYPE, configuration) {
-
-    private val expression: Expression = SPEL_PARSER.parseExpression(configuration.getMatcherPattern())
+    private val expression: Expression = configuration.getRequired(SPEL_CONDITION_MATCHER_EXPRESSION_KEY).asString()
+        .let {
+            SPEL_PARSER.parseExpression(it)
+        }
 
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         val root = Root(request = request, context = securityContext)

@@ -31,6 +31,14 @@ interface Configuration {
     fun has(key: String): Boolean = get(key) != null
     fun asStringList(): List<String> = asList().map { it.asString() }
     fun asStringMap(): Map<String, String> = asMap().mapValues { it.value.asString() }
+
+    val isString: Boolean
+    val isBoolean: Boolean
+    val isInt: Boolean
+    val isLong: Boolean
+    val isDouble: Boolean
+    val isArray: Boolean
+    val isObject: Boolean
 }
 
 inline fun <reified T> Configuration.asPojo(): T = asPojo(T::class.java)

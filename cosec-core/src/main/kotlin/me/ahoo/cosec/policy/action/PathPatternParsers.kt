@@ -14,21 +14,22 @@
 package me.ahoo.cosec.policy.action
 
 import me.ahoo.cosec.api.configuration.Configuration
-import me.ahoo.cosec.policy.condition.part.PathConditionMatcherFactory
 import org.springframework.http.server.PathContainer
 import org.springframework.web.util.pattern.PathPatternParser
 
 internal object PathPatternParsers {
+    const val OPTIONS_KEY = "options"
+
     fun Configuration.asPathPatternParser(): PathPatternParser {
-        val pathConfiguration = get(PathConditionMatcherFactory.TYPE) ?: return PathPatternParser.defaultInstance
+        val pathOptions = get(OPTIONS_KEY) ?: return PathPatternParser.defaultInstance
         val caseSensitive =
-            pathConfiguration.get("caseSensitive")?.asBoolean() ?: PathPatternParser.defaultInstance.isCaseSensitive
-        val separator = pathConfiguration.get("separator")?.asString()?.trim()
+            pathOptions.get("caseSensitive")?.asBoolean() ?: PathPatternParser.defaultInstance.isCaseSensitive
+        val separator = pathOptions.get("separator")?.asString()?.trim()
             ?: PathPatternParser.defaultInstance.pathOptions.separator().toString()
         require(separator.length == 1) {
             "separator must be a single character."
         }
-        val decodeAndParseSegments = pathConfiguration.get("decodeAndParseSegments")?.asBoolean()
+        val decodeAndParseSegments = pathOptions.get("decodeAndParseSegments")?.asBoolean()
             ?: PathPatternParser.defaultInstance.pathOptions.shouldDecodeAndParseSegments()
         val parser = PathPatternParser()
         parser.isCaseSensitive = caseSensitive

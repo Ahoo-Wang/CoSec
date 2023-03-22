@@ -19,11 +19,11 @@ import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
 class InConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(InConditionMatcherFactory.TYPE, configuration) {
-    private val values: Set<String> = configuration.getRequired(InConditionMatcherFactory.TYPE)
+    private val value: Set<String> = configuration.getRequired(STARTS_WITH_CONDITION_MATCHER_VALUE_KEY)
         .asStringList().toSet()
 
     override fun matchPart(partValue: String): Boolean {
-        return values.contains(partValue)
+        return value.contains(partValue)
     }
 }
 

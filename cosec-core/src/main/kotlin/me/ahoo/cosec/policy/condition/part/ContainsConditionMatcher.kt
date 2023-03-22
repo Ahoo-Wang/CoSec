@@ -16,16 +16,15 @@ package me.ahoo.cosec.policy.condition.part
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
-import me.ahoo.cosec.policy.getMatcherPattern
 
 class ContainsConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(ContainsConditionMatcherFactory.TYPE, configuration) {
-    private val pattern: String = configuration.getMatcherPattern()
+    private val value: String = configuration.getRequired(ContainsConditionMatcher::value.name).asString()
     private val ignoreCase: Boolean =
         configuration.get(STARTS_WITH_CONDITION_MATCHER_IGNORE_CASE_KEY)?.asBoolean() ?: false
 
     override fun matchPart(partValue: String): Boolean {
-        return partValue.contains(pattern, ignoreCase)
+        return partValue.contains(value, ignoreCase)
     }
 }
 

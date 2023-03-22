@@ -20,7 +20,6 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
-import me.ahoo.cosec.policy.MATCHER_TYPE_KEY
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
@@ -29,22 +28,19 @@ import org.junit.jupiter.api.Test
 class BoolConditionMatcherTest {
     @Test
     fun matchWhenEmpty() {
-        val conditionMatcher = BoolConditionMatcherFactory().create(JsonConfiguration.EMPTY)
+        val conditionMatcher = BoolConditionMatcherFactory().create(JsonConfiguration.NULL)
         assertThat(conditionMatcher.type, `is`(BoolConditionMatcherFactory.TYPE))
-        assertThat(conditionMatcher.configuration, `is`(JsonConfiguration.EMPTY))
+        assertThat(conditionMatcher.configuration, `is`(JsonConfiguration.NULL))
         assertThat(conditionMatcher.match(mockk(), mockk()), `is`(true))
     }
 
     @Test
     fun matchWhenAndOneAll() {
         val conditionMatcher = BoolConditionMatcherFactory().create(
-            mapOf(
-                MATCHER_TYPE_KEY to BoolConditionMatcherFactory.TYPE,
-                BoolConditionMatcherFactory.TYPE to mapOf<String, Any>(
-                    BOOL_CONDITION_MATCHER_AND_KEY to listOf(
-                        mapOf<String, Any>(
-                            MATCHER_TYPE_KEY to AllConditionMatcherFactory.TYPE,
-                        ),
+            mapOf<String, Any>(
+                BOOL_CONDITION_MATCHER_AND_KEY to listOf(
+                    mapOf<String, Any>(
+                        AllConditionMatcherFactory.TYPE to JsonConfiguration.newPojoConfiguration(),
                     ),
                 ),
             ).asConfiguration(),
@@ -59,13 +55,10 @@ class BoolConditionMatcherTest {
     @Test
     fun matchWhenOrOneAll() {
         val conditionMatcher = BoolConditionMatcherFactory().create(
-            mapOf(
-                MATCHER_TYPE_KEY to BoolConditionMatcherFactory.TYPE,
-                BoolConditionMatcherFactory.TYPE to mapOf<String, Any>(
-                    BOOL_CONDITION_MATCHER_OR_KEY to listOf(
-                        mapOf<String, Any>(
-                            MATCHER_TYPE_KEY to AllConditionMatcherFactory.TYPE,
-                        ),
+            mapOf<String, Any>(
+                BOOL_CONDITION_MATCHER_OR_KEY to listOf(
+                    mapOf<String, Any>(
+                        AllConditionMatcherFactory.TYPE to AllConditionMatcherFactory.TYPE,
                     ),
                 ),
             ).asConfiguration(),
@@ -80,18 +73,15 @@ class BoolConditionMatcherTest {
     @Test
     fun matchWhenAndOneAllOrOneAll() {
         val conditionMatcher = BoolConditionMatcherFactory().create(
-            mapOf(
-                MATCHER_TYPE_KEY to BoolConditionMatcherFactory.TYPE,
-                BoolConditionMatcherFactory.TYPE to mapOf<String, Any>(
-                    BOOL_CONDITION_MATCHER_AND_KEY to listOf(
-                        mapOf<String, Any>(
-                            MATCHER_TYPE_KEY to AllConditionMatcherFactory.TYPE,
-                        ),
+            mapOf<String, Any>(
+                BOOL_CONDITION_MATCHER_AND_KEY to listOf(
+                    mapOf<String, Any>(
+                        AllConditionMatcherFactory.TYPE to JsonConfiguration.newPojoConfiguration(),
                     ),
-                    BOOL_CONDITION_MATCHER_OR_KEY to listOf(
-                        mapOf<String, Any>(
-                            MATCHER_TYPE_KEY to AllConditionMatcherFactory.TYPE,
-                        ),
+                ),
+                BOOL_CONDITION_MATCHER_OR_KEY to listOf(
+                    mapOf<String, Any>(
+                        AllConditionMatcherFactory.TYPE to JsonConfiguration.newPojoConfiguration(),
                     ),
                 ),
             ).asConfiguration(),

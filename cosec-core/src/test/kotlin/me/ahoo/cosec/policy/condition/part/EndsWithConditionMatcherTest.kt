@@ -17,7 +17,6 @@ import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
-import me.ahoo.cosec.policy.MATCHER_PATTERN_KEY
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
@@ -27,7 +26,7 @@ class EndsWithConditionMatcherTest {
         EndsWithConditionMatcherFactory().create(
             mapOf(
                 CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
-                MATCHER_PATTERN_KEY to ".168.0.1",
+                "value" to ".168.0.1",
             ).asConfiguration(),
         )
 

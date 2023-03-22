@@ -24,6 +24,6 @@ data class PermissionData(
     override val name: String,
     override val description: String = "",
     override val effect: Effect = Effect.ALLOW,
-    override val actions: List<ActionMatcher> = listOf(),
+    override val action: ActionMatcher,
     override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
 ) : Permission

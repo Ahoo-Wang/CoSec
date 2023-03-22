@@ -15,13 +15,13 @@ package me.ahoo.cosec.policy
 
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
+import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
@@ -51,8 +51,7 @@ internal class DefaultPolicyEvaluatorTest {
                 get() = "name"
             override val effect: Effect
                 get() = Effect.ALLOW
-            override val actions: List<ActionMatcher>
-                get() = listOf()
+            override val action = AllActionMatcher
             override val condition: ConditionMatcher
                 get() = AllConditionMatcher.INSTANCE
 

@@ -26,12 +26,6 @@ object DefaultAppPermissionEvaluator : AppPermissionEvaluator {
         appPermission.condition.match(evaluateRequest, mockContext)
         appPermission.permissionIndexer.values.forEach { permission ->
             permission.verify(evaluateRequest, mockContext)
-
-            permission.actions.forEach {
-                it.match(evaluateRequest, mockContext)
-            }
-
-            permission.condition.match(evaluateRequest, mockContext)
         }
     }
 }

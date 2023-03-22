@@ -17,12 +17,17 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
-import me.ahoo.cosec.policy.getMatcherPattern
 import ognl.Ognl
+
+const val OGNL_CONDITION_MATCHER_EXPRESSION_KEY = "expression"
 
 class OgnlConditionMatcher(configuration: Configuration) :
     AbstractConditionMatcher(OgnlConditionMatcherFactory.TYPE, configuration) {
-    private val ognlExpression = Ognl.parseExpression(configuration.getMatcherPattern())
+    private val ognlExpression = configuration.getRequired(OGNL_CONDITION_MATCHER_EXPRESSION_KEY).asString()
+        .let {
+            Ognl.parseExpression(it)
+        }
+
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         val ognlContext = mapOf(
             "request" to request,

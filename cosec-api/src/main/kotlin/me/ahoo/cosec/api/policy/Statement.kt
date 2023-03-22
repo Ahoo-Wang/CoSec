@@ -20,20 +20,15 @@ import me.ahoo.cosec.api.context.request.Request
 interface Statement : Named, PermissionVerifier {
     override val name: String
     val effect: Effect
-    val actions: List<ActionMatcher>
+    val action: ActionMatcher
     val condition: ConditionMatcher
 
-    @Suppress("ReturnCount")
     override fun verify(request: Request, securityContext: SecurityContext): VerifyResult {
         if (!condition.match(request, securityContext)) {
             return VerifyResult.IMPLICIT_DENY
         }
-        actions.any {
-            it.match(request, securityContext)
-        }.let { anyMatched ->
-            if (!anyMatched) {
-                return VerifyResult.IMPLICIT_DENY
-            }
+        if (!action.match(request, securityContext)) {
+            return VerifyResult.IMPLICIT_DENY
         }
         return when (effect) {
             Effect.ALLOW -> VerifyResult.ALLOW

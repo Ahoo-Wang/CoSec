@@ -34,7 +34,7 @@ class PathPatternParsersTest {
     @Test
     fun asPathPatternParser() {
         val pathPatternParser = mapOf(
-            PathConditionMatcherFactory.TYPE to mapOf<String, Any>(
+            PathPatternParsers.OPTIONS_KEY to mapOf<String, Any>(
                 "caseSensitive" to false,
                 "separator" to ".",
                 "decodeAndParseSegments" to false,
@@ -48,7 +48,7 @@ class PathPatternParsersTest {
     @Test
     fun asPathPatternParserWhenDefault() {
         val pathPatternParser = mapOf(
-            PathConditionMatcherFactory.TYPE to mapOf<String, Any>(),
+            PathPatternParsers.OPTIONS_KEY to mapOf<String, Any>(),
         ).asConfiguration().asPathPatternParser()
         assertThat(pathPatternParser.isCaseSensitive, equalTo(PathPatternParser.defaultInstance.isCaseSensitive))
         assertThat(

@@ -17,18 +17,20 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.action.PathPatternParsers.asPathPatternParser
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
-import me.ahoo.cosec.policy.getMatcherPattern
 import org.springframework.http.server.PathContainer
 import org.springframework.web.util.pattern.PathPattern
 
 class PathConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(PathConditionMatcherFactory.TYPE, configuration) {
     private val patternParser = configuration.asPathPatternParser()
-    private val pathPattern: PathPattern = patternParser.parse(configuration.getMatcherPattern())
+    private val pattern: PathPattern = configuration.getRequired(PathConditionMatcher::pattern.name)
+        .asString().let {
+            patternParser.parse(it)
+        }
 
     override fun matchPart(partValue: String): Boolean {
         PathContainer.parsePath(partValue, patternParser.pathOptions).let {
-            return pathPattern.matches(it)
+            return pattern.matches(it)
         }
     }
 }

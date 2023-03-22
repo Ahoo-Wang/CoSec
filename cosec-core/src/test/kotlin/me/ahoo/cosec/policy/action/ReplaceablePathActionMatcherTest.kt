@@ -18,7 +18,6 @@ import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
-import me.ahoo.cosec.policy.MATCHER_PATTERN_KEY
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
@@ -34,7 +33,7 @@ internal class ReplaceablePathActionMatcherTest {
         }
 
         val actionMatcher =
-            PathActionMatcherFactory().create(mapOf(MATCHER_PATTERN_KEY to "order/#{principal.id}/*").asConfiguration())
+            PathActionMatcherFactory().create("order/#{principal.id}/*".asConfiguration())
         assertThat(actionMatcher, instanceOf(ReplaceablePathActionMatcher::class.java))
         val request1 = mockk<Request>() {
             every {
@@ -49,4 +48,5 @@ internal class ReplaceablePathActionMatcherTest {
         }
         assertThat(actionMatcher.match(request2, securityContext), equalTo(false))
     }
+
 }

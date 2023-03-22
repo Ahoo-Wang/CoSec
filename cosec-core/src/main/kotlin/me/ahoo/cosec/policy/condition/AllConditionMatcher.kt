@@ -17,14 +17,12 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
-import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
-import me.ahoo.cosec.policy.MATCHER_TYPE_KEY
+import me.ahoo.cosec.configuration.JsonConfiguration
 
 class AllConditionMatcher(configuration: Configuration) :
     AbstractConditionMatcher(AllConditionMatcherFactory.TYPE, configuration) {
     companion object {
-        private val ALL_CONFIGURATION = mapOf(MATCHER_TYPE_KEY to AllConditionMatcherFactory.TYPE).asConfiguration()
-        val INSTANCE = AllConditionMatcher(ALL_CONFIGURATION)
+        val INSTANCE = AllConditionMatcher(JsonConfiguration.newPojoConfiguration())
     }
 
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {

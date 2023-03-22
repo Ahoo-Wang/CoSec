@@ -19,6 +19,7 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.StatementData
+import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosid.test.MockIdGenerator
 import org.hamcrest.MatcherAssert.assertThat
@@ -63,7 +64,7 @@ internal class PolicyCodecExecutorTest {
             description = "",
             type = PolicyType.SYSTEM,
             tenantId = "1",
-            statements = listOf(StatementData()),
+            statements = listOf(StatementData(action = AllActionMatcher)),
         )
         val key = "policy:" + MockIdGenerator.INSTANCE.generateAsString()
         val cacheValue: CacheValue<Policy> = CacheValue.forever(policy)

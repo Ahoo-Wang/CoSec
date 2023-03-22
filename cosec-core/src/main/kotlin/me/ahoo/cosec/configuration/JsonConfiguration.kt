@@ -16,6 +16,8 @@ package me.ahoo.cosec.configuration
 import com.fasterxml.jackson.core.ObjectCodec
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.NullNode
+import com.fasterxml.jackson.databind.node.ObjectNode
+import com.fasterxml.jackson.databind.node.TextNode
 import me.ahoo.cosec.Delegated
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
@@ -27,13 +29,21 @@ class JsonConfiguration(
     Delegated<JsonNode> {
 
     companion object {
-        val EMPTY: JsonConfiguration by lazy {
+        val NULL: JsonConfiguration by lazy {
             JsonConfiguration(NullNode.getInstance(), CoSecJsonSerializer)
+        }
+
+        fun newPojoConfiguration(): JsonConfiguration {
+            return JsonConfiguration(ObjectNode(CoSecJsonSerializer.nodeFactory), CoSecJsonSerializer)
         }
 
         fun Map<String, *>.asConfiguration(): JsonConfiguration {
             val jsonString = CoSecJsonSerializer.writeValueAsString(this)
             return JsonConfiguration(CoSecJsonSerializer.readTree(jsonString), CoSecJsonSerializer)
+        }
+
+        fun String.asConfiguration(): JsonConfiguration {
+            return JsonConfiguration(TextNode(this), CoSecJsonSerializer)
         }
     }
 
@@ -85,4 +95,19 @@ class JsonConfiguration(
             it.readValueAs(pojoClass)
         }
     }
+
+    override val isString: Boolean
+        get() = delegate.isTextual
+    override val isBoolean: Boolean
+        get() = delegate.isBoolean
+    override val isInt: Boolean
+        get() = delegate.isInt
+    override val isLong: Boolean
+        get() = delegate.isLong
+    override val isDouble: Boolean
+        get() = delegate.isDouble
+    override val isArray: Boolean
+        get() = delegate.isArray
+    override val isObject: Boolean
+        get() = delegate.isObject
 }

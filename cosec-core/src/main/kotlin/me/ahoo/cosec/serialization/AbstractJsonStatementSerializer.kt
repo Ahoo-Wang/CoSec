@@ -15,7 +15,7 @@ import me.ahoo.cosec.policy.condition.AllConditionMatcher
 
 const val STATEMENT_NAME = "name"
 const val STATEMENT_EFFECT_KEY = "effect"
-const val STATEMENT_ACTIONS_KEY = "actions"
+const val STATEMENT_ACTION_KEY = "action"
 const val STATEMENT_CONDITION_KEY = "condition"
 
 abstract class AbstractJsonStatementSerializer<T : Statement>(statementType: Class<T>) :
@@ -24,13 +24,7 @@ abstract class AbstractJsonStatementSerializer<T : Statement>(statementType: Cla
         gen.writeStartObject()
         gen.writeStringField(STATEMENT_NAME, value.name)
         gen.writePOJOField(STATEMENT_EFFECT_KEY, value.effect)
-        if (value.actions.isNotEmpty()) {
-            gen.writeArrayFieldStart(STATEMENT_ACTIONS_KEY)
-            value.actions.forEach {
-                gen.writeObject(it)
-            }
-            gen.writeEndArray()
-        }
+        gen.writePOJOField(STATEMENT_ACTION_KEY, value.action.configuration)
         gen.writePOJOField(STATEMENT_CONDITION_KEY, value.condition)
         writeExtend(value, gen, provider)
         gen.writeEndObject()
@@ -46,9 +40,10 @@ abstract class AbstractJsonStatementDeserializer<T : Statement>(statementType: C
         val effect = jsonNode.get(STATEMENT_EFFECT_KEY)?.traverse(p.codec)
             ?.readValueAs(Effect::class.java)
             ?: Effect.ALLOW
-        val actions = jsonNode.get(STATEMENT_ACTIONS_KEY)?.map {
-            it.traverse(p.codec).readValueAs(ActionMatcher::class.java)
-        }.orEmpty()
+
+        val action =
+            requireNotNull(jsonNode.get(STATEMENT_ACTION_KEY)).traverse(p.codec).readValueAs(ActionMatcher::class.java)
+
         val condition =
             jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.codec)?.readValueAs(ConditionMatcher::class.java)
                 ?: AllConditionMatcher.INSTANCE
@@ -57,7 +52,7 @@ abstract class AbstractJsonStatementDeserializer<T : Statement>(statementType: C
             jsonNode = jsonNode,
             name = jsonNode.get(STATEMENT_NAME)?.asText().orEmpty(),
             effect = effect,
-            actions = actions,
+            action = action,
             condition = condition,
         )
     }
@@ -66,7 +61,7 @@ abstract class AbstractJsonStatementDeserializer<T : Statement>(statementType: C
         jsonNode: JsonNode,
         name: String,
         effect: Effect,
-        actions: List<ActionMatcher>,
+        action: ActionMatcher,
         condition: ConditionMatcher
     ): T
 }

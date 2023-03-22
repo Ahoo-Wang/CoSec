@@ -16,22 +16,21 @@ package me.ahoo.cosec.policy.condition.part
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
-import me.ahoo.cosec.policy.getMatcherPattern
 
 class EndsWithConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(EndsWithConditionMatcherFactory.TYPE, configuration) {
-    private val pattern: String = configuration.getMatcherPattern()
+    private val value: String = configuration.getRequired(EndsWithConditionMatcher::value.name).asString()
     private val ignoreCase: Boolean =
         configuration.get(STARTS_WITH_CONDITION_MATCHER_IGNORE_CASE_KEY)?.asBoolean() ?: false
 
     override fun matchPart(partValue: String): Boolean {
-        return partValue.endsWith(pattern, ignoreCase)
+        return partValue.endsWith(value, ignoreCase)
     }
 }
 
 class EndsWithConditionMatcherFactory : ConditionMatcherFactory {
     companion object {
-        const val TYPE = "ends_with"
+        const val TYPE = "endsWith"
     }
 
     override val type: String

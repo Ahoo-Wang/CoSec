@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema",
+  "$id": "https://github.com/Ahoo-Wang/CoSec/blob/main/schema/definitions.schema.json",
+  "title": "CoSec Schema",
+  "type": "object",
+  "definitions": {
+    "effect": {
+      "enum": [
+        "allow",
+        "deny"
+      ]
+    },
+    "pathOptions": {
+      "type": "object",
+      "properties": {
+        "caseSensitive": {
+          "type": "boolean"
+        },
+        "separator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1
+        },
+        "decodeAndParseSegments": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
+
+

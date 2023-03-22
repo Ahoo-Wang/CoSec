@@ -9,13 +9,13 @@ import org.junit.jupiter.api.Test
 
 class PermissionSerializerTest {
     private val json = """
-{"id":"appId","condition":{"type":"all"},"groups":[{"name":"name","description":"description","permissions":[{"name":"Anonymous","effect":"allow","actions":[{"type":"path","pattern":"/auth/register"},{"type":"path","pattern":"/auth/login"}],"condition":{"type":"all"},"id":"permissionId","description":"description"}]}]}
+{"id":"manage","condition":{"bool":{"and":[{"authenticated":{}},{"rateLimiter":{"permitsPerSecond":10}},{"inTenant":{"value":"default"}}]}},"groups":[{"name":"order","description":"order management","permissions":[{"name":"Ship","effect":"allow","action":"/order/ship","condition":{"all":{}},"id":"manage.order.ship","description":"Ship"},{"name":"Issue an invoice","effect":"allow","action":"/order/issueInvoice","condition":{"all":{}},"id":"manage.order.issueInvoice","description":"Issue an invoice"}]}]}
     """.trimIndent()
 
     @Test
     fun serialize() {
         val appPermission = CoSecJsonSerializer.readValue(json, AppPermission::class.java)
-        assertThat(appPermission.id, equalTo("appId"))
+        assertThat(appPermission.id, equalTo("manage"))
         val serializedJson = CoSecJsonSerializer.writeValueAsString(appPermission)
         assertThat(serializedJson, equalTo(json))
     }
@@ -28,5 +28,6 @@ class PermissionSerializerTest {
             }
         }
         assertThat(testAppPermission, `is`(notNullValue()))
+        assertThat(CoSecJsonSerializer.writeValueAsString(testAppPermission), `is`(notNullValue()))
     }
 }
