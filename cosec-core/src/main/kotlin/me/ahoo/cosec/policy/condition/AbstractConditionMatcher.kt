@@ -25,7 +25,7 @@ abstract class AbstractConditionMatcher(
     final override val configuration: Configuration,
 ) :
     ConditionMatcher {
-    protected val negate: Boolean = configuration.get(CONDITION_MATCHER_NEGATE_KEY)?.asBoolean() ?: false
+    private val negate: Boolean = configuration.get(CONDITION_MATCHER_NEGATE_KEY)?.asBoolean() ?: false
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
         val match = internalMatch(request, securityContext)

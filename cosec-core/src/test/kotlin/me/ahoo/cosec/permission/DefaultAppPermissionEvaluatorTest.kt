@@ -14,7 +14,6 @@
 package me.ahoo.cosec.permission
 
 import me.ahoo.cosec.api.policy.Effect
-import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import org.junit.jupiter.api.Test
 
@@ -30,7 +29,7 @@ class DefaultAppPermissionEvaluatorTest {
                             id = "permissionId",
                             name = "",
                             effect = Effect.DENY,
-                            actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY)),
+                            action = AllActionMatcher,
                         )
                     )
                 )

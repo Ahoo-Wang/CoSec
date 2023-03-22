@@ -37,7 +37,7 @@ object JsonPermissionDeserializer : AbstractJsonStatementDeserializer<Permission
         jsonNode: JsonNode,
         name: String,
         effect: Effect,
-        actions: List<ActionMatcher>,
+        action: ActionMatcher,
         condition: ConditionMatcher
     ): Permission {
         val permissionId = requireNotNull(jsonNode.get(PERMISSION_ID).asText())
@@ -47,7 +47,7 @@ object JsonPermissionDeserializer : AbstractJsonStatementDeserializer<Permission
             name = name,
             description = description,
             effect = effect,
-            actions = actions,
+            action = action,
             condition = condition
         )
     }

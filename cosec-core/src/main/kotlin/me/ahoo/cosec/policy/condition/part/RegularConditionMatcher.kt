@@ -16,20 +16,20 @@ package me.ahoo.cosec.policy.condition.part
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
-import me.ahoo.cosec.policy.getMatcherPattern
 
 class RegularConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(RegularConditionMatcherFactory.TYPE, configuration) {
-    private val matcher: Regex = configuration.getMatcherPattern().toRegex(RegexOption.IGNORE_CASE)
+    private val pattern: Regex = configuration.getRequired(RegularConditionMatcher::pattern.name).asString()
+        .toRegex(RegexOption.IGNORE_CASE)
 
     override fun matchPart(partValue: String): Boolean {
-        return matcher.matches(partValue)
+        return pattern.matches(partValue)
     }
 }
 
 class RegularConditionMatcherFactory : ConditionMatcherFactory {
     companion object {
-        const val TYPE = "reg"
+        const val TYPE = "regular"
     }
 
     override val type: String

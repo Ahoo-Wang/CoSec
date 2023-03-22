@@ -1,4 +1,3 @@
-
 /*
  * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,18 +22,37 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.policy.action.ActionMatcherFactoryProvider
-import me.ahoo.cosec.policy.getMatcherType
+import me.ahoo.cosec.policy.action.AllActionMatcher
+import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 
 object JsonActionMatcherSerializer : StdSerializer<ActionMatcher>(ActionMatcher::class.java) {
     override fun serialize(value: ActionMatcher, gen: JsonGenerator, provider: SerializerProvider) {
-        gen.writePOJO(value.configuration)
+        if (value.configuration.isString || value.configuration.isArray) {
+            gen.writePOJO(value.configuration)
+            return
+        }
+        gen.writePOJOField(value.type, value.configuration)
     }
 }
 
 object JsonActionMatcherDeserializer : StdDeserializer<ActionMatcher>(ActionMatcher::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): ActionMatcher {
-        return p.codec.readValue(p, JsonConfiguration::class.java).let {
-            ActionMatcherFactoryProvider.getRequired(it.getMatcherType()).create(it)
+        val actionConfiguration = p.codec.readValue(p, JsonConfiguration::class.java)
+
+        if (actionConfiguration.isString && actionConfiguration.asString() == AllActionMatcher.ALL) {
+            return AllActionMatcher
         }
+
+        if (actionConfiguration.isString || actionConfiguration.isArray) {
+            return PathActionMatcherFactory.INSTANCE.create(actionConfiguration)
+        }
+
+        require(actionConfiguration.isObject)
+        /**
+         * isObject
+         */
+        val field = actionConfiguration.delegate.fields().next()
+        val conditionConfiguration = field.value.traverse(p.codec).readValueAs(JsonConfiguration::class.java)
+        return ActionMatcherFactoryProvider.getRequired(field.key).create(conditionConfiguration)
     }
 }

@@ -18,7 +18,6 @@ import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
-import me.ahoo.cosec.policy.MATCHER_PATTERN_KEY
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.params.ParameterizedTest
@@ -31,7 +30,8 @@ internal class OgnlConditionMatcherTest {
     @ParameterizedTest
     @MethodSource("parametersForActions")
     fun matchRequest(expression: String, actions: List<String>, expected: Boolean) {
-        val conditionMatcher = OgnlConditionMatcherFactory().create(mapOf(MATCHER_PATTERN_KEY to expression).asConfiguration())
+        val conditionMatcher =
+            OgnlConditionMatcherFactory().create(mapOf(OGNL_CONDITION_MATCHER_EXPRESSION_KEY to expression).asConfiguration())
         actions.forEach {
             val request = mockk<Request> {
                 every { path } returns it
@@ -43,7 +43,8 @@ internal class OgnlConditionMatcherTest {
     @ParameterizedTest
     @MethodSource("parametersForContext")
     fun matchContext(expression: String, principalIds: List<String>, expected: Boolean) {
-        val conditionMatcher = OgnlConditionMatcherFactory().create(mapOf(MATCHER_PATTERN_KEY to expression).asConfiguration())
+        val conditionMatcher =
+            OgnlConditionMatcherFactory().create(mapOf(OGNL_CONDITION_MATCHER_EXPRESSION_KEY to expression).asConfiguration())
         principalIds.forEach {
             val context = mockk<SecurityContext> {
                 every { principal } returns mockk {

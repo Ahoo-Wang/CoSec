@@ -23,9 +23,9 @@ internal class AllConditionMatcherTest {
 
     @Test
     fun match() {
-        val conditionMatcher = AllConditionMatcherFactory().create(JsonConfiguration.EMPTY)
+        val conditionMatcher = AllConditionMatcherFactory().create(JsonConfiguration.NULL)
         assertThat(conditionMatcher.type, `is`(AllConditionMatcherFactory.TYPE))
-        assertThat(conditionMatcher.configuration, `is`(JsonConfiguration.EMPTY))
+        assertThat(conditionMatcher.configuration, `is`(JsonConfiguration.NULL))
         assertThat(conditionMatcher.match(mockk(), mockk()), `is`(true))
     }
 }

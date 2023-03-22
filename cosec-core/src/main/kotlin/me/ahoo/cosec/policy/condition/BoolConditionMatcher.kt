@@ -27,13 +27,11 @@ class BoolConditionMatcher(configuration: Configuration) : AbstractConditionMatc
     configuration,
 ) {
     val and: List<ConditionMatcher> =
-        configuration.get(BoolConditionMatcherFactory.TYPE)
-            ?.get(BOOL_CONDITION_MATCHER_AND_KEY)
+        configuration.get(BOOL_CONDITION_MATCHER_AND_KEY)
             ?.asList()
             ?.map { it.asPojo<ConditionMatcher>() }.orEmpty()
     val or: List<ConditionMatcher> =
-        configuration.get(BoolConditionMatcherFactory.TYPE)
-            ?.get(BOOL_CONDITION_MATCHER_OR_KEY)
+        configuration.get(BOOL_CONDITION_MATCHER_OR_KEY)
             ?.asList()
             ?.map { it.asPojo<ConditionMatcher>() }.orEmpty()
 

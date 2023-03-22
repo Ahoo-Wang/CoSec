@@ -1,15 +1,20 @@
 {
   "id": "manage",
   "condition": {
-    "type": "bool",
     "bool": {
       "and": [
         {
-          "type": "authenticated"
+          "authenticated": {}
         },
         {
-          "type": "rate_limiter",
-          "permitsPerSecond": 10
+          "rateLimiter": {
+            "permitsPerSecond": 10
+          }
+        },
+        {
+          "inTenant": {
+            "value": "default"
+          }
         }
       ]
     }
@@ -23,23 +28,18 @@
           "id": "manage.order.ship",
           "name": "Ship",
           "description": "Ship",
-          "actions": [
-            {
-              "type": "path",
-              "pattern": "/order/ship"
-            }
-          ]
+          "action": "/order/ship"
         },
         {
           "id": "manage.order.issueInvoice",
           "name": "Issue an invoice",
           "description": "Issue an invoice",
-          "actions": [
-            {
-              "type": "path",
-              "pattern": "/order/issueInvoice"
+          "action": "/order/issueInvoice",
+          "condition": {
+            "all": {
+
             }
-          ]
+          }
         }
       ]
     }

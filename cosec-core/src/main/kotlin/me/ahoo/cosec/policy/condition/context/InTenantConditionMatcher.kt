@@ -20,23 +20,34 @@ import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.AbstractConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
-class InDefaultTenantConditionMatcher(configuration: Configuration) :
-    AbstractConditionMatcher(InDefaultTenantConditionMatcherFactory.TYPE, configuration) {
+enum class TenantType {
+    DEFAULT, USER, PLATFORM
+}
+
+class InTenantConditionMatcher(configuration: Configuration) :
+    AbstractConditionMatcher(InTenantConditionMatcherFactory.TYPE, configuration) {
+    private val value: TenantType = configuration.getRequired(InTenantConditionMatcher::value.name).asString().let {
+        TenantType.valueOf(it.uppercase())
+    }
 
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        return securityContext.tenant.isDefaultTenant
+        return when (value) {
+            TenantType.DEFAULT -> securityContext.tenant.isDefaultTenant
+            TenantType.USER -> securityContext.tenant.isUserTenant
+            TenantType.PLATFORM -> securityContext.tenant.isPlatformTenant
+        }
     }
 }
 
-class InDefaultTenantConditionMatcherFactory : ConditionMatcherFactory {
+class InTenantConditionMatcherFactory : ConditionMatcherFactory {
     companion object {
-        const val TYPE = "in_default_tenant"
+        const val TYPE = "inTenant"
     }
 
     override val type: String
         get() = TYPE
 
     override fun create(configuration: Configuration): ConditionMatcher {
-        return InDefaultTenantConditionMatcher(configuration)
+        return InTenantConditionMatcher(configuration)
     }
 }

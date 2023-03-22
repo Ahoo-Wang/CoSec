@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema",
+  "$id": "https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-app-permission.schema.json",
+  "title": "CoSec App Permission Schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "description": "The id of the app permission",
+      "type": "string"
+    },
+    "condition": {
+      "description": "The condition of the app permission",
+      "$ref": "condition.schema.json"
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/permissionGroup"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "groups"
+  ],
+  "definitions": {
+    "permissionGroup": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The name of the permission group",
+          "type": "string"
+        },
+        "description": {
+          "description": "The description of permission group",
+          "type": "string"
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/permission"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "permissions"
+      ]
+    },
+    "permission": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "The id of the permission",
+          "type": "string"
+        },
+        "name": {
+          "description": "The name of the permission",
+          "type": "string"
+        },
+        "description": {
+          "description": "The description of the permission",
+          "type": "string"
+        },
+        "effect": {
+          "$ref": "definitions.schema.json#/definitions/effect",
+          "default": "allow"
+        },
+        "action": {
+          "$ref": "action.schema.json"
+        },
+        "condition": {
+          "$ref": "condition.schema.json"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "action"
+      ]
+    }
+  }
+}
+
+

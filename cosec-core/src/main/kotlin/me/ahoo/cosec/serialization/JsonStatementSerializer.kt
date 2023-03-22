@@ -27,9 +27,9 @@ object JsonStatementDeserializer : AbstractJsonStatementDeserializer<Statement>(
         jsonNode: JsonNode,
         name: String,
         effect: Effect,
-        actions: List<ActionMatcher>,
+        action: ActionMatcher,
         condition: ConditionMatcher
     ): Statement {
-        return StatementData(name, effect, actions, condition)
+        return StatementData(name, effect, action, condition)
     }
 }

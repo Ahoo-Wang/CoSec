@@ -19,37 +19,36 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.VerifyResult
-import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.policy.condition.SpelConditionMatcherFactory
 import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
+import org.hamcrest.Matchers.equalTo
+import org.hamcrest.Matchers.instanceOf
+import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
 
 internal class StatementDataTest {
 
     @Test
     fun verifyDefault() {
-        val statementData = StatementData()
+        val statementData = StatementData(action = AllActionMatcher)
         assertThat(statementData.name, equalTo(""))
         assertThat(statementData.effect, equalTo(Effect.ALLOW))
-        assertThat(statementData.actions, equalTo(listOf()))
+        assertThat(statementData.action, equalTo(AllActionMatcher))
         assertThat(statementData.condition, instanceOf(AllConditionMatcher::class.java))
-        assertThat(statementData.verify(mockk(), mockk()), `is`(VerifyResult.IMPLICIT_DENY))
+        assertThat(statementData.verify(mockk(), mockk()), `is`(VerifyResult.ALLOW))
     }
 
     @Test
     fun verify() {
         val statementData = StatementData(
-            actions = listOf(
-                PathActionMatcherFactory().create(
-                    mapOf(
-                        MATCHER_PATTERN_KEY to "auth/*",
-                    ).asConfiguration(),
-                ),
+            action = PathActionMatcherFactory().create(
+                mapOf(
+                    "pattern" to "auth/*",
+                ).asConfiguration(),
             ),
         )
         val request = mockk<Request> {
@@ -61,16 +60,14 @@ internal class StatementDataTest {
     @Test
     fun verifyWithCondition() {
         val statementData = StatementData(
-            actions = listOf(
-                PathActionMatcherFactory().create(
-                    mapOf(
-                        MATCHER_PATTERN_KEY to "order/#{principal.id}/*",
-                    ).asConfiguration(),
-                ),
+            action = PathActionMatcherFactory().create(
+                mapOf(
+                    "pattern" to "order/#{principal.id}/*",
+                ).asConfiguration(),
             ),
             condition = SpelConditionMatcherFactory().create(
                 mapOf(
-                    MATCHER_PATTERN_KEY to "context.principal.authenticated()",
+                    "expression" to "context.principal.authenticated()",
                 ).asConfiguration(),
             ),
         )
@@ -98,7 +95,7 @@ internal class StatementDataTest {
     fun verifyDeny() {
         val statementData = StatementData(
             effect = Effect.DENY,
-            actions = listOf(AllActionMatcher(JsonConfiguration.EMPTY)),
+            action = AllActionMatcher,
         )
         assertThat(statementData.verify(mockk(), mockk()), `is`(VerifyResult.EXPLICIT_DENY))
     }

@@ -19,6 +19,7 @@ import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.permission.PermissionGroupData
+import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosid.test.MockIdGenerator
 import org.hamcrest.MatcherAssert.assertThat
@@ -59,7 +60,10 @@ internal class AppPermissionCodecExecutorTest {
         val appPermission = AppPermissionData(
             id = "2",
             groups = listOf(
-                PermissionGroupData("groupName", permissions = listOf(PermissionData("id", "name")))
+                PermissionGroupData(
+                    "groupName",
+                    permissions = listOf(PermissionData("id", "name", action = AllActionMatcher))
+                )
             )
         )
         val key = "app:" + MockIdGenerator.INSTANCE.generateAsString()

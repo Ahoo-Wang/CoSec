@@ -17,21 +17,27 @@ import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.configuration.JsonConfiguration
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
+import org.hamcrest.Matchers.`is`
+import org.hamcrest.Matchers.notNullValue
 import org.junit.jupiter.api.Test
 
-class InUserTenantConditionMatcherTest {
+class InTenantConditionMatcherTest {
     @Test
     fun match() {
         val request: Request = mockk()
         val context: SecurityContext = mockk {
-            every { tenant.isUserTenant } returns true
+            every { tenant.isDefaultTenant } returns true
         }
-        val conditionMatcher = InUserTenantConditionMatcherFactory().create(JsonConfiguration.EMPTY)
-        assertThat(conditionMatcher.type, `is`(InUserTenantConditionMatcherFactory.TYPE))
-        assertThat(conditionMatcher.configuration, `is`(JsonConfiguration.EMPTY))
+        val conditionMatcher = InTenantConditionMatcherFactory()
+            .create(
+                mapOf(
+                    "value" to TenantType.DEFAULT.name,
+                ).asConfiguration(),
+            )
+        assertThat(conditionMatcher.type, `is`(InTenantConditionMatcherFactory.TYPE))
+        assertThat(conditionMatcher.configuration, notNullValue())
         assertThat(conditionMatcher.match(request, context), `is`(true))
     }
 }

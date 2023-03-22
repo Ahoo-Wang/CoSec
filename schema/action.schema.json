@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema",
+  "$id": "https://github.com/Ahoo-Wang/CoSec/blob/main/schema/action.schema.json",
+  "title": "CoSec Action Matcher Schema",
+  "anyOf": [
+    {
+      "type": "string"
+    },
+    {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "#/definitions/pathActionMatcher"
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "pathActionMatcher": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "options": {
+          "$ref": "definitions.schema.json#/definitions/pathOptions"
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    }
+  }
+}
+
+

@@ -109,7 +109,7 @@ class CustomConditionMatcher(configuration: Configuration) :
 
 ## Policy Schema
 
-Configure [Policy Schema](document/cosec-policy.schema.json) to support IDE ([IntelliJ IDEA](https://www.jetbrains.com/help/idea/json.html#ws_json_using_schemas)) input autocompletion.
+Configure [Policy Schema](schema/cosec-policy.schema.json) to support IDE ([IntelliJ IDEA](https://www.jetbrains.com/help/idea/json.html#ws_json_using_schemas)) input autocompletion.
 
 > Policy Demo
 
@@ -310,7 +310,7 @@ Configure [Policy Schema](document/cosec-policy.schema.json) to support IDE ([In
 
 ## App Permission Metadata Schema
 
-Configure [App Permission Schema](document/cosec-app-permission.schema.json) to support IDE ([IntelliJ IDEA](https://www.jetbrains.com/help/idea/json.html#ws_json_using_schemas)) input autocompletion.
+Configure [App Permission Schema](schema/cosec-app-permission.schema.json) to support IDE ([IntelliJ IDEA](https://www.jetbrains.com/help/idea/json.html#ws_json_using_schemas)) input autocompletion.
 
 > App Permission Demo
 

@@ -42,7 +42,7 @@ class RateLimiterConditionMatcher(
 
 class RateLimiterConditionMatcherFactory : ConditionMatcherFactory {
     companion object {
-        const val TYPE = "rate_limiter"
+        const val TYPE = "rateLimiter"
     }
 
     override val type: String

@@ -19,10 +19,10 @@ import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
 class EqConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(EqConditionMatcherFactory.TYPE, configuration) {
-    private val eq: String = configuration.getRequired(EqConditionMatcherFactory.TYPE).asString()
+    private val value: String = configuration.getRequired(STARTS_WITH_CONDITION_MATCHER_VALUE_KEY).asString()
 
     override fun matchPart(partValue: String): Boolean {
-        return eq == partValue
+        return value == partValue
     }
 }
 

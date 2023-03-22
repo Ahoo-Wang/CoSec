@@ -21,25 +21,21 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
-import me.ahoo.cosec.policy.MATCHER_PATTERN_KEY
-import me.ahoo.cosec.policy.MATCHER_TYPE_KEY
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.newPojoConfiguration
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.StatementData
-import me.ahoo.cosec.policy.action.AllActionMatcherFactory
-import me.ahoo.cosec.policy.action.NoneActionMatcherFactory
+import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.action.PathActionMatcherFactory
-import me.ahoo.cosec.policy.action.RegularActionMatcherFactory
 import me.ahoo.cosec.policy.condition.AllConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.BOOL_CONDITION_MATCHER_AND_KEY
 import me.ahoo.cosec.policy.condition.BoolConditionMatcher
 import me.ahoo.cosec.policy.condition.BoolConditionMatcherFactory
-import me.ahoo.cosec.policy.condition.NoneConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.OgnlConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.SPEL_CONDITION_MATCHER_EXPRESSION_KEY
 import me.ahoo.cosec.policy.condition.SpelConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.context.AuthenticatedConditionMatcherFactory
-import me.ahoo.cosec.policy.condition.context.InDefaultTenantConditionMatcherFactory
-import me.ahoo.cosec.policy.condition.context.InPlatformTenantConditionMatcherFactory
-import me.ahoo.cosec.policy.condition.context.InUserTenantConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.context.InTenantConditionMatcherFactory
+import me.ahoo.cosec.policy.condition.context.TenantType
 import me.ahoo.cosec.policy.condition.part.CONDITION_MATCHER_PART_KEY
 import me.ahoo.cosec.policy.condition.part.InConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.part.RegularConditionMatcherFactory
@@ -86,7 +82,7 @@ internal class CoSecJsonSerializerTest {
         )
         assertThat(input, instanceOf(BoolConditionMatcher::class.java))
         assertThat(input.type, `is`(conditionMatcher.type))
-        assertThat((input as BoolConditionMatcher).and.size, equalTo(10))
+        assertThat((input as BoolConditionMatcher).and.size, equalTo(7))
     }
 
     @ParameterizedTest
@@ -99,7 +95,7 @@ internal class CoSecJsonSerializerTest {
         )
         assertThat(input, instanceOf(statement.javaClass))
         assertThat(input.effect, `is`(statement.effect))
-        assertThat(input.actions, hasSize(statement.actions.size))
+        assertThat(input.action, notNullValue())
         assertThat(input.condition, notNullValue())
     }
 
@@ -169,32 +165,13 @@ internal class CoSecJsonSerializerTest {
         @JvmStatic
         fun serializeActionMatcherProvider(): Stream<ActionMatcher> {
             return Stream.of(
-                AllActionMatcherFactory().create(mapOf(MATCHER_TYPE_KEY to AllActionMatcherFactory.TYPE).asConfiguration()),
-                NoneActionMatcherFactory().create(mapOf(MATCHER_TYPE_KEY to NoneActionMatcherFactory.TYPE).asConfiguration()),
+                AllActionMatcher,
                 PathActionMatcherFactory().create(
-                    mapOf(
-                        MATCHER_TYPE_KEY to PathActionMatcherFactory.TYPE,
-                        MATCHER_PATTERN_KEY to ".*",
-                    ).asConfiguration(),
+                    ".*".asConfiguration(),
                 ),
                 PathActionMatcherFactory().create(
-                    mapOf(
-                        MATCHER_TYPE_KEY to PathActionMatcherFactory.TYPE,
-                        MATCHER_PATTERN_KEY to "#{principal.id}.*",
-                    ).asConfiguration(),
-                ),
-                RegularActionMatcherFactory().create(
-                    mapOf(
-                        MATCHER_TYPE_KEY to RegularActionMatcherFactory.TYPE,
-                        MATCHER_PATTERN_KEY to ".*",
-                    ).asConfiguration(),
-                ),
-                RegularActionMatcherFactory().create(
-                    mapOf(
-                        MATCHER_TYPE_KEY to RegularActionMatcherFactory.TYPE,
-                        MATCHER_PATTERN_KEY to "#{principal.id}.*",
-                    ).asConfiguration(),
-                ),
+                    "#{principal.id}.*".asConfiguration(),
+                )
             )
         }
 
@@ -202,65 +179,37 @@ internal class CoSecJsonSerializerTest {
         fun serializeConditionMatcherProvider(): ConditionMatcher {
             return BoolConditionMatcherFactory().create(
                 mapOf(
-                    MATCHER_TYPE_KEY to BoolConditionMatcherFactory.TYPE,
-                    BoolConditionMatcherFactory.TYPE to mapOf(
-                        BOOL_CONDITION_MATCHER_AND_KEY to listOf(
-                            AllConditionMatcherFactory().create(
-                                mapOf(
-                                    MATCHER_TYPE_KEY to AllConditionMatcherFactory.TYPE,
-                                ).asConfiguration(),
-                            ),
-                            NoneConditionMatcherFactory().create(
-                                mapOf(
-                                    MATCHER_TYPE_KEY to NoneConditionMatcherFactory.TYPE,
-                                ).asConfiguration(),
-                            ),
-                            AuthenticatedConditionMatcherFactory().create(
-                                mapOf(
-                                    MATCHER_TYPE_KEY to AuthenticatedConditionMatcherFactory.TYPE,
-                                ).asConfiguration(),
-                            ),
-                            InDefaultTenantConditionMatcherFactory().create(
-                                mapOf(
-                                    MATCHER_TYPE_KEY to InDefaultTenantConditionMatcherFactory.TYPE,
-                                ).asConfiguration(),
-                            ),
-                            InPlatformTenantConditionMatcherFactory().create(
-                                mapOf(
-                                    MATCHER_TYPE_KEY to InPlatformTenantConditionMatcherFactory.TYPE,
-                                ).asConfiguration(),
-                            ),
-                            InUserTenantConditionMatcherFactory().create(
-                                mapOf(
-                                    MATCHER_TYPE_KEY to InUserTenantConditionMatcherFactory.TYPE,
-                                ).asConfiguration(),
-                            ),
-                            InConditionMatcherFactory().create(
-                                mapOf(
-                                    MATCHER_TYPE_KEY to InConditionMatcherFactory.TYPE,
-                                    CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
-                                    "in" to setOf("remoteIp", "remoteIp1"),
-                                ).asConfiguration(),
-                            ),
-                            RegularConditionMatcherFactory().create(
-                                mapOf(
-                                    MATCHER_TYPE_KEY to RegularConditionMatcherFactory.TYPE,
-                                    CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
-                                    MATCHER_PATTERN_KEY to "192\\.168\\.0\\.[0-9]*",
-                                ).asConfiguration(),
-                            ),
-                            SpelConditionMatcherFactory().create(
-                                mapOf(
-                                    MATCHER_TYPE_KEY to SpelConditionMatcherFactory.TYPE,
-                                    MATCHER_PATTERN_KEY to "context.principal.id=='1'",
-                                ).asConfiguration(),
-                            ),
-                            OgnlConditionMatcherFactory().create(
-                                mapOf(
-                                    MATCHER_TYPE_KEY to OgnlConditionMatcherFactory.TYPE,
-                                    MATCHER_PATTERN_KEY to "path == \"auth/login\"",
-                                ).asConfiguration(),
-                            ),
+                    BOOL_CONDITION_MATCHER_AND_KEY to listOf(
+                        AllConditionMatcherFactory().create(newPojoConfiguration()),
+                        AuthenticatedConditionMatcherFactory().create(
+                            newPojoConfiguration()
+                        ),
+                        InTenantConditionMatcherFactory().create(
+                            mapOf(
+                                "value" to TenantType.DEFAULT.name,
+                            ).asConfiguration(),
+                        ),
+                        InConditionMatcherFactory().create(
+                            mapOf(
+                                CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
+                                "value" to setOf("remoteIp", "remoteIp1"),
+                            ).asConfiguration(),
+                        ),
+                        RegularConditionMatcherFactory().create(
+                            mapOf(
+                                CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
+                                "pattern" to "192\\.168\\.0\\.[0-9]*",
+                            ).asConfiguration(),
+                        ),
+                        SpelConditionMatcherFactory().create(
+                            mapOf(
+                                SPEL_CONDITION_MATCHER_EXPRESSION_KEY to "context.principal.id=='1'"
+                            ).asConfiguration(),
+                        ),
+                        OgnlConditionMatcherFactory().create(
+                            mapOf(
+                                SPEL_CONDITION_MATCHER_EXPRESSION_KEY to "path == \"auth/login\""
+                            ).asConfiguration(),
                         ),
                     ),
                 ).asConfiguration(),
@@ -270,10 +219,10 @@ internal class CoSecJsonSerializerTest {
         @JvmStatic
         fun serializeStatementProvider(): Stream<Statement> {
             return Stream.of(
-                StatementData(),
+                StatementData(action = AllActionMatcher),
                 StatementData(
                     effect = Effect.DENY,
-                    actions = serializeActionMatcherProvider().toList(),
+                    action = AllActionMatcher,
                     condition = serializeConditionMatcherProvider(),
                 ),
             )
