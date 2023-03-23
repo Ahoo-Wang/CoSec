@@ -13,7 +13,9 @@
 
 package me.ahoo.cosec.policy.action
 
+import io.mockk.every
 import io.mockk.mockk
+import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
@@ -26,5 +28,20 @@ internal class AllActionMatcherTest {
         assertThat(allActionMatcher.type, `is`(AllActionMatcherFactory.TYPE))
         assertThat(allActionMatcher.configuration.asString(), `is`(AllActionMatcherFactory.ALL))
         assertThat(allActionMatcher.match(mockk(), mockk()), `is`(true))
+    }
+
+    @Test
+    fun matchMethod() {
+        val allActionMatcher =
+            AllActionMatcherFactory().create(mapOf(ACTION_MATCHER_METHOD_KEY to "GET").asConfiguration())
+        assertThat(allActionMatcher.type, `is`(AllActionMatcherFactory.TYPE))
+        val getRequest = mockk<Request> {
+            every { method } returns "GET"
+        }
+        assertThat(allActionMatcher.match(getRequest, mockk()), `is`(true))
+        val postRequest = mockk<Request> {
+            every { method } returns "POST"
+        }
+        assertThat(allActionMatcher.match(postRequest, mockk()), `is`(false))
     }
 }
