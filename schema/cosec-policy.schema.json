@@ -55,10 +55,6 @@
         "custom"
       ]
     },
-    "effect": {
-      "$ref": "definitions.schema.json#/definitions/effect",
-      "default": "allow"
-    },
     "statement": {
       "type": "object",
       "properties": {
@@ -67,7 +63,7 @@
           "type": "string"
         },
         "effect": {
-          "$ref": "#/definitions/effect",
+          "$ref": "definitions.schema.json#/definitions/effect",
           "default": "allow"
         },
         "action": {

@@ -73,12 +73,8 @@ object JsonPolicyDeserializer : StdDeserializer<Policy>(Policy::class.java) {
             name = requireNotNull(jsonNode.get(POLICY_NAME_KEY)) {
                 "$POLICY_NAME_KEY is required!"
             }.asText(),
-            category = requireNotNull(jsonNode.get(POLICY_CATEGORY_KEY)) {
-                "$POLICY_CATEGORY_KEY is required!"
-            }.asText(),
-            description = requireNotNull(jsonNode.get(POLICY_DESCRIPTION_KEY)) {
-                "$POLICY_DESCRIPTION_KEY is required!"
-            }.asText(),
+            category = jsonNode.get(POLICY_CATEGORY_KEY)?.asText().orEmpty(),
+            description = jsonNode.get(POLICY_DESCRIPTION_KEY)?.asText().orEmpty(),
             type = requireNotNull(jsonNode.get(POLICY_TYPE_KEY)) {
                 "$POLICY_TYPE_KEY is required!"
             }.traverse(p.codec).readValueAs(PolicyType::class.java),

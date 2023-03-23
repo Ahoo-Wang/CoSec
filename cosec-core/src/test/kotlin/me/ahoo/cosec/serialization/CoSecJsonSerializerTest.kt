@@ -42,6 +42,7 @@ import me.ahoo.cosec.policy.condition.part.RegularConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.part.RequestParts
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
@@ -115,6 +116,17 @@ internal class CoSecJsonSerializerTest {
         assertThat(input.type, `is`(policy.type))
     }
 
+    @ParameterizedTest
+    @MethodSource("deserializePolicyErrorProvider")
+    fun deserializePolicyError(policyJson:String) {
+        Assertions.assertThrows(IllegalArgumentException::class.java) {
+            CoSecJsonSerializer.readValue(
+                policyJson,
+                Policy::class.java,
+            )
+        }
+    }
+
     @Test
     fun serializePolicySet() {
         val policySetType = object : TypeReference<Set<Policy>>() {}
@@ -162,6 +174,26 @@ internal class CoSecJsonSerializerTest {
     }
 
     companion object {
+        @JvmStatic
+        fun deserializePolicyErrorProvider(): Stream<String> {
+            return Stream.of(
+                "{}",
+                """
+                    "id":"id"
+                """,
+                """
+                    "id":"id",
+                    "name":"name"
+                """,
+                """
+                    "id":"id",
+                    "name":"name",
+                    "category":"category",
+                    "type":"global"
+                """
+            )
+        }
+
         @JvmStatic
         fun serializeActionMatcherProvider(): Stream<ActionMatcher> {
             return Stream.of(
