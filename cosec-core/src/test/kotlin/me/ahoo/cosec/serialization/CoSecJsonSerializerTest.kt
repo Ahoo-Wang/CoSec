@@ -59,6 +59,8 @@ internal class CoSecJsonSerializerTest {
             }
         }
         assertThat(testPolicy, `is`(notNullValue()))
+        val policyJson = CoSecJsonSerializer.writeValueAsString(testPolicy)
+        assertThat(CoSecJsonSerializer.readValue(policyJson, Policy::class.java), `is`(notNullValue()))
     }
 
     @ParameterizedTest
@@ -118,7 +120,7 @@ internal class CoSecJsonSerializerTest {
 
     @ParameterizedTest
     @MethodSource("deserializePolicyErrorProvider")
-    fun deserializePolicyError(policyJson:String) {
+    fun deserializePolicyError(policyJson: String) {
         Assertions.assertThrows(IllegalArgumentException::class.java) {
             CoSecJsonSerializer.readValue(
                 policyJson,
