@@ -41,7 +41,7 @@ RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
 
 #### How to customize `ActionMatcher` (SPI)
 
-> Refer to [RegularActionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/RegularActionMatcher.kt) 
+> Refer to [PathActionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/PathActionMatcher.kt) 
 
 ```kotlin
 class CustomConditionMatcherFactory : ConditionMatcherFactory {

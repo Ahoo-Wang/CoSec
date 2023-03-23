@@ -10,22 +10,13 @@ interface RequestMatcher{
     match(request: Request, securityContext: SecurityContext): Boolean
 }
 interface ActionMatcher
-abstract class AbstractActionMatcher{
-    val methods: Set<String>
-}
 class AllActionMatcher
-class NoneActionMatcher
 class PathActionMatcher
-class RegularActionMatcher
 class ReplaceablePathActionMatcher
-class ReplaceableRegularActionMatcher
 
 RequestMatcher <|-- ActionMatcher
-ActionMatcher  <|-- AbstractActionMatcher
-AbstractActionMatcher <|-- AllActionMatcher
-AbstractActionMatcher <|-- NoneActionMatcher
-AbstractActionMatcher <|-- PathActionMatcher
-AbstractActionMatcher <|-- RegularActionMatcher
-AbstractActionMatcher <|-- ReplaceablePathActionMatcher
-AbstractActionMatcher <|-- ReplaceableRegularActionMatcher
+ActionMatcher <|-- AllActionMatcher
+ActionMatcher <|-- PathActionMatcher
+ActionMatcher <|-- ReplaceablePathActionMatcher
+ActionMatcher <|-- CompositePathActionMatcher
 @enduml

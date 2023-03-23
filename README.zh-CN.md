@@ -41,7 +41,7 @@
 
 #### 如何自定义 `ActionMatcher` (SPI)
 
-> 参考 [RegularActionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/RegularActionMatcher.kt)
+> 参考 [PathActionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/PathActionMatcher.kt)
 
 ```kotlin
 class CustomActionMatcherFactory : ActionMatcherFactory {
