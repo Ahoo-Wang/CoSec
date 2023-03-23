@@ -22,6 +22,9 @@
     "rateLimiter": {
       "$ref": "#/definitions/rateLimiterConditionMatcher"
     },
+    "groupedRateLimiter": {
+      "$ref": "#/definitions/groupedRateLimiterConditionMatcher"
+    },
     "ognl": {
       "$ref": "#/definitions/ognlConditionMatcher"
     },
@@ -121,6 +124,25 @@
       },
       "required": [
         "permitsPerSecond"
+      ]
+    },
+    "groupedRateLimiterConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "permitsPerSecond": {
+          "type": "number"
+        },
+        "expireAfterAccessSecond": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "part",
+        "permitsPerSecond",
+        "expireAfterAccessSecond"
       ]
     },
     "ognlConditionMatcher": {

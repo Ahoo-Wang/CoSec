@@ -7,8 +7,10 @@
           "authenticated": {}
         },
         {
-          "rateLimiter": {
-            "permitsPerSecond": 10
+          "groupedRateLimiter": {
+            "part": "request.remoteIp",
+            "permitsPerSecond": 10,
+            "expireAfterAccessSecond": 1000
           }
         },
         {
@@ -34,12 +36,7 @@
           "id": "manage.order.issueInvoice",
           "name": "Issue an invoice",
           "description": "Issue an invoice",
-          "action": "/order/issueInvoice",
-          "condition": {
-            "all": {
-
-            }
-          }
+          "action": "/order/issueInvoice"
         }
       ]
     }
