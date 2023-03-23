@@ -44,22 +44,24 @@ RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
 > Refer to [RegularActionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/RegularActionMatcher.kt) 
 
 ```kotlin
-class CustomActionMatcherFactory : ActionMatcherFactory {
+class CustomConditionMatcherFactory : ConditionMatcherFactory {
     companion object {
-        const val TYPE = "[CustomActionType]"
+        const val TYPE = "[CustomConditionType]"
     }
 
     override val type: String
         get() = TYPE
 
-    override fun create(onfiguration: Configuration): ActionMatcher {
-        return CustomActionMatcher(onfiguration)
+    override fun create(configuration: Configuration): ConditionMatcher {
+        return CustomConditionMatcher(configuration)
     }
 }
-class CustomActionMatcher(configuration: Configuration) :
-    AbstractActionMatcher(CustomActionMatcherFactory.TYPE, configuration) {
+object CustomConditionMatcher(override val configuration: Configuration) : ActionMatcher {
 
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
+    override val type: String
+        get() = CustomConditionMatcherFactory.TYPE
+
+    override fun match(request: Request, securityContext: SecurityContext): Boolean {
         //Custom matching logic
     }
 }

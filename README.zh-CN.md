@@ -92,10 +92,12 @@ class CustomConditionMatcherFactory : ConditionMatcherFactory {
         return CustomConditionMatcher(configuration)
     }
 }
-class CustomConditionMatcher(configuration: Configuration) :
-    AbstractActionMatcher(CustomActionMatcherFactory.TYPE, configuration) {
+object CustomConditionMatcher(override val configuration: Configuration) : ActionMatcher {
 
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
+    override val type: String
+        get() = CustomConditionMatcherFactory.TYPE
+
+    override fun match(request: Request, securityContext: SecurityContext): Boolean {
         //Custom matching logic
     }
 }
