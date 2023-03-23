@@ -120,6 +120,9 @@ class PathActionMatcherFactory : ActionMatcherFactory {
             patternConfiguration.asList()
                 .map { it.asString().asPathActionMatcher(this, patternParser) }
                 .let { actionMatchers ->
+                    if (actionMatchers.size == 1) {
+                        return actionMatchers.first()
+                    }
                     return CompositePathActionMatcher(
                         actionMatchers = actionMatchers,
                         configuration = this

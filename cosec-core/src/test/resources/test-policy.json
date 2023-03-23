@@ -157,11 +157,44 @@
     {
       "name": "TestEndsWith",
       "effect": "allow",
-      "action": "*",
+      "action": ["*"],
       "condition": {
         "endsWith": {
           "part": "request.attributes.remoteIp",
           "value": ".168.0.1"
+        }
+      }
+    },
+    {
+      "name": "TestActionObject",
+      "effect": "allow",
+      "action": {
+        "path": {
+          "pattern": [
+            "/user/#{principal.id}/*"
+          ],
+          "options": {
+            "caseSensitive": false,
+            "separator": "/",
+            "decodeAndParseSegments": false
+          }
+        }
+      }
+    },
+    {
+      "name": "TestActionObjectMultiPattern",
+      "effect": "allow",
+      "action": {
+        "path": {
+          "pattern": [
+            "/user/#{principal.id}/*",
+            "/user/#{principal.id}/order/*"
+          ],
+          "options": {
+            "caseSensitive": false,
+            "separator": "/",
+            "decodeAndParseSegments": false
+          }
         }
       }
     }
