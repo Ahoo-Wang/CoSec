@@ -270,7 +270,7 @@ internal class SimpleAuthorizationTest {
             rolePermissions = listOf(
                 RolePermissionData(
                     id = "roleId",
-                    permissions = setOf(permissionId),
+                    permissions = setOf("*"),
                 )
             )
         )
