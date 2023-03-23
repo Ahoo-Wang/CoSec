@@ -24,7 +24,7 @@ abstract class AbstractJsonStatementSerializer<T : Statement>(statementType: Cla
         gen.writeStartObject()
         gen.writeStringField(STATEMENT_NAME, value.name)
         gen.writePOJOField(STATEMENT_EFFECT_KEY, value.effect)
-        gen.writePOJOField(STATEMENT_ACTION_KEY, value.action.configuration)
+        gen.writePOJOField(STATEMENT_ACTION_KEY, value.action)
         gen.writePOJOField(STATEMENT_CONDITION_KEY, value.condition)
         writeExtend(value, gen, provider)
         gen.writeEndObject()
