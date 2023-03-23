@@ -25,3 +25,4 @@ me.ahoo.cosec.policy.condition.SpelConditionMatcherFactory
 me.ahoo.cosec.policy.condition.OgnlConditionMatcherFactory
 me.ahoo.cosec.policy.condition.BoolConditionMatcherFactory
 me.ahoo.cosec.policy.condition.limiter.RateLimiterConditionMatcherFactory
+me.ahoo.cosec.policy.condition.limiter.GroupedRateLimiterConditionMatcherFactory

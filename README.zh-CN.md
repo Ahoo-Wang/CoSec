@@ -123,141 +123,127 @@ class CustomConditionMatcher(configuration: Configuration) :
   "type": "global",
   "tenantId": "tenantId",
   "condition": {
-    "type": "bool",
     "bool": {
       "and": [
         {
-          "type": "authenticated"
+          "authenticated": {}
         },
         {
-          "type": "rate_limiter",
-          "permitsPerSecond": 10
+          "rateLimiter": {
+            "permitsPerSecond": 10
+          }
         }
       ]
     }
   },
   "statements": [
     {
-      "name": "Anonymous",
-      "actions": [
-        {
-          "type": "path",
-          "pattern": "/auth/register"
-        },
-        {
-          "type": "path",
-          "pattern": "/auth/login"
+      "action": {
+        "path": {
+          "pattern": "/user/#{principal.id}/*",
+          "options": {
+            "caseSensitive": false,
+            "separator": "/",
+            "decodeAndParseSegments": false
+          }
         }
+      }
+    },
+    {
+      "name": "Anonymous",
+      "action": [
+        "/auth/register",
+        "/auth/login"
       ]
     },
     {
       "name": "UserScope",
-      "actions": [
-        {
-          "type": "path",
-          "pattern": "/user/#{principal.id}/*"
-        }
-      ],
+      "action": "/user/#{principal.id}/*",
       "condition": {
-        "type": "authenticated"
+        "authenticated": {}
       }
     },
     {
       "name": "Developer",
-      "actions": [
-        {
-          "type": "all"
-        }
-      ],
+      "action": "*",
       "condition": {
-        "type": "in",
-        "part": "context.principal.id",
-        "in": [
-          "developerId"
-        ]
+        "in": {
+          "part": "context.principal.id",
+          "value": [
+            "developerId"
+          ]
+        }
       }
     },
     {
       "name": "RequestOriginDeny",
       "effect": "deny",
-      "actions": [
-        {
-          "type": "all"
-        }
-      ],
+      "action": "*",
       "condition": {
-        "type": "reg",
-        "negate": true,
-        "part": "request.origin",
-        "pattern": "^(http|https)://github.com"
+        "regular": {
+          "negate": true,
+          "part": "request.origin",
+          "pattern": "^(http|https)://github.com"
+        }
       }
     },
     {
       "name": "IpBlacklist",
       "effect": "deny",
-      "actions": [
-        {
-          "type": "all"
-        }
-      ],
+      "action": "*",
       "condition": {
-        "type": "path",
-        "part": "request.remoteIp",
         "path": {
-          "caseSensitive": false,
-          "separator": ".",
-          "decodeAndParseSegments": false
-        },
-        "pattern": "192.168.0.*"
+          "part": "request.remoteIp",
+          "pattern": "192.168.0.*",
+          "options": {
+            "caseSensitive": false,
+            "separator": ".",
+            "decodeAndParseSegments": false
+          }
+        }
       }
     },
     {
       "name": "RegionWhitelist",
       "effect": "deny",
-      "actions": [
-        {
-          "type": "all"
-        }
-      ],
+      "action": "*",
       "condition": {
-        "negate": true,
-        "type": "reg",
-        "part": "request.attributes.ipRegion",
-        "pattern": "^中国\\|0\\|(上海|广东省)\\|.*"
+        "regular": {
+          "negate": true,
+          "part": "request.attributes.ipRegion",
+          "pattern": "^中国\\|0\\|(上海|广东省)\\|.*"
+        }
       }
     },
     {
       "name": "AllowDeveloperOrIpRange",
-      "actions": [
-        {
-          "type": "all"
-        }
-      ],
+      "action": "*",
       "condition": {
-        "type": "bool",
         "bool": {
           "and": [
             {
-              "type": "authenticated"
+              "authenticated": {}
             }
           ],
           "or": [
             {
-              "type": "in",
-              "part": "context.principal.id",
-              "in": [
-                "developerId"
-              ]
+              "in": {
+                "part": "context.principal.id",
+                "value": [
+                  "developerId"
+                ]
+              }
             },
             {
-              "type": "path",
-              "part": "request.remoteIp",
               "path": {
-                "caseSensitive": false,
-                "separator": ".",
-                "decodeAndParseSegments": false
-              },
-              "pattern": "192.168.0.*"
+                "part": "request.remoteIp",
+                "pattern": "192.168.0.*",
+                "options": {
+                  "caseSensitive": false,
+                  "separator": ".",
+                  "decodeAndParseSegments": false
+                }
+              }
             }
           ]
         }
@@ -266,47 +252,39 @@ class CustomConditionMatcher(configuration: Configuration) :
     {
       "name": "TestContains",
       "effect": "allow",
-      "actions": [
-        {
-          "type": "all"
-        }
-      ],
+      "action": "*",
       "condition": {
-        "type": "contains",
-        "part": "request.attributes.ipRegion",
-        "pattern": "上海"
+        "contains": {
+          "part": "request.attributes.ipRegion",
+          "value": "上海"
+        }
       }
     },
     {
       "name": "TestStartsWith",
       "effect": "allow",
-      "actions": [
-        {
-          "type": "all"
-        }
-      ],
+      "action": "*",
       "condition": {
-        "type": "starts_with",
-        "part": "request.attributes.ipRegion",
-        "pattern": "中国"
+        "startsWith": {
+          "part": "request.attributes.ipRegion",
+          "value": "中国"
+        }
       }
     },
     {
       "name": "TestEndsWith",
       "effect": "allow",
-      "actions": [
-        {
-          "type": "all"
-        }
-      ],
+      "action": "*",
       "condition": {
-        "type": "ends_with",
-        "part": "request.attributes.remoteIp",
-        "pattern": ".168.0.1"
+        "endsWith": {
+          "part": "request.attributes.remoteIp",
+          "value": ".168.0.1"
+        }
       }
     }
   ]
 }
+
 ```
 ## 应用权限元数据 Schema
 
@@ -318,15 +296,22 @@ class CustomConditionMatcher(configuration: Configuration) :
 {
   "id": "manage",
   "condition": {
-    "type": "bool",
     "bool": {
       "and": [
         {
-          "type": "authenticated"
+          "authenticated": {}
         },
         {
-          "type": "rate_limiter",
-          "permitsPerSecond": 10
+          "groupedRateLimiter": {
+            "part": "request.remoteIp",
+            "permitsPerSecond": 10,
+            "expireAfterAccessSecond": 1000
+          }
+        },
+        {
+          "inTenant": {
+            "value": "default"
+          }
         }
       ]
     }
@@ -340,28 +325,19 @@ class CustomConditionMatcher(configuration: Configuration) :
           "id": "manage.order.ship",
           "name": "Ship",
           "description": "Ship",
-          "actions": [
-            {
-              "type": "path",
-              "pattern": "/order/ship"
-            }
-          ]
+          "action": "/order/ship"
         },
         {
           "id": "manage.order.issueInvoice",
           "name": "Issue an invoice",
           "description": "Issue an invoice",
-          "actions": [
-            {
-              "type": "path",
-              "pattern": "/order/issueInvoice"
-            }
-          ]
+          "action": "/order/issueInvoice"
         }
       ]
     }
   ]
 }
+
 ```
 
 ## OpenTelemetry
