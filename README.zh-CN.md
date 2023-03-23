@@ -44,22 +44,22 @@
 > 参考 [PathActionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/PathActionMatcher.kt)
 
 ```kotlin
-class CustomConditionMatcherFactory : ConditionMatcherFactory {
+class CustomActionMatcherFactory : ActionMatcherFactory {
     companion object {
-        const val TYPE = "[CustomConditionType]"
+        const val TYPE = "[CustomActionType]"
     }
 
     override val type: String
         get() = TYPE
 
     override fun create(configuration: Configuration): ConditionMatcher {
-        return CustomConditionMatcher(configuration)
+        return CustomActionMatcher(configuration)
     }
 }
-object CustomConditionMatcher(override val configuration: Configuration) : ActionMatcher {
+class CustomActionMatcher(override val configuration: Configuration) : ActionMatcher {
 
     override val type: String
-        get() = CustomConditionMatcherFactory.TYPE
+        get() = CustomActionMatcherFactory.TYPE
 
     override fun match(request: Request, securityContext: SecurityContext): Boolean {
         //Custom matching logic
@@ -94,12 +94,10 @@ class CustomConditionMatcherFactory : ConditionMatcherFactory {
         return CustomConditionMatcher(configuration)
     }
 }
-object CustomConditionMatcher(override val configuration: Configuration) : ActionMatcher {
+class CustomConditionMatcher(configuration: Configuration) :
+    AbstractConditionMatcher(CustomConditionMatcherFactory.TYPE, configuration) {
 
-    override val type: String
-        get() = CustomConditionMatcherFactory.TYPE
-
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         //Custom matching logic
     }
 }

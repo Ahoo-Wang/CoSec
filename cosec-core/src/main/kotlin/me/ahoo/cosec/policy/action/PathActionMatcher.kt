@@ -77,7 +77,7 @@ class PathActionMatcherFactory : ActionMatcherFactory {
         private const val PATTERN_KEY = "pattern"
         val INSTANCE = PathActionMatcherFactory()
 
-        fun String.asPathActionMatcher(
+        private fun String.asPathActionMatcher(
             configuration: Configuration = this.asConfiguration(),
             patternParser: PathPatternParser = PathPatternParser.defaultInstance
         ): ActionMatcher {
