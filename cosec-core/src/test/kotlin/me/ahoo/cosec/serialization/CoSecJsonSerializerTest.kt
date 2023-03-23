@@ -197,7 +197,7 @@ internal class CoSecJsonSerializerTest {
         @JvmStatic
         fun serializeActionMatcherProvider(): Stream<ActionMatcher> {
             return Stream.of(
-                AllActionMatcher,
+                AllActionMatcher.INSTANCE,
                 PathActionMatcherFactory().create(
                     ".*".asConfiguration(),
                 ),
@@ -251,10 +251,10 @@ internal class CoSecJsonSerializerTest {
         @JvmStatic
         fun serializeStatementProvider(): Stream<Statement> {
             return Stream.of(
-                StatementData(action = AllActionMatcher),
+                StatementData(action = AllActionMatcher.INSTANCE),
                 StatementData(
                     effect = Effect.DENY,
-                    action = AllActionMatcher,
+                    action = AllActionMatcher.INSTANCE,
                     condition = serializeConditionMatcherProvider(),
                 ),
             )

@@ -29,7 +29,7 @@ class DefaultAppPermissionEvaluatorTest {
                             id = "permissionId",
                             name = "",
                             effect = Effect.DENY,
-                            action = AllActionMatcher,
+                            action = AllActionMatcher.INSTANCE,
                         )
                     )
                 )

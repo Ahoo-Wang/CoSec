@@ -34,10 +34,10 @@ internal class StatementDataTest {
 
     @Test
     fun verifyDefault() {
-        val statementData = StatementData(action = AllActionMatcher)
+        val statementData = StatementData(action = AllActionMatcher.INSTANCE)
         assertThat(statementData.name, equalTo(""))
         assertThat(statementData.effect, equalTo(Effect.ALLOW))
-        assertThat(statementData.action, equalTo(AllActionMatcher))
+        assertThat(statementData.action, equalTo(AllActionMatcher.INSTANCE))
         assertThat(statementData.condition, instanceOf(AllConditionMatcher::class.java))
         assertThat(statementData.verify(mockk(), mockk()), `is`(VerifyResult.ALLOW))
     }
@@ -95,7 +95,7 @@ internal class StatementDataTest {
     fun verifyDeny() {
         val statementData = StatementData(
             effect = Effect.DENY,
-            action = AllActionMatcher,
+            action = AllActionMatcher.INSTANCE,
         )
         assertThat(statementData.verify(mockk(), mockk()), `is`(VerifyResult.EXPLICIT_DENY))
     }

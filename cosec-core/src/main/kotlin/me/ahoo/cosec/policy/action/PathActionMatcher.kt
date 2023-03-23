@@ -26,13 +26,10 @@ import org.springframework.web.util.pattern.PathPatternParser
 class PathActionMatcher(
     private val patternParser: PathPatternParser,
     private val pathPattern: PathPattern,
-    override val configuration: Configuration
-) :
-    ActionMatcher {
-    override val type: String
-        get() = PathActionMatcherFactory.TYPE
+    configuration: Configuration
+) : AbstractActionMatcher(PathActionMatcherFactory.TYPE, configuration) {
 
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         PathContainer.parsePath(request.path, patternParser.pathOptions)
             .let { pathContainer ->
                 return pathPattern.matches(pathContainer)
@@ -43,12 +40,10 @@ class PathActionMatcher(
 class ReplaceablePathActionMatcher(
     private val patternParser: PathPatternParser,
     private val pattern: String,
-    override val configuration: Configuration
-) : ActionMatcher {
-    override val type: String
-        get() = PathActionMatcherFactory.TYPE
+    configuration: Configuration
+) : AbstractActionMatcher(PathActionMatcherFactory.TYPE, configuration) {
 
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         val pathPattern = ActionPatternReplacer.replace(pattern, securityContext)
         val pathContainer = PathContainer.parsePath(request.path)
         patternParser.parse(pathPattern).let {
@@ -140,8 +135,8 @@ class PathActionMatcherFactory : ActionMatcherFactory {
         }
 
         if (configuration.isArray) {
-            if (configuration.asStringList().contains(AllActionMatcher.ALL)) {
-                return AllActionMatcher
+            if (configuration.asStringList().contains(AllActionMatcherFactory.ALL)) {
+                return AllActionMatcher.INSTANCE
             }
             return configuration.arrayAsActionMatcher()
         }

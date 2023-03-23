@@ -62,7 +62,7 @@ internal class AppPermissionCodecExecutorTest {
             groups = listOf(
                 PermissionGroupData(
                     "groupName",
-                    permissions = listOf(PermissionData("id", "name", action = AllActionMatcher))
+                    permissions = listOf(PermissionData("id", "name", action = AllActionMatcher.INSTANCE))
                 )
             )
         )

@@ -32,7 +32,7 @@ class RedisAppRolePermissionRepositoryTest {
             id = UUID.randomUUID().toString(),
             name = "",
             effect = Effect.DENY,
-            action = AllActionMatcher,
+            action = AllActionMatcher.INSTANCE,
         )
         val appPermission = AppPermissionData(
             "appId",

@@ -157,7 +157,11 @@
     {
       "name": "TestEndsWith",
       "effect": "allow",
-      "action": ["*"],
+      "action": {
+        "all": {
+          "method": "GET"
+        }
+      },
       "condition": {
         "endsWith": {
           "part": "request.attributes.remoteIp",
@@ -170,6 +174,7 @@
       "effect": "allow",
       "action": {
         "path": {
+          "method": "GET",
           "pattern": [
             "/user/#{principal.id}/*"
           ],
@@ -186,6 +191,10 @@
       "effect": "allow",
       "action": {
         "path": {
+          "method": [
+            "GET",
+            "POST"
+          ],
           "pattern": [
             "/user/#{principal.id}/*",
             "/user/#{principal.id}/order/*"

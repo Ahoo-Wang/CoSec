@@ -51,7 +51,7 @@ internal class DefaultPolicyEvaluatorTest {
                 get() = "name"
             override val effect: Effect
                 get() = Effect.ALLOW
-            override val action = AllActionMatcher
+            override val action = AllActionMatcher.INSTANCE
             override val condition: ConditionMatcher
                 get() = AllConditionMatcher.INSTANCE
 
