@@ -32,7 +32,9 @@ object JsonActionMatcherSerializer : StdSerializer<ActionMatcher>(ActionMatcher:
             gen.writePOJO(value.configuration)
             return
         }
+        gen.writeStartObject()
         gen.writePOJOField(value.type, value.configuration)
+        gen.writeEndObject()
     }
 }
 
