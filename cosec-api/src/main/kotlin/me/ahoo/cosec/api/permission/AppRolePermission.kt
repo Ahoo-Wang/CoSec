@@ -11,7 +11,18 @@ interface AppRolePermission {
      * RoleId -> Permissions
      */
     val rolePermissionIndexer: Map<String, List<Permission>>
-        get() = rolePermissions.associate {
-            it.id to it.permissions.mapNotNull { permissionId -> appPermission.permissionIndexer[permissionId] }
+        get() {
+            rolePermissions.forEach {
+                if (it.permissions.contains(ALL_PERMISSION_ID)) {
+                    return mapOf(it.id to appPermission.permissionIndexer.values.toList())
+                }
+            }
+            return rolePermissions.associate {
+                it.id to it.permissions.mapNotNull { permissionId -> appPermission.permissionIndexer[permissionId] }
+            }
         }
+
+    companion object {
+        const val ALL_PERMISSION_ID = "*"
+    }
 }
