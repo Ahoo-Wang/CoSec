@@ -19,16 +19,27 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 
-object AllActionMatcher : ActionMatcher {
-    const val TYPE = "all"
-    const val ALL = "*"
-    override val type: String
-        get() = TYPE
-    override val configuration: Configuration by lazy {
-        ALL.asConfiguration()
+class AllActionMatcher(configuration: Configuration) :
+    AbstractActionMatcher(AllActionMatcherFactory.TYPE, configuration) {
+    companion object {
+        val INSTANCE = AllActionMatcher(AllActionMatcherFactory.ALL.asConfiguration())
     }
 
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         return true
+    }
+}
+
+class AllActionMatcherFactory : ActionMatcherFactory {
+    companion object {
+        const val TYPE = "all"
+        const val ALL = "*"
+    }
+
+    override val type: String
+        get() = TYPE
+
+    override fun create(configuration: Configuration): ActionMatcher {
+        return AllActionMatcher(configuration)
     }
 }

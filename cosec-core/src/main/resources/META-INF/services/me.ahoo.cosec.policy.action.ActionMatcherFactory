@@ -10,4 +10,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+me.ahoo.cosec.policy.action.AllActionMatcherFactory
 me.ahoo.cosec.policy.action.PathActionMatcherFactory

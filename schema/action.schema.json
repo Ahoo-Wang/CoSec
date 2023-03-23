@@ -17,11 +17,47 @@
       "properties": {
         "path": {
           "$ref": "#/definitions/pathActionMatcher"
+        },
+        "all": {
+          "$ref": "#/definitions/allActionMatcher"
         }
       }
     }
   ],
   "definitions": {
+    "method": {
+      "enum": [
+        "GET",
+        "HEAD",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+        "TRACE"
+      ]
+    },
+    "methodValue": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/method"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/method"
+          }
+        }
+      ]
+    },
+    "allActionMatcher": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "$ref": "#/definitions/methodValue"
+        }
+      }
+    },
     "pathActionMatcher": {
       "type": "object",
       "properties": {
@@ -37,6 +73,9 @@
               }
             }
           ]
+        },
+        "method": {
+          "$ref": "#/definitions/methodValue"
         },
         "options": {
           "$ref": "definitions.schema.json#/definitions/pathOptions"

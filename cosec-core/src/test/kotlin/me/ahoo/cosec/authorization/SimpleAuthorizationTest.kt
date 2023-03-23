@@ -79,7 +79,7 @@ internal class SimpleAuthorizationTest {
             every { statements } returns listOf(
                 StatementData(
                     effect = Effect.ALLOW,
-                    action = AllActionMatcher,
+                    action = AllActionMatcher.INSTANCE,
                 ),
             )
         }
@@ -108,7 +108,7 @@ internal class SimpleAuthorizationTest {
             every { statements } returns listOf(
                 StatementData(
                     effect = Effect.DENY,
-                    action = AllActionMatcher,
+                    action = AllActionMatcher.INSTANCE,
                 ),
             )
         }
@@ -136,7 +136,7 @@ internal class SimpleAuthorizationTest {
             every { statements } returns listOf(
                 StatementData(
                     effect = Effect.ALLOW,
-                    action = AllActionMatcher,
+                    action = AllActionMatcher.INSTANCE,
                 ),
             )
         }
@@ -171,7 +171,7 @@ internal class SimpleAuthorizationTest {
             every { statements } returns listOf(
                 StatementData(
                     effect = Effect.DENY,
-                    action = AllActionMatcher,
+                    action = AllActionMatcher.INSTANCE,
                 ),
             )
         }
@@ -210,7 +210,7 @@ internal class SimpleAuthorizationTest {
                                 id = permissionId,
                                 name = "",
                                 effect = Effect.ALLOW,
-                                action = AllActionMatcher,
+                                action = AllActionMatcher.INSTANCE,
                             )
                         )
                     )
@@ -261,7 +261,7 @@ internal class SimpleAuthorizationTest {
                                 id = permissionId,
                                 name = "",
                                 effect = Effect.DENY,
-                                action = AllActionMatcher,
+                                action = AllActionMatcher.INSTANCE,
                             )
                         )
                     )
