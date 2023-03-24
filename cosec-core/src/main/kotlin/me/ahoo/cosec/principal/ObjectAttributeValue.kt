@@ -10,25 +10,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package me.ahoo.cosec.principal
 
 import me.ahoo.cosec.api.principal.AttributeValue
-import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
 
-/**
- * Simple Principal.
- *
- * @author ahoo wang
- */
-data class SimplePrincipal(
-    override val id: String,
-    override val policies: Set<String> = emptySet(),
-    override val roles: Set<String> = emptySet(),
-    override val attributes: Map<String, AttributeValue<*>> = emptyMap(),
-) : CoSecPrincipal {
-
+class ObjectAttributeValue<V>(override val value: V) : AttributeValue<V> {
     companion object {
-        @JvmField
-        val ANONYMOUS: CoSecPrincipal = SimplePrincipal(CoSecPrincipal.ANONYMOUS_ID)
+        @Suppress("UNCHECKED_CAST")
+        fun <V> V.asAttributeValue(): AttributeValue<V> {
+            return when (this) {
+                is AttributeValue<*> -> this
+                is String -> TextAttributeValue(this)
+                else -> ObjectAttributeValue(this)
+            } as AttributeValue<V>
+        }
+    }
+
+    override fun asString(): String {
+        return CoSecJsonSerializer.writeValueAsString(value)
+    }
+
+    override fun <T> asObject(objectClass: Class<T>): T {
+        @Suppress("UNCHECKED_CAST")
+        return value as T
     }
 }

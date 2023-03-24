@@ -26,7 +26,7 @@ class CoSecPrincipalTest {
             override val id: String
                 get() = ANONYMOUS_ID
 
-            override val attributes: Map<String, String>
+            override val attributes: Map<String, AttributeValue<*>>
                 get() = throw UnsupportedOperationException()
             override val policies: Set<String>
                 get() = throw UnsupportedOperationException()
@@ -45,7 +45,7 @@ class CoSecPrincipalTest {
             override val id: String
                 get() = "id"
 
-            override val attributes: Map<String, String>
+            override val attributes: Map<String, AttributeValue<*>>
                 get() = throw UnsupportedOperationException()
             override val policies: Set<String>
                 get() = throw UnsupportedOperationException()

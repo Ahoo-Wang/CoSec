@@ -90,9 +90,9 @@ class JsonConfiguration(
         return delegate.asDouble()
     }
 
-    override fun <T> asPojo(pojoClass: Class<T>): T {
+    override fun <T> asObject(objectClass: Class<T>): T {
         return delegate.traverse(objectCodec).use {
-            it.readValueAs(pojoClass)
+            it.readValueAs(objectClass)
         }
     }
 

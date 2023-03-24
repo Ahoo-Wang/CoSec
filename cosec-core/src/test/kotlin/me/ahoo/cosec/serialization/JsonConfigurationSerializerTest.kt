@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.serialization
 
-import me.ahoo.cosec.api.configuration.asPojo
+import me.ahoo.cosec.api.configuration.asObject
 import me.ahoo.cosec.configuration.JsonConfiguration
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
@@ -38,7 +38,7 @@ class JsonConfigurationSerializerTest {
             equalTo(mapOf("kind" to "request", "name" to "remoteIp")),
         )
         assertThat(
-            jsonConfiguration.getRequired("part").asPojo<Part>(),
+            jsonConfiguration.getRequired("part").asObject<Part>(),
             equalTo(Part("request", "remoteIp")),
         )
         val jsonString = CoSecJsonSerializer.writeValueAsString(jsonConfiguration)

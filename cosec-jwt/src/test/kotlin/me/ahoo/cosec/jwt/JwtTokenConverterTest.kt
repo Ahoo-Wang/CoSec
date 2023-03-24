@@ -13,10 +13,13 @@
 package me.ahoo.cosec.jwt
 
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.principal.ObjectAttributeValue.Companion.asAttributeValue
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
 import org.hamcrest.MatcherAssert.assertThat
+import org.hamcrest.Matchers.equalTo
 import org.hamcrest.Matchers.notNullValue
 import org.junit.jupiter.api.Test
 
@@ -25,6 +28,7 @@ import org.junit.jupiter.api.Test
  */
 internal class JwtTokenConverterTest {
     var jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, JwtFixture.ALGORITHM)
+    private val jwtTokenVerifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
 
     @Test
     fun anonymousAsToken() {
@@ -35,8 +39,20 @@ internal class JwtTokenConverterTest {
     @Test
     fun asToken() {
         val principal =
-            SimplePrincipal("id", setOf("policyId"), setOf("roleId"), mapOf("attr_key" to "attr_value"))
+            SimplePrincipal(
+                "id",
+                setOf("policyId"),
+                setOf("roleId"),
+                mapOf(
+                    "attr_string" to "attr_string_value".asAttributeValue(),
+                    "attr_list" to listOf("attr_list_value").asAttributeValue()
+                )
+            )
         val token: CompositeToken = jwtTokenConverter.asToken(principal)
         assertThat(token, notNullValue())
+        val verified = jwtTokenVerifier.verify<TokenPrincipal>(token)
+        assertThat(verified.id, equalTo(principal.id))
+        assertThat(verified.attributes["attr_string"]!!.asString(), equalTo("attr_string_value"))
+        assertThat(verified.attributes["attr_list"]!!.asObject(List::class.java), equalTo(listOf("attr_list_value")))
     }
 }
