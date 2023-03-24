@@ -206,6 +206,23 @@
           }
         }
       }
+    },
+    {
+      "name": "TestComposite",
+      "effect": "allow",
+      "action": {
+        "composite": [
+          "/user/#{principal.id}/*",
+          {
+            "path": {
+              "method": "POST",
+              "pattern": [
+                "/user/#{principal.id}/order/*"
+              ]
+            }
+          }
+        ]
+      }
     }
   ]
 }

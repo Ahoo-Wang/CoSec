@@ -52,20 +52,6 @@ class ReplaceablePathActionMatcher(
     }
 }
 
-class CompositePathActionMatcher(
-    private val actionMatchers: List<ActionMatcher>,
-    override val configuration: Configuration
-) : ActionMatcher {
-    override val type: String
-        get() = PathActionMatcherFactory.TYPE
-
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        return actionMatchers.any { pathActionMatcher ->
-            pathActionMatcher.match(request, securityContext)
-        }
-    }
-}
-
 class PathActionMatcherFactory : ActionMatcherFactory {
     companion object {
         const val TYPE = "path"
@@ -99,7 +85,8 @@ class PathActionMatcherFactory : ActionMatcherFactory {
             asList()
                 .map { it.stringAsActionMatcher() }
                 .let { actionMatchers ->
-                    return CompositePathActionMatcher(
+                    return CompositeActionMatcher(
+                        type = TYPE,
                         actionMatchers = actionMatchers,
                         configuration = this
                     )
@@ -118,7 +105,8 @@ class PathActionMatcherFactory : ActionMatcherFactory {
                     if (actionMatchers.size == 1) {
                         return actionMatchers.first()
                     }
-                    return CompositePathActionMatcher(
+                    return CompositeActionMatcher(
+                        type = TYPE,
                         actionMatchers = actionMatchers,
                         configuration = this
                     )

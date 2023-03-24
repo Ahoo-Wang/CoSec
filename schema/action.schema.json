@@ -18,6 +18,9 @@
         "path": {
           "$ref": "#/definitions/pathActionMatcher"
         },
+        "composite": {
+          "$ref": "#/definitions/compositeActionMatcher"
+        },
         "all": {
           "$ref": "#/definitions/allActionMatcher"
         }
@@ -84,6 +87,25 @@
       "required": [
         "pattern"
       ]
+    },
+    "compositeActionMatcher": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "path": {
+                "$ref": "#/definitions/pathActionMatcher"
+              }
+            }
+          }
+        ]
+      },
+      "minItems": 1
     }
   }
 }

@@ -12,3 +12,4 @@
 #
 me.ahoo.cosec.policy.action.AllActionMatcherFactory
 me.ahoo.cosec.policy.action.PathActionMatcherFactory
+me.ahoo.cosec.policy.action.CompositeActionMatcherFactory
