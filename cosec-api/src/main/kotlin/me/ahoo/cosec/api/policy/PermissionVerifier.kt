@@ -17,7 +17,7 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 
-interface PermissionVerifier {
+fun interface PermissionVerifier {
     fun verify(request: Request, securityContext: SecurityContext): VerifyResult
 }
 

@@ -14,16 +14,41 @@
 package me.ahoo.cosec.api.policy
 
 import me.ahoo.cosec.api.Named
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.tenant.Tenant
 
 /**
  * Permission Policy
  */
-interface Policy : Named, Tenant {
+interface Policy : Named, Tenant, PermissionVerifier {
     val id: String
     val category: String
     val description: String
     val type: PolicyType
     val condition: ConditionMatcher
     val statements: List<Statement>
+    override fun verify(request: Request, securityContext: SecurityContext): VerifyResult {
+        if (!condition.match(request, securityContext)) {
+            return VerifyResult.IMPLICIT_DENY
+        }
+        statements.filter {
+            it.effect == Effect.DENY
+        }.forEach {
+            val verifyResult = it.verify(request, securityContext)
+            if (verifyResult == VerifyResult.EXPLICIT_DENY) {
+                return VerifyResult.EXPLICIT_DENY
+            }
+        }
+
+        statements.filter {
+            it.effect == Effect.ALLOW
+        }.forEach {
+            val verifyResult = it.verify(request, securityContext)
+            if (verifyResult == VerifyResult.ALLOW) {
+                return VerifyResult.ALLOW
+            }
+        }
+        return VerifyResult.IMPLICIT_DENY
+    }
 }

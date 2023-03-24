@@ -24,10 +24,11 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
     override fun evaluate(policy: Policy) {
         val evaluateRequest = EvaluateRequest()
         val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
-        policy.condition.match(evaluateRequest, mockContext)
+        policy.condition.match(request = evaluateRequest, securityContext = mockContext)
         policy.statements.forEach { statement ->
-            statement.verify(evaluateRequest, mockContext)
+            statement.verify(request = evaluateRequest, securityContext = mockContext)
         }
+        policy.verify(request = evaluateRequest, securityContext = mockContext)
     }
 }
 
