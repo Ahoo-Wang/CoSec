@@ -14,7 +14,7 @@
 package me.ahoo.cosec.policy.condition
 
 import me.ahoo.cosec.api.configuration.Configuration
-import me.ahoo.cosec.api.configuration.asPojo
+import me.ahoo.cosec.api.configuration.asObject
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
@@ -29,11 +29,11 @@ class BoolConditionMatcher(configuration: Configuration) : AbstractConditionMatc
     val and: List<ConditionMatcher> =
         configuration.get(BOOL_CONDITION_MATCHER_AND_KEY)
             ?.asList()
-            ?.map { it.asPojo<ConditionMatcher>() }.orEmpty()
+            ?.map { it.asObject<ConditionMatcher>() }.orEmpty()
     val or: List<ConditionMatcher> =
         configuration.get(BOOL_CONDITION_MATCHER_OR_KEY)
             ?.asList()
-            ?.map { it.asPojo<ConditionMatcher>() }.orEmpty()
+            ?.map { it.asObject<ConditionMatcher>() }.orEmpty()
 
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         and.any {

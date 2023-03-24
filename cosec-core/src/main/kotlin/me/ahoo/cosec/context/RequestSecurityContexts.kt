@@ -10,31 +10,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package me.ahoo.cosec.context
 
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.token.TokenExpiredException
-import org.slf4j.LoggerFactory
+import me.ahoo.cosec.api.context.request.Request
 
-/**
- * Security Context Parser .
- *
- * @author ahoo wang
- */
-private val LOG = LoggerFactory.getLogger(SecurityContextParser::class.java)
+object RequestSecurityContexts {
+    const val KEY = "COSEC_SECURITY_CONTEXT_REQUEST"
 
-fun interface SecurityContextParser<R> {
-    @Throws(TokenExpiredException::class)
-    fun parse(request: R): SecurityContext
+    fun <R : Request> SecurityContext.setRequest(request: R) {
+        setAttributeValue(KEY, request)
+    }
 
-    fun ensureParse(request: R): SecurityContext {
-        return try {
-            parse(request)
-        } catch (ignored: Throwable) {
-            if (LOG.isDebugEnabled) {
-                LOG.debug(ignored.message, ignored)
-            }
-            SimpleSecurityContext.anonymous()
-        }
+    fun <R : Request> SecurityContext.getRequest(): R? {
+        return getAttributeValue<R>(KEY)
     }
 }

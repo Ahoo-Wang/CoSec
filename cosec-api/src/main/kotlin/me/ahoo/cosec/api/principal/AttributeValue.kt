@@ -10,25 +10,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.principal
 
-import me.ahoo.cosec.api.principal.AttributeValue
-import me.ahoo.cosec.api.principal.CoSecPrincipal
+package me.ahoo.cosec.api.principal
 
-/**
- * Simple Principal.
- *
- * @author ahoo wang
- */
-data class SimplePrincipal(
-    override val id: String,
-    override val policies: Set<String> = emptySet(),
-    override val roles: Set<String> = emptySet(),
-    override val attributes: Map<String, AttributeValue<*>> = emptyMap(),
-) : CoSecPrincipal {
+interface AttributeValue<V> {
+    val value: V
 
-    companion object {
-        @JvmField
-        val ANONYMOUS: CoSecPrincipal = SimplePrincipal(CoSecPrincipal.ANONYMOUS_ID)
-    }
+    fun asString(): String
+
+    fun <T> asObject(objectClass: Class<T>): T
 }

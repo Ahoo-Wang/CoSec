@@ -14,6 +14,7 @@ package me.ahoo.cosec.servlet
 
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
@@ -39,29 +40,31 @@ abstract class AbstractAuthorizationInterceptor(
 ) {
 
     protected fun authorize(
-        request: HttpServletRequest,
-        response: HttpServletResponse,
+        servletRequest: HttpServletRequest,
+        servletResponse: HttpServletResponse,
     ): Boolean {
         var tokenVerificationException: TokenVerificationException? = null
         val securityContext = try {
-            securityContextParser.parse(request)
+            securityContextParser.parse(servletRequest)
         } catch (verificationException: TokenVerificationException) {
             tokenVerificationException = verificationException
             SimpleSecurityContext.anonymous()
         }
 
         SecurityContextHolder.setContext(securityContext)
-        request.setSecurityContext(securityContext)
-        return authorization.authorize(requestParser.parse(request), securityContext)
+        servletRequest.setSecurityContext(securityContext)
+        val request = requestParser.parse(servletRequest)
+        securityContext.setRequest(request)
+        return authorization.authorize(request, securityContext)
             .map {
                 if (!it.authorized) {
                     if (!securityContext.principal.authenticated()) {
-                        response.status = HttpStatus.UNAUTHORIZED.value()
+                        servletResponse.status = HttpStatus.UNAUTHORIZED.value()
                     } else {
-                        response.status = HttpStatus.FORBIDDEN.value()
+                        servletResponse.status = HttpStatus.FORBIDDEN.value()
                     }
 
-                    response.writeWithAuthorizeResult(
+                    servletResponse.writeWithAuthorizeResult(
                         tokenVerificationException?.asAuthorizeResult() ?: it
                     )
                     return@map false

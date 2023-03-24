@@ -10,25 +10,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.principal
 
+package me.ahoo.cosec.jwt
+
+import com.auth0.jwt.interfaces.Claim
 import me.ahoo.cosec.api.principal.AttributeValue
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 
-/**
- * Simple Principal.
- *
- * @author ahoo wang
- */
-data class SimplePrincipal(
-    override val id: String,
-    override val policies: Set<String> = emptySet(),
-    override val roles: Set<String> = emptySet(),
-    override val attributes: Map<String, AttributeValue<*>> = emptyMap(),
-) : CoSecPrincipal {
-
+class ClaimAttributeValue(override val value: Claim) : AttributeValue<Claim> {
     companion object {
-        @JvmField
-        val ANONYMOUS: CoSecPrincipal = SimplePrincipal(CoSecPrincipal.ANONYMOUS_ID)
+        fun Claim.asClaimAttributeValue(): ClaimAttributeValue {
+            return ClaimAttributeValue(this)
+        }
+    }
+
+    override fun asString(): String {
+        return value.asString()
+    }
+
+    override fun <T> asObject(objectClass: Class<T>): T {
+        return value.`as`(objectClass)
     }
 }

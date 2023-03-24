@@ -15,6 +15,7 @@ package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
@@ -50,6 +51,7 @@ abstract class ReactiveSecurityFilter(
         }
         exchange.setSecurityContext(securityContext)
         val request = requestParser.parse(exchange)
+        securityContext.setRequest(request)
         return authorization.authorize(request, securityContext)
             .flatMap { authorizeResult ->
                 if (authorizeResult.authorized) {

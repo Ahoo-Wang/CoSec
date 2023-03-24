@@ -14,6 +14,7 @@ package me.ahoo.cosec.oauth.client
 
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.oauth.OAuthUser
+import me.ahoo.cosec.principal.ObjectAttributeValue.Companion.asAttributeValue
 import me.ahoo.cosec.principal.SimplePrincipal
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
@@ -31,7 +32,7 @@ object DirectOAuthClientPrincipalConverter : OAuthClientPrincipalConverter {
             id = asClientUserId(client, authUser),
             policies = emptySet(),
             roles = emptySet(),
-            attributes = authUser.rawInfo.mapValues { it.value.toString() },
+            attributes = authUser.rawInfo.mapValues { it.value.asAttributeValue() },
         ).toMono()
     }
 

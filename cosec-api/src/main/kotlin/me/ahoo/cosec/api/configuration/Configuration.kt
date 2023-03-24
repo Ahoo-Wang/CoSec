@@ -26,7 +26,7 @@ interface Configuration {
     fun asInt(): Int
     fun asLong(): Long
     fun asDouble(): Double
-    fun <T> asPojo(pojoClass: Class<T>): T
+    fun <T> asObject(objectClass: Class<T>): T
 
     fun has(key: String): Boolean = get(key) != null
     fun asStringList(): List<String> = asList().map { it.asString() }
@@ -41,4 +41,4 @@ interface Configuration {
     val isObject: Boolean
 }
 
-inline fun <reified T> Configuration.asPojo(): T = asPojo(T::class.java)
+inline fun <reified T> Configuration.asObject(): T = asObject(T::class.java)
