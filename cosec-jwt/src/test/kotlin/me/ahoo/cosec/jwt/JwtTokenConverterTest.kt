@@ -45,6 +45,7 @@ internal class JwtTokenConverterTest {
                 setOf("roleId"),
                 mapOf(
                     "attr_string" to "attr_string_value".asAttributeValue(),
+                    "attr_number" to 1.asAttributeValue(),
                     "attr_list" to listOf("attr_list_value").asAttributeValue()
                 )
             )
@@ -53,6 +54,10 @@ internal class JwtTokenConverterTest {
         val verified = jwtTokenVerifier.verify<TokenPrincipal>(token)
         assertThat(verified.id, equalTo(principal.id))
         assertThat(verified.attributes["attr_string"]!!.asString(), equalTo("attr_string_value"))
+        assertThat(verified.attributes["attr_number"]!!.asString(), equalTo("1"))
+        assertThat(verified.attributes["attr_number"]!!.asObject(Int::class.java), equalTo(1))
         assertThat(verified.attributes["attr_list"]!!.asObject(List::class.java), equalTo(listOf("attr_list_value")))
+        val token2 = jwtTokenConverter.asToken(verified)
+        assertThat(token2, notNullValue())
     }
 }

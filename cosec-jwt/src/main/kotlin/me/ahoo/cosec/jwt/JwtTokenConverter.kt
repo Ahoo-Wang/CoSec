@@ -48,7 +48,7 @@ class JwtTokenConverter(
                 !Jwts.isRegisteredClaim(it.key)
             }
             .map {
-                it.key to it.value.value
+                it.key to it.value.asString()
             }
             .toMap()
 
@@ -60,6 +60,7 @@ class JwtTokenConverter(
             .withPayload(payloadClaims)
             .withIssuedAt(now)
             .withExpiresAt(accessTokenExp)
+
         if (principal is TenantCapable) {
             val tenantCapable = principal as TenantCapable
             accessTokenBuilder
