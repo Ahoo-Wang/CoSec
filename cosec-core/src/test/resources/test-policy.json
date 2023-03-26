@@ -223,6 +223,16 @@
           }
         ]
       }
+    },
+    {
+      "name": "TestInRole",
+      "effect": "allow",
+      "action": "*",
+      "condition": {
+        "inRole": {
+          "value": "admin"
+        }
+      }
     }
   ]
 }
