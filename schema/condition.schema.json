@@ -16,6 +16,9 @@
     "inTenant": {
       "$ref": "#/definitions/inTenantConditionMatcher"
     },
+    "inRole": {
+      "$ref": "#/definitions/inRoleConditionMatcher"
+    },
     "path": {
       "$ref": "#/definitions/pathConditionMatcher"
     },
@@ -109,6 +112,20 @@
         },
         "value": {
           "$ref": "#/definitions/tenantType"
+        }
+      },
+      "required": [
+        "value"
+      ]
+    },
+    "inRoleConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "string"
         }
       },
       "required": [
