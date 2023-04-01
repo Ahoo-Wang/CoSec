@@ -21,7 +21,7 @@ dependencies {
     api(platform("io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom:1.24.0"))
     constraints {
         api("ognl:ognl:3.3.4")
-        api("com.auth0:java-jwt:4.3.0")
+        api("com.auth0:java-jwt:4.4.0")
         api("org.lionsoul:ip2region:2.7.0")
         api("com.google.guava:guava:31.1-jre")
         api("io.opentelemetry:opentelemetry-semconv:1.20.1-alpha")
