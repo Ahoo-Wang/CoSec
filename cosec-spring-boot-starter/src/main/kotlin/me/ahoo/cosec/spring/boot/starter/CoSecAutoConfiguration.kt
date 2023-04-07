@@ -29,7 +29,7 @@ import org.springframework.context.annotation.Bean
 @ConditionalOnCoSecEnabled
 @EnableConfigurationProperties(CoSecProperties::class)
 class CoSecAutoConfiguration {
-    
+
     @Bean
     @ConditionalOnMissingBean
     fun coSecModule(): CoSecModule {
