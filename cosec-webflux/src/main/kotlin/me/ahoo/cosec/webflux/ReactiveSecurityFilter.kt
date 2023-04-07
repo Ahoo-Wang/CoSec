@@ -38,9 +38,9 @@ abstract class ReactiveSecurityFilter(
     val authorization: Authorization,
 ) {
 
-    inline fun filterInternal(
+    fun filterInternal(
         exchange: ServerWebExchange,
-        crossinline chain: (ServerWebExchange) -> Mono<Void>
+        chain: (ServerWebExchange) -> Mono<Void>
     ): Mono<Void> {
         var tokenVerificationException: TokenVerificationException? = null
         val securityContext = try {

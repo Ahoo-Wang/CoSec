@@ -18,7 +18,6 @@ import me.zhyd.oauth.config.AuthConfig
 import me.zhyd.oauth.config.AuthDefaultSource
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.ConstructorBinding
-import org.springframework.boot.context.properties.NestedConfigurationProperty
 
 /**
  * OAuth Authentication Properties .
@@ -29,13 +28,13 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty
 @ConfigurationProperties(prefix = OAuthClientAuthenticationProperties.PREFIX)
 data class OAuthClientAuthenticationProperties(
     val enabled: Boolean = true,
-    @NestedConfigurationProperty
     val registration: Map<String, Client> = emptyMap(),
 ) {
     companion object {
         const val PREFIX = AuthenticationProperties.PREFIX + ".oauth.client"
     }
 
+    @Suppress("LongParameterList")
     @ConstructorBinding
     class Client(
         val type: AuthDefaultSource,
