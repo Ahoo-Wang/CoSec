@@ -36,6 +36,8 @@ interface AuthenticationProvider {
     fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> getRequired(
         credentialsType: Class<out Credentials>,
     ): A {
-        return requireNotNull(get<C, P, A>(credentialsType)) { "Can not found Authentication by credentialsType:[${credentialsType.name}]" }
+        return requireNotNull(get<C, P, A>(credentialsType)) {
+            "Can not found Authentication by credentialsType:[${credentialsType.name}]"
+        }
     }
 }

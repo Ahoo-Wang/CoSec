@@ -45,8 +45,7 @@ class RedisAuthStateCache(
     }
 
     override fun containsKey(key: String): Boolean {
-        val exists = redisTemplate.hasKey(withPredix(key))
-        return java.lang.Boolean.TRUE == exists
+        return redisTemplate.hasKey(withPredix(key))
     }
 
     companion object {
