@@ -26,10 +26,10 @@ plugins {
     id("me.champeau.jmh")
     jacoco
 }
-
+val dependenciesProject = project(":cosec-dependencies")
 val bomProjects = setOf(
     project(":cosec-bom"),
-    project(":cosec-dependencies"),
+    dependenciesProject,
 )
 
 val serverProjects = setOf(
@@ -132,9 +132,9 @@ configure(libraryProjects) {
     }
 
     dependencies {
-        api(platform(project(":cosec-dependencies")))
-        detektPlugins(platform(project(":cosec-dependencies")))
-        jmh(platform(project(":cosec-dependencies")))
+        api(platform(dependenciesProject))
+        detektPlugins(platform(dependenciesProject))
+        jmh(platform(dependenciesProject))
         implementation("com.google.guava:guava")
         implementation("org.slf4j:slf4j-api")
         testImplementation("org.hamcrest:hamcrest")
