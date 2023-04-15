@@ -25,28 +25,29 @@ spec:
             - name: TZ
               value: Asia/Shanghai
           image: ahoowang/cosec-gateway:lastVersion
-          livenessProbe:
+          startupProbe:
             httpGet:
-              port: 8080
+              port: http
               path: /actuator/health
           readinessProbe:
             httpGet:
-              port: 8080
-              path: /actuator/health
-          startupProbe:
+              port: http
+              path: /actuator/health/readiness
+          livenessProbe:
             httpGet:
-              port: 8080
-              path: /actuator/health
+              port: http
+              path: /actuator/health/liveness
           name: cosec-gateway
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: 8080
               protocol: TCP
           resources:
             limits:
-              cpu: "1"
+              cpu: "2"
               memory: 2048Mi
             requests:
-              cpu: 250m
+              cpu: 500m
               memory: 1024Mi
           volumeMounts:
             - mountPath: /etc/localtime
@@ -56,7 +57,6 @@ spec:
             path: /etc/localtime
             type: ""
           name: volume-localtime
-
 ---
 apiVersion: v1
 kind: Service
@@ -68,8 +68,26 @@ spec:
   selector:
     app: cosec-gateway
   ports:
-    - name: rest
+    - name: http
       port: 80
       protocol: TCP
       targetPort: 8080
-
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cosec-gateway-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cosec-gateway
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 200

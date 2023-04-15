@@ -177,7 +177,6 @@ configure(publishProjects) {
                 from(components[publishComponentName])
                 pom {
                     name.set(rootProject.name)
-
                     description.set(getPropertyOf("description"))
                     url.set(getPropertyOf("website"))
                     issueManagement {
