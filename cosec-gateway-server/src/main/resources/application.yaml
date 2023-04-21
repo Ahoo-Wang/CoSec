@@ -34,13 +34,8 @@ cosid:
     enabled: true
     distributor:
       type: redis
-  snowflake:
+  generator:
     enabled: true
-    share:
-      clock-sync: true
-      friendly: true
-      converter:
-        type: radix
 
 cosec:
   authentication:
