@@ -30,8 +30,8 @@ internal class OgnlConditionMatcherTest {
     @ParameterizedTest
     @MethodSource("parametersForActions")
     fun matchRequest(expression: String, actions: List<String>, expected: Boolean) {
-        val conditionMatcher =
-            OgnlConditionMatcherFactory().create(mapOf(OGNL_CONDITION_MATCHER_EXPRESSION_KEY to expression).asConfiguration())
+        val conditionMatcher = OgnlConditionMatcherFactory()
+            .create(mapOf(OGNL_CONDITION_MATCHER_EXPRESSION_KEY to expression).asConfiguration())
         actions.forEach {
             val request = mockk<Request> {
                 every { path } returns it
@@ -43,8 +43,8 @@ internal class OgnlConditionMatcherTest {
     @ParameterizedTest
     @MethodSource("parametersForContext")
     fun matchContext(expression: String, principalIds: List<String>, expected: Boolean) {
-        val conditionMatcher =
-            OgnlConditionMatcherFactory().create(mapOf(OGNL_CONDITION_MATCHER_EXPRESSION_KEY to expression).asConfiguration())
+        val conditionMatcher = OgnlConditionMatcherFactory()
+            .create(mapOf(OGNL_CONDITION_MATCHER_EXPRESSION_KEY to expression).asConfiguration())
         principalIds.forEach {
             val context = mockk<SecurityContext> {
                 every { principal } returns mockk {

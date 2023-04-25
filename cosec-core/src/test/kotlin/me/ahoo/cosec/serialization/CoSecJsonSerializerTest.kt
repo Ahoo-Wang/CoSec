@@ -22,6 +22,7 @@ import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.newPojoConfiguration
+import me.ahoo.cosec.policy.DefaultPolicyEvaluator
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcher
@@ -60,7 +61,9 @@ internal class CoSecJsonSerializerTest {
         }
         assertThat(testPolicy, `is`(notNullValue()))
         val policyJson = CoSecJsonSerializer.writeValueAsString(testPolicy)
-        assertThat(CoSecJsonSerializer.readValue(policyJson, Policy::class.java), `is`(notNullValue()))
+        val policy = CoSecJsonSerializer.readValue(policyJson, Policy::class.java)
+        assertThat(policy, `is`(notNullValue()))
+        DefaultPolicyEvaluator.evaluate(policy)
     }
 
     @ParameterizedTest

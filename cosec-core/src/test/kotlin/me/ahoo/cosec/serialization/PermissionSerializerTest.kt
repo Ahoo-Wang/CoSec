@@ -2,6 +2,7 @@ package me.ahoo.cosec.serialization
 
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.permission.DefaultAppPermissionEvaluator
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.hamcrest.Matchers.`is`
@@ -33,6 +34,7 @@ class PermissionSerializerTest {
                     CoSecJsonSerializer.readValue(it, AppPermission::class.java)
                 }
             }
+        DefaultAppPermissionEvaluator.evaluate(testAppPermission)
         assertThat(testAppPermission, `is`(notNullValue()))
         assertThat(CoSecJsonSerializer.writeValueAsString(testAppPermission), `is`(notNullValue()))
     }
