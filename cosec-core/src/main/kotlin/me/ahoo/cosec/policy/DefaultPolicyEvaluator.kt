@@ -26,6 +26,8 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
         val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
         policy.condition.match(request = evaluateRequest, securityContext = mockContext)
         policy.statements.forEach { statement ->
+            statement.condition.match(request = evaluateRequest, securityContext = mockContext)
+            statement.action.match(request = evaluateRequest, securityContext = mockContext)
             statement.verify(request = evaluateRequest, securityContext = mockContext)
         }
         policy.verify(request = evaluateRequest, securityContext = mockContext)

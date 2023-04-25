@@ -25,7 +25,9 @@ object DefaultAppPermissionEvaluator : AppPermissionEvaluator {
         val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
         appPermission.condition.match(evaluateRequest, mockContext)
         appPermission.permissionIndexer.values.forEach { permission ->
-            permission.verify(evaluateRequest, mockContext)
+            permission.condition.match(request = evaluateRequest, securityContext = mockContext)
+            permission.action.match(request = evaluateRequest, securityContext = mockContext)
+            permission.verify(request = evaluateRequest, securityContext = mockContext)
         }
     }
 }
