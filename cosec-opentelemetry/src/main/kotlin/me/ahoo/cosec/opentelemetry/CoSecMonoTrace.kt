@@ -17,22 +17,21 @@ import io.opentelemetry.context.Context
 import org.reactivestreams.Subscription
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.CoreSubscriber
-import reactor.core.publisher.BaseSubscriber
 import reactor.core.publisher.Mono
 
 class CoSecMonoTrace(
+    private val parentContext: Context,
     private val exchange: ServerWebExchange,
-    private val chain: Mono<Void>,
+    private val source: Mono<Void>,
 ) : Mono<Void>() {
     override fun subscribe(actual: CoreSubscriber<in Void>) {
-        val parentContext = Context.current()
         if (!CoSecInstrumenter.INSTRUMENTER.shouldStart(parentContext, exchange)) {
-            chain.subscribe(actual)
+            source.subscribe(actual)
             return
         }
-        val context = CoSecInstrumenter.INSTRUMENTER.start(parentContext, exchange)
-        context.makeCurrent().use {
-            chain.subscribe(TraceFilterSubscriber(context, exchange, actual))
+        val otelContext = CoSecInstrumenter.INSTRUMENTER.start(parentContext, exchange)
+        otelContext.makeCurrent().use {
+            source.subscribe(TraceFilterSubscriber(otelContext, exchange, actual))
         }
     }
 }
@@ -41,36 +40,24 @@ class TraceFilterSubscriber(
     private val otelContext: Context,
     private val exchange: ServerWebExchange,
     private val actual: CoreSubscriber<in Void>
-) : BaseSubscriber<Void>() {
+) : CoreSubscriber<Void> {
     override fun currentContext(): reactor.util.context.Context {
         return actual.currentContext()
     }
 
-    override fun hookOnSubscribe(subscription: Subscription) {
-        actual.onSubscribe(this)
+    override fun onSubscribe(subscription: Subscription) {
+        actual.onSubscribe(subscription)
     }
 
-    override fun hookOnError(throwable: Throwable) {
-        try {
-            otelContext.makeCurrent().use {
-                actual.onError(throwable)
-            }
-        } finally {
-            CoSecInstrumenter.INSTRUMENTER.end(otelContext, exchange, null, throwable)
-        }
+    override fun onNext(unused: Void) = Unit
+
+    override fun onError(throwable: Throwable) {
+        CoSecInstrumenter.INSTRUMENTER.end(otelContext, exchange, null, throwable)
+        actual.onError(throwable)
     }
 
-    override fun hookOnCancel() {
+    override fun onComplete() {
         CoSecInstrumenter.INSTRUMENTER.end(otelContext, exchange, null, null)
-    }
-
-    override fun hookOnComplete() {
-        try {
-            otelContext.makeCurrent().use {
-                actual.onComplete()
-            }
-        } finally {
-            CoSecInstrumenter.INSTRUMENTER.end(otelContext, exchange, null, null)
-        }
+        actual.onComplete()
     }
 }

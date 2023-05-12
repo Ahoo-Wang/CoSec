@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.opentelemetry.gateway
 
+import io.opentelemetry.context.Context
 import me.ahoo.cosec.opentelemetry.CoSecMonoTrace
 import org.springframework.cloud.gateway.filter.GatewayFilterChain
 import org.springframework.cloud.gateway.filter.GlobalFilter
@@ -25,7 +26,8 @@ object TraceGatewayFilter : GlobalFilter, Ordered {
         exchange: ServerWebExchange,
         chain: GatewayFilterChain,
     ): Mono<Void> {
-        return CoSecMonoTrace(exchange, chain.filter(exchange))
+        val parentContext = Context.current()
+        return CoSecMonoTrace(parentContext = parentContext, exchange = exchange, source = chain.filter(exchange))
     }
 
     override fun getOrder(): Int {
