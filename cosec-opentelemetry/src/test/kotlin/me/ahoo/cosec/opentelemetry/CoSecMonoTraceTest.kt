@@ -18,6 +18,7 @@ import io.mockk.mockk
 import io.opentelemetry.api.GlobalOpenTelemetry
 import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
+import io.opentelemetry.context.Context
 import io.opentelemetry.context.propagation.ContextPropagators
 import io.opentelemetry.sdk.OpenTelemetrySdk
 import io.opentelemetry.sdk.trace.SdkTracerProvider
@@ -54,7 +55,7 @@ class CoSecMonoTraceTest {
             every { getSecurityContext() } returns null
         }
 
-        CoSecMonoTrace(exchange, Mono.empty()).test()
+        CoSecMonoTrace(Context.current(), exchange, Mono.empty()).test()
             .verifyComplete()
     }
 
@@ -64,7 +65,7 @@ class CoSecMonoTraceTest {
             every { getSecurityContext() } returns SimpleSecurityContext.anonymous()
         }
 
-        CoSecMonoTrace(exchange, Mono.empty()).test()
+        CoSecMonoTrace(Context.current(), exchange, Mono.empty()).test()
             .verifyComplete()
     }
 
@@ -82,7 +83,7 @@ class CoSecMonoTraceTest {
             every { getSecurityContext() } returns securityContext
         }
 
-        CoSecMonoTrace(exchange, Mono.empty()).test()
+        CoSecMonoTrace(Context.current(), exchange, Mono.empty()).test()
             .verifyComplete()
     }
 
@@ -93,7 +94,7 @@ class CoSecMonoTraceTest {
             every { getSecurityContext() } returns securityContext
         }
 
-        CoSecMonoTrace(exchange, Mono.empty()).test()
+        CoSecMonoTrace(Context.current(), exchange, Mono.empty()).test()
             .verifyComplete()
     }
 
@@ -103,7 +104,7 @@ class CoSecMonoTraceTest {
             every { getSecurityContext() } returns null
         }
 
-        CoSecMonoTrace(exchange, Mono.error(RuntimeException())).test()
+        CoSecMonoTrace(Context.current(), exchange, Mono.error(RuntimeException())).test()
             .verifyError()
     }
 
@@ -122,7 +123,7 @@ class CoSecMonoTraceTest {
             every { getSecurityContext() } returns securityContext
         }
 
-        CoSecMonoTrace(exchange, Mono.empty()).test()
+        CoSecMonoTrace(Context.current(), exchange, Mono.empty()).test()
             .verifyComplete()
     }
 }
