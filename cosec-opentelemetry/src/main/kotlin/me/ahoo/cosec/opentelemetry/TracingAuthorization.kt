@@ -11,26 +11,22 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.opentelemetry.gateway
+package me.ahoo.cosec.opentelemetry
 
 import io.opentelemetry.context.Context
-import me.ahoo.cosec.opentelemetry.CoSecMonoTrace
-import org.springframework.cloud.gateway.filter.GatewayFilterChain
-import org.springframework.cloud.gateway.filter.GlobalFilter
-import org.springframework.core.Ordered
-import org.springframework.web.server.ServerWebExchange
+import me.ahoo.cosec.Delegated
+import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.Request
 import reactor.core.publisher.Mono
 
-object TraceGatewayFilter : GlobalFilter, Ordered {
-    override fun filter(
-        exchange: ServerWebExchange,
-        chain: GatewayFilterChain,
-    ): Mono<Void> {
+class TracingAuthorization(override val delegate: Authorization) :
+    Authorization,
+    Delegated<Authorization> {
+    override fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
         val parentContext = Context.current()
-        return CoSecMonoTrace(parentContext = parentContext, exchange = exchange, source = chain.filter(exchange))
-    }
-
-    override fun getOrder(): Int {
-        return Ordered.HIGHEST_PRECEDENCE
+        val source = delegate.authorize(request = request, context = context)
+        return CoSecMonoTrace(parentContext = parentContext, securityContext = context, source = source)
     }
 }

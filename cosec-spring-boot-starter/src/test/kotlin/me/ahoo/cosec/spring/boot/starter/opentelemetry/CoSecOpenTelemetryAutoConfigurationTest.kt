@@ -13,7 +13,9 @@
 
 package me.ahoo.cosec.spring.boot.starter.opentelemetry
 
-import me.ahoo.cosec.opentelemetry.gateway.TraceGatewayFilter
+import io.mockk.mockk
+import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.opentelemetry.TracingAuthorization
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
@@ -25,10 +27,11 @@ class CoSecOpenTelemetryAutoConfigurationTest {
     @Test
     fun contextLoads() {
         contextRunner
+            .withBean(Authorization::class.java, { mockk<Authorization>() })
             .withUserConfiguration(CoSecOpenTelemetryAutoConfiguration::class.java)
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
-                    .hasSingleBean(TraceGatewayFilter::class.java)
+                    .hasSingleBean(TracingAuthorization::class.java)
             }
     }
 }

@@ -22,19 +22,19 @@ import io.opentelemetry.instrumentation.api.instrumenter.Instrumenter
 import io.opentelemetry.instrumentation.api.instrumenter.SpanNameExtractor
 import io.opentelemetry.semconv.trace.attributes.SemanticAttributes
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.PolicyCapable
 import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.getVerifyContext
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
-import org.springframework.web.server.ServerWebExchange
 
 object CoSecInstrumenter {
     private const val INSTRUMENTATION_NAME = "me.ahoo.cosec"
-    private const val INSTRUMENTATION_VERSION = "1.15.0"
-    val INSTRUMENTER: Instrumenter<ServerWebExchange, Unit> =
-        Instrumenter.builder<ServerWebExchange, Unit>(
+    private const val INSTRUMENTATION_VERSION = "1.16.16"
+    val INSTRUMENTER: Instrumenter<SecurityContext, AuthorizeResult> =
+        Instrumenter.builder<SecurityContext, AuthorizeResult>(
             GlobalOpenTelemetry.get(),
             INSTRUMENTATION_NAME,
             CoSecSpanNameExtractor,
@@ -43,13 +43,13 @@ object CoSecInstrumenter {
             .buildInstrumenter()
 }
 
-object CoSecSpanNameExtractor : SpanNameExtractor<ServerWebExchange> {
-    override fun extract(request: ServerWebExchange): String {
-        return "cosec"
+object CoSecSpanNameExtractor : SpanNameExtractor<SecurityContext> {
+    override fun extract(request: SecurityContext): String {
+        return "cosec.authorize"
     }
 }
 
-object CoSecAttributesExtractor : AttributesExtractor<ServerWebExchange, Unit> {
+object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, AuthorizeResult> {
     private const val COSEC_TENANT_ID_KEY = CoSec.COSEC_PREFIX + "tenant_id"
     val COSEC_TENANT_ID_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_TENANT_ID_KEY)
 
@@ -79,16 +79,16 @@ object CoSecAttributesExtractor : AttributesExtractor<ServerWebExchange, Unit> {
     val COSEC_AUTHORIZATION_RESULT_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_AUTHORIZATION_RESULT_KEY)
 
     const val SEPARATOR = ","
-    override fun onStart(attributes: AttributesBuilder, parentContext: Context, request: ServerWebExchange) = Unit
+    override fun onStart(attributes: AttributesBuilder, parentContext: Context, request: SecurityContext) = Unit
 
     override fun onEnd(
         attributes: AttributesBuilder,
         context: Context,
-        request: ServerWebExchange,
-        response: Unit?,
+        request: SecurityContext,
+        response: AuthorizeResult?,
         error: Throwable?
     ) {
-        val securityContext = request.getSecurityContext() ?: return
+        val securityContext = request
         val principal = securityContext.principal
         attributes.put(COSEC_TENANT_ID_ATTRIBUTE_KEY, securityContext.tenant.tenantId)
         attributes.put(SemanticAttributes.ENDUSER_ID, principal.id)
