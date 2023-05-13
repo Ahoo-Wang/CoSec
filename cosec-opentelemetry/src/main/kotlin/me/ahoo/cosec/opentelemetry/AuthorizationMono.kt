@@ -14,33 +14,34 @@
 package me.ahoo.cosec.opentelemetry
 
 import io.opentelemetry.context.Context
+import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.SecurityContext
 import org.reactivestreams.Subscription
-import org.springframework.web.server.ServerWebExchange
 import reactor.core.CoreSubscriber
 import reactor.core.publisher.Mono
 
 class CoSecMonoTrace(
     private val parentContext: Context,
-    private val exchange: ServerWebExchange,
-    private val source: Mono<Void>,
-) : Mono<Void>() {
-    override fun subscribe(actual: CoreSubscriber<in Void>) {
-        if (!CoSecInstrumenter.INSTRUMENTER.shouldStart(parentContext, exchange)) {
+    private val securityContext: SecurityContext,
+    private val source: Mono<AuthorizeResult>,
+) : Mono<AuthorizeResult>() {
+    override fun subscribe(actual: CoreSubscriber<in AuthorizeResult>) {
+        if (!CoSecInstrumenter.INSTRUMENTER.shouldStart(parentContext, securityContext)) {
             source.subscribe(actual)
             return
         }
-        val otelContext = CoSecInstrumenter.INSTRUMENTER.start(parentContext, exchange)
+        val otelContext = CoSecInstrumenter.INSTRUMENTER.start(parentContext, securityContext)
         otelContext.makeCurrent().use {
-            source.subscribe(TraceFilterSubscriber(otelContext, exchange, actual))
+            source.subscribe(TraceFilterSubscriber(otelContext, securityContext, actual))
         }
     }
 }
 
 class TraceFilterSubscriber(
     private val otelContext: Context,
-    private val exchange: ServerWebExchange,
-    private val actual: CoreSubscriber<in Void>
-) : CoreSubscriber<Void> {
+    private val securityContext: SecurityContext,
+    private val actual: CoreSubscriber<in AuthorizeResult>
+) : CoreSubscriber<AuthorizeResult> {
     override fun currentContext(): reactor.util.context.Context {
         return actual.currentContext()
     }
@@ -49,15 +50,17 @@ class TraceFilterSubscriber(
         actual.onSubscribe(subscription)
     }
 
-    override fun onNext(unused: Void) = Unit
+    override fun onNext(authorizeResult: AuthorizeResult) {
+        actual.onNext(authorizeResult)
+    }
 
     override fun onError(throwable: Throwable) {
-        CoSecInstrumenter.INSTRUMENTER.end(otelContext, exchange, null, throwable)
+        CoSecInstrumenter.INSTRUMENTER.end(otelContext, securityContext, null, throwable)
         actual.onError(throwable)
     }
 
     override fun onComplete() {
-        CoSecInstrumenter.INSTRUMENTER.end(otelContext, exchange, null, null)
+        CoSecInstrumenter.INSTRUMENTER.end(otelContext, securityContext, null, null)
         actual.onComplete()
     }
 }

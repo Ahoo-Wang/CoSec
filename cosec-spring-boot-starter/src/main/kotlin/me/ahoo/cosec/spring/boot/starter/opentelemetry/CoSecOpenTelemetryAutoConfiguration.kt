@@ -13,35 +13,21 @@
 
 package me.ahoo.cosec.spring.boot.starter.opentelemetry
 
-import me.ahoo.cosec.opentelemetry.gateway.TraceGatewayFilter
-import me.ahoo.cosec.opentelemetry.webflux.TraceWebFilter
+import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.opentelemetry.TracingAuthorization
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import org.springframework.boot.autoconfigure.AutoConfiguration
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass
 import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Primary
 
 @AutoConfiguration
 @ConditionalOnCoSecEnabled
 @ConditionalOnOpenTelemetryEnabled
 class CoSecOpenTelemetryAutoConfiguration {
 
-    @Configuration
-    @ConditionalOnMissingClass("org.springframework.cloud.gateway.filter.GlobalFilter")
-    class Webflux {
-        @Bean
-        fun traceWebFilter(): TraceWebFilter {
-            return TraceWebFilter
-        }
-    }
-
-    @Configuration
-    @ConditionalOnClass(name = ["org.springframework.cloud.gateway.filter.GlobalFilter"])
-    class Gateway {
-        @Bean
-        fun traceGatewayFilter(): TraceGatewayFilter {
-            return TraceGatewayFilter
-        }
+    @Bean
+    @Primary
+    fun tracingAuthorization(authorization: Authorization): Authorization {
+        return TracingAuthorization(authorization)
     }
 }
