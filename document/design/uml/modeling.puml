@@ -152,7 +152,7 @@ package context{
         getRequiredAttribute(String): T
     }
     TenantCapable <|--  SecurityContext
-    CoSecPrincipal *--> SecurityContext
+    CoSecPrincipal <--* SecurityContext
 
     interface Request{
         val appId:String
