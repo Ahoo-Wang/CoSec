@@ -108,6 +108,42 @@ package principal{
     end note
 }
 
+package permission{
+    interface Permission{
+       id: String
+       description: String
+    }
+    interface PermissionGroup{
+       name: String
+       description: String
+       permissions: List<Permission>
+    }
+    interface AppPermission{
+       groups: List<PermissionGroup>
+       condition: ConditionMatcher
+       id: String
+    }
+
+    interface AppRolePermission{
+       appPermission: AppPermission
+       rolePermissions: List<RolePermission>
+       rolePermissionIndexer: Map<String, List<Permission>>
+    }
+    note right of AppRolePermission::rolePermissionIndexer
+        roleId -> List<Permission>
+    end note
+    interface RolePermission {
+       id: String
+       permissions: Set<String>
+    }
+
+    Statement <|-- Permission
+    PermissionGroup *-->  Permission
+    AppPermission *-->  PermissionGroup
+    AppRolePermission *-->  AppPermission
+    AppRolePermission *-->  RolePermission
+}
+
 package context{
     interface SecurityContext {
         val principal: CoSecPrincipal
@@ -116,7 +152,7 @@ package context{
         getRequiredAttribute(String): T
     }
     TenantCapable <|--  SecurityContext
-    CoSecPrincipal --* SecurityContext
+    CoSecPrincipal *--> SecurityContext
 
     interface Request{
         val appId:String

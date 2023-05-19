@@ -24,10 +24,10 @@ interface Statement : Named, PermissionVerifier {
     val condition: ConditionMatcher
 
     override fun verify(request: Request, securityContext: SecurityContext): VerifyResult {
-        if (!condition.match(request, securityContext)) {
+        if (!condition.match(request = request, securityContext = securityContext)) {
             return VerifyResult.IMPLICIT_DENY
         }
-        if (!action.match(request, securityContext)) {
+        if (!action.match(request = request, securityContext = securityContext)) {
             return VerifyResult.IMPLICIT_DENY
         }
         return when (effect) {
