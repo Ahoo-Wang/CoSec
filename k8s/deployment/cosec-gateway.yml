@@ -44,11 +44,11 @@ spec:
               protocol: TCP
           resources:
             limits:
-              cpu: "2"
-              memory: 2048Mi
+              cpu: "4"
+              memory: 2816Mi
             requests:
               cpu: 500m
-              memory: 1024Mi
+              memory: 2048Mi
           volumeMounts:
             - mountPath: /etc/localtime
               name: volume-localtime
@@ -82,7 +82,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: cosec-gateway
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 10
   metrics:
     - type: Resource
@@ -90,4 +90,4 @@ spec:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 200
+          averageUtilization: 600

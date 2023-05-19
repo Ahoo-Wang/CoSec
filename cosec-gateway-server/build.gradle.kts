@@ -35,8 +35,8 @@ tasks.jar.configure {
 application {
     mainClass.set("me.ahoo.cosec.gateway.server.GatewayServerKt")
     applicationDefaultJvmArgs = listOf(
-        "-Xms1024M",
-        "-Xmx1024M",
+        "-Xms2048M",
+        "-Xmx2048M",
         "-XX:MaxMetaspaceSize=256M",
         "-XX:MaxDirectMemorySize=512M",
         "-Xss1m",
