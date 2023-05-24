@@ -29,6 +29,6 @@ dependencies {
         api("io.mockk:mockk:1.13.5")
         api("org.openjdk.jmh:jmh-core:1.36")
         api("org.openjdk.jmh:jmh-generator-annprocess:1.36")
-        api("io.gitlab.arturbosch.detekt:detekt-formatting:1.22.0")
+        api("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.0")
     }
 }
