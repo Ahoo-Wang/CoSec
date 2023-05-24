@@ -14,10 +14,9 @@
 package me.ahoo.cosec.principal
 
 import me.ahoo.cosec.principal.ObjectAttributeValue.Companion.asAttributeValue
-import org.junit.jupiter.api.Test
-
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
+import org.junit.jupiter.api.Test
 
 class ObjectAttributeValueTest {
 

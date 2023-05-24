@@ -22,7 +22,7 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 interface AuthenticationProvider {
     fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> register(
         credentialsType: Class<C>,
-        authentication: A,
+        authentication: A
     )
 
     fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> register(authentication: A) {
@@ -30,11 +30,11 @@ interface AuthenticationProvider {
     }
 
     operator fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> get(
-        credentialsType: Class<out Credentials>,
+        credentialsType: Class<out Credentials>
     ): A?
 
     fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> getRequired(
-        credentialsType: Class<out Credentials>,
+        credentialsType: Class<out Credentials>
     ): A {
         return requireNotNull(get<C, P, A>(credentialsType)) {
             "Can not found Authentication by credentialsType:[${credentialsType.name}]"

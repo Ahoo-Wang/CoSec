@@ -15,7 +15,6 @@ package me.ahoo.cosec.policy.action
 
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.policy.action.PathPatternParsers.asPathPatternParser
-import me.ahoo.cosec.policy.condition.part.PathConditionMatcherFactory
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test

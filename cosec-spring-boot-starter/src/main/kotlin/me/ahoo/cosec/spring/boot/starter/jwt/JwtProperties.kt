@@ -30,7 +30,7 @@ data class JwtProperties(
     var algorithm: Algorithm = Algorithm.HMAC256,
     var secret: String,
     @NestedConfigurationProperty
-    var tokenValidity: TokenValidity = TokenValidity(),
+    var tokenValidity: TokenValidity = TokenValidity()
 ) {
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "jwt"
@@ -39,7 +39,7 @@ data class JwtProperties(
     @ConstructorBinding
     data class TokenValidity(
         var access: Duration = Duration.ofMinutes(10),
-        var refresh: Duration = Duration.ofDays(7),
+        var refresh: Duration = Duration.ofDays(7)
     )
 
     enum class Algorithm {

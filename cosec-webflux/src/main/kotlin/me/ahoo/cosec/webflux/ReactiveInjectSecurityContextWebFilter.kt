@@ -29,7 +29,7 @@ import reactor.kotlin.core.publisher.toMono
  * @author ahoo wang
  */
 class ReactiveInjectSecurityContextWebFilter(
-    private val securityContextParser: SecurityContextParser<ServerWebExchange>,
+    private val securityContextParser: SecurityContextParser<ServerWebExchange>
 ) :
     WebFilter, Ordered {
 

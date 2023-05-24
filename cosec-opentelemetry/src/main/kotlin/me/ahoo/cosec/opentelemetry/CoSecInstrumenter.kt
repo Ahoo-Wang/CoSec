@@ -108,11 +108,11 @@ object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, Authorize
                 attributes.put(COSEC_AUTHORIZATION_POLICY_ID_ATTRIBUTE_KEY, verifyContext.policy.id)
                 attributes.put(
                     COSEC_AUTHORIZATION_STATEMENT_IDX_ATTRIBUTE_KEY,
-                    verifyContext.statementIndex.toLong()
+                    verifyContext.statementIndex.toLong(),
                 )
                 attributes.put(
                     COSEC_AUTHORIZATION_STATEMENT_NAME_ATTRIBUTE_KEY,
-                    verifyContext.statement.name
+                    verifyContext.statement.name,
                 )
             }
 

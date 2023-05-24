@@ -35,5 +35,5 @@ interface AuthorizeResult {
 
 internal data class AuthorizeResultData(
     override val authorized: Boolean,
-    override val reason: String,
+    override val reason: String
 ) : AuthorizeResult

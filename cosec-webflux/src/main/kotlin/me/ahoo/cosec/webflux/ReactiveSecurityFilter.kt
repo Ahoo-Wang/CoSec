@@ -35,7 +35,7 @@ import reactor.kotlin.core.publisher.toMono
 abstract class ReactiveSecurityFilter(
     val securityContextParser: SecurityContextParser<ServerWebExchange>,
     val requestParser: RequestParser<ServerWebExchange>,
-    val authorization: Authorization,
+    val authorization: Authorization
 ) {
 
     fun filterInternal(
@@ -68,7 +68,7 @@ abstract class ReactiveSecurityFilter(
                     exchange.response.statusCode = HttpStatus.FORBIDDEN
                 }
                 exchange.response.writeWithAuthorizeResult(
-                    tokenVerificationException?.asAuthorizeResult() ?: authorizeResult
+                    tokenVerificationException?.asAuthorizeResult() ?: authorizeResult,
                 )
             }.onErrorResume(TooManyRequestsException::class.java) { _ ->
                 exchange.response.statusCode = HttpStatus.TOO_MANY_REQUESTS

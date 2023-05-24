@@ -33,19 +33,19 @@ class CoSecServletRequestTest {
             method = "method",
             remoteIp = "remoteIp",
             origin = "origin",
-            referer = "referer"
+            referer = "referer",
         ).withAttributes(emptyMap())
         assertThat(
             request.toString(),
-            `is`("CoSecServletRequest(path='path', method='method', remoteIp='remoteIp', origin='origin', referer='referer')")
+            `is`("CoSecServletRequest(path='path', method='method', remoteIp='remoteIp', origin='origin', referer='referer')"),
         )
         assertThat(
             request.getHeader("key"),
-            `is`("value")
+            `is`("value"),
         )
         assertThat(
             request.getHeader("not-exists"),
-            `is`("")
+            `is`(""),
         )
     }
 }

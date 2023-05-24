@@ -3,7 +3,6 @@ package me.ahoo.cosec.redis
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.policy.Effect
-import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.permission.PermissionGroupData
@@ -36,7 +35,7 @@ class RedisAppRolePermissionRepositoryTest {
         )
         val appPermission = AppPermissionData(
             "appId",
-            groups = listOf(PermissionGroupData(name = "", permissions = listOf(permission)))
+            groups = listOf(PermissionGroupData(name = "", permissions = listOf(permission))),
         )
         val appPermissionCache = mockk<AppPermissionCache>()
         every { appPermissionCache.get("appId") } returns appPermission
@@ -53,5 +52,4 @@ class RedisAppRolePermissionRepositoryTest {
             }
             .verifyComplete()
     }
-
 }

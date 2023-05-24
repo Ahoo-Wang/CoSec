@@ -26,7 +26,7 @@ import javax.servlet.http.HttpServletRequest
  */
 class ServletRequestParser(
     private val remoteIPResolver: RemoteIpResolver<HttpServletRequest>,
-    private val requestAttributesAppends: List<RequestAttributesAppender> = listOf(),
+    private val requestAttributesAppends: List<RequestAttributesAppender> = listOf()
 ) : RequestParser<HttpServletRequest> {
     override fun parse(request: HttpServletRequest): Request {
         var cosecRequest: Request = CoSecServletRequest(

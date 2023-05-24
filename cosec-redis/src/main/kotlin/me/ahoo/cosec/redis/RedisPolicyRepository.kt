@@ -20,7 +20,7 @@ import reactor.kotlin.core.publisher.toMono
 
 class RedisPolicyRepository(
     private val globalPolicyIndexCache: GlobalPolicyIndexCache,
-    private val policyCache: PolicyCache,
+    private val policyCache: PolicyCache
 ) : PolicyRepository {
     override fun getGlobalPolicy(): Mono<List<Policy>> {
         return globalPolicyIndexCache[GlobalPolicyIndexKey]

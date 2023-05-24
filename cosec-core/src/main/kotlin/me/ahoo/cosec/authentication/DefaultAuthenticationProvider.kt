@@ -34,7 +34,7 @@ object DefaultAuthenticationProvider : AuthenticationProvider {
 
     override fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> register(
         credentialsType: Class<C>,
-        authentication: A,
+        authentication: A
     ) {
         if (log.isInfoEnabled) {
             log.info("Register Authentication: {} for Credentials: {}", authentication, credentialsType)
@@ -43,7 +43,7 @@ object DefaultAuthenticationProvider : AuthenticationProvider {
     }
 
     override fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> get(
-        credentialsType: Class<out Credentials>,
+        credentialsType: Class<out Credentials>
     ): A? {
         @Suppress("UNCHECKED_CAST")
         return authenticationMaps[credentialsType] as A?

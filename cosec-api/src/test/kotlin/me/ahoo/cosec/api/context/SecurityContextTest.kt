@@ -28,7 +28,7 @@ class SecurityContextTest {
         val securityContext = MockSecurityContext(
             mutableMapOf("key" to "value"),
             mockk(),
-            mockk()
+            mockk(),
         )
         assertThat(securityContext.getAttributeValue<String>("key"), equalTo("value"))
         assertThrows<IllegalArgumentException> {

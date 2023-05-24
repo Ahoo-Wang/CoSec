@@ -22,18 +22,20 @@ class DefaultAppPermissionEvaluatorTest {
     @Test
     fun evaluate() {
         val appPermission = AppPermissionData(
-            id = "appId", groups = listOf(
+            id = "appId",
+            groups = listOf(
                 PermissionGroupData(
-                    "groupName", permissions = listOf(
+                    "groupName",
+                    permissions = listOf(
                         PermissionData(
                             id = "permissionId",
                             name = "",
                             effect = Effect.DENY,
                             action = AllActionMatcher.INSTANCE,
-                        )
-                    )
-                )
-            )
+                        ),
+                    ),
+                ),
+            ),
         )
         DefaultAppPermissionEvaluator.evaluate(appPermission)
     }

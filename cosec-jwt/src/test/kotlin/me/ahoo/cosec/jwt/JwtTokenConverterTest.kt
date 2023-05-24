@@ -46,8 +46,8 @@ internal class JwtTokenConverterTest {
                 mapOf(
                     "attr_string" to "attr_string_value".asAttributeValue(),
                     "attr_number" to 1.asAttributeValue(),
-                    "attr_list" to listOf("attr_list_value").asAttributeValue()
-                )
+                    "attr_list" to listOf("attr_list_value").asAttributeValue(),
+                ),
             )
         val token: CompositeToken = jwtTokenConverter.asToken(principal)
         assertThat(token, notNullValue())

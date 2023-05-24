@@ -17,7 +17,6 @@ import com.auth0.jwt.algorithms.Algorithm
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.context.SecurityContextParser
-import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.jwt.Jwts

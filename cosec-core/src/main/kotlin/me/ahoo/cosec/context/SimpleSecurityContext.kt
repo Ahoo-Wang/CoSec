@@ -30,7 +30,7 @@ import javax.annotation.concurrent.ThreadSafe
 class SimpleSecurityContext(
     override val principal: CoSecPrincipal,
     override val tenant: Tenant = principal.tenant,
-    override val attributes: MutableMap<String, Any> = ConcurrentHashMap(),
+    override val attributes: MutableMap<String, Any> = ConcurrentHashMap()
 ) : SecurityContext {
     companion object {
         fun anonymous(): SecurityContext {

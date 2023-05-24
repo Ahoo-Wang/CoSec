@@ -50,7 +50,7 @@ import java.lang.reflect.Constructor
     OAuthClientAuthenticationProperties::class,
 )
 class CoSecOAuthClientAuthenticationAutoConfiguration(
-    private val authenticationProperties: OAuthClientAuthenticationProperties,
+    private val authenticationProperties: OAuthClientAuthenticationProperties
 ) {
     @Bean
     @ConditionalOnMissingBean
@@ -84,7 +84,7 @@ class CoSecOAuthClientAuthenticationAutoConfiguration(
     @ConditionalOnMissingBean
     fun authAuthentication(
         authProvider: OAuthClientManager,
-        principalConverter: OAuthClientPrincipalConverter,
+        principalConverter: OAuthClientPrincipalConverter
     ): OAuthClientAuthentication {
         return OAuthClientAuthentication(authProvider, principalConverter)
     }

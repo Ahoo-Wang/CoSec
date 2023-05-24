@@ -20,7 +20,7 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import reactor.core.publisher.Mono
 
 class CompositeAuthentication(
-    private val authenticationProvider: AuthenticationProvider,
+    private val authenticationProvider: AuthenticationProvider
 ) : Authentication<Credentials, CoSecPrincipal> {
     override val supportCredentials: Class<Credentials>
         get() = Credentials::class.java

@@ -59,7 +59,7 @@ class CoSecAuthorizationAutoConfiguration {
     @ConditionalOnMissingBean
     fun cosecAuthorization(
         policyRepository: PolicyRepository,
-        appRolePermissionRepository: AppRolePermissionRepository,
+        appRolePermissionRepository: AppRolePermissionRepository
     ): Authorization {
         return SimpleAuthorization(policyRepository, appRolePermissionRepository)
     }
@@ -87,7 +87,7 @@ class CoSecAuthorizationAutoConfiguration {
         @ConditionalOnMissingBean(name = [SERVLET_REQUEST_PARSER_BEAN_NAME])
         fun servletRequestParser(
             servletRemoteIpResolver: RemoteIpResolver<HttpServletRequest>,
-            requestAttributesAppenderObjectProvider: ObjectProvider<RequestAttributesAppender>,
+            requestAttributesAppenderObjectProvider: ObjectProvider<RequestAttributesAppender>
         ): RequestParser<HttpServletRequest> {
             return ServletRequestParser(servletRemoteIpResolver, requestAttributesAppenderObjectProvider.toList())
         }
@@ -95,7 +95,7 @@ class CoSecAuthorizationAutoConfiguration {
         @Bean(SERVLET_SECURITY_CONTEXT_PARSER_BEAN_NAME)
         @ConditionalOnMissingBean(name = [SERVLET_SECURITY_CONTEXT_PARSER_BEAN_NAME])
         fun servletSecurityContextParser(
-            tokenVerifier: TokenVerifier,
+            tokenVerifier: TokenVerifier
         ): SecurityContextParser<HttpServletRequest> {
             return ServletRequestSecurityContextParser(tokenVerifier)
         }
@@ -103,9 +103,10 @@ class CoSecAuthorizationAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         fun authorizationFilter(
-            @Qualifier(SERVLET_SECURITY_CONTEXT_PARSER_BEAN_NAME) securityContextParser: SecurityContextParser<HttpServletRequest>,
+            @Qualifier(SERVLET_SECURITY_CONTEXT_PARSER_BEAN_NAME) securityContextParser:
+            SecurityContextParser<HttpServletRequest>,
             authorization: Authorization,
-            @Qualifier(SERVLET_REQUEST_PARSER_BEAN_NAME) requestParser: RequestParser<HttpServletRequest>,
+            @Qualifier(SERVLET_REQUEST_PARSER_BEAN_NAME) requestParser: RequestParser<HttpServletRequest>
         ): AuthorizationFilter {
             return AuthorizationFilter(securityContextParser, authorization, requestParser)
         }
@@ -125,7 +126,7 @@ class CoSecAuthorizationAutoConfiguration {
         @ConditionalOnMissingBean(name = [REACTIVE_REQUEST_PARSER_BEAN_NAME])
         fun reactiveRequestParser(
             reactiveRemoteIpResolver: RemoteIpResolver<ServerWebExchange>,
-            requestAttributesAppenderObjectProvider: ObjectProvider<RequestAttributesAppender>,
+            requestAttributesAppenderObjectProvider: ObjectProvider<RequestAttributesAppender>
         ): RequestParser<ServerWebExchange> {
             return ReactiveRequestParser(reactiveRemoteIpResolver, requestAttributesAppenderObjectProvider.toList())
         }
@@ -133,7 +134,7 @@ class CoSecAuthorizationAutoConfiguration {
         @Bean(REACTIVE_SECURITY_CONTEXT_PARSER_BEAN_NAME)
         @ConditionalOnMissingBean(name = [REACTIVE_SECURITY_CONTEXT_PARSER_BEAN_NAME])
         fun reactiveSecurityContextParser(
-            tokenVerifier: TokenVerifier,
+            tokenVerifier: TokenVerifier
         ): SecurityContextParser<ServerWebExchange> {
             return ReactiveSecurityContextParser(tokenVerifier)
         }
@@ -142,9 +143,10 @@ class CoSecAuthorizationAutoConfiguration {
         @ConditionalOnMissingBean
         @ConditionalOnMissingClass("org.springframework.cloud.gateway.filter.GlobalFilter")
         fun reactiveAuthorizationFilter(
-            @Qualifier(REACTIVE_SECURITY_CONTEXT_PARSER_BEAN_NAME) securityContextParser: SecurityContextParser<ServerWebExchange>,
+            @Qualifier(REACTIVE_SECURITY_CONTEXT_PARSER_BEAN_NAME) securityContextParser:
+            SecurityContextParser<ServerWebExchange>,
             @Qualifier(REACTIVE_REQUEST_PARSER_BEAN_NAME) requestParser: RequestParser<ServerWebExchange>,
-            authorization: Authorization,
+            authorization: Authorization
         ): ReactiveAuthorizationFilter {
             return ReactiveAuthorizationFilter(securityContextParser, requestParser, authorization)
         }

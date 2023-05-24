@@ -16,6 +16,8 @@ package me.ahoo.cosec.api.context
 interface Attributes<SOURCE : Attributes<SOURCE, KEY, VALUE>, KEY, VALUE> {
     val attributes: Map<KEY, VALUE>
     fun withAttributes(attributes: Map<KEY, VALUE>): SOURCE
+
+    @Suppress("ReturnCount")
     fun mergeAttributes(additionalAttributes: Map<KEY, VALUE>): SOURCE {
         if (additionalAttributes.isEmpty()) {
             @Suppress("UNCHECKED_CAST")

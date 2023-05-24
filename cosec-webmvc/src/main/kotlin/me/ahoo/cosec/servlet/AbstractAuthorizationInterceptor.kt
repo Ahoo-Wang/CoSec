@@ -36,12 +36,12 @@ import javax.servlet.http.HttpServletResponse
 abstract class AbstractAuthorizationInterceptor(
     private val requestParser: RequestParser<HttpServletRequest>,
     private val securityContextParser: SecurityContextParser<HttpServletRequest>,
-    private val authorization: Authorization,
+    private val authorization: Authorization
 ) {
 
     protected fun authorize(
         servletRequest: HttpServletRequest,
-        servletResponse: HttpServletResponse,
+        servletResponse: HttpServletResponse
     ): Boolean {
         var tokenVerificationException: TokenVerificationException? = null
         val securityContext = try {
@@ -65,7 +65,7 @@ abstract class AbstractAuthorizationInterceptor(
                     }
 
                     servletResponse.writeWithAuthorizeResult(
-                        tokenVerificationException?.asAuthorizeResult() ?: it
+                        tokenVerificationException?.asAuthorizeResult() ?: it,
                     )
                     return@map false
                 }

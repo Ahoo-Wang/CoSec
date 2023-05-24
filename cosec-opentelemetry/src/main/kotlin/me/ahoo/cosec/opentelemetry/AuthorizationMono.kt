@@ -23,7 +23,7 @@ import reactor.core.publisher.Mono
 class CoSecMonoTrace(
     private val parentContext: Context,
     private val securityContext: SecurityContext,
-    private val source: Mono<AuthorizeResult>,
+    private val source: Mono<AuthorizeResult>
 ) : Mono<AuthorizeResult>() {
     override fun subscribe(actual: CoreSubscriber<in AuthorizeResult>) {
         if (!CoSecInstrumenter.INSTRUMENTER.shouldStart(parentContext, securityContext)) {

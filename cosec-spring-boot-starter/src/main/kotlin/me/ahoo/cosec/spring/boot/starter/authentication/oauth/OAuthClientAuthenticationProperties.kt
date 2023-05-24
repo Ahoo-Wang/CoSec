@@ -28,7 +28,7 @@ import org.springframework.boot.context.properties.ConstructorBinding
 @ConfigurationProperties(prefix = OAuthClientAuthenticationProperties.PREFIX)
 data class OAuthClientAuthenticationProperties(
     val enabled: Boolean = true,
-    val registration: Map<String, Client> = emptyMap(),
+    val registration: Map<String, Client> = emptyMap()
 ) {
     companion object {
         const val PREFIX = AuthenticationProperties.PREFIX + ".oauth.client"
@@ -55,7 +55,7 @@ data class OAuthClientAuthenticationProperties(
         packId: String?,
         pkce: Boolean = false,
         authServerId: String?,
-        ignoreCheckRedirectUri: Boolean = false,
+        ignoreCheckRedirectUri: Boolean = false
     ) : AuthConfig(
         clientId,
         clientSecret,

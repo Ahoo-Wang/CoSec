@@ -48,5 +48,4 @@ internal class ReplaceablePathActionMatcherTest {
         }
         assertThat(actionMatcher.match(request2, securityContext), equalTo(false))
     }
-
 }

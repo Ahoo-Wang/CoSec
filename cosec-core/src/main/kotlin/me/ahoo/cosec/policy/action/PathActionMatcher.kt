@@ -66,13 +66,13 @@ class PathActionMatcherFactory : ActionMatcherFactory {
                 ReplaceablePathActionMatcher(
                     patternParser = patternParser,
                     pattern = this,
-                    configuration = configuration
+                    configuration = configuration,
                 )
             } else {
                 PathActionMatcher(
                     patternParser = patternParser,
                     pathPattern = patternParser.parse(this),
-                    configuration = configuration
+                    configuration = configuration,
                 )
             }
         }
@@ -88,7 +88,7 @@ class PathActionMatcherFactory : ActionMatcherFactory {
                     return CompositeActionMatcher(
                         type = TYPE,
                         actionMatchers = actionMatchers,
-                        configuration = this
+                        configuration = this,
                     )
                 }
         }
@@ -108,7 +108,7 @@ class PathActionMatcherFactory : ActionMatcherFactory {
                     return CompositeActionMatcher(
                         type = TYPE,
                         actionMatchers = actionMatchers,
-                        configuration = this
+                        configuration = this,
                     )
                 }
         }

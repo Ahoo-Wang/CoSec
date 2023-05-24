@@ -101,6 +101,4 @@ class TracingAuthorizationTest {
             .expectNext(AuthorizeResult.IMPLICIT_DENY)
             .verifyComplete()
     }
-
-
 }

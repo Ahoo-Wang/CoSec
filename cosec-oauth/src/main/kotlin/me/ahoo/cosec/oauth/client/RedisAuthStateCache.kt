@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
  */
 class RedisAuthStateCache(
     private val redisTemplate: StringRedisTemplate,
-    private val keyPrefix: String = DEFAULT_KEY_PREFIX,
+    private val keyPrefix: String = DEFAULT_KEY_PREFIX
 ) :
     AuthStateCache {
 

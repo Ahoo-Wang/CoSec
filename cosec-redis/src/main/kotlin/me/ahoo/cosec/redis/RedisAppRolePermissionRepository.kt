@@ -30,7 +30,7 @@ class RedisAppRolePermissionRepository(
             val permissions = rolePermissionCache[it] ?: return@mapNotNull null
             RolePermissionData(
                 it,
-                permissions
+                permissions,
             )
         }
         return AppRolePermissionData(appPermission, rolePermissions).toMono()

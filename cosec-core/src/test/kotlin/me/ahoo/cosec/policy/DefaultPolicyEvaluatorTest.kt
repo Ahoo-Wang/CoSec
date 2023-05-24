@@ -70,7 +70,7 @@ internal class DefaultPolicyEvaluatorTest {
                 type = PolicyType.CUSTOM,
                 tenantId = "1",
                 statements = listOf(statement),
-            )
+            ),
         )
     }
 

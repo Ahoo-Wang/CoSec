@@ -195,7 +195,7 @@ internal class CoSecJsonSerializerTest {
                     "name":"name",
                     "category":"category",
                     "type":"global"
-                """
+                """,
             )
         }
 
@@ -208,7 +208,7 @@ internal class CoSecJsonSerializerTest {
                 ),
                 PathActionMatcherFactory().create(
                     "#{principal.id}.*".asConfiguration(),
-                )
+                ),
             )
         }
 
@@ -219,7 +219,7 @@ internal class CoSecJsonSerializerTest {
                     BOOL_CONDITION_MATCHER_AND_KEY to listOf(
                         AllConditionMatcherFactory().create(newPojoConfiguration()),
                         AuthenticatedConditionMatcherFactory().create(
-                            newPojoConfiguration()
+                            newPojoConfiguration(),
                         ),
                         InTenantConditionMatcherFactory().create(
                             mapOf(
@@ -240,12 +240,12 @@ internal class CoSecJsonSerializerTest {
                         ),
                         SpelConditionMatcherFactory().create(
                             mapOf(
-                                SPEL_CONDITION_MATCHER_EXPRESSION_KEY to "context.principal.id=='1'"
+                                SPEL_CONDITION_MATCHER_EXPRESSION_KEY to "context.principal.id=='1'",
                             ).asConfiguration(),
                         ),
                         OgnlConditionMatcherFactory().create(
                             mapOf(
-                                SPEL_CONDITION_MATCHER_EXPRESSION_KEY to "path == \"auth/login\""
+                                SPEL_CONDITION_MATCHER_EXPRESSION_KEY to "path == \"auth/login\"",
                             ).asConfiguration(),
                         ),
                     ),

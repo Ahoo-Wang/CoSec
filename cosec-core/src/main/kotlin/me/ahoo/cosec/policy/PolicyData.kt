@@ -27,7 +27,7 @@ class PolicyData(
     override val type: PolicyType,
     override val tenantId: String,
     override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
-    override val statements: List<Statement> = listOf(),
+    override val statements: List<Statement> = listOf()
 ) : Policy {
 
     override fun equals(other: Any?): Boolean {

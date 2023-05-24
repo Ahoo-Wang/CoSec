@@ -41,7 +41,7 @@ class CoSecAuthenticationAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun authenticationProvider(
-        applicationContext: ApplicationContext,
+        applicationContext: ApplicationContext
     ): AuthenticationProvider {
         applicationContext.getBeansOfType(Authentication::class.java).values.forEach {
             @Suppress("UNCHECKED_CAST")

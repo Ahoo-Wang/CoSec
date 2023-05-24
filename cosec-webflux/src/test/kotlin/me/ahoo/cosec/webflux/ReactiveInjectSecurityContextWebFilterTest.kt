@@ -18,8 +18,6 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.verify
-import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.hamcrest.MatcherAssert.assertThat

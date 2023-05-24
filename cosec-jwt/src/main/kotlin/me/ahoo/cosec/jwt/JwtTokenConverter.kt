@@ -35,7 +35,7 @@ class JwtTokenConverter(
     private val idGenerator: IdGenerator,
     private val algorithm: Algorithm,
     private val accessTokenValidity: Duration = Duration.ofMinutes(10),
-    private val refreshTokenValidity: Duration = Duration.ofDays(7),
+    private val refreshTokenValidity: Duration = Duration.ofDays(7)
 ) : TokenConverter {
 
     override fun asToken(principal: CoSecPrincipal): CompositeToken {

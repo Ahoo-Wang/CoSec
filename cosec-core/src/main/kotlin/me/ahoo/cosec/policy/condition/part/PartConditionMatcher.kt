@@ -20,7 +20,7 @@ import me.ahoo.cosec.policy.condition.AbstractConditionMatcher
 
 abstract class PartConditionMatcher(
     type: String,
-    configuration: Configuration,
+    configuration: Configuration
 ) : AbstractConditionMatcher(type, configuration) {
     private val partExtractor: PartExtractor = configuration
         .getRequired(CONDITION_MATCHER_PART_KEY).asString()

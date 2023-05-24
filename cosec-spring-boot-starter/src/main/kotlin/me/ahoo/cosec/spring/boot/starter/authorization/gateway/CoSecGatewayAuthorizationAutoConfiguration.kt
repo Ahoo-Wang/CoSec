@@ -49,7 +49,7 @@ class CoSecGatewayAuthorizationAutoConfiguration {
         securityContextParser: SecurityContextParser<ServerWebExchange>,
         @Qualifier(CoSecAuthorizationAutoConfiguration.REACTIVE_REQUEST_PARSER_BEAN_NAME)
         requestParser: RequestParser<ServerWebExchange>,
-        authorization: Authorization,
+        authorization: Authorization
     ): AuthorizationGatewayFilter {
         return AuthorizationGatewayFilter(securityContextParser, requestParser, authorization)
     }

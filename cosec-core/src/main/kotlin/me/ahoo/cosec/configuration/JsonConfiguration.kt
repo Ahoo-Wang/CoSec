@@ -24,7 +24,7 @@ import me.ahoo.cosec.serialization.CoSecJsonSerializer
 
 class JsonConfiguration(
     override val delegate: JsonNode,
-    private val objectCodec: ObjectCodec,
+    private val objectCodec: ObjectCodec
 ) : Configuration,
     Delegated<JsonNode> {
 

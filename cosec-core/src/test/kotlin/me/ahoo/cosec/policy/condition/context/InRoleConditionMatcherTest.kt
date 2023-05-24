@@ -21,7 +21,6 @@ import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.hamcrest.Matchers.notNullValue
-
 import org.junit.jupiter.api.Test
 
 class InRoleConditionMatcherTest {

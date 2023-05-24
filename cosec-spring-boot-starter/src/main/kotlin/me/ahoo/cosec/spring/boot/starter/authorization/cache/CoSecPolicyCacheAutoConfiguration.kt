@@ -64,7 +64,7 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
     @ConditionalOnMissingBean
     fun redisPolicyRepository(
         globalPolicyIndexCache: GlobalPolicyIndexCache,
-        policyCache: PolicyCache,
+        policyCache: PolicyCache
     ): PolicyRepository {
         return RedisPolicyRepository(
             globalPolicyIndexCache,
@@ -81,10 +81,11 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
     @Bean
     @ConditionalOnMissingBean
     fun globalPolicyIndexCache(
-        @Qualifier(GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<GlobalPolicyIndexKey, Set<String>>,
+        @Qualifier(GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME) cacheSource:
+        CacheSource<GlobalPolicyIndexKey, Set<String>>,
         redisTemplate: StringRedisTemplate,
         cacheManager: CacheManager,
-        idGenerator: IdGenerator,
+        idGenerator: IdGenerator
     ): GlobalPolicyIndexCache {
         val clientId = idGenerator.generateAsString()
         val cacheKeyPrefix = cacheProperties.cacheKeyPrefix.globalPolicyIndex
@@ -118,7 +119,7 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
         @Qualifier(POLICY_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<String, Policy>,
         redisTemplate: StringRedisTemplate,
         cacheManager: CacheManager,
-        idGenerator: IdGenerator,
+        idGenerator: IdGenerator
     ): PolicyCache {
         val clientId = idGenerator.generateAsString()
         val cacheKeyPrefix = cacheProperties.cacheKeyPrefix.policy

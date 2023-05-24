@@ -22,7 +22,7 @@ const val ACTION_MATCHER_METHOD_KEY = "method"
 
 abstract class AbstractActionMatcher(
     override val type: String,
-    final override val configuration: Configuration,
+    final override val configuration: Configuration
 ) : ActionMatcher {
     companion object {
         private fun Configuration.asMethod(): Set<String> {

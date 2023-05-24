@@ -203,25 +203,27 @@ internal class SimpleAuthorizationTest {
         val permissionId = UUID.randomUUID().toString()
         val appRolePermission = AppRolePermissionData(
             appPermission = AppPermissionData(
-                id = "appId", groups = listOf(
+                id = "appId",
+                groups = listOf(
                     PermissionGroupData(
-                        "groupName", permissions = listOf(
+                        "groupName",
+                        permissions = listOf(
                             PermissionData(
                                 id = permissionId,
                                 name = "",
                                 effect = Effect.ALLOW,
                                 action = AllActionMatcher.INSTANCE,
-                            )
-                        )
-                    )
-                )
+                            ),
+                        ),
+                    ),
+                ),
             ),
             rolePermissions = listOf(
                 RolePermissionData(
                     id = "roleId",
                     permissions = setOf(permissionId),
-                )
-            )
+                ),
+            ),
         )
 
         val securityContext = mockk<SecurityContext> {
@@ -254,25 +256,27 @@ internal class SimpleAuthorizationTest {
         val permissionId = UUID.randomUUID().toString()
         val appRolePermission = AppRolePermissionData(
             appPermission = AppPermissionData(
-                id = "appId", groups = listOf(
+                id = "appId",
+                groups = listOf(
                     PermissionGroupData(
-                        "groupName", permissions = listOf(
+                        "groupName",
+                        permissions = listOf(
                             PermissionData(
                                 id = permissionId,
                                 name = "",
                                 effect = Effect.DENY,
                                 action = AllActionMatcher.INSTANCE,
-                            )
-                        )
-                    )
-                )
+                            ),
+                        ),
+                    ),
+                ),
             ),
             rolePermissions = listOf(
                 RolePermissionData(
                     id = "roleId",
                     permissions = setOf("*"),
-                )
-            )
+                ),
+            ),
         )
         val securityContext = mockk<SecurityContext> {
             every { principal.authenticated() } returns false

@@ -26,7 +26,7 @@ import javax.servlet.http.HttpServletRequest
  * @author ahoo wang
  */
 class ServletRequestSecurityContextParser(
-    private val tokenVerifier: TokenVerifier,
+    private val tokenVerifier: TokenVerifier
 ) : AbstractSecurityContextParser<HttpServletRequest>() {
     override fun getAccessToken(request: HttpServletRequest): AccessToken? {
         val authorization = request.getHeader(Jwts.AUTHORIZATION_KEY)

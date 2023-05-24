@@ -23,7 +23,7 @@ import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
 abstract class AbstractRefreshTokenAuthentication<C : RefreshTokenCredentials, out P : CoSecPrincipal>(
-    override val supportCredentials: Class<C>,
+    override val supportCredentials: Class<C>
 ) : Authentication<C, P>
 
 class SimpleRefreshTokenAuthentication(private val tokenVerifier: TokenVerifier) :

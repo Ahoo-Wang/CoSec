@@ -79,7 +79,7 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
         @Qualifier(APP_PERMISSION_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<String, AppPermission>,
         redisTemplate: StringRedisTemplate,
         cacheManager: CacheManager,
-        idGenerator: IdGenerator,
+        idGenerator: IdGenerator
     ): AppPermissionCache {
         val clientId = idGenerator.generateAsString()
         val cacheKeyPrefix = cacheProperties.cacheKeyPrefix.appPermission
@@ -109,7 +109,7 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
         @Qualifier(Role_PERMISSION_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<String, Set<String>>,
         redisTemplate: StringRedisTemplate,
         cacheManager: CacheManager,
-        idGenerator: IdGenerator,
+        idGenerator: IdGenerator
     ): RolePermissionCache {
         val clientId = idGenerator.generateAsString()
         val cacheKeyPrefix = cacheProperties.cacheKeyPrefix.rolePermission

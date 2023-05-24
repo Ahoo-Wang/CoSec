@@ -22,7 +22,7 @@ const val CONDITION_MATCHER_NEGATE_KEY = "negate"
 
 abstract class AbstractConditionMatcher(
     final override val type: String,
-    final override val configuration: Configuration,
+    final override val configuration: Configuration
 ) :
     ConditionMatcher {
     private val negate: Boolean = configuration.get(CONDITION_MATCHER_NEGATE_KEY)?.asBoolean() ?: false

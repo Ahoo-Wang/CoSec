@@ -30,7 +30,7 @@ import reactor.core.publisher.Mono
 class AuthorizationGatewayFilter(
     securityContextParser: SecurityContextParser<ServerWebExchange>,
     requestParser: RequestParser<ServerWebExchange>,
-    authorization: Authorization,
+    authorization: Authorization
 ) : GlobalFilter, Ordered, ReactiveSecurityFilter(securityContextParser, requestParser, authorization) {
     override fun filter(exchange: ServerWebExchange, chain: GatewayFilterChain): Mono<Void> {
         return filterInternal(exchange) {

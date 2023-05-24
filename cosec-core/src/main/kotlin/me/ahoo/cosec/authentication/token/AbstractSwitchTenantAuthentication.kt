@@ -41,7 +41,7 @@ abstract class AbstractSwitchTenantAuthentication : Authentication<SwitchTenantC
      */
     protected abstract fun switchTenant(
         targetTenantId: String,
-        previousPrincipal: CoSecPrincipal,
+        previousPrincipal: CoSecPrincipal
     ): Mono<out TenantPrincipal>
 }
 

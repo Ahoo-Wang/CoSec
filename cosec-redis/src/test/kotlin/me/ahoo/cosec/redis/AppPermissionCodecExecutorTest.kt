@@ -62,9 +62,9 @@ internal class AppPermissionCodecExecutorTest {
             groups = listOf(
                 PermissionGroupData(
                     "groupName",
-                    permissions = listOf(PermissionData("id", "name", action = AllActionMatcher.INSTANCE))
-                )
-            )
+                    permissions = listOf(PermissionData("id", "name", action = AllActionMatcher.INSTANCE)),
+                ),
+            ),
         )
         val key = "app:" + MockIdGenerator.INSTANCE.generateAsString()
         val cacheValue: CacheValue<AppPermission> = CacheValue.forever(appPermission)

@@ -36,7 +36,7 @@ import javax.servlet.http.HttpServletResponse
 class AuthorizationFilter(
     securityContextParser: SecurityContextParser<HttpServletRequest>,
     authorization: Authorization,
-    requestParser: RequestParser<HttpServletRequest>,
+    requestParser: RequestParser<HttpServletRequest>
 ) : AbstractAuthorizationInterceptor(requestParser, securityContextParser, authorization), Filter {
     @Throws(IOException::class, ServletException::class)
     override fun doFilter(request: ServletRequest, response: ServletResponse, chain: FilterChain) {

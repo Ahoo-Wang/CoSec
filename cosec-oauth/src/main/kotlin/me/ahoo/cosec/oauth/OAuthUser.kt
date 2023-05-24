@@ -26,7 +26,7 @@ data class OAuthUser(
     val location: String? = null,
     val gender: Gender = Gender.UNKNOWN,
     val rawInfo: MutableMap<String, Any> = mutableMapOf(),
-    val provider: String,
+    val provider: String
 ) {
 
     enum class Gender {

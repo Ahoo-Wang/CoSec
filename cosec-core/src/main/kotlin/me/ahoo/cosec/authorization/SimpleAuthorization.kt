@@ -66,7 +66,7 @@ class SimpleAuthorization(
                         policy = policy,
                         statementIndex = index,
                         statement = statement,
-                        result = verifyResult
+                        result = verifyResult,
                     )
                 }
             }
@@ -87,7 +87,7 @@ class SimpleAuthorization(
                         policy = policy,
                         statementIndex = index,
                         statement = statement,
-                        result = verifyResult
+                        result = verifyResult,
                     )
                 }
             }
@@ -122,7 +122,7 @@ class SimpleAuthorization(
                     return RoleVerifyContext(
                         roleId = roleId,
                         permission = permission,
-                        result = verifyResult
+                        result = verifyResult,
                     )
                 }
             }
@@ -144,7 +144,7 @@ class SimpleAuthorization(
                     return RoleVerifyContext(
                         roleId = roleId,
                         permission = permission,
-                        result = verifyResult
+                        result = verifyResult,
                     )
                 }
             }

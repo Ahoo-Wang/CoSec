@@ -24,7 +24,7 @@ import org.springframework.boot.context.properties.ConstructorBinding
 @ConstructorBinding
 @ConfigurationProperties(prefix = AuthorizationProperties.PREFIX)
 data class AuthorizationProperties(
-    val enabled: Boolean = true,
+    val enabled: Boolean = true
 ) {
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "authorization"

@@ -25,7 +25,7 @@ import me.ahoo.cosec.tenant.SimpleTenant
  */
 data class SimpleTenantPrincipal(
     override val delegate: CoSecPrincipal,
-    override val tenant: Tenant,
+    override val tenant: Tenant
 ) : TenantPrincipal,
     CoSecPrincipal by delegate,
     Delegated<CoSecPrincipal> {

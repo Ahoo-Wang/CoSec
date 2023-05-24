@@ -37,8 +37,8 @@ class GroupedRateLimiterConditionMatcherTest {
                     mapOf(
                         CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
                         RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY to 2,
-                        GROUPED_RATE_LIMITER_CONDITION_MATCHER_EXPIRE_AFTER_ACCESS_SECOND_KEY to 2000
-                    ).asConfiguration()
+                        GROUPED_RATE_LIMITER_CONDITION_MATCHER_EXPIRE_AFTER_ACCESS_SECOND_KEY to 2000,
+                    ).asConfiguration(),
                 )
         assertThat(conditionMatcher.match(request, mockk()), `is`(true))
     }
@@ -51,8 +51,8 @@ class GroupedRateLimiterConditionMatcherTest {
                     mapOf(
                         CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
                         RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY to 1,
-                        GROUPED_RATE_LIMITER_CONDITION_MATCHER_EXPIRE_AFTER_ACCESS_SECOND_KEY to 2000
-                    ).asConfiguration()
+                        GROUPED_RATE_LIMITER_CONDITION_MATCHER_EXPIRE_AFTER_ACCESS_SECOND_KEY to 2000,
+                    ).asConfiguration(),
                 )
 
         assertThrows(TooManyRequestsException::class.java) {

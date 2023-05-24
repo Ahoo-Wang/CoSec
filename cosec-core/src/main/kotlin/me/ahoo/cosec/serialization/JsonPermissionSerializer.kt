@@ -48,7 +48,7 @@ object JsonPermissionDeserializer : AbstractJsonStatementDeserializer<Permission
             description = description,
             effect = effect,
             action = action,
-            condition = condition
+            condition = condition,
         )
     }
 }

@@ -65,7 +65,7 @@ class CoSecJwtAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecJwtTokenVerifier(
-        algorithm: Algorithm,
+        algorithm: Algorithm
     ): TokenVerifier {
         return JwtTokenVerifier(algorithm)
     }
@@ -75,7 +75,7 @@ class CoSecJwtAutoConfiguration {
     fun cosecTokenConverter(
         idGenerator: IdGenerator,
         algorithm: Algorithm,
-        jwtProperties: JwtProperties,
+        jwtProperties: JwtProperties
     ): TokenConverter {
         return JwtTokenConverter(
             idGenerator,
@@ -93,7 +93,7 @@ class CoSecJwtAutoConfiguration {
         @ConditionalOnBean(CompositeAuthentication::class)
         fun tokenCompositeAuthentication(
             compositeAuthentication: CompositeAuthentication,
-            tokenConverter: TokenConverter,
+            tokenConverter: TokenConverter
         ): TokenCompositeAuthentication {
             return TokenCompositeAuthentication(compositeAuthentication, tokenConverter)
         }
