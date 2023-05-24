@@ -31,7 +31,7 @@ include(":code-coverage-report")
 
 pluginManagement {
     plugins {
-        id("io.gitlab.arturbosch.detekt") version "1.22.0" apply false
+        id("io.gitlab.arturbosch.detekt") version "1.23.0" apply false
         kotlin("jvm") version "1.8.21" apply false
         kotlin("plugin.spring") version "1.8.21" apply false
         id("org.jetbrains.dokka") version "1.8.10" apply false
