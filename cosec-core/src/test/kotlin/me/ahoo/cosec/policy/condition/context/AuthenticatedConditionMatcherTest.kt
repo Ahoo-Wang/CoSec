@@ -26,7 +26,7 @@ class AuthenticatedConditionMatcherTest {
     @Test
     fun match() {
         val request: Request = mockk()
-        val context: SecurityContext = mockk() {
+        val context: SecurityContext = mockk {
             every { principal.authenticated() } returns true
         }
         val conditionMatcher = AuthenticatedConditionMatcherFactory().create(JsonConfiguration.NULL)

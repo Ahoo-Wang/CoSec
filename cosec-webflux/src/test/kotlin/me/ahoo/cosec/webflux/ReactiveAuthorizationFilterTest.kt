@@ -171,7 +171,7 @@ internal class ReactiveAuthorizationFilterTest {
         val accessToken = SecurityContextParserSpec.createAccessToken(principal)
         val tokenHeader =
             Jwts.TOKEN_PREFIX + accessToken
-        val exchange = mockk<ServerWebExchange>() {
+        val exchange = mockk<ServerWebExchange> {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns tokenHeader
             every { request.headers.origin } returns "origin"
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
@@ -210,7 +210,7 @@ internal class ReactiveAuthorizationFilterTest {
             ReactiveRequestParser(ReactiveRemoteIpResolver),
             authorization,
         )
-        val exchange = mockk<ServerWebExchange>() {
+        val exchange = mockk<ServerWebExchange> {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
             every { request.headers.origin } returns "origin"
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"

@@ -33,7 +33,7 @@ class TracingAuthorizationTest {
 
     @Test
     fun authorize() {
-        val authorization = mockk<Authorization>() {
+        val authorization = mockk<Authorization> {
             every { authorize(any(), any()) } returns AuthorizeResult.ALLOW.toMono()
         }
         val tracingAuthorization = TracingAuthorization(authorization)
@@ -47,7 +47,7 @@ class TracingAuthorizationTest {
 
     @Test
     fun authorizeWithError() {
-        val authorization = mockk<Authorization>() {
+        val authorization = mockk<Authorization> {
             every { authorize(any(), any()) } returns RuntimeException().toMono()
         }
         val tracingAuthorization = TracingAuthorization(authorization)
@@ -61,7 +61,7 @@ class TracingAuthorizationTest {
 
     @Test
     fun authorizeWithRoleVerifyContext() {
-        val authorization = mockk<Authorization>() {
+        val authorization = mockk<Authorization> {
             every { authorize(any(), any()) } returns AuthorizeResult.ALLOW.toMono()
         }
         val tracingAuthorization = TracingAuthorization(authorization)
@@ -83,7 +83,7 @@ class TracingAuthorizationTest {
 
     @Test
     fun authorizeWithPolicyVerifyContext() {
-        val authorization = mockk<Authorization>() {
+        val authorization = mockk<Authorization> {
             every { authorize(any(), any()) } returns AuthorizeResult.IMPLICIT_DENY.toMono()
         }
         val tracingAuthorization = TracingAuthorization(authorization)

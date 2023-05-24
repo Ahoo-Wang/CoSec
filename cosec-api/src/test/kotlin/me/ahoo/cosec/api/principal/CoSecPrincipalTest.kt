@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test
 
 class CoSecPrincipalTest {
 
+    @Suppress("ThrowsCount")
     @Test
     fun anonymous() {
         val anonymous = object : CoSecPrincipal {
@@ -39,6 +40,7 @@ class CoSecPrincipalTest {
         assertThat(anonymous.name, equalTo(ANONYMOUS_ID))
     }
 
+    @Suppress("ThrowsCount")
     @Test
     fun authenticated() {
         val authenticated = object : CoSecPrincipal {

@@ -23,7 +23,7 @@ import javax.servlet.http.HttpServletRequest
 class CoSecServletRequestTest {
     @Test
     fun test() {
-        val delegate = mockk<HttpServletRequest>() {
+        val delegate = mockk<HttpServletRequest> {
             every { getHeader("key") } returns "value"
             every { getHeader("not-exists") } returns null
         }
@@ -37,7 +37,9 @@ class CoSecServletRequestTest {
         ).withAttributes(emptyMap())
         assertThat(
             request.toString(),
-            `is`("CoSecServletRequest(path='path', method='method', remoteIp='remoteIp', origin='origin', referer='referer')"),
+            `is`(
+                "CoSecServletRequest(path='path', method='method', remoteIp='remoteIp', origin='origin', referer='referer')"
+            ),
         )
         assertThat(
             request.getHeader("key"),

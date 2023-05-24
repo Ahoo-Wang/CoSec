@@ -36,7 +36,7 @@ abstract class SecurityContextParserSpec {
 
     @Test
     fun parseNone() {
-        val request = mockk<HttpServletRequest>() {
+        val request = mockk<HttpServletRequest> {
             every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
         }
         val securityContext = createSecurityContextParser().parse(request)

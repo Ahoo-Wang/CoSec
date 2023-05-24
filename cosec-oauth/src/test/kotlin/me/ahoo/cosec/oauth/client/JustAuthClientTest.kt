@@ -32,7 +32,7 @@ internal class JustAuthClientTest {
 
     @Test
     fun authorizeUrl() {
-        val authRequest = mockk<AuthRequest>() {
+        val authRequest = mockk<AuthRequest> {
             every { authorize(any()) } returns "authorizeUrl"
         }
         val authClient = JustAuthClient("clientId", authRequest, MockIdGenerator.INSTANCE)
@@ -43,8 +43,8 @@ internal class JustAuthClientTest {
     @Test
     fun authenticateFail() {
         val oAuthClientCredentials = OAuthClientCredentials("clientId")
-        val authRequest = mockk<AuthRequest>() {
-            every { login(oAuthClientCredentials) } returns mockk<AuthResponse<AuthUser>>() {
+        val authRequest = mockk<AuthRequest> {
+            every { login(oAuthClientCredentials) } returns mockk<AuthResponse<AuthUser>> {
                 every { ok() } returns false
                 every { msg } returns "msg"
                 every { code } returns -1
@@ -61,8 +61,8 @@ internal class JustAuthClientTest {
     @Test
     fun authenticateSuccess() {
         val oAuthClientCredentials = OAuthClientCredentials("clientId")
-        val authRequest = mockk<AuthRequest>() {
-            every { login(oAuthClientCredentials) } returns mockk<AuthResponse<AuthUser>>() {
+        val authRequest = mockk<AuthRequest> {
+            every { login(oAuthClientCredentials) } returns mockk<AuthResponse<AuthUser>> {
                 every { ok() } returns true
                 every { data } returns
                     AuthUser(

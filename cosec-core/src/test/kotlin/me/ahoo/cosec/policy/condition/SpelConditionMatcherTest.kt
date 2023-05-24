@@ -33,7 +33,7 @@ internal class SpelConditionMatcherTest {
     fun match() {
         val conditionMatcher = SpelConditionMatcherFactory()
             .create(mapOf(SPEL_CONDITION_MATCHER_EXPRESSION_KEY to "context.principal.id=='1'").asConfiguration())
-        val securityContext = mockk<SecurityContext>() {
+        val securityContext = mockk<SecurityContext> {
             every { principal } returns mockk {
                 every { id } returns "1"
             }

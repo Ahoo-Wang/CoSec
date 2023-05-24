@@ -26,7 +26,7 @@ internal class ReactiveRequestParserTest {
     @Test
     fun parse() {
         val requestParser = ReactiveRequestParser(ReactiveRemoteIpResolver)
-        val exchange = mockk<ServerWebExchange>() {
+        val exchange = mockk<ServerWebExchange> {
             every { request.path.value() } returns "/path"
             every { request.methodValue } returns "GET"
             every { request.remoteAddress?.hostName } returns "hostName"

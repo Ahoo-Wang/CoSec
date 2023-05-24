@@ -23,7 +23,7 @@ import org.springframework.web.server.ServerWebExchange
 class ReactiveRequestTest {
     @Test
     fun test() {
-        val delegate = mockk<ServerWebExchange>() {
+        val delegate = mockk<ServerWebExchange> {
             every { request.headers.getFirst("key") } returns "value"
             every { request.headers.getFirst("not-exists") } returns null
         }
@@ -37,7 +37,9 @@ class ReactiveRequestTest {
         ).withAttributes(emptyMap())
         assertThat(
             request.toString(),
-            `is`("ReactiveRequest(path='path', method='method', remoteIp='remoteIp', origin='origin', referer='referer')"),
+            `is`(
+                "ReactiveRequest(path='path', method='method', remoteIp='remoteIp', origin='origin', referer='referer')"
+            ),
         )
         assertThat(
             request.getHeader("key"),

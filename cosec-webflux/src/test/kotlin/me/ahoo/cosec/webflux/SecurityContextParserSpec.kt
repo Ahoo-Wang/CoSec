@@ -43,7 +43,7 @@ abstract class SecurityContextParserSpec {
 
     @Test
     fun parseNone() {
-        val exchange = mockk<ServerWebExchange>() {
+        val exchange = mockk<ServerWebExchange> {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
         }
         val securityContext = createSecurityContextParser().parse(exchange)
@@ -54,7 +54,7 @@ abstract class SecurityContextParserSpec {
     fun parse() {
         val principal = SimplePrincipal("id")
         val token = jwtTokenConverter.asToken(principal).accessToken
-        val exchange = mockk<ServerWebExchange>() {
+        val exchange = mockk<ServerWebExchange> {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns Jwts.TOKEN_PREFIX + token
         }
 

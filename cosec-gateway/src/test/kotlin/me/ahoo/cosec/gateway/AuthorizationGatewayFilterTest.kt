@@ -49,7 +49,7 @@ class AuthorizationGatewayFilterTest {
             authorization,
         )
         assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE + 10))
-        val exchange = mockk<ServerWebExchange>() {
+        val exchange = mockk<ServerWebExchange> {
             every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
             every { request.headers.origin } returns "origin"
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"

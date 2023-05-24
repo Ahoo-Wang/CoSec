@@ -49,7 +49,12 @@ class JwtTokenVerifierTest {
     @Test
     fun refreshWhenExpired() {
         val converter =
-            JwtTokenConverter(MockIdGenerator.INSTANCE, JwtFixture.ALGORITHM, Duration.ofMillis(1), Duration.ofMillis(1))
+            JwtTokenConverter(
+                MockIdGenerator.INSTANCE,
+                JwtFixture.ALGORITHM,
+                Duration.ofMillis(1),
+                Duration.ofMillis(1)
+            )
         val oldToken: CompositeToken = converter.asToken(SimpleTenantPrincipal.ANONYMOUS)
         TimeUnit.SECONDS.sleep(1)
         assertThrows(TokenExpiredException::class.java) { jwtTokenVerifier.refresh<TokenPrincipal>(oldToken) }

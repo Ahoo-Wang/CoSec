@@ -26,7 +26,7 @@ internal class ReplaceablePathActionMatcherTest {
 
     @Test
     fun match() {
-        val securityContext = mockk<SecurityContext>() {
+        val securityContext = mockk<SecurityContext> {
             every { principal } returns mockk {
                 every { id } returns "1"
             }
@@ -35,13 +35,13 @@ internal class ReplaceablePathActionMatcherTest {
         val actionMatcher =
             PathActionMatcherFactory().create("order/#{principal.id}/*".asConfiguration())
         assertThat(actionMatcher, instanceOf(ReplaceablePathActionMatcher::class.java))
-        val request1 = mockk<Request>() {
+        val request1 = mockk<Request> {
             every {
                 path
             } returns "order/1/1"
         }
         assertThat(actionMatcher.match(request1, securityContext), equalTo(true))
-        val request2 = mockk<Request>() {
+        val request2 = mockk<Request> {
             every {
                 path
             } returns "order/1/1/hi"

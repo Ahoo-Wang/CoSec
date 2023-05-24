@@ -21,9 +21,8 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.authentication.CompositeAuthentication
 import me.ahoo.cosec.authentication.DefaultAuthenticationProvider
 import me.ahoo.cosec.principal.SimplePrincipal
-import org.hamcrest.MatcherAssert.assertThat
+import org.hamcrest.MatcherAssert.*
 import org.hamcrest.Matchers.*
-import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import reactor.kotlin.core.publisher.toMono
 import reactor.kotlin.test.test
@@ -34,7 +33,7 @@ class TokenCompositeAuthenticationTest {
     fun authenticateAsToken() {
         val compositeAuthentication = CompositeAuthentication(DefaultAuthenticationProvider)
         val compositeToken = SimpleCompositeToken("accessToken", "refreshToken")
-        val tokenConverter = mockk<TokenConverter>() {
+        val tokenConverter = mockk<TokenConverter> {
             every { asToken(any()) } returns compositeToken
         }
         val tokenCompositeAuthentication = TokenCompositeAuthentication(compositeAuthentication, tokenConverter)
