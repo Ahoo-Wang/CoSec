@@ -8,4 +8,4 @@ spring:
         config-id: ${spring.application.name}.yaml
     service-registry:
       auto-registration:
-        enabled: ${cosky.auto-registry:true}
+        enabled: ${cosky.auto-registry:false}

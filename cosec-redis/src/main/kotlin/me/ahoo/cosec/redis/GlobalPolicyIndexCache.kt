@@ -15,17 +15,11 @@ package me.ahoo.cosec.redis
 import me.ahoo.cache.Cache
 import me.ahoo.cosec.Delegated
 
-object GlobalPolicyIndexKey {
-    override fun toString(): String {
-        return "GlobalPolicyIndexKey"
-    }
-}
-
 /**
  * Global Policy Index Cache .
  *
  * @author ahoo wang
  */
-class GlobalPolicyIndexCache(override val delegate: Cache<GlobalPolicyIndexKey, Set<String>>) :
-    Cache<GlobalPolicyIndexKey, Set<String>> by delegate,
-    Delegated<Cache<GlobalPolicyIndexKey, Set<String>>>
+class GlobalPolicyIndexCache(override val delegate: Cache<String, Set<String>>) :
+    Cache<String, Set<String>> by delegate,
+    Delegated<Cache<String, Set<String>>>

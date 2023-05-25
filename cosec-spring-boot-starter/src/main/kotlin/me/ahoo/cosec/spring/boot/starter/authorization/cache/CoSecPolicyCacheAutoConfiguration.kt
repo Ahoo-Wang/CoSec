@@ -16,7 +16,6 @@ import me.ahoo.cache.CacheConfig
 import me.ahoo.cache.CacheManager
 import me.ahoo.cache.CacheSource
 import me.ahoo.cache.CacheSource.Companion.noOp
-import me.ahoo.cache.converter.KeyConverter
 import me.ahoo.cache.converter.ToStringKeyConverter
 import me.ahoo.cache.distributed.DistributedCache
 import me.ahoo.cache.spring.redis.RedisDistributedCache
@@ -25,7 +24,7 @@ import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.redis.GlobalPolicyIndexCache
-import me.ahoo.cosec.redis.GlobalPolicyIndexKey
+import me.ahoo.cosec.redis.GlobalPolicyIndexKeyConverter
 import me.ahoo.cosec.redis.PolicyCache
 import me.ahoo.cosec.redis.RedisPolicyRepository
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
@@ -74,7 +73,7 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
 
     @Bean(GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME)
     @ConditionalOnMissingBean(name = [GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME])
-    fun globalPolicyIndexCacheSource(): CacheSource<GlobalPolicyIndexKey, Set<String>> {
+    fun globalPolicyIndexCacheSource(): CacheSource<String, Set<String>> {
         return noOp()
     }
 
@@ -82,24 +81,20 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
     @ConditionalOnMissingBean
     fun globalPolicyIndexCache(
         @Qualifier(GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME) cacheSource:
-        CacheSource<GlobalPolicyIndexKey, Set<String>>,
+        CacheSource<String, Set<String>>,
         redisTemplate: StringRedisTemplate,
         cacheManager: CacheManager,
         idGenerator: IdGenerator
     ): GlobalPolicyIndexCache {
         val clientId = idGenerator.generateAsString()
-        val cacheKeyPrefix = cacheProperties.cacheKeyPrefix.globalPolicyIndex
         val codecExecutor = SetToSetCodecExecutor(redisTemplate)
+        val keyConverter = GlobalPolicyIndexKeyConverter(cacheProperties.cacheKeyPrefix.globalPolicyIndex)
         val distributedCaching: DistributedCache<Set<String>> = RedisDistributedCache(redisTemplate, codecExecutor)
         val delegate = cacheManager.getOrCreateCache(
             CacheConfig(
                 cacheName = GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME,
                 clientId = clientId,
-                keyConverter = object : KeyConverter<GlobalPolicyIndexKey> {
-                    override fun asKey(sourceKey: GlobalPolicyIndexKey): String {
-                        return cacheKeyPrefix
-                    }
-                },
+                keyConverter = keyConverter,
                 distributedCaching = distributedCaching,
                 cacheSource = cacheSource,
             ),

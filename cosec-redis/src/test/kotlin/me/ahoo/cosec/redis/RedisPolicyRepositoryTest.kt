@@ -35,7 +35,7 @@ internal class RedisPolicyRepositoryTest {
     @Test
     fun getGlobalPolicyWhenIsEmpty() {
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
-        every { globalPolicyIndexCache.get(GlobalPolicyIndexKey) } returns emptySet()
+        every { globalPolicyIndexCache.get("") } returns emptySet()
         val permissionRepository = RedisPolicyRepository(globalPolicyIndexCache, mockk())
         permissionRepository.getGlobalPolicy()
             .test()
@@ -46,7 +46,7 @@ internal class RedisPolicyRepositoryTest {
     @Test
     fun getGlobalPolicy() {
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
-        every { globalPolicyIndexCache.get(GlobalPolicyIndexKey) } returns setOf("policyId")
+        every { globalPolicyIndexCache.get("") } returns setOf("policyId")
         val permissionRepository = RedisPolicyRepository(globalPolicyIndexCache, mockPolicyCache())
         permissionRepository.getGlobalPolicy()
             .test()

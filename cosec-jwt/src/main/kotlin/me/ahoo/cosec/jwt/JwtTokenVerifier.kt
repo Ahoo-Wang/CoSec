@@ -26,7 +26,8 @@ import me.ahoo.cosec.token.TokenVerifier
 class JwtTokenVerifier(algorithm: Algorithm) : TokenVerifier {
     private val jwtVerifier: JWTVerifier = JWT.require(algorithm).build()
 
-    private inline fun verify(accessToken: String): DecodedJWT {
+    @Suppress("TooGenericExceptionCaught")
+    private fun verify(accessToken: String): DecodedJWT {
         try {
             return jwtVerifier.verify(accessToken)
         } catch (tokenExpiredException: TokenExpiredException) {
