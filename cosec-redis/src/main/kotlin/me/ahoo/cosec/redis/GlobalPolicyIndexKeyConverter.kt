@@ -13,26 +13,14 @@
 
 package me.ahoo.cosec.redis
 
-import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.authorization.PolicyRepository
-import reactor.core.publisher.Mono
-import reactor.kotlin.core.publisher.toMono
+import me.ahoo.cache.converter.KeyConverter
 
-class RedisPolicyRepository(
-    private val globalPolicyIndexCache: GlobalPolicyIndexCache,
-    private val policyCache: PolicyCache
-) : PolicyRepository {
-    override fun getGlobalPolicy(): Mono<List<Policy>> {
-        return globalPolicyIndexCache[""]
-            .orEmpty()
-            .let {
-                getPolicies(it)
-            }
+class GlobalPolicyIndexKeyConverter(private val key: String) : KeyConverter<String> {
+    override fun asKey(sourceKey: String): String {
+        return key
     }
 
-    override fun getPolicies(policyIds: Set<String>): Mono<List<Policy>> {
-        return policyIds.mapNotNull {
-            policyCache[it]
-        }.toMono()
+    override fun toString(): String {
+        return "GlobalPolicyKeyConverter(key='$key')"
     }
 }
