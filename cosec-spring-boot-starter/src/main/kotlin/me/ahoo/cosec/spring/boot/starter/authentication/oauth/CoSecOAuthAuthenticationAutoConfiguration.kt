@@ -69,9 +69,9 @@ class CoSecOAuthAuthenticationAutoConfiguration(
             )
             val authRequest: AuthRequest = BeanUtils.instantiateClass(authRequestCtor, provider, authStateCache)
             val authProvider: OAuthProvider = JustAuthProvider(key, authRequest, idGenerator)
-            OAuthProviderManager.INSTANCE.register(authProvider)
+            OAuthProviderManager.register(authProvider)
         }
-        return OAuthProviderManager.INSTANCE
+        return OAuthProviderManager
     }
 
     @Bean
@@ -83,9 +83,8 @@ class CoSecOAuthAuthenticationAutoConfiguration(
     @Bean
     @ConditionalOnMissingBean
     fun oAuthAuthentication(
-        oAuthProviderManager: OAuthProviderManager,
         principalConverter: OAuthUserPrincipalConverter
     ): OAuthAuthentication {
-        return OAuthAuthentication(oAuthProviderManager, principalConverter)
+        return OAuthAuthentication(principalConverter)
     }
 }

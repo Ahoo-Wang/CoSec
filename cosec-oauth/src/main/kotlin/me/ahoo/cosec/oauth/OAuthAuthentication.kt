@@ -22,7 +22,6 @@ import reactor.core.publisher.Mono
  * @author ahoo wang
  */
 class OAuthAuthentication(
-    private val oAuthProviderManager: OAuthProviderManager,
     private val principalConverter: OAuthUserPrincipalConverter = DirectOAuthUserPrincipalConverter
 ) : Authentication<OAuthCredentials, CoSecPrincipal> {
     override val supportCredentials: Class<OAuthCredentials>
@@ -37,11 +36,11 @@ class OAuthAuthentication(
      * @return Authorize Url
      */
     fun authorizeUrl(provider: String): String {
-        return oAuthProviderManager.getRequired(provider).authorizeUrl()
+        return OAuthProviderManager.getRequired(provider).authorizeUrl()
     }
 
     override fun authenticate(credentials: OAuthCredentials): Mono<CoSecPrincipal> {
-        return oAuthProviderManager.getRequired(credentials.provider)
+        return OAuthProviderManager.getRequired(credentials.provider)
             .authenticate(credentials)
             .flatMap {
                 principalConverter.convert(credentials.provider, it)

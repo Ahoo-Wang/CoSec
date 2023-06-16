@@ -12,7 +12,6 @@
  */
 package me.ahoo.cosec.oauth
 
-import com.google.common.annotations.Beta
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -20,8 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * @author ahoo wang
  */
-@Beta
-class OAuthProviderManager {
+object OAuthProviderManager {
     private val providers: ConcurrentHashMap<String, OAuthProvider> = ConcurrentHashMap()
 
     operator fun get(provider: String): OAuthProvider? {
@@ -38,10 +36,5 @@ class OAuthProviderManager {
 
     fun register(authProvider: OAuthProvider) {
         providers[authProvider.name] = authProvider
-    }
-
-    companion object {
-        @JvmField
-        val INSTANCE = OAuthProviderManager()
     }
 }

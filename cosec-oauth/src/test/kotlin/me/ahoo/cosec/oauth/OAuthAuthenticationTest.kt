@@ -26,30 +26,38 @@ internal class OAuthAuthenticationTest {
 
     @Test
     fun authorizeUrl() {
-        val clientManager = mockk<OAuthProviderManager> {
-            every { getRequired(any()).authorizeUrl() } returns "authorizeUrl"
-        }
-        val authentication = OAuthAuthentication(clientManager)
+        OAuthProviderManager.register(
+            "authorizeUrl",
+            mockk {
+                every { authorizeUrl() } returns "authorizeUrl"
+            }
+        )
+        val authentication = OAuthAuthentication()
         assertThat(authentication.supportCredentials, `is`(OAuthCredentials::class.java))
-        assertThat(authentication.authorizeUrl(""), `is`("authorizeUrl"))
+        assertThat(authentication.authorizeUrl("authorizeUrl"), `is`("authorizeUrl"))
     }
 
     @Test
     fun authenticate() {
-        val clientManager = mockk<OAuthProviderManager> {
-            every {
-                getRequired(any())
-                    .authenticate(any())
-            } returns OAuthUser(id = "id", username = "username", provider = "provider").toMono()
-        }
-        val authentication = OAuthAuthentication(clientManager)
+        OAuthProviderManager.register(
+            "authenticate",
+            mockk {
+                every { authorizeUrl() } returns "authenticate"
+                every { authenticate(any()) } returns OAuthUser(
+                    id = "id",
+                    username = "username",
+                    provider = "authenticate"
+                ).toMono()
+            }
+        )
+        val authentication = OAuthAuthentication()
 
-        authentication.authenticate(JustAuthCredentials("clientId"))
+        authentication.authenticate(JustAuthCredentials("authenticate"))
             .test()
             .consumeNextWith {
                 assertThat(
                     it.id,
-                    `is`("id@clientId"),
+                    `is`("id@authenticate"),
                 )
             }
             .verifyComplete()
