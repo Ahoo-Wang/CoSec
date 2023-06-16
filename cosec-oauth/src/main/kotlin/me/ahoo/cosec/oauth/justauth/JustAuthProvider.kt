@@ -10,10 +10,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.oauth.client
+package me.ahoo.cosec.oauth.justauth
 
 import com.google.common.base.MoreObjects
+import me.ahoo.cosec.oauth.OAuthCredentials
 import me.ahoo.cosec.oauth.OAuthException
+import me.ahoo.cosec.oauth.OAuthProvider
 import me.ahoo.cosec.oauth.OAuthUser
 import me.ahoo.cosid.IdGenerator
 import me.zhyd.oauth.enums.AuthUserGender
@@ -24,20 +26,21 @@ import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
 /**
- * JustAuthClient .
+ * JustAuthProvider .
  *
  * @author ahoo wang
  */
-class JustAuthClient(
+class JustAuthProvider(
     override val name: String,
     private val authRequest: AuthRequest,
     private val idGenerator: IdGenerator
-) : OAuthClient {
+) : OAuthProvider {
     override fun authorizeUrl(): String {
         return authRequest.authorize(idGenerator.generateAsString())
     }
 
-    override fun authenticate(credentials: OAuthClientCredentials): Mono<OAuthUser> {
+    override fun authenticate(credentials: OAuthCredentials): Mono<OAuthUser> {
+        require(credentials is JustAuthCredentials)
         return Mono.defer {
             @Suppress("UNCHECKED_CAST")
             val authResponse: AuthResponse<AuthUser> = authRequest.login(credentials) as AuthResponse<AuthUser>

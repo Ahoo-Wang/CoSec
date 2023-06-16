@@ -11,45 +11,53 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.oauth.client
+package me.ahoo.cosec.oauth
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.oauth.OAuthUser
+import me.ahoo.cosec.oauth.justauth.JustAuthCredentials
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
 import reactor.kotlin.core.publisher.toMono
 import reactor.kotlin.test.test
 
-internal class OAuthClientAuthenticationTest {
+internal class OAuthAuthenticationTest {
 
     @Test
     fun authorizeUrl() {
-        val clientManager = mockk<OAuthClientManager> {
-            every { getRequired(any()).authorizeUrl() } returns "authorizeUrl"
-        }
-        val authentication = OAuthClientAuthentication(clientManager)
-        assertThat(authentication.supportCredentials, `is`(OAuthClientCredentials::class.java))
-        assertThat(authentication.authorizeUrl(""), `is`("authorizeUrl"))
+        OAuthProviderManager.register(
+            "authorizeUrl",
+            mockk {
+                every { authorizeUrl() } returns "authorizeUrl"
+            }
+        )
+        val authentication = OAuthAuthentication()
+        assertThat(authentication.supportCredentials, `is`(OAuthCredentials::class.java))
+        assertThat(authentication.authorizeUrl("authorizeUrl"), `is`("authorizeUrl"))
     }
 
     @Test
     fun authenticate() {
-        val clientManager = mockk<OAuthClientManager> {
-            every {
-                getRequired(any())
-                    .authenticate(any())
-            } returns OAuthUser(id = "id", username = "username", provider = "provider").toMono()
-        }
-        val authentication = OAuthClientAuthentication(clientManager)
+        OAuthProviderManager.register(
+            "authenticate",
+            mockk {
+                every { authorizeUrl() } returns "authenticate"
+                every { authenticate(any()) } returns OAuthUser(
+                    id = "id",
+                    username = "username",
+                    provider = "authenticate"
+                ).toMono()
+            }
+        )
+        val authentication = OAuthAuthentication()
 
-        authentication.authenticate(OAuthClientCredentials("clientId"))
+        authentication.authenticate(JustAuthCredentials("authenticate"))
             .test()
             .consumeNextWith {
                 assertThat(
                     it.id,
-                    `is`("id@clientId"),
+                    `is`("id@authenticate"),
                 )
             }
             .verifyComplete()

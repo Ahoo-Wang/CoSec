@@ -10,38 +10,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.oauth.client
+package me.ahoo.cosec.oauth
 
-import com.google.common.annotations.Beta
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * OAuthClientManager .
+ * OAuthProviderManager .
  *
  * @author ahoo wang
  */
-@Beta
-class OAuthClientManager {
-    private val clients: ConcurrentHashMap<String, OAuthClient> = ConcurrentHashMap()
+object OAuthProviderManager {
+    private val providers: ConcurrentHashMap<String, OAuthProvider> = ConcurrentHashMap()
 
-    operator fun get(client: String): OAuthClient? {
-        return clients[client]
+    operator fun get(provider: String): OAuthProvider? {
+        return providers[provider]
     }
 
-    fun getRequired(client: String): OAuthClient {
-        return requireNotNull(get(client))
+    fun getRequired(provider: String): OAuthProvider {
+        return requireNotNull(get(provider))
     }
 
-    fun register(client: String, authProvider: OAuthClient) {
-        clients[client] = authProvider
+    fun register(provider: String, authProvider: OAuthProvider) {
+        providers[provider] = authProvider
     }
 
-    fun register(authProvider: OAuthClient) {
-        clients[authProvider.name] = authProvider
-    }
-
-    companion object {
-        @JvmField
-        val INSTANCE = OAuthClientManager()
+    fun register(authProvider: OAuthProvider) {
+        providers[authProvider.name] = authProvider
     }
 }

@@ -37,6 +37,7 @@ class CompositeAuthenticationTest {
     fun authenticate() {
         val credentials = mockk<Credentials>()
         val authentication = mockk<Authentication<Credentials, CoSecPrincipal>> {
+            every { supportCredentials } returns credentials.javaClass
             every { authenticate(any()) } returns SimplePrincipal.ANONYMOUS.toMono()
         }
         DefaultAuthenticationProvider.register(credentials.javaClass, authentication)

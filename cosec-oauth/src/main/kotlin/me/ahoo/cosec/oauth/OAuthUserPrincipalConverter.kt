@@ -10,25 +10,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package me.ahoo.cosec.oauth
 
-package me.ahoo.cosec.oauth.client
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+import reactor.core.publisher.Mono
 
-import me.ahoo.cosec.oauth.OAuthUser
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.`is`
-import org.junit.jupiter.api.Test
-import reactor.kotlin.test.test
+/**
+ * OAuth User Principal Converter .
+ *
+ * @author ahoo wang
+ */
 
-internal class DirectOAuthClientPrincipalConverterTest {
+fun interface OAuthUserPrincipalConverter {
+    fun convert(provider: String, authUser: OAuthUser): Mono<CoSecPrincipal>
 
-    @Test
-    fun convert() {
-        val authUser = OAuthUser(id = "id", username = "username", provider = "provider")
-        DirectOAuthClientPrincipalConverter.convert("clientId", authUser)
-            .test()
-            .consumeNextWith {
-                assertThat(it.id, `is`("id@clientId"))
-            }
-            .verifyComplete()
+    companion object {
+        const val OAUTH_PROVIDER = "cosec_oauth_provider"
     }
 }

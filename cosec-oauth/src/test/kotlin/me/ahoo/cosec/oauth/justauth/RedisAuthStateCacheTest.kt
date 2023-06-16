@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.oauth.client
+package me.ahoo.cosec.oauth.justauth
 
 import me.ahoo.cosid.test.MockIdGenerator
 import org.hamcrest.MatcherAssert.assertThat

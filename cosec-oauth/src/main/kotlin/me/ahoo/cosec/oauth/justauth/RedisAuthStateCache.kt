@@ -10,7 +10,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.oauth.client
+package me.ahoo.cosec.oauth.justauth
 
 import me.zhyd.oauth.cache.AuthStateCache
 import org.springframework.data.redis.core.StringRedisTemplate

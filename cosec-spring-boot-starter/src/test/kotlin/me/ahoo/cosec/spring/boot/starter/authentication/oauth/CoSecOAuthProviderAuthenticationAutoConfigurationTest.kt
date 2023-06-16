@@ -15,10 +15,10 @@ package me.ahoo.cosec.spring.boot.starter.authentication.oauth
 
 import me.ahoo.cosec.api.authentication.AuthenticationProvider
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.oauth.client.OAuthClientAuthentication
-import me.ahoo.cosec.oauth.client.OAuthClientCredentials
-import me.ahoo.cosec.oauth.client.OAuthClientManager
-import me.ahoo.cosec.oauth.client.OAuthClientPrincipalConverter
+import me.ahoo.cosec.oauth.OAuthAuthentication
+import me.ahoo.cosec.oauth.OAuthCredentials
+import me.ahoo.cosec.oauth.OAuthProviderManager
+import me.ahoo.cosec.oauth.OAuthUserPrincipalConverter
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnAuthenticationEnabled
 import me.ahoo.cosid.IdGenerator
@@ -30,46 +30,46 @@ import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
-internal class CoSecOAuthClientAuthenticationAutoConfigurationTest {
+internal class CoSecOAuthProviderAuthenticationAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
 
     @Test
     fun contextLoads() {
         contextRunner
             .withPropertyValues(
-                "${OAuthClientAuthenticationProperties.PREFIX}.registration.google.type=google",
-                "${OAuthClientAuthenticationProperties.PREFIX}.registration.google.client-id=client-id",
-                "${OAuthClientAuthenticationProperties.PREFIX}.registration.google.client-secret=client-secret",
-                "${OAuthClientAuthenticationProperties.PREFIX}.registration.google.redirect-uri=https://github.com/Ahoo-Wang/CoCache/oauth-client/callback/google",
-                "${OAuthClientAuthenticationProperties.PREFIX}.registration.github.type=github",
-                "${OAuthClientAuthenticationProperties.PREFIX}.registration.github.client-id=client-id",
-                "${OAuthClientAuthenticationProperties.PREFIX}.registration.github.client-secret=client-secret",
-                "${OAuthClientAuthenticationProperties.PREFIX}.registration.github.redirect-uri=https://github.com/Ahoo-Wang/CoCache/oauth-client/callback/github",
+                "${OAuthAuthenticationProperties.PREFIX}.registration.google.type=google",
+                "${OAuthAuthenticationProperties.PREFIX}.registration.google.client-id=client-id",
+                "${OAuthAuthenticationProperties.PREFIX}.registration.google.client-secret=client-secret",
+                "${OAuthAuthenticationProperties.PREFIX}.registration.google.redirect-uri=https://github.com/Ahoo-Wang/CoCache/oauth-client/callback/google",
+                "${OAuthAuthenticationProperties.PREFIX}.registration.github.type=github",
+                "${OAuthAuthenticationProperties.PREFIX}.registration.github.client-id=client-id",
+                "${OAuthAuthenticationProperties.PREFIX}.registration.github.client-secret=client-secret",
+                "${OAuthAuthenticationProperties.PREFIX}.registration.github.redirect-uri=https://github.com/Ahoo-Wang/CoCache/oauth-client/callback/github",
             )
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
                 RedisAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,
-                CoSecOAuthClientAuthenticationAutoConfiguration::class.java,
+                CoSecOAuthAuthenticationAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
                 assertThat(context)
-                    .hasSingleBean(OAuthClientAuthenticationProperties::class.java)
-                    .hasSingleBean(CoSecOAuthClientAuthenticationAutoConfiguration::class.java)
+                    .hasSingleBean(OAuthAuthenticationProperties::class.java)
+                    .hasSingleBean(CoSecOAuthAuthenticationAutoConfiguration::class.java)
                     .hasSingleBean(AuthenticationProvider::class.java)
                     .hasSingleBean(AuthStateCache::class.java)
-                    .hasSingleBean(OAuthClientManager::class.java)
-                    .hasSingleBean(OAuthClientPrincipalConverter::class.java)
-                    .hasSingleBean(OAuthClientAuthentication::class.java)
+                    .hasSingleBean(OAuthProviderManager::class.java)
+                    .hasSingleBean(OAuthUserPrincipalConverter::class.java)
+                    .hasSingleBean(OAuthAuthentication::class.java)
                     .getBean(AuthenticationProvider::class.java)
                     .extracting {
-                        it.getRequired<OAuthClientCredentials, CoSecPrincipal, OAuthClientAuthentication>(
-                            OAuthClientCredentials::class.java,
+                        it.getRequired<OAuthCredentials, CoSecPrincipal, OAuthAuthentication>(
+                            OAuthCredentials::class.java,
                         )
                     }
 
                 assertThat(context)
-                    .getBean(OAuthClientManager::class.java)
+                    .getBean(OAuthProviderManager::class.java)
                     .extracting {
                         it.getRequired("google")
                         it.getRequired("github")
@@ -83,12 +83,12 @@ internal class CoSecOAuthClientAuthenticationAutoConfigurationTest {
             .withPropertyValues("${ConditionalOnAuthenticationEnabled.ENABLED_KEY}=false")
             .withUserConfiguration(
                 CoSecAuthenticationAutoConfiguration::class.java,
-                CoSecOAuthClientAuthenticationAutoConfiguration::class.java,
+                CoSecOAuthAuthenticationAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
                 assertThat(context)
-                    .doesNotHaveBean(OAuthClientAuthenticationProperties::class.java)
-                    .doesNotHaveBean(CoSecOAuthClientAuthenticationAutoConfiguration::class.java)
+                    .doesNotHaveBean(OAuthAuthenticationProperties::class.java)
+                    .doesNotHaveBean(CoSecOAuthAuthenticationAutoConfiguration::class.java)
             }
     }
 }
