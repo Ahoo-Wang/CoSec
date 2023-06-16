@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.oauth.client
+package me.ahoo.cosec.oauth.justauth
 
 import com.alibaba.fastjson.JSONObject
 import io.mockk.every
@@ -28,31 +28,31 @@ import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
 
-internal class JustAuthClientTest {
+internal class JustAuthProviderTest {
 
     @Test
     fun authorizeUrl() {
         val authRequest = mockk<AuthRequest> {
             every { authorize(any()) } returns "authorizeUrl"
         }
-        val authClient = JustAuthClient("clientId", authRequest, MockIdGenerator.INSTANCE)
+        val authClient = JustAuthProvider("clientId", authRequest, MockIdGenerator.INSTANCE)
         assertThat(authClient.name, `is`("clientId"))
         assertThat(authClient.authorizeUrl(), `is`("authorizeUrl"))
     }
 
     @Test
     fun authenticateFail() {
-        val oAuthClientCredentials = OAuthClientCredentials("clientId")
+        val oAuthCredentials = JustAuthCredentials("clientId")
         val authRequest = mockk<AuthRequest> {
-            every { login(oAuthClientCredentials) } returns mockk<AuthResponse<AuthUser>> {
+            every { login(oAuthCredentials) } returns mockk<AuthResponse<AuthUser>> {
                 every { ok() } returns false
                 every { msg } returns "msg"
                 every { code } returns -1
             }
         }
-        val authClient = JustAuthClient("clientId", authRequest, MockIdGenerator.INSTANCE)
+        val authClient = JustAuthProvider("clientId", authRequest, MockIdGenerator.INSTANCE)
 
-        authClient.authenticate(oAuthClientCredentials)
+        authClient.authenticate(oAuthCredentials)
             .test()
             .expectError(OAuthException::class.java)
             .verify()
@@ -60,9 +60,9 @@ internal class JustAuthClientTest {
 
     @Test
     fun authenticateSuccess() {
-        val oAuthClientCredentials = OAuthClientCredentials("clientId")
+        val oAuthCredentials = JustAuthCredentials("clientId")
         val authRequest = mockk<AuthRequest> {
-            every { login(oAuthClientCredentials) } returns mockk<AuthResponse<AuthUser>> {
+            every { login(oAuthCredentials) } returns mockk<AuthResponse<AuthUser>> {
                 every { ok() } returns true
                 every { data } returns
                     AuthUser(
@@ -82,8 +82,8 @@ internal class JustAuthClientTest {
                     )
             }
         }
-        val authClient = JustAuthClient("clientId", authRequest, MockIdGenerator.INSTANCE)
-        authClient.authenticate(oAuthClientCredentials)
+        val authClient = JustAuthProvider("clientId", authRequest, MockIdGenerator.INSTANCE)
+        authClient.authenticate(oAuthCredentials)
             .test()
             .consumeNextWith {
                 assertThat(it.id, `is`("uuid"))

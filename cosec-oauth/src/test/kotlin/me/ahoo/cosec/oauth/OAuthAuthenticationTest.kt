@@ -11,40 +11,40 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.oauth.client
+package me.ahoo.cosec.oauth
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.oauth.OAuthUser
+import me.ahoo.cosec.oauth.justauth.JustAuthCredentials
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
 import reactor.kotlin.core.publisher.toMono
 import reactor.kotlin.test.test
 
-internal class OAuthClientAuthenticationTest {
+internal class OAuthAuthenticationTest {
 
     @Test
     fun authorizeUrl() {
-        val clientManager = mockk<OAuthClientManager> {
+        val clientManager = mockk<OAuthProviderManager> {
             every { getRequired(any()).authorizeUrl() } returns "authorizeUrl"
         }
-        val authentication = OAuthClientAuthentication(clientManager)
-        assertThat(authentication.supportCredentials, `is`(OAuthClientCredentials::class.java))
+        val authentication = OAuthAuthentication(clientManager)
+        assertThat(authentication.supportCredentials, `is`(OAuthCredentials::class.java))
         assertThat(authentication.authorizeUrl(""), `is`("authorizeUrl"))
     }
 
     @Test
     fun authenticate() {
-        val clientManager = mockk<OAuthClientManager> {
+        val clientManager = mockk<OAuthProviderManager> {
             every {
                 getRequired(any())
                     .authenticate(any())
             } returns OAuthUser(id = "id", username = "username", provider = "provider").toMono()
         }
-        val authentication = OAuthClientAuthentication(clientManager)
+        val authentication = OAuthAuthentication(clientManager)
 
-        authentication.authenticate(OAuthClientCredentials("clientId"))
+        authentication.authenticate(JustAuthCredentials("clientId"))
             .test()
             .consumeNextWith {
                 assertThat(

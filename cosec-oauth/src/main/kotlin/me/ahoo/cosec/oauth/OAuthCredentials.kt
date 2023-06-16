@@ -10,14 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.oauth.client
+
+package me.ahoo.cosec.oauth
 
 import me.ahoo.cosec.api.authentication.Credentials
-import me.zhyd.oauth.model.AuthCallback
 
-/**
- * OAuth Client Credentials .
- *
- * @author ahoo wang
- */
-class OAuthClientCredentials(val client: String) : AuthCallback(), Credentials
+interface OAuthCredentials : Credentials {
+    val provider: String
+}

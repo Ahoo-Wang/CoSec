@@ -3,34 +3,34 @@
 title OAuth Flow
 
 actor User
-participant OAuthClientAuthentication
-participant OAuthClientManager
-participant OAuthClient
+participant OAuthAuthentication
+participant OAuthProviderManager
+participant OAuthProvider
 participant AuthorizationServer
-participant OAuthClientPrincipalConverter
+participant OAuthUserPrincipalConverter
 participant TokenConverter
 User++
 
-User -> OAuthClientAuthentication++: authorize()
-OAuthClientAuthentication -> OAuthClientManager++: getOAuthClient()
-OAuthClientAuthentication <-- OAuthClientManager--: OAuthClient
-OAuthClientAuthentication -> OAuthClient++: authorize()
-OAuthClientAuthentication <-- OAuthClient--: authorizeUrl
-User <-- OAuthClientAuthentication--: authorizeUrl
+User -> OAuthAuthentication++: authorize()
+OAuthAuthentication -> OAuthProviderManager++: getOAuthProvider()
+OAuthAuthentication <-- OAuthProviderManager--: OAuthProvider
+OAuthAuthentication -> OAuthProvider++: authorize()
+OAuthAuthentication <-- OAuthProvider--: authorizeUrl
+User <-- OAuthAuthentication--: authorizeUrl
 User -> AuthorizationServer++: redirect : Authorization Grant
 User <-- AuthorizationServer--: (Authorization code,state)
-User -> OAuthClientAuthentication++: callback(code,state)
-OAuthClientAuthentication -> OAuthClientManager++: getOAuthClient()
-OAuthClientAuthentication <-- OAuthClientManager--: OAuthClient
-OAuthClientAuthentication -> OAuthClient++: authenticate()
-OAuthClient-> AuthorizationServer++: getAccessToken()
-OAuthClient <-- AuthorizationServer--: accessToken
-OAuthClient -> AuthorizationServer++: getUserInfo()
-OAuthClient <-- AuthorizationServer--: userInfo
-OAuthClientAuthentication <-- OAuthClient--: userInfo
-OAuthClientAuthentication -> OAuthClientPrincipalConverter++: convert()
-OAuthClientAuthentication <-- OAuthClientPrincipalConverter--: Principal
-OAuthClientAuthentication -> TokenConverter++: convert()
-OAuthClientAuthentication <-- TokenConverter--: token
-User <-- OAuthClientAuthentication--: token
+User -> OAuthAuthentication++: callback(code,state)
+OAuthAuthentication -> OAuthProviderManager++: getOAuthProvider()
+OAuthAuthentication <-- OAuthProviderManager--: OAuthProvider
+OAuthAuthentication -> OAuthProvider++: authenticate()
+OAuthProvider-> AuthorizationServer++: getAccessToken()
+OAuthProvider <-- AuthorizationServer--: accessToken
+OAuthProvider -> AuthorizationServer++: getUserInfo()
+OAuthProvider <-- AuthorizationServer--: userInfo
+OAuthAuthentication <-- OAuthProvider--: userInfo
+OAuthAuthentication -> OAuthUserPrincipalConverter++: convert()
+OAuthAuthentication <-- OAuthUserPrincipalConverter--: Principal
+OAuthAuthentication -> TokenConverter++: convert()
+OAuthAuthentication <-- TokenConverter--: token
+User <-- OAuthAuthentication--: token
 @enduml

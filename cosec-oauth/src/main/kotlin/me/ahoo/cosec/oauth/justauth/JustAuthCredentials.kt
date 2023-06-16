@@ -10,26 +10,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.oauth.client
+package me.ahoo.cosec.oauth.justauth
 
-import me.ahoo.cosec.api.Named
-import me.ahoo.cosec.oauth.OAuthException
-import me.ahoo.cosec.oauth.OAuthUser
-import reactor.core.publisher.Mono
+import me.ahoo.cosec.oauth.OAuthCredentials
+import me.zhyd.oauth.model.AuthCallback
 
 /**
- * OAuth Client .
+ * JustAuth Credentials .
  *
  * @author ahoo wang
  */
-interface OAuthClient : Named {
-    /**
-     * Generate authorize Url.
-     *
-     * @return authorize Url
-     */
-    fun authorizeUrl(): String
-
-    @Throws(OAuthException::class)
-    fun authenticate(credentials: OAuthClientCredentials): Mono<OAuthUser>
-}
+class JustAuthCredentials(override val provider: String) : AuthCallback(), OAuthCredentials

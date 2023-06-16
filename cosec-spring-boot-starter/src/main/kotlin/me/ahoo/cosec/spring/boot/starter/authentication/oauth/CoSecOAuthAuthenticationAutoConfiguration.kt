@@ -12,14 +12,14 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authentication.oauth
 
+import me.ahoo.cosec.oauth.DirectOAuthUserPrincipalConverter
+import me.ahoo.cosec.oauth.OAuthAuthentication
+import me.ahoo.cosec.oauth.OAuthProvider
+import me.ahoo.cosec.oauth.OAuthProviderManager
 import me.ahoo.cosec.oauth.OAuthUser
-import me.ahoo.cosec.oauth.client.DirectOAuthClientPrincipalConverter
-import me.ahoo.cosec.oauth.client.JustAuthClient
-import me.ahoo.cosec.oauth.client.OAuthClient
-import me.ahoo.cosec.oauth.client.OAuthClientAuthentication
-import me.ahoo.cosec.oauth.client.OAuthClientManager
-import me.ahoo.cosec.oauth.client.OAuthClientPrincipalConverter
-import me.ahoo.cosec.oauth.client.RedisAuthStateCache
+import me.ahoo.cosec.oauth.OAuthUserPrincipalConverter
+import me.ahoo.cosec.oauth.justauth.JustAuthProvider
+import me.ahoo.cosec.oauth.justauth.RedisAuthStateCache
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnAuthenticationEnabled
 import me.ahoo.cosid.IdGenerator
@@ -47,10 +47,10 @@ import java.lang.reflect.Constructor
 @ConditionalOnOAuthAuthenticationEnabled
 @ConditionalOnClass(OAuthUser::class)
 @EnableConfigurationProperties(
-    OAuthClientAuthenticationProperties::class,
+    OAuthAuthenticationProperties::class,
 )
-class CoSecOAuthClientAuthenticationAutoConfiguration(
-    private val authenticationProperties: OAuthClientAuthenticationProperties
+class CoSecOAuthAuthenticationAutoConfiguration(
+    private val oAuthAuthenticationProperties: OAuthAuthenticationProperties
 ) {
     @Bean
     @ConditionalOnMissingBean
@@ -60,32 +60,32 @@ class CoSecOAuthClientAuthenticationAutoConfiguration(
 
     @Bean
     @ConditionalOnMissingBean
-    fun authProviderManager(authStateCache: AuthStateCache, idGenerator: IdGenerator): OAuthClientManager {
-        for ((key, client) in authenticationProperties.registration) {
-            val authRequestClass: Class<out AuthDefaultRequest> = client.type.targetClass
+    fun oAuthProviderManager(authStateCache: AuthStateCache, idGenerator: IdGenerator): OAuthProviderManager {
+        for ((key, provider) in oAuthAuthenticationProperties.registration) {
+            val authRequestClass: Class<out AuthDefaultRequest> = provider.type.targetClass
             val authRequestCtor: Constructor<out AuthDefaultRequest> = authRequestClass.getConstructor(
                 AuthConfig::class.java,
                 AuthStateCache::class.java,
             )
-            val authRequest: AuthRequest = BeanUtils.instantiateClass(authRequestCtor, client, authStateCache)
-            val authProvider: OAuthClient = JustAuthClient(key, authRequest, idGenerator)
-            OAuthClientManager.INSTANCE.register(authProvider)
+            val authRequest: AuthRequest = BeanUtils.instantiateClass(authRequestCtor, provider, authStateCache)
+            val authProvider: OAuthProvider = JustAuthProvider(key, authRequest, idGenerator)
+            OAuthProviderManager.INSTANCE.register(authProvider)
         }
-        return OAuthClientManager.INSTANCE
+        return OAuthProviderManager.INSTANCE
     }
 
     @Bean
     @ConditionalOnMissingBean
-    fun authPrincipalConverter(): OAuthClientPrincipalConverter {
-        return DirectOAuthClientPrincipalConverter
+    fun directOAuthUserPrincipalConverter(): OAuthUserPrincipalConverter {
+        return DirectOAuthUserPrincipalConverter
     }
 
     @Bean
     @ConditionalOnMissingBean
-    fun authAuthentication(
-        authProvider: OAuthClientManager,
-        principalConverter: OAuthClientPrincipalConverter
-    ): OAuthClientAuthentication {
-        return OAuthClientAuthentication(authProvider, principalConverter)
+    fun oAuthAuthentication(
+        oAuthProviderManager: OAuthProviderManager,
+        principalConverter: OAuthUserPrincipalConverter
+    ): OAuthAuthentication {
+        return OAuthAuthentication(oAuthProviderManager, principalConverter)
     }
 }

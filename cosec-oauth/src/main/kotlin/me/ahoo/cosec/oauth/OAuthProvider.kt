@@ -10,23 +10,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.authentication.oauth
+package me.ahoo.cosec.oauth
 
-import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import me.ahoo.cosec.api.Named
+import reactor.core.publisher.Mono
 
 /**
- * Conditional On CoSec Enabled.
+ * OAuth Provider .
  *
  * @author ahoo wang
  */
-@ConditionalOnProperty(
-    value = [ConditionalOnOAuthAuthenticationEnabled.ENABLED_KEY],
-    matchIfMissing = true,
-    havingValue = "true",
-)
-annotation class ConditionalOnOAuthAuthenticationEnabled {
-    companion object {
-        const val ENABLED_KEY: String = OAuthAuthenticationProperties.PREFIX + ENABLED_SUFFIX_KEY
-    }
+interface OAuthProvider : Named {
+    /**
+     * Generate authorize Url.
+     *
+     * @return authorize Url
+     */
+    fun authorizeUrl(): String
+
+    @Throws(OAuthException::class)
+    fun authenticate(credentials: OAuthCredentials): Mono<OAuthUser>
 }

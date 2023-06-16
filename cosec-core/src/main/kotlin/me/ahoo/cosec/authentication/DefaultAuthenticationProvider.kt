@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Simple Authentication Provider .
+ * Default Authentication Provider .
  *
  * @author ahoo wang
  */
@@ -42,10 +42,19 @@ object DefaultAuthenticationProvider : AuthenticationProvider {
         authenticationMaps[credentialsType] = authentication
     }
 
+    @Suppress("UNCHECKED_CAST")
     override fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> get(
         credentialsType: Class<out Credentials>
     ): A? {
-        @Suppress("UNCHECKED_CAST")
-        return authenticationMaps[credentialsType] as A?
+        val authentication = authenticationMaps[credentialsType] as A?
+        if (authentication != null) {
+            return authentication
+        }
+        return authenticationMaps.values
+            .firstOrNull {
+                it.supportCredentials.isAssignableFrom(credentialsType)
+            }?.let {
+                return it as A
+            }
     }
 }

@@ -10,24 +10,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.oauth.client
+package me.ahoo.cosec.oauth
 
 import me.ahoo.cosec.api.authentication.Authentication
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import reactor.core.publisher.Mono
 
 /**
- * OAuth Client Authentication .
+ * OAuth Authentication .
  *
  * @author ahoo wang
  */
-class OAuthClientAuthentication(
-    private val authClientManager: OAuthClientManager,
-    private val principalConverter: OAuthClientPrincipalConverter = DirectOAuthClientPrincipalConverter
-) : Authentication<OAuthClientCredentials, CoSecPrincipal> {
-    override val supportCredentials: Class<OAuthClientCredentials>
+class OAuthAuthentication(
+    private val oAuthProviderManager: OAuthProviderManager,
+    private val principalConverter: OAuthUserPrincipalConverter = DirectOAuthUserPrincipalConverter
+) : Authentication<OAuthCredentials, CoSecPrincipal> {
+    override val supportCredentials: Class<OAuthCredentials>
         get() {
-            return OAuthClientCredentials::class.java
+            return OAuthCredentials::class.java
         }
 
     /**
@@ -37,14 +37,14 @@ class OAuthClientAuthentication(
      * @return Authorize Url
      */
     fun authorizeUrl(provider: String): String {
-        return authClientManager.getRequired(provider).authorizeUrl()
+        return oAuthProviderManager.getRequired(provider).authorizeUrl()
     }
 
-    override fun authenticate(credentials: OAuthClientCredentials): Mono<CoSecPrincipal> {
-        return authClientManager.getRequired(credentials.client)
+    override fun authenticate(credentials: OAuthCredentials): Mono<CoSecPrincipal> {
+        return oAuthProviderManager.getRequired(credentials.provider)
             .authenticate(credentials)
             .flatMap {
-                principalConverter.convert(credentials.client, it)
+                principalConverter.convert(credentials.provider, it)
             }
     }
 }

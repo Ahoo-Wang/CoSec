@@ -25,18 +25,18 @@ import org.springframework.boot.context.properties.ConstructorBinding
  * @author ahoo wang
  */
 @ConstructorBinding
-@ConfigurationProperties(prefix = OAuthClientAuthenticationProperties.PREFIX)
-data class OAuthClientAuthenticationProperties(
+@ConfigurationProperties(prefix = OAuthAuthenticationProperties.PREFIX)
+data class OAuthAuthenticationProperties(
     val enabled: Boolean = true,
-    val registration: Map<String, Client> = emptyMap()
+    val registration: Map<String, Provider> = emptyMap()
 ) {
     companion object {
-        const val PREFIX = AuthenticationProperties.PREFIX + ".oauth.client"
+        const val PREFIX = AuthenticationProperties.PREFIX + ".oauth"
     }
 
     @Suppress("LongParameterList")
     @ConstructorBinding
-    class Client(
+    class Provider(
         val type: AuthDefaultSource,
         clientId: String,
         clientSecret: String?,
