@@ -13,8 +13,8 @@
 
 package me.ahoo.cosec.servlet
 
+import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.context.SecurityContextParser
-import javax.servlet.http.HttpServletRequest
 
 internal class InjectSecurityContextParserTest : SecurityContextParserSpec() {
 

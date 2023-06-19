@@ -14,7 +14,6 @@ package me.ahoo.cosec.spring.boot.starter
 
 import me.ahoo.cosec.api.CoSec
 import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.boot.context.properties.ConstructorBinding
 
 const val ENABLED_SUFFIX_KEY = ".enabled"
 
@@ -23,6 +22,5 @@ const val ENABLED_SUFFIX_KEY = ".enabled"
  *
  * @author ahoo wang
  */
-@ConstructorBinding
 @ConfigurationProperties(prefix = CoSec.COSEC)
 data class CoSecProperties(val enabled: Boolean = true)

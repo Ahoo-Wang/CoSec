@@ -1,3 +1,7 @@
+server:
+  error:
+    whitelabel:
+      enabled: false
 cosec:
   authentication:
     enabled: false

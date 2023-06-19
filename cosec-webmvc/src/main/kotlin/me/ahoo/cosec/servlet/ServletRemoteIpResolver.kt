@@ -13,8 +13,8 @@
 
 package me.ahoo.cosec.servlet
 
+import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.context.request.RemoteIpResolver
-import javax.servlet.http.HttpServletRequest
 
 object ServletRemoteIpResolver : RemoteIpResolver<HttpServletRequest> {
     override fun resolve(request: HttpServletRequest): String {

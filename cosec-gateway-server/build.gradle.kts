@@ -20,7 +20,7 @@ plugins {
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(8))
+        languageVersion.set(JavaLanguageVersion.of(17))
     }
 }
 tasks.jar.configure {
@@ -41,7 +41,7 @@ application {
         "-XX:MaxDirectMemorySize=512M",
         "-Xss1m",
         "-server",
-        "-XX:+UseG1GC",
+        "-XX:+UseZGC",
         "-Xlog:gc*:file=logs/$applicationName-gc.log:time,tags:filecount=10,filesize=32M",
         "-XX:+HeapDumpOnOutOfMemoryError",
         "-XX:HeapDumpPath=data",

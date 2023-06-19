@@ -14,14 +14,12 @@ package me.ahoo.cosec.spring.boot.starter.authentication
 
 import me.ahoo.cosec.api.CoSec
 import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.boot.context.properties.ConstructorBinding
 
 /**
  * Authentication Properties .
  *
  * @author ahoo wang
  */
-@ConstructorBinding
 @ConfigurationProperties(prefix = AuthenticationProperties.PREFIX)
 data class AuthenticationProperties(val enabled: Boolean = true) {
 

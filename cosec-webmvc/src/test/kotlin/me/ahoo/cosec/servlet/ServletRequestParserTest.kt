@@ -15,11 +15,11 @@ package me.ahoo.cosec.servlet
 
 import io.mockk.every
 import io.mockk.mockk
+import jakarta.servlet.http.HttpServletRequest
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
-import javax.servlet.http.HttpServletRequest
 
 internal class ServletRequestParserTest {
 

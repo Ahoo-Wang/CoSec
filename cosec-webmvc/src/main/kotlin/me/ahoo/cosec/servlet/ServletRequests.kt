@@ -12,8 +12,8 @@
  */
 package me.ahoo.cosec.servlet
 
+import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.context.SecurityContext
-import javax.servlet.http.HttpServletRequest
 
 /**
  * ServletRequests .

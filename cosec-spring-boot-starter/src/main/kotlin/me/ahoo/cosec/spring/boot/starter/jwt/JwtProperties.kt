@@ -14,7 +14,6 @@ package me.ahoo.cosec.spring.boot.starter.jwt
 
 import me.ahoo.cosec.api.CoSec
 import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.boot.context.properties.ConstructorBinding
 import org.springframework.boot.context.properties.NestedConfigurationProperty
 import java.time.Duration
 
@@ -23,7 +22,6 @@ import java.time.Duration
  *
  * @author ahoo wang
  */
-@ConstructorBinding
 @ConfigurationProperties(prefix = JwtProperties.PREFIX)
 data class JwtProperties(
     val enabled: Boolean = true,
@@ -36,7 +34,6 @@ data class JwtProperties(
         const val PREFIX = CoSec.COSEC_PREFIX + "jwt"
     }
 
-    @ConstructorBinding
     data class TokenValidity(
         var access: Duration = Duration.ofMinutes(10),
         var refresh: Duration = Duration.ofDays(7)

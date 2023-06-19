@@ -15,10 +15,10 @@ package me.ahoo.cosec.servlet
 
 import io.mockk.every
 import io.mockk.mockk
+import jakarta.servlet.http.HttpServletRequest
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
-import javax.servlet.http.HttpServletRequest
 
 class CoSecServletRequestTest {
     @Test
