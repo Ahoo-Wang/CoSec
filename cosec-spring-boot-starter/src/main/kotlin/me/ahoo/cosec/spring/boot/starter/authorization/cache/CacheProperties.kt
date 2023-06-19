@@ -15,14 +15,12 @@ package me.ahoo.cosec.spring.boot.starter.authorization.cache
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.spring.boot.starter.authorization.AuthorizationProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.boot.context.properties.ConstructorBinding
 
 /**
  * CacheProperties .
  *
  * @author ahoo wang
  */
-@ConstructorBinding
 @ConfigurationProperties(prefix = CacheProperties.PREFIX)
 data class CacheProperties(val enabled: Boolean = true, val cacheKeyPrefix: CacheKeyPrefix = CacheKeyPrefix()) {
     companion object {

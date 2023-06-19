@@ -15,6 +15,8 @@ package me.ahoo.cosec.servlet
 
 import io.mockk.every
 import io.mockk.mockk
+import jakarta.servlet.FilterChain
+import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
@@ -22,8 +24,6 @@ import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
-import javax.servlet.FilterChain
-import javax.servlet.http.HttpServletRequest
 
 internal class InjectSecurityContextFilterTest {
 

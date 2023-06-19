@@ -16,6 +16,7 @@ package me.ahoo.cosec.servlet
 import com.auth0.jwt.algorithms.Algorithm
 import io.mockk.every
 import io.mockk.mockk
+import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
@@ -26,7 +27,6 @@ import me.ahoo.cosid.test.MockIdGenerator
 import org.hamcrest.MatcherAssert.*
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
-import javax.servlet.http.HttpServletRequest
 
 abstract class SecurityContextParserSpec {
     var algorithm = Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLWGA_")

@@ -12,13 +12,13 @@
  */
 package me.ahoo.cosec.servlet
 
+import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.context.AbstractSecurityContextParser
 import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.jwt.Jwts.parseAccessToken
 import me.ahoo.cosec.token.TokenVerifier
-import javax.servlet.http.HttpServletRequest
 
 /**
  * ServletRequestSecurityContextParser .

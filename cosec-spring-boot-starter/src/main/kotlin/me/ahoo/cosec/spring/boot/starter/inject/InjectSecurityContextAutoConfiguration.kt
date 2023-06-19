@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter.inject
 
+import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.servlet.InjectSecurityContextFilter
 import me.ahoo.cosec.servlet.InjectSecurityContextParser
@@ -26,7 +27,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.server.ServerWebExchange
-import javax.servlet.http.HttpServletRequest
 
 /**
  * InjectSecurityContextAutoConfiguration .

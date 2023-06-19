@@ -13,9 +13,9 @@
 
 package me.ahoo.cosec.servlet
 
+import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.Delegated
 import me.ahoo.cosec.api.context.request.Request
-import javax.servlet.http.HttpServletRequest
 
 data class CoSecServletRequest(
     override val delegate: HttpServletRequest,

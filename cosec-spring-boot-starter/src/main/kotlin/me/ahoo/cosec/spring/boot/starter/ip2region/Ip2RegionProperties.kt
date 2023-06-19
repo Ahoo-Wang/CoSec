@@ -14,14 +14,12 @@ package me.ahoo.cosec.spring.boot.starter.ip2region
 
 import me.ahoo.cosec.api.CoSec
 import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.boot.context.properties.ConstructorBinding
 
 /**
  * InjectSecurityContextProperties .
  *
  * @author ahoo wang
  */
-@ConstructorBinding
 @ConfigurationProperties(prefix = Ip2RegionProperties.PREFIX)
 data class Ip2RegionProperties(val enabled: Boolean = true) {
 

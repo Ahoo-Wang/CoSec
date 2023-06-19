@@ -14,14 +14,12 @@ package me.ahoo.cosec.spring.boot.starter.inject
 
 import me.ahoo.cosec.api.CoSec
 import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.boot.context.properties.ConstructorBinding
 
 /**
  * InjectSecurityContextProperties .
  *
  * @author ahoo wang
  */
-@ConstructorBinding
 @ConfigurationProperties(prefix = InjectSecurityContextProperties.PREFIX)
 data class InjectSecurityContextProperties(val enabled: Boolean = true) {
 

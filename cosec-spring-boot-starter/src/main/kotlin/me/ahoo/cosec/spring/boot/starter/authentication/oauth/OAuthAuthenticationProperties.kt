@@ -17,14 +17,12 @@ import me.ahoo.cosec.spring.boot.starter.authentication.AuthenticationProperties
 import me.zhyd.oauth.config.AuthConfig
 import me.zhyd.oauth.config.AuthDefaultSource
 import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.boot.context.properties.ConstructorBinding
 
 /**
  * OAuth Authentication Properties .
  *
  * @author ahoo wang
  */
-@ConstructorBinding
 @ConfigurationProperties(prefix = OAuthAuthenticationProperties.PREFIX)
 data class OAuthAuthenticationProperties(
     val enabled: Boolean = true,
@@ -35,7 +33,6 @@ data class OAuthAuthenticationProperties(
     }
 
     @Suppress("LongParameterList")
-    @ConstructorBinding
     class Provider(
         val type: AuthDefaultSource,
         clientId: String,

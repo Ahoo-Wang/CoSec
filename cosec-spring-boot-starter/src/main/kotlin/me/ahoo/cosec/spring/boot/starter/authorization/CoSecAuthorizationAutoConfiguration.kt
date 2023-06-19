@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization
 
+import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
@@ -40,7 +41,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.server.ServerWebExchange
-import javax.servlet.http.HttpServletRequest
 
 /**
  * CoSec Authorization AutoConfiguration.

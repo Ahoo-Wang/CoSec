@@ -14,14 +14,12 @@ package me.ahoo.cosec.spring.boot.starter.authorization.gateway
 
 import me.ahoo.cosec.spring.boot.starter.authorization.AuthorizationProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
-import org.springframework.boot.context.properties.ConstructorBinding
 
 /**
  * CacheProperties .
  *
  * @author ahoo wang
  */
-@ConstructorBinding
 @ConfigurationProperties(prefix = GatewayProperties.PREFIX)
 data class GatewayProperties(val enabled: Boolean = true) {
     companion object {
