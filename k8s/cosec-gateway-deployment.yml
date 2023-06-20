@@ -20,7 +20,7 @@ spec:
         - env:
             - name: TZ
               value: Asia/Shanghai
-          image: registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway:2.0.0
+          image: registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway:2.0.1
           startupProbe:
             httpGet:
               port: http
