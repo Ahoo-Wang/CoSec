@@ -63,6 +63,12 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Login to AliyunCR
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.ALIYUN_CR_USERNAME }}
+          password: ${{ secrets.ALIYUN_CR_TOKEN }}
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v4
@@ -70,6 +76,7 @@ jobs:
           images: |
             ahoowang/cosec-gateway
             ghcr.io/ahoo-wang/cosec-gateway
+            registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway
           tags: |
             type=ref,event=branch
             type=ref,event=pr

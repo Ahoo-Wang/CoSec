@@ -13,12 +13,14 @@ spec:
     metadata:
       labels:
         app: cosec-gateway
+      annotations:
+        instrumentation.opentelemetry.io/inject-java: "true"
     spec:
       containers:
         - env:
             - name: TZ
               value: Asia/Shanghai
-          image: ahoowang/cosec-gateway:lastVersion
+          image: registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway:2.0.0
           startupProbe:
             httpGet:
               port: http
