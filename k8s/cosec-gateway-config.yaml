@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cosec-gateway-config
+  labels:
+    app: cosec-gateway-config
+data:
+  bootstrap.yaml: |-
+    spring:
+      application:
+        name: ${service.name:cosec-gateway}
+  application.yaml: |-
+    server:
+      error:
+        whitelabel:
+          enabled: false
+    cosec:
+      authentication:
+        enabled: false

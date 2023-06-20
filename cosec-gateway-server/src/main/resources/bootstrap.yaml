@@ -1,11 +1,3 @@
 spring:
   application:
     name: ${service.name:cosec-gateway}
-  cloud:
-    cosky:
-      namespace: ${cosky.namespace:{dev}}
-      config:
-        config-id: ${spring.application.name}.yaml
-    service-registry:
-      auto-registration:
-        enabled: ${cosky.auto-registry:false}
