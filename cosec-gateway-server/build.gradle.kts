@@ -18,10 +18,8 @@ plugins {
     kotlin("kapt")
 }
 
-java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(17))
-    }
+kotlin {
+    jvmToolchain(17)
 }
 tasks.jar.configure {
     exclude("application.yaml", "bootstrap.yaml")
@@ -68,8 +66,6 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("me.ahoo.cosid:cosid-spring-redis")
     implementation("me.ahoo.cosid:cosid-spring-boot-starter")
-    implementation("me.ahoo.cosky:spring-cloud-starter-cosky-config")
-    implementation("me.ahoo.cosky:spring-cloud-starter-cosky-discovery")
     implementation("org.springframework.cloud:spring-cloud-starter-gateway")
     implementation("org.springframework.cloud:spring-cloud-starter-openfeign")
     implementation("org.springframework.cloud:spring-cloud-starter-loadbalancer")

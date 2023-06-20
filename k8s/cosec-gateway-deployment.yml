@@ -16,12 +16,6 @@ spec:
     spec:
       containers:
         - env:
-            - name: SPRING_REDIS_HOST
-              value: redis-uri:6379
-            - name: SPRING_REDIS_PASSWORD
-              value: redis-pwd
-            - name: SPRING_CLOUD_COSKY_NAMESPACE
-              value: '{dev}'
             - name: TZ
               value: Asia/Shanghai
           image: ahoowang/cosec-gateway:lastVersion
@@ -52,42 +46,13 @@ spec:
           volumeMounts:
             - mountPath: /etc/localtime
               name: volume-localtime
+            - mountPath: /opt/cosec-gateway-server/config/
+              name: cosec-gateway-config
       volumes:
         - hostPath:
             path: /etc/localtime
             type: ""
           name: volume-localtime
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: cosec-gateway
-  labels:
-    app: cosec-gateway
-spec:
-  selector:
-    app: cosec-gateway
-  ports:
-    - name: http
-      port: 80
-      protocol: TCP
-      targetPort: 8080
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: cosec-gateway-hpa
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: cosec-gateway
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 600
+        - configMap:
+            name: cosec-gateway-config
+          name: cosec-gateway-config
