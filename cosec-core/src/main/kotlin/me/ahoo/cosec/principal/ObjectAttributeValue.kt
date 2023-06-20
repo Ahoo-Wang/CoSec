@@ -19,7 +19,7 @@ import me.ahoo.cosec.serialization.CoSecJsonSerializer
 class ObjectAttributeValue<V>(override val value: V) : AttributeValue<V> {
     companion object {
         @Suppress("UNCHECKED_CAST")
-        fun <V> V.asAttributeValue(): AttributeValue<V> {
+        fun <V : Any> V.asAttributeValue(): AttributeValue<V> {
             return when (this) {
                 is AttributeValue<*> -> this
                 is String -> TextAttributeValue(this)
