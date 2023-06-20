@@ -18,6 +18,20 @@ spec:
     spec:
       containers:
         - env:
+            - name: LANG
+              value: C.utf8
+            - name: SPRING_DATA_REDIS_CLUSTER_NODES
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: nodes
+            - name: SPRING_DATA_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: password
+            - name: SPRING_DATA_REDIS_CLUSTER_MAX_REDIRECTS
+              value: "3"
             - name: TZ
               value: Asia/Shanghai
           image: registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway:2.0.1
