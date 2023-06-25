@@ -15,7 +15,7 @@ dependencies {
     api(platform("org.springframework.boot:spring-boot-dependencies:3.1.1"))
     api(platform("org.springframework.cloud:spring-cloud-dependencies:2022.0.3"))
     api(platform("me.ahoo.cosid:cosid-bom:2.1.1"))
-    api(platform("me.ahoo.cocache:cocache-bom:2.0.0"))
+    api(platform("me.ahoo.cocache:cocache-bom:2.0.2"))
     api(platform("me.zhyd.oauth:JustAuth:1.16.5"))
     api(platform("io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom:1.27.0"))
     constraints {
