@@ -22,7 +22,7 @@ dependencies {
         api("ognl:ognl:3.3.4")
         api("com.auth0:java-jwt:4.4.0")
         api("org.lionsoul:ip2region:2.7.0")
-        api("com.google.guava:guava:32.0.1-jre")
+        api("com.google.guava:guava:32.1.0-jre")
         api("io.opentelemetry:opentelemetry-semconv:1.20.1-alpha")
         api("org.hamcrest:hamcrest:2.2")
         api("io.mockk:mockk:1.13.5")
