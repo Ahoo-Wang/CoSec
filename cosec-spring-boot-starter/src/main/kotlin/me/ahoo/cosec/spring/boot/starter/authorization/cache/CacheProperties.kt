@@ -22,15 +22,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = CacheProperties.PREFIX)
-data class CacheProperties(val enabled: Boolean = true, val cacheKeyPrefix: CacheKeyPrefix = CacheKeyPrefix()) {
+data class CacheProperties(val enabled: Boolean = true, val keyPrefix: String = CoSec.COSEC) {
     companion object {
         const val PREFIX: String = AuthorizationProperties.PREFIX + ".cache"
     }
 
-    data class CacheKeyPrefix(
-        var globalPolicyIndex: String = CoSec.COSEC + ":global:policy",
-        var policy: String = CoSec.COSEC + ":policy:",
-        var appPermission: String = CoSec.COSEC + ":app:permission:",
-        var rolePermission: String = CoSec.COSEC + ":role:permission:"
-    )
+    val globalPolicyIndexKey: String = "$keyPrefix:global:policy"
+    val policyKeyPrefix: String = "$keyPrefix:policy:"
+    val appPermissionKeyPrefix: String = "$keyPrefix:app:permission:"
+    val rolePermissionKeyPrefix: String = "$keyPrefix:role:permission:"
 }
