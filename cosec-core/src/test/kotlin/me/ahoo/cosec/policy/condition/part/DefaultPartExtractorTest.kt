@@ -17,7 +17,6 @@ import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.principal.ObjectAttributeValue.Companion.asAttributeValue
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Assertions
@@ -114,7 +113,7 @@ class DefaultPartExtractorTest {
     @Test
     fun extractContextPrincipalAttributes() {
         val context: SecurityContext = mockk {
-            every { principal.attributes["key"] } returns "value".asAttributeValue()
+            every { principal.attributes["key"] } returns "value"
             every { principal.attributes["not_exist"] } returns null
         }
         assertThat(

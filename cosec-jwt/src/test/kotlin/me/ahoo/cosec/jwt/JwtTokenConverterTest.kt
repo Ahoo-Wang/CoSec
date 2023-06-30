@@ -14,7 +14,6 @@ package me.ahoo.cosec.jwt
 
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.principal.ObjectAttributeValue.Companion.asAttributeValue
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
@@ -44,19 +43,14 @@ internal class JwtTokenConverterTest {
                 setOf("policyId"),
                 setOf("roleId"),
                 mapOf(
-                    "attr_string" to "attr_string_value".asAttributeValue(),
-                    "attr_number" to 1.asAttributeValue(),
-                    "attr_list" to listOf("attr_list_value").asAttributeValue(),
+                    "attr_string" to "attr_string_value"
                 ),
             )
         val token: CompositeToken = jwtTokenConverter.asToken(principal)
         assertThat(token, notNullValue())
         val verified = jwtTokenVerifier.verify<TokenPrincipal>(token)
         assertThat(verified.id, equalTo(principal.id))
-        assertThat(verified.attributes["attr_string"]!!.asString(), equalTo("attr_string_value"))
-        assertThat(verified.attributes["attr_number"]!!.asString(), equalTo("1"))
-        assertThat(verified.attributes["attr_number"]!!.asObject(Int::class.java), equalTo(1))
-        assertThat(verified.attributes["attr_list"]!!.asObject(List::class.java), equalTo(listOf("attr_list_value")))
+        assertThat(verified.attributes["attr_string"], equalTo("attr_string_value"))
         val token2 = jwtTokenConverter.asToken(verified)
         assertThat(token2, notNullValue())
     }

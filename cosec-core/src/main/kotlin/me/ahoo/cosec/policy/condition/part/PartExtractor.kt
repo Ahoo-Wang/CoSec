@@ -63,7 +63,7 @@ data class DefaultPartExtractor(val part: String) : PartExtractor {
                 }
                 if (part.startsWith(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX)) {
                     val headerKey = part.substring(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX.length)
-                    return securityContext.principal.attributes[headerKey]?.asString().orEmpty()
+                    return securityContext.principal.attributes[headerKey].orEmpty()
                 }
 
                 throw IllegalArgumentException("Unsupported part: $part")

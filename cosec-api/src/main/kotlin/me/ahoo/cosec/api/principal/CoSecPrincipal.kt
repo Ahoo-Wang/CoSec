@@ -32,7 +32,7 @@ interface CoSecPrincipal : Principal, PolicyCapable, RoleCapable {
         return id
     }
 
-    val attributes: Map<String, AttributeValue<*>>
+    val attributes: Map<String, String>
     fun anonymous(): Boolean {
         return ANONYMOUS_ID == id
     }

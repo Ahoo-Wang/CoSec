@@ -12,7 +12,6 @@
  */
 package me.ahoo.cosec.principal
 
-import me.ahoo.cosec.api.principal.AttributeValue
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 
 /**
@@ -24,7 +23,7 @@ data class SimplePrincipal(
     override val id: String,
     override val policies: Set<String> = emptySet(),
     override val roles: Set<String> = emptySet(),
-    override val attributes: Map<String, AttributeValue<*>> = emptyMap()
+    override val attributes: Map<String, String> = emptyMap()
 ) : CoSecPrincipal {
 
     companion object {
