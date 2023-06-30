@@ -48,7 +48,7 @@ class JwtTokenConverter(
                 !Jwts.isRegisteredClaim(it.key)
             }
             .map {
-                it.key to it.value.asString()
+                it.key to it.value
             }
             .toMap()
 

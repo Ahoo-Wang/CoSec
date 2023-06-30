@@ -20,7 +20,6 @@ import me.ahoo.cosec.api.principal.RoleCapable
 import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
-import me.ahoo.cosec.principal.ObjectAttributeValue.Companion.asAttributeValue
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.SimpleAccessToken
@@ -70,7 +69,7 @@ object Jwts {
             .claims
             .asSequence()
             .filter { !isRegisteredClaim(it.key) }
-            .associateBy({ it.key }, { it.value.asString().asAttributeValue() })
+            .associateBy({ it.key }, { it.value.asString() })
 
         val policyClaim = decodedAccessToken.getClaim(PolicyCapable.POLICY_KEY)
         val policies = if (policyClaim.isMissing) emptySet() else policyClaim.asList(String::class.java).toSet()
