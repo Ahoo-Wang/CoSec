@@ -82,7 +82,7 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
         idGenerator: IdGenerator
     ): AppPermissionCache {
         val clientId = idGenerator.generateAsString()
-        val cacheKeyPrefix = cacheProperties.cacheKeyPrefix.appPermission
+        val cacheKeyPrefix = cacheProperties.appPermissionKeyPrefix
         val codecExecutor = ObjectToJsonCodecExecutor(AppPermission::class.java, redisTemplate, CoSecJsonSerializer)
         val distributedCaching: DistributedCache<AppPermission> = RedisDistributedCache(redisTemplate, codecExecutor)
         val delegate = cacheManager.getOrCreateCache(
@@ -112,7 +112,7 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
         idGenerator: IdGenerator
     ): RolePermissionCache {
         val clientId = idGenerator.generateAsString()
-        val cacheKeyPrefix = cacheProperties.cacheKeyPrefix.rolePermission
+        val cacheKeyPrefix = cacheProperties.rolePermissionKeyPrefix
         val codecExecutor = SetToSetCodecExecutor(redisTemplate)
         val distributedCaching: DistributedCache<Set<String>> = RedisDistributedCache(redisTemplate, codecExecutor)
         val delegate = cacheManager.getOrCreateCache(

@@ -88,7 +88,7 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
     ): GlobalPolicyIndexCache {
         val clientId = idGenerator.generateAsString()
         val codecExecutor = SetToSetCodecExecutor(redisTemplate)
-        val keyConverter = GlobalPolicyIndexKeyConverter(cacheProperties.cacheKeyPrefix.globalPolicyIndex)
+        val keyConverter = GlobalPolicyIndexKeyConverter(cacheProperties.globalPolicyIndexKey)
         val distributedCaching: DistributedCache<Set<String>> = RedisDistributedCache(redisTemplate, codecExecutor)
         val delegate = cacheManager.getOrCreateCache(
             CacheConfig(
@@ -117,7 +117,7 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
         idGenerator: IdGenerator
     ): PolicyCache {
         val clientId = idGenerator.generateAsString()
-        val cacheKeyPrefix = cacheProperties.cacheKeyPrefix.policy
+        val cacheKeyPrefix = cacheProperties.policyKeyPrefix
         val codecExecutor = ObjectToJsonCodecExecutor(Policy::class.java, redisTemplate, CoSecJsonSerializer)
         val distributedCaching: DistributedCache<Policy> = RedisDistributedCache(redisTemplate, codecExecutor)
         val delegate = cacheManager.getOrCreateCache(
