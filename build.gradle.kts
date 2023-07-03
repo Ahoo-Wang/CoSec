@@ -21,7 +21,7 @@ plugins {
     alias(libs.plugins.detekt)
     alias(libs.plugins.kotlin)
     alias(libs.plugins.dokka)
-    alias(libs.plugins.jmh)
+    alias(libs.plugins.jmhPlugin)
     jacoco
 }
 val dependenciesProject = project(":cosec-dependencies")
