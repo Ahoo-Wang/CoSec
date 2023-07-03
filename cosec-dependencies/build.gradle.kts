@@ -12,22 +12,22 @@
  */
 
 dependencies {
-    api(platform("org.springframework.boot:spring-boot-dependencies:3.1.1"))
-    api(platform("org.springframework.cloud:spring-cloud-dependencies:2022.0.3"))
-    api(platform("me.ahoo.cosid:cosid-bom:2.2.1"))
-    api(platform("me.ahoo.cocache:cocache-bom:2.0.2"))
-    api(platform("me.zhyd.oauth:JustAuth:1.16.5"))
-    api(platform("io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom:1.27.0"))
+    api(platform(libs.springBootDependencies))
+    api(platform(libs.springCloudDependencies))
+    api(platform(libs.cosidBom))
+    api(platform(libs.cocacheBom))
+    api(platform(libs.justAuth))
+    api(platform(libs.opentelemetryInstrumentationBom))
     constraints {
-        api("ognl:ognl:3.3.4")
-        api("com.auth0:java-jwt:4.4.0")
-        api("org.lionsoul:ip2region:2.7.0")
-        api("com.google.guava:guava:32.1.1-jre")
-        api("io.opentelemetry:opentelemetry-semconv:1.20.1-alpha")
-        api("org.hamcrest:hamcrest:2.2")
-        api("io.mockk:mockk:1.13.5")
-        api("org.openjdk.jmh:jmh-core:1.36")
-        api("org.openjdk.jmh:jmh-generator-annprocess:1.36")
-        api("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.0")
+        api(libs.ognl)
+        api(libs.javaJwt)
+        api(libs.ip2region)
+        api(libs.guava)
+        api(libs.opentelemetrySemconv)
+        api(libs.jmhCore)
+        api(libs.jmhGeneratorAnnprocess)
+        api(libs.hamcrest)
+        api(libs.mockk)
+        api(libs.detektFormatting)
     }
 }
