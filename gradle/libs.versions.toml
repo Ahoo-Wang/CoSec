@@ -15,12 +15,13 @@ justAuth = "1.16.5"
 hamcrest = "2.2"
 mockk = "1.13.5"
 detektFormatting = "1.23.0"
+jmh = "1.36"
 # plugins
 detekt = "1.23.0"
 dokka = "1.8.20"
 kotlin = "1.8.22"
 publishPlugin = "1.3.0"
-jmh = "1.36"
+jmhPlugin = "0.7.1"
 [libraries]
 springBootDependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "springBoot" }
 springCloudDependencies = { module = "org.springframework.cloud:spring-cloud-dependencies", version.ref = "springCloud" }
@@ -46,5 +47,5 @@ kotlin = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlinSpring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
 kotlinkapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
 publishPlugin = { id = "io.github.gradle-nexus.publish-plugin", version.ref = "publishPlugin" }
-jmh = { id = "me.champeau.jmh", version.ref = "jmh" }
+jmhPlugin = { id = "me.champeau.jmh", version.ref = "jmhPlugin" }
 
