@@ -1,0 +1,50 @@
+[versions]
+# libraries
+springBoot = "3.1.1"
+springCloud = "2022.0.3"
+cosid = "2.2.1"
+cocache = "2.0.2"
+opentelemetry = "1.27.0"
+opentelemetrySemconv = "1.22.0-alpha"
+testcontainers = "1.18.3"
+guava = "32.1.1-jre"
+ognl = "3.3.4"
+javaJwt = "4.4.0"
+ip2region = "2.7.0"
+justAuth = "1.16.5"
+hamcrest = "2.2"
+mockk = "1.13.5"
+detektFormatting = "1.23.0"
+# plugins
+detekt = "1.23.0"
+dokka = "1.8.20"
+kotlin = "1.8.22"
+publishPlugin = "1.3.0"
+jmh = "0.7.1"
+[libraries]
+springBootDependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "springBoot" }
+springCloudDependencies = { module = "org.springframework.cloud:spring-cloud-dependencies", version.ref = "springCloud" }
+cosidBom = { module = "me.ahoo.cosid:cosid-bom", version.ref = "cosid" }
+cocacheBom = { module = "me.ahoo.cocache:cocache-bom", version.ref = "cocache" }
+opentelemetryInstrumentationBom = { module = "io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom", version.ref = "opentelemetry" }
+opentelemetrySemconv = { module = "io.opentelemetry:opentelemetry-semconv", version.ref = "opentelemetrySemconv" }
+testcontainersBom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
+ognl = { module = "ognl:ognl", version.ref = "ognl" }
+javaJwt = { module = "com.auth0:java-jwt", version.ref = "javaJwt" }
+ip2region = { module = "org.lionsoul:ip2region", version.ref = "ip2region" }
+justAuth = { module = "me.zhyd.oauth:JustAuth", version.ref = "justAuth" }
+hamcrest = { module = "org.hamcrest:hamcrest", version.ref = "hamcrest" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+detektFormatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detektFormatting" }
+jmhCore = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
+jmhGeneratorAnnprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
+[plugins]
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
+kotlin = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlinSpring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+kotlinkapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
+publishPlugin = { id = "io.github.gradle-nexus.publish-plugin", version.ref = "publishPlugin" }
+jmh = { id = "me.champeau.jmh", version.ref = "jmh" }
+
