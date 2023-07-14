@@ -42,7 +42,7 @@ jobs:
           settings-path: ${{ github.workspace }}
 
       - name: Build Dist
-        run: gradle cosec-gateway-server:installDist
+        run: ./gradlew cosec-gateway-server:installDist
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
