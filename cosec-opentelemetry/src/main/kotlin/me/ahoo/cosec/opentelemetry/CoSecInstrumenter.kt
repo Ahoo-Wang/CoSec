@@ -32,7 +32,7 @@ import me.ahoo.cosec.authorization.VerifyContext.Companion.getVerifyContext
 
 object CoSecInstrumenter {
     private const val INSTRUMENTATION_NAME = "me.ahoo.cosec"
-    private val INSTRUMENTATION_VERSION = CoSecInstrumenter.javaClass.`package`.implementationVersion ?: "2.1.2"
+    internal val INSTRUMENTATION_VERSION = CoSecInstrumenter.javaClass.`package`.implementationVersion ?: "2.1.2"
     val INSTRUMENTER: Instrumenter<SecurityContext, AuthorizeResult> =
         Instrumenter.builder<SecurityContext, AuthorizeResult>(
             GlobalOpenTelemetry.get(),
@@ -51,34 +51,36 @@ object CoSecSpanNameExtractor : SpanNameExtractor<SecurityContext> {
 
 object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, AuthorizeResult> {
     private const val COSEC_TENANT_ID_KEY = CoSec.COSEC_PREFIX + "tenant_id"
-    val COSEC_TENANT_ID_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_TENANT_ID_KEY)
+    private val COSEC_TENANT_ID_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_TENANT_ID_KEY)
 
     private const val COSEC_POLICY_KEY = CoSec.COSEC_PREFIX + PolicyCapable.POLICY_KEY
-    val COSEC_POLICY_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_POLICY_KEY)
+    private val COSEC_POLICY_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_POLICY_KEY)
 
     private const val COSEC_AUTHORIZE_PREFIX = CoSec.COSEC_PREFIX + "authorize."
 
     private const val COSEC_AUTHORIZATION_POLICY_ID_KEY = COSEC_AUTHORIZE_PREFIX + "policy.id"
-    val COSEC_AUTHORIZATION_POLICY_ID_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_AUTHORIZATION_POLICY_ID_KEY)
+    private val COSEC_AUTHORIZATION_POLICY_ID_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_AUTHORIZATION_POLICY_ID_KEY)
 
     private const val COSEC_AUTHORIZATION_STATEMENT_PREFIX = COSEC_AUTHORIZE_PREFIX + "statement."
     private const val COSEC_AUTHORIZATION_STATEMENT_IDX_KEY = COSEC_AUTHORIZATION_STATEMENT_PREFIX + "index"
-    val COSEC_AUTHORIZATION_STATEMENT_IDX_ATTRIBUTE_KEY = AttributeKey.longKey(COSEC_AUTHORIZATION_STATEMENT_IDX_KEY)
+    private val COSEC_AUTHORIZATION_STATEMENT_IDX_ATTRIBUTE_KEY =
+        AttributeKey.longKey(COSEC_AUTHORIZATION_STATEMENT_IDX_KEY)
 
     private const val COSEC_AUTHORIZATION_STATEMENT_NAME_KEY = COSEC_AUTHORIZATION_STATEMENT_PREFIX + "name"
-    val COSEC_AUTHORIZATION_STATEMENT_NAME_ATTRIBUTE_KEY =
+    private val COSEC_AUTHORIZATION_STATEMENT_NAME_ATTRIBUTE_KEY =
         AttributeKey.stringKey(COSEC_AUTHORIZATION_STATEMENT_NAME_KEY)
 
     private const val COSEC_AUTHORIZATION_ROLE_ID_KEY = COSEC_AUTHORIZE_PREFIX + "role.id"
-    val COSEC_AUTHORIZATION_ROLE_ID_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_AUTHORIZATION_ROLE_ID_KEY)
+    private val COSEC_AUTHORIZATION_ROLE_ID_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_AUTHORIZATION_ROLE_ID_KEY)
 
     private const val COSEC_AUTHORIZATION_PERMISSION_ID_KEY = COSEC_AUTHORIZE_PREFIX + "permission.id"
-    val COSEC_AUTHORIZATION_PERMISSION_ID_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_AUTHORIZATION_PERMISSION_ID_KEY)
+    private val COSEC_AUTHORIZATION_PERMISSION_ID_ATTRIBUTE_KEY =
+        AttributeKey.stringKey(COSEC_AUTHORIZATION_PERMISSION_ID_KEY)
 
     private const val COSEC_AUTHORIZATION_RESULT_KEY = COSEC_AUTHORIZE_PREFIX + "result"
-    val COSEC_AUTHORIZATION_RESULT_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_AUTHORIZATION_RESULT_KEY)
+    private val COSEC_AUTHORIZATION_RESULT_ATTRIBUTE_KEY = AttributeKey.stringKey(COSEC_AUTHORIZATION_RESULT_KEY)
 
-    const val SEPARATOR = ","
+    private const val SEPARATOR = ","
     override fun onStart(attributes: AttributesBuilder, parentContext: Context, request: SecurityContext) = Unit
 
     override fun onEnd(
