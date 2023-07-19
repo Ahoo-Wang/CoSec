@@ -51,6 +51,15 @@ abstract class SecurityContextParserSpec {
     }
 
     @Test
+    fun ensureParse() {
+        val exchange = mockk<ServerWebExchange> {
+            every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } throws RuntimeException("parse error")
+        }
+        val securityContext = createSecurityContextParser().ensureParse(exchange)
+        assertThat(securityContext.principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
+    }
+
+    @Test
     fun parse() {
         val principal = SimplePrincipal("id")
         val token = jwtTokenConverter.asToken(principal).accessToken
