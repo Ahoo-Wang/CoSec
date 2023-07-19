@@ -32,7 +32,7 @@ import me.ahoo.cosec.authorization.VerifyContext.Companion.getVerifyContext
 
 object CoSecInstrumenter {
     private const val INSTRUMENTATION_NAME = "me.ahoo.cosec"
-    private const val INSTRUMENTATION_VERSION = "1.16.16"
+    private val INSTRUMENTATION_VERSION = CoSecInstrumenter.javaClass.`package`.implementationVersion ?: "2.1.2"
     val INSTRUMENTER: Instrumenter<SecurityContext, AuthorizeResult> =
         Instrumenter.builder<SecurityContext, AuthorizeResult>(
             GlobalOpenTelemetry.get(),
