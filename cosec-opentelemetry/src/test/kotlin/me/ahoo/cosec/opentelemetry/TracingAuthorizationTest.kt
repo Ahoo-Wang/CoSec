@@ -14,6 +14,8 @@ import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.context.SimpleSecurityContext
+import org.hamcrest.MatcherAssert.*
+import org.hamcrest.Matchers
 import org.junit.jupiter.api.Test
 import reactor.kotlin.core.publisher.toMono
 import reactor.kotlin.test.test
@@ -29,6 +31,11 @@ class TracingAuthorizationTest {
                 .setPropagators(ContextPropagators.create(W3CTraceContextPropagator.getInstance()))
                 .buildAndRegisterGlobal()
         }
+    }
+
+    @Test
+    fun getVersion() {
+        assertThat(CoSecInstrumenter.INSTRUMENTATION_VERSION, Matchers.notNullValue())
     }
 
     @Test
