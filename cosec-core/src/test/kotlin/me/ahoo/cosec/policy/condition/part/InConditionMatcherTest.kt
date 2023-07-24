@@ -26,7 +26,7 @@ class InConditionMatcherTest {
         InConditionMatcherFactory().create(
             mapOf(
                 CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
-                STARTS_WITH_CONDITION_MATCHER_VALUE_KEY to setOf("remoteIp", "remoteIp1"),
+                CONDITION_MATCHER_VALUE_KEY to setOf("remoteIp", "remoteIp1"),
             ).asConfiguration(),
         )
 

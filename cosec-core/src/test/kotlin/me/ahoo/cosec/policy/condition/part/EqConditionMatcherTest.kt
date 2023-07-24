@@ -26,7 +26,7 @@ class EqConditionMatcherTest {
         EqConditionMatcherFactory().create(
             mapOf(
                 CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
-                STARTS_WITH_CONDITION_MATCHER_VALUE_KEY to "remoteIp",
+                CONDITION_MATCHER_VALUE_KEY to "remoteIp",
             ).asConfiguration(),
         )
 
@@ -45,5 +45,31 @@ class EqConditionMatcherTest {
             every { remoteIp } returns "remoteIp2"
         }
         assertThat(conditionMatcher.match(requestNotMatch, mockk()), `is`(false))
+    }
+
+    @Test
+    fun matchCase() {
+        val request: Request = mockk {
+            every { remoteIp } returns "remoteip"
+        }
+        assertThat(conditionMatcher.type, `is`(EqConditionMatcherFactory.TYPE))
+        assertThat(conditionMatcher.match(request, mockk()), `is`(false))
+    }
+
+    @Test
+    fun matchIgnoreCase() {
+        val ignoreCaseConditionMatcher =
+            EqConditionMatcherFactory().create(
+                mapOf(
+                    CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
+                    CONDITION_MATCHER_VALUE_KEY to "remoteIp",
+                    CONDITION_MATCHER_IGNORE_CASE_KEY to "true"
+                ).asConfiguration(),
+            )
+        val request: Request = mockk {
+            every { remoteIp } returns "remoteip"
+        }
+        assertThat(ignoreCaseConditionMatcher.type, `is`(EqConditionMatcherFactory.TYPE))
+        assertThat(ignoreCaseConditionMatcher.match(request, mockk()), `is`(true))
     }
 }

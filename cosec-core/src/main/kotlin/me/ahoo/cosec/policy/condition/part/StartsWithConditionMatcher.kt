@@ -17,14 +17,14 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
-const val STARTS_WITH_CONDITION_MATCHER_VALUE_KEY = "value"
-const val STARTS_WITH_CONDITION_MATCHER_IGNORE_CASE_KEY = "ignoreCase"
+const val CONDITION_MATCHER_VALUE_KEY = "value"
+const val CONDITION_MATCHER_IGNORE_CASE_KEY = "ignoreCase"
 
 class StartsWithConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(StartsWithConditionMatcherFactory.TYPE, configuration) {
-    private val value: String = configuration.getRequired(STARTS_WITH_CONDITION_MATCHER_VALUE_KEY).asString()
+    private val value: String = configuration.getRequired(CONDITION_MATCHER_VALUE_KEY).asString()
     private val ignoreCase: Boolean =
-        configuration.get(STARTS_WITH_CONDITION_MATCHER_IGNORE_CASE_KEY)?.asBoolean() ?: false
+        configuration.get(CONDITION_MATCHER_IGNORE_CASE_KEY)?.asBoolean() ?: false
 
     override fun matchPart(partValue: String): Boolean {
         return partValue.startsWith(value, ignoreCase)

@@ -21,7 +21,7 @@ class EndsWithConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(EndsWithConditionMatcherFactory.TYPE, configuration) {
     private val value: String = configuration.getRequired(EndsWithConditionMatcher::value.name).asString()
     private val ignoreCase: Boolean =
-        configuration.get(STARTS_WITH_CONDITION_MATCHER_IGNORE_CASE_KEY)?.asBoolean() ?: false
+        configuration.get(CONDITION_MATCHER_IGNORE_CASE_KEY)?.asBoolean() ?: false
 
     override fun matchPart(partValue: String): Boolean {
         return partValue.endsWith(value, ignoreCase)
