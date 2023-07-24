@@ -86,7 +86,8 @@
       },
       "required": [
         "pattern"
-      ]
+      ],
+      "additionalProperties": false
     },
     "compositeActionMatcher": {
       "type": "array",

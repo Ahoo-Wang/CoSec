@@ -19,10 +19,12 @@ import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
 class EqConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(EqConditionMatcherFactory.TYPE, configuration) {
-    private val value: String = configuration.getRequired(STARTS_WITH_CONDITION_MATCHER_VALUE_KEY).asString()
+    private val value: String = configuration.getRequired(CONDITION_MATCHER_VALUE_KEY).asString()
+    private val ignoreCase: Boolean =
+        configuration.get(CONDITION_MATCHER_IGNORE_CASE_KEY)?.asBoolean() ?: false
 
     override fun matchPart(partValue: String): Boolean {
-        return value == partValue
+        return value.equals(partValue, ignoreCase)
     }
 }
 
