@@ -15,6 +15,7 @@ package me.ahoo.cosec.policy.condition.part
 
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.policy.action.getPathVariables
 
 const val CONDITION_MATCHER_PART_KEY = "part"
 
@@ -31,6 +32,7 @@ object RequestParts {
     const val REFERER = PREFIX + "referer"
     const val HEADER_PREFIX = PREFIX + "header."
     const val ATTRIBUTES_PREFIX = PREFIX + "attributes."
+    const val PATH_VAR_PREFIX = "$PATH.var."
 }
 
 object SecurityContextParts {
@@ -65,7 +67,10 @@ data class DefaultPartExtractor(val part: String) : PartExtractor {
                     val headerKey = part.substring(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX.length)
                     return securityContext.principal.attributes[headerKey].orEmpty()
                 }
-
+                if (part.startsWith(RequestParts.PATH_VAR_PREFIX)) {
+                    val pathVarKey = part.substring(RequestParts.PATH_VAR_PREFIX.length)
+                    return securityContext.getPathVariables()?.get(pathVarKey).orEmpty()
+                }
                 throw IllegalArgumentException("Unsupported part: $part")
             }
         }

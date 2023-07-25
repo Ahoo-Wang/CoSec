@@ -233,6 +233,16 @@
           "value": "admin"
         }
       }
+    },
+    {
+      "name": "RequestPathVar",
+      "action": "/user/{id}",
+      "condition": {
+        "eq": {
+          "part": "request.path.var.id",
+          "value": "userId"
+        }
+      }
     }
   ]
 }

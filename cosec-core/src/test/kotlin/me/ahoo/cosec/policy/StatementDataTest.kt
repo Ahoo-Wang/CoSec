@@ -20,6 +20,7 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
@@ -54,7 +55,7 @@ internal class StatementDataTest {
         val request = mockk<Request> {
             every { path } returns "auth/login:POST"
         }
-        assertThat(statementData.verify(request, mockk()), `is`(VerifyResult.ALLOW))
+        assertThat(statementData.verify(request, SimpleSecurityContext.anonymous()), `is`(VerifyResult.ALLOW))
     }
 
     @Test
@@ -74,12 +75,13 @@ internal class StatementDataTest {
         val request = mockk<Request> {
             every { path } returns "order/1/search:POST"
         }
-        val securityContext = mockk<SecurityContext> {
-            every { principal } returns mockk {
+        val securityContext = SimpleSecurityContext(
+            principal = mockk {
                 every { id } returns "1"
                 every { authenticated() } returns true
             }
-        }
+        )
+
         assertThat(statementData.verify(request, securityContext), `is`(VerifyResult.ALLOW))
 
         val securityContextNotMine = mockk<SecurityContext> {

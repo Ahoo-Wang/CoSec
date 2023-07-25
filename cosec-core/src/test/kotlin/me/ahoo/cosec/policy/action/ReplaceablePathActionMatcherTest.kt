@@ -15,9 +15,9 @@ package me.ahoo.cosec.policy.action
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.context.SimpleSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
@@ -26,11 +26,11 @@ internal class ReplaceablePathActionMatcherTest {
 
     @Test
     fun match() {
-        val securityContext = mockk<SecurityContext> {
-            every { principal } returns mockk {
+        val securityContext = SimpleSecurityContext(
+            principal = mockk {
                 every { id } returns "1"
             }
-        }
+        )
 
         val actionMatcher =
             PathActionMatcherFactory().create("order/#{principal.id}/*".asConfiguration())

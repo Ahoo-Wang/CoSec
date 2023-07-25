@@ -73,6 +73,7 @@
         "request.header.cosec-app-id",
         "request.attributes.",
         "request.attributes.ipRegion",
+        "request.path.var.",
         "context.tenantId",
         "context.principal.id",
         "context.principal.attributes."
