@@ -27,6 +27,7 @@ import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.asAuthorizeResult
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import reactor.core.publisher.Mono
 
 /**
  * Abstract Authorization Interceptor .
@@ -42,7 +43,7 @@ abstract class AbstractAuthorizationInterceptor(
     protected fun authorize(
         servletRequest: HttpServletRequest,
         servletResponse: HttpServletResponse
-    ): Boolean {
+    ): Mono<Boolean> {
         var tokenVerificationException: TokenVerificationException? = null
         val securityContext = try {
             securityContextParser.parse(servletRequest)
@@ -70,7 +71,7 @@ abstract class AbstractAuthorizationInterceptor(
                     return@map false
                 }
                 true
-            }.block()!!
+            }
     }
 
     fun HttpServletResponse.writeWithAuthorizeResult(authorizeResult: AuthorizeResult) {

@@ -42,13 +42,16 @@ class AuthorizationFilter(
     override fun doFilter(request: ServletRequest, response: ServletResponse, chain: FilterChain) {
         val httpServletRequest = request as HttpServletRequest
         val httpServletResponse = response as HttpServletResponse
-        try {
-            if (authorize(httpServletRequest, httpServletResponse)) {
-                chain.doFilter(request, response)
+        authorize(httpServletRequest, httpServletResponse)
+            .doOnNext {
+                if (it) {
+                    chain.doFilter(request, response)
+                }
             }
-        } catch (tooManyRequestsException: TooManyRequestsException) {
-            response.status = HttpStatus.TOO_MANY_REQUESTS.value()
-            httpServletResponse.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
-        }
+            .doOnError(TooManyRequestsException::class.java) {
+                response.status = HttpStatus.TOO_MANY_REQUESTS.value()
+                httpServletResponse.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
+            }
+            .subscribe()
     }
 }

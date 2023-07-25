@@ -140,7 +140,7 @@ internal class AuthorizationFilterTest {
     @Test
     fun doFilterWhenTooManyRequests() {
         val authorization = mockk<Authorization> {
-            every { authorize(any(), any()) } throws TooManyRequestsException()
+            every { authorize(any(), any()) } returns TooManyRequestsException().toMono()
         }
         val filter = AuthorizationFilter(
             InjectSecurityContextParser,
