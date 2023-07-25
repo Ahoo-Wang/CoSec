@@ -23,6 +23,15 @@ import org.springframework.http.server.PathContainer
 import org.springframework.web.util.pattern.PathPattern
 import org.springframework.web.util.pattern.PathPatternParser
 
+const val PATH_VARIABLES_KEY = "PATH_VARIABLES"
+fun SecurityContext.setPathVariables(pathVariables: Map<String, String>) {
+    setAttributeValue(PATH_VARIABLES_KEY, pathVariables)
+}
+
+fun SecurityContext.getPathVariables(): Map<String, String>? {
+    return getAttributeValue(PATH_VARIABLES_KEY)
+}
+
 class PathActionMatcher(
     private val patternParser: PathPatternParser,
     private val pathPattern: PathPattern,
@@ -32,7 +41,9 @@ class PathActionMatcher(
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         PathContainer.parsePath(request.path, patternParser.pathOptions)
             .let { pathContainer ->
-                return pathPattern.matches(pathContainer)
+                val pathMatchInfo = pathPattern.matchAndExtract(pathContainer) ?: return false
+                securityContext.setPathVariables(pathMatchInfo.uriVariables)
+                return true
             }
     }
 }
@@ -47,7 +58,9 @@ class ReplaceablePathActionMatcher(
         val pathPattern = ActionPatternReplacer.replace(pattern, securityContext)
         val pathContainer = PathContainer.parsePath(request.path)
         patternParser.parse(pathPattern).let {
-            return it.matches(pathContainer)
+            val pathMatchInfo = it.matchAndExtract(pathContainer) ?: return false
+            securityContext.setPathVariables(pathMatchInfo.uriVariables)
+            return true
         }
     }
 }

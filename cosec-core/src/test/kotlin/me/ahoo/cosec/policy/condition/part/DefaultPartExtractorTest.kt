@@ -17,6 +17,7 @@ import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.policy.action.getPathVariables
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Assertions
@@ -62,6 +63,17 @@ class DefaultPartExtractorTest {
             every { referer } returns "referer"
         }
         assertThat(DefaultPartExtractor(RequestParts.REFERER).extract(request, mockk()), equalTo("referer"))
+    }
+
+    @Test
+    fun extractRequestPathVar() {
+        val context: SecurityContext = mockk {
+            every { getPathVariables() } returns mapOf("id" to "id")
+        }
+        assertThat(
+            DefaultPartExtractor(RequestParts.PATH_VAR_PREFIX + "id").extract(mockk(), context),
+            equalTo("id")
+        )
     }
 
     @Test

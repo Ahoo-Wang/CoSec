@@ -17,9 +17,9 @@ import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.context.SimpleSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
-import org.hamcrest.Matchers.`is`
+import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
 
 internal class PathActionMatcherTest {
@@ -27,11 +27,25 @@ internal class PathActionMatcherTest {
     @Test
     fun match() {
         val actionMatcher =
-            PathActionMatcherFactory().create("/auth/*:POST".asConfiguration())
+            PathActionMatcherFactory().create("/auth/*".asConfiguration())
         val request = mockk<Request> {
-            every { path } returns "/auth/login:POST"
+            every { path } returns "/auth/login"
         }
-        assertThat(actionMatcher.match(request, mockk()), `is`(true))
+        val securityContext = SimpleSecurityContext.anonymous()
+        assertThat(actionMatcher.match(request, securityContext), `is`(true))
+        assertThat(securityContext.getPathVariables(), anEmptyMap())
+    }
+
+    @Test
+    fun matchWithVar() {
+        val actionMatcher =
+            PathActionMatcherFactory().create("/user/{id}/pwd".asConfiguration())
+        val request = mockk<Request> {
+            every { path } returns "/user/1/pwd"
+        }
+        val securityContext = SimpleSecurityContext.anonymous()
+        assertThat(actionMatcher.match(request, securityContext), `is`(true))
+        assertThat(securityContext.getPathVariables()?.get("id"), `is`("1"))
     }
 
     @Test
@@ -43,12 +57,13 @@ internal class PathActionMatcherTest {
                 path
             } returns "/order/1/1/hi"
         }
-        assertThat(actionMatcher.match(request1, mockk()), equalTo(true))
+        val securityContext = SimpleSecurityContext.anonymous()
+        assertThat(actionMatcher.match(request1, securityContext), equalTo(true))
         val request2 = mockk<Request> {
             every {
                 path
             } returns "/all"
         }
-        assertThat(actionMatcher.match(request2, mockk()), equalTo(true))
+        assertThat(actionMatcher.match(request2, securityContext), equalTo(true))
     }
 }
