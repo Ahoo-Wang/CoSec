@@ -14,42 +14,17 @@
 package me.ahoo.cosec.policy.action
 
 import org.openjdk.jmh.annotations.Benchmark
-import org.openjdk.jmh.annotations.Scope
-import org.openjdk.jmh.annotations.Setup
-import org.openjdk.jmh.annotations.State
-import org.springframework.http.server.PathContainer
 import org.springframework.web.util.pattern.PathPattern
-import org.springframework.web.util.pattern.PathPatternParser
 
-@State(Scope.Benchmark)
 open class PathPatternBenchmark {
-    companion object {
-        const val path = "/api/user/CoSecId"
-    }
-
-    private lateinit var patternParser: PathPatternParser
-    private lateinit var pathPattern: PathPattern
-
-    @Setup
-    fun init() {
-        patternParser = PathPatternParser.defaultInstance
-        pathPattern = patternParser.parse("/api/user/{id}")
-    }
 
     @Benchmark
     fun matches(): Boolean {
-        PathContainer.parsePath(path, patternParser.pathOptions)
-            .let { pathContainer ->
-                return pathPattern.matches(pathContainer)
-            }
+        return PathPatternTest.matches()
     }
 
     @Benchmark
     fun matchAndExtract(): PathPattern.PathMatchInfo? {
-        PathContainer.parsePath(path, patternParser.pathOptions)
-            .let { pathContainer ->
-                return pathPattern.matchAndExtract(pathContainer)
-            }
+        return PathPatternTest.matchAndExtract()
     }
-
 }
