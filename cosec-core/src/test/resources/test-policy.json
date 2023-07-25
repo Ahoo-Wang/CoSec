@@ -243,6 +243,16 @@
           "value": "userId"
         }
       }
+    },
+    {
+      "name": "RequestPathVarTemplate",
+      "action": "/user/{id}",
+      "condition": {
+        "eq": {
+          "part": "request.path.var.id",
+          "value": "#{principal.id}"
+        }
+      }
     }
   ]
 }
