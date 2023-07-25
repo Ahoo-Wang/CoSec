@@ -18,7 +18,9 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.policy.SpelExpression.Companion.isSpelTemplate
 import me.ahoo.cosec.policy.action.PathPatternParsers.asPathPatternParser
+import me.ahoo.cosec.policy.asTemplateExpression
 import org.springframework.http.server.PathContainer
 import org.springframework.web.util.pattern.PathPattern
 import org.springframework.web.util.pattern.PathPatternParser
@@ -53,9 +55,9 @@ class ReplaceablePathActionMatcher(
     private val pattern: String,
     configuration: Configuration
 ) : AbstractActionMatcher(PathActionMatcherFactory.TYPE, configuration) {
-
+    private val expression = pattern.asTemplateExpression()
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        val pathPattern = ActionPatternReplacer.replace(pattern, securityContext)
+        val pathPattern = requireNotNull(expression.getValue(securityContext))
         val pathContainer = PathContainer.parsePath(request.path)
         patternParser.parse(pathPattern).let {
             val pathMatchInfo = it.matchAndExtract(pathContainer) ?: return false
@@ -75,7 +77,7 @@ class PathActionMatcherFactory : ActionMatcherFactory {
             configuration: Configuration = this.asConfiguration(),
             patternParser: PathPatternParser = PathPatternParser.defaultInstance
         ): ActionMatcher {
-            return if (ActionPatternReplacer.isTemplate(this)) {
+            return if (this.isSpelTemplate()) {
                 ReplaceablePathActionMatcher(
                     patternParser = patternParser,
                     pattern = this,

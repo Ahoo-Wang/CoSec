@@ -37,9 +37,7 @@ class PolicyData(
         other as PolicyData
 
         if (id != other.id) return false
-        if (tenantId != other.tenantId) return false
-
-        return true
+        return tenantId == other.tenantId
     }
 
     override fun hashCode(): Int {

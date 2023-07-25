@@ -14,6 +14,7 @@
 package me.ahoo.cosec.policy.condition.part
 
 import me.ahoo.cosec.api.configuration.Configuration
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
@@ -26,7 +27,7 @@ class StartsWithConditionMatcher(configuration: Configuration) :
     private val ignoreCase: Boolean =
         configuration.get(CONDITION_MATCHER_IGNORE_CASE_KEY)?.asBoolean() ?: false
 
-    override fun matchPart(partValue: String): Boolean {
+    override fun matchPart(partValue: String, securityContext: SecurityContext): Boolean {
         return partValue.startsWith(value, ignoreCase)
     }
 }
