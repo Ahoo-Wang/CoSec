@@ -18,6 +18,7 @@ import com.google.common.cache.CacheLoader
 import com.google.common.cache.LoadingCache
 import com.google.common.util.concurrent.RateLimiter
 import me.ahoo.cosec.api.configuration.Configuration
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.part.PartConditionMatcher
@@ -41,7 +42,7 @@ class GroupedRateLimiterConditionMatcher(
         .expireAfterAccess(expireAfterAccessSecond, TimeUnit.SECONDS)
         .build(RateLimiterLoader())
 
-    override fun matchPart(partValue: String): Boolean {
+    override fun matchPart(partValue: String, securityContext: SecurityContext): Boolean {
         val rateLimiter = rateLimiters.get(partValue)
         if (rateLimiter.tryAcquire()) {
             return true

@@ -14,6 +14,7 @@
 package me.ahoo.cosec.policy.condition.part
 
 import me.ahoo.cosec.api.configuration.Configuration
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
@@ -22,7 +23,7 @@ class InConditionMatcher(configuration: Configuration) :
     private val value: Set<String> = configuration.getRequired(CONDITION_MATCHER_VALUE_KEY)
         .asStringList().toSet()
 
-    override fun matchPart(partValue: String): Boolean {
+    override fun matchPart(partValue: String, securityContext: SecurityContext): Boolean {
         return value.contains(partValue)
     }
 }

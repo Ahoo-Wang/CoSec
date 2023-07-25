@@ -30,8 +30,8 @@ abstract class PartConditionMatcher(
 
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         val partValue = partExtractor.extract(request, securityContext)
-        return matchPart(partValue)
+        return matchPart(partValue, securityContext)
     }
 
-    abstract fun matchPart(partValue: String): Boolean
+    abstract fun matchPart(partValue: String, securityContext: SecurityContext): Boolean
 }

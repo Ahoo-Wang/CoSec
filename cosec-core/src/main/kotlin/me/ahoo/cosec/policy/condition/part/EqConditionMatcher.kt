@@ -14,17 +14,24 @@
 package me.ahoo.cosec.policy.condition.part
 
 import me.ahoo.cosec.api.configuration.Configuration
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.policy.Expression
+import me.ahoo.cosec.policy.asTemplateExpression
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
 class EqConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(EqConditionMatcherFactory.TYPE, configuration) {
-    private val value: String = configuration.getRequired(CONDITION_MATCHER_VALUE_KEY).asString()
+    private val expression: Expression<String> = configuration
+        .getRequired(CONDITION_MATCHER_VALUE_KEY)
+        .asString()
+        .asTemplateExpression()
     private val ignoreCase: Boolean =
         configuration.get(CONDITION_MATCHER_IGNORE_CASE_KEY)?.asBoolean() ?: false
 
-    override fun matchPart(partValue: String): Boolean {
-        return value.equals(partValue, ignoreCase)
+    override fun matchPart(partValue: String, securityContext: SecurityContext): Boolean {
+        val value = expression.getValue(securityContext)
+        return partValue.equals(value, ignoreCase)
     }
 }
 

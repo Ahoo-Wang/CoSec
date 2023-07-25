@@ -14,6 +14,7 @@
 package me.ahoo.cosec.policy.condition.part
 
 import me.ahoo.cosec.api.configuration.Configuration
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.action.PathPatternParsers.asPathPatternParser
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
@@ -28,7 +29,7 @@ class PathConditionMatcher(configuration: Configuration) :
             patternParser.parse(it)
         }
 
-    override fun matchPart(partValue: String): Boolean {
+    override fun matchPart(partValue: String, securityContext: SecurityContext): Boolean {
         PathContainer.parsePath(partValue, patternParser.pathOptions).let {
             return pattern.matches(it)
         }
