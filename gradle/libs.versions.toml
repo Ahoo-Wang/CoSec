@@ -12,6 +12,7 @@ ognl = "3.3.4"
 javaJwt = "4.4.0"
 ip2region = "2.7.0"
 justAuth = "1.16.5"
+swagger = "2.2.15"
 hamcrest = "2.2"
 mockk = "1.13.5"
 detektFormatting = "1.23.0"
@@ -35,6 +36,7 @@ ognl = { module = "ognl:ognl", version.ref = "ognl" }
 javaJwt = { module = "com.auth0:java-jwt", version.ref = "javaJwt" }
 ip2region = { module = "org.lionsoul:ip2region", version.ref = "ip2region" }
 justAuth = { module = "me.zhyd.oauth:JustAuth", version.ref = "justAuth" }
+swagger = { module = "io.swagger.core.v3:swagger-core-jakarta", version.ref = "swagger" }
 hamcrest = { module = "org.hamcrest:hamcrest", version.ref = "hamcrest" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 detektFormatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detektFormatting" }

@@ -10,25 +10,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package me.ahoo.cosec.spring.boot.starter.generator
 
-dependencies {
-    api(platform(libs.springBootDependencies))
-    api(platform(libs.springCloudDependencies))
-    api(platform(libs.cosidBom))
-    api(platform(libs.cocacheBom))
-    api(platform(libs.justAuth))
-    api(platform(libs.opentelemetryInstrumentationBom))
-    constraints {
-        api(libs.ognl)
-        api(libs.javaJwt)
-        api(libs.ip2region)
-        api(libs.guava)
-        api(libs.opentelemetrySemconv)
-        api(libs.swagger)
-        api(libs.jmhCore)
-        api(libs.jmhGeneratorAnnprocess)
-        api(libs.hamcrest)
-        api(libs.mockk)
-        api(libs.detektFormatting)
+import io.swagger.v3.oas.models.OpenAPI
+import org.springframework.beans.factory.ObjectProvider
+import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.context.annotation.Bean
+
+/**
+ * CoSec Generator Endpoint AutoConfiguration .
+ *
+ * @author ahoo wang
+ */
+
+@AutoConfiguration
+@ConditionalOnGeneratorEnabled
+class CoSecGeneratorEndpointAutoConfiguration {
+
+    @Bean
+    fun coSecGeneratorEndpoint(openAPIProvider: ObjectProvider<OpenAPI>): CoSecGeneratorEndpoint {
+        return CoSecGeneratorEndpoint(openAPIProvider)
     }
 }

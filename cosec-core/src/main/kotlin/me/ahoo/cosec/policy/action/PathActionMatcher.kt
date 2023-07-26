@@ -70,7 +70,7 @@ class ReplaceablePathActionMatcher(
 class PathActionMatcherFactory : ActionMatcherFactory {
     companion object {
         const val TYPE = "path"
-        private const val PATTERN_KEY = "pattern"
+         const val PATTERN_KEY = "pattern"
         val INSTANCE = PathActionMatcherFactory()
 
         private fun String.asPathActionMatcher(
