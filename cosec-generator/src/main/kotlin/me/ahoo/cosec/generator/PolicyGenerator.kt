@@ -33,24 +33,22 @@ object PolicyGenerator {
 
     fun generate(openAPI: OpenAPI): Policy {
         val statements = mutableListOf<Statement>()
-        openAPI.paths.forEach { path, item ->
-            val method = item.readOperationsMap().map {
-                it.key.name
-            }.toSet()
-            val action = PathActionMatcherFactory.INSTANCE.create(
-                mapOf<String, Any>(
-                    PathActionMatcherFactory.PATTERN_KEY to path,
-                    ACTION_MATCHER_METHOD_KEY to method
-                ).asConfiguration()
-            )
-            StatementData(
-                name = item.summary,
-                action = action
-            ).also {
-                statements.add(it)
+        for ((path, item) in openAPI.paths) {
+            for ((method, operation) in item.readOperationsMap()) {
+                val action = PathActionMatcherFactory.INSTANCE.create(
+                    mapOf<String, String>(
+                        PathActionMatcherFactory.PATTERN_KEY to path,
+                        ACTION_MATCHER_METHOD_KEY to method.name
+                    ).asConfiguration()
+                )
+                StatementData(
+                    name = operation.summary ?: item.summary,
+                    action = action
+                ).also {
+                    statements.add(it)
+                }
             }
         }
-
         return PolicyData(
             id = POLICY_ID,
             category = POLICY_CATEGORY,
