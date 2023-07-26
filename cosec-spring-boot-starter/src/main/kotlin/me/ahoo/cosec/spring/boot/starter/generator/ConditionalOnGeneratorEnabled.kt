@@ -10,25 +10,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package me.ahoo.cosec.spring.boot.starter.generator
 
-dependencies {
-    api(platform(libs.springBootDependencies))
-    api(platform(libs.springCloudDependencies))
-    api(platform(libs.cosidBom))
-    api(platform(libs.cocacheBom))
-    api(platform(libs.justAuth))
-    api(platform(libs.opentelemetryInstrumentationBom))
-    constraints {
-        api(libs.ognl)
-        api(libs.javaJwt)
-        api(libs.ip2region)
-        api(libs.guava)
-        api(libs.opentelemetrySemconv)
-        api(libs.swagger)
-        api(libs.jmhCore)
-        api(libs.jmhGeneratorAnnprocess)
-        api(libs.hamcrest)
-        api(libs.mockk)
-        api(libs.detektFormatting)
-    }
-}
+import me.ahoo.cosec.generator.OpenAPIPolicyGenerator
+import org.springframework.boot.actuate.endpoint.annotation.Endpoint
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
+
+/**
+ * Conditional On Generator Enabled.
+ *
+ * @author ahoo wang
+ */
+@ConditionalOnClass(
+    value = [OpenAPIPolicyGenerator::class, Endpoint::class],
+    name = [
+        "io.swagger.v3.oas.models.OpenAPI"
+    ],
+)
+annotation class ConditionalOnGeneratorEnabled

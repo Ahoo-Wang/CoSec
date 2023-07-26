@@ -66,4 +66,17 @@ internal class PathActionMatcherTest {
         }
         assertThat(actionMatcher.match(request2, securityContext), equalTo(true))
     }
+
+    @Test
+    fun createFromObj() {
+        val actionMatcher =
+            PathActionMatcherFactory().create(
+                mapOf<String, Any>(
+                    PathActionMatcherFactory.PATTERN_KEY to "path",
+                    ACTION_MATCHER_METHOD_KEY to "GET"
+                ).asConfiguration()
+            ) as PathActionMatcher
+        assertThat(actionMatcher.type, equalTo(PathActionMatcherFactory.TYPE))
+        assertThat(actionMatcher.method, hasItem("GET"))
+    }
 }
