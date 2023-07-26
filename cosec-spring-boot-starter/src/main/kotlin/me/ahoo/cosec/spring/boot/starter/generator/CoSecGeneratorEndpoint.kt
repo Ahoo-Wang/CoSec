@@ -15,7 +15,7 @@ package me.ahoo.cosec.spring.boot.starter.generator
 
 import io.swagger.v3.oas.models.OpenAPI
 import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.generator.PolicyGenerator
+import me.ahoo.cosec.generator.OpenAPIPolicyGenerator
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation
@@ -23,8 +23,8 @@ import org.springframework.boot.actuate.endpoint.annotation.ReadOperation
 @Endpoint(id = "cosecGenerator")
 class CoSecGeneratorEndpoint(private val openAPIProvider: ObjectProvider<OpenAPI>) {
     @ReadOperation
-    fun policy(): Policy? {
+    fun generate(): Policy? {
         val openAPI = openAPIProvider.getIfAvailable() ?: return null
-        return PolicyGenerator.generate(openAPI)
+        return OpenAPIPolicyGenerator.generate(openAPI)
     }
 }

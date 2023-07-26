@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter.generator
 
-import me.ahoo.cosec.generator.PolicyGenerator
+import me.ahoo.cosec.generator.OpenAPIPolicyGenerator
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 
@@ -22,7 +22,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
  * @author ahoo wang
  */
 @ConditionalOnClass(
-    value = [PolicyGenerator::class, Endpoint::class],
+    value = [OpenAPIPolicyGenerator::class, Endpoint::class],
     name = [
         "io.swagger.v3.oas.models.OpenAPI"
     ],

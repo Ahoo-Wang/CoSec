@@ -24,7 +24,7 @@ import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.ACTION_MATCHER_METHOD_KEY
 import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 
-object PolicyGenerator {
+object OpenAPIPolicyGenerator {
     const val Generator_PREFIX = "PolicyGenerator"
     const val POLICY_ID = Generator_PREFIX + "Id"
     const val POLICY_CATEGORY = Generator_PREFIX + "Category"
