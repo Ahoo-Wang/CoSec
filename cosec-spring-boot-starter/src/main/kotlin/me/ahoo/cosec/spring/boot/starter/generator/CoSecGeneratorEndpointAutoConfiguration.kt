@@ -28,7 +28,7 @@ import org.springframework.context.annotation.Bean
 class CoSecGeneratorEndpointAutoConfiguration {
 
     @Bean
-    fun coSecGeneratorEndpoint(openAPIProvider: ObjectProvider<OpenAPI>): CoSecGeneratorEndpoint {
-        return CoSecGeneratorEndpoint(openAPIProvider)
+    fun coSecPolicyGeneratorEndpoint(openAPIProvider: ObjectProvider<OpenAPI>): CoSecPolicyGeneratorEndpoint {
+        return CoSecPolicyGeneratorEndpoint(openAPIProvider)
     }
 }

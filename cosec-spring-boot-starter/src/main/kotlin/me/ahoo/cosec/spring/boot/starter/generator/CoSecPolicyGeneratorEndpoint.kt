@@ -20,8 +20,8 @@ import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation
 
-@Endpoint(id = "cosecGenerator")
-class CoSecGeneratorEndpoint(private val openAPIProvider: ObjectProvider<OpenAPI>) {
+@Endpoint(id = "cosecPolicyGenerator")
+class CoSecPolicyGeneratorEndpoint(private val openAPIProvider: ObjectProvider<OpenAPI>) {
     @ReadOperation
     fun generate(): Policy? {
         val openAPI = openAPIProvider.getIfAvailable() ?: return null

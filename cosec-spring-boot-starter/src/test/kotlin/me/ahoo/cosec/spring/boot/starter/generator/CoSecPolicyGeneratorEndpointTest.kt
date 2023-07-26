@@ -8,11 +8,11 @@ import org.hamcrest.MatcherAssert.*
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
 
-class CoSecGeneratorEndpointTest {
+class CoSecPolicyGeneratorEndpointTest {
 
     @Test
     fun generate() {
-        val policy = CoSecGeneratorEndpoint(
+        val policy = CoSecPolicyGeneratorEndpoint(
             mockk {
                 every { getIfAvailable() } returns OpenAPI().paths(Paths())
             }
@@ -23,7 +23,7 @@ class CoSecGeneratorEndpointTest {
 
     @Test
     fun generateIfNull() {
-        val policy = CoSecGeneratorEndpoint(
+        val policy = CoSecPolicyGeneratorEndpoint(
             mockk {
                 every { getIfAvailable() } returns null
             }

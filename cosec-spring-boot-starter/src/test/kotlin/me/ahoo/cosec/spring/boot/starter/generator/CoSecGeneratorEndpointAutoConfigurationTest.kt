@@ -17,7 +17,7 @@ class CoSecGeneratorEndpointAutoConfigurationTest {
             .withUserConfiguration(CoSecGeneratorEndpointAutoConfiguration::class.java)
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
-                    .hasSingleBean(CoSecGeneratorEndpoint::class.java)
+                    .hasSingleBean(CoSecPolicyGeneratorEndpoint::class.java)
             }
     }
 }
