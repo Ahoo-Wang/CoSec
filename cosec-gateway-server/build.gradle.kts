@@ -64,8 +64,6 @@ dependencies {
     implementation(project(":cosec-ip2region"))
     implementation("me.ahoo.cocache:cocache-spring-boot-starter")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
-    implementation("me.ahoo.cosid:cosid-spring-redis")
-    implementation("me.ahoo.cosid:cosid-spring-boot-starter")
     implementation("org.springframework.cloud:spring-cloud-starter-gateway")
     implementation("org.springframework.cloud:spring-cloud-starter-openfeign")
     implementation("org.springframework.cloud:spring-cloud-starter-loadbalancer")

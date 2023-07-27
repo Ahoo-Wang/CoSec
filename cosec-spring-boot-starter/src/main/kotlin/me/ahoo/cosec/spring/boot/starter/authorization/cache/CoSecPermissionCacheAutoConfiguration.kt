@@ -21,6 +21,7 @@ import me.ahoo.cache.distributed.DistributedCache
 import me.ahoo.cache.spring.redis.RedisDistributedCache
 import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
 import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
+import me.ahoo.cache.util.ClientIdGenerator
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.redis.AppPermissionCache
@@ -28,7 +29,6 @@ import me.ahoo.cosec.redis.RedisAppRolePermissionRepository
 import me.ahoo.cosec.redis.RolePermissionCache
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosid.IdGenerator
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -79,9 +79,9 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
         @Qualifier(APP_PERMISSION_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<String, AppPermission>,
         redisTemplate: StringRedisTemplate,
         cacheManager: CacheManager,
-        idGenerator: IdGenerator
+        clientIdGenerator: ClientIdGenerator
     ): AppPermissionCache {
-        val clientId = idGenerator.generateAsString()
+        val clientId = clientIdGenerator.generate()
         val cacheKeyPrefix = cacheProperties.appPermissionKeyPrefix
         val codecExecutor = ObjectToJsonCodecExecutor(AppPermission::class.java, redisTemplate, CoSecJsonSerializer)
         val distributedCaching: DistributedCache<AppPermission> = RedisDistributedCache(redisTemplate, codecExecutor)
@@ -109,9 +109,9 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
         @Qualifier(Role_PERMISSION_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<String, Set<String>>,
         redisTemplate: StringRedisTemplate,
         cacheManager: CacheManager,
-        idGenerator: IdGenerator
+        clientIdGenerator: ClientIdGenerator
     ): RolePermissionCache {
-        val clientId = idGenerator.generateAsString()
+        val clientId = clientIdGenerator.generate()
         val cacheKeyPrefix = cacheProperties.rolePermissionKeyPrefix
         val codecExecutor = SetToSetCodecExecutor(redisTemplate)
         val distributedCaching: DistributedCache<Set<String>> = RedisDistributedCache(redisTemplate, codecExecutor)

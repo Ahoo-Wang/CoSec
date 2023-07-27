@@ -62,7 +62,6 @@ dependencies {
     "ip2regionSupportImplementation"(project(":cosec-ip2region"))
     "generatorSupportImplementation"(project(":cosec-generator"))
     "generatorSupportImplementation"("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("me.ahoo.cosid:cosid-spring-boot-starter")
     api("org.springframework.boot:spring-boot-starter")
     kapt("org.springframework.boot:spring-boot-configuration-processor")
     kapt("org.springframework.boot:spring-boot-autoconfigure-processor")

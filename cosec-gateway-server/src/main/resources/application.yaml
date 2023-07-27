@@ -28,14 +28,6 @@ spring:
             - Path=/google/**
           filters:
             - StripPrefix=1
-cosid:
-  namespace: ${spring.application.name}
-  machine:
-    enabled: true
-    distributor:
-      type: redis
-  generator:
-    enabled: true
 
 cosec:
   authentication:
