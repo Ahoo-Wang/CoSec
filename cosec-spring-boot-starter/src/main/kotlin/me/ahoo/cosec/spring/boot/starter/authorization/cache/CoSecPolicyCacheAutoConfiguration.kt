@@ -21,6 +21,7 @@ import me.ahoo.cache.distributed.DistributedCache
 import me.ahoo.cache.spring.redis.RedisDistributedCache
 import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
 import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
+import me.ahoo.cache.util.ClientIdGenerator
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.redis.GlobalPolicyIndexCache
@@ -29,7 +30,6 @@ import me.ahoo.cosec.redis.PolicyCache
 import me.ahoo.cosec.redis.RedisPolicyRepository
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosid.IdGenerator
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -84,9 +84,9 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
         CacheSource<String, Set<String>>,
         redisTemplate: StringRedisTemplate,
         cacheManager: CacheManager,
-        idGenerator: IdGenerator
+        clientIdGenerator: ClientIdGenerator
     ): GlobalPolicyIndexCache {
-        val clientId = idGenerator.generateAsString()
+        val clientId = clientIdGenerator.generate()
         val codecExecutor = SetToSetCodecExecutor(redisTemplate)
         val keyConverter = GlobalPolicyIndexKeyConverter(cacheProperties.globalPolicyIndexKey)
         val distributedCaching: DistributedCache<Set<String>> = RedisDistributedCache(redisTemplate, codecExecutor)
@@ -114,9 +114,9 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
         @Qualifier(POLICY_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<String, Policy>,
         redisTemplate: StringRedisTemplate,
         cacheManager: CacheManager,
-        idGenerator: IdGenerator
+        clientIdGenerator: ClientIdGenerator
     ): PolicyCache {
-        val clientId = idGenerator.generateAsString()
+        val clientId = clientIdGenerator.generate()
         val cacheKeyPrefix = cacheProperties.policyKeyPrefix
         val codecExecutor = ObjectToJsonCodecExecutor(Policy::class.java, redisTemplate, CoSecJsonSerializer)
         val distributedCaching: DistributedCache<Policy> = RedisDistributedCache(redisTemplate, codecExecutor)
