@@ -1,7 +1,7 @@
 [versions]
 # libraries
 springBoot = "3.1.2"
-springCloud = "2022.0.3"
+springCloud = "2022.0.4"
 cosid = "2.2.5"
 cocache = "2.1.4"
 opentelemetry = "1.28.0"
