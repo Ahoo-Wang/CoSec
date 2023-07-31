@@ -13,10 +13,12 @@
 package me.ahoo.cosec.spring.boot.starter.authentication.oauth
 
 import com.xkcoding.http.config.HttpConfig
+import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import me.ahoo.cosec.spring.boot.starter.authentication.AuthenticationProperties
 import me.zhyd.oauth.config.AuthConfig
 import me.zhyd.oauth.config.AuthDefaultSource
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.bind.DefaultValue
 
 /**
  * OAuth Authentication Properties .
@@ -24,10 +26,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = OAuthAuthenticationProperties.PREFIX)
-data class OAuthAuthenticationProperties(
-    val enabled: Boolean = true,
+class OAuthAuthenticationProperties(
+    @DefaultValue("true")
+    override var enabled: Boolean = true,
     val registration: Map<String, Provider> = emptyMap()
-) {
+) : EnabledCapable {
     companion object {
         const val PREFIX = AuthenticationProperties.PREFIX + ".oauth"
     }

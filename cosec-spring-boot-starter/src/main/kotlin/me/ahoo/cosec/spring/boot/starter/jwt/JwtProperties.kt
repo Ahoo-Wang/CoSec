@@ -13,8 +13,10 @@
 package me.ahoo.cosec.spring.boot.starter.jwt
 
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.NestedConfigurationProperty
+import org.springframework.boot.context.properties.bind.DefaultValue
 import java.time.Duration
 
 /**
@@ -23,13 +25,14 @@ import java.time.Duration
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = JwtProperties.PREFIX)
-data class JwtProperties(
-    val enabled: Boolean = true,
+class JwtProperties(
+    @DefaultValue("true")
+    override var enabled: Boolean = true,
     var algorithm: Algorithm = Algorithm.HMAC256,
     var secret: String,
     @NestedConfigurationProperty
     var tokenValidity: TokenValidity = TokenValidity()
-) {
+) : EnabledCapable {
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "jwt"
     }

@@ -13,8 +13,10 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import me.ahoo.cosec.spring.boot.starter.authorization.AuthorizationProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.bind.DefaultValue
 
 /**
  * CacheProperties .
@@ -22,7 +24,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = CacheProperties.PREFIX)
-data class CacheProperties(val enabled: Boolean = true, val keyPrefix: String = CoSec.COSEC) {
+class CacheProperties(
+    @DefaultValue("true")
+    override var enabled: Boolean = true,
+    @DefaultValue(CoSec.COSEC)
+    var keyPrefix: String = CoSec.COSEC
+) : EnabledCapable {
     companion object {
         const val PREFIX: String = AuthorizationProperties.PREFIX + ".cache"
     }

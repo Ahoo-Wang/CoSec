@@ -12,8 +12,10 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.gateway
 
+import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import me.ahoo.cosec.spring.boot.starter.authorization.AuthorizationProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.bind.DefaultValue
 
 /**
  * CacheProperties .
@@ -21,7 +23,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = GatewayProperties.PREFIX)
-data class GatewayProperties(val enabled: Boolean = true) {
+class GatewayProperties(
+    @DefaultValue("true")
+    override var enabled: Boolean = true
+) : EnabledCapable {
     companion object {
         const val PREFIX: String = AuthorizationProperties.PREFIX + ".gateway"
     }
