@@ -13,7 +13,9 @@
 package me.ahoo.cosec.spring.boot.starter.authentication
 
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.bind.DefaultValue
 
 /**
  * Authentication Properties .
@@ -21,7 +23,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = AuthenticationProperties.PREFIX)
-data class AuthenticationProperties(val enabled: Boolean = true) {
+class AuthenticationProperties(@DefaultValue("true") override var enabled: Boolean = true) : EnabledCapable {
 
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "authentication"

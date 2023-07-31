@@ -13,7 +13,9 @@
 package me.ahoo.cosec.spring.boot.starter.ip2region
 
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.bind.DefaultValue
 
 /**
  * InjectSecurityContextProperties .
@@ -21,7 +23,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = Ip2RegionProperties.PREFIX)
-data class Ip2RegionProperties(val enabled: Boolean = true) {
+data class Ip2RegionProperties(@DefaultValue("true") override var enabled: Boolean = true) : EnabledCapable {
 
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "ip2region"

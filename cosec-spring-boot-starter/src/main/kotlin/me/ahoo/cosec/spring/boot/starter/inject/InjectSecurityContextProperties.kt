@@ -13,7 +13,9 @@
 package me.ahoo.cosec.spring.boot.starter.inject
 
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.bind.DefaultValue
 
 /**
  * InjectSecurityContextProperties .
@@ -21,7 +23,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = InjectSecurityContextProperties.PREFIX)
-data class InjectSecurityContextProperties(val enabled: Boolean = true) {
+class InjectSecurityContextProperties(@DefaultValue("false") override var enabled: Boolean = false) : EnabledCapable {
 
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "inject"
