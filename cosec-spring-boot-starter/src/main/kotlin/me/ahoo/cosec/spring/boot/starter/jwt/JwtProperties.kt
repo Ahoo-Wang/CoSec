@@ -27,7 +27,7 @@ import java.time.Duration
 @ConfigurationProperties(prefix = JwtProperties.PREFIX)
 class JwtProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
-    var algorithm: Algorithm = Algorithm.HMAC256,
+    @DefaultValue("hmac256") var algorithm: Algorithm = Algorithm.HMAC256,
     var secret: String,
     @NestedConfigurationProperty var tokenValidity: TokenValidity = TokenValidity()
 ) : EnabledCapable {
