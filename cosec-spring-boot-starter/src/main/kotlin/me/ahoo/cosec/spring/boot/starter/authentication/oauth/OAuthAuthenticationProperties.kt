@@ -27,8 +27,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  */
 @ConfigurationProperties(prefix = OAuthAuthenticationProperties.PREFIX)
 class OAuthAuthenticationProperties(
-    @DefaultValue("true")
-    override var enabled: Boolean = true,
+    @DefaultValue("true") override var enabled: Boolean = true,
     val registration: Map<String, Provider> = emptyMap()
 ) : EnabledCapable {
     companion object {

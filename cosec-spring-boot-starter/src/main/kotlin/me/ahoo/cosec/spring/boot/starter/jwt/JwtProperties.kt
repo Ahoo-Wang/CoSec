@@ -26,12 +26,10 @@ import java.time.Duration
  */
 @ConfigurationProperties(prefix = JwtProperties.PREFIX)
 class JwtProperties(
-    @DefaultValue("true")
-    override var enabled: Boolean = true,
+    @DefaultValue("true") override var enabled: Boolean = true,
     var algorithm: Algorithm = Algorithm.HMAC256,
     var secret: String,
-    @NestedConfigurationProperty
-    var tokenValidity: TokenValidity = TokenValidity()
+    @NestedConfigurationProperty var tokenValidity: TokenValidity = TokenValidity()
 ) : EnabledCapable {
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "jwt"

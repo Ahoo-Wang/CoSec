@@ -23,10 +23,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = Ip2RegionProperties.PREFIX)
-data class Ip2RegionProperties(
-    @DefaultValue("true")
-    override var enabled: Boolean = true
-) : EnabledCapable {
+data class Ip2RegionProperties(@DefaultValue("true") override var enabled: Boolean = true) : EnabledCapable {
 
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "ip2region"

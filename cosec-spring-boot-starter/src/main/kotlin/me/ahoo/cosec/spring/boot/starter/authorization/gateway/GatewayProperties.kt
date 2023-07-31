@@ -23,10 +23,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = GatewayProperties.PREFIX)
-class GatewayProperties(
-    @DefaultValue("true")
-    override var enabled: Boolean = true
-) : EnabledCapable {
+class GatewayProperties(@DefaultValue("true") override var enabled: Boolean = true) : EnabledCapable {
     companion object {
         const val PREFIX: String = AuthorizationProperties.PREFIX + ".gateway"
     }

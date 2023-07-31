@@ -25,10 +25,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  */
 @ConfigurationProperties(prefix = CacheProperties.PREFIX)
 class CacheProperties(
-    @DefaultValue("true")
-    override var enabled: Boolean = true,
-    @DefaultValue(CoSec.COSEC)
-    var keyPrefix: String = CoSec.COSEC
+    @DefaultValue("true") override var enabled: Boolean = true,
+    @DefaultValue(CoSec.COSEC) var keyPrefix: String = CoSec.COSEC
 ) : EnabledCapable {
     companion object {
         const val PREFIX: String = AuthorizationProperties.PREFIX + ".cache"

@@ -23,10 +23,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = AuthenticationProperties.PREFIX)
-class AuthenticationProperties(
-    @DefaultValue("true")
-    override var enabled: Boolean = true
-) : EnabledCapable {
+class AuthenticationProperties(@DefaultValue("true") override var enabled: Boolean = true) : EnabledCapable {
 
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "authentication"

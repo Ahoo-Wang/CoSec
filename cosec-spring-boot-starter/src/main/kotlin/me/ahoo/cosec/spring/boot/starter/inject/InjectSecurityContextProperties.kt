@@ -23,10 +23,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = InjectSecurityContextProperties.PREFIX)
-class InjectSecurityContextProperties(
-    @DefaultValue("false")
-    override var enabled: Boolean = false
-) : EnabledCapable {
+class InjectSecurityContextProperties(@DefaultValue("false") override var enabled: Boolean = false) : EnabledCapable {
 
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "inject"
