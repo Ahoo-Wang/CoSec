@@ -28,6 +28,4 @@ interface EnabledCapable {
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = CoSec.COSEC)
-class CoSecProperties(
-    @DefaultValue("true") override var enabled: Boolean = true
-) : EnabledCapable
+class CoSecProperties(@DefaultValue("true") override var enabled: Boolean = true) : EnabledCapable
