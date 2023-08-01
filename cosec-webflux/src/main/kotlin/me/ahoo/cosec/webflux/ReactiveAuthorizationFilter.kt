@@ -27,7 +27,7 @@ import reactor.core.publisher.Mono
  * @author ahoo wang
  */
 class ReactiveAuthorizationFilter(
-    securityContextParser: SecurityContextParser<ServerWebExchange>,
+    securityContextParser: SecurityContextParser,
     requestParser: RequestParser<ServerWebExchange>,
     authorization: Authorization
 ) : WebFilter, Ordered, ReactiveSecurityFilter(securityContextParser, requestParser, authorization) {

@@ -28,7 +28,7 @@ import reactor.core.publisher.Mono
  * @author ahoo wang
  */
 class AuthorizationGatewayFilter(
-    securityContextParser: SecurityContextParser<ServerWebExchange>,
+    securityContextParser: SecurityContextParser,
     requestParser: RequestParser<ServerWebExchange>,
     authorization: Authorization
 ) : GlobalFilter, Ordered, ReactiveSecurityFilter(securityContextParser, requestParser, authorization) {

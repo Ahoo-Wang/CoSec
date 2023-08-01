@@ -20,6 +20,6 @@ import me.ahoo.cosec.api.token.CompositeToken
  *
  * @author ahoo wang
  */
-interface TokenConverter {
+fun interface TokenConverter {
     fun asToken(principal: CoSecPrincipal): CompositeToken
 }

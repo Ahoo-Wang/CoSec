@@ -16,6 +16,7 @@ package me.ahoo.cosec.spring.boot.starter.authorization.gateway
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.gateway.AuthorizationGatewayFilter
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPermissionCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPolicyCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
@@ -43,6 +44,7 @@ internal class CoSecGatewayAuthorizationAutoConfigurationTest {
                 CoCacheAutoConfiguration::class.java,
                 CoSecPolicyCacheAutoConfiguration::class.java,
                 CoSecPermissionCacheAutoConfiguration::class.java,
+                CoSecRequestParserAutoConfiguration::class.java,
                 CoSecAuthorizationAutoConfiguration::class.java,
                 CoSecGatewayAuthorizationAutoConfiguration::class.java,
                 CoSecJwtAutoConfiguration::class.java,

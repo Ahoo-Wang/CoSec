@@ -15,14 +15,16 @@ package me.ahoo.cosec.jwt
 import com.auth0.jwt.JWT
 import com.auth0.jwt.RegisteredClaims
 import com.auth0.jwt.interfaces.DecodedJWT
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.PolicyCapable
 import me.ahoo.cosec.api.principal.RoleCapable
 import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
+import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
-import me.ahoo.cosec.token.SimpleAccessToken
+import me.ahoo.cosec.token.PrincipalConverter
 import me.ahoo.cosec.token.SimpleTokenPrincipal
 import me.ahoo.cosec.token.SimpleTokenTenantPrincipal
 
@@ -31,8 +33,7 @@ import me.ahoo.cosec.token.SimpleTokenTenantPrincipal
  *
  * @author ahoo wang
  */
-object Jwts {
-    const val AUTHORIZATION_KEY = "authorization"
+object Jwts : PrincipalConverter {
     const val TOKEN_PREFIX = "Bearer "
     private val jwtParser = JWT()
 
@@ -49,17 +50,13 @@ object Jwts {
             RoleCapable.ROLE_KEY == key
     }
 
-    @JvmStatic
-    fun parseAccessToken(authorization: String?): SimpleAccessToken? {
-        if (authorization?.startsWith(TOKEN_PREFIX) != true) {
-            return null
-        }
-        val accessToken = authorization.substring(TOKEN_PREFIX.length)
-        return SimpleAccessToken(accessToken)
-    }
-
     fun decode(token: String): DecodedJWT {
-        return jwtParser.decodeJwt(token)
+        val jwtToken = if (token.startsWith(TOKEN_PREFIX)) {
+            token.substring(TOKEN_PREFIX.length)
+        } else {
+            token
+        }
+        return jwtParser.decodeJwt(jwtToken)
     }
 
     fun <T : TokenPrincipal> asPrincipal(decodedAccessToken: DecodedJWT): T {
@@ -98,5 +95,9 @@ object Jwts {
     fun <T : TokenPrincipal> asPrincipal(accessToken: String): T {
         val decodedAccessToken = decode(accessToken)
         return asPrincipal(decodedAccessToken)
+    }
+
+    override fun asPrincipal(accessToken: AccessToken): CoSecPrincipal {
+        return asPrincipal(accessToken.accessToken)
     }
 }

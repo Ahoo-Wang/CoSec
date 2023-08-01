@@ -35,7 +35,7 @@ import org.springframework.http.MediaType
  */
 abstract class AbstractAuthorizationInterceptor(
     private val requestParser: RequestParser<HttpServletRequest>,
-    private val securityContextParser: SecurityContextParser<HttpServletRequest>,
+    private val securityContextParser: SecurityContextParser,
     private val authorization: Authorization
 ) {
 
@@ -43,9 +43,10 @@ abstract class AbstractAuthorizationInterceptor(
         servletRequest: HttpServletRequest,
         servletResponse: HttpServletResponse
     ): Boolean {
+        val request = requestParser.parse(servletRequest)
         var tokenVerificationException: TokenVerificationException? = null
         val securityContext = try {
-            securityContextParser.parse(servletRequest)
+            securityContextParser.parse(request)
         } catch (verificationException: TokenVerificationException) {
             tokenVerificationException = verificationException
             SimpleSecurityContext.anonymous()
@@ -53,7 +54,6 @@ abstract class AbstractAuthorizationInterceptor(
 
         SecurityContextHolder.setContext(securityContext)
         servletRequest.setSecurityContext(securityContext)
-        val request = requestParser.parse(servletRequest)
         securityContext.setRequest(request)
         return authorization.authorize(request, securityContext)
             .map {

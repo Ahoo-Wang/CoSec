@@ -34,7 +34,7 @@ import java.io.IOException
  * @see org.springframework.web.filter.OncePerRequestFilter
  */
 class AuthorizationFilter(
-    securityContextParser: SecurityContextParser<HttpServletRequest>,
+    securityContextParser: SecurityContextParser,
     authorization: Authorization,
     requestParser: RequestParser<HttpServletRequest>
 ) : AbstractAuthorizationInterceptor(requestParser, securityContextParser, authorization), Filter {
