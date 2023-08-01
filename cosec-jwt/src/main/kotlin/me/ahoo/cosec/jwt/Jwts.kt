@@ -50,12 +50,16 @@ object Jwts : PrincipalConverter {
             RoleCapable.ROLE_KEY == key
     }
 
-    fun decode(token: String): DecodedJWT {
-        val jwtToken = if (token.startsWith(TOKEN_PREFIX)) {
-            token.substring(TOKEN_PREFIX.length)
+    fun String.removeBearerPrefix(): String {
+        return if (this.startsWith(TOKEN_PREFIX)) {
+            this.substring(TOKEN_PREFIX.length)
         } else {
-            token
+            this
         }
+    }
+
+    fun decode(token: String): DecodedJWT {
+        val jwtToken = token.removeBearerPrefix()
         return jwtParser.decodeJwt(jwtToken)
     }
 
