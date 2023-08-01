@@ -319,7 +319,8 @@
           "$ref": "#/definitions/partValue"
         },
         "pattern": {
-          "type": "string"
+          "type": "string",
+          "format": "regex"
         }
       },
       "required": [

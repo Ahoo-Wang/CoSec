@@ -10,7 +10,8 @@
       "type": "array",
       "items": {
         "type": "string"
-      }
+      },
+      "uniqueItems": true
     },
     {
       "type": "object",
@@ -49,7 +50,8 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/method"
-          }
+          },
+          "uniqueItems": true
         }
       ]
     },
@@ -73,7 +75,8 @@
               "type": "array",
               "items": {
                 "type": "string"
-              }
+              },
+              "uniqueItems": true
             }
           ]
         },
