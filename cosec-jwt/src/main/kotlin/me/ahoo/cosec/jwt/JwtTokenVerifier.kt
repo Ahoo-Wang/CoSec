@@ -21,6 +21,7 @@ import com.auth0.jwt.interfaces.JWTVerifier
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.jwt.Jwts.removeBearerPrefix
 import me.ahoo.cosec.token.TokenVerifier
 
 class JwtTokenVerifier(algorithm: Algorithm) : TokenVerifier {
@@ -38,7 +39,8 @@ class JwtTokenVerifier(algorithm: Algorithm) : TokenVerifier {
     }
 
     override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T {
-        val decodedAccessToken = verify(accessToken.accessToken)
+        val removedBearerAccessToken = accessToken.accessToken.removeBearerPrefix()
+        val decodedAccessToken = verify(removedBearerAccessToken)
         return Jwts.asPrincipal(decodedAccessToken)
     }
 
