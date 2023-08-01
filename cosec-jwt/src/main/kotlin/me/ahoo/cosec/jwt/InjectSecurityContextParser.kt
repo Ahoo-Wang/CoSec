@@ -11,13 +11,14 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.webflux
+package me.ahoo.cosec.jwt
 
-import me.ahoo.cosec.context.SecurityContextParser
-import org.springframework.web.server.ServerWebExchange
+import me.ahoo.cosec.context.DefaultSecurityContextParser
 
-internal class ReactiveSecurityContextParserTest : SecurityContextParserSpec() {
-    override fun createSecurityContextParser(): SecurityContextParser<ServerWebExchange> {
-        return ReactiveSecurityContextParser(jwtTokenVerifier)
-    }
-}
+/**
+ * Inject Security Context Parser .
+ * WARNING: Without verify!!!
+ *
+ * @author ahoo wang
+ */
+object InjectSecurityContextParser : DefaultSecurityContextParser(Jwts)

@@ -13,13 +13,17 @@
 
 package me.ahoo.cosec.token
 
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 
-interface TokenVerifier {
+interface TokenVerifier : PrincipalConverter {
     @Throws(TokenVerificationException::class)
     fun <T : TokenPrincipal> verify(accessToken: AccessToken): T
+    override fun asPrincipal(accessToken: AccessToken): CoSecPrincipal {
+        return verify(accessToken)
+    }
 
     @Throws(TokenVerificationException::class)
     fun <T : TokenPrincipal> refresh(token: CompositeToken): T

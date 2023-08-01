@@ -13,6 +13,7 @@
 package me.ahoo.cosec.context
 
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.token.TokenExpiredException
 import org.slf4j.LoggerFactory
 
@@ -22,12 +23,13 @@ import org.slf4j.LoggerFactory
  * @author ahoo wang
  */
 private val LOG = LoggerFactory.getLogger(SecurityContextParser::class.java)
+const val AUTHORIZATION_HEADER_KEY = "authorization"
 
-fun interface SecurityContextParser<R> {
+fun interface SecurityContextParser {
     @Throws(TokenExpiredException::class)
-    fun parse(request: R): SecurityContext
+    fun parse(request: Request): SecurityContext
 
-    fun ensureParse(request: R): SecurityContext {
+    fun ensureParse(request: Request): SecurityContext {
         return try {
             parse(request)
         } catch (ignored: Throwable) {

@@ -15,6 +15,7 @@ package me.ahoo.cosec.spring.boot.starter.authorization
 
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.context.DefaultSecurityContextParser
 import me.ahoo.cosec.servlet.AuthorizationFilter
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPermissionCacheAutoConfiguration
@@ -45,6 +46,7 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 CoCacheAutoConfiguration::class.java,
                 CoSecPolicyCacheAutoConfiguration::class.java,
                 CoSecPermissionCacheAutoConfiguration::class.java,
+                CoSecRequestParserAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecJwtAutoConfiguration::class.java,
                 Ip2RegionAutoConfiguration::class.java,
@@ -54,13 +56,9 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 assertThat(context)
                     .hasSingleBean(AuthorizationProperties::class.java)
                     .hasSingleBean(CoSecAuthorizationAutoConfiguration::class.java)
+                    .hasSingleBean(DefaultSecurityContextParser::class.java)
                     .hasSingleBean(Authorization::class.java)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.SERVLET_REQUEST_PARSER_BEAN_NAME)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.SERVLET_SECURITY_CONTEXT_PARSER_BEAN_NAME)
                     .hasSingleBean(AuthorizationFilter::class.java)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.REACTIVE_REQUEST_PARSER_BEAN_NAME)
-                    .hasBean(CoSecAuthorizationAutoConfiguration.REACTIVE_SECURITY_CONTEXT_PARSER_BEAN_NAME)
-//                    .hasSingleBean(ReactiveAuthorizationFilter::class.java)
             }
     }
 }

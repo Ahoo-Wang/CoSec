@@ -3,6 +3,7 @@ me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfigur
 me.ahoo.cosec.spring.boot.starter.authentication.oauth.CoSecOAuthAuthenticationAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPolicyCacheAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPermissionCacheAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.authorization.gateway.CoSecGatewayAuthorizationAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.inject.InjectSecurityContextAutoConfiguration

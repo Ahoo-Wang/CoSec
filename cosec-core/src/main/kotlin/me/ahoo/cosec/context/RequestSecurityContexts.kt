@@ -19,8 +19,9 @@ import me.ahoo.cosec.api.context.request.Request
 object RequestSecurityContexts {
     const val KEY = "COSEC_SECURITY_CONTEXT_REQUEST"
 
-    fun <R : Request> SecurityContext.setRequest(request: R) {
+    fun SecurityContext.setRequest(request: Request): SecurityContext {
         setAttributeValue(KEY, request)
+        return this
     }
 
     fun <R : Request> SecurityContext.getRequest(): R? {

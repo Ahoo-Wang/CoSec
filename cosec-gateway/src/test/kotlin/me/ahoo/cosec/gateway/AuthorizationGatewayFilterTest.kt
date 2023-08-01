@@ -20,8 +20,8 @@ import io.mockk.runs
 import io.mockk.verify
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
-import me.ahoo.cosec.jwt.Jwts
-import me.ahoo.cosec.webflux.ReactiveInjectSecurityContextParser
+import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
+import me.ahoo.cosec.jwt.InjectSecurityContextParser
 import me.ahoo.cosec.webflux.ReactiveRemoteIpResolver
 import me.ahoo.cosec.webflux.ReactiveRequestParser
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
@@ -44,17 +44,17 @@ class AuthorizationGatewayFilterTest {
             every { authorize(any(), any()) } returns AuthorizeResult.ALLOW.toMono()
         }
         val filter = AuthorizationGatewayFilter(
-            ReactiveInjectSecurityContextParser,
+            InjectSecurityContextParser,
             ReactiveRequestParser(ReactiveRemoteIpResolver),
             authorization,
         )
         assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE + 10))
         val exchange = mockk<ServerWebExchange> {
-            every { request.headers.getFirst(Jwts.AUTHORIZATION_KEY) } returns null
+            every { request.headers.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.headers.origin } returns "origin"
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
-            every { request.methodValue } returns "GET"
+            every { request.method.name() } returns "GET"
             every { request.remoteAddress } returns InetSocketAddress("hostname", 0)
             every { setSecurityContext(any()) } just runs
             every {

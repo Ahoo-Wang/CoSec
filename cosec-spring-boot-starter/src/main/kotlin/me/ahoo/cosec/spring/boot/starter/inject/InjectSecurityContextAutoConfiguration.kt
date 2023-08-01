@@ -14,10 +14,12 @@ package me.ahoo.cosec.spring.boot.starter.inject
 
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.jwt.InjectSecurityContextParser
 import me.ahoo.cosec.servlet.InjectSecurityContextFilter
-import me.ahoo.cosec.servlet.InjectSecurityContextParser
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.webflux.ReactiveInjectSecurityContextParser
+import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.REACTIVE_REQUEST_PARSER_BEAN_NAME
+import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.SERVLET_REQUEST_PARSER_BEAN_NAME
 import me.ahoo.cosec.webflux.ReactiveInjectSecurityContextWebFilter
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -40,28 +42,23 @@ import org.springframework.web.server.ServerWebExchange
     InjectSecurityContextProperties::class,
 )
 class InjectSecurityContextAutoConfiguration {
-    companion object {
-        const val INJECT_SECURITY_CONTEXT_PARSER_BEAN_NAME = "injectSecurityContextParser"
-        const val REACTIVE_INJECT_SECURITY_CONTEXT_PARSER_BEAN_NAME = "reactiveInjectSecurityContextParser"
+    @Bean
+    @ConditionalOnMissingBean
+    fun injectSecurityContextParser(): SecurityContextParser {
+        return InjectSecurityContextParser
     }
 
     @Configuration
     @ConditionalOnClass(InjectSecurityContextFilter::class)
     class WebMvc {
 
-        @Bean(INJECT_SECURITY_CONTEXT_PARSER_BEAN_NAME)
-        @ConditionalOnMissingBean(name = [INJECT_SECURITY_CONTEXT_PARSER_BEAN_NAME])
-        fun injectSecurityContextParser(): SecurityContextParser<HttpServletRequest> {
-            return InjectSecurityContextParser
-        }
-
         @Bean
         @ConditionalOnMissingBean
         fun injectSecurityContextFilter(
-            @Qualifier(INJECT_SECURITY_CONTEXT_PARSER_BEAN_NAME) securityContextParser:
-            SecurityContextParser<HttpServletRequest>
+            @Qualifier(SERVLET_REQUEST_PARSER_BEAN_NAME) requestParser: RequestParser<HttpServletRequest>,
+            securityContextParser: SecurityContextParser
         ): InjectSecurityContextFilter {
-            return InjectSecurityContextFilter(securityContextParser)
+            return InjectSecurityContextFilter(requestParser, securityContextParser)
         }
     }
 
@@ -69,19 +66,13 @@ class InjectSecurityContextAutoConfiguration {
     @ConditionalOnClass(ReactiveInjectSecurityContextWebFilter::class)
     class WebFlux {
 
-        @Bean(REACTIVE_INJECT_SECURITY_CONTEXT_PARSER_BEAN_NAME)
-        @ConditionalOnMissingBean(name = [REACTIVE_INJECT_SECURITY_CONTEXT_PARSER_BEAN_NAME])
-        fun reactiveInjectSecurityContextParser(): SecurityContextParser<ServerWebExchange> {
-            return ReactiveInjectSecurityContextParser
-        }
-
         @Bean
         @ConditionalOnMissingBean
         fun reactiveInjectSecurityContextWebFilter(
-            @Qualifier(REACTIVE_INJECT_SECURITY_CONTEXT_PARSER_BEAN_NAME) securityContextParser:
-            SecurityContextParser<ServerWebExchange>
+            @Qualifier(REACTIVE_REQUEST_PARSER_BEAN_NAME) requestParser: RequestParser<ServerWebExchange>,
+            securityContextParser: SecurityContextParser
         ): ReactiveInjectSecurityContextWebFilter {
-            return ReactiveInjectSecurityContextWebFilter(securityContextParser)
+            return ReactiveInjectSecurityContextWebFilter(requestParser, securityContextParser)
         }
     }
 }

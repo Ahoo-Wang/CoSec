@@ -33,7 +33,7 @@ import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
 abstract class ReactiveSecurityFilter(
-    val securityContextParser: SecurityContextParser<ServerWebExchange>,
+    val securityContextParser: SecurityContextParser,
     val requestParser: RequestParser<ServerWebExchange>,
     val authorization: Authorization
 ) {
@@ -42,15 +42,15 @@ abstract class ReactiveSecurityFilter(
         exchange: ServerWebExchange,
         chain: (ServerWebExchange) -> Mono<Void>
     ): Mono<Void> {
+        val request = requestParser.parse(exchange)
         var tokenVerificationException: TokenVerificationException? = null
         val securityContext = try {
-            securityContextParser.parse(exchange)
+            securityContextParser.parse(request)
         } catch (verificationException: TokenVerificationException) {
             tokenVerificationException = verificationException
             SimpleSecurityContext.anonymous()
         }
         exchange.setSecurityContext(securityContext)
-        val request = requestParser.parse(exchange)
         securityContext.setRequest(request)
         return authorization.authorize(request, securityContext)
             .flatMap { authorizeResult ->

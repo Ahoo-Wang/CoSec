@@ -29,7 +29,7 @@ class ReactiveRequestParser(
         var cosecRequest: Request = ReactiveRequest(
             delegate = request,
             path = request.request.path.value(),
-            method = request.request.methodValue,
+            method = request.request.method.name(),
             remoteIp = remoteIpResolver.resolve(request),
             origin = request.request.headers.origin.orEmpty(),
             referer = request.request.headers.getFirst(HttpHeaders.REFERER).orEmpty(),

@@ -14,8 +14,7 @@
 package me.ahoo.cosec.spring.boot.starter.inject
 
 import me.ahoo.cosec.servlet.InjectSecurityContextFilter
-import me.ahoo.cosec.servlet.InjectSecurityContextParser
-import me.ahoo.cosec.webflux.ReactiveInjectSecurityContextParser
+import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration
 import me.ahoo.cosec.webflux.ReactiveInjectSecurityContextWebFilter
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
@@ -28,7 +27,10 @@ internal class InjectSecurityContextAutoConfigurationTest {
     @Test
     fun contextLoadsWhenDefault() {
         contextRunner
-            .withUserConfiguration(InjectSecurityContextAutoConfiguration::class.java)
+            .withUserConfiguration(
+                CoSecRequestParserAutoConfiguration::class.java,
+                InjectSecurityContextAutoConfiguration::class.java
+            )
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
                     .doesNotHaveBean(InjectSecurityContextProperties::class.java)
@@ -40,14 +42,15 @@ internal class InjectSecurityContextAutoConfigurationTest {
     fun contextLoadsWhenEnabled() {
         contextRunner
             .withPropertyValues("${ConditionalOnInjectSecurityEnabled.ENABLED_KEY}=true")
-            .withUserConfiguration(InjectSecurityContextAutoConfiguration::class.java)
+            .withUserConfiguration(
+                CoSecRequestParserAutoConfiguration::class.java,
+                InjectSecurityContextAutoConfiguration::class.java
+            )
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
                     .hasSingleBean(InjectSecurityContextProperties::class.java)
                     .hasSingleBean(InjectSecurityContextAutoConfiguration::class.java)
-                    .hasSingleBean(InjectSecurityContextParser::class.java)
                     .hasSingleBean(InjectSecurityContextFilter::class.java)
-                    .hasSingleBean(ReactiveInjectSecurityContextParser::class.java)
                     .hasSingleBean(ReactiveInjectSecurityContextWebFilter::class.java)
             }
     }

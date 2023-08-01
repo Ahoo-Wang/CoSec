@@ -21,6 +21,7 @@ import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import java.io.IOException
 
@@ -30,7 +31,10 @@ import java.io.IOException
  *
  * @author ahoo wang
  */
-class InjectSecurityContextFilter(private val securityContextParser: SecurityContextParser<HttpServletRequest>) :
+class InjectSecurityContextFilter(
+    private val requestParser: RequestParser<HttpServletRequest>,
+    private val securityContextParser: SecurityContextParser
+) :
     Filter {
 
     @Throws(IOException::class, ServletException::class)
@@ -41,7 +45,8 @@ class InjectSecurityContextFilter(private val securityContextParser: SecurityCon
 
     private fun tryInjectSecurityContext(servletRequest: ServletRequest) {
         val httpServletRequest = servletRequest as HttpServletRequest
-        val securityContext: SecurityContext = securityContextParser.ensureParse(httpServletRequest)
+        val request = requestParser.parse(servletRequest)
+        val securityContext: SecurityContext = securityContextParser.ensureParse(request)
         SecurityContextHolder.setContext(securityContext)
         httpServletRequest.setSecurityContext(securityContext)
     }

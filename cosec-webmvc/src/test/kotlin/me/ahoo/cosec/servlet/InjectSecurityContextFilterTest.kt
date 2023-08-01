@@ -17,21 +17,29 @@ import io.mockk.every
 import io.mockk.mockk
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
+import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
 import me.ahoo.cosec.context.SecurityContextHolder
-import me.ahoo.cosec.jwt.Jwts
+import me.ahoo.cosec.jwt.InjectSecurityContextParser
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
+import org.hamcrest.MatcherAssert.*
+import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
+import org.springframework.http.HttpHeaders
 
 internal class InjectSecurityContextFilterTest {
 
     @Test
     fun doFilter() {
-        val filter = InjectSecurityContextFilter(InjectSecurityContextParser)
+        val filter =
+            InjectSecurityContextFilter(ServletRequestParser(ServletRemoteIpResolver), InjectSecurityContextParser)
         val request = mockk<HttpServletRequest> {
-            every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
+            every { servletPath } returns "/path"
+            every { method } returns "GET"
+            every { remoteHost } returns "remoteHost"
+            every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
+            every { getHeader(HttpHeaders.ORIGIN) } returns null
+            every { getHeader(HttpHeaders.REFERER) } returns null
             every { setSecurityContext(any()) } returns Unit
         }
         val filterChain = mockk<FilterChain> {
@@ -43,9 +51,15 @@ internal class InjectSecurityContextFilterTest {
 
     @Test
     fun doFilterThrow() {
-        val filter = InjectSecurityContextFilter(InjectSecurityContextParser)
+        val filter =
+            InjectSecurityContextFilter(ServletRequestParser(ServletRemoteIpResolver), InjectSecurityContextParser)
         val request = mockk<HttpServletRequest> {
-            every { getHeader(Jwts.AUTHORIZATION_KEY) } returns null
+            every { servletPath } returns "/path"
+            every { method } returns "GET"
+            every { remoteHost } returns "remoteHost"
+            every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
+            every { getHeader(HttpHeaders.ORIGIN) } returns null
+            every { getHeader(HttpHeaders.REFERER) } returns null
             every { setSecurityContext(any()) } returns Unit
         }
         val filterChain = mockk<FilterChain> {
