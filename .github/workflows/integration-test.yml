@@ -32,6 +32,25 @@ jobs:
       - name: Test CoSec-Core
         run: ./gradlew cosec-core:clean cosec-core:check
 
+  cosec-opentelemetry-test:
+    name: CoSec OpenTelemetry Test
+    needs: [ cosec-core-test ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'adopt'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Test CoSec-OpenTelemetry
+        run: ./gradlew cosec-opentelemetry:clean cosec-opentelemetry:check
+
   cosec-jwt-test:
     name: CoSec Jwt Test
     needs: [ cosec-core-test ]
