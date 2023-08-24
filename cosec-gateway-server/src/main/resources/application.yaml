@@ -37,6 +37,10 @@ cosec:
     secret: FyN0Igd80Gas8stTavArGKOYnS9uLWGA_
   ip2region:
     enabled: false
+  authorization:
+    local-policy:
+      enabled: true
+      paths: classpath:build-in-policy
 logging:
   level:
     root: info

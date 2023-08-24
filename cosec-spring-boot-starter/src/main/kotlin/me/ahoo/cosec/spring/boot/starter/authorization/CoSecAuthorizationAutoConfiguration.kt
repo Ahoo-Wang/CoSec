@@ -15,6 +15,8 @@ package me.ahoo.cosec.spring.boot.starter.authorization
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
+import me.ahoo.cosec.authorization.CompositePolicyRepository
+import me.ahoo.cosec.authorization.LocalPolicyRepository
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.context.DefaultSecurityContextParser
@@ -26,14 +28,18 @@ import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoCon
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.SERVLET_REQUEST_PARSER_BEAN_NAME
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosec.webflux.ReactiveAuthorizationFilter
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Primary
+import org.springframework.core.annotation.Order
 import org.springframework.web.server.ServerWebExchange
 
 /**
@@ -52,6 +58,23 @@ class CoSecAuthorizationAutoConfiguration {
     @ConditionalOnMissingBean
     fun securityContextParser(tokenVerifier: TokenVerifier): SecurityContextParser {
         return DefaultSecurityContextParser(tokenVerifier)
+    }
+
+    @Order(0)
+    @Bean
+    @ConditionalOnProperty(
+        value = [AuthorizationProperties.LOCAL_POLICY_ENABLED],
+        matchIfMissing = false,
+        havingValue = "true",
+    )
+    fun localPolicyRepository(authorizationProperties: AuthorizationProperties): PolicyRepository {
+        return LocalPolicyRepository(authorizationProperties.localPolicy.paths)
+    }
+
+    @Primary
+    @Bean
+    fun compositePolicyRepository(policyRepositories: ObjectProvider<PolicyRepository>): PolicyRepository {
+        return CompositePolicyRepository(policyRepositories.orderedStream().toList())
     }
 
     @Bean

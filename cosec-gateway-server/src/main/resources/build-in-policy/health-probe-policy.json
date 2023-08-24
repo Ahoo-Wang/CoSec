@@ -1,0 +1,18 @@
+{
+  "id": "(health-probe)",
+  "name": "健康探针",
+  "category": "health-probe",
+  "description": "健康探针全局策略",
+  "type": "global",
+  "tenantId": "(platform)",
+  "statements": [
+    {
+      "name": "actuator",
+      "action": [
+        "/actuator/health",
+        "/actuator/health/readiness",
+        "/actuator/health/liveness"
+      ]
+    }
+  ]
+}

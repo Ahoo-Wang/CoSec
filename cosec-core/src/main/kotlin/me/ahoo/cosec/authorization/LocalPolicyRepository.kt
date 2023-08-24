@@ -22,7 +22,7 @@ import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 import java.nio.file.Files
 
-class LocalPolicyRepository(private val policyFiles: Set<String>) : PolicyRepository {
+class LocalPolicyRepository(private val policyPaths: Set<String>) : PolicyRepository {
     companion object {
         private const val POLICY_EXTENSION = "json"
     }
@@ -31,12 +31,12 @@ class LocalPolicyRepository(private val policyFiles: Set<String>) : PolicyReposi
     private val localPolicies = loadPolicies()
 
     private fun loadPolicies(): List<Policy> {
-        val policyFiles = policyFiles.flatMap { file ->
-            val policyDir = ResourceUtils.getFile(file)
-            if (!policyDir.isDirectory()) {
-                return@flatMap listOf(policyDir)
+        val policyFiles = policyPaths.flatMap { path ->
+            val policyFile = ResourceUtils.getFile(path)
+            if (!policyFile.isDirectory()) {
+                return@flatMap listOf(policyFile)
             }
-            Files.walk(policyDir.toPath())
+            Files.walk(policyFile.toPath())
                 .filter {
                     it.toFile().isFile && it.toFile().extension == POLICY_EXTENSION
                 }.map {
@@ -47,13 +47,13 @@ class LocalPolicyRepository(private val policyFiles: Set<String>) : PolicyReposi
             if (log.isDebugEnabled) {
                 log.debug("Load Policy [{}].", file)
             }
-            file.toURI().toURL().openStream().use {
-                try {
+            try {
+                file.toURI().toURL().openStream().use {
                     return@mapNotNull CoSecJsonSerializer.readValue(it, Policy::class.java)
-                } catch (e: Throwable) {
-                    if (log.isErrorEnabled) {
-                        log.error(e.message, e)
-                    }
+                }
+            } catch (e: Throwable) {
+                if (log.isErrorEnabled) {
+                    log.error(e.message, e)
                 }
             }
             null
