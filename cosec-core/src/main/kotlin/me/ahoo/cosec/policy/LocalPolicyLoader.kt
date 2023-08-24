@@ -42,6 +42,8 @@ class LocalPolicyLoader(private val locations: Set<String>) {
                 }
                 listOf()
             }
+        }.filter {
+            it.file.isFile
         }.mapNotNull {
             if (log.isInfoEnabled) {
                 log.info("Load Policy [{}].", it)
