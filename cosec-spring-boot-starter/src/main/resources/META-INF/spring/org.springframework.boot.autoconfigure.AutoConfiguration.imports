@@ -10,4 +10,4 @@ me.ahoo.cosec.spring.boot.starter.inject.InjectSecurityContextAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.opentelemetry.CoSecOpenTelemetryAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionAutoConfiguration
-me.ahoo.cosec.spring.boot.starter.actuate.CoSecGeneratorEndpointAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.actuate.CoSecEndpointAutoConfiguration

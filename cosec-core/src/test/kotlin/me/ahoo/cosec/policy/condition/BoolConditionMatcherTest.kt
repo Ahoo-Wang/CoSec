@@ -97,7 +97,7 @@ class BoolConditionMatcherTest {
     @Test
     fun matchGivenJson() {
         val testPolicy = requireNotNull(
-            javaClass.classLoader.getResource("build-in/test-policy.json")
+            javaClass.classLoader.getResource("cosec-policy/test-policy.json")
         ).let { resource ->
             resource.openStream().use {
                 CoSecJsonSerializer.readValue(it, Policy::class.java)

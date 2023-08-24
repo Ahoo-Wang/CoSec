@@ -29,7 +29,7 @@ class PermissionSerializerTest {
     @Test
     fun serializeTestResource() {
         val testAppPermission =
-            requireNotNull(javaClass.classLoader.getResource("build-in/test-app-permission.json")).let { resource ->
+            requireNotNull(javaClass.classLoader.getResource("cosec-policy/test-app-permission.json")).let { resource ->
                 resource.openStream().use {
                     CoSecJsonSerializer.readValue(it, AppPermission::class.java)
                 }

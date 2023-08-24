@@ -8,8 +8,8 @@ class LocalPolicyLoaderTest {
 
     private val localPolicyRepository = LocalPolicyLoader(
         setOf(
-            "classpath:build-in",
-            "classpath:build-in/test-policy.json"
+            "classpath:cosec-policy",
+            "classpath:cosec-policy/test-policy.json"
         )
     )
 
