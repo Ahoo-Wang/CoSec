@@ -10,7 +10,7 @@ class LocalPolicyLoaderTest {
         setOf(
             "classpath:cosec-policy-not-found",
             "classpath:cosec-policy",
-            "classpath:cosec-policy/*-policy.json"
+            "classpath:cosec-policy/*.json"
         )
     )
 

@@ -35,7 +35,14 @@ class LocalPolicyLoader(private val locations: Set<String>) {
             if (log.isInfoEnabled) {
                 log.info("Load Location [{}].", it)
             }
-            resourceResolver.getResources(it).toList()
+            try {
+                resourceResolver.getResources(it).toList()
+            } catch (e: FileNotFoundException) {
+                if (log.isErrorEnabled) {
+                    log.error(e.message, e)
+                }
+                listOf()
+            }
         }.filter {
             try {
                 it.file.isFile
