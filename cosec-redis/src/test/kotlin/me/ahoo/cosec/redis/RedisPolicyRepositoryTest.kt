@@ -15,8 +15,10 @@ package me.ahoo.cosec.redis
 
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.policy.PolicyData
+import me.ahoo.cosec.redis.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
 
@@ -75,12 +77,19 @@ internal class RedisPolicyRepositoryTest {
     @Test
     fun setPolicy() {
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
-        every { globalPolicyIndexCache.get("") } returns setOf("policyId")
+        every { globalPolicyIndexCache.get(CACHE_KEY) } returns setOf()
+        every { globalPolicyIndexCache.set(CACHE_KEY, any()) } returns Unit
         val policyCache = mockPolicyCache()
         val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
         policyRepository.setPolicy(policyData)
             .test()
             .verifyComplete()
+
+        verify {
+            policyCache.set(any(), any())
+            globalPolicyIndexCache.get(any())
+            globalPolicyIndexCache.set(CACHE_KEY, any())
+        }
     }
 
     private fun mockPolicyCache(): PolicyCache {

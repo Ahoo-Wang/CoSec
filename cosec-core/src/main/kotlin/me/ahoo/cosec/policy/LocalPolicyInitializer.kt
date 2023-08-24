@@ -16,6 +16,7 @@ package me.ahoo.cosec.policy
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.PolicyRepository
 import reactor.core.publisher.Mono
+import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.switchIfEmpty
 import reactor.kotlin.core.publisher.toMono
 
@@ -55,6 +56,7 @@ class LocalPolicyInitializer(
                         log.error("Init - Policy[{}] failed.", it.id, error)
                     }
                 }
+                .subscribeOn(Schedulers.boundedElastic())
                 .subscribe()
         }
     }
