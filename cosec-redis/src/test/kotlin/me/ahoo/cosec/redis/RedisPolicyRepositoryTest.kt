@@ -92,6 +92,46 @@ internal class RedisPolicyRepositoryTest {
         }
     }
 
+    @Test
+    fun setPolicyIfGlobalContains() {
+        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
+        every { globalPolicyIndexCache.get(CACHE_KEY) } returns setOf(policyData.id)
+        every { globalPolicyIndexCache.set(CACHE_KEY, any()) } returns Unit
+        val policyCache = mockPolicyCache()
+        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
+        policyRepository.setPolicy(policyData)
+            .test()
+            .verifyComplete()
+
+        verify {
+            policyCache.set(any(), any())
+            globalPolicyIndexCache.get(any())
+        }
+    }
+
+    @Test
+    fun setPolicyIfSystem() {
+        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
+        val policyCache = mockPolicyCache()
+        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
+        val systemPolicy = PolicyData(
+            id = "policyId",
+            category = "policyName",
+            name = "policyDesc",
+            description = "policyType",
+            type = PolicyType.SYSTEM,
+            tenantId = "tenantId",
+            statements = listOf(),
+        )
+        policyRepository.setPolicy(systemPolicy)
+            .test()
+            .verifyComplete()
+
+        verify {
+            policyCache.set(any(), any())
+        }
+    }
+
     private fun mockPolicyCache(): PolicyCache {
         val policyCache = mockk<PolicyCache>()
         every { policyCache.get("policyId") } returns policyData
