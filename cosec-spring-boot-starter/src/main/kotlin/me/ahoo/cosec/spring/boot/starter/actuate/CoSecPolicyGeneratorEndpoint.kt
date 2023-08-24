@@ -10,30 +10,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.generator
+
+package me.ahoo.cosec.spring.boot.starter.actuate
 
 import io.swagger.v3.oas.models.OpenAPI
+import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.generator.OpenAPIPolicyGenerator
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint
-import org.springframework.boot.autoconfigure.AutoConfiguration
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
-import org.springframework.context.annotation.Bean
+import org.springframework.boot.actuate.endpoint.annotation.ReadOperation
 
-/**
- * CoSec Generator Endpoint AutoConfiguration .
- *
- * @author ahoo wang
- */
-
-@AutoConfiguration
-@ConditionalOnClass(
-    value = [OpenAPIPolicyGenerator::class, Endpoint::class]
-)
-class CoSecGeneratorEndpointAutoConfiguration {
-    @Bean
-    @ConditionalOnClass(value = [OpenAPI::class])
-    fun coSecPolicyGeneratorEndpoint(openAPIProvider: ObjectProvider<OpenAPI>): CoSecPolicyGeneratorEndpoint {
-        return CoSecPolicyGeneratorEndpoint(openAPIProvider)
+@Endpoint(id = "cosecPolicyGenerator")
+class CoSecPolicyGeneratorEndpoint(private val openAPIProvider: ObjectProvider<OpenAPI>) {
+    @ReadOperation
+    fun generate(): Policy? {
+        val openAPI = openAPIProvider.getIfAvailable() ?: return null
+        return OpenAPIPolicyGenerator.generate(openAPI)
     }
 }

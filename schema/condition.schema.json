@@ -353,6 +353,9 @@
     },
     "boolConditionMatcher": {
       "properties": {
+        "negate": {
+          "type": "boolean"
+        },
         "and": {
           "type": "array",
           "items": {
