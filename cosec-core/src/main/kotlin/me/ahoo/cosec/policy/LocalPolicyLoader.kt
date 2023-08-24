@@ -43,15 +43,6 @@ class LocalPolicyLoader(private val locations: Set<String>) {
                 }
                 listOf()
             }
-        }.filter {
-            try {
-                it.file.isFile
-            } catch (e: FileNotFoundException) {
-                if (log.isErrorEnabled) {
-                    log.error(e.message, e)
-                }
-                false
-            }
         }.mapNotNull {
             if (log.isInfoEnabled) {
                 log.info("Load Policy [{}].", it)
