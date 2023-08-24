@@ -32,11 +32,19 @@ class AuthorizationProperties(
         const val PREFIX = CoSec.COSEC_PREFIX + "authorization"
         const val LOCAL_POLICY_PREFIX = "$PREFIX.local-policy"
         const val LOCAL_POLICY_ENABLED = LOCAL_POLICY_PREFIX + ENABLED_SUFFIX_KEY
+        const val LOCAL_POLICY_INIT_REPOSITORY = "$LOCAL_POLICY_PREFIX.init-repository"
     }
 
     class LocalPolicy(
         @DefaultValue("false")
         override var enabled: Boolean = false,
-        var paths: Set<String> = emptySet()
-    ) : EnabledCapable
+        @DefaultValue(DEFAULT_PATH)
+        var paths: Set<String> = setOf(DEFAULT_PATH),
+        @DefaultValue("false")
+        var initRepository: Boolean = false
+    ) : EnabledCapable {
+        companion object {
+            const val DEFAULT_PATH = "classpath:build-in-policy"
+        }
+    }
 }

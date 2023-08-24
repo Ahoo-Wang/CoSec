@@ -22,4 +22,8 @@ import me.ahoo.cosec.Delegated
  */
 class GlobalPolicyIndexCache(override val delegate: Cache<String, Set<String>>) :
     Cache<String, Set<String>> by delegate,
-    Delegated<Cache<String, Set<String>>>
+    Delegated<Cache<String, Set<String>>> {
+    companion object {
+        const val CACHE_KEY = ""
+    }
+}

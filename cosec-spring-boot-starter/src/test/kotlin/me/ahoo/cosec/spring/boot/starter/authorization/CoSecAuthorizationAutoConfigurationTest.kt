@@ -15,9 +15,9 @@ package me.ahoo.cosec.spring.boot.starter.authorization
 
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.api.authorization.Authorization
-import me.ahoo.cosec.authorization.CompositePolicyRepository
-import me.ahoo.cosec.authorization.LocalPolicyRepository
 import me.ahoo.cosec.context.DefaultSecurityContextParser
+import me.ahoo.cosec.policy.LocalPolicyInitializer
+import me.ahoo.cosec.policy.LocalPolicyLoader
 import me.ahoo.cosec.servlet.AuthorizationFilter
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPermissionCacheAutoConfiguration
@@ -42,6 +42,7 @@ internal class CoSecAuthorizationAutoConfigurationTest {
             .withPropertyValues(
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
                 "${AuthorizationProperties.LOCAL_POLICY_ENABLED}=true",
+                "${AuthorizationProperties.LOCAL_POLICY_INIT_REPOSITORY}=true",
             )
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
@@ -59,8 +60,8 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 assertThat(context)
                     .hasSingleBean(AuthorizationProperties::class.java)
                     .hasSingleBean(CoSecAuthorizationAutoConfiguration::class.java)
-                    .hasSingleBean(LocalPolicyRepository::class.java)
-                    .hasSingleBean(CompositePolicyRepository::class.java)
+                    .hasSingleBean(LocalPolicyLoader::class.java)
+                    .hasSingleBean(LocalPolicyInitializer::class.java)
                     .hasSingleBean(DefaultSecurityContextParser::class.java)
                     .hasSingleBean(Authorization::class.java)
                     .hasSingleBean(AuthorizationFilter::class.java)
