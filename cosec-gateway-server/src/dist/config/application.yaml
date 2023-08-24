@@ -5,3 +5,7 @@ server:
 cosec:
   authentication:
     enabled: false
+  authorization:
+    local-policy:
+      enabled: true
+      paths: classpath:build-in-policy

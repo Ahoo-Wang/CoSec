@@ -60,7 +60,6 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
     }
 
     @Bean
-    @ConditionalOnMissingBean
     fun redisPolicyRepository(
         globalPolicyIndexCache: GlobalPolicyIndexCache,
         policyCache: PolicyCache
