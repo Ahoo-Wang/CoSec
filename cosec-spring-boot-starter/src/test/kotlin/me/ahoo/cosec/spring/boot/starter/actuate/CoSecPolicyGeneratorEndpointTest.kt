@@ -1,4 +1,4 @@
-package me.ahoo.cosec.spring.boot.starter.generator
+package me.ahoo.cosec.spring.boot.starter.actuate
 
 import io.mockk.every
 import io.mockk.mockk

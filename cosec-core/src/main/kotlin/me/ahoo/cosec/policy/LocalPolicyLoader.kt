@@ -16,13 +16,13 @@ package me.ahoo.cosec.policy
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import org.slf4j.LoggerFactory
-import org.springframework.util.ResourceUtils
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver
+import org.springframework.core.io.support.ResourcePatternResolver
 import java.io.FileNotFoundException
-import java.nio.file.Files
 
-class LocalPolicyLoader(private val policyPaths: Set<String>) {
+class LocalPolicyLoader(private val locations: Set<String>) {
     companion object {
-        private const val POLICY_EXTENSION = "json"
+        private val resourceResolver: ResourcePatternResolver = PathMatchingResourcePatternResolver()
     }
 
     private val log = LoggerFactory.getLogger(LocalPolicyLoader::class.java)
@@ -31,40 +31,39 @@ class LocalPolicyLoader(private val policyPaths: Set<String>) {
     }
 
     private fun loadPolicies(): List<Policy> {
-        val policyFiles = policyPaths.flatMap { path ->
-            val policyFile = try {
-                ResourceUtils.getFile(path)
-            } catch (ex: FileNotFoundException) {
-                if (log.isErrorEnabled) {
-                    log.error(ex.message, ex)
-                }
-                return@flatMap listOf()
-            }
-
-            if (!policyFile.isDirectory()) {
-                return@flatMap listOf(policyFile)
-            }
-            Files.walk(policyFile.toPath())
-                .filter {
-                    it.toFile().isFile && it.toFile().extension == POLICY_EXTENSION
-                }.map {
-                    it.toFile()
-                }.toList()
-        }
-        return policyFiles.mapNotNull { file ->
+        return locations.flatMap {
             if (log.isInfoEnabled) {
-                log.info("Load Policy [{}].", file)
+                log.info("Load Location [{}].", it)
             }
             try {
-                file.toURI().toURL().openStream().use {
-                    return@mapNotNull CoSecJsonSerializer.readValue(it, Policy::class.java)
+                resourceResolver.getResources(it).toList()
+            } catch (e: FileNotFoundException) {
+                if (log.isErrorEnabled) {
+                    log.error(e.message, e)
                 }
+                listOf()
+            }
+        }.filter {
+            try {
+                it.file.isFile
+            } catch (e: FileNotFoundException) {
+                if (log.isErrorEnabled) {
+                    log.error(e.message, e)
+                }
+                false
+            }
+        }.mapNotNull {
+            if (log.isInfoEnabled) {
+                log.info("Load Policy [{}].", it)
+            }
+            try {
+                return@mapNotNull CoSecJsonSerializer.readValue(it.contentAsByteArray, Policy::class.java)
             } catch (e: Throwable) {
                 if (log.isErrorEnabled) {
                     log.error(e.message, e)
                 }
+                null
             }
-            null
         }.distinctBy {
             it.id
         }

@@ -10,7 +10,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.generator
+package me.ahoo.cosec.spring.boot.starter.actuate
 
 import io.swagger.v3.oas.models.OpenAPI
 import me.ahoo.cosec.generator.OpenAPIPolicyGenerator
@@ -21,7 +21,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.context.annotation.Bean
 
 /**
- * CoSec Generator Endpoint AutoConfiguration .
+ * CoSec Endpoint AutoConfiguration .
  *
  * @author ahoo wang
  */
@@ -30,7 +30,7 @@ import org.springframework.context.annotation.Bean
 @ConditionalOnClass(
     value = [OpenAPIPolicyGenerator::class, Endpoint::class]
 )
-class CoSecGeneratorEndpointAutoConfiguration {
+class CoSecEndpointAutoConfiguration {
     @Bean
     @ConditionalOnClass(value = [OpenAPI::class])
     fun coSecPolicyGeneratorEndpoint(openAPIProvider: ObjectProvider<OpenAPI>): CoSecPolicyGeneratorEndpoint {

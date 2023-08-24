@@ -38,13 +38,13 @@ class AuthorizationProperties(
     class LocalPolicy(
         @DefaultValue("false")
         override var enabled: Boolean = false,
-        @DefaultValue(DEFAULT_PATH)
-        var paths: Set<String> = setOf(DEFAULT_PATH),
+        @DefaultValue(DEFAULT_LOCATION)
+        var locations: Set<String> = setOf(DEFAULT_LOCATION),
         @DefaultValue("false")
         var initRepository: Boolean = false
     ) : EnabledCapable {
         companion object {
-            const val DEFAULT_PATH = "classpath:build-in-policy"
+            const val DEFAULT_LOCATION = "classpath:cosec-policy/*-policy.json"
         }
     }
 }

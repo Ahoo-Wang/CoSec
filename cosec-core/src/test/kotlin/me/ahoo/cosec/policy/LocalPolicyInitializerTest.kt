@@ -15,7 +15,7 @@ import reactor.kotlin.core.publisher.toMono
 class LocalPolicyInitializerTest {
     private val localPolicyLoader = LocalPolicyLoader(
         setOf(
-            "classpath:build-in"
+            "classpath:cosec-policy/*-policy.json"
         )
     )
 

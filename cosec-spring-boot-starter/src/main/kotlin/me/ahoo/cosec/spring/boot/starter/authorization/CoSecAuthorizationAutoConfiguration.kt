@@ -64,7 +64,7 @@ class CoSecAuthorizationAutoConfiguration {
         havingValue = "true",
     )
     fun localPolicyLoader(authorizationProperties: AuthorizationProperties): LocalPolicyLoader {
-        return LocalPolicyLoader(authorizationProperties.localPolicy.paths)
+        return LocalPolicyLoader(authorizationProperties.localPolicy.locations)
     }
 
     @Bean(initMethod = "init")
