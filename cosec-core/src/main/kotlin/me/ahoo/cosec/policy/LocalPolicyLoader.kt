@@ -18,6 +18,7 @@ import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import org.slf4j.LoggerFactory
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import org.springframework.core.io.support.ResourcePatternResolver
+import java.io.FileNotFoundException
 
 class LocalPolicyLoader(private val locations: Set<String>) {
     companion object {
@@ -34,16 +35,16 @@ class LocalPolicyLoader(private val locations: Set<String>) {
             if (log.isInfoEnabled) {
                 log.info("Load Location [{}].", it)
             }
+            resourceResolver.getResources(it).toList()
+        }.filter {
             try {
-                resourceResolver.getResources(it).toList()
-            } catch (e: Throwable) {
+                it.file.isFile
+            } catch (e: FileNotFoundException) {
                 if (log.isErrorEnabled) {
                     log.error(e.message, e)
                 }
-                listOf()
+                false
             }
-        }.filter {
-            it.file.isFile
         }.mapNotNull {
             if (log.isInfoEnabled) {
                 log.info("Load Policy [{}].", it)
@@ -56,9 +57,8 @@ class LocalPolicyLoader(private val locations: Set<String>) {
                 }
                 null
             }
+        }.distinctBy {
+            it.id
         }
-            .distinctBy {
-                it.id
-            }
     }
 }

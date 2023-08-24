@@ -8,8 +8,9 @@ class LocalPolicyLoaderTest {
 
     private val localPolicyRepository = LocalPolicyLoader(
         setOf(
+            "classpath:cosec-policy-not-found",
             "classpath:cosec-policy",
-            "classpath:cosec-policy/test-policy.json"
+            "classpath:cosec-policy/*-policy.json"
         )
     )
 
