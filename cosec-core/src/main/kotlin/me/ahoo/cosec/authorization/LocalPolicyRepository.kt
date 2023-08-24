@@ -23,6 +23,10 @@ import reactor.kotlin.core.publisher.toMono
 import java.nio.file.Files
 
 class LocalPolicyRepository(private val policyFiles: Set<String>) : PolicyRepository {
+    companion object {
+        private const val POLICY_EXTENSION = "json"
+    }
+
     private val log = LoggerFactory.getLogger(LocalPolicyRepository::class.java)
     private val localPolicies = loadPolicies()
 
@@ -34,7 +38,7 @@ class LocalPolicyRepository(private val policyFiles: Set<String>) : PolicyReposi
             }
             Files.walk(policyDir.toPath())
                 .filter {
-                    it.toFile().isFile && it.toFile().extension == "json"
+                    it.toFile().isFile && it.toFile().extension == POLICY_EXTENSION
                 }.map {
                     it.toFile()
                 }.toList()
