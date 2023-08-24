@@ -14,7 +14,10 @@
 package me.ahoo.cosec.redis
 
 import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.authorization.PolicyRepository
+import me.ahoo.cosec.policy.DefaultPolicyEvaluator
+import me.ahoo.cosec.redis.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
@@ -22,8 +25,12 @@ class RedisPolicyRepository(
     private val globalPolicyIndexCache: GlobalPolicyIndexCache,
     private val policyCache: PolicyCache
 ) : PolicyRepository {
+    companion object {
+        private val log = org.slf4j.LoggerFactory.getLogger(RedisPolicyRepository::class.java)
+    }
+
     override fun getGlobalPolicy(): Mono<List<Policy>> {
-        return globalPolicyIndexCache[""]
+        return globalPolicyIndexCache[CACHE_KEY]
             .orEmpty()
             .let {
                 getPolicies(it)
@@ -34,5 +41,21 @@ class RedisPolicyRepository(
         return policyIds.mapNotNull {
             policyCache[it]
         }.toMono()
+    }
+
+    override fun setPolicy(policy: Policy): Mono<Void> {
+        return Mono.fromRunnable {
+            if (log.isInfoEnabled) {
+                log.info("setPolicy - policy: [{}]", policy.id)
+            }
+            DefaultPolicyEvaluator.evaluate(policy)
+            policyCache[policy.id] = policy
+            if (policy.type == PolicyType.GLOBAL) {
+                val globalPolicies = globalPolicyIndexCache[CACHE_KEY] ?: emptySet()
+                if (globalPolicies.contains(policy.id).not()) {
+                    globalPolicyIndexCache[CACHE_KEY] = globalPolicies + policy.id
+                }
+            }
+        }
     }
 }

@@ -11,28 +11,36 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.authorization
+package me.ahoo.cosec.policy
 
 import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import org.slf4j.LoggerFactory
 import org.springframework.util.ResourceUtils
-import reactor.core.publisher.Mono
-import reactor.kotlin.core.publisher.toMono
+import java.io.FileNotFoundException
 import java.nio.file.Files
 
-class LocalPolicyRepository(private val policyPaths: Set<String>) : PolicyRepository {
+class LocalPolicyLoader(private val policyPaths: Set<String>) {
     companion object {
         private const val POLICY_EXTENSION = "json"
     }
 
-    private val log = LoggerFactory.getLogger(LocalPolicyRepository::class.java)
-    private val localPolicies = loadPolicies()
+    private val log = LoggerFactory.getLogger(LocalPolicyLoader::class.java)
+    val policies: List<Policy> by lazy {
+        loadPolicies()
+    }
 
     private fun loadPolicies(): List<Policy> {
         val policyFiles = policyPaths.flatMap { path ->
-            val policyFile = ResourceUtils.getFile(path)
+            val policyFile = try {
+                ResourceUtils.getFile(path)
+            } catch (ex: FileNotFoundException) {
+                if (log.isErrorEnabled) {
+                    log.error(ex.message, ex)
+                }
+                return@flatMap listOf()
+            }
+
             if (!policyFile.isDirectory()) {
                 return@flatMap listOf(policyFile)
             }
@@ -44,8 +52,8 @@ class LocalPolicyRepository(private val policyPaths: Set<String>) : PolicyReposi
                 }.toList()
         }
         return policyFiles.mapNotNull { file ->
-            if (log.isDebugEnabled) {
-                log.debug("Load Policy [{}].", file)
+            if (log.isInfoEnabled) {
+                log.info("Load Policy [{}].", file)
             }
             try {
                 file.toURI().toURL().openStream().use {
@@ -60,19 +68,5 @@ class LocalPolicyRepository(private val policyPaths: Set<String>) : PolicyReposi
         }.distinctBy {
             it.id
         }
-    }
-
-    private val globalPolicies = localPolicies.filter {
-        it.type == PolicyType.GLOBAL
-    }.toMono()
-
-    override fun getGlobalPolicy(): Mono<List<Policy>> {
-        return globalPolicies
-    }
-
-    override fun getPolicies(policyIds: Set<String>): Mono<List<Policy>> {
-        return localPolicies.filter {
-            it.id in policyIds
-        }.toMono()
     }
 }

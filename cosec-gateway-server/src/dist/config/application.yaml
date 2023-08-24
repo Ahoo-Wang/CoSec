@@ -8,4 +8,4 @@ cosec:
   authorization:
     local-policy:
       enabled: true
-      paths: classpath:build-in-policy
+      init-repository: true
