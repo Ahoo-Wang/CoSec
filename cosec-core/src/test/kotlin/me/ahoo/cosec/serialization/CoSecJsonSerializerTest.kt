@@ -48,13 +48,14 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import java.util.stream.Stream
-import kotlin.streams.toList
 
 internal class CoSecJsonSerializerTest {
 
     @Test
     fun serializeTestResource() {
-        val testPolicy = requireNotNull(javaClass.classLoader.getResource("test-policy.json")).let { resource ->
+        val testPolicy = requireNotNull(
+            javaClass.classLoader.getResource("build-in/test-policy.json")
+        ).let { resource ->
             resource.openStream().use {
                 CoSecJsonSerializer.readValue(it, Policy::class.java)
             }
