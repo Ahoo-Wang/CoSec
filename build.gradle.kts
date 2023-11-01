@@ -73,7 +73,8 @@ configure(libraryProjects) {
         withJavadocJar()
         withSourcesJar()
     }
-    apply<KotlinPlatformJvmPlugin>()
+    apply(plugin = "org.jetbrains.kotlin.jvm")
+//    apply<KotlinPlatformJvmPlugin>()
     configure<KotlinJvmProjectExtension> {
         jvmToolchain(17)
     }
