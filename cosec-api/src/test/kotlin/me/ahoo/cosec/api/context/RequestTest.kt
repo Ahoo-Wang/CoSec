@@ -21,6 +21,6 @@ import org.junit.jupiter.api.Test
 class RequestTest {
     @Test
     fun appIdKey() {
-        assertThat(Request.APP_ID, equalTo("cosec-app-id"))
+        assertThat(Request.APP_ID, equalTo("CoSec-App-Id"))
     }
 }

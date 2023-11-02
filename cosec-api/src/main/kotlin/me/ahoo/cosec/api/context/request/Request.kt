@@ -13,12 +13,11 @@
 
 package me.ahoo.cosec.api.context.request
 
-import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.api.context.Attributes
 
 interface Request : Attributes<Request, String, String> {
     companion object {
-        const val APP_ID = "${CoSec.COSEC}-app-id"
+        const val APP_ID = "CoSec-App-Id"
     }
 
     val appId: String
