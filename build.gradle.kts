@@ -12,9 +12,9 @@
  */
 import io.gitlab.arturbosch.detekt.DetektPlugin
 import io.gitlab.arturbosch.detekt.extensions.DetektExtension
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.dokka.gradle.DokkaPlugin
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
-import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformJvmPlugin
 
 plugins {
     alias(libs.plugins.publishPlugin)
@@ -121,6 +121,9 @@ configure(libraryProjects) {
     }
     tasks.withType<Test> {
         useJUnitPlatform()
+        testLogging {
+            exceptionFormat = TestExceptionFormat.FULL
+        }
         // fix logging missing code for JacocoPlugin
         jvmArgs = listOf("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback.xml")
     }
