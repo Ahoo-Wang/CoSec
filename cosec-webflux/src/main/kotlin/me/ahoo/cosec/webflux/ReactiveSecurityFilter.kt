@@ -25,12 +25,15 @@ import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.asAuthorizeResult
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.server.reactive.ServerHttpResponse
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
+
+private val log = LoggerFactory.getLogger(ReactiveSecurityFilter::class.java)
 
 abstract class ReactiveSecurityFilter(
     val securityContextParser: SecurityContextParser,
@@ -47,6 +50,9 @@ abstract class ReactiveSecurityFilter(
         val securityContext = try {
             securityContextParser.parse(request)
         } catch (verificationException: TokenVerificationException) {
+            if (log.isDebugEnabled) {
+                log.debug("Parse request to security context failed.", verificationException)
+            }
             tokenVerificationException = verificationException
             SimpleSecurityContext.anonymous()
         }

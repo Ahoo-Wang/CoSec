@@ -29,11 +29,13 @@ class OgnlConditionMatcher(configuration: Configuration) :
         }
 
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        val ognlContext = mapOf(
+        @Suppress("UNCHECKED_CAST")
+        val contextValues = mapOf(
             "request" to request,
             "context" to securityContext,
-        )
-        return Ognl.getValue(ognlExpression, ognlContext, request) as Boolean
+        ) as Map<Any, Any>
+        val ognlContext = Ognl.createDefaultContext(request).withValues(contextValues)
+        return Ognl.getValue(ognlExpression, ognlContext, request, Boolean::class.java) as Boolean
     }
 }
 
