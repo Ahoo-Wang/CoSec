@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.authentication.oauth
+package me.ahoo.cosec.spring.boot.starter.authentication.social
 
 import me.ahoo.cosec.api.authentication.AuthenticationProvider
 import me.ahoo.cosec.api.principal.CoSecPrincipal
@@ -21,8 +21,6 @@ import me.ahoo.cosec.social.SocialProviderManager
 import me.ahoo.cosec.social.SocialUserPrincipalConverter
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnAuthenticationEnabled
-import me.ahoo.cosec.spring.boot.starter.authentication.social.CoSecSocialAuthenticationAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.authentication.social.SocialAuthenticationProperties
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import me.zhyd.oauth.cache.AuthStateCache
