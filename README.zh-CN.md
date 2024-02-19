@@ -14,13 +14,13 @@
 
 ![Authentication-Flow](document/design/assets/Authentication-Flow.svg)
 
+### 社会化认证
+
+![Social-Authentication](document/design/assets/Social-Authentication.svg)
+
 ## 授权
 
 ![Authorization-Flow](document/design/assets/Authorization-Flow.svg)
-
-## OAuth
-
-![OAuth-Flow](document/design/assets/OAuth-Flow.svg)
 
 ## 建模类图
 

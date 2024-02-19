@@ -14,13 +14,13 @@ RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
 
 ![Authentication-Flow](document/design/assets/Authentication-Flow.svg)
 
+### Social Authentication
+
+![Social-Authentication](document/design/assets/Social-Authentication.svg)
+
 ## Authorization
 
 ![Authorization-Flow](document/design/assets/Authorization-Flow.svg)
-
-## OAuth
-
-![OAuth-Flow](document/design/assets/OAuth-Flow.svg)
 
 ## Modeling
 

@@ -10,22 +10,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package me.ahoo.cosec.social
 
-rootProject.name = "CoSec"
+/**
+ * Social User .
+ *
+ * @author ahoo wang
+ */
+data class SocialUser(
+    val id: String,
+    val username: String,
+    val nickname: String? = null,
+    val avatar: String? = null,
+    val email: String? = null,
+    val location: String? = null,
+    val gender: Gender = Gender.UNKNOWN,
+    val rawInfo: MutableMap<String, Any> = mutableMapOf(),
+    val provider: String
+) {
 
-include(":cosec-bom")
-include(":cosec-dependencies")
-include(":cosec-api")
-include(":cosec-core")
-include(":cosec-jwt")
-include(":cosec-redis")
-include(":cosec-social")
-include(":cosec-webmvc")
-include(":cosec-webflux")
-include(":cosec-spring-boot-starter")
-include(":cosec-gateway")
-include(":cosec-gateway-server")
-include(":cosec-opentelemetry")
-include(":cosec-ip2region")
-include(":code-coverage-report")
-include(":cosec-generator")
+    enum class Gender {
+        MALE, FEMALE, UNKNOWN
+    }
+}

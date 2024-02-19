@@ -1,0 +1,36 @@
+@startuml
+!include layout.puml
+title Social Authentication
+
+actor User
+participant SocialAuthentication
+participant SocialProviderManager
+participant SocialProvider
+participant AuthorizationServer
+participant SocialUserPrincipalConverter
+participant TokenConverter
+User++
+
+User -> SocialAuthentication++: authorize()
+SocialAuthentication -> SocialProviderManager++: getSocialProvider()
+SocialAuthentication <-- SocialProviderManager--: SocialProvider
+SocialAuthentication -> SocialProvider++: authorize()
+SocialAuthentication <-- SocialProvider--: authorizeUrl
+User <-- SocialAuthentication--: authorizeUrl
+User -> AuthorizationServer++: redirect : Authorization Grant
+User <-- AuthorizationServer--: (Authorization code,state)
+User -> SocialAuthentication++: callback(code,state)
+SocialAuthentication -> SocialProviderManager++: getSocialProvider()
+SocialAuthentication <-- SocialProviderManager--: SocialProvider
+SocialAuthentication -> SocialProvider++: authenticate()
+SocialProvider-> AuthorizationServer++: getAccessToken()
+SocialProvider <-- AuthorizationServer--: accessToken
+SocialProvider -> AuthorizationServer++: getUserInfo()
+SocialProvider <-- AuthorizationServer--: userInfo
+SocialAuthentication <-- SocialProvider--: userInfo
+SocialAuthentication -> SocialUserPrincipalConverter++: convert()
+SocialAuthentication <-- SocialUserPrincipalConverter--: Principal
+SocialAuthentication -> TokenConverter++: convert()
+SocialAuthentication <-- TokenConverter--: token
+User <-- SocialAuthentication--: token
+@enduml
