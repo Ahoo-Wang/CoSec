@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="us-ascii" standalone="no"?>
+<!--
+  - Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -      http://www.apache.org/licenses/LICENSE-2.0
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  -->
+
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css"
+     height="892px" preserveAspectRatio="none" style="width:1088px;height:892px;background:#FFFFFF;" version="1.1"
+     viewBox="0 0 1088 892" width="1088px" zoomAndPan="magnify">
+    <defs/>
+    <g>
+        <text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing"
+              textLength="153" x="463.5" y="41.3125">Social Authentication
+        </text>
+        <rect fill="#FFFFFF" height="645.832" style="stroke:#181818;stroke-width:1.0;" width="10" x="18.5"
+              y="141.7539"/>
+        <rect fill="#FFFFFF" height="146.5527" style="stroke:#181818;stroke-width:1.0;" width="10" x="172.5"
+              y="163.0645"/>
+        <rect fill="#FFFFFF" height="381.0371" style="stroke:#181818;stroke-width:1.0;" width="10" x="172.5"
+              y="397.5488"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="345.5"
+              y="192.375"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="345.5"
+              y="426.8594"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="496.5"
+              y="250.9961"/>
+        <rect fill="#FFFFFF" height="146.5527" style="stroke:#181818;stroke-width:1.0;" width="10" x="496.5"
+              y="485.4805"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="638" y="338.9277"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="638" y="514.791"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="638" y="573.4121"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="830" y="661.3438"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="1008.5"
+              y="719.9648"/>
+        <line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="23" x2="23" y1="131.7539"
+              y2="796.5859"/>
+        <line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="177" x2="177" y1="131.7539"
+              y2="796.5859"/>
+        <line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="350" x2="350" y1="131.7539"
+              y2="796.5859"/>
+        <line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="501" x2="501" y1="131.7539"
+              y2="796.5859"/>
+        <line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="643" x2="643" y1="131.7539"
+              y2="796.5859"/>
+        <line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="835" x2="835" y1="131.7539"
+              y2="796.5859"/>
+        <line style="stroke:#181818;stroke-width:0.5;stroke-dasharray:5.0,5.0;" x1="1013" x2="1013" y1="131.7539"
+              y2="796.5859"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="31" x="5"
+              y="128.8008">User
+        </text>
+        <ellipse cx="23.5" cy="63.7656" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/>
+        <path d="M23.5,71.7656 L23.5,98.7656 M10.5,79.7656 L36.5,79.7656 M23.5,98.7656 L10.5,113.7656 M23.5,98.7656 L36.5,113.7656 "
+              fill="none" style="stroke:#181818;stroke-width:0.5;"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="31" x="5"
+              y="809.1211">User
+        </text>
+        <ellipse cx="23.5" cy="820.5742" fill="#E2E2F0" rx="8" ry="8" style="stroke:#181818;stroke-width:0.5;"/>
+        <path d="M23.5,828.5742 L23.5,855.5742 M10.5,836.5742 L36.5,836.5742 M23.5,855.5742 L10.5,870.5742 M23.5,855.5742 L36.5,870.5742 "
+              fill="none" style="stroke:#181818;stroke-width:0.5;"/>
+        <rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="155"
+              x="100" y="100.2656"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="141" x="107"
+              y="120.8008">SocialAuthentication
+        </text>
+        <rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="155"
+              x="100" y="795.5859"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="141" x="107"
+              y="816.1211">SocialAuthentication
+        </text>
+        <rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="171"
+              x="265" y="100.2656"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="157" x="272"
+              y="120.8008">SocialProviderManager
+        </text>
+        <rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="171"
+              x="265" y="795.5859"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="157" x="272"
+              y="816.1211">SocialProviderManager
+        </text>
+        <rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="111"
+              x="446" y="100.2656"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="97" x="453"
+              y="120.8008">SocialProvider
+        </text>
+        <rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="111"
+              x="446" y="795.5859"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="97" x="453"
+              y="816.1211">SocialProvider
+        </text>
+        <rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="152"
+              x="567" y="100.2656"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="138" x="574"
+              y="120.8008">AuthorizationServer
+        </text>
+        <rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="152"
+              x="567" y="795.5859"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="138" x="574"
+              y="816.1211">AuthorizationServer
+        </text>
+        <rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="212"
+              x="729" y="100.2656"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="198" x="736"
+              y="120.8008">SocialUserPrincipalConverter
+        </text>
+        <rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="212"
+              x="729" y="795.5859"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="198" x="736"
+              y="816.1211">SocialUserPrincipalConverter
+        </text>
+        <rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="125"
+              x="951" y="100.2656"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="111" x="958"
+              y="120.8008">TokenConverter
+        </text>
+        <rect fill="#E2E2F0" height="30.4883" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="125"
+              x="951" y="795.5859"/>
+        <text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="111" x="958"
+              y="816.1211">TokenConverter
+        </text>
+        <rect fill="#FFFFFF" height="645.832" style="stroke:#181818;stroke-width:1.0;" width="10" x="18.5"
+              y="141.7539"/>
+        <rect fill="#FFFFFF" height="146.5527" style="stroke:#181818;stroke-width:1.0;" width="10" x="172.5"
+              y="163.0645"/>
+        <rect fill="#FFFFFF" height="381.0371" style="stroke:#181818;stroke-width:1.0;" width="10" x="172.5"
+              y="397.5488"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="345.5"
+              y="192.375"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="345.5"
+              y="426.8594"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="496.5"
+              y="250.9961"/>
+        <rect fill="#FFFFFF" height="146.5527" style="stroke:#181818;stroke-width:1.0;" width="10" x="496.5"
+              y="485.4805"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="638" y="338.9277"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="638" y="514.791"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="638" y="573.4121"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="830" y="661.3438"/>
+        <rect fill="#FFFFFF" height="29.3105" style="stroke:#181818;stroke-width:1.0;" width="10" x="1008.5"
+              y="719.9648"/>
+        <polygon fill="#181818" points="160.5,159.0645,170.5,163.0645,160.5,167.0645,164.5,163.0645"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;" x1="28.5" x2="166.5" y1="163.0645" y2="163.0645"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="67" x="35.5"
+              y="158.3223">authorize()
+        </text>
+        <polygon fill="#181818" points="333.5,188.375,343.5,192.375,333.5,196.375,337.5,192.375"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;" x1="182.5" x2="339.5" y1="192.375" y2="192.375"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="116" x="189.5"
+              y="187.6328">getSocialProvider()
+        </text>
+        <polygon fill="#181818" points="193.5,217.6855,183.5,221.6855,193.5,225.6855,189.5,221.6855"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="187.5" x2="349.5" y1="221.6855"
+              y2="221.6855"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="88" x="199.5"
+              y="216.9434">SocialProvider
+        </text>
+        <polygon fill="#181818" points="484.5,246.9961,494.5,250.9961,484.5,254.9961,488.5,250.9961"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;" x1="182.5" x2="490.5" y1="250.9961" y2="250.9961"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="67" x="189.5"
+              y="246.2539">authorize()
+        </text>
+        <polygon fill="#181818" points="193.5,276.3066,183.5,280.3066,193.5,284.3066,189.5,280.3066"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="187.5" x2="500.5" y1="280.3066"
+              y2="280.3066"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="77" x="199.5"
+              y="275.5645">authorizeUrl
+        </text>
+        <polygon fill="#181818" points="39.5,305.6172,29.5,309.6172,39.5,313.6172,35.5,309.6172"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="33.5" x2="176.5" y1="309.6172"
+              y2="309.6172"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="77" x="45.5"
+              y="304.875">authorizeUrl
+        </text>
+        <polygon fill="#181818" points="626,334.9277,636,338.9277,626,342.9277,630,338.9277"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;" x1="28.5" x2="632" y1="338.9277" y2="338.9277"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="184" x="35.5"
+              y="334.1855">redirect : Authorization Grant
+        </text>
+        <polygon fill="#181818" points="39.5,364.2383,29.5,368.2383,39.5,372.2383,35.5,368.2383"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="33.5" x2="642" y1="368.2383"
+              y2="368.2383"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="163" x="45.5"
+              y="363.4961">(Authorization code,state)
+        </text>
+        <polygon fill="#181818" points="160.5,393.5488,170.5,397.5488,160.5,401.5488,164.5,397.5488"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;" x1="28.5" x2="166.5" y1="397.5488" y2="397.5488"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="125" x="35.5"
+              y="392.8066">callback(code,state)
+        </text>
+        <polygon fill="#181818" points="333.5,422.8594,343.5,426.8594,333.5,430.8594,337.5,426.8594"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;" x1="182.5" x2="339.5" y1="426.8594" y2="426.8594"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="116" x="189.5"
+              y="422.1172">getSocialProvider()
+        </text>
+        <polygon fill="#181818" points="193.5,452.1699,183.5,456.1699,193.5,460.1699,189.5,456.1699"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="187.5" x2="349.5" y1="456.1699"
+              y2="456.1699"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="88" x="199.5"
+              y="451.4277">SocialProvider
+        </text>
+        <polygon fill="#181818" points="484.5,481.4805,494.5,485.4805,484.5,489.4805,488.5,485.4805"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;" x1="182.5" x2="490.5" y1="485.4805" y2="485.4805"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="86" x="189.5"
+              y="480.7383">authenticate()
+        </text>
+        <polygon fill="#181818" points="626,510.791,636,514.791,626,518.791,630,514.791"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;" x1="506.5" x2="632" y1="514.791" y2="514.791"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="111" x="513.5"
+              y="510.0488">getAccessToken()
+        </text>
+        <polygon fill="#181818" points="517.5,540.1016,507.5,544.1016,517.5,548.1016,513.5,544.1016"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="511.5" x2="642" y1="544.1016"
+              y2="544.1016"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="81" x="523.5"
+              y="539.3594">accessToken
+        </text>
+        <polygon fill="#181818" points="626,569.4121,636,573.4121,626,577.4121,630,573.4121"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;" x1="506.5" x2="632" y1="573.4121" y2="573.4121"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="81" x="513.5"
+              y="568.6699">getUserInfo()
+        </text>
+        <polygon fill="#181818" points="517.5,598.7227,507.5,602.7227,517.5,606.7227,513.5,602.7227"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="511.5" x2="642" y1="602.7227"
+              y2="602.7227"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="52" x="523.5"
+              y="597.9805">userInfo
+        </text>
+        <polygon fill="#181818" points="193.5,628.0332,183.5,632.0332,193.5,636.0332,189.5,632.0332"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="187.5" x2="500.5" y1="632.0332"
+              y2="632.0332"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="52" x="199.5"
+              y="627.291">userInfo
+        </text>
+        <polygon fill="#181818" points="818,657.3438,828,661.3438,818,665.3438,822,661.3438"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;" x1="182.5" x2="824" y1="661.3438" y2="661.3438"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="55" x="189.5"
+              y="656.6016">convert()
+        </text>
+        <polygon fill="#181818" points="193.5,686.6543,183.5,690.6543,193.5,694.6543,189.5,690.6543"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="187.5" x2="834" y1="690.6543"
+              y2="690.6543"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="54" x="199.5"
+              y="685.9121">Principal
+        </text>
+        <polygon fill="#181818" points="996.5,715.9648,1006.5,719.9648,996.5,723.9648,1000.5,719.9648"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;" x1="182.5" x2="1002.5" y1="719.9648" y2="719.9648"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="55" x="189.5"
+              y="715.2227">convert()
+        </text>
+        <polygon fill="#181818" points="193.5,745.2754,183.5,749.2754,193.5,753.2754,189.5,749.2754"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="187.5" x2="1012.5" y1="749.2754"
+              y2="749.2754"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="36" x="199.5"
+              y="744.5332">token
+        </text>
+        <polygon fill="#181818" points="39.5,774.5859,29.5,778.5859,39.5,782.5859,35.5,778.5859"
+                 style="stroke:#181818;stroke-width:1.0;"/>
+        <line style="stroke:#181818;stroke-width:1.0;stroke-dasharray:2.0,2.0;" x1="33.5" x2="176.5" y1="778.5859"
+              y2="778.5859"/>
+        <text fill="#000000" font-family="sans-serif" font-size="13" lengthAdjust="spacing" textLength="36" x="45.5"
+              y="773.8438">token
+        </text>
+        <a href="https://github.com/Ahoo-Wang/CoSec" target="_top" title="https://github.com/Ahoo-Wang/CoSec"
+           xlink:actuate="onRequest" xlink:href="https://github.com/Ahoo-Wang/CoSec" xlink:show="new"
+           xlink:title="https://github.com/Ahoo-Wang/CoSec" xlink:type="simple">
+            <text fill="#808080" font-family="sans-serif" font-size="10" lengthAdjust="spacing"
+                  text-decoration="underline" textLength="189" x="891" y="14.668">https://github.com/Ahoo-Wang/CoSec
+            </text>
+        </a>
+        <a href="https://github.com/Ahoo-Wang/CoSec" target="_top" title="https://github.com/Ahoo-Wang/CoSec"
+           xlink:actuate="onRequest" xlink:href="https://github.com/Ahoo-Wang/CoSec" xlink:show="new"
+           xlink:title="https://github.com/Ahoo-Wang/CoSec" xlink:type="simple">
+            <text fill="#808080" font-family="sans-serif" font-size="10" lengthAdjust="spacing"
+                  text-decoration="underline" textLength="189" x="445.5" y="882.7422">https://github.com/Ahoo-Wang/CoSec
+            </text>
+        </a><!--SRC=[rLJBJiCm4BpxAymjLGWV426aYWFYW5Ifz0CMPobMZHqvcqhmzTXfI73YF7ha5CKxipFUiNqZjL1rWLp1bwdfhgm_5ID92ldU20cARslwG4rI04cZ6GD1nl93XPQLODswB45JYnw0nu2TDMTPe7q13STeYrz4KF9zZPNVJTizsdEKwatjhDkHMrIFHZiK3O2lveIwBtb6chBcoxE7w2xIDEVGwcEoOJ5Cpnriq9EFI65jgibzbiMxP5a-dCuw5wkyZsMzNaSxM7MPJuyB6yJHpaiaDM_8OY4j2k9vYE1FraNKQqNeNYe9IS8KU5iH46uMOnIWr1k8K_ANz1_pR35zf5roarDthhT2O5KrLs14d9iuzBmXQrRFn_6ityrLOdLBkkQipdEwASRVX-PWN7wMWuoty1wwrKaJuTkpKZOaUI5gSbYyaGti1m00]-->
+    </g>
+</svg>

@@ -10,22 +10,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package me.ahoo.cosec.social
 
-rootProject.name = "CoSec"
+import me.ahoo.cosec.CoSecException
 
-include(":cosec-bom")
-include(":cosec-dependencies")
-include(":cosec-api")
-include(":cosec-core")
-include(":cosec-jwt")
-include(":cosec-redis")
-include(":cosec-social")
-include(":cosec-webmvc")
-include(":cosec-webflux")
-include(":cosec-spring-boot-starter")
-include(":cosec-gateway")
-include(":cosec-gateway-server")
-include(":cosec-opentelemetry")
-include(":cosec-ip2region")
-include(":code-coverage-report")
-include(":cosec-generator")
+/**
+ * SocialAuthenticationException.
+ *
+ * @author ahoo wang
+ */
+class SocialAuthenticationException : CoSecException {
+    constructor()
+    constructor(s: String) : super(s)
+    constructor(message: String, cause: Throwable) : super(message, cause)
+    constructor(cause: Throwable) : super(cause)
+}

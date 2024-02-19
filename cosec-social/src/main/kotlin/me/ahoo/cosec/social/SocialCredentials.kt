@@ -11,21 +11,10 @@
  * limitations under the License.
  */
 
-rootProject.name = "CoSec"
+package me.ahoo.cosec.social
 
-include(":cosec-bom")
-include(":cosec-dependencies")
-include(":cosec-api")
-include(":cosec-core")
-include(":cosec-jwt")
-include(":cosec-redis")
-include(":cosec-social")
-include(":cosec-webmvc")
-include(":cosec-webflux")
-include(":cosec-spring-boot-starter")
-include(":cosec-gateway")
-include(":cosec-gateway-server")
-include(":cosec-opentelemetry")
-include(":cosec-ip2region")
-include(":code-coverage-report")
-include(":cosec-generator")
+import me.ahoo.cosec.api.authentication.Credentials
+
+interface SocialCredentials : Credentials {
+    val provider: String
+}

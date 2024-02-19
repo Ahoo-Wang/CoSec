@@ -10,22 +10,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package me.ahoo.cosec.spring.boot.starter.authentication.social
 
-rootProject.name = "CoSec"
+import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 
-include(":cosec-bom")
-include(":cosec-dependencies")
-include(":cosec-api")
-include(":cosec-core")
-include(":cosec-jwt")
-include(":cosec-redis")
-include(":cosec-social")
-include(":cosec-webmvc")
-include(":cosec-webflux")
-include(":cosec-spring-boot-starter")
-include(":cosec-gateway")
-include(":cosec-gateway-server")
-include(":cosec-opentelemetry")
-include(":cosec-ip2region")
-include(":code-coverage-report")
-include(":cosec-generator")
+/**
+ * Conditional On Social Enabled.
+ *
+ * @author ahoo wang
+ */
+@ConditionalOnProperty(
+    value = [ConditionalOnSocialAuthenticationEnabled.ENABLED_KEY],
+    matchIfMissing = true,
+    havingValue = "true",
+)
+annotation class ConditionalOnSocialAuthenticationEnabled {
+    companion object {
+        const val ENABLED_KEY: String = SocialAuthenticationProperties.PREFIX + ENABLED_SUFFIX_KEY
+    }
+}

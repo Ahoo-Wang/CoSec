@@ -10,22 +10,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package me.ahoo.cosec.social
 
-rootProject.name = "CoSec"
+import me.ahoo.cosec.api.Named
+import reactor.core.publisher.Mono
 
-include(":cosec-bom")
-include(":cosec-dependencies")
-include(":cosec-api")
-include(":cosec-core")
-include(":cosec-jwt")
-include(":cosec-redis")
-include(":cosec-social")
-include(":cosec-webmvc")
-include(":cosec-webflux")
-include(":cosec-spring-boot-starter")
-include(":cosec-gateway")
-include(":cosec-gateway-server")
-include(":cosec-opentelemetry")
-include(":cosec-ip2region")
-include(":code-coverage-report")
-include(":cosec-generator")
+/**
+ * Social Provider .
+ *
+ * @author ahoo wang
+ */
+interface SocialAuthenticationProvider : Named {
+    /**
+     * Generate authorize Url.
+     *
+     * @return authorize Url
+     */
+    fun authorizeUrl(): String
+
+    @Throws(SocialAuthenticationException::class)
+    fun authenticate(credentials: SocialCredentials): Mono<SocialUser>
+}

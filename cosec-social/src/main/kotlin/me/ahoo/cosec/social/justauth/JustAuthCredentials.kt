@@ -10,22 +10,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package me.ahoo.cosec.social.justauth
 
-rootProject.name = "CoSec"
+import me.ahoo.cosec.social.SocialCredentials
+import me.zhyd.oauth.model.AuthCallback
 
-include(":cosec-bom")
-include(":cosec-dependencies")
-include(":cosec-api")
-include(":cosec-core")
-include(":cosec-jwt")
-include(":cosec-redis")
-include(":cosec-social")
-include(":cosec-webmvc")
-include(":cosec-webflux")
-include(":cosec-spring-boot-starter")
-include(":cosec-gateway")
-include(":cosec-gateway-server")
-include(":cosec-opentelemetry")
-include(":cosec-ip2region")
-include(":code-coverage-report")
-include(":cosec-generator")
+/**
+ * JustAuth Credentials .
+ *
+ * @author ahoo wang
+ */
+class JustAuthCredentials(override val provider: String) : AuthCallback(), SocialCredentials
