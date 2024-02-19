@@ -49,9 +49,11 @@ interface CoSecPrincipal : Principal, PolicyCapable, RoleCapable {
         val ROOT_ID: String = System.getProperty(ROOT_KEY, CoSec.COSEC)
 
         //endregion
-        //region ANONYMOUS 未认证状态下的用户
 
-        val ANONYMOUS_ID = CoSec.DEFAULT
+        /**
+         * ANONYMOUS 未认证状态下的用户
+         */
+        const val ANONYMOUS_ID = CoSec.DEFAULT
 
         fun CoSecPrincipal.isRoot(): Boolean {
             return ROOT_ID == id
