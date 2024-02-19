@@ -13,9 +13,9 @@
 package me.ahoo.cosec.social.justauth
 
 import com.google.common.base.MoreObjects
-import me.ahoo.cosec.social.SocialCredentials
 import me.ahoo.cosec.social.SocialAuthenticationException
 import me.ahoo.cosec.social.SocialAuthenticationProvider
+import me.ahoo.cosec.social.SocialCredentials
 import me.ahoo.cosec.social.SocialUser
 import me.ahoo.cosid.IdGenerator
 import me.zhyd.oauth.enums.AuthUserGender
@@ -45,7 +45,9 @@ class JustAuthProvider(
             @Suppress("UNCHECKED_CAST")
             val authResponse: AuthResponse<AuthUser> = authRequest.login(credentials) as AuthResponse<AuthUser>
             if (!authResponse.ok()) {
-                throw SocialAuthenticationException(MoreObjects.firstNonNull(authResponse.msg, authResponse.code.toString()))
+                throw SocialAuthenticationException(
+                    MoreObjects.firstNonNull(authResponse.msg, authResponse.code.toString())
+                )
             }
             val authUser = authResponse.data
             SocialUser(

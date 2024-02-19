@@ -70,8 +70,8 @@ jobs:
       - name: Test CoSec-Jwt
         run: ./gradlew cosec-jwt:clean cosec-jwt:check
 
-  cosec-oauth-test:
-    name: CoSec OAuth Test
+  cosec-social-test:
+    name: CoSec Social Test
     needs: [ cosec-core-test ]
     runs-on: ubuntu-latest
     services:
@@ -96,8 +96,8 @@ jobs:
           server-id: github
           settings-path: ${{ github.workspace }}
 
-      - name: Test CoSec-OAuth
-        run: ./gradlew cosec-oauth:clean cosec-oauth:check
+      - name: Test CoSec-Social
+        run: ./gradlew cosec-social:clean cosec-social:check
 
   cosec-redis-test:
     name: CoSec Redis Test

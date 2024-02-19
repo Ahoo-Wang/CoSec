@@ -63,25 +63,16 @@ internal class JustAuthProviderTest {
     @Test
     fun authenticateSuccess() {
         val oAuthCredentials = JustAuthCredentials("clientId")
+        val authUser = AuthUser()
+        authUser.uuid = "uuid"
+        authUser.username = "username"
+        authUser.gender = AuthUserGender.MALE
+        authUser.token = AuthToken()
+        authUser.rawUserInfo = JSONObject()
         val authRequest = mockk<AuthRequest> {
             every { login(oAuthCredentials) } returns mockk<AuthResponse<AuthUser>> {
                 every { ok() } returns true
-                every { data } returns
-                    AuthUser(
-                        "uuid",
-                        "username",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        AuthUserGender.MALE,
-                        "",
-                        AuthToken(),
-                        JSONObject(),
-                    )
+                every { data } returns authUser
             }
         }
         val authClient = JustAuthProvider("clientId", authRequest, MockIdGenerator.INSTANCE)
