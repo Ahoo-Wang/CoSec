@@ -54,7 +54,8 @@ class SocialAuthenticationProperties(
         packId: String?,
         pkce: Boolean = false,
         authServerId: String?,
-        ignoreCheckRedirectUri: Boolean = false
+        ignoreCheckRedirectUri: Boolean = false,
+        tenantId: String?,
     ) : AuthConfig(
         clientId,
         clientSecret,
@@ -74,5 +75,6 @@ class SocialAuthenticationProperties(
         pkce,
         authServerId,
         ignoreCheckRedirectUri,
+        tenantId
     )
 }
