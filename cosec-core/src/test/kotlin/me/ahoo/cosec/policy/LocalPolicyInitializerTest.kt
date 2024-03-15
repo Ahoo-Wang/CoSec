@@ -25,7 +25,20 @@ class LocalPolicyInitializerTest {
             every { getPolicies(any()) } returns Mono.empty()
             every { setPolicy(any()) } returns Mono.empty()
         }
-        val localPolicyInitializer = LocalPolicyInitializer(localPolicyLoader, mockPolicyRepository)
+        val localPolicyInitializer = LocalPolicyInitializer(localPolicyLoader, mockPolicyRepository, false)
+        localPolicyInitializer.init()
+        verify {
+            mockPolicyRepository.setPolicy(any())
+        }
+    }
+
+    @Test
+    fun initForceRefresh() {
+        val mockPolicyRepository = mockk<PolicyRepository> {
+            every { getPolicies(any()) } returns Mono.empty()
+            every { setPolicy(any()) } returns Mono.empty()
+        }
+        val localPolicyInitializer = LocalPolicyInitializer(localPolicyLoader, mockPolicyRepository, true)
         localPolicyInitializer.init()
         verify {
             mockPolicyRepository.setPolicy(any())
@@ -38,7 +51,7 @@ class LocalPolicyInitializerTest {
             every { getPolicies(any()) } returns listOf<Policy>().toMono()
             every { setPolicy(any()) } returns Mono.empty()
         }
-        val localPolicyInitializer = LocalPolicyInitializer(localPolicyLoader, mockPolicyRepository)
+        val localPolicyInitializer = LocalPolicyInitializer(localPolicyLoader, mockPolicyRepository, false)
         localPolicyInitializer.init()
         verify {
             mockPolicyRepository.setPolicy(any())
@@ -51,7 +64,7 @@ class LocalPolicyInitializerTest {
             every { getPolicies(any()) } returns listOf(localPolicyLoader.policies.first()).toMono()
             every { setPolicy(any()) } returns Mono.empty()
         }
-        val localPolicyInitializer = LocalPolicyInitializer(localPolicyLoader, mockPolicyRepository)
+        val localPolicyInitializer = LocalPolicyInitializer(localPolicyLoader, mockPolicyRepository, false)
         localPolicyInitializer.init()
         verify {
             mockPolicyRepository.setPolicy(any()) wasNot Called
@@ -64,7 +77,7 @@ class LocalPolicyInitializerTest {
             every { getPolicies(any()) } returns Mono.empty()
             every { setPolicy(any()) } returns RuntimeException().toMono()
         }
-        val localPolicyInitializer = LocalPolicyInitializer(localPolicyLoader, mockPolicyRepository)
+        val localPolicyInitializer = LocalPolicyInitializer(localPolicyLoader, mockPolicyRepository, false)
         Assertions.assertThrows(RuntimeException::class.java) {
             localPolicyInitializer.init()
         }
