@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyEvaluator
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 
 object DefaultPolicyEvaluator : PolicyEvaluator {
@@ -24,13 +25,30 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
     override fun evaluate(policy: Policy) {
         val evaluateRequest = EvaluateRequest()
         val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
-        policy.condition.match(request = evaluateRequest, securityContext = mockContext)
-        policy.statements.forEach { statement ->
-            statement.condition.match(request = evaluateRequest, securityContext = mockContext)
-            statement.action.match(request = evaluateRequest, securityContext = mockContext)
-            statement.verify(request = evaluateRequest, securityContext = mockContext)
+        safeEvaluate {
+            policy.condition.match(request = evaluateRequest, securityContext = mockContext)
         }
-        policy.verify(request = evaluateRequest, securityContext = mockContext)
+        policy.statements.forEach { statement ->
+            safeEvaluate {
+                statement.condition.match(request = evaluateRequest, securityContext = mockContext)
+            }
+            statement.action.match(request = evaluateRequest, securityContext = mockContext)
+            safeEvaluate {
+                statement.verify(request = evaluateRequest, securityContext = mockContext)
+            }
+        }
+
+        safeEvaluate {
+            policy.verify(request = evaluateRequest, securityContext = mockContext)
+        }
+    }
+
+    private fun safeEvaluate(verifyFun: () -> Unit) {
+        try {
+            verifyFun()
+        } catch (ignore: TooManyRequestsException) {
+            // ignore
+        }
     }
 }
 

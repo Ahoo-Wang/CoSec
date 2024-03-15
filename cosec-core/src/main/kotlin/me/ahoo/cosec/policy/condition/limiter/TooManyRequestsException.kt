@@ -13,4 +13,4 @@
 
 package me.ahoo.cosec.policy.condition.limiter
 
-class TooManyRequestsException : RuntimeException()
+class TooManyRequestsException(message: String = "") : RuntimeException(message)
