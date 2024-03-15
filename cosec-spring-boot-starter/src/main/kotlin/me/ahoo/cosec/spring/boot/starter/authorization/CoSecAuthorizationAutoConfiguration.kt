@@ -75,9 +75,14 @@ class CoSecAuthorizationAutoConfiguration {
     )
     fun localPolicyInitializer(
         localPolicyLoader: LocalPolicyLoader,
-        policyRepository: PolicyRepository
+        policyRepository: PolicyRepository,
+        authorizationProperties: AuthorizationProperties
     ): LocalPolicyInitializer {
-        return LocalPolicyInitializer(localPolicyLoader, policyRepository)
+        return LocalPolicyInitializer(
+            localPolicyLoader = localPolicyLoader,
+            policyRepository = policyRepository,
+            forceRefresh = authorizationProperties.localPolicy.forceRefresh
+        )
     }
 
     @Bean
