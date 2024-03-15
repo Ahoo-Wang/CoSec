@@ -22,7 +22,8 @@ import java.time.Duration
 
 class LocalPolicyInitializer(
     private val localPolicyLoader: LocalPolicyLoader,
-    private val policyRepository: PolicyRepository
+    private val policyRepository: PolicyRepository,
+    private val forceRefresh: Boolean
 ) {
     companion object {
         private val log = org.slf4j.LoggerFactory.getLogger(LocalPolicyInitializer::class.java)
@@ -42,22 +43,33 @@ class LocalPolicyInitializer(
     }
 
     private fun initPolicy(policy: Policy) {
+        if (forceRefresh) {
+            if (log.isInfoEnabled) {
+                log.info("Force Refresh Init Policy - Local Policy[{}].", policy.id)
+            }
+            policyRepository.setPolicy(policy).block(Duration.ofSeconds(10))
+            return
+        }
+
         policyRepository.getPolicies(setOf(policy.id))
             .switchIfEmpty {
                 listOf<Policy>().toMono()
             }
             .flatMap { policies ->
                 if (policies.isEmpty()) {
+                    if (log.isInfoEnabled) {
+                        log.info("Init Policy - [{}].", policy.id)
+                    }
                     return@flatMap policyRepository.setPolicy(policy)
                 }
                 if (log.isInfoEnabled) {
-                    log.info("Init - [{}] already exists,Ignore setting policy.", policy.id)
+                    log.info("Init Policy - [{}] already exists,Ignore setting policy.", policy.id)
                 }
                 Mono.empty()
             }
             .doOnError { error ->
                 if (log.isErrorEnabled) {
-                    log.error("Init - Policy[{}] failed.", policy.id, error)
+                    log.error("Init Policy - [{}] failed.", policy.id, error)
                 }
             }.block(Duration.ofSeconds(10))
     }

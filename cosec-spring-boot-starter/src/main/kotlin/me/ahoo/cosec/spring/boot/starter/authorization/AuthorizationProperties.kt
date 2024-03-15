@@ -41,7 +41,9 @@ class AuthorizationProperties(
         @DefaultValue(DEFAULT_LOCATION)
         var locations: Set<String> = setOf(DEFAULT_LOCATION),
         @DefaultValue("false")
-        var initRepository: Boolean = false
+        var initRepository: Boolean = false,
+        @DefaultValue("false")
+        var forceRefresh: Boolean = false
     ) : EnabledCapable {
         companion object {
             const val DEFAULT_LOCATION = "classpath:cosec-policy/*-policy.json"
