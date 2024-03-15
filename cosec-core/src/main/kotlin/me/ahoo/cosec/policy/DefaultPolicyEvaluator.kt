@@ -25,14 +25,27 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
     override fun evaluate(policy: Policy) {
         val evaluateRequest = EvaluateRequest()
         val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
-        policy.condition.match(request = evaluateRequest, securityContext = mockContext)
-        policy.statements.forEach { statement ->
-            statement.condition.match(request = evaluateRequest, securityContext = mockContext)
-            statement.action.match(request = evaluateRequest, securityContext = mockContext)
-            statement.verify(request = evaluateRequest, securityContext = mockContext)
+        safeEvaluate {
+            policy.condition.match(request = evaluateRequest, securityContext = mockContext)
         }
-        try {
+        policy.statements.forEach { statement ->
+            safeEvaluate {
+                statement.condition.match(request = evaluateRequest, securityContext = mockContext)
+            }
+            statement.action.match(request = evaluateRequest, securityContext = mockContext)
+            safeEvaluate {
+                statement.verify(request = evaluateRequest, securityContext = mockContext)
+            }
+        }
+
+        safeEvaluate {
             policy.verify(request = evaluateRequest, securityContext = mockContext)
+        }
+    }
+
+    private fun safeEvaluate(verifyFun: () -> Unit) {
+        try {
+            verifyFun()
         } catch (ignore: TooManyRequestsException) {
             // ignore
         }
