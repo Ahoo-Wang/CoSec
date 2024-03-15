@@ -28,7 +28,7 @@ const val GROUPED_RATE_LIMITER_CONDITION_MATCHER_EXPIRE_AFTER_ACCESS_SECOND_KEY 
 
 class GroupedRateLimiterConditionMatcher(
     configuration: Configuration
-) : PartConditionMatcher(RateLimiterConditionMatcherFactory.TYPE, configuration) {
+) : PartConditionMatcher(GroupedRateLimiterConditionMatcherFactory.TYPE, configuration) {
 
     private val permitsPerSecond: Double =
         requireNotNull(configuration.get(RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY)) {
