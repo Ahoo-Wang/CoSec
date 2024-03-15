@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyEvaluator
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 
 object DefaultPolicyEvaluator : PolicyEvaluator {
@@ -30,7 +31,11 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
             statement.action.match(request = evaluateRequest, securityContext = mockContext)
             statement.verify(request = evaluateRequest, securityContext = mockContext)
         }
-        policy.verify(request = evaluateRequest, securityContext = mockContext)
+        try {
+            policy.verify(request = evaluateRequest, securityContext = mockContext)
+        } catch (ignore: TooManyRequestsException) {
+            // ignore
+        }
     }
 }
 

@@ -48,7 +48,7 @@ class GroupedRateLimiterConditionMatcher(
             return true
         }
 
-        throw TooManyRequestsException()
+        throw TooManyRequestsException("Rate limit exceeded - Group[$partValue]!")
     }
 
     inner class RateLimiterLoader : CacheLoader<String, RateLimiter>() {
