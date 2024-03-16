@@ -3,7 +3,7 @@
 springBoot = "3.2.3"
 springCloud = "2023.0.0"
 cosid = "2.6.6"
-cocache = "2.3.3"
+cocache = "2.3.4"
 opentelemetry = "2.2.0"
 opentelemetrySemconv = "1.22.0-alpha"
 testcontainers = "1.19.7"
