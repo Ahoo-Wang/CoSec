@@ -21,7 +21,6 @@ import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 
 object DefaultPolicyEvaluator : PolicyEvaluator {
-
     override fun evaluate(policy: Policy) {
         val evaluateRequest = EvaluateRequest()
         val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
@@ -43,7 +42,7 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
         }
     }
 
-    private fun safeEvaluate(verifyFun: () -> Unit) {
+    internal fun safeEvaluate(verifyFun: () -> Unit) {
         try {
             verifyFun()
         } catch (ignore: TooManyRequestsException) {
