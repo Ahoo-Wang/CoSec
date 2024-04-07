@@ -16,6 +16,7 @@ package me.ahoo.cosec.permission
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.AppPermissionEvaluator
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.policy.DefaultPolicyEvaluator.safeEvaluate
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 
@@ -23,11 +24,20 @@ object DefaultAppPermissionEvaluator : AppPermissionEvaluator {
     override fun evaluate(appPermission: AppPermission) {
         val evaluateRequest = EvaluateRequest()
         val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
-        appPermission.condition.match(evaluateRequest, mockContext)
+        safeEvaluate {
+            appPermission.condition.match(evaluateRequest, mockContext)
+        }
+
         appPermission.permissionIndexer.values.forEach { permission ->
-            permission.condition.match(request = evaluateRequest, securityContext = mockContext)
-            permission.action.match(request = evaluateRequest, securityContext = mockContext)
-            permission.verify(request = evaluateRequest, securityContext = mockContext)
+            safeEvaluate {
+                permission.condition.match(request = evaluateRequest, securityContext = mockContext)
+            }
+            safeEvaluate {
+                permission.action.match(request = evaluateRequest, securityContext = mockContext)
+            }
+            safeEvaluate {
+                permission.verify(request = evaluateRequest, securityContext = mockContext)
+            }
         }
     }
 }
