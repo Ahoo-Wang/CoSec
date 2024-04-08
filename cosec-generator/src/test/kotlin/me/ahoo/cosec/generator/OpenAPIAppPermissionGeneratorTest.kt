@@ -20,6 +20,7 @@ class OpenAPIAppPermissionGeneratorTest {
             PathItem()
                 .summary("test")
                 .get(Operation().tags(listOf("test")).summary("get"))
+                .post(Operation().tags(listOf("test")).summary("set"))
                 .also {
                     paths.addPathItem("/test", it)
                 }
