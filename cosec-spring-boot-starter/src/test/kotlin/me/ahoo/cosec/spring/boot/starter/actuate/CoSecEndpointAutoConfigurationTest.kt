@@ -18,6 +18,7 @@ class CoSecEndpointAutoConfigurationTest {
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
                     .hasSingleBean(CoSecPolicyGeneratorEndpoint::class.java)
+                    .hasSingleBean(CoSecAppPermissionGeneratorEndpoint::class.java)
             }
     }
 }
