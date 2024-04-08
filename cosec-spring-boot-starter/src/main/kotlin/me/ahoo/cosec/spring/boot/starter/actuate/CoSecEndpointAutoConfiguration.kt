@@ -36,4 +36,12 @@ class CoSecEndpointAutoConfiguration {
     fun coSecPolicyGeneratorEndpoint(openAPIProvider: ObjectProvider<OpenAPI>): CoSecPolicyGeneratorEndpoint {
         return CoSecPolicyGeneratorEndpoint(openAPIProvider)
     }
+
+    @Bean
+    @ConditionalOnClass(value = [OpenAPI::class])
+    fun coSecAppPermissionGeneratorEndpoint(
+        openAPIProvider: ObjectProvider<OpenAPI>
+    ): CoSecAppPermissionGeneratorEndpoint {
+        return CoSecAppPermissionGeneratorEndpoint(openAPIProvider)
+    }
 }
