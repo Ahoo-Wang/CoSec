@@ -29,7 +29,7 @@ object OpenAPIAppPermissionGenerator {
     fun generate(openAPI: OpenAPI): AppPermission {
         val tagGroupOperations = mutableMapOf<String, MutableList<Permission>>()
 
-        for ((path, item) in openAPI.paths) {
+        for ((path, item) in openAPI.paths.orEmpty()) {
             for ((method, operation) in item.readOperationsMap()) {
                 val action = PathActionMatcherFactory.INSTANCE.create(
                     mapOf<String, String>(
