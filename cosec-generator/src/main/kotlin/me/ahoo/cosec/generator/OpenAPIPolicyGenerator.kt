@@ -40,8 +40,9 @@ object OpenAPIPolicyGenerator {
                         ACTION_MATCHER_METHOD_KEY to method.name
                     ).asConfiguration()
                 )
+
                 StatementData(
-                    name = operation.summary ?: item.summary,
+                    name = operation.summary ?: item.summary ?: operation.operationId.orEmpty(),
                     action = action
                 ).also {
                     statements.add(it)

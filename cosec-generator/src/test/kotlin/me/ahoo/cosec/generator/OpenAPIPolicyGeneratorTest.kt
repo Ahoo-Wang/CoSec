@@ -21,10 +21,14 @@ class OpenAPIPolicyGeneratorTest {
                     paths.addPathItem("/test", it)
                 }
             PathItem()
-                .summary("test2")
-                .get(Operation())
+                .get(Operation().summary("test2"))
                 .also {
                     paths.addPathItem("/test2", it)
+                }
+            PathItem()
+                .get(Operation().operationId("test3"))
+                .also {
+                    paths.addPathItem("/test3", it)
                 }
         }
 
@@ -33,8 +37,9 @@ class OpenAPIPolicyGeneratorTest {
         assertThat(policy.category, equalTo(OpenAPIPolicyGenerator.POLICY_CATEGORY))
         assertThat(policy.name, equalTo(OpenAPIPolicyGenerator.POLICY_NAME))
         assertThat(policy.description, equalTo(OpenAPIPolicyGenerator.POLICY_DESCRIPTION))
-        assertThat(policy.statements, hasSize(2))
-        assertThat(policy.statements.first().name, equalTo("get"))
-        assertThat(policy.statements.last().name, equalTo("test2"))
+        assertThat(policy.statements, hasSize(3))
+        assertThat(policy.statements[0].name, equalTo("get"))
+        assertThat(policy.statements[1].name, equalTo("test2"))
+        assertThat(policy.statements[2].name, equalTo("test3"))
     }
 }
