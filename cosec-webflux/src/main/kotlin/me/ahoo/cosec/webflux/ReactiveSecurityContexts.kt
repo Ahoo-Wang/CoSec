@@ -21,7 +21,12 @@ import reactor.util.context.ContextView
 object ReactiveSecurityContexts {
 
     fun ContextView.getSecurityContext(): SecurityContext {
-        return get(SecurityContext.KEY)
+        return getSecurityContextOrEmpty()
+            ?: throw IllegalStateException("SecurityContext is null.")
+    }
+
+    fun ContextView.getSecurityContextOrEmpty(): SecurityContext? {
+        return getOrEmpty<SecurityContext>(SecurityContext.KEY).orElse(null)
     }
 
     fun Context.setSecurityContext(securityContext: SecurityContext): Context {

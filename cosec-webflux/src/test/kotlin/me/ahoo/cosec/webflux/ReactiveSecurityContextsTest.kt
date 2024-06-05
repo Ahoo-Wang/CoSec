@@ -17,12 +17,15 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
+import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContextOrEmpty
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
+import org.hamcrest.MatcherAssert.*
+import org.hamcrest.Matchers.*
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
 import reactor.kotlin.test.test
+import reactor.util.context.Context
 
 class ReactiveSecurityContextsTest {
 
@@ -38,5 +41,17 @@ class ReactiveSecurityContextsTest {
             .hasKey(SecurityContext.KEY)
             .then()
             .verifyComplete()
+    }
+
+    @Test
+    fun getEmpty() {
+        Context.empty()
+            .getSecurityContextOrEmpty()
+            .let {
+                assertThat(it, equalTo(null))
+            }
+        Assertions.assertThrows(IllegalStateException::class.java) {
+            Context.empty().getSecurityContext()
+        }
     }
 }
