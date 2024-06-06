@@ -56,8 +56,8 @@ abstract class ReactiveSecurityFilter(
             tokenVerificationException = verificationException
             SimpleSecurityContext.anonymous()
         }
-        exchange.setSecurityContext(securityContext)
         securityContext.setRequest(request)
+        exchange.setSecurityContext(securityContext)
         return authorization.authorize(request, securityContext)
             .flatMap { authorizeResult ->
                 if (authorizeResult.authorized) {

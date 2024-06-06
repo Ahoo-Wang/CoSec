@@ -51,10 +51,9 @@ abstract class AbstractAuthorizationInterceptor(
             tokenVerificationException = verificationException
             SimpleSecurityContext.anonymous()
         }
-
+        securityContext.setRequest(request)
         SecurityContextHolder.setContext(securityContext)
         servletRequest.setSecurityContext(securityContext)
-        securityContext.setRequest(request)
         return authorization.authorize(request, securityContext)
             .map {
                 if (!it.authorized) {

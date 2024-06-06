@@ -19,6 +19,7 @@ import jakarta.servlet.ServletRequest
 import jakarta.servlet.ServletResponse
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
@@ -47,6 +48,7 @@ class InjectSecurityContextFilter(
         val httpServletRequest = servletRequest as HttpServletRequest
         val request = requestParser.parse(servletRequest)
         val securityContext: SecurityContext = securityContextParser.ensureParse(request)
+        securityContext.setRequest(request)
         SecurityContextHolder.setContext(securityContext)
         httpServletRequest.setSecurityContext(securityContext)
     }
