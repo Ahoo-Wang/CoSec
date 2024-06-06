@@ -1,6 +1,5 @@
 package me.ahoo.cosec.policy
 
-import io.mockk.Called
 import io.mockk.confirmVerified
 import io.mockk.every
 import io.mockk.mockk
@@ -62,12 +61,11 @@ class LocalPolicyInitializerTest {
     fun initIfExists() {
         val mockPolicyRepository = mockk<PolicyRepository> {
             every { getPolicies(any()) } returns listOf(localPolicyLoader.policies.first()).toMono()
-            every { setPolicy(any()) } returns Mono.empty()
         }
         val localPolicyInitializer = LocalPolicyInitializer(localPolicyLoader, mockPolicyRepository, false)
         localPolicyInitializer.init()
         verify {
-            mockPolicyRepository.setPolicy(any()) wasNot Called
+            mockPolicyRepository.getPolicies(any())
         }
     }
 
