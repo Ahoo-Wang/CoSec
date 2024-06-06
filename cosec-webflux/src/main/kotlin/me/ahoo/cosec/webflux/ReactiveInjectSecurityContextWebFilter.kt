@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.webflux
 
+import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
@@ -32,12 +33,12 @@ import reactor.kotlin.core.publisher.toMono
 class ReactiveInjectSecurityContextWebFilter(
     private val requestParser: RequestParser<ServerWebExchange>,
     private val securityContextParser: SecurityContextParser
-) :
-    WebFilter, Ordered {
+) : WebFilter, Ordered {
 
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
         val request = requestParser.parse(exchange)
         val securityContext = securityContextParser.ensureParse(request)
+        securityContext.setRequest(request)
         exchange.mutate()
             .principal(securityContext.principal.toMono())
             .build().let {
