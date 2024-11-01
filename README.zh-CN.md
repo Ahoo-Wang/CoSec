@@ -342,6 +342,22 @@ class CustomConditionMatcher(configuration: Configuration) :
 }
 
 ```
+## 获取当前安全上下文
+
+### WebFlux
+
+```kotlin
+     Mono.deferContextual {
+        val securityContext = it.getSecurityContext()
+        //TODO
+    }
+```
+
+### WebMvc
+
+```
+SecurityContextHolder.context
+```
 
 ## OpenTelemetry
 

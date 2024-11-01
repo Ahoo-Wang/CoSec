@@ -341,6 +341,22 @@ Configure [App Permission Schema](schema/cosec-app-permission.schema.json) to su
 }
 ```
 
+## Obtain the current security context
+
+### WebFlux
+
+```kotlin
+     Mono.deferContextual {
+        val securityContext = it.getSecurityContext()
+        //TODO
+    }
+```
+
+### WebMvc
+
+```
+SecurityContextHolder.context
+```
 ## OpenTelemetry
 
 [CoSec-OpenTelemetry](cosec-opentelemetry)
