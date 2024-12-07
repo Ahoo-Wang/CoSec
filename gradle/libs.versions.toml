@@ -2,7 +2,7 @@
 # libraries
 springBoot = "3.3.5"
 springCloud = "2023.0.3"
-cosid = "2.9.9"
+cosid = "2.9.10"
 cocache = "2.5.2"
 opentelemetry = "2.10.0"
 opentelemetrySemconv = "1.22.0-alpha"
