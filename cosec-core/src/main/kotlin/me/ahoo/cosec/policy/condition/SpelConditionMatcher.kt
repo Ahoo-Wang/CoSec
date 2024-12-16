@@ -30,7 +30,7 @@ class SpelConditionMatcher(configuration: Configuration) :
 
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
         val root = Root(request = request, context = securityContext)
-        return expression.getValue(root) ?: false
+        return expression.getValue(root) == true
     }
 
     data class Root(
