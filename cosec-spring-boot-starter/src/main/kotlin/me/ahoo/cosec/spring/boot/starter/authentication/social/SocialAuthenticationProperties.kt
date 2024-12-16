@@ -56,6 +56,14 @@ class SocialAuthenticationProperties(
         authServerId: String?,
         ignoreCheckRedirectUri: Boolean = false,
         tenantId: String?,
+        kid: String?,
+        teamId: String?,
+        loginType: String = "CorpApp",
+        lang: String = "zh",
+        dingTalkOrgType: String?,
+        dingTalkCorpId: String?,
+        dingTalkExclusiveLogin: Boolean = false,
+        dingTalkExclusiveCorpId: String?,
     ) : AuthConfig(
         clientId,
         clientSecret,
@@ -75,6 +83,14 @@ class SocialAuthenticationProperties(
         pkce,
         authServerId,
         ignoreCheckRedirectUri,
-        tenantId
+        tenantId,
+        kid,
+        teamId,
+        loginType,
+        lang,
+        dingTalkOrgType,
+        dingTalkCorpId,
+        dingTalkExclusiveLogin,
+        dingTalkExclusiveCorpId,
     )
 }
