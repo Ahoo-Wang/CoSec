@@ -21,7 +21,7 @@ import me.ahoo.cosec.api.token.TokenPrincipal
 interface TokenVerifier : PrincipalConverter {
     @Throws(TokenVerificationException::class)
     fun <T : TokenPrincipal> verify(accessToken: AccessToken): T
-    override fun asPrincipal(accessToken: AccessToken): CoSecPrincipal {
+    override fun toPrincipal(accessToken: AccessToken): CoSecPrincipal {
         return verify(accessToken)
     }
 

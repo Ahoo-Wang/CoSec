@@ -41,13 +41,13 @@ class JwtTokenVerifier(algorithm: Algorithm) : TokenVerifier {
     override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T {
         val removedBearerAccessToken = accessToken.accessToken.removeBearerPrefix()
         val decodedAccessToken = verify(removedBearerAccessToken)
-        return Jwts.asPrincipal(decodedAccessToken)
+        return Jwts.toPrincipal(decodedAccessToken)
     }
 
     override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {
         val decodedRefreshToken: DecodedJWT = verify(token.refreshToken)
         val decodedAccessToken = Jwts.decode(token.accessToken)
         require(decodedRefreshToken.subject == decodedAccessToken.id) { "Illegal refreshToken." }
-        return Jwts.asPrincipal(decodedAccessToken)
+        return Jwts.toPrincipal(decodedAccessToken)
     }
 }

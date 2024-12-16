@@ -15,7 +15,7 @@ package me.ahoo.cosec.jwt
 import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
-import me.ahoo.cosec.jwt.Jwts.asPrincipal
+import me.ahoo.cosec.jwt.Jwts.toPrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
 import org.openjdk.jmh.annotations.Benchmark
@@ -73,6 +73,6 @@ open class JwtTokenConverterBenchmark {
 
     @Benchmark
     fun asPrincipalWithNoneVerify(): TokenTenantPrincipal {
-        return asPrincipal(token.accessToken)
+        return toPrincipal(token.accessToken)
     }
 }

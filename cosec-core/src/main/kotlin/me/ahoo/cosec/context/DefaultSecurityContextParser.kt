@@ -29,7 +29,7 @@ open class DefaultSecurityContextParser(private val principalConverter: Principa
             return SimpleSecurityContext.anonymous()
         }
         val accessToken = SimpleAccessToken(authorization)
-        val principal = principalConverter.asPrincipal(accessToken)
+        val principal = principalConverter.toPrincipal(accessToken)
         return SimpleSecurityContext(principal)
     }
 }

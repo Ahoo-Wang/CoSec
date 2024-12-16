@@ -7,7 +7,6 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.token.PrincipalConverter
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
-import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class DefaultSecurityContextParserTest {
@@ -18,7 +17,7 @@ class DefaultSecurityContextParserTest {
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns "Bearer token"
         }
         val principalConverter = mockk<PrincipalConverter> {
-            every { asPrincipal(any()) } returns mockk()
+            every { toPrincipal(any()) } returns mockk()
         }
         val securityContextParser = DefaultSecurityContextParser(principalConverter)
 
@@ -26,7 +25,7 @@ class DefaultSecurityContextParserTest {
 
         verify {
             request.getHeader(AUTHORIZATION_HEADER_KEY)
-            principalConverter.asPrincipal(any())
+            principalConverter.toPrincipal(any())
         }
     }
 

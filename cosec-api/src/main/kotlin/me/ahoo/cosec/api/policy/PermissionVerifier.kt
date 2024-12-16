@@ -26,7 +26,7 @@ enum class VerifyResult {
     EXPLICIT_DENY,
     IMPLICIT_DENY;
 
-    fun asAuthorizeResult(): AuthorizeResult {
+    fun toAuthorizeResult(): AuthorizeResult {
         return when (this) {
             ALLOW -> AuthorizeResult.ALLOW
             EXPLICIT_DENY -> AuthorizeResult.EXPLICIT_DENY

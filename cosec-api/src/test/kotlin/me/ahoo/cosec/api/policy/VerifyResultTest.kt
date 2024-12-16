@@ -21,9 +21,9 @@ import org.junit.jupiter.api.Test
 class VerifyResultTest {
 
     @Test
-    fun asAuthorizeResult() {
-        assertThat(VerifyResult.ALLOW.asAuthorizeResult(), `is`(AuthorizeResult.ALLOW))
-        assertThat(VerifyResult.EXPLICIT_DENY.asAuthorizeResult(), `is`(AuthorizeResult.EXPLICIT_DENY))
-        assertThat(VerifyResult.IMPLICIT_DENY.asAuthorizeResult(), `is`(AuthorizeResult.IMPLICIT_DENY))
+    fun toAuthorizeResult() {
+        assertThat(VerifyResult.ALLOW.toAuthorizeResult(), `is`(AuthorizeResult.ALLOW))
+        assertThat(VerifyResult.EXPLICIT_DENY.toAuthorizeResult(), `is`(AuthorizeResult.EXPLICIT_DENY))
+        assertThat(VerifyResult.IMPLICIT_DENY.toAuthorizeResult(), `is`(AuthorizeResult.IMPLICIT_DENY))
     }
 }
