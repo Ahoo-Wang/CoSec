@@ -35,62 +35,93 @@ class SocialAuthenticationProperties(
     }
 
     @Suppress("LongParameterList")
-    class Provider(
-        val type: AuthDefaultSource,
-        clientId: String,
-        clientSecret: String?,
-        redirectUri: String?,
-        alipayPublicKey: String?,
-        unionId: Boolean = false,
-        stackOverflowKey: String?,
-        agentId: String?,
-        usertype: String?,
-        domainPrefix: String?,
-        httpConfig: HttpConfig?,
-        ignoreCheckState: Boolean = false,
-        scopes: MutableList<String>?,
-        deviceId: String?,
-        clientOsType: Int?,
-        packId: String?,
-        pkce: Boolean = false,
-        authServerId: String?,
-        ignoreCheckRedirectUri: Boolean = false,
-        tenantId: String?,
-        kid: String?,
-        teamId: String?,
-        loginType: String = "CorpApp",
-        lang: String = "zh",
-        dingTalkOrgType: String?,
-        dingTalkCorpId: String?,
-        dingTalkExclusiveLogin: Boolean = false,
-        dingTalkExclusiveCorpId: String?,
-    ) : AuthConfig(
-        clientId,
-        clientSecret,
-        redirectUri,
-        alipayPublicKey,
-        unionId,
-        stackOverflowKey,
-        agentId,
-        usertype,
-        domainPrefix,
-        httpConfig,
-        ignoreCheckState,
-        scopes,
-        deviceId,
-        clientOsType,
-        packId,
-        pkce,
-        authServerId,
-        ignoreCheckRedirectUri,
-        tenantId,
-        kid,
-        teamId,
-        loginType,
-        lang,
-        dingTalkOrgType,
-        dingTalkCorpId,
-        dingTalkExclusiveLogin,
-        dingTalkExclusiveCorpId,
-    )
+    data class Provider(
+        var type: AuthDefaultSource,
+        var clientId: String,
+        var clientSecret: String? = null,
+        var redirectUri: String? = null,
+        var alipayPublicKey: String? = null,
+        var unionId: Boolean = false,
+        var stackOverflowKey: String? = null,
+        var agentId: String? = null,
+        var usertype: String? = null,
+        var domainPrefix: String? = null,
+        var httpConfig: HttpConfig? = null,
+        var ignoreCheckState: Boolean = false,
+        var scopes: MutableList<String>? = null,
+        var deviceId: String? = null,
+        var clientOsType: Int? = null,
+        var packId: String? = null,
+        var pkce: Boolean = false,
+        var authServerId: String? = null,
+        var ignoreCheckRedirectUri: Boolean = false,
+        var tenantId: String? = null,
+        var kid: String? = null,
+        var teamId: String? = null,
+        var loginType: String = "CorpApp",
+        var lang: String = "zh",
+        var dingTalkOrgType: String? = null,
+        var dingTalkCorpId: String? = null,
+        var dingTalkExclusiveLogin: Boolean = false,
+        var dingTalkExclusiveCorpId: String? = null,
+    ) {
+        fun toJustAuthConfig(): AuthConfig {
+            return AuthConfig(
+                /* clientId = */
+                clientId,
+                /* clientSecret = */
+                clientSecret,
+                /* redirectUri = */
+                redirectUri,
+                /* alipayPublicKey = */
+                alipayPublicKey,
+                /* unionId = */
+                unionId,
+                /* stackOverflowKey = */
+                stackOverflowKey,
+                /* agentId = */
+                agentId,
+                /* usertype = */
+                usertype,
+                /* domainPrefix = */
+                domainPrefix,
+                /* httpConfig = */
+                httpConfig,
+                /* ignoreCheckState = */
+                ignoreCheckState,
+                /* scopes = */
+                scopes,
+                /* deviceId = */
+                deviceId,
+                /* clientOsType = */
+                clientOsType,
+                /* packId = */
+                packId,
+                /* pkce = */
+                pkce,
+                /* authServerId = */
+                authServerId,
+                /* ignoreCheckRedirectUri = */
+                ignoreCheckRedirectUri,
+                /* tenantId = */
+                tenantId,
+                /* kid = */
+                kid,
+                /* teamId = */
+                teamId,
+                /* loginType = */
+                loginType,
+                /* lang = */
+                lang,
+                /* dingTalkOrgType = */
+                dingTalkOrgType,
+                /* dingTalkCorpId = */
+                dingTalkCorpId,
+                /* dingTalkExclusiveLogin = */
+                dingTalkExclusiveLogin,
+                /* dingTalkExclusiveCorpId = */
+                dingTalkExclusiveCorpId,
+            )
+        }
+    }
 }

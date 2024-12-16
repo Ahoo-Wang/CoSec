@@ -67,7 +67,8 @@ class CoSecSocialAuthenticationAutoConfiguration(
                 AuthConfig::class.java,
                 AuthStateCache::class.java,
             )
-            val authRequest: AuthRequest = BeanUtils.instantiateClass(authRequestCtor, provider, authStateCache)
+            val authConfig = provider.toJustAuthConfig()
+            val authRequest: AuthRequest = BeanUtils.instantiateClass(authRequestCtor, authConfig, authStateCache)
             val authProvider: SocialAuthenticationProvider = JustAuthProvider(key, authRequest, idGenerator)
             SocialProviderManager.register(authProvider)
         }
