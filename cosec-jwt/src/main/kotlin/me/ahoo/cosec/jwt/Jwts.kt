@@ -63,7 +63,7 @@ object Jwts : PrincipalConverter {
         return jwtParser.decodeJwt(jwtToken)
     }
 
-    fun <T : TokenPrincipal> asPrincipal(decodedAccessToken: DecodedJWT): T {
+    fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT): T {
         val accessTokenId = decodedAccessToken.id
         val principalId = decodedAccessToken.subject
         val attributes = decodedAccessToken
@@ -96,12 +96,12 @@ object Jwts : PrincipalConverter {
      * @return TokenTenantPrincipal
      */
     @JvmStatic
-    fun <T : TokenPrincipal> asPrincipal(accessToken: String): T {
+    fun <T : TokenPrincipal> toPrincipal(accessToken: String): T {
         val decodedAccessToken = decode(accessToken)
-        return asPrincipal(decodedAccessToken)
+        return toPrincipal(decodedAccessToken)
     }
 
-    override fun asPrincipal(accessToken: AccessToken): CoSecPrincipal {
-        return asPrincipal(accessToken.accessToken)
+    override fun toPrincipal(accessToken: AccessToken): CoSecPrincipal {
+        return toPrincipal(accessToken.accessToken)
     }
 }

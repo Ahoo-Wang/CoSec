@@ -21,5 +21,5 @@ import me.ahoo.cosec.api.token.AccessToken
  * @author ahoo wang
  */
 fun interface PrincipalConverter {
-    fun asPrincipal(accessToken: AccessToken): CoSecPrincipal
+    fun toPrincipal(accessToken: AccessToken): CoSecPrincipal
 }

@@ -208,7 +208,7 @@ class SimpleAuthorization(
             }
             .map {
                 context.setVerifyContext(it)
-                it.result.asAuthorizeResult()
+                it.result.toAuthorizeResult()
             }.switchIfEmpty {
                 if (log.isDebugEnabled) {
                     log.debug(
