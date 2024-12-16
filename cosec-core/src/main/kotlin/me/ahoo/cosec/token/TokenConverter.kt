@@ -14,12 +14,18 @@ package me.ahoo.cosec.token
 
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
+import java.time.Duration
 
 /**
  * Token Converter.
  *
  * @author ahoo wang
  */
-fun interface TokenConverter {
-    fun asToken(principal: CoSecPrincipal): CompositeToken
+interface TokenConverter {
+    fun toToken(principal: CoSecPrincipal): CompositeToken
+    fun toToken(
+        principal: CoSecPrincipal,
+        accessTokenValidity: Duration,
+        refreshTokenValidity: Duration
+    ): CompositeToken
 }

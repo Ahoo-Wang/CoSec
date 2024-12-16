@@ -38,7 +38,15 @@ class JwtTokenConverter(
     private val refreshTokenValidity: Duration = Duration.ofDays(7)
 ) : TokenConverter {
 
-    override fun asToken(principal: CoSecPrincipal): CompositeToken {
+    override fun toToken(principal: CoSecPrincipal): CompositeToken {
+        return toToken(principal, accessTokenValidity, refreshTokenValidity)
+    }
+
+    override fun toToken(
+        principal: CoSecPrincipal,
+        accessTokenValidity: Duration,
+        refreshTokenValidity: Duration
+    ): CompositeToken {
         val accessTokenId = idGenerator.generateAsString()
         val now = Date()
         val accessTokenExp = Date(System.currentTimeMillis() + accessTokenValidity.toMillis())

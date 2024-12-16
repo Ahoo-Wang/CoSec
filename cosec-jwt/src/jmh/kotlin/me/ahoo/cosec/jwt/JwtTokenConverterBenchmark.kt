@@ -63,7 +63,7 @@ open class JwtTokenConverterBenchmark {
         algorithm = Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLWGA_")
         jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, algorithm)
         jwtTokenVerifier = JwtTokenVerifier(algorithm)
-        token = jwtTokenConverter.asToken(SimpleTenantPrincipal.ANONYMOUS)
+        token = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
     }
 
     @Benchmark

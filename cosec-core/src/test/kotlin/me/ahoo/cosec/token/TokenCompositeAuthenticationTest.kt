@@ -34,7 +34,7 @@ class TokenCompositeAuthenticationTest {
         val compositeAuthentication = CompositeAuthentication(DefaultAuthenticationProvider)
         val compositeToken = SimpleCompositeToken("accessToken", "refreshToken")
         val tokenConverter = mockk<TokenConverter> {
-            every { asToken(any()) } returns compositeToken
+            every { toToken(any()) } returns compositeToken
         }
         val tokenCompositeAuthentication = TokenCompositeAuthentication(compositeAuthentication, tokenConverter)
         assertThat(tokenCompositeAuthentication.supportCredentials, `is`(Credentials::class.java))

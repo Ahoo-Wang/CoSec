@@ -48,7 +48,7 @@ internal class ReactiveAuthorizationFilterTest {
         val algorithm = Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLWGA_")
         val jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, algorithm)
         fun createAccessToken(principal: SimplePrincipal): String {
-            return jwtTokenConverter.asToken(principal).accessToken
+            return jwtTokenConverter.toToken(principal).accessToken
         }
     }
 

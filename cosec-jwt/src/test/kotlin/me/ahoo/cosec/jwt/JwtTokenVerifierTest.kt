@@ -33,14 +33,14 @@ class JwtTokenVerifierTest {
 
     @Test
     fun verify() {
-        val token: CompositeToken = jwtTokenConverter.asToken(SimpleTenantPrincipal.ANONYMOUS)
+        val token: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
         val principal: TokenTenantPrincipal = jwtTokenVerifier.verify(token)
         assertThat(principal.name, equalTo(CoSecPrincipal.ANONYMOUS_ID))
     }
 
     @Test
     fun refresh() {
-        val oldToken: CompositeToken = jwtTokenConverter.asToken(SimpleTenantPrincipal.ANONYMOUS)
+        val oldToken: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
         val newTokenPrincipal = jwtTokenVerifier.refresh<TokenTenantPrincipal>(oldToken)
         assertThat(newTokenPrincipal.id, equalTo(SimpleTenantPrincipal.ANONYMOUS.id))
         assertThat(newTokenPrincipal.tenant.tenantId, equalTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId))
@@ -55,7 +55,7 @@ class JwtTokenVerifierTest {
                 Duration.ofMillis(1),
                 Duration.ofMillis(1)
             )
-        val oldToken: CompositeToken = converter.asToken(SimpleTenantPrincipal.ANONYMOUS)
+        val oldToken: CompositeToken = converter.toToken(SimpleTenantPrincipal.ANONYMOUS)
         TimeUnit.SECONDS.sleep(1)
         assertThrows(TokenExpiredException::class.java) { jwtTokenVerifier.refresh<TokenPrincipal>(oldToken) }
     }
