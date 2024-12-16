@@ -30,13 +30,13 @@ internal class JwtTokenConverterTest {
     private val jwtTokenVerifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
 
     @Test
-    fun anonymousAsToken() {
-        val token: CompositeToken = jwtTokenConverter.asToken(SimpleTenantPrincipal.ANONYMOUS)
+    fun anonymousToToken() {
+        val token: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
         assertThat(token, notNullValue())
     }
 
     @Test
-    fun asToken() {
+    fun toToken() {
         val principal =
             SimplePrincipal(
                 "id",
@@ -46,12 +46,12 @@ internal class JwtTokenConverterTest {
                     "attr_string" to "attr_string_value"
                 ),
             )
-        val token: CompositeToken = jwtTokenConverter.asToken(principal)
+        val token: CompositeToken = jwtTokenConverter.toToken(principal)
         assertThat(token, notNullValue())
         val verified = jwtTokenVerifier.verify<TokenPrincipal>(token)
         assertThat(verified.id, equalTo(principal.id))
         assertThat(verified.attributes["attr_string"], equalTo("attr_string_value"))
-        val token2 = jwtTokenConverter.asToken(verified)
+        val token2 = jwtTokenConverter.toToken(verified)
         assertThat(token2, notNullValue())
     }
 }

@@ -33,7 +33,7 @@ class SimpleRefreshTokenAuthenticationTest {
     fun authenticate() {
         val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(jwtTokenVerifier)
         assertThat(refreshTokenAuthentication.supportCredentials, `is`(RefreshTokenCredentials::class.java))
-        val oldToken: CompositeToken = jwtTokenConverter.asToken(SimpleTenantPrincipal.ANONYMOUS)
+        val oldToken: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
 
         refreshTokenAuthentication.authenticate(object : RefreshTokenCredentials {
             override val accessToken: String

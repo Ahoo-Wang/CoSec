@@ -45,7 +45,7 @@ class TokenCompositeAuthentication(
     ): Mono<out CompositeToken> {
         return authenticate(credentialsType, credentials)
             .map {
-                tokenConverter.asToken(it)
+                tokenConverter.toToken(it)
             }
     }
 }
