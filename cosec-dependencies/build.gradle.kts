@@ -23,7 +23,6 @@ dependencies {
         api(libs.javaJwt)
         api(libs.ip2region)
         api(libs.guava)
-        api(libs.opentelemetrySemconv)
         api(libs.swagger)
         api(libs.jmhCore)
         api(libs.jmhGeneratorAnnprocess)
