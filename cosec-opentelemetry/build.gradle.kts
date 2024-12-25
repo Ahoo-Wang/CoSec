@@ -14,7 +14,6 @@
 dependencies {
     implementation(project(":cosec-core"))
     implementation("io.opentelemetry.instrumentation:opentelemetry-instrumentation-api")
-    implementation("io.opentelemetry:opentelemetry-semconv")
     testImplementation("io.projectreactor:reactor-test")
     testImplementation("io.opentelemetry:opentelemetry-sdk")
 }

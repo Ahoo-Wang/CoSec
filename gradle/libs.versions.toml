@@ -5,7 +5,6 @@ springCloud = "2024.0.0"
 cosid = "2.10.1"
 cocache = "2.6.1"
 opentelemetry = "2.11.0"
-opentelemetrySemconv = "1.22.0-alpha"
 testcontainers = "1.20.4"
 guava = "33.4.0-jre"
 ognl = "3.4.3"
@@ -28,7 +27,6 @@ springCloudDependencies = { module = "org.springframework.cloud:spring-cloud-dep
 cosidBom = { module = "me.ahoo.cosid:cosid-bom", version.ref = "cosid" }
 cocacheBom = { module = "me.ahoo.cocache:cocache-bom", version.ref = "cocache" }
 opentelemetryInstrumentationBom = { module = "io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom", version.ref = "opentelemetry" }
-opentelemetrySemconv = { module = "io.opentelemetry:opentelemetry-semconv", version.ref = "opentelemetrySemconv" }
 testcontainersBom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 ognl = { module = "ognl:ognl", version.ref = "ognl" }
