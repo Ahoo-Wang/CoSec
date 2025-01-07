@@ -33,7 +33,7 @@ class OgnlConditionMatcher(configuration: Configuration) :
         val contextValues = mapOf(
             "request" to request,
             "context" to securityContext,
-        ) as Map<Any, Any>
+        )
         val ognlContext = Ognl.createDefaultContext(request).withValues(contextValues)
         return Ognl.getValue(ognlExpression, ognlContext, request, Boolean::class.java) as Boolean
     }
