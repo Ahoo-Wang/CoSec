@@ -1,14 +1,14 @@
 [versions]
 # libraries
-springBoot = "3.4.1"
-springCloud = "2024.0.0"
+spring-boot = "3.4.1"
+spring-cloud = "2024.0.0"
 cosid = "2.10.2"
 cocache = "2.6.2"
 opentelemetry = "2.11.0"
 testcontainers = "1.20.4"
 guava = "33.4.0-jre"
 ognl = "3.4.5"
-javaJwt = "4.4.0"
+java-jwt = "4.4.0"
 ip2region = "2.7.0"
 justAuth = "1.16.7"
 swagger = "2.2.27"
@@ -19,32 +19,32 @@ jmh = "1.37"
 detekt = "1.23.7"
 dokka = "2.0.0"
 kotlin = "2.0.21"
-publishPlugin = "2.0.0"
-jmhPlugin = "0.7.2"
+publish-plugin = "2.0.0"
+jmh-plugin = "0.7.2"
 [libraries]
-springBootDependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "springBoot" }
-springCloudDependencies = { module = "org.springframework.cloud:spring-cloud-dependencies", version.ref = "springCloud" }
-cosidBom = { module = "me.ahoo.cosid:cosid-bom", version.ref = "cosid" }
-cocacheBom = { module = "me.ahoo.cocache:cocache-bom", version.ref = "cocache" }
-opentelemetryInstrumentationBom = { module = "io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom", version.ref = "opentelemetry" }
-testcontainersBom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+spring-boot-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
+spring-cloud-dependencies = { module = "org.springframework.cloud:spring-cloud-dependencies", version.ref = "spring-cloud" }
+cosid-bom = { module = "me.ahoo.cosid:cosid-bom", version.ref = "cosid" }
+cocache-bom = { module = "me.ahoo.cocache:cocache-bom", version.ref = "cocache" }
+opentelemetry-instrumentation-bom = { module = "io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom", version.ref = "opentelemetry" }
+testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 ognl = { module = "ognl:ognl", version.ref = "ognl" }
-javaJwt = { module = "com.auth0:java-jwt", version.ref = "javaJwt" }
+java-jwt = { module = "com.auth0:java-jwt", version.ref = "java-jwt" }
 ip2region = { module = "org.lionsoul:ip2region", version.ref = "ip2region" }
 justAuth = { module = "me.zhyd.oauth:JustAuth", version.ref = "justAuth" }
 swagger = { module = "io.swagger.core.v3:swagger-core-jakarta", version.ref = "swagger" }
 hamcrest = { module = "org.hamcrest:hamcrest", version.ref = "hamcrest" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
-detektFormatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detekt" }
-jmhCore = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
-jmhGeneratorAnnprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
+detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detekt" }
+jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
+jmh-generator-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
 [plugins]
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
 kotlin = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-kotlinSpring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
-kotlinkapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
-publishPlugin = { id = "io.github.gradle-nexus.publish-plugin", version.ref = "publishPlugin" }
-jmhPlugin = { id = "me.champeau.jmh", version.ref = "jmhPlugin" }
+kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
+publish = { id = "io.github.gradle-nexus.publish-plugin", version.ref = "publish-plugin" }
+jmh = { id = "me.champeau.jmh", version.ref = "jmh-plugin" }
 
