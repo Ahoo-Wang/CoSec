@@ -20,7 +20,7 @@ dependencies {
     api(platform(libs.opentelemetry.instrumentation.bom))
     constraints {
         api(libs.ognl)
-        api(libs.ava.jwt)
+        api(libs.java.jwt)
         api(libs.ip2region)
         api(libs.guava)
         api(libs.swagger)
