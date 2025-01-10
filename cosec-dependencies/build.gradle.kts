@@ -12,22 +12,22 @@
  */
 
 dependencies {
-    api(platform(libs.springBootDependencies))
-    api(platform(libs.springCloudDependencies))
-    api(platform(libs.cosidBom))
-    api(platform(libs.cocacheBom))
+    api(platform(libs.spring.boot.dependencies))
+    api(platform(libs.spring.cloud.dependencies))
+    api(platform(libs.cosid.bom))
+    api(platform(libs.cocache.bom))
     api(platform(libs.justAuth))
-    api(platform(libs.opentelemetryInstrumentationBom))
+    api(platform(libs.opentelemetry.instrumentation.bom))
     constraints {
         api(libs.ognl)
-        api(libs.javaJwt)
+        api(libs.ava.jwt)
         api(libs.ip2region)
         api(libs.guava)
         api(libs.swagger)
-        api(libs.jmhCore)
-        api(libs.jmhGeneratorAnnprocess)
+        api(libs.jmh.core)
+        api(libs.jmh.generator.annprocess)
         api(libs.hamcrest)
         api(libs.mockk)
-        api(libs.detektFormatting)
+        api(libs.detekt.formatting)
     }
 }
