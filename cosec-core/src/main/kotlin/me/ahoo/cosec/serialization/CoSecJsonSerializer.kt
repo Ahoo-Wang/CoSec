@@ -26,6 +26,6 @@ object CoSecJsonSerializer : ObjectMapper() {
         configure(JsonParser.Feature.IGNORE_UNDEFINED, true)
         disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
         registerKotlinModule()
-        registerModule(CoSecModule())
+        findAndRegisterModules()
     }
 }
