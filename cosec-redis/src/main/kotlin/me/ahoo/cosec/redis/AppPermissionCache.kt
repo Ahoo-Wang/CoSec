@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.redis
 
-import me.ahoo.cache.Cache
+import me.ahoo.cache.api.Cache
 import me.ahoo.cosec.Delegated
 import me.ahoo.cosec.api.permission.AppPermission
 

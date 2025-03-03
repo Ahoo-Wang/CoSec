@@ -9,7 +9,7 @@ class GlobalPolicyIndexKeyConverterTest {
 
     @Test
     fun asKey() {
-        assertThat(keyConverter.asKey(""), equalTo("key"))
+        assertThat(keyConverter.toStringKey(""), equalTo("key"))
     }
 
     @Test

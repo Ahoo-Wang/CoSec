@@ -14,8 +14,8 @@ package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cache.CacheConfig
 import me.ahoo.cache.CacheManager
-import me.ahoo.cache.CacheSource
-import me.ahoo.cache.CacheSource.Companion.noOp
+import me.ahoo.cache.api.source.CacheSource
+import me.ahoo.cache.api.source.CacheSource.Companion.noOp
 import me.ahoo.cache.converter.ToStringKeyConverter
 import me.ahoo.cache.distributed.DistributedCache
 import me.ahoo.cache.spring.redis.RedisDistributedCache
