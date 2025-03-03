@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.redis
 
-import me.ahoo.cache.Cache
+import me.ahoo.cache.api.Cache
 import me.ahoo.cosec.Delegated
 
 class RolePermissionCache(override val delegate: Cache<String, Set<String>>) :
