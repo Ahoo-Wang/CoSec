@@ -16,7 +16,7 @@ package me.ahoo.cosec.redis
 import me.ahoo.cache.converter.KeyConverter
 
 class GlobalPolicyIndexKeyConverter(private val key: String) : KeyConverter<String> {
-    override fun asKey(sourceKey: String): String {
+    override fun toStringKey(sourceKey: String): String {
         return key
     }
 
