@@ -12,8 +12,8 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import me.ahoo.cache.CacheConfig
 import me.ahoo.cache.CacheManager
+import me.ahoo.cache.CoherentCacheConfiguration
 import me.ahoo.cache.api.source.CacheSource
 import me.ahoo.cache.api.source.CacheSource.Companion.noOp
 import me.ahoo.cache.converter.ToStringKeyConverter
@@ -84,13 +84,13 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
         val clientId = clientIdGenerator.generate()
         val cacheKeyPrefix = cacheProperties.appPermissionKeyPrefix
         val codecExecutor = ObjectToJsonCodecExecutor(AppPermission::class.java, redisTemplate, CoSecJsonSerializer)
-        val distributedCaching: DistributedCache<AppPermission> = RedisDistributedCache(redisTemplate, codecExecutor)
+        val distributedCache: DistributedCache<AppPermission> = RedisDistributedCache(redisTemplate, codecExecutor)
         val delegate = cacheManager.getOrCreateCache(
-            CacheConfig(
+            CoherentCacheConfiguration(
                 cacheName = APP_PERMISSION_CACHE_BEAN_NAME,
                 clientId = clientId,
                 keyConverter = ToStringKeyConverter(cacheKeyPrefix),
-                distributedCaching = distributedCaching,
+                distributedCache = distributedCache,
                 cacheSource = cacheSource,
             ),
         )
@@ -114,13 +114,13 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
         val clientId = clientIdGenerator.generate()
         val cacheKeyPrefix = cacheProperties.rolePermissionKeyPrefix
         val codecExecutor = SetToSetCodecExecutor(redisTemplate)
-        val distributedCaching: DistributedCache<Set<String>> = RedisDistributedCache(redisTemplate, codecExecutor)
+        val distributedCache: DistributedCache<Set<String>> = RedisDistributedCache(redisTemplate, codecExecutor)
         val delegate = cacheManager.getOrCreateCache(
-            CacheConfig(
+            CoherentCacheConfiguration(
                 cacheName = Role_PERMISSION_CACHE_BEAN_NAME,
                 clientId = clientId,
                 keyConverter = ToStringKeyConverter(cacheKeyPrefix),
-                distributedCaching = distributedCaching,
+                distributedCache = distributedCache,
                 cacheSource = cacheSource,
             ),
         )

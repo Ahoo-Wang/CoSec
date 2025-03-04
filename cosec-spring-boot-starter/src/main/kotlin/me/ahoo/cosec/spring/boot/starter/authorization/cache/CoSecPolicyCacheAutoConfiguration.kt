@@ -12,8 +12,8 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import me.ahoo.cache.CacheConfig
 import me.ahoo.cache.CacheManager
+import me.ahoo.cache.CoherentCacheConfiguration
 import me.ahoo.cache.api.source.CacheSource
 import me.ahoo.cache.api.source.CacheSource.Companion.noOp
 import me.ahoo.cache.converter.ToStringKeyConverter
@@ -89,13 +89,13 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
         val clientId = clientIdGenerator.generate()
         val codecExecutor = SetToSetCodecExecutor(redisTemplate)
         val keyConverter = GlobalPolicyIndexKeyConverter(cacheProperties.globalPolicyIndexKey)
-        val distributedCaching: DistributedCache<Set<String>> = RedisDistributedCache(redisTemplate, codecExecutor)
+        val distributedCache: DistributedCache<Set<String>> = RedisDistributedCache(redisTemplate, codecExecutor)
         val delegate = cacheManager.getOrCreateCache(
-            CacheConfig(
+            CoherentCacheConfiguration(
                 cacheName = GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME,
                 clientId = clientId,
                 keyConverter = keyConverter,
-                distributedCaching = distributedCaching,
+                distributedCache = distributedCache,
                 cacheSource = cacheSource,
             ),
         )
@@ -119,13 +119,13 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
         val clientId = clientIdGenerator.generate()
         val cacheKeyPrefix = cacheProperties.policyKeyPrefix
         val codecExecutor = ObjectToJsonCodecExecutor(Policy::class.java, redisTemplate, CoSecJsonSerializer)
-        val distributedCaching: DistributedCache<Policy> = RedisDistributedCache(redisTemplate, codecExecutor)
+        val distributedCache: DistributedCache<Policy> = RedisDistributedCache(redisTemplate, codecExecutor)
         val delegate = cacheManager.getOrCreateCache(
-            CacheConfig(
+            CoherentCacheConfiguration(
                 cacheName = POLICY_CACHE_BEAN_NAME,
                 clientId = clientId,
                 keyConverter = ToStringKeyConverter(cacheKeyPrefix),
-                distributedCaching = distributedCaching,
+                distributedCache = distributedCache,
                 cacheSource = cacheSource,
             ),
         )
