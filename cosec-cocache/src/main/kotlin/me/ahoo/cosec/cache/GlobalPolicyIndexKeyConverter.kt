@@ -11,12 +11,16 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.redis
+package me.ahoo.cosec.cache
 
-import me.ahoo.cache.api.Cache
-import me.ahoo.cosec.Delegated
-import me.ahoo.cosec.api.permission.AppPermission
+import me.ahoo.cache.converter.KeyConverter
 
-class AppPermissionCache(override val delegate: Cache<String, AppPermission>) :
-    Cache<String, AppPermission> by delegate,
-    Delegated<Cache<String, AppPermission>>
+class GlobalPolicyIndexKeyConverter(private val key: String) : KeyConverter<String> {
+    override fun toStringKey(sourceKey: String): String {
+        return key
+    }
+
+    override fun toString(): String {
+        return "GlobalPolicyKeyConverter(key='$key')"
+    }
+}

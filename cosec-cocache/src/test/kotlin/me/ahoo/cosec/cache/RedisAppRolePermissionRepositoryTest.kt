@@ -1,4 +1,4 @@
-package me.ahoo.cosec.redis
+package me.ahoo.cosec.cache
 
 import io.mockk.every
 import io.mockk.mockk

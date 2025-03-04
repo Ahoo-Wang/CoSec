@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.redis
+package me.ahoo.cosec.cache
 
 import me.ahoo.cosec.api.permission.AppRolePermission
 import me.ahoo.cosec.authorization.AppRolePermissionRepository

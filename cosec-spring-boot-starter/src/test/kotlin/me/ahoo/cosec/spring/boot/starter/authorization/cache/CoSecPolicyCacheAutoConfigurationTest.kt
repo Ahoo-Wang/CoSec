@@ -15,8 +15,8 @@ package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.authorization.PolicyRepository
-import me.ahoo.cosec.redis.GlobalPolicyIndexCache
-import me.ahoo.cosec.redis.PolicyCache
+import me.ahoo.cosec.cache.GlobalPolicyIndexCache
+import me.ahoo.cosec.cache.PolicyCache
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat

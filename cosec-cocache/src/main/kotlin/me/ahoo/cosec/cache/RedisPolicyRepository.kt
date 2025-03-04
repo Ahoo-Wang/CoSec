@@ -11,13 +11,13 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.redis
+package me.ahoo.cosec.cache
 
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.authorization.PolicyRepository
+import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import me.ahoo.cosec.policy.DefaultPolicyEvaluator
-import me.ahoo.cosec.redis.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 

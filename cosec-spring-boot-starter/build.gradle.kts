@@ -56,7 +56,7 @@ dependencies {
     "webfluxSupportImplementation"(project(":cosec-webflux"))
     "gatewaySupportImplementation"(project(":cosec-gateway"))
     "oauthSupportImplementation"(project(":cosec-social"))
-    "cacheSupportImplementation"(project(":cosec-redis"))
+    "cacheSupportImplementation"(project(":cosec-cocache"))
     "cacheSupportImplementation"("me.ahoo.cocache:cocache-spring-boot-starter")
     "opentelemetrySupportImplementation"(project(":cosec-opentelemetry"))
     "ip2regionSupportImplementation"(project(":cosec-ip2region"))
