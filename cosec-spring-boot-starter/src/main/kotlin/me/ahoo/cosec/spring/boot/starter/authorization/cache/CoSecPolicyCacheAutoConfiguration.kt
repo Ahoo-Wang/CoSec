@@ -24,10 +24,10 @@ import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
 import me.ahoo.cache.util.ClientIdGenerator
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.PolicyRepository
-import me.ahoo.cosec.redis.GlobalPolicyIndexCache
-import me.ahoo.cosec.redis.GlobalPolicyIndexKeyConverter
-import me.ahoo.cosec.redis.PolicyCache
-import me.ahoo.cosec.redis.RedisPolicyRepository
+import me.ahoo.cosec.cache.GlobalPolicyIndexCache
+import me.ahoo.cosec.cache.GlobalPolicyIndexKeyConverter
+import me.ahoo.cosec.cache.PolicyCache
+import me.ahoo.cosec.cache.RedisPolicyRepository
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import org.springframework.beans.factory.annotation.Qualifier
@@ -46,7 +46,7 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @AutoConfiguration
 @ConditionalOnCoSecEnabled
 @ConditionalOnCacheEnabled
-@ConditionalOnClass(name = ["me.ahoo.cosec.redis.GlobalPolicyIndexCache"])
+@ConditionalOnClass(name = ["me.ahoo.cosec.cache.GlobalPolicyIndexCache"])
 @EnableConfigurationProperties(
     CacheProperties::class,
 )

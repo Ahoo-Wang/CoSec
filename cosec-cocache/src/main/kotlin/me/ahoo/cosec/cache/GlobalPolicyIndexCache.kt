@@ -10,7 +10,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.redis
+package me.ahoo.cosec.cache
 
 import me.ahoo.cache.api.Cache
 import me.ahoo.cosec.Delegated

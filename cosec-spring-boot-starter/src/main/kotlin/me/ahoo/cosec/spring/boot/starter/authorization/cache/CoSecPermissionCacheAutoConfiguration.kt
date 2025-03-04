@@ -24,9 +24,9 @@ import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
 import me.ahoo.cache.util.ClientIdGenerator
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
-import me.ahoo.cosec.redis.AppPermissionCache
-import me.ahoo.cosec.redis.RedisAppRolePermissionRepository
-import me.ahoo.cosec.redis.RolePermissionCache
+import me.ahoo.cosec.cache.AppPermissionCache
+import me.ahoo.cosec.cache.RedisAppRolePermissionRepository
+import me.ahoo.cosec.cache.RolePermissionCache
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import org.springframework.beans.factory.annotation.Qualifier
@@ -45,7 +45,7 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @AutoConfiguration
 @ConditionalOnCoSecEnabled
 @ConditionalOnCacheEnabled
-@ConditionalOnClass(name = ["me.ahoo.cosec.redis.AppPermissionCache"])
+@ConditionalOnClass(name = ["me.ahoo.cosec.cache.AppPermissionCache"])
 @EnableConfigurationProperties(
     CacheProperties::class,
 )

@@ -10,12 +10,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package me.ahoo.cosec.cache
 
-dependencies {
-    api(project(":cosec-core"))
-    api("me.ahoo.cocache:cocache-spring-redis")
-    testImplementation("io.lettuce:lettuce-core")
-    testImplementation("me.ahoo.cosid:cosid-core")
-    testImplementation("me.ahoo.cosid:cosid-test")
-    testImplementation("io.projectreactor:reactor-test")
-}
+import me.ahoo.cache.api.Cache
+import me.ahoo.cosec.Delegated
+import me.ahoo.cosec.api.policy.Policy
+
+/**
+ * Policy Cache .
+ *
+ * @author ahoo wang
+ */
+class PolicyCache(override val delegate: Cache<String, Policy>) :
+    Cache<String, Policy> by delegate,
+    Delegated<Cache<String, Policy>>

@@ -56,7 +56,7 @@ application {
 dependencies {
     implementation(platform(project(":cosec-dependencies")))
     implementation("io.netty:netty-all")
-    implementation(project(":cosec-redis"))
+    implementation(project(":cosec-cocache"))
     implementation(project(":cosec-webflux"))
     implementation(project(":cosec-gateway"))
     implementation(project(":cosec-opentelemetry"))

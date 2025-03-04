@@ -11,14 +11,14 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.redis
+package me.ahoo.cosec.cache
 
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import me.ahoo.cosec.policy.PolicyData
-import me.ahoo.cosec.redis.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
 
