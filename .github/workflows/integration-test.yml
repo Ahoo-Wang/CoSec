@@ -99,8 +99,8 @@ jobs:
       - name: Test CoSec-Social
         run: ./gradlew cosec-social:clean cosec-social:check
 
-  cosec-redis-test:
-    name: CoSec Redis Test
+  cosec-cocache-test:
+    name: CoSec CoCache Test
     needs: [ cosec-core-test ]
     runs-on: ubuntu-latest
     services:
@@ -125,8 +125,8 @@ jobs:
           server-id: github
           settings-path: ${{ github.workspace }}
 
-      - name: Test CoSec-Redis
-        run: ./gradlew cosec-redis:clean cosec-redis:check
+      - name: Test CoSec-CoCache
+        run: ./gradlew cosec-cocache:clean cosec-cocache:check
 
   cosec-webflux-test:
     name: CoSec WebFlux Test
