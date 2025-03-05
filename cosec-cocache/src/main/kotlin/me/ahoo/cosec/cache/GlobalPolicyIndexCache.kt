@@ -13,16 +13,13 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cache.api.Cache
-import me.ahoo.cosec.Delegated
 
 /**
  * Global Policy Index Cache .
  *
  * @author ahoo wang
  */
-class GlobalPolicyIndexCache(override val delegate: Cache<String, Set<String>>) :
-    Cache<String, Set<String>> by delegate,
-    Delegated<Cache<String, Set<String>>> {
+interface GlobalPolicyIndexCache : Cache<String, Set<String>> {
     companion object {
         const val CACHE_KEY = ""
     }

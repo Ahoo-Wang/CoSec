@@ -14,8 +14,5 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cache.api.Cache
-import me.ahoo.cosec.Delegated
 
-class RolePermissionCache(override val delegate: Cache<String, Set<String>>) :
-    Cache<String, Set<String>> by delegate,
-    Delegated<Cache<String, Set<String>>>
+interface RolePermissionCache : Cache<String, Set<String>>

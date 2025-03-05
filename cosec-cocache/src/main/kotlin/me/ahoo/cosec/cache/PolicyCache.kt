@@ -13,7 +13,6 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cache.api.Cache
-import me.ahoo.cosec.Delegated
 import me.ahoo.cosec.api.policy.Policy
 
 /**
@@ -21,6 +20,4 @@ import me.ahoo.cosec.api.policy.Policy
  *
  * @author ahoo wang
  */
-class PolicyCache(override val delegate: Cache<String, Policy>) :
-    Cache<String, Policy> by delegate,
-    Delegated<Cache<String, Policy>>
+interface PolicyCache : Cache<String, Policy>

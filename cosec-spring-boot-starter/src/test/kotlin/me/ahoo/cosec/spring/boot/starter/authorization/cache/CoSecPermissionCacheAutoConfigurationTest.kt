@@ -43,7 +43,7 @@ internal class CoSecPermissionCacheAutoConfigurationTest {
                     .hasSingleBean(CoSecPermissionCacheAutoConfiguration::class.java)
                     .hasBean(CoSecPermissionCacheAutoConfiguration.APP_PERMISSION_CACHE_BEAN_NAME)
                     .hasSingleBean(AppPermissionCache::class.java)
-                    .hasBean(CoSecPermissionCacheAutoConfiguration.Role_PERMISSION_CACHE_BEAN_NAME)
+                    .hasBean(CoSecPermissionCacheAutoConfiguration.ROLE_PERMISSION_CACHE_BEAN_NAME)
                     .hasSingleBean(RolePermissionCache::class.java)
                     .hasSingleBean(AppRolePermissionRepository::class.java)
             }

@@ -41,9 +41,8 @@ internal class CoSecPolicyCacheAutoConfigurationTest {
                 assertThat(context)
                     .hasSingleBean(CacheProperties::class.java)
                     .hasSingleBean(CoSecPolicyCacheAutoConfiguration::class.java)
-                    .hasBean(CoSecPolicyCacheAutoConfiguration.GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME)
                     .hasSingleBean(GlobalPolicyIndexCache::class.java)
-                    .hasBean(CoSecPolicyCacheAutoConfiguration.POLICY_CACHE_SOURCE_BEAN_NAME)
+                    .hasBean(CoSecPolicyCacheAutoConfiguration.POLICY_CACHE_BEAN_NAME)
                     .hasSingleBean(PolicyCache::class.java)
                     .hasSingleBean(PolicyRepository::class.java)
             }
