@@ -14,9 +14,6 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cache.api.Cache
-import me.ahoo.cosec.Delegated
 import me.ahoo.cosec.api.permission.AppPermission
 
-class AppPermissionCache(override val delegate: Cache<String, AppPermission>) :
-    Cache<String, AppPermission> by delegate,
-    Delegated<Cache<String, AppPermission>>
+interface AppPermissionCache : Cache<String, AppPermission>

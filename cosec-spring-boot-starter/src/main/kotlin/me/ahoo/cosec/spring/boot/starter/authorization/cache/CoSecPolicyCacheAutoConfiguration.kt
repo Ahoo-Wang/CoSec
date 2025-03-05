@@ -12,25 +12,20 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import me.ahoo.cache.CacheManager
-import me.ahoo.cache.CoherentCacheConfiguration
-import me.ahoo.cache.api.source.CacheSource
-import me.ahoo.cache.api.source.CacheSource.Companion.noOp
+import me.ahoo.cache.converter.KeyConverter
 import me.ahoo.cache.converter.ToStringKeyConverter
 import me.ahoo.cache.distributed.DistributedCache
+import me.ahoo.cache.spring.EnableCoCache
+import me.ahoo.cache.spring.converter.SpringKeyConverterFactory.Companion.KEY_CONVERTER_SUFFIX
 import me.ahoo.cache.spring.redis.RedisDistributedCache
-import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
+import me.ahoo.cache.spring.redis.RedisDistributedCacheFactory.Companion.DISTRIBUTED_CACHE_SUFFIX
 import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
-import me.ahoo.cache.util.ClientIdGenerator
-import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache
 import me.ahoo.cosec.cache.GlobalPolicyIndexKeyConverter
 import me.ahoo.cosec.cache.PolicyCache
 import me.ahoo.cosec.cache.RedisPolicyRepository
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -50,13 +45,17 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @EnableConfigurationProperties(
     CacheProperties::class,
 )
+@EnableCoCache(caches = [GlobalPolicyIndexCache::class, PolicyCache::class])
 class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProperties) {
 
     companion object {
-        const val GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME = "globalPolicyIndexCache"
-        const val GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME = "${GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME}Source"
-        const val POLICY_CACHE_BEAN_NAME = "policyCache"
-        const val POLICY_CACHE_SOURCE_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}Source"
+        const val GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME = "GlobalPolicyIndexCache"
+        const val GLOBAL_POLICY_INDEX_CACHE_KEY_CONVERTER_BEAN_NAME =
+            "${GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
+        const val GLOBAL_POLICY_INDEX_CACHE_DISTRIBUTED_CACHE_BEAN_NAME =
+            "${GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME}$DISTRIBUTED_CACHE_SUFFIX"
+        const val POLICY_CACHE_BEAN_NAME = "PolicyCache"
+        const val POLICY_CACHE_KEY_CONVERTER_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
     }
 
     @Bean
@@ -71,64 +70,22 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
         )
     }
 
-    @Bean(GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME])
-    fun globalPolicyIndexCacheSource(): CacheSource<String, Set<String>> {
-        return noOp()
+    @Bean(GLOBAL_POLICY_INDEX_CACHE_KEY_CONVERTER_BEAN_NAME)
+    @ConditionalOnMissingBean(name = [GLOBAL_POLICY_INDEX_CACHE_KEY_CONVERTER_BEAN_NAME])
+    fun globalPolicyIndexCacheKeyConverter(): KeyConverter<String> {
+        return GlobalPolicyIndexKeyConverter(cacheProperties.globalPolicyIndexKey)
     }
 
-    @Bean
-    @ConditionalOnMissingBean
-    fun globalPolicyIndexCache(
-        @Qualifier(GLOBAL_POLICY_INDEX_CACHE_SOURCE_BEAN_NAME) cacheSource:
-        CacheSource<String, Set<String>>,
-        redisTemplate: StringRedisTemplate,
-        cacheManager: CacheManager,
-        clientIdGenerator: ClientIdGenerator
-    ): GlobalPolicyIndexCache {
-        val clientId = clientIdGenerator.generate()
+    @Bean(GLOBAL_POLICY_INDEX_CACHE_DISTRIBUTED_CACHE_BEAN_NAME)
+    @ConditionalOnMissingBean(name = [GLOBAL_POLICY_INDEX_CACHE_DISTRIBUTED_CACHE_BEAN_NAME])
+    fun globalPolicyIndexCacheDistributedCache(redisTemplate: StringRedisTemplate): DistributedCache<Set<String>> {
         val codecExecutor = SetToSetCodecExecutor(redisTemplate)
-        val keyConverter = GlobalPolicyIndexKeyConverter(cacheProperties.globalPolicyIndexKey)
-        val distributedCache: DistributedCache<Set<String>> = RedisDistributedCache(redisTemplate, codecExecutor)
-        val delegate = cacheManager.getOrCreateCache(
-            CoherentCacheConfiguration(
-                cacheName = GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME,
-                clientId = clientId,
-                keyConverter = keyConverter,
-                distributedCache = distributedCache,
-                cacheSource = cacheSource,
-            ),
-        )
-        return GlobalPolicyIndexCache(delegate)
+        return RedisDistributedCache(redisTemplate, codecExecutor)
     }
 
-    @Bean(POLICY_CACHE_SOURCE_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [POLICY_CACHE_SOURCE_BEAN_NAME])
-    fun policyCacheSource(): CacheSource<String, Policy> {
-        return noOp()
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    fun policyCache(
-        @Qualifier(POLICY_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<String, Policy>,
-        redisTemplate: StringRedisTemplate,
-        cacheManager: CacheManager,
-        clientIdGenerator: ClientIdGenerator
-    ): PolicyCache {
-        val clientId = clientIdGenerator.generate()
-        val cacheKeyPrefix = cacheProperties.policyKeyPrefix
-        val codecExecutor = ObjectToJsonCodecExecutor(Policy::class.java, redisTemplate, CoSecJsonSerializer)
-        val distributedCache: DistributedCache<Policy> = RedisDistributedCache(redisTemplate, codecExecutor)
-        val delegate = cacheManager.getOrCreateCache(
-            CoherentCacheConfiguration(
-                cacheName = POLICY_CACHE_BEAN_NAME,
-                clientId = clientId,
-                keyConverter = ToStringKeyConverter(cacheKeyPrefix),
-                distributedCache = distributedCache,
-                cacheSource = cacheSource,
-            ),
-        )
-        return PolicyCache(delegate)
+    @Bean(POLICY_CACHE_KEY_CONVERTER_BEAN_NAME)
+    @ConditionalOnMissingBean(name = [POLICY_CACHE_KEY_CONVERTER_BEAN_NAME])
+    fun policyCacheKeyConverter(): KeyConverter<String> {
+        return ToStringKeyConverter(cacheProperties.policyKeyPrefix)
     }
 }

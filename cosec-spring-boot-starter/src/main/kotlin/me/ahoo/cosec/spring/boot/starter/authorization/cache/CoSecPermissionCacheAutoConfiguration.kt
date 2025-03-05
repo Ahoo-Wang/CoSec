@@ -12,24 +12,19 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import me.ahoo.cache.CacheManager
-import me.ahoo.cache.CoherentCacheConfiguration
-import me.ahoo.cache.api.source.CacheSource
-import me.ahoo.cache.api.source.CacheSource.Companion.noOp
+import me.ahoo.cache.converter.KeyConverter
 import me.ahoo.cache.converter.ToStringKeyConverter
 import me.ahoo.cache.distributed.DistributedCache
+import me.ahoo.cache.spring.EnableCoCache
+import me.ahoo.cache.spring.converter.SpringKeyConverterFactory.Companion.KEY_CONVERTER_SUFFIX
 import me.ahoo.cache.spring.redis.RedisDistributedCache
-import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
+import me.ahoo.cache.spring.redis.RedisDistributedCacheFactory.Companion.DISTRIBUTED_CACHE_SUFFIX
 import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
-import me.ahoo.cache.util.ClientIdGenerator
-import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.cache.AppPermissionCache
 import me.ahoo.cosec.cache.RedisAppRolePermissionRepository
 import me.ahoo.cosec.cache.RolePermissionCache
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -49,13 +44,18 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @EnableConfigurationProperties(
     CacheProperties::class,
 )
+@EnableCoCache(caches = [AppPermissionCache::class, RolePermissionCache::class])
 class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CacheProperties) {
 
     companion object {
-        const val APP_PERMISSION_CACHE_BEAN_NAME = "appPermissionCache"
-        const val APP_PERMISSION_CACHE_SOURCE_BEAN_NAME = "${APP_PERMISSION_CACHE_BEAN_NAME}Source"
-        const val Role_PERMISSION_CACHE_BEAN_NAME = "rolePermissionCache"
-        const val Role_PERMISSION_CACHE_SOURCE_BEAN_NAME = "${Role_PERMISSION_CACHE_BEAN_NAME}Source"
+        const val APP_PERMISSION_CACHE_BEAN_NAME = "AppPermissionCache"
+        const val APP_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME =
+            "${APP_PERMISSION_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
+        const val ROLE_PERMISSION_CACHE_BEAN_NAME = "RolePermissionCache"
+        const val ROLE_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME =
+            "${ROLE_PERMISSION_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
+        const val ROLE_PERMISSION_CACHE_DISTRIBUTED_CACHE_BEAN_NAME =
+            "${ROLE_PERMISSION_CACHE_BEAN_NAME}$DISTRIBUTED_CACHE_SUFFIX"
     }
 
     @Bean
@@ -67,63 +67,22 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
         return RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
     }
 
-    @Bean(APP_PERMISSION_CACHE_SOURCE_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [APP_PERMISSION_CACHE_SOURCE_BEAN_NAME])
-    fun appPermissionCacheSource(): CacheSource<String, AppPermission> {
-        return noOp()
+    @Bean(APP_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME)
+    @ConditionalOnMissingBean(name = [APP_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME])
+    fun appPermissionCacheKeyConverter(): KeyConverter<String> {
+        return ToStringKeyConverter(cacheProperties.appPermissionKeyPrefix)
     }
 
-    @Bean
-    @ConditionalOnMissingBean
-    fun appPermissionCache(
-        @Qualifier(APP_PERMISSION_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<String, AppPermission>,
-        redisTemplate: StringRedisTemplate,
-        cacheManager: CacheManager,
-        clientIdGenerator: ClientIdGenerator
-    ): AppPermissionCache {
-        val clientId = clientIdGenerator.generate()
-        val cacheKeyPrefix = cacheProperties.appPermissionKeyPrefix
-        val codecExecutor = ObjectToJsonCodecExecutor(AppPermission::class.java, redisTemplate, CoSecJsonSerializer)
-        val distributedCache: DistributedCache<AppPermission> = RedisDistributedCache(redisTemplate, codecExecutor)
-        val delegate = cacheManager.getOrCreateCache(
-            CoherentCacheConfiguration(
-                cacheName = APP_PERMISSION_CACHE_BEAN_NAME,
-                clientId = clientId,
-                keyConverter = ToStringKeyConverter(cacheKeyPrefix),
-                distributedCache = distributedCache,
-                cacheSource = cacheSource,
-            ),
-        )
-        return AppPermissionCache(delegate)
+    @Bean(ROLE_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME)
+    @ConditionalOnMissingBean(name = [ROLE_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME])
+    fun rolePermissionCacheKeyConverter(): KeyConverter<String> {
+        return ToStringKeyConverter(cacheProperties.rolePermissionKeyPrefix)
     }
 
-    @Bean(Role_PERMISSION_CACHE_SOURCE_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [Role_PERMISSION_CACHE_SOURCE_BEAN_NAME])
-    fun rolePermissionCacheSource(): CacheSource<String, Set<String>> {
-        return noOp()
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    fun rolePermissionCache(
-        @Qualifier(Role_PERMISSION_CACHE_SOURCE_BEAN_NAME) cacheSource: CacheSource<String, Set<String>>,
-        redisTemplate: StringRedisTemplate,
-        cacheManager: CacheManager,
-        clientIdGenerator: ClientIdGenerator
-    ): RolePermissionCache {
-        val clientId = clientIdGenerator.generate()
-        val cacheKeyPrefix = cacheProperties.rolePermissionKeyPrefix
+    @Bean(ROLE_PERMISSION_CACHE_DISTRIBUTED_CACHE_BEAN_NAME)
+    @ConditionalOnMissingBean(name = [ROLE_PERMISSION_CACHE_DISTRIBUTED_CACHE_BEAN_NAME])
+    fun rolePermissionCacheDistributedCache(redisTemplate: StringRedisTemplate): DistributedCache<Set<String>> {
         val codecExecutor = SetToSetCodecExecutor(redisTemplate)
-        val distributedCache: DistributedCache<Set<String>> = RedisDistributedCache(redisTemplate, codecExecutor)
-        val delegate = cacheManager.getOrCreateCache(
-            CoherentCacheConfiguration(
-                cacheName = Role_PERMISSION_CACHE_BEAN_NAME,
-                clientId = clientId,
-                keyConverter = ToStringKeyConverter(cacheKeyPrefix),
-                distributedCache = distributedCache,
-                cacheSource = cacheSource,
-            ),
-        )
-        return RolePermissionCache(delegate)
+        return RedisDistributedCache(redisTemplate, codecExecutor)
     }
 }
