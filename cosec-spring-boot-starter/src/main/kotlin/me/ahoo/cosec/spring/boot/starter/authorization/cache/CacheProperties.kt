@@ -12,11 +12,18 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
+import me.ahoo.cache.api.annotation.GuavaCache
+import me.ahoo.cache.api.annotation.GuavaCache.Companion.UNSET_INT
+import me.ahoo.cache.api.annotation.GuavaCache.Companion.UNSET_LONG
+import me.ahoo.cache.client.GuavaClientSideCache
+import me.ahoo.cache.client.GuavaClientSideCache.Companion.toClientSideCache
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import me.ahoo.cosec.spring.boot.starter.authorization.AuthorizationProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.NestedConfigurationProperty
 import org.springframework.boot.context.properties.bind.DefaultValue
+import java.util.concurrent.TimeUnit
 
 /**
  * CacheProperties .
@@ -26,7 +33,11 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 @ConfigurationProperties(prefix = CacheProperties.PREFIX)
 class CacheProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
-    @DefaultValue(CoSec.COSEC) var keyPrefix: String = CoSec.COSEC
+    @DefaultValue(CoSec.COSEC) var keyPrefix: String = CoSec.COSEC,
+    @NestedConfigurationProperty
+    var policy: CacheConfiguration = CacheConfiguration(),
+    @NestedConfigurationProperty
+    var role: CacheConfiguration = CacheConfiguration()
 ) : EnabledCapable {
     companion object {
         const val PREFIX: String = AuthorizationProperties.PREFIX + ".cache"
@@ -36,4 +47,24 @@ class CacheProperties(
     val policyKeyPrefix: String = "$keyPrefix:policy:"
     val appPermissionKeyPrefix: String = "$keyPrefix:app:permission:"
     val rolePermissionKeyPrefix: String = "$keyPrefix:role:permission:"
+}
+
+data class CacheConfiguration(
+    var initialCapacity: Int = UNSET_INT,
+    var concurrencyLevel: Int = UNSET_INT,
+    var maximumSize: Long = UNSET_LONG,
+    var expireUnit: TimeUnit = TimeUnit.SECONDS,
+    var expireAfterWrite: Long = UNSET_LONG,
+    var expireAfterAccess: Long = UNSET_LONG
+) {
+    fun <V> toGuavaClientSideCache(): GuavaClientSideCache<V> {
+        return GuavaCache(
+            initialCapacity = initialCapacity,
+            concurrencyLevel = concurrencyLevel,
+            maximumSize = maximumSize,
+            expireUnit = expireUnit,
+            expireAfterWrite = expireAfterWrite,
+            expireAfterAccess = expireAfterAccess
+        ).toClientSideCache()
+    }
 }

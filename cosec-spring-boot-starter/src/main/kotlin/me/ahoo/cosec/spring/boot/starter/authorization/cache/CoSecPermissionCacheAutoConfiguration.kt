@@ -12,14 +12,17 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
+import me.ahoo.cache.api.client.ClientSideCache
 import me.ahoo.cache.converter.KeyConverter
 import me.ahoo.cache.converter.ToStringKeyConverter
 import me.ahoo.cache.distributed.DistributedCache
 import me.ahoo.cache.spring.EnableCoCache
+import me.ahoo.cache.spring.client.SpringClientSideCacheFactory.Companion.CLIENT_SIDE_CACHE_SUFFIX
 import me.ahoo.cache.spring.converter.SpringKeyConverterFactory.Companion.KEY_CONVERTER_SUFFIX
 import me.ahoo.cache.spring.redis.RedisDistributedCache
 import me.ahoo.cache.spring.redis.RedisDistributedCacheFactory.Companion.DISTRIBUTED_CACHE_SUFFIX
 import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
+import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.cache.AppPermissionCache
 import me.ahoo.cosec.cache.RedisAppRolePermissionRepository
@@ -54,6 +57,8 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
         const val ROLE_PERMISSION_CACHE_BEAN_NAME = "RolePermissionCache"
         const val ROLE_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME =
             "${ROLE_PERMISSION_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
+        const val ROLE_PERMISSION_CACHE_CLIENT_BEAN_NAME =
+            "${ROLE_PERMISSION_CACHE_BEAN_NAME}$CLIENT_SIDE_CACHE_SUFFIX"
         const val ROLE_PERMISSION_CACHE_DISTRIBUTED_CACHE_BEAN_NAME =
             "${ROLE_PERMISSION_CACHE_BEAN_NAME}$DISTRIBUTED_CACHE_SUFFIX"
     }
@@ -77,6 +82,12 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
     @ConditionalOnMissingBean(name = [ROLE_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME])
     fun rolePermissionCacheKeyConverter(): KeyConverter<String> {
         return ToStringKeyConverter(cacheProperties.rolePermissionKeyPrefix)
+    }
+
+    @Bean(ROLE_PERMISSION_CACHE_CLIENT_BEAN_NAME)
+    @ConditionalOnMissingBean(name = [ROLE_PERMISSION_CACHE_CLIENT_BEAN_NAME])
+    fun policyCacheClientSideCache(): ClientSideCache<Policy> {
+        return cacheProperties.role.toGuavaClientSideCache()
     }
 
     @Bean(ROLE_PERMISSION_CACHE_DISTRIBUTED_CACHE_BEAN_NAME)

@@ -12,14 +12,17 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
+import me.ahoo.cache.api.client.ClientSideCache
 import me.ahoo.cache.converter.KeyConverter
 import me.ahoo.cache.converter.ToStringKeyConverter
 import me.ahoo.cache.distributed.DistributedCache
 import me.ahoo.cache.spring.EnableCoCache
+import me.ahoo.cache.spring.client.SpringClientSideCacheFactory.Companion.CLIENT_SIDE_CACHE_SUFFIX
 import me.ahoo.cache.spring.converter.SpringKeyConverterFactory.Companion.KEY_CONVERTER_SUFFIX
 import me.ahoo.cache.spring.redis.RedisDistributedCache
 import me.ahoo.cache.spring.redis.RedisDistributedCacheFactory.Companion.DISTRIBUTED_CACHE_SUFFIX
 import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
+import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache
 import me.ahoo.cosec.cache.GlobalPolicyIndexKeyConverter
@@ -56,6 +59,7 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
             "${GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME}$DISTRIBUTED_CACHE_SUFFIX"
         const val POLICY_CACHE_BEAN_NAME = "PolicyCache"
         const val POLICY_CACHE_KEY_CONVERTER_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
+        const val POLICY_CACHE_CLIENT_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}$CLIENT_SIDE_CACHE_SUFFIX"
     }
 
     @Bean
@@ -81,6 +85,12 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
     fun globalPolicyIndexCacheDistributedCache(redisTemplate: StringRedisTemplate): DistributedCache<Set<String>> {
         val codecExecutor = SetToSetCodecExecutor(redisTemplate)
         return RedisDistributedCache(redisTemplate, codecExecutor)
+    }
+
+    @Bean(POLICY_CACHE_CLIENT_BEAN_NAME)
+    @ConditionalOnMissingBean(name = [POLICY_CACHE_CLIENT_BEAN_NAME])
+    fun policyCacheClientSideCache(): ClientSideCache<Policy> {
+        return cacheProperties.policy.toGuavaClientSideCache()
     }
 
     @Bean(POLICY_CACHE_KEY_CONVERTER_BEAN_NAME)
