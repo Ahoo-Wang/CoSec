@@ -41,6 +41,12 @@ cosec:
     local-policy:
       enabled: true
       init-repository: true
+    cache:
+      policy:
+        maximum-size: 100000
+      role:
+        maximum-size: 100000
+
 logging:
   level:
     root: info
