@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.context
 
+import com.google.errorprone.annotations.ThreadSafe
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.tenant.Tenant
@@ -19,7 +20,6 @@ import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
 import java.util.concurrent.ConcurrentHashMap
-import javax.annotation.concurrent.ThreadSafe
 
 /**
  * Security Context.
