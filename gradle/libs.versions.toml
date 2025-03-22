@@ -7,6 +7,7 @@ cocache = "3.5.8"
 opentelemetry = "2.14.0"
 testcontainers = "1.20.6"
 guava = "33.4.5-jre"
+kotlin-logging = "7.0.5"
 ognl = "3.4.6"
 java-jwt = "4.5.0"
 ip2region = "2.7.0"
@@ -29,6 +30,7 @@ cocache-bom = { module = "me.ahoo.cocache:cocache-bom", version.ref = "cocache" 
 opentelemetry-instrumentation-bom = { module = "io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom", version.ref = "opentelemetry" }
 testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
+kotlin-logging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
 ognl = { module = "ognl:ognl", version.ref = "ognl" }
 java-jwt = { module = "com.auth0:java-jwt", version.ref = "java-jwt" }
 ip2region = { module = "org.lionsoul:ip2region", version.ref = "ip2region" }

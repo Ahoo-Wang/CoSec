@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.webflux
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
@@ -25,7 +26,6 @@ import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.asAuthorizeResult
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
-import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.server.reactive.ServerHttpResponse
@@ -33,13 +33,14 @@ import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
-private val log = LoggerFactory.getLogger(ReactiveSecurityFilter::class.java)
-
 abstract class ReactiveSecurityFilter(
     val securityContextParser: SecurityContextParser,
     val requestParser: RequestParser<ServerWebExchange>,
     val authorization: Authorization
 ) {
+    companion object {
+        private val log = KotlinLogging.logger {}
+    }
 
     fun filterInternal(
         exchange: ServerWebExchange,
@@ -50,8 +51,8 @@ abstract class ReactiveSecurityFilter(
         val securityContext = try {
             securityContextParser.parse(request)
         } catch (verificationException: TokenVerificationException) {
-            if (log.isDebugEnabled) {
-                log.debug("Parse request to security context failed.", verificationException)
+            log.debug(verificationException) {
+                "Parse request to security context failed."
             }
             tokenVerificationException = verificationException
             SimpleSecurityContext.anonymous()
