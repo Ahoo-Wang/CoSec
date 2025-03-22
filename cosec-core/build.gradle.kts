@@ -16,6 +16,7 @@ dependencies {
     compileOnly("ognl:ognl")
     compileOnly("org.springframework:spring-web")
     compileOnly("org.springframework:spring-expression")
+    api("io.github.oshai:kotlin-logging-jvm")
     api("io.projectreactor:reactor-core")
     api("io.projectreactor.kotlin:reactor-kotlin-extensions")
     api("com.fasterxml.jackson.core:jackson-databind")
