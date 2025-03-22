@@ -12,11 +12,11 @@
  */
 package me.ahoo.cosec.authentication
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.authentication.Authentication
 import me.ahoo.cosec.api.authentication.AuthenticationProvider
 import me.ahoo.cosec.api.authentication.Credentials
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -25,19 +25,16 @@ import java.util.concurrent.ConcurrentHashMap
  * @author ahoo wang
  */
 object DefaultAuthenticationProvider : AuthenticationProvider {
-    private val log = LoggerFactory.getLogger(DefaultAuthenticationProvider::class.java)
-    private val authenticationMaps: MutableMap<Class<out Credentials>, Authentication<out Credentials, CoSecPrincipal>>
-
-    init {
-        authenticationMaps = ConcurrentHashMap()
-    }
+    private val log = KotlinLogging.logger {}
+    private val authenticationMaps:
+        MutableMap<Class<out Credentials>, Authentication<out Credentials, CoSecPrincipal>> = ConcurrentHashMap()
 
     override fun <C : Credentials, P : CoSecPrincipal, A : Authentication<C, P>> register(
         credentialsType: Class<C>,
         authentication: A
     ) {
-        if (log.isInfoEnabled) {
-            log.info("Register Authentication: {} for Credentials: {}", authentication, credentialsType)
+        log.info {
+            "Register Authentication: $authentication for Credentials: $credentialsType."
         }
         authenticationMaps[credentialsType] = authentication
     }

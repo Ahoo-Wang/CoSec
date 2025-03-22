@@ -13,27 +13,27 @@
 
 package me.ahoo.cosec.policy.condition
 
-import org.slf4j.LoggerFactory
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 object ConditionMatcherFactoryProvider {
-    private val log = LoggerFactory.getLogger(ConditionMatcherFactoryProvider::class.java)
+    private val log = KotlinLogging.logger {}
     private val actionMatcherFactories: ConcurrentHashMap<String, ConditionMatcherFactory> = ConcurrentHashMap()
 
     init {
         ServiceLoader.load(ConditionMatcherFactory::class.java)
             .forEach {
-                if (log.isInfoEnabled) {
-                    log.info("Load $it to register.")
+                log.info {
+                    "Load $it to register."
                 }
                 register(it)
             }
     }
 
     fun register(conditionMatcherFactory: ConditionMatcherFactory) {
-        if (log.isInfoEnabled) {
-            log.info("Register $conditionMatcherFactory.")
+        log.info {
+            "Register $conditionMatcherFactory."
         }
         actionMatcherFactories[conditionMatcherFactory.type] = conditionMatcherFactory
     }

@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.authorization
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
@@ -24,7 +25,6 @@ import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.CoSecPrincipal.Companion.isRoot
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
-import org.slf4j.LoggerFactory
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.switchIfEmpty
 import reactor.kotlin.core.publisher.toMono
@@ -39,7 +39,7 @@ class SimpleAuthorization(
     private val appRolePermissionRepository: AppRolePermissionRepository
 ) : Authorization {
     companion object {
-        private val log = LoggerFactory.getLogger(SimpleAuthorization::class.java)
+        private val log = KotlinLogging.logger {}
     }
 
     private fun verifyPolicies(
@@ -57,10 +57,8 @@ class SimpleAuthorization(
             }.forEachIndexed { index, statement ->
                 val verifyResult = statement.verify(request, securityContext)
                 if (verifyResult == VerifyResult.EXPLICIT_DENY) {
-                    if (log.isDebugEnabled) {
-                        log.debug(
-                            "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Explicit Deny].",
-                        )
+                    log.debug {
+                        "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Explicit Deny]."
                     }
                     return PolicyVerifyContext(
                         policy = policy,
@@ -78,10 +76,8 @@ class SimpleAuthorization(
             }.forEachIndexed { index, statement ->
                 val verifyResult = statement.verify(request, securityContext)
                 if (verifyResult == VerifyResult.ALLOW) {
-                    if (log.isDebugEnabled) {
-                        log.debug(
-                            "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Allow].",
-                        )
+                    log.debug {
+                        "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Allow]."
                     }
                     return PolicyVerifyContext(
                         policy = policy,
@@ -114,10 +110,8 @@ class SimpleAuthorization(
             }.forEach { permission ->
                 val verifyResult = permission.verify(request, context)
                 if (verifyResult == VerifyResult.EXPLICIT_DENY) {
-                    if (log.isDebugEnabled) {
-                        log.debug(
-                            "Verify [$request] [$context] matched Role[$roleId] Permission[${permission.id}][${permission.name}] - [Explicit Deny].",
-                        )
+                    log.debug {
+                        "Verify [$request] [$context] matched Role[$roleId] Permission[${permission.id}][${permission.name}] - [Explicit Deny]."
                     }
                     return RoleVerifyContext(
                         roleId = roleId,
@@ -136,10 +130,8 @@ class SimpleAuthorization(
             }.forEach { permission ->
                 val verifyResult = permission.verify(request, context)
                 if (verifyResult == VerifyResult.ALLOW) {
-                    if (log.isDebugEnabled) {
-                        log.debug(
-                            "Verify [$request] [$context] matched Role[$roleId] Permission[${permission.id}][${permission.name}] - [Allow].",
-                        )
+                    log.debug {
+                        "Verify [$request] [$context] matched Role[$roleId] Permission[${permission.id}][${permission.name}] - [Allow]."
                     }
                     return RoleVerifyContext(
                         roleId = roleId,
@@ -157,8 +149,8 @@ class SimpleAuthorization(
 
     private fun verifyRoot(context: SecurityContext): VerifyResult {
         return if (context.principal.isRoot()) {
-            if (log.isDebugEnabled) {
-                log.debug("Verify [$context] matched Root - [Allow].")
+            log.debug {
+                "Verify [$context] matched Root - [Allow]."
             }
             VerifyResult.ALLOW
         } else {
@@ -210,10 +202,8 @@ class SimpleAuthorization(
                 context.setVerifyContext(it)
                 it.result.toAuthorizeResult()
             }.switchIfEmpty {
-                if (log.isDebugEnabled) {
-                    log.debug(
-                        "Verify [$request] [$context] No policies matched - [Implicit Deny].",
-                    )
+                log.debug {
+                    "Verify [$request] [$context] No policies matched - [Implicit Deny]."
                 }
                 AuthorizeResult.IMPLICIT_DENY.toMono()
             }

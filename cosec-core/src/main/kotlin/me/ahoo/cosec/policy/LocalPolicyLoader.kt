@@ -13,46 +13,44 @@
 
 package me.ahoo.cosec.policy
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import org.slf4j.LoggerFactory
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import org.springframework.core.io.support.ResourcePatternResolver
 import java.io.FileNotFoundException
 
 class LocalPolicyLoader(private val locations: Set<String>) {
     companion object {
+        private val log = KotlinLogging.logger {}
         private val resourceResolver: ResourcePatternResolver = PathMatchingResourcePatternResolver()
     }
 
-    private val log = LoggerFactory.getLogger(LocalPolicyLoader::class.java)
     val policies: List<Policy> by lazy {
         loadPolicies()
     }
 
     private fun loadPolicies(): List<Policy> {
         return locations.flatMap {
-            if (log.isInfoEnabled) {
-                log.info("Load Location [{}].", it)
+            log.info {
+                "Load Location [$it]."
             }
             try {
                 resourceResolver.getResources(it).toList()
             } catch (e: FileNotFoundException) {
-                if (log.isErrorEnabled) {
-                    log.error(e.message, e)
+                log.error(e) {
+                    e.message
                 }
                 listOf()
             }
         }.mapNotNull {
-            if (log.isInfoEnabled) {
-                log.info("Load Policy [{}].", it)
+            log.info {
+                "Load Policy [$it]."
             }
             try {
                 return@mapNotNull CoSecJsonSerializer.readValue(it.contentAsByteArray, Policy::class.java)
             } catch (e: Throwable) {
-                if (log.isErrorEnabled) {
-                    log.error(e.message, e)
-                }
+                log.error(e) { e.message }
                 null
             }
         }.distinctBy {

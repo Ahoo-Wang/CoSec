@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.cache
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.authorization.PolicyRepository
@@ -26,7 +27,7 @@ class RedisPolicyRepository(
     private val policyCache: PolicyCache
 ) : PolicyRepository {
     companion object {
-        private val log = org.slf4j.LoggerFactory.getLogger(RedisPolicyRepository::class.java)
+        private val log = KotlinLogging.logger {}
     }
 
     override fun getGlobalPolicy(): Mono<List<Policy>> {
@@ -45,8 +46,8 @@ class RedisPolicyRepository(
 
     override fun setPolicy(policy: Policy): Mono<Void> {
         return Mono.fromRunnable {
-            if (log.isInfoEnabled) {
-                log.info("setPolicy - policy: [{}]", policy.id)
+            log.info {
+                "setPolicy - policy: [${policy.id}]."
             }
             DefaultPolicyEvaluator.evaluate(policy)
             policyCache[policy.id] = policy

@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.policy
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.PolicyRepository
 import reactor.core.publisher.Mono
@@ -26,15 +27,15 @@ class LocalPolicyInitializer(
     private val forceRefresh: Boolean
 ) {
     companion object {
-        private val log = org.slf4j.LoggerFactory.getLogger(LocalPolicyInitializer::class.java)
+        private val log = KotlinLogging.logger {}
     }
 
     /**
      * Initialize local policy to PolicyRepository.
      */
     fun init() {
-        if (log.isInfoEnabled) {
-            log.info("Initialize local policy to PolicyRepository.")
+        log.info {
+            "Initialize local policy to PolicyRepository."
         }
         val policies = localPolicyLoader.policies
         policies.forEach {
@@ -44,8 +45,8 @@ class LocalPolicyInitializer(
 
     private fun initPolicy(policy: Policy) {
         if (forceRefresh) {
-            if (log.isInfoEnabled) {
-                log.info("Force Refresh Init Policy - Local Policy[{}].", policy.id)
+            log.info {
+                "Force Refresh Init Policy - Local Policy[${policy.id}]."
             }
             policyRepository.setPolicy(policy).block(Duration.ofSeconds(10))
             return
@@ -57,19 +58,19 @@ class LocalPolicyInitializer(
             }
             .flatMap { policies ->
                 if (policies.isEmpty()) {
-                    if (log.isInfoEnabled) {
-                        log.info("Init Policy - [{}].", policy.id)
+                    log.info {
+                        "Init Policy - [${policy.id}]."
                     }
                     return@flatMap policyRepository.setPolicy(policy)
                 }
-                if (log.isInfoEnabled) {
-                    log.info("Init Policy - [{}] already exists,Ignore setting policy.", policy.id)
+                log.info {
+                    "Init Policy - [${policy.id}] already exists,Ignore setting policy."
                 }
                 Mono.empty()
             }
             .doOnError { error ->
-                if (log.isErrorEnabled) {
-                    log.error("Init Policy - [{}] failed.", policy.id, error)
+                log.error(error) {
+                    "Init Policy - [${policy.id}] failed."
                 }
             }.block(Duration.ofSeconds(10))
     }

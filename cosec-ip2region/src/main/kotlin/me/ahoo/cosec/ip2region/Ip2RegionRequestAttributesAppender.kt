@@ -13,17 +13,17 @@
 
 package me.ahoo.cosec.ip2region
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.context.request.RequestAttributesAppender
 import org.lionsoul.ip2region.xdb.Searcher
-import org.slf4j.LoggerFactory
 import java.io.File
 
 const val REQUEST_ATTRIBUTES_IP_REGION_KEY = "ipRegion"
 
 class Ip2RegionRequestAttributesAppender(ip2regionFile: File = LOCAL_IP2REGION_FILE) : RequestAttributesAppender {
     companion object {
-        private val log = LoggerFactory.getLogger(Ip2RegionRequestAttributesAppender::class.java)
+        private val log = KotlinLogging.logger {}
         private val LOCAL_IP2REGION_FILE: File = Ip2RegionRequestAttributesAppender::class.java
             .classLoader.getResource("ip2region.xdb").let {
                 File(it.file)
@@ -38,17 +38,13 @@ class Ip2RegionRequestAttributesAppender(ip2regionFile: File = LOCAL_IP2REGION_F
     override fun append(request: Request): Request {
         val region = try {
             val searchedRegion = searcher.search(request.remoteIp)
-            if (log.isTraceEnabled) {
-                log.trace(
-                    "remoteIp:[{}],searchedRegion:[{}]",
-                    request.remoteIp,
-                    searchedRegion,
-                )
+            log.trace {
+                "remoteIp:[${request.remoteIp}],searchedRegion:[$searchedRegion]"
             }
             searchedRegion
         } catch (e: Exception) {
-            if (log.isDebugEnabled) {
-                log.debug("search ip2region failed!", e)
+            log.warn(e) {
+                "search ip2region failed! remoteIp:[${request.remoteIp}]"
             }
             return request
         }

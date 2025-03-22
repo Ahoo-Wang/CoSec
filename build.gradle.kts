@@ -137,6 +137,7 @@ configure(libraryProjects) {
         jmh(platform(dependenciesProject))
         implementation("com.google.guava:guava")
         implementation("org.slf4j:slf4j-api")
+        implementation("io.github.oshai:kotlin-logging-jvm")
         testImplementation("ch.qos.logback:logback-classic")
         testImplementation("org.hamcrest:hamcrest")
         testImplementation("io.mockk:mockk") {
