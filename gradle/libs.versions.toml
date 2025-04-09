@@ -14,7 +14,7 @@ ip2region = "2.7.0"
 justAuth = "1.16.7"
 swagger = "2.2.30"
 hamcrest = "3.0"
-mockk = "1.13.17"
+mockk = "1.14.0"
 jmh = "1.37"
 # plugins
 detekt = "1.23.8"
