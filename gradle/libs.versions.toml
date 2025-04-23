@@ -13,6 +13,8 @@ java-jwt = "4.5.0"
 ip2region = "2.7.0"
 justAuth = "1.16.7"
 swagger = "2.2.30"
+# testing
+fluent-assert = "0.1.0"
 hamcrest = "3.0"
 mockk = "1.14.0"
 jmh = "1.37"
@@ -36,6 +38,7 @@ java-jwt = { module = "com.auth0:java-jwt", version.ref = "java-jwt" }
 ip2region = { module = "org.lionsoul:ip2region", version.ref = "ip2region" }
 justAuth = { module = "me.zhyd.oauth:JustAuth", version.ref = "justAuth" }
 swagger = { module = "io.swagger.core.v3:swagger-core-jakarta", version.ref = "swagger" }
+fluent-assert-bom = { module = "me.ahoo.test:fluent-assert-bom", version.ref = "fluent-assert" }
 hamcrest = { module = "org.hamcrest:hamcrest", version.ref = "hamcrest" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detekt" }

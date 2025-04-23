@@ -15,8 +15,7 @@ package me.ahoo.cosec.context.request
 
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.request.Request
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 class XForwardedRemoteIpResolverTest {
@@ -29,7 +28,7 @@ class XForwardedRemoteIpResolverTest {
                 return listOf("", "")
             }
         }
-        assertThat(xForwardedRemoteIpResolver.resolve(mockk()), `is`("default"))
+        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("default")
     }
 
     @Test
@@ -39,7 +38,7 @@ class XForwardedRemoteIpResolverTest {
                 return null
             }
         }
-        assertThat(xForwardedRemoteIpResolver.resolve(mockk()), `is`("default"))
+        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("default")
     }
 
     @Test
@@ -49,7 +48,7 @@ class XForwardedRemoteIpResolverTest {
                 return listOf("ipAddress")
             }
         }
-        assertThat(xForwardedRemoteIpResolver.resolve(mockk()), `is`("ipAddress"))
+        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("ipAddress")
     }
 
     @Test
@@ -59,6 +58,6 @@ class XForwardedRemoteIpResolverTest {
                 return listOf("ipAddress0, ipAddress1, ipAddress2")
             }
         }
-        assertThat(xForwardedRemoteIpResolver.resolve(mockk()), `is`("ipAddress0"))
+        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("ipAddress0")
     }
 }

@@ -14,21 +14,19 @@
 package me.ahoo.cosec.context
 
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
-import org.hamcrest.Matchers.nullValue
-import org.junit.jupiter.api.Assertions
+import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 
 internal class SecurityContextHolderTest {
 
     @Test
     fun test() {
-        assertThat(SecurityContextHolder.context, nullValue())
+        SecurityContextHolder.context.assert().isNull()
         SecurityContextHolder.setContext(SimpleSecurityContext.anonymous())
-        assertThat(SecurityContextHolder.context!!.principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
+        SecurityContextHolder.context!!.principal.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS)
         SecurityContextHolder.remove()
-        Assertions.assertThrows(IllegalArgumentException::class.java) {
+        assertThrownBy<IllegalArgumentException> {
             SecurityContextHolder.requiredContext
         }
     }

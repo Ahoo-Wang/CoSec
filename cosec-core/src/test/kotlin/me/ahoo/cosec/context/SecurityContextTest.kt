@@ -15,11 +15,9 @@ package me.ahoo.cosec.context
 
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.principal.SimplePrincipal
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
-import org.hamcrest.Matchers.`is`
+import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 
 internal class SecurityContextTest {
 
@@ -27,10 +25,10 @@ internal class SecurityContextTest {
     fun test() {
         val context: SecurityContext = SimpleSecurityContext(SimplePrincipal.ANONYMOUS)
         context.setAttributeValue("key", "value")
-        assertThat(context.getRequiredAttributeValue("key"), `is`("value"))
-        assertThat(context.principal, equalTo(SimplePrincipal.ANONYMOUS))
-        assertThat(context.tenant, equalTo(SimplePrincipal.ANONYMOUS.tenant))
-        assertThrows<IllegalArgumentException> {
+        context.getRequiredAttributeValue<String>("key").assert().isEqualTo("value")
+        context.principal.assert().isEqualTo(SimplePrincipal.ANONYMOUS)
+        context.tenant.assert().isEqualTo(SimplePrincipal.ANONYMOUS.tenant)
+        assertThrownBy<IllegalArgumentException> {
             context.getRequiredAttributeValue("not-exists")
         }
     }

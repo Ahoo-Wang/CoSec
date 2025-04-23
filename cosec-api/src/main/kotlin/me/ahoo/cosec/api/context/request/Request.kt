@@ -30,4 +30,5 @@ interface Request : Attributes<Request, String, String> {
     val origin: String
     val referer: String
     fun getHeader(key: String): String
+    fun getQuery(key: String): String
 }
