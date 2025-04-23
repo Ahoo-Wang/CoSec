@@ -19,6 +19,7 @@ import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContextOrEmpty
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
+import me.ahoo.test.asserts.assert
 import org.hamcrest.MatcherAssert.*
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Assertions
@@ -36,7 +37,7 @@ class ReactiveSecurityContextsTest {
             .test()
             .expectAccessibleContext()
             .assertThat {
-                assertThat(it.getSecurityContext().principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
+                it.getSecurityContext().principal.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS)
             }
             .hasKey(SecurityContext.KEY)
             .then()
@@ -48,7 +49,7 @@ class ReactiveSecurityContextsTest {
         Context.empty()
             .getSecurityContextOrEmpty()
             .let {
-                assertThat(it, equalTo(null))
+                it.assert().isNull()
             }
         Assertions.assertThrows(IllegalStateException::class.java) {
             Context.empty().getSecurityContext()

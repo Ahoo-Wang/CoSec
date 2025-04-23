@@ -13,27 +13,25 @@
 
 package me.ahoo.cosec.webflux
 
-import io.mockk.every
-import io.mockk.mockk
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.`is`
+import me.ahoo.cosec.context.request.XForwardedRemoteIpResolver.Companion.X_FORWARDED_FOR
+import org.hamcrest.MatcherAssert.*
+import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
-import org.springframework.http.HttpHeaders
-import org.springframework.web.server.ServerWebExchange
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest
+import org.springframework.mock.web.server.MockServerWebExchange
+import java.net.InetSocketAddress
 
 internal class ReactiveRequestParserTest {
 
     @Test
     fun parse() {
         val requestParser = ReactiveRequestParser(ReactiveRemoteIpResolver)
-        val exchange = mockk<ServerWebExchange> {
-            every { request.path.value() } returns "/path"
-            every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
-            every { request.headers.origin } returns null
-            every { request.headers.getFirst(HttpHeaders.REFERER) } returns null
-        }
-        val request = requestParser.parse(exchange)
+        val serverRequest = MockServerHttpRequest.get("/path")
+            .remoteAddress(InetSocketAddress.createUnresolved("localhost", 8080))
+            .header(X_FORWARDED_FOR, "localhost")
+        val serverWebExchange = MockServerWebExchange.from(serverRequest)
+
+        val request = requestParser.parse(serverWebExchange)
         assertThat(request.path, `is`("/path"))
         assertThat(request.method, `is`("GET"))
     }

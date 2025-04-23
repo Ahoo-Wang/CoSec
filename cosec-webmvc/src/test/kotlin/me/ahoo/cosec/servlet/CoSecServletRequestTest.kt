@@ -16,8 +16,7 @@ package me.ahoo.cosec.servlet
 import io.mockk.every
 import io.mockk.mockk
 import jakarta.servlet.http.HttpServletRequest
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.`is`
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 class CoSecServletRequestTest {
@@ -26,6 +25,7 @@ class CoSecServletRequestTest {
         val delegate = mockk<HttpServletRequest> {
             every { getHeader("key") } returns "value"
             every { getHeader("not-exists") } returns null
+            every { getParameter("key") } returns "value"
         }
         val request = CoSecServletRequest(
             delegate = delegate,
@@ -35,19 +35,11 @@ class CoSecServletRequestTest {
             origin = "origin",
             referer = "referer",
         ).withAttributes(emptyMap())
-        assertThat(
-            request.toString(),
-            `is`(
-                "CoSecServletRequest(path='path', method='method', remoteIp='remoteIp', origin='origin', referer='referer')"
-            ),
+        request.toString().assert().isEqualTo(
+            "CoSecServletRequest(path='path', method='method', remoteIp='remoteIp', origin='origin', referer='referer')"
         )
-        assertThat(
-            request.getHeader("key"),
-            `is`("value"),
-        )
-        assertThat(
-            request.getHeader("not-exists"),
-            `is`(""),
-        )
+        request.getHeader("key").assert().isEqualTo("value")
+        request.getQuery("key").assert().isEqualTo("value")
+        request.getHeader("not-exists").assert().isEqualTo("")
     }
 }
