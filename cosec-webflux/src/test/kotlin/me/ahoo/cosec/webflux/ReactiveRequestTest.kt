@@ -13,20 +13,19 @@
 
 package me.ahoo.cosec.webflux
 
-import io.mockk.every
-import io.mockk.mockk
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.`is`
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import org.springframework.web.server.ServerWebExchange
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest
+import org.springframework.mock.web.server.MockServerWebExchange
 
 class ReactiveRequestTest {
     @Test
     fun test() {
-        val delegate = mockk<ServerWebExchange> {
-            every { request.headers.getFirst("key") } returns "value"
-            every { request.headers.getFirst("not-exists") } returns null
-        }
+        val serverRequest = MockServerHttpRequest.get("")
+            .header("key", "value")
+            .queryParam("key", "value")
+        val delegate = MockServerWebExchange.from(serverRequest)
+
         val request = ReactiveRequest(
             delegate = delegate,
             path = "path",
@@ -35,19 +34,12 @@ class ReactiveRequestTest {
             origin = "origin",
             referer = "referer",
         ).withAttributes(emptyMap())
-        assertThat(
-            request.toString(),
-            `is`(
+        request.toString().assert()
+            .isEqualTo(
                 "ReactiveRequest(path='path', method='method', remoteIp='remoteIp', origin='origin', referer='referer')"
-            ),
-        )
-        assertThat(
-            request.getHeader("key"),
-            `is`("value"),
-        )
-        assertThat(
-            request.getHeader("not-exists"),
-            `is`(""),
-        )
+            )
+        request.getHeader("key").assert().isEqualTo("value")
+        request.getHeader("not-exists").assert().isEqualTo("")
+        request.getQuery("key").assert().isEqualTo("value")
     }
 }

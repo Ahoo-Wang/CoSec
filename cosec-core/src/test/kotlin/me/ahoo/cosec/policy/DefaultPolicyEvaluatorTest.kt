@@ -23,6 +23,7 @@ import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
+import me.ahoo.test.asserts.assert
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
@@ -34,14 +35,15 @@ internal class DefaultPolicyEvaluatorTest {
     @Test
     fun evaluateRequest() {
         var evaluateRequest: Request = EvaluateRequest()
-        assertThat(evaluateRequest.method, equalTo("POST"))
-        assertThat(evaluateRequest.remoteIp, equalTo("127.0.0.1"))
-        assertThat(evaluateRequest.origin, equalTo("mockOrigin"))
-        assertThat(evaluateRequest.referer, equalTo("mockReferer"))
-        assertThat(evaluateRequest.getHeader("key"), equalTo("key"))
-        assertThat(evaluateRequest.attributes, equalTo(mapOf()))
+        evaluateRequest.method.assert().isEqualTo("POST")
+        evaluateRequest.remoteIp.assert().isEqualTo("127.0.0.1")
+        evaluateRequest.origin.assert().isEqualTo("mockOrigin")
+        evaluateRequest.referer.assert().isEqualTo("mockReferer")
+        evaluateRequest.getHeader("key").assert().isEqualTo("key")
+        evaluateRequest.getQuery("key").assert().isEqualTo("key")
+        evaluateRequest.attributes.assert().isEmpty()
         evaluateRequest = evaluateRequest.withAttributes(mapOf("key" to "value"))
-        assertThat(evaluateRequest.attributes["key"], equalTo("value"))
+        evaluateRequest.attributes.assert().containsKey("key")
     }
 
     @Test

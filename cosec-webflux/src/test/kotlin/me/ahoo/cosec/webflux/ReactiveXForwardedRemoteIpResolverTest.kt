@@ -13,24 +13,22 @@
 
 package me.ahoo.cosec.webflux
 
-import com.google.common.net.HttpHeaders.X_FORWARDED_FOR
-import io.mockk.every
-import io.mockk.mockk
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
+import me.ahoo.cosec.context.request.XForwardedRemoteIpResolver.Companion.X_FORWARDED_FOR
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import org.springframework.web.server.ServerWebExchange
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest
+import org.springframework.mock.web.server.MockServerWebExchange
 
 class ReactiveXForwardedRemoteIpResolverTest {
 
     @Test
     fun extractXForwardedHeaderValues() {
         val xForwardedRemoteIpResolver = ReactiveXForwardedRemoteIpResolver()
-        assertThat(xForwardedRemoteIpResolver.maxTrustedIndex, equalTo(Int.MAX_VALUE))
-        val serverWebExchange = mockk<ServerWebExchange> {
-            every { request.headers.get(X_FORWARDED_FOR) } returns listOf("localhost")
-        }
+        xForwardedRemoteIpResolver.maxTrustedIndex.assert().isEqualTo(Int.MAX_VALUE)
+        val serverRequest = MockServerHttpRequest.get("")
+            .header(X_FORWARDED_FOR, "localhost")
+        val serverWebExchange = MockServerWebExchange.from(serverRequest)
         val remoteIp = xForwardedRemoteIpResolver.extractXForwardedHeaderValues(serverWebExchange)
-        assertThat(remoteIp, equalTo(listOf("localhost")))
+        remoteIp.assert().containsExactly("localhost")
     }
 }

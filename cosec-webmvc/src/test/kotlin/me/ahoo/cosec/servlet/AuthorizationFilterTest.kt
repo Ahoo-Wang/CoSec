@@ -56,6 +56,7 @@ internal class AuthorizationFilterTest {
             every { method } returns "GET"
             every { remoteHost } returns "remoteHost"
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
+            every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
             every { getHeader(HttpHeaders.ORIGIN) } returns null
             every { getHeader(HttpHeaders.REFERER) } returns null
             every { setSecurityContext(any()) } returns Unit
@@ -82,6 +83,7 @@ internal class AuthorizationFilterTest {
             every { method } returns "GET"
             every { remoteHost } returns "remoteHost"
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
+            every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
             every { getHeader(HttpHeaders.ORIGIN) } returns "ORIGIN"
             every { getHeader(HttpHeaders.REFERER) } returns "REFERER"
             every { setSecurityContext(any()) } returns Unit
@@ -153,6 +155,7 @@ internal class AuthorizationFilterTest {
             every { method } returns "GET"
             every { remoteHost } returns "remoteHost"
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
+            every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
             every { getHeader(HttpHeaders.ORIGIN) } returns null
             every { getHeader(HttpHeaders.REFERER) } returns null
             every { setSecurityContext(any()) } returns Unit
