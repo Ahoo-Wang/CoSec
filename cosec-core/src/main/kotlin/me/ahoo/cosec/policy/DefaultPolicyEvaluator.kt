@@ -67,6 +67,10 @@ data class EvaluateRequest(override val attributes: Map<String, String> = mapOf(
         return key
     }
 
+    override fun getQuery(key: String): String {
+        return key
+    }
+
     override fun withAttributes(attributes: Map<String, String>): Request {
         return copy(attributes = attributes)
     }

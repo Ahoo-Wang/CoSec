@@ -5,7 +5,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.token.PrincipalConverter
-import org.hamcrest.MatcherAssert.assertThat
+import me.ahoo.test.asserts.assert
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
 
@@ -20,8 +20,7 @@ class DefaultSecurityContextParserTest {
             every { toPrincipal(any()) } returns mockk()
         }
         val securityContextParser = DefaultSecurityContextParser(principalConverter)
-
-        assertThat(securityContextParser.parse(request), notNullValue())
+        securityContextParser.parse(request).assert().isNotNull()
 
         verify {
             request.getHeader(AUTHORIZATION_HEADER_KEY)
@@ -33,14 +32,35 @@ class DefaultSecurityContextParserTest {
     fun parseIfEmpty() {
         val request = mockk<Request> {
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns ""
+            every { getQuery(AUTHORIZATION_HEADER_KEY) } returns ""
         }
 
         val securityContextParser = DefaultSecurityContextParser(mockk())
         val securityContext = securityContextParser.ensureParse(request)
-        assertThat(securityContext, notNullValue())
-        assertThat(securityContext.principal.anonymous(), equalTo(true))
+        securityContext.assert().isNotNull()
+        securityContext.principal.anonymous().assert().isTrue()
         verify {
             request.getHeader(AUTHORIZATION_HEADER_KEY)
+            request.getQuery(AUTHORIZATION_HEADER_KEY)
+        }
+    }
+
+    @Test
+    fun parseHeaderEmpty() {
+        val request = mockk<Request> {
+            every { getHeader(AUTHORIZATION_HEADER_KEY) } returns ""
+            every { getQuery(AUTHORIZATION_HEADER_KEY) } returns "Bearer token"
+        }
+        val principalConverter = mockk<PrincipalConverter> {
+            every { toPrincipal(any()) } returns mockk()
+        }
+        val securityContextParser = DefaultSecurityContextParser(principalConverter)
+        val securityContext = securityContextParser.ensureParse(request)
+        securityContext.assert().isNotNull()
+        verify {
+            request.getHeader(AUTHORIZATION_HEADER_KEY)
+            request.getQuery(AUTHORIZATION_HEADER_KEY)
+            principalConverter.toPrincipal(any())
         }
     }
 
@@ -51,8 +71,8 @@ class DefaultSecurityContextParserTest {
         }
         val securityContextParser = DefaultSecurityContextParser(mockk())
         val securityContext = securityContextParser.ensureParse(request)
-        assertThat(securityContext, notNullValue())
-        assertThat(securityContext.principal.anonymous(), equalTo(true))
+        securityContext.assert().isNotNull()
+        securityContext.principal.anonymous().assert().isTrue()
         verify {
             request.getHeader(AUTHORIZATION_HEADER_KEY)
         }

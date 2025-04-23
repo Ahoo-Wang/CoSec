@@ -31,6 +31,10 @@ data class ReactiveRequest(
         return delegate.request.headers.getFirst(key).orEmpty()
     }
 
+    override fun getQuery(key: String): String {
+        return delegate.request.queryParams.getFirst(key).orEmpty()
+    }
+
     override fun withAttributes(attributes: Map<String, String>): Request = copy(attributes = attributes)
 
     override fun toString(): String {
