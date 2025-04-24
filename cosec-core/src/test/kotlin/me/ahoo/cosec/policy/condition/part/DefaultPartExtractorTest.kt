@@ -18,9 +18,8 @@ import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.policy.action.getPathVariables
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
-import org.junit.jupiter.api.Assertions
+import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 
 class DefaultPartExtractorTest {
@@ -30,7 +29,7 @@ class DefaultPartExtractorTest {
         val request: Request = mockk {
             every { path } returns "path"
         }
-        assertThat(DefaultPartExtractor(RequestParts.PATH).extract(request, mockk()), equalTo("path"))
+        DefaultPartExtractor(RequestParts.PATH).extract(request, mockk()).assert().isEqualTo("path")
     }
 
     @Test
@@ -38,7 +37,7 @@ class DefaultPartExtractorTest {
         val request: Request = mockk {
             every { method } returns "method"
         }
-        assertThat(DefaultPartExtractor(RequestParts.METHOD).extract(request, mockk()), equalTo("method"))
+        DefaultPartExtractor(RequestParts.METHOD).extract(request, mockk()).assert().isEqualTo("method")
     }
 
     @Test
@@ -46,7 +45,23 @@ class DefaultPartExtractorTest {
         val request: Request = mockk {
             every { remoteIp } returns "remoteIp"
         }
-        assertThat(DefaultPartExtractor(RequestParts.REMOTE_IP).extract(request, mockk()), equalTo("remoteIp"))
+        DefaultPartExtractor(RequestParts.REMOTE_IP).extract(request, mockk()).assert().isEqualTo("remoteIp")
+    }
+
+    @Test
+    fun extractRequestAppId() {
+        val request: Request = mockk {
+            every { appId } returns "appId"
+        }
+        DefaultPartExtractor(RequestParts.APP_ID).extract(request, mockk()).assert().isEqualTo("appId")
+    }
+
+    @Test
+    fun extractRequestDeviceId() {
+        val request: Request = mockk {
+            every { deviceId } returns "deviceId"
+        }
+        DefaultPartExtractor(RequestParts.DEVICE_ID).extract(request, mockk()).assert().isEqualTo("deviceId")
     }
 
     @Test
@@ -54,7 +69,7 @@ class DefaultPartExtractorTest {
         val request: Request = mockk {
             every { origin } returns "origin"
         }
-        assertThat(DefaultPartExtractor(RequestParts.ORIGIN).extract(request, mockk()), equalTo("origin"))
+        DefaultPartExtractor(RequestParts.ORIGIN).extract(request, mockk()).assert().isEqualTo("origin")
     }
 
     @Test
@@ -62,7 +77,7 @@ class DefaultPartExtractorTest {
         val request: Request = mockk {
             every { referer } returns "referer"
         }
-        assertThat(DefaultPartExtractor(RequestParts.REFERER).extract(request, mockk()), equalTo("referer"))
+        DefaultPartExtractor(RequestParts.REFERER).extract(request, mockk()).assert().isEqualTo("referer")
     }
 
     @Test
@@ -70,10 +85,8 @@ class DefaultPartExtractorTest {
         val context: SecurityContext = mockk {
             every { getPathVariables() } returns mapOf("id" to "id")
         }
-        assertThat(
-            DefaultPartExtractor(RequestParts.PATH_VAR_PREFIX + "id").extract(mockk(), context),
-            equalTo("id")
-        )
+
+        DefaultPartExtractor(RequestParts.PATH_VAR_PREFIX + "id").extract(mockk(), context).assert().isEqualTo("id")
     }
 
     @Test
@@ -81,10 +94,8 @@ class DefaultPartExtractorTest {
         val request: Request = mockk {
             every { getHeader("key") } returns "value"
         }
-        assertThat(
-            DefaultPartExtractor(RequestParts.HEADER_PREFIX + "key").extract(request, mockk()),
-            equalTo("value"),
-        )
+
+        DefaultPartExtractor(RequestParts.HEADER_PREFIX + "key").extract(request, mockk()).assert().isEqualTo("value")
     }
 
     @Test
@@ -92,7 +103,7 @@ class DefaultPartExtractorTest {
         val context: SecurityContext = mockk {
             every { tenant.tenantId } returns "tenantId"
         }
-        assertThat(DefaultPartExtractor(SecurityContextParts.TENANT_ID).extract(mockk(), context), equalTo("tenantId"))
+        DefaultPartExtractor(SecurityContextParts.TENANT_ID).extract(mockk(), context).assert().isEqualTo("tenantId")
     }
 
     @Test
@@ -100,10 +111,9 @@ class DefaultPartExtractorTest {
         val context: SecurityContext = mockk {
             every { principal.id } returns "principal.id"
         }
-        assertThat(
-            DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ID).extract(mockk(), context),
-            equalTo("principal.id"),
-        )
+
+        DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ID).extract(mockk(), context).assert()
+            .isEqualTo("principal.id")
     }
 
     @Test
@@ -112,14 +122,13 @@ class DefaultPartExtractorTest {
             every { attributes["key"] } returns "value"
             every { attributes["not_exist"] } returns null
         }
-        assertThat(
-            DefaultPartExtractor(RequestParts.ATTRIBUTES_PREFIX + "key").extract(request, mockk()),
-            equalTo("value"),
+
+        DefaultPartExtractor(RequestParts.ATTRIBUTES_PREFIX + "key").extract(request, mockk()).assert().isEqualTo(
+            "value"
         )
-        assertThat(
-            DefaultPartExtractor(RequestParts.ATTRIBUTES_PREFIX + "not_exist").extract(request, mockk()),
-            equalTo(""),
-        )
+
+        DefaultPartExtractor(RequestParts.ATTRIBUTES_PREFIX + "not_exist").extract(request, mockk()).assert()
+            .isEqualTo("")
     }
 
     @Test
@@ -128,22 +137,19 @@ class DefaultPartExtractorTest {
             every { principal.attributes["key"] } returns "value"
             every { principal.attributes["not_exist"] } returns null
         }
-        assertThat(
-            DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX + "key").extract(mockk(), context),
-            equalTo("value"),
-        )
-        assertThat(
-            DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX + "not_exist").extract(
-                mockk(),
-                context,
-            ),
-            equalTo(""),
-        )
+
+        DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX + "key").extract(mockk(), context)
+            .assert().isEqualTo("value")
+
+        DefaultPartExtractor(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX + "not_exist").extract(
+            mockk(),
+            context,
+        ).assert().isEqualTo("")
     }
 
     @Test
     fun extractWhenWrongPart() {
-        Assertions.assertThrows(IllegalArgumentException::class.java) {
+        assertThrownBy<IllegalArgumentException> {
             DefaultPartExtractor("wrongPart").extract(mockk(), mockk())
         }
     }

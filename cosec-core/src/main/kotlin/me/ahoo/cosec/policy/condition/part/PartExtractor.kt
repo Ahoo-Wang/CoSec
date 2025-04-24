@@ -27,6 +27,8 @@ object RequestParts {
     const val PREFIX = "request."
     const val PATH = PREFIX + "path"
     const val METHOD = PREFIX + "method"
+    const val APP_ID = PREFIX + "appId"
+    const val DEVICE_ID = PREFIX + "deviceId"
     const val REMOTE_IP = PREFIX + "remoteIp"
     const val ORIGIN = PREFIX + "origin"
     const val REFERER = PREFIX + "referer"
@@ -45,10 +47,13 @@ object SecurityContextParts {
 
 data class DefaultPartExtractor(val part: String) : PartExtractor {
 
+    @Suppress("CyclomaticComplexMethod")
     override fun extract(request: Request, securityContext: SecurityContext): String {
         return when (part) {
             RequestParts.PATH -> request.path
             RequestParts.METHOD -> request.method
+            RequestParts.APP_ID -> request.appId
+            RequestParts.DEVICE_ID -> request.deviceId
             RequestParts.REMOTE_IP -> request.remoteIp
             RequestParts.ORIGIN -> request.origin
             RequestParts.REFERER -> request.referer
