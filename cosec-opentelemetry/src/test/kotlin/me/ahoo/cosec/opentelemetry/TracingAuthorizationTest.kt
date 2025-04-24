@@ -13,6 +13,7 @@ import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
+import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SimpleSecurityContext
 import org.hamcrest.MatcherAssert.*
 import org.hamcrest.Matchers
@@ -106,6 +107,32 @@ class TracingAuthorizationTest {
         tracingAuthorization.authorize(request, securityContext)
             .test()
             .expectNext(AuthorizeResult.IMPLICIT_DENY)
+            .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWithRequest() {
+        val authorization = mockk<Authorization> {
+            every { authorize(any(), any()) } returns AuthorizeResult.ALLOW.toMono()
+        }
+        val tracingAuthorization = TracingAuthorization(authorization)
+        val request = mockk<Request> {
+            every { appId } returns "appId"
+            every { deviceId } returns "deviceId"
+        }
+        val verifyContext = mockk<RoleVerifyContext> {
+            every { roleId } returns "roleId"
+            every { permission } returns mockk {
+                every { id } returns "permissionId"
+            }
+            every { result } returns VerifyResult.ALLOW
+        }
+        val securityContext = SimpleSecurityContext.anonymous()
+        securityContext.setVerifyContext(verifyContext)
+        securityContext.setRequest(request)
+        tracingAuthorization.authorize(request, securityContext)
+            .test()
+            .expectNext(AuthorizeResult.ALLOW)
             .verifyComplete()
     }
 }
