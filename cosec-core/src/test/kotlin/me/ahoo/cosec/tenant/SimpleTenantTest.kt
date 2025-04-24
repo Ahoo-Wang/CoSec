@@ -13,23 +13,22 @@
 
 package me.ahoo.cosec.tenant
 
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 class SimpleTenantTest {
     @Test
     fun isDefaultTenant() {
-        assertThat(SimpleTenant.DEFAULT.isDefaultTenant, equalTo(true))
+        SimpleTenant.DEFAULT.isDefaultTenant.assert().isTrue()
     }
 
     @Test
     fun isPlatformTenant() {
-        assertThat(SimpleTenant.PLATFORM.isPlatformTenant, equalTo(true))
+        SimpleTenant.PLATFORM.isPlatformTenant.assert().isTrue()
     }
 
     @Test
     fun isUserTenant() {
-        assertThat(SimpleTenant("userTenantId").isUserTenant, equalTo(true))
+        SimpleTenant("userTenantId").isUserTenant.assert().isTrue()
     }
 }

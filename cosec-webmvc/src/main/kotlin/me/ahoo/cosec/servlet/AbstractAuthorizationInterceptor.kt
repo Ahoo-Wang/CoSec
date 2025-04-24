@@ -24,7 +24,7 @@ import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import me.ahoo.cosec.token.TokenVerificationException
-import me.ahoo.cosec.token.asAuthorizeResult
+import me.ahoo.cosec.token.toAuthorizeResult
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 
@@ -64,7 +64,7 @@ abstract class AbstractAuthorizationInterceptor(
                     }
 
                     servletResponse.writeWithAuthorizeResult(
-                        tokenVerificationException?.asAuthorizeResult() ?: it,
+                        tokenVerificationException?.toAuthorizeResult() ?: it,
                     )
                     return@map false
                 }

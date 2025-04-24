@@ -14,15 +14,14 @@
 package me.ahoo.cosec.token
 
 import me.ahoo.cosec.api.authorization.AuthorizeResult
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 class TokenVerificationExceptionKtTest {
 
     @Test
-    fun asAuthorizeResult() {
-        assertThat(TokenVerificationException().asAuthorizeResult().reason, equalTo("Token Invalid"))
-        assertThat(TokenExpiredException().asAuthorizeResult(), sameInstance(AuthorizeResult.TOKEN_EXPIRED))
+    fun toAuthorizeResult() {
+        TokenVerificationException().toAuthorizeResult().reason.assert().isEqualTo("Token Invalid")
+        TokenExpiredException().toAuthorizeResult().assert().isSameAs(AuthorizeResult.TOKEN_EXPIRED)
     }
 }
