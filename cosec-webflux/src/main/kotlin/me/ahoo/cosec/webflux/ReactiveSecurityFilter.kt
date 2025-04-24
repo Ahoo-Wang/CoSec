@@ -23,7 +23,7 @@ import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.token.TokenVerificationException
-import me.ahoo.cosec.token.asAuthorizeResult
+import me.ahoo.cosec.token.toAuthorizeResult
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.springframework.http.HttpStatus
@@ -75,7 +75,7 @@ abstract class ReactiveSecurityFilter(
                     exchange.response.statusCode = HttpStatus.FORBIDDEN
                 }
                 exchange.response.writeWithAuthorizeResult(
-                    tokenVerificationException?.asAuthorizeResult() ?: authorizeResult,
+                    tokenVerificationException?.toAuthorizeResult() ?: authorizeResult,
                 )
             }.onErrorResume(TooManyRequestsException::class.java) { _ ->
                 exchange.response.statusCode = HttpStatus.TOO_MANY_REQUESTS

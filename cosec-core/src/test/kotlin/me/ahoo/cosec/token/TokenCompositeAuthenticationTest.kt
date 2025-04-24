@@ -21,6 +21,7 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.authentication.CompositeAuthentication
 import me.ahoo.cosec.authentication.DefaultAuthenticationProvider
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.test.asserts.assert
 import org.hamcrest.MatcherAssert.*
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
@@ -37,7 +38,7 @@ class TokenCompositeAuthenticationTest {
             every { toToken(any()) } returns compositeToken
         }
         val tokenCompositeAuthentication = TokenCompositeAuthentication(compositeAuthentication, tokenConverter)
-        assertThat(tokenCompositeAuthentication.supportCredentials, `is`(Credentials::class.java))
+        tokenCompositeAuthentication.supportCredentials.assert().isEqualTo(Credentials::class.java)
 
         val credentials = mockk<Credentials>()
         val authentication = mockk<Authentication<Credentials, CoSecPrincipal>> {
@@ -48,7 +49,7 @@ class TokenCompositeAuthenticationTest {
         tokenCompositeAuthentication.authenticateAsToken(credentials)
             .test()
             .consumeNextWith {
-                assertThat(it, `is`(compositeToken))
+                it.assert().isEqualTo(compositeToken)
             }
             .verifyComplete()
     }

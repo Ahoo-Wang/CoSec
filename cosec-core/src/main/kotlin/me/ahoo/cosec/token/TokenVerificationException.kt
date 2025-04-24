@@ -23,7 +23,7 @@ open class TokenVerificationException : CoSecException {
     constructor(cause: Throwable) : super(cause)
 }
 
-fun TokenVerificationException.asAuthorizeResult(): AuthorizeResult {
+fun TokenVerificationException.toAuthorizeResult(): AuthorizeResult {
     if (this is TokenExpiredException) {
         return AuthorizeResult.TOKEN_EXPIRED
     }
