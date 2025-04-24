@@ -24,11 +24,13 @@ import io.opentelemetry.instrumentation.api.instrumenter.SpanNameExtractor
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.PolicyCapable
 import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.getVerifyContext
+import me.ahoo.cosec.context.RequestSecurityContexts.getRequest
 
 object CoSecInstrumenter {
     private const val INSTRUMENTATION_NAME = "me.ahoo.cosec"
@@ -53,7 +55,11 @@ object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, Authorize
     private val END_USER_ID_ATTRIBUTE_KEY = stringKey("enduser.id")
     private val END_USER_ROLE_ATTRIBUTE_KEY = stringKey("enduser.role")
     private const val COSEC_TENANT_ID_KEY = CoSec.COSEC_PREFIX + "tenant_id"
+    private const val COSEC_APP_ID_KEY = CoSec.COSEC_PREFIX + "app_id"
+    private const val COSEC_DEVICE_ID_KEY = CoSec.COSEC_PREFIX + "device_id"
     private val COSEC_TENANT_ID_ATTRIBUTE_KEY = stringKey(COSEC_TENANT_ID_KEY)
+    private val COSEC_APP_ID_ATTRIBUTE_KEY = stringKey(COSEC_APP_ID_KEY)
+    private val COSEC_DEVICE_ID_ATTRIBUTE_KEY = stringKey(COSEC_DEVICE_ID_KEY)
 
     private const val COSEC_POLICY_KEY = CoSec.COSEC_PREFIX + PolicyCapable.POLICY_KEY
     private val COSEC_POLICY_ATTRIBUTE_KEY = stringKey(COSEC_POLICY_KEY)
@@ -92,6 +98,11 @@ object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, Authorize
         response: AuthorizeResult?,
         error: Throwable?
     ) {
+        val cosecRequest = request.getRequest<Request>()
+        if (cosecRequest != null) {
+            attributes.put(COSEC_APP_ID_ATTRIBUTE_KEY, cosecRequest.appId)
+            attributes.put(COSEC_DEVICE_ID_ATTRIBUTE_KEY, cosecRequest.deviceId)
+        }
         val securityContext = request
         val principal = securityContext.principal
         attributes.put(COSEC_TENANT_ID_ATTRIBUTE_KEY, securityContext.tenant.tenantId)
