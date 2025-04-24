@@ -18,11 +18,16 @@ import me.ahoo.cosec.api.context.Attributes
 interface Request : Attributes<Request, String, String> {
     companion object {
         const val APP_ID = "CoSec-App-Id"
+        const val DEVICE_ID = "CoSec-Device-Id"
     }
 
     val appId: String
         get() {
-            return getHeader(APP_ID)
+            return getHeader(APP_ID).ifBlank { getQuery(APP_ID) }
+        }
+    val deviceId: String
+        get() {
+            return getHeader(DEVICE_ID).ifBlank { getQuery(DEVICE_ID) }
         }
     val path: String
     val method: String

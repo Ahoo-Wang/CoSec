@@ -38,6 +38,8 @@ class ReactiveRequestTest {
             .isEqualTo(
                 "ReactiveRequest(path='path', method='method', remoteIp='remoteIp', origin='origin', referer='referer')"
             )
+        request.appId.assert().isEmpty()
+        request.deviceId.assert().isEmpty()
         request.getHeader("key").assert().isEqualTo("value")
         request.getHeader("not-exists").assert().isEqualTo("")
         request.getQuery("key").assert().isEqualTo("value")

@@ -14,13 +14,13 @@
 package me.ahoo.cosec.api.context
 
 import me.ahoo.cosec.api.context.request.Request
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 class RequestTest {
     @Test
     fun appIdKey() {
-        assertThat(Request.APP_ID, equalTo("CoSec-App-Id"))
+        Request.APP_ID.assert().isEqualTo("CoSec-App-Id")
+        Request.DEVICE_ID.assert().isEqualTo("CoSec-Device-Id")
     }
 }
