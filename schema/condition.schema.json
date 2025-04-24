@@ -66,6 +66,8 @@
       "enum": [
         "request.path",
         "request.method",
+        "request.appId",
+        "request.deviceId",
         "request.remoteIp",
         "request.origin",
         "request.referer",
