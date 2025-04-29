@@ -16,7 +16,7 @@ swagger = "2.2.30"
 # testing
 fluent-assert = "0.1.0"
 hamcrest = "3.0"
-mockk = "1.14.0"
+mockk = "1.14.2"
 jmh = "1.37"
 # plugins
 detekt = "1.23.8"
