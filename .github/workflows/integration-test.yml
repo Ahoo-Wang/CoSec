@@ -12,7 +12,7 @@
 #
 
 name: Integration Test
-on: [ push, pull_request ]
+on: [ pull_request ]
 jobs:
   cosec-core-test:
     name: CoSec Core Test
