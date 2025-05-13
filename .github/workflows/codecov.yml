@@ -1,9 +1,5 @@
 name: Codecov
 on:
-  push:
-    paths-ignore:
-      - 'document/**'
-      - 'cosec-gateway-server/**'
   pull_request:
     paths-ignore:
       - 'document/**'
