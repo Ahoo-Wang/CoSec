@@ -12,7 +12,7 @@ ognl = "3.4.7"
 java-jwt = "4.5.0"
 ip2region = "2.7.0"
 justAuth = "1.16.7"
-swagger = "2.2.30"
+swagger = "2.2.31"
 # testing
 fluent-assert = "0.1.0"
 hamcrest = "3.0"
