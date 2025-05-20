@@ -34,7 +34,7 @@ import me.ahoo.cosec.context.RequestSecurityContexts.getRequest
 
 object CoSecInstrumenter {
     private const val INSTRUMENTATION_NAME = "me.ahoo.cosec"
-    internal val INSTRUMENTATION_VERSION = CoSecInstrumenter.javaClass.`package`.implementationVersion ?: "2.1.2"
+    internal val INSTRUMENTATION_VERSION = CoSecInstrumenter.javaClass.`package`.implementationVersion ?: "2.13.8"
     val INSTRUMENTER: Instrumenter<SecurityContext, AuthorizeResult> =
         Instrumenter.builder<SecurityContext, AuthorizeResult>(
             GlobalOpenTelemetry.get(),
@@ -52,11 +52,11 @@ object CoSecSpanNameExtractor : SpanNameExtractor<SecurityContext> {
 }
 
 object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, AuthorizeResult> {
-    private val END_USER_ID_ATTRIBUTE_KEY = stringKey("enduser.id")
-    private val END_USER_ROLE_ATTRIBUTE_KEY = stringKey("enduser.role")
+    private val USER_ID_ATTRIBUTE_KEY = stringKey("user.id")
+    private val USER_ROLES_ATTRIBUTE_KEY = stringKey("user.roles")
     private const val COSEC_TENANT_ID_KEY = CoSec.COSEC_PREFIX + "tenant_id"
     private const val COSEC_APP_ID_KEY = CoSec.COSEC_PREFIX + "app_id"
-    private const val COSEC_DEVICE_ID_KEY = CoSec.COSEC_PREFIX + "device_id"
+    private const val COSEC_DEVICE_ID_KEY = CoSec.COSEC_PREFIX + "device.id"
     private val COSEC_TENANT_ID_ATTRIBUTE_KEY = stringKey(COSEC_TENANT_ID_KEY)
     private val COSEC_APP_ID_ATTRIBUTE_KEY = stringKey(COSEC_APP_ID_KEY)
     private val COSEC_DEVICE_ID_ATTRIBUTE_KEY = stringKey(COSEC_DEVICE_ID_KEY)
@@ -106,9 +106,9 @@ object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, Authorize
         val securityContext = request
         val principal = securityContext.principal
         attributes.put(COSEC_TENANT_ID_ATTRIBUTE_KEY, securityContext.tenant.tenantId)
-        attributes.put(END_USER_ID_ATTRIBUTE_KEY, principal.id)
+        attributes.put(USER_ID_ATTRIBUTE_KEY, principal.id)
         val roleStr = principal.roles.joinToString(SEPARATOR)
-        attributes.put(END_USER_ROLE_ATTRIBUTE_KEY, roleStr)
+        attributes.put(USER_ROLES_ATTRIBUTE_KEY, roleStr)
         val policyStr = principal.policies.joinToString(SEPARATOR)
         attributes.put(COSEC_POLICY_ATTRIBUTE_KEY, policyStr)
         val verifyContext = securityContext.getVerifyContext()
