@@ -56,10 +56,9 @@ object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, Authorize
     private val USER_ROLES_ATTRIBUTE_KEY = stringKey("user.roles")
     private const val COSEC_TENANT_ID_KEY = CoSec.COSEC_PREFIX + "tenant_id"
     private const val COSEC_APP_ID_KEY = CoSec.COSEC_PREFIX + "app_id"
-    private const val COSEC_DEVICE_ID_KEY = CoSec.COSEC_PREFIX + "device.id"
     private val COSEC_TENANT_ID_ATTRIBUTE_KEY = stringKey(COSEC_TENANT_ID_KEY)
     private val COSEC_APP_ID_ATTRIBUTE_KEY = stringKey(COSEC_APP_ID_KEY)
-    private val COSEC_DEVICE_ID_ATTRIBUTE_KEY = stringKey(COSEC_DEVICE_ID_KEY)
+    private val COSEC_DEVICE_ID_ATTRIBUTE_KEY = stringKey("device.id")
 
     private const val COSEC_POLICY_KEY = CoSec.COSEC_PREFIX + PolicyCapable.POLICY_KEY
     private val COSEC_POLICY_ATTRIBUTE_KEY = stringKey(COSEC_POLICY_KEY)
