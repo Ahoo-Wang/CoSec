@@ -99,15 +99,25 @@ object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, Authorize
     ) {
         val cosecRequest = request.getRequest<Request>()
         if (cosecRequest != null) {
-            attributes.put(COSEC_APP_ID_ATTRIBUTE_KEY, cosecRequest.appId)
-            attributes.put(COSEC_DEVICE_ID_ATTRIBUTE_KEY, cosecRequest.deviceId)
+            val appId = cosecRequest.appId
+            if (appId.isNotBlank()) {
+                attributes.put(COSEC_APP_ID_ATTRIBUTE_KEY, appId)
+            }
+            val deviceId = cosecRequest.deviceId
+            if (deviceId.isNotBlank()) {
+                attributes.put(COSEC_DEVICE_ID_ATTRIBUTE_KEY, deviceId)
+            }
         }
         val securityContext = request
         val principal = securityContext.principal
         attributes.put(COSEC_TENANT_ID_ATTRIBUTE_KEY, securityContext.tenant.tenantId)
         attributes.put(USER_ID_ATTRIBUTE_KEY, principal.id)
-        attributes.put(USER_ROLES_ATTRIBUTE_KEY, principal.roles.toList())
-        attributes.put(COSEC_POLICY_ATTRIBUTE_KEY, principal.policies.toList())
+        if (principal.roles.isNotEmpty()) {
+            attributes.put(USER_ROLES_ATTRIBUTE_KEY, principal.roles.toList())
+        }
+        if (principal.policies.isNotEmpty()) {
+            attributes.put(COSEC_POLICY_ATTRIBUTE_KEY, principal.policies.toList())
+        }
         val verifyContext = securityContext.getVerifyContext()
         if (verifyContext == null) {
             attributes.put(COSEC_AUTHORIZATION_RESULT_ATTRIBUTE_KEY, VerifyResult.IMPLICIT_DENY.name)
