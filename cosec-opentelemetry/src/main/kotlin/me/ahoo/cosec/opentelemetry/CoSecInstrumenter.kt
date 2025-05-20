@@ -15,6 +15,7 @@ package me.ahoo.cosec.opentelemetry
 
 import io.opentelemetry.api.GlobalOpenTelemetry
 import io.opentelemetry.api.common.AttributeKey
+import io.opentelemetry.api.common.AttributeKey.stringArrayKey
 import io.opentelemetry.api.common.AttributeKey.stringKey
 import io.opentelemetry.api.common.AttributesBuilder
 import io.opentelemetry.context.Context
@@ -53,7 +54,7 @@ object CoSecSpanNameExtractor : SpanNameExtractor<SecurityContext> {
 
 object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, AuthorizeResult> {
     private val USER_ID_ATTRIBUTE_KEY = stringKey("user.id")
-    private val USER_ROLES_ATTRIBUTE_KEY = stringKey("user.roles")
+    private val USER_ROLES_ATTRIBUTE_KEY = stringArrayKey("user.roles")
     private const val COSEC_TENANT_ID_KEY = CoSec.COSEC_PREFIX + "tenant_id"
     private const val COSEC_APP_ID_KEY = CoSec.COSEC_PREFIX + "app_id"
     private val COSEC_TENANT_ID_ATTRIBUTE_KEY = stringKey(COSEC_TENANT_ID_KEY)
@@ -61,7 +62,7 @@ object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, Authorize
     private val COSEC_DEVICE_ID_ATTRIBUTE_KEY = stringKey("device.id")
 
     private const val COSEC_POLICY_KEY = CoSec.COSEC_PREFIX + PolicyCapable.POLICY_KEY
-    private val COSEC_POLICY_ATTRIBUTE_KEY = stringKey(COSEC_POLICY_KEY)
+    private val COSEC_POLICY_ATTRIBUTE_KEY = stringArrayKey(COSEC_POLICY_KEY)
 
     private const val COSEC_AUTHORIZE_PREFIX = CoSec.COSEC_PREFIX + "authorize."
 
@@ -87,7 +88,6 @@ object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, Authorize
     private const val COSEC_AUTHORIZATION_RESULT_KEY = COSEC_AUTHORIZE_PREFIX + "result"
     private val COSEC_AUTHORIZATION_RESULT_ATTRIBUTE_KEY = stringKey(COSEC_AUTHORIZATION_RESULT_KEY)
 
-    private const val SEPARATOR = ","
     override fun onStart(attributes: AttributesBuilder, parentContext: Context, request: SecurityContext) = Unit
 
     override fun onEnd(
@@ -106,10 +106,8 @@ object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, Authorize
         val principal = securityContext.principal
         attributes.put(COSEC_TENANT_ID_ATTRIBUTE_KEY, securityContext.tenant.tenantId)
         attributes.put(USER_ID_ATTRIBUTE_KEY, principal.id)
-        val roleStr = principal.roles.joinToString(SEPARATOR)
-        attributes.put(USER_ROLES_ATTRIBUTE_KEY, roleStr)
-        val policyStr = principal.policies.joinToString(SEPARATOR)
-        attributes.put(COSEC_POLICY_ATTRIBUTE_KEY, policyStr)
+        attributes.put(USER_ROLES_ATTRIBUTE_KEY, principal.roles.toList())
+        attributes.put(COSEC_POLICY_ATTRIBUTE_KEY, principal.policies.toList())
         val verifyContext = securityContext.getVerifyContext()
         if (verifyContext == null) {
             attributes.put(COSEC_AUTHORIZATION_RESULT_ATTRIBUTE_KEY, VerifyResult.IMPLICIT_DENY.name)
