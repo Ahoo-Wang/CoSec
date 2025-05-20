@@ -63,6 +63,8 @@ dependencies {
     implementation(project(":cosec-spring-boot-starter"))
     implementation(project(":cosec-ip2region"))
     implementation("me.ahoo.cocache:cocache-spring-boot-starter")
+    implementation("com.github.ben-manes.caffeine:caffeine")
+    implementation("org.springframework.boot:spring-boot-starter-cache")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
     implementation("org.springframework.cloud:spring-cloud-starter-gateway")
     implementation("org.springframework.cloud:spring-cloud-starter-openfeign")
