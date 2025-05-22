@@ -14,20 +14,18 @@
 package me.ahoo.cosec.api.context.request
 
 import me.ahoo.cosec.api.context.Attributes
+import me.ahoo.cosec.api.context.request.AppIdCapable.Companion.APP_ID_KEY
+import me.ahoo.cosec.api.context.request.DeviceIdCapable.Companion.DEVICE_ID_KEY
 
-interface Request : Attributes<Request, String, String> {
-    companion object {
-        const val APP_ID = "CoSec-App-Id"
-        const val DEVICE_ID = "CoSec-Device-Id"
-    }
+interface Request : Attributes<Request, String, String>, AppIdCapable, DeviceIdCapable {
 
-    val appId: String
+    override val appId: String
         get() {
-            return getHeader(APP_ID).ifBlank { getQuery(APP_ID) }
+            return getHeader(APP_ID_KEY).ifBlank { getQuery(APP_ID_KEY) }
         }
-    val deviceId: String
+    override val deviceId: String
         get() {
-            return getHeader(DEVICE_ID).ifBlank { getQuery(DEVICE_ID) }
+            return getHeader(DEVICE_ID_KEY).ifBlank { getQuery(DEVICE_ID_KEY) }
         }
     val path: String
     val method: String
