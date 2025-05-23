@@ -14,7 +14,7 @@ ip2region = "2.7.0"
 justAuth = "1.16.7"
 swagger = "2.2.32"
 # testing
-fluent-assert = "0.1.1"
+fluent-assert = "0.1.2"
 hamcrest = "3.0"
 mockk = "1.14.2"
 jmh = "1.37"
