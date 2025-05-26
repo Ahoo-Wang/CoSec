@@ -51,24 +51,23 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
     }
 }
 
-data class EvaluateRequest(override val attributes: Map<String, String> = mapOf()) : Request {
-    override val path: String
-        get() = "/policies/test"
-    override val method: String
-        get() = "POST"
-    override val remoteIp: String
-        get() = "127.0.0.1"
-    override val origin: String
-        get() = "mockOrigin"
-    override val referer: String
-        get() = "mockReferer"
+data class EvaluateRequest(
+    override val path: String = "/policies/test",
+    override val method: String = "POST",
+    override val remoteIp: String = "127.0.0.1",
+    override val origin: String = "mockOrigin",
+    override val referer: String = "mockReferer",
+    override val attributes: Map<String, String> = mapOf(),
+    private val headers: Map<String, String> = mapOf(),
+    private val queries: Map<String, String> = mapOf(),
+) : Request {
 
     override fun getHeader(key: String): String {
-        return key
+        return headers[key].orEmpty()
     }
 
     override fun getQuery(key: String): String {
-        return key
+        return queries[key].orEmpty()
     }
 
     override fun withAttributes(attributes: Map<String, String>): Request {
