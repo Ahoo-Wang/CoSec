@@ -11,14 +11,10 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.oauth
+package me.ahoo.cosec.social
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.social.SocialAuthentication
-import me.ahoo.cosec.social.SocialCredentials
-import me.ahoo.cosec.social.SocialProviderManager
-import me.ahoo.cosec.social.SocialUser
 import me.ahoo.cosec.social.justauth.JustAuthCredentials
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`

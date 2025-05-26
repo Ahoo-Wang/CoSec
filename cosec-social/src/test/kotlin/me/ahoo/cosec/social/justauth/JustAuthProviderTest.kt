@@ -11,15 +11,14 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.oauth.justauth
+package me.ahoo.cosec.social.justauth
 
 import com.alibaba.fastjson.JSONObject
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.social.SocialAuthenticationException
-import me.ahoo.cosec.social.justauth.JustAuthCredentials
-import me.ahoo.cosec.social.justauth.JustAuthProvider
 import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.test.asserts.assert
 import me.zhyd.oauth.enums.AuthUserGender
 import me.zhyd.oauth.model.AuthResponse
 import me.zhyd.oauth.model.AuthToken
@@ -38,6 +37,7 @@ internal class JustAuthProviderTest {
             every { authorize(any()) } returns "authorizeUrl"
         }
         val authClient = JustAuthProvider("clientId", authRequest, MockIdGenerator.INSTANCE)
+        authClient.name.assert().isEqualTo("clientId")
         assertThat(authClient.name, `is`("clientId"))
         assertThat(authClient.authorizeUrl(), `is`("authorizeUrl"))
     }
