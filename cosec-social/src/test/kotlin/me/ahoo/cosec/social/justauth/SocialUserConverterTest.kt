@@ -15,8 +15,8 @@ package me.ahoo.cosec.social.justauth
 
 import com.alibaba.fastjson.JSONObject
 import me.ahoo.cosec.social.SocialUser
-import me.ahoo.cosec.social.justauth.SocialUserConverter.toSocialUserGender
 import me.ahoo.cosec.social.justauth.SocialUserConverter.toSocialUser
+import me.ahoo.cosec.social.justauth.SocialUserConverter.toSocialUserGender
 import me.ahoo.test.asserts.assert
 import me.zhyd.oauth.enums.AuthUserGender
 import me.zhyd.oauth.model.AuthToken
@@ -45,5 +45,4 @@ class SocialUserConverterTest {
         coSecUser.gender.name.assert().isEqualTo(authUser.gender.name)
         coSecUser.rawInfo.assert().isEqualTo(authUser.rawUserInfo)
     }
-
 }
