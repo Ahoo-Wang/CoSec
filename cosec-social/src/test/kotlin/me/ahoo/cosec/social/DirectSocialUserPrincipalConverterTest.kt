@@ -11,10 +11,8 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.oauth
+package me.ahoo.cosec.social
 
-import me.ahoo.cosec.social.DirectSocialUserPrincipalConverter
-import me.ahoo.cosec.social.SocialUser
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test

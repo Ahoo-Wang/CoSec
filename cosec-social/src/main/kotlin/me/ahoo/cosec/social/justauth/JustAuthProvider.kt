@@ -17,8 +17,8 @@ import me.ahoo.cosec.social.SocialAuthenticationException
 import me.ahoo.cosec.social.SocialAuthenticationProvider
 import me.ahoo.cosec.social.SocialCredentials
 import me.ahoo.cosec.social.SocialUser
+import me.ahoo.cosec.social.justauth.SocialUserConverter.toSocialUser
 import me.ahoo.cosid.IdGenerator
-import me.zhyd.oauth.enums.AuthUserGender
 import me.zhyd.oauth.model.AuthResponse
 import me.zhyd.oauth.model.AuthUser
 import me.zhyd.oauth.request.AuthRequest
@@ -50,26 +50,7 @@ class JustAuthProvider(
                 )
             }
             val authUser = authResponse.data
-            SocialUser(
-                id = authUser.uuid,
-                username = authUser.username,
-                nickname = authUser.nickname,
-                avatar = authUser.avatar,
-                email = authUser.email,
-                location = authUser.location,
-                gender = asGender(authUser.gender),
-                rawInfo = authUser.rawUserInfo,
-                provider = name,
-            ).toMono()
-        }
-    }
-
-    private fun asGender(authUserGender: AuthUserGender): SocialUser.Gender {
-        return when (authUserGender) {
-            AuthUserGender.MALE -> SocialUser.Gender.MALE
-            AuthUserGender.FEMALE -> SocialUser.Gender.FEMALE
-            AuthUserGender.UNKNOWN -> SocialUser.Gender.UNKNOWN
-            else -> throw IllegalStateException("Unexpected value: $authUserGender")
+            return@defer authUser.toSocialUser(name).toMono()
         }
     }
 
