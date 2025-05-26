@@ -49,6 +49,23 @@ class CoSecJwtAutoConfigurationTest {
     }
 
     @Test
+    fun contextLoadsIfNotExistIdGenerator() {
+        contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+            )
+            .withUserConfiguration(
+                CoSecJwtAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                AssertionsForInterfaceTypes.assertThat(context)
+                    .hasSingleBean(Algorithm::class.java)
+                    .hasSingleBean(TokenConverter::class.java)
+                    .hasSingleBean(TokenVerifier::class.java)
+            }
+    }
+
+    @Test
     fun contextLoadsWhenDisable() {
         contextRunner
             .withPropertyValues(

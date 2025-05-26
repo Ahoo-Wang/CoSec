@@ -22,6 +22,8 @@ import me.ahoo.cosec.token.TokenCompositeAuthentication
 import me.ahoo.cosec.token.TokenConverter
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.jvm.UuidGenerator
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -64,6 +66,22 @@ class CoSecJwtAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    fun cosecTokenConverter(
+        idGeneratorProvider: ObjectProvider<IdGenerator>,
+        algorithm: Algorithm,
+        jwtProperties: JwtProperties
+    ): TokenConverter {
+        val idGenerator = idGeneratorProvider.getIfAvailable { UuidGenerator.INSTANCE }
+        return JwtTokenConverter(
+            idGenerator = idGenerator,
+            algorithm = algorithm,
+            accessTokenValidity = jwtProperties.tokenValidity.access,
+            refreshTokenValidity = jwtProperties.tokenValidity.refresh,
+        )
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     fun cosecJwtTokenVerifier(
         algorithm: Algorithm
     ): TokenVerifier {
@@ -73,21 +91,6 @@ class CoSecJwtAutoConfiguration {
     @Configuration
     @ConditionalOnAuthenticationEnabled
     class OnAuthentication {
-
-        @Bean
-        @ConditionalOnMissingBean
-        fun cosecTokenConverter(
-            idGenerator: IdGenerator,
-            algorithm: Algorithm,
-            jwtProperties: JwtProperties
-        ): TokenConverter {
-            return JwtTokenConverter(
-                idGenerator,
-                algorithm,
-                jwtProperties.tokenValidity.access,
-                jwtProperties.tokenValidity.refresh,
-            )
-        }
 
         @Bean
         @ConditionalOnBean(CompositeAuthentication::class)
