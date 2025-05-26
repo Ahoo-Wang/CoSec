@@ -33,17 +33,37 @@ import org.junit.jupiter.params.provider.MethodSource
 internal class DefaultPolicyEvaluatorTest {
 
     @Test
-    fun evaluateRequest() {
+    fun evaluateDefaultRequest() {
         var evaluateRequest: Request = EvaluateRequest()
         evaluateRequest.method.assert().isEqualTo("POST")
         evaluateRequest.remoteIp.assert().isEqualTo("127.0.0.1")
         evaluateRequest.origin.assert().isEqualTo("mockOrigin")
         evaluateRequest.referer.assert().isEqualTo("mockReferer")
-        evaluateRequest.getHeader("key").assert().isEqualTo("key")
-        evaluateRequest.getQuery("key").assert().isEqualTo("key")
+        evaluateRequest.getHeader("key").assert().isEqualTo("")
+        evaluateRequest.getQuery("key").assert().isEqualTo("")
         evaluateRequest.attributes.assert().isEmpty()
         evaluateRequest = evaluateRequest.withAttributes(mapOf("key" to "value"))
         evaluateRequest.attributes.assert().containsKey("key")
+    }
+
+    @Test
+    fun evaluateRequest() {
+        val evaluateRequest: Request = EvaluateRequest(
+            path = "/policies/hi",
+            method = "GET",
+            remoteIp = "127.0.0.2",
+            origin = "mock",
+            referer = "mock",
+            headers = mapOf("key" to "value"),
+            queries = mapOf("key" to "value"),
+        )
+        evaluateRequest.method.assert().isEqualTo("GET")
+        evaluateRequest.remoteIp.assert().isEqualTo("127.0.0.2")
+        evaluateRequest.origin.assert().isEqualTo("mock")
+        evaluateRequest.referer.assert().isEqualTo("mock")
+        evaluateRequest.getHeader("key").assert().isEqualTo("value")
+        evaluateRequest.getQuery("key").assert().isEqualTo("value")
+        evaluateRequest.attributes.assert().isEmpty()
     }
 
     @Test
