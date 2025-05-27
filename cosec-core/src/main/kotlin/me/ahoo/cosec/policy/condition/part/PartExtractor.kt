@@ -33,6 +33,7 @@ object RequestParts {
     const val ORIGIN = PREFIX + "origin"
     const val ORIGIN_HOST = "$ORIGIN.host"
     const val REFERER = PREFIX + "referer"
+    const val REFERER_HOST = "$REFERER.host"
     const val HEADER_PREFIX = PREFIX + "header."
     const val ATTRIBUTES_PREFIX = PREFIX + "attributes."
     const val PATH_VAR_PREFIX = "$PATH.var."
@@ -59,6 +60,7 @@ data class DefaultPartExtractor(val part: String) : PartExtractor {
             RequestParts.ORIGIN -> request.origin.toString()
             RequestParts.ORIGIN_HOST -> request.origin.host.orEmpty()
             RequestParts.REFERER -> request.referer.toString()
+            RequestParts.REFERER_HOST -> request.referer.host.orEmpty()
             SecurityContextParts.TENANT_ID -> securityContext.tenant.tenantId
             SecurityContextParts.PRINCIPAL_ID -> securityContext.principal.id
             else -> {

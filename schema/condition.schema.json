@@ -72,6 +72,7 @@
         "request.origin",
         "request.origin.host",
         "request.referer",
+        "request.referer.host",
         "request.header.",
         "request.header.cosec-app-id",
         "request.attributes.",
