@@ -16,67 +16,67 @@ package me.ahoo.cosec.policy.condition.part
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.AppIdCapable
+import me.ahoo.cosec.api.context.request.DeviceIdCapable
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.policy.action.getPathVariables
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import java.net.URI
 
 class DefaultPartExtractorTest {
 
     @Test
     fun extractRequestPath() {
-        val request: Request = mockk {
-            every { path } returns "path"
-        }
+        val request: Request = EvaluateRequest(path = "path")
         DefaultPartExtractor(RequestParts.PATH).extract(request, mockk()).assert().isEqualTo("path")
     }
 
     @Test
     fun extractRequestMethod() {
-        val request: Request = mockk {
-            every { method } returns "method"
-        }
+        val request: Request = EvaluateRequest(method = "method")
+
         DefaultPartExtractor(RequestParts.METHOD).extract(request, mockk()).assert().isEqualTo("method")
     }
 
     @Test
     fun extractRequestRemoteIp() {
-        val request: Request = mockk {
-            every { remoteIp } returns "remoteIp"
-        }
+        val request: Request = EvaluateRequest(remoteIp = "remoteIp")
         DefaultPartExtractor(RequestParts.REMOTE_IP).extract(request, mockk()).assert().isEqualTo("remoteIp")
     }
 
     @Test
     fun extractRequestAppId() {
-        val request: Request = mockk {
-            every { appId } returns "appId"
-        }
+        val request: Request = EvaluateRequest(
+            headers = mapOf(
+                AppIdCapable.APP_ID_KEY to "appId"
+            )
+        )
         DefaultPartExtractor(RequestParts.APP_ID).extract(request, mockk()).assert().isEqualTo("appId")
     }
 
     @Test
     fun extractRequestDeviceId() {
-        val request: Request = mockk {
-            every { deviceId } returns "deviceId"
-        }
+        val request: Request = EvaluateRequest(
+            headers = mapOf(
+                DeviceIdCapable.DEVICE_ID_KEY to "deviceId"
+            )
+        )
+
         DefaultPartExtractor(RequestParts.DEVICE_ID).extract(request, mockk()).assert().isEqualTo("deviceId")
     }
 
     @Test
     fun extractRequestOrigin() {
-        val request: Request = mockk {
-            every { origin } returns "origin"
-        }
+        val request: Request = EvaluateRequest(origin = URI.create("origin"))
         DefaultPartExtractor(RequestParts.ORIGIN).extract(request, mockk()).assert().isEqualTo("origin")
     }
 
     @Test
     fun extractRequestReferer() {
-        val request: Request = mockk {
-            every { referer } returns "referer"
-        }
+        val request: Request = EvaluateRequest(referer = URI.create("referer"))
         DefaultPartExtractor(RequestParts.REFERER).extract(request, mockk()).assert().isEqualTo("referer")
     }
 

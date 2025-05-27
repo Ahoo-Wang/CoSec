@@ -29,6 +29,7 @@ import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import java.net.URI
 
 internal class DefaultPolicyEvaluatorTest {
 
@@ -37,8 +38,8 @@ internal class DefaultPolicyEvaluatorTest {
         var evaluateRequest: Request = EvaluateRequest()
         evaluateRequest.method.assert().isEqualTo("POST")
         evaluateRequest.remoteIp.assert().isEqualTo("127.0.0.1")
-        evaluateRequest.origin.assert().isEqualTo("mockOrigin")
-        evaluateRequest.referer.assert().isEqualTo("mockReferer")
+        evaluateRequest.origin.assert().hasHost("mockOrigin")
+        evaluateRequest.referer.assert().hasHost("mockReferer")
         evaluateRequest.getHeader("key").assert().isEqualTo("")
         evaluateRequest.getQuery("key").assert().isEqualTo("")
         evaluateRequest.attributes.assert().isEmpty()
@@ -52,15 +53,15 @@ internal class DefaultPolicyEvaluatorTest {
             path = "/policies/hi",
             method = "GET",
             remoteIp = "127.0.0.2",
-            origin = "mock",
-            referer = "mock",
+            origin = URI.create("mock"),
+            referer = URI.create("mock"),
             headers = mapOf("key" to "value"),
             queries = mapOf("key" to "value"),
         )
         evaluateRequest.method.assert().isEqualTo("GET")
         evaluateRequest.remoteIp.assert().isEqualTo("127.0.0.2")
-        evaluateRequest.origin.assert().isEqualTo("mock")
-        evaluateRequest.referer.assert().isEqualTo("mock")
+        evaluateRequest.origin.toString().assert().isEqualTo("mock")
+        evaluateRequest.referer.toString().assert().isEqualTo("mock")
         evaluateRequest.getHeader("key").assert().isEqualTo("value")
         evaluateRequest.getQuery("key").assert().isEqualTo("value")
         evaluateRequest.attributes.assert().isEmpty()

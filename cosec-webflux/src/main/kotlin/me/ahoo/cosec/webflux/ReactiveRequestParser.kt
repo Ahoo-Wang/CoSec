@@ -19,6 +19,7 @@ import me.ahoo.cosec.context.request.RequestAttributesAppender
 import me.ahoo.cosec.context.request.RequestParser
 import org.springframework.http.HttpHeaders
 import org.springframework.web.server.ServerWebExchange
+import java.net.URI
 
 class ReactiveRequestParser(
     private val remoteIpResolver: RemoteIpResolver<ServerWebExchange>,
@@ -31,8 +32,8 @@ class ReactiveRequestParser(
             path = request.request.path.value(),
             method = request.request.method.name(),
             remoteIp = remoteIpResolver.resolve(request),
-            origin = request.request.headers.origin.orEmpty(),
-            referer = request.request.headers.getFirst(HttpHeaders.REFERER).orEmpty(),
+            origin = URI.create(request.request.headers.origin.orEmpty()),
+            referer = URI.create(request.request.headers.getFirst(HttpHeaders.REFERER).orEmpty()),
         )
 
         for (requestAttributesAppender in requestAttributesAppends) {

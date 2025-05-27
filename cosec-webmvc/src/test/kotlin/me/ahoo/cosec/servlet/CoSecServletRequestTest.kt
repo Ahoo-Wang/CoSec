@@ -18,6 +18,7 @@ import io.mockk.mockk
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import java.net.URI
 
 class CoSecServletRequestTest {
     @Test
@@ -32,11 +33,11 @@ class CoSecServletRequestTest {
             path = "path",
             method = "method",
             remoteIp = "remoteIp",
-            origin = "origin",
-            referer = "referer",
+            origin = URI.create("http://origin"),
+            referer = URI.create("http://referer"),
         ).withAttributes(emptyMap())
         request.toString().assert().isEqualTo(
-            "CoSecServletRequest(path='path', method='method', remoteIp='remoteIp', origin='origin', referer='referer')"
+            "CoSecServletRequest(path='path', method='method', remoteIp='remoteIp', origin='http://origin', referer='http://referer')"
         )
         request.getHeader("key").assert().isEqualTo("value")
         request.getQuery("key").assert().isEqualTo("value")

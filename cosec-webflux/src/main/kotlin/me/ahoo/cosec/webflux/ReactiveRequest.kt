@@ -16,14 +16,15 @@ package me.ahoo.cosec.webflux
 import me.ahoo.cosec.Delegated
 import me.ahoo.cosec.api.context.request.Request
 import org.springframework.web.server.ServerWebExchange
+import java.net.URI
 
 data class ReactiveRequest(
     override val delegate: ServerWebExchange,
     override val path: String,
     override val method: String,
     override val remoteIp: String,
-    override val origin: String,
-    override val referer: String,
+    override val origin: URI,
+    override val referer: URI,
     override val attributes: Map<String, String> = mapOf()
 ) : Request,
     Delegated<ServerWebExchange> {
