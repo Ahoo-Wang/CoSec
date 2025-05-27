@@ -50,22 +50,12 @@ class JwtTokenConverter(
         val accessTokenId = idGenerator.generateAsString()
         val now = Date()
         val accessTokenExp = Date(System.currentTimeMillis() + accessTokenValidity.toMillis())
-        val payloadClaims: Map<String, *> = principal.attributes
-            .asSequence()
-            .filter {
-                !Jwts.isRegisteredClaim(it.key)
-            }
-            .map {
-                it.key to it.value
-            }
-            .toMap()
-
         val accessTokenBuilder = JWT.create()
             .withJWTId(accessTokenId)
             .withSubject(principal.id)
             .withClaim(PolicyCapable.POLICY_KEY, principal.policies.toList())
             .withClaim(RoleCapable.ROLE_KEY, principal.roles.toList())
-            .withPayload(payloadClaims)
+            .withClaim(CoSecPrincipal::attributes.name, principal.attributes)
             .withIssuedAt(now)
             .withExpiresAt(accessTokenExp)
 

@@ -13,7 +13,6 @@
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.JWT
-import com.auth0.jwt.RegisteredClaims
 import com.auth0.jwt.interfaces.DecodedJWT
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.PolicyCapable
@@ -36,20 +35,6 @@ import me.ahoo.cosec.token.SimpleTokenTenantPrincipal
 object Jwts : PrincipalConverter {
     const val TOKEN_PREFIX = "Bearer "
     private val jwtParser = JWT()
-
-    fun isRegisteredClaim(key: String): Boolean {
-        return RegisteredClaims.ISSUER == key ||
-            RegisteredClaims.SUBJECT == key ||
-            RegisteredClaims.EXPIRES_AT == key ||
-            RegisteredClaims.NOT_BEFORE == key ||
-            RegisteredClaims.ISSUED_AT == key ||
-            RegisteredClaims.JWT_ID == key ||
-            RegisteredClaims.AUDIENCE == key ||
-            TENANT_ID_KEY == key ||
-            PolicyCapable.POLICY_KEY == key ||
-            RoleCapable.ROLE_KEY == key
-    }
-
     fun String.removeBearerPrefix(): String {
         return if (this.startsWith(TOKEN_PREFIX)) {
             this.substring(TOKEN_PREFIX.length)
@@ -66,17 +51,12 @@ object Jwts : PrincipalConverter {
     fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT): T {
         val accessTokenId = decodedAccessToken.id
         val principalId = decodedAccessToken.subject
-        val attributes = decodedAccessToken
-            .claims
-            .asSequence()
-            .filter { !isRegisteredClaim(it.key) }
-            .associateBy({ it.key }, { it.value.asString() })
-
         val policyClaim = decodedAccessToken.getClaim(PolicyCapable.POLICY_KEY)
         val policies = if (policyClaim.isMissing) emptySet() else policyClaim.asList(String::class.java).toSet()
-
         val rolesClaim = decodedAccessToken.getClaim(RoleCapable.ROLE_KEY)
         val roles = if (rolesClaim.isMissing) emptySet() else rolesClaim.asList(String::class.java).toSet()
+        val attributesClaim = decodedAccessToken.getClaim(CoSecPrincipal::attributes.name)
+        val attributes = if (attributesClaim.isMissing) emptyMap<String, Any>() else attributesClaim.asMap()
         val principal = SimplePrincipal(principalId, policies, roles, attributes)
         val tenantId = decodedAccessToken.getClaim(TENANT_ID_KEY).asString()
         val tokenPrincipal = SimpleTokenPrincipal(accessTokenId, principal)

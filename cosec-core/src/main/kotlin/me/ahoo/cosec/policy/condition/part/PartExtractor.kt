@@ -70,7 +70,7 @@ data class DefaultPartExtractor(val part: String) : PartExtractor {
                 }
                 if (part.startsWith(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX)) {
                     val headerKey = part.substring(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX.length)
-                    return securityContext.principal.attributes[headerKey].orEmpty()
+                    return securityContext.principal.attributes[headerKey]?.toString().orEmpty()
                 }
                 if (part.startsWith(RequestParts.PATH_VAR_PREFIX)) {
                     val pathVarKey = part.substring(RequestParts.PATH_VAR_PREFIX.length)
