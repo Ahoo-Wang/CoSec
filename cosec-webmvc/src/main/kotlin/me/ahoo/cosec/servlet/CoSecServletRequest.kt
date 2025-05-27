@@ -16,14 +16,15 @@ package me.ahoo.cosec.servlet
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.Delegated
 import me.ahoo.cosec.api.context.request.Request
+import java.net.URI
 
 data class CoSecServletRequest(
     override val delegate: HttpServletRequest,
     override val path: String,
     override val method: String,
     override val remoteIp: String,
-    override val origin: String,
-    override val referer: String,
+    override val origin: URI,
+    override val referer: URI,
     override val attributes: Map<String, String> = mapOf()
 ) : Request, Delegated<HttpServletRequest> {
     override fun getHeader(key: String): String {

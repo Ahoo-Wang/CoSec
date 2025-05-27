@@ -55,8 +55,8 @@ data class DefaultPartExtractor(val part: String) : PartExtractor {
             RequestParts.APP_ID -> request.appId
             RequestParts.DEVICE_ID -> request.deviceId
             RequestParts.REMOTE_IP -> request.remoteIp
-            RequestParts.ORIGIN -> request.origin
-            RequestParts.REFERER -> request.referer
+            RequestParts.ORIGIN -> request.origin.toString()
+            RequestParts.REFERER -> request.referer.toString()
             SecurityContextParts.TENANT_ID -> securityContext.tenant.tenantId
             SecurityContextParts.PRINCIPAL_ID -> securityContext.principal.id
             else -> {

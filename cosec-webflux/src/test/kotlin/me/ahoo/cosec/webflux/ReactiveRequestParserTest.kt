@@ -30,7 +30,6 @@ internal class ReactiveRequestParserTest {
             .remoteAddress(InetSocketAddress.createUnresolved("localhost", 8080))
             .header(X_FORWARDED_FOR, "localhost")
         val serverWebExchange = MockServerWebExchange.from(serverRequest)
-
         val request = requestParser.parse(serverWebExchange)
         assertThat(request.path, `is`("/path"))
         assertThat(request.method, `is`("GET"))

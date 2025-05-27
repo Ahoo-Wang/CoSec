@@ -18,6 +18,7 @@ import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.context.request.RequestAttributesAppender
 import me.ahoo.cosec.context.request.RequestParser
 import org.springframework.http.HttpHeaders
+import java.net.URI
 
 /**
  * ServletRequestParser .
@@ -34,8 +35,8 @@ class ServletRequestParser(
             path = request.servletPath,
             method = request.method,
             remoteIp = remoteIPResolver.resolve(request),
-            origin = request.getHeader(HttpHeaders.ORIGIN).orEmpty(),
-            referer = request.getHeader(HttpHeaders.REFERER).orEmpty(),
+            origin = URI.create(request.getHeader(HttpHeaders.ORIGIN).orEmpty()),
+            referer = URI.create(request.getHeader(HttpHeaders.REFERER).orEmpty()),
         )
         for (requestAttributesAppender in requestAttributesAppends) {
             cosecRequest = requestAttributesAppender.append(cosecRequest)

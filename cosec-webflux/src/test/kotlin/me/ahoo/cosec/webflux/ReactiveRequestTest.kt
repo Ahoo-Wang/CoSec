@@ -17,6 +17,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.server.MockServerWebExchange
+import java.net.URI
 
 class ReactiveRequestTest {
     @Test
@@ -31,12 +32,12 @@ class ReactiveRequestTest {
             path = "path",
             method = "method",
             remoteIp = "remoteIp",
-            origin = "origin",
-            referer = "referer",
+            origin = URI.create("http://origin"),
+            referer = URI.create("http://referer"),
         ).withAttributes(emptyMap())
         request.toString().assert()
             .isEqualTo(
-                "ReactiveRequest(path='path', method='method', remoteIp='remoteIp', origin='origin', referer='referer')"
+                "ReactiveRequest(path='path', method='method', remoteIp='remoteIp', origin='http://origin', referer='http://referer')"
             )
         request.appId.assert().isEmpty()
         request.deviceId.assert().isEmpty()

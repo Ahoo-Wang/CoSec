@@ -19,6 +19,7 @@ import me.ahoo.cosec.api.policy.PolicyEvaluator
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import java.net.URI
 
 object DefaultPolicyEvaluator : PolicyEvaluator {
     override fun evaluate(policy: Policy) {
@@ -55,8 +56,8 @@ data class EvaluateRequest(
     override val path: String = "/policies/test",
     override val method: String = "POST",
     override val remoteIp: String = "127.0.0.1",
-    override val origin: String = "mockOrigin",
-    override val referer: String = "mockReferer",
+    override val origin: URI = URI.create("http://mockOrigin"),
+    override val referer: URI = URI.create("http://mockReferer"),
     override val attributes: Map<String, String> = mapOf(),
     private val headers: Map<String, String> = mapOf(),
     private val queries: Map<String, String> = mapOf(),

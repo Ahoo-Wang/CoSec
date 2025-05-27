@@ -16,6 +16,7 @@ package me.ahoo.cosec.api.context.request
 import me.ahoo.cosec.api.context.Attributes
 import me.ahoo.cosec.api.context.request.AppIdCapable.Companion.APP_ID_KEY
 import me.ahoo.cosec.api.context.request.DeviceIdCapable.Companion.DEVICE_ID_KEY
+import java.net.URI
 
 interface Request : Attributes<Request, String, String>, AppIdCapable, DeviceIdCapable {
 
@@ -30,8 +31,8 @@ interface Request : Attributes<Request, String, String>, AppIdCapable, DeviceIdC
     val path: String
     val method: String
     val remoteIp: String
-    val origin: String
-    val referer: String
+    val origin: URI
+    val referer: URI
     fun getHeader(key: String): String
     fun getQuery(key: String): String
 }
