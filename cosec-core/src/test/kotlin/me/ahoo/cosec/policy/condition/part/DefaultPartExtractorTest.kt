@@ -70,8 +70,20 @@ class DefaultPartExtractorTest {
 
     @Test
     fun extractRequestOrigin() {
-        val request: Request = EvaluateRequest(origin = URI.create("origin"))
-        DefaultPartExtractor(RequestParts.ORIGIN).extract(request, mockk()).assert().isEqualTo("origin")
+        val request: Request = EvaluateRequest(origin = URI.create("http://origin"))
+        DefaultPartExtractor(RequestParts.ORIGIN).extract(request, mockk()).assert().isEqualTo("http://origin")
+    }
+
+    @Test
+    fun extractRequestOriginHost() {
+        val request: Request = EvaluateRequest(origin = URI.create("http://origin"))
+        DefaultPartExtractor(RequestParts.ORIGIN_HOST).extract(request, mockk()).assert().isEqualTo("origin")
+    }
+
+    @Test
+    fun extractRequestOriginHostNotFound() {
+        val request: Request = EvaluateRequest(origin = URI.create(""))
+        DefaultPartExtractor(RequestParts.ORIGIN_HOST).extract(request, mockk()).assert().isEqualTo("")
     }
 
     @Test
