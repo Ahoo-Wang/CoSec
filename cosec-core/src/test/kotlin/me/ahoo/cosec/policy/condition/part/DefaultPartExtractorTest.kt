@@ -88,8 +88,20 @@ class DefaultPartExtractorTest {
 
     @Test
     fun extractRequestReferer() {
-        val request: Request = EvaluateRequest(referer = URI.create("referer"))
-        DefaultPartExtractor(RequestParts.REFERER).extract(request, mockk()).assert().isEqualTo("referer")
+        val request: Request = EvaluateRequest(referer = URI.create("http://referer"))
+        DefaultPartExtractor(RequestParts.REFERER).extract(request, mockk()).assert().isEqualTo("http://referer")
+    }
+
+    @Test
+    fun extractRequestRefererHost() {
+        val request: Request = EvaluateRequest(referer = URI.create("http://referer"))
+        DefaultPartExtractor(RequestParts.REFERER_HOST).extract(request, mockk()).assert().isEqualTo("referer")
+    }
+
+    @Test
+    fun extractRequestRefererHostNotFound() {
+        val request: Request = EvaluateRequest(referer = URI.create(""))
+        DefaultPartExtractor(RequestParts.REFERER_HOST).extract(request, mockk()).assert().isEqualTo("")
     }
 
     @Test
