@@ -17,9 +17,7 @@ import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
-import org.hamcrest.Matchers.notNullValue
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 /**
@@ -32,7 +30,7 @@ internal class JwtTokenConverterTest {
     @Test
     fun anonymousToToken() {
         val token: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
-        assertThat(token, notNullValue())
+        token.assert().isNotNull()
     }
 
     @Test
@@ -43,15 +41,47 @@ internal class JwtTokenConverterTest {
                 setOf("policyId"),
                 setOf("roleId"),
                 mapOf(
-                    "attr_string" to "attr_string_value"
+                    "attr_string" to "attr_string_value",
+                    "attr_int" to 1,
+                    "attr_boolean" to true,
+                    "attr_double" to 1.0,
+                    "attr_long" to 1L,
+                    "attr_list" to listOf("a", "b", "c"),
                 ),
             )
         val token: CompositeToken = jwtTokenConverter.toToken(principal)
-        assertThat(token, notNullValue())
         val verified = jwtTokenVerifier.verify<TokenPrincipal>(token)
-        assertThat(verified.id, equalTo(principal.id))
-        assertThat(verified.attributes["attr_string"], equalTo("attr_string_value"))
+        verified.id.assert().isEqualTo(principal.id)
+        verified.policies.assert().isEqualTo(principal.policies)
+        verified.roles.assert().isEqualTo(principal.roles)
+        verified.authenticated().assert().isEqualTo(true)
+        verified.anonymous().assert().isEqualTo(false)
+        verified.attributes["attr_string"].assert().isEqualTo("attr_string_value")
+        verified.attributes["attr_int"].assert().isEqualTo(1)
+        verified.attributes["attr_boolean"].assert().isEqualTo(true)
+        verified.attributes["attr_double"].assert().isEqualTo(1.0)
+        verified.attributes["attr_long"].assert().isEqualTo(1)
+        verified.attributes["attr_list"].assert().isEqualTo(listOf("a", "b", "c"))
         val token2 = jwtTokenConverter.toToken(verified)
-        assertThat(token2, notNullValue())
+        val verified2 = jwtTokenVerifier.verify<TokenPrincipal>(token2)
+        verified2.id.assert().isEqualTo(principal.id)
+    }
+
+    @Test
+    fun toTokenIfMissing() {
+        val principal = SimplePrincipal(
+            "id"
+        )
+        val token: CompositeToken = jwtTokenConverter.toToken(principal)
+        val verified = jwtTokenVerifier.verify<TokenPrincipal>(token)
+        verified.id.assert().isEqualTo(principal.id)
+        verified.policies.assert().isEqualTo(principal.policies)
+        verified.roles.assert().isEqualTo(principal.roles)
+        verified.authenticated().assert().isEqualTo(true)
+        verified.anonymous().assert().isEqualTo(false)
+        verified.attributes.assert().isEmpty()
+        val token2 = jwtTokenConverter.toToken(verified)
+        val verified2 = jwtTokenVerifier.verify<TokenPrincipal>(token2)
+        verified2.id.assert().isEqualTo(principal.id)
     }
 }

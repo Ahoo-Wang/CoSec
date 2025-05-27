@@ -53,11 +53,17 @@ class JwtTokenConverter(
         val accessTokenBuilder = JWT.create()
             .withJWTId(accessTokenId)
             .withSubject(principal.id)
-            .withClaim(PolicyCapable.POLICY_KEY, principal.policies.toList())
-            .withClaim(RoleCapable.ROLE_KEY, principal.roles.toList())
-            .withClaim(CoSecPrincipal::attributes.name, principal.attributes)
             .withIssuedAt(now)
             .withExpiresAt(accessTokenExp)
+        if (principal.policies.isNotEmpty()) {
+            accessTokenBuilder.withClaim(PolicyCapable.POLICY_KEY, principal.policies.toList())
+        }
+        if (principal.roles.isNotEmpty()) {
+            accessTokenBuilder.withClaim(RoleCapable.ROLE_KEY, principal.roles.toList())
+        }
+        if (principal.attributes.isNotEmpty()) {
+            accessTokenBuilder.withClaim(CoSecPrincipal::attributes.name, principal.attributes)
+        }
 
         if (principal is TenantCapable) {
             val tenantCapable = principal as TenantCapable
