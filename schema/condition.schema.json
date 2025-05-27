@@ -70,6 +70,7 @@
         "request.deviceId",
         "request.remoteIp",
         "request.origin",
+        "request.origin.host",
         "request.referer",
         "request.header.",
         "request.header.cosec-app-id",

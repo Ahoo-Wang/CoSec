@@ -31,6 +31,7 @@ object RequestParts {
     const val DEVICE_ID = PREFIX + "deviceId"
     const val REMOTE_IP = PREFIX + "remoteIp"
     const val ORIGIN = PREFIX + "origin"
+    const val ORIGIN_HOST = "$ORIGIN.host"
     const val REFERER = PREFIX + "referer"
     const val HEADER_PREFIX = PREFIX + "header."
     const val ATTRIBUTES_PREFIX = PREFIX + "attributes."
@@ -56,6 +57,7 @@ data class DefaultPartExtractor(val part: String) : PartExtractor {
             RequestParts.DEVICE_ID -> request.deviceId
             RequestParts.REMOTE_IP -> request.remoteIp
             RequestParts.ORIGIN -> request.origin.toString()
+            RequestParts.ORIGIN_HOST -> request.origin.host.orEmpty()
             RequestParts.REFERER -> request.referer.toString()
             SecurityContextParts.TENANT_ID -> securityContext.tenant.tenantId
             SecurityContextParts.PRINCIPAL_ID -> securityContext.principal.id
