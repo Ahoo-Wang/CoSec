@@ -14,6 +14,7 @@ ip2region = "2.7.0"
 justAuth = "1.16.7"
 swagger = "2.2.32"
 # testing
+junit = "5.13.0"
 fluent-assert = "0.1.2"
 hamcrest = "3.0"
 mockk = "1.14.2"
@@ -38,6 +39,7 @@ java-jwt = { module = "com.auth0:java-jwt", version.ref = "java-jwt" }
 ip2region = { module = "org.lionsoul:ip2region", version.ref = "ip2region" }
 justAuth = { module = "me.zhyd.oauth:JustAuth", version.ref = "justAuth" }
 swagger = { module = "io.swagger.core.v3:swagger-core-jakarta", version.ref = "swagger" }
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 fluent-assert-bom = { module = "me.ahoo.test:fluent-assert-bom", version.ref = "fluent-assert" }
 hamcrest = { module = "org.hamcrest:hamcrest", version.ref = "hamcrest" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
