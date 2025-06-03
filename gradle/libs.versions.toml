@@ -2,7 +2,7 @@
 # libraries
 spring-boot = "3.5.0"
 spring-cloud = "2025.0.0"
-cosid = "2.12.5"
+cosid = "2.13.0"
 cocache = "3.8.1"
 opentelemetry = "2.16.0"
 testcontainers = "1.21.1"
