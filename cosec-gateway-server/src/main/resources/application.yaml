@@ -6,29 +6,30 @@ server:
 spring:
   cloud:
     gateway:
-      globalcors:
-        corsConfigurations:
-          '[/**]':
-            allowedOrigins: "*"
-            allowedMethods: "*"
-            allowedHeaders: "*"
-            maxAge: 1800000
-      default-filters:
-        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
-      routes:
-        - id: cosec-auth
-          uri: lb://cosec-auth
-          predicates:
-            - Path=/cosec-auth/**
-          filters:
-            - StripPrefix=1
-        - id: google
-          uri: https://www.google.com
-          predicates:
-            - Path=/google/**
-          filters:
-            - StripPrefix=1
-
+      server:
+        webflux:
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowedOrigins: "*"
+                allowedMethods: "*"
+                allowedHeaders: "*"
+                maxAge: 1800000
+          default-filters:
+            - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+          routes:
+            - id: cosec-auth
+              uri: lb://cosec-auth
+              predicates:
+                - Path=/cosec-auth/**
+              filters:
+                - StripPrefix=1
+            - id: google
+              uri: https://www.google.com
+              predicates:
+                - Path=/google/**
+              filters:
+                - StripPrefix=1
 cosec:
   authentication:
     enabled: false
