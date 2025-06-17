@@ -43,9 +43,9 @@ java {
         usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
         capability(group.toString(), "opentelemetry-support", version.toString())
     }
-    registerFeature("generatorSupport") {
+    registerFeature("openapiSupport") {
         usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
-        capability(group.toString(), "generator-support", version.toString())
+        capability(group.toString(), "openapi-support", version.toString())
     }
 }
 dependencies {
@@ -60,8 +60,8 @@ dependencies {
     "cacheSupportImplementation"("me.ahoo.cocache:cocache-spring-boot-starter")
     "opentelemetrySupportImplementation"(project(":cosec-opentelemetry"))
     "ip2regionSupportImplementation"(project(":cosec-ip2region"))
-    "generatorSupportImplementation"(project(":cosec-generator"))
-    "generatorSupportImplementation"("org.springframework.boot:spring-boot-starter-actuator")
+    "openapiSupportImplementation"(project(":cosec-openapi"))
+    "openapiSupportImplementation"("org.springframework.boot:spring-boot-starter-actuator")
     api("org.springframework.boot:spring-boot-starter")
     kapt("org.springframework.boot:spring-boot-configuration-processor")
     kapt("org.springframework.boot:spring-boot-autoconfigure-processor")
