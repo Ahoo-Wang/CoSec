@@ -62,6 +62,7 @@ dependencies {
     "ip2regionSupportImplementation"(project(":cosec-ip2region"))
     "openapiSupportImplementation"(project(":cosec-openapi"))
     "openapiSupportImplementation"("org.springframework.boot:spring-boot-starter-actuator")
+    "openapiSupportImplementation"("org.springdoc:springdoc-openapi-starter-common")
     api("org.springframework.boot:spring-boot-starter")
     kapt("org.springframework.boot:spring-boot-configuration-processor")
     kapt("org.springframework.boot:spring-boot-autoconfigure-processor")

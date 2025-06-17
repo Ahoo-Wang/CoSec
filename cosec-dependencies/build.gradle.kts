@@ -18,6 +18,7 @@ dependencies {
     api(platform(libs.cocache.bom))
     api(platform(libs.justAuth))
     api(platform(libs.opentelemetry.instrumentation.bom))
+    api(platform(libs.springdoc.bom))
     api(platform(libs.fluent.assert.bom))
     constraints {
         api(libs.ognl)
