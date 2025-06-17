@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.openapi.security
 
+import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
 import org.junit.jupiter.api.Test
 
@@ -20,6 +21,14 @@ class BearerAuthOpenApiCustomizerTest {
     @Test
     fun customise() {
         val openAPI = OpenAPI()
+        BearerAuthOpenApiCustomizer.accept(openAPI)
+        openAPI.components.securitySchemes.containsKey(BearerAuthOpenApiCustomizer.BEARER_AUTH)
+    }
+
+    @Test
+    fun customiseWithComponents() {
+        val openAPI = OpenAPI()
+        openAPI.components(Components())
         BearerAuthOpenApiCustomizer.accept(openAPI)
         openAPI.components.securitySchemes.containsKey(BearerAuthOpenApiCustomizer.BEARER_AUTH)
     }
