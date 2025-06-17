@@ -17,6 +17,7 @@ import me.ahoo.cosec.openapi.security.BearerAuthOpenApiCustomizer
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import org.springdoc.core.customizers.OpenApiCustomizer
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 
@@ -26,6 +27,7 @@ import org.springframework.context.annotation.Bean
 @EnableConfigurationProperties(
     OpenAPIProperties::class,
 )
+@ConditionalOnClass(value = [OpenApiCustomizer::class])
 class CoSecOpenAPIAutoConfiguration {
     @Bean
     fun bearerAuthOpenApiCustomizer(): OpenApiCustomizer {
