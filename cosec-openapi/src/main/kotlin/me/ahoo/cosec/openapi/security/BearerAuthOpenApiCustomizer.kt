@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.openapi.security
 
-import com.google.common.net.HttpHeaders
 import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.security.SecurityRequirement
@@ -32,11 +31,8 @@ object BearerAuthOpenApiCustomizer : Consumer<OpenAPI> {
             BEARER_AUTH,
             SecurityScheme()
                 .type(SecurityScheme.Type.HTTP)
-                .`in`(SecurityScheme.In.HEADER)
-                .name(HttpHeaders.AUTHORIZATION)
                 .scheme("bearer")
                 .description("Bearer Token")
-                .bearerFormat("JWT")
         )
     }
 }
