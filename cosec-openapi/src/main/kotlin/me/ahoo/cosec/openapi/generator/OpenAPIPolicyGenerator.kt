@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.generator
+package me.ahoo.cosec.openapi.generator
 
 import io.swagger.v3.oas.models.OpenAPI
 import me.ahoo.cosec.api.policy.Policy
@@ -23,6 +23,7 @@ import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.ACTION_MATCHER_METHOD_KEY
 import me.ahoo.cosec.policy.action.PathActionMatcherFactory
+import kotlin.collections.iterator
 
 object OpenAPIPolicyGenerator {
     const val POLICY_ID = "PolicyId"

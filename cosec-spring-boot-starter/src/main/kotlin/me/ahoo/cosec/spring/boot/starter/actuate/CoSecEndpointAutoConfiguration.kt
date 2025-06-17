@@ -13,7 +13,7 @@
 package me.ahoo.cosec.spring.boot.starter.actuate
 
 import io.swagger.v3.oas.models.OpenAPI
-import me.ahoo.cosec.generator.OpenAPIPolicyGenerator
+import me.ahoo.cosec.openapi.generator.OpenAPIPolicyGenerator
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint
 import org.springframework.boot.autoconfigure.AutoConfiguration

@@ -15,7 +15,7 @@ package me.ahoo.cosec.spring.boot.starter.actuate
 
 import io.swagger.v3.oas.models.OpenAPI
 import me.ahoo.cosec.api.permission.AppPermission
-import me.ahoo.cosec.generator.OpenAPIAppPermissionGenerator
+import me.ahoo.cosec.openapi.generator.OpenAPIAppPermissionGenerator
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation

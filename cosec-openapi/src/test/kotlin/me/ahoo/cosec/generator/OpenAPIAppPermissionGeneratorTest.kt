@@ -5,6 +5,7 @@ import io.swagger.v3.oas.models.Operation
 import io.swagger.v3.oas.models.PathItem
 import io.swagger.v3.oas.models.Paths
 import io.swagger.v3.oas.models.info.Info
+import me.ahoo.cosec.openapi.generator.OpenAPIAppPermissionGenerator
 import org.hamcrest.CoreMatchers.equalTo
 import org.hamcrest.MatcherAssert.*
 import org.hamcrest.Matchers.*
