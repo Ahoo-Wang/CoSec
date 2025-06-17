@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.openapi
 
+import io.swagger.v3.oas.models.OpenAPI
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
 import org.springdoc.core.customizers.OpenApiCustomizer
@@ -30,6 +31,8 @@ class CoSecOpenAPIAutoConfigurationTest {
                 AssertionsForInterfaceTypes.assertThat(context)
                     .hasSingleBean(OpenAPIProperties::class.java)
                     .hasSingleBean(OpenApiCustomizer::class.java)
+                val openApiCustomizer = context.getBean(OpenApiCustomizer::class.java)
+                openApiCustomizer.customise(OpenAPI())
             }
     }
 }
