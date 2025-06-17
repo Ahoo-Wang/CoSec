@@ -15,6 +15,8 @@ package me.ahoo.cosec.openapi.security
 
 import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
+import io.swagger.v3.oas.models.security.SecurityScheme
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 class BearerAuthOpenApiCustomizerTest {
@@ -22,7 +24,10 @@ class BearerAuthOpenApiCustomizerTest {
     fun customise() {
         val openAPI = OpenAPI()
         BearerAuthOpenApiCustomizer.accept(openAPI)
-        openAPI.components.securitySchemes.containsKey(BearerAuthOpenApiCustomizer.BEARER_AUTH)
+        openAPI.components.securitySchemes.containsKey(BearerAuthOpenApiCustomizer.BEARER_AUTH_NAME)
+        val bearerAuthSecuritySchema = openAPI.components.securitySchemes[BearerAuthOpenApiCustomizer.BEARER_AUTH_NAME]!!
+        bearerAuthSecuritySchema.type.assert().isEqualTo(SecurityScheme.Type.HTTP)
+        bearerAuthSecuritySchema.scheme.assert().isEqualTo(BearerAuthOpenApiCustomizer.BEARER_SCHEME)
     }
 
     @Test
@@ -30,6 +35,6 @@ class BearerAuthOpenApiCustomizerTest {
         val openAPI = OpenAPI()
         openAPI.components(Components())
         BearerAuthOpenApiCustomizer.accept(openAPI)
-        openAPI.components.securitySchemes.containsKey(BearerAuthOpenApiCustomizer.BEARER_AUTH)
+        openAPI.components.securitySchemes.containsKey(BearerAuthOpenApiCustomizer.BEARER_AUTH_NAME)
     }
 }

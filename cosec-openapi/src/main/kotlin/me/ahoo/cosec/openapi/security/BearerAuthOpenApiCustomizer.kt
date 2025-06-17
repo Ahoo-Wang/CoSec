@@ -17,22 +17,23 @@ import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.security.SecurityRequirement
 import io.swagger.v3.oas.models.security.SecurityScheme
+import me.ahoo.cosec.api.CoSec
 import java.util.function.Consumer
 
 object BearerAuthOpenApiCustomizer : Consumer<OpenAPI> {
-    const val BEARER_AUTH = "bearerAuth"
+    const val BEARER_AUTH_NAME = CoSec.COSEC_PREFIX + "BearerAuth"
+    const val BEARER_SCHEME = "bearer"
     override fun accept(openAPI: OpenAPI) {
-        openAPI.addSecurityItem(SecurityRequirement().addList(BEARER_AUTH))
+        openAPI.addSecurityItem(SecurityRequirement().addList(BEARER_AUTH_NAME))
         if (openAPI.components == null) {
             openAPI.components(Components())
         }
 
         openAPI.components.addSecuritySchemes(
-            BEARER_AUTH,
+            BEARER_AUTH_NAME,
             SecurityScheme()
                 .type(SecurityScheme.Type.HTTP)
-                .scheme("bearer")
-                .description("Bearer Token")
+                .scheme(BEARER_SCHEME)
         )
     }
 }
