@@ -27,7 +27,7 @@ import org.springframework.context.annotation.Bean
 @EnableConfigurationProperties(
     OpenAPIProperties::class,
 )
-@ConditionalOnClass(value = [OpenApiCustomizer::class])
+@ConditionalOnClass(value = [BearerAuthOpenApiCustomizer::class, OpenApiCustomizer::class])
 class CoSecOpenAPIAutoConfiguration {
     @Bean
     fun bearerAuthOpenApiCustomizer(): OpenApiCustomizer {
