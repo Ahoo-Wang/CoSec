@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-policy.schema.json",
+  "$id": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/cosec-policy.schema.json",
   "title": "CoSec Policy Schema",
   "type": "object",
   "properties": {
