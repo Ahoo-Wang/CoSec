@@ -15,7 +15,7 @@ justAuth = "1.16.7"
 swagger = "2.2.34"
 springdoc = "2.8.9"
 # testing
-junit = "5.13.1"
+junit = "5.13.2"
 fluent-assert = "0.1.2"
 hamcrest = "3.0"
 mockk = "1.14.4"
