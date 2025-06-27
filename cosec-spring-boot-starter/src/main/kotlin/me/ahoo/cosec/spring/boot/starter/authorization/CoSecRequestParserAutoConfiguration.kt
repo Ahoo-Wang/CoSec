@@ -87,8 +87,8 @@ class CoSecRequestParserAutoConfiguration {
             val idGenerator = idGeneratorObjectProvider.getIfAvailable { UuidGenerator.INSTANCE }
             return ReactiveRequestParser(
                 remoteIpResolver = reactiveRemoteIpResolver,
-                idGenerator = idGenerator,
-                requestAttributesAppends = requestAttributesAppenderObjectProvider.toList()
+                requestAttributesAppends = requestAttributesAppenderObjectProvider.toList(),
+                idGenerator = idGenerator
             )
         }
     }

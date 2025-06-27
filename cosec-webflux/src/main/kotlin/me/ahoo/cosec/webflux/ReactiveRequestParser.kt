@@ -26,8 +26,8 @@ import java.net.URI
 
 class ReactiveRequestParser(
     private val remoteIpResolver: RemoteIpResolver<ServerWebExchange>,
-    private val idGenerator: IdGenerator = UuidGenerator.INSTANCE,
-    private val requestAttributesAppends: List<RequestAttributesAppender> = listOf()
+    private val requestAttributesAppends: List<RequestAttributesAppender> = listOf(),
+    private val idGenerator: IdGenerator = UuidGenerator.INSTANCE
 ) :
     RequestParser<ServerWebExchange> {
     override fun parse(request: ServerWebExchange): Request {
