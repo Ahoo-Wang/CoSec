@@ -16,6 +16,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_KEY
 import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
@@ -54,6 +55,7 @@ abstract class AbstractAuthorizationInterceptor(
         securityContext.setRequest(request)
         SecurityContextHolder.setContext(securityContext)
         servletRequest.setSecurityContext(securityContext)
+        servletResponse.addHeader(REQUEST_ID_KEY, request.requestId)
         return authorization.authorize(request, securityContext)
             .map {
                 if (!it.authorized) {
