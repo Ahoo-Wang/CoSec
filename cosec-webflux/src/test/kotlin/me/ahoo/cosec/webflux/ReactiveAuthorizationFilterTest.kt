@@ -30,8 +30,10 @@ import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.token.TokenVerificationException
+import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.test.asserts.assert
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
@@ -39,10 +41,13 @@ import org.springframework.core.Ordered
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest
+import org.springframework.mock.web.server.MockServerWebExchange
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
+import kotlin.collections.contains
 
 internal class ReactiveAuthorizationFilterTest {
     companion object {
@@ -64,31 +69,18 @@ internal class ReactiveAuthorizationFilterTest {
             authorization,
         )
         assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE + 10))
-        val exchange = mockk<ServerWebExchange> {
-            every { request.headers.getFirst(RequestIdCapable.REQUEST_ID_KEY) } returns null
-            every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
-            every { request.headers.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
-            every { request.queryParams.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
-            every { request.headers.origin } returns "origin"
-            every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
-            every { request.path.value() } returns "/path"
-            every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
-            every { setSecurityContext(any()) } just runs
-            every {
-                mutate()
-                    .principal(any())
-                    .build()
-            } returns this
+        val serverRequest = MockServerHttpRequest.get("/path")
+            .header(HttpHeaders.ORIGIN, "origin")
+            .build()
+        val serverExchange = MockServerWebExchange.builder(serverRequest).build()
+        val filterChain = WebFilterChain {
+            it.getSecurityContext().assert().isNotNull()
+            it.request.headers.contains(RequestIdCapable.REQUEST_ID_KEY).assert().isTrue()
+            Mono.empty()
         }
-        val filterChain = mockk<WebFilterChain> {
-            every { filter(exchange) } returns Mono.empty()
-        }
-        filter.filter(exchange, filterChain).block()
+        filter.filter(serverExchange, filterChain).block()
         verify {
             authorization.authorize(any(), any())
-            exchange.setSecurityContext(any())
-            filterChain.filter(exchange)
         }
     }
 
