@@ -34,6 +34,7 @@ class ReactiveRequestTest {
             remoteIp = "remoteIp",
             origin = URI.create("http://origin"),
             referer = URI.create("http://referer"),
+            requestId = "requestId",
         ).withAttributes(emptyMap())
         request.toString().assert()
             .isEqualTo(
