@@ -14,15 +14,19 @@
 package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.context.request.RequestIdCapable
 import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.context.request.RequestAttributesAppender
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.jvm.UuidGenerator
 import org.springframework.http.HttpHeaders
 import org.springframework.web.server.ServerWebExchange
 import java.net.URI
 
 class ReactiveRequestParser(
     private val remoteIpResolver: RemoteIpResolver<ServerWebExchange>,
+    private val idGenerator: IdGenerator = UuidGenerator.INSTANCE,
     private val requestAttributesAppends: List<RequestAttributesAppender> = listOf()
 ) :
     RequestParser<ServerWebExchange> {
@@ -34,6 +38,9 @@ class ReactiveRequestParser(
             remoteIp = remoteIpResolver.resolve(request),
             origin = URI.create(request.request.headers.origin.orEmpty()),
             referer = URI.create(request.request.headers.getFirst(HttpHeaders.REFERER).orEmpty()),
+            requestId = request.request.headers.getFirst(RequestIdCapable.REQUEST_ID_KEY).orEmpty().ifBlank {
+                idGenerator.generateAsString()
+            },
         )
 
         for (requestAttributesAppender in requestAttributesAppends) {

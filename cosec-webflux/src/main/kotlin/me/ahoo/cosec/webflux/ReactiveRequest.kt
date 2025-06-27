@@ -25,6 +25,7 @@ data class ReactiveRequest(
     override val remoteIp: String,
     override val origin: URI,
     override val referer: URI,
+    override val requestId: String,
     override val attributes: Map<String, String> = mapOf()
 ) : Request,
     Delegated<ServerWebExchange> {

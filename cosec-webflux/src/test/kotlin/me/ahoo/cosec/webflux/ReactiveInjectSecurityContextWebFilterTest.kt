@@ -18,6 +18,7 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.verify
+import me.ahoo.cosec.api.context.request.RequestIdCapable
 import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
 import me.ahoo.cosec.jwt.InjectSecurityContextParser
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
@@ -43,6 +44,7 @@ internal class ReactiveInjectSecurityContextWebFilterTest {
 
         assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE + 10))
         val exchange = mockk<ServerWebExchange> {
+            every { request.headers.getFirst(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { request.headers.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
