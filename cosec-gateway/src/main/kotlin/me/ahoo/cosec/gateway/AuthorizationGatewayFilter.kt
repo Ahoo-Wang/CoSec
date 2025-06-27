@@ -39,6 +39,7 @@ class AuthorizationGatewayFilter(
                 .header(REQUEST_ID_KEY, request.requestId)
                 .build()
             val nextServerExchange = serverExchange.mutate().request(serverHttpRequest).build()
+            nextServerExchange.response.headers.set(REQUEST_ID_KEY, request.requestId)
             chain.filter(nextServerExchange)
         }
     }
