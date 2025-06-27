@@ -32,8 +32,8 @@ class ReactiveAuthorizationFilter(
     authorization: Authorization
 ) : WebFilter, Ordered, ReactiveSecurityFilter(securityContextParser, requestParser, authorization) {
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
-        return filterInternal(exchange) {
-            chain.filter(it)
+        return filterInternal(exchange) { serverExchange, request ->
+            chain.filter(serverExchange)
         }
     }
 
