@@ -13,6 +13,7 @@
 package me.ahoo.cosec.gateway
 
 import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_KEY
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.webflux.ReactiveSecurityFilter
@@ -33,8 +34,12 @@ class AuthorizationGatewayFilter(
     authorization: Authorization
 ) : GlobalFilter, Ordered, ReactiveSecurityFilter(securityContextParser, requestParser, authorization) {
     override fun filter(exchange: ServerWebExchange, chain: GatewayFilterChain): Mono<Void> {
-        return filterInternal(exchange) {
-            chain.filter(it)
+        return filterInternal(exchange) { serverExchange, request ->
+            val serverHttpRequest = serverExchange.request.mutate()
+                .header(REQUEST_ID_KEY, request.requestId)
+                .build()
+            val nextServerExchange = serverExchange.mutate().request(serverHttpRequest).build()
+            chain.filter(nextServerExchange)
         }
     }
 

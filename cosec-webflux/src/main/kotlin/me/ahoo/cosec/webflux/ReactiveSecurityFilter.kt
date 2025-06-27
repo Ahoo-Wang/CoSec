@@ -16,6 +16,7 @@ package me.ahoo.cosec.webflux
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_KEY
 import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextParser
@@ -45,7 +46,7 @@ abstract class ReactiveSecurityFilter(
 
     fun filterInternal(
         exchange: ServerWebExchange,
-        chain: (ServerWebExchange) -> Mono<Void>
+        chain: (ServerWebExchange, Request) -> Mono<Void>
     ): Mono<Void> {
         val request = requestParser.parse(exchange)
         var tokenVerificationException: TokenVerificationException? = null
@@ -64,14 +65,10 @@ abstract class ReactiveSecurityFilter(
         return authorization.authorize(request, securityContext)
             .flatMap { authorizeResult ->
                 if (authorizeResult.authorized) {
-                    val request = exchange.request.mutate()
-                        .header(REQUEST_ID_KEY, request.requestId)
-                        .build()
                     exchange.mutate()
-                        .request(request)
                         .principal(securityContext.principal.toMono())
                         .build().let {
-                            return@flatMap chain(it).writeSecurityContext(securityContext)
+                            return@flatMap chain(it, request).writeSecurityContext(securityContext)
                         }
                 }
                 val principal = securityContext.principal
