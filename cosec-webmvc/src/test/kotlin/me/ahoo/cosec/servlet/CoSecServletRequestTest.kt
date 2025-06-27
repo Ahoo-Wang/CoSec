@@ -35,6 +35,7 @@ class CoSecServletRequestTest {
             remoteIp = "remoteIp",
             origin = URI.create("http://origin"),
             referer = URI.create("http://referer"),
+            requestId = "requestId"
         ).withAttributes(emptyMap())
         request.toString().assert().isEqualTo(
             "CoSecServletRequest(path='path', method='method', remoteIp='remoteIp', origin='http://origin', referer='http://referer')"

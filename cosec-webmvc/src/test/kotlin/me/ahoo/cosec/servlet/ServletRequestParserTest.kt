@@ -16,6 +16,7 @@ package me.ahoo.cosec.servlet
 import io.mockk.every
 import io.mockk.mockk
 import jakarta.servlet.http.HttpServletRequest
+import me.ahoo.cosec.api.context.request.RequestIdCapable
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
@@ -32,6 +33,7 @@ internal class ServletRequestParserTest {
             every { remoteHost } returns "remoteHost"
             every { getHeader(HttpHeaders.ORIGIN) } returns "ORIGIN"
             every { getHeader(HttpHeaders.REFERER) } returns "REFERER"
+            every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns "requestId"
         }
         val request = servletRequestParser.parse(servletRequest)
         assertThat(request.path, equalTo("/path"))

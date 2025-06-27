@@ -61,9 +61,15 @@ class CoSecRequestParserAutoConfiguration {
         @ConditionalOnMissingBean(name = [SERVLET_REQUEST_PARSER_BEAN_NAME])
         fun servletRequestParser(
             servletRemoteIpResolver: RemoteIpResolver<HttpServletRequest>,
-            requestAttributesAppenderObjectProvider: ObjectProvider<RequestAttributesAppender>
+            requestAttributesAppenderObjectProvider: ObjectProvider<RequestAttributesAppender>,
+            idGeneratorObjectProvider: ObjectProvider<IdGenerator>
         ): RequestParser<HttpServletRequest> {
-            return ServletRequestParser(servletRemoteIpResolver, requestAttributesAppenderObjectProvider.toList())
+            val idGenerator = idGeneratorObjectProvider.getIfAvailable { UuidGenerator.INSTANCE }
+            return ServletRequestParser(
+                remoteIPResolver = servletRemoteIpResolver,
+                requestAttributesAppends = requestAttributesAppenderObjectProvider.toList(),
+                idGenerator = idGenerator
+            )
         }
     }
 
@@ -81,8 +87,8 @@ class CoSecRequestParserAutoConfiguration {
         @ConditionalOnMissingBean(name = [REACTIVE_REQUEST_PARSER_BEAN_NAME])
         fun reactiveRequestParser(
             reactiveRemoteIpResolver: RemoteIpResolver<ServerWebExchange>,
-            idGeneratorObjectProvider: ObjectProvider<IdGenerator>,
-            requestAttributesAppenderObjectProvider: ObjectProvider<RequestAttributesAppender>
+            requestAttributesAppenderObjectProvider: ObjectProvider<RequestAttributesAppender>,
+            idGeneratorObjectProvider: ObjectProvider<IdGenerator>
         ): RequestParser<ServerWebExchange> {
             val idGenerator = idGeneratorObjectProvider.getIfAvailable { UuidGenerator.INSTANCE }
             return ReactiveRequestParser(
