@@ -55,7 +55,7 @@ abstract class AbstractAuthorizationInterceptor(
         securityContext.setRequest(request)
         SecurityContextHolder.setContext(securityContext)
         servletRequest.setSecurityContext(securityContext)
-        servletResponse.addHeader(REQUEST_ID_KEY, request.requestId)
+        servletResponse.setHeader(REQUEST_ID_KEY, request.requestId)
         return authorization.authorize(request, securityContext)
             .map {
                 if (!it.authorized) {

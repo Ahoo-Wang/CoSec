@@ -20,6 +20,7 @@ import io.mockk.runs
 import io.mockk.verify
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.request.RequestIdCapable
 import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
 import me.ahoo.cosec.jwt.InjectSecurityContextParser
 import me.ahoo.cosec.webflux.ReactiveRemoteIpResolver
@@ -50,6 +51,8 @@ class AuthorizationGatewayFilterTest {
         )
         assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE + 10))
         val exchange = mockk<ServerWebExchange> {
+            every { request.headers.getFirst(RequestIdCapable.REQUEST_ID_KEY) } returns null
+            every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
             every { request.headers.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.queryParams.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.headers.origin } returns "origin"
