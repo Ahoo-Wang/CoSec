@@ -21,6 +21,7 @@ import io.mockk.runs
 import io.mockk.verify
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.request.RequestIdCapable
 import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.jwt.InjectSecurityContextParser
@@ -64,6 +65,8 @@ internal class ReactiveAuthorizationFilterTest {
         )
         assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE + 10))
         val exchange = mockk<ServerWebExchange> {
+            every { request.headers.getFirst(RequestIdCapable.REQUEST_ID_KEY) } returns null
+            every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
             every { request.headers.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.queryParams.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.headers.origin } returns "origin"
@@ -103,6 +106,8 @@ internal class ReactiveAuthorizationFilterTest {
             authorization,
         )
         val exchange = mockk<ServerWebExchange> {
+            every { request.headers.getFirst(RequestIdCapable.REQUEST_ID_KEY) } returns null
+            every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
             every { request.headers.origin } returns "origin"
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
@@ -143,6 +148,8 @@ internal class ReactiveAuthorizationFilterTest {
             authorization,
         )
         val exchange = mockk<ServerWebExchange> {
+            every { request.headers.getFirst(RequestIdCapable.REQUEST_ID_KEY) } returns null
+            every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
             every { request.headers.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.queryParams.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.headers.origin } returns "origin"
@@ -187,6 +194,8 @@ internal class ReactiveAuthorizationFilterTest {
         val tokenHeader =
             Jwts.TOKEN_PREFIX + accessToken
         val exchange = mockk<ServerWebExchange> {
+            every { request.headers.getFirst(RequestIdCapable.REQUEST_ID_KEY) } returns null
+            every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
             every { request.headers.getFirst(AUTHORIZATION_HEADER_KEY) } returns tokenHeader
             every { request.headers.origin } returns "origin"
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
@@ -195,6 +204,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.remoteAddress?.hostName } returns "hostName"
             every { response.setStatusCode(HttpStatus.FORBIDDEN) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
+            every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
             every { response.writeWith(any()) } returns Mono.empty()
             every { setSecurityContext(any()) } just runs
@@ -226,6 +236,8 @@ internal class ReactiveAuthorizationFilterTest {
             authorization,
         )
         val exchange = mockk<ServerWebExchange> {
+            every { request.headers.getFirst(RequestIdCapable.REQUEST_ID_KEY) } returns null
+            every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
             every { request.headers.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.queryParams.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.headers.origin } returns "origin"

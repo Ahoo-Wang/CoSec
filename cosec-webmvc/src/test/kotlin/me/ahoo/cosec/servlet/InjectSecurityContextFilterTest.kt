@@ -17,6 +17,7 @@ import io.mockk.every
 import io.mockk.mockk
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
+import me.ahoo.cosec.api.context.request.RequestIdCapable
 import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.jwt.InjectSecurityContextParser
@@ -37,6 +38,7 @@ internal class InjectSecurityContextFilterTest {
             every { servletPath } returns "/path"
             every { method } returns "GET"
             every { remoteHost } returns "remoteHost"
+            every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
             every { getHeader(HttpHeaders.ORIGIN) } returns null
             every { getHeader(HttpHeaders.REFERER) } returns null
@@ -57,6 +59,7 @@ internal class InjectSecurityContextFilterTest {
             every { servletPath } returns "/path"
             every { method } returns "GET"
             every { remoteHost } returns "remoteHost"
+            every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
             every { getHeader(HttpHeaders.ORIGIN) } returns null
             every { getHeader(HttpHeaders.REFERER) } returns null

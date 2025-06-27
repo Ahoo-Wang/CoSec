@@ -23,6 +23,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.request.RequestIdCapable
 import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
@@ -55,16 +56,20 @@ internal class AuthorizationFilterTest {
             every { servletPath } returns "/path"
             every { method } returns "GET"
             every { remoteHost } returns "remoteHost"
+            every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
             every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
             every { getHeader(HttpHeaders.ORIGIN) } returns null
             every { getHeader(HttpHeaders.REFERER) } returns null
             every { setSecurityContext(any()) } returns Unit
         }
+        val servletResponse = mockk<HttpServletResponse> {
+            every { setHeader(RequestIdCapable.REQUEST_ID_KEY, any()) } just runs
+        }
         val filterChain = mockk<FilterChain> {
             every { doFilter(servletRequest, any()) } returns Unit
         }
-        filter.doFilter(servletRequest, mockk<HttpServletResponse>(), filterChain)
+        filter.doFilter(servletRequest, servletResponse, filterChain)
         assertThat(SecurityContextHolder.requiredContext.principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
     }
 
@@ -82,6 +87,7 @@ internal class AuthorizationFilterTest {
             every { servletPath } returns "/path"
             every { method } returns "GET"
             every { remoteHost } returns "remoteHost"
+            every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
             every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
             every { getHeader(HttpHeaders.ORIGIN) } returns "ORIGIN"
@@ -89,6 +95,7 @@ internal class AuthorizationFilterTest {
             every { setSecurityContext(any()) } returns Unit
         }
         val servletResponse = mockk<HttpServletResponse> {
+            every { setHeader(RequestIdCapable.REQUEST_ID_KEY, any()) } just runs
             every { contentType = MediaType.APPLICATION_JSON_VALUE } just runs
             every { status = HttpStatus.UNAUTHORIZED.value() } returns Unit
             every { outputStream.write(any() as ByteArray) } returns Unit
@@ -118,11 +125,13 @@ internal class AuthorizationFilterTest {
             every { servletPath } returns "/path"
             every { method } returns "GET"
             every { remoteHost } returns "remoteHost"
+            every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(HttpHeaders.ORIGIN) } returns "ORIGIN"
             every { getHeader(HttpHeaders.REFERER) } returns "REFERER"
             every { setSecurityContext(any()) } returns Unit
         }
         val servletResponse = mockk<HttpServletResponse> {
+            every { setHeader(RequestIdCapable.REQUEST_ID_KEY, any()) } just runs
             every { contentType = MediaType.APPLICATION_JSON_VALUE } just runs
             every { status = HttpStatus.UNAUTHORIZED.value() } returns Unit
             every { outputStream.write(any() as ByteArray) } returns Unit
@@ -154,6 +163,7 @@ internal class AuthorizationFilterTest {
             every { servletPath } returns "/path"
             every { method } returns "GET"
             every { remoteHost } returns "remoteHost"
+            every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
             every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
             every { getHeader(HttpHeaders.ORIGIN) } returns null
@@ -161,6 +171,7 @@ internal class AuthorizationFilterTest {
             every { setSecurityContext(any()) } returns Unit
         }
         val servletResponse = mockk<HttpServletResponse> {
+            every { setHeader(RequestIdCapable.REQUEST_ID_KEY, any()) } just runs
             every { contentType = MediaType.APPLICATION_JSON_VALUE } just runs
             every { status = HttpStatus.TOO_MANY_REQUESTS.value() } returns Unit
             every { outputStream.write(any() as ByteArray) } returns Unit
