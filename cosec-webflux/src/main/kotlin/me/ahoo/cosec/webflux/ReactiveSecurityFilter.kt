@@ -64,7 +64,11 @@ abstract class ReactiveSecurityFilter(
         return authorization.authorize(request, securityContext)
             .flatMap { authorizeResult ->
                 if (authorizeResult.authorized) {
+                    val request = exchange.request.mutate()
+                        .header(REQUEST_ID_KEY, request.requestId)
+                        .build()
                     exchange.mutate()
+                        .request(request)
                         .principal(securityContext.principal.toMono())
                         .build().let {
                             return@flatMap chain(it).writeSecurityContext(securityContext)
