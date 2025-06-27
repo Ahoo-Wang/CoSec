@@ -119,6 +119,7 @@ class TracingAuthorizationTest {
         val request = mockk<Request> {
             every { appId } returns "appId"
             every { deviceId } returns "deviceId"
+            every { requestId } returns "requestId"
         }
         val verifyContext = mockk<RoleVerifyContext> {
             every { roleId } returns "roleId"
