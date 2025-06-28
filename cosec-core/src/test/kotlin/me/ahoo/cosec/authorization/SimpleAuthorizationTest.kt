@@ -21,6 +21,7 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.AppRolePermissionData
@@ -49,6 +50,28 @@ internal class SimpleAuthorizationTest {
         authorization.authorize(request, securityContext)
             .test()
             .expectNext(AuthorizeResult.ALLOW)
+            .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenBlacklistChecker() {
+        val policyRepository = mockk<PolicyRepository>()
+        val permissionRepository = mockk<AppRolePermissionRepository>()
+        val blacklistChecker = mockk<BlacklistChecker> {
+            every { check(any(), any()) } returns Mono.just(false)
+        }
+        val authorization = SimpleAuthorization(
+            policyRepository = policyRepository,
+            appRolePermissionRepository = permissionRepository,
+            blacklistChecker = blacklistChecker
+        )
+        val request = mockk<Request>()
+        val securityContext = mockk<SecurityContext> {
+            every { principal.id } returns CoSecPrincipal.ANONYMOUS_ID
+        }
+        authorization.authorize(request, securityContext)
+            .test()
+            .expectNext(AuthorizeResult.EXPLICIT_DENY)
             .verifyComplete()
     }
 

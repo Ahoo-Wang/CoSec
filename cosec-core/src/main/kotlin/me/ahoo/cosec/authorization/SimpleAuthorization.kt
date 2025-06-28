@@ -217,7 +217,7 @@ class SimpleAuthorization(
                     log.debug {
                         "Request [$request] is blocked by the blacklist."
                     }
-                    return@flatMap AuthorizeResult.IMPLICIT_DENY.toMono()
+                    return@flatMap AuthorizeResult.EXPLICIT_DENY.toMono()
                 }
                 verify(request, context)
             }
