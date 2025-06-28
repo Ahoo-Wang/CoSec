@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.SimpleAuthorization
+import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.context.DefaultSecurityContextParser
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
@@ -87,11 +88,22 @@ class CoSecAuthorizationAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    fun blacklistChecker(): BlacklistChecker {
+        return BlacklistChecker.NoOp
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     fun cosecAuthorization(
         policyRepository: PolicyRepository,
-        appRolePermissionRepository: AppRolePermissionRepository
+        appRolePermissionRepository: AppRolePermissionRepository,
+        blacklistChecker: BlacklistChecker
     ): Authorization {
-        return SimpleAuthorization(policyRepository, appRolePermissionRepository)
+        return SimpleAuthorization(
+            policyRepository = policyRepository,
+            appRolePermissionRepository = appRolePermissionRepository,
+            blacklistChecker = blacklistChecker
+        )
     }
 
     @Configuration

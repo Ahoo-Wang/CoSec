@@ -15,6 +15,7 @@ package me.ahoo.cosec.spring.boot.starter.authorization
 
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.context.DefaultSecurityContextParser
 import me.ahoo.cosec.policy.LocalPolicyInitializer
 import me.ahoo.cosec.policy.LocalPolicyLoader
@@ -63,6 +64,7 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                     .hasSingleBean(LocalPolicyLoader::class.java)
                     .hasSingleBean(LocalPolicyInitializer::class.java)
                     .hasSingleBean(DefaultSecurityContextParser::class.java)
+                    .hasSingleBean(BlacklistChecker::class.java)
                     .hasSingleBean(Authorization::class.java)
                     .hasSingleBean(AuthorizationFilter::class.java)
             }
