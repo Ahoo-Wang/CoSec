@@ -61,7 +61,7 @@ abstract class ReactiveSecurityFilter(
         }
         securityContext.setRequest(request)
         exchange.setSecurityContext(securityContext)
-        exchange.response.headers.set(REQUEST_ID_KEY, request.requestId)
+        exchange.response.headers.trySet(REQUEST_ID_KEY, request.requestId)
         return authorization.authorize(request, securityContext)
             .flatMap { authorizeResult ->
                 if (authorizeResult.authorized) {
