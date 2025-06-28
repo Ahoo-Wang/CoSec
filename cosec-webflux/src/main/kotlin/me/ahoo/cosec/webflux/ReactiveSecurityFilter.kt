@@ -17,6 +17,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_KEY
 import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
@@ -60,6 +61,7 @@ abstract class ReactiveSecurityFilter(
         }
         securityContext.setRequest(request)
         exchange.setSecurityContext(securityContext)
+        exchange.response.headers.set(REQUEST_ID_KEY, request.requestId)
         return authorization.authorize(request, securityContext)
             .flatMap { authorizeResult ->
                 if (authorizeResult.authorized) {
