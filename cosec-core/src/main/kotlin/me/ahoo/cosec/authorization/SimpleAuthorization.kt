@@ -25,6 +25,7 @@ import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.CoSecPrincipal.Companion.isRoot
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
+import me.ahoo.cosec.blacklist.BlacklistChecker
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.switchIfEmpty
 import reactor.kotlin.core.publisher.toMono
@@ -36,7 +37,8 @@ import reactor.kotlin.core.publisher.toMono
  */
 class SimpleAuthorization(
     private val policyRepository: PolicyRepository,
-    private val appRolePermissionRepository: AppRolePermissionRepository
+    private val appRolePermissionRepository: AppRolePermissionRepository,
+    private val blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp
 ) : Authorization {
     companion object {
         private val log = KotlinLogging.logger {}
@@ -185,12 +187,7 @@ class SimpleAuthorization(
             }
     }
 
-    override fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
-        val verifyResult = verifyRoot(context)
-        if (verifyResult == VerifyResult.ALLOW) {
-            return AuthorizeResult.ALLOW.toMono()
-        }
-
+    private fun verify(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
         return verifyGlobalPolicies(request, context)
             .switchIfEmpty {
                 verifyPrincipalPolicies(request, context)
@@ -206,6 +203,23 @@ class SimpleAuthorization(
                     "Verify [$request] [$context] No policies matched - [Implicit Deny]."
                 }
                 AuthorizeResult.IMPLICIT_DENY.toMono()
+            }
+    }
+
+    override fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
+        val verifyResult = verifyRoot(context)
+        if (verifyResult == VerifyResult.ALLOW) {
+            return AuthorizeResult.ALLOW.toMono()
+        }
+        return blacklistChecker.check(request, context)
+            .flatMap { allowed ->
+                if (!allowed) {
+                    log.debug {
+                        "Request [$request] is blocked by the blacklist."
+                    }
+                    return@flatMap AuthorizeResult.IMPLICIT_DENY.toMono()
+                }
+                verify(request, context)
             }
     }
 }
