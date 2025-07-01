@@ -23,6 +23,7 @@ data class AppPermissionData(
     override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
     override val groups: List<PermissionGroup> = listOf()
 ) : AppPermission {
+    @delegate:Transient
     override val permissionIndexer: Map<String, me.ahoo.cosec.api.permission.Permission> by lazy(this) {
         super.permissionIndexer
     }

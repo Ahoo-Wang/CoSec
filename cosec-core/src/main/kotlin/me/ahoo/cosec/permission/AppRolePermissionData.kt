@@ -22,6 +22,7 @@ data class AppRolePermissionData(
     override val appPermission: AppPermission,
     override val rolePermissions: List<RolePermission>
 ) : AppRolePermission {
+    @delegate:Transient
     override val rolePermissionIndexer: Map<String, List<Permission>> by lazy(this) {
         super.rolePermissionIndexer
     }
