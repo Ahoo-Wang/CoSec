@@ -11,10 +11,11 @@ spring:
           globalcors:
             cors-configurations:
               '[/**]':
-                allowedOrigins: "*"
-                allowedMethods: "*"
-                allowedHeaders: "*"
-                maxAge: 1800000
+                allowed-origins: "*"
+                allowed-methods: "*"
+                allowed-headers: "*"
+                exposed-headers: "*"
+                max-age: 1800000
           default-filters:
             - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
           routes:

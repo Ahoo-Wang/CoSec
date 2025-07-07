@@ -10,11 +10,6 @@ data:
       application:
         name: ${service.name:cosec-gateway}
   application.yaml: |-
-    management:
-      endpoint:
-        health:
-          show-details: always
-
     server:
       port: 8080
       error:
@@ -23,48 +18,43 @@ data:
     spring:
       cloud:
         gateway:
-          httpclient:
-            pool:
-              max-idle-time: 60S
-          globalcors:
-            corsConfigurations:
-              '[/**]':
-                allowedOrigins: "*"
-                allowedMethods: "*"
-                allowedHeaders: "*"
-                maxAge: 1800000
-          default-filters:
-            - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
-          routes:
-            - id: iam-service
-              uri: http://iam-service
-              predicates:
-                - Path=/iam/**
-              filters:
-                - StripPrefix=1
-
-
-    cosid:
-      namespace: ${spring.application.name}
-      machine:
-        enabled: true
-        distributor:
-          type: redis
-      generator:
-        enabled: true
-        namespace: saas
-
+          server:
+            webflux:
+              globalcors:
+                cors-configurations:
+                  '[/**]':
+                    allowed-origins: "*"
+                    allowed-methods: "*"
+                    allowed-headers: "*"
+                    exposed-headers: "*"
+                    max-age: 1800000
+              default-filters:
+                - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+              routes:
+                - id: cosec-auth
+                  uri: lb://cosec-auth
+                  predicates:
+                    - Path=/cosec-auth/**
+                  filters:
+                    - StripPrefix=1
     cosec:
       authentication:
         enabled: false
       jwt:
         algorithm: hmac256
-        secret: ouoD7zTMwBqY5d5BKowOKz9__Q6z9__Q
+        secret: FyN0Igd80Gas8stTavArGKOYnS9uLWGA_
       ip2region:
         enabled: false
       authorization:
+        local-policy:
+          enabled: true
+          init-repository: true
         cache:
-          key-prefix: saas
+          policy:
+            maximum-size: 100000
+          role:
+            maximum-size: 100000
+
     logging:
       level:
         root: info
