@@ -37,6 +37,10 @@ data class ReactiveRequest(
         return delegate.request.queryParams.getFirst(key).orEmpty()
     }
 
+    override fun getCookieValue(key: String): String {
+        return delegate.request.cookies.getFirst(key)?.value.orEmpty()
+    }
+
     override fun withAttributes(attributes: Map<String, String>): Request = copy(attributes = attributes)
 
     override fun toString(): String {

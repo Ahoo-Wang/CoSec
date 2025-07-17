@@ -61,6 +61,7 @@ data class EvaluateRequest(
     override val attributes: Map<String, String> = mapOf(),
     private val headers: Map<String, String> = mapOf(),
     private val queries: Map<String, String> = mapOf(),
+    private val cookies: Map<String, String> = mapOf(),
 ) : Request {
 
     override fun getHeader(key: String): String {
@@ -69,6 +70,10 @@ data class EvaluateRequest(
 
     override fun getQuery(key: String): String {
         return queries[key].orEmpty()
+    }
+
+    override fun getCookieValue(key: String): String {
+        return cookies[key].orEmpty()
     }
 
     override fun withAttributes(attributes: Map<String, String>): Request {

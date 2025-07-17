@@ -24,11 +24,11 @@ import me.ahoo.cosec.token.SimpleAccessToken
  */
 open class DefaultSecurityContextParser(private val principalConverter: PrincipalConverter) : SecurityContextParser {
     private fun getAuthorization(request: Request): String {
-        val authorization = request.getHeader(AUTHORIZATION_HEADER_KEY)
-        if (authorization.isNotBlank()) {
-            return authorization
+        return request.getHeader(AUTHORIZATION_HEADER_KEY).ifBlank {
+            request.getQuery(AUTHORIZATION_HEADER_KEY)
+        }.ifBlank {
+            request.getCookieValue(AUTHORIZATION_HEADER_KEY)
         }
-        return request.getQuery(AUTHORIZATION_HEADER_KEY)
     }
 
     override fun parse(request: Request): SecurityContext {
