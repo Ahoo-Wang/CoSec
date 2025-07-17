@@ -31,8 +31,13 @@ data class CoSecServletRequest(
     override fun getHeader(key: String): String {
         return delegate.getHeader(key).orEmpty()
     }
+
     override fun getQuery(key: String): String {
         return delegate.getParameter(key).orEmpty()
+    }
+
+    override fun getCookieValue(key: String): String {
+        return delegate.cookies?.firstOrNull { it.name == key }?.value.orEmpty()
     }
 
     override fun withAttributes(attributes: Map<String, String>): Request = copy(attributes = attributes)

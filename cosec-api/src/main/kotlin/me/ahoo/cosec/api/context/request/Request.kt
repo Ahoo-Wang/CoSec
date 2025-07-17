@@ -40,4 +40,5 @@ interface Request : Attributes<Request, String, String>, AppIdCapable, DeviceIdC
     val referer: URI
     fun getHeader(key: String): String
     fun getQuery(key: String): String
+    fun getCookieValue(key: String): String
 }
