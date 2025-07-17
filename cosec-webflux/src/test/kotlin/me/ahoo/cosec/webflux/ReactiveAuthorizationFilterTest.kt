@@ -144,6 +144,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
             every { request.headers.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.queryParams.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
+            every { request.cookies.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.headers.origin } returns "origin"
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
@@ -232,6 +233,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
             every { request.headers.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.queryParams.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
+            every { request.cookies.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.headers.origin } returns "origin"
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
