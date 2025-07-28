@@ -17,6 +17,7 @@ import me.ahoo.cosec.policy.SpelExpression.Companion.asSpelTemplateExpression
 import me.ahoo.cosec.policy.SpelExpression.Companion.isSpelTemplate
 import org.springframework.expression.ParserContext.TEMPLATE_EXPRESSION
 import org.springframework.expression.spel.standard.SpelExpressionParser
+import org.springframework.expression.spel.support.SimpleEvaluationContext
 
 fun interface Expression<RESULT> {
     fun getValue(root: Any): RESULT?
@@ -34,7 +35,8 @@ class SpelExpression<RESULT>(
 ) :
     Expression<RESULT> {
     override fun getValue(root: Any): RESULT? {
-        return expression.getValue(root, resultType)
+        val context = SimpleEvaluationContext.forReadOnlyDataBinding().withRootObject(root).build()
+        return expression.getValue(context, resultType)
     }
 
     companion object {
