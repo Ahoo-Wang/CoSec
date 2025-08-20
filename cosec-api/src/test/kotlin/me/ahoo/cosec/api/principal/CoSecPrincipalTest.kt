@@ -34,8 +34,8 @@ class CoSecPrincipalTest {
             override val roles: Set<String>
                 get() = throw UnsupportedOperationException()
         }
-        assertThat(anonymous.anonymous(), equalTo(true))
-        assertThat(anonymous.authenticated(), equalTo(false))
+        assertThat(anonymous.anonymous, equalTo(true))
+        assertThat(anonymous.authenticated, equalTo(false))
         assertThat(anonymous.id, equalTo(ANONYMOUS_ID))
         assertThat(anonymous.name, equalTo(ANONYMOUS_ID))
     }
@@ -54,7 +54,7 @@ class CoSecPrincipalTest {
             override val roles: Set<String>
                 get() = throw UnsupportedOperationException()
         }
-        assertThat(authenticated.authenticated(), equalTo(true))
-        assertThat(authenticated.anonymous(), equalTo(false))
+        assertThat(authenticated.authenticated, equalTo(true))
+        assertThat(authenticated.anonymous, equalTo(false))
     }
 }

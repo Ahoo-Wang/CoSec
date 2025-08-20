@@ -38,7 +38,7 @@ class DefaultSecurityContextParserTest {
         val securityContextParser = DefaultSecurityContextParser(mockk())
         val securityContext = securityContextParser.ensureParse(request)
         securityContext.assert().isNotNull()
-        securityContext.principal.anonymous().assert().isTrue()
+        securityContext.principal.anonymous.assert().isTrue()
         verify {
             request.getHeader(AUTHORIZATION_HEADER_KEY)
             request.getQuery(AUTHORIZATION_HEADER_KEY)
@@ -72,7 +72,7 @@ class DefaultSecurityContextParserTest {
         val securityContextParser = DefaultSecurityContextParser(mockk())
         val securityContext = securityContextParser.ensureParse(request)
         securityContext.assert().isNotNull()
-        securityContext.principal.anonymous().assert().isTrue()
+        securityContext.principal.anonymous.assert().isTrue()
         verify {
             request.getHeader(AUTHORIZATION_HEADER_KEY)
         }

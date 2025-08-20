@@ -23,7 +23,7 @@ import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 class AuthenticatedConditionMatcher(configuration: Configuration) :
     AbstractConditionMatcher(AuthenticatedConditionMatcherFactory.TYPE, configuration) {
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        return securityContext.principal.authenticated()
+        return securityContext.principal.authenticated
     }
 }
 

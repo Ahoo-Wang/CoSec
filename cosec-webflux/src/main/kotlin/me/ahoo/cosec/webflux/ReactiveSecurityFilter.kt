@@ -72,7 +72,7 @@ abstract class ReactiveSecurityFilter(
                         }
                 }
                 val principal = securityContext.principal
-                if (!principal.authenticated()) {
+                if (!principal.authenticated) {
                     exchange.response.statusCode = HttpStatus.UNAUTHORIZED
                 } else {
                     exchange.response.statusCode = HttpStatus.FORBIDDEN
