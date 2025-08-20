@@ -33,13 +33,11 @@ interface CoSecPrincipal : Principal, PolicyCapable, RoleCapable {
     }
 
     val attributes: Map<String, Any>
-    fun anonymous(): Boolean {
-        return ANONYMOUS_ID == id
-    }
+    val anonymous: Boolean
+        get() = ANONYMOUS_ID == id
 
-    fun authenticated(): Boolean {
-        return !anonymous()
-    }
+    val authenticated: Boolean
+        get() = !anonymous
 
     companion object {
 

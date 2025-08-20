@@ -59,7 +59,7 @@ abstract class AbstractAuthorizationInterceptor(
         return authorization.authorize(request, securityContext)
             .map {
                 if (!it.authorized) {
-                    if (!securityContext.principal.authenticated()) {
+                    if (!securityContext.principal.authenticated) {
                         servletResponse.status = HttpStatus.UNAUTHORIZED.value()
                     } else {
                         servletResponse.status = HttpStatus.FORBIDDEN.value()

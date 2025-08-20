@@ -108,11 +108,11 @@ class BoolConditionMatcherTest {
         assertThat(conditionMatcher, instanceOf(BoolConditionMatcher::class.java))
         val developerId = "developerId"
         val matchedContext: SecurityContext = mockk {
-            every { principal.authenticated() } returns true
+            every { principal.authenticated } returns true
             every { principal.id } returns developerId
         }
         val notMatchedContext: SecurityContext = mockk {
-            every { principal.authenticated() } returns true
+            every { principal.authenticated } returns true
             every { principal.id } returns "not-developerId"
         }
         val matchedRequest: Request = mockk {

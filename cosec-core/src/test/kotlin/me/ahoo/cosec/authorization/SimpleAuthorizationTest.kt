@@ -164,7 +164,7 @@ internal class SimpleAuthorizationTest {
             )
         }
         val securityContext = mockk<SecurityContext> {
-            every { principal.authenticated() } returns false
+            every { principal.authenticated } returns false
             every { principal.id } returns ""
             every { principal.policies } returns setOf("principalPolicy")
             every { setAttributeValue(any(), any()) } returns this
@@ -199,7 +199,7 @@ internal class SimpleAuthorizationTest {
             )
         }
         val securityContext = mockk<SecurityContext> {
-            every { principal.authenticated() } returns false
+            every { principal.authenticated } returns false
             every { principal.id } returns ""
             every { principal.policies } returns setOf("principalPolicy")
             every { setAttributeValue(any(), any()) } returns this
@@ -250,7 +250,7 @@ internal class SimpleAuthorizationTest {
         )
 
         val securityContext = mockk<SecurityContext> {
-            every { principal.authenticated() } returns false
+            every { principal.authenticated } returns false
             every { principal.id } returns ""
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy")
@@ -302,7 +302,7 @@ internal class SimpleAuthorizationTest {
             ),
         )
         val securityContext = mockk<SecurityContext> {
-            every { principal.authenticated() } returns false
+            every { principal.authenticated } returns false
             every { principal.id } returns ""
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy")

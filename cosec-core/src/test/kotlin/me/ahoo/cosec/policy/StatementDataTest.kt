@@ -68,7 +68,7 @@ internal class StatementDataTest {
             ),
             condition = SpelConditionMatcherFactory().create(
                 mapOf(
-                    "expression" to "context.principal.authenticated()",
+                    "expression" to "context.principal.authenticated",
                 ).asConfiguration(),
             ),
         )
@@ -78,7 +78,7 @@ internal class StatementDataTest {
         val securityContext = SimpleSecurityContext(
             principal = mockk {
                 every { id } returns "1"
-                every { authenticated() } returns true
+                every { authenticated } returns true
             }
         )
 
@@ -87,7 +87,7 @@ internal class StatementDataTest {
         val securityContextNotMine = mockk<SecurityContext> {
             every { principal } returns mockk {
                 every { id } returns "2"
-                every { authenticated() } returns true
+                every { authenticated } returns true
             }
         }
         assertThat(statementData.verify(request, securityContextNotMine), `is`(VerifyResult.IMPLICIT_DENY))
