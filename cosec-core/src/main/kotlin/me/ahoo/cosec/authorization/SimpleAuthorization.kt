@@ -150,7 +150,7 @@ class SimpleAuthorization(
     }
 
     private fun verifyRoot(context: SecurityContext): VerifyResult {
-        return if (context.principal.isRoot()) {
+        return if (context.principal.isRoot) {
             log.debug {
                 "Verify [$context] matched Root - [Allow]."
             }

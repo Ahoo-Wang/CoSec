@@ -53,8 +53,10 @@ interface CoSecPrincipal : Principal, PolicyCapable, RoleCapable {
          */
         const val ANONYMOUS_ID = CoSec.DEFAULT
 
-        fun CoSecPrincipal.isRoot(): Boolean {
-            return ROOT_ID == id
-        }
+        /**
+         * 是否是根账号
+         */
+        val CoSecPrincipal.isRoot: Boolean
+            get() = ROOT_ID == id
     }
 }
