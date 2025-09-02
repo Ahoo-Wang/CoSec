@@ -16,6 +16,7 @@ package me.ahoo.cosec.servlet
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.Delegated
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.context.request.format
 import java.net.URI
 
 data class CoSecServletRequest(
@@ -43,6 +44,6 @@ data class CoSecServletRequest(
     override fun withAttributes(attributes: Map<String, String>): Request = copy(attributes = attributes)
 
     override fun toString(): String {
-        return "CoSecServletRequest(path='$path', method='$method', remoteIp='$remoteIp', origin='$origin', referer='$referer')"
+        return this.format()
     }
 }

@@ -16,6 +16,7 @@ package me.ahoo.cosec.servlet
 import io.mockk.every
 import io.mockk.mockk
 import jakarta.servlet.http.HttpServletRequest
+import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.net.URI
@@ -27,6 +28,8 @@ class CoSecServletRequestTest {
             every { getHeader("key") } returns "value"
             every { getHeader("not-exists") } returns null
             every { getParameter("key") } returns "value"
+            every { getHeader(AppIdCapable.APP_ID_KEY) } returns null
+            every { getParameter(AppIdCapable.APP_ID_KEY) } returns "appId"
         }
         val request = CoSecServletRequest(
             delegate = delegate,
@@ -38,7 +41,7 @@ class CoSecServletRequestTest {
             requestId = "requestId"
         ).withAttributes(emptyMap())
         request.toString().assert().isEqualTo(
-            "CoSecServletRequest(path='path', method='method', remoteIp='remoteIp', origin='http://origin', referer='http://referer')"
+            "Request([appId]:[remoteIp] - requestId [method path] [http://origin] [http://referer])"
         )
         request.getHeader("key").assert().isEqualTo("value")
         request.getQuery("key").assert().isEqualTo("value")

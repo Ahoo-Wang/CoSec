@@ -15,6 +15,7 @@ package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.Delegated
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.context.request.format
 import org.springframework.web.server.ServerWebExchange
 import java.net.URI
 
@@ -44,6 +45,6 @@ data class ReactiveRequest(
     override fun withAttributes(attributes: Map<String, String>): Request = copy(attributes = attributes)
 
     override fun toString(): String {
-        return "ReactiveRequest(path='$path', method='$method', remoteIp='$remoteIp', origin='$origin', referer='$referer')"
+        return this.format()
     }
 }
