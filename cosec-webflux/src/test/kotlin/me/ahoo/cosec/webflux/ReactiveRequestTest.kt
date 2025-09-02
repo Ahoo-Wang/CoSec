@@ -38,7 +38,7 @@ class ReactiveRequestTest {
         ).withAttributes(emptyMap())
         request.toString().assert()
             .isEqualTo(
-                "ReactiveRequest(path='path', method='method', remoteIp='remoteIp', origin='http://origin', referer='http://referer')"
+                "Request([]:[remoteIp] - requestId [method path] [http://origin] [http://referer])"
             )
         request.appId.assert().isEmpty()
         request.deviceId.assert().isEmpty()
