@@ -24,6 +24,7 @@ import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.policy.action.ActionMatcherFactoryProvider
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.action.AllActionMatcherFactory
+import me.ahoo.cosec.policy.action.CompositeActionMatcherFactory
 import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 
 object JsonActionMatcherSerializer : StdSerializer<ActionMatcher>(ActionMatcher::class.java) {
@@ -44,12 +45,15 @@ object JsonActionMatcherDeserializer : StdDeserializer<ActionMatcher>(ActionMatc
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): ActionMatcher {
         val actionConfiguration = p.codec.readValue(p, JsonConfiguration::class.java)
 
-        if (actionConfiguration.isString && actionConfiguration.asString() == AllActionMatcherFactory.ALL) {
-            return AllActionMatcher.INSTANCE
+        if (actionConfiguration.isString) {
+            if (actionConfiguration.asString() == AllActionMatcherFactory.ALL) {
+                return AllActionMatcher.INSTANCE
+            }
+            return PathActionMatcherFactory.INSTANCE.create(actionConfiguration)
         }
 
-        if (actionConfiguration.isString || actionConfiguration.isArray) {
-            return PathActionMatcherFactory.INSTANCE.create(actionConfiguration)
+        if (actionConfiguration.isArray) {
+            return CompositeActionMatcherFactory.INSTANCE.create(actionConfiguration)
         }
 
         require(actionConfiguration.isObject)
