@@ -29,9 +29,7 @@ import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 
 object JsonActionMatcherSerializer : StdSerializer<ActionMatcher>(ActionMatcher::class.java) {
     override fun serialize(value: ActionMatcher, gen: JsonGenerator, provider: SerializerProvider) {
-        if (value.type == PathActionMatcherFactory.TYPE &&
-            (value.configuration.isString || value.configuration.isArray)
-        ) {
+        if (value.configuration.isString || value.configuration.isArray) {
             gen.writePOJO(value.configuration)
             return
         }
