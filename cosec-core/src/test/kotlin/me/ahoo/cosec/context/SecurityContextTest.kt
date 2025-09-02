@@ -15,6 +15,8 @@ package me.ahoo.cosec.context
 
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -22,7 +24,7 @@ import org.junit.jupiter.api.Test
 internal class SecurityContextTest {
 
     @Test
-    fun test() {
+    fun testAnonymous() {
         val context: SecurityContext = SimpleSecurityContext(SimplePrincipal.ANONYMOUS)
         context.setAttributeValue("key", "value")
         context.getRequiredAttributeValue<String>("key").assert().isEqualTo("value")
@@ -31,5 +33,19 @@ internal class SecurityContextTest {
         assertThrownBy<IllegalArgumentException> {
             context.getRequiredAttributeValue("not-exists")
         }
+        context.toString().assert().isEqualTo("Context([Anonymous])")
+    }
+
+    @Test
+    fun testDefaultTenant() {
+        val context: SecurityContext = SimpleSecurityContext(SimplePrincipal("test"))
+        context.toString().assert().isEqualTo("Context([test])")
+    }
+
+    @Test
+    fun testTenant() {
+        val context: SecurityContext =
+            SimpleSecurityContext(SimpleTenantPrincipal(SimplePrincipal("test"), SimpleTenant("test")))
+        context.toString().assert().isEqualTo("Context([test]@[test])")
     }
 }

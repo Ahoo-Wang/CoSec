@@ -39,7 +39,13 @@ class SimpleSecurityContext(
     }
 
     override fun toString(): String {
-        return "SimpleSecurityContext(principal.id=${principal.id}, tenantId=${tenant.tenantId})"
+        if (principal.anonymous) {
+            return "Context([Anonymous])"
+        }
+        if (tenant.isDefaultTenant) {
+            return "Context([${principal.id}])"
+        }
+        return "Context([${principal.id}]@[${tenant.tenantId}])"
     }
 }
 
