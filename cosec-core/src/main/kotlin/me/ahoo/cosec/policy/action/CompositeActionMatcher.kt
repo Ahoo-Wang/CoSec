@@ -34,6 +34,7 @@ class CompositeActionMatcher(
 class CompositeActionMatcherFactory : ActionMatcherFactory {
     companion object {
         const val TYPE = "composite"
+        val INSTANCE = CompositeActionMatcherFactory()
     }
 
     override val type: String
