@@ -253,6 +253,39 @@
           "value": "#{principal.id}"
         }
       }
+    },
+    {
+      "name": "compositeAction",
+      "action": {
+        "composite": [
+          {
+            "path": {
+              "pattern": "/user/#{principal.id}/*"
+            }
+          },
+          {
+            "path": {
+              "pattern": "/user/#{principal.id}/order/*"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "arrayAction",
+      "action": [
+        "/user/#{principal.id}/*",
+        {
+          "path": {
+            "pattern": "/user/#{principal.id}/*"
+          }
+        },
+        {
+          "path": {
+            "pattern": "/user/#{principal.id}/order/*"
+          }
+        }
+      ]
     }
   ]
 }
