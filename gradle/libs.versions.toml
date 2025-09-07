@@ -13,7 +13,7 @@ java-jwt = "4.5.0"
 ip2region = "2.7.0"
 justAuth = "1.16.7"
 swagger = "2.2.36"
-springdoc = "2.8.12"
+springdoc = "2.8.13"
 # testing
 junit = "5.13.4"
 fluent-assert = "0.2.1"
