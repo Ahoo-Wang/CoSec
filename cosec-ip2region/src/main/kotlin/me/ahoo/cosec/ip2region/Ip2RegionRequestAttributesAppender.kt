@@ -17,11 +17,13 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.context.request.RequestAttributesAppender
 import org.lionsoul.ip2region.xdb.Searcher
+import org.lionsoul.ip2region.xdb.Version
 import java.io.File
 
 const val REQUEST_ATTRIBUTES_IP_REGION_KEY = "ipRegion"
 
-class Ip2RegionRequestAttributesAppender(ip2regionFile: File = LOCAL_IP2REGION_FILE) : RequestAttributesAppender {
+class Ip2RegionRequestAttributesAppender(ip2regionFile: File = LOCAL_IP2REGION_FILE, version: Version = Version.IPv4) :
+    RequestAttributesAppender {
     companion object {
         private val log = KotlinLogging.logger {}
         private val LOCAL_IP2REGION_FILE: File = Ip2RegionRequestAttributesAppender::class.java
@@ -32,7 +34,7 @@ class Ip2RegionRequestAttributesAppender(ip2regionFile: File = LOCAL_IP2REGION_F
 
     private val searcher: Searcher by lazy {
         val dbBuffer = Searcher.loadContentFromFile(ip2regionFile.path)
-        Searcher.newWithBuffer(dbBuffer)
+        Searcher.newWithBuffer(version, dbBuffer)
     }
 
     override fun append(request: Request): Request {

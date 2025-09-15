@@ -41,10 +41,12 @@ class Ip2RegionRequestAttributesAppenderTest {
     fun appendWrongIp() {
         val request: Request = mockk {
             every { remoteIp } returns "localhost"
+            every { mergeAttributes(mapOf(REQUEST_ATTRIBUTES_IP_REGION_KEY to "0|0|0|内网IP|内网IP")) } returns mockk()
         }
         ip2RegionRequestAttributesAppender.append(request)
         verify {
             request.remoteIp
+            request.mergeAttributes(mapOf(REQUEST_ATTRIBUTES_IP_REGION_KEY to "0|0|0|内网IP|内网IP"))
         }
     }
 }
