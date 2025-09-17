@@ -3,6 +3,8 @@ server:
   error:
     whitelabel:
       enabled: false
+  compression:
+    enabled: true
 spring:
   cloud:
     gateway:
