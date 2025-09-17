@@ -5,6 +5,7 @@ server:
       enabled: false
   compression:
     enabled: true
+    min-response-size: 1KB
 spring:
   cloud:
     gateway:
