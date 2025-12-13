@@ -1,9 +1,9 @@
 [versions]
 # libraries
-spring-boot = "3.5.8"
-spring-cloud = "2025.0.0"
-cosid = "2.15.1"
-cocache = "3.10.5"
+spring-boot = "4.0.0"
+spring-cloud = "2025.1.0"
+cosid = "3.0.0"
+cocache = "4.0.0"
 opentelemetry = "2.23.0"
 testcontainers = "2.0.2"
 guava = "33.5.0-jre"
@@ -13,7 +13,7 @@ java-jwt = "4.5.0"
 ip2region = "3.3.1"
 justAuth = "1.16.7"
 swagger = "2.2.41"
-springdoc = "2.8.14"
+springdoc = "3.0.0"
 # testing
 junit = "6.0.1"
 fluent-assert = "0.2.6"

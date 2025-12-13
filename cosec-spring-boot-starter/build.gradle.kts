@@ -57,6 +57,7 @@ dependencies {
     "gatewaySupportImplementation"(project(":cosec-gateway"))
     "oauthSupportImplementation"(project(":cosec-social"))
     "cacheSupportImplementation"(project(":cosec-cocache"))
+    "cacheSupportImplementation"("org.springframework.boot:spring-boot-data-redis")
     "cacheSupportImplementation"("me.ahoo.cocache:cocache-spring-boot-starter")
     "opentelemetrySupportImplementation"(project(":cosec-opentelemetry"))
     "ip2regionSupportImplementation"(project(":cosec-ip2region"))

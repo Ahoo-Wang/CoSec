@@ -54,7 +54,7 @@ class AuthorizationGatewayFilterTest {
         val serverExchange = MockServerWebExchange.builder(serverRequest).build()
         val filterChain = GatewayFilterChain {
             it.getSecurityContext().assert().isNotNull()
-            it.request.headers.contains(RequestIdCapable.REQUEST_ID_KEY).assert().isTrue()
+            it.request.headers.containsHeader(RequestIdCapable.REQUEST_ID_KEY).assert().isTrue()
             Mono.empty()
         }
         filter.filter(serverExchange, filterChain).block()

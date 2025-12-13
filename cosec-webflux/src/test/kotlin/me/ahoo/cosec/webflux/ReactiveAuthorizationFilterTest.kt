@@ -75,7 +75,7 @@ internal class ReactiveAuthorizationFilterTest {
         val serverExchange = MockServerWebExchange.builder(serverRequest).build()
         val filterChain = WebFilterChain {
             it.getSecurityContext().assert().isNotNull()
-            it.request.headers.contains(RequestIdCapable.REQUEST_ID_KEY).assert().isFalse()
+            it.request.headers.containsHeader(RequestIdCapable.REQUEST_ID_KEY).assert().isFalse()
             Mono.empty()
         }
         filter.filter(serverExchange, filterChain).block()

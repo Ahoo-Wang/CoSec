@@ -36,7 +36,7 @@ class SpelExpression<RESULT>(
     Expression<RESULT> {
     override fun getValue(root: Any): RESULT? {
         val context = SimpleEvaluationContext.forReadOnlyDataBinding().withRootObject(root).build()
-        return expression.getValue(context, resultType)
+        return expression.getValue(context, resultType as Class<RESULT & Any>?)
     }
 
     companion object {
