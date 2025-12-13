@@ -13,30 +13,30 @@
 
 package me.ahoo.cosec.serialization
 
-import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.databind.DeserializationContext
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.SerializerProvider
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer
-import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.api.permission.Permission
 import me.ahoo.cosec.api.permission.PermissionGroup
 import me.ahoo.cosec.permission.PermissionGroupData
+import tools.jackson.core.JsonGenerator
+import tools.jackson.core.JsonParser
+import tools.jackson.databind.DeserializationContext
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.SerializationContext
+import tools.jackson.databind.deser.std.StdDeserializer
+import tools.jackson.databind.ser.std.StdSerializer
 
 const val PERMISSION_GROUP_NAME_KEY = "name"
 const val PERMISSION_GROUP_DESCRIPTION_KEY = "description"
 const val PERMISSION_GROUP_PERMISSIONS_KEY = "permissions"
 
 object JsonPermissionGroupSerializer : StdSerializer<PermissionGroup>(PermissionGroup::class.java) {
-    override fun serialize(value: PermissionGroup, gen: JsonGenerator, provider: SerializerProvider) {
+    override fun serialize(value: PermissionGroup, gen: JsonGenerator, provider: SerializationContext) {
         gen.writeStartObject()
-        gen.writeStringField(PERMISSION_GROUP_NAME_KEY, value.name)
-        gen.writeStringField(PERMISSION_GROUP_DESCRIPTION_KEY, value.description)
+        gen.writeStringProperty(PERMISSION_GROUP_NAME_KEY, value.name)
+        gen.writeStringProperty(PERMISSION_GROUP_DESCRIPTION_KEY, value.description)
         if (value.permissions.isNotEmpty()) {
-            gen.writeArrayFieldStart(PERMISSION_GROUP_PERMISSIONS_KEY)
+            gen.writeArrayPropertyStart(PERMISSION_GROUP_PERMISSIONS_KEY)
             value.permissions.forEach {
-                gen.writeObject(it)
+                gen.writePOJO(it)
             }
             gen.writeEndArray()
         }
@@ -46,9 +46,9 @@ object JsonPermissionGroupSerializer : StdSerializer<PermissionGroup>(Permission
 
 object JsonPermissionGroupDeserializer : StdDeserializer<PermissionGroup>(PermissionGroup::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): PermissionGroup {
-        val jsonNode = p.codec.readTree<JsonNode>(p)
+        val jsonNode = p.objectReadContext().readTree<JsonNode>(p)
         val permissions = jsonNode.get(PERMISSION_GROUP_PERMISSIONS_KEY)?.map {
-            it.traverse(p.codec).readValueAs(Permission::class.java)
+            it.traverse(p.objectReadContext()).readValueAs(Permission::class.java)
         }.orEmpty()
         return PermissionGroupData(
             name = requireNotNull(jsonNode.get(PERMISSION_GROUP_NAME_KEY)) {

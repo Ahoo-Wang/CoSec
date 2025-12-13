@@ -13,12 +13,12 @@
 
 package me.ahoo.cosec.serialization
 
-import com.fasterxml.jackson.databind.JsonNode
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.policy.StatementData
+import tools.jackson.databind.JsonNode
 
 object JsonStatementSerializer : AbstractJsonStatementSerializer<Statement>(Statement::class.java)
 

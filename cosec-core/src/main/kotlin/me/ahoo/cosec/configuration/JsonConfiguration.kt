@@ -13,65 +13,59 @@
 
 package me.ahoo.cosec.configuration
 
-import com.fasterxml.jackson.core.ObjectCodec
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.NullNode
-import com.fasterxml.jackson.databind.node.ObjectNode
-import com.fasterxml.jackson.databind.node.TextNode
 import me.ahoo.cosec.Delegated
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.node.NullNode
+import tools.jackson.databind.node.StringNode
 
 class JsonConfiguration(
-    override val delegate: JsonNode,
-    private val objectCodec: ObjectCodec
+    override val delegate: JsonNode
 ) : Configuration,
     Delegated<JsonNode> {
 
     companion object {
         val NULL: JsonConfiguration by lazy {
-            JsonConfiguration(NullNode.getInstance(), CoSecJsonSerializer)
+            JsonConfiguration(
+                NullNode.getInstance()
+            )
         }
 
         fun newPojoConfiguration(): JsonConfiguration {
-            return JsonConfiguration(ObjectNode(CoSecJsonSerializer.nodeFactory), CoSecJsonSerializer)
+            return JsonConfiguration(CoSecJsonSerializer.createObjectNode())
         }
 
         fun Map<String, *>.asConfiguration(): JsonConfiguration {
             val jsonString = CoSecJsonSerializer.writeValueAsString(this)
-            return JsonConfiguration(CoSecJsonSerializer.readTree(jsonString), CoSecJsonSerializer)
+            return JsonConfiguration(CoSecJsonSerializer.readTree(jsonString))
         }
 
         fun String.asConfiguration(): JsonConfiguration {
-            return JsonConfiguration(TextNode(this), CoSecJsonSerializer)
+            return JsonConfiguration(StringNode(this))
         }
     }
 
     override fun get(key: String): Configuration? {
-        return delegate.get(key)?.let { JsonConfiguration(it, objectCodec) }
+        return delegate.get(key)?.let { JsonConfiguration(it) }
     }
 
     override fun asList(): List<Configuration> {
-        return buildList {
-            val elements = delegate.elements()
-            while (elements.hasNext()) {
-                add(JsonConfiguration(elements.next(), objectCodec))
-            }
+        return delegate.map {
+            JsonConfiguration(it)
         }
     }
 
     override fun asMap(): Map<String, Configuration> {
         return buildMap {
-            val fields = delegate.fields()
-            while (fields.hasNext()) {
-                val field = fields.next()
-                put(field.key, JsonConfiguration(field.value, objectCodec))
+            delegate.properties().forEach {
+                put(it.key, JsonConfiguration(it.value))
             }
         }
     }
 
     override fun asString(): String {
-        return delegate.asText()
+        return delegate.asString()
     }
 
     override fun asBoolean(): Boolean {
@@ -91,13 +85,11 @@ class JsonConfiguration(
     }
 
     override fun <T> asObject(objectClass: Class<T>): T {
-        return delegate.traverse(objectCodec).use {
-            it.readValueAs(objectClass)
-        }
+        return CoSecJsonSerializer.treeToValue<T>(delegate, objectClass)
     }
 
     override val isString: Boolean
-        get() = delegate.isTextual
+        get() = delegate.isString
     override val isBoolean: Boolean
         get() = delegate.isBoolean
     override val isInt: Boolean

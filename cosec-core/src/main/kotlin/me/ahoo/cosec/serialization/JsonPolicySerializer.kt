@@ -13,13 +13,6 @@
 
 package me.ahoo.cosec.serialization
 
-import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.databind.DeserializationContext
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.SerializerProvider
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer
-import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
@@ -27,6 +20,13 @@ import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
+import tools.jackson.core.JsonGenerator
+import tools.jackson.core.JsonParser
+import tools.jackson.databind.DeserializationContext
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.SerializationContext
+import tools.jackson.databind.deser.std.StdDeserializer
+import tools.jackson.databind.ser.std.StdSerializer
 
 const val POLICY_ID_KEY = "id"
 const val POLICY_NAME_KEY = "name"
@@ -36,19 +36,19 @@ const val POLICY_TYPE_KEY = "type"
 const val POLICY_STATEMENTS_KEY = "statements"
 
 object JsonPolicySerializer : StdSerializer<Policy>(Policy::class.java) {
-    override fun serialize(value: Policy, gen: JsonGenerator, provider: SerializerProvider) {
+    override fun serialize(value: Policy, gen: JsonGenerator, provider: SerializationContext) {
         gen.writeStartObject()
-        gen.writeStringField(POLICY_ID_KEY, value.id)
-        gen.writeStringField(POLICY_NAME_KEY, value.name)
-        gen.writeStringField(POLICY_CATEGORY_KEY, value.category)
-        gen.writeStringField(POLICY_DESCRIPTION_KEY, value.description)
-        gen.writePOJOField(POLICY_TYPE_KEY, value.type)
-        gen.writeStringField(TENANT_ID_KEY, value.tenantId)
-        gen.writePOJOField(STATEMENT_CONDITION_KEY, value.condition)
+        gen.writeStringProperty(POLICY_ID_KEY, value.id)
+        gen.writeStringProperty(POLICY_NAME_KEY, value.name)
+        gen.writeStringProperty(POLICY_CATEGORY_KEY, value.category)
+        gen.writeStringProperty(POLICY_DESCRIPTION_KEY, value.description)
+        gen.writePOJOProperty(POLICY_TYPE_KEY, value.type)
+        gen.writeStringProperty(TENANT_ID_KEY, value.tenantId)
+        gen.writePOJOProperty(STATEMENT_CONDITION_KEY, value.condition)
         if (value.statements.isNotEmpty()) {
-            gen.writeArrayFieldStart(POLICY_STATEMENTS_KEY)
+            gen.writeArrayPropertyStart(POLICY_STATEMENTS_KEY)
             value.statements.forEach {
-                gen.writeObject(it)
+                gen.writePOJO(it)
             }
             gen.writeEndArray()
         }
@@ -58,12 +58,12 @@ object JsonPolicySerializer : StdSerializer<Policy>(Policy::class.java) {
 
 object JsonPolicyDeserializer : StdDeserializer<Policy>(Policy::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): Policy {
-        val jsonNode = p.codec.readTree<JsonNode>(p)
+        val jsonNode = p.objectReadContext().readTree<JsonNode>(p)
         val condition =
-            jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.codec)?.readValueAs(ConditionMatcher::class.java)
+            jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.objectReadContext())?.readValueAs(ConditionMatcher::class.java)
                 ?: AllConditionMatcher.INSTANCE
         val statements = jsonNode.get(POLICY_STATEMENTS_KEY)?.map {
-            it.traverse(p.codec).readValueAs(Statement::class.java)
+            it.traverse(p.objectReadContext()).readValueAs(Statement::class.java)
         }.orEmpty()
 
         return PolicyData(
@@ -77,7 +77,7 @@ object JsonPolicyDeserializer : StdDeserializer<Policy>(Policy::class.java) {
             description = jsonNode.get(POLICY_DESCRIPTION_KEY)?.asText().orEmpty(),
             type = requireNotNull(jsonNode.get(POLICY_TYPE_KEY)) {
                 "$POLICY_TYPE_KEY is required!"
-            }.traverse(p.codec).readValueAs(PolicyType::class.java),
+            }.traverse(p.objectReadContext()).readValueAs(PolicyType::class.java),
             tenantId = requireNotNull(jsonNode.get(TENANT_ID_KEY)) {
                 "$TENANT_ID_KEY is required!"
             }.asText(),

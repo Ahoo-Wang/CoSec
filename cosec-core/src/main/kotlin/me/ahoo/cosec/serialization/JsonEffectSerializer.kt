@@ -13,22 +13,22 @@
 
 package me.ahoo.cosec.serialization
 
-import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.databind.DeserializationContext
-import com.fasterxml.jackson.databind.SerializerProvider
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer
-import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.api.policy.Effect
+import tools.jackson.core.JsonGenerator
+import tools.jackson.core.JsonParser
+import tools.jackson.databind.DeserializationContext
+import tools.jackson.databind.SerializationContext
+import tools.jackson.databind.deser.std.StdDeserializer
+import tools.jackson.databind.ser.std.StdSerializer
 
 object JsonEffectSerializer : StdSerializer<Effect>(Effect::class.java) {
-    override fun serialize(value: Effect, gen: JsonGenerator, provider: SerializerProvider) {
+    override fun serialize(value: Effect, gen: JsonGenerator, provider: SerializationContext) {
         gen.writeString(value.name.lowercase())
     }
 }
 
 object JsonEffectDeserializer : StdDeserializer<Effect>(Effect::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): Effect {
-        return Effect.valueOf(p.text.uppercase())
+        return Effect.valueOf(p.string.uppercase())
     }
 }

@@ -13,12 +13,6 @@
 
 package me.ahoo.cosec.serialization
 
-import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.databind.DeserializationContext
-import com.fasterxml.jackson.databind.SerializerProvider
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer
-import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.policy.action.ActionMatcherFactoryProvider
@@ -26,22 +20,28 @@ import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.action.AllActionMatcherFactory
 import me.ahoo.cosec.policy.action.CompositeActionMatcherFactory
 import me.ahoo.cosec.policy.action.PathActionMatcherFactory
+import tools.jackson.core.JsonGenerator
+import tools.jackson.core.JsonParser
+import tools.jackson.databind.DeserializationContext
+import tools.jackson.databind.SerializationContext
+import tools.jackson.databind.deser.std.StdDeserializer
+import tools.jackson.databind.ser.std.StdSerializer
 
 object JsonActionMatcherSerializer : StdSerializer<ActionMatcher>(ActionMatcher::class.java) {
-    override fun serialize(value: ActionMatcher, gen: JsonGenerator, provider: SerializerProvider) {
+    override fun serialize(value: ActionMatcher, gen: JsonGenerator, provider: SerializationContext) {
         if (value.configuration.isString || value.configuration.isArray) {
             gen.writePOJO(value.configuration)
             return
         }
         gen.writeStartObject()
-        gen.writePOJOField(value.type, value.configuration)
+        gen.writePOJOProperty(value.type, value.configuration)
         gen.writeEndObject()
     }
 }
 
 object JsonActionMatcherDeserializer : StdDeserializer<ActionMatcher>(ActionMatcher::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): ActionMatcher {
-        val actionConfiguration = p.codec.readValue(p, JsonConfiguration::class.java)
+        val actionConfiguration = p.objectReadContext().readValue(p, JsonConfiguration::class.java)
 
         if (actionConfiguration.isString) {
             if (actionConfiguration.asString() == AllActionMatcherFactory.ALL) {
@@ -58,8 +58,9 @@ object JsonActionMatcherDeserializer : StdDeserializer<ActionMatcher>(ActionMatc
         /**
          * isObject
          */
-        val field = actionConfiguration.delegate.fields().next()
-        val conditionConfiguration = field.value.traverse(p.codec).readValueAs(JsonConfiguration::class.java)
+        val field = actionConfiguration.delegate.properties().first()
+        val conditionConfiguration =
+            field.value.traverse(p.objectReadContext()).readValueAs(JsonConfiguration::class.java)
         return ActionMatcherFactoryProvider.getRequired(field.key).create(conditionConfiguration)
     }
 }

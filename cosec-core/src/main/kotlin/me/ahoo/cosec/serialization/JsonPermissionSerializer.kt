@@ -13,22 +13,22 @@
 
 package me.ahoo.cosec.serialization
 
-import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.SerializerProvider
 import me.ahoo.cosec.api.permission.Permission
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.permission.PermissionData
+import tools.jackson.core.JsonGenerator
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.SerializationContext
 
 const val PERMISSION_ID = "id"
 const val PERMISSION_DESCRIPTION = "description"
 
 object JsonPermissionSerializer : AbstractJsonStatementSerializer<Permission>(Permission::class.java) {
-    override fun writeExtend(value: Permission, gen: JsonGenerator, provider: SerializerProvider) {
-        gen.writeStringField(PERMISSION_ID, value.id)
-        gen.writeStringField(PERMISSION_DESCRIPTION, value.description)
+    override fun writeExtend(value: Permission, gen: JsonGenerator, provider: SerializationContext) {
+        gen.writeStringProperty(PERMISSION_ID, value.id)
+        gen.writeStringProperty(PERMISSION_DESCRIPTION, value.description)
     }
 }
 
@@ -40,8 +40,8 @@ object JsonPermissionDeserializer : AbstractJsonStatementDeserializer<Permission
         action: ActionMatcher,
         condition: ConditionMatcher
     ): Permission {
-        val permissionId = requireNotNull(jsonNode.get(PERMISSION_ID).asText())
-        val description = jsonNode.get(PERMISSION_DESCRIPTION)?.asText().orEmpty()
+        val permissionId = requireNotNull(jsonNode.get(PERMISSION_ID).asString())
+        val description = jsonNode.get(PERMISSION_DESCRIPTION)?.asString().orEmpty()
         return PermissionData(
             id = permissionId,
             name = name,

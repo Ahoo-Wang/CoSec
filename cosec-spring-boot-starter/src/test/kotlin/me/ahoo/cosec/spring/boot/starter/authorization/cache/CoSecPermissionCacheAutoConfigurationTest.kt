@@ -22,6 +22,7 @@ import me.ahoo.cosid.test.MockIdGenerator
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
@@ -33,6 +34,7 @@ internal class CoSecPermissionCacheAutoConfigurationTest {
         contextRunner
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
+                JacksonAutoConfiguration::class.java,
                 DataRedisAutoConfiguration::class.java,
                 CoCacheAutoConfiguration::class.java,
                 CoSecPermissionCacheAutoConfiguration::class.java,

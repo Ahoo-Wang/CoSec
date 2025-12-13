@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.serialization
 
-import com.fasterxml.jackson.core.type.TypeReference
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
@@ -47,6 +46,7 @@ import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import tools.jackson.core.type.TypeReference
 import java.util.stream.Stream
 
 internal class CoSecJsonSerializerTest {
