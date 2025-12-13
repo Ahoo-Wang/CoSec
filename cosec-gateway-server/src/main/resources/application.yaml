@@ -1,12 +1,13 @@
 server:
   port: 8080
-  error:
-    whitelabel:
-      enabled: false
   compression:
     enabled: true
     min-response-size: 1KB
 spring:
+  web:
+    error:
+      whitelabel:
+        enabled: false
   cloud:
     gateway:
       server:
