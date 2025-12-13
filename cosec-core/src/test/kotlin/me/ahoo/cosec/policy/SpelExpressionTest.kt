@@ -1,9 +1,8 @@
 package me.ahoo.cosec.policy
 
-import io.mockk.every
-import io.mockk.mockk
-import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.SpelExpression.Companion.isSpelTemplate
+import me.ahoo.test.asserts.assert
 import org.hamcrest.MatcherAssert.*
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
@@ -20,19 +19,12 @@ class SpelExpressionTest {
 
     @Test
     fun getValue() {
-        val securityContext = mockk<SecurityContext> {
-            every { principal } returns mockk {
-                every { id } returns "1"
-            }
-        }
-        "order/#{principal.id}/1".asTemplateExpression()
-            .let {
-                assertThat(it.getValue(securityContext), equalTo("order/1/1"))
-            }
-
-        "order/1/1".asTemplateExpression()
-            .let {
-                assertThat(it.getValue(securityContext), equalTo("order/1/1"))
-            }
+        val securityContext = SimpleSecurityContext.anonymous()
+        val templateExpression = "order/#{principal.id}/1".asTemplateExpression()
+        templateExpression.getValue(securityContext).assert().isEqualTo("order/(0)/1")
+        val constExpression = "order/1/1".asTemplateExpression()
+        constExpression.getValue(securityContext).assert().isEqualTo("order/1/1")
     }
+
+    data class Order(val id: Int)
 }
