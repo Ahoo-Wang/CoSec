@@ -13,19 +13,8 @@
 
 package me.ahoo.cosec.serialization
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect
-import com.fasterxml.jackson.annotation.PropertyAccessor
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import tools.jackson.module.kotlin.jsonMapper
 
-object CoSecJsonSerializer : ObjectMapper() {
-    init {
-        setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY)
-        configure(JsonParser.Feature.IGNORE_UNDEFINED, true)
-        disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-        registerKotlinModule()
-        findAndRegisterModules()
-    }
+val CoSecJsonSerializer = jsonMapper {
+    findAndAddModules()
 }

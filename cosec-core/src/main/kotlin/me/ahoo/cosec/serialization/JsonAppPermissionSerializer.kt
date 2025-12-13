@@ -13,31 +13,31 @@
 
 package me.ahoo.cosec.serialization
 
-import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.databind.DeserializationContext
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.SerializerProvider
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer
-import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.PermissionGroup
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
+import tools.jackson.core.JsonGenerator
+import tools.jackson.core.JsonParser
+import tools.jackson.databind.DeserializationContext
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.SerializationContext
+import tools.jackson.databind.deser.std.StdDeserializer
+import tools.jackson.databind.ser.std.StdSerializer
 
 const val APP_PERMISSION_ID_KEY = "id"
 const val APP_PERMISSION_GROUPS_KEY = "groups"
 
 object JsonAppPermissionSerializer : StdSerializer<AppPermission>(AppPermission::class.java) {
-    override fun serialize(value: AppPermission, gen: JsonGenerator, provider: SerializerProvider) {
+    override fun serialize(value: AppPermission, gen: JsonGenerator, provider: SerializationContext) {
         gen.writeStartObject()
-        gen.writeStringField(APP_PERMISSION_ID_KEY, value.id)
-        gen.writePOJOField(STATEMENT_CONDITION_KEY, value.condition)
+        gen.writeStringProperty(APP_PERMISSION_ID_KEY, value.id)
+        gen.writePOJOProperty(STATEMENT_CONDITION_KEY, value.condition)
         if (value.groups.isNotEmpty()) {
-            gen.writeArrayFieldStart(APP_PERMISSION_GROUPS_KEY)
+            gen.writeArrayPropertyStart(APP_PERMISSION_GROUPS_KEY)
             value.groups.forEach {
-                gen.writeObject(it)
+                gen.writePOJO(it)
             }
             gen.writeEndArray()
         }
@@ -47,17 +47,17 @@ object JsonAppPermissionSerializer : StdSerializer<AppPermission>(AppPermission:
 
 object JsonAppPermissionDeserializer : StdDeserializer<AppPermission>(AppPermission::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): AppPermission {
-        val jsonNode = p.codec.readTree<JsonNode>(p)
+        val jsonNode = p.objectReadContext().readTree<JsonNode>(p)
         val condition =
-            jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.codec)?.readValueAs(ConditionMatcher::class.java)
+            jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.objectReadContext())?.readValueAs(ConditionMatcher::class.java)
                 ?: AllConditionMatcher.INSTANCE
         val groups = jsonNode.get(APP_PERMISSION_GROUPS_KEY)?.map {
-            it.traverse(p.codec).readValueAs(PermissionGroup::class.java)
+            it.traverse(p.objectReadContext()).readValueAs(PermissionGroup::class.java)
         }.orEmpty()
         return AppPermissionData(
             id = requireNotNull(jsonNode.get(APP_PERMISSION_ID_KEY)) {
                 "$APP_PERMISSION_ID_KEY is required!"
-            }.asText(),
+            }.asString(),
             condition = condition,
             groups = groups,
         )

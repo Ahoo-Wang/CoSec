@@ -13,22 +13,22 @@
 
 package me.ahoo.cosec.serialization
 
-import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.databind.DeserializationContext
-import com.fasterxml.jackson.databind.SerializerProvider
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer
-import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.configuration.JsonConfiguration
+import tools.jackson.core.JsonGenerator
+import tools.jackson.core.JsonParser
+import tools.jackson.databind.DeserializationContext
+import tools.jackson.databind.SerializationContext
+import tools.jackson.databind.deser.std.StdDeserializer
+import tools.jackson.databind.ser.std.StdSerializer
 
 object JsonConfigurationSerializer : StdSerializer<JsonConfiguration>(JsonConfiguration::class.java) {
-    override fun serialize(value: JsonConfiguration, gen: JsonGenerator, provider: SerializerProvider) {
+    override fun serialize(value: JsonConfiguration, gen: JsonGenerator, provider: SerializationContext) {
         gen.writeTree(value.delegate)
     }
 }
 
 object JsonConfigurationDeserializer : StdDeserializer<JsonConfiguration>(JsonConfiguration::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): JsonConfiguration {
-        return JsonConfiguration(p.readValueAsTree(), p.codec)
+        return JsonConfiguration(p.readValueAsTree())
     }
 }

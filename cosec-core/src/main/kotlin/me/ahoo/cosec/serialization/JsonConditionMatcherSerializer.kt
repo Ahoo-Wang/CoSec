@@ -13,30 +13,32 @@
 
 package me.ahoo.cosec.serialization
 
-import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.databind.DeserializationContext
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.SerializerProvider
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer
-import com.fasterxml.jackson.databind.ser.std.StdSerializer
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactoryProvider
+import tools.jackson.core.JsonGenerator
+import tools.jackson.core.JsonParser
+import tools.jackson.databind.DeserializationContext
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.SerializationContext
+import tools.jackson.databind.deser.std.StdDeserializer
+import tools.jackson.databind.ser.std.StdSerializer
 
 object JsonConditionMatcherSerializer : StdSerializer<ConditionMatcher>(ConditionMatcher::class.java) {
-    override fun serialize(value: ConditionMatcher, gen: JsonGenerator, provider: SerializerProvider) {
+    override fun serialize(value: ConditionMatcher, gen: JsonGenerator, provider: SerializationContext) {
         gen.writeStartObject()
-        gen.writePOJOField(value.type, value.configuration)
+        gen.writePOJOProperty(value.type, value.configuration)
         gen.writeEndObject()
     }
 }
 
 object JsonConditionMatcherDeserializer : StdDeserializer<ConditionMatcher>(ConditionMatcher::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): ConditionMatcher {
-        val conditionObject = p.codec.readTree<JsonNode>(p)
-        val field = conditionObject.fields().next()
-        val conditionConfiguration = field.value.traverse(p.codec).readValueAs(JsonConfiguration::class.java)
+        val conditionObject = p.objectReadContext().readTree<JsonNode>(p)
+        val field = conditionObject.properties().first()
+        val conditionConfiguration = field.value.traverse(
+            p.objectReadContext()
+        ).readValueAs(JsonConfiguration::class.java)
         val conditionMatcherFactory = ConditionMatcherFactoryProvider.getRequired(field.key)
         return conditionMatcherFactory.create(conditionConfiguration)
     }

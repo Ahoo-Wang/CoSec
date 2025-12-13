@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.serialization
 
-import com.fasterxml.jackson.databind.module.SimpleModule
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.Permission
 import me.ahoo.cosec.api.permission.PermissionGroup
@@ -24,6 +23,7 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.configuration.JsonConfiguration
+import tools.jackson.databind.module.SimpleModule
 
 class CoSecModule : SimpleModule() {
     init {
