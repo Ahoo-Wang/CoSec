@@ -16,6 +16,7 @@ import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
+import me.ahoo.cosec.webflux.ReactiveSecurityFilter.Companion.SECURITY_FILTER_ORDER
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.springframework.core.Ordered
 import org.springframework.web.server.ServerWebExchange
@@ -49,6 +50,6 @@ class ReactiveInjectSecurityContextWebFilter(
     }
 
     override fun getOrder(): Int {
-        return Ordered.HIGHEST_PRECEDENCE + 10
+        return SECURITY_FILTER_ORDER
     }
 }
