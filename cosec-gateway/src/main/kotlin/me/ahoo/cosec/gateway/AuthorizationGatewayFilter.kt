@@ -42,8 +42,4 @@ class AuthorizationGatewayFilter(
             chain.filter(nextServerExchange)
         }
     }
-
-    override fun getOrder(): Int {
-        return Ordered.HIGHEST_PRECEDENCE + 10
-    }
 }

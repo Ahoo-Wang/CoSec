@@ -30,14 +30,12 @@ import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.token.TokenVerificationException
+import me.ahoo.cosec.webflux.ReactiveSecurityFilter.Companion.SECURITY_FILTER_ORDER
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
-import org.springframework.core.Ordered
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -68,7 +66,7 @@ internal class ReactiveAuthorizationFilterTest {
             ReactiveRequestParser(ReactiveRemoteIpResolver),
             authorization,
         )
-        assertThat(filter.order, equalTo(Ordered.HIGHEST_PRECEDENCE + 10))
+        filter.order.assert().isEqualTo(SECURITY_FILTER_ORDER)
         val serverRequest = MockServerHttpRequest.get("/path")
             .header(HttpHeaders.ORIGIN, "origin")
             .build()
