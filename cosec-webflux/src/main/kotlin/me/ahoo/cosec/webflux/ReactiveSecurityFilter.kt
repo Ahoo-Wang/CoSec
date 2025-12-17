@@ -28,7 +28,6 @@ import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.toAuthorizeResult
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
-import org.springframework.core.Ordered
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.server.reactive.ServerHttpResponse
@@ -40,10 +39,9 @@ abstract class ReactiveSecurityFilter(
     val securityContextParser: SecurityContextParser,
     val requestParser: RequestParser<ServerWebExchange>,
     val authorization: Authorization
-) : Ordered {
+) {
     companion object {
         private val log = KotlinLogging.logger {}
-        const val SECURITY_FILTER_ORDER = 1000
     }
 
     fun filterInternal(
@@ -86,10 +84,6 @@ abstract class ReactiveSecurityFilter(
                 exchange.response.statusCode = HttpStatus.TOO_MANY_REQUESTS
                 exchange.response.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
             }
-    }
-
-    override fun getOrder(): Int {
-        return SECURITY_FILTER_ORDER
     }
 
     fun ServerHttpResponse.writeWithAuthorizeResult(authorizeResult: AuthorizeResult): Mono<Void> {

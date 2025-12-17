@@ -19,10 +19,10 @@ import io.mockk.verify
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.request.RequestIdCapable
+import me.ahoo.cosec.gateway.AuthorizationGatewayFilter.Companion.AUTHORIZATION_GATEWAY_FILTER_ORDER
 import me.ahoo.cosec.jwt.InjectSecurityContextParser
 import me.ahoo.cosec.webflux.ReactiveRemoteIpResolver
 import me.ahoo.cosec.webflux.ReactiveRequestParser
-import me.ahoo.cosec.webflux.ReactiveSecurityFilter.Companion.SECURITY_FILTER_ORDER
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import me.ahoo.test.asserts.assert
 import org.hamcrest.MatcherAssert.*
@@ -47,7 +47,7 @@ class AuthorizationGatewayFilterTest {
             ReactiveRequestParser(ReactiveRemoteIpResolver),
             authorization,
         )
-        filter.order.assert().isEqualTo(SECURITY_FILTER_ORDER)
+        filter.order.assert().isEqualTo(AUTHORIZATION_GATEWAY_FILTER_ORDER)
         val serverRequest = MockServerHttpRequest.get("/path")
             .header(HttpHeaders.ORIGIN, "origin")
             .build()

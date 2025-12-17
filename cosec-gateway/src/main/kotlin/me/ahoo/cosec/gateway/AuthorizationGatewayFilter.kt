@@ -33,6 +33,10 @@ class AuthorizationGatewayFilter(
     requestParser: RequestParser<ServerWebExchange>,
     authorization: Authorization
 ) : GlobalFilter, Ordered, ReactiveSecurityFilter(securityContextParser, requestParser, authorization) {
+    companion object {
+        const val AUTHORIZATION_GATEWAY_FILTER_ORDER = Ordered.HIGHEST_PRECEDENCE + 10
+    }
+
     override fun filter(exchange: ServerWebExchange, chain: GatewayFilterChain): Mono<Void> {
         return filterInternal(exchange) { serverExchange, request ->
             val serverHttpRequest = serverExchange.request.mutate()
@@ -41,5 +45,9 @@ class AuthorizationGatewayFilter(
             val nextServerExchange = serverExchange.mutate().request(serverHttpRequest).build()
             chain.filter(nextServerExchange)
         }
+    }
+
+    override fun getOrder(): Int {
+        return AUTHORIZATION_GATEWAY_FILTER_ORDER
     }
 }

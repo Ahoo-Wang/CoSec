@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.webflux
 
-import me.ahoo.cosec.webflux.ReactiveSecurityFilter.Companion.SECURITY_FILTER_ORDER
+import me.ahoo.cosec.webflux.ReactiveAuthorizationFilter.Companion.REACTIVE_AUTHORIZATION_FILTER_ORDER
 import org.springframework.core.Ordered
 import org.springframework.web.cors.reactive.CorsConfigurationSource
 import org.springframework.web.cors.reactive.CorsProcessor
@@ -23,9 +23,13 @@ import org.springframework.web.cors.reactive.DefaultCorsProcessor
 class OrderedCorsWebFilter(
     configSource: CorsConfigurationSource,
     processor: CorsProcessor = DefaultCorsProcessor(),
-    private val order: Int = SECURITY_FILTER_ORDER - 1
+    private val order: Int = DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER
 ) :
     Ordered, CorsWebFilter(configSource, processor) {
+    companion object {
+        const val DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER = REACTIVE_AUTHORIZATION_FILTER_ORDER - 1
+    }
+
     override fun getOrder(): Int {
         return this.order
     }

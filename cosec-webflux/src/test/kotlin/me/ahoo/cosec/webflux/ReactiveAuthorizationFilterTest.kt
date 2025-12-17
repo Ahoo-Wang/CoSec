@@ -30,7 +30,7 @@ import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.token.TokenVerificationException
-import me.ahoo.cosec.webflux.ReactiveSecurityFilter.Companion.SECURITY_FILTER_ORDER
+import me.ahoo.cosec.webflux.ReactiveAuthorizationFilter.Companion.REACTIVE_AUTHORIZATION_FILTER_ORDER
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import me.ahoo.cosid.test.MockIdGenerator
@@ -45,7 +45,6 @@ import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
-import kotlin.collections.contains
 
 internal class ReactiveAuthorizationFilterTest {
     companion object {
@@ -66,7 +65,7 @@ internal class ReactiveAuthorizationFilterTest {
             ReactiveRequestParser(ReactiveRemoteIpResolver),
             authorization,
         )
-        filter.order.assert().isEqualTo(SECURITY_FILTER_ORDER)
+        filter.order.assert().isEqualTo(REACTIVE_AUTHORIZATION_FILTER_ORDER)
         val serverRequest = MockServerHttpRequest.get("/path")
             .header(HttpHeaders.ORIGIN, "origin")
             .build()
