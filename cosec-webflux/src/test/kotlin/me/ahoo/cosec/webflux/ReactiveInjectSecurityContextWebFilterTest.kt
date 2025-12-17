@@ -21,7 +21,7 @@ import io.mockk.verify
 import me.ahoo.cosec.api.context.request.RequestIdCapable
 import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
 import me.ahoo.cosec.jwt.InjectSecurityContextParser
-import me.ahoo.cosec.webflux.ReactiveSecurityFilter.Companion.SECURITY_FILTER_ORDER
+import me.ahoo.cosec.webflux.ReactiveInjectSecurityContextWebFilter.Companion.REACTIVE_INJECT_SECURITY_CONTEXT_WEB_FILTER_ORDER
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -38,7 +38,7 @@ internal class ReactiveInjectSecurityContextWebFilterTest {
             ReactiveRequestParser(ReactiveRemoteIpResolver),
             InjectSecurityContextParser
         )
-        filter.order.assert().isEqualTo(SECURITY_FILTER_ORDER)
+        filter.order.assert().isEqualTo(REACTIVE_INJECT_SECURITY_CONTEXT_WEB_FILTER_ORDER)
 
         val exchange = mockk<ServerWebExchange> {
             every { request.headers.getFirst(RequestIdCapable.REQUEST_ID_KEY) } returns null

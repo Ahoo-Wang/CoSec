@@ -14,14 +14,13 @@
 package me.ahoo.cosec.webflux
 
 import io.mockk.mockk
-import me.ahoo.cosec.webflux.ReactiveSecurityFilter.Companion.SECURITY_FILTER_ORDER
+import me.ahoo.cosec.webflux.OrderedCorsWebFilter.Companion.DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER
 import me.ahoo.test.asserts.assert
-import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class OrderedCorsWebFilterTest {
     @Test
     fun getOrder() {
-        OrderedCorsWebFilter(mockk()).order.assert().isEqualTo(SECURITY_FILTER_ORDER - 1)
+        OrderedCorsWebFilter(mockk()).order.assert().isEqualTo(DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER)
     }
 }
