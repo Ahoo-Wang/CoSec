@@ -31,6 +31,10 @@ class ReactiveAuthorizationFilter(
     requestParser: RequestParser<ServerWebExchange>,
     authorization: Authorization
 ) : WebFilter, Ordered, ReactiveSecurityFilter(securityContextParser, requestParser, authorization) {
+    companion object {
+        const val REACTIVE_AUTHORIZATION_FILTER_ORDER = 1000
+    }
+
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
         return filterInternal(exchange) { serverExchange, request ->
             chain.filter(serverExchange)
@@ -38,6 +42,6 @@ class ReactiveAuthorizationFilter(
     }
 
     override fun getOrder(): Int {
-        return Ordered.HIGHEST_PRECEDENCE + 10
+        return REACTIVE_AUTHORIZATION_FILTER_ORDER
     }
 }

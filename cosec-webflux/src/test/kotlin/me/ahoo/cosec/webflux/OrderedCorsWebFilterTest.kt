@@ -11,10 +11,16 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.cache
+package me.ahoo.cosec.webflux
 
-import me.ahoo.cache.api.Cache
-import me.ahoo.cosec.api.permission.PermissionId
-import me.ahoo.cosec.api.principal.SpacedRoleId
+import io.mockk.mockk
+import me.ahoo.cosec.webflux.OrderedCorsWebFilter.Companion.DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER
+import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Test
 
-interface RolePermissionCache : Cache<SpacedRoleId, Set<PermissionId>>
+class OrderedCorsWebFilterTest {
+    @Test
+    fun getOrder() {
+        OrderedCorsWebFilter(mockk()).order.assert().isEqualTo(DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER)
+    }
+}

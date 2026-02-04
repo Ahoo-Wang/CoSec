@@ -11,10 +11,15 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.cache
+package me.ahoo.cosec.api.context.request
 
-import me.ahoo.cache.api.Cache
-import me.ahoo.cosec.api.permission.PermissionId
-import me.ahoo.cosec.api.principal.SpacedRoleId
+typealias SpaceId = String
 
-interface RolePermissionCache : Cache<SpacedRoleId, Set<PermissionId>>
+interface SpaceIdCapable {
+    companion object {
+        const val SPACE_ID_KEY = "CoSec-Space-Id"
+        const val DEFAULT = ""
+    }
+
+    val spaceId: SpaceId
+}

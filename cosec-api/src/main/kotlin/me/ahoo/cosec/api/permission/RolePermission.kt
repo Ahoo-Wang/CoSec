@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.api.permission
 
+import me.ahoo.cosec.api.principal.RoleId
+
 /**
  * Role Permissions.
  */
@@ -20,10 +22,10 @@ interface RolePermission {
     /**
      * role id
      */
-    val id: String
+    val id: RoleId
 
     /**
      * @see me.ahoo.cosec.api.permission.Permission
      */
-    val permissions: Set<String>
+    val permissions: Set<PermissionId>
 }
