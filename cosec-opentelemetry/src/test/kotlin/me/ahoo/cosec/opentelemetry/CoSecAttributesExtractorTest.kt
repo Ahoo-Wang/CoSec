@@ -54,6 +54,7 @@ class CoSecAttributesExtractorTest {
             every { appId } returns "appId"
             every { deviceId } returns "deviceId"
             every { requestId } returns "requestId"
+            every { spaceId } returns "spaceId"
         }
         val verifyContext = mockk<PolicyVerifyContext> {
             every { policy.id } returns "policyId"
@@ -86,6 +87,7 @@ class CoSecAttributesExtractorTest {
             every { appId } returns "appId"
             every { deviceId } returns "deviceId"
             every { requestId } returns "requestId"
+            every { spaceId } returns "spaceId"
         }
         val verifyContext = mockk<RoleVerifyContext> {
             every { roleId } returns "roleId"
@@ -113,6 +115,7 @@ class CoSecAttributesExtractorTest {
             every { appId } returns ""
             every { deviceId } returns ""
             every { requestId } returns ""
+            every { spaceId } returns ""
         }
         val securityContext = SimpleSecurityContext.anonymous()
         securityContext.setRequest(request)
