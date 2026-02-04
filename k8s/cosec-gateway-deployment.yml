@@ -38,6 +38,9 @@ spec:
               value: "30s"
             - name: TZ
               value: Asia/Shanghai
+            - name: JAVA_OPTS
+              # https://github.com/netty/netty/issues/16082
+              value: -Djava.net.preferIPv4Stack=true
           image: registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway:2.0.1
           startupProbe:
             httpGet:
