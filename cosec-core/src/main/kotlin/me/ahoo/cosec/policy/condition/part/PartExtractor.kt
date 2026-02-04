@@ -28,6 +28,7 @@ object RequestParts {
     const val PATH = PREFIX + "path"
     const val METHOD = PREFIX + "method"
     const val APP_ID = PREFIX + "appId"
+    const val SPACE_ID = PREFIX + "spaceId"
     const val DEVICE_ID = PREFIX + "deviceId"
     const val REMOTE_IP = PREFIX + "remoteIp"
     const val ORIGIN = PREFIX + "origin"
@@ -55,6 +56,7 @@ data class DefaultPartExtractor(val part: String) : PartExtractor {
             RequestParts.PATH -> request.path
             RequestParts.METHOD -> request.method
             RequestParts.APP_ID -> request.appId
+            RequestParts.SPACE_ID -> request.spaceId
             RequestParts.DEVICE_ID -> request.deviceId
             RequestParts.REMOTE_IP -> request.remoteIp
             RequestParts.ORIGIN -> request.origin.toString()
