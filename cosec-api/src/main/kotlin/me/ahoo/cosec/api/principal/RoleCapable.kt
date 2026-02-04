@@ -12,7 +12,43 @@
  */
 package me.ahoo.cosec.api.principal
 
+import me.ahoo.cosec.api.context.request.SpaceId
+import me.ahoo.cosec.api.context.request.SpaceIdCapable
+
 typealias RoleId = String
+
+interface RoleIdCapable {
+    val roleId: RoleId
+}
+
+data class SpacedRoleId(
+    override val roleId: RoleId,
+    override val spaceId: SpaceId = SpaceIdCapable.DEFAULT
+) : RoleIdCapable, SpaceIdCapable {
+    companion object {
+        const val SPACE_ID_SEPARATOR = "@"
+
+        val String.spaced: Boolean
+            get() = contains(SPACE_ID_SEPARATOR)
+
+        fun String.toSpacedRoleId(): SpacedRoleId {
+            val split = this.split(SPACE_ID_SEPARATOR)
+            val spaceId = if (split.size == 1) {
+                SpaceIdCapable.DEFAULT
+            } else {
+                split[1]
+            }
+            return SpacedRoleId(split[0], spaceId)
+        }
+    }
+
+    override fun toString(): String {
+        if (spaceId == SpaceIdCapable.DEFAULT) {
+            return roleId
+        }
+        return "$roleId$SPACE_ID_SEPARATOR$spaceId"
+    }
+}
 
 /**
  * RoleCapable .

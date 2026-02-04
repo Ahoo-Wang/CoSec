@@ -82,7 +82,7 @@ internal class SimpleAuthorizationTest {
             every { getPolicies(any()) } returns Mono.empty()
         }
         val permissionRepository = mockk<AppRolePermissionRepository> {
-            every { getAppRolePermission(any(), any()) } returns Mono.empty()
+            every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
         val authorization = SimpleAuthorization(policyRepository, permissionRepository)
         val request = mockk<Request> {
@@ -111,7 +111,7 @@ internal class SimpleAuthorizationTest {
             every { getPolicies(any()) } returns Mono.empty()
         }
         val permissionRepository = mockk<AppRolePermissionRepository> {
-            every { getAppRolePermission(any(), any()) } returns Mono.empty()
+            every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
         val authorization = SimpleAuthorization(policyRepository, permissionRepository)
         val request = mockk<Request> {
@@ -140,7 +140,7 @@ internal class SimpleAuthorizationTest {
             every { getPolicies(any()) } returns Mono.empty()
         }
         val permissionRepository = mockk<AppRolePermissionRepository> {
-            every { getAppRolePermission(any(), any()) } returns Mono.empty()
+            every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
         val authorization = SimpleAuthorization(policyRepository, permissionRepository)
         val request = mockk<Request>()
@@ -174,7 +174,7 @@ internal class SimpleAuthorizationTest {
             every { getPolicies(any()) } returns Mono.just(listOf(principalPolicy))
         }
         val permissionRepository = mockk<AppRolePermissionRepository> {
-            every { getAppRolePermission(any(), any()) } returns Mono.empty()
+            every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
         val authorization = SimpleAuthorization(policyRepository, permissionRepository)
         val request = mockk<Request> {
@@ -209,7 +209,7 @@ internal class SimpleAuthorizationTest {
             every { getPolicies(any()) } returns Mono.just(listOf(principalPolicy))
         }
         val permissionRepository = mockk<AppRolePermissionRepository> {
-            every { getAppRolePermission(any(), any()) } returns Mono.empty()
+            every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
         val authorization = SimpleAuthorization(policyRepository, permissionRepository)
         val request = mockk<Request> {
@@ -261,11 +261,12 @@ internal class SimpleAuthorizationTest {
             every { getPolicies(any()) } returns Mono.empty()
         }
         val permissionRepository = mockk<AppRolePermissionRepository> {
-            every { getAppRolePermission(any(), any()) } returns appRolePermission.toMono()
+            every { getAppRolePermission(any(), any(), any()) } returns appRolePermission.toMono()
         }
         val authorization = SimpleAuthorization(policyRepository, permissionRepository)
         val request = mockk<Request> {
             every { appId } returns "appId"
+            every { spaceId } returns "spaceId"
         }
 
         authorization.authorize(request, securityContext)
@@ -313,11 +314,12 @@ internal class SimpleAuthorizationTest {
             every { getPolicies(any()) } returns Mono.empty()
         }
         val permissionRepository = mockk<AppRolePermissionRepository> {
-            every { getAppRolePermission(any(), any()) } returns appRolePermission.toMono()
+            every { getAppRolePermission(any(), any(), any()) } returns appRolePermission.toMono()
         }
         val authorization = SimpleAuthorization(policyRepository, permissionRepository)
         val request = mockk<Request> {
             every { appId } returns "appId"
+            every { spaceId } returns "spaceId"
         }
 
         authorization.authorize(request, securityContext)
