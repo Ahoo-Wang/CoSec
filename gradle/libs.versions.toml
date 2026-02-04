@@ -12,7 +12,7 @@ ognl = "3.4.10"
 java-jwt = "4.5.0"
 ip2region = "3.3.3"
 justAuth = "1.16.7"
-swagger = "2.2.41"
+swagger = "2.2.42"
 springdoc = "3.0.0"
 # testing
 junit = "6.0.2"
