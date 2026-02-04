@@ -17,7 +17,7 @@ typealias SpaceId = String
 
 interface SpaceIdCapable {
     companion object {
-        const val SPACE_ID_KEY = "X-Space-Id"
+        const val SPACE_ID_KEY = "CoSec-Space-Id"
         const val DEFAULT = ""
     }
 
