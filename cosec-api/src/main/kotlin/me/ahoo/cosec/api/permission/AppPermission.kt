@@ -2,11 +2,13 @@ package me.ahoo.cosec.api.permission
 
 import me.ahoo.cosec.api.policy.ConditionMatcher
 
+typealias AppId = String
+
 /**
  * App permissions metadata.
  */
 interface AppPermission {
-    val id: String
+    val id: AppId
     val condition: ConditionMatcher
     val groups: List<PermissionGroup>
 

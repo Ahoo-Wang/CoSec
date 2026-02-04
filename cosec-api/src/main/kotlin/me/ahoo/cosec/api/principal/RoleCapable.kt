@@ -12,6 +12,8 @@
  */
 package me.ahoo.cosec.api.principal
 
+typealias RoleId = String
+
 /**
  * RoleCapable .
  *
@@ -21,15 +23,14 @@ interface RoleCapable {
     /**
      * get role ids.
      * relation:
-     * <pre>
+     *
      * [CoSecPrincipal] 1:N [me.ahoo.cosec.api.tenant.Tenant]
      * [me.ahoo.cosec.api.tenant.Tenant] 1:N Role
      * [CoSecPrincipal] 1:N Role
-     </pre> *
      *
      * @return role ids..
      */
-    val roles: Set<String>
+    val roles: Set<RoleId>
 
     companion object {
         const val ROLE_KEY = "roles"
