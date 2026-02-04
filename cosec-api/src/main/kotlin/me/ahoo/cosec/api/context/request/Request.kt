@@ -21,15 +21,15 @@ import java.net.URI
 
 interface Request : Attributes<Request, String, String>, AppIdCapable, DeviceIdCapable, RequestIdCapable {
 
-    override val appId: String
+    override val appId: AppId
         get() {
             return getHeader(APP_ID_KEY).ifBlank { getQuery(APP_ID_KEY) }
         }
-    override val deviceId: String
+    override val deviceId: DeviceId
         get() {
             return getHeader(DEVICE_ID_KEY).ifBlank { getQuery(DEVICE_ID_KEY) }
         }
-    override val requestId: String
+    override val requestId: RequestId
         get() {
             return getHeader(REQUEST_ID_KEY)
         }

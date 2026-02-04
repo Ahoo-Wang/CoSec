@@ -13,10 +13,12 @@
 
 package me.ahoo.cosec.api.context.request
 
+typealias RequestId = String
+
 interface RequestIdCapable {
     companion object {
         const val REQUEST_ID_KEY = "CoSec-Request-Id"
     }
 
-    val requestId: String
+    val requestId: RequestId
 }
