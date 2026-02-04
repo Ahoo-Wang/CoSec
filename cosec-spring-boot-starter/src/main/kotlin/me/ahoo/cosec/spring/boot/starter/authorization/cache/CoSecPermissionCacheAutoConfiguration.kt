@@ -23,6 +23,7 @@ import me.ahoo.cache.spring.redis.RedisDistributedCache
 import me.ahoo.cache.spring.redis.RedisDistributedCacheFactory.Companion.DISTRIBUTED_CACHE_SUFFIX
 import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
 import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.cache.AppPermissionCache
 import me.ahoo.cosec.cache.RedisAppRolePermissionRepository
@@ -80,7 +81,7 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
 
     @Bean(ROLE_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME)
     @ConditionalOnMissingBean(name = [ROLE_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME])
-    fun rolePermissionCacheKeyConverter(): KeyConverter<String> {
+    fun rolePermissionCacheKeyConverter(): KeyConverter<SpacedRoleId> {
         return ToStringKeyConverter(cacheProperties.rolePermissionKeyPrefix)
     }
 
