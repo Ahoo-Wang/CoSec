@@ -181,7 +181,7 @@ class SimpleAuthorization(
         if (context.principal.roles.isEmpty()) {
             return Mono.empty()
         }
-        return appRolePermissionRepository.getAppRolePermission(request.appId, context.principal.roles)
+        return appRolePermissionRepository.getAppRolePermission(request.appId, request.spaceId, context.principal.roles)
             .mapNotNull {
                 verifyAppRolePermission(it, request, context)
             }

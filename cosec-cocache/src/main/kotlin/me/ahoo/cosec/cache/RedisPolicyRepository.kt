@@ -15,6 +15,7 @@ package me.ahoo.cosec.cache
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.policy.PolicyId
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
@@ -38,7 +39,7 @@ class RedisPolicyRepository(
             }
     }
 
-    override fun getPolicies(policyIds: Set<String>): Mono<List<Policy>> {
+    override fun getPolicies(policyIds: Set<PolicyId>): Mono<List<Policy>> {
         return policyIds.mapNotNull {
             policyCache[it]
         }.toMono()

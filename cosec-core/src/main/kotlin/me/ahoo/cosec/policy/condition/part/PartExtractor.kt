@@ -28,6 +28,7 @@ object RequestParts {
     const val PATH = PREFIX + "path"
     const val METHOD = PREFIX + "method"
     const val APP_ID = PREFIX + "appId"
+    const val SPACE_ID = PREFIX + "spaceId"
     const val DEVICE_ID = PREFIX + "deviceId"
     const val REMOTE_IP = PREFIX + "remoteIp"
     const val ORIGIN = PREFIX + "origin"
@@ -55,6 +56,7 @@ data class DefaultPartExtractor(val part: String) : PartExtractor {
             RequestParts.PATH -> request.path
             RequestParts.METHOD -> request.method
             RequestParts.APP_ID -> request.appId
+            RequestParts.SPACE_ID -> request.spaceId
             RequestParts.DEVICE_ID -> request.deviceId
             RequestParts.REMOTE_IP -> request.remoteIp
             RequestParts.ORIGIN -> request.origin.toString()
@@ -69,12 +71,12 @@ data class DefaultPartExtractor(val part: String) : PartExtractor {
                     return request.getHeader(headerKey)
                 }
                 if (part.startsWith(RequestParts.ATTRIBUTES_PREFIX)) {
-                    val attributeKey = part.substring(RequestParts.ATTRIBUTES_PREFIX.length)
-                    return request.attributes[attributeKey].orEmpty()
+                    val requestAttributeKey = part.substring(RequestParts.ATTRIBUTES_PREFIX.length)
+                    return request.attributes[requestAttributeKey].orEmpty()
                 }
                 if (part.startsWith(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX)) {
-                    val headerKey = part.substring(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX.length)
-                    return securityContext.principal.attributes[headerKey]?.toString().orEmpty()
+                    val principalAttributeKey = part.substring(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX.length)
+                    return securityContext.principal.attributes[principalAttributeKey]?.toString().orEmpty()
                 }
                 if (part.startsWith(RequestParts.PATH_VAR_PREFIX)) {
                     val pathVarKey = part.substring(RequestParts.PATH_VAR_PREFIX.length)

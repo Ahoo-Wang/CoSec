@@ -14,6 +14,7 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cache.api.Cache
+import me.ahoo.cosec.api.context.request.AppId
 import me.ahoo.cosec.api.permission.AppPermission
 
-interface AppPermissionCache : Cache<String, AppPermission>
+interface AppPermissionCache : Cache<AppId, AppPermission>

@@ -17,19 +17,29 @@ import me.ahoo.cosec.api.context.Attributes
 import me.ahoo.cosec.api.context.request.AppIdCapable.Companion.APP_ID_KEY
 import me.ahoo.cosec.api.context.request.DeviceIdCapable.Companion.DEVICE_ID_KEY
 import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_KEY
+import me.ahoo.cosec.api.context.request.SpaceIdCapable.Companion.SPACE_ID_KEY
 import java.net.URI
 
-interface Request : Attributes<Request, String, String>, AppIdCapable, DeviceIdCapable, RequestIdCapable {
+interface Request :
+    Attributes<Request, String, String>,
+    AppIdCapable,
+    SpaceIdCapable,
+    DeviceIdCapable,
+    RequestIdCapable {
 
-    override val appId: String
+    override val appId: AppId
         get() {
             return getHeader(APP_ID_KEY).ifBlank { getQuery(APP_ID_KEY) }
         }
-    override val deviceId: String
+    override val spaceId: SpaceId
+        get() {
+            return getHeader(SPACE_ID_KEY).ifBlank { getQuery(SPACE_ID_KEY) }
+        }
+    override val deviceId: DeviceId
         get() {
             return getHeader(DEVICE_ID_KEY).ifBlank { getQuery(DEVICE_ID_KEY) }
         }
-    override val requestId: String
+    override val requestId: RequestId
         get() {
             return getHeader(REQUEST_ID_KEY)
         }

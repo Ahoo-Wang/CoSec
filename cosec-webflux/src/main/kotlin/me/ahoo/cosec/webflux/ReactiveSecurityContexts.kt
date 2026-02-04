@@ -36,7 +36,7 @@ object ReactiveSecurityContexts {
     /**
      * Write Security Context.
      */
-    fun <T> Mono<T>.writeSecurityContext(securityContext: SecurityContext): Mono<T> {
+    fun <T : Any> Mono<T>.writeSecurityContext(securityContext: SecurityContext): Mono<T> {
         return contextWrite {
             it.setSecurityContext(securityContext)
         }

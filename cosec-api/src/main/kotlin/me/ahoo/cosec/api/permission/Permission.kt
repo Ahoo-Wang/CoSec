@@ -15,6 +15,8 @@ package me.ahoo.cosec.api.permission
 
 import me.ahoo.cosec.api.policy.Statement
 
+typealias PermissionId = String
+
 /**
  * Permission metadata.
  */
@@ -22,6 +24,6 @@ interface Permission : Statement {
     /**
      * format : appId.group.permission
      */
-    val id: String
+    val id: PermissionId
     val description: String
 }

@@ -34,6 +34,9 @@ class ReactiveInjectSecurityContextWebFilter(
     private val requestParser: RequestParser<ServerWebExchange>,
     private val securityContextParser: SecurityContextParser
 ) : WebFilter, Ordered {
+    companion object {
+        const val REACTIVE_INJECT_SECURITY_CONTEXT_WEB_FILTER_ORDER = Ordered.HIGHEST_PRECEDENCE + 10
+    }
 
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
         val request = requestParser.parse(exchange)
@@ -49,6 +52,6 @@ class ReactiveInjectSecurityContextWebFilter(
     }
 
     override fun getOrder(): Int {
-        return Ordered.HIGHEST_PRECEDENCE + 10
+        return REACTIVE_INJECT_SECURITY_CONTEXT_WEB_FILTER_ORDER
     }
 }
