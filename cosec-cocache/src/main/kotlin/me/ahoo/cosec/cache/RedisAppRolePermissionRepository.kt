@@ -13,7 +13,9 @@
 
 package me.ahoo.cosec.cache
 
+import me.ahoo.cosec.api.context.request.AppId
 import me.ahoo.cosec.api.permission.AppRolePermission
+import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.permission.AppRolePermissionData
 import me.ahoo.cosec.permission.RolePermissionData
@@ -24,13 +26,13 @@ class RedisAppRolePermissionRepository(
     private val appPermissionCache: AppPermissionCache,
     private val rolePermissionCache: RolePermissionCache
 ) : AppRolePermissionRepository {
-    override fun getAppRolePermission(appId: String, roleIds: Set<String>): Mono<AppRolePermission> {
+    override fun getAppRolePermission(appId: AppId, roleIds: Set<RoleId>): Mono<AppRolePermission> {
         val appPermission = appPermissionCache[appId] ?: return Mono.empty()
         val rolePermissions = roleIds.mapNotNull {
             val permissions = rolePermissionCache[it] ?: return@mapNotNull null
             RolePermissionData(
-                it,
-                permissions,
+                id = it,
+                permissions = permissions,
             )
         }
         return AppRolePermissionData(appPermission, rolePermissions).toMono()

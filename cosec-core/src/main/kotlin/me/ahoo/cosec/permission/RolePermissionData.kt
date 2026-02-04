@@ -13,9 +13,11 @@
 
 package me.ahoo.cosec.permission
 
+import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.permission.RolePermission
+import me.ahoo.cosec.api.principal.RoleId
 
 data class RolePermissionData(
-    override val id: String,
-    override val permissions: Set<String>
+    override val id: RoleId,
+    override val permissions: Set<PermissionId>
 ) : RolePermission

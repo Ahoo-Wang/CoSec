@@ -18,11 +18,13 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.tenant.Tenant
 
+typealias PolicyId = String
+
 /**
  * Permission Policy
  */
 interface Policy : Named, Tenant, PermissionVerifier {
-    val id: String
+    val id: PolicyId
     val category: String
     val description: String
     val type: PolicyType
