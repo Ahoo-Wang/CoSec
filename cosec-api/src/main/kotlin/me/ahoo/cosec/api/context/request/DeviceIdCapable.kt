@@ -17,7 +17,10 @@ typealias DeviceId = String
 
 interface DeviceIdCapable {
     companion object {
-        const val DEVICE_ID_KEY = "CoSec-Device-Id"
+        @Deprecated("Use DeviceIdCapable.DEVICE_ID_KEY instead.", ReplaceWith("DeviceIdCapable.DEVICE_ID_KEY"))
+        const val LEGACY_DEVICE_ID_KEY = "CoSec-Device-Id"
+        const val DEVICE_ID_KEY = "X-Device-Id"
     }
+
     val deviceId: DeviceId
 }

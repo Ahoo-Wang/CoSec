@@ -17,7 +17,9 @@ typealias AppId = String
 
 interface AppIdCapable {
     companion object {
-        const val APP_ID_KEY = "CoSec-App-Id"
+        @Deprecated("Use AppIdCapable.LEGACY_APP_ID_KEY instead.", ReplaceWith("AppIdCapable.LEGACY_APP_ID_KEY"))
+        const val LEGACY_APP_ID_KEY = "CoSec-App-Id"
+        const val APP_ID_KEY = "X-App-Id"
     }
 
     val appId: AppId
