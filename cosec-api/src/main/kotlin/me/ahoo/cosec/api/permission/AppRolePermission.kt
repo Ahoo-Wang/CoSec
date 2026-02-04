@@ -1,5 +1,7 @@
 package me.ahoo.cosec.api.permission
 
+import me.ahoo.cosec.api.principal.RoleId
+
 /**
  * App Role Permission.
  */
@@ -10,7 +12,7 @@ interface AppRolePermission {
     /**
      * RoleId -> Permissions
      */
-    val rolePermissionIndexer: Map<String, List<Permission>>
+    val rolePermissionIndexer: Map<RoleId, List<Permission>>
         get() {
             rolePermissions.forEach {
                 if (it.permissions.contains(ALL_PERMISSION_ID)) {
