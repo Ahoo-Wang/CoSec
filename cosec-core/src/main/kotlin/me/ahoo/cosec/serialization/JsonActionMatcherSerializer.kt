@@ -58,7 +58,7 @@ object JsonActionMatcherDeserializer : StdDeserializer<ActionMatcher>(ActionMatc
         /**
          * isObject
          */
-        val field = actionConfiguration.delegate.fields().next()
+        val field = actionConfiguration.delegate.properties().first()
         val conditionConfiguration = field.value.traverse(p.codec).readValueAs(JsonConfiguration::class.java)
         return ActionMatcherFactoryProvider.getRequired(field.key).create(conditionConfiguration)
     }
