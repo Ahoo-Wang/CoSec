@@ -17,7 +17,7 @@ typealias RequestId = String
 
 interface RequestIdCapable {
     companion object {
-        const val REQUEST_ID_KEY = "CoSec-Request-Id"
+        const val REQUEST_ID_KEY = "${COSEC_EXTEND_KEY_PREFIX}Request-Id"
     }
 
     val requestId: RequestId

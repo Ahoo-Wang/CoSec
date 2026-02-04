@@ -17,7 +17,7 @@ typealias DeviceId = String
 
 interface DeviceIdCapable {
     companion object {
-        const val DEVICE_ID_KEY = "CoSec-Device-Id"
+        const val DEVICE_ID_KEY = "${COSEC_EXTEND_KEY_PREFIX}Device-Id"
     }
     val deviceId: DeviceId
 }
