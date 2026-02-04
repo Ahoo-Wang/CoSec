@@ -17,7 +17,9 @@ typealias RequestId = String
 
 interface RequestIdCapable {
     companion object {
-        const val REQUEST_ID_KEY = "CoSec-Request-Id"
+        @Deprecated("Use RequestIdCapable.REQUEST_ID_KEY instead.", ReplaceWith("RequestIdCapable.REQUEST_ID_KEY"))
+        const val LEGACY_REQUEST_ID_KEY = "CoSec-Request-Id"
+        const val REQUEST_ID_KEY = "X-Request-Id"
     }
 
     val requestId: RequestId
