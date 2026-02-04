@@ -13,9 +13,11 @@
 
 package me.ahoo.cosec.api.context.request
 
+typealias DeviceId = String
+
 interface DeviceIdCapable {
     companion object {
         const val DEVICE_ID_KEY = "CoSec-Device-Id"
     }
-    val deviceId: String
+    val deviceId: DeviceId
 }
