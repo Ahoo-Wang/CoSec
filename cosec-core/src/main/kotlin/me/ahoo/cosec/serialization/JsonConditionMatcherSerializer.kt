@@ -35,7 +35,7 @@ object JsonConditionMatcherSerializer : StdSerializer<ConditionMatcher>(Conditio
 object JsonConditionMatcherDeserializer : StdDeserializer<ConditionMatcher>(ConditionMatcher::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): ConditionMatcher {
         val conditionObject = p.codec.readTree<JsonNode>(p)
-        val field = conditionObject.fields().next()
+        val field = conditionObject.properties().first()
         val conditionConfiguration = field.value.traverse(p.codec).readValueAs(JsonConfiguration::class.java)
         val conditionMatcherFactory = ConditionMatcherFactoryProvider.getRequired(field.key)
         return conditionMatcherFactory.create(conditionConfiguration)
