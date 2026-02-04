@@ -15,6 +15,6 @@ package me.ahoo.cosec.cache
 
 import me.ahoo.cache.api.Cache
 import me.ahoo.cosec.api.permission.PermissionId
-import me.ahoo.cosec.api.principal.RoleId
+import me.ahoo.cosec.api.principal.SpacedRoleId
 
-interface RolePermissionCache : Cache<RoleId, Set<PermissionId>>
+interface RolePermissionCache : Cache<SpacedRoleId, Set<PermissionId>>

@@ -3,6 +3,7 @@ package me.ahoo.cosec.cache
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.policy.Effect
+import me.ahoo.cosec.api.principal.SpacedRoleId.Companion.toSpacedRoleId
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.permission.PermissionGroupData
@@ -20,7 +21,7 @@ class RedisAppRolePermissionRepositoryTest {
         val appPermissionCache = mockk<AppPermissionCache>()
         every { appPermissionCache.get("appId") } returns null
         val permissionRepository = RedisAppRolePermissionRepository(appPermissionCache, mockk())
-        permissionRepository.getAppRolePermission("appId", setOf("roleId"))
+        permissionRepository.getAppRolePermission("appId", "", setOf("roleId"))
             .test()
             .verifyComplete()
     }
@@ -41,10 +42,10 @@ class RedisAppRolePermissionRepositoryTest {
         every { appPermissionCache.get("appId") } returns appPermission
 
         val rolePermissionCache = mockk<RolePermissionCache>()
-        every { rolePermissionCache.get("roleId") } returns setOf(permission.id)
+        every { rolePermissionCache.get("roleId".toSpacedRoleId()) } returns setOf(permission.id)
 
         val permissionRepository = RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
-        permissionRepository.getAppRolePermission("appId", setOf("roleId"))
+        permissionRepository.getAppRolePermission("appId", "", setOf("roleId"))
             .test()
             .consumeNextWith {
                 assertThat(it.appPermission, equalTo(appPermission))
