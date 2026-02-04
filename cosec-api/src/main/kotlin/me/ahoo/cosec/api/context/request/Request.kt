@@ -15,9 +15,7 @@ package me.ahoo.cosec.api.context.request
 
 import me.ahoo.cosec.api.context.Attributes
 import me.ahoo.cosec.api.context.request.AppIdCapable.Companion.APP_ID_KEY
-import me.ahoo.cosec.api.context.request.AppIdCapable.Companion.LEGACY_APP_ID_KEY
 import me.ahoo.cosec.api.context.request.DeviceIdCapable.Companion.DEVICE_ID_KEY
-import me.ahoo.cosec.api.context.request.DeviceIdCapable.Companion.LEGACY_DEVICE_ID_KEY
 import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_KEY
 import me.ahoo.cosec.api.context.request.SpaceIdCapable.Companion.SPACE_ID_KEY
 import java.net.URI
@@ -31,31 +29,20 @@ interface Request :
 
     override val appId: AppId
         get() {
-            return getHeaderOrQuery(APP_ID_KEY, LEGACY_APP_ID_KEY)
+            return getHeader(APP_ID_KEY).ifBlank { getQuery(APP_ID_KEY) }
         }
     override val spaceId: SpaceId
         get() {
-            return getHeaderOrQuery(SPACE_ID_KEY)
+            return getHeader(SPACE_ID_KEY).ifBlank { getQuery(SPACE_ID_KEY) }
         }
     override val deviceId: DeviceId
         get() {
-            return getHeaderOrQuery(DEVICE_ID_KEY, LEGACY_DEVICE_ID_KEY)
+            return getHeader(DEVICE_ID_KEY).ifBlank { getQuery(DEVICE_ID_KEY) }
         }
     override val requestId: RequestId
         get() {
             return getHeader(REQUEST_ID_KEY)
         }
-
-    private fun getHeaderOrQuery(key: String, fallbackKey: String): String {
-        return getHeaderOrQuery(key).ifBlank {
-            getHeaderOrQuery(fallbackKey)
-        }
-    }
-
-    private fun getHeaderOrQuery(key: String): String {
-        return getHeader(key).ifBlank { getQuery(key) }
-    }
-
     val path: String
     val method: String
     val remoteIp: String

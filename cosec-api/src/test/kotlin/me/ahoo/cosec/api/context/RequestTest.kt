@@ -15,17 +15,13 @@ package me.ahoo.cosec.api.context
 
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.DeviceIdCapable
-import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 class RequestTest {
     @Test
     fun appIdKey() {
-        AppIdCapable.LEGACY_APP_ID_KEY.assert().isEqualTo("CoSec-App-Id")
-        AppIdCapable.APP_ID_KEY.assert().isEqualTo("X-App-Id")
-        DeviceIdCapable.LEGACY_DEVICE_ID_KEY.assert().isEqualTo("CoSec-Device-Id")
-        DeviceIdCapable.DEVICE_ID_KEY.assert().isEqualTo("X-Device-Id")
-        SpaceIdCapable.SPACE_ID_KEY.assert().isEqualTo("X-Space-Id")
+        AppIdCapable.APP_ID_KEY.assert().isEqualTo("CoSec-App-Id")
+        DeviceIdCapable.DEVICE_ID_KEY.assert().isEqualTo("CoSec-Device-Id")
     }
 }
