@@ -56,9 +56,11 @@ object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, Authorize
     private val USER_ID_ATTRIBUTE_KEY = stringKey("user.id")
     private val USER_ROLES_ATTRIBUTE_KEY = stringArrayKey("user.roles")
     private const val COSEC_TENANT_ID_KEY = CoSec.COSEC_PREFIX + "tenant_id"
+    private const val COSEC_SPACE_ID_KEY = CoSec.COSEC_PREFIX + "space_id"
     private const val COSEC_APP_ID_KEY = CoSec.COSEC_PREFIX + "app_id"
     private const val COSEC_REQUEST_ID_KEY = CoSec.COSEC_PREFIX + "request_id"
     private val COSEC_TENANT_ID_ATTRIBUTE_KEY = stringKey(COSEC_TENANT_ID_KEY)
+    private val COSEC_SPACE_ID_ATTRIBUTE_KEY = stringKey(COSEC_SPACE_ID_KEY)
     private val COSEC_APP_ID_ATTRIBUTE_KEY = stringKey(COSEC_APP_ID_KEY)
     private val COSEC_DEVICE_ID_ATTRIBUTE_KEY = stringKey("device.id")
     private val COSEC_REQUEST_ID_ATTRIBUTE_KEY = stringKey(COSEC_REQUEST_ID_KEY)
@@ -111,6 +113,10 @@ object CoSecAttributesExtractor : AttributesExtractor<SecurityContext, Authorize
             val requestId = cosecRequest.requestId
             if (requestId.isNotBlank()) {
                 attributes.put(COSEC_REQUEST_ID_ATTRIBUTE_KEY, requestId)
+            }
+            val spaceId = cosecRequest.spaceId
+            if (spaceId.isNotBlank()) {
+                attributes.put(COSEC_SPACE_ID_ATTRIBUTE_KEY, spaceId)
             }
         }
         val securityContext = request
