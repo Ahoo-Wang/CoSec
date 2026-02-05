@@ -40,6 +40,11 @@
           "items": {
             "$ref": "#/definitions/permission"
           }
+        },
+        "spaced": {
+          "type": "boolean",
+          "description": "Whether the permission group is spaced",
+          "default": false
         }
       },
       "required": [
