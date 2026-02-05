@@ -13,12 +13,4 @@
 
 package me.ahoo.cosec.api.context.request
 
-typealias AppId = String
-
-interface AppIdCapable {
-    companion object {
-        const val APP_ID_KEY = "${COSEC_EXTEND_KEY_PREFIX}App-Id"
-    }
-
-    val appId: AppId
-}
+const val COSEC_EXTEND_KEY_PREFIX = "CoSec-"

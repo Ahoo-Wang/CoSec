@@ -14,7 +14,9 @@
 package me.ahoo.cosec.permission
 
 import me.ahoo.cosec.api.permission.AppPermission
+import me.ahoo.cosec.api.permission.Permission
 import me.ahoo.cosec.api.permission.PermissionGroup
+import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 
@@ -24,7 +26,7 @@ data class AppPermissionData(
     override val groups: List<PermissionGroup> = listOf()
 ) : AppPermission {
     @delegate:Transient
-    override val permissionIndexer: Map<String, me.ahoo.cosec.api.permission.Permission> by lazy(this) {
+    override val permissionIndexer: Map<PermissionId, Permission> by lazy(this) {
         super.permissionIndexer
     }
 
