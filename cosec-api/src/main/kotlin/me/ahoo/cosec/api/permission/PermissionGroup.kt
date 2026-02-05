@@ -15,11 +15,13 @@ package me.ahoo.cosec.api.permission
 
 import me.ahoo.cosec.api.Named
 
-/**
- * Permission group.
- */
 interface PermissionGroup : Named {
     override val name: String
     val description: String
     val permissions: List<Permission>
+
+    /**
+     * Whether it is a space resource
+     */
+    val spaced: Boolean
 }
