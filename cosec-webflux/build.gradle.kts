@@ -15,7 +15,6 @@ dependencies {
     api(project(":cosec-core"))
     api(project(":cosec-jwt"))
     api("org.springframework:spring-context")
-    api("org.springframework:spring-web")
     api("org.springframework:spring-webflux")
     testImplementation("me.ahoo.cosid:cosid-test")
     testImplementation("org.springframework:spring-test")
