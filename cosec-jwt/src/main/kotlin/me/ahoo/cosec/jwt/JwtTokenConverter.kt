@@ -27,9 +27,17 @@ import java.time.Duration
 import java.util.*
 
 /**
- * Jwt Token Converter.
+ * JWT-based token converter.
  *
- * @author ahoo wang
+ * This converter generates JWT tokens containing principal information
+ * including policies, roles, and tenant context.
+ *
+ * @param idGenerator Generator for unique token IDs
+ * @param algorithm The algorithm used to sign JWTs
+ * @param accessTokenValidity Duration for which access tokens are valid
+ * @param refreshTokenValidity Duration for which refresh tokens are valid
+ * @see TokenConverter
+ * @see JwtTokenVerifier
  */
 class JwtTokenConverter(
     private val idGenerator: IdGenerator,
@@ -37,10 +45,11 @@ class JwtTokenConverter(
     private val accessTokenValidity: Duration = Duration.ofMinutes(10),
     private val refreshTokenValidity: Duration = Duration.ofDays(7)
 ) : TokenConverter {
-
-    override fun toToken(principal: CoSecPrincipal): CompositeToken {
-        return toToken(principal, accessTokenValidity, refreshTokenValidity)
-    }
+    override fun toToken(principal: CoSecPrincipal): CompositeToken = toToken(
+        principal,
+        accessTokenValidity,
+        refreshTokenValidity
+    )
 
     override fun toToken(
         principal: CoSecPrincipal,
@@ -50,11 +59,13 @@ class JwtTokenConverter(
         val accessTokenId = idGenerator.generateAsString()
         val now = Date()
         val accessTokenExp = Date(System.currentTimeMillis() + accessTokenValidity.toMillis())
-        val accessTokenBuilder = JWT.create()
-            .withJWTId(accessTokenId)
-            .withSubject(principal.id)
-            .withIssuedAt(now)
-            .withExpiresAt(accessTokenExp)
+        val accessTokenBuilder =
+            JWT
+                .create()
+                .withJWTId(accessTokenId)
+                .withSubject(principal.id)
+                .withIssuedAt(now)
+                .withExpiresAt(accessTokenExp)
         if (principal.policies.isNotEmpty()) {
             accessTokenBuilder.withClaim(PolicyCapable.POLICY_KEY, principal.policies.toList())
         }
@@ -73,12 +84,14 @@ class JwtTokenConverter(
         val accessToken = accessTokenBuilder.sign(algorithm)
         val refreshTokenId = idGenerator.generateAsString()
         val refreshTokenExp = Date(System.currentTimeMillis() + refreshTokenValidity.toMillis())
-        val refreshToken = JWT.create()
-            .withJWTId(refreshTokenId)
-            .withSubject(accessTokenId)
-            .withIssuedAt(now)
-            .withExpiresAt(refreshTokenExp)
-            .sign(algorithm)
+        val refreshToken =
+            JWT
+                .create()
+                .withJWTId(refreshTokenId)
+                .withSubject(accessTokenId)
+                .withIssuedAt(now)
+                .withExpiresAt(refreshTokenExp)
+                .sign(algorithm)
         return SimpleCompositeToken(accessToken, refreshToken)
     }
 }

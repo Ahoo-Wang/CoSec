@@ -35,6 +35,21 @@ import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
+/**
+ * Base class for reactive security filters.
+ *
+ * This abstract class provides the core security filtering logic for WebFlux applications,
+ * including:
+ * - Parsing requests to extract security context
+ * - Authorization decision making
+ * - Error handling for authentication failures
+ *
+ * @param securityContextParser Parser for extracting security context from requests
+ * @param requestParser Parser for converting exchanges to requests
+ * @param authorization The authorization service
+ * @see ReactiveAuthorizationFilter
+ * @see ReactiveInjectSecurityContextWebFilter
+ */
 abstract class ReactiveSecurityFilter(
     val securityContextParser: SecurityContextParser,
     val requestParser: RequestParser<ServerWebExchange>,
@@ -50,24 +65,28 @@ abstract class ReactiveSecurityFilter(
     ): Mono<Void> {
         val request = requestParser.parse(exchange)
         var tokenVerificationException: TokenVerificationException? = null
-        val securityContext = try {
-            securityContextParser.parse(request)
-        } catch (verificationException: TokenVerificationException) {
-            log.debug(verificationException) {
-                "Parse request to security context failed."
+        val securityContext =
+            try {
+                securityContextParser.parse(request)
+            } catch (verificationException: TokenVerificationException) {
+                log.debug(verificationException) {
+                    "Parse request to security context failed."
+                }
+                tokenVerificationException = verificationException
+                SimpleSecurityContext.anonymous()
             }
-            tokenVerificationException = verificationException
-            SimpleSecurityContext.anonymous()
-        }
         securityContext.setRequest(request)
         exchange.setSecurityContext(securityContext)
         exchange.response.headers.trySet(REQUEST_ID_KEY, request.requestId)
-        return authorization.authorize(request, securityContext)
+        return authorization
+            .authorize(request, securityContext)
             .flatMap { authorizeResult ->
                 if (authorizeResult.authorized) {
-                    exchange.mutate()
+                    exchange
+                        .mutate()
                         .principal(securityContext.principal.toMono())
-                        .build().let {
+                        .build()
+                        .let {
                             return@flatMap chain(it, request).writeSecurityContext(securityContext)
                         }
                 }
