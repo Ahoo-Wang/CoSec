@@ -13,8 +13,14 @@
 package me.ahoo.cosec.api.token
 
 /**
- * Composite Token .
+ * Token that contains both access and refresh tokens.
  *
- * @author ahoo wang
+ * This is a convenience interface that combines [AccessToken] and [RefreshToken]
+ * for cases where both are needed together.
+ *
+ * @see AccessToken
+ * @see RefreshToken
  */
-interface CompositeToken : AccessToken, RefreshToken
+interface CompositeToken :
+    AccessToken,
+    RefreshToken

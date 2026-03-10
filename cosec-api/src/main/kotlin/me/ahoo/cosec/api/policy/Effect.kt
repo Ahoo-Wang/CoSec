@@ -13,6 +13,22 @@
 
 package me.ahoo.cosec.api.policy
 
+/**
+ * Policy effect that determines whether an action is allowed or denied.
+ *
+ * This enum represents the two possible effects of a policy statement:
+ * - [ALLOW]: Grants permission to perform the action
+ * - [DENY]: Explicitly prohibits the action
+ *
+ * DENY statements take precedence over ALLOW statements during policy evaluation.
+ *
+ * @see Statement
+ * @see Policy
+ */
 enum class Effect {
-    ALLOW, DENY
+    /** Allows the action to be performed */
+    ALLOW,
+
+    /** Denies the action */
+    DENY
 }

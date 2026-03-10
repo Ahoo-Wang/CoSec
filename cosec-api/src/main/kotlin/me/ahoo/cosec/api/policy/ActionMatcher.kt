@@ -15,4 +15,17 @@ package me.ahoo.cosec.api.policy
 
 import me.ahoo.cosec.api.principal.RequestMatcher
 
+/**
+ * Action matcher for evaluating policy actions.
+ *
+ * An ActionMatcher determines whether a request's action (such as HTTP method
+ * and path) matches a specific pattern defined in a policy statement.
+ *
+ * Common implementations include:
+ * - [me.ahoo.cosec.policy.action.PathActionMatcher] - Matches by path patterns
+ * - [me.ahoo.cosec.policy.action.AllActionMatcher] - Matches all actions
+ *
+ * @see Statement
+ * @see RequestMatcher
+ */
 interface ActionMatcher : RequestMatcher

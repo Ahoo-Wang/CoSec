@@ -16,16 +16,25 @@ package me.ahoo.cosec.api.permission
 import me.ahoo.cosec.api.principal.RoleId
 
 /**
- * Role Permissions.
+ * Role-based permissions.
+ *
+ * A RolePermission defines which permissions are assigned to a specific role.
+ * This enables role-based access control (RBAC).
+ *
+ * @see RoleId
+ * @see Permission
+ * @see AppRolePermission
  */
 interface RolePermission {
     /**
-     * role id
+     * The role ID this permission assignment belongs to.
      */
     val id: RoleId
 
     /**
-     * @see me.ahoo.cosec.api.permission.Permission
+     * Set of permission IDs assigned to this role.
+     *
+     * @see Permission
      */
     val permissions: Set<PermissionId>
 }

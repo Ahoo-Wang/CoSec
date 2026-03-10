@@ -21,6 +21,21 @@ import reactor.kotlin.core.publisher.switchIfEmpty
 import reactor.kotlin.core.publisher.toMono
 import java.time.Duration
 
+/**
+ * Initializes local policies to a [PolicyRepository].
+ *
+ * This class loads policies from local files and registers them
+ * with the policy repository. It supports:
+ * - Force refresh mode (always updates existing policies)
+ * - Non-force mode (only adds new policies)
+ *
+ * @param localPolicyLoader The loader that reads policies from files
+ * @param policyRepository The repository to register policies with
+ * @param forceRefresh If true, always updates existing policies; if false, skips existing
+ *
+ * @see LocalPolicyLoader
+ * @see PolicyRepository
+ */
 class LocalPolicyInitializer(
     private val localPolicyLoader: LocalPolicyLoader,
     private val policyRepository: PolicyRepository,
@@ -31,7 +46,10 @@ class LocalPolicyInitializer(
     }
 
     /**
-     * Initialize local policy to PolicyRepository.
+     * Initializes all local policies to the repository.
+     *
+     * In force refresh mode, all policies are updated.
+     * In non-force mode, only policies that don't already exist are added.
      */
     fun init() {
         log.info {
@@ -52,11 +70,11 @@ class LocalPolicyInitializer(
             return
         }
 
-        policyRepository.getPolicies(setOf(policy.id))
+        policyRepository
+            .getPolicies(setOf(policy.id))
             .switchIfEmpty {
                 listOf<Policy>().toMono()
-            }
-            .flatMap { policies ->
+            }.flatMap { policies ->
                 if (policies.isEmpty()) {
                     log.info {
                         "Init Policy - [${policy.id}]."
@@ -67,8 +85,7 @@ class LocalPolicyInitializer(
                     "Init Policy - [${policy.id}] already exists,Ignore setting policy."
                 }
                 Mono.empty()
-            }
-            .doOnError { error ->
+            }.doOnError { error ->
                 log.error(error) {
                     "Init Policy - [${policy.id}] failed."
                 }

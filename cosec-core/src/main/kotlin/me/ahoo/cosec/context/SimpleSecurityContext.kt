@@ -22,9 +22,17 @@ import me.ahoo.cosec.tenant.SimpleTenant
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Security Context.
+ * Simple implementation of [SecurityContext].
  *
- * @author ahoo wang
+ * This is a thread-safe implementation that holds the principal,
+ * tenant information, and custom attributes for a request.
+ *
+ * @param principal The authenticated principal
+ * @param tenant The tenant context (defaults to principal's tenant)
+ * @param attributes Custom attributes for this context
+ *
+ * @see SecurityContext
+ * @see CoSecPrincipal
  */
 @ThreadSafe
 class SimpleSecurityContext(
@@ -33,9 +41,10 @@ class SimpleSecurityContext(
     override val attributes: MutableMap<String, Any> = ConcurrentHashMap()
 ) : SecurityContext {
     companion object {
-        fun anonymous(): SecurityContext {
-            return SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
-        }
+        /**
+         * Creates an anonymous security context for unauthenticated requests.
+         */
+        fun anonymous(): SecurityContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
     }
 
     override fun toString(): String {
@@ -49,6 +58,12 @@ class SimpleSecurityContext(
     }
 }
 
+/**
+ * Extension property to get tenant from a principal.
+ *
+ * If the principal implements [TenantCapable], returns its tenant.
+ * Otherwise, returns [SimpleTenant.DEFAULT].
+ */
 val CoSecPrincipal.tenant: Tenant
     get() {
         return if (this is TenantCapable) {

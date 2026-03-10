@@ -13,8 +13,12 @@
 package me.ahoo.cosec.api.authentication
 
 /**
- * Credentials tag.
+ * Base marker interface for authentication credentials.
  *
- * @author ahoo wang
+ * Credentials are pieces of information used to verify identity,
+ * such as username/password, API keys, or tokens.
+ *
+ * @see Authentication
+ * @see me.ahoo.cosec.api.token.RefreshTokenCredentials
  */
 interface Credentials

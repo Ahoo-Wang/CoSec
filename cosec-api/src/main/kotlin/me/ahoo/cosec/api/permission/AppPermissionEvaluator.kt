@@ -13,6 +13,22 @@
 
 package me.ahoo.cosec.api.permission
 
+/**
+ * Interface for evaluating application permissions.
+ *
+ * Implementations validate that permission configurations are correct
+ * and can be used for authorization.
+ *
+ * @see AppPermission
+ */
 interface AppPermissionEvaluator {
+    /**
+     * Evaluates an application permission configuration.
+     *
+     * This validates the permission setup and ensures all referenced
+     * permissions and conditions are properly configured.
+     *
+     * @param appPermission The application permission to evaluate
+     */
     fun evaluate(appPermission: AppPermission)
 }

@@ -13,18 +13,25 @@
 package me.ahoo.cosec.api.principal
 
 /**
- * PolicyCapable .
+ * Interface for entities that have policies.
  *
- * @author ahoo wang
+ * This interface allows principals to have direct policy assignments
+ * in addition to role-based permissions.
+ *
+ * Relationship:
+ * - [CoSecPrincipal] 1:N [me.ahoo.cosec.policy.Policy]
+ *
+ * @see Policy
+ * @see CoSecPrincipal
  */
 interface PolicyCapable {
     /**
-     * get policy ids.
-     * relation:
+     * The set of policy IDs assigned to this principal.
      *
-     * [me.ahoo.cosec.api.principal.CoSecPrincipal] 1:N [me.ahoo.cosec.policy.Policy]
+     * These policies are evaluated during authorization alongside
+     * role-based permissions.
      *
-     * @return policy ids..
+     * @return Set of policy identifiers
      */
     val policies: Set<String>
 

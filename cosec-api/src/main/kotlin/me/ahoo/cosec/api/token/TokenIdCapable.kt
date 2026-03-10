@@ -13,10 +13,18 @@
 package me.ahoo.cosec.api.token
 
 /**
- * Token Id Capable .
+ * Interface for entities that have a token ID.
  *
- * @author ahoo wang
+ * This is typically implemented by principals that are authenticated
+ * via token-based authentication.
+ *
+ * @see Token
+ * @see TokenPrincipal
  */
 interface TokenIdCapable : Token {
+    /**
+     * The unique identifier for this token.
+     * This ID is used for token management and revocation.
+     */
     val tokenId: String
 }

@@ -16,7 +16,26 @@ package me.ahoo.cosec.policy.condition
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.policy.ConditionMatcher
 
+/**
+ * Factory interface for creating [ConditionMatcher] instances.
+ *
+ * Implementations are responsible for creating condition matchers
+ * based on configuration. The factory is registered with
+ * [ConditionMatcherFactoryProvider] to make matchers available
+ * for policy definitions.
+ *
+ * @see ConditionMatcher
+ * @see ConditionMatcherFactoryProvider
+ */
 interface ConditionMatcherFactory {
+    /** The type identifier for this factory */
     val type: String
+
+    /**
+     * Creates a condition matcher from the given configuration.
+     *
+     * @param configuration The configuration for the matcher
+     * @return A new ConditionMatcher instance
+     */
     fun create(configuration: Configuration): ConditionMatcher
 }

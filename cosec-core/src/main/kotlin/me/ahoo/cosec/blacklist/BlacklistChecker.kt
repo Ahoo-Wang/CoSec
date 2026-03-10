@@ -17,16 +17,38 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import reactor.core.publisher.Mono
 
+/**
+ * Interface for checking if a request is blocked by blacklist.
+ *
+ * Blacklist checking is used to block specific users or IP addresses
+ * from accessing the system, typically for security reasons like
+ * suspicious activity or policy violations.
+ *
+ * @see NoOp
+ */
 interface BlacklistChecker {
-    fun check(request: Request, context: SecurityContext): Mono<Boolean>
+    /**
+     * Checks if the request is allowed based on blacklist rules.
+     *
+     * @param request The incoming request
+     * @param context The security context
+     * @return [Mono] emitting true if the request is allowed, false if blocked
+     */
+    fun check(
+        request: Request,
+        context: SecurityContext
+    ): Mono<Boolean>
 
+    /**
+     * No-op blacklist checker that always allows all requests.
+     * Use this when blacklist functionality is not needed.
+     */
     object NoOp : BlacklistChecker {
-        val PASS = Mono.just(true)
+        private val PASS = Mono.just(true)
+
         override fun check(
             request: Request,
             context: SecurityContext
-        ): Mono<Boolean> {
-            return PASS
-        }
+        ): Mono<Boolean> = PASS
     }
 }

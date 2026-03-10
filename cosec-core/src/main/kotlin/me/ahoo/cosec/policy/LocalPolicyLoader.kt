@@ -20,7 +20,18 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import org.springframework.core.io.support.ResourcePatternResolver
 import java.io.FileNotFoundException
 
-class LocalPolicyLoader(private val locations: Set<String>) {
+/**
+ * Loads policies from local file system locations.
+ *
+ * This loader reads policy definitions from JSON files in specified
+ * locations using Spring's resource pattern resolution.
+ *
+ * @param locations Set of resource patterns to load policies from
+ * @see Policy
+ */
+class LocalPolicyLoader(
+    private val locations: Set<String>
+) {
     companion object {
         private val log = KotlinLogging.logger {}
         private val resourceResolver: ResourcePatternResolver = PathMatchingResourcePatternResolver()
@@ -31,30 +42,31 @@ class LocalPolicyLoader(private val locations: Set<String>) {
     }
 
     private fun loadPolicies(): List<Policy> {
-        return locations.flatMap {
-            log.info {
-                "Load Location [$it]."
-            }
-            try {
-                resourceResolver.getResources(it).toList()
-            } catch (e: FileNotFoundException) {
-                log.error(e) {
-                    e.message
+        return locations
+            .flatMap {
+                log.info {
+                    "Load Location [$it]."
                 }
-                listOf()
+                try {
+                    resourceResolver.getResources(it).toList()
+                } catch (e: FileNotFoundException) {
+                    log.error(e) {
+                        e.message
+                    }
+                    listOf()
+                }
+            }.mapNotNull {
+                log.info {
+                    "Load Policy [$it]."
+                }
+                try {
+                    return@mapNotNull CoSecJsonSerializer.readValue(it.contentAsByteArray, Policy::class.java)
+                } catch (e: Throwable) {
+                    log.error(e) { e.message }
+                    null
+                }
+            }.distinctBy {
+                it.id
             }
-        }.mapNotNull {
-            log.info {
-                "Load Policy [$it]."
-            }
-            try {
-                return@mapNotNull CoSecJsonSerializer.readValue(it.contentAsByteArray, Policy::class.java)
-            } catch (e: Throwable) {
-                log.error(e) { e.message }
-                null
-            }
-        }.distinctBy {
-            it.id
-        }
     }
 }

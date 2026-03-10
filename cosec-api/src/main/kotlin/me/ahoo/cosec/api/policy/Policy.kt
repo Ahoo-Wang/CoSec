@@ -18,39 +18,87 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.tenant.Tenant
 
+/** Type alias for policy identifier */
 typealias PolicyId = String
 
 /**
- * Permission Policy
+ * Permission Policy.
+ *
+ * A Policy is a collection of statements that define access control rules.
+ * Each policy has:
+ * - [id] - Unique identifier
+ * - [name] - Human-readable name
+ * - [category] - Category for grouping policies
+ * - [description] - Detailed description
+ * - [type] - Policy type (e.g., global, app-specific)
+ * - [condition] - Condition that must be met for this policy to apply
+ * - [statements] - List of permission statements
+ *
+ * Policies are evaluated to determine if a request should be allowed or denied.
+ * When evaluating, the condition is checked first, then each statement is
+ * evaluated in order (DENY statements take precedence).
+ *
+ * @see Statement
+ * @see Effect
+ * @see ConditionMatcher
  */
-interface Policy : Named, Tenant, PermissionVerifier {
-    val id: PolicyId
+interface Policy :
+    Named,
+    Tenant,
+    PermissionVerifier {
+    /** Unique identifier for this policy */
+    override val id: PolicyId
+
+    /** Category for grouping related policies (e.g., "admin", "user") */
     val category: String
+
+    /** Detailed description of what this policy controls */
     val description: String
+
+    /** Type of policy (e.g., GLOBAL, APP) */
     val type: PolicyType
+
+    /** Condition that must be met for this policy to be considered */
     val condition: ConditionMatcher
+
+    /** List of permission statements in this policy */
     val statements: List<Statement>
-    override fun verify(request: Request, securityContext: SecurityContext): VerifyResult {
+
+    /**
+     * Verifies if the request is permitted by this policy.
+     *
+     * @param request The incoming request
+     * @param securityContext The security context of the request
+     * @return [VerifyResult.ALLOW] if policy condition and any ALLOW statement match,
+     *         [VerifyResult.EXPLICIT_DENY] if any DENY statement matches,
+     *         [VerifyResult.IMPLICIT_DENY] otherwise
+     */
+    override fun verify(
+        request: Request,
+        securityContext: SecurityContext
+    ): VerifyResult {
         if (!condition.match(request, securityContext)) {
             return VerifyResult.IMPLICIT_DENY
         }
-        statements.filter {
-            it.effect == Effect.DENY
-        }.forEach {
-            val verifyResult = it.verify(request, securityContext)
-            if (verifyResult == VerifyResult.EXPLICIT_DENY) {
-                return VerifyResult.EXPLICIT_DENY
+        statements
+            .filter {
+                it.effect == Effect.DENY
+            }.forEach {
+                val verifyResult = it.verify(request, securityContext)
+                if (verifyResult == VerifyResult.EXPLICIT_DENY) {
+                    return VerifyResult.EXPLICIT_DENY
+                }
             }
-        }
 
-        statements.filter {
-            it.effect == Effect.ALLOW
-        }.forEach {
-            val verifyResult = it.verify(request, securityContext)
-            if (verifyResult == VerifyResult.ALLOW) {
-                return VerifyResult.ALLOW
+        statements
+            .filter {
+                it.effect == Effect.ALLOW
+            }.forEach {
+                val verifyResult = it.verify(request, securityContext)
+                if (verifyResult == VerifyResult.ALLOW) {
+                    return VerifyResult.ALLOW
+                }
             }
-        }
         return VerifyResult.IMPLICIT_DENY
     }
 }

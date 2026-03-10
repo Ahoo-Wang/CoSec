@@ -15,15 +15,29 @@ package me.ahoo.cosec.api.permission
 
 import me.ahoo.cosec.api.policy.Statement
 
+/** Type alias for permission identifier */
 typealias PermissionId = String
 
 /**
- * Permission metadata.
+ * Permission metadata extending [Statement].
+ *
+ * A Permission represents a specific action or resource that can be granted.
+ * It extends [Statement] to include the ability to verify permissions.
+ *
+ * Format: `appId.group.permission` (e.g., "order.read", "admin.users.delete")
+ *
+ * @see Statement
+ * @see AppPermission
+ * @see RolePermission
  */
 interface Permission : Statement {
     /**
-     * format : appId.group.permission
+     * Unique permission identifier.
+     *
+     * Format: appId.group.permission
      */
-    val id: PermissionId
+    override val id: PermissionId
+
+    /** Description of what this permission allows */
     val description: String
 }
