@@ -15,6 +15,14 @@ package me.ahoo.cosec.serialization
 
 import tools.jackson.module.kotlin.jsonMapper
 
-val CoSecJsonSerializer = jsonMapper {
-    findAndAddModules()
-}
+/**
+ * JSON serializer for CoSec objects.
+ *
+ * This is a Jackson ObjectMapper configured with Kotlin support
+ * and module registration for CoSec types.
+ */
+
+val CoSecJsonSerializer =
+    jsonMapper {
+        findAndAddModules()
+    }

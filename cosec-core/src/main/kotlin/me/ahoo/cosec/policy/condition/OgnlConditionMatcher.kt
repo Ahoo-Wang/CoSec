@@ -21,19 +21,36 @@ import ognl.Ognl
 
 const val OGNL_CONDITION_MATCHER_EXPRESSION_KEY = "expression"
 
-class OgnlConditionMatcher(configuration: Configuration) :
-    AbstractConditionMatcher(OgnlConditionMatcherFactory.TYPE, configuration) {
-    private val ognlExpression = configuration.getRequired(OGNL_CONDITION_MATCHER_EXPRESSION_KEY).asString()
-        .let {
-            Ognl.parseExpression(it)
-        }
+/**
+ * Condition matcher using OGNL (Object-Graph Navigation Language).
+ *
+ * This matcher evaluates an OGNL expression to determine if the condition is met.
+ *
+ * @param configuration Configuration containing the OGNL expression
+ * @see ConditionMatcher
+ * @see <a href="https://ognl.org/">OGNL</a>
+ */
+class OgnlConditionMatcher(
+    configuration: Configuration
+) : AbstractConditionMatcher(OgnlConditionMatcherFactory.TYPE, configuration) {
+    private val ognlExpression =
+        configuration
+            .getRequired(OGNL_CONDITION_MATCHER_EXPRESSION_KEY)
+            .asString()
+            .let {
+                Ognl.parseExpression(it)
+            }
 
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
+    override fun internalMatch(
+        request: Request,
+        securityContext: SecurityContext
+    ): Boolean {
         @Suppress("UNCHECKED_CAST")
-        val contextValues = mapOf(
-            "request" to request,
-            "context" to securityContext,
-        )
+        val contextValues =
+            mapOf(
+                "request" to request,
+                "context" to securityContext,
+            )
         val ognlContext = Ognl.createDefaultContext(request).withValues(contextValues)
         return Ognl.getValue(ognlExpression, ognlContext, request, Boolean::class.java) as Boolean
     }
@@ -47,7 +64,5 @@ class OgnlConditionMatcherFactory : ConditionMatcherFactory {
     override val type: String
         get() = "ognl"
 
-    override fun create(configuration: Configuration): ConditionMatcher {
-        return OgnlConditionMatcher(configuration)
-    }
+    override fun create(configuration: Configuration): ConditionMatcher = OgnlConditionMatcher(configuration)
 }
