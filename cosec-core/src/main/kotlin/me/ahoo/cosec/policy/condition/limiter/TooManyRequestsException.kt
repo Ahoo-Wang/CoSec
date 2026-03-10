@@ -13,4 +13,11 @@
 
 package me.ahoo.cosec.policy.condition.limiter
 
-class TooManyRequestsException(message: String = "") : RuntimeException(message)
+/**
+ * Exception thrown when rate limit is exceeded.
+ *
+ * @see RateLimiterConditionMatcher
+ */
+class TooManyRequestsException(
+    message: String = ""
+) : RuntimeException(message)

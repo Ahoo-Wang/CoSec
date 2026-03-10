@@ -18,17 +18,29 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
 
+/**
+ * Composite action matcher that combines multiple matchers.
+ *
+ * This matcher uses OR logic - returns true if any of the contained
+ * matchers match the request.
+ *
+ * @param type The type identifier for this composite matcher
+ * @param actionMatchers List of action matchers to combine
+ * @param configuration Additional configuration
+ * @see ActionMatcher
+ */
 class CompositeActionMatcher(
     override val type: String,
     private val actionMatchers: List<ActionMatcher>,
     override val configuration: Configuration
 ) : ActionMatcher {
-
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        return actionMatchers.any { pathActionMatcher ->
+    override fun match(
+        request: Request,
+        securityContext: SecurityContext
+    ): Boolean =
+        actionMatchers.any { pathActionMatcher ->
             pathActionMatcher.match(request, securityContext)
         }
-    }
 }
 
 class CompositeActionMatcherFactory : ActionMatcherFactory {
@@ -42,9 +54,10 @@ class CompositeActionMatcherFactory : ActionMatcherFactory {
 
     override fun create(configuration: Configuration): ActionMatcher {
         configuration.asList().let { actionMatcherConfigurations ->
-            val actionMatchers = actionMatcherConfigurations.map { actionMatcherConfiguration ->
-                actionMatcherConfiguration.asObject(ActionMatcher::class.java)
-            }
+            val actionMatchers =
+                actionMatcherConfigurations.map { actionMatcherConfiguration ->
+                    actionMatcherConfiguration.asObject(ActionMatcher::class.java)
+                }
             return CompositeActionMatcher(TYPE, actionMatchers, configuration)
         }
     }

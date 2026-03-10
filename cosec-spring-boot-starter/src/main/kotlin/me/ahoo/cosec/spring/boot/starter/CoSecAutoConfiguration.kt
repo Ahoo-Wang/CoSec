@@ -22,23 +22,25 @@ import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 
 /**
- * CoSec AutoConfiguration .
+ * Auto-configuration for CoSec security framework.
  *
- * @author ahoo wang
+ * This class provides the main Spring Boot auto-configuration for CoSec,
+ * including:
+ * - JSON serialization module registration
+ * - Matcher factory registration
+ *
+ * @see CoSecProperties
  */
 @ConditionalOnCoSecEnabled
 @AutoConfiguration(before = [JacksonAutoConfiguration::class])
 @EnableConfigurationProperties(CoSecProperties::class)
 class CoSecAutoConfiguration {
-
     @Bean
     @ConditionalOnMissingBean
-    fun coSecModule(): CoSecModule {
-        return CoSecModule()
-    }
+    fun coSecModule(): CoSecModule = CoSecModule()
 
     @Bean
-    fun matcherFactoryRegister(applicationContext: ApplicationContext): MatcherFactoryRegister {
-        return MatcherFactoryRegister(applicationContext)
-    }
+    fun matcherFactoryRegister(applicationContext: ApplicationContext): MatcherFactoryRegister = MatcherFactoryRegister(
+        applicationContext
+    )
 }

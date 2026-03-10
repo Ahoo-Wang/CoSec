@@ -13,9 +13,9 @@
 package me.ahoo.cosec
 
 /**
- * Delegated .
+ * Interface for delegation pattern.
  *
- * @author ahoo wang
+ * @param T The type being delegated
  */
 interface Delegated<T> {
     val delegate: T

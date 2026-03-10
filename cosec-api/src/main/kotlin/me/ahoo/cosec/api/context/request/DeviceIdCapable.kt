@@ -15,9 +15,15 @@ package me.ahoo.cosec.api.context.request
 
 typealias DeviceId = String
 
+/**
+ * Interface for entities that have a device ID.
+ *
+ * @see Request
+ */
 interface DeviceIdCapable {
     companion object {
         const val DEVICE_ID_KEY = "${COSEC_EXTEND_KEY_PREFIX}Device-Id"
     }
+
     val deviceId: DeviceId
 }

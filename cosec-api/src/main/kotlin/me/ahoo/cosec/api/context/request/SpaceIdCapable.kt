@@ -15,6 +15,11 @@ package me.ahoo.cosec.api.context.request
 
 typealias SpaceId = String
 
+/**
+ * Interface for entities that have a space/tenant ID.
+ *
+ * @see Request
+ */
 interface SpaceIdCapable {
     companion object {
         const val SPACE_ID_KEY = "${COSEC_EXTEND_KEY_PREFIX}Space-Id"
