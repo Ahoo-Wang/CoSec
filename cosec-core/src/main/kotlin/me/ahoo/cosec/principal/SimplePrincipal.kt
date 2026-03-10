@@ -15,9 +15,17 @@ package me.ahoo.cosec.principal
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 
 /**
- * Simple Principal.
+ * Simple implementation of [CoSecPrincipal].
  *
- * @author ahoo wang
+ * This is a basic implementation that stores principal data
+ * as simple properties.
+ *
+ * @param id The unique identifier for this principal
+ * @param policies Set of policy IDs assigned to this principal
+ * @param roles Set of role IDs assigned to this principal
+ * @param attributes Additional attributes for this principal
+ *
+ * @see CoSecPrincipal
  */
 data class SimplePrincipal(
     override val id: String,
@@ -25,8 +33,8 @@ data class SimplePrincipal(
     override val roles: Set<String> = emptySet(),
     override val attributes: Map<String, Any> = emptyMap()
 ) : CoSecPrincipal {
-
     companion object {
+        /** Anonymous principal for unauthenticated requests */
         @JvmField
         val ANONYMOUS: CoSecPrincipal = SimplePrincipal(CoSecPrincipal.ANONYMOUS_ID)
     }

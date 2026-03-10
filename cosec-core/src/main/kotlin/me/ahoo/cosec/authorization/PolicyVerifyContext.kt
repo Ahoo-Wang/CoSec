@@ -19,22 +19,44 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
 
+/**
+ * Context containing verification result details.
+ *
+ * This interface represents the result of policy or permission verification,
+ * including which policy/statement matched and the verification outcome.
+ *
+ * @see PolicyVerifyContext
+ * @see RoleVerifyContext
+ */
 interface VerifyContext {
+    /** The verification result */
     val result: VerifyResult
 
     companion object {
         private const val KEY = "COSEC_AUTHORIZATION_VERIFY_CONTEXT"
 
+        /**
+         * Sets the verification context on a security context.
+         */
         fun SecurityContext.setVerifyContext(verifyContext: VerifyContext) {
             this.setAttributeValue(KEY, verifyContext)
         }
 
-        fun SecurityContext.getVerifyContext(): VerifyContext? {
-            return this.getAttributeValue(KEY)
-        }
+        /**
+         * Gets the verification context from a security context.
+         */
+        fun SecurityContext.getVerifyContext(): VerifyContext? = this.getAttributeValue(KEY)
     }
 }
 
+/**
+ * Verification context for policy-based authorization.
+ *
+ * @param policy The policy that matched
+ * @param statementIndex Index of the matching statement
+ * @param statement The matching statement
+ * @param result The verification result
+ */
 data class PolicyVerifyContext(
     val policy: Policy,
     val statementIndex: Int,
@@ -42,6 +64,13 @@ data class PolicyVerifyContext(
     override val result: VerifyResult
 ) : VerifyContext
 
+/**
+ * Verification context for role-based authorization.
+ *
+ * @param roleId The role that matched
+ * @param permission The permission that matched
+ * @param result The verification result
+ */
 data class RoleVerifyContext(
     val roleId: String,
     val permission: Permission,

@@ -17,12 +17,30 @@ import me.ahoo.cosec.api.token.CompositeToken
 import java.time.Duration
 
 /**
- * Token Converter.
+ * Converter from principal to token.
  *
- * @author ahoo wang
+ * This interface is used to generate tokens (access and refresh)
+ * for authenticated principals.
+ *
+ * @see TokenVerifier
  */
 interface TokenConverter {
+    /**
+     * Converts a principal to a token with default validity periods.
+     *
+     * @param principal The principal to convert
+     * @return The generated composite token
+     */
     fun toToken(principal: CoSecPrincipal): CompositeToken
+
+    /**
+     * Converts a principal to a token with custom validity periods.
+     *
+     * @param principal The principal to convert
+     * @param accessTokenValidity Duration for which access token is valid
+     * @param refreshTokenValidity Duration for which refresh token is valid
+     * @return The generated composite token
+     */
     fun toToken(
         principal: CoSecPrincipal,
         accessTokenValidity: Duration,

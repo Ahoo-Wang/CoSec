@@ -16,6 +16,15 @@ package me.ahoo.cosec.token
 import me.ahoo.cosec.CoSecException
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 
+/**
+ * Exception thrown when token verification fails.
+ *
+ * This is the base exception for all token-related errors,
+ * including invalid tokens, expired tokens, etc.
+ *
+ * @see TokenExpiredException
+ * @see TokenVerifier
+ */
 open class TokenVerificationException : CoSecException {
     constructor()
     constructor(s: String) : super(s)
@@ -23,6 +32,9 @@ open class TokenVerificationException : CoSecException {
     constructor(cause: Throwable) : super(cause)
 }
 
+/**
+ * Converts a token verification exception to an authorization result.
+ */
 fun TokenVerificationException.toAuthorizeResult(): AuthorizeResult {
     if (this is TokenExpiredException) {
         return AuthorizeResult.TOKEN_EXPIRED
