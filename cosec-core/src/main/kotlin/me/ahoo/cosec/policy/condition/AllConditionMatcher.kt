@@ -19,15 +19,26 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.configuration.JsonConfiguration
 
-class AllConditionMatcher(configuration: Configuration) :
-    AbstractConditionMatcher(AllConditionMatcherFactory.TYPE, configuration) {
+/**
+ * Condition matcher that always returns true.
+ *
+ * This matcher is useful as a catch-all or when no specific
+ * condition filtering is needed.
+ *
+ * @param configuration Configuration (not used)
+ * @see ConditionMatcher
+ */
+class AllConditionMatcher(
+    configuration: Configuration
+) : AbstractConditionMatcher(AllConditionMatcherFactory.TYPE, configuration) {
     companion object {
         val INSTANCE = AllConditionMatcher(JsonConfiguration.newPojoConfiguration())
     }
 
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        return true
-    }
+    override fun internalMatch(
+        request: Request,
+        securityContext: SecurityContext
+    ): Boolean = true
 }
 
 class AllConditionMatcherFactory : ConditionMatcherFactory {
@@ -38,7 +49,5 @@ class AllConditionMatcherFactory : ConditionMatcherFactory {
     override val type: String
         get() = TYPE
 
-    override fun create(configuration: Configuration): ConditionMatcher {
-        return AllConditionMatcher(configuration)
-    }
+    override fun create(configuration: Configuration): ConditionMatcher = AllConditionMatcher(configuration)
 }

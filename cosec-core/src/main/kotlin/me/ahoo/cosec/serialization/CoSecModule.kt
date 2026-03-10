@@ -25,6 +25,23 @@ import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.configuration.JsonConfiguration
 import tools.jackson.databind.module.SimpleModule
 
+/**
+ * Jackson module for serializing/deserializing CoSec types.
+ *
+ * This module registers serializers and deserializers for:
+ * - ActionMatcher
+ * - ConditionMatcher
+ * - Effect
+ * - Statement
+ * - Policy
+ * - PolicyType
+ * - Permission
+ * - PermissionGroup
+ * - AppPermission
+ * - JsonConfiguration
+ *
+ * @see CoSecJsonSerializer
+ */
 class CoSecModule : SimpleModule() {
     init {
         addSerializer(ActionMatcher::class.java, JsonActionMatcherSerializer)

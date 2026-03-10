@@ -22,37 +22,58 @@ import me.ahoo.cosec.api.policy.ConditionMatcher
 const val BOOL_CONDITION_MATCHER_AND_KEY = "and"
 const val BOOL_CONDITION_MATCHER_OR_KEY = "or"
 
-class BoolConditionMatcher(configuration: Configuration) : AbstractConditionMatcher(
+/**
+ * Boolean condition matcher supporting AND/OR operations.
+ *
+ * This matcher combines multiple conditions using boolean logic:
+ * - "and": All conditions must match (AND logic)
+ * - "or": Any condition must match (OR logic)
+ *
+ * @param configuration Configuration containing child conditions
+ * @see ConditionMatcher
+ */
+class BoolConditionMatcher(
+    configuration: Configuration
+) : AbstractConditionMatcher(
     BoolConditionMatcherFactory.TYPE,
     configuration,
 ) {
     val and: List<ConditionMatcher> =
-        configuration.get(BOOL_CONDITION_MATCHER_AND_KEY)
+        configuration
+            .get(BOOL_CONDITION_MATCHER_AND_KEY)
             ?.asList()
-            ?.map { it.asObject<ConditionMatcher>() }.orEmpty()
+            ?.map { it.asObject<ConditionMatcher>() }
+            .orEmpty()
     val or: List<ConditionMatcher> =
-        configuration.get(BOOL_CONDITION_MATCHER_OR_KEY)
+        configuration
+            .get(BOOL_CONDITION_MATCHER_OR_KEY)
             ?.asList()
-            ?.map { it.asObject<ConditionMatcher>() }.orEmpty()
+            ?.map { it.asObject<ConditionMatcher>() }
+            .orEmpty()
 
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        and.any {
-            !it.match(request, securityContext)
-        }.let {
-            if (it) {
-                return false
+    override fun internalMatch(
+        request: Request,
+        securityContext: SecurityContext
+    ): Boolean {
+        and
+            .any {
+                !it.match(request, securityContext)
+            }.let {
+                if (it) {
+                    return false
+                }
             }
-        }
         if (or.isEmpty()) {
             return true
         }
-        or.any {
-            it.match(request, securityContext)
-        }.let {
-            if (it) {
-                return true
+        or
+            .any {
+                it.match(request, securityContext)
+            }.let {
+                if (it) {
+                    return true
+                }
             }
-        }
         return false
     }
 }
@@ -65,7 +86,5 @@ class BoolConditionMatcherFactory : ConditionMatcherFactory {
     override val type: String
         get() = TYPE
 
-    override fun create(configuration: Configuration): ConditionMatcher {
-        return BoolConditionMatcher(configuration)
-    }
+    override fun create(configuration: Configuration): ConditionMatcher = BoolConditionMatcher(configuration)
 }
