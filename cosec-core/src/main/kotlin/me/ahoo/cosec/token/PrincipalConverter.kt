@@ -16,10 +16,16 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.AccessToken
 
 /**
- * Principal Converter.
+ * Converter from access token to principal.
  *
- * @author ahoo wang
+ * @see TokenVerifier
  */
 fun interface PrincipalConverter {
+    /**
+     * Converts an access token to a principal.
+     *
+     * @param accessToken The access token to convert
+     * @return The principal
+     */
     fun toPrincipal(accessToken: AccessToken): CoSecPrincipal
 }

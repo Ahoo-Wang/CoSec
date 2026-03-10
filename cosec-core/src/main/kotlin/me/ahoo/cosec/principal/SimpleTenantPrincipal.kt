@@ -19,9 +19,16 @@ import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.tenant.SimpleTenant
 
 /**
- * Simple Tenant Principal .
+ * Simple implementation of [TenantPrincipal].
  *
- * @author ahoo wang
+ * This combines a [CoSecPrincipal] with [Tenant] information
+ * to represent a principal within a specific tenant context.
+ *
+ * @param delegate The underlying principal
+ * @param tenant The tenant context
+ *
+ * @see TenantPrincipal
+ * @see CoSecPrincipal
  */
 data class SimpleTenantPrincipal(
     override val delegate: CoSecPrincipal,
@@ -30,6 +37,7 @@ data class SimpleTenantPrincipal(
     CoSecPrincipal by delegate,
     Delegated<CoSecPrincipal> {
     companion object {
+        /** Anonymous tenant principal for unauthenticated requests */
         @JvmField
         val ANONYMOUS: TenantPrincipal = SimpleTenantPrincipal(SimplePrincipal.ANONYMOUS, SimpleTenant.DEFAULT)
     }

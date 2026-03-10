@@ -15,26 +15,49 @@ package me.ahoo.cosec.context
 import me.ahoo.cosec.api.context.SecurityContext
 
 /**
- * Security Context Holder.
+ * Thread-local holder for security context.
  *
- * @author ahoo wang
+ * This object provides a convenient way to access the current
+ * security context from anywhere in the application.
+ *
+ * @see SecurityContext
+ * @see SimpleSecurityContext
  */
 object SecurityContextHolder {
     private val SECURITY_CONTEXT_THREAD_LOCAL: ThreadLocal<SecurityContext> = InheritableThreadLocal()
 
+    /**
+     * Sets the security context for the current thread.
+     *
+     * @param context The security context to set
+     */
     @JvmStatic
     fun setContext(context: SecurityContext) {
         SECURITY_CONTEXT_THREAD_LOCAL.set(context)
     }
 
+    /**
+     * Gets the security context for the current thread.
+     *
+     * @return The current security context, or null if not set
+     */
     @JvmStatic
     val context: SecurityContext?
         get() = SECURITY_CONTEXT_THREAD_LOCAL.get()
 
+    /**
+     * Gets the required security context, throwing if not set.
+     *
+     * @return The current security context
+     * @throws IllegalStateException if context is not set
+     */
     @JvmStatic
     val requiredContext: SecurityContext
         get() = requireNotNull(context) { "SecurityContext is null." }
 
+    /**
+     * Removes the security context from the current thread.
+     */
     @JvmStatic
     fun remove() {
         SECURITY_CONTEXT_THREAD_LOCAL.remove()

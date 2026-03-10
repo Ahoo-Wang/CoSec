@@ -32,11 +32,9 @@ typealias PermissionId = String
  */
 interface Permission : Statement {
     /**
-     * Unique permission identifier.
-     *
-     * Format: appId.group.permission
+     * format : appId.group.permission
      */
-    override val id: PermissionId
+    val id: PermissionId
 
     /** Description of what this permission allows */
     val description: String

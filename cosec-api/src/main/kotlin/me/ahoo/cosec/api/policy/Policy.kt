@@ -47,7 +47,7 @@ interface Policy :
     Tenant,
     PermissionVerifier {
     /** Unique identifier for this policy */
-    override val id: PolicyId
+    val id: PolicyId
 
     /** Category for grouping related policies (e.g., "admin", "user") */
     val category: String

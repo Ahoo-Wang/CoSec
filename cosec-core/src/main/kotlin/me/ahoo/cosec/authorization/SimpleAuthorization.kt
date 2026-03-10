@@ -31,9 +31,18 @@ import reactor.kotlin.core.publisher.switchIfEmpty
 import reactor.kotlin.core.publisher.toMono
 
 /**
- * Simple Authorization .
+ * Simple Authorization implementation.
  *
- * @author ahoo wang
+ * This class provides the core authorization logic by evaluating:
+ * 1. Root user bypass (root users always get ALLOW)
+ * 2. Blacklist checks
+ * 3. Global policies
+ * 4. Principal-specific policies
+ * 5. Role-based permissions
+ *
+ * @param policyRepository Repository for accessing policies
+ * @param appRolePermissionRepository Repository for accessing role permissions
+ * @param blacklistChecker Optional blacklist checker for blocking requests
  */
 class SimpleAuthorization(
     private val policyRepository: PolicyRepository,
@@ -49,46 +58,49 @@ class SimpleAuthorization(
         request: Request,
         securityContext: SecurityContext
     ): VerifyContext? {
-        val matchedPolicies = policies.filter { policy ->
-            policy.condition.match(request = request, securityContext = securityContext)
+        val matchedPolicies =
+            policies.filter { policy ->
+                policy.condition.match(request = request, securityContext = securityContext)
+            }
+
+        matchedPolicies.forEach { policy: Policy ->
+            policy.statements
+                .filter { statement: Statement ->
+                    statement.effect == Effect.DENY
+                }.forEachIndexed { index, statement ->
+                    val verifyResult = statement.verify(request, securityContext)
+                    if (verifyResult == VerifyResult.EXPLICIT_DENY) {
+                        log.debug {
+                            "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Explicit Deny]."
+                        }
+                        return PolicyVerifyContext(
+                            policy = policy,
+                            statementIndex = index,
+                            statement = statement,
+                            result = verifyResult,
+                        )
+                    }
+                }
         }
 
         matchedPolicies.forEach { policy: Policy ->
-            policy.statements.filter { statement: Statement ->
-                statement.effect == Effect.DENY
-            }.forEachIndexed { index, statement ->
-                val verifyResult = statement.verify(request, securityContext)
-                if (verifyResult == VerifyResult.EXPLICIT_DENY) {
-                    log.debug {
-                        "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Explicit Deny]."
+            policy.statements
+                .filter { statement: Statement ->
+                    statement.effect == Effect.ALLOW
+                }.forEachIndexed { index, statement ->
+                    val verifyResult = statement.verify(request, securityContext)
+                    if (verifyResult == VerifyResult.ALLOW) {
+                        log.debug {
+                            "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Allow]."
+                        }
+                        return PolicyVerifyContext(
+                            policy = policy,
+                            statementIndex = index,
+                            statement = statement,
+                            result = verifyResult,
+                        )
                     }
-                    return PolicyVerifyContext(
-                        policy = policy,
-                        statementIndex = index,
-                        statement = statement,
-                        result = verifyResult,
-                    )
                 }
-            }
-        }
-
-        matchedPolicies.forEach { policy: Policy ->
-            policy.statements.filter { statement: Statement ->
-                statement.effect == Effect.ALLOW
-            }.forEachIndexed { index, statement ->
-                val verifyResult = statement.verify(request, securityContext)
-                if (verifyResult == VerifyResult.ALLOW) {
-                    log.debug {
-                        "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Allow]."
-                    }
-                    return PolicyVerifyContext(
-                        policy = policy,
-                        statementIndex = index,
-                        statement = statement,
-                        result = verifyResult,
-                    )
-                }
-            }
         }
         /**
          * [VerifyResult.IMPLICIT_DENY]
@@ -107,41 +119,43 @@ class SimpleAuthorization(
         appRolePermission.rolePermissionIndexer.forEach { rolePermissionEntry ->
             val roleId = rolePermissionEntry.key
             val permissions = rolePermissionEntry.value
-            permissions.filter { permission: Permission ->
-                permission.effect == Effect.DENY
-            }.forEach { permission ->
-                val verifyResult = permission.verify(request, context)
-                if (verifyResult == VerifyResult.EXPLICIT_DENY) {
-                    log.debug {
-                        "Verify [$request] [$context] matched Role[$roleId] Permission[${permission.id}][${permission.name}] - [Explicit Deny]."
+            permissions
+                .filter { permission: Permission ->
+                    permission.effect == Effect.DENY
+                }.forEach { permission ->
+                    val verifyResult = permission.verify(request, context)
+                    if (verifyResult == VerifyResult.EXPLICIT_DENY) {
+                        log.debug {
+                            "Verify [$request] [$context] matched Role[$roleId] Permission[${permission.id}][${permission.name}] - [Explicit Deny]."
+                        }
+                        return RoleVerifyContext(
+                            roleId = roleId,
+                            permission = permission,
+                            result = verifyResult,
+                        )
                     }
-                    return RoleVerifyContext(
-                        roleId = roleId,
-                        permission = permission,
-                        result = verifyResult,
-                    )
                 }
-            }
         }
 
         appRolePermission.rolePermissionIndexer.forEach { rolePermissionEntry ->
             val roleId = rolePermissionEntry.key
             val permissions = rolePermissionEntry.value
-            permissions.filter { statement: Statement ->
-                statement.effect == Effect.ALLOW
-            }.forEach { permission ->
-                val verifyResult = permission.verify(request, context)
-                if (verifyResult == VerifyResult.ALLOW) {
-                    log.debug {
-                        "Verify [$request] [$context] matched Role[$roleId] Permission[${permission.id}][${permission.name}] - [Allow]."
+            permissions
+                .filter { statement: Statement ->
+                    statement.effect == Effect.ALLOW
+                }.forEach { permission ->
+                    val verifyResult = permission.verify(request, context)
+                    if (verifyResult == VerifyResult.ALLOW) {
+                        log.debug {
+                            "Verify [$request] [$context] matched Role[$roleId] Permission[${permission.id}][${permission.name}] - [Allow]."
+                        }
+                        return RoleVerifyContext(
+                            roleId = roleId,
+                            permission = permission,
+                            result = verifyResult,
+                        )
                     }
-                    return RoleVerifyContext(
-                        roleId = roleId,
-                        permission = permission,
-                        result = verifyResult,
-                    )
                 }
-            }
         }
         /**
          * [VerifyResult.IMPLICIT_DENY]
@@ -149,8 +163,8 @@ class SimpleAuthorization(
         return null
     }
 
-    private fun verifyRoot(context: SecurityContext): VerifyResult {
-        return if (context.principal.isRoot) {
+    private fun verifyRoot(context: SecurityContext): VerifyResult =
+        if (context.principal.isRoot) {
             log.debug {
                 "Verify [$context] matched Root - [Allow]."
             }
@@ -158,44 +172,55 @@ class SimpleAuthorization(
         } else {
             VerifyResult.IMPLICIT_DENY
         }
-    }
 
-    private fun verifyGlobalPolicies(request: Request, context: SecurityContext): Mono<VerifyContext> {
-        return policyRepository.getGlobalPolicy()
+    private fun verifyGlobalPolicies(
+        request: Request,
+        context: SecurityContext
+    ): Mono<VerifyContext> =
+        policyRepository
+            .getGlobalPolicy()
             .mapNotNull { policies: List<Policy> ->
                 verifyPolicies(policies, request, context)
             }
-    }
 
-    private fun verifyPrincipalPolicies(request: Request, context: SecurityContext): Mono<VerifyContext> {
+    private fun verifyPrincipalPolicies(
+        request: Request,
+        context: SecurityContext
+    ): Mono<VerifyContext> {
         if (context.principal.policies.isEmpty()) {
             return Mono.empty()
         }
-        return policyRepository.getPolicies(context.principal.policies)
+        return policyRepository
+            .getPolicies(context.principal.policies)
             .mapNotNull { policies: List<Policy> ->
                 verifyPolicies(policies, request, context)
             }
     }
 
-    private fun verifyAppRolePermission(request: Request, context: SecurityContext): Mono<VerifyContext> {
+    private fun verifyAppRolePermission(
+        request: Request,
+        context: SecurityContext
+    ): Mono<VerifyContext> {
         if (context.principal.roles.isEmpty()) {
             return Mono.empty()
         }
-        return appRolePermissionRepository.getAppRolePermission(request.appId, request.spaceId, context.principal.roles)
+        return appRolePermissionRepository
+            .getAppRolePermission(request.appId, request.spaceId, context.principal.roles)
             .mapNotNull {
                 verifyAppRolePermission(it, request, context)
             }
     }
 
-    private fun verify(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
-        return verifyGlobalPolicies(request, context)
+    private fun verify(
+        request: Request,
+        context: SecurityContext
+    ): Mono<AuthorizeResult> =
+        verifyGlobalPolicies(request, context)
             .switchIfEmpty {
                 verifyPrincipalPolicies(request, context)
-            }
-            .switchIfEmpty {
+            }.switchIfEmpty {
                 verifyAppRolePermission(request, context)
-            }
-            .map {
+            }.map {
                 context.setVerifyContext(it)
                 it.result.toAuthorizeResult()
             }.switchIfEmpty {
@@ -204,14 +229,17 @@ class SimpleAuthorization(
                 }
                 AuthorizeResult.IMPLICIT_DENY.toMono()
             }
-    }
 
-    override fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
+    override fun authorize(
+        request: Request,
+        context: SecurityContext
+    ): Mono<AuthorizeResult> {
         val verifyResult = verifyRoot(context)
         if (verifyResult == VerifyResult.ALLOW) {
             return AuthorizeResult.ALLOW.toMono()
         }
-        return blacklistChecker.check(request, context)
+        return blacklistChecker
+            .check(request, context)
             .flatMap { allowed ->
                 if (!allowed) {
                     log.debug {

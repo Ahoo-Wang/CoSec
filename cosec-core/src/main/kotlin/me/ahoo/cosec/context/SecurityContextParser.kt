@@ -17,20 +17,38 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.token.TokenExpiredException
 import org.slf4j.LoggerFactory
 
-/**
- * Security Context Parser .
- *
- * @author ahoo wang
- */
 private val LOG = LoggerFactory.getLogger(SecurityContextParser::class.java)
+
+/** Authorization header key */
 const val AUTHORIZATION_HEADER_KEY = "authorization"
 
+/**
+ * Parser for extracting security context from requests.
+ *
+ * Implementations extract authentication information from incoming
+ * requests and convert them to security contexts.
+ *
+ * @see DefaultSecurityContextParser
+ */
 fun interface SecurityContextParser {
+    /**
+     * Parses a request to extract security context.
+     *
+     * @param request The incoming request
+     * @return The parsed security context
+     * @throws TokenExpiredException if token has expired
+     */
     @Throws(TokenExpiredException::class)
     fun parse(request: Request): SecurityContext
 
-    fun ensureParse(request: Request): SecurityContext {
-        return try {
+    /**
+     * Parses a request, returning anonymous context on failure.
+     *
+     * @param request The incoming request
+     * @return The parsed security context, or anonymous if parsing fails
+     */
+    fun ensureParse(request: Request): SecurityContext =
+        try {
             parse(request)
         } catch (ignored: Throwable) {
             if (LOG.isDebugEnabled) {
@@ -38,5 +56,4 @@ fun interface SecurityContextParser {
             }
             SimpleSecurityContext.anonymous()
         }
-    }
 }

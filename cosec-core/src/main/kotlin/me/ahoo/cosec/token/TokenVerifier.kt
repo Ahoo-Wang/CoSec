@@ -18,13 +18,42 @@ import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 
+/**
+ * Verifier for validating access and refresh tokens.
+ *
+ * This interface is responsible for:
+ * - Verifying the validity of access tokens
+ * - Extracting principal information from tokens
+ * - Refreshing tokens using refresh tokens
+ *
+ * @see PrincipalConverter
+ * @see TokenConverter
+ */
 interface TokenVerifier : PrincipalConverter {
+    /**
+     * Verifies an access token and returns the principal.
+     *
+     * @param T The type of token principal
+     * @param accessToken The access token to verify
+     * @return The verified token principal
+     * @throws TokenVerificationException if verification fails
+     */
     @Throws(TokenVerificationException::class)
     fun <T : TokenPrincipal> verify(accessToken: AccessToken): T
-    override fun toPrincipal(accessToken: AccessToken): CoSecPrincipal {
-        return verify(accessToken)
-    }
 
+    /**
+     * Default implementation converting to principal via verify.
+     */
+    override fun toPrincipal(accessToken: AccessToken): CoSecPrincipal = verify(accessToken)
+
+    /**
+     * Refreshes tokens using a refresh token.
+     *
+     * @param T The type of token principal
+     * @param token The composite token containing refresh token
+     * @return New token principal with new tokens
+     * @throws TokenVerificationException if refresh fails
+     */
     @Throws(TokenVerificationException::class)
     fun <T : TokenPrincipal> refresh(token: CompositeToken): T
 }
