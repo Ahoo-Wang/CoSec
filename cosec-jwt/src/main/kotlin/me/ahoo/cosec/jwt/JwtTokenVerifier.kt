@@ -24,7 +24,19 @@ import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.jwt.Jwts.removeBearerPrefix
 import me.ahoo.cosec.token.TokenVerifier
 
-class JwtTokenVerifier(algorithm: Algorithm) : TokenVerifier {
+/**
+ * JWT-based token verifier.
+ *
+ * This implementation uses the Auth0 JWT library to verify JWT tokens
+ * and extract principal information from them.
+ *
+ * @param algorithm The algorithm used to verify JWT signatures
+ * @see TokenVerifier
+ * @see JwtTokenConverter
+ */
+class JwtTokenVerifier(
+    algorithm: Algorithm
+) : TokenVerifier {
     private val jwtVerifier: JWTVerifier = JWT.require(algorithm).build()
 
     @Suppress("TooGenericExceptionCaught")
@@ -32,9 +44,11 @@ class JwtTokenVerifier(algorithm: Algorithm) : TokenVerifier {
         try {
             return jwtVerifier.verify(accessToken)
         } catch (tokenExpiredException: TokenExpiredException) {
-            throw me.ahoo.cosec.token.TokenExpiredException(tokenExpiredException.message!!, tokenExpiredException)
+            throw me.ahoo.cosec.token
+                .TokenExpiredException(tokenExpiredException.message!!, tokenExpiredException)
         } catch (exception: Exception) {
-            throw me.ahoo.cosec.token.TokenVerificationException(exception.message!!, exception)
+            throw me.ahoo.cosec.token
+                .TokenVerificationException(exception.message!!, exception)
         }
     }
 

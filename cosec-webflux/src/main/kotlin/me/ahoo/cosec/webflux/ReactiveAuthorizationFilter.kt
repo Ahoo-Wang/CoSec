@@ -22,26 +22,35 @@ import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 
 /**
- * Reactive Authorization Filter .
+ * WebFilter that performs authorization for reactive applications.
  *
- * @author ahoo wang
+ * This filter intercepts requests and performs authorization checks using the
+ * provided [Authorization] service. It returns appropriate HTTP status codes
+ * (401 for unauthenticated, 403 for forbidden) when authorization fails.
+ *
+ * @param securityContextParser Parser for extracting security context
+ * @param requestParser Parser for converting exchanges to requests
+ * @param authorization The authorization service
+ * @see ReactiveSecurityFilter
  */
 class ReactiveAuthorizationFilter(
     securityContextParser: SecurityContextParser,
     requestParser: RequestParser<ServerWebExchange>,
     authorization: Authorization
-) : WebFilter, Ordered, ReactiveSecurityFilter(securityContextParser, requestParser, authorization) {
+) : ReactiveSecurityFilter(securityContextParser, requestParser, authorization),
+    WebFilter,
+    Ordered {
     companion object {
         const val REACTIVE_AUTHORIZATION_FILTER_ORDER = 1000
     }
 
-    override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
-        return filterInternal(exchange) { serverExchange, request ->
+    override fun filter(
+        exchange: ServerWebExchange,
+        chain: WebFilterChain
+    ): Mono<Void> =
+        filterInternal(exchange) { serverExchange, request ->
             chain.filter(serverExchange)
         }
-    }
 
-    override fun getOrder(): Int {
-        return REACTIVE_AUTHORIZATION_FILTER_ORDER
-    }
+    override fun getOrder(): Int = REACTIVE_AUTHORIZATION_FILTER_ORDER
 }

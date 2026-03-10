@@ -28,20 +28,26 @@ import me.ahoo.cosec.token.SimpleTokenPrincipal
 import me.ahoo.cosec.token.SimpleTokenTenantPrincipal
 
 /**
- * Jwts .
+ * JWT utility functions.
  *
- * @author ahoo wang
+ * This object provides helper methods for JWT operations including:
+ * - Token decoding
+ * - Principal extraction from tokens
+ * - Bearer prefix handling
+ *
+ * @see JwtTokenVerifier
+ * @see JwtTokenConverter
  */
 object Jwts : PrincipalConverter {
     const val TOKEN_PREFIX = "Bearer "
     private val jwtParser = JWT()
-    fun String.removeBearerPrefix(): String {
-        return if (this.startsWith(TOKEN_PREFIX)) {
+
+    fun String.removeBearerPrefix(): String =
+        if (this.startsWith(TOKEN_PREFIX)) {
             this.substring(TOKEN_PREFIX.length)
         } else {
             this
         }
-    }
 
     fun decode(token: String): DecodedJWT {
         val jwtToken = token.removeBearerPrefix()
@@ -81,7 +87,5 @@ object Jwts : PrincipalConverter {
         return toPrincipal(decodedAccessToken)
     }
 
-    override fun toPrincipal(accessToken: AccessToken): CoSecPrincipal {
-        return toPrincipal(accessToken.accessToken)
-    }
+    override fun toPrincipal(accessToken: AccessToken): CoSecPrincipal = toPrincipal(accessToken.accessToken)
 }
