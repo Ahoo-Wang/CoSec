@@ -19,6 +19,15 @@ import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 
+/**
+ * Data class implementation of [Statement].
+ *
+ * @param name Statement name
+ * @param effect Statement effect (ALLOW or DENY)
+ * @param action Action matcher
+ * @param condition Condition matcher
+ * @see Statement
+ */
 data class StatementData(
     override val name: String = "",
     override val effect: Effect = Effect.ALLOW,
