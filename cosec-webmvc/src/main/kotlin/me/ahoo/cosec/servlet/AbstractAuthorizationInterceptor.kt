@@ -30,33 +30,43 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 
 /**
- * Abstract Authorization Interceptor .
+ * Abstract base class for authorization interceptors in servlet applications.
  *
- * @author ahoo wang
+ * This class provides the core authorization logic for servlet-based applications,
+ * including:
+ * - Parsing requests to extract security context
+ * - Authorization decision making
+ * - Error handling for authentication failures
+ *
+ * @param requestParser Parser for converting servlet requests
+ * @param securityContextParser Parser for extracting security context
+ * @param authorization The authorization service
+ * @see AuthorizationFilter
  */
 abstract class AbstractAuthorizationInterceptor(
     private val requestParser: RequestParser<HttpServletRequest>,
     private val securityContextParser: SecurityContextParser,
     private val authorization: Authorization
 ) {
-
     protected fun authorize(
         servletRequest: HttpServletRequest,
         servletResponse: HttpServletResponse
     ): Boolean {
         val request = requestParser.parse(servletRequest)
         var tokenVerificationException: TokenVerificationException? = null
-        val securityContext = try {
-            securityContextParser.parse(request)
-        } catch (verificationException: TokenVerificationException) {
-            tokenVerificationException = verificationException
-            SimpleSecurityContext.anonymous()
-        }
+        val securityContext =
+            try {
+                securityContextParser.parse(request)
+            } catch (verificationException: TokenVerificationException) {
+                tokenVerificationException = verificationException
+                SimpleSecurityContext.anonymous()
+            }
         securityContext.setRequest(request)
         SecurityContextHolder.setContext(securityContext)
         servletRequest.setSecurityContext(securityContext)
         servletResponse.setHeader(REQUEST_ID_KEY, request.requestId)
-        return authorization.authorize(request, securityContext)
+        return authorization
+            .authorize(request, securityContext)
             .map {
                 if (!it.authorized) {
                     if (!securityContext.principal.authenticated) {

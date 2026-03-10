@@ -15,7 +15,15 @@ package me.ahoo.cosec.tenant
 
 import me.ahoo.cosec.api.tenant.Tenant
 
-data class SimpleTenant(override val tenantId: String) : Tenant {
+/**
+ * Simple implementation of [Tenant].
+ *
+ * @param tenantId The tenant identifier
+ * @see Tenant
+ */
+data class SimpleTenant(
+    override val tenantId: String
+) : Tenant {
     companion object {
         @JvmField
         val PLATFORM: Tenant = SimpleTenant(Tenant.PLATFORM_TENANT_ID)

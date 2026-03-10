@@ -19,15 +19,25 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 
-class AllActionMatcher(configuration: Configuration) :
-    AbstractActionMatcher(AllActionMatcherFactory.TYPE, configuration) {
+/**
+ * Action matcher that matches all requests.
+ *
+ * This matcher always returns true, allowing any action to pass through.
+ * Useful as a catch-all or wildcard matcher.
+ *
+ * @see ActionMatcher
+ */
+class AllActionMatcher(
+    configuration: Configuration
+) : AbstractActionMatcher(AllActionMatcherFactory.TYPE, configuration) {
     companion object {
         val INSTANCE = AllActionMatcher(AllActionMatcherFactory.ALL.asConfiguration())
     }
 
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        return true
-    }
+    override fun internalMatch(
+        request: Request,
+        securityContext: SecurityContext
+    ): Boolean = true
 }
 
 class AllActionMatcherFactory : ActionMatcherFactory {
@@ -39,7 +49,5 @@ class AllActionMatcherFactory : ActionMatcherFactory {
     override val type: String
         get() = TYPE
 
-    override fun create(configuration: Configuration): ActionMatcher {
-        return AllActionMatcher(configuration)
-    }
+    override fun create(configuration: Configuration): ActionMatcher = AllActionMatcher(configuration)
 }

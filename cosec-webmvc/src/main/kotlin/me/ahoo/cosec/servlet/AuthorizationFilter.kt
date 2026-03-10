@@ -28,18 +28,28 @@ import org.springframework.http.HttpStatus
 import java.io.IOException
 
 /**
- * Authorization Filter.
+ * Servlet Filter for authorization in traditional web applications.
  *
- * @author ahoo wang
- * @see org.springframework.web.filter.OncePerRequestFilter
+ * This filter performs authorization checks for incoming HTTP requests
+ * in servlet-based applications (Spring MVC).
+ *
+ * @param securityContextParser Parser for extracting security context
+ * @param authorization The authorization service
+ * @param requestParser Parser for converting servlet requests
+ * @see AbstractAuthorizationInterceptor
  */
 class AuthorizationFilter(
     securityContextParser: SecurityContextParser,
     authorization: Authorization,
     requestParser: RequestParser<HttpServletRequest>
-) : AbstractAuthorizationInterceptor(requestParser, securityContextParser, authorization), Filter {
+) : AbstractAuthorizationInterceptor(requestParser, securityContextParser, authorization),
+    Filter {
     @Throws(IOException::class, ServletException::class)
-    override fun doFilter(request: ServletRequest, response: ServletResponse, chain: FilterChain) {
+    override fun doFilter(
+        request: ServletRequest,
+        response: ServletResponse,
+        chain: FilterChain
+    ) {
         val httpServletRequest = request as HttpServletRequest
         val httpServletResponse = response as HttpServletResponse
         try {

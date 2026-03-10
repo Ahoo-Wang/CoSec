@@ -13,9 +13,12 @@
 package me.ahoo.cosec.api.tenant
 
 /**
- * Tenant Capable.
+ * Interface for entities that have tenant context.
  *
- * @author ahoo wang
+ * This interface is implemented by principals that belong to a specific tenant.
+ *
+ * @see Tenant
+ * @see TenantPrincipal
  */
 interface TenantCapable {
     val tenant: Tenant

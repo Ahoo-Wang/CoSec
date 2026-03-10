@@ -22,13 +22,29 @@ import me.ahoo.cosec.policy.SpelExpression.Companion.asSpelExpression
 
 const val SPEL_CONDITION_MATCHER_EXPRESSION_KEY = "expression"
 
-class SpelConditionMatcher(configuration: Configuration) :
-    AbstractConditionMatcher(SpelConditionMatcherFactory.TYPE, configuration) {
+/**
+ * Condition matcher using Spring Expression Language (SpEL).
+ *
+ * This matcher evaluates a SpEL expression to determine if the condition is met.
+ * The expression has access to the request and security context objects.
+ *
+ * @param configuration Configuration containing the SpEL expression
+ * @see ConditionMatcher
+ * @see <a href="https://docs.spring.io/spring-framework/docs/current/reference/html/core.html#expressions">SpEL</a>
+ */
+class SpelConditionMatcher(
+    configuration: Configuration
+) : AbstractConditionMatcher(SpelConditionMatcherFactory.TYPE, configuration) {
     private val expression: Expression<Boolean> =
-        configuration.getRequired(SPEL_CONDITION_MATCHER_EXPRESSION_KEY).asString()
+        configuration
+            .getRequired(SPEL_CONDITION_MATCHER_EXPRESSION_KEY)
+            .asString()
             .asSpelExpression(Boolean::class.java)
 
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
+    override fun internalMatch(
+        request: Request,
+        securityContext: SecurityContext
+    ): Boolean {
         val root = Root(request = request, context = securityContext)
         return expression.getValue(root) == true
     }
@@ -47,7 +63,5 @@ class SpelConditionMatcherFactory : ConditionMatcherFactory {
     override val type: String
         get() = TYPE
 
-    override fun create(configuration: Configuration): ConditionMatcher {
-        return SpelConditionMatcher(configuration)
-    }
+    override fun create(configuration: Configuration): ConditionMatcher = SpelConditionMatcher(configuration)
 }

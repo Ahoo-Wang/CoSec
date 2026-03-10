@@ -13,9 +13,7 @@
 package me.ahoo.cosec
 
 /**
- * Security Exception.
- *
- * @author ahoo wang
+ * Base exception for CoSec security framework.
  */
 open class CoSecException : SecurityException {
     constructor()

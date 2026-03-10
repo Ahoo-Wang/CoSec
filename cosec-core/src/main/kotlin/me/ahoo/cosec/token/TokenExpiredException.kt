@@ -13,9 +13,9 @@
 package me.ahoo.cosec.token
 
 /**
- * Token Expired Exception.
+ * Exception thrown when a token has expired.
  *
- * @author ahoo wang
+ * @see TokenVerifier
  */
 class TokenExpiredException : TokenVerificationException {
     constructor()

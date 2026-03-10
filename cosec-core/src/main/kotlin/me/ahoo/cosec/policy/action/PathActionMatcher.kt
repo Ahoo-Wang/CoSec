@@ -26,22 +26,30 @@ import org.springframework.web.util.pattern.PathPattern
 import org.springframework.web.util.pattern.PathPatternParser
 
 const val PATH_VARIABLES_KEY = "PATH_VARIABLES"
+
+/**
+ * Sets path variables extracted from URL patterns to the security context.
+ */
 fun SecurityContext.setPathVariables(pathVariables: Map<String, String>) {
     setAttributeValue(PATH_VARIABLES_KEY, pathVariables)
 }
 
-fun SecurityContext.getPathVariables(): Map<String, String>? {
-    return getAttributeValue(PATH_VARIABLES_KEY)
-}
+/**
+ * Gets path variables from the security context.
+ */
+fun SecurityContext.getPathVariables(): Map<String, String>? = getAttributeValue(PATH_VARIABLES_KEY)
 
 class PathActionMatcher(
     private val patternParser: PathPatternParser,
     private val pathPattern: PathPattern,
     configuration: Configuration
 ) : AbstractActionMatcher(PathActionMatcherFactory.TYPE, configuration) {
-
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        PathContainer.parsePath(request.path, patternParser.pathOptions)
+    override fun internalMatch(
+        request: Request,
+        securityContext: SecurityContext
+    ): Boolean {
+        PathContainer
+            .parsePath(request.path, patternParser.pathOptions)
             .let { pathContainer ->
                 val pathMatchInfo = pathPattern.matchAndExtract(pathContainer) ?: return false
                 securityContext.setPathVariables(pathMatchInfo.uriVariables)
@@ -56,7 +64,11 @@ class ReplaceablePathActionMatcher(
     configuration: Configuration
 ) : AbstractActionMatcher(PathActionMatcherFactory.TYPE, configuration) {
     private val expression = pattern.asTemplateExpression()
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
+
+    override fun internalMatch(
+        request: Request,
+        securityContext: SecurityContext
+    ): Boolean {
         val pathPattern = requireNotNull(expression.getValue(securityContext))
         val pathContainer = PathContainer.parsePath(request.path)
         patternParser.parse(pathPattern).let {
@@ -76,8 +88,8 @@ class PathActionMatcherFactory : ActionMatcherFactory {
         private fun String.asPathActionMatcher(
             configuration: Configuration = this.asConfiguration(),
             patternParser: PathPatternParser = PathPatternParser.defaultInstance
-        ): ActionMatcher {
-            return if (this.isSpelTemplate()) {
+        ): ActionMatcher =
+            if (this.isSpelTemplate()) {
                 ReplaceablePathActionMatcher(
                     patternParser = patternParser,
                     pattern = this,
@@ -90,11 +102,8 @@ class PathActionMatcherFactory : ActionMatcherFactory {
                     configuration = configuration,
                 )
             }
-        }
 
-        fun Configuration.stringAsActionMatcher(): ActionMatcher {
-            return this.asString().asPathActionMatcher(this)
-        }
+        fun Configuration.stringAsActionMatcher(): ActionMatcher = this.asString().asPathActionMatcher(this)
 
         fun Configuration.arrayAsActionMatcher(): ActionMatcher {
             asList()
@@ -114,7 +123,8 @@ class PathActionMatcherFactory : ActionMatcherFactory {
             if (patternConfiguration.isString) {
                 return patternConfiguration.asString().asPathActionMatcher(this, patternParser)
             }
-            patternConfiguration.asList()
+            patternConfiguration
+                .asList()
                 .map { it.asString().asPathActionMatcher(this, patternParser) }
                 .let { actionMatchers ->
                     if (actionMatchers.size == 1) {
