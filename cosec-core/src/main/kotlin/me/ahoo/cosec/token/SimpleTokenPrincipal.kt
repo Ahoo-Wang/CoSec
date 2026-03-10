@@ -19,12 +19,17 @@ import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.principal.SimplePrincipal
 
 /**
- * SimpleTokenPrincipal .
+ * Simple implementation of [TokenPrincipal].
  *
- * @author ahoo wang
+ * @param tokenId The token identifier
+ * @param delegate The underlying principal
+ * @see TokenPrincipal
+ * @see CoSecPrincipal
  */
-data class SimpleTokenPrincipal(override val tokenId: String, override val delegate: CoSecPrincipal) :
-    TokenPrincipal,
+data class SimpleTokenPrincipal(
+    override val tokenId: String,
+    override val delegate: CoSecPrincipal
+) : TokenPrincipal,
     CoSecPrincipal by delegate,
     Delegated<CoSecPrincipal> {
     companion object {

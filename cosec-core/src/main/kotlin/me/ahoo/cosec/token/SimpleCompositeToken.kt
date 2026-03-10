@@ -15,8 +15,13 @@ package me.ahoo.cosec.token
 import me.ahoo.cosec.api.token.CompositeToken
 
 /**
- * Simple Composite Token .
+ * Simple implementation of [CompositeToken].
  *
- * @author ahoo wang
+ * @param accessToken The access token value
+ * @param refreshToken The refresh token value
+ * @see CompositeToken
  */
-data class SimpleCompositeToken(override val accessToken: String, override val refreshToken: String) : CompositeToken
+data class SimpleCompositeToken(
+    override val accessToken: String,
+    override val refreshToken: String
+) : CompositeToken

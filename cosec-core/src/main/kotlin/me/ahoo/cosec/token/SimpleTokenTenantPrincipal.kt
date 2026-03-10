@@ -19,12 +19,16 @@ import me.ahoo.cosec.api.token.TokenTenantPrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
 
 /**
- * Simple Token Tenant Principal .
+ * Simple implementation of [TokenTenantPrincipal].
  *
- * @author ahoo wang
+ * @param delegate The underlying token principal
+ * @param tenant The tenant context
+ * @see TokenTenantPrincipal
  */
-data class SimpleTokenTenantPrincipal(override val delegate: TokenPrincipal, override val tenant: Tenant) :
-    TokenTenantPrincipal,
+data class SimpleTokenTenantPrincipal(
+    override val delegate: TokenPrincipal,
+    override val tenant: Tenant
+) : TokenTenantPrincipal,
     TokenPrincipal by delegate,
     Delegated<TokenPrincipal> {
     companion object {

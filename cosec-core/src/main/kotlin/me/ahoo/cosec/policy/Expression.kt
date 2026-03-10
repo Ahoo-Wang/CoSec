@@ -19,21 +19,31 @@ import org.springframework.expression.ParserContext.TEMPLATE_EXPRESSION
 import org.springframework.expression.spel.standard.SpelExpressionParser
 import org.springframework.expression.spel.support.SimpleEvaluationContext
 
+/**
+ * Interface for expression evaluation.
+ *
+ * @param RESULT The result type of the expression
+ */
 fun interface Expression<RESULT> {
+    /**
+     * Evaluates the expression.
+     *
+     * @param root The root object for evaluation context
+     * @return The result of evaluation
+     */
     fun getValue(root: Any): RESULT?
 }
 
-class DirectStringExpression(private val expression: String) : Expression<String> {
-    override fun getValue(root: Any): String {
-        return expression
-    }
+class DirectStringExpression(
+    private val expression: String
+) : Expression<String> {
+    override fun getValue(root: Any): String = expression
 }
 
 class SpelExpression<RESULT>(
     private val expression: org.springframework.expression.Expression,
     private val resultType: Class<RESULT>
-) :
-    Expression<RESULT> {
+) : Expression<RESULT> {
     override fun getValue(root: Any): RESULT? {
         val context = SimpleEvaluationContext.forReadOnlyDataBinding().withRootObject(root).build()
         return expression.getValue(context, resultType as Class<RESULT & Any>?)
@@ -41,31 +51,28 @@ class SpelExpression<RESULT>(
 
     companion object {
         internal val SPEL_PARSER = SpelExpressionParser()
-        fun String.isSpelTemplate(): Boolean {
-            return contains(TEMPLATE_EXPRESSION.expressionPrefix) &&
+
+        fun String.isSpelTemplate(): Boolean =
+            contains(TEMPLATE_EXPRESSION.expressionPrefix) &&
                 contains(TEMPLATE_EXPRESSION.expressionSuffix)
-        }
 
-        fun <RESULT> String.asSpelExpression(resultType: Class<RESULT>): SpelExpression<RESULT> {
-            return SpelExpression(
+        fun <RESULT> String.asSpelExpression(resultType: Class<RESULT>): SpelExpression<RESULT> =
+            SpelExpression(
                 SPEL_PARSER.parseExpression(this),
-                resultType
+                resultType,
             )
-        }
 
-        fun String.asSpelTemplateExpression(): SpelExpression<String> {
-            return SpelExpression(
+        fun String.asSpelTemplateExpression(): SpelExpression<String> =
+            SpelExpression(
                 SPEL_PARSER.parseExpression(this, TEMPLATE_EXPRESSION),
-                String::class.java
+                String::class.java,
             )
-        }
     }
 }
 
-fun String.asTemplateExpression(): Expression<String> {
-    return if (isSpelTemplate()) {
+fun String.asTemplateExpression(): Expression<String> =
+    if (isSpelTemplate()) {
         asSpelTemplateExpression()
     } else {
         DirectStringExpression(this)
     }
-}
