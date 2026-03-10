@@ -13,8 +13,13 @@
 package me.ahoo.cosec.api.token
 
 /**
- * Token .
+ * Base interface for all token types.
  *
- * @author ahoo wang
+ * Tokens are used for authentication and authorization.
+ * Common implementations include [AccessToken] and [RefreshToken].
+ *
+ * @see AccessToken
+ * @see RefreshToken
+ * @see CompositeToken
  */
 interface Token

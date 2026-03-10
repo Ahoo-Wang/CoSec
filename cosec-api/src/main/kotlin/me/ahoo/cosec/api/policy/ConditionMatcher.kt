@@ -15,4 +15,15 @@ package me.ahoo.cosec.api.policy
 
 import me.ahoo.cosec.api.principal.RequestMatcher
 
+/**
+ * Condition matcher for evaluating policy conditions.
+ *
+ * A ConditionMatcher determines whether a request matches a specific condition
+ * defined in a policy. It is used to control when a policy or statement
+ * should be applied.
+ *
+ * @see Policy
+ * @see Statement
+ * @see RequestMatcher
+ */
 interface ConditionMatcher : RequestMatcher

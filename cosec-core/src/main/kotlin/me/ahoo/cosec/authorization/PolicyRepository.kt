@@ -17,13 +17,35 @@ import me.ahoo.cosec.api.policy.Policy
 import reactor.core.publisher.Mono
 
 /**
+ * Repository interface for managing policies.
  *
- * Policy Repository .
+ * This interface defines operations for storing, retrieving, and managing
+ * authorization policies. Implementations may use various storage backends
+ * like databases, distributed caches, or configuration files.
  *
- * @author ahoo wang
+ * @see Policy
  */
 interface PolicyRepository {
+    /**
+     * Gets the global policy that applies to all requests.
+     *
+     * @return [Mono] emitting the list of global policies
+     */
     fun getGlobalPolicy(): Mono<List<Policy>>
+
+    /**
+     * Gets policies by their IDs.
+     *
+     * @param policyIds Set of policy IDs to retrieve
+     * @return [Mono] emitting the list of found policies
+     */
     fun getPolicies(policyIds: Set<String>): Mono<List<Policy>>
+
+    /**
+     * Saves or updates a policy.
+     *
+     * @param policy The policy to save
+     * @return [Mono] completing when the policy is saved
+     */
     fun setPolicy(policy: Policy): Mono<Void>
 }

@@ -15,13 +15,28 @@ package me.ahoo.cosec.api.permission
 
 import me.ahoo.cosec.api.Named
 
+/**
+ * Group of related permissions.
+ *
+ * Permission groups organize permissions into logical sets,
+ * such as "users", "orders", "admin", etc.
+ *
+ * @see Permission
+ * @see AppPermission
+ */
 interface PermissionGroup : Named {
+    /** The name/identifier of this permission group */
     override val name: String
+
+    /** Description of what this group contains */
     val description: String
+
+    /** List of permissions in this group */
     val permissions: List<Permission>
 
     /**
-     * Whether it is a space resource
+     * Whether this group represents space-scoped resources.
+     * Space-scoped resources are tied to a specific tenant/space.
      */
     val spaced: Boolean
 }

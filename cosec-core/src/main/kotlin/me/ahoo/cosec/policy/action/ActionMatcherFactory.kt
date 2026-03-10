@@ -16,7 +16,26 @@ package me.ahoo.cosec.policy.action
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.policy.ActionMatcher
 
+/**
+ * Factory interface for creating [ActionMatcher] instances.
+ *
+ * Implementations are responsible for creating action matchers
+ * based on configuration. The factory is registered with
+ * [ActionMatcherFactoryProvider] to make matchers available
+ * for policy definitions.
+ *
+ * @see ActionMatcher
+ * @see ActionMatcherFactoryProvider
+ */
 interface ActionMatcherFactory {
+    /** The type identifier for this factory */
     val type: String
+
+    /**
+     * Creates an action matcher from the given configuration.
+     *
+     * @param configuration The configuration for the matcher
+     * @return A new ActionMatcher instance
+     */
     fun create(configuration: Configuration): ActionMatcher
 }
