@@ -13,6 +13,15 @@
 
 package me.ahoo.cosec.api.policy
 
+/**
+ * Policy type enumeration.
+ *
+ * - [GLOBAL]: Global policies that apply to all applications
+ * - [SYSTEM]: System policies managed by platform administrators
+ * - [CUSTOM]: User-defined policies
+ *
+ * @see Policy
+ */
 enum class PolicyType {
     /**
      * Global strategy.

@@ -17,8 +17,31 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 
+/**
+ * Base interface for matching requests against policies.
+ *
+ * This interface is implemented by [ConditionMatcher] and [ActionMatcher]
+ * to determine whether a request matches certain criteria.
+ *
+ * @see ConditionMatcher
+ * @see ActionMatcher
+ */
 interface RequestMatcher {
+    /** The type identifier for this matcher */
     val type: String
+
+    /** Configuration for this matcher */
     val configuration: Configuration
-    fun match(request: Request, securityContext: SecurityContext): Boolean
+
+    /**
+     * Determines if the request matches this matcher.
+     *
+     * @param request The incoming request
+     * @param securityContext The security context
+     * @return true if the request matches, false otherwise
+     */
+    fun match(
+        request: Request,
+        securityContext: SecurityContext
+    ): Boolean
 }

@@ -15,8 +15,14 @@ package me.ahoo.cosec.api.token
 import me.ahoo.cosec.api.principal.TenantPrincipal
 
 /**
- * Token Tenant Principal .
+ * Principal that is both tenant-aware and token-authenticated.
  *
- * @author ahoo wang
+ * This combines [TenantPrincipal] with [TokenPrincipal] for multi-tenant
+ * applications using token-based authentication.
+ *
+ * @see TenantPrincipal
+ * @see TokenPrincipal
  */
-interface TokenTenantPrincipal : TenantPrincipal, TokenPrincipal
+interface TokenTenantPrincipal :
+    TenantPrincipal,
+    TokenPrincipal

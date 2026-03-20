@@ -16,12 +16,30 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import reactor.core.publisher.Mono
 
 /**
- * Authentication is a process in which a user provides credentials that are then compared to those stored in an operating system, database, app or resource.
- * If they match, users authenticate successfully, and can then perform actions that they're authorized for, during an authorization process.
+ * Authentication interface for credential verification.
  *
- * @author ahoo wang
+ * Authentication is the process of verifying the identity of a user
+ * by validating their credentials. If successful, it returns a
+ * [CoSecPrincipal] representing the authenticated user.
+ *
+ * @param C The type of credentials this authentication supports
+ * @param P The type of principal returned on successful authentication
+ *
+ * @see Credentials
+ * @see AuthenticationProvider
+ * @see CoSecPrincipal
  */
 interface Authentication<C : Credentials, out P : CoSecPrincipal> {
+    /**
+     * The type of credentials this authentication supports.
+     */
     val supportCredentials: Class<C>
+
+    /**
+     * Authenticates the provided credentials.
+     *
+     * @param credentials The credentials to validate
+     * @return [Mono] emitting the authenticated principal, or empty if authentication fails
+     */
     fun authenticate(credentials: C): Mono<out P>
 }

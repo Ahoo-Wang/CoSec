@@ -17,17 +17,31 @@ import me.ahoo.cosec.api.context.request.Request
 import reactor.core.publisher.Mono
 
 /**
- * The authorization refers to the process that determines what a user is allowed to do.
+ * Authorization service interface.
  *
- * @author ahoo wang
+ * Authorization is the process of determining what a user is allowed to do.
+ * It evaluates policies and permissions to decide whether a request should
+ * be allowed or denied.
+ *
+ * The authorization process typically checks:
+ * 1. Global policies (apply to all applications)
+ * 2. Principal-specific policies (user-defined policies)
+ * 3. Role-based permissions (app-specific role permissions)
+ *
+ * @see AuthorizeResult
+ * @see SecurityContext
+ * @see Request
  */
 fun interface Authorization {
     /**
-     * 判断当前安全上下文（用户）是否具有该操作的权限.
+     * Determines whether the current user has permission to perform the requested action.
      *
-     * @param context Security Context
-     * @param request Request
-     * @return If true, the current user has access to the action.
+     * @param request The incoming request to authorize
+     * @param context The security context containing user information
+     * @return [Mono] emitting [AuthorizeResult] indicating whether access is granted
      */
-    fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult>
+    fun authorize(
+        request: Request,
+        context: SecurityContext
+    ): Mono<AuthorizeResult>
 }

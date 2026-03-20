@@ -17,20 +17,59 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 
+/**
+ * Interface for verifying permissions.
+ *
+ * Implementations of this interface are responsible for determining whether
+ * a request should be allowed or denied based on the policy rules.
+ *
+ * @see Policy
+ * @see Statement
+ */
 fun interface PermissionVerifier {
-    fun verify(request: Request, securityContext: SecurityContext): VerifyResult
+    /**
+     * Verifies if the request is permitted.
+     *
+     * @param request The incoming request
+     * @param securityContext The security context of the request
+     * @return The result of the verification
+     */
+    fun verify(
+        request: Request,
+        securityContext: SecurityContext
+    ): VerifyResult
 }
 
+/**
+ * Result of permission verification.
+ *
+ * This enum represents the possible outcomes of verifying a permission:
+ * - [ALLOW]: The action is explicitly allowed
+ * - [EXPLICIT_DENY]: The action is explicitly denied by a DENY statement
+ * - [IMPLICIT_DENY]: The action is denied because no matching ALLOW statement exists
+ *
+ * @see PermissionVerifier
+ * @see AuthorizeResult
+ */
 enum class VerifyResult {
+    /** The action is explicitly allowed */
     ALLOW,
+
+    /** The action is explicitly denied */
     EXPLICIT_DENY,
+
+    /** The action is implicitly denied (no matching ALLOW statement) */
     IMPLICIT_DENY;
 
-    fun toAuthorizeResult(): AuthorizeResult {
-        return when (this) {
+    /**
+     * Converts this verification result to an authorization result.
+     *
+     * @return The corresponding [AuthorizeResult]
+     */
+    fun toAuthorizeResult(): AuthorizeResult =
+        when (this) {
             ALLOW -> AuthorizeResult.ALLOW
             EXPLICIT_DENY -> AuthorizeResult.EXPLICIT_DENY
             IMPLICIT_DENY -> AuthorizeResult.IMPLICIT_DENY
         }
-    }
 }

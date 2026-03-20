@@ -17,13 +17,50 @@ import me.ahoo.cosec.api.Named
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 
-interface Statement : Named, PermissionVerifier {
+/**
+ * Policy statement that defines permission rules.
+ *
+ * A Statement is a single permission rule within a [Policy]. It contains:
+ * - [name] - The identifier of this statement
+ * - [effect] - Whether this statement allows or denies the action
+ * - [action] - The action matcher that determines if this statement applies
+ * - [condition] - The condition that must be met for this statement to apply
+ *
+ * Statements are evaluated in order, with DENY statements taking precedence
+ * over ALLOW statements.
+ *
+ * @see Policy
+ * @see Effect
+ * @see ActionMatcher
+ * @see ConditionMatcher
+ */
+interface Statement :
+    Named,
+    PermissionVerifier {
     override val name: String
+
+    /** The effect of this statement - either ALLOW or DENY */
     val effect: Effect
+
+    /** The action matcher that determines if this statement applies to a request */
     val action: ActionMatcher
+
+    /** The condition that must be met for this statement to apply */
     val condition: ConditionMatcher
 
-    override fun verify(request: Request, securityContext: SecurityContext): VerifyResult {
+    /**
+     * Verifies if the request matches this statement.
+     *
+     * @param request The incoming request
+     * @param securityContext The security context of the request
+     * @return [VerifyResult.ALLOW] if the action and condition match and effect is ALLOW,
+     *         [VerifyResult.EXPLICIT_DENY] if the action and condition match and effect is DENY,
+     *         [VerifyResult.IMPLICIT_DENY] otherwise
+     */
+    override fun verify(
+        request: Request,
+        securityContext: SecurityContext
+    ): VerifyResult {
         if (!action.match(request = request, securityContext = securityContext)) {
             return VerifyResult.IMPLICIT_DENY
         }

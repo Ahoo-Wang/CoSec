@@ -13,9 +13,9 @@
 package me.ahoo.cosec.api
 
 /**
- * CoSec const.
+ * CoSec framework constants.
  *
- * @author ahoo wang
+ * This object contains common constants used throughout the CoSec framework.
  */
 object CoSec {
     const val COSEC = "cosec"

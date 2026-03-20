@@ -13,8 +13,16 @@
 
 package me.ahoo.cosec.api.context
 
+/**
+ * Generic interface for entities that have attributes.
+ *
+ * @param SOURCE The implementing type
+ * @param KEY The type of keys
+ * @param VALUE The type of values
+ */
 interface Attributes<SOURCE : Attributes<SOURCE, KEY, VALUE>, KEY, VALUE> {
     val attributes: Map<KEY, VALUE>
+
     fun withAttributes(attributes: Map<KEY, VALUE>): SOURCE
 
     @Suppress("ReturnCount")
@@ -26,10 +34,11 @@ interface Attributes<SOURCE : Attributes<SOURCE, KEY, VALUE>, KEY, VALUE> {
         if (this.attributes.isEmpty()) {
             return withAttributes(attributes = additionalAttributes)
         }
-        val mergedAttributes = buildMap(attributes.size + additionalAttributes.size) {
-            putAll(additionalAttributes)
-            putAll(attributes)
-        }
+        val mergedAttributes =
+            buildMap(attributes.size + additionalAttributes.size) {
+                putAll(additionalAttributes)
+                putAll(attributes)
+            }
         return withAttributes(attributes = mergedAttributes)
     }
 }

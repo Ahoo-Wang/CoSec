@@ -15,6 +15,11 @@ package me.ahoo.cosec.api.context.request
 
 typealias RequestId = String
 
+/**
+ * Interface for entities that have a request ID for tracing.
+ *
+ * @see Request
+ */
 interface RequestIdCapable {
     companion object {
         const val REQUEST_ID_KEY = "${COSEC_EXTEND_KEY_PREFIX}Request-Id"

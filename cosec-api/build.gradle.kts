@@ -12,5 +12,6 @@
  */
 
 dependencies {
+    compileOnly("com.fasterxml.jackson.core:jackson-annotations")
     api("io.projectreactor:reactor-core")
 }
