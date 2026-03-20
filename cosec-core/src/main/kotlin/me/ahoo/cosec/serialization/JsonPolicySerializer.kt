@@ -62,7 +62,7 @@ object JsonPolicyDeserializer : StdDeserializer<Policy>(Policy::class.java) {
         val condition =
             jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.objectReadContext())?.readValueAs(ConditionMatcher::class.java)
                 ?: AllConditionMatcher.INSTANCE
-        val statements = jsonNode.get(POLICY_STATEMENTS_KEY)?.map {
+        val statements = jsonNode.get(POLICY_STATEMENTS_KEY)?.asArray()?.elements()?.map {
             it.traverse(p.objectReadContext()).readValueAs(Statement::class.java)
         }.orEmpty()
 

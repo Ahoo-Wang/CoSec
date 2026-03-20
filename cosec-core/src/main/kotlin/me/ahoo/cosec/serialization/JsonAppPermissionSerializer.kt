@@ -51,7 +51,7 @@ object JsonAppPermissionDeserializer : StdDeserializer<AppPermission>(AppPermiss
         val condition =
             jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.objectReadContext())?.readValueAs(ConditionMatcher::class.java)
                 ?: AllConditionMatcher.INSTANCE
-        val groups = jsonNode.get(APP_PERMISSION_GROUPS_KEY)?.map {
+        val groups = jsonNode.get(APP_PERMISSION_GROUPS_KEY)?.asArray()?.elements()?.map {
             it.traverse(p.objectReadContext()).readValueAs(PermissionGroup::class.java)
         }.orEmpty()
         return AppPermissionData(
