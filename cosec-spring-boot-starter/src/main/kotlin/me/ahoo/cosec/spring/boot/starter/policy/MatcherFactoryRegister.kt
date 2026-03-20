@@ -17,6 +17,7 @@ import me.ahoo.cosec.policy.action.ActionMatcherFactory
 import me.ahoo.cosec.policy.action.ActionMatcherFactoryProvider
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactoryProvider
+import org.springframework.beans.factory.getBeansOfType
 import org.springframework.context.ApplicationContext
 import org.springframework.context.SmartLifecycle
 
@@ -25,10 +26,10 @@ class MatcherFactoryRegister(private val applicationContext: ApplicationContext)
     private var running = false
     override fun start() {
         running = true
-        applicationContext.getBeansOfType(ConditionMatcherFactory::class.java).values.forEach {
+        applicationContext.getBeansOfType<ConditionMatcherFactory>().values.forEach {
             ConditionMatcherFactoryProvider.register(it)
         }
-        applicationContext.getBeansOfType(ActionMatcherFactory::class.java).values.forEach {
+        applicationContext.getBeansOfType<ActionMatcherFactory>().values.forEach {
             ActionMatcherFactoryProvider.register(it)
         }
     }
