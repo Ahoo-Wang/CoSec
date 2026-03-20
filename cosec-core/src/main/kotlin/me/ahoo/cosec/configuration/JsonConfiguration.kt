@@ -53,7 +53,7 @@ class JsonConfiguration(
     override fun get(key: String): Configuration? = delegate.get(key)?.let { JsonConfiguration(it) }
 
     override fun asList(): List<Configuration> =
-        delegate.asArray().elements().map {
+        delegate.values().map {
             JsonConfiguration(it)
         }
 

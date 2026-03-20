@@ -52,7 +52,7 @@ abstract class AbstractJsonStatementDeserializer<T : Statement>(statementType: C
 
         return createStatement(
             jsonNode = jsonNode,
-            name = jsonNode.get(STATEMENT_NAME)?.asText().orEmpty(),
+            name = jsonNode.get(STATEMENT_NAME)?.asString().orEmpty(),
             effect = effect,
             action = action,
             condition = condition,
