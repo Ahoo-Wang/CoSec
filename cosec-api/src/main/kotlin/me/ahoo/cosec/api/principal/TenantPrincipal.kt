@@ -15,8 +15,14 @@ package me.ahoo.cosec.api.principal
 import me.ahoo.cosec.api.tenant.TenantCapable
 
 /**
- * Tenant Principal .
+ * Principal that belongs to a tenant.
  *
- * @author ahoo wang
+ * A TenantPrincipal extends [CoSecPrincipal] with tenant capabilities,
+ * allowing it to operate within a specific tenant context.
+ *
+ * @see CoSecPrincipal
+ * @see TenantCapable
  */
-interface TenantPrincipal : CoSecPrincipal, TenantCapable
+interface TenantPrincipal :
+    CoSecPrincipal,
+    TenantCapable

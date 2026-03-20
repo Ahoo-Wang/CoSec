@@ -15,8 +15,15 @@ package me.ahoo.cosec.api.token
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 
 /**
- * Token Principal .
+ * Principal authenticated via token-based authentication.
  *
- * @author ahoo wang
+ * A TokenPrincipal extends [CoSecPrincipal] with token-specific capabilities,
+ * including the ability to track the token used for authentication.
+ *
+ * @see TokenIdCapable
+ * @see CoSecPrincipal
+ * @see TokenTenantPrincipal
  */
-interface TokenPrincipal : TokenIdCapable, CoSecPrincipal
+interface TokenPrincipal :
+    TokenIdCapable,
+    CoSecPrincipal

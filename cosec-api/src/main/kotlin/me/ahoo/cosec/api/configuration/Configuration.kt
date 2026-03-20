@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.api.configuration
 
+import com.fasterxml.jackson.annotation.JsonIgnore
+
 interface Configuration {
     fun get(key: String): Configuration?
     fun getRequired(key: String): Configuration = requireNotNull(get(key)) {
@@ -32,12 +34,25 @@ interface Configuration {
     fun asStringList(): List<String> = asList().map { it.asString() }
     fun asStringMap(): Map<String, String> = asMap().mapValues { it.value.asString() }
 
+    @get:JsonIgnore
     val isString: Boolean
+
+    @get:JsonIgnore
     val isBoolean: Boolean
+
+    @get:JsonIgnore
     val isInt: Boolean
+
+    @get:JsonIgnore
     val isLong: Boolean
+
+    @get:JsonIgnore
     val isDouble: Boolean
+
+    @get:JsonIgnore
     val isArray: Boolean
+
+    @get:JsonIgnore
     val isObject: Boolean
 }
 

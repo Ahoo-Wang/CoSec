@@ -16,24 +16,74 @@ package me.ahoo.cosec.api.context
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.tenant.TenantCapable
 
+/**
+ * Security context containing information about the current user/request.
+ *
+ * This interface provides access to:
+ * - The current principal (user)
+ * - The tenant information
+ * - Custom attributes for passing data between components
+ *
+ * The security context is typically populated during authentication
+ * and remains available throughout the request lifecycle.
+ *
+ * @see CoSecPrincipal
+ * @see TenantCapable
+ * @see Authorization
+ */
 interface SecurityContext : TenantCapable {
+    /**
+     * Key for storing/retrieving SecurityContext from request attributes.
+     */
     companion object {
         const val KEY = "COSEC_SECURITY_CONTEXT"
     }
 
+    /**
+     * Custom attributes for storing additional context data.
+     * These attributes can be used to pass data between different
+     * components during the authorization process.
+     */
     val attributes: MutableMap<String, Any>
+
+    /**
+     * The current principal (user) making the request.
+     *
+     * @see CoSecPrincipal
+     */
     val principal: CoSecPrincipal
 
+    /**
+     * Gets an attribute value by key.
+     *
+     * @param attributeKey The attribute key
+     * @return The attribute value, or null if not found
+     */
     fun <V> getAttributeValue(attributeKey: String): V? {
         @Suppress("UNCHECKED_CAST")
         return attributes[attributeKey] as V?
     }
 
-    fun <V> getRequiredAttributeValue(attributeKey: String): V {
-        return requireNotNull(getAttributeValue(attributeKey))
-    }
+    /**
+     * Gets a required attribute value, throwing if not found.
+     *
+     * @param attributeKey The attribute key
+     * @return The attribute value
+     * @throws IllegalArgumentException if the attribute is not found
+     */
+    fun <V> getRequiredAttributeValue(attributeKey: String): V = requireNotNull(getAttributeValue(attributeKey))
 
-    fun setAttributeValue(attributeKey: String, value: Any): SecurityContext {
+    /**
+     * Sets an attribute value.
+     *
+     * @param attributeKey The attribute key
+     * @param value The value to set
+     * @return This security context for chaining
+     */
+    fun setAttributeValue(
+        attributeKey: String,
+        value: Any
+    ): SecurityContext {
         attributes[attributeKey] = value
         return this
     }

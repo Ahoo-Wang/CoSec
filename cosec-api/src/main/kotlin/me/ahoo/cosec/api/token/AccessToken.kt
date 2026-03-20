@@ -13,10 +13,16 @@
 package me.ahoo.cosec.api.token
 
 /**
- * Access Token.
+ * Access token for API authentication.
  *
- * @author ahoo wang
+ * An access token is used to authorize API requests.
+ * It typically has a shorter lifespan than refresh tokens.
+ *
+ * @see Token
+ * @see RefreshToken
+ * @see CompositeToken
  */
 interface AccessToken : Token {
+    /** The actual access token value */
     val accessToken: String
 }

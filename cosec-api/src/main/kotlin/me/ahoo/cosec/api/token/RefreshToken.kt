@@ -13,10 +13,16 @@
 package me.ahoo.cosec.api.token
 
 /**
- * Refresh Token .
+ * Refresh token for obtaining new access tokens.
  *
- * @author ahoo wang
+ * A refresh token is used to obtain a new access token when the current one expires.
+ * It typically has a longer lifespan than access tokens.
+ *
+ * @see Token
+ * @see AccessToken
+ * @see CompositeToken
  */
 interface RefreshToken : Token {
+    /** The actual refresh token value */
     val refreshToken: String
 }
