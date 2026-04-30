@@ -12,7 +12,6 @@
  */
 package me.ahoo.cosec.servlet
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.servlet.Filter
 import jakarta.servlet.FilterChain
 import jakarta.servlet.ServletException
@@ -45,9 +44,6 @@ class AuthorizationFilter(
     requestParser: RequestParser<HttpServletRequest>
 ) : AbstractAuthorizationInterceptor(requestParser, securityContextParser, authorization),
     Filter {
-    companion object {
-        private val log = KotlinLogging.logger {}
-    }
 
     @Throws(IOException::class, ServletException::class)
     override fun doFilter(
@@ -58,18 +54,14 @@ class AuthorizationFilter(
         val httpServletRequest = request as HttpServletRequest
         val httpServletResponse = response as HttpServletResponse
         try {
-            if (authorize(httpServletRequest, httpServletResponse)) {
-                chain.doFilter(request, response)
+            if (!authorize(httpServletRequest, httpServletResponse)) {
+                return
             }
         } catch (tooManyRequestsException: TooManyRequestsException) {
             response.status = HttpStatus.TOO_MANY_REQUESTS.value()
             httpServletResponse.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
-        } catch (cause: Exception) {
-            log.error(cause) {
-                "Unexpected error during authorization of request [${httpServletRequest.servletPath}] [${httpServletRequest.method}]."
-            }
-            httpServletResponse.status = HttpStatus.INTERNAL_SERVER_ERROR.value()
-            httpServletResponse.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
         }
+
+        chain.doFilter(request, response)
     }
 }
