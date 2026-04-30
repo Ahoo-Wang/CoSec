@@ -59,7 +59,7 @@ class SimpleAuthorization(
     private data class RolePermissionEntry(val roleId: RoleId, val permission: Permission)
 
     private inline fun <T> evaluateDenyFirst(
-        items: Iterable<T>,
+        items: Sequence<T>,
         crossinline effectExtractor: (T) -> Effect,
         crossinline verifyItem: (T) -> VerifyResult,
         crossinline onMatch: (T, VerifyResult) -> VerifyContext
@@ -84,13 +84,12 @@ class SimpleAuthorization(
         request: Request,
         securityContext: SecurityContext
     ): VerifyContext? {
-        val matchedPolicies =
-            policies.filter { policy ->
-                policy.condition.match(request = request, securityContext = securityContext)
-            }
+        val matchedPolicies = policies.asSequence().filter { policy ->
+            policy.condition.match(request = request, securityContext = securityContext)
+        }
 
         val allStatements = matchedPolicies.flatMap { policy ->
-            policy.statements.mapIndexed { index, statement ->
+            policy.statements.asSequence().mapIndexed { index, statement ->
                 PolicyStatementEntry(policy, index, statement)
             }
         }
@@ -122,9 +121,10 @@ class SimpleAuthorization(
             return null
         }
 
-        val allPermissions = appRolePermission.rolePermissionIndexer.entries.flatMap { (roleId, permissions) ->
-            permissions.map { permission -> RolePermissionEntry(roleId, permission) }
-        }
+        val allPermissions =
+            appRolePermission.rolePermissionIndexer.entries.asSequence().flatMap { (roleId, permissions) ->
+                permissions.asSequence().map { permission -> RolePermissionEntry(roleId, permission) }
+            }
 
         return evaluateDenyFirst(
             items = allPermissions,
