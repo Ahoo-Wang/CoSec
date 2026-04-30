@@ -23,6 +23,7 @@ import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
+import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.test.asserts.assert
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
@@ -101,5 +102,33 @@ internal class DefaultPolicyEvaluatorTest {
     @MethodSource("me.ahoo.cosec.serialization.CoSecJsonSerializerTest#serializePolicyProvider")
     fun evaluate(policy: Policy) {
         DefaultPolicyEvaluator.evaluate(policy)
+    }
+
+    @Test
+    fun evaluateRequestWithCookies() {
+        val evaluateRequest = EvaluateRequest(
+            cookies = mapOf("sessionId" to "abc123"),
+        )
+        evaluateRequest.getCookieValue("sessionId").assert().isEqualTo("abc123")
+        evaluateRequest.getCookieValue("missing").assert().isEmpty()
+    }
+
+    @Test
+    fun safeEvaluateSwallowsTooManyRequestsException() {
+        var executed = false
+        DefaultPolicyEvaluator.safeEvaluate {
+            executed = true
+            throw TooManyRequestsException()
+        }
+        assertThat(executed, equalTo(true))
+    }
+
+    @Test
+    fun safeEvaluateCallsFunctionNormally() {
+        var executed = false
+        DefaultPolicyEvaluator.safeEvaluate {
+            executed = true
+        }
+        assertThat(executed, equalTo(true))
     }
 }

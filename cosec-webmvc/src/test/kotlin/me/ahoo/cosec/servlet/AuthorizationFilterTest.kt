@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
 internal class AuthorizationFilterTest {
@@ -188,6 +189,86 @@ internal class AuthorizationFilterTest {
         verify {
             servletResponse.contentType = MediaType.APPLICATION_JSON_VALUE
             servletResponse.status = HttpStatus.TOO_MANY_REQUESTS.value()
+            servletResponse.outputStream.write(any() as ByteArray)
+            servletResponse.outputStream.flush()
+        }
+    }
+
+    @Test
+    fun doFilterWhenUnexpectedError() {
+        val authorization = mockk<Authorization> {
+            every { authorize(any(), any()) } throws RuntimeException("unexpected error")
+        }
+        val filter = AuthorizationFilter(
+            InjectSecurityContextParser,
+            authorization,
+            ServletRequestParser(ServletRemoteIpResolver),
+        )
+        val servletRequest = mockk<HttpServletRequest> {
+            every { servletPath } returns "/path"
+            every { method } returns "GET"
+            every { remoteHost } returns "remoteHost"
+            every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
+            every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
+            every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
+            every { cookies } returns arrayOf()
+            every { getHeader(HttpHeaders.ORIGIN) } returns null
+            every { getHeader(HttpHeaders.REFERER) } returns null
+            every { setSecurityContext(any()) } returns Unit
+        }
+        val servletResponse = mockk<HttpServletResponse> {
+            every { setHeader(RequestIdCapable.REQUEST_ID_KEY, any()) } just runs
+            every { contentType = MediaType.APPLICATION_JSON_VALUE } just runs
+            every { status = HttpStatus.INTERNAL_SERVER_ERROR.value() } returns Unit
+            every { outputStream.write(any() as ByteArray) } returns Unit
+            every { outputStream.flush() } returns Unit
+        }
+        val filterChain = mockk<FilterChain>()
+        filter.doFilter(servletRequest, servletResponse, filterChain)
+
+        verify {
+            servletResponse.contentType = MediaType.APPLICATION_JSON_VALUE
+            servletResponse.status = HttpStatus.INTERNAL_SERVER_ERROR.value()
+            servletResponse.outputStream.write(any() as ByteArray)
+            servletResponse.outputStream.flush()
+        }
+    }
+
+    @Test
+    fun doFilterWhenAuthorizationReturnsEmpty() {
+        val authorization = mockk<Authorization> {
+            every { authorize(any(), any()) } returns Mono.empty()
+        }
+        val filter = AuthorizationFilter(
+            InjectSecurityContextParser,
+            authorization,
+            ServletRequestParser(ServletRemoteIpResolver),
+        )
+        val servletRequest = mockk<HttpServletRequest> {
+            every { servletPath } returns "/path"
+            every { method } returns "GET"
+            every { remoteHost } returns "remoteHost"
+            every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
+            every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
+            every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
+            every { cookies } returns arrayOf()
+            every { getHeader(HttpHeaders.ORIGIN) } returns null
+            every { getHeader(HttpHeaders.REFERER) } returns null
+            every { setSecurityContext(any()) } returns Unit
+        }
+        val servletResponse = mockk<HttpServletResponse> {
+            every { setHeader(RequestIdCapable.REQUEST_ID_KEY, any()) } just runs
+            every { contentType = MediaType.APPLICATION_JSON_VALUE } just runs
+            every { status = HttpStatus.FORBIDDEN.value() } returns Unit
+            every { outputStream.write(any() as ByteArray) } returns Unit
+            every { outputStream.flush() } returns Unit
+        }
+        val filterChain = mockk<FilterChain>()
+        filter.doFilter(servletRequest, servletResponse, filterChain)
+
+        verify {
+            servletResponse.contentType = MediaType.APPLICATION_JSON_VALUE
+            servletResponse.status = HttpStatus.FORBIDDEN.value()
             servletResponse.outputStream.write(any() as ByteArray)
             servletResponse.outputStream.flush()
         }

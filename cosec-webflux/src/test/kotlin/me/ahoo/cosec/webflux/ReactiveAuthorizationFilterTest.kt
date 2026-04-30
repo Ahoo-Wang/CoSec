@@ -257,4 +257,46 @@ internal class ReactiveAuthorizationFilterTest {
             exchange.setSecurityContext(any())
         }
     }
+
+    @Test
+    fun filterWhenUnexpectedError() {
+        val authorization = mockk<Authorization> {
+            every { authorize(any(), any()) } returns RuntimeException("unexpected error").toMono()
+        }
+        val filter = ReactiveAuthorizationFilter(
+            InjectSecurityContextParser,
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
+            authorization,
+        )
+        val exchange = mockk<ServerWebExchange> {
+            every { request.headers.getFirst(RequestIdCapable.REQUEST_ID_KEY) } returns null
+            every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
+            every { request.headers.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
+            every { request.queryParams.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
+            every { request.cookies.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
+            every { request.headers.origin } returns "origin"
+            every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
+            every { request.path.value() } returns "/path"
+            every { request.method.name() } returns "GET"
+            every { request.remoteAddress?.hostName } returns "hostName"
+            every { response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR) } returns true
+            every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
+            every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
+            every { response.writeWith(any()) } returns Mono.empty()
+            every { setSecurityContext(any()) } just runs
+            every {
+                mutate()
+                    .principal(any())
+                    .build()
+            } returns this
+        }
+
+        filter.filter(exchange, mockk()).block()
+        verify {
+            authorization.authorize(any(), any())
+            exchange.response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR
+            exchange.response.bufferFactory().wrap(any() as ByteArray)
+            exchange.response.writeWith(any())
+        }
+    }
 }
