@@ -22,6 +22,15 @@ import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
 const val RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY = "permitsPerSecond"
 
+/**
+ * Global rate limiter condition matcher.
+ *
+ * Creates a single [RateLimiter] shared across ALL requests matching this condition.
+ * This provides global rate limiting — the rate limit applies to the total request
+ * volume regardless of the source user/IP.
+ *
+ * For per-user or per-group rate limiting, use [GroupedRateLimiterConditionMatcher].
+ */
 class RateLimiterConditionMatcher(
     override val configuration: Configuration
 ) : ConditionMatcher {

@@ -8,7 +8,7 @@ complexity:
     active: false
 style:
   MaxLineLength:
-    maxLineLength: 300
+    maxLineLength: 200
   ReturnCount:
     active: false
   UseCheckOrError:
@@ -36,9 +36,17 @@ naming:
     active: false
 exceptions:
   SwallowedException:
-    active: false
+    active: true
+    ignoredExceptionTypes:
+      - TooManyRequestsException
   TooGenericExceptionCaught:
-    active: false
+    active: true
+    excludes:
+      - "**/DefaultPolicyEvaluator.kt"
+      - "**/SecurityContextParser.kt"
+      - "**/LocalPolicyLoader.kt"
+      - "**/Ip2RegionRequestAttributesAppender.kt"
+      - "**/AuthorizationFilter.kt"
 
   ThrowingExceptionsWithoutMessageOrCause:
     active: false

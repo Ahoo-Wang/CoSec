@@ -25,10 +25,15 @@ import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
 /**
- * ReactiveInjectSecurityContextWebFilter .
- * 用于API网关授权检查后下游服务解析安全上下文，不需要进行Token校验。
+ * Reactive WebFilter for injecting security context without token verification.
  *
- * @author ahoo wang
+ * This filter is designed for downstream services behind an API gateway that has
+ * already performed authorization checks. It parses the security context from
+ * request headers without requiring token verification.
+ *
+ * @param requestParser Parser for converting exchanges to requests
+ * @param securityContextParser Parser for extracting security context
+ * @see SecurityContextParser.ensureParse
  */
 class ReactiveInjectSecurityContextWebFilter(
     private val requestParser: RequestParser<ServerWebExchange>,

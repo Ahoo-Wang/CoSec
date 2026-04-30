@@ -41,6 +41,11 @@ class ReactiveAuthorizationFilter(
     WebFilter,
     Ordered {
     companion object {
+        /**
+         * Filter order for reactive authorization.
+         * Set to 1000 to run after framework filters (CORS, etc.)
+         * while still running before most application filters.
+         */
         const val REACTIVE_AUTHORIZATION_FILTER_ORDER = 1000
     }
 

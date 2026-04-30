@@ -44,6 +44,10 @@ import reactor.kotlin.core.publisher.toMono
  * - Authorization decision making
  * - Error handling for authentication failures
  *
+ * Note: The authorization algorithm in this class mirrors the logic in
+ * [me.ahoo.cosec.servlet.AbstractAuthorizationInterceptor]. Changes to the
+ * algorithm here should be reflected in the servlet counterpart.
+ *
  * @param securityContextParser Parser for extracting security context from requests
  * @param requestParser Parser for converting exchanges to requests
  * @param authorization The authorization service
@@ -102,6 +106,12 @@ abstract class ReactiveSecurityFilter(
             }.onErrorResume(TooManyRequestsException::class.java) { _ ->
                 exchange.response.statusCode = HttpStatus.TOO_MANY_REQUESTS
                 exchange.response.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
+            }.onErrorResume { cause ->
+                log.error(cause) {
+                    "Unexpected error during authorization of request [${request.path}] [${request.method}]."
+                }
+                exchange.response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR
+                exchange.response.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
             }
     }
 

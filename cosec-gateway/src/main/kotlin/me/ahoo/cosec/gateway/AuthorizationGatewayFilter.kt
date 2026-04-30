@@ -34,6 +34,11 @@ class AuthorizationGatewayFilter(
     authorization: Authorization
 ) : GlobalFilter, Ordered, ReactiveSecurityFilter(securityContextParser, requestParser, authorization) {
     companion object {
+        /**
+         * Filter order for gateway authorization.
+         * Uses HIGHEST_PRECEDENCE + 10 to run very early in the gateway filter chain,
+         * ensuring authorization is checked before route-specific filters.
+         */
         const val AUTHORIZATION_GATEWAY_FILTER_ORDER = Ordered.HIGHEST_PRECEDENCE + 10
     }
 
