@@ -18,6 +18,7 @@ import io.mockk.mockk
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.CoSecPrincipal
@@ -325,6 +326,64 @@ internal class SimpleAuthorizationTest {
         authorization.authorize(request, securityContext)
             .test()
             .expectNext(AuthorizeResult.EXPLICIT_DENY)
+            .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenRoleAppConditionNotMatched() {
+        val permissionId = UUID.randomUUID().toString()
+        val neverMatchCondition = mockk<ConditionMatcher> {
+            every { match(any<Request>(), any<SecurityContext>()) } returns false
+        }
+        val appRolePermission = AppRolePermissionData(
+            appPermission = AppPermissionData(
+                id = "appId",
+                condition = neverMatchCondition,
+                groups = listOf(
+                    PermissionGroupData(
+                        "groupName",
+                        permissions = listOf(
+                            PermissionData(
+                                id = permissionId,
+                                name = "",
+                                effect = Effect.ALLOW,
+                                action = AllActionMatcher.INSTANCE,
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            rolePermissions = listOf(
+                RolePermissionData(
+                    id = "roleId",
+                    permissions = setOf(permissionId),
+                ),
+            ),
+        )
+
+        val securityContext = mockk<SecurityContext> {
+            every { principal.authenticated } returns false
+            every { principal.id } returns ""
+            every { principal.policies } returns emptySet()
+            every { principal.roles } returns setOf("rolePolicy")
+            every { setAttributeValue(any(), any()) } returns this
+        }
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.empty()
+            every { getPolicies(any()) } returns Mono.empty()
+        }
+        val permissionRepository = mockk<AppRolePermissionRepository> {
+            every { getAppRolePermission(any(), any(), any()) } returns appRolePermission.toMono()
+        }
+        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
+        val request = mockk<Request> {
+            every { appId } returns "appId"
+            every { spaceId } returns "spaceId"
+        }
+
+        authorization.authorize(request, securityContext)
+            .test()
+            .expectNext(AuthorizeResult.IMPLICIT_DENY)
             .verifyComplete()
     }
 }
