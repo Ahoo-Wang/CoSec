@@ -27,10 +27,15 @@ import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import java.io.IOException
 
 /**
- * Inject Security Context Filter .
- * 用于API网关授权检查后下游服务解析安全上下文，不需要进行Token校验。
+ * Servlet filter for injecting security context without token verification.
  *
- * @author ahoo wang
+ * This filter is designed for downstream services behind an API gateway that has
+ * already performed authorization checks. It parses the security context from
+ * request headers without requiring token verification.
+ *
+ * @param requestParser Parser for converting servlet requests
+ * @param securityContextParser Parser for extracting security context
+ * @see SecurityContextParser.ensureParse
  */
 class InjectSecurityContextFilter(
     private val requestParser: RequestParser<HttpServletRequest>,

@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.servlet
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import me.ahoo.cosec.api.authorization.Authorization
@@ -38,6 +39,10 @@ import org.springframework.http.MediaType
  * - Authorization decision making
  * - Error handling for authentication failures
  *
+ * Note: The authorization algorithm in this class mirrors the logic in
+ * [me.ahoo.cosec.webflux.ReactiveSecurityFilter]. Changes to the algorithm
+ * here should be reflected in the reactive counterpart.
+ *
  * @param requestParser Parser for converting servlet requests
  * @param securityContextParser Parser for extracting security context
  * @param authorization The authorization service
@@ -48,6 +53,10 @@ abstract class AbstractAuthorizationInterceptor(
     private val securityContextParser: SecurityContextParser,
     private val authorization: Authorization
 ) {
+    companion object {
+        private val log = KotlinLogging.logger {}
+    }
+
     protected fun authorize(
         servletRequest: HttpServletRequest,
         servletResponse: HttpServletResponse
@@ -81,7 +90,12 @@ abstract class AbstractAuthorizationInterceptor(
                     return@map false
                 }
                 true
-            }.block()!!
+            }.block() ?: run {
+            log.warn { "Authorization returned empty result for request [$request]. Denying by default." }
+            servletResponse.status = HttpStatus.FORBIDDEN.value()
+            servletResponse.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
+            false
+        }
     }
 
     fun HttpServletResponse.writeWithAuthorizeResult(authorizeResult: AuthorizeResult) {

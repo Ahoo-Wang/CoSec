@@ -24,6 +24,7 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.CoSecPrincipal.Companion.isRoot
+import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import reactor.core.publisher.Mono
@@ -53,6 +54,31 @@ class SimpleAuthorization(
         private val log = KotlinLogging.logger {}
     }
 
+    private data class PolicyStatementEntry(val policy: Policy, val index: Int, val statement: Statement)
+
+    private data class RolePermissionEntry(val roleId: RoleId, val permission: Permission)
+
+    private inline fun <T> evaluateDenyFirst(
+        items: Iterable<T>,
+        crossinline effectExtractor: (T) -> Effect,
+        crossinline verifyItem: (T) -> VerifyResult,
+        crossinline onMatch: (T, VerifyResult) -> VerifyContext
+    ): VerifyContext? {
+        items.filter { effectExtractor(it) == Effect.DENY }.forEach { item ->
+            val result = verifyItem(item)
+            if (result == VerifyResult.EXPLICIT_DENY) {
+                return onMatch(item, result)
+            }
+        }
+        items.filter { effectExtractor(it) == Effect.ALLOW }.forEach { item ->
+            val result = verifyItem(item)
+            if (result == VerifyResult.ALLOW) {
+                return onMatch(item, result)
+            }
+        }
+        return null
+    }
+
     private fun verifyPolicies(
         policies: List<Policy>,
         request: Request,
@@ -63,49 +89,28 @@ class SimpleAuthorization(
                 policy.condition.match(request = request, securityContext = securityContext)
             }
 
-        matchedPolicies.forEach { policy: Policy ->
-            policy.statements
-                .filter { statement: Statement ->
-                    statement.effect == Effect.DENY
-                }.forEachIndexed { index, statement ->
-                    val verifyResult = statement.verify(request, securityContext)
-                    if (verifyResult == VerifyResult.EXPLICIT_DENY) {
-                        log.debug {
-                            "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Explicit Deny]."
-                        }
-                        return PolicyVerifyContext(
-                            policy = policy,
-                            statementIndex = index,
-                            statement = statement,
-                            result = verifyResult,
-                        )
-                    }
-                }
+        val allStatements = matchedPolicies.flatMap { policy ->
+            policy.statements.mapIndexed { index, statement ->
+                PolicyStatementEntry(policy, index, statement)
+            }
         }
 
-        matchedPolicies.forEach { policy: Policy ->
-            policy.statements
-                .filter { statement: Statement ->
-                    statement.effect == Effect.ALLOW
-                }.forEachIndexed { index, statement ->
-                    val verifyResult = statement.verify(request, securityContext)
-                    if (verifyResult == VerifyResult.ALLOW) {
-                        log.debug {
-                            "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [Allow]."
-                        }
-                        return PolicyVerifyContext(
-                            policy = policy,
-                            statementIndex = index,
-                            statement = statement,
-                            result = verifyResult,
-                        )
-                    }
+        return evaluateDenyFirst(
+            items = allStatements,
+            effectExtractor = { it.statement.effect },
+            verifyItem = { it.statement.verify(request, securityContext) },
+            onMatch = { entry, result ->
+                log.debug {
+                    "Verify [$request] [$securityContext] matched Policy[${entry.policy.id}] Statement[${entry.index}][${entry.statement.name}] - [$result]."
                 }
-        }
-        /**
-         * [VerifyResult.IMPLICIT_DENY]
-         */
-        return null
+                PolicyVerifyContext(
+                    policy = entry.policy,
+                    statementIndex = entry.index,
+                    statement = entry.statement,
+                    result = result,
+                )
+            }
+        )
     }
 
     private fun verifyAppRolePermission(
@@ -116,51 +121,26 @@ class SimpleAuthorization(
         if (!appRolePermission.appPermission.condition.match(request, context)) {
             return null
         }
-        appRolePermission.rolePermissionIndexer.forEach { rolePermissionEntry ->
-            val roleId = rolePermissionEntry.key
-            val permissions = rolePermissionEntry.value
-            permissions
-                .filter { permission: Permission ->
-                    permission.effect == Effect.DENY
-                }.forEach { permission ->
-                    val verifyResult = permission.verify(request, context)
-                    if (verifyResult == VerifyResult.EXPLICIT_DENY) {
-                        log.debug {
-                            "Verify [$request] [$context] matched Role[$roleId] Permission[${permission.id}][${permission.name}] - [Explicit Deny]."
-                        }
-                        return RoleVerifyContext(
-                            roleId = roleId,
-                            permission = permission,
-                            result = verifyResult,
-                        )
-                    }
-                }
+
+        val allPermissions = appRolePermission.rolePermissionIndexer.entries.flatMap { (roleId, permissions) ->
+            permissions.map { permission -> RolePermissionEntry(roleId, permission) }
         }
 
-        appRolePermission.rolePermissionIndexer.forEach { rolePermissionEntry ->
-            val roleId = rolePermissionEntry.key
-            val permissions = rolePermissionEntry.value
-            permissions
-                .filter { statement: Statement ->
-                    statement.effect == Effect.ALLOW
-                }.forEach { permission ->
-                    val verifyResult = permission.verify(request, context)
-                    if (verifyResult == VerifyResult.ALLOW) {
-                        log.debug {
-                            "Verify [$request] [$context] matched Role[$roleId] Permission[${permission.id}][${permission.name}] - [Allow]."
-                        }
-                        return RoleVerifyContext(
-                            roleId = roleId,
-                            permission = permission,
-                            result = verifyResult,
-                        )
-                    }
+        return evaluateDenyFirst(
+            items = allPermissions,
+            effectExtractor = { it.permission.effect },
+            verifyItem = { it.permission.verify(request, context) },
+            onMatch = { entry, result ->
+                log.debug {
+                    "Verify [$request] [$context] matched Role[${entry.roleId}] Permission[${entry.permission.id}][${entry.permission.name}] - [$result]."
                 }
-        }
-        /**
-         * [VerifyResult.IMPLICIT_DENY]
-         */
-        return null
+                RoleVerifyContext(
+                    roleId = entry.roleId,
+                    permission = entry.permission,
+                    result = result,
+                )
+            }
+        )
     }
 
     private fun verifyRoot(context: SecurityContext): VerifyResult =

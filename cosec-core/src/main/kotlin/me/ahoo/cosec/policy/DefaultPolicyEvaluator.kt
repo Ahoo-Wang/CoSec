@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.policy
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyEvaluator
@@ -22,6 +23,7 @@ import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import java.net.URI
 
 object DefaultPolicyEvaluator : PolicyEvaluator {
+    private val logger = KotlinLogging.logger { }
     override fun evaluate(policy: Policy) {
         val evaluateRequest = EvaluateRequest()
         val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
@@ -46,12 +48,19 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
     internal fun safeEvaluate(verifyFun: () -> Unit) {
         try {
             verifyFun()
-        } catch (ignore: TooManyRequestsException) {
-            // ignore
+        } catch (e: TooManyRequestsException) {
+            logger.debug(e) { "Rate limit condition triggered during policy evaluation - skipping." }
         }
     }
 }
 
+/**
+ * Mock request used for policy evaluation and validation.
+ *
+ * This is NOT a production request object. It provides default values
+ * suitable for testing policy conditions and statements during policy
+ * evaluation via [DefaultPolicyEvaluator].
+ */
 data class EvaluateRequest(
     override val path: String = "/policies/test",
     override val method: String = "POST",
