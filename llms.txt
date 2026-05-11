@@ -1,0 +1,68 @@
+# CoSec
+
+> RBAC-based and Policy-based Multi-Tenant Reactive Security Framework for JVM applications. Built on Spring Boot 4 and Project Reactor with AWS IAM-inspired policy model.
+
+## Onboarding
+
+- [Contributor Guide](wiki/onboarding/contributor.md) - Setup, architecture, testing, and contributing
+- [Staff Engineer Guide](wiki/onboarding/staff-engineer.md) - Architecture deep-dive, design tradeoffs
+- [Executive Guide](wiki/onboarding/executive.md) - Capability map, risk assessment, investment thesis
+- [Product Manager Guide](wiki/onboarding/product-manager.md) - User journeys, feature map, FAQ
+
+## Architecture
+
+- [Module Dependency Graph](wiki/deep-dive/architecture/module-dependency.md) - Module structure and dependencies
+- [Security Model](wiki/deep-dive/architecture/security-model.md) - Principal hierarchy, policy model, deny-first algorithm
+- [Reactive Design](wiki/deep-dive/architecture/reactive-design.md) - Project Reactor integration throughout
+- [Multi-Tenancy](wiki/deep-dive/architecture/multi-tenancy.md) - Tenant model and scoped policies
+
+## Getting Started
+
+- [Overview](wiki/getting-started/overview.md) - What is CoSec, key features, comparison
+- [Quick Start](wiki/getting-started/quick-start.md) - Step-by-step integration guide
+- [Configuration Reference](wiki/getting-started/configuration.md) - All cosec.* properties
+- [Policy Authoring Guide](wiki/getting-started/policy-authoring.md) - Writing JSON policies
+
+## Deep Dive
+
+### Authentication
+
+- [Authentication System](wiki/deep-dive/authentication/authentication-system.md) - Auth provider, composite auth, credentials
+- [JWT Integration](wiki/deep-dive/authentication/jwt-integration.md) - Token creation, verification, claims
+- [Social Authentication](wiki/deep-dive/authentication/social-authentication.md) - OAuth via JustAuth
+- [Token Management](wiki/deep-dive/authentication/token-management.md) - Token hierarchy and lifecycle
+
+### Authorization
+
+- [Authorization Flow](wiki/deep-dive/authorization/authorization-flow.md) - Root → blacklist → policies → roles → implicit deny
+- [Policy Evaluation](wiki/deep-dive/authorization/policy-evaluation.md) - Deny-first algorithm, verify context
+- [Action Matchers](wiki/deep-dive/authorization/action-matchers.md) - Path, wildcard, composite matchers
+- [Condition Matchers](wiki/deep-dive/authorization/condition-matchers.md) - Path, context, rate limit, expression matchers
+- [Permissions and Roles](wiki/deep-dive/authorization/permissions-roles.md) - RBAC model, app permissions
+
+### Integrations
+
+- [Spring WebFlux](wiki/deep-dive/integrations/spring-webflux.md) - Reactive WebFilter integration
+- [Spring WebMvc](wiki/deep-dive/integrations/spring-webmvc.md) - Servlet filter integration
+- [Spring Cloud Gateway](wiki/deep-dive/integrations/spring-cloud-gateway.md) - GlobalFilter for API gateway
+- [Redis Caching](wiki/deep-dive/integrations/redis-caching.md) - CoCache-based policy caching
+- [OpenTelemetry](wiki/deep-dive/integrations/opentelemetry.md) - Distributed tracing
+- [OpenAPI / Swagger](wiki/deep-dive/integrations/openapi.md) - Auto-generate permissions from API specs
+- [IP Geolocation](wiki/deep-dive/integrations/ip-geolocation.md) - IP region enrichment
+
+### Extending CoSec
+
+- [Custom Matchers (SPI)](wiki/deep-dive/extending/custom-matchers.md) - Java SPI for custom matchers
+- [Auto-Configuration](wiki/deep-dive/extending/auto-configuration.md) - Spring Boot auto-config internals
+
+### Operations
+
+- [Deployment](wiki/deep-dive/operations/deployment.md) - Docker, Kubernetes, CI/CD
+- [Testing Guide](wiki/deep-dive/operations/testing.md) - Testing policies and authorization
+- [Performance](wiki/deep-dive/operations/performance.md) - JMH benchmarks, optimization
+
+## Optional
+
+- [CLAUDE.md](CLAUDE.md) - AI coding assistant instructions
+- [README.md](README.md) - Project README with design diagrams
+- [schema/](schema/) - JSON Schema files for policy and permission validation
