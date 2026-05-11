@@ -1,0 +1,47 @@
+:root {
+  --cosec-primary: #6d5dfc;
+  --cosec-primary-light: #8b7ffc;
+  --vp-c-brand-1: var(--cosec-primary);
+  --vp-c-brand-2: var(--cosec-primary-light);
+  --vp-c-brand-3: var(--cosec-primary);
+}
+
+/* Dark mode Mermaid overrides */
+.dark .mermaid {
+  --mermaid-font-family: 'JetBrains Mono', monospace;
+}
+
+.dark .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Medium zoom for mermaid and images */
+.medium-zoom-overlay {
+  z-index: 999;
+}
+
+.medium-zoom-image--opened {
+  z-index: 1000;
+  cursor: zoom-out;
+}
+
+/* Mermaid diagram container */
+.mermaid {
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.mermaid svg {
+  cursor: zoom-in;
+}
+
+/* Code block styling */
+.vp-doc div[class*='language-'] {
+  border-radius: 8px;
+}
+
+/* Custom container for tips */
+.custom-block.tip {
+  border-color: var(--cosec-primary);
+}

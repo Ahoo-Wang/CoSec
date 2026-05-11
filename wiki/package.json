@@ -1,0 +1,17 @@
+{
+  "name": "cosec-wiki",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CoSec Security Framework Documentation",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.3",
+    "vitepress-mermaid-renderer": "^1.1.23",
+    "medium-zoom": "^1.1.0"
+  }
+}

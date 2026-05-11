@@ -1,0 +1,66 @@
+# CoSec Wiki
+
+> RBAC-based and Policy-based Multi-Tenant Reactive Security Framework. This wiki provides comprehensive documentation for the CoSec security framework.
+
+## Onboarding
+
+- onboarding/index.md - Onboarding guide index
+- onboarding/contributor.md - Contributor guide
+- onboarding/staff-engineer.md - Staff engineer guide
+- onboarding/executive.md - Executive guide
+- onboarding/product-manager.md - Product manager guide
+
+## Getting Started
+
+- getting-started/overview.md - CoSec overview, features, comparison
+- getting-started/quick-start.md - Step-by-step integration guide
+- getting-started/configuration.md - Configuration properties reference
+- getting-started/policy-authoring.md - JSON policy authoring guide
+
+## Architecture
+
+- deep-dive/architecture/module-dependency.md - Module structure and dependencies
+- deep-dive/architecture/security-model.md - Security model and policy design
+- deep-dive/architecture/reactive-design.md - Reactive programming with Project Reactor
+- deep-dive/architecture/multi-tenancy.md - Multi-tenant architecture
+
+## Authentication
+
+- deep-dive/authentication/authentication-system.md - Authentication system architecture
+- deep-dive/authentication/jwt-integration.md - JWT token handling
+- deep-dive/authentication/social-authentication.md - OAuth social authentication
+- deep-dive/authentication/token-management.md - Token lifecycle management
+
+## Authorization
+
+- deep-dive/authorization/authorization-flow.md - Authorization pipeline
+- deep-dive/authorization/policy-evaluation.md - Policy evaluation algorithm
+- deep-dive/authorization/action-matchers.md - Action matcher SPI
+- deep-dive/authorization/condition-matchers.md - Condition matcher SPI
+- deep-dive/authorization/permissions-roles.md - RBAC permission model
+
+## Integrations
+
+- deep-dive/integrations/spring-webflux.md - WebFlux integration
+- deep-dive/integrations/spring-webmvc.md - WebMvc integration
+- deep-dive/integrations/spring-cloud-gateway.md - Spring Cloud Gateway integration
+- deep-dive/integrations/redis-caching.md - Redis caching via CoCache
+- deep-dive/integrations/opentelemetry.md - OpenTelemetry tracing
+- deep-dive/integrations/openapi.md - OpenAPI/Swagger integration
+- deep-dive/integrations/ip-geolocation.md - IP geolocation enrichment
+
+## Extending CoSec
+
+- deep-dive/extending/custom-matchers.md - Custom matcher SPI guide
+- deep-dive/extending/auto-configuration.md - Auto-configuration internals
+
+## Operations
+
+- deep-dive/operations/deployment.md - Deployment guide (Docker, K8s)
+- deep-dive/operations/testing.md - Testing guide
+- deep-dive/operations/performance.md - Performance and benchmarks
+
+## Optional
+
+- index.md - Wiki landing page
+- zh/index.md - Chinese landing page
