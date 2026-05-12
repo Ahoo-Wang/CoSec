@@ -7,6 +7,9 @@ export default defineConfig({
     title: 'CoSec',
     ignoreDeadLinks: true,
     description: 'RBAC-based and Policy-based Multi-Tenant Reactive Security Framework',
+    sitemap: {
+        hostname: 'https://cosec.ahoo.me',
+    },
     head: [
       ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
     ],
