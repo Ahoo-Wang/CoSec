@@ -11,6 +11,8 @@
 [![Awesome Kotlin Badge](https://kotlin.link/awesome-kotlin.svg)](https://github.com/KotlinBy/awesome-kotlin)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Ahoo-Wang/CoSec)
 
+> [中文文档](https://cosec.ahoo.me/zh/) | [English Document](https://cosec.ahoo.me/)
+
 ## 认证
 
 ![Authentication-Flow](document/design/assets/Authentication-Flow.svg)
