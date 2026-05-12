@@ -132,9 +132,6 @@ export default defineConfig({
             message: 'Licensed under the Apache License, Version 2.0.',
             copyright: 'Copyright 2021-present Ahoo Wang',
           },
-          search: {
-            provider: 'local',
-          },
           socialLinks: [
             { icon: 'github', link: REPO_URL },
           ],
@@ -243,9 +240,6 @@ export default defineConfig({
             message: '基于 Apache License 2.0 发布',
             copyright: 'Copyright 2021-present Ahoo Wang',
           },
-          search: {
-            provider: 'local',
-          },
           docFooter: {
             prev: '上一页',
             next: '下一页',
@@ -265,6 +259,9 @@ export default defineConfig({
       },
     },
     themeConfig: {
+      search: {
+        provider: 'local',
+      },
       socialLinks: [
         { icon: 'github', link: REPO_URL },
       ],
