@@ -12,6 +12,8 @@ export default defineConfig({
     },
     head: [
       ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
+      ['script', { async: '', src: 'https://www.googletagmanager.com/gtag/js?id=G-7BDR21FTDV' }],
+      ['script', {}, "window.dataLayer = window.dataLayer || [];\nfunction gtag(){dataLayer.push(arguments);}\ngtag('js', new Date());\ngtag('config', 'G-7BDR21FTDV');"],
     ],
     locales: {
       root: {
