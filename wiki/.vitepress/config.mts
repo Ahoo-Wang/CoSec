@@ -154,6 +154,13 @@ export default defineConfig({
                 { text: 'Redis 缓存', link: '/zh/deep-dive/integrations/redis-caching' },
               ],
             },
+            {
+              text: '资源',
+              items: [
+                { text: 'API 参考', link: '/zh/deep-dive/extending/custom-matchers' },
+                { text: '入门指南', link: '/zh/onboarding/' },
+              ],
+            },
           ],
           sidebar: {
             '/zh/getting-started/': [
