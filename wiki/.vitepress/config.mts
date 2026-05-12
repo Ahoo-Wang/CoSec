@@ -238,6 +238,18 @@ export default defineConfig({
                 ],
               },
             ],
+            '/zh/onboarding/': [
+              {
+                text: '入门指南',
+                collapsed: false,
+                items: [
+                  { text: '贡献者指南', link: '/zh/onboarding/contributor' },
+                  { text: '高级工程师指南', link: '/zh/onboarding/staff-engineer' },
+                  { text: '管理者指南', link: '/zh/onboarding/executive' },
+                  { text: '产品经理指南', link: '/zh/onboarding/product-manager' },
+                ],
+              },
+            ],
           },
           editLink: {
             pattern: `${REPO_URL}/edit/main/wiki/:path`,
