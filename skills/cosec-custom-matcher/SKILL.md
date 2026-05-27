@@ -1,6 +1,6 @@
 ---
 name: cosec-custom-matcher
-description: "Help developers create custom ActionMatcher and ConditionMatcher implementations for CoSec. Use this skill when users need to extend CoSec's policy matching with custom logic, implement a new condition type, create a custom action matcher, or register SPI extensions."
+description: "Use when extending CoSec policy matching with custom ActionMatcher or ConditionMatcher implementations, condition types, matcher factories, ServiceLoader SPI registration, or Spring bean matcher registration."
 ---
 
 # CoSec Custom Matcher Development

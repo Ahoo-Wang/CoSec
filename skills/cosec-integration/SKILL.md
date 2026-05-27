@@ -1,6 +1,6 @@
 ---
 name: cosec-integration
-description: "Guide developers through integrating CoSec security framework into Spring Boot applications. Use this skill whenever the user asks about adding CoSec to a project, configuring CoSec properties, setting up JWT authentication, enabling authorization filters, adding Redis caching for policies, or integrating CoSec with WebFlux, WebMVC, or Spring Cloud Gateway."
+description: "Use when adding CoSec to a Spring Boot application, choosing WebFlux/WebMVC/Gateway modules, configuring JWT authentication, authorization filters, local policies, Redis policy caching, social login, IP enrichment, OpenAPI, or OpenTelemetry integration."
 ---
 
 # CoSec Integration Guide

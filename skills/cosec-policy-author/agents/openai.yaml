@@ -1,0 +1,4 @@
+interface:
+  display_name: "CoSec Policy Authoring"
+  short_description: "Write CoSec authorization policies"
+  default_prompt: "Use $cosec-policy-author to draft and validate CoSec policy JSON for my endpoints."

@@ -1,6 +1,6 @@
 ---
 name: cosec-troubleshoot
-description: "Debug and troubleshoot CoSec authorization issues. Use this skill when users report unexpected 403/401 errors, requests being denied when they should be allowed, policies not taking effect, JWT token issues, or need to understand why a specific request was authorized or denied."
+description: "Use when diagnosing CoSec authentication or authorization failures such as unexpected 401/403 responses, denied requests that should be allowed, policies not loading, JWT token rejection, matcher mismatches, or unclear access decisions."
 ---
 
 # CoSec Troubleshooting Guide
