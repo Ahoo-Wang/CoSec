@@ -1,0 +1,4 @@
+interface:
+  display_name: "CoSec Troubleshooting"
+  short_description: "Debug CoSec access decisions"
+  default_prompt: "Use $cosec-troubleshoot to diagnose why a CoSec request is denied or a JWT is rejected."

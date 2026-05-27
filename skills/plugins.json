@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "plugins": [
+    {
+      "name": "ahoo-cosec-skills",
+      "description": "CoSec skills for integrating a reactive multi-tenant RBAC and policy-based security framework, authoring authorization policies, extending matchers, and troubleshooting access decisions.",
+      "skills": {
+        "include": [
+          "cosec-custom-matcher",
+          "cosec-integration",
+          "cosec-policy-author",
+          "cosec-troubleshoot"
+        ],
+        "exclude": [
+          "*-workspace"
+        ]
+      },
+      "keywords": [
+        "cosec",
+        "security",
+        "authorization",
+        "authentication",
+        "rbac",
+        "policy",
+        "multi-tenant",
+        "spring-boot",
+        "reactive",
+        "jwt"
+      ],
+      "category": "development",
+      "interface": {
+        "displayName": "Ahoo CoSec Skills",
+        "capabilities": [
+          "Skills"
+        ],
+        "defaultPrompt": "Help me integrate CoSec, author authorization policies, implement custom matchers, and troubleshoot authentication or authorization issues."
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      }
+    }
+  ]
+}

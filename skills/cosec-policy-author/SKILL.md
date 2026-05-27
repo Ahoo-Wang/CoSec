@@ -1,6 +1,6 @@
 ---
 name: cosec-policy-author
-description: "Author, validate, and explain CoSec security policy JSON files. Use this skill whenever the user mentions writing, creating, editing, or debugging CoSec policies, policy statements, action matchers, condition matchers, or authorization rules. Also use when users ask about policy JSON format, how to allow/deny specific endpoints, how to set up role-based access, or how to configure rate limiting in CoSec policies."
+description: "Use when writing, validating, explaining, or debugging CoSec policy JSON, policy statements, ALLOW/DENY rules, action matchers, condition matchers, role-based authorization, tenant scoping, or rate limiting policies."
 ---
 
 # CoSec Policy Authoring
