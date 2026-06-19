@@ -18,7 +18,7 @@ springdoc = "3.0.3"
 junit = "6.0.3"
 fluent-assert = "0.2.8"
 hamcrest = "3.0"
-mockk = "1.14.9"
+mockk = "1.14.11"
 jmh = "1.37"
 # plugins
 detekt = "1.23.8"
