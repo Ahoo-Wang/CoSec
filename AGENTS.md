@@ -65,6 +65,13 @@ cosec-bom/          - Bill of Materials
 - SPI extension points via Java ServiceLoader for ActionMatcher and ConditionMatcher
 - Multi-tenant: TenantPrincipal, tenant-scoped policies
 
+## RoGraph Integration
+
+- CoSec is a RoGraph security gateway foundation, not a commercial Product Context.
+- RoGraph-facing Published Language must use RESTful API as the publication form.
+- Events, SDKs, internal reactive APIs, filters, gateway adapters, claims, and storage schemas may be implementation or integration mechanisms, but they must not replace RoGraph Published Language.
+- Do not treat CoSec as the identity or access source of truth; Idena owns identity, access, credentials, security context, and identity audit facts.
+
 ## Boundaries
 
 - ✅ Always add new interfaces to `cosec-api`
