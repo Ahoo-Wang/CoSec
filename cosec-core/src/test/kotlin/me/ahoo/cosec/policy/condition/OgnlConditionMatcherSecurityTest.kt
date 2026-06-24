@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+import java.net.URI
 import java.nio.file.Files
 
 /**
@@ -45,6 +46,9 @@ internal class OgnlConditionMatcherSecurityTest {
             // reflection gadget via getClass()/classloader
             "request.getClass().getClassLoader() != null",
             "#context.principal.getClass() != null",
+            // mutation of the security context / request attributes must be denied (read-only sandbox)
+            "#context.setAttributeValue('rograph.workspaceId', 'x') != null",
+            "#context.attributes.put('rograph.workspaceId', 'x') != null",
         ]
     )
     fun `should block dangerous expression`(expression: String) {
@@ -52,6 +56,13 @@ internal class OgnlConditionMatcherSecurityTest {
         assertThrows<OgnlException> {
             conditionMatcher.match(mockk(relaxed = true), mockk(relaxed = true))
         }
+    }
+
+    @Test
+    fun `should still evaluate legitimate URI getter conditions`() {
+        val conditionMatcher = matcher("origin.host == \"example.com\"")
+        val request = mockk<Request> { every { origin } returns URI("https://example.com/login") }
+        assertThat(conditionMatcher.match(request, mockk()), `is`(true))
     }
 
     @Test

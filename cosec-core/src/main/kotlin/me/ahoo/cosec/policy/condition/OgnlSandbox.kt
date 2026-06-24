@@ -17,27 +17,35 @@ import ognl.AbstractMemberAccess
 import ognl.ClassResolver
 import ognl.OgnlContext
 import java.lang.reflect.Member
+import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
 /**
- * A locked-down OGNL [ognl.MemberAccess] that prevents a policy-supplied expression from reaching
- * security-sensitive members.
+ * A locked-down OGNL [ognl.MemberAccess] that restricts a policy-supplied expression to *read-only
+ * navigation and comparison* of the `request` and `context` object graphs.
  *
- * OGNL's default member access only checks [Modifier.isPublic], which leaves the whole public JDK
- * surface (file I/O, reflection, `System` properties, ...) reachable from a policy expression. This
- * implementation additionally denies:
- * - non-public members (it never escalates access via `setAccessible`),
- * - the `getClass` reflection entry point (blocks `expr.class.classLoader...` gadget chains),
- * - any member declared on a denylisted class or package prefix.
+ * OGNL's default member access only checks [Modifier.isPublic], which leaves the whole public JVM
+ * surface (file I/O, reflection, `System`, process control, ...) reachable from a policy expression,
+ * and also lets an expression *mutate* the graph (e.g. `context.setAttributeValue(...)`,
+ * `context.attributes.put(...)`) or escape it through an adapter's `delegate`. This implementation
+ * denies:
+ * - non-public members, and field/constructor access (only method-based reads are allowed);
+ * - mutators — setters (`setX`) and mutating collection/map operations (`put`, `add`, `clear`, ...);
+ * - the `getClass` reflection entry point and the `getDelegate` adapter escape;
+ * - members declared on (or inherited from) a security-sensitive type or package.
  *
  * Combined with [DenyAllOgnlClassResolver] (which blocks `new X(...)`, `@X@y` and type references),
- * an OGNL condition is restricted to navigating/comparing the `request` and `context` object graphs.
+ * an OGNL condition cannot construct objects, call statics, reach dangerous members, or write state.
+ *
+ * Note: signature-based read-only enforcement is best-effort. For fully untrusted policy authors,
+ * prefer the SpEL matcher, which is sandboxed via `SimpleEvaluationContext.forReadOnlyDataBinding()`.
  */
 object SecureOgnlMemberAccess : AbstractMemberAccess() {
-    private val deniedClasses: Set<Class<*>> = setOf(
+    /** Exact dangerous types, matched with [Class.isAssignableFrom] so subclasses are denied too. */
+    private val deniedAssignableTypes: List<Class<*>> = listOf(
         Runtime::class.java,
-        ProcessBuilder::class.java,
         Process::class.java,
+        ProcessBuilder::class.java,
         System::class.java,
         Thread::class.java,
         ThreadGroup::class.java,
@@ -48,7 +56,6 @@ object SecureOgnlMemberAccess : AbstractMemberAccess() {
     private val deniedPackagePrefixes: List<String> = listOf(
         "java.io",
         "java.nio",
-        "java.net",
         "java.lang.reflect",
         "java.lang.invoke",
         "javax.naming",
@@ -61,6 +68,46 @@ object SecureOgnlMemberAccess : AbstractMemberAccess() {
         "groovy",
     )
 
+    /** Method names that read nothing / mutate state and must never be reachable from a condition. */
+    private val deniedMethodNames: Set<String> = setOf(
+        // reflection entry point and adapter escape to the raw HttpServletRequest/ServerWebExchange
+        "getClass",
+        "getDelegate",
+        // object monitor / lifecycle
+        "wait",
+        "notify",
+        "notifyAll",
+        // mutating collection / map / list operations
+        "put",
+        "putAll",
+        "putIfAbsent",
+        "add",
+        "addAll",
+        "addFirst",
+        "addLast",
+        "remove",
+        "removeAll",
+        "removeIf",
+        "removeFirst",
+        "removeLast",
+        "retainAll",
+        "clear",
+        "replace",
+        "replaceAll",
+        "merge",
+        "compute",
+        "computeIfAbsent",
+        "computeIfPresent",
+        "poll",
+        "push",
+        "pop",
+        "offer",
+        "sort",
+        "fill",
+        "reverse",
+        "swap",
+    )
+
     override fun isAccessible(
         context: OgnlContext,
         target: Any?,
@@ -70,21 +117,24 @@ object SecureOgnlMemberAccess : AbstractMemberAccess() {
         if (!Modifier.isPublic(member.modifiers)) {
             return false
         }
-        if (member.name == GET_CLASS_METHOD_NAME) {
+        if (member !is Method) {
             return false
         }
-        return !isDenied(member.declaringClass)
+        if (member.name in deniedMethodNames || member.name.startsWith(SETTER_PREFIX)) {
+            return false
+        }
+        return !isDeniedType(member.declaringClass)
     }
 
-    private fun isDenied(declaringClass: Class<*>): Boolean {
-        if (deniedClasses.contains(declaringClass)) {
+    private fun isDeniedType(declaringClass: Class<*>): Boolean {
+        if (deniedAssignableTypes.any { it.isAssignableFrom(declaringClass) }) {
             return true
         }
         val name = declaringClass.name
         return deniedPackagePrefixes.any { name.startsWith("$it.") }
     }
 
-    private const val GET_CLASS_METHOD_NAME = "getClass"
+    private const val SETTER_PREFIX = "set"
 }
 
 /**

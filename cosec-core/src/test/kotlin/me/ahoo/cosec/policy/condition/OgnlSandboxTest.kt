@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.policy.condition
 
+import me.ahoo.cosec.Delegated
+import me.ahoo.cosec.api.context.SecurityContext
 import ognl.Ognl
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
@@ -22,34 +24,76 @@ import org.junit.jupiter.api.assertThrows
 internal class OgnlSandboxTest {
     private val context = Ognl.createDefaultContext("root")
 
+    private fun accessible(member: java.lang.reflect.Member): Boolean =
+        SecureOgnlMemberAccess.isAccessible(context, null, member, null)
+
     @Test
     fun `should deny non-public member`() {
-        val nonPublicField = Integer::class.java.getDeclaredField("value")
-        assertThat(SecureOgnlMemberAccess.isAccessible(context, 1, nonPublicField, "value"), `is`(false))
+        val nonPublicField = String::class.java.getDeclaredField("hash")
+        assertThat(accessible(nonPublicField), `is`(false))
+    }
+
+    @Test
+    fun `should deny field access`() {
+        val publicField = Math::class.java.getField("PI")
+        assertThat(accessible(publicField), `is`(false))
     }
 
     @Test
     fun `should deny getClass reflection entry point`() {
-        val getClass = Any::class.java.getMethod("getClass")
-        assertThat(SecureOgnlMemberAccess.isAccessible(context, Any(), getClass, null), `is`(false))
+        assertThat(accessible(Any::class.java.getMethod("getClass")), `is`(false))
+    }
+
+    @Test
+    fun `should deny getDelegate adapter escape`() {
+        assertThat(accessible(DelegatedHolder::class.java.getMethod("getDelegate")), `is`(false))
+    }
+
+    @Test
+    fun `should deny setters`() {
+        val setter = SecurityContext::class.java
+            .getMethod("setAttributeValue", String::class.java, Any::class.java)
+        assertThat(accessible(setter), `is`(false))
+    }
+
+    @Test
+    fun `should deny mutating collection methods`() {
+        val put = java.util.Hashtable::class.java.getMethod("put", Any::class.java, Any::class.java)
+        assertThat(accessible(put), `is`(false))
     }
 
     @Test
     fun `should deny member of a denylisted class`() {
-        val getProperties = System::class.java.getMethod("getProperties")
-        assertThat(SecureOgnlMemberAccess.isAccessible(context, null, getProperties, null), `is`(false))
+        assertThat(accessible(System::class.java.getMethod("getProperties")), `is`(false))
+    }
+
+    @Test
+    fun `should deny member of a subclass of a denylisted type`() {
+        // URLClassLoader is a subclass of ClassLoader; getURLs is declared on the subclass.
+        val getUrls = java.net.URLClassLoader::class.java.getMethod("getURLs")
+        assertThat(accessible(getUrls), `is`(false))
     }
 
     @Test
     fun `should deny member of a denylisted package`() {
-        val getPath = java.io.File::class.java.getMethod("getPath")
-        assertThat(SecureOgnlMemberAccess.isAccessible(context, java.io.File("x"), getPath, "path"), `is`(false))
+        assertThat(accessible(java.io.File::class.java.getMethod("getPath")), `is`(false))
     }
 
     @Test
-    fun `should allow public member of a safe type`() {
-        val length = String::class.java.getMethod("length")
-        assertThat(SecureOgnlMemberAccess.isAccessible(context, "x", length, null), `is`(true))
+    fun `should allow read-only getter of a safe type`() {
+        assertThat(accessible(String::class.java.getMethod("length")), `is`(true))
+    }
+
+    @Test
+    fun `should allow read-only method with arguments of a safe type`() {
+        val startsWith = String::class.java.getMethod("startsWith", String::class.java)
+        assertThat(accessible(startsWith), `is`(true))
+    }
+
+    @Test
+    fun `should allow URI getters used by origin and referer conditions`() {
+        assertThat(accessible(java.net.URI::class.java.getMethod("getHost")), `is`(true))
+        assertThat(accessible(java.net.URI::class.java.getMethod("getScheme")), `is`(true))
     }
 
     @Test
@@ -58,4 +102,6 @@ internal class OgnlSandboxTest {
             DenyAllOgnlClassResolver.classForName<Any>("java.lang.Runtime", context)
         }
     }
+
+    private class DelegatedHolder(override val delegate: String) : Delegated<String>
 }
