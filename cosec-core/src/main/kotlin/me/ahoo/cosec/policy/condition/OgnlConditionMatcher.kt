@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import ognl.DefaultTypeConverter
 import ognl.Ognl
 
 const val OGNL_CONDITION_MATCHER_EXPRESSION_KEY = "expression"
@@ -25,6 +26,10 @@ const val OGNL_CONDITION_MATCHER_EXPRESSION_KEY = "expression"
  * Condition matcher using OGNL (Object-Graph Navigation Language).
  *
  * This matcher evaluates an OGNL expression to determine if the condition is met.
+ *
+ * The OGNL evaluation context is sandboxed via [SecureOgnlMemberAccess] and [DenyAllOgnlClassResolver]
+ * so that a policy-supplied expression can only navigate/compare the `request` and `context` object
+ * graphs, and cannot construct objects, call statics or reach security-sensitive members.
  *
  * @param configuration Configuration containing the OGNL expression
  * @see ConditionMatcher
@@ -51,7 +56,12 @@ class OgnlConditionMatcher(
                 "request" to request,
                 "context" to securityContext,
             )
-        val ognlContext = Ognl.createDefaultContext(request).withValues(contextValues)
+        val ognlContext = Ognl.createDefaultContext(
+            request,
+            SecureOgnlMemberAccess,
+            DenyAllOgnlClassResolver,
+            DefaultTypeConverter()
+        ).withValues(contextValues)
         return Ognl.getValue(ognlExpression, ognlContext, request, Boolean::class.java) as Boolean
     }
 }
