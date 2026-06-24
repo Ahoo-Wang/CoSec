@@ -30,6 +30,7 @@ import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.jwt.InjectSecurityContextParser
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
+import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import me.ahoo.cosec.token.TokenVerificationException
@@ -201,6 +202,50 @@ internal class AuthorizationFilterTest {
             servletResponse.outputStream.write(any() as ByteArray)
             servletResponse.outputStream.flush()
         }
+    }
+
+    @Test
+    fun doFilterWhenRegexTimeout() {
+        val authorization = mockk<Authorization> {
+            every { authorize(any(), any()) } throws RegexTimeoutException("regex timeout")
+        }
+        val filter = AuthorizationFilter(
+            InjectSecurityContextParser,
+            authorization,
+            ServletRequestParser(ServletRemoteIpResolver),
+        )
+        val servletRequest = mockk<HttpServletRequest> {
+            every { servletPath } returns "/path"
+            every { method } returns "GET"
+            every { remoteHost } returns "remoteHost"
+            every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
+            every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
+            every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
+            every { cookies } returns arrayOf()
+            every { getHeader(HttpHeaders.ORIGIN) } returns null
+            every { getHeader(HttpHeaders.REFERER) } returns null
+            every { setSecurityContext(any()) } returns Unit
+        }
+        val servletResponse = mockk<HttpServletResponse> {
+            every { setHeader(RequestIdCapable.REQUEST_ID_KEY, any()) } just runs
+            every { contentType = MediaType.APPLICATION_JSON_VALUE } just runs
+            every { status = HttpStatus.FORBIDDEN.value() } returns Unit
+            every { outputStream.write(any() as ByteArray) } returns Unit
+            every { outputStream.flush() } returns Unit
+        }
+        val filterChain = mockk<FilterChain> {
+            every { doFilter(servletRequest, any()) } returns Unit
+        }
+        filter.doFilter(servletRequest, servletResponse, filterChain)
+
+        verify {
+            servletResponse.contentType = MediaType.APPLICATION_JSON_VALUE
+            servletResponse.status = HttpStatus.FORBIDDEN.value()
+            servletResponse.outputStream.write(any() as ByteArray)
+            servletResponse.outputStream.flush()
+        }
+        // A ReDoS-guard trip is an expected deny, not a server error, and must clean up the context.
+        assertThat(SecurityContextHolder.context, nullValue())
     }
 
     @Test

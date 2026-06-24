@@ -23,6 +23,7 @@ import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
+import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.toAuthorizeResult
@@ -106,6 +107,11 @@ abstract class ReactiveSecurityFilter(
             }.onErrorResume(TooManyRequestsException::class.java) { _ ->
                 exchange.response.statusCode = HttpStatus.TOO_MANY_REQUESTS
                 exchange.response.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
+            }.onErrorResume(RegexTimeoutException::class.java) { _ ->
+                // A regex condition exceeding its time budget (ReDoS guard) is an expected, fail-closed
+                // authorization outcome -> deny, not a 5xx server error (which would invite client retries).
+                exchange.response.statusCode = HttpStatus.FORBIDDEN
+                exchange.response.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
             }.onErrorResume { cause ->
                 log.error(cause) {
                     "Unexpected error during authorization of request [${request.path}] [${request.method}]."

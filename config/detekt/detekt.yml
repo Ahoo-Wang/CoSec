@@ -39,6 +39,7 @@ exceptions:
     active: true
     ignoredExceptionTypes:
       - TooManyRequestsException
+      - RegexTimeoutException
   TooGenericExceptionCaught:
     active: true
     excludes:
