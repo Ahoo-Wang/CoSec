@@ -20,6 +20,9 @@ import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.assertThrows
+import java.util.concurrent.TimeUnit
 
 class RegularConditionMatcherTest {
     private val conditionMatcher =
@@ -45,5 +48,38 @@ class RegularConditionMatcherTest {
             every { remoteIp } returns "192.168.1.1"
         }
         assertThat(conditionMatcher.match(requestNotMatch, mockk()), `is`(false))
+    }
+
+    @Test
+    fun `should still match a legitimate pattern with an explicit timeout`() {
+        val matcher = RegularConditionMatcherFactory().create(
+            mapOf(
+                CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
+                "pattern" to "192\\.168\\.0\\.[0-9]*",
+                REGULAR_CONDITION_MATCHER_TIMEOUT_KEY to 1000,
+            ).asConfiguration(),
+        )
+        val request = mockk<Request> {
+            every { remoteIp } returns "192.168.0.1"
+        }
+        assertThat(matcher.match(request, mockk()), `is`(true))
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    fun `should abort a catastrophic regex against malicious input instead of hanging`() {
+        val matcher = RegularConditionMatcherFactory().create(
+            mapOf(
+                CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
+                "pattern" to "(.*a){24}",
+                REGULAR_CONDITION_MATCHER_TIMEOUT_KEY to 100,
+            ).asConfiguration(),
+        )
+        val request = mockk<Request> {
+            every { remoteIp } returns "a".repeat(44)
+        }
+        assertThrows<RegexTimeoutException> {
+            matcher.match(request, mockk())
+        }
     }
 }

@@ -18,13 +18,29 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
+const val REGULAR_CONDITION_MATCHER_TIMEOUT_KEY = "timeout"
+
+/**
+ * Default per-match time budget in milliseconds.
+ *
+ * A policy-supplied pattern is matched against attacker-controlled request input, so a
+ * pathological (catastrophic-backtracking) pattern could otherwise hang the worker thread or the
+ * reactor event loop. The match is bounded by this budget; on overrun a [RegexTimeoutException] is
+ * thrown, which propagates to a fail-closed `IMPLICIT_DENY`. Tune via the `timeout` configuration
+ * (milliseconds) — legitimate matches against short request parts complete in microseconds.
+ */
+const val DEFAULT_REGULAR_CONDITION_MATCHER_TIMEOUT_MILLIS = 1000L
+
 class RegularConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(RegularConditionMatcherFactory.TYPE, configuration) {
     private val pattern: Regex = configuration.getRequired(RegularConditionMatcher::pattern.name).asString()
         .toRegex(RegexOption.IGNORE_CASE)
+    private val timeoutMillis: Long =
+        configuration.get(REGULAR_CONDITION_MATCHER_TIMEOUT_KEY)?.asLong()
+            ?: DEFAULT_REGULAR_CONDITION_MATCHER_TIMEOUT_MILLIS
 
     override fun matchPart(partValue: String, securityContext: SecurityContext): Boolean {
-        return pattern.matches(partValue)
+        return pattern.matchesWithin(partValue, timeoutMillis)
     }
 }
 
