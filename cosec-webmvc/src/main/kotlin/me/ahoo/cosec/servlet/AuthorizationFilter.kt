@@ -22,6 +22,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
@@ -57,22 +58,29 @@ class AuthorizationFilter(
     ) {
         val httpServletRequest = request as HttpServletRequest
         val httpServletResponse = response as HttpServletResponse
+        // authorize() binds the SecurityContext to the current (pooled) thread via SecurityContextHolder.
+        // It must be removed once the request completes, otherwise it bleeds into the next request served
+        // by the same worker thread. Cleanup runs on every exit path, including early returns and errors.
         try {
-            if (!authorize(httpServletRequest, httpServletResponse)) {
+            try {
+                if (!authorize(httpServletRequest, httpServletResponse)) {
+                    return
+                }
+            } catch (tooManyRequestsException: TooManyRequestsException) {
+                response.status = HttpStatus.TOO_MANY_REQUESTS.value()
+                httpServletResponse.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
+            } catch (cause: Exception) {
+                log.error(cause) {
+                    "Unexpected error during authorization of request [${httpServletRequest.servletPath}] [${httpServletRequest.method}]."
+                }
+                httpServletResponse.status = HttpStatus.INTERNAL_SERVER_ERROR.value()
+                httpServletResponse.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
                 return
             }
-        } catch (tooManyRequestsException: TooManyRequestsException) {
-            response.status = HttpStatus.TOO_MANY_REQUESTS.value()
-            httpServletResponse.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
-        } catch (cause: Exception) {
-            log.error(cause) {
-                "Unexpected error during authorization of request [${httpServletRequest.servletPath}] [${httpServletRequest.method}]."
-            }
-            httpServletResponse.status = HttpStatus.INTERNAL_SERVER_ERROR.value()
-            httpServletResponse.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
-            return
-        }
 
-        chain.doFilter(request, response)
+            chain.doFilter(request, response)
+        } finally {
+            SecurityContextHolder.remove()
+        }
     }
 }

@@ -24,6 +24,7 @@ import jakarta.servlet.http.HttpServletResponse
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.request.RequestIdCapable
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
@@ -34,6 +35,7 @@ import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
 import me.ahoo.cosec.token.TokenVerificationException
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
+import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
@@ -68,11 +70,17 @@ internal class AuthorizationFilterTest {
         val servletResponse = mockk<HttpServletResponse> {
             every { setHeader(RequestIdCapable.REQUEST_ID_KEY, any()) } just runs
         }
+        var principalDuringChain: CoSecPrincipal? = null
         val filterChain = mockk<FilterChain> {
-            every { doFilter(servletRequest, any()) } returns Unit
+            every { doFilter(servletRequest, any()) } answers {
+                principalDuringChain = SecurityContextHolder.context?.principal
+            }
         }
         filter.doFilter(servletRequest, servletResponse, filterChain)
-        assertThat(SecurityContextHolder.requiredContext.principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
+        // The security context is available to the downstream chain ...
+        assertThat(principalDuringChain, equalTo(SimpleTenantPrincipal.ANONYMOUS))
+        // ... but is removed afterwards so it cannot bleed into the next request on a pooled thread.
+        assertThat(SecurityContextHolder.context, nullValue())
     }
 
     @Test
@@ -108,7 +116,8 @@ internal class AuthorizationFilterTest {
             every { doFilter(servletRequest, any()) } returns Unit
         }
         filter.doFilter(servletRequest, servletResponse, filterChain)
-        assertThat(SecurityContextHolder.requiredContext.principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
+        // A denied request must not leave its security context bound to the (pooled) request thread.
+        assertThat(SecurityContextHolder.context, nullValue())
     }
 
     @Test

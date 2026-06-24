@@ -45,8 +45,14 @@ class InjectSecurityContextFilter(
 
     @Throws(IOException::class, ServletException::class)
     override fun doFilter(servletRequest: ServletRequest, servletResponse: ServletResponse, filterChain: FilterChain) {
-        tryInjectSecurityContext(servletRequest)
-        filterChain.doFilter(servletRequest, servletResponse)
+        // The injected SecurityContext is bound to the current (pooled) thread; remove it once the request
+        // completes so it cannot bleed into the next request served by the same worker thread.
+        try {
+            tryInjectSecurityContext(servletRequest)
+            filterChain.doFilter(servletRequest, servletResponse)
+        } finally {
+            SecurityContextHolder.remove()
+        }
     }
 
     private fun tryInjectSecurityContext(servletRequest: ServletRequest) {

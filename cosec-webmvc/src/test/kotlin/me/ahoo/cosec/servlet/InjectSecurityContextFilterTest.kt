@@ -18,6 +18,7 @@ import io.mockk.mockk
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.context.request.RequestIdCapable
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.jwt.InjectSecurityContextParser
@@ -44,11 +45,17 @@ internal class InjectSecurityContextFilterTest {
             every { getHeader(HttpHeaders.REFERER) } returns null
             every { setSecurityContext(any()) } returns Unit
         }
+        var principalDuringChain: CoSecPrincipal? = null
         val filterChain = mockk<FilterChain> {
-            every { doFilter(request, any()) } returns Unit
+            every { doFilter(request, any()) } answers {
+                principalDuringChain = SecurityContextHolder.context?.principal
+            }
         }
         filter.doFilter(request, mockk(), filterChain)
-        assertThat(SecurityContextHolder.requiredContext.principal, equalTo(SimpleTenantPrincipal.ANONYMOUS))
+        // The security context is available to the downstream chain ...
+        assertThat(principalDuringChain, equalTo(SimpleTenantPrincipal.ANONYMOUS))
+        // ... but is removed afterwards so it cannot bleed into the next request on a pooled thread.
+        assertThat(SecurityContextHolder.context, nullValue())
     }
 
     @Test
