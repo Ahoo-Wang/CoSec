@@ -54,8 +54,8 @@ object SecureOgnlMemberAccess : AbstractMemberAccess() {
         "javax.naming",
         "javax.script",
         "jakarta.naming",
-        "sun.",
-        "jdk.",
+        "sun",
+        "jdk",
         "ognl",
         "javassist",
         "groovy",
@@ -81,7 +81,7 @@ object SecureOgnlMemberAccess : AbstractMemberAccess() {
             return true
         }
         val name = declaringClass.name
-        return deniedPackagePrefixes.any { name == it || name.startsWith("$it.") }
+        return deniedPackagePrefixes.any { name.startsWith("$it.") }
     }
 
     private const val GET_CLASS_METHOD_NAME = "getClass"
