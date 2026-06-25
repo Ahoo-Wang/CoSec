@@ -24,6 +24,7 @@ import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
+import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.test.asserts.assert
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
@@ -119,6 +120,16 @@ internal class DefaultPolicyEvaluatorTest {
         DefaultPolicyEvaluator.safeEvaluate {
             executed = true
             throw TooManyRequestsException()
+        }
+        assertThat(executed, equalTo(true))
+    }
+
+    @Test
+    fun safeEvaluateSwallowsRegexTimeoutException() {
+        var executed = false
+        DefaultPolicyEvaluator.safeEvaluate {
+            executed = true
+            throw RegexTimeoutException("regex timeout")
         }
         assertThat(executed, equalTo(true))
     }
