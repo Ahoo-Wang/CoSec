@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "CoSec Security Framework Documentation",
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@10.34.5",
   "scripts": {
     "dev": "vitepress dev",
     "build": "vitepress build",
