@@ -16,7 +16,7 @@ swagger = "2.2.52"
 springdoc = "3.0.3"
 # testing
 junit = "6.1.2"
-fluent-assert = "0.2.8"
+fluent-assert = "1.0.0"
 hamcrest = "3.0"
 mockk = "1.14.11"
 jmh = "1.37"
