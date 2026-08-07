@@ -15,8 +15,8 @@ importers:
         specifier: ^1.6.4
         version: 1.6.4(@algolia/client-search@5.52.1)(postcss@8.5.14)(search-insights@2.17.3)
       vitepress-mermaid-renderer:
-        specifier: ^1.1.29
-        version: 1.1.29(mermaid@11.15.0)(vue@3.5.34)
+        specifier: ^1.1.30
+        version: 1.1.30(mermaid@11.15.0)(vue@3.5.34)
 
 packages:
 
@@ -1174,8 +1174,8 @@ packages:
       terser:
         optional: true
 
-  vitepress-mermaid-renderer@1.1.29:
-    resolution: {integrity: sha512-zgBsPVL8GRTPd6p4buIDegzVbOPnlCKyozzwrpcdMQDXptPF41wQMlCJvEla42/YDOTVQnQK3W0He13WgFiPXg==}
+  vitepress-mermaid-renderer@1.1.30:
+    resolution: {integrity: sha512-8cdDz9Kb2gx7jaw3iEYs0gpQa2CVUMeAG/yTpsE/3AtAYhD0PKT6Wi1TOYDo7tEqoSFS3x05fRH5i2JRQaRIgQ==}
     engines: {node: '>=16.0.0'}
     peerDependencies:
       mermaid: ^11.0.0
@@ -2393,7 +2393,7 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
-  vitepress-mermaid-renderer@1.1.29(mermaid@11.15.0)(vue@3.5.34):
+  vitepress-mermaid-renderer@1.1.30(mermaid@11.15.0)(vue@3.5.34):
     dependencies:
       mermaid: 11.15.0
       vue: 3.5.34
