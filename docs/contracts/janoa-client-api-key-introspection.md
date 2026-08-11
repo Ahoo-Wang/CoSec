@@ -34,15 +34,15 @@
 
 ## Request Example
 
-下列值是显式 synthetic 文档 sentinel，不是可用 secret。它故意短于 wire contract 的 32 字符下限，任何实现都必须在 introspection 前拒绝它；真实测试 fixture 必须生成临时值且不得写入仓库。
+下列值是显式 synthetic 文档 sentinel，不是可用 secret。它满足 wire contract 的 32 字符下限，但不得配置为真实 credential；真实测试 fixture 必须生成临时值且不得写入仓库。
 
 ```json
-{"apiKey":"jk_live_example-only"}
+{"apiKey":"jk_live_example-only-not-a-real-key"}
 ```
 
 ## Response Shape Example
 
-下列响应只展示 active result 的字段形状，不表示上方 synthetic sentinel 会得到该结果。
+下列响应展示 active result 的字段形状，不表示仓库中存在与 synthetic sentinel 对应的 live key。
 
 ```json
 {
