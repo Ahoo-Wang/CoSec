@@ -25,6 +25,7 @@ import me.ahoo.cosec.token.SimpleCompositeToken
 import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.test.asserts.assertThrownBy
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Assertions.*
@@ -87,6 +88,40 @@ class JwtTokenVerifierTest {
                 SimpleCompositeToken(tamperedAccessToken, token.refreshToken)
             )
         }
+    }
+
+    @Test
+    fun refreshWhenAccessTokenUseIsWrong() {
+        val token = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
+        val decodedAccessToken = JWT.decode(token.accessToken)
+        val wrongUseAccessToken = JWT.create()
+            .withJWTId(decodedAccessToken.id)
+            .withSubject(decodedAccessToken.subject)
+            .withClaim(Jwts.TOKEN_USE_CLAIM, Jwts.REFRESH_TOKEN_USE)
+            .sign(JwtFixture.ALGORITHM)
+
+        assertThrownBy<TokenVerificationException> {
+            jwtTokenVerifier.refresh<TokenPrincipal>(
+                SimpleCompositeToken(wrongUseAccessToken, token.refreshToken)
+            )
+        }.hasMessage("Illegal access token use.")
+    }
+
+    @Test
+    fun refreshWhenRefreshTokenIsBoundToAnotherAccessToken() {
+        val token = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
+        val decodedAccessToken = JWT.decode(token.accessToken)
+        val anotherAccessToken = JWT.create()
+            .withJWTId("another-access-token-id")
+            .withSubject(decodedAccessToken.subject)
+            .withClaim(Jwts.TOKEN_USE_CLAIM, Jwts.ACCESS_TOKEN_USE)
+            .sign(JwtFixture.ALGORITHM)
+
+        assertThrownBy<TokenVerificationException> {
+            jwtTokenVerifier.refresh<TokenPrincipal>(
+                SimpleCompositeToken(anotherAccessToken, token.refreshToken)
+            )
+        }.hasMessage("Illegal refreshToken.")
     }
 
     @Test

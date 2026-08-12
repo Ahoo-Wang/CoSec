@@ -18,8 +18,11 @@ import io.mockk.mockk
 import io.mockk.verify
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.context.request.RequestAttributesAppender
+import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import java.lang.reflect.InvocationTargetException
 import java.net.URL
 import java.net.URLClassLoader
 import java.nio.file.Files
@@ -59,23 +62,36 @@ class Ip2RegionRequestAttributesAppenderTest {
     }
 
     @Test
-    fun defaultDatabaseLoadsFromPackagedJar(@TempDir tempDir: Path) {
-        val jar = tempDir.resolve("packaged-ip2region.jar")
-        val resourceNames = listOf(
-            "me/ahoo/cosec/ip2region/Ip2RegionRequestAttributesAppender.class",
-            "me/ahoo/cosec/ip2region/Ip2RegionRequestAttributesAppender\$Companion.class",
-            "me/ahoo/cosec/ip2region/Ip2RegionRequestAttributesAppenderKt.class",
-            "ip2region.xdb",
-        )
-        JarOutputStream(Files.newOutputStream(jar)).use { output ->
-            resourceNames.forEach { resourceName ->
-                output.putNextEntry(JarEntry(resourceName))
-                requireNotNull(javaClass.classLoader.getResourceAsStream(resourceName)).use { input ->
-                    input.copyTo(output)
-                }
-                output.closeEntry()
-            }
+    fun appendInvalidIpReturnsOriginalRequest() {
+        val request: Request = mockk {
+            every { remoteIp } returns "invalid host name"
         }
+
+        ip2RegionRequestAttributesAppender.append(request).assert().isSameAs(request)
+    }
+
+    @Test
+    fun explicitDatabaseFileSupportsLookup(@TempDir tempDir: Path) {
+        val database = tempDir.resolve("external-ip2region.xdb")
+        requireNotNull(javaClass.classLoader.getResourceAsStream("ip2region.xdb")).use { input ->
+            Files.copy(input, database)
+        }
+        val mergedRequest = mockk<Request>()
+        val request: Request = mockk {
+            every { remoteIp } returns "101.228.87.88"
+            every {
+                mergeAttributes(mapOf(REQUEST_ATTRIBUTES_IP_REGION_KEY to "中国|0|上海|上海市|电信"))
+            } returns mergedRequest
+        }
+
+        val result = Ip2RegionRequestAttributesAppender(database.toFile()).append(request)
+
+        result.assert().isSameAs(mergedRequest)
+    }
+
+    @Test
+    fun defaultDatabaseLoadsFromPackagedJar(@TempDir tempDir: Path) {
+        val jar = createPackagedJar(tempDir, includeDatabase = true)
         val request: Request = mockk {
             every { remoteIp } returns "101.228.87.88"
             every {
@@ -98,6 +114,48 @@ class Ip2RegionRequestAttributesAppenderTest {
         verify {
             request.mergeAttributes(mapOf(REQUEST_ATTRIBUTES_IP_REGION_KEY to "中国|0|上海|上海市|电信"))
         }
+    }
+
+    @Test
+    fun defaultDatabaseFailsFastWhenPackagedResourceIsMissing(@TempDir tempDir: Path) {
+        val jar = createPackagedJar(tempDir, includeDatabase = false)
+
+        ChildFirstUrlClassLoader(
+            arrayOf(jar.toUri().toURL()),
+            javaClass.classLoader,
+        ).use { classLoader ->
+            val constructor = classLoader
+                .loadClass("me.ahoo.cosec.ip2region.Ip2RegionRequestAttributesAppender")
+                .getDeclaredConstructor()
+
+            assertThrownBy<InvocationTargetException> {
+                constructor.newInstance()
+            }.cause()
+                .isInstanceOf(IllegalArgumentException::class.java)
+                .hasMessage("Classpath resource [ip2region.xdb] was not found.")
+        }
+    }
+
+    private fun createPackagedJar(tempDir: Path, includeDatabase: Boolean): Path {
+        val jar = tempDir.resolve("packaged-ip2region.jar")
+        val resourceNames = buildList {
+            add("me/ahoo/cosec/ip2region/Ip2RegionRequestAttributesAppender.class")
+            add("me/ahoo/cosec/ip2region/Ip2RegionRequestAttributesAppender\$Companion.class")
+            add("me/ahoo/cosec/ip2region/Ip2RegionRequestAttributesAppenderKt.class")
+            if (includeDatabase) {
+                add("ip2region.xdb")
+            }
+        }
+        JarOutputStream(Files.newOutputStream(jar)).use { output ->
+            resourceNames.forEach { resourceName ->
+                output.putNextEntry(JarEntry(resourceName))
+                requireNotNull(javaClass.classLoader.getResourceAsStream(resourceName)).use { input ->
+                    input.copyTo(output)
+                }
+                output.closeEntry()
+            }
+        }
+        return jar
     }
 
     private class ChildFirstUrlClassLoader(urls: Array<URL>, parent: ClassLoader) : URLClassLoader(urls, parent) {
