@@ -17,8 +17,7 @@ import io.mockk.every
 import io.mockk.mockk
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.context.request.RequestIdCapable
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 
@@ -30,13 +29,14 @@ internal class ServletRequestParserTest {
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
             every { method } returns "GET"
-            every { remoteHost } returns "remoteHost"
+            every { remoteAddr } returns "127.0.0.1"
             every { getHeader(HttpHeaders.ORIGIN) } returns "ORIGIN"
             every { getHeader(HttpHeaders.REFERER) } returns "REFERER"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns "requestId"
         }
         val request = servletRequestParser.parse(servletRequest)
-        assertThat(request.path, equalTo("/path"))
-        assertThat(request.method, equalTo("GET"))
+        request.path.assert().isEqualTo("/path")
+        request.method.assert().isEqualTo("GET")
+        request.remoteIp.assert().isEqualTo("127.0.0.1")
     }
 }

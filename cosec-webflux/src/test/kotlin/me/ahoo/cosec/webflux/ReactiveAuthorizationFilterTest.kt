@@ -36,8 +36,8 @@ import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -97,11 +97,10 @@ internal class ReactiveAuthorizationFilterTest {
         val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/path"))
         val downstreamError = RuntimeException("downstream error")
 
-        val actualError = assertThrows<RuntimeException> {
+        assertThrownBy<RuntimeException> {
             filter.filter(exchange, WebFilterChain { Mono.error(downstreamError) }).block()
-        }
+        }.isSameAs(downstreamError)
 
-        actualError.assert().isSameAs(downstreamError)
         exchange.response.statusCode.assert().isNull()
     }
 
@@ -150,7 +149,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.remoteAddress?.address?.hostAddress } returns "127.0.0.1"
             every { response.setStatusCode(HttpStatus.UNAUTHORIZED) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
@@ -195,7 +194,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.remoteAddress?.address?.hostAddress } returns "127.0.0.1"
             every { response.setStatusCode(HttpStatus.UNAUTHORIZED) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
@@ -240,7 +239,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.remoteAddress?.address?.hostAddress } returns "127.0.0.1"
             every { response.setStatusCode(HttpStatus.FORBIDDEN) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
@@ -284,7 +283,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.remoteAddress?.address?.hostAddress } returns "127.0.0.1"
             every { response.setStatusCode(HttpStatus.TOO_MANY_REQUESTS) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
@@ -327,7 +326,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.remoteAddress?.address?.hostAddress } returns "127.0.0.1"
             every { response.setStatusCode(HttpStatus.FORBIDDEN) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
@@ -369,7 +368,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.remoteAddress?.address?.hostAddress } returns "127.0.0.1"
             every { response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()

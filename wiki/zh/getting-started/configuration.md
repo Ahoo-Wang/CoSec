@@ -102,16 +102,13 @@ CoSec 默认从直接网络对端解析远程 IP，不信任 `X-Forwarded-For`�
 
 ### 授权缓存属性（`cosec.authorization.cache.*`）
 
-通过 CoCache 控制基于 Redis 的策略和角色权限缓存。
+控制 Redis 权威策略存储与基于 CoCache 的角色权限缓存。
 
 | 属性 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
 | `cosec.authorization.cache.enabled` | `Boolean` | `true` | 启用缓存 |
 | `cosec.authorization.cache.key-prefix` | `String` | `cosec` | Redis 键前缀 |
-| `cosec.authorization.cache.policy.initialCapacity` | `Int` | *未设置* | Guava 缓存初始容量（策略缓存） |
-| `cosec.authorization.cache.policy.maximumSize` | `Long` | *未设置* | Guava 缓存最大大小（策略缓存） |
-| `cosec.authorization.cache.policy.expireAfterWrite` | `Long` | *未设置* | 写入后过期时间（秒）（策略缓存） |
-| `cosec.authorization.cache.policy.expireAfterAccess` | `Long` | *未设置* | 访问后过期时间（秒）（策略缓存） |
+| `cosec.authorization.cache.policy.*` | `CacheConfiguration` | *未设置* | 为配置兼容保留；策略存储不使用 L1 缓存 |
 | `cosec.authorization.cache.role.initialCapacity` | `Int` | *未设置* | Guava 缓存初始容量（角色缓存） |
 | `cosec.authorization.cache.role.maximumSize` | `Long` | *未设置* | Guava 缓存最大大小（角色缓存） |
 | `cosec.authorization.cache.role.expireAfterWrite` | `Long` | *未设置* | 写入后过期时间（秒）（角色缓存） |
@@ -119,7 +116,9 @@ CoSec 默认从直接网络对端解析远程 IP，不信任 `X-Forwarded-For`�
 
 定义在 `CacheProperties`（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt:34](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt#L34)）中。
 
-全局策略索引现在通过 `GlobalPolicyIndex` 端口和 Redis Set 原子操作维护。这是主版本迁移：`GlobalPolicyIndexCache`、`GlobalPolicyIndexKeyConverter`、对应 CoCache Bean，以及旧 `RedisPolicyRepository` 构造器均已删除。自定义缓存接线的应用必须提供 `GlobalPolicyIndex` Bean，其 `update` 实现需要把索引归属与可幂等重放的策略覆盖写原子协调起来。
+策略持久化现在使用响应式 `PolicyStore` 端口和两个同槽位 Redis Hash。Lua 脚本原子更新全部策略的权威 Hash 与保存完整文档的全局投影。这是主版本接线迁移：`GlobalPolicyIndexCache`、`GlobalPolicyIndexKeyConverter`、对应 CoCache Bean，以及旧 `RedisPolicyRepository` 构造器均已删除。自定义接线的应用必须提供 `PolicyStore` Bean，原子发布策略及其全局可见性，并把阻塞 I/O 与 event-loop 线程隔离。
+
+该升级需要维护窗口切换：启动新版本前必须停止全部旧策略写入方。旧记录没有可用于排序新旧写入的 revision，因此不支持新旧版本滚动混部。切换后，默认适配器会排空旧全局索引 Set，并按需导入旧策略 key，且不会覆盖新权威记录。发生新写入后若需回滚，必须先把新 Hash 数据迁回旧格式。
 
 ### 网关属性（`cosec.authorization.gateway.*`）
 

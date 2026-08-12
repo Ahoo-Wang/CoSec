@@ -14,15 +14,17 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
-import me.ahoo.cosec.api.policy.GlobalPolicyIndex
+import me.ahoo.cosec.api.policy.PolicyStore
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.cache.PolicyCache
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
+import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
+import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
@@ -43,10 +45,35 @@ internal class CoSecPolicyCacheAutoConfigurationTest {
                 assertThat(context)
                     .hasSingleBean(CacheProperties::class.java)
                     .hasSingleBean(CoSecPolicyCacheAutoConfiguration::class.java)
-                    .hasSingleBean(GlobalPolicyIndex::class.java)
+                    .hasSingleBean(PolicyStore::class.java)
+                    .hasSingleBean(RedisPolicyStore::class.java)
                     .hasBean(CoSecPolicyCacheAutoConfiguration.POLICY_CACHE_BEAN_NAME)
                     .hasSingleBean(PolicyCache::class.java)
                     .hasSingleBean(PolicyRepository::class.java)
+            }
+    }
+
+    @Test
+    fun backsOffWithoutCacheSupportClasses() {
+        contextRunner
+            .withConfiguration(AutoConfigurations.of(CoSecPolicyCacheAutoConfiguration::class.java))
+            .withClassLoader(FilteredClassLoader("me.ahoo.cosec.cache"))
+            .run { context: AssertableApplicationContext ->
+                assertThat(context)
+                    .doesNotHaveBean(CoSecPolicyCacheAutoConfiguration::class.java)
+                    .doesNotHaveBean(PolicyRepository::class.java)
+            }
+    }
+
+    @Test
+    fun backsOffWithoutRedisClasses() {
+        contextRunner
+            .withConfiguration(AutoConfigurations.of(CoSecPolicyCacheAutoConfiguration::class.java))
+            .withClassLoader(FilteredClassLoader("org.springframework.data.redis"))
+            .run { context: AssertableApplicationContext ->
+                assertThat(context)
+                    .doesNotHaveBean(CoSecPolicyCacheAutoConfiguration::class.java)
+                    .doesNotHaveBean(PolicyRepository::class.java)
             }
     }
 }

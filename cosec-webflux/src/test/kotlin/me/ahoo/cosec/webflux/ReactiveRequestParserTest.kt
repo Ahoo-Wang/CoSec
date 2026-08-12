@@ -14,11 +14,11 @@
 package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.context.request.XForwardedRemoteIpResolver.Companion.X_FORWARDED_FOR
-import org.hamcrest.MatcherAssert.*
-import org.hamcrest.Matchers.*
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.server.MockServerWebExchange
+import java.net.InetAddress
 import java.net.InetSocketAddress
 
 internal class ReactiveRequestParserTest {
@@ -26,12 +26,14 @@ internal class ReactiveRequestParserTest {
     @Test
     fun parse() {
         val requestParser = ReactiveRequestParser(ReactiveRemoteIpResolver)
+        val peerAddress = InetAddress.getByAddress("peer.example", byteArrayOf(127, 0, 0, 1))
         val serverRequest = MockServerHttpRequest.get("/path")
-            .remoteAddress(InetSocketAddress.createUnresolved("localhost", 8080))
+            .remoteAddress(InetSocketAddress(peerAddress, 8080))
             .header(X_FORWARDED_FOR, "localhost")
         val serverWebExchange = MockServerWebExchange.from(serverRequest)
         val request = requestParser.parse(serverWebExchange)
-        assertThat(request.path, `is`("/path"))
-        assertThat(request.method, `is`("GET"))
+        request.path.assert().isEqualTo("/path")
+        request.method.assert().isEqualTo("GET")
+        request.remoteIp.assert().isEqualTo("127.0.0.1")
     }
 }

@@ -1,11 +1,11 @@
 ---
-title: 使用 CoCache 的 Redis 缓存
-description: CoSec 如何使用 CoCache 配合 Redis 实现策略、权限和角色映射的分布式缓存，支持多网关实例。
+title: Redis 策略存储与 CoCache
+description: CoSec 如何使用原子 Redis 策略存储与 CoCache 角色权限缓存支持多网关实例。
 ---
 
-# 使用 CoCache 的 Redis 缓存
+# Redis 策略存储与 CoCache
 
-CoSec 使用 CoCache 的两级缓存（本地 Caffeine + Redis）保存策略文档和角色权限。全局策略索引刻意独立：`GlobalPolicyIndex` 直接读写两个 Redis Set，避免任何进程从 L1 成员快照返回陈旧数据。主集合保存已确认的索引归属，pending 集合在写入所有权不确定时保留 fail-safe 候选。
+CoSec 使用两个同槽位 Redis Hash 支撑响应式 `PolicyStore`：一个保存全部策略的权威 Hash，一个保存完整文档的全局策略投影。Lua 脚本原子更新二者，因此从 `GLOBAL` 切换到其他类型时不会暴露陈旧全局策略。角色权限继续使用 CoCache 的两级缓存（本地 Caffeine + Redis）。阻塞式 Redis 操作会延迟到 Reactor bounded-elastic 调度器执行。
 
 ## 架构概览
 
@@ -14,17 +14,14 @@ graph TD
     A["Authorization Request"] --> B["SimpleAuthorization"]
     B --> C["RedisPolicyRepository"]
     B --> D["RedisAppRolePermissionRepository"]
-    C --> E["GlobalPolicyIndex"]
-    C --> F["PolicyCache"]
+    C --> E["PolicyStore"]
     D --> G["AppPermissionCache"]
     D --> H["RolePermissionCache"]
-    E --> K["Redis Sets（主集合 + pending）"]
+    E --> K["Redis Hash（全部策略 + 全局投影）"]
     I["Redis (L2)"]
     J["Caffeine (L1)"]
-    F --> I
     G --> I
     H --> I
-    F --> J
     G --> J
     H --> J
 
@@ -33,7 +30,6 @@ graph TD
     style C fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style D fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style E fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style F fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style G fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style H fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style I fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -48,36 +44,32 @@ graph TD
 
 基于 Redis 缓存实现 `PolicyRepository`。提供三种操作：
 
-1. **`getGlobalPolicy()`** -- 从 `GlobalPolicyIndex` 读取 ID，再从 `PolicyCache` 获取文档，并过滤当前类型不是 `PolicyType.GLOBAL` 的文档。
-2. **`getPolicies(policyIds)`** -- 从 `PolicyCache` 根据 ID 获取特定策略。
-3. **`setPolicy(policy)`** -- 校验策略，然后把幂等的缓存覆盖写交给 `GlobalPolicyIndex.update()`，按策略 ID 串行协调文档与索引归属。
+1. **`getGlobalPolicy()`** -- 委托给响应式 `PolicyStore`，只读取全局投影，并按文档当前的 `PolicyType.GLOBAL` 值防御性过滤。
+2. **`getPolicies(policyIds)`** -- 批量读取指定的 Hash field。
+3. **`setPolicy(policy)`** -- 校验策略，并原子更新权威 field 与全局投影。
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Auth as SimpleAuthorization
     participant Repo as RedisPolicyRepository
-    participant Index as GlobalPolicyIndex
-    participant PolicyCache as PolicyCache
+    participant Store as PolicyStore
     participant Redis
 
     Auth->>Repo: getGlobalPolicy()
-    Repo->>Index: getPolicyIds()
-    Index->>Redis: SMEMBERS 主集合与 pending 集合
-    Redis-->>Index: 策略 ID 候选并集
-    Index-->>Repo: Set of policy IDs
-    Repo->>PolicyCache: get(policyId1), get(policyId2), ...
-    PolicyCache->>Redis: GET 缺失的策略文档
-    Redis-->>PolicyCache: Serialized policies
-    PolicyCache-->>Repo: List of Policy
-    Repo->>Repo: 过滤 type == GLOBAL
+    Repo->>Store: getGlobalPolicies()
+    Store->>Store: 在 boundedElastic 调度阻塞适配器
+    Store->>Redis: HVALS {cosec:policy}:global
+    Redis-->>Store: 序列化全局策略记录
+    Store->>Store: 反序列化并过滤 type == GLOBAL
+    Store-->>Repo: List of Policy
     Repo-->>Auth: Mono of List of Policy
 
 
 
 ```
 
-`GlobalPolicyIndex.update()` 获取按策略 ID 隔离、可续租的 Redis 锁。GLOBAL 更新先把 ID 写入 pending 集合，再对主集合执行 `SADD`，然后覆盖策略；非 GLOBAL 更新先覆盖策略再执行 `SREM`。只有确认锁所有权后才删除 pending 标记。锁所有权确认返回 false 或发生异常时，会重放幂等覆盖写。所有尝试都无法确认时，适配器保留 pending 候选、对主集合执行 fail-safe `SADD`，并返回显式错误。`getPolicyIds()` 返回两个集合的并集；这可能产生会被读取端策略类型过滤的冗余候选，但不会静默漏掉 GLOBAL 策略。
+每个策略 ID 在权威 Hash 中对应一个 field。Lua 脚本在一次 Redis 操作内写入该 field，并在全局投影中写入或删除同一完整文档。两个 key 使用相同 Redis Cluster hash tag，因此无需可续租 lease 或过期锁持有者即可获得单一线性化点。全局读取复杂度是 O(G)，G 为全局策略数量，不再扫描全部策略。`RedisPolicyStore` 同时暴露既有同步 `PolicyCache` 门面，并在旧写入方全部停止后按需迁移旧记录。
 
 ### RedisAppRolePermissionRepository
 
@@ -113,17 +105,19 @@ sequenceDiagram
 
 ### 缓存接口
 
-文档缓存接口扩展 CoCache 的 `Cache<K, V>`，提供统一的 L1（Caffeine）和 L2（Redis）缓存 API：
+缓存接口继续保留既有 `Cache<K, V>` API。策略访问直接由 Redis Hash 支撑；权限缓存继续使用 CoCache L1 与 L2：
 
 | 缓存接口 | 键类型 | 值类型 | 用途 |
 |----------------|----------|------------|---------|
-| `PolicyCache` | `String`（策略 ID） | `Policy` | 单个策略文档 |
+| `PolicyCache` | `String`（策略 ID） | `Policy` | `PolicyStore` 记录的兼容门面 |
 | `AppPermissionCache` | `AppId` | `AppPermission` | 应用权限定义 |
 | `RolePermissionCache` | `SpacedRoleId` | `Set<PermissionId>` | 角色到权限的映射 |
 
-### GlobalPolicyIndex
+### PolicyStore
 
-`GlobalPolicyIndex` 是 `cosec-api` 中的公开端口，不属于 CoCache 缓存。Redis 适配器针对主键 `cosec.authorization.cache.key-prefix + ":global:policy"` 及额外追加 `":pending"` 的 pending 键执行 `SMEMBERS`、`SADD` 和 `SREM`。自定义适配器必须完整实现 fail-safe `update` 契约；回调可能被重放，因此必须保持幂等。
+`PolicyStore` 是 `cosec-api` 中的响应式公开端口。默认适配器使用 `{<key-prefix>:policy}:store` 保存全部策略，使用 `{<key-prefix>:policy}:global` 保存全局投影。自定义适配器必须原子发布策略文档及其全局可见性，并且不得在订阅方的 event-loop 线程执行阻塞 I/O。
+
+该迁移是维护窗口切换，不支持新旧版本滚动混部。旧策略记录没有可用于安全排序新旧写入的 revision。部署前必须停止全部旧写入方；随后新适配器会排空旧全局索引，并按需导入旧文档，且不会覆盖新权威记录。发生新写入后若需回滚，必须先导出或迁移新 Hash 数据；仅重启旧节点会丢失这些写入。
 
 ## 缓存配置
 
@@ -133,8 +127,6 @@ sequenceDiagram
 cosec:
   authorization:
     cache:
-      policy:
-        maximum-size: 100000
       role:
         maximum-size: 100000
 ```
@@ -144,32 +136,26 @@ cosec:
 ```mermaid
 graph TD
     subgraph "L1 - Caffeine (In-Process)"
-        A["PolicyCache (local)"]
         B["AppPermissionCache (local)"]
         C["RolePermissionCache (local)"]
     end
     subgraph "L2 - Redis (Distributed)"
-        E["PolicyCache (Redis)"]
+        E["PolicyStore（同槽位 Redis Hash）"]
         F["AppPermissionCache (Redis)"]
         G["RolePermissionCache (Redis)"]
-        H["GlobalPolicyIndex（主集合 + pending Redis Sets）"]
     end
-    D["GlobalPolicyIndex（无 L1）"] --> H
-    A -->|miss| E
+    D["PolicyStore（无 L1）"] --> E
     B -->|miss| F
     C -->|miss| G
-    E -->|invalidate| A
     F -->|invalidate| B
     G -->|invalidate| C
 
-    style A fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style B fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style C fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style D fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style E fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style F fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style G fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style H fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
 
@@ -179,8 +165,8 @@ graph TD
 - [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisAppRolePermissionRepository.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisAppRolePermissionRepository.kt#L27) -- 角色权限仓库
 - [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/PolicyCache.kt:23](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/PolicyCache.kt#L23) -- 策略缓存接口
 - [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/AppPermissionCache.kt:20](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/AppPermissionCache.kt#L20) -- 应用权限缓存接口
-- [cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/GlobalPolicyIndex.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/GlobalPolicyIndex.kt) -- fail-safe 索引端口
-- [cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/RedisGlobalPolicyIndex.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/RedisGlobalPolicyIndex.kt) -- Redis 适配器
+- [cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/PolicyStore.kt:23](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/PolicyStore.kt#L23) -- 响应式策略存储端口
+- [cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/RedisPolicyStore.kt:29](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/RedisPolicyStore.kt#L29) -- 原子 Redis Hash 适配器
 
 ## 相关页面
 

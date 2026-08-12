@@ -44,6 +44,9 @@ class CacheProperties(
     }
 
     val globalPolicyIndexKey: String = "$keyPrefix:global:policy"
+    private val policyStoreHashTag: String = "{$keyPrefix:policy}"
+    val policyStoreKey: String = "$policyStoreHashTag:store"
+    val globalPolicyStoreKey: String = "$policyStoreHashTag:global"
     val policyKeyPrefix: String = "$keyPrefix:policy:"
     val appPermissionKeyPrefix: String = "$keyPrefix:app:permission:"
     val rolePermissionKeyPrefix: String = "$keyPrefix:role:permission:"

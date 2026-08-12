@@ -156,44 +156,31 @@ open class PathPatternBenchmark {
 
 ## 缓存策略
 
-### 多级缓存 (CoCache + Redis)
+### 策略存储与多级权限缓存
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Auth as SimpleAuthorization
-    participant L1 as Caffeine Cache<br>(in-process)
-    participant L2 as Redis<br>(distributed)
-    participant Source as Source Repository
+    participant Store as PolicyStore
+    participant Redis as 同槽位 Redis Hash
 
-    Auth->>L1: get(policyId)
-    alt Cache hit
-        L1-->>Auth: Policy (fast path)
-    else Cache miss
-        L1->>L2: get(policyId)
-        alt Redis hit
-            L2-->>L1: Policy
-            L1-->>Auth: Policy (populated L1)
-        else Redis miss
-            L2->>Source: Load from source
-            Source-->>L2: Policy
-            L2-->>L1: Policy
-            L1-->>Auth: Policy (populated both levels)
-        end
-    end
+    Auth->>Store: getGlobalPolicies()
+    Store->>Store: 将阻塞操作切换到 boundedElastic
+    Store->>Redis: HVALS {cosec:policy}:global
+    Redis-->>Store: 仅返回全局策略文档
+    Store-->>Auth: Mono of policies
 
 
 
 ```
 
-缓存配置支持每个缓存最多 100,000 个条目：
+角色权限缓存配置支持最多 100,000 个条目：
 
 ```yaml
 cosec:
   authorization:
     cache:
-      policy:
-        maximum-size: 100000
       role:
         maximum-size: 100000
 ```
@@ -202,8 +189,7 @@ cosec:
 
 | 缓存 | 最大大小 | 键 | 值 |
 |------|----------|----|----|
-| PolicyCache | 100,000 | 策略 ID | 序列化的策略 |
-| GlobalPolicyIndex | 2 个 Redis Set | `cosec:global:policy`、`cosec:global:policy:pending` | 已确认与 fail-safe 候选 ID；直接读取，不建立 L1 快照 |
+| PolicyStore / PolicyCache | Redis Hash | `{cosec:policy}:store`、`{cosec:policy}:global` | 权威记录与原子维护的全局投影；全局读取为 O(G) |
 | AppPermissionCache | 100,000 | AppId | AppPermission |
 | RolePermissionCache | 100,000 | SpacedRoleId | PermissionId 集合 |
 

@@ -102,16 +102,13 @@ Defined in `AuthorizationProperties` ([cosec-spring-boot-starter/src/main/kotlin
 
 ### Authorization Cache Properties (`cosec.authorization.cache.*`)
 
-Controls Redis-based caching for policies and role permissions via CoCache.
+Controls Redis-backed policy storage and CoCache-based role-permission caching.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `cosec.authorization.cache.enabled` | `Boolean` | `true` | Enable caching |
 | `cosec.authorization.cache.key-prefix` | `String` | `cosec` | Redis key prefix |
-| `cosec.authorization.cache.policy.initialCapacity` | `Int` | *unset* | Guava cache initial capacity (policy cache) |
-| `cosec.authorization.cache.policy.maximumSize` | `Long` | *unset* | Guava cache maximum size (policy cache) |
-| `cosec.authorization.cache.policy.expireAfterWrite` | `Long` | *unset* | Expire after write in seconds (policy cache) |
-| `cosec.authorization.cache.policy.expireAfterAccess` | `Long` | *unset* | Expire after access in seconds (policy cache) |
+| `cosec.authorization.cache.policy.*` | `CacheConfiguration` | *unset* | Retained for configuration compatibility; policy storage has no L1 cache |
 | `cosec.authorization.cache.role.initialCapacity` | `Int` | *unset* | Guava cache initial capacity (role cache) |
 | `cosec.authorization.cache.role.maximumSize` | `Long` | *unset* | Guava cache maximum size (role cache) |
 | `cosec.authorization.cache.role.expireAfterWrite` | `Long` | *unset* | Expire after write in seconds (role cache) |
@@ -119,7 +116,9 @@ Controls Redis-based caching for policies and role permissions via CoCache.
 
 Defined in `CacheProperties` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt:34](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt#L34)).
 
-The global-policy index now uses the `GlobalPolicyIndex` port and direct Redis Set operations. This is a major-version migration: `GlobalPolicyIndexCache`, `GlobalPolicyIndexKeyConverter`, their CoCache beans, and the old `RedisPolicyRepository` constructor have been removed. Applications with custom cache wiring must provide a `GlobalPolicyIndex` bean whose `update` implementation atomically coordinates index membership with the idempotent policy overwrite callback.
+Policy persistence now uses the reactive `PolicyStore` port and two co-slotted Redis Hashes. A Lua script atomically updates the authoritative all-policy Hash and the full-document global projection. This is a major-version wiring migration: `GlobalPolicyIndexCache`, `GlobalPolicyIndexKeyConverter`, their CoCache beans, and the old `RedisPolicyRepository` constructor have been removed. Applications with custom wiring must provide a `PolicyStore` bean that atomically publishes a policy and its global visibility while isolating blocking I/O from event-loop threads.
+
+This upgrade requires a maintenance-window cutover: stop all old policy writers before starting the new version. Rolling mixed-version deployment is unsupported because legacy records have no revision for ordering old and new writes. After cutover, the default adapter drains legacy global-index Sets and lazily imports legacy policy keys without overwriting a new authoritative record. A rollback after new writes requires migrating the new Hash data back first.
 
 ### Gateway Properties (`cosec.authorization.gateway.*`)
 

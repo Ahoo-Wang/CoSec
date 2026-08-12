@@ -12,17 +12,18 @@
  */
 package me.ahoo.cosec.api.policy
 
-interface GlobalPolicyIndex {
-    fun getPolicyIds(): Set<PolicyId>
+import reactor.core.publisher.Mono
 
-    /**
-     * Serializes and fail-safely coordinates a policy overwrite with its global-index membership.
-     *
-     * [updatePolicy] may be replayed when ownership cannot be confirmed, so it must be idempotent.
-     */
-    fun update(
-        policyId: PolicyId,
-        global: Boolean,
-        updatePolicy: () -> Unit
-    )
+/**
+ * Reactive authoritative storage for policies.
+ *
+ * [setPolicy] must atomically publish the policy document and its visibility to [getGlobalPolicies].
+ * Blocking adapters must isolate their I/O from the subscriber thread.
+ */
+interface PolicyStore {
+    fun getGlobalPolicies(): Mono<List<Policy>>
+
+    fun getPolicies(policyIds: Set<PolicyId>): Mono<List<Policy>>
+
+    fun setPolicy(policy: Policy): Mono<Void>
 }

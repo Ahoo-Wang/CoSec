@@ -45,7 +45,7 @@ internal class ReactiveInjectSecurityContextWebFilterTest {
             every { request.headers.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.remoteAddress?.address?.hostAddress } returns "127.0.0.1"
             every { request.headers.origin } returns null
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns null
             every { setSecurityContext(any()) } just runs

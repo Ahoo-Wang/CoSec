@@ -38,7 +38,7 @@ internal class InjectSecurityContextFilterTest {
         val request = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
             every { method } returns "GET"
-            every { remoteHost } returns "remoteHost"
+            every { remoteAddr } returns "127.0.0.1"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
             every { getHeader(HttpHeaders.ORIGIN) } returns null
@@ -65,7 +65,7 @@ internal class InjectSecurityContextFilterTest {
         val request = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
             every { method } returns "GET"
-            every { remoteHost } returns "remoteHost"
+            every { remoteAddr } returns "127.0.0.1"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
             every { getHeader(HttpHeaders.ORIGIN) } returns null

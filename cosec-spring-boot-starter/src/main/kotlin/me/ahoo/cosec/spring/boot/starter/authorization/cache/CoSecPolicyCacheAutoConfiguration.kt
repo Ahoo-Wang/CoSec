@@ -12,16 +12,8 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import me.ahoo.cache.api.client.ClientSideCache
-import me.ahoo.cache.converter.KeyConverter
-import me.ahoo.cache.converter.ToStringKeyConverter
-import me.ahoo.cache.spring.EnableCoCache
-import me.ahoo.cache.spring.client.SpringClientSideCacheFactory.Companion.CLIENT_SIDE_CACHE_SUFFIX
-import me.ahoo.cache.spring.converter.SpringKeyConverterFactory.Companion.KEY_CONVERTER_SUFFIX
-import me.ahoo.cosec.api.policy.GlobalPolicyIndex
-import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.policy.PolicyStore
 import me.ahoo.cosec.authorization.PolicyRepository
-import me.ahoo.cosec.cache.PolicyCache
 import me.ahoo.cosec.cache.RedisPolicyRepository
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -30,6 +22,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.data.redis.core.StringRedisTemplate
+import tools.jackson.databind.ObjectMapper
 
 /**
  * CoSec Policy Cache AutoConfiguration.
@@ -39,46 +32,41 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @AutoConfiguration
 @ConditionalOnCoSecEnabled
 @ConditionalOnCacheEnabled
-@ConditionalOnClass(name = ["me.ahoo.cosec.api.policy.GlobalPolicyIndex"])
+@ConditionalOnClass(
+    name = [
+        "me.ahoo.cosec.cache.PolicyCache",
+        "org.springframework.data.redis.core.StringRedisTemplate",
+    ]
+)
 @EnableConfigurationProperties(
     CacheProperties::class,
 )
-@EnableCoCache(caches = [PolicyCache::class])
 class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProperties) {
-
     companion object {
         const val POLICY_CACHE_BEAN_NAME = "PolicyCache"
-        const val POLICY_CACHE_KEY_CONVERTER_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
-        const val POLICY_CACHE_CLIENT_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}$CLIENT_SIDE_CACHE_SUFFIX"
     }
 
     @Bean
     @ConditionalOnMissingBean
     fun redisPolicyRepository(
-        globalPolicyIndex: GlobalPolicyIndex,
-        policyCache: PolicyCache
+        policyStore: PolicyStore,
     ): PolicyRepository {
-        return RedisPolicyRepository(
-            globalPolicyIndex,
-            policyCache,
+        return RedisPolicyRepository(policyStore)
+    }
+
+    @Bean(POLICY_CACHE_BEAN_NAME)
+    @ConditionalOnMissingBean(PolicyStore::class)
+    fun policyStore(
+        redisTemplate: StringRedisTemplate,
+        objectMapper: ObjectMapper,
+    ): RedisPolicyStore {
+        return RedisPolicyStore(
+            redisTemplate,
+            objectMapper,
+            cacheProperties.policyStoreKey,
+            cacheProperties.globalPolicyStoreKey,
+            cacheProperties.policyKeyPrefix,
+            cacheProperties.globalPolicyIndexKey,
         )
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    fun globalPolicyIndex(redisTemplate: StringRedisTemplate): GlobalPolicyIndex {
-        return RedisGlobalPolicyIndex(redisTemplate, cacheProperties.globalPolicyIndexKey)
-    }
-
-    @Bean(POLICY_CACHE_CLIENT_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [POLICY_CACHE_CLIENT_BEAN_NAME])
-    fun policyCacheClientSideCache(): ClientSideCache<Policy> {
-        return cacheProperties.policy.toGuavaClientSideCache()
-    }
-
-    @Bean(POLICY_CACHE_KEY_CONVERTER_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [POLICY_CACHE_KEY_CONVERTER_BEAN_NAME])
-    fun policyCacheKeyConverter(): KeyConverter<String> {
-        return ToStringKeyConverter(cacheProperties.policyKeyPrefix)
     }
 }

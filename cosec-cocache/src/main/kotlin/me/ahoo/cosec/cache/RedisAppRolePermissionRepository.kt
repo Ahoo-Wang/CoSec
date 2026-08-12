@@ -22,22 +22,23 @@ import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.permission.AppRolePermissionData
 import me.ahoo.cosec.permission.RolePermissionData
 import reactor.core.publisher.Mono
-import reactor.kotlin.core.publisher.toMono
+import reactor.core.scheduler.Schedulers
 
 class RedisAppRolePermissionRepository(
     private val appPermissionCache: AppPermissionCache,
     private val rolePermissionCache: RolePermissionCache
 ) : AppRolePermissionRepository {
-    override fun getAppRolePermission(appId: AppId, spaceId: SpaceId, roleIds: Set<RoleId>): Mono<AppRolePermission> {
-        val appPermission = appPermissionCache[appId] ?: return Mono.empty()
-        val rolePermissions = roleIds.mapNotNull {
-            val spacedRoleId = SpacedRoleId(roleId = it, spaceId = spaceId)
-            val permissions = rolePermissionCache[spacedRoleId] ?: return@mapNotNull null
-            RolePermissionData(
-                id = it,
-                permissions = permissions,
-            )
-        }
-        return AppRolePermissionData(appPermission, rolePermissions).toMono()
-    }
+    override fun getAppRolePermission(appId: AppId, spaceId: SpaceId, roleIds: Set<RoleId>): Mono<AppRolePermission> =
+        Mono.fromCallable<AppRolePermission> {
+            val appPermission = appPermissionCache[appId] ?: return@fromCallable null
+            val rolePermissions = roleIds.mapNotNull {
+                val spacedRoleId = SpacedRoleId(roleId = it, spaceId = spaceId)
+                val permissions = rolePermissionCache[spacedRoleId] ?: return@mapNotNull null
+                RolePermissionData(
+                    id = it,
+                    permissions = permissions,
+                )
+            }
+            AppRolePermissionData(appPermission, rolePermissions)
+        }.subscribeOn(Schedulers.boundedElastic())
 }

@@ -14,43 +14,35 @@
 package me.ahoo.cosec.cache
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.api.policy.GlobalPolicyIndex
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyId
-import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.api.policy.PolicyStore
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.policy.DefaultPolicyEvaluator
 import reactor.core.publisher.Mono
-import reactor.kotlin.core.publisher.toMono
 
 class RedisPolicyRepository(
-    private val globalPolicyIndex: GlobalPolicyIndex,
-    private val policyCache: PolicyCache
+    private val policyStore: PolicyStore,
 ) : PolicyRepository {
     companion object {
         private val log = KotlinLogging.logger {}
     }
 
     override fun getGlobalPolicy(): Mono<List<Policy>> {
-        return getPolicies(globalPolicyIndex.getPolicyIds())
-            .map { policies -> policies.filter { it.type == PolicyType.GLOBAL } }
+        return policyStore.getGlobalPolicies()
     }
 
     override fun getPolicies(policyIds: Set<PolicyId>): Mono<List<Policy>> {
-        return policyIds.mapNotNull {
-            policyCache[it]
-        }.toMono()
+        return policyStore.getPolicies(policyIds)
     }
 
     override fun setPolicy(policy: Policy): Mono<Void> {
-        return Mono.fromRunnable {
+        return Mono.defer {
             log.info {
                 "setPolicy - policy: [${policy.id}]."
             }
             DefaultPolicyEvaluator.evaluate(policy)
-            globalPolicyIndex.update(policy.id, policy.type == PolicyType.GLOBAL) {
-                policyCache[policy.id] = policy
-            }
+            policyStore.setPolicy(policy)
         }
     }
 }

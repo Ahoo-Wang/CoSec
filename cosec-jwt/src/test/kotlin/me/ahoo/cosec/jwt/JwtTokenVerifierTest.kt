@@ -56,7 +56,7 @@ class JwtTokenVerifierTest {
     fun verifyWhenRefreshTokenIsUsedAsAccessToken() {
         val token = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
 
-        assertThrows(TokenVerificationException::class.java) {
+        assertThrownBy<TokenVerificationException> {
             jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(token.refreshToken))
         }
     }
@@ -68,7 +68,7 @@ class JwtTokenVerifierTest {
             .withSubject("principal-id")
             .sign(JwtFixture.ALGORITHM)
 
-        assertThrows(TokenVerificationException::class.java) {
+        assertThrownBy<TokenVerificationException> {
             jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(tokenWithoutUse))
         }
     }
@@ -83,7 +83,7 @@ class JwtTokenVerifierTest {
             .withClaim("token_use", "access")
             .sign(Algorithm.HMAC256("tampered-secret"))
 
-        assertThrows(TokenVerificationException::class.java) {
+        assertThrownBy<TokenVerificationException> {
             jwtTokenVerifier.refresh<TokenPrincipal>(
                 SimpleCompositeToken(tamperedAccessToken, token.refreshToken)
             )
@@ -128,7 +128,7 @@ class JwtTokenVerifierTest {
     fun refreshWhenAccessTokenIsUsedAsRefreshToken() {
         val token = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
 
-        assertThrows(TokenVerificationException::class.java) {
+        assertThrownBy<TokenVerificationException> {
             jwtTokenVerifier.refresh<TokenPrincipal>(
                 SimpleCompositeToken(token.accessToken, token.accessToken)
             )

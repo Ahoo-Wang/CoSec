@@ -18,6 +18,6 @@ import org.springframework.web.server.ServerWebExchange
 
 object ReactiveRemoteIpResolver : RemoteIpResolver<ServerWebExchange> {
     override fun resolve(request: ServerWebExchange): String {
-        return request.request.remoteAddress?.hostName.orEmpty()
+        return request.request.remoteAddress?.address?.hostAddress.orEmpty()
     }
 }

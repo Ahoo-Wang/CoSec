@@ -156,44 +156,31 @@ Two benchmark methods measure:
 
 ## Caching Strategies
 
-### Multi-Level Cache (CoCache + Redis)
+### Policy Store and Multi-Level Permission Cache
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Auth as SimpleAuthorization
-    participant L1 as Caffeine Cache<br>(in-process)
-    participant L2 as Redis<br>(distributed)
-    participant Source as Source Repository
+    participant Store as PolicyStore
+    participant Redis as Co-slotted Redis Hashes
 
-    Auth->>L1: get(policyId)
-    alt Cache hit
-        L1-->>Auth: Policy (fast path)
-    else Cache miss
-        L1->>L2: get(policyId)
-        alt Redis hit
-            L2-->>L1: Policy
-            L1-->>Auth: Policy (populated L1)
-        else Redis miss
-            L2->>Source: Load from source
-            Source-->>L2: Policy
-            L2-->>L1: Policy
-            L1-->>Auth: Policy (populated both levels)
-        end
-    end
+    Auth->>Store: getGlobalPolicies()
+    Store->>Store: switch blocking work to boundedElastic
+    Store->>Redis: HVALS {cosec:policy}:global
+    Redis-->>Store: Global policy documents only
+    Store-->>Auth: Mono of policies
 
 
 
 ```
 
-Cache configuration supports up to 100,000 entries per cache:
+Role-permission cache configuration supports up to 100,000 entries:
 
 ```yaml
 cosec:
   authorization:
     cache:
-      policy:
-        maximum-size: 100000
       role:
         maximum-size: 100000
 ```
@@ -202,8 +189,7 @@ cosec:
 
 | Cache | Max Size | Key | Value |
 |-------|----------|-----|-------|
-| PolicyCache | 100,000 | Policy ID | Serialized Policy |
-| GlobalPolicyIndex | 2 Redis Sets | `cosec:global:policy`, `cosec:global:policy:pending` | Confirmed and fail-safe candidate IDs; read directly without an L1 snapshot |
+| PolicyStore / PolicyCache | Redis Hashes | `{cosec:policy}:store`, `{cosec:policy}:global` | Authoritative records plus atomically maintained global projection; global reads are O(G) |
 | AppPermissionCache | 100,000 | AppId | AppPermission |
 | RolePermissionCache | 100,000 | SpacedRoleId | Set of PermissionId |
 
