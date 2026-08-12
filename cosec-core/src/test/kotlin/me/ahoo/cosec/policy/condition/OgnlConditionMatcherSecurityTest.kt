@@ -47,8 +47,8 @@ internal class OgnlConditionMatcherSecurityTest {
             "request.getClass().getClassLoader() != null",
             "#context.principal.getClass() != null",
             // mutation of the security context / request attributes must be denied (read-only sandbox)
-            "#context.setAttributeValue('rograph.workspaceId', 'x') != null",
-            "#context.attributes.put('rograph.workspaceId', 'x') != null",
+            "#context.setAttributeValue('security.workspaceId', 'x') != null",
+            "#context.attributes.put('security.workspaceId', 'x') != null",
         ]
     )
     fun `should block dangerous expression`(expression: String) {
