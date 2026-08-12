@@ -10,17 +10,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package me.ahoo.cosec.api.policy
 
-package me.ahoo.cosec.cache
+interface GlobalPolicyIndex {
+    fun getPolicyIds(): Set<PolicyId>
 
-import me.ahoo.cache.converter.KeyConverter
-
-class GlobalPolicyIndexKeyConverter(private val key: String) : KeyConverter<String> {
-    override fun toStringKey(sourceKey: String): String {
-        return key
-    }
-
-    override fun toString(): String {
-        return "GlobalPolicyKeyConverter(key='$key')"
-    }
+    /**
+     * Serializes and fail-safely coordinates a policy overwrite with its global-index membership.
+     *
+     * [updatePolicy] may be replayed when ownership cannot be confirmed, so it must be idempotent.
+     */
+    fun update(
+        policyId: PolicyId,
+        global: Boolean,
+        updatePolicy: () -> Unit
+    )
 }

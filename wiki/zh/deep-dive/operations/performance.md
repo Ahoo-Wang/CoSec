@@ -203,7 +203,7 @@ cosec:
 | 缓存 | 最大大小 | 键 | 值 |
 |------|----------|----|----|
 | PolicyCache | 100,000 | 策略 ID | 序列化的策略 |
-| GlobalPolicyIndexCache | 1（固定键） | `""` | 全局策略 ID 集合 |
+| GlobalPolicyIndex | 2 个 Redis Set | `cosec:global:policy`、`cosec:global:policy:pending` | 已确认与 fail-safe 候选 ID；直接读取，不建立 L1 快照 |
 | AppPermissionCache | 100,000 | AppId | AppPermission |
 | RolePermissionCache | 100,000 | SpacedRoleId | PermissionId 集合 |
 

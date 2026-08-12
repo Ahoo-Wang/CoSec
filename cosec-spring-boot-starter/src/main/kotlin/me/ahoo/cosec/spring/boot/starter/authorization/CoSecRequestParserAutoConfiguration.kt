@@ -16,11 +16,11 @@ import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.context.request.RequestAttributesAppender
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.servlet.ServletRemoteIpResolver
 import me.ahoo.cosec.servlet.ServletRequestParser
-import me.ahoo.cosec.servlet.ServletXForwardedRemoteIpResolver
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.webflux.ReactiveRemoteIpResolver
 import me.ahoo.cosec.webflux.ReactiveRequestParser
-import me.ahoo.cosec.webflux.ReactiveXForwardedRemoteIpResolver
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.jvm.UuidGenerator
 import org.springframework.beans.factory.ObjectProvider
@@ -54,7 +54,7 @@ class CoSecRequestParserAutoConfiguration {
         @Bean(SERVLET_REMOTE_IP_RESOLVER_BEAN_NAME)
         @ConditionalOnMissingBean(name = [SERVLET_REMOTE_IP_RESOLVER_BEAN_NAME])
         fun servletRemoteIpResolver(): RemoteIpResolver<HttpServletRequest> {
-            return ServletXForwardedRemoteIpResolver.TRUST_ALL
+            return ServletRemoteIpResolver
         }
 
         @Bean(SERVLET_REQUEST_PARSER_BEAN_NAME)
@@ -80,7 +80,7 @@ class CoSecRequestParserAutoConfiguration {
         @Bean(REACTIVE_REMOTE_IP_RESOLVER_BEAN_NAME)
         @ConditionalOnMissingBean(name = [REACTIVE_REMOTE_IP_RESOLVER_BEAN_NAME])
         fun reactiveRemoteIpResolver(): RemoteIpResolver<ServerWebExchange> {
-            return ReactiveXForwardedRemoteIpResolver.TRUST_ALL
+            return ReactiveRemoteIpResolver
         }
 
         @Bean(REACTIVE_REQUEST_PARSER_BEAN_NAME)

@@ -43,6 +43,7 @@ data class TokenValidity(
 {
   "jti": "<generated-unique-id>",
   "sub": "<principal.id>",
+  "token_use": "access",
   "iat": 1684000000000,
   "exp": 1684000600000,
   "policies": ["policy-id-1", "policy-id-2"],
@@ -56,6 +57,7 @@ data class TokenValidity(
 
 - **`sub`**（主题）：设置为 `principal.id` -- 唯一用户标识符
 - **`jti`**（JWT ID）：由 `IdGenerator` 生成（默认：UUID）。用于令牌撤销和刷新令牌绑定
+- **`token_use`**：必需的令牌用途。访问令牌固定为 `access`，刷新令牌固定为 `refresh`
 - **`policies`**: `PolicyCapable.POLICY_KEY` 声明 -- 分配给主体的策略 ID 列表
 - **`roles`**: `RoleCapable.ROLE_KEY` 声明 -- 角色 ID 列表
 - **`attributes`**: `CoSecPrincipal::attributes.name` 声明 -- 任意键值元数据
@@ -67,12 +69,15 @@ data class TokenValidity(
 {
   "jti": "<refresh-token-id>",
   "sub": "<access-token-id>",
+  "token_use": "refresh",
   "iat": 1684000000000,
   "exp": 1685209600000
 }
 ```
 
-刷新令牌的 `sub` 声明被设置为**访问令牌的 `jti`**，在两个令牌之间建立绑定关系。
+刷新令牌的 `sub` 声明被设置为**访问令牌的 `jti`**，在两个令牌之间建立绑定关系。缺少 `token_use` 或用途与当前操作不匹配的令牌将被拒绝。
+
+> **安全迁移：** 引入 `token_use` 契约前签发的令牌会被主动拒绝。升级后用户必须重新登录；系统不提供旧令牌兼容模式，因为兼容模式会保留“刷新令牌可作为访问令牌”的歧义。
 
 ## 关键类
 
@@ -93,8 +98,8 @@ class JwtTokenConverter(
 
 [JwtTokenVerifier](../../../../cosec-jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt) 实现了 `TokenVerifier`，提供：
 
-- **`verify(AccessToken)`**：验证签名，检查过期时间，提取 `TokenPrincipal`
-- **`refresh(CompositeToken)`**：验证刷新令牌，确保其 `sub` 与访问令牌的 `jti` 匹配，然后从（可能已过期的）访问令牌中提取主体
+- **`verify(AccessToken)`**：验证签名、访问令牌用途和过期时间，然后提取 `TokenPrincipal`
+- **`refresh(CompositeToken)`**：验证刷新令牌的签名、用途和过期时间；验证访问令牌的签名和用途但允许访问令牌已过期；校验令牌绑定后提取主体
 
 ### Jwts 工具类
 
@@ -174,8 +179,9 @@ sequenceDiagram
     Client->>Verifier: refresh(CompositeToken)
     Verifier->>JWT: verify(refreshToken)
     JWT-->>Verifier: DecodedJWT (refresh)
-    Verifier->>Jwts: decode(accessToken) -- no verification
-    Jwts-->>Verifier: DecodedJWT (access, possibly expired)
+    Verifier->>Jwts: decode(accessToken)
+    Jwts-->>Verifier: DecodedJWT（access，可能已过期）
+    Verifier->>Verifier: 验证 access 签名 + token_use=access
     Verifier->>Verifier: require(refresh.sub == access.jti)
     Verifier->>Jwts: toPrincipal(accessJWT)
     Jwts-->>Verifier: TokenPrincipal

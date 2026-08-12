@@ -187,7 +187,6 @@ graph LR
     F["Thread Stack: 1M<br>(-Xss1m)"] --> D
     G["Heap Dump<br>(-XX:+HeapDumpOnOutOfMemoryError)"] --> H["data/ directory"]
     I["GC Logging<br>(-Xlog:gc*)"] --> J["logs/ directory"]
-    K["JMX Remote<br>(port 5555)"] --> L["Monitoring"]
     D --> M["Application Server"]
 
     style A fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -200,13 +199,13 @@ graph LR
     style H fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style I fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style J fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style K fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style L fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style M fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
 
 选择 ZGC 是因为其低延迟暂停时间，这对于必须在微秒内响应的授权网关至关重要。
+
+远程 JMX 默认关闭。如运维监控确实需要启用，应在部署环境中显式配置认证、传输加密和网络访问控制，不得通过应用默认参数暴露无认证的 JMX 端口。
 
 ## CI/CD 流水线
 

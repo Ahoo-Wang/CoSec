@@ -37,6 +37,7 @@ import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -46,6 +47,7 @@ import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal class ReactiveAuthorizationFilterTest {
     companion object {
@@ -80,6 +82,52 @@ internal class ReactiveAuthorizationFilterTest {
         verify {
             authorization.authorize(any(), any())
         }
+    }
+
+    @Test
+    fun filterPropagatesDownstreamError() {
+        val authorization = mockk<Authorization> {
+            every { authorize(any(), any()) } returns AuthorizeResult.ALLOW.toMono()
+        }
+        val filter = ReactiveAuthorizationFilter(
+            InjectSecurityContextParser,
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
+            authorization,
+        )
+        val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/path"))
+        val downstreamError = RuntimeException("downstream error")
+
+        val actualError = assertThrows<RuntimeException> {
+            filter.filter(exchange, WebFilterChain { Mono.error(downstreamError) }).block()
+        }
+
+        actualError.assert().isSameAs(downstreamError)
+        exchange.response.statusCode.assert().isNull()
+    }
+
+    @Test
+    fun filterFailsClosedWhenAuthorizationCompletesEmpty() {
+        val authorization = mockk<Authorization> {
+            every { authorize(any(), any()) } returns Mono.empty()
+        }
+        val filter = ReactiveAuthorizationFilter(
+            InjectSecurityContextParser,
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
+            authorization,
+        )
+        val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/path"))
+        val chainInvoked = AtomicBoolean()
+
+        filter.filter(
+            exchange,
+            WebFilterChain {
+                chainInvoked.set(true)
+                Mono.empty()
+            },
+        ).block()
+
+        chainInvoked.get().assert().isFalse()
+        exchange.response.statusCode.assert().isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
     }
 
     @Test

@@ -15,17 +15,12 @@ package me.ahoo.cosec.spring.boot.starter.authorization.cache
 import me.ahoo.cache.api.client.ClientSideCache
 import me.ahoo.cache.converter.KeyConverter
 import me.ahoo.cache.converter.ToStringKeyConverter
-import me.ahoo.cache.distributed.DistributedCache
 import me.ahoo.cache.spring.EnableCoCache
 import me.ahoo.cache.spring.client.SpringClientSideCacheFactory.Companion.CLIENT_SIDE_CACHE_SUFFIX
 import me.ahoo.cache.spring.converter.SpringKeyConverterFactory.Companion.KEY_CONVERTER_SUFFIX
-import me.ahoo.cache.spring.redis.RedisDistributedCache
-import me.ahoo.cache.spring.redis.RedisDistributedCacheFactory.Companion.DISTRIBUTED_CACHE_SUFFIX
-import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
+import me.ahoo.cosec.api.policy.GlobalPolicyIndex
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.PolicyRepository
-import me.ahoo.cosec.cache.GlobalPolicyIndexCache
-import me.ahoo.cosec.cache.GlobalPolicyIndexKeyConverter
 import me.ahoo.cosec.cache.PolicyCache
 import me.ahoo.cosec.cache.RedisPolicyRepository
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
@@ -44,19 +39,14 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @AutoConfiguration
 @ConditionalOnCoSecEnabled
 @ConditionalOnCacheEnabled
-@ConditionalOnClass(name = ["me.ahoo.cosec.cache.GlobalPolicyIndexCache"])
+@ConditionalOnClass(name = ["me.ahoo.cosec.api.policy.GlobalPolicyIndex"])
 @EnableConfigurationProperties(
     CacheProperties::class,
 )
-@EnableCoCache(caches = [GlobalPolicyIndexCache::class, PolicyCache::class])
+@EnableCoCache(caches = [PolicyCache::class])
 class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProperties) {
 
     companion object {
-        const val GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME = "GlobalPolicyIndexCache"
-        const val GLOBAL_POLICY_INDEX_CACHE_KEY_CONVERTER_BEAN_NAME =
-            "${GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
-        const val GLOBAL_POLICY_INDEX_CACHE_DISTRIBUTED_CACHE_BEAN_NAME =
-            "${GLOBAL_POLICY_INDEX_CACHE_BEAN_NAME}$DISTRIBUTED_CACHE_SUFFIX"
         const val POLICY_CACHE_BEAN_NAME = "PolicyCache"
         const val POLICY_CACHE_KEY_CONVERTER_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
         const val POLICY_CACHE_CLIENT_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}$CLIENT_SIDE_CACHE_SUFFIX"
@@ -65,26 +55,19 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
     @Bean
     @ConditionalOnMissingBean
     fun redisPolicyRepository(
-        globalPolicyIndexCache: GlobalPolicyIndexCache,
+        globalPolicyIndex: GlobalPolicyIndex,
         policyCache: PolicyCache
     ): PolicyRepository {
         return RedisPolicyRepository(
-            globalPolicyIndexCache,
+            globalPolicyIndex,
             policyCache,
         )
     }
 
-    @Bean(GLOBAL_POLICY_INDEX_CACHE_KEY_CONVERTER_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [GLOBAL_POLICY_INDEX_CACHE_KEY_CONVERTER_BEAN_NAME])
-    fun globalPolicyIndexCacheKeyConverter(): KeyConverter<String> {
-        return GlobalPolicyIndexKeyConverter(cacheProperties.globalPolicyIndexKey)
-    }
-
-    @Bean(GLOBAL_POLICY_INDEX_CACHE_DISTRIBUTED_CACHE_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [GLOBAL_POLICY_INDEX_CACHE_DISTRIBUTED_CACHE_BEAN_NAME])
-    fun globalPolicyIndexCacheDistributedCache(redisTemplate: StringRedisTemplate): DistributedCache<Set<String>> {
-        val codecExecutor = SetToSetCodecExecutor(redisTemplate)
-        return RedisDistributedCache(redisTemplate, codecExecutor)
+    @Bean
+    @ConditionalOnMissingBean
+    fun globalPolicyIndex(redisTemplate: StringRedisTemplate): GlobalPolicyIndex {
+        return RedisGlobalPolicyIndex(redisTemplate, cacheProperties.globalPolicyIndexKey)
     }
 
     @Bean(POLICY_CACHE_CLIENT_BEAN_NAME)

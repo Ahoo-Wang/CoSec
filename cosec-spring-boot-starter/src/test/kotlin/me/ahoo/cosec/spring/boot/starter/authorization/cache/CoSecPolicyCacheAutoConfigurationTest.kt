@@ -14,8 +14,8 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
+import me.ahoo.cosec.api.policy.GlobalPolicyIndex
 import me.ahoo.cosec.authorization.PolicyRepository
-import me.ahoo.cosec.cache.GlobalPolicyIndexCache
 import me.ahoo.cosec.cache.PolicyCache
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
@@ -43,7 +43,7 @@ internal class CoSecPolicyCacheAutoConfigurationTest {
                 assertThat(context)
                     .hasSingleBean(CacheProperties::class.java)
                     .hasSingleBean(CoSecPolicyCacheAutoConfiguration::class.java)
-                    .hasSingleBean(GlobalPolicyIndexCache::class.java)
+                    .hasSingleBean(GlobalPolicyIndex::class.java)
                     .hasBean(CoSecPolicyCacheAutoConfiguration.POLICY_CACHE_BEAN_NAME)
                     .hasSingleBean(PolicyCache::class.java)
                     .hasSingleBean(PolicyRepository::class.java)

@@ -203,7 +203,7 @@ cosec:
 | Cache | Max Size | Key | Value |
 |-------|----------|-----|-------|
 | PolicyCache | 100,000 | Policy ID | Serialized Policy |
-| GlobalPolicyIndexCache | 1 (fixed key) | `""` | Set of global policy IDs |
+| GlobalPolicyIndex | 2 Redis Sets | `cosec:global:policy`, `cosec:global:policy:pending` | Confirmed and fail-safe candidate IDs; read directly without an L1 snapshot |
 | AppPermissionCache | 100,000 | AppId | AppPermission |
 | RolePermissionCache | 100,000 | SpacedRoleId | Set of PermissionId |
 

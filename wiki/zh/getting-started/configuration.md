@@ -74,6 +74,8 @@ flowchart TD
 
 定义在 `JwtProperties`（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties.kt#L28)）中。条件激活由 `@ConditionalOnJwtEnabled` 控制（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/ConditionalOnJwtEnabled.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/ConditionalOnJwtEnabled.kt)）。
 
+访问令牌和刷新令牌分别包含必需的 `token_use=access` 与 `token_use=refresh` 声明。升级后会拒绝旧版本签发且缺少该声明的令牌，因此存量会话需要重新登录。
+
 ## 认证属性（`cosec.authentication.*`）
 
 | 属性 | 类型 | 默认值 | 描述 |
@@ -85,6 +87,8 @@ flowchart TD
 ## 授权属性（`cosec.authorization.*`）
 
 控制授权引擎和策略加载行为。
+
+CoSec 默认从直接网络对端解析远程 IP，不信任 `X-Forwarded-For`。部署在可信代理之后时，可以提供名为 `servletRemoteIpResolver` 或 `reactiveRemoteIpResolver` 的 Bean，并使用 `ServletXForwardedRemoteIpResolver` 或 `ReactiveXForwardedRemoteIpResolver`。`maxTrustedIndex` 必须设置为准确的可信代理跳数；面向互联网的服务不得使用 `TRUST_ALL`。
 
 | 属性 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
@@ -114,6 +118,8 @@ flowchart TD
 | `cosec.authorization.cache.role.expireAfterAccess` | `Long` | *未设置* | 访问后过期时间（秒）（角色缓存） |
 
 定义在 `CacheProperties`（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt:34](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt#L34)）中。
+
+全局策略索引现在通过 `GlobalPolicyIndex` 端口和 Redis Set 原子操作维护。这是主版本迁移：`GlobalPolicyIndexCache`、`GlobalPolicyIndexKeyConverter`、对应 CoCache Bean，以及旧 `RedisPolicyRepository` 构造器均已删除。自定义缓存接线的应用必须提供 `GlobalPolicyIndex` Bean，其 `update` 实现需要把索引归属与可幂等重放的策略覆盖写原子协调起来。
 
 ### 网关属性（`cosec.authorization.gateway.*`）
 

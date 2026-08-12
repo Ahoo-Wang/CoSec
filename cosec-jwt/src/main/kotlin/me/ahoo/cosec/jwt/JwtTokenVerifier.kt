@@ -21,6 +21,9 @@ import com.auth0.jwt.interfaces.JWTVerifier
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.jwt.Jwts.ACCESS_TOKEN_USE
+import me.ahoo.cosec.jwt.Jwts.REFRESH_TOKEN_USE
+import me.ahoo.cosec.jwt.Jwts.TOKEN_USE_CLAIM
 import me.ahoo.cosec.jwt.Jwts.removeBearerPrefix
 import me.ahoo.cosec.token.TokenVerifier
 
@@ -35,33 +38,55 @@ import me.ahoo.cosec.token.TokenVerifier
  * @see JwtTokenConverter
  */
 class JwtTokenVerifier(
-    algorithm: Algorithm
+    private val algorithm: Algorithm
 ) : TokenVerifier {
-    private val jwtVerifier: JWTVerifier = JWT.require(algorithm).build()
+    private val accessTokenVerifier: JWTVerifier = JWT.require(algorithm)
+        .withClaim(TOKEN_USE_CLAIM, ACCESS_TOKEN_USE)
+        .build()
+    private val refreshTokenVerifier: JWTVerifier = JWT.require(algorithm)
+        .withClaim(TOKEN_USE_CLAIM, REFRESH_TOKEN_USE)
+        .build()
 
     @Suppress("TooGenericExceptionCaught")
-    private fun verify(accessToken: String): DecodedJWT {
+    private fun verify(token: String, verifier: JWTVerifier): DecodedJWT {
         try {
-            return jwtVerifier.verify(accessToken)
+            return verifier.verify(token)
         } catch (tokenExpiredException: TokenExpiredException) {
             throw me.ahoo.cosec.token
                 .TokenExpiredException(tokenExpiredException.message!!, tokenExpiredException)
         } catch (exception: Exception) {
             throw me.ahoo.cosec.token
-                .TokenVerificationException(exception.message!!, exception)
+                .TokenVerificationException(exception.message ?: "Token verification failed.", exception)
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun verifyRefreshAccessToken(accessToken: String): DecodedJWT {
+        try {
+            val decodedAccessToken = Jwts.decode(accessToken)
+            algorithm.verify(decodedAccessToken)
+            require(decodedAccessToken.getClaim(TOKEN_USE_CLAIM).asString() == ACCESS_TOKEN_USE) {
+                "Illegal access token use."
+            }
+            return decodedAccessToken
+        } catch (exception: Exception) {
+            throw me.ahoo.cosec.token
+                .TokenVerificationException(exception.message ?: "Token verification failed.", exception)
         }
     }
 
     override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T {
         val removedBearerAccessToken = accessToken.accessToken.removeBearerPrefix()
-        val decodedAccessToken = verify(removedBearerAccessToken)
+        val decodedAccessToken = verify(removedBearerAccessToken, accessTokenVerifier)
         return Jwts.toPrincipal(decodedAccessToken)
     }
 
     override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {
-        val decodedRefreshToken: DecodedJWT = verify(token.refreshToken)
-        val decodedAccessToken = Jwts.decode(token.accessToken)
-        require(decodedRefreshToken.subject == decodedAccessToken.id) { "Illegal refreshToken." }
+        val decodedRefreshToken = verify(token.refreshToken, refreshTokenVerifier)
+        val decodedAccessToken = verifyRefreshAccessToken(token.accessToken)
+        if (decodedRefreshToken.subject != decodedAccessToken.id) {
+            throw me.ahoo.cosec.token.TokenVerificationException("Illegal refreshToken.")
+        }
         return Jwts.toPrincipal(decodedAccessToken)
     }
 }

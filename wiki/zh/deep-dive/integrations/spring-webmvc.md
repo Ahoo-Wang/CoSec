@@ -134,7 +134,7 @@ graph TD
 
 ### SecurityContextHolder
 
-当前安全上下文的线程本地持有者。使用 `InheritableThreadLocal` 使子线程继承父线程的上下文。提供静态方法 `setContext()`、`context`、`requiredContext` 和 `remove()`。
+当前安全上下文的线程本地持有者。它使用普通 `ThreadLocal`，子线程不会继承请求安全状态；异步任务必须只显式传播其确实需要的上下文。持有者提供 `setContext()`、`context`、`requiredContext` 和 `remove()`。
 
 ## 上下文传播
 
@@ -142,7 +142,7 @@ graph TD
 
 | 通道 | 机制 | 作用域 |
 |---------|-----------|-------|
-| `SecurityContextHolder` | `InheritableThreadLocal` | 当前线程和子线程 |
+| `SecurityContextHolder` | `ThreadLocal` | 仅当前线程 |
 | `HttpServletRequest` 属性 | `request.setAttribute()` | 当前请求生命周期 |
 
 两者都在 `AbstractAuthorizationInterceptor.authorize()` 中设置，因此下游代码可以通过任一机制访问安全上下文。

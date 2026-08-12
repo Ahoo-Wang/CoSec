@@ -17,6 +17,8 @@ import me.ahoo.cosec.api.Named
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 
+const val PATH_VARIABLES_KEY = "PATH_VARIABLES"
+
 /**
  * Policy statement that defines permission rules.
  *
@@ -61,15 +63,24 @@ interface Statement :
         request: Request,
         securityContext: SecurityContext
     ): VerifyResult {
-        if (!action.match(request = request, securityContext = securityContext)) {
-            return VerifyResult.IMPLICIT_DENY
-        }
-        if (!condition.match(request = request, securityContext = securityContext)) {
-            return VerifyResult.IMPLICIT_DENY
-        }
-        return when (effect) {
-            Effect.ALLOW -> VerifyResult.ALLOW
-            Effect.DENY -> VerifyResult.EXPLICIT_DENY
+        securityContext.setAttributeValue(PATH_VARIABLES_KEY, emptyMap<String, String>())
+        var matched = false
+        try {
+            if (!action.match(request = request, securityContext = securityContext)) {
+                return VerifyResult.IMPLICIT_DENY
+            }
+            if (!condition.match(request = request, securityContext = securityContext)) {
+                return VerifyResult.IMPLICIT_DENY
+            }
+            matched = true
+            return when (effect) {
+                Effect.ALLOW -> VerifyResult.ALLOW
+                Effect.DENY -> VerifyResult.EXPLICIT_DENY
+            }
+        } finally {
+            if (!matched) {
+                securityContext.setAttributeValue(PATH_VARIABLES_KEY, emptyMap<String, String>())
+            }
         }
     }
 }

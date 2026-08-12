@@ -40,7 +40,7 @@ internal class StatementDataTest {
         assertThat(statementData.effect, equalTo(Effect.ALLOW))
         assertThat(statementData.action, equalTo(AllActionMatcher.INSTANCE))
         assertThat(statementData.condition, instanceOf(AllConditionMatcher::class.java))
-        assertThat(statementData.verify(mockk(), mockk()), `is`(VerifyResult.ALLOW))
+        assertThat(statementData.verify(mockk(), SimpleSecurityContext.anonymous()), `is`(VerifyResult.ALLOW))
     }
 
     @Test
@@ -89,6 +89,7 @@ internal class StatementDataTest {
                 every { id } returns "2"
                 every { authenticated } returns true
             }
+            every { setAttributeValue(any(), any()) } returns this
         }
         assertThat(statementData.verify(request, securityContextNotMine), `is`(VerifyResult.IMPLICIT_DENY))
     }
@@ -99,6 +100,6 @@ internal class StatementDataTest {
             effect = Effect.DENY,
             action = AllActionMatcher.INSTANCE,
         )
-        assertThat(statementData.verify(mockk(), mockk()), `is`(VerifyResult.EXPLICIT_DENY))
+        assertThat(statementData.verify(mockk(), SimpleSecurityContext.anonymous()), `is`(VerifyResult.EXPLICIT_DENY))
     }
 }

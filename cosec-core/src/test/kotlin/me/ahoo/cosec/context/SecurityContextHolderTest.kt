@@ -17,6 +17,7 @@ import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import java.util.concurrent.atomic.AtomicReference
 
 internal class SecurityContextHolderTest {
 
@@ -28,6 +29,23 @@ internal class SecurityContextHolderTest {
         SecurityContextHolder.remove()
         assertThrownBy<IllegalArgumentException> {
             SecurityContextHolder.requiredContext
+        }
+    }
+
+    @Test
+    fun contextIsNotInheritedByChildThread() {
+        val childContext = AtomicReference<me.ahoo.cosec.api.context.SecurityContext?>()
+        SecurityContextHolder.setContext(SimpleSecurityContext.anonymous())
+        try {
+            val childThread = Thread {
+                childContext.set(SecurityContextHolder.context)
+            }
+            childThread.start()
+            childThread.join()
+
+            childContext.get().assert().isNull()
+        } finally {
+            SecurityContextHolder.remove()
         }
     }
 }

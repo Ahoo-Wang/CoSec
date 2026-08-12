@@ -1,7 +1,9 @@
 package me.ahoo.cosec.spring.boot.starter.authorization
 
+import me.ahoo.cosec.servlet.ServletRemoteIpResolver
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.REACTIVE_REQUEST_PARSER_BEAN_NAME
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.SERVLET_REQUEST_PARSER_BEAN_NAME
+import me.ahoo.cosec.webflux.ReactiveRemoteIpResolver
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
@@ -23,6 +25,12 @@ class CoSecRequestParserAutoConfigurationTest {
                     .hasBean(SERVLET_REQUEST_PARSER_BEAN_NAME)
                     .hasBean(CoSecRequestParserAutoConfiguration.REACTIVE_REMOTE_IP_RESOLVER_BEAN_NAME)
                     .hasBean(REACTIVE_REQUEST_PARSER_BEAN_NAME)
+                AssertionsForInterfaceTypes.assertThat(
+                    context.getBean(CoSecRequestParserAutoConfiguration.SERVLET_REMOTE_IP_RESOLVER_BEAN_NAME)
+                ).isSameAs(ServletRemoteIpResolver)
+                AssertionsForInterfaceTypes.assertThat(
+                    context.getBean(CoSecRequestParserAutoConfiguration.REACTIVE_REMOTE_IP_RESOLVER_BEAN_NAME)
+                ).isSameAs(ReactiveRemoteIpResolver)
             }
     }
 }

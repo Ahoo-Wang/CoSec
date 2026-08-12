@@ -216,8 +216,8 @@ sequenceDiagram
     participant TC as TokenConverter
 
     Client->>TV: refresh(CompositeToken)
-    TV->>TV: verify refresh token signature + expiry
-    TV->>TV: decode access token (no verify, may be expired)
+    TV->>TV: 验证 refresh 签名 + token_use=refresh + 过期时间
+    TV->>TV: 验证 access 签名 + token_use=access（允许已过期）
     TV->>TV: require(refresh.sub == access.jti)
     TV-->>Client: TokenPrincipal (from access claims)
 

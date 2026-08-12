@@ -13,12 +13,17 @@
 
 package me.ahoo.cosec.jwt
 
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.token.SimpleAccessToken
+import me.ahoo.cosec.token.SimpleCompositeToken
 import me.ahoo.cosec.token.TokenExpiredException
+import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosid.test.MockIdGenerator
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
@@ -44,6 +49,71 @@ class JwtTokenVerifierTest {
         val newTokenPrincipal = jwtTokenVerifier.refresh<TokenTenantPrincipal>(oldToken)
         assertThat(newTokenPrincipal.id, equalTo(SimpleTenantPrincipal.ANONYMOUS.id))
         assertThat(newTokenPrincipal.tenant.tenantId, equalTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId))
+    }
+
+    @Test
+    fun verifyWhenRefreshTokenIsUsedAsAccessToken() {
+        val token = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
+
+        assertThrows(TokenVerificationException::class.java) {
+            jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(token.refreshToken))
+        }
+    }
+
+    @Test
+    fun verifyWhenTokenUseIsMissing() {
+        val tokenWithoutUse = JWT.create()
+            .withJWTId("access-token-id")
+            .withSubject("principal-id")
+            .sign(JwtFixture.ALGORITHM)
+
+        assertThrows(TokenVerificationException::class.java) {
+            jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(tokenWithoutUse))
+        }
+    }
+
+    @Test
+    fun refreshWhenAccessTokenSignatureIsTampered() {
+        val token = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
+        val decodedAccessToken = JWT.decode(token.accessToken)
+        val tamperedAccessToken = JWT.create()
+            .withJWTId(decodedAccessToken.id)
+            .withSubject(CoSecPrincipal.ROOT_ID)
+            .withClaim("token_use", "access")
+            .sign(Algorithm.HMAC256("tampered-secret"))
+
+        assertThrows(TokenVerificationException::class.java) {
+            jwtTokenVerifier.refresh<TokenPrincipal>(
+                SimpleCompositeToken(tamperedAccessToken, token.refreshToken)
+            )
+        }
+    }
+
+    @Test
+    fun refreshWhenAccessTokenIsUsedAsRefreshToken() {
+        val token = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
+
+        assertThrows(TokenVerificationException::class.java) {
+            jwtTokenVerifier.refresh<TokenPrincipal>(
+                SimpleCompositeToken(token.accessToken, token.accessToken)
+            )
+        }
+    }
+
+    @Test
+    fun refreshWhenOnlyAccessTokenIsExpired() {
+        val converter = JwtTokenConverter(
+            MockIdGenerator.INSTANCE,
+            JwtFixture.ALGORITHM,
+            Duration.ofMillis(1),
+            Duration.ofDays(1),
+        )
+        val token = converter.toToken(SimpleTenantPrincipal.ANONYMOUS)
+        TimeUnit.SECONDS.sleep(1)
+
+        val principal = jwtTokenVerifier.refresh<TokenPrincipal>(token)
+
+        assertThat(principal.name, equalTo(CoSecPrincipal.ANONYMOUS_ID))
     }
 
     @Test

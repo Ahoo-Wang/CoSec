@@ -24,8 +24,9 @@ import me.ahoo.cosec.policy.asTemplateExpression
 import org.springframework.http.server.PathContainer
 import org.springframework.web.util.pattern.PathPattern
 import org.springframework.web.util.pattern.PathPatternParser
+import me.ahoo.cosec.api.policy.PATH_VARIABLES_KEY as API_PATH_VARIABLES_KEY
 
-const val PATH_VARIABLES_KEY = "PATH_VARIABLES"
+const val PATH_VARIABLES_KEY = API_PATH_VARIABLES_KEY
 
 /**
  * Sets path variables extracted from URL patterns to the security context.

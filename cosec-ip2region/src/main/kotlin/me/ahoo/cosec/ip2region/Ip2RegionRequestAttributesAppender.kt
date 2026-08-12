@@ -22,18 +22,22 @@ import java.io.File
 
 const val REQUEST_ATTRIBUTES_IP_REGION_KEY = "ipRegion"
 
-class Ip2RegionRequestAttributesAppender(ip2regionFile: File = LOCAL_IP2REGION_FILE, version: Version = Version.IPv4) :
+class Ip2RegionRequestAttributesAppender(ip2regionFile: File? = null, version: Version = Version.IPv4) :
     RequestAttributesAppender {
     companion object {
         private val log = KotlinLogging.logger {}
-        private val LOCAL_IP2REGION_FILE: File = Ip2RegionRequestAttributesAppender::class.java
-            .classLoader.getResource("ip2region.xdb").let {
-                File(it.file)
-            }
     }
 
-    private val searcher: Searcher by lazy {
-        val dbBuffer = Searcher.loadContentFromFile(ip2regionFile.path)
+    private val searcher: Searcher = run {
+        val dbBuffer = if (ip2regionFile == null) {
+            requireNotNull(
+                Ip2RegionRequestAttributesAppender::class.java.classLoader.getResourceAsStream("ip2region.xdb")
+            ) { "Classpath resource [ip2region.xdb] was not found." }.use {
+                Searcher.loadContentFromInputStream(it)
+            }
+        } else {
+            Searcher.loadContentFromFile(ip2regionFile)
+        }
         Searcher.newWithBuffer(version, dbBuffer)
     }
 

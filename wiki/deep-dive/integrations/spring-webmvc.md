@@ -134,7 +134,7 @@ graph TD
 
 ### SecurityContextHolder
 
-A thread-local holder for the current security context. Uses `InheritableThreadLocal` so child threads inherit the parent's context. Provides static methods `setContext()`, `context`, `requiredContext`, and `remove()`.
+A thread-local holder for the current security context. It uses a plain `ThreadLocal`; child threads do not inherit request security state. Async work must propagate only the context it explicitly needs. The holder provides `setContext()`, `context`, `requiredContext`, and `remove()`.
 
 ## Context Propagation
 
@@ -142,7 +142,7 @@ Unlike the reactive integration which uses Reactor's `Context`, the servlet inte
 
 | Channel | Mechanism | Scope |
 |---------|-----------|-------|
-| `SecurityContextHolder` | `InheritableThreadLocal` | Current thread and child threads |
+| `SecurityContextHolder` | `ThreadLocal` | Current thread only |
 | `HttpServletRequest` attributes | `request.setAttribute()` | Current request lifecycle |
 
 Both are set in `AbstractAuthorizationInterceptor.authorize()` so downstream code can access the security context via either mechanism.

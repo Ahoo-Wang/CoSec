@@ -77,6 +77,7 @@ interface Policy :
         request: Request,
         securityContext: SecurityContext
     ): VerifyResult {
+        securityContext.setAttributeValue(PATH_VARIABLES_KEY, emptyMap<String, String>())
         if (!condition.match(request, securityContext)) {
             return VerifyResult.IMPLICIT_DENY
         }

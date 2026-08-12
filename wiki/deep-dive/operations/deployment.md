@@ -187,7 +187,6 @@ graph LR
     F["Thread Stack: 1M<br>(-Xss1m)"] --> D
     G["Heap Dump<br>(-XX:+HeapDumpOnOutOfMemoryError)"] --> H["data/ directory"]
     I["GC Logging<br>(-Xlog:gc*)"] --> J["logs/ directory"]
-    K["JMX Remote<br>(port 5555)"] --> L["Monitoring"]
     D --> M["Application Server"]
 
     style A fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -200,13 +199,13 @@ graph LR
     style H fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style I fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style J fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style K fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style L fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style M fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
 
 ZGC is chosen for its low-latency pause times, which is critical for an authorization gateway that must respond in microseconds.
+
+Remote JMX is disabled by default. If operational monitoring requires it, enable it in the deployment environment with authentication, transport security, and network-level access controls; do not expose an unauthenticated JMX port from the application defaults.
 
 ## CI/CD Pipeline
 

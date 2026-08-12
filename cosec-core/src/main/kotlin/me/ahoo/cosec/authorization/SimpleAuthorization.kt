@@ -18,17 +18,14 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.permission.AppRolePermission
-import me.ahoo.cosec.api.permission.Permission
 import me.ahoo.cosec.api.policy.Effect
+import me.ahoo.cosec.api.policy.PATH_VARIABLES_KEY
 import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.CoSecPrincipal.Companion.isRoot
-import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import reactor.core.publisher.Mono
-import reactor.kotlin.core.publisher.switchIfEmpty
 import reactor.kotlin.core.publisher.toMono
 
 /**
@@ -54,12 +51,14 @@ class SimpleAuthorization(
         private val log = KotlinLogging.logger {}
     }
 
-    private data class PolicyStatementEntry(val policy: Policy, val index: Int, val statement: Statement)
-
-    private data class RolePermissionEntry(val roleId: RoleId, val permission: Permission)
+    private data class VerifyCandidate(
+        val effect: Effect,
+        val verify: () -> VerifyResult,
+        val onMatch: (VerifyResult) -> VerifyContext
+    )
 
     private inline fun <T> evaluateDenyFirst(
-        items: Sequence<T>,
+        items: List<T>,
         crossinline effectExtractor: (T) -> Effect,
         crossinline verifyItem: (T) -> VerifyResult,
         crossinline onMatch: (T, VerifyResult) -> VerifyContext
@@ -83,65 +82,79 @@ class SimpleAuthorization(
         policies: List<Policy>,
         request: Request,
         securityContext: SecurityContext
-    ): VerifyContext? {
-        val matchedPolicies = policies.asSequence().filter { policy ->
-            policy.condition.match(request = request, securityContext = securityContext)
-        }
-
-        val allStatements = matchedPolicies.flatMap { policy ->
-            policy.statements.asSequence().mapIndexed { index, statement ->
-                PolicyStatementEntry(policy, index, statement)
+    ): List<VerifyCandidate> {
+        return policies.flatMap { policy ->
+            val policyMatches by lazy {
+                policy.condition.match(request = request, securityContext = securityContext)
             }
-        }
-
-        return evaluateDenyFirst(
-            items = allStatements,
-            effectExtractor = { it.statement.effect },
-            verifyItem = { it.statement.verify(request, securityContext) },
-            onMatch = { entry, result ->
-                log.debug {
-                    "Verify [$request] [$securityContext] matched Policy[${entry.policy.id}] Statement[${entry.index}][${entry.statement.name}] - [$result]."
-                }
-                PolicyVerifyContext(
-                    policy = entry.policy,
-                    statementIndex = entry.index,
-                    statement = entry.statement,
-                    result = result,
+            policy.statements.mapIndexed { index, statement ->
+                VerifyCandidate(
+                    effect = statement.effect,
+                    verify = {
+                        if (policyMatches) {
+                            statement.verify(request, securityContext)
+                        } else {
+                            VerifyResult.IMPLICIT_DENY
+                        }
+                    },
+                    onMatch = { result ->
+                        log.debug {
+                            "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [$result]."
+                        }
+                        PolicyVerifyContext(
+                            policy = policy,
+                            statementIndex = index,
+                            statement = statement,
+                            result = result,
+                        )
+                    }
                 )
             }
-        )
+        }
     }
 
     private fun verifyAppRolePermission(
         appRolePermission: AppRolePermission,
         request: Request,
         context: SecurityContext
-    ): VerifyContext? {
-        if (!appRolePermission.appPermission.condition.match(request, context)) {
-            return null
+    ): List<VerifyCandidate> {
+        val appPermissionMatches by lazy {
+            appRolePermission.appPermission.condition.match(request, context)
         }
 
-        val allPermissions =
-            appRolePermission.rolePermissionIndexer.entries.asSequence().flatMap { (roleId, permissions) ->
-                permissions.asSequence().map { permission -> RolePermissionEntry(roleId, permission) }
-            }
-
-        return evaluateDenyFirst(
-            items = allPermissions,
-            effectExtractor = { it.permission.effect },
-            verifyItem = { it.permission.verify(request, context) },
-            onMatch = { entry, result ->
-                log.debug {
-                    "Verify [$request] [$context] matched Role[${entry.roleId}] Permission[${entry.permission.id}][${entry.permission.name}] - [$result]."
-                }
-                RoleVerifyContext(
-                    roleId = entry.roleId,
-                    permission = entry.permission,
-                    result = result,
+        return appRolePermission.rolePermissionIndexer.entries.flatMap { (roleId, permissions) ->
+            permissions.map { permission ->
+                VerifyCandidate(
+                    effect = permission.effect,
+                    verify = {
+                        if (appPermissionMatches) {
+                            permission.verify(request, context)
+                        } else {
+                            VerifyResult.IMPLICIT_DENY
+                        }
+                    },
+                    onMatch = { result ->
+                        log.debug {
+                            "Verify [$request] [$context] matched Role[$roleId] Permission[${permission.id}][${permission.name}] - [$result]."
+                        }
+                        RoleVerifyContext(
+                            roleId = roleId,
+                            permission = permission,
+                            result = result,
+                        )
+                    }
                 )
             }
-        )
+        }
     }
+
+    private fun verifyCandidates(candidates: List<VerifyCandidate>): VerifyContext? =
+        evaluateDenyFirst(
+            items = candidates,
+            effectExtractor = { it.effect },
+            verifyItem = { it.verify() },
+            onMatch = { candidate, result -> candidate.onMatch(result) },
+        )
 
     private fun verifyRoot(context: SecurityContext): VerifyResult =
         if (context.principal.isRoot) {
@@ -153,67 +166,69 @@ class SimpleAuthorization(
             VerifyResult.IMPLICIT_DENY
         }
 
-    private fun verifyGlobalPolicies(
-        request: Request,
-        context: SecurityContext
-    ): Mono<VerifyContext> =
-        policyRepository
-            .getGlobalPolicy()
-            .mapNotNull { policies: List<Policy> ->
-                verifyPolicies(policies, request, context)
-            }
-
-    private fun verifyPrincipalPolicies(
-        request: Request,
-        context: SecurityContext
-    ): Mono<VerifyContext> {
+    private fun getPrincipalPolicies(context: SecurityContext): Mono<List<Policy>> {
         if (context.principal.policies.isEmpty()) {
-            return Mono.empty()
+            return emptyList<Policy>().toMono()
         }
         return policyRepository
             .getPolicies(context.principal.policies)
-            .mapNotNull { policies: List<Policy> ->
-                verifyPolicies(policies, request, context)
-            }
+            .defaultIfEmpty(emptyList())
     }
 
-    private fun verifyAppRolePermission(
+    private fun getAppRolePermissions(
         request: Request,
         context: SecurityContext
-    ): Mono<VerifyContext> {
+    ): Mono<List<AppRolePermission>> {
         if (context.principal.roles.isEmpty()) {
-            return Mono.empty()
+            return emptyList<AppRolePermission>().toMono()
         }
         return appRolePermissionRepository
             .getAppRolePermission(request.appId, request.spaceId, context.principal.roles)
-            .mapNotNull {
-                verifyAppRolePermission(it, request, context)
-            }
+            .map { listOf(it) }
+            .defaultIfEmpty(emptyList())
     }
 
     private fun verify(
         request: Request,
         context: SecurityContext
-    ): Mono<AuthorizeResult> =
-        verifyGlobalPolicies(request, context)
-            .switchIfEmpty {
-                verifyPrincipalPolicies(request, context)
-            }.switchIfEmpty {
-                verifyAppRolePermission(request, context)
-            }.map {
-                context.setVerifyContext(it)
-                it.result.toAuthorizeResult()
-            }.switchIfEmpty {
+    ): Mono<AuthorizeResult> {
+        val globalPolicies = policyRepository.getGlobalPolicy().defaultIfEmpty(emptyList())
+        return Mono.zip(
+            globalPolicies,
+            getPrincipalPolicies(context),
+            getAppRolePermissions(request, context),
+        ).mapNotNull { sources ->
+            val candidates = buildList {
+                addAll(
+                    verifyPolicies(
+                        (sources.t1 + sources.t2).distinctBy { it.id },
+                        request,
+                        context,
+                    )
+                )
+                sources.t3.forEach { appRolePermission ->
+                    addAll(verifyAppRolePermission(appRolePermission, request, context))
+                }
+            }
+            verifyCandidates(candidates)
+        }.map {
+            context.setVerifyContext(it)
+            it.result.toAuthorizeResult()
+        }.switchIfEmpty(
+            Mono.defer {
                 log.debug {
                     "Verify [$request] [$context] No policies matched - [Implicit Deny]."
                 }
                 AuthorizeResult.IMPLICIT_DENY.toMono()
             }
+        )
+    }
 
     override fun authorize(
         request: Request,
         context: SecurityContext
     ): Mono<AuthorizeResult> {
+        context.setAttributeValue(PATH_VARIABLES_KEY, emptyMap<String, String>())
         val verifyResult = verifyRoot(context)
         if (verifyResult == VerifyResult.ALLOW) {
             return AuthorizeResult.ALLOW.toMono()

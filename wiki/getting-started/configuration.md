@@ -74,6 +74,8 @@ Controls JWT token creation and verification.
 
 Defined in `JwtProperties` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties.kt#L28)). Conditional activation is controlled by `@ConditionalOnJwtEnabled` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/ConditionalOnJwtEnabled.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/ConditionalOnJwtEnabled.kt)).
 
+Access and refresh tokens carry required `token_use=access` and `token_use=refresh` claims. Tokens issued by an earlier version without this claim are rejected after upgrading, so existing sessions must sign in again.
+
 ## Authentication Properties (`cosec.authentication.*`)
 
 | Property | Type | Default | Description |
@@ -85,6 +87,8 @@ Defined in `AuthenticationProperties` ([cosec-spring-boot-starter/src/main/kotli
 ## Authorization Properties (`cosec.authorization.*`)
 
 Controls the authorization engine and policy loading behavior.
+
+By default, CoSec resolves the remote IP from the direct network peer and does not trust `X-Forwarded-For`. A deployment behind known proxies may provide a bean named `servletRemoteIpResolver` or `reactiveRemoteIpResolver` using `ServletXForwardedRemoteIpResolver` or `ReactiveXForwardedRemoteIpResolver`. Set `maxTrustedIndex` to the exact number of trusted proxy hops; do not use `TRUST_ALL` on an Internet-facing service.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -114,6 +118,8 @@ Controls Redis-based caching for policies and role permissions via CoCache.
 | `cosec.authorization.cache.role.expireAfterAccess` | `Long` | *unset* | Expire after access in seconds (role cache) |
 
 Defined in `CacheProperties` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt:34](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt#L34)).
+
+The global-policy index now uses the `GlobalPolicyIndex` port and direct Redis Set operations. This is a major-version migration: `GlobalPolicyIndexCache`, `GlobalPolicyIndexKeyConverter`, their CoCache beans, and the old `RedisPolicyRepository` constructor have been removed. Applications with custom cache wiring must provide a `GlobalPolicyIndex` bean whose `update` implementation atomically coordinates index membership with the idempotent policy overwrite callback.
 
 ### Gateway Properties (`cosec.authorization.gateway.*`)
 

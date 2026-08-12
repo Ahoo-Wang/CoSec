@@ -20,6 +20,9 @@ import me.ahoo.cosec.api.principal.RoleCapable
 import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.jwt.Jwts.ACCESS_TOKEN_USE
+import me.ahoo.cosec.jwt.Jwts.REFRESH_TOKEN_USE
+import me.ahoo.cosec.jwt.Jwts.TOKEN_USE_CLAIM
 import me.ahoo.cosec.token.SimpleCompositeToken
 import me.ahoo.cosec.token.TokenConverter
 import me.ahoo.cosid.IdGenerator
@@ -66,6 +69,7 @@ class JwtTokenConverter(
                 .withSubject(principal.id)
                 .withIssuedAt(now)
                 .withExpiresAt(accessTokenExp)
+                .withClaim(TOKEN_USE_CLAIM, ACCESS_TOKEN_USE)
         if (principal.policies.isNotEmpty()) {
             accessTokenBuilder.withClaim(PolicyCapable.POLICY_KEY, principal.policies.toList())
         }
@@ -91,6 +95,7 @@ class JwtTokenConverter(
                 .withSubject(accessTokenId)
                 .withIssuedAt(now)
                 .withExpiresAt(refreshTokenExp)
+                .withClaim(TOKEN_USE_CLAIM, REFRESH_TOKEN_USE)
                 .sign(algorithm)
         return SimpleCompositeToken(accessToken, refreshToken)
     }

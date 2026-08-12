@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.jwt
 
+import com.auth0.jwt.JWT
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.principal.SimplePrincipal
@@ -31,6 +32,8 @@ internal class JwtTokenConverterTest {
     fun anonymousToToken() {
         val token: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
         token.assert().isNotNull()
+        JWT.decode(token.accessToken).getClaim("token_use").asString().assert().isEqualTo("access")
+        JWT.decode(token.refreshToken).getClaim("token_use").asString().assert().isEqualTo("refresh")
     }
 
     @Test

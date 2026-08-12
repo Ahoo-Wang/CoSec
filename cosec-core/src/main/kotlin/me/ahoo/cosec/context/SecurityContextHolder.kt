@@ -24,7 +24,7 @@ import me.ahoo.cosec.api.context.SecurityContext
  * @see SimpleSecurityContext
  */
 object SecurityContextHolder {
-    private val SECURITY_CONTEXT_THREAD_LOCAL: ThreadLocal<SecurityContext> = InheritableThreadLocal()
+    private val SECURITY_CONTEXT_THREAD_LOCAL: ThreadLocal<SecurityContext> = ThreadLocal()
 
     /**
      * Sets the security context for the current thread.

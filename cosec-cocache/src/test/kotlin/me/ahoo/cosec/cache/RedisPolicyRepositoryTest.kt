@@ -15,9 +15,10 @@ package me.ahoo.cosec.cache
 
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
+import me.ahoo.cosec.api.policy.GlobalPolicyIndex
 import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import me.ahoo.cosec.policy.PolicyData
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
@@ -36,9 +37,9 @@ internal class RedisPolicyRepositoryTest {
 
     @Test
     fun getGlobalPolicyWhenIsEmpty() {
-        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
-        every { globalPolicyIndexCache.get("") } returns emptySet()
-        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, mockk())
+        val globalPolicyIndex = mockk<GlobalPolicyIndex>()
+        every { globalPolicyIndex.getPolicyIds() } returns emptySet()
+        val policyRepository = RedisPolicyRepository(globalPolicyIndex, mockk())
         policyRepository.getGlobalPolicy()
             .test()
             .expectNext(listOf())
@@ -47,9 +48,9 @@ internal class RedisPolicyRepositoryTest {
 
     @Test
     fun getGlobalPolicy() {
-        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
-        every { globalPolicyIndexCache.get("") } returns setOf("policyId")
-        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, mockPolicyCache())
+        val globalPolicyIndex = mockk<GlobalPolicyIndex>()
+        every { globalPolicyIndex.getPolicyIds() } returns setOf("policyId")
+        val policyRepository = RedisPolicyRepository(globalPolicyIndex, mockPolicyCache())
         policyRepository.getGlobalPolicy()
             .test()
             .expectNext(listOf(policyData))
@@ -57,8 +58,29 @@ internal class RedisPolicyRepositoryTest {
     }
 
     @Test
+    fun getGlobalPolicyIgnoresStaleNonGlobalPolicy() {
+        val globalPolicyIndex = mockk<GlobalPolicyIndex>()
+        every { globalPolicyIndex.getPolicyIds() } returns setOf("policyId")
+        val systemPolicy = PolicyData(
+            id = policyData.id,
+            category = policyData.category,
+            name = policyData.name,
+            description = policyData.description,
+            type = PolicyType.SYSTEM,
+            tenantId = policyData.tenantId,
+            statements = policyData.statements,
+        )
+        val policyRepository = RedisPolicyRepository(globalPolicyIndex, mockPolicyCache(systemPolicy))
+
+        policyRepository.getGlobalPolicy()
+            .test()
+            .expectNext(emptyList())
+            .verifyComplete()
+    }
+
+    @Test
     fun getPoliciesWhenPolicyIsEmpty() {
-        val policyRepository = RedisPolicyRepository(mockk(), mockk())
+        val policyRepository = RedisPolicyRepository(mockk<GlobalPolicyIndex>(), mockk())
         policyRepository.getPolicies(emptySet())
             .test()
             .expectNext(listOf())
@@ -67,7 +89,7 @@ internal class RedisPolicyRepositoryTest {
 
     @Test
     fun getPolicies() {
-        val policyRepository = RedisPolicyRepository(mockk(), mockPolicyCache())
+        val policyRepository = RedisPolicyRepository(mockk<GlobalPolicyIndex>(), mockPolicyCache())
         policyRepository.getPolicies(setOf("policyId"))
             .test()
             .expectNext(listOf(policyData))
@@ -76,44 +98,30 @@ internal class RedisPolicyRepositoryTest {
 
     @Test
     fun setPolicy() {
-        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
-        every { globalPolicyIndexCache.get(CACHE_KEY) } returns setOf()
-        every { globalPolicyIndexCache.set(CACHE_KEY, any()) } returns Unit
+        val globalPolicyIndex = mockk<GlobalPolicyIndex>()
+        val updatePolicy = slot<() -> Unit>()
+        every { globalPolicyIndex.update(policyData.id, true, capture(updatePolicy)) } answers {
+            updatePolicy.captured()
+        }
         val policyCache = mockPolicyCache()
-        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
+        val policyRepository = RedisPolicyRepository(globalPolicyIndex, policyCache)
         policyRepository.setPolicy(policyData)
             .test()
             .verifyComplete()
 
-        verify {
-            policyCache.set(any(), any())
-            globalPolicyIndexCache.get(any())
-            globalPolicyIndexCache.set(CACHE_KEY, any())
-        }
-    }
-
-    @Test
-    fun setPolicyIfGlobalContains() {
-        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
-        every { globalPolicyIndexCache.get(CACHE_KEY) } returns setOf(policyData.id)
-        every { globalPolicyIndexCache.set(CACHE_KEY, any()) } returns Unit
-        val policyCache = mockPolicyCache()
-        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
-        policyRepository.setPolicy(policyData)
-            .test()
-            .verifyComplete()
-
-        verify {
-            policyCache.set(any(), any())
-            globalPolicyIndexCache.get(any())
-        }
+        verify { globalPolicyIndex.update(policyData.id, true, any()) }
+        verify { policyCache.set(policyData.id, policyData) }
     }
 
     @Test
     fun setPolicyIfSystem() {
-        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
+        val globalPolicyIndex = mockk<GlobalPolicyIndex>()
+        val updatePolicy = slot<() -> Unit>()
+        every { globalPolicyIndex.update(policyData.id, false, capture(updatePolicy)) } answers {
+            updatePolicy.captured()
+        }
         val policyCache = mockPolicyCache()
-        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
+        val policyRepository = RedisPolicyRepository(globalPolicyIndex, policyCache)
         val systemPolicy = PolicyData(
             id = "policyId",
             category = "policyName",
@@ -127,14 +135,13 @@ internal class RedisPolicyRepositoryTest {
             .test()
             .verifyComplete()
 
-        verify {
-            policyCache.set(any(), any())
-        }
+        verify { globalPolicyIndex.update(policyData.id, false, any()) }
+        verify { policyCache.set(systemPolicy.id, systemPolicy) }
     }
 
-    private fun mockPolicyCache(): PolicyCache {
+    private fun mockPolicyCache(policy: PolicyData = policyData): PolicyCache {
         val policyCache = mockk<PolicyCache>()
-        every { policyCache.get("policyId") } returns policyData
+        every { policyCache.get("policyId") } returns policy
         every { policyCache.set("policyId", any()) } returns Unit
         return policyCache
     }

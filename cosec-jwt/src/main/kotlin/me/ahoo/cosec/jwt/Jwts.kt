@@ -40,6 +40,9 @@ import me.ahoo.cosec.token.SimpleTokenTenantPrincipal
  */
 object Jwts : PrincipalConverter {
     const val TOKEN_PREFIX = "Bearer "
+    const val TOKEN_USE_CLAIM = "token_use"
+    const val ACCESS_TOKEN_USE = "access"
+    const val REFRESH_TOKEN_USE = "refresh"
     private val jwtParser = JWT()
 
     fun String.removeBearerPrefix(): String =

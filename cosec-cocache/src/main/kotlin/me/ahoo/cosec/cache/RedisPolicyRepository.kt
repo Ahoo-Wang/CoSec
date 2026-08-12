@@ -14,17 +14,17 @@
 package me.ahoo.cosec.cache
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.api.policy.GlobalPolicyIndex
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyId
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.authorization.PolicyRepository
-import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import me.ahoo.cosec.policy.DefaultPolicyEvaluator
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
 class RedisPolicyRepository(
-    private val globalPolicyIndexCache: GlobalPolicyIndexCache,
+    private val globalPolicyIndex: GlobalPolicyIndex,
     private val policyCache: PolicyCache
 ) : PolicyRepository {
     companion object {
@@ -32,11 +32,8 @@ class RedisPolicyRepository(
     }
 
     override fun getGlobalPolicy(): Mono<List<Policy>> {
-        return globalPolicyIndexCache[CACHE_KEY]
-            .orEmpty()
-            .let {
-                getPolicies(it)
-            }
+        return getPolicies(globalPolicyIndex.getPolicyIds())
+            .map { policies -> policies.filter { it.type == PolicyType.GLOBAL } }
     }
 
     override fun getPolicies(policyIds: Set<PolicyId>): Mono<List<Policy>> {
@@ -51,12 +48,8 @@ class RedisPolicyRepository(
                 "setPolicy - policy: [${policy.id}]."
             }
             DefaultPolicyEvaluator.evaluate(policy)
-            policyCache[policy.id] = policy
-            if (policy.type == PolicyType.GLOBAL) {
-                val globalPolicies = globalPolicyIndexCache[CACHE_KEY] ?: emptySet()
-                if (globalPolicies.contains(policy.id).not()) {
-                    globalPolicyIndexCache[CACHE_KEY] = globalPolicies + policy.id
-                }
+            globalPolicyIndex.update(policy.id, policy.type == PolicyType.GLOBAL) {
+                policyCache[policy.id] = policy
             }
         }
     }

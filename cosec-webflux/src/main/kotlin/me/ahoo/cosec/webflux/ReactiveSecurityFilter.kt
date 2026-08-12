@@ -16,6 +16,7 @@ package me.ahoo.cosec.webflux
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_KEY
 import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
@@ -60,9 +61,43 @@ abstract class ReactiveSecurityFilter(
     val requestParser: RequestParser<ServerWebExchange>,
     val authorization: Authorization
 ) {
+    private data class AuthorizationOutcome(
+        val authorizeResult: AuthorizeResult,
+        val statusCode: HttpStatus? = null
+    )
+
     companion object {
         private val log = KotlinLogging.logger {}
     }
+
+    private fun authorizeRequest(
+        request: Request,
+        securityContext: SecurityContext
+    ): Mono<AuthorizationOutcome> =
+        authorization
+            .authorize(request, securityContext)
+            .map { AuthorizationOutcome(it) }
+            .switchIfEmpty(
+                Mono.error(IllegalStateException("Authorization completed without a result."))
+            ).onErrorResume(TooManyRequestsException::class.java) { _ ->
+                AuthorizationOutcome(
+                    AuthorizeResult.TOO_MANY_REQUESTS,
+                    HttpStatus.TOO_MANY_REQUESTS,
+                ).toMono()
+            }.onErrorResume(RegexTimeoutException::class.java) { _ ->
+                AuthorizationOutcome(
+                    AuthorizeResult.IMPLICIT_DENY,
+                    HttpStatus.FORBIDDEN,
+                ).toMono()
+            }.onErrorResume { cause ->
+                log.error(cause) {
+                    "Unexpected error during authorization of request [${request.path}] [${request.method}]."
+                }
+                AuthorizationOutcome(
+                    AuthorizeResult.IMPLICIT_DENY,
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                ).toMono()
+            }
 
     fun filterInternal(
         exchange: ServerWebExchange,
@@ -83,9 +118,13 @@ abstract class ReactiveSecurityFilter(
         securityContext.setRequest(request)
         exchange.setSecurityContext(securityContext)
         exchange.response.headers.trySet(REQUEST_ID_KEY, request.requestId)
-        return authorization
-            .authorize(request, securityContext)
-            .flatMap { authorizeResult ->
+        return authorizeRequest(request, securityContext)
+            .flatMap { outcome ->
+                outcome.statusCode?.let { statusCode ->
+                    exchange.response.statusCode = statusCode
+                    return@flatMap exchange.response.writeWithAuthorizeResult(outcome.authorizeResult)
+                }
+                val authorizeResult = outcome.authorizeResult
                 if (authorizeResult.authorized) {
                     exchange
                         .mutate()
@@ -104,20 +143,6 @@ abstract class ReactiveSecurityFilter(
                 exchange.response.writeWithAuthorizeResult(
                     tokenVerificationException?.toAuthorizeResult() ?: authorizeResult,
                 )
-            }.onErrorResume(TooManyRequestsException::class.java) { _ ->
-                exchange.response.statusCode = HttpStatus.TOO_MANY_REQUESTS
-                exchange.response.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
-            }.onErrorResume(RegexTimeoutException::class.java) { _ ->
-                // A regex condition exceeding its time budget (ReDoS guard) is an expected, fail-closed
-                // authorization outcome -> deny, not a 5xx server error (which would invite client retries).
-                exchange.response.statusCode = HttpStatus.FORBIDDEN
-                exchange.response.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
-            }.onErrorResume { cause ->
-                log.error(cause) {
-                    "Unexpected error during authorization of request [${request.path}] [${request.method}]."
-                }
-                exchange.response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR
-                exchange.response.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
             }
     }
 
