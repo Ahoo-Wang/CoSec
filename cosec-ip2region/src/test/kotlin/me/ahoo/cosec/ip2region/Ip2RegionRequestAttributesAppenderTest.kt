@@ -17,10 +17,18 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 class Ip2RegionRequestAttributesAppenderTest {
     private val ip2RegionRequestAttributesAppender = Ip2RegionRequestAttributesAppender()
+
+    @Test
+    fun loadDefaultDbIsNotEmpty() {
+        val ip2regionDb = Ip2RegionRequestAttributesAppender.loadDefaultIp2RegionDb()
+        ip2regionDb.assert().isNotNull()
+        ip2regionDb.size.assert().isGreaterThan(0)
+    }
 
     @Test
     fun append() {
