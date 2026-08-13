@@ -24,6 +24,8 @@ import me.ahoo.cosec.token.SimpleCompositeToken
 import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Assertions.*
@@ -77,7 +79,7 @@ class JwtTokenVerifierTest {
             refreshToken = oldToken.refreshToken,
         )
 
-        assertThrows(TokenVerificationException::class.java) {
+        assertThrownBy<TokenVerificationException> {
             jwtTokenVerifier.refresh<TokenPrincipal>(forgedToken)
         }
     }
@@ -95,7 +97,7 @@ class JwtTokenVerifierTest {
 
         val newTokenPrincipal = jwtTokenVerifier.refresh<TokenTenantPrincipal>(oldToken)
 
-        assertThat(newTokenPrincipal.id, equalTo(SimpleTenantPrincipal.ANONYMOUS.id))
-        assertThat(newTokenPrincipal.tenant.tenantId, equalTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId))
+        newTokenPrincipal.id.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS.id)
+        newTokenPrincipal.tenant.tenantId.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId)
     }
 }
