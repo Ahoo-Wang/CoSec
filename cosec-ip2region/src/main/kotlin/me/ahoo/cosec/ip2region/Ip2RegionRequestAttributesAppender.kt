@@ -18,23 +18,26 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.context.request.RequestAttributesAppender
 import org.lionsoul.ip2region.xdb.Searcher
 import org.lionsoul.ip2region.xdb.Version
-import java.io.File
+import java.io.ByteArrayInputStream
 
 const val REQUEST_ATTRIBUTES_IP_REGION_KEY = "ipRegion"
 
-class Ip2RegionRequestAttributesAppender(ip2regionFile: File = LOCAL_IP2REGION_FILE, version: Version = Version.IPv4) :
-    RequestAttributesAppender {
+class Ip2RegionRequestAttributesAppender(
+    ip2regionDb: ByteArray = loadDefaultIp2RegionDb(),
+    version: Version = Version.IPv4
+) : RequestAttributesAppender {
     companion object {
         private val log = KotlinLogging.logger {}
-        private val LOCAL_IP2REGION_FILE: File = Ip2RegionRequestAttributesAppender::class.java
-            .classLoader.getResource("ip2region.xdb").let {
-                File(it.file)
-            }
+        const val IP2REGION_DB_RESOURCE = "ip2region.xdb"
+
+        fun loadDefaultIp2RegionDb(): ByteArray =
+            Ip2RegionRequestAttributesAppender::class.java.classLoader.getResourceAsStream(IP2REGION_DB_RESOURCE)
+                ?.use { it.readBytes() }
+                ?: throw IllegalStateException("Classpath resource [$IP2REGION_DB_RESOURCE] not found.")
     }
 
     private val searcher: Searcher by lazy {
-        val dbBuffer = Searcher.loadContentFromFile(ip2regionFile.path)
-        Searcher.newWithBuffer(version, dbBuffer)
+        Searcher.newWithBuffer(version, Searcher.loadContentFromInputStream(ByteArrayInputStream(ip2regionDb)))
     }
 
     override fun append(request: Request): Request {
