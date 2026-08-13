@@ -82,4 +82,18 @@ class CoSecJwtAutoConfigurationTest {
                     .doesNotHaveBean(TokenVerifier::class.java)
             }
     }
+
+    @Test
+    fun contextLoadsWhenSecretIsMissing() {
+        contextRunner
+            .withUserConfiguration(
+                CoSecJwtAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                AssertionsForInterfaceTypes.assertThat(context)
+                    .hasFailed()
+                    .getFailure()
+                    .hasRootCauseInstanceOf(IllegalArgumentException::class.java)
+            }
+    }
 }
