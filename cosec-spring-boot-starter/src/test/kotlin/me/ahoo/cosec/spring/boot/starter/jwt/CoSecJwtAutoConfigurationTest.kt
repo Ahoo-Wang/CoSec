@@ -20,6 +20,7 @@ import me.ahoo.cosec.token.TokenConverter
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
@@ -90,7 +91,7 @@ class CoSecJwtAutoConfigurationTest {
                 CoSecJwtAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
-                AssertionsForInterfaceTypes.assertThat(context)
+                context.assert()
                     .hasFailed()
                     .getFailure()
                     .hasRootCauseInstanceOf(IllegalArgumentException::class.java)
