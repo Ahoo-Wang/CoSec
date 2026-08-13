@@ -3,11 +3,7 @@ package me.ahoo.cosec.api.permission
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.principal.RoleId
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.contains
-import org.hamcrest.Matchers.containsInAnyOrder
-import org.hamcrest.Matchers.hasKey
-import org.hamcrest.Matchers.hasSize
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 class AppRolePermissionTest {
@@ -38,11 +34,11 @@ class AppRolePermissionTest {
 
         val indexer = appRolePermission.rolePermissionIndexer
 
-        assertThat(indexer, hasKey("admin"))
-        assertThat(indexer, hasKey("writer"))
-        assertThat(indexer.keys, hasSize(2))
-        assertThat(indexer.getValue("admin"), containsInAnyOrder(readPermission, writePermission))
-        assertThat(indexer.getValue("writer"), contains(writePermission))
+        indexer.assert().containsKey("admin")
+        indexer.assert().containsKey("writer")
+        indexer.assert().hasSize(2)
+        indexer.getValue("admin").assert().containsExactlyInAnyOrder(readPermission, writePermission)
+        indexer.getValue("writer").assert().containsExactly(writePermission)
     }
 
     @Test
@@ -65,7 +61,7 @@ class AppRolePermissionTest {
 
         val indexer = appRolePermission.rolePermissionIndexer
 
-        assertThat(indexer.getValue("reader"), contains(readPermission))
-        assertThat(indexer.getValue("writer"), contains(writePermission))
+        indexer.getValue("reader").assert().containsExactly(readPermission)
+        indexer.getValue("writer").assert().containsExactly(writePermission)
     }
 }
