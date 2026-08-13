@@ -64,13 +64,14 @@ class SimpleAuthorization(
         crossinline verifyItem: (T) -> VerifyResult,
         crossinline onMatch: (T, VerifyResult) -> VerifyContext
     ): VerifyContext? {
-        items.filter { effectExtractor(it) == Effect.DENY }.forEach { item ->
+        val materializedItems = items.toList()
+        materializedItems.filter { effectExtractor(it) == Effect.DENY }.forEach { item ->
             val result = verifyItem(item)
             if (result == VerifyResult.EXPLICIT_DENY) {
                 return onMatch(item, result)
             }
         }
-        items.filter { effectExtractor(it) == Effect.ALLOW }.forEach { item ->
+        materializedItems.filter { effectExtractor(it) == Effect.ALLOW }.forEach { item ->
             val result = verifyItem(item)
             if (result == VerifyResult.ALLOW) {
                 return onMatch(item, result)
