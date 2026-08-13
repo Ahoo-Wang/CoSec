@@ -35,7 +35,7 @@ import me.ahoo.cosec.token.TokenVerifier
  * @see JwtTokenConverter
  */
 class JwtTokenVerifier(
-    algorithm: Algorithm
+    private val algorithm: Algorithm
 ) : TokenVerifier {
     private val jwtVerifier: JWTVerifier = JWT.require(algorithm).build()
 
@@ -61,7 +61,18 @@ class JwtTokenVerifier(
     override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {
         val decodedRefreshToken: DecodedJWT = verify(token.refreshToken)
         val decodedAccessToken = Jwts.decode(token.accessToken)
+        verifyAccessTokenSignature(decodedAccessToken)
         require(decodedRefreshToken.subject == decodedAccessToken.id) { "Illegal refreshToken." }
         return Jwts.toPrincipal(decodedAccessToken)
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun verifyAccessTokenSignature(decodedAccessToken: DecodedJWT) {
+        try {
+            algorithm.verify(decodedAccessToken)
+        } catch (exception: Exception) {
+            throw me.ahoo.cosec.token
+                .TokenVerificationException(exception.message!!, exception)
+        }
     }
 }

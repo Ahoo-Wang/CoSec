@@ -49,6 +49,10 @@ class CoSecJwtAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecTokenAlgorithm(jwtProperties: JwtProperties): Algorithm {
+        require(jwtProperties.secret.isNotBlank()) {
+            "Property [${JwtProperties.PREFIX}.secret] must not be blank when JWT is enabled. " +
+                "Set cosec.jwt.secret to a strong random value, or disable JWT via cosec.jwt.enabled=false."
+        }
         return when (jwtProperties.algorithm) {
             JwtProperties.Algorithm.HMAC256 -> Algorithm.HMAC256(
                 jwtProperties.secret,

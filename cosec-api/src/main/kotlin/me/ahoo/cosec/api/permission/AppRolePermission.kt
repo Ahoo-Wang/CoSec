@@ -29,15 +29,16 @@ interface AppRolePermission {
      * @return Map of RoleId to list of Permissions
      */
     val rolePermissionIndexer: Map<RoleId, List<Permission>>
-        get() {
-            rolePermissions.forEach {
-                if (it.permissions.contains(ALL_PERMISSION_ID)) {
-                    return mapOf(it.id to appPermission.permissionIndexer.values.toList())
+        get() = rolePermissions.associate { rolePermission ->
+            val permissions =
+                if (rolePermission.permissions.contains(ALL_PERMISSION_ID)) {
+                    appPermission.permissionIndexer.values.toList()
+                } else {
+                    rolePermission.permissions.mapNotNull { permissionId ->
+                        appPermission.permissionIndexer[permissionId]
+                    }
                 }
-            }
-            return rolePermissions.associate {
-                it.id to it.permissions.mapNotNull { permissionId -> appPermission.permissionIndexer[permissionId] }
-            }
+            rolePermission.id to permissions
         }
 
     companion object {

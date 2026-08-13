@@ -13,13 +13,19 @@
 
 package me.ahoo.cosec.jwt
 
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.token.SimpleCompositeToken
 import me.ahoo.cosec.token.TokenExpiredException
+import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Assertions.*
@@ -58,5 +64,40 @@ class JwtTokenVerifierTest {
         val oldToken: CompositeToken = converter.toToken(SimpleTenantPrincipal.ANONYMOUS)
         TimeUnit.SECONDS.sleep(1)
         assertThrows(TokenExpiredException::class.java) { jwtTokenVerifier.refresh<TokenPrincipal>(oldToken) }
+    }
+
+    @Test
+    fun refreshWhenAccessTokenSignatureIsForged() {
+        val oldToken: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
+        val legitAccessTokenId = Jwts.decode(oldToken.accessToken).id
+        val forgedAccessToken = JWT.create()
+            .withJWTId(legitAccessTokenId)
+            .withSubject(SimpleTenantPrincipal.ANONYMOUS.id)
+            .sign(Algorithm.HMAC256("attacker-secret"))
+        val forgedToken = SimpleCompositeToken(
+            accessToken = forgedAccessToken,
+            refreshToken = oldToken.refreshToken,
+        )
+
+        assertThrownBy<TokenVerificationException> {
+            jwtTokenVerifier.refresh<TokenPrincipal>(forgedToken)
+        }
+    }
+
+    @Test
+    fun refreshWhenAccessTokenExpiredButSignatureValid() {
+        val converter = JwtTokenConverter(
+            MockIdGenerator.INSTANCE,
+            JwtFixture.ALGORITHM,
+            Duration.ofMillis(1),
+            Duration.ofDays(7),
+        )
+        val oldToken: CompositeToken = converter.toToken(SimpleTenantPrincipal.ANONYMOUS)
+        TimeUnit.SECONDS.sleep(1)
+
+        val newTokenPrincipal = jwtTokenVerifier.refresh<TokenTenantPrincipal>(oldToken)
+
+        newTokenPrincipal.id.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS.id)
+        newTokenPrincipal.tenant.tenantId.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId)
     }
 }

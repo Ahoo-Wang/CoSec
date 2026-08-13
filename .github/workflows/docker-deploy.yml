@@ -92,3 +92,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Aliyun ACR rejects OCI 1.1 empty-descriptor attestation manifests (application/vnd.oci.empty.v1+json)
+          provenance: false
+          sbom: false

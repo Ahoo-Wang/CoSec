@@ -20,6 +20,7 @@ import me.ahoo.cosec.token.TokenConverter
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
@@ -80,6 +81,20 @@ class CoSecJwtAutoConfigurationTest {
                     .doesNotHaveBean(TokenConverter::class.java)
                     .doesNotHaveBean(TokenCompositeAuthentication::class.java)
                     .doesNotHaveBean(TokenVerifier::class.java)
+            }
+    }
+
+    @Test
+    fun contextLoadsWhenSecretIsMissing() {
+        contextRunner
+            .withUserConfiguration(
+                CoSecJwtAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                context.assert()
+                    .hasFailed()
+                    .getFailure()
+                    .hasRootCauseInstanceOf(IllegalArgumentException::class.java)
             }
     }
 }
