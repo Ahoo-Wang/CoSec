@@ -169,7 +169,7 @@ The `JwtFixture` object provides a shared test algorithm for JWT-based tests:
 
 ```kotlin
 object JwtFixture {
-    var ALGORITHM = Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLWGA_")
+    var ALGORITHM = Algorithm.HMAC256("jwt-doc-example-secret")
 }
 ```
 
