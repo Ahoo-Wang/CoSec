@@ -112,6 +112,7 @@ internal class RedisPolicyRepositoryTest {
     @Test
     fun setPolicyIfSystem() {
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
+        every { globalPolicyIndexCache.get(CACHE_KEY) } returns null
         val policyCache = mockPolicyCache()
         val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
         val systemPolicy = PolicyData(
@@ -129,6 +130,59 @@ internal class RedisPolicyRepositoryTest {
 
         verify {
             policyCache.set(any(), any())
+        }
+    }
+
+    @Test
+    fun setPolicyWhenDemotedFromGlobal() {
+        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
+        every { globalPolicyIndexCache.get(CACHE_KEY) } returns setOf(policyData.id)
+        every { globalPolicyIndexCache.set(CACHE_KEY, any()) } returns Unit
+        val policyCache = mockPolicyCache()
+        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
+        val systemPolicy = PolicyData(
+            id = "policyId",
+            category = "policyName",
+            name = "policyDesc",
+            description = "policyType",
+            type = PolicyType.SYSTEM,
+            tenantId = "tenantId",
+            statements = listOf(),
+        )
+        policyRepository.setPolicy(systemPolicy)
+            .test()
+            .verifyComplete()
+
+        verify {
+            policyCache.set(any(), any())
+            globalPolicyIndexCache.set(CACHE_KEY, emptySet())
+        }
+    }
+
+    @Test
+    fun setPolicyIfSystemWhenNotInGlobalIndex() {
+        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
+        every { globalPolicyIndexCache.get(CACHE_KEY) } returns null
+        val policyCache = mockPolicyCache()
+        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
+        val systemPolicy = PolicyData(
+            id = "policyId",
+            category = "policyName",
+            name = "policyDesc",
+            description = "policyType",
+            type = PolicyType.SYSTEM,
+            tenantId = "tenantId",
+            statements = listOf(),
+        )
+        policyRepository.setPolicy(systemPolicy)
+            .test()
+            .verifyComplete()
+
+        verify {
+            policyCache.set(any(), any())
+        }
+        verify(exactly = 0) {
+            globalPolicyIndexCache.set(any(), any())
         }
     }
 
