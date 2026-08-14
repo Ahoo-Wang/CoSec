@@ -344,6 +344,28 @@ internal class ReactiveAuthorizationFilterTest {
     }
 
     @Test
+    fun filterWhenDownstreamErrorPropagates() {
+        val authorization = mockk<Authorization> {
+            every { authorize(any(), any()) } returns AuthorizeResult.ALLOW.toMono()
+        }
+        val filter = ReactiveAuthorizationFilter(
+            InjectSecurityContextParser,
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
+            authorization,
+        )
+        val serverRequest = MockServerHttpRequest.get("/path").build()
+        val exchange = MockServerWebExchange.builder(serverRequest).build()
+        val downstreamError = IllegalStateException("downstream boom")
+        val filterChain = WebFilterChain { Mono.error<Void>(downstreamError) }
+
+        val thrown = runCatching { filter.filter(exchange, filterChain).block() }.exceptionOrNull()
+        // Errors from the downstream handler must reach Spring's error handling, not be
+        // rewritten into a 500 "Implicit Deny" by the authorization filter.
+        thrown.assert().isEqualTo(downstreamError)
+        exchange.response.statusCode.assert().isNull()
+    }
+
+    @Test
     fun filterWhenInvalidPath() {
         val authorization = mockk<Authorization>()
         val filter = ReactiveAuthorizationFilter(
