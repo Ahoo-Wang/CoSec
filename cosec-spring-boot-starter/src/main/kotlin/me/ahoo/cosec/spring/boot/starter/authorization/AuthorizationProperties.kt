@@ -37,6 +37,10 @@ class AuthorizationProperties(
     }
 
     class RemoteIp(
+        /**
+         * `0` ignores X-Forwarded-For entirely (directly exposed deployments);
+         * `N` trusts N proxy hops, taking the rightmost entry appended by the closest trusted proxy.
+         */
         @DefaultValue("1")
         var maxTrustedIndex: Int = 1
     )
