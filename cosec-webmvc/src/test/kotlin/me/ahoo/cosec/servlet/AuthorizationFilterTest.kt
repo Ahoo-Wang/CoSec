@@ -119,6 +119,8 @@ internal class AuthorizationFilterTest {
         filter.doFilter(servletRequest, servletResponse, filterChain)
         // A denied request must not leave its security context bound to the (pooled) request thread.
         assertThat(SecurityContextHolder.context, nullValue())
+        // A denied request must not reach the filter chain.
+        verify(exactly = 0) { filterChain.doFilter(any(), any()) }
     }
 
     @Test
@@ -290,6 +292,7 @@ internal class AuthorizationFilterTest {
             servletResponse.outputStream.write(any() as ByteArray)
             servletResponse.outputStream.flush()
         }
+        verify(exactly = 0) { filterChain.doFilter(any(), any()) }
     }
 
     @Test
