@@ -186,6 +186,30 @@ internal class RedisPolicyRepositoryTest {
         }
     }
 
+    @Test
+    fun getPoliciesEvaluatedPerSubscription() {
+        val otherPolicy = PolicyData(
+            id = "policyId",
+            category = "policyName",
+            name = "changed",
+            description = "policyDesc",
+            type = PolicyType.GLOBAL,
+            tenantId = "tenantId",
+            statements = listOf(),
+        )
+        val policyCache = mockk<PolicyCache>()
+        every { policyCache.get("policyId") } returnsMany listOf(policyData, otherPolicy)
+        val policyRepository = RedisPolicyRepository(mockk(), policyCache)
+        val policiesMono = policyRepository.getPolicies(setOf("policyId"))
+
+        policiesMono.test()
+            .expectNextMatches { it.single().name == "policyDesc" }
+            .verifyComplete()
+        policiesMono.test()
+            .expectNextMatches { it.single().name == "changed" }
+            .verifyComplete()
+    }
+
     private fun mockPolicyCache(): PolicyCache {
         val policyCache = mockk<PolicyCache>()
         every { policyCache.get("policyId") } returns policyData

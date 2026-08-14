@@ -21,6 +21,7 @@ import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import me.ahoo.cosec.policy.DefaultPolicyEvaluator
 import reactor.core.publisher.Mono
+import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.toMono
 
 class RedisPolicyRepository(
@@ -32,21 +33,22 @@ class RedisPolicyRepository(
     }
 
     override fun getGlobalPolicy(): Mono<List<Policy>> {
-        return globalPolicyIndexCache[CACHE_KEY]
-            .orEmpty()
-            .let {
-                getPolicies(it)
-            }
+        return Mono.defer {
+            val globalPolicyIds = globalPolicyIndexCache[CACHE_KEY].orEmpty()
+            globalPolicyIds.mapNotNull { policyCache[it] }.toMono()
+        }.subscribeOn(Schedulers.boundedElastic())
     }
 
     override fun getPolicies(policyIds: Set<PolicyId>): Mono<List<Policy>> {
-        return policyIds.mapNotNull {
-            policyCache[it]
-        }.toMono()
+        return Mono.defer {
+            policyIds.mapNotNull {
+                policyCache[it]
+            }.toMono()
+        }.subscribeOn(Schedulers.boundedElastic())
     }
 
     override fun setPolicy(policy: Policy): Mono<Void> {
-        return Mono.fromRunnable {
+        return Mono.fromRunnable<Void> {
             log.info {
                 "setPolicy - policy: [${policy.id}]."
             }
@@ -60,6 +62,6 @@ class RedisPolicyRepository(
             } else if (globalPolicies != null && globalPolicies.contains(policy.id)) {
                 globalPolicyIndexCache[CACHE_KEY] = globalPolicies - policy.id
             }
-        }
+        }.subscribeOn(Schedulers.boundedElastic())
     }
 }
