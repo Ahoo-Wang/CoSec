@@ -14,10 +14,12 @@ package me.ahoo.cosec.webflux
 
 import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.context.request.InvalidRequestPathException
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.springframework.core.Ordered
+import org.springframework.http.HttpStatus
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilter
 import org.springframework.web.server.WebFilterChain
@@ -44,7 +46,12 @@ class ReactiveInjectSecurityContextWebFilter(
     }
 
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
-        val request = requestParser.parse(exchange)
+        val request = try {
+            requestParser.parse(exchange)
+        } catch (_: InvalidRequestPathException) {
+            exchange.response.statusCode = HttpStatus.BAD_REQUEST
+            return Mono.empty()
+        }
         val securityContext = securityContextParser.ensureParse(request)
         securityContext.setRequest(request)
         exchange.mutate()

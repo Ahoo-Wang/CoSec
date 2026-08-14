@@ -29,6 +29,9 @@ object RequestPaths {
     }
 
     fun isTraversal(path: String): Boolean {
+        if ('%' !in path && '.' !in path) {
+            return false
+        }
         val decodedPath = try {
             UriUtils.decode(path, Charsets.UTF_8)
         } catch (_: IllegalArgumentException) {

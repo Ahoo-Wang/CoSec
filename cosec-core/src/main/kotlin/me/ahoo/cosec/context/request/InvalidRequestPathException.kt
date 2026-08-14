@@ -17,7 +17,4 @@ package me.ahoo.cosec.context.request
  * Thrown when a request path contains traversal segments (plain or percent-encoded),
  * which authorization matching must never accept.
  */
-class InvalidRequestPathException : IllegalArgumentException {
-    constructor() : super("Invalid request path.")
-    constructor(cause: Throwable) : super("Invalid request path.", cause)
-}
+class InvalidRequestPathException : IllegalArgumentException("Invalid request path.")
