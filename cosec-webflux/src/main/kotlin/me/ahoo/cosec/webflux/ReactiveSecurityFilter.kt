@@ -109,8 +109,8 @@ abstract class ReactiveSecurityFilter(
                     tokenVerificationException?.toAuthorizeResult() ?: authorizeResult,
                 ).then(Mono.empty())
             }.onAuthorizeError(exchange, request)
-        return authorizedExchange.flatMap { exchange ->
-            chain(exchange, request).writeSecurityContext(securityContext)
+        return authorizedExchange.flatMap { authorized ->
+            chain(authorized, request).writeSecurityContext(securityContext)
         }
     }
 
