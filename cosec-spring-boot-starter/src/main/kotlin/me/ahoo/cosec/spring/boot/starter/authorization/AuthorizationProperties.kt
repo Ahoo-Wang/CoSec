@@ -26,7 +26,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 @ConfigurationProperties(prefix = AuthorizationProperties.PREFIX)
 class AuthorizationProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
-    var localPolicy: LocalPolicy = LocalPolicy()
+    var localPolicy: LocalPolicy = LocalPolicy(),
+    var remoteIp: RemoteIp = RemoteIp()
 ) : EnabledCapable {
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "authorization"
@@ -34,6 +35,11 @@ class AuthorizationProperties(
         const val LOCAL_POLICY_ENABLED = LOCAL_POLICY_PREFIX + ENABLED_SUFFIX_KEY
         const val LOCAL_POLICY_INIT_REPOSITORY = "$LOCAL_POLICY_PREFIX.init-repository"
     }
+
+    class RemoteIp(
+        @DefaultValue("1")
+        var maxTrustedIndex: Int = 1
+    )
 
     class LocalPolicy(
         @DefaultValue("false")

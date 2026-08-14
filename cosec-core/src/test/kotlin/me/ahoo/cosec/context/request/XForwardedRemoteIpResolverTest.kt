@@ -60,4 +60,28 @@ class XForwardedRemoteIpResolverTest {
         }
         xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("ipAddress0")
     }
+
+    @Test
+    fun resolveWhenMaxTrustedIndexZero() {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Request>(defaultRemoteIpResolver) {
+            override val maxTrustedIndex: Int get() = 0
+            override fun extractXForwardedHeaderValues(request: Request): List<String>? {
+                return listOf("ipAddress")
+            }
+        }
+        // maxTrustedIndex = 0 means: do not trust X-Forwarded-For at all.
+        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("default")
+    }
+
+    @Test
+    fun resolveWhenMaxTrustedIndexOne() {
+        val xForwardedRemoteIpResolver = object : XForwardedRemoteIpResolver<Request>(defaultRemoteIpResolver) {
+            override val maxTrustedIndex: Int get() = 1
+            override fun extractXForwardedHeaderValues(request: Request): List<String>? {
+                return listOf("ipAddress0, ipAddress1, ipAddress2")
+            }
+        }
+        // Trust exactly one hop: the rightmost entry is the one appended by the closest proxy.
+        xForwardedRemoteIpResolver.resolve(mockk()).assert().isEqualTo("ipAddress2")
+    }
 }

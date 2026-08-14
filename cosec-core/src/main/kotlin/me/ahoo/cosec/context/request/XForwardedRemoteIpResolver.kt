@@ -44,9 +44,14 @@ abstract class XForwardedRemoteIpResolver<R>(
             return defaultRemoteIpResolver.resolve(request)
         }
 
+        if (maxTrustedIndex <= 0) {
+            return defaultRemoteIpResolver.resolve(request)
+        }
+
         val xForwardedValues = xForwardedHeaderValues[0]
             .split(DELIMITER)
             .filter { it.isNotBlank() }
+            .map { it.trim() }
             .reversed()
         if (xForwardedValues.isEmpty()) {
             return defaultRemoteIpResolver.resolve(request)

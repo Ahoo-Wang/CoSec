@@ -16,7 +16,7 @@ package me.ahoo.cosec.webflux
 import me.ahoo.cosec.context.request.XForwardedRemoteIpResolver
 import org.springframework.web.server.ServerWebExchange
 
-class ReactiveXForwardedRemoteIpResolver(override val maxTrustedIndex: Int = Int.MAX_VALUE) :
+class ReactiveXForwardedRemoteIpResolver(override val maxTrustedIndex: Int = 1) :
     XForwardedRemoteIpResolver<ServerWebExchange>(ReactiveRemoteIpResolver) {
     companion object {
         val TRUST_ALL = ReactiveXForwardedRemoteIpResolver(Int.MAX_VALUE)

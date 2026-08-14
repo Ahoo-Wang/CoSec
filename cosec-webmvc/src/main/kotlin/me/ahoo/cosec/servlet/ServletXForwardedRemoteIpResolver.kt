@@ -16,7 +16,7 @@ package me.ahoo.cosec.servlet
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.context.request.XForwardedRemoteIpResolver
 
-class ServletXForwardedRemoteIpResolver(override val maxTrustedIndex: Int = Int.MAX_VALUE) :
+class ServletXForwardedRemoteIpResolver(override val maxTrustedIndex: Int = 1) :
     XForwardedRemoteIpResolver<HttpServletRequest>(ServletRemoteIpResolver) {
     companion object {
         val TRUST_ALL = ServletXForwardedRemoteIpResolver(Int.MAX_VALUE)
