@@ -11,18 +11,17 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.webflux
+package me.ahoo.cosec.servlet
 
-import me.ahoo.cosec.context.request.XForwardedRemoteIpResolver
-import org.springframework.web.server.ServerWebExchange
+import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Test
 
-class ReactiveXForwardedRemoteIpResolver(override val maxTrustedIndex: Int = 1) :
-    XForwardedRemoteIpResolver<ServerWebExchange>(ReactiveRemoteIpResolver) {
-    companion object {
-        val TRUST_ALL = ReactiveXForwardedRemoteIpResolver(Int.MAX_VALUE)
-    }
+class ServletXForwardedRemoteIpResolverTest {
 
-    override fun extractXForwardedHeaderValues(request: ServerWebExchange): List<String>? {
-        return request.request.headers[X_FORWARDED_FOR]
+    @Test
+    fun defaultMaxTrustedIndex() {
+        val xForwardedRemoteIpResolver = ServletXForwardedRemoteIpResolver()
+        // The default trusts exactly one hop (rightmost entry); use TRUST_ALL for the old trust-all behavior.
+        xForwardedRemoteIpResolver.maxTrustedIndex.assert().isEqualTo(1)
     }
 }

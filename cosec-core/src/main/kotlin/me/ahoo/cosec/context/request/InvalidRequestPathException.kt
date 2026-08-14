@@ -11,18 +11,10 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.webflux
+package me.ahoo.cosec.context.request
 
-import me.ahoo.cosec.context.request.XForwardedRemoteIpResolver
-import org.springframework.web.server.ServerWebExchange
-
-class ReactiveXForwardedRemoteIpResolver(override val maxTrustedIndex: Int = 1) :
-    XForwardedRemoteIpResolver<ServerWebExchange>(ReactiveRemoteIpResolver) {
-    companion object {
-        val TRUST_ALL = ReactiveXForwardedRemoteIpResolver(Int.MAX_VALUE)
-    }
-
-    override fun extractXForwardedHeaderValues(request: ServerWebExchange): List<String>? {
-        return request.request.headers[X_FORWARDED_FOR]
-    }
-}
+/**
+ * Thrown when a request path contains traversal segments (plain or percent-encoded),
+ * which authorization matching must never accept.
+ */
+class InvalidRequestPathException : IllegalArgumentException("Invalid request path.")

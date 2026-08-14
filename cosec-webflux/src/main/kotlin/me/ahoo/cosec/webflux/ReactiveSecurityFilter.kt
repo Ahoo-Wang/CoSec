@@ -21,6 +21,7 @@ import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_K
 import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.context.request.InvalidRequestPathException
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
@@ -68,7 +69,12 @@ abstract class ReactiveSecurityFilter(
         exchange: ServerWebExchange,
         chain: (ServerWebExchange, Request) -> Mono<Void>
     ): Mono<Void> {
-        val request = requestParser.parse(exchange)
+        val request = try {
+            requestParser.parse(exchange)
+        } catch (_: InvalidRequestPathException) {
+            exchange.response.statusCode = HttpStatus.BAD_REQUEST
+            return Mono.empty()
+        }
         var tokenVerificationException: TokenVerificationException? = null
         val securityContext =
             try {
@@ -83,17 +89,15 @@ abstract class ReactiveSecurityFilter(
         securityContext.setRequest(request)
         exchange.setSecurityContext(securityContext)
         exchange.response.headers.trySet(REQUEST_ID_KEY, request.requestId)
-        return authorization
+        val authorizedExchange = authorization
             .authorize(request, securityContext)
-            .flatMap { authorizeResult ->
+            .flatMap<ServerWebExchange> { authorizeResult ->
                 if (authorizeResult.authorized) {
-                    exchange
+                    return@flatMap exchange
                         .mutate()
                         .principal(securityContext.principal.toMono())
                         .build()
-                        .let {
-                            return@flatMap chain(it, request).writeSecurityContext(securityContext)
-                        }
+                        .toMono()
                 }
                 val principal = securityContext.principal
                 if (!principal.authenticated) {
@@ -103,22 +107,35 @@ abstract class ReactiveSecurityFilter(
                 }
                 exchange.response.writeWithAuthorizeResult(
                     tokenVerificationException?.toAuthorizeResult() ?: authorizeResult,
-                )
-            }.onErrorResume(TooManyRequestsException::class.java) { _ ->
-                exchange.response.statusCode = HttpStatus.TOO_MANY_REQUESTS
-                exchange.response.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
-            }.onErrorResume(RegexTimeoutException::class.java) { _ ->
-                // A regex condition exceeding its time budget (ReDoS guard) is an expected, fail-closed
-                // authorization outcome -> deny, not a 5xx server error (which would invite client retries).
-                exchange.response.statusCode = HttpStatus.FORBIDDEN
-                exchange.response.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
-            }.onErrorResume { cause ->
-                log.error(cause) {
-                    "Unexpected error during authorization of request [${request.path}] [${request.method}]."
-                }
-                exchange.response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR
-                exchange.response.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
+                ).then(Mono.empty())
+            }.onAuthorizeError(exchange, request)
+        return authorizedExchange.flatMap { authorized ->
+            chain(authorized, request).writeSecurityContext(securityContext)
+        }
+    }
+
+    private fun Mono<ServerWebExchange>.onAuthorizeError(
+        exchange: ServerWebExchange,
+        request: Request
+    ): Mono<ServerWebExchange> {
+        return onErrorResume(TooManyRequestsException::class.java) { _ ->
+            exchange.response.statusCode = HttpStatus.TOO_MANY_REQUESTS
+            exchange.response.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
+                .then(Mono.empty())
+        }.onErrorResume(RegexTimeoutException::class.java) { _ ->
+            // A regex condition exceeding its time budget (ReDoS guard) is an expected, fail-closed
+            // authorization outcome -> deny, not a 5xx server error (which would invite client retries).
+            exchange.response.statusCode = HttpStatus.FORBIDDEN
+            exchange.response.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
+                .then(Mono.empty())
+        }.onErrorResume { cause ->
+            log.error(cause) {
+                "Unexpected error during authorization of request [${request.path}] [${request.method}]."
             }
+            exchange.response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR
+            exchange.response.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
+                .then(Mono.empty())
+        }
     }
 
     fun ServerHttpResponse.writeWithAuthorizeResult(authorizeResult: AuthorizeResult): Mono<Void> {

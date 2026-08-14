@@ -27,6 +27,7 @@ import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.server.ServerWebExchange
@@ -38,7 +39,10 @@ import org.springframework.web.server.ServerWebExchange
  */
 @AutoConfiguration
 @ConditionalOnCoSecEnabled
-class CoSecRequestParserAutoConfiguration {
+@EnableConfigurationProperties(AuthorizationProperties::class)
+class CoSecRequestParserAutoConfiguration(
+    private val authorizationProperties: AuthorizationProperties
+) {
 
     companion object {
         const val SERVLET_REMOTE_IP_RESOLVER_BEAN_NAME = "servletRemoteIpResolver"
@@ -49,12 +53,12 @@ class CoSecRequestParserAutoConfiguration {
 
     @Configuration
     @ConditionalOnClass(name = ["me.ahoo.cosec.servlet.AuthorizationFilter"])
-    class WebMvc {
+    inner class WebMvc {
 
         @Bean(SERVLET_REMOTE_IP_RESOLVER_BEAN_NAME)
         @ConditionalOnMissingBean(name = [SERVLET_REMOTE_IP_RESOLVER_BEAN_NAME])
         fun servletRemoteIpResolver(): RemoteIpResolver<HttpServletRequest> {
-            return ServletXForwardedRemoteIpResolver.TRUST_ALL
+            return ServletXForwardedRemoteIpResolver(authorizationProperties.remoteIp.maxTrustedIndex)
         }
 
         @Bean(SERVLET_REQUEST_PARSER_BEAN_NAME)
@@ -75,12 +79,12 @@ class CoSecRequestParserAutoConfiguration {
 
     @Configuration
     @ConditionalOnClass(name = ["me.ahoo.cosec.webflux.ReactiveAuthorizationFilter"])
-    class WebFlux {
+    inner class WebFlux {
 
         @Bean(REACTIVE_REMOTE_IP_RESOLVER_BEAN_NAME)
         @ConditionalOnMissingBean(name = [REACTIVE_REMOTE_IP_RESOLVER_BEAN_NAME])
         fun reactiveRemoteIpResolver(): RemoteIpResolver<ServerWebExchange> {
-            return ReactiveXForwardedRemoteIpResolver.TRUST_ALL
+            return ReactiveXForwardedRemoteIpResolver(authorizationProperties.remoteIp.maxTrustedIndex)
         }
 
         @Bean(REACTIVE_REQUEST_PARSER_BEAN_NAME)

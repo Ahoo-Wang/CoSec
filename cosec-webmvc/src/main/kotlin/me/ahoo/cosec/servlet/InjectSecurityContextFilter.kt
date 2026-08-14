@@ -18,12 +18,15 @@ import jakarta.servlet.ServletException
 import jakarta.servlet.ServletRequest
 import jakarta.servlet.ServletResponse
 import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.context.request.InvalidRequestPathException
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
+import org.springframework.http.HttpStatus
 import java.io.IOException
 
 /**
@@ -48,19 +51,27 @@ class InjectSecurityContextFilter(
         // The injected SecurityContext is bound to the current (pooled) thread; remove it once the request
         // completes so it cannot bleed into the next request served by the same worker thread.
         try {
-            tryInjectSecurityContext(servletRequest)
-            filterChain.doFilter(servletRequest, servletResponse)
+            if (tryInjectSecurityContext(servletRequest)) {
+                filterChain.doFilter(servletRequest, servletResponse)
+            } else {
+                (servletResponse as HttpServletResponse).status = HttpStatus.BAD_REQUEST.value()
+            }
         } finally {
             SecurityContextHolder.remove()
         }
     }
 
-    private fun tryInjectSecurityContext(servletRequest: ServletRequest) {
+    private fun tryInjectSecurityContext(servletRequest: ServletRequest): Boolean {
         val httpServletRequest = servletRequest as HttpServletRequest
-        val request = requestParser.parse(servletRequest)
+        val request = try {
+            requestParser.parse(servletRequest)
+        } catch (_: InvalidRequestPathException) {
+            return false
+        }
         val securityContext: SecurityContext = securityContextParser.ensureParse(request)
         securityContext.setRequest(request)
         SecurityContextHolder.setContext(securityContext)
         httpServletRequest.setSecurityContext(securityContext)
+        return true
     }
 }

@@ -75,6 +75,19 @@ internal class RedisPolicyRepositoryTest {
     }
 
     @Test
+    fun getPoliciesWhenCacheMiss() {
+        // A policy id missing from the cache is silently dropped from the result.
+        val policyCache = mockk<PolicyCache>()
+        every { policyCache.get("policyId") } returns policyData
+        every { policyCache.get("unknownPolicyId") } returns null
+        val policyRepository = RedisPolicyRepository(mockk(), policyCache)
+        policyRepository.getPolicies(setOf("policyId", "unknownPolicyId"))
+            .test()
+            .expectNext(listOf(policyData))
+            .verifyComplete()
+    }
+
+    @Test
     fun setPolicy() {
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
         every { globalPolicyIndexCache.get(CACHE_KEY) } returns setOf()
@@ -184,6 +197,30 @@ internal class RedisPolicyRepositoryTest {
         verify(exactly = 0) {
             globalPolicyIndexCache.set(any(), any())
         }
+    }
+
+    @Test
+    fun getPoliciesEvaluatedPerSubscription() {
+        val otherPolicy = PolicyData(
+            id = "policyId",
+            category = "policyName",
+            name = "changed",
+            description = "policyDesc",
+            type = PolicyType.GLOBAL,
+            tenantId = "tenantId",
+            statements = listOf(),
+        )
+        val policyCache = mockk<PolicyCache>()
+        every { policyCache.get("policyId") } returnsMany listOf(policyData, otherPolicy)
+        val policyRepository = RedisPolicyRepository(mockk(), policyCache)
+        val policiesMono = policyRepository.getPolicies(setOf("policyId"))
+
+        policiesMono.test()
+            .expectNextMatches { it.single().name == "policyDesc" }
+            .verifyComplete()
+        policiesMono.test()
+            .expectNextMatches { it.single().name == "changed" }
+            .verifyComplete()
     }
 
     private fun mockPolicyCache(): PolicyCache {

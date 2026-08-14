@@ -15,8 +15,10 @@ package me.ahoo.cosec.servlet
 
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import me.ahoo.cosec.api.context.request.RequestIdCapable
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
@@ -28,6 +30,7 @@ import org.hamcrest.MatcherAssert.*
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
 
 internal class InjectSecurityContextFilterTest {
 
@@ -76,5 +79,25 @@ internal class InjectSecurityContextFilterTest {
             every { doFilter(request, any()) } returns Unit
         }
         filter.doFilter(request, mockk(), filterChain)
+    }
+
+    @Test
+    fun doFilterWhenInvalidPath() {
+        val filter =
+            InjectSecurityContextFilter(ServletRequestParser(ServletRemoteIpResolver), InjectSecurityContextParser)
+        val request = mockk<HttpServletRequest> {
+            every { servletPath } returns "/public/../admin"
+        }
+        val response = mockk<HttpServletResponse> {
+            every { status = HttpStatus.BAD_REQUEST.value() } returns Unit
+        }
+        val filterChain = mockk<FilterChain>()
+        filter.doFilter(request, response, filterChain)
+
+        verify {
+            response.status = HttpStatus.BAD_REQUEST.value()
+        }
+        verify(exactly = 0) { filterChain.doFilter(any(), any()) }
+        assertThat(SecurityContextHolder.context, nullValue())
     }
 }

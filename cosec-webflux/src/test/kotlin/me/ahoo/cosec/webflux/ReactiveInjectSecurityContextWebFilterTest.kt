@@ -26,6 +26,9 @@ import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest
+import org.springframework.mock.web.server.MockServerWebExchange
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
@@ -62,5 +65,20 @@ internal class ReactiveInjectSecurityContextWebFilterTest {
         verify {
             exchange.setSecurityContext(any())
         }
+    }
+
+    @Test
+    fun filterWhenInvalidPath() {
+        val filter = ReactiveInjectSecurityContextWebFilter(
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
+            InjectSecurityContextParser
+        )
+        val serverRequest = MockServerHttpRequest.get("/public/../admin").build()
+        val exchange = MockServerWebExchange.builder(serverRequest).build()
+        val filterChain = mockk<WebFilterChain>()
+        filter.filter(exchange, filterChain).block()
+
+        exchange.response.statusCode.assert().isEqualTo(HttpStatus.BAD_REQUEST)
+        verify(exactly = 0) { filterChain.filter(any()) }
     }
 }

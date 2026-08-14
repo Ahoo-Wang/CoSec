@@ -119,6 +119,8 @@ internal class AuthorizationFilterTest {
         filter.doFilter(servletRequest, servletResponse, filterChain)
         // A denied request must not leave its security context bound to the (pooled) request thread.
         assertThat(SecurityContextHolder.context, nullValue())
+        // A denied request must not reach the filter chain.
+        verify(exactly = 0) { filterChain.doFilter(any(), any()) }
     }
 
     @Test
@@ -202,6 +204,8 @@ internal class AuthorizationFilterTest {
             servletResponse.outputStream.write(any() as ByteArray)
             servletResponse.outputStream.flush()
         }
+        // The request was denied by the rate limiter, so it must not reach the filter chain.
+        verify(exactly = 0) { filterChain.doFilter(any(), any()) }
     }
 
     @Test
@@ -246,6 +250,8 @@ internal class AuthorizationFilterTest {
         }
         // A ReDoS-guard trip is an expected deny, not a server error, and must clean up the context.
         assertThat(SecurityContextHolder.context, nullValue())
+        // The request was denied by the ReDoS guard, so it must not reach the filter chain.
+        verify(exactly = 0) { filterChain.doFilter(any(), any()) }
     }
 
     @Test
@@ -286,6 +292,7 @@ internal class AuthorizationFilterTest {
             servletResponse.outputStream.write(any() as ByteArray)
             servletResponse.outputStream.flush()
         }
+        verify(exactly = 0) { filterChain.doFilter(any(), any()) }
     }
 
     @Test
@@ -326,5 +333,29 @@ internal class AuthorizationFilterTest {
             servletResponse.outputStream.write(any() as ByteArray)
             servletResponse.outputStream.flush()
         }
+    }
+
+    @Test
+    fun doFilterWhenInvalidPath() {
+        val authorization = mockk<Authorization>()
+        val filter = AuthorizationFilter(
+            InjectSecurityContextParser,
+            authorization,
+            ServletRequestParser(ServletRemoteIpResolver),
+        )
+        val servletRequest = mockk<HttpServletRequest> {
+            every { servletPath } returns "/public/../admin"
+        }
+        val servletResponse = mockk<HttpServletResponse> {
+            every { status = HttpStatus.BAD_REQUEST.value() } returns Unit
+        }
+        val filterChain = mockk<FilterChain>()
+        filter.doFilter(servletRequest, servletResponse, filterChain)
+
+        verify {
+            servletResponse.status = HttpStatus.BAD_REQUEST.value()
+        }
+        verify(exactly = 0) { filterChain.doFilter(any(), any()) }
+        verify(exactly = 0) { authorization.authorize(any(), any()) }
     }
 }
