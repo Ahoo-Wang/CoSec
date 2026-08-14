@@ -17,3 +17,6 @@ gradle-app.setting
 
 # Local planning drafts
 docs/superpowers/
+
+# Local Redis dump from cocache integration tests
+dump.rdb
