@@ -26,6 +26,9 @@ import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.PrincipalConverter
 import me.ahoo.cosec.token.SimpleTokenPrincipal
 import me.ahoo.cosec.token.SimpleTokenTenantPrincipal
+import me.ahoo.cosec.token.TokenExpiredException
+import me.ahoo.cosec.token.TokenVerificationException
+import java.util.Date
 
 /**
  * JWT utility functions.
@@ -52,6 +55,24 @@ object Jwts : PrincipalConverter {
     fun decode(token: String): DecodedJWT {
         val jwtToken = token.removeBearerPrefix()
         return jwtParser.decodeJwt(jwtToken)
+    }
+
+    /**
+     * Verifies exp/nbf time claims without verifying the signature.
+     * A token without exp is rejected: inject mode must never accept never-expiring tokens.
+     */
+    fun verifyTimeClaims(decodedJwt: DecodedJWT) {
+        val expiresAt = decodedJwt.expiresAt ?: throw TokenVerificationException()
+        if (expiresAt.before(Date())) {
+            throw TokenExpiredException()
+        }
+        verifyNotBefore(decodedJwt.notBefore)
+    }
+
+    private fun verifyNotBefore(notBefore: Date?) {
+        if (notBefore != null && notBefore.after(Date())) {
+            throw TokenVerificationException()
+        }
     }
 
     fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT): T {

@@ -13,12 +13,24 @@
 
 package me.ahoo.cosec.jwt
 
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.context.DefaultSecurityContextParser
+import me.ahoo.cosec.token.PrincipalConverter
 
 /**
  * Inject Security Context Parser .
- * WARNING: Without verify!!!
+ * WARNING: Signature is NOT verified - downstream services trust the gateway to have verified it.
+ * Time claims (exp/nbf) ARE verified: a gateway-rejected expired token must not stay valid forever here.
  *
  * @author ahoo wang
  */
-object InjectSecurityContextParser : DefaultSecurityContextParser(Jwts)
+object InjectSecurityContextParser : DefaultSecurityContextParser(InjectPrincipalConverter)
+
+private object InjectPrincipalConverter : PrincipalConverter {
+    override fun toPrincipal(accessToken: AccessToken): CoSecPrincipal {
+        val decodedAccessToken = Jwts.decode(accessToken.accessToken)
+        Jwts.verifyTimeClaims(decodedAccessToken)
+        return Jwts.toPrincipal(decodedAccessToken)
+    }
+}
