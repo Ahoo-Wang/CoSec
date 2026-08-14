@@ -138,7 +138,7 @@ cosec:
     enabled: false
   jwt:
     algorithm: hmac256
-    secret: FyN0Igd80Gas8stTavArGKOYnS9uLWGA_
+    secret: ${COSEC_JWT_SECRET:change-me-in-production}
   ip2region:
     enabled: false
   authorization:

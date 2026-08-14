@@ -49,7 +49,7 @@ import reactor.kotlin.core.publisher.toMono
 
 internal class ReactiveAuthorizationFilterTest {
     companion object {
-        val algorithm = Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLWGA_")
+        val algorithm = Algorithm.HMAC256("webflux-filter-test-secret")
         val jwtTokenConverter = JwtTokenConverter(MockIdGenerator.INSTANCE, algorithm)
         fun createAccessToken(principal: SimplePrincipal): String {
             return jwtTokenConverter.toToken(principal).accessToken

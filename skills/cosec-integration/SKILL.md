@@ -209,7 +209,7 @@ cosec:
     enabled: false          # Gateway relies on token injection from upstream
   jwt:
     algorithm: hmac256
-    secret: FyN0Igd80Gas8stTavArGKOYnS9uLWGA_
+    secret: ${COSEC_JWT_SECRET:change-me-in-production}
   authorization:
     local-policy:
       enabled: true

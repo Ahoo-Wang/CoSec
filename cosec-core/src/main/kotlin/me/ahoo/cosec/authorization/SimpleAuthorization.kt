@@ -58,19 +58,27 @@ class SimpleAuthorization(
 
     private data class RolePermissionEntry(val roleId: RoleId, val permission: Permission)
 
+    /**
+     * Deny-first evaluation: all DENY items are verified before any ALLOW item, first match wins.
+     *
+     * The incoming sequence is materialized once so every upstream condition (e.g. a policy-level
+     * rate limiter) is evaluated exactly once per authorization — including conditions positioned
+     * after a matching early DENY — meaning denied requests uniformly consume rate-limiter permits.
+     */
     private inline fun <T> evaluateDenyFirst(
         items: Sequence<T>,
         crossinline effectExtractor: (T) -> Effect,
         crossinline verifyItem: (T) -> VerifyResult,
         crossinline onMatch: (T, VerifyResult) -> VerifyContext
     ): VerifyContext? {
-        items.filter { effectExtractor(it) == Effect.DENY }.forEach { item ->
+        val (denyItems, allowItems) = items.partition { effectExtractor(it) == Effect.DENY }
+        denyItems.forEach { item ->
             val result = verifyItem(item)
             if (result == VerifyResult.EXPLICIT_DENY) {
                 return onMatch(item, result)
             }
         }
-        items.filter { effectExtractor(it) == Effect.ALLOW }.forEach { item ->
+        allowItems.forEach { item ->
             val result = verifyItem(item)
             if (result == VerifyResult.ALLOW) {
                 return onMatch(item, result)

@@ -52,11 +52,13 @@ class RedisPolicyRepository(
             }
             DefaultPolicyEvaluator.evaluate(policy)
             policyCache[policy.id] = policy
+            val globalPolicies = globalPolicyIndexCache[CACHE_KEY]
             if (policy.type == PolicyType.GLOBAL) {
-                val globalPolicies = globalPolicyIndexCache[CACHE_KEY] ?: emptySet()
-                if (globalPolicies.contains(policy.id).not()) {
-                    globalPolicyIndexCache[CACHE_KEY] = globalPolicies + policy.id
+                if (globalPolicies == null || globalPolicies.contains(policy.id).not()) {
+                    globalPolicyIndexCache[CACHE_KEY] = (globalPolicies ?: emptySet()) + policy.id
                 }
+            } else if (globalPolicies != null && globalPolicies.contains(policy.id)) {
+                globalPolicyIndexCache[CACHE_KEY] = globalPolicies - policy.id
             }
         }
     }

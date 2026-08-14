@@ -39,5 +39,5 @@ fun TokenVerificationException.toAuthorizeResult(): AuthorizeResult {
     if (this is TokenExpiredException) {
         return AuthorizeResult.TOKEN_EXPIRED
     }
-    return AuthorizeResult.deny(this.message ?: "Token Invalid")
+    return AuthorizeResult.deny("Token Invalid")
 }

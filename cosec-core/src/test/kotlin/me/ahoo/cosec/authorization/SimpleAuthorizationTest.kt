@@ -32,6 +32,7 @@ import me.ahoo.cosec.permission.RolePermissionData
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
@@ -385,5 +386,42 @@ internal class SimpleAuthorizationTest {
             .test()
             .expectNext(AuthorizeResult.IMPLICIT_DENY)
             .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenPolicyConditionEvaluatedOnlyOnce() {
+        var matchCount = 0
+        val countingCondition = mockk<ConditionMatcher> {
+            every { match(any<Request>(), any<SecurityContext>()) } answers {
+                matchCount++
+                true
+            }
+        }
+        val globalPolicy = mockk<Policy> {
+            every { id } returns "globalPolicy"
+            every { condition } returns countingCondition
+            every { statements } returns listOf(
+                StatementData(
+                    effect = Effect.ALLOW,
+                    action = AllActionMatcher.INSTANCE,
+                ),
+            )
+        }
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.just(listOf(globalPolicy))
+            every { getPolicies(any()) } returns Mono.empty()
+        }
+        val permissionRepository = mockk<AppRolePermissionRepository> {
+            every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
+        }
+        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
+        val request = mockk<Request>()
+
+        authorization.authorize(request, SimpleSecurityContext.anonymous())
+            .test()
+            .expectNext(AuthorizeResult.ALLOW)
+            .verifyComplete()
+
+        matchCount.assert().isEqualTo(1)
     }
 }

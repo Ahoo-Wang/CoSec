@@ -16,5 +16,6 @@ package me.ahoo.cosec.jwt
 import com.auth0.jwt.algorithms.Algorithm
 
 object JwtFixture {
-    var ALGORITHM = Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLWGA_")
+    const val TEST_JWT_SECRET = "jwt-fixture-test-secret"
+    var ALGORITHM = Algorithm.HMAC256(TEST_JWT_SECRET)
 }
