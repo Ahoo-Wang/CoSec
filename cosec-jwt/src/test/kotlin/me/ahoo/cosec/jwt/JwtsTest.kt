@@ -44,6 +44,15 @@ class JwtsTest {
     }
 
     @Test
+    fun verifyTimeClaimsWhenNotBeforeInPast() {
+        val token = signToken(
+            expiresAt = Date(System.currentTimeMillis() + 60_000),
+            notBefore = Date(System.currentTimeMillis() - 60_000),
+        )
+        Jwts.verifyTimeClaims(Jwts.decode(token))
+    }
+
+    @Test
     fun verifyTimeClaimsWhenNotBeforeInFuture() {
         val token = signToken(
             expiresAt = Date(System.currentTimeMillis() + 60_000),

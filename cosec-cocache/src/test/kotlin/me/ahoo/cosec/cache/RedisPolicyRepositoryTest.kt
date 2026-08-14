@@ -75,6 +75,19 @@ internal class RedisPolicyRepositoryTest {
     }
 
     @Test
+    fun getPoliciesWhenCacheMiss() {
+        // A policy id missing from the cache is silently dropped from the result.
+        val policyCache = mockk<PolicyCache>()
+        every { policyCache.get("policyId") } returns policyData
+        every { policyCache.get("unknownPolicyId") } returns null
+        val policyRepository = RedisPolicyRepository(mockk(), policyCache)
+        policyRepository.getPolicies(setOf("policyId", "unknownPolicyId"))
+            .test()
+            .expectNext(listOf(policyData))
+            .verifyComplete()
+    }
+
+    @Test
     fun setPolicy() {
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
         every { globalPolicyIndexCache.get(CACHE_KEY) } returns setOf()

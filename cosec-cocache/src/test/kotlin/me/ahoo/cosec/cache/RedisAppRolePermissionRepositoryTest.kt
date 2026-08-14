@@ -27,6 +27,24 @@ class RedisAppRolePermissionRepositoryTest {
     }
 
     @Test
+    fun getRolePermissionsWhenRolePermissionMissing() {
+        val appPermission = AppPermissionData("appId", groups = listOf())
+        val appPermissionCache = mockk<AppPermissionCache>()
+        every { appPermissionCache.get("appId") } returns appPermission
+
+        val rolePermissionCache = mockk<RolePermissionCache>()
+        every { rolePermissionCache.get("roleId".toSpacedRoleId()) } returns null
+
+        val permissionRepository = RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
+        permissionRepository.getAppRolePermission("appId", "", setOf("roleId"))
+            .test()
+            .consumeNextWith {
+                assertThat(it.rolePermissions, equalTo(emptyList()))
+            }
+            .verifyComplete()
+    }
+
+    @Test
     fun getRolePermissions() {
         val permission = PermissionData(
             id = UUID.randomUUID().toString(),
