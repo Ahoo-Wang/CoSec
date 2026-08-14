@@ -35,6 +35,7 @@ object RequestPaths {
         val decodedPath = try {
             UriUtils.decode(path, Charsets.UTF_8)
         } catch (_: IllegalArgumentException) {
+            // fail-closed: a malformed percent-escape is never a safe traversal-clean path.
             return true
         }
         return decodedPath.split('/').any { it == "." || it == ".." }
