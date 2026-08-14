@@ -17,9 +17,11 @@ import io.mockk.every
 import io.mockk.mockk
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.context.request.RequestIdCapable
+import me.ahoo.cosec.context.request.InvalidRequestPathException
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.springframework.http.HttpHeaders
 
 internal class ServletRequestParserTest {
@@ -38,5 +40,14 @@ internal class ServletRequestParserTest {
         val request = servletRequestParser.parse(servletRequest)
         assertThat(request.path, equalTo("/path"))
         assertThat(request.method, equalTo("GET"))
+    }
+
+    @Test
+    fun parseWhenTraversalPath() {
+        val servletRequest = mockk<HttpServletRequest> {
+            every { servletPath } returns "/public/../admin"
+        }
+        val parser = ServletRequestParser(ServletRemoteIpResolver)
+        assertThrows<InvalidRequestPathException> { parser.parse(servletRequest) }
     }
 }

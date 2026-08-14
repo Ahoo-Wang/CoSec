@@ -13,13 +13,17 @@
 
 package me.ahoo.cosec.webflux
 
+import me.ahoo.cosec.context.request.InvalidRequestPathException
 import me.ahoo.cosec.context.request.XForwardedRemoteIpResolver.Companion.X_FORWARDED_FOR
 import org.hamcrest.MatcherAssert.*
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.springframework.http.HttpMethod
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.server.MockServerWebExchange
 import java.net.InetSocketAddress
+import java.net.URI
 
 internal class ReactiveRequestParserTest {
 
@@ -33,5 +37,15 @@ internal class ReactiveRequestParserTest {
         val request = requestParser.parse(serverWebExchange)
         assertThat(request.path, `is`("/path"))
         assertThat(request.method, `is`("GET"))
+    }
+
+    @Test
+    fun parseWhenTraversalPath() {
+        // MockServerHttpRequest.get(String) treats the string as a URI template and re-encodes
+        // '%' to '%25'; a pre-encoded URI mirrors what a real server delivers to the parser.
+        val serverRequest = MockServerHttpRequest.method(HttpMethod.GET, URI.create("/public/%2e%2e/admin")).build()
+        val exchange = MockServerWebExchange.builder(serverRequest).build()
+        val parser = ReactiveRequestParser(ReactiveRemoteIpResolver)
+        assertThrows<InvalidRequestPathException> { parser.parse(exchange) }
     }
 }

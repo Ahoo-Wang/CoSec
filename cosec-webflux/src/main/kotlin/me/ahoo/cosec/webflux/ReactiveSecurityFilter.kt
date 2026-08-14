@@ -21,6 +21,7 @@ import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_K
 import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.context.request.InvalidRequestPathException
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
@@ -68,7 +69,12 @@ abstract class ReactiveSecurityFilter(
         exchange: ServerWebExchange,
         chain: (ServerWebExchange, Request) -> Mono<Void>
     ): Mono<Void> {
-        val request = requestParser.parse(exchange)
+        val request = try {
+            requestParser.parse(exchange)
+        } catch (_: InvalidRequestPathException) {
+            exchange.response.statusCode = HttpStatus.BAD_REQUEST
+            return Mono.empty()
+        }
         var tokenVerificationException: TokenVerificationException? = null
         val securityContext =
             try {

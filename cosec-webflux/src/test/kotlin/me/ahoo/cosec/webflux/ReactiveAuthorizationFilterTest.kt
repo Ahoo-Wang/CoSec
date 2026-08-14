@@ -342,4 +342,21 @@ internal class ReactiveAuthorizationFilterTest {
             exchange.response.writeWith(any())
         }
     }
+
+    @Test
+    fun filterWhenInvalidPath() {
+        val authorization = mockk<Authorization>()
+        val filter = ReactiveAuthorizationFilter(
+            InjectSecurityContextParser,
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
+            authorization,
+        )
+        val serverRequest = MockServerHttpRequest.get("/public/../admin").build()
+        val exchange = MockServerWebExchange.builder(serverRequest).build()
+        val filterChain = mockk<WebFilterChain>()
+        filter.filter(exchange, filterChain).block()
+
+        exchange.response.statusCode.assert().isEqualTo(HttpStatus.BAD_REQUEST)
+        verify(exactly = 0) { authorization.authorize(any(), any()) }
+    }
 }

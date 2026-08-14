@@ -18,6 +18,7 @@ import me.ahoo.cosec.api.context.request.RequestIdCapable
 import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.context.request.RequestAttributesAppender
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.context.request.RequestPaths
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.jvm.UuidGenerator
 import org.springframework.http.HttpHeaders
@@ -31,9 +32,11 @@ class ReactiveRequestParser(
 ) :
     RequestParser<ServerWebExchange> {
     override fun parse(request: ServerWebExchange): Request {
+        val path = request.request.path.value()
+        RequestPaths.requireSafe(path)
         var cosecRequest: Request = ReactiveRequest(
             delegate = request,
-            path = request.request.path.value(),
+            path = path,
             method = request.request.method.name(),
             remoteIp = remoteIpResolver.resolve(request),
             origin = URI.create(request.request.headers.origin.orEmpty()),

@@ -24,6 +24,7 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.context.request.InvalidRequestPathException
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
@@ -67,6 +68,9 @@ class AuthorizationFilter(
                 if (!authorize(httpServletRequest, httpServletResponse)) {
                     return
                 }
+            } catch (_: InvalidRequestPathException) {
+                httpServletResponse.status = HttpStatus.BAD_REQUEST.value()
+                return
             } catch (tooManyRequestsException: TooManyRequestsException) {
                 response.status = HttpStatus.TOO_MANY_REQUESTS.value()
                 httpServletResponse.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)

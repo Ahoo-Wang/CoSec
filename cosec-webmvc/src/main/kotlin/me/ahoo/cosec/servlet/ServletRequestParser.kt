@@ -18,6 +18,7 @@ import me.ahoo.cosec.api.context.request.RequestIdCapable
 import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.context.request.RequestAttributesAppender
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.context.request.RequestPaths
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.jvm.UuidGenerator
 import org.springframework.http.HttpHeaders
@@ -34,6 +35,7 @@ class ServletRequestParser(
     private val idGenerator: IdGenerator = UuidGenerator.INSTANCE
 ) : RequestParser<HttpServletRequest> {
     override fun parse(request: HttpServletRequest): Request {
+        RequestPaths.requireSafe(request.servletPath)
         var cosecRequest: Request = CoSecServletRequest(
             delegate = request,
             path = request.servletPath,
