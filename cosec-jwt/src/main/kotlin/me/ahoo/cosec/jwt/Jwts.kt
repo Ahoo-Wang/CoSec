@@ -60,6 +60,8 @@ object Jwts : PrincipalConverter {
     /**
      * Verifies exp/nbf time claims without verifying the signature.
      * A token without exp is rejected: inject mode must never accept never-expiring tokens.
+     * Comparison uses millisecond precision — strictly tighter than java-jwt's verified path,
+     * which truncates now to whole seconds. Do not soften this without re-reading the design note.
      */
     fun verifyTimeClaims(decodedJwt: DecodedJWT) {
         val expiresAt = decodedJwt.expiresAt ?: throw TokenVerificationException()
