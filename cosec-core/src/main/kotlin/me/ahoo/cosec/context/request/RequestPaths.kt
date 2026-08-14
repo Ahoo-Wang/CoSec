@@ -19,6 +19,9 @@ import org.springframework.web.util.UriUtils
  * Guards request paths against traversal segments before any authorization matching:
  * matching machinery percent-decodes segments, so an encoded `..` would otherwise be
  * authorized under a public wildcard pattern and normalized by the downstream container.
+ *
+ * Guarding scope is single-decode: double-encoded sequences (e.g. `%252e%252e`) decode to
+ * literals here exactly as they do in the downstream matchers, so they stay out of scope by design.
  */
 object RequestPaths {
 

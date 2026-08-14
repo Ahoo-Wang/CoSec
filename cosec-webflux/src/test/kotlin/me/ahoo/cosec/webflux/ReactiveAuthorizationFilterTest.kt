@@ -380,5 +380,7 @@ internal class ReactiveAuthorizationFilterTest {
 
         exchange.response.statusCode.assert().isEqualTo(HttpStatus.BAD_REQUEST)
         verify(exactly = 0) { authorization.authorize(any(), any()) }
+        // A traversal path must not reach the filter chain.
+        verify(exactly = 0) { filterChain.filter(any()) }
     }
 }
