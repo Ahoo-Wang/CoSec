@@ -202,6 +202,8 @@ internal class AuthorizationFilterTest {
             servletResponse.outputStream.write(any() as ByteArray)
             servletResponse.outputStream.flush()
         }
+        // The request was denied by the rate limiter, so it must not reach the filter chain.
+        verify(exactly = 0) { filterChain.doFilter(any(), any()) }
     }
 
     @Test
@@ -246,6 +248,8 @@ internal class AuthorizationFilterTest {
         }
         // A ReDoS-guard trip is an expected deny, not a server error, and must clean up the context.
         assertThat(SecurityContextHolder.context, nullValue())
+        // The request was denied by the ReDoS guard, so it must not reach the filter chain.
+        verify(exactly = 0) { filterChain.doFilter(any(), any()) }
     }
 
     @Test

@@ -70,11 +70,13 @@ class AuthorizationFilter(
             } catch (tooManyRequestsException: TooManyRequestsException) {
                 response.status = HttpStatus.TOO_MANY_REQUESTS.value()
                 httpServletResponse.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
+                return
             } catch (regexTimeoutException: RegexTimeoutException) {
                 // A regex condition exceeding its time budget (ReDoS guard) is an expected, fail-closed
                 // authorization outcome -> deny, not a 5xx server error (which would invite client retries).
                 httpServletResponse.status = HttpStatus.FORBIDDEN.value()
                 httpServletResponse.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
+                return
             } catch (cause: Exception) {
                 log.error(cause) {
                     "Unexpected error during authorization of request [${httpServletRequest.servletPath}] [${httpServletRequest.method}]."
