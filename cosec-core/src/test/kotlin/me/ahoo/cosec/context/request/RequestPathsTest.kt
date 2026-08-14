@@ -49,6 +49,9 @@ class RequestPathsTest {
             "/admin",
             "/api/users%20123",
             "/api/users/123",
+            // Single-decode scope by design: double-encoded segments decode to literals,
+            // in the guard exactly as in the downstream matchers.
+            "/public/%252e%252e/admin",
         ],
     )
     fun requireSafeWhenNormal(path: String) {
