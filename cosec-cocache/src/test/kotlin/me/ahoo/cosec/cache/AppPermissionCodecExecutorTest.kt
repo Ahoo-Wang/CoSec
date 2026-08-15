@@ -70,7 +70,7 @@ internal class AppPermissionCodecExecutorTest {
         val key = "app:" + MockIdGenerator.INSTANCE.generateAsString()
         val cacheValue: CacheValue<AppPermission> = DefaultCacheValue.forever(appPermission)
         codecExecutor.executeAndEncode(key, cacheValue)
-        val value = codecExecutor.executeAndDecode(key, ComputedTtlAt.FOREVER).value
+        val value = requireNotNull(codecExecutor.executeAndDecode(key, ComputedTtlAt.FOREVER)).value
         assertThat(value, `is`(appPermission))
     }
 
