@@ -70,7 +70,7 @@ internal class PolicyCodecExecutorTest {
         val key = "policy:" + MockIdGenerator.INSTANCE.generateAsString()
         val cacheValue: CacheValue<Policy> = DefaultCacheValue.forever(policy)
         codecExecutor.executeAndEncode(key, cacheValue)
-        val value = codecExecutor.executeAndDecode(key, ComputedTtlAt.FOREVER).value
+        val value = requireNotNull(codecExecutor.executeAndDecode(key, ComputedTtlAt.FOREVER)).value
         assertThat(value, `is`(policy))
     }
 
