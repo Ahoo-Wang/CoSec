@@ -35,6 +35,9 @@ interface RoleIdCapable {
  *
  * @see RoleIdCapable
  * @see SpaceIdCapable
+ *
+ * Cache-key representation only: role IDs never contain '@' (see [RoleCapable.roles]),
+ * so the `roleId@spaceId` encoding is unambiguous.
  */
 data class SpacedRoleId(
     override val roleId: RoleId,
@@ -85,6 +88,11 @@ data class SpacedRoleId(
 interface RoleCapable {
     /**
      * The set of role IDs assigned to this principal.
+     *
+     * Contract: role IDs are globally unique and never contain '@'.
+     * Role permissions are stored per space under (roleId, spaceId); the request's
+     * spaceId selects the evaluation context—it chooses among defined scopes,
+     * it does not expand grants.
      *
      * @return Set of role identifiers
      */
