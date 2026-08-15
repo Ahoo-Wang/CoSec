@@ -20,6 +20,7 @@ import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.token.SimpleAccessToken
 import me.ahoo.cosec.token.SimpleCompositeToken
 import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.token.TokenVerificationException
@@ -42,6 +43,14 @@ class JwtTokenVerifierTest {
         val token: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
         val principal: TokenTenantPrincipal = jwtTokenVerifier.verify(token)
         assertThat(principal.name, equalTo(CoSecPrincipal.ANONYMOUS_ID))
+    }
+
+    @Test
+    fun verifyWhenExpiresAtMissing() {
+        val token = JWT.create().withSubject("subject").sign(JwtFixture.ALGORITHM)
+        assertThrows(TokenVerificationException::class.java) {
+            jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(token))
+        }
     }
 
     @Test
