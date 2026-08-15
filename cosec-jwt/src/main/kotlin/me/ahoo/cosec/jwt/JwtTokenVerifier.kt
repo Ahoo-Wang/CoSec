@@ -37,7 +37,9 @@ import me.ahoo.cosec.token.TokenVerifier
 class JwtTokenVerifier(
     private val algorithm: Algorithm
 ) : TokenVerifier {
-    private val jwtVerifier: JWTVerifier = JWT.require(algorithm).build()
+    private val jwtVerifier: JWTVerifier = JWT.require(algorithm)
+        .withClaimPresence("exp")
+        .build()
 
     @Suppress("TooGenericExceptionCaught")
     private fun verify(accessToken: String): DecodedJWT {
