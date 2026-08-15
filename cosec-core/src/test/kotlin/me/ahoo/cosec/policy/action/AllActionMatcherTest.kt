@@ -44,4 +44,20 @@ internal class AllActionMatcherTest {
         }
         assertThat(allActionMatcher.match(postRequest, mockk()), `is`(false))
     }
+
+    @Test
+    fun matchMethodListLowerCase() {
+        val allActionMatcher =
+            AllActionMatcherFactory().create(
+                mapOf(ACTION_MATCHER_METHOD_KEY to listOf("get", "post")).asConfiguration()
+            )
+        val getRequest = mockk<Request> {
+            every { method } returns "GET"
+        }
+        assertThat(allActionMatcher.match(getRequest, mockk()), `is`(true))
+        val putRequest = mockk<Request> {
+            every { method } returns "PUT"
+        }
+        assertThat(allActionMatcher.match(putRequest, mockk()), `is`(false))
+    }
 }

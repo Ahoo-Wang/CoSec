@@ -30,7 +30,7 @@ abstract class AbstractActionMatcher(
             if (methodConfiguration.isString) {
                 return setOf(methodConfiguration.asString().uppercase())
             }
-            return methodConfiguration.asStringList().toSet()
+            return methodConfiguration.asStringList().map { it.uppercase() }.toSet()
         }
     }
 
