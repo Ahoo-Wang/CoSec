@@ -48,9 +48,11 @@ class JwtTokenVerifierTest {
     @Test
     fun verifyWhenExpiresAtMissing() {
         val token = JWT.create().withSubject("subject").sign(JwtFixture.ALGORITHM)
-        assertThrows(TokenVerificationException::class.java) {
+        val thrown = assertThrows(TokenVerificationException::class.java) {
             jwtTokenVerifier.verify<TokenPrincipal>(SimpleAccessToken(token))
         }
+        // Missing exp is an invalid token, not an expired one — pin the mapping.
+        assertFalse(thrown is TokenExpiredException)
     }
 
     @Test
