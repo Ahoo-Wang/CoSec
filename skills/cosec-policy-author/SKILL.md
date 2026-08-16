@@ -34,7 +34,7 @@ A policy file is a single JSON object placed in `src/main/resources/cosec-policy
 | `description` | No | Detailed description |
 | `type` | Yes | `global` (applies to all requests), `system` (system-level), or `custom` (user/role-specific) |
 | `tenantId` | Yes | Tenant scope. Use `(platform)` for global/system policies |
-| `condition` | No | Policy-level ConditionMatcher — if present and doesn't match, entire policy is skipped |
+| `condition` | No | Policy-level ConditionMatcher — if present and doesn't match, this policy is **skipped** (other policies still evaluate) |
 | `statements` | Yes | Array of Statement objects |
 
 ## Statement Structure
@@ -52,19 +52,21 @@ Each statement defines a single permission rule:
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `name` | No | — | Descriptive name for the statement |
+| `name` | No | `""` | Descriptive name for the statement |
 | `effect` | No | `"allow"` | `"allow"` or `"deny"`. DENY takes precedence over ALLOW |
 | `action` | Yes | — | ActionMatcher definition (see below) |
-| `condition` | No | — | ConditionMatcher definition (see below) |
+| `condition` | No | match-all | ConditionMatcher definition (see below) |
 
 ## Evaluation Order
 
-1. Policy-level condition checked first — if it doesn't match, the entire policy returns IMPLICIT_DENY
-2. **DENY statements evaluated first** — any match returns EXPLICIT_DENY immediately
-3. **ALLOW statements evaluated next** — any match returns ALLOW
-4. Default: IMPLICIT_DENY
+Within one evaluation tier (global policies, or principal-attached policies), CoSec pools **all statements from all policies whose policy-level condition matched**, then evaluates them deny-first:
 
-This means you should write DENY rules before ALLOW rules in the statements array for clarity, though the framework handles ordering internally.
+1. Policies whose policy-level `condition` doesn't match are skipped entirely — this does NOT deny the request
+2. **All DENY statements are checked first** — any match returns EXPLICIT_DENY immediately, even if an ALLOW statement in another policy would also match
+3. **ALLOW statements are checked next** — any match returns ALLOW
+4. If nothing matched in this tier, the next tier is tried; if no tier matches, the default is IMPLICIT_DENY
+
+A practical consequence: a DENY statement in ANY policy of the same tier overrides an ALLOW in ANY other policy. Write DENY statements before ALLOW rules in the statements array for readability, though the framework pools statements before evaluating.
 
 ## Action Matchers
 
@@ -92,7 +94,7 @@ Matches path segments. Access the variable in conditions via `request.path.var.i
 ```json
 "action": ["/auth/register", "/auth/login", "/auth/logout"]
 ```
-Matches if ANY path in the array matches.
+Matches if ANY path in the array matches. An array containing `"*"` matches all requests.
 
 ### Wildcard
 ```json
@@ -146,7 +148,7 @@ Matches all GET requests regardless of path.
 
 ## Condition Matchers
 
-The `condition` field adds additional constraints beyond path matching. All condition types:
+The `condition` field adds additional constraints beyond path matching. An omitted condition defaults to match-all (`all`). All condition types:
 
 ### authenticated — user must be logged in
 ```json
@@ -158,10 +160,11 @@ The `condition` field adds additional constraints beyond path matching. All cond
 "condition": { "inRole": { "value": "admin" } }
 ```
 
-### inTenant — request must be from the specified tenant
+### inTenant — request must be from the specified tenant type
 ```json
-"condition": { "inTenant": { "value": "tenant-abc" } }
+"condition": { "inTenant": { "value": "platform" } }
 ```
+`value` is a tenant **type** — `default`, `user`, or `platform` — not a tenant ID. Any other string makes the policy fail to load: the error is logged and the policy is **silently skipped** at startup, so its rules stop applying (watch for 403s).
 
 ### eq — exact value match
 ```json
@@ -174,11 +177,16 @@ The `condition` field adds additional constraints beyond path matching. All cond
 ```
 
 The `part` field is a path expression that extracts a value from the request or security context:
+- `request.path` — full request path
 - `request.path.var.{name}` — path variable
-- `request.remoteIp` — client IP
-- `request.origin` — request origin
 - `request.method` — HTTP method
+- `request.remoteIp` — client IP
+- `request.origin` — request origin; `request.origin.host` — origin host
+- `request.referer` — referer; `request.referer.host` — referer host
+- `request.appId` / `request.spaceId` / `request.deviceId` — request identifiers
+- `request.header.{name}` — request header (singular `header`)
 - `request.attributes.{key}` — request attributes (e.g., `request.attributes.ipRegion`)
+- `context.tenantId` — current tenant ID
 - `context.principal.id` — current user ID
 - `context.principal.attributes.{key}` — principal attributes
 
@@ -274,16 +282,19 @@ All items in `and` must match. At least one item in `or` must match. Both are op
   }
 }
 ```
+When the limit is exceeded the request fails with TOO_MANY_REQUESTS (HTTP 429) rather than a normal deny. `rateLimiter` creates a single limiter shared by all matching requests; `groupedRateLimiter` creates one per group value. Both are in-memory and per-JVM-instance — `cosec-cocache` provides **no** rate limiting (it only caches policies/permissions/tokens), so a limit shared across instances requires a custom ConditionMatcher backed by Redis or another shared store.
 
-### groupedRateLimiter — grouped rate limiting
+### groupedRateLimiter — per-group rate limiting
 ```json
 "condition": {
   "groupedRateLimiter": {
+    "part": "context.principal.id",
     "permitsPerSecond": 100,
-    "groupKey": "context.principal.id"
+    "expireAfterAccessSecond": 60
   }
 }
 ```
+The group is selected by `part` (any valid part path, e.g. `context.principal.id` for per-user limits). Both `permitsPerSecond` and `expireAfterAccessSecond` (idle expiry of each group's limiter) are required. Exceeding the limit yields TOO_MANY_REQUESTS.
 
 ## Common Patterns
 
@@ -406,11 +417,12 @@ All items in `and` must match. At least one item in `or` must match. Both are op
 
 When reviewing a policy, check:
 
-1. **DENY before ALLOW** — while the framework handles ordering, writing DENY statements first improves readability
-2. **SpEL templates** — `#{principal.id}` is valid; `{principal.id}` is NOT (conflicts with path variables)
+1. **DENY before ALLOW** — DENY in any same-tier policy overrides ALLOW elsewhere; writing DENY statements first improves readability
+2. **SpEL templates** — `#{principal.id}` is valid; `{principal.id}` is NOT (it is parsed as a path variable or literal)
 3. **Path variables** — use `{varName}` syntax, access via `request.path.var.varName` in conditions
 4. **Wildcard with conditions** — `"action": "*"` alone allows everything; always pair with a condition
-5. **Negate logic** — `regular` matcher has `negate` field; other matchers don't
+5. **Negate logic** — every condition matcher accepts `negate: true` (handled centrally in `AbstractConditionMatcher`); `rateLimiter` is the only exception
 6. **Bool structure** — `and` and `or` are sibling fields, not nested
-7. **Part paths** — must be valid: `request.*`, `context.principal.*`, `request.path.var.*`, `request.attributes.*`
+7. **Part paths** — must be valid (singular `request.header.{name}`, not `request.headers.{name}`); invalid parts throw `IllegalArgumentException` at evaluation time
 8. **Policy type** — `global` policies apply to all requests; `custom` policies are attached to specific users/roles
+9. **groupedRateLimiter** — requires `part`, `permitsPerSecond`, and `expireAfterAccessSecond`; there is no `groupKey` field

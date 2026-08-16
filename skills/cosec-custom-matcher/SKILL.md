@@ -13,7 +13,7 @@ Policy matching has two sides:
 - **ActionMatcher** — determines if a request's action (path + method) matches a policy pattern
 - **ConditionMatcher** — determines if contextual conditions are met (user attributes, request properties, etc.)
 
-Both extend `RequestMatcher` and are created by corresponding factory classes registered via SPI.
+Both extend `RequestMatcher`. The matcher interfaces live in `cosec-api` (`me.ahoo.cosec.api.policy`); the factory interfaces live in `cosec-core` (`me.ahoo.cosec.policy.action` / `me.ahoo.cosec.policy.condition`), and factory implementations are discovered via Java SPI (ServiceLoader).
 
 ```
 Policy
@@ -55,7 +55,7 @@ class PremiumUserConditionMatcher(
 Key points:
 - `type` — unique string identifier used in policy JSON
 - `configuration` — arbitrary key-value config passed from the policy JSON
-- `match()` — return `true` if the condition is satisfied
+- `match()` — return `true` if the condition is satisfied. Throwing here fails the evaluation, so prefer returning `false` for non-matches and reserve exceptions for genuine misconfiguration (the built-in rate limiter, for example, throws to signal TOO_MANY_REQUESTS)
 
 ### Step 2: Implement the Factory
 
@@ -111,7 +111,7 @@ With configuration:
 
 Access configuration in the matcher:
 ```kotlin
-val minTier = configuration.getRequiredString("minTier")
+val minTier = configuration.getRequired("minTier").asString()
 ```
 
 ## Creating a Custom ActionMatcher
@@ -132,7 +132,8 @@ class HttpMethodActionMatcher(
 
     override val type: String = "httpMethod"
 
-    private val allowedMethods: Set<String> = configuration.getRequiredString("methods")
+    private val allowedMethods: Set<String> = configuration.getRequired("methods")
+        .asString()
         .split(",")
         .map { it.trim().uppercase() }
         .toSet()
@@ -185,17 +186,25 @@ com.example.cosec.action.HttpMethodActionMatcherFactory
 
 ## Accessing Configuration Values
 
-The `Configuration` interface provides typed accessors:
+The `Configuration` interface is a tree of typed nodes — there are no convenience accessors like `getRequiredString`; chain a `get`/`getRequired` with an `as*` conversion:
 
 ```kotlin
-// Required (throws if missing)
-val value: String = configuration.getRequiredString("key")
+// Required (getRequired throws IllegalArgumentException if missing)
+val value: String = configuration.getRequired("key").asString()
+val count: Int = configuration.getRequired("key").asInt()
 
 // Optional with default
-val value: String = configuration.get("key", "default")
+val value: String = configuration.get("key")?.asString() ?: "default"
 
-// Nested configuration
-val nested: Configuration = configuration.getRequiredConfiguration("nested")
+// Nested configuration (getRequired returns a Configuration directly)
+val nested: Configuration = configuration.getRequired("nested")
+
+// Collections
+val list: List<String> = configuration.getRequired("tags").asStringList()
+val map: Map<String, String> = configuration.getRequired("labels").asStringMap()
+
+// Existence check
+if (configuration.has("key")) { ... }
 ```
 
 ## Accessing Request and Context Data
@@ -205,8 +214,8 @@ val nested: Configuration = configuration.getRequiredConfiguration("nested")
 request.path           // URL path
 request.method         // HTTP method
 request.remoteIp       // client IP
-request.origin         // Origin header
-request.referer        // Referer header
+request.origin         // Origin as URI; request.origin.host for the host part
+request.referer        // Referer as URI; request.referer.host for the host part
 request.appId          // application ID
 request.spaceId        // space ID
 request.deviceId       // device ID
@@ -222,11 +231,11 @@ securityContext.principal                    // CoSecPrincipal
 securityContext.principal.id                 // user ID
 securityContext.principal.authenticated      // boolean
 securityContext.principal.anonymous          // boolean
-securityContext.principal.roles              // Set<String>
-securityContext.principal.policies           // Set<String>
-securityContext.principal.attributes         // Map<String, String>
-securityContext.tenant                       // Tenant info
-securityContext.attributes                   // MutableMap<String, Any>
+securityContext.principal.roles              // Set<RoleId> (RoleCapable, RoleId = String)
+securityContext.principal.policies           // Set<String> of attached policy IDs (PolicyCapable)
+securityContext.principal.attributes         // Map<String, Any>
+securityContext.tenant                       // Tenant (use .tenantId)
+securityContext.attributes                   // MutableMap<String, Any> (carries path variables etc.)
 ```
 
 ## Built-in ConditionMatcher Types Reference
@@ -235,9 +244,10 @@ For reference, here are all built-in types:
 
 | Type | Description | Key Config |
 |------|-------------|------------|
+| `all` | Match all (the default when `condition` is omitted) | — |
 | `authenticated` | User must be logged in | — |
 | `inRole` | User must have role | `value`: role name |
-| `inTenant` | Must be from tenant | `value`: tenant ID |
+| `inTenant` | Must be from tenant type | `value`: `default` / `user` / `platform` |
 | `eq` | Exact match | `part`, `value` |
 | `contains` | Substring match | `part`, `value` |
 | `startsWith` | Prefix match | `part`, `value` |
@@ -249,7 +259,11 @@ For reference, here are all built-in types:
 | `spel` | Spring Expression | `expression` |
 | `ognl` | OGNL expression | `expression` |
 | `rateLimiter` | Rate limiting | `permitsPerSecond` |
-| `groupedRateLimiter` | Grouped rate limit | `permitsPerSecond`, `groupKey` |
+| `groupedRateLimiter` | Grouped rate limit | `part`, `permitsPerSecond`, `expireAfterAccessSecond` |
+
+`negate: true` is accepted by **every** condition matcher above (it is handled centrally in `AbstractConditionMatcher`, not just by `regular`); `rateLimiter` is the only one without it.
+
+Avoid redefining these type names — SPI registration and Spring registration both key off the `type` string, and a duplicate overrides the built-in factory.
 
 ## Built-in ActionMatcher Types Reference
 
@@ -261,7 +275,7 @@ For reference, here are all built-in types:
 
 ## Spring Registration (Alternative to SPI)
 
-You can also register matcher factories as Spring beans. The `MatcherFactoryRegister` auto-configuration picks them up from the `ApplicationContext`:
+You can also register matcher factories as Spring beans. The `MatcherFactoryRegister` lifecycle bean picks up every `ConditionMatcherFactory` / `ActionMatcherFactory` bean from the `ApplicationContext` at startup:
 
 ```kotlin
 @Configuration

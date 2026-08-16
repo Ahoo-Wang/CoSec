@@ -16,7 +16,7 @@ CoSec modules are published to Maven Central under the `me.ahoo.cosec` group. Us
 ```kotlin
 // gradle/libs.versions.toml
 [versions]
-cosec = "4.3.6"  // check latest at https://central.sonatype.com/artifact/me.ahoo.cosec/cosec-bom
+cosec = "4.9.0"  // check latest at https://central.sonatype.com/artifact/me.ahoo.cosec/cosec-bom
 
 [libraries]
 cosec-bom = { module = "me.ahoo.cosec:cosec-bom", version.ref = "cosec" }
@@ -53,7 +53,7 @@ dependencies {
         <dependency>
             <groupId>me.ahoo.cosec</groupId>
             <artifactId>cosec-bom</artifactId>
-            <version>4.3.6</version>
+            <version>4.9.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -96,7 +96,7 @@ dependencies {
 cosec:
   enabled: true                        # master switch (default: true)
   authentication:
-    enabled: true                      # enable authentication
+    enabled: true                      # enable authentication (default: true)
   authorization:
     enabled: true                      # enable authorization (default: true)
     local-policy:
@@ -104,7 +104,7 @@ cosec:
       locations: classpath:cosec-policy/*-policy.json
       init-repository: true            # push local policies to repository on startup
   jwt:
-    algorithm: hmac256                 # hmac256, hmac384, hmac512, rsa256, etc.
+    algorithm: hmac256                 # hmac256 (default), hmac384, hmac512
     secret: your-256-bit-secret-key    # required for HMAC algorithms
 ```
 
@@ -113,15 +113,21 @@ cosec:
 | Property | Default | Description |
 |----------|---------|-------------|
 | `cosec.enabled` | `true` | Master enable/disable switch |
-| `cosec.authentication.enabled` | — | Enable/disable authentication |
+| `cosec.authentication.enabled` | `true` | Enable/disable authentication |
 | `cosec.authorization.enabled` | `true` | Enable/disable authorization |
 | `cosec.authorization.local-policy.enabled` | `false` | Load policies from local JSON files |
 | `cosec.authorization.local-policy.locations` | `classpath:cosec-policy/*-policy.json` | Resource patterns for policy files |
 | `cosec.authorization.local-policy.init-repository` | `false` | Push local policies to repository on startup |
-| `cosec.jwt.algorithm` | — | JWT algorithm (hmac256, rsa256, etc.) |
-| `cosec.jwt.secret` | — | JWT secret key (for HMAC algorithms) |
-| `cosec.ip2region.enabled` | `false` | Enable IP geolocation |
-| `cosec.openapi.enabled` | `false` | Enable OpenAPI integration |
+| `cosec.authorization.local-policy.force-refresh` | `false` | Force-refresh repository policies on init |
+| `cosec.authorization.remote-ip.max-trusted-index` | `1` | Trusted proxy hops for X-Forwarded-For resolution; `0` ignores the header |
+| `cosec.jwt.enabled` | `true` | Enable JWT auto-configuration |
+| `cosec.jwt.algorithm` | `hmac256` | JWT algorithm (`hmac256`, `hmac384`, `hmac512` — RSA is not supported) |
+| `cosec.jwt.secret` | — | JWT secret key (required for HMAC algorithms) |
+| `cosec.jwt.token-validity.access` | `10m` | Access token time-to-live |
+| `cosec.jwt.token-validity.refresh` | `7d` | Refresh token time-to-live |
+| `cosec.jwt.token-revocation.enabled` | `false` | Reject revoked tokens (logout support; back the revocation store with `cosec-cocache` for distributed setups) |
+| `cosec.ip2region.enabled` | `true` | Enable IP geolocation (takes effect when `cosec-ip2region` is on the classpath) |
+| `cosec.openapi.enabled` | `true` | Enable OpenAPI integration (takes effect when `cosec-openapi` is on the classpath) |
 
 ## Step 3: Create Policy Files
 
@@ -196,6 +202,7 @@ The auto-configuration automatically registers:
 - `SimpleAuthorization` for policy evaluation
 - `LocalPolicyLoader` / `LocalPolicyInitializer` for loading local policy files
 - JWT token converter and verifier (if `cosec-jwt` is on classpath)
+- Token revocation beans (`TokenStore` / `TokenRevoker` / `RevocableTokenVerifier`) — revocation takes effect only with `cosec.jwt.token-revocation.enabled=true` plus a Redis-backed store (`cosec-cocache`)
 - Request parsers for both reactive and servlet environments
 
 ## Gateway Server Reference
@@ -235,7 +242,7 @@ cosec:
   authorization:
     enabled: false            # disable only authorization
   jwt:
-    # not configuring jwt disables JWT auto-config
+    enabled: false            # disable JWT auto-config
   ip2region:
     enabled: false
 ```
@@ -247,4 +254,6 @@ Each auto-configuration class has a corresponding `@ConditionalOn*Enabled` annot
 - **403 on all requests**: Check that policy files exist and match the `locations` pattern. Enable debug logging: `logging.level.me.ahoo.cosec.authorization.SimpleAuthorization=debug`
 - **JWT token not recognized**: Verify `cosec.jwt.secret` and `cosec.jwt.algorithm` match what the token issuer uses
 - **Policies not loading**: Ensure `cosec.authorization.local-policy.enabled=true` and files are in the correct classpath location
-- **Root user bypasses everything**: This is by design. Root user ID defaults to `"cosec"` (configurable via `cosec.root` system property)
+- **Root user bypasses everything**: This is by design. Root user ID defaults to `"cosec"` (override with the `cosec.root` system property)
+
+For deeper debugging workflows, see the `cosec-troubleshoot` skill.

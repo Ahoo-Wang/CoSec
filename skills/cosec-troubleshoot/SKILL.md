@@ -5,7 +5,7 @@ description: "Use when diagnosing CoSec authentication or authorization failures
 
 # CoSec Troubleshooting Guide
 
-This skill helps you debug authorization issues in CoSec. When a request gets an unexpected result (403, 401, or is allowed when it shouldn't be), follow this systematic approach.
+This skill helps you debug authorization issues in CoSec. When a request gets an unexpected result (403, 401, 429, or is allowed when it shouldn't be), follow this systematic approach.
 
 ## Step 1: Enable Debug Logging
 
@@ -17,7 +17,7 @@ logging:
     me.ahoo.cosec.authorization.SimpleAuthorization: debug
 ```
 
-This logs the full evaluation chain: root check → blacklist → global policies → principal policies → role permissions → final result.
+This logs every matched statement, the policy/statement it came from, and the final result, e.g. `Verify [request] [context] matched Policy[globalPolicy] Statement[2][RequestOriginDeny] - [EXPLICIT_DENY].` (statement index is 0-based)
 
 For more granular tracing:
 ```yaml
@@ -30,34 +30,33 @@ logging:
 
 ## Step 2: Understand the Evaluation Order
 
-`SimpleAuthorization` evaluates in this order, stopping at the first definitive result:
+`SimpleAuthorization.authorize` evaluates in this order, falling through with `switchIfEmpty` when a step produces no match:
 
 ```
 1. Root user check
-   └─ If principal.id == "cosec" → ALLOW (bypass everything)
+   └─ If principal.id == root ID (default "cosec") → ALLOW (bypass everything)
 
 2. Blacklist check
    └─ If principal is blacklisted → EXPLICIT_DENY
 
 3. Global policies (type: "global")
-   └─ For each global policy:
-      a. Check policy-level condition → skip if no match
-      b. Check DENY statements → EXPLICIT_DENY if any matches
-      c. Check ALLOW statements → ALLOW if any matches
-   └─ First definitive result wins
+   └─ Skip policies whose policy-level condition doesn't match
+   └─ Pool ALL statements from ALL matched policies, then deny-first:
+      a. Check every DENY statement → EXPLICIT_DENY if any matches
+      b. Check every ALLOW statement → ALLOW if any matches
 
 4. Principal-specific policies
    └─ Policies attached to the user (via policy IDs on the principal)
-   └─ Same evaluation as global policies
+   └─ Same pooled deny-first evaluation as global policies
 
 5. Role-based app permissions
-   └─ Evaluate role permissions for the request's appId/spaceId
-   └─ Only applies when request has an appId
+   └─ Only when the principal has roles; permissions are looked up
+      by request.appId + request.spaceId, then evaluated deny-first
 
 6. Default → IMPLICIT_DENY
 ```
 
-Each step uses `switchIfEmpty` to fall through to the next if no match is found.
+Key consequence: a DENY statement in ANY policy of the same tier beats an ALLOW statement in ANY other policy of that tier — policy order within a tier does not matter.
 
 ## Step 3: Common Issues and Fixes
 
@@ -99,8 +98,8 @@ cosec:
 
 **Likely causes:**
 1. DENY statement doesn't match — check action pattern and condition
-2. Another ALLOW statement matches first (but DENY should take precedence)
-3. Root user bypass — check if the user ID is "cosec"
+2. An ALLOW statement in a LATER tier matches (tiers fall through: global → principal → role permissions) — a DENY only overrides ALLOW within the same tier
+3. Root user bypass — check if the user ID equals the root ID (default `"cosec"`, override with the `cosec.root` system property)
 
 **Debug:** Enable debug logging and check which statement matched.
 
@@ -110,9 +109,9 @@ cosec:
 
 **Likely causes:**
 1. `cosec.jwt.secret` doesn't match the token issuer's secret
-2. `cosec.jwt.algorithm` doesn't match the token's algorithm
-3. Token is expired
-4. Token format is wrong (not a standard JWT)
+2. `cosec.jwt.algorithm` doesn't match the token's algorithm (supported: `hmac256`, `hmac384`, `hmac512`)
+3. Token is expired (`token-validity.access` defaults to 10 minutes)
+4. Token was revoked (logout) while `cosec.jwt.token-revocation.enabled=true`
 
 **Check:**
 ```yaml
@@ -120,6 +119,11 @@ cosec:
   jwt:
     algorithm: hmac256    # must match the signing algorithm
     secret: exact-same-secret-used-by-issuer
+    token-validity:
+      access: 10m         # access token TTL
+      refresh: 7d         # refresh token TTL
+    token-revocation:
+      enabled: false      # when true, revoked (logged-out) tokens are rejected
 ```
 
 ### Policies not loading from local files
@@ -135,18 +139,18 @@ cosec:
 
 ### Rate limiter not working
 
-**Symptoms:** Rate limiting conditions are ignored.
+**Symptoms:** Limits are per-instance instead of shared across the cluster.
 
-**Cause:** Rate limiters require a shared state. In a distributed setup, you need Redis-backed caching (`cosec-cocache`).
+**Cause:** Both `rateLimiter` and `groupedRateLimiter` keep state in memory, per JVM instance — there is no built-in distributed limiter, and `cosec-cocache` does not provide one (it only caches policies/permissions/tokens).
 
-**Fix:** Add the cocache dependency and configure Redis.
+**Fix:** Implement a custom `ConditionMatcher` backed by a shared store such as Redis — see the `cosec-custom-matcher` skill. Also note: a tripped limiter produces `TOO_MANY_REQUESTS` (HTTP 429), not a plain 403.
 
 ### Path variables not matching
 
 **Symptoms:** `/user/123` doesn't match `/user/{id}`.
 
 **Check:**
-1. Use `{varName}` not `:varName` (Spring WebFlux style)
+1. Use `{varName}` — the `:varName` colon syntax is not supported by CoSec's path patterns
 2. Access the variable via `request.path.var.varName` in conditions
 3. Ensure the path pattern is correct (no trailing slash mismatch)
 
@@ -160,70 +164,99 @@ cosec:
 
 ### Condition part path is wrong
 
-**Symptoms:** Condition always returns false.
+**Symptoms:** Condition always returns false, or evaluation throws `IllegalArgumentException: Unsupported part`.
 
 **Valid part paths:**
+- `request.path` — full request path
 - `request.path.var.{name}` — path variable
-- `request.remoteIp` — client IP address
-- `request.origin` — Origin header
 - `request.method` — HTTP method
+- `request.remoteIp` — client IP address
+- `request.origin` — Origin; `request.origin.host` — origin host
+- `request.referer` — Referer; `request.referer.host` — referer host
+- `request.appId` / `request.spaceId` / `request.deviceId` — identifiers
+- `request.header.{name}` — request header (singular `header`)
 - `request.attributes.{key}` — request attributes
-- `request.headers.{name}` — request header
+- `context.tenantId` — tenant ID
 - `context.principal.id` — user ID
 - `context.principal.attributes.{key}` — principal attribute
 
 Common mistakes:
+- `request.headers.X-Foo` (wrong) → `request.header.X-Foo` (correct)
 - `request.ip` (wrong) → `request.remoteIp` (correct)
 - `principal.id` (wrong) → `context.principal.id` (correct)
 - `request.pathVariable.id` (wrong) → `request.path.var.id` (correct)
 
 ## Step 4: Testing Policies Locally
 
-### Unit test with SimpleAuthorization
+These patterns mirror the real tests in `cosec-core/src/test/kotlin/me/ahoo/cosec/authorization/SimpleAuthorizationTest.kt`.
+
+### Unit test a full authorization decision
 
 ```kotlin
 @Test
 fun `test policy evaluation`() {
-    val policyLoader = LocalPolicyLoader("classpath:cosec-policy/test-policy.json")
-    val policies = policyLoader.load()
+    val globalPolicy = mockk<Policy> {
+        every { id } returns "globalPolicy"
+        every { condition } returns AllConditionMatcher.INSTANCE
+        every { statements } returns listOf(
+            StatementData(
+                name = "PublicEndpoints",
+                effect = Effect.ALLOW,
+                action = PathActionMatcherFactory.INSTANCE
+                    .create(mapOf("pattern" to "/api/users/*").asConfiguration()),
+            ),
+        )
+    }
+    val policyRepository = mockk<PolicyRepository> {
+        every { getGlobalPolicy() } returns Mono.just(listOf(globalPolicy))
+        every { getPolicies(any()) } returns Mono.empty()
+    }
+    val permissionRepository = mockk<AppRolePermissionRepository> {
+        every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
+    }
 
-    val evaluator = DefaultPolicyEvaluator(policies)
-
+    val authorization = SimpleAuthorization(policyRepository, permissionRepository)
     val request = mockk<Request> {
         every { path } returns "/api/users/123"
         every { method } returns "GET"
-        every { remoteIp } returns "192.168.1.1"
+    }
+    // relaxed: evaluation writes path variables and the verify context into the context
+    val securityContext = mockk<SecurityContext>(relaxed = true) {
+        every { principal.id } returns "user-123"
     }
 
-    val principal = mockk<CoSecPrincipal> {
-        every { id } returns "user-123"
-        every { authenticated } returns true
-        every { roles } returns setOf("user")
-    }
-
-    val context = mockk<SecurityContext> {
-        every { this@mockk.principal } returns principal
-    }
-
-    val result = evaluator.evaluate(request, context)
-    assertThat(result.authorized).isTrue()
+    authorization.authorize(request, securityContext)
+        .test()
+        .expectNext(AuthorizeResult.ALLOW)
+        .verifyComplete()
 }
 ```
 
-### Test specific matcher
+Imports worth knowing: `me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration` for building matchers from maps, `me.ahoo.cosec.policy.StatementData` / `me.ahoo.cosec.policy.action.PathActionMatcherFactory` for real (non-mock) matchers, and `reactor.kotlin.test.test` for stepping through the `Mono`.
+
+### Smoke-test a local policy file
+
+`LocalPolicyLoader` takes a set of resource patterns and exposes loaded policies as a property; `DefaultPolicyEvaluator` is a stateless object that dry-runs every matcher of a policy against a mock request to surface configuration errors (it swallows rate-limit and regex-timeout errors):
+
+```kotlin
+val policies = LocalPolicyLoader(setOf("classpath:cosec-policy/test-policy.json")).policies
+policies.forEach { DefaultPolicyEvaluator.evaluate(it) }
+```
+
+### Test a specific matcher
 
 ```kotlin
 @Test
 fun `test path action matcher`() {
-    val factory = PathActionMatcherFactory()
-    val matcher = factory.create(Configuration.of("pattern" to "/api/users/*"))
+    val matcher = PathActionMatcherFactory.INSTANCE
+        .create(mapOf("pattern" to "/api/users/*").asConfiguration())
 
     val request = mockk<Request> {
         every { path } returns "/api/users/123"
         every { method } returns "GET"
     }
 
-    assertThat(matcher.match(request, mockk())).isTrue()
+    matcher.match(request, SimpleSecurityContext.anonymous()).assert().isTrue()
 }
 ```
 
@@ -253,7 +286,7 @@ fun whoami(exchange: ServerWebExchange): Mono<Map<String, Any?>> {
 | Result | `authorized` | Meaning |
 |--------|-------------|---------|
 | `ALLOW` | `true` | Explicitly allowed by a policy statement |
-| `EXPLICIT_DENY` | `false` | Explicitly denied by a DENY statement |
+| `EXPLICIT_DENY` | `false` | Explicitly denied by a DENY statement or blacklist |
 | `IMPLICIT_DENY` | `false` | No statement matched (default deny) |
 | `TOKEN_EXPIRED` | `false` | JWT token has expired |
 | `TOO_MANY_REQUESTS` | `false` | Rate limiter exceeded |
