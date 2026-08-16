@@ -202,7 +202,7 @@ The auto-configuration automatically registers:
 - `SimpleAuthorization` for policy evaluation
 - `LocalPolicyLoader` / `LocalPolicyInitializer` for loading local policy files
 - JWT token converter and verifier (if `cosec-jwt` is on classpath)
-- `TokenStore` / `TokenRevoker` / `RevocableTokenVerifier` for token revocation (if `cosec.jwt.token-revocation.enabled=true`)
+- Token revocation beans (`TokenStore` / `TokenRevoker` / `RevocableTokenVerifier`) — revocation takes effect only with `cosec.jwt.token-revocation.enabled=true` plus a Redis-backed store (`cosec-cocache`)
 - Request parsers for both reactive and servlet environments
 
 ## Gateway Server Reference

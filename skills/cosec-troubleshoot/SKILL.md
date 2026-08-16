@@ -17,7 +17,7 @@ logging:
     me.ahoo.cosec.authorization.SimpleAuthorization: debug
 ```
 
-This logs every matched statement, the policy/statement it came from, and the final result, e.g. `Verify [request] [context] matched Policy[globalPolicy] Statement[2][RequestOriginDeny] - [Explicit Deny].`
+This logs every matched statement, the policy/statement it came from, and the final result, e.g. `Verify [request] [context] matched Policy[globalPolicy] Statement[2][RequestOriginDeny] - [EXPLICIT_DENY].` (statement index is 0-based)
 
 For more granular tracing:
 ```yaml
@@ -139,18 +139,18 @@ cosec:
 
 ### Rate limiter not working
 
-**Symptoms:** Rate limiting conditions are ignored, or limits are per-instance instead of global.
+**Symptoms:** Limits are per-instance instead of shared across the cluster.
 
-**Cause:** Rate limiters keep state in memory. In a distributed setup, you need Redis-backed state (`cosec-cocache`).
+**Cause:** Both `rateLimiter` and `groupedRateLimiter` keep state in memory, per JVM instance — there is no built-in distributed limiter, and `cosec-cocache` does not provide one (it only caches policies/permissions/tokens).
 
-**Fix:** Add the cocache dependency and configure Redis. Also note: a tripped limiter produces `TOO_MANY_REQUESTS` (HTTP 429), not a plain 403.
+**Fix:** Implement a custom `ConditionMatcher` backed by a shared store such as Redis — see the `cosec-custom-matcher` skill. Also note: a tripped limiter produces `TOO_MANY_REQUESTS` (HTTP 429), not a plain 403.
 
 ### Path variables not matching
 
 **Symptoms:** `/user/123` doesn't match `/user/{id}`.
 
 **Check:**
-1. Use `{varName}` not `:varName` (Spring WebFlux style)
+1. Use `{varName}` — the `:varName` colon syntax is not supported by CoSec's path patterns
 2. Access the variable via `request.path.var.varName` in conditions
 3. Ensure the path pattern is correct (no trailing slash mismatch)
 

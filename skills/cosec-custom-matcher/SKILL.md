@@ -13,7 +13,7 @@ Policy matching has two sides:
 - **ActionMatcher** — determines if a request's action (path + method) matches a policy pattern
 - **ConditionMatcher** — determines if contextual conditions are met (user attributes, request properties, etc.)
 
-Both matcher interfaces live in `cosec-api` (`me.ahoo.cosec.api.policy`); the factories live in `cosec-core` (`me.ahoo.cosec.policy.action` / `me.ahoo.cosec.policy.condition`) and are created by factory classes registered via SPI.
+Both extend `RequestMatcher`. The matcher interfaces live in `cosec-api` (`me.ahoo.cosec.api.policy`); the factory interfaces live in `cosec-core` (`me.ahoo.cosec.policy.action` / `me.ahoo.cosec.policy.condition`), and factory implementations are discovered via Java SPI (ServiceLoader).
 
 ```
 Policy
@@ -244,9 +244,10 @@ For reference, here are all built-in types:
 
 | Type | Description | Key Config |
 |------|-------------|------------|
+| `all` | Match all (the default when `condition` is omitted) | — |
 | `authenticated` | User must be logged in | — |
 | `inRole` | User must have role | `value`: role name |
-| `inTenant` | Must be from tenant | `value`: tenant ID |
+| `inTenant` | Must be from tenant type | `value`: `default` / `user` / `platform` |
 | `eq` | Exact match | `part`, `value` |
 | `contains` | Substring match | `part`, `value` |
 | `startsWith` | Prefix match | `part`, `value` |
@@ -259,6 +260,8 @@ For reference, here are all built-in types:
 | `ognl` | OGNL expression | `expression` |
 | `rateLimiter` | Rate limiting | `permitsPerSecond` |
 | `groupedRateLimiter` | Grouped rate limit | `part`, `permitsPerSecond`, `expireAfterAccessSecond` |
+
+`negate: true` is accepted by **every** condition matcher above (it is handled centrally in `AbstractConditionMatcher`, not just by `regular`); `rateLimiter` is the only one without it.
 
 Avoid redefining these type names — SPI registration and Spring registration both key off the `type` string, and a duplicate overrides the built-in factory.
 

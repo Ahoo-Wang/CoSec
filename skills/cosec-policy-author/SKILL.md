@@ -148,7 +148,7 @@ Matches all GET requests regardless of path.
 
 ## Condition Matchers
 
-The `condition` field adds additional constraints beyond path matching. All condition types:
+The `condition` field adds additional constraints beyond path matching. An omitted condition defaults to match-all (`all`). All condition types:
 
 ### authenticated — user must be logged in
 ```json
@@ -160,10 +160,11 @@ The `condition` field adds additional constraints beyond path matching. All cond
 "condition": { "inRole": { "value": "admin" } }
 ```
 
-### inTenant — request must be from the specified tenant
+### inTenant — request must be from the specified tenant type
 ```json
-"condition": { "inTenant": { "value": "tenant-abc" } }
+"condition": { "inTenant": { "value": "platform" } }
 ```
+`value` is a tenant **type** — `default`, `user`, or `platform` — not a tenant ID. Any other string makes the policy fail to load: the error is logged and the policy is **silently skipped** at startup, so its rules stop applying (watch for 403s).
 
 ### eq — exact value match
 ```json
@@ -281,7 +282,7 @@ All items in `and` must match. At least one item in `or` must match. Both are op
   }
 }
 ```
-When the limit is exceeded the request fails with TOO_MANY_REQUESTS (HTTP 429) rather than a normal deny. Rate limiter state is in-memory; use `cosec-cocache` (Redis) for a shared limit across instances.
+When the limit is exceeded the request fails with TOO_MANY_REQUESTS (HTTP 429) rather than a normal deny. `rateLimiter` creates a single limiter shared by all matching requests; `groupedRateLimiter` creates one per group value. Both are in-memory and per-JVM-instance — `cosec-cocache` provides **no** rate limiting (it only caches policies/permissions/tokens), so a limit shared across instances requires a custom ConditionMatcher backed by Redis or another shared store.
 
 ### groupedRateLimiter — per-group rate limiting
 ```json
@@ -420,7 +421,7 @@ When reviewing a policy, check:
 2. **SpEL templates** — `#{principal.id}` is valid; `{principal.id}` is NOT (it is parsed as a path variable or literal)
 3. **Path variables** — use `{varName}` syntax, access via `request.path.var.varName` in conditions
 4. **Wildcard with conditions** — `"action": "*"` alone allows everything; always pair with a condition
-5. **Negate logic** — `regular` matcher has `negate` field; other matchers don't
+5. **Negate logic** — every condition matcher accepts `negate: true` (handled centrally in `AbstractConditionMatcher`); `rateLimiter` is the only exception
 6. **Bool structure** — `and` and `or` are sibling fields, not nested
 7. **Part paths** — must be valid (singular `request.header.{name}`, not `request.headers.{name}`); invalid parts throw `IllegalArgumentException` at evaluation time
 8. **Policy type** — `global` policies apply to all requests; `custom` policies are attached to specific users/roles
