@@ -82,4 +82,26 @@ class RevocableTokenVerifierTest {
             revocableTokenVerifier.refresh<TokenPrincipal>(compositeToken)
         }
     }
+
+    @Test
+    fun toPrincipalWhenNotRevoked() {
+        every { tokenVerifier.verify<TokenPrincipal>(accessToken) } returns tokenPrincipal
+        every { tokenVerifier.toPrincipal(accessToken) } returns tokenPrincipal
+        every { tokenStore.isRevoked("tokenId") } returns false
+
+        val actual = revocableTokenVerifier.toPrincipal(accessToken)
+
+        actual.assert().isSameAs(tokenPrincipal)
+    }
+
+    @Test
+    fun toPrincipalWhenRevoked() {
+        every { tokenVerifier.verify<TokenPrincipal>(accessToken) } returns tokenPrincipal
+        every { tokenVerifier.toPrincipal(accessToken) } returns tokenPrincipal
+        every { tokenStore.isRevoked("tokenId") } returns true
+
+        assertThrows<TokenRevokedException> {
+            revocableTokenVerifier.toPrincipal(accessToken)
+        }
+    }
 }

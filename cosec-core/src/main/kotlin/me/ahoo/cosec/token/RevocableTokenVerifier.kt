@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.token
 
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
@@ -20,9 +21,10 @@ import me.ahoo.cosec.api.token.TokenPrincipal
 /**
  * [TokenVerifier] decorator that rejects revoked tokens.
  *
- * Both the request path ([verify]) and the renewal path ([refresh]) consult the
- * [TokenStore] after the delegate succeeds, so a logged-out token cannot be
- * refreshed back to life either.
+ * Both the request path ([verify] and its [toPrincipal] alias used by
+ * [me.ahoo.cosec.context.SecurityContextParser]) and the renewal path ([refresh])
+ * consult the [TokenStore] after the delegate succeeds, so a logged-out token
+ * can neither authenticate nor be refreshed back to life.
  *
  * @param delegate the actual verification implementation
  * @param tokenStore the revocation store
@@ -38,6 +40,8 @@ class RevocableTokenVerifier(
         @Suppress("UNCHECKED_CAST")
         return tokenPrincipal as T
     }
+
+    override fun toPrincipal(accessToken: AccessToken): CoSecPrincipal = verify(accessToken)
 
     override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {
         val tokenPrincipal = delegate.refresh<TokenPrincipal>(token)

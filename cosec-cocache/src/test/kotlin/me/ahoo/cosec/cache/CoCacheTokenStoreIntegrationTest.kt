@@ -68,7 +68,7 @@ internal class CoCacheTokenStoreIntegrationTest {
             maximumSize = 1_000,
             expireUnit = TimeUnit.SECONDS,
             expireAfterWrite = 30,
-        ).toClientSideCache()
+        ).toClientSideCache(ttl = MISSING_GUARD_TTL.toSeconds(), ttlAmplitude = 0)
         val cacheConfiguration = CoherentCacheConfiguration<String, Boolean>(
             cacheName = "RevokedTokenCache",
             clientId = "CoCacheTokenStoreIntegrationTest",
@@ -104,6 +104,19 @@ internal class CoCacheTokenStoreIntegrationTest {
         tokenStore.isRevoked(MockIdGenerator.INSTANCE.generateAsString()).assert().isFalse()
     }
 
+    @Test
+    fun missingGuardExpiresAfterTtl() {
+        val tokenId = MockIdGenerator.INSTANCE.generateAsString()
+        tokenStore.isRevoked(tokenId).assert().isFalse()
+
+        val guardKey = KEY_PREFIX + tokenId
+        stringRedisTemplate.hasKey(guardKey).assert().isTrue()
+        stringRedisTemplate.getExpire(guardKey).assert().isGreaterThan(0)
+
+        Thread.sleep(MISSING_GUARD_TTL.toMillis() + MARGIN_MS)
+        stringRedisTemplate.hasKey(guardKey).assert().isFalse()
+    }
+
     private class IntegrationRevokedTokenCache(cache: CoherentCache<String, Boolean>) :
         RevokedTokenCache,
         Cache<String, Boolean> by cache
@@ -113,6 +126,7 @@ internal class CoCacheTokenStoreIntegrationTest {
         private const val DISTRIBUTED_TTL = 30L
         private const val DISTRIBUTED_TTL_AMPLITUDE = 10L
         private val REVOCATION_TTL = Duration.ofSeconds(1)
+        private val MISSING_GUARD_TTL = Duration.ofSeconds(2)
         private const val MARGIN_MS = 2_000L
     }
 }
