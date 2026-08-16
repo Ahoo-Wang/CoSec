@@ -7,6 +7,7 @@ me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfigurat
 me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.authorization.gateway.CoSecGatewayAuthorizationAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.inject.InjectSecurityContextAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.opentelemetry.CoSecOpenTelemetryAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionAutoConfiguration

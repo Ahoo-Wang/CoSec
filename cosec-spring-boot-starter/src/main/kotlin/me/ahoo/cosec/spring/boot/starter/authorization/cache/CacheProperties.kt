@@ -37,7 +37,9 @@ class CacheProperties(
     @NestedConfigurationProperty
     var policy: CacheConfiguration = CacheConfiguration(),
     @NestedConfigurationProperty
-    var role: CacheConfiguration = CacheConfiguration()
+    var role: CacheConfiguration = CacheConfiguration(),
+    @NestedConfigurationProperty
+    var token: CacheConfiguration = CacheConfiguration(expireAfterWrite = 30, maximumSize = 100_000),
 ) : EnabledCapable {
     companion object {
         const val PREFIX: String = AuthorizationProperties.PREFIX + ".cache"
@@ -47,6 +49,7 @@ class CacheProperties(
     val policyKeyPrefix: String = "$keyPrefix:policy:"
     val appPermissionKeyPrefix: String = "$keyPrefix:app:permission:"
     val rolePermissionKeyPrefix: String = "$keyPrefix:role:permission:"
+    val revokedTokenKeyPrefix: String = "$keyPrefix:token:revoked:"
 }
 
 data class CacheConfiguration(
