@@ -26,7 +26,7 @@ import me.ahoo.cosec.policy.condition.AllConditionMatcher
  * @param category Policy category for grouping
  * @param name Policy name
  * @param description Policy description
- * @param type Policy type (GLOBAL or APP)
+ * @param type Policy type (GLOBAL, SYSTEM, or CUSTOM)
  * @param tenantId Tenant identifier
  * @param condition Condition matcher for this policy
  * @param statements List of permission statements
