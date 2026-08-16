@@ -22,8 +22,13 @@ import java.time.Duration
  * A revoked token is rejected by [RevocableTokenVerifier] until its natural expiry,
  * so entries only need to outlive the refresh token bound to them.
  *
+ * Implementations are consulted on every authenticated request, so lookups should
+ * be cheap; distributed implementations are expected to trade a short propagation
+ * window for locality (see `me.ahoo.cosec.cache.CoCacheTokenStore` in cosec-cocache).
+ *
  * @see NoOp
  * @see RevocableTokenVerifier
+ * @see TokenRevoker
  */
 interface TokenStore {
 
@@ -31,7 +36,9 @@ interface TokenStore {
      * Revokes a token by its id.
      *
      * @param tokenId the token id (jti) to revoke
-     * @param ttl how long the revocation entry must outlive, at least the bound refresh token
+     * @param ttl how long to keep the revocation entry; must cover the remaining
+     * lifetime of the refresh token bound to [tokenId], otherwise that refresh
+     * token could be revived once the entry expires
      */
     fun revoke(tokenId: String, ttl: Duration)
 
@@ -45,7 +52,9 @@ interface TokenStore {
 
     /**
      * No-op token store that never revokes anything.
-     * Use this to keep the stateless default behavior.
+     *
+     * This is the default wired by the Spring Boot starter, keeping verification
+     * fully stateless: logout is inert until a real [TokenStore] bean is provided.
      */
     object NoOp : TokenStore {
         override fun revoke(tokenId: String, ttl: Duration) = Unit

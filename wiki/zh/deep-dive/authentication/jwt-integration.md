@@ -194,6 +194,22 @@ JWT 默认是无状态的——仅在客户端删除令牌并不会让服务端�
 - 刷新令牌绑定到访问令牌的 `jti`（即其 `sub` 声明），因此被吊销令牌的刷新请求同样会被拒绝。
 - 吊销条目的存活时间为刷新令牌的有效期（`cosec.jwt.token-validity.refresh`），因此它绝不会早于所绑定的刷新令牌过期。
 
+令牌已失效时登出保持幂等——捕获并忽略验证失败即可：
+
+```kotlin
+@PostMapping("/logout")
+fun logout(@RequestHeader(HttpHeaders.AUTHORIZATION) authorization: String): ResponseEntity<Void> {
+    try {
+        tokenRevoker.revoke(SimpleAccessToken(authorization)) // Bearer 前缀由验证器内部剥离
+    } catch (ignored: TokenVerificationException) {
+        // 令牌已无效或已过期——已无可吊销
+    }
+    return ResponseEntity.noContent().build()
+}
+```
+
+注意：请在访问令牌过期前执行注销。已过期的访问令牌会验证失败，此时其仍有效的绑定刷新令牌将无法再通过 `TokenRevoker` 吊销。
+
 ### 如何启用
 
 ```yaml
@@ -260,7 +276,11 @@ cosec:
     token-validity:
       access: 10m
       refresh: 7d
+    token-revocation:
+      enabled: false # 可选启用注销；设为 true 时接入基于 Redis 的 CoCacheTokenStore
 ```
+
+吊销的本地缓存通过 `cosec.authorization.cache.token.*` 调优（默认：写入后 30 秒过期、10 万条目——这也是跨实例登出生效的最坏传播窗口）。
 
 ## 参考文献
 

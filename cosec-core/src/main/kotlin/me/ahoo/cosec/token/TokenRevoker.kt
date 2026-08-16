@@ -23,6 +23,9 @@ import java.time.Duration
  * The application exposes its own logout endpoint and calls [revoke] with the
  * token to invalidate. Passing a [me.ahoo.cosec.api.token.CompositeToken]
  * (a subtype of [AccessToken]) requires no separate overload.
+ *
+ * @see DefaultTokenRevoker
+ * @see TokenStore
  */
 interface TokenRevoker {
 
@@ -32,7 +35,9 @@ interface TokenRevoker {
      *
      * @param accessToken the access token to revoke
      * @return the principal of the revoked token
-     * @throws TokenVerificationException if the token is invalid or already revoked
+     * @throws TokenVerificationException if the token is invalid (including
+     * already expired -- revoke before the access token expires to also kill
+     * the bound refresh token) or already revoked
      */
     @Throws(TokenVerificationException::class)
     fun revoke(accessToken: AccessToken): TokenPrincipal
@@ -41,8 +46,11 @@ interface TokenRevoker {
 /**
  * Default [TokenRevoker] backed by a [TokenStore].
  *
- * @param revocationTtl must cover the full refresh token validity, so the
- * revocation entry never expires before the bound refresh token does
+ * @param tokenVerifier verifies the token and resolves its tokenId before revoking
+ * @param tokenStore where the revocation entry is recorded
+ * @param revocationTtl how long each revocation entry is kept; must cover the
+ * full refresh token validity, so it never expires before the bound refresh
+ * token does -- the starter wires it from `cosec.jwt.token-validity.refresh`
  */
 class DefaultTokenRevoker(
     private val tokenVerifier: TokenVerifier,

@@ -16,9 +16,11 @@ package me.ahoo.cosec.token
 /**
  * Exception thrown when a token has been revoked.
  *
- * A revoked token is treated as unauthenticated, the same as an expired token.
+ * A revoked token is treated as unauthenticated, the same as an expired token:
+ * the security context resolves to anonymous and protected routes answer `401`.
  *
  * @see TokenStore
  * @see RevocableTokenVerifier
+ * @see TokenVerificationException
  */
 class TokenRevokedException(s: String) : TokenVerificationException(s)

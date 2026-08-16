@@ -17,6 +17,14 @@ import me.ahoo.cache.api.Cache
 /**
  * Revoked Token Cache .
  *
+ * Key is the token id (jti); value is `true` when the token has been revoked.
+ * Entries carry their own absolute expiry (`CacheValue.ttlAt`, epoch seconds),
+ * matching the remaining lifetime of the revoked token's bound refresh token.
+ *
+ * The local tier is configured via `cosec.authorization.cache.token.*`
+ * (default: 30s expire-after-write, 100k entries); the distributed tier is Redis.
+ *
  * @author ahoo wang
+ * @see CoCacheTokenStore
  */
 interface RevokedTokenCache : Cache<String, Boolean>

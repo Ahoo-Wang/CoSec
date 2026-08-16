@@ -194,6 +194,22 @@ JWTs are stateless by default -- deleting the token on the client does not inval
 - The refresh token is bound to the access token's `jti` (its `sub` claim), so refreshing a revoked token is rejected as well.
 - The revocation entry is kept for the refresh token validity (`cosec.jwt.token-validity.refresh`), so it never expires before the bound refresh token does.
 
+Logout stays idempotent when the token is already invalid -- catch and ignore the verification failure:
+
+```kotlin
+@PostMapping("/logout")
+fun logout(@RequestHeader(HttpHeaders.AUTHORIZATION) authorization: String): ResponseEntity<Void> {
+    try {
+        tokenRevoker.revoke(SimpleAccessToken(authorization)) // the verifier strips the Bearer prefix
+    } catch (ignored: TokenVerificationException) {
+        // token already invalid or expired -- nothing left to revoke
+    }
+    return ResponseEntity.noContent().build()
+}
+```
+
+Note: revoke before the access token expires. An already-expired access token fails verification, and its still-valid bound refresh token can then no longer be killed through `TokenRevoker`.
+
 ### How to Enable
 
 ```yaml
@@ -260,7 +276,11 @@ cosec:
     token-validity:
       access: 10m
       refresh: 7d
+    token-revocation:
+      enabled: false # opt-in logout; true wires the Redis-backed CoCacheTokenStore
 ```
+
+The revocation local cache is tuned under `cosec.authorization.cache.token.*` (default: 30s expire-after-write, 100k entries -- also the worst-case logout propagation window across instances).
 
 ## References
 

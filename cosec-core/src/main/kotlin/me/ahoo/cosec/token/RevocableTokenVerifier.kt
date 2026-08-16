@@ -28,12 +28,20 @@ import me.ahoo.cosec.api.token.TokenPrincipal
  *
  * @param delegate the actual verification implementation
  * @param tokenStore the revocation store
+ * @throws TokenRevokedException when a delegate-verified token's id is revoked
  */
 class RevocableTokenVerifier(
     private val delegate: TokenVerifier,
     private val tokenStore: TokenStore
 ) : TokenVerifier by delegate {
 
+    /**
+     * @param T the expected principal type
+     * @param accessToken the access token to verify
+     * @return the verified token principal
+     * @throws TokenVerificationException if the delegate rejects the token
+     * @throws TokenRevokedException if the token has been revoked
+     */
     override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T {
         val tokenPrincipal = delegate.verify<TokenPrincipal>(accessToken)
         checkNotRevoked(tokenPrincipal)
@@ -41,8 +49,28 @@ class RevocableTokenVerifier(
         return tokenPrincipal as T
     }
 
+    /**
+     * Routes through [verify] so the revocation check cannot be bypassed.
+     *
+     * This override must stay explicit: `TokenVerifier by delegate` would otherwise
+     * forward this interface default method straight to the delegate, and the
+     * per-request path ([me.ahoo.cosec.context.SecurityContextParser]) calls it.
+     *
+     * @param accessToken the access token to convert
+     * @return the principal of the verified token
+     * @throws TokenVerificationException if the token is invalid
+     * @throws TokenRevokedException if the token has been revoked
+     */
     override fun toPrincipal(accessToken: AccessToken): CoSecPrincipal = verify(accessToken)
 
+    /**
+     * @param T the expected principal type
+     * @param token the composite token containing the refresh token
+     * @return the token principal carried by the old access token
+     * @throws TokenVerificationException if the delegate rejects the refresh token
+     * or its binding to the access token
+     * @throws TokenRevokedException if the old access token's id has been revoked
+     */
     override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {
         val tokenPrincipal = delegate.refresh<TokenPrincipal>(token)
         checkNotRevoked(tokenPrincipal)
