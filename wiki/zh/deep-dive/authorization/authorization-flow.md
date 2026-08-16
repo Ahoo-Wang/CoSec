@@ -46,15 +46,14 @@ private inline fun <T> evaluateDenyFirst(
     crossinline verifyItem: (T) -> VerifyResult,
     crossinline onMatch: (T, VerifyResult) -> VerifyContext
 ): VerifyContext? {
-    // Phase 1: Check ALL DENY statements first
-    items.filter { effectExtractor(it) == Effect.DENY }.forEach { item ->
+    val (denyItems, allowItems) = items.partition { effectExtractor(it) == Effect.DENY }
+    denyItems.forEach { item ->
         val result = verifyItem(item)
         if (result == VerifyResult.EXPLICIT_DENY) {
             return onMatch(item, result)
         }
     }
-    // Phase 2: Then check ALLOW statements
-    items.filter { effectExtractor(it) == Effect.ALLOW }.forEach { item ->
+    allowItems.forEach { item ->
         val result = verifyItem(item)
         if (result == VerifyResult.ALLOW) {
             return onMatch(item, result)
@@ -64,7 +63,7 @@ private inline fun <T> evaluateDenyFirst(
 }
 ```
 
-这确保了**显式拒绝始终优先于允许**，与 AWS IAM 评估模型一致。
+这确保了**显式拒绝始终优先于允许**，与 AWS IAM 评估模型一致。传入的序列通过 `partition` 仅物化一次，因此每个上游条件（例如策略级速率限制器）在每次授权中恰好被评估一次 -- 包括位于匹配的早期 DENY 之后的条件 -- 这意味着被拒绝的请求同样会消耗速率限制器许可。
 
 ## AuthorizeResult 类型
 
@@ -137,6 +136,7 @@ sequenceDiagram
     Policy-->>Auth: List<Policy>
     Auth->>Auth: filter by condition.match
     Auth->>Eval: evaluateDenyFirst(allStatements)
+    Note over Eval: partition once into denyItems / allowItems
     Note over Eval: Phase 1: DENY statements
     loop each DENY statement
         Eval->>Eval: statement.verify(request, context)

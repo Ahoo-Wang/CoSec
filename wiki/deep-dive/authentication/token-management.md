@@ -180,7 +180,7 @@ classDiagram
 
 ```mermaid
 flowchart TD
-    A["Security Filter receives request"] --> B["Extract AccessToken from header"]
+    A["Security Filter receives request"] --> B["Extract AccessToken from header/query/cookie"]
     B --> C["TokenVerifier.verify(accessToken)"]
     C --> D{"Validate signature + expiry"}
     D -->|"Token expired"| E["throw TokenExpiredException"]
@@ -189,8 +189,10 @@ flowchart TD
     G --> H{"tenantId present?"}
     H -->|"yes"| I["Create TokenTenantPrincipal"]
     H -->|"no"| J["Create TokenPrincipal"]
-    I --> K["Set principal on SecurityContext"]
-    J --> K
+    I --> R{"revoked (jti in TokenStore)?"}
+    J --> R
+    R -->|"yes"| T["throw TokenRevokedException (401)"]
+    R -->|"no"| K["Set principal on SecurityContext"]
 
     style A fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style B fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -203,6 +205,8 @@ flowchart TD
     style I fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style J fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style K fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style R fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style T fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
 
@@ -217,7 +221,7 @@ sequenceDiagram
 
     Client->>TV: refresh(CompositeToken)
     TV->>TV: verify refresh token signature + expiry
-    TV->>TV: decode access token (no verify, may be expired)
+    TV->>TV: verify access token signature (expiry not re-checked, may be expired)
     TV->>TV: require(refresh.sub == access.jti)
     TV-->>Client: TokenPrincipal (from access claims)
 

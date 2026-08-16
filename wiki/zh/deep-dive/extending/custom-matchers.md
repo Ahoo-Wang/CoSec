@@ -58,7 +58,7 @@ interface ActionMatcherFactory {
 |--------|------|------|
 | `AllActionMatcherFactory` | `all` | 无条件匹配所有操作 |
 | `PathActionMatcherFactory` | `path` | 按 URL 路径模式和 HTTP 方法匹配 |
-| `CompositeActionMatcherFactory` | `composite` | 使用 AND/OR 逻辑组合多个匹配器 |
+| `CompositeActionMatcherFactory` | `composite` | 使用 OR 逻辑组合多个匹配器（任一匹配即通过） |
 
 ## ConditionMatcherFactory
 
@@ -75,7 +75,7 @@ interface ConditionMatcherFactory {
 
 | 类别 | 匹配器 | 描述 |
 |------|--------|------|
-| 基于路径 | `Eq`、`Contains`、`StartsWith`、`EndsWith`、`In`、`Regular` | 将请求属性与值进行匹配 |
+| 基于路径 | `Eq`、`Contains`、`StartsWith`、`EndsWith`、`In`、`Regular`、`Path` | 将请求属性与值进行匹配 |
 | 基于上下文 | `Authenticated`、`InRole`、`InTenant` | 匹配安全上下文属性 |
 | 速率限制 | 速率限制匹配器 | 强制执行请求速率限制 |
 | 表达式 | `OGNL`、`SpEL` | 计算自定义表达式 |
@@ -98,8 +98,9 @@ me.ahoo.cosec.policy.action.CompositeActionMatcherFactory
 
 ```
 me.ahoo.cosec.policy.condition.AllConditionMatcherFactory
-me.ahoo.cosec.policy.condition.authenticated.AuthenticatedConditionMatcherFactory
-me.ahoo.cosec.policy.condition.eq.EqConditionMatcherFactory
+me.ahoo.cosec.policy.condition.context.AuthenticatedConditionMatcherFactory
+me.ahoo.cosec.policy.condition.part.EqConditionMatcherFactory
+me.ahoo.cosec.policy.condition.part.PathConditionMatcherFactory
 ...
 ```
 
@@ -166,9 +167,17 @@ graph TD
 
 ### 步骤 1：实现匹配器
 
+自定义匹配器扩展 [AbstractActionMatcher](../../../../cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/AbstractActionMatcher.kt)，它提供了 `RequestMatcher` 所需的 `type` 和 `configuration` 属性，并实现了双参数的 `match(request, securityContext)`；子类只需实现 `internalMatch`：
+
 ```kotlin
-class HttpMethodActionMatcher(private val method: String) : ActionMatcher {
-    override fun match(request: Request): Boolean {
+class HttpMethodActionMatcher(
+    private val method: String,
+    configuration: Configuration
+) : AbstractActionMatcher(HttpMethodActionMatcherFactory.TYPE, configuration) {
+    override fun internalMatch(
+        request: Request,
+        securityContext: SecurityContext
+    ): Boolean {
         return request.method.equals(method, ignoreCase = true)
     }
 }
@@ -178,10 +187,16 @@ class HttpMethodActionMatcher(private val method: String) : ActionMatcher {
 
 ```kotlin
 class HttpMethodActionMatcherFactory : ActionMatcherFactory {
-    override val type = "httpMethod"
+    companion object {
+        const val TYPE = "httpMethod"
+    }
+
+    override val type: String
+        get() = TYPE
+
     override fun create(configuration: Configuration): ActionMatcher {
-        val method = configuration.getConfigValue("method", String::class.java)
-        return HttpMethodActionMatcher(method)
+        val method = configuration.getRequired("method").asString()
+        return HttpMethodActionMatcher(method, configuration)
     }
 }
 ```
@@ -196,12 +211,15 @@ com.example.HttpMethodActionMatcherFactory
 
 ### 步骤 4：在策略 JSON 中使用
 
+在对象形式中，第一个属性的键即工厂的 `type`，其值作为匹配器的配置：
+
 ```json
 {
   "effect": "ALLOW",
   "action": {
-    "type": "httpMethod",
-    "method": "GET"
+    "httpMethod": {
+      "method": "GET"
+    }
   }
 }
 ```

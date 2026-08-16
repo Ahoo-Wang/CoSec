@@ -115,6 +115,17 @@ object BearerAuthOpenApiCustomizer : Consumer<OpenAPI> {
 
 安全方案名称为 `cosec.BearerAuth`，使用 `cosec.` 前缀以避免与规范中的其他安全方案冲突。
 
+## 自动配置与 Actuator 端点
+
+`CoSecOpenAPIAutoConfiguration`（[源码](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/openapi/CoSecOpenAPIAutoConfiguration.kt#L30)）注册了唯一的 `OpenApiCustomizer` Bean，包装 `BearerAuthOpenApiCustomizer.accept(it)`，因此 SpringDoc 会自动获得 Bearer 安全方案。它以 `cosec.openapi.enabled`（默认 `true`）和 classpath 上存在 springdoc 类为条件。
+
+在生成器一侧，`CoSecEndpointAutoConfiguration`（[源码](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/actuate/CoSecEndpointAutoConfiguration.kt#L31)）暴露了两个 Spring Boot actuator 端点，按需调用生成器：
+
+| 端点 | Bean | 用途 |
+|----------|------|---------|
+| `cosecPolicyGenerator` | `CoSecPolicyGeneratorEndpoint` | 从应用的 `OpenAPI` Bean 生成 `Policy` |
+| `cosecAppPermissionGenerator` | `CoSecAppPermissionGeneratorEndpoint` | 从应用的 `OpenAPI` Bean 生成 `AppPermission` |
+
 ## 工作流程：从 OpenAPI 到权限
 
 ```mermaid

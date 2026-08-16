@@ -136,7 +136,7 @@ fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult>
 | `onErrorResume` | `try/except` | `promise.catch(handler)` | 响应式错误处理 |
 | `toMono()` | `Future(result)` | `Promise.resolve(result)` | 将值包装为 Mono |
 
-来自 `SimpleAuthorization.authorize()` 的真实示例（[SimpleAuthorization.kt:213](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L213)）：
+来自 `SimpleAuthorization.authorize()` 的真实示例（[SimpleAuthorization.kt:221](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221)）：
 
 ```kotlin
 override fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
@@ -187,7 +187,7 @@ class CoSecAutoConfiguration {
 
 条件注解控制功能何时被激活：
 
-- `@ConditionalOnCoSecEnabled` -- 检查 `cosec.enabled` 属性（[ConditionalOnCoSecEnabled.kt:23](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/ConditionalOnCoSecEnabled.kt#L23)）
+- `@ConditionalOnCoSecEnabled` -- 检查 `cosec.enabled` 属性（[ConditionalOnCoSecEnabled.kt:24](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/ConditionalOnCoSecEnabled.kt#L24)）
 - `@ConditionalOnJwtEnabled` -- 激活 JWT 支持
 - `@ConditionalOnAuthorizationEnabled` -- 激活授权
 - `@ConditionalOnGatewayEnabled` -- 激活 Spring Cloud Gateway 集成
@@ -407,20 +407,6 @@ classDiagram
     Authorization ..> SecurityContext : uses
     Authorization ..> AuthorizeResult : returns
 
-    style CoSecPrincipal fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style Policy fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style Statement fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style SecurityContext fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style Authorization fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style Authentication fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style Request fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style ActionMatcher fill:#161b22,stroke:#30363d,color:#e6edf3
-    style ConditionMatcher fill:#161b22,stroke:#30363d,color:#e6edf3
-    style Effect fill:#161b22,stroke:#30363d,color:#e6edf3
-    style AuthorizeResult fill:#161b22,stroke:#30363d,color:#e6edf3
-    style RoleCapable fill:#161b22,stroke:#30363d,color:#e6edf3
-    style PolicyCapable fill:#161b22,stroke:#30363d,color:#e6edf3
-    style TenantPrincipal fill:#161b22,stroke:#30363d,color:#e6edf3
 ```
 
 <!-- Sources:
@@ -438,8 +424,8 @@ classDiagram
 **CoSecPrincipal**（[CoSecPrincipal.kt:35](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L35)）-- 核心身份类型。继承 `java.security.Principal`、`PolicyCapable` 和 `RoleCapable`。关键属性：
 
 - `id` -- 唯一标识符（[第 42 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L42)）
-- `anonymous` -- 当 `id == ANONYMOUS_ID`（`"(0)"`）时为 true（[第 61 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L61)）
-- `authenticated` -- `anonymous` 的反义（[第 68 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L68)）
+- `anonymous` -- 当 `id == ANONYMOUS_ID`（`"(0)"`）时为 true（[第 60 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L60)）
+- `authenticated` -- `anonymous` 的反义（[第 67 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L67)）
 - `ROOT_ID` -- 默认为 `"cosec"`，可通过系统属性 `cosec.root` 配置（[第 80 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L80)）
 - `ANONYMOUS_ID` -- `"(0)"`（[第 87 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L87)）
 - `isRoot` -- 扩展属性，检查 `ROOT_ID == id`（[第 94 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L94)）
@@ -517,25 +503,25 @@ flowchart TD
 ```
 
 <!-- Sources:
-  cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:213-232
-  cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt:66-116
+  cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:221-240
+  cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt:68-139
 -->
 
 #### 授权流程详解（SimpleAuthorization）
 
-`SimpleAuthorization`（[SimpleAuthorization.kt:48](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48)）是核心授权实现。其 `authorize()` 方法（[第 213 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L213)）严格按照以下顺序执行：
+`SimpleAuthorization`（[SimpleAuthorization.kt:48](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48)）是核心授权实现。其 `authorize()` 方法（[第 221 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221)）严格按照以下顺序执行：
 
-1. **Root 用户检查**（[第 217 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L217)）-- 如果 `context.principal.isRoot`，立即返回 `ALLOW`。Root 用户绕过所有检查。
+1. **Root 用户检查**（[第 225 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L225)）-- 如果 `context.principal.isRoot`，立即返回 `ALLOW`。Root 用户绕过所有检查。
 
-2. **黑名单检查**（[第 221 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221)）-- 如果 `BlacklistChecker`（[BlacklistChecker.kt:29](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/blacklist/BlacklistChecker.kt#L29)）阻止请求，返回 `EXPLICIT_DENY`。默认为 `NoOp`，放行所有请求。
+2. **黑名单检查**（[第 229 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L229)）-- 如果 `BlacklistChecker`（[BlacklistChecker.kt:29](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/blacklist/BlacklistChecker.kt#L29)）阻止请求，返回 `EXPLICIT_DENY`。默认为 `NoOp`，放行所有请求。
 
-3. **验证管道**（[第 194 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L194)）-- 使用 `switchIfEmpty` 的响应式链：
-   - `verifyGlobalPolicies`（[第 156 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L156)）-- 评估来自 `PolicyRepository.getGlobalPolicy()` 的全局策略。
-   - `verifyPrincipalPolicies`（[第 166 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L166)）-- 评估分配给主体的策略。
-   - `verifyAppRolePermission`（[第 180 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L180)）-- 评估基于角色的权限。
+3. **验证管道**（[第 202 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L202)）-- 使用 `switchIfEmpty` 的响应式链：
+   - `verifyGlobalPolicies`（[第 164 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L164)）-- 评估来自 `PolicyRepository.getGlobalPolicy()` 的全局策略。
+   - `verifyPrincipalPolicies`（[第 174 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L174)）-- 评估分配给主体的策略。
+   - `verifyAppRolePermission`（[第 188 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L188)）-- 评估基于角色的权限。
    - 如果没有匹配，返回 `IMPLICIT_DENY`。
 
-每个策略验证都使用 `evaluateDenyFirst` 辅助方法（[第 61 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61)），它始终在 ALLOW 语句之前处理 DENY 语句。
+每个策略验证都使用 `evaluateDenyFirst` 辅助方法（[第 68 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68)），它始终在 ALLOW 语句之前处理 DENY 语句。
 
 ### 集成层：请求如何进入 CoSec
 
@@ -588,19 +574,19 @@ flowchart LR
   cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt
 -->
 
-**WebFlux**（`cosec-webflux`）：`ReactiveAuthorizationFilter`（[ReactiveAuthorizationFilter.kt:36](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36)）实现 `WebFilter` 和 `Ordered`。它继承 `ReactiveSecurityFilter`，后者包含共享的过滤逻辑（[ReactiveSecurityFilter.kt:57](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L57)）。过滤器顺序为 `1000`（[第 49 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L49)）。
+**WebFlux**（`cosec-webflux`）：`ReactiveAuthorizationFilter`（[ReactiveAuthorizationFilter.kt:36](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36)）实现 `WebFilter` 和 `Ordered`。它继承 `ReactiveSecurityFilter`，后者包含共享的过滤逻辑（[ReactiveSecurityFilter.kt:59](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59)）。过滤器顺序为 `1000`（[第 49 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L49)）。
 
 **Gateway**（`cosec-gateway`）：`AuthorizationGatewayFilter`（[AuthorizationGatewayFilter.kt:31](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt#L31)）实现 Spring Cloud Gateway 的 `GlobalFilter`。它也继承 `ReactiveSecurityFilter`。过滤器顺序为 `HIGHEST_PRECEDENCE + 10`（[第 42 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt#L42)）。
 
-**安全过滤器逻辑**：`ReactiveSecurityFilter.filterInternal()` 方法（[ReactiveSecurityFilter.kt:66](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L66)）处理完整的请求生命周期：
-- 使用 `RequestParser` 解析请求（[第 70 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L70)）
-- 使用 `SecurityContextParser` 提取安全上下文（[第 73 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L73)）
-- 遇到 `TokenVerificationException` 时，回退到匿名上下文（[第 75 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L75)）
-- 调用 `authorization.authorize()`（[第 85 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L85)）
-- 如果已授权，将 principal 设置到 exchange 并继续过滤器链（[第 89 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L89)）
-- 如果未授权且为匿名用户：HTTP 401（[第 99 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L99)）
-- 如果未授权且已认证：HTTP 403（[第 101 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L101)）
-- 处理 `TooManyRequestsException`：HTTP 429（[第 106 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L106)）
+**安全过滤器逻辑**：`ReactiveSecurityFilter.filterInternal()` 方法（[ReactiveSecurityFilter.kt:68](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L68)）处理完整的请求生命周期：
+- 使用 `RequestParser` 解析请求（[第 72 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L72)）
+- 使用 `SecurityContextParser` 提取安全上下文（[第 79-81 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L79)）
+- 遇到 `TokenVerificationException` 时，回退到匿名上下文（[第 82-88 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L82)）
+- 调用 `authorization.authorize()`（[第 92 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L92)）
+- 如果已授权，将 principal 设置到 exchange 并继续过滤器链（[第 95-100 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L95)）
+- 如果未授权且为匿名用户：HTTP 401（[第 104 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L104)）
+- 如果未授权且已认证：HTTP 403（[第 106 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L106)）
+- 处理 `TooManyRequestsException`：HTTP 429（[第 121 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L121)）
 
 ### SPI 扩展点
 
@@ -704,12 +690,13 @@ flowchart TD
 
 ### 策略评估流程
 
-`DefaultPolicyEvaluator`（[DefaultPolicyEvaluator.kt:25](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L25)）提供策略验证（不是授权）。它创建一个模拟的 `EvaluateRequest`（[第 64 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L64)）并运行所有条件、Action 和语句，以便在策略投入生产前捕获配置错误。
+`DefaultPolicyEvaluator`（[DefaultPolicyEvaluator.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L26)）提供策略验证（不是授权）。它创建一个模拟的 `EvaluateRequest`（[第 29 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L29)）并运行所有条件、Action 和语句，以便在策略投入生产前捕获配置错误。
 
 ### 认证管道
 
 ```mermaid
 sequenceDiagram
+    autonumber
     participant C as 客户端
     participant F as 安全过滤器
     participant SP as SecurityContextParser
@@ -988,7 +975,7 @@ CoSec 采用分层测试方法，在每个层级使用特定的库。
 
 #### 编写授权逻辑的测试
 
-`SimpleAuthorization` 的测试（[SimpleAuthorizationTest.kt:41](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/test/kotlin/me/ahoo/cosec/authorization/SimpleAuthorizationTest.kt#L41)）是一个很好的参考。关键模式：
+`SimpleAuthorization` 的测试（[SimpleAuthorizationTest.kt:42](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/test/kotlin/me/ahoo/cosec/authorization/SimpleAuthorizationTest.kt#L42)）是一个很好的参考。关键模式：
 
 **1. 使用 MockK 进行 Mock**：
 
@@ -1060,7 +1047,7 @@ Verify [Request(...)] [Context(...)] matched Policy[policyId] Statement[0][state
 
 **2. 意外的 IMPLICIT_DENY**：最常见的原因是策略条件不匹配。使用调试日志跟踪正在评估的策略和语句。检查策略的顶层 `condition` 是否为 `AllConditionMatcher`（匹配一切）或是否与你的请求上下文匹配。
 
-**3. TokenVerificationException 被吞没**：`ReactiveSecurityFilter` 捕获 `TokenVerificationException` 并回退到匿名上下文（[ReactiveSecurityFilter.kt:75](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L75)）。如果你看到意外的 403 响应，检查 Token 解析是否静默失败。
+**3. TokenVerificationException 被吞没**：`ReactiveSecurityFilter` 捕获 `TokenVerificationException` 并回退到匿名上下文（[ReactiveSecurityFilter.kt:82-88](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L82)）。如果你看到意外的 403 响应，检查 Token 解析是否静默失败。
 
 **4. StepVerifier 超时**：如果 `Mono` 从未完成，`StepVerifier.verifyComplete()` 会挂起。使用 `.verify(Duration)` 设置超时，并检查所有响应式链是否产生值。
 
@@ -1127,7 +1114,7 @@ Detekt 规则在 `config/detekt/detekt.yml`（[detekt.yml](https://github.com/Ah
 
 #### 7. 策略评估中的 RateLimiter 异常
 
-`DefaultPolicyEvaluator` 在评估过程中捕获 `TooManyRequestsException`（[DefaultPolicyEvaluator.kt:48](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L48)）。如果你的策略使用限流条件，不要期望它们在评估时抛出异常 -- 它们会被静默跳过。
+`DefaultPolicyEvaluator` 在评估过程中捕获 `TooManyRequestsException`（[DefaultPolicyEvaluator.kt:52](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L52)）。如果你的策略使用限流条件，不要期望它们在评估时抛出异常 -- 它们会被静默跳过。
 
 #### 8. SecurityContext 的线程安全性
 
@@ -1373,25 +1360,26 @@ AuthorizeResult = ALLOW | EXPLICIT_DENY | IMPLICIT_DENY | TOKEN_EXPIRED | TOO_MA
 | `cosec.authentication.enabled` | `true` | 启用认证 |
 | `cosec.authorization.enabled` | `true` | 启用授权 |
 | `cosec.jwt.enabled` | `true` | 启用 JWT 支持 |
-| `cosec.gateway.enabled` | `false` | 启用 Gateway 集成 |
-| `cosec.social.enabled` | `false` | 启用社交认证 |
-| `cosec.cache.enabled` | `false` | 启用 Redis 缓存 |
-| `cosec.ip2region.enabled` | `false` | 启用 IP 地理位置 |
-| `cosec.openapi.enabled` | `false` | 启用 OpenAPI 集成 |
-| `cosec.opentelemetry.enabled` | `false` | 启用 OpenTelemetry 链路追踪 |
+| `cosec.authorization.gateway.enabled` | `true` | 启用 Gateway 集成 |
+| `cosec.authentication.social.enabled` | `true` | 启用社交认证 |
+| `cosec.authorization.cache.enabled` | `true` | 启用 Redis 缓存 |
+| `cosec.ip2region.enabled` | `true` | 启用 IP 地理位置 |
+| `cosec.openapi.enabled` | `true` | 启用 OpenAPI 集成 |
 | `cosec.inject.enabled` | `false` | 启用安全上下文注入 |
+
+> OpenTelemetry 链路追踪没有 `cosec.opentelemetry.enabled` 属性；其自动配置纯粹基于 classpath 条件（当 `cosec-opentelemetry` 与 OpenTelemetry API 位于 classpath 上时激活）。
 
 #### 技术栈速查
 
 | 组件 | 版本 | 来源 |
 |---|---|---|
-| Kotlin | 2.3.20 | [libs.versions.toml:26](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L26) |
+| Kotlin | 2.4.10 | [libs.versions.toml:26](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L26) |
 | Java 目标 | 17 | [build.gradle.kts:83](https://github.com/Ahoo-Wang/CoSec/blob/main/build.gradle.kts#L83) |
-| Spring Boot | 4.0.5 | [libs.versions.toml:3](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L3) |
-| Spring Cloud | 2025.1.1 | [libs.versions.toml:4](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L4) |
-| JUnit | 6.0.3 | [libs.versions.toml:18](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L18) |
-| MockK | 1.14.9 | [libs.versions.toml:21](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L21) |
-| FluentAssert | 0.2.6 | [libs.versions.toml:19](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L19) |
+| Spring Boot | 4.1.0 | [libs.versions.toml:3](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L3) |
+| Spring Cloud | 2025.1.2 | [libs.versions.toml:4](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L4) |
+| JUnit | 6.1.3 | [libs.versions.toml:18](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L18) |
+| MockK | 1.14.11 | [libs.versions.toml:21](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L21) |
+| FluentAssert | 1.0.0 | [libs.versions.toml:19](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L19) |
 | Detekt | 1.23.8 | [libs.versions.toml:24](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L24) |
-| Jackson（JWT） | 4.5.1 | [libs.versions.toml:12](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L12) |
+| auth0 java-jwt | 4.6.0 | [libs.versions.toml:12](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L12) |
 | OGNL | 3.4.11 | [libs.versions.toml:11](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L11) |

@@ -187,30 +187,31 @@ flowchart TD
 
 ```
 
-The `authorize` method ([SimpleAuthorization.kt:213-232](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L213)) follows this sequence:
+The `authorize` method ([SimpleAuthorization.kt:221-240](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221)) follows this sequence:
 
-1. **Root bypass** ([line 146](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L146)) -- If `context.principal.isRoot` is true, return `ALLOW` immediately.
-2. **Blacklist check** ([line 221](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221)) -- The `BlacklistChecker` verifies the request is not blocked. If blocked, return `EXPLICIT_DENY`.
-3. **Global policies** ([line 156](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L156)) -- Fetch and evaluate global policies via `PolicyRepository.getGlobalPolicy()`.
-4. **Principal policies** ([line 166](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L166)) -- Fetch and evaluate policies attached to the principal via `PolicyRepository.getPolicies()`.
-5. **Role permissions** ([line 180](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L180)) -- Fetch and evaluate app-specific role permissions via `AppRolePermissionRepository.getAppRolePermission()`.
-6. **Implicit deny** ([line 206](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L206)) -- If no policy matched, return `IMPLICIT_DENY`.
+1. **Root bypass** ([verifyRoot, lines 154-162, invoked at line 225](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L154)) -- If `context.principal.isRoot` is true, return `ALLOW` immediately.
+2. **Blacklist check** ([lines 229-230](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L229)) -- The `BlacklistChecker` verifies the request is not blocked. If blocked, return `EXPLICIT_DENY`.
+3. **Global policies** ([lines 164-172](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L164)) -- Fetch and evaluate global policies via `PolicyRepository.getGlobalPolicy()`.
+4. **Principal policies** ([lines 174-186](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L174)) -- Fetch and evaluate policies attached to the principal via `PolicyRepository.getPolicies()`.
+5. **Role permissions** ([lines 188-200](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L188)) -- Fetch and evaluate app-specific role permissions via `AppRolePermissionRepository.getAppRolePermission()`.
+6. **Implicit deny** ([lines 214-218](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L214)) -- If no policy matched, return `IMPLICIT_DENY`.
 
 Each stage uses `Mono.switchIfEmpty` to fall through to the next stage, forming a reactive chain.
 
 ## Deny-First Evaluation at Scale
 
-The `evaluateDenyFirst` method ([SimpleAuthorization.kt:61-80](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61)) is a generic helper used for both policy statements and role permissions. It processes items as a `Sequence` for lazy evaluation, filtering first by `Effect.DENY`, then by `Effect.ALLOW`:
+The `evaluateDenyFirst` method ([SimpleAuthorization.kt:68-88](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68)) is a generic helper used for both policy statements and role permissions. It partitions the incoming items once — first by `Effect.DENY`, then by `Effect.ALLOW` — so every DENY item is verified before any ALLOW item, first match wins:
 
 ```
-1. Filter all items where effect == DENY
+1. Partition all items into denyItems (effect == DENY) and allowItems (effect == ALLOW)
 2. For each DENY item, call verifyItem()
 3. If any returns EXPLICIT_DENY, short-circuit and return
-4. Filter all items where effect == ALLOW
-5. For each ALLOW item, call verifyItem()
-6. If any returns ALLOW, short-circuit and return
-7. Return null (no match)
+4. For each ALLOW item, call verifyItem()
+5. If any returns ALLOW, short-circuit and return
+6. Return null (no match)
 ```
+
+The sequence is materialized once, on purpose ([SimpleAuthorization.kt:74](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L74)): upstream conditions (e.g. a policy-level rate limiter) execute exactly once per authorization — including conditions positioned after a matching early DENY — so denied requests uniformly consume rate-limiter permits.
 
 This algorithm is applied to both `PolicyStatementEntry` objects (global and principal policies) and `RolePermissionEntry` objects (role-based app permissions), ensuring consistent deny-first semantics across all authorization sources.
 

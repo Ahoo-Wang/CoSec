@@ -38,14 +38,14 @@ graph TD
 
 ```kotlin
 class Ip2RegionRequestAttributesAppender(
-    ip2regionFile: File = LOCAL_IP2REGION_FILE,
+    ip2regionDb: ByteArray = loadDefaultIp2RegionDb(),
     version: Version = Version.IPv4
 ) : RequestAttributesAppender
 ```
 
 关键特性：
 
-- **数据库**: 默认从 classpath 加载 `ip2region.xdb` 文件。xdb 格式提供内存映射查询，无需外部依赖。
+- **数据库**: 默认通过 `loadDefaultIp2RegionDb()` 将 classpath 上的 `ip2region.xdb` 文件加载到 `ByteArray` 中。xdb 格式提供内存映射查询，无需外部依赖。
 - **惰性初始化**: `Searcher` 在首次使用时惰性创建。
 - **属性键**: `ipRegion` -- 对应常量 `REQUEST_ATTRIBUTES_IP_REGION_KEY`。
 - **错误处理**: 如果搜索失败（例如在 IPv4 模式下搜索 IPv6 地址），请求将在不添加 `ipRegion` 属性的情况下原样返回。
@@ -129,8 +129,8 @@ cosec:
 
 - [cosec-ip2region/src/main/kotlin/me/ahoo/cosec/ip2region/Ip2RegionRequestAttributesAppender.kt:25](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-ip2region/src/main/kotlin/me/ahoo/cosec/ip2region/Ip2RegionRequestAttributesAppender.kt#L25) -- 核心 IP 解析逻辑
 - [cosec-spring-boot-starter/src/main/kotlin/.../Ip2RegionAutoConfiguration.kt:33](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/ip2region/Ip2RegionAutoConfiguration.kt#L33) -- 自动配置
-- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt#L27) -- WebFlux 请求解析器（使用 appender）
-- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt:31](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt#L31) -- Servlet 请求解析器（使用 appender）
+- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt#L28) -- WebFlux 请求解析器（使用 appender）
+- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt:32](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt#L32) -- Servlet 请求解析器（使用 appender）
 - [k8s/cosec-gateway-config.yaml](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/cosec-gateway-config.yaml) -- 禁用 ip2region 的示例配置
 
 ## 相关页面

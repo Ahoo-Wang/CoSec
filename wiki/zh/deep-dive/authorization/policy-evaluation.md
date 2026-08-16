@@ -19,7 +19,7 @@ class PolicyData(
     override val category: String,
     override val name: String,
     override val description: String,
-    override val type: PolicyType,       // GLOBAL or APP
+    override val type: PolicyType,       // GLOBAL, SYSTEM, or CUSTOM
     override val tenantId: String,
     override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
     override val statements: List<Statement> = listOf()
@@ -29,7 +29,7 @@ class PolicyData(
 关键属性：
 
 - **`id`**：唯一策略标识符
-- **`type`**：`GLOBAL`（适用于所有应用）或 `APP`（应用范围）
+- **`type`**：`GLOBAL`、`SYSTEM` 或 `CUSTOM` -- 全局策略、平台管理的系统策略或用户自定义策略
 - **`tenantId`**：租户范围 -- 策略是租户范围的
 - **`condition`**：在评估任何声明之前必须匹配的顶层条件
 - **`statements`**：有序的权限规则列表
@@ -96,7 +96,7 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
 }
 ```
 
-`safeEvaluate` 包装器捕获 `TooManyRequestsException`（来自速率限制器条件）并继续执行，因为速率限制无法使用模拟数据进行有意义的评估。
+`safeEvaluate` 包装器捕获 `TooManyRequestsException`（来自速率限制器条件）和 `RegexTimeoutException`（来自超出时间预算的正则条件）并继续执行，因为这两者都无法使用模拟数据进行有意义的评估。
 
 ### EvaluateRequest
 
@@ -109,6 +109,10 @@ data class EvaluateRequest(
     override val remoteIp: String = "127.0.0.1",
     override val origin: URI = URI.create("http://mockOrigin"),
     override val referer: URI = URI.create("http://mockReferer"),
+    override val attributes: Map<String, String> = mapOf(),
+    private val headers: Map<String, String> = mapOf(),
+    private val queries: Map<String, String> = mapOf(),
+    private val cookies: Map<String, String> = mapOf(),
 ) : Request
 ```
 
@@ -226,19 +230,18 @@ data class PolicyVerifyContext(
 
 ## 性能：基于序列的评估
 
-`evaluateDenyFirst` 函数操作 Kotlin `Sequence<T>` 而非 `List<T>`。这意味着：
+`evaluateDenyFirst` 函数接收 Kotlin `Sequence<T>`，并通过 `items.partition { ... }` 仅物化一次，构建两个中间列表（拒绝项和允许项）。这意味着：
 
-- 声明过滤和迭代是**惰性的** -- 仅在需要时评估
-- 如果 DENY 声明提前匹配，剩余声明永远不会被评估
-- 内存开销最小，因为不创建中间集合
+- 每个上游条件（例如策略级速率限制器）在每次授权中恰好被评估一次，包括位于匹配的早期 DENY 之后的条件
+- 在每一轮扫描中，验证在第一个决定性结果处短路：DENY 轮在第一个 `EXPLICIT_DENY` 处停止，ALLOW 轮在第一个 `ALLOW` 处停止
 
 ## 参考文献
 
-- [DefaultPolicyEvaluator.kt:25](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L25) - 加载时策略验证
+- [DefaultPolicyEvaluator.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L26) - 加载时策略验证
 - [PolicyVerifyContext.kt:60](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/PolicyVerifyContext.kt#L60) - 验证上下文数据类
 - [PolicyData.kt:35](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/PolicyData.kt#L35) - 策略数据实现
 - [StatementData.kt:31](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/StatementData.kt#L31) - 声明数据实现
-- [SimpleAuthorization.kt:86](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L86) - 授权中的策略验证
+- [SimpleAuthorization.kt:90](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L90) - 授权中的策略验证
 
 ## 相关页面
 

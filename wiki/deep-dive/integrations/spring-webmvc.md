@@ -84,9 +84,11 @@ sequenceDiagram
 Key behaviors of `AuthorizationFilter.doFilter`:
 
 1. **Delegates** to `AbstractAuthorizationInterceptor.authorize()`.
-2. **Catches** `TooManyRequestsException` and returns HTTP 429.
-3. **Catches** unexpected exceptions, logs an error, and returns HTTP 500.
-4. On successful authorization, calls `chain.doFilter(request, response)`.
+2. **Catches** `InvalidRequestPathException` (malformed/invalid path) and returns HTTP 400.
+3. **Catches** `TooManyRequestsException` and returns HTTP 429.
+4. **Catches** `RegexTimeoutException` (a regex condition exceeding its time budget, i.e. the ReDoS guard) and returns HTTP 403 as a fail-closed deny.
+5. **Catches** unexpected exceptions, logs an error, and returns HTTP 500.
+6. On successful authorization, calls `chain.doFilter(request, response)`.
 
 ### AbstractAuthorizationInterceptor
 
@@ -149,11 +151,11 @@ Both are set in `AbstractAuthorizationInterceptor.authorize()` so downstream cod
 
 ## References
 
-- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt:42](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt#L42) -- Servlet filter entry point
+- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt:45](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt#L45) -- Servlet filter entry point
 - [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt:51](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt#L51) -- Base interceptor with authorization logic
-- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt:31](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt#L31) -- Request parsing
+- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt:32](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt#L32) -- Request parsing
 - [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/CoSecServletRequest.kt:22](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/CoSecServletRequest.kt#L22) -- Request data class
-- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/InjectSecurityContextFilter.kt:40](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/InjectSecurityContextFilter.kt#L40) -- Downstream context injection
+- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/InjectSecurityContextFilter.kt:43](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/InjectSecurityContextFilter.kt#L43) -- Downstream context injection
 - [cosec-core/src/main/kotlin/me/ahoo/cosec/context/SecurityContextHolder.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/SecurityContextHolder.kt#L26) -- Thread-local context holder
 
 ## Related Pages

@@ -9,7 +9,7 @@ CoSec 采用多模块 Gradle Kotlin DSL 项目组织，具有清晰的关注点�
 
 ## 高层模块架构
 
-项目在 [settings.gradle.kts](https://github.com/Ahoo-Wang/CoSec/blob/main/settings.gradle.kts) 中声明，列出了所有 15 个包含的模块。架构采用分层方法，API 模块定义契约，核心模块提供实现，集成模块适配各种运行时环境。
+项目在 [settings.gradle.kts](https://github.com/Ahoo-Wang/CoSec/blob/main/settings.gradle.kts#L16) 中声明，包含 16 个 `include(...)` 调用 —— 15 个 CoSec 模块加上 `code-coverage-report` 构建聚合模块。架构采用分层方法，API 模块定义契约，核心模块提供实现，集成模块适配各种运行时环境。
 
 ```mermaid
 graph TB
@@ -59,6 +59,11 @@ graph TB
     STARTER -.-> OTEL
     STARTER -.-> OPENAPI
     GWSERVER --> STARTER
+    GWSERVER --> COCACHE
+    GWSERVER --> WEBFLUX
+    GWSERVER --> GATEWAY
+    GWSERVER --> OTEL
+    GWSERVER --> IP2REGION
 
     style API fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style CORE fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -82,17 +87,17 @@ graph TB
 |------|------|--------|------|
 | `cosec-api` | 核心接口，无框架依赖 | [CoSecPrincipal](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L35), [Authorization](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/authorization/Authorization.kt#L35), [Policy](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/Policy.kt#L45), [Tenant](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/tenant/Tenant.kt#L22) | 无（纯 API） |
 | `cosec-core` | 策略评估、认证、授权 | [SimpleAuthorization](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48), PolicyRepository, BlacklistChecker | `cosec-api` |
-| `cosec-jwt` | JWT 令牌创建和验证 | JwtTokenVerifier, TokenConverter | `cosec-core` |
-| `cosec-cocache` | 基于 Redis 的策略/权限分布式缓存 | CachedPolicyRepository, CachedAppRolePermissionRepository | `cosec-core` |
-| `cosec-social` | 通过 JustAuth 的 OAuth 社交认证 | SocialAuthentication, OAuthService | `cosec-core` |
-| `cosec-ip2region` | 用于条件匹配的 IP 地理定位 | Ip2RegionConditionMatcher | `cosec-core` |
-| `cosec-opentelemetry` | 安全操作的 OpenTelemetry 追踪 | SecurityTracingFilter | `cosec-core` |
-| `cosec-openapi` | 安全端点的 Swagger/OpenAPI 集成 | CoSecOpenApiCustomizer | `cosec-core` |
-| `cosec-webflux` | Spring WebFlux 的响应式 WebFilter | [ReactiveSecurityFilter](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L57), [ReactiveAuthorizationFilter](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36) | `cosec-core` |
-| `cosec-webmvc` | Spring WebMVC 的 Servlet 过滤器 | ServletAuthorizationFilter, ServletSecurityFilter | `cosec-core` |
+| `cosec-jwt` | JWT 令牌创建和验证 | JwtTokenVerifier, JwtTokenConverter | `cosec-core` |
+| `cosec-cocache` | 基于 Redis 的策略/权限分布式缓存 | RedisPolicyRepository, RedisAppRolePermissionRepository, PolicyCache, RolePermissionCache, AppPermissionCache, GlobalPolicyIndexCache, CoCacheTokenStore, RevokedTokenCache | `cosec-core` |
+| `cosec-social` | 通过 JustAuth 的 OAuth 社交认证 | SocialAuthentication, SocialAuthenticationProvider, SocialProviderManager, justauth/JustAuthProvider | `cosec-core` |
+| `cosec-ip2region` | 用于条件匹配的 IP 地理定位 | Ip2RegionRequestAttributesAppender | `cosec-core` |
+| `cosec-opentelemetry` | 安全操作的 OpenTelemetry 追踪 | CoSecInstrumenter, TracingAuthorization, AuthorizationMono | `cosec-core` |
+| `cosec-openapi` | 安全端点的 Swagger/OpenAPI 集成 | BearerAuthOpenApiCustomizer, OpenAPIPolicyGenerator, OpenAPIAppPermissionGenerator | `cosec-core` |
+| `cosec-webflux` | Spring WebFlux 的响应式 WebFilter | [ReactiveSecurityFilter](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59), [ReactiveAuthorizationFilter](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36) | `cosec-core`, `cosec-jwt` |
+| `cosec-webmvc` | Spring WebMVC 的 Servlet 过滤器（包 `me.ahoo.cosec.servlet`） | AuthorizationFilter, AbstractAuthorizationInterceptor, ServletRequestParser, InjectSecurityContextFilter | `cosec-core`, `cosec-jwt` |
 | `cosec-gateway` | Spring Cloud Gateway GlobalFilter | [AuthorizationGatewayFilter](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt#L31) | `cosec-webflux` |
 | `cosec-spring-boot-starter` | 自动配置，聚合所有模块 | CoSecAutoConfiguration, 条件功能 | `cosec-core`, `cosec-jwt`, 可选模块 |
-| `cosec-gateway-server` | 独立网关应用（不发布） | GatewayApplication | `cosec-spring-boot-starter` |
+| `cosec-gateway-server` | 独立网关应用（不发布） | GatewayServer | `cosec-spring-boot-starter`, `cosec-cocache`, `cosec-webflux`, `cosec-gateway`, `cosec-opentelemetry`, `cosec-ip2region` |
 | `cosec-dependencies` | 依赖管理的版本目录 | libs.versions.toml | 无 |
 | `cosec-bom` | 用于一致版本控制的物料清单 | BOM 定义 | `cosec-dependencies` |
 
@@ -128,14 +133,22 @@ graph LR
 
 ```
 
-Starter 的使用者可以通过声明相应依赖来选择特定功能：
+Starter 的使用者通过在同一个 `cosec-spring-boot-starter` 构件上要求相应的能力来选择特定功能：
 
 ```kotlin
 // 仅 WebFlux 支持
-implementation("me.ahoo.cosec:cosec-spring-boot-starter-webflux-support")
+implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+    capabilities {
+        requireCapability("me.ahoo.cosec:webflux-support")
+    }
+}
 
 // 仅 Gateway 支持（传递性引入 WebFlux）
-implementation("me.ahoo.cosec:cosec-spring-boot-starter-gateway-support")
+implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+    capabilities {
+        requireCapability("me.ahoo.cosec:gateway-support")
+    }
+}
 ```
 
 ## 依赖分层原则
@@ -171,7 +184,7 @@ graph BT
 
 2. **核心作为唯一实现** —— `cosec-core` 是具体实现的唯一提供者。如 [SimpleAuthorization](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48) 中所见，核心授权逻辑委托给 `PolicyRepository` 和 `AppRolePermissionRepository` 接口，这些接口由上层装配。
 
-3. **集成无感知** —— 集成模块（`cosec-webflux`、`cosec-webmvc`、`cosec-gateway`）仅依赖 `cosec-core`，彼此之间不依赖。Gateway 模块是一个特例，它扩展了 WebFlux 过滤器，因为两者都在响应式上下文中运行。
+3. **集成无感知** —— 集成模块（`cosec-webflux`、`cosec-webmvc`、`cosec-gateway`）依赖 `cosec-core` 和 `cosec-jwt`，彼此之间不依赖。Gateway 模块是一个特例，它扩展了 WebFlux 过滤器，因为两者都在响应式上下文中运行。
 
 4. **可选功能组合** —— Starter 模块使用 Gradle 的 `registerFeature` 机制（参见 [build.gradle.kts:18-49](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts#L18)）来提供可选模块，而不会强制使用者使用传递性依赖。
 
@@ -179,7 +192,7 @@ graph BT
 
 ## 参考资料
 
-- [settings.gradle.kts](https://github.com/Ahoo-Wang/CoSec/blob/main/settings.gradle.kts#L14) —— 所有模块声明
+- [settings.gradle.kts](https://github.com/Ahoo-Wang/CoSec/blob/main/settings.gradle.kts#L16) —— 所有模块声明
 - [cosec-spring-boot-starter/build.gradle.kts](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts#L18) —— 功能变体注册
 - [SimpleAuthorization.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48) —— 核心授权实现
 - [CoSecPrincipal.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L35) —— 主体接口（API 层）

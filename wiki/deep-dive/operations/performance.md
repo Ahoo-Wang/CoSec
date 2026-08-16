@@ -117,7 +117,7 @@ flowchart TD
 
 ## JMH Benchmarks
 
-CoSec includes JMH (Java Microbenchmark Harness) benchmarks in every module via the `me.champeau.jmh` Gradle plugin.
+CoSec applies the `me.champeau.jmh` Gradle plugin to all subprojects, but benchmark sources currently exist only in `cosec-core` (`PathPatternBenchmark`) and `cosec-jwt` (`JwtTokenConverterBenchmark`).
 
 ### PathPatternBenchmark
 
@@ -151,7 +151,7 @@ Two benchmark methods measure:
 ./gradlew :cosec-core:jmh -PjmhIncludes=*.PathPatternBenchmark
 
 # Run with custom JMH options
-./gradlew :cosec-core:jmh -PjmhIncludes="*" -PjmhParams="mode=avgt"
+./gradlew :cosec-core:jmh -PjmhIncludes="*" -PjmhMode=avgt
 ```
 
 ## Caching Strategies
@@ -219,8 +219,8 @@ Recent performance optimizations in the codebase:
 ## References
 
 - [cosec-core/src/jmh/kotlin/me/ahoo/cosec/policy/action/PathPatternBenchmark.kt:19](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/jmh/kotlin/me/ahoo/cosec/policy/action/PathPatternBenchmark.kt#L19) -- JMH benchmark
-- [cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:61](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61) -- Sequence-based evaluateDenyFirst
-- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt#L26) -- Cached policy repository
+- [cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:68](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68) -- Sequence-based evaluateDenyFirst
+- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt#L27) -- Cached policy repository
 - [k8s/cosec-gateway-config.yaml](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/cosec-gateway-config.yaml) -- Cache configuration
 - [cosec-gateway-server/build.gradle.kts:35](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/build.gradle.kts#L35) -- JVM performance options
 

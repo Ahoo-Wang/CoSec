@@ -7,32 +7,36 @@ description: How CoSec's Spring Boot auto-configuration wires up all security co
 
 CoSec uses Spring Boot's auto-configuration mechanism to automatically wire up all security components based on classpath presence and property configuration. This allows applications to add CoSec by simply including the dependency with minimal configuration.
 
-## Configuration Hierarchy
+## Auto-Configuration Overview
+
+All 15 CoSec auto-configuration classes are registered as **independent, flat entries** in `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` -- there is no parent/child hierarchy among them. What ties them together is the shared `@ConditionalOnCoSecEnabled` gate (`cosec.enabled`, default `true`); several classes layer additional conditions on top (for example, `CoSecAuthorizationAutoConfiguration` also requires `@ConditionalOnAuthorizationEnabled`, and `CoSecGatewayAuthorizationAutoConfiguration` additionally requires `@ConditionalOnGatewayEnabled` and `@ConditionalOnClass(AuthorizationGatewayFilter::class)`). The one exception is `CoSecEndpointAutoConfiguration`, which is activated purely by classpath presence.
 
 ```mermaid
 graph TD
-    A["CoSecAutoConfiguration<br>(root)"] --> B["CoSecAuthorizationAutoConfiguration"]
-    A --> C["CoSecJwtAutoConfiguration"]
-    A --> D["CoSecGatewayAuthorizationAutoConfiguration"]
-    A --> E["CoSecPolicyCacheAutoConfiguration"]
-    A --> F["Ip2RegionAutoConfiguration"]
-    A --> G["CoSecSocialAutoConfiguration"]
-    A --> H["CoSecOpenTelemetryAutoConfiguration"]
-    B --> I["WebFlux (ReactiveAuthorizationFilter)"]
-    B --> J["WebMVC (AuthorizationFilter)"]
-    B --> K["InjectSecurityContext"]
-    C --> L["JwtTokenConverter"]
-    C --> M["JwtTokenVerifier"]
-    C --> N["TokenCompositeAuthentication"]
-    D --> O["AuthorizationGatewayFilter"]
+    G["@ConditionalOnCoSecEnabled<br>(cosec.enabled=true)"]
+    G --> A["CoSecAutoConfiguration"]
+    G --> B["CoSecAuthenticationAutoConfiguration"]
+    G --> C["CoSecSocialAuthenticationAutoConfiguration"]
+    G --> D["CoSecPolicyCacheAutoConfiguration"]
+    G --> E["CoSecPermissionCacheAutoConfiguration"]
+    G --> F["CoSecRequestParserAutoConfiguration"]
+    G --> H["CoSecAuthorizationAutoConfiguration"]
+    G --> I["CoSecGatewayAuthorizationAutoConfiguration"]
+    G --> J["InjectSecurityContextAutoConfiguration"]
+    G --> K["CoSecTokenRevocationCacheAutoConfiguration"]
+    G --> L["CoSecJwtAutoConfiguration"]
+    G --> M["CoSecOpenTelemetryAutoConfiguration"]
+    G --> N["Ip2RegionAutoConfiguration"]
+    G --> O["CoSecOpenAPIAutoConfiguration"]
+    P["CoSecEndpointAutoConfiguration<br>(classpath-only gate)"]
 
+    style G fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style A fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style B fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style C fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style D fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style E fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style F fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style G fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style H fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style I fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style J fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -41,6 +45,7 @@ graph TD
     style M fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style N fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style O fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style P fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
 
@@ -54,6 +59,7 @@ The root auto-configuration class. It runs before `JacksonAutoConfiguration` to 
 @EnableConfigurationProperties(CoSecProperties::class)
 class CoSecAutoConfiguration {
     @Bean
+    @ConditionalOnMissingBean
     fun coSecModule(): CoSecModule = CoSecModule()
 
     @Bean
@@ -63,7 +69,7 @@ class CoSecAutoConfiguration {
 }
 ```
 
-Registers two beans:
+Registers two beans (the `coSecModule` bean backs off via `@ConditionalOnMissingBean` when the application defines its own):
 1. **`CoSecModule`** -- Jackson module for serializing CoSec types (policies, statements, matchers).
 2. **`MatcherFactoryRegister`** -- Spring `SmartLifecycle` that registers all `ActionMatcherFactory` and `ConditionMatcherFactory` beans from the application context.
 
@@ -108,8 +114,8 @@ graph TD
     A["CoSecAuthorizationAutoConfiguration"] --> B["securityContextParser<br>(DefaultSecurityContextParser)"]
     A --> C["cosecAuthorization<br>(SimpleAuthorization)"]
     A --> D["blacklistChecker<br>(BlacklistChecker.NoOp)"]
-    A --> E["localPolicyLoader"]
-    A --> F["localPolicyInitializer"]
+    A --> E["localPolicyLoader<br>(local-policy.enabled)"]
+    A --> F["localPolicyInitializer<br>(local-policy.init-repository)"]
     A --> G["WebFlux config"]
     A --> H["WebMVC config"]
     G --> I["reactiveAuthorizationFilter<br>(ReactiveAuthorizationFilter)"]
@@ -131,7 +137,9 @@ graph TD
 The nested `WebFlux` and `WebMVC` configurations are conditionally activated based on classpath presence:
 - **WebFlux**: activated when `ReactiveAuthorizationFilter` is on the classpath AND Spring Cloud Gateway is NOT.
 - **WebMVC**: activated when `AuthorizationFilter` is on the classpath.
-- **Gateway**: handled by the separate `CoSecGatewayAuthorizationAutoConfiguration` which takes precedence over the plain WebFlux filter (via `@ConditionalOnMissingClass`).
+- **Gateway**: handled by the separate `CoSecGatewayAuthorizationAutoConfiguration`, activated via `@ConditionalOnClass(AuthorizationGatewayFilter::class)`; the plain WebFlux `reactiveAuthorizationFilter` bean itself carries `@ConditionalOnMissingClass("org.springframework.cloud.gateway.filter.GlobalFilter")`, so it backs off when Spring Cloud Gateway is on the classpath.
+
+The `localPolicyLoader` and `localPolicyInitializer` beans are **off by default**: each is guarded by `@ConditionalOnProperty` (`cosec.authorization.local-policy.enabled` and `cosec.authorization.local-policy.init-repository` respectively) with `matchIfMissing = false`, so both beans are only created when explicitly enabled.
 
 ## CoSecJwtAutoConfiguration
 
@@ -158,7 +166,25 @@ cosec:
 
 ## Spring Auto-Configuration Registration
 
-CoSec uses Spring Boot's `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` file to register all auto-configuration classes. This is the modern replacement for `spring.factories`.
+CoSec uses Spring Boot's `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` file to register all auto-configuration classes. This is the modern replacement for `spring.factories`. The starter registers all 15 auto-configuration classes as flat, independent entries:
+
+```
+me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authentication.social.CoSecSocialAuthenticationAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPolicyCacheAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPermissionCacheAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authorization.gateway.CoSecGatewayAuthorizationAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.inject.InjectSecurityContextAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.opentelemetry.CoSecOpenTelemetryAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.actuate.CoSecEndpointAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.openapi.CoSecOpenAPIAutoConfiguration
+```
 
 ```mermaid
 sequenceDiagram

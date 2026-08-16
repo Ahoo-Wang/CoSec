@@ -156,7 +156,7 @@ override val spaceId: SpaceId
 
 `Policy` 接口（[Policy.kt:45](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/Policy.kt#L45)）扩展了 `Tenant`，意味着每个策略都有 `tenantId`。这允许 `PolicyRepository` 仅获取与当前租户相关的策略，并使条件匹配器能够强制执行租户边界。
 
-在授权期间，`SimpleAuthorization`（[SimpleAuthorization.kt:82-113](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L82)）通过条件匹配器过滤策略，其中可以包括租户感知检查，如 `InTenant` 条件。
+在授权期间，`SimpleAuthorization`（[SimpleAuthorization.kt:90-121](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L90)）通过条件匹配器过滤策略，其中可以包括租户感知检查，如 `InTenant` 条件。
 
 ## 租户层次结构
 
@@ -189,7 +189,7 @@ graph TD
 
 ```
 
-平台租户是管理根。平台管理员可以定义适用于所有租户的全局策略，或为个别客户创建租户特定的策略。`SimpleAuthorization` 的评估顺序确保全局策略（可能是平台租户范围的）在主体特定策略之前评估（[SimpleAuthorization.kt:156-178](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L156)）。
+平台租户是管理根。平台管理员可以定义适用于所有租户的全局策略，或为个别客户创建租户特定的策略。`SimpleAuthorization` 的评估顺序确保全局策略（可能是平台租户范围的）在主体特定策略之前评估（[SimpleAuthorization.kt:164-186](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L164)）。
 
 ## 租户条件的 SPI 扩展点
 

@@ -29,7 +29,7 @@ features:
     link: /zh/deep-dive/architecture/multi-tenancy
   - icon: 🔑
     title: JWT 与社交认证
-    details: JWT 令牌生命周期管理（含刷新令牌），通过 JustAuth 支持 20+ 社交登录提供商。
+    details: JWT 令牌生命周期管理（含刷新令牌与基于撤销的登出：TokenRevoker、cosec.jwt.token-revocation.enabled），通过 JustAuth 支持 20+ 社交登录提供商。
     link: /zh/deep-dive/authentication/authentication-system
   - icon: 🔌
     title: 可扩展 SPI
@@ -64,11 +64,11 @@ cosec:
 
 | 技术 | 版本 | 用途 |
 |------|------|------|
-| Kotlin | 2.3.20 | 主要语言 |
+| Kotlin | 2.4.10 | 主要语言 |
 | Java | 17 | 目标 JVM |
-| Spring Boot | 4.0.5 | 应用框架 |
+| Spring Boot | 4.1.0 | 应用框架 |
 | Project Reactor | - | 响应式编程 |
-| JWT (auth0) | 4.5.1 | 令牌处理 |
-| CoCache | 4.0.2 | 分布式缓存 |
+| JWT (auth0) | 4.6.0 | 令牌处理 |
+| CoCache | 4.3.0 | 分布式缓存 |
 | JustAuth | 1.16.7 | 社交认证 |
-| OpenTelemetry | 2.26.1 | 可观测性 |
+| OpenTelemetry | 2.30.0 | 可观测性 |

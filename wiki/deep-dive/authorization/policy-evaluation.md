@@ -19,7 +19,7 @@ class PolicyData(
     override val category: String,
     override val name: String,
     override val description: String,
-    override val type: PolicyType,       // GLOBAL or APP
+    override val type: PolicyType,       // GLOBAL, SYSTEM, or CUSTOM
     override val tenantId: String,
     override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
     override val statements: List<Statement> = listOf()
@@ -29,7 +29,7 @@ class PolicyData(
 Key properties:
 
 - **`id`**: Unique policy identifier
-- **`type`**: `GLOBAL` (applies to all apps) or `APP` (app-scoped)
+- **`type`**: `GLOBAL`, `SYSTEM`, or `CUSTOM` -- global policies, platform-managed system policies, or user-defined policies
 - **`tenantId`**: Tenant scope -- policies are tenant-scoped
 - **`condition`**: A top-level condition that must match before any statement is evaluated
 - **`statements`**: Ordered list of permission rules
@@ -96,7 +96,7 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
 }
 ```
 
-The `safeEvaluate` wrapper catches `TooManyRequestsException` (from rate limiter conditions) and continues, since rate limits cannot be meaningfully evaluated with mock data.
+The `safeEvaluate` wrapper catches `TooManyRequestsException` (from rate limiter conditions) and `RegexTimeoutException` (from regex conditions exceeding their time budget) and continues, since neither can be meaningfully evaluated with mock data.
 
 ### EvaluateRequest
 
@@ -109,6 +109,10 @@ data class EvaluateRequest(
     override val remoteIp: String = "127.0.0.1",
     override val origin: URI = URI.create("http://mockOrigin"),
     override val referer: URI = URI.create("http://mockReferer"),
+    override val attributes: Map<String, String> = mapOf(),
+    private val headers: Map<String, String> = mapOf(),
+    private val queries: Map<String, String> = mapOf(),
+    private val cookies: Map<String, String> = mapOf(),
 ) : Request
 ```
 
@@ -226,19 +230,18 @@ This enables downstream code (audit logging, debugging, OpenTelemetry tracing) t
 
 ## Performance: Sequence-Based Evaluation
 
-The `evaluateDenyFirst` function operates on Kotlin `Sequence<T>` rather than `List<T>`. This means:
+The `evaluateDenyFirst` function takes a Kotlin `Sequence<T>` and materializes it exactly once via `items.partition { ... }`, which builds two intermediate lists (deny items and allow items). This means:
 
-- Statement filtering and iteration is **lazy** -- only evaluated as needed
-- If a DENY statement matches early, remaining statements are never evaluated
-- Memory overhead is minimal since no intermediate collections are created
+- Every upstream condition (e.g. a policy-level rate limiter) is evaluated exactly once per authorization, including conditions positioned after a matching early DENY
+- Within each pass, verification short-circuits on the first decisive result: the DENY pass stops at the first `EXPLICIT_DENY`, the ALLOW pass at the first `ALLOW`
 
 ## References
 
-- [DefaultPolicyEvaluator.kt:25](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L25) - Load-time policy validation
+- [DefaultPolicyEvaluator.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L26) - Load-time policy validation
 - [PolicyVerifyContext.kt:60](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/PolicyVerifyContext.kt#L60) - Verification context data classes
 - [PolicyData.kt:35](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/PolicyData.kt#L35) - Policy data implementation
 - [StatementData.kt:31](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/StatementData.kt#L31) - Statement data implementation
-- [SimpleAuthorization.kt:86](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L86) - Policy verification in authorization
+- [SimpleAuthorization.kt:90](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L90) - Policy verification in authorization
 
 ## Related Pages
 

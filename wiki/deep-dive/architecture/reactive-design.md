@@ -32,7 +32,7 @@ Both contracts ensure the caller never blocks. The reactive types propagate thro
 
 ## Reactive Filter Chain
 
-The central reactive integration point is `ReactiveSecurityFilter` ([ReactiveSecurityFilter.kt:57](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L57)), which is extended by both `ReactiveAuthorizationFilter` (WebFlux) and `AuthorizationGatewayFilter` (Spring Cloud Gateway).
+The central reactive integration point is `ReactiveSecurityFilter` ([ReactiveSecurityFilter.kt:59](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59)), which is extended by both `ReactiveAuthorizationFilter` (WebFlux) and `AuthorizationGatewayFilter` (Spring Cloud Gateway).
 
 ```mermaid
 sequenceDiagram
@@ -69,14 +69,14 @@ sequenceDiagram
 
 ### The filterInternal Method
 
-The `filterInternal` method ([ReactiveSecurityFilter.kt:66-116](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L66)) is the reactive pipeline entry point. Its structure is:
+The `filterInternal` method ([ReactiveSecurityFilter.kt:68-115](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L68)) is the reactive pipeline entry point. Its structure is:
 
-1. **Parse the request** from the `ServerWebExchange` using the injected `RequestParser` ([line 70](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L70)).
-2. **Parse the security context** using the injected `SecurityContextParser`. If a `TokenVerificationException` occurs, catch it and fall back to an anonymous context ([line 73-81](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L73)).
-3. **Authorize** by calling `authorization.authorize(request, securityContext)` ([line 85](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L85)).
-4. **FlatMap** on the result: if authorized, mutate the exchange with the principal and invoke the filter chain; otherwise set 401 or 403 ([line 87-105](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L87)).
-5. **onErrorResume** for `TooManyRequestsException` returns HTTP 429 ([line 106](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L106)).
-6. **onErrorResume** for unexpected errors returns HTTP 500 with `IMPLICIT_DENY` ([line 109](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L109)).
+1. **Parse the request** from the `ServerWebExchange` using the injected `RequestParser` ([line 73](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L73)).
+2. **Parse the security context** using the injected `SecurityContextParser`. If a `TokenVerificationException` occurs, catch it and fall back to an anonymous context ([line 78-88](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L78)).
+3. **Authorize** by calling `authorization.authorize(request, securityContext)` ([line 92-93](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L92)).
+4. **FlatMap** on the result: if authorized, mutate the exchange with the principal and invoke the filter chain; otherwise set 401 or 403 ([line 94-111](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L94)).
+5. **onErrorResume** for `TooManyRequestsException` returns HTTP 429 ([line 121-124](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L121)).
+6. **onErrorResume** for unexpected errors returns HTTP 500 with `IMPLICIT_DENY` ([line 131-137](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L131)).
 
 ## Mono Chain in Authorization
 
@@ -106,7 +106,7 @@ flowchart LR
 
 ```
 
-The `verify` method ([SimpleAuthorization.kt:194-211](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L194)) constructs this chain:
+The `verify` method ([SimpleAuthorization.kt:202-219](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L202)) constructs this chain:
 
 ```kotlin
 verifyGlobalPolicies(request, context)
@@ -118,7 +118,7 @@ verifyGlobalPolicies(request, context)
 
 Each `verifyXxx` method returns `Mono<VerifyContext>`. If a method produces an empty `Mono` (no matching policy), `switchIfEmpty` triggers the next stage. This is semantically equivalent to a series of `orElse` calls but in a non-blocking reactive style.
 
-The outer `authorize` method ([SimpleAuthorization.kt:213-232](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L213)) wraps the verify chain with synchronous root user check and an asynchronous blacklist check:
+The outer `authorize` method ([SimpleAuthorization.kt:221-240](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221)) wraps the verify chain with synchronous root user check and an asynchronous blacklist check:
 
 ```kotlin
 override fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
@@ -189,7 +189,7 @@ The Gateway variant ([AuthorizationGatewayFilter.kt:31](https://github.com/Ahoo-
 
 ## Error Handling Strategy
 
-The reactive pipeline uses `onErrorResume` operators at two levels to ensure graceful degradation:
+The reactive pipeline uses `onErrorResume` operators at multiple levels to ensure graceful degradation:
 
 ```mermaid
 sequenceDiagram
@@ -206,6 +206,10 @@ sequenceDiagram
         Authz-->>RSF: Error(TooManyRequestsException)
         RSF->>Error: onErrorResume(TooManyRequestsException)
         Error-->>RSF: HTTP 429 + TOO_MANY_REQUESTS
+    else RegexTimeoutException
+        Authz-->>RSF: Error(RegexTimeoutException)
+        RSF->>Error: onErrorResume(RegexTimeoutException)
+        Error-->>RSF: HTTP 403 + IMPLICIT_DENY
     else Unexpected Exception
         Authz-->>RSF: Error(RuntimeException)
         RSF->>Error: onErrorResume { generic }
@@ -214,21 +218,23 @@ sequenceDiagram
 
 ```
 
-The error handling is layered in `filterInternal` ([ReactiveSecurityFilter.kt:106-114](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L106)):
+The error handling is layered in `filterInternal` ([ReactiveSecurityFilter.kt:121-138](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L121)):
 
-1. **TokenVerificationException** -- Caught synchronously during context parsing ([line 75](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L75)). The request proceeds as anonymous. If the anonymous user is later denied, the response is 401 (not 403).
+1. **TokenVerificationException** -- Caught synchronously during context parsing ([line 82](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L82)). The request proceeds as anonymous. If the anonymous user is later denied, the response is 401 (not 403).
 
-2. **TooManyRequestsException** -- Caught via `onErrorResume(TooManyRequestsException::class.java)` ([line 106](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L106)). Returns HTTP 429 with a `TOO_MANY_REQUESTS` result body. This is typically raised by rate-limiting `ConditionMatcher` implementations.
+2. **TooManyRequestsException** -- Caught via `onErrorResume(TooManyRequestsException::class.java)` ([line 121](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L121)). Returns HTTP 429 with a `TOO_MANY_REQUESTS` result body. This is typically raised by rate-limiting `ConditionMatcher` implementations.
 
-3. **Generic Exception** -- Caught by the final `onErrorResume` block ([line 109](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L109)). Logged at ERROR level and returns HTTP 500 with `IMPLICIT_DENY`. This ensures the security framework never crashes the application; it defaults to deny access on unexpected failures.
+3. **RegexTimeoutException** -- Caught via `onErrorResume(RegexTimeoutException::class.java)` ([line 125-130](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L125)). A regex condition exceeding its time budget (the ReDoS guard) is an expected, fail-closed authorization outcome, so it returns HTTP 403 with `IMPLICIT_DENY` rather than a 5xx server error (which would invite client retries).
 
-All error responses are serialized as JSON using `CoSecJsonSerializer` and written as a `Mono<Void>` via `writeWithAuthorizeResult` ([line 118](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L118)).
+4. **Generic Exception** -- Caught by the final `onErrorResume` block ([line 131](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L131)). Logged at ERROR level and returns HTTP 500 with `IMPLICIT_DENY`. This ensures the security framework never crashes the application; it defaults to deny access on unexpected failures.
+
+All error responses are serialized as JSON using `CoSecJsonSerializer` and written as a `Mono<Void>` via `writeWithAuthorizeResult` ([line 141](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L141)).
 
 ## References
 
 - [Authorization.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/authorization/Authorization.kt#L35) -- `Mono<AuthorizeResult>` contract
 - [Authentication.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/authentication/Authentication.kt#L32) -- `Mono<out P>` contract
-- [ReactiveSecurityFilter.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L57) -- Base reactive filter with error handling
+- [ReactiveSecurityFilter.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59) -- Base reactive filter with error handling
 - [ReactiveAuthorizationFilter.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36) -- WebFlux WebFilter adapter
 - [AuthorizationGatewayFilter.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt#L31) -- Gateway GlobalFilter adapter
 - [SimpleAuthorization.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48) -- `Mono.switchIfEmpty` authorization cascade

@@ -46,15 +46,14 @@ private inline fun <T> evaluateDenyFirst(
     crossinline verifyItem: (T) -> VerifyResult,
     crossinline onMatch: (T, VerifyResult) -> VerifyContext
 ): VerifyContext? {
-    // Phase 1: Check ALL DENY statements first
-    items.filter { effectExtractor(it) == Effect.DENY }.forEach { item ->
+    val (denyItems, allowItems) = items.partition { effectExtractor(it) == Effect.DENY }
+    denyItems.forEach { item ->
         val result = verifyItem(item)
         if (result == VerifyResult.EXPLICIT_DENY) {
             return onMatch(item, result)
         }
     }
-    // Phase 2: Then check ALLOW statements
-    items.filter { effectExtractor(it) == Effect.ALLOW }.forEach { item ->
+    allowItems.forEach { item ->
         val result = verifyItem(item)
         if (result == VerifyResult.ALLOW) {
             return onMatch(item, result)
@@ -64,7 +63,7 @@ private inline fun <T> evaluateDenyFirst(
 }
 ```
 
-This ensures that **explicit deny always takes precedence over allow**, matching the AWS IAM evaluation model.
+This ensures that **explicit deny always takes precedence over allow**, matching the AWS IAM evaluation model. The incoming sequence is materialized exactly once by `partition`, so every upstream condition (e.g. a policy-level rate limiter) is evaluated exactly once per authorization -- including conditions positioned after a matching early DENY -- meaning denied requests uniformly consume rate-limiter permits.
 
 ## AuthorizeResult Types
 
@@ -137,6 +136,7 @@ sequenceDiagram
     Policy-->>Auth: List<Policy>
     Auth->>Auth: filter by condition.match
     Auth->>Eval: evaluateDenyFirst(allStatements)
+    Note over Eval: partition once into denyItems / allowItems
     Note over Eval: Phase 1: DENY statements
     loop each DENY statement
         Eval->>Eval: statement.verify(request, context)

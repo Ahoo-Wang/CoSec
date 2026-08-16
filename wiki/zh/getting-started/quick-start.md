@@ -30,15 +30,17 @@ dependencies {
 dependencies {
     implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
         capabilities {
-            requireCapability("me.ahoo.cosec:cosec-spring-boot-starter:webflux-support")
+            requireCapability("me.ahoo.cosec:webflux-support")
         }
     }
     // 或者用于 Gateway：
-    // requireCapability("me.ahoo.cosec:cosec-spring-boot-starter:gateway-support")
+    // requireCapability("me.ahoo.cosec:gateway-support")
     // 或者用于缓存（Redis）：
-    // requireCapability("me.ahoo.cosec:cosec-spring-boot-starter:cache-support")
+    // requireCapability("me.ahoo.cosec:cache-support")
 }
 ```
+
+能力以 `group:name` 形式（如 `me.ahoo.cosec:webflux-support`）声明在 starter 本身之上，而不是单独的构件。
 
 Starter 会根据检测到的依赖自动配置安全组件。自动配置由 `@ConditionalOnCoSecEnabled` 控制（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/ConditionalOnCoSecEnabled.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/ConditionalOnCoSecEnabled.kt)）。
 
@@ -70,6 +72,7 @@ cosec:
 | `cosec.jwt.secret` | `String` | *必填* | JWT 签名的密钥 |
 | `cosec.jwt.token-validity.access` | `Duration` | `PT10M` | 访问令牌 TTL |
 | `cosec.jwt.token-validity.refresh` | `Duration` | `P7D` | 刷新令牌 TTL |
+| `cosec.jwt.token-revocation.enabled` | `Boolean` | `false` | 启用用于登出的令牌撤销（被撤销的令牌记录在缓存中） |
 | `cosec.authorization.enabled` | `Boolean` | `true` | 启用授权 |
 | `cosec.authorization.local-policy.enabled` | `Boolean` | `false` | 从本地 JSON 文件加载策略 |
 | `cosec.authorization.local-policy.locations` | `Set<String>` | `classpath:cosec-policy/*-policy.json` | 策略文件的 Glob 模式 |
@@ -141,8 +144,8 @@ curl -v http://localhost:8080/actuator/health
 
 ```bash
 curl -v http://localhost:8080/api/users
-# 预期结果：401 Unauthorized（无凭证）
-# 或 403 Forbidden（匿名用户，没有匹配的 ALLOW 策略）
+# 预期结果：401 Unauthorized（匿名请求，没有匹配的 ALLOW 策略）
+# 403 Forbidden 仅在已认证主体被策略拒绝时返回
 ```
 
 ## 认证流程
@@ -208,10 +211,12 @@ class UsernamePasswordAuthentication(
             .filter { passwordEncoder.matches(credentials.password, it.hashedPassword) }
             .map { user ->
                 SimpleTenantPrincipal(
-                    id = user.id,
-                    roles = user.roles,
-                    policies = user.policies,
-                    tenantId = user.tenantId
+                    SimplePrincipal(
+                        id = user.id,
+                        roles = user.roles,
+                        policies = user.policies
+                    ),
+                    SimpleTenant(user.tenantId)
                 )
             }
     }

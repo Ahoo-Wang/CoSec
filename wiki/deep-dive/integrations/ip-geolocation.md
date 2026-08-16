@@ -38,14 +38,14 @@ Implements `RequestAttributesAppender` and uses the ip2region `xdb` format datab
 
 ```kotlin
 class Ip2RegionRequestAttributesAppender(
-    ip2regionFile: File = LOCAL_IP2REGION_FILE,
+    ip2regionDb: ByteArray = loadDefaultIp2RegionDb(),
     version: Version = Version.IPv4
 ) : RequestAttributesAppender
 ```
 
 Key characteristics:
 
-- **Database**: Loads the `ip2region.xdb` file from the classpath by default. The xdb format provides memory-mapped lookups with no external dependencies.
+- **Database**: Loads the `ip2region.xdb` file from the classpath by default into a `ByteArray` (via `loadDefaultIp2RegionDb()`). The xdb format provides memory-mapped lookups with no external dependencies.
 - **Lazy initialization**: The `Searcher` is created lazily on first use.
 - **Attribute key**: `ipRegion` -- this is the constant `REQUEST_ATTRIBUTES_IP_REGION_KEY`.
 - **Error handling**: If the search fails (e.g., for an IPv6 address when IPv4 mode is selected), the request is returned unchanged without the `ipRegion` attribute.
@@ -129,8 +129,8 @@ When `cosec.ip2region.enabled=false` is set (as in the gateway deployment), the 
 
 - [cosec-ip2region/src/main/kotlin/me/ahoo/cosec/ip2region/Ip2RegionRequestAttributesAppender.kt:25](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-ip2region/src/main/kotlin/me/ahoo/cosec/ip2region/Ip2RegionRequestAttributesAppender.kt#L25) -- Core IP resolution logic
 - [cosec-spring-boot-starter/src/main/kotlin/.../Ip2RegionAutoConfiguration.kt:33](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/ip2region/Ip2RegionAutoConfiguration.kt#L33) -- Auto-configuration
-- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt#L27) -- WebFlux request parser (uses appenders)
-- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt:31](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt#L31) -- Servlet request parser (uses appenders)
+- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt#L28) -- WebFlux request parser (uses appenders)
+- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt:32](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt#L32) -- Servlet request parser (uses appenders)
 - [k8s/cosec-gateway-config.yaml](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/cosec-gateway-config.yaml) -- Example config with ip2region disabled
 
 ## Related Pages

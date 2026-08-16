@@ -169,7 +169,8 @@ The `JwtFixture` object provides a shared test algorithm for JWT-based tests:
 
 ```kotlin
 object JwtFixture {
-    var ALGORITHM = Algorithm.HMAC256("jwt-doc-example-secret")
+    const val TEST_JWT_SECRET = "jwt-fixture-test-secret"
+    var ALGORITHM = Algorithm.HMAC256(TEST_JWT_SECRET)
 }
 ```
 
@@ -214,8 +215,8 @@ flowchart LR
 
 ## References
 
-- [cosec-core/src/test/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluatorTest.kt:35](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/test/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluatorTest.kt#L35) -- Policy evaluator tests
-- [cosec-core/src/test/kotlin/me/ahoo/cosec/authorization/SimpleAuthorizationTest.kt:41](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/test/kotlin/me/ahoo/cosec/authorization/SimpleAuthorizationTest.kt#L41) -- Authorization tests
+- [cosec-core/src/test/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluatorTest.kt:36](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/test/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluatorTest.kt#L36) -- Policy evaluator tests
+- [cosec-core/src/test/kotlin/me/ahoo/cosec/authorization/SimpleAuthorizationTest.kt:42](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/test/kotlin/me/ahoo/cosec/authorization/SimpleAuthorizationTest.kt#L42) -- Authorization tests
 - [cosec-jwt/src/test/kotlin/me/ahoo/cosec/jwt/JwtFixture.kt:18](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-jwt/src/test/kotlin/me/ahoo/cosec/jwt/JwtFixture.kt#L18) -- JWT test fixture
 - [cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:48](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48) -- SimpleAuthorization (under test)
 - [cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt) -- Policy evaluator (under test)

@@ -70,19 +70,16 @@ The `rolePermissionIndexer` performs the join between roles and permissions:
 
 ```kotlin
 val rolePermissionIndexer: Map<RoleId, List<Permission>>
-    get() {
-        // Check for wildcard first
-        rolePermissions.forEach {
-            if (it.permissions.contains(ALL_PERMISSION_ID)) {
-                return mapOf(it.id to appPermission.permissionIndexer.values.toList())
+    get() = rolePermissions.associate { rolePermission ->
+        val permissions =
+            if (rolePermission.permissions.contains(ALL_PERMISSION_ID)) {
+                appPermission.permissionIndexer.values.toList()
+            } else {
+                rolePermission.permissions.mapNotNull { permissionId ->
+                    appPermission.permissionIndexer[permissionId]
+                }
             }
-        }
-        // Normal mapping
-        return rolePermissions.associate {
-            it.id to it.permissions.mapNotNull { permId ->
-                appPermission.permissionIndexer[permId]
-            }
-        }
+        rolePermission.id to permissions
     }
 ```
 
@@ -148,7 +145,9 @@ classDiagram
     class PermissionGroup {
         <<interface>>
         +name: String
+        +description: String
         +permissions: List~Permission~
+        +spaced: Boolean
     }
     class AppPermission {
         <<interface>>
@@ -186,12 +185,11 @@ classDiagram
 
 ```mermaid
 flowchart TD
-    A["AppRolePermission.rolePermissionIndexer"] --> B{"Any RolePermission has '*'?"}
+    A["AppRolePermission.rolePermissionIndexer"] --> E["For each RolePermission"]
+    E --> B{"Role permissions contain '*'?"}
     B -->|"yes"| C["Wildcard role gets ALL permissions"]
     C --> D["roleId -> all permissionIndexer.values"]
-    B -->|"no"| E["Normal mapping"]
-    E --> F["For each RolePermission"]
-    F --> G["Map permissions set to Permission objects via permissionIndexer"]
+    B -->|"no"| G["Map permissions set to Permission objects via permissionIndexer"]
     G --> H["roleId -> List<Permission>"]
 
     style A fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -199,7 +197,6 @@ flowchart TD
     style C fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style D fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style E fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style F fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style G fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style H fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 

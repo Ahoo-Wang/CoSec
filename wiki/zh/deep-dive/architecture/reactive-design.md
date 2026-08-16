@@ -32,7 +32,7 @@ interface Authentication<C : Credentials, out P : CoSecPrincipal> {
 
 ## 响应式过滤器链
 
-核心的响应式集成点是 `ReactiveSecurityFilter`（[ReactiveSecurityFilter.kt:57](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L57)），它被 `ReactiveAuthorizationFilter`（WebFlux）和 `AuthorizationGatewayFilter`（Spring Cloud Gateway）扩展。
+核心的响应式集成点是 `ReactiveSecurityFilter`（[ReactiveSecurityFilter.kt:59](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59)），它被 `ReactiveAuthorizationFilter`（WebFlux）和 `AuthorizationGatewayFilter`（Spring Cloud Gateway）扩展。
 
 ```mermaid
 sequenceDiagram
@@ -69,14 +69,14 @@ sequenceDiagram
 
 ### filterInternal 方法
 
-`filterInternal` 方法（[ReactiveSecurityFilter.kt:66-116](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L66)）是响应式管道的入口点。其结构如下：
+`filterInternal` 方法（[ReactiveSecurityFilter.kt:68-115](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L68)）是响应式管道的入口点。其结构如下：
 
-1. **解析请求** —— 使用注入的 `RequestParser` 从 `ServerWebExchange` 解析（[第 70 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L70)）。
-2. **解析安全上下文** —— 使用注入的 `SecurityContextParser` 解析。如果发生 `TokenVerificationException`，捕获并回退到匿名上下文（[第 73-81 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L73)）。
-3. **授权** —— 调用 `authorization.authorize(request, securityContext)`（[第 85 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L85)）。
-4. **FlatMap** 结果：如果已授权，修改 exchange 中的主体并调用过滤器链；否则设置 401 或 403（[第 87-105 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L87)）。
-5. **onErrorResume** 处理 `TooManyRequestsException` 返回 HTTP 429（[第 106 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L106)）。
-6. **onErrorResume** 处理意外错误返回 HTTP 500 和 `IMPLICIT_DENY`（[第 109 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L109)）。
+1. **解析请求** —— 使用注入的 `RequestParser` 从 `ServerWebExchange` 解析（[第 73 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L73)）。
+2. **解析安全上下文** —— 使用注入的 `SecurityContextParser` 解析。如果发生 `TokenVerificationException`，捕获并回退到匿名上下文（[第 78-88 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L78)）。
+3. **授权** —— 调用 `authorization.authorize(request, securityContext)`（[第 92-93 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L92)）。
+4. **FlatMap** 结果：如果已授权，修改 exchange 中的主体并调用过滤器链；否则设置 401 或 403（[第 94-111 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L94)）。
+5. **onErrorResume** 处理 `TooManyRequestsException` 返回 HTTP 429（[第 121-124 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L121)）。
+6. **onErrorResume** 处理意外错误返回 HTTP 500 和 `IMPLICIT_DENY`（[第 131-137 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L131)）。
 
 ## 授权中的 Mono 链
 
@@ -106,7 +106,7 @@ flowchart LR
 
 ```
 
-`verify` 方法（[SimpleAuthorization.kt:194-211](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L194)）构建此链：
+`verify` 方法（[SimpleAuthorization.kt:202-219](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L202)）构建此链：
 
 ```kotlin
 verifyGlobalPolicies(request, context)
@@ -118,7 +118,7 @@ verifyGlobalPolicies(request, context)
 
 每个 `verifyXxx` 方法返回 `Mono<VerifyContext>`。如果方法产生空的 `Mono`（无匹配策略），`switchIfEmpty` 触发下一阶段。这在语义上等同于一系列 `orElse` 调用，但以非阻塞的响应式风格实现。
 
-外层的 `authorize` 方法（[SimpleAuthorization.kt:213-232](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L213)）将 verify 链包装在同步根用户检查和异步黑名单检查中：
+外层的 `authorize` 方法（[SimpleAuthorization.kt:221-240](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221)）将 verify 链包装在同步根用户检查和异步黑名单检查中：
 
 ```kotlin
 override fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
@@ -189,7 +189,7 @@ Gateway 变体（[AuthorizationGatewayFilter.kt:31](https://github.com/Ahoo-Wang
 
 ## 错误处理策略
 
-响应式管道在两个级别使用 `onErrorResume` 操作符以确保优雅降级：
+响应式管道在多个级别使用 `onErrorResume` 操作符以确保优雅降级：
 
 ```mermaid
 sequenceDiagram
@@ -206,6 +206,10 @@ sequenceDiagram
         Authz-->>RSF: Error(TooManyRequestsException)
         RSF->>Error: onErrorResume(TooManyRequestsException)
         Error-->>RSF: HTTP 429 + TOO_MANY_REQUESTS
+    else RegexTimeoutException
+        Authz-->>RSF: Error(RegexTimeoutException)
+        RSF->>Error: onErrorResume(RegexTimeoutException)
+        Error-->>RSF: HTTP 403 + IMPLICIT_DENY
     else Unexpected Exception
         Authz-->>RSF: Error(RuntimeException)
         RSF->>Error: onErrorResume { generic }
@@ -214,21 +218,23 @@ sequenceDiagram
 
 ```
 
-错误处理在 `filterInternal` 中分层（[ReactiveSecurityFilter.kt:106-114](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L106)）：
+错误处理在 `filterInternal` 中分层（[ReactiveSecurityFilter.kt:121-138](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L121)）：
 
-1. **TokenVerificationException** —— 在上下文解析期间同步捕获（[第 75 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L75)）。请求以匿名用户身份继续。如果匿名用户稍后被拒绝，响应为 401（而非 403）。
+1. **TokenVerificationException** —— 在上下文解析期间同步捕获（[第 82 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L82)）。请求以匿名用户身份继续。如果匿名用户稍后被拒绝，响应为 401（而非 403）。
 
-2. **TooManyRequestsException** —— 通过 `onErrorResume(TooManyRequestsException::class.java)` 捕获（[第 106 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L106)）。返回 HTTP 429 和 `TOO_MANY_REQUESTS` 结果体。这通常由速率限制 `ConditionMatcher` 实现触发。
+2. **TooManyRequestsException** —— 通过 `onErrorResume(TooManyRequestsException::class.java)` 捕获（[第 121 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L121)）。返回 HTTP 429 和 `TOO_MANY_REQUESTS` 结果体。这通常由速率限制 `ConditionMatcher` 实现触发。
 
-3. **通用异常** —— 由最终的 `onErrorResume` 块捕获（[第 109 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L109)）。以 ERROR 级别记录日志并返回 HTTP 500 和 `IMPLICIT_DENY`。这确保安全框架永远不会使应用崩溃；在意外失败时默认拒绝访问。
+3. **RegexTimeoutException** —— 通过 `onErrorResume(RegexTimeoutException::class.java)` 捕获（[第 125-130 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L125)）。正则条件超出其时间预算（ReDoS 防护）是预期的、故障关闭的授权结果，因此返回 HTTP 403 和 `IMPLICIT_DENY`，而非 5xx 服务器错误（后者会诱发客户端重试）。
 
-所有错误响应都使用 `CoSecJsonSerializer` 序列化为 JSON，并通过 `writeWithAuthorizeResult` 写入 `Mono<Void>`（[第 118 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L118)）。
+4. **通用异常** —— 由最终的 `onErrorResume` 块捕获（[第 131 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L131)）。以 ERROR 级别记录日志并返回 HTTP 500 和 `IMPLICIT_DENY`。这确保安全框架永远不会使应用崩溃；在意外失败时默认拒绝访问。
+
+所有错误响应都使用 `CoSecJsonSerializer` 序列化为 JSON，并通过 `writeWithAuthorizeResult` 写入 `Mono<Void>`（[第 141 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L141)）。
 
 ## 参考资料
 
 - [Authorization.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/authorization/Authorization.kt#L35) —— `Mono<AuthorizeResult>` 契约
 - [Authentication.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/authentication/Authentication.kt#L32) —— `Mono<out P>` 契约
-- [ReactiveSecurityFilter.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L57) —— 带错误处理的基础响应式过滤器
+- [ReactiveSecurityFilter.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59) —— 带错误处理的基础响应式过滤器
 - [ReactiveAuthorizationFilter.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36) —— WebFlux WebFilter 适配器
 - [AuthorizationGatewayFilter.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt#L31) —— Gateway GlobalFilter 适配器
 - [SimpleAuthorization.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48) —— `Mono.switchIfEmpty` 授权级联

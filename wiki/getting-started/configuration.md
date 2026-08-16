@@ -19,8 +19,8 @@ flowchart TD
     ROOT --> AUTHZ["cosec.authorization.*"]
     ROOT --> IP2R["cosec.ip2region.*"]
     ROOT --> OPENAPI["cosec.openapi.*"]
-    ROOT --> SOCIAL["cosec.social.*"]
-    ROOT --> INJECT["cosec.inject-security-context.*"]
+    ROOT --> SOCIAL["cosec.authentication.social.*"]
+    ROOT --> INJECT["cosec.inject.*"]
 
     AUTHZ --> LP["authorization.local-policy.*"]
     AUTHZ --> CACHE["authorization.cache.*"]
@@ -71,6 +71,7 @@ Controls JWT token creation and verification.
 | `cosec.jwt.secret` | `String` | *required* | Secret key for HMAC signing |
 | `cosec.jwt.token-validity.access` | `Duration` | `PT10M` | Access token time-to-live (10 minutes) |
 | `cosec.jwt.token-validity.refresh` | `Duration` | `P7D` | Refresh token time-to-live (7 days) |
+| `cosec.jwt.token-revocation.enabled` | `Boolean` | `false` | Enable token revocation for logout; revoked tokens are tracked in the authorization token cache |
 
 Defined in `JwtProperties` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties.kt#L28)). Conditional activation is controlled by `@ConditionalOnJwtEnabled` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/ConditionalOnJwtEnabled.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/ConditionalOnJwtEnabled.kt)).
 
@@ -93,6 +94,7 @@ Controls the authorization engine and policy loading behavior.
 | `cosec.authorization.local-policy.locations` | `Set<String>` | `classpath:cosec-policy/*-policy.json` | Glob patterns for policy file locations |
 | `cosec.authorization.local-policy.init-repository` | `Boolean` | `false` | Initialize the policy repository with local files on startup |
 | `cosec.authorization.local-policy.force-refresh` | `Boolean` | `false` | Force refresh of local policies on startup |
+| `cosec.authorization.remote-ip.max-trusted-index` | `Int` | `1` | X-Forwarded-For trust depth: `0` ignores the header entirely (directly exposed deployments); `N` trusts N proxy hops and takes the rightmost entry appended by the closest trusted proxy |
 
 Defined in `AuthorizationProperties` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/AuthorizationProperties.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/AuthorizationProperties.kt#L27)).
 
@@ -105,13 +107,25 @@ Controls Redis-based caching for policies and role permissions via CoCache.
 | `cosec.authorization.cache.enabled` | `Boolean` | `true` | Enable caching |
 | `cosec.authorization.cache.key-prefix` | `String` | `cosec` | Redis key prefix |
 | `cosec.authorization.cache.policy.initialCapacity` | `Int` | *unset* | Guava cache initial capacity (policy cache) |
+| `cosec.authorization.cache.policy.concurrencyLevel` | `Int` | *unset* | Guava cache concurrency level (policy cache) |
 | `cosec.authorization.cache.policy.maximumSize` | `Long` | *unset* | Guava cache maximum size (policy cache) |
-| `cosec.authorization.cache.policy.expireAfterWrite` | `Long` | *unset* | Expire after write in seconds (policy cache) |
-| `cosec.authorization.cache.policy.expireAfterAccess` | `Long` | *unset* | Expire after access in seconds (policy cache) |
+| `cosec.authorization.cache.policy.expireUnit` | `TimeUnit` | `SECONDS` | Time unit for expireAfterWrite/expireAfterAccess (policy cache) |
+| `cosec.authorization.cache.policy.expireAfterWrite` | `Long` | *unset* | Expire after write (policy cache) |
+| `cosec.authorization.cache.policy.expireAfterAccess` | `Long` | *unset* | Expire after access (policy cache) |
 | `cosec.authorization.cache.role.initialCapacity` | `Int` | *unset* | Guava cache initial capacity (role cache) |
+| `cosec.authorization.cache.role.concurrencyLevel` | `Int` | *unset* | Guava cache concurrency level (role cache) |
 | `cosec.authorization.cache.role.maximumSize` | `Long` | *unset* | Guava cache maximum size (role cache) |
-| `cosec.authorization.cache.role.expireAfterWrite` | `Long` | *unset* | Expire after write in seconds (role cache) |
-| `cosec.authorization.cache.role.expireAfterAccess` | `Long` | *unset* | Expire after access in seconds (role cache) |
+| `cosec.authorization.cache.role.expireUnit` | `TimeUnit` | `SECONDS` | Time unit for expireAfterWrite/expireAfterAccess (role cache) |
+| `cosec.authorization.cache.role.expireAfterWrite` | `Long` | *unset* | Expire after write (role cache) |
+| `cosec.authorization.cache.role.expireAfterAccess` | `Long` | *unset* | Expire after access (role cache) |
+| `cosec.authorization.cache.token.initialCapacity` | `Int` | *unset* | Guava cache initial capacity (revoked-token cache) |
+| `cosec.authorization.cache.token.concurrencyLevel` | `Int` | *unset* | Guava cache concurrency level (revoked-token cache) |
+| `cosec.authorization.cache.token.maximumSize` | `Long` | `100000` | Guava cache maximum size (revoked-token cache) |
+| `cosec.authorization.cache.token.expireUnit` | `TimeUnit` | `SECONDS` | Time unit for expireAfterWrite/expireAfterAccess (revoked-token cache) |
+| `cosec.authorization.cache.token.expireAfterWrite` | `Long` | `30` | Expire after write (revoked-token cache); bounds cross-instance revocation propagation |
+| `cosec.authorization.cache.token.expireAfterAccess` | `Long` | *unset* | Expire after access (revoked-token cache) |
+
+The derived Redis key prefix for revoked tokens is `cosec:token:revoked:` (i.e. `${key-prefix}:token:revoked:`). It backs token revocation (`cosec.jwt.token-revocation.enabled`) for logout.
 
 Defined in `CacheProperties` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt:34](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt#L34)).
 
@@ -152,9 +166,9 @@ sequenceDiagram
     autonumber
     participant SB as Spring Boot
     participant CA as CoSecAutoConfiguration
-    participant JA as JwtAutoConfiguration
-    participant AA as AuthAutoConfiguration
-    participant AZ as AuthzAutoConfiguration
+    participant JA as CoSecJwtAutoConfiguration
+    participant AA as CoSecAuthenticationAutoConfiguration
+    participant AZ as CoSecAuthorizationAutoConfiguration
     participant MA as MatcherFactoryRegister
 
     SB->>CA: Check @ConditionalOnCoSecEnabled

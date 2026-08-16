@@ -97,10 +97,10 @@ sequenceDiagram
 
 `filterInternal` 方法处理以下内容：
 
-1. **请求解析** -- 将 `ServerWebExchange` 转换为 CoSec `Request`。
+1. **请求解析** -- 将 `ServerWebExchange` 转换为 CoSec `Request`；若抛出 `InvalidRequestPathException`（格式错误/非法路径），则直接以 **400 Bad Request** 短路返回。
 2. **令牌验证** -- 捕获 `TokenVerificationException` 并回退到匿名的 `SimpleSecurityContext`。
 3. **授权决策** -- 调用 `Authorization.authorize()` 并将结果映射为 HTTP 状态码。
-4. **错误处理** -- 将 `TooManyRequestsException` 映射为 429，将意外错误映射为 500。
+4. **错误处理** -- 将 `TooManyRequestsException` 映射为 429；将 `RegexTimeoutException`（正则条件超出时间预算，即 ReDoS 防护）以失败关闭（fail-closed）方式映射为 403 拒绝；将意外错误映射为 500。
 
 ### ReactiveRequestParser
 
@@ -165,8 +165,8 @@ graph TD
 ## 参考资料
 
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt:36](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36) -- 过滤器入口
-- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt:57](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L57) -- 包含 `filterInternal` 的基类
-- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt#L27) -- 请求解析
+- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt:59](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59) -- 包含 `filterInternal` 的基类
+- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt#L28) -- 请求解析
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequest.kt:22](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequest.kt#L22) -- 请求数据类
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityContexts.kt:21](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityContexts.kt#L21) -- 上下文传播
 

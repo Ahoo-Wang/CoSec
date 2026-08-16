@@ -5,7 +5,7 @@ description: CoSec 如何使用 CoCache 配合 Redis 实现策略、权限和角
 
 # 使用 CoCache 的 Redis 缓存
 
-CoSec 利用 CoCache 为策略和角色权限提供两级分布式缓存层（本地 Caffeine + Redis）。这确保了快速的授权决策，同时在多个网关实例间保持一致性。
+CoSec 利用 CoCache 为策略、角色权限和已撤销令牌提供两级分布式缓存层（本地 Caffeine + Redis）。这确保了快速的授权决策，同时在多个网关实例间保持一致性。
 
 ## 架构概览
 
@@ -108,6 +108,19 @@ sequenceDiagram
 
 ```
 
+### RevokedTokenCache（令牌撤销）
+
+除了策略和权限之外，还有第五个缓存用于跟踪**已撤销的 JWT**。`RevokedTokenCache` 以令牌 ID（`jti`）为键，为已撤销的令牌存储 `true`；每个条目都携带自身的绝对过期时间，与被撤销令牌的剩余生命周期一致。`CoCacheTokenStore` 在该缓存之上实现了 `TokenStore` SPI，因此撤销状态可在所有网关实例间共享，而本地命中无需网络开销。
+
+装配逻辑位于 `CoSecTokenRevocationCacheAutoConfiguration`（[源码](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/CoSecTokenRevocationCacheAutoConfiguration.kt#L38)）：
+
+- `@EnableCoCache(caches = [RevokedTokenCache::class])` 注册两级缓存。
+- `coCacheTokenStore` Bean 将其暴露为 `TokenStore`。
+- 键转换器为键添加前缀 `cosec:token:revoked:`。
+- 本地层默认 `expireAfterWrite=30s` / `maximumSize=100_000`（可通过 `cosec.authorization.cache.token.*` 配置）。
+
+该功能通过 `cosec.jwt.token-revocation.enabled` 按需开启（默认 `false`）。端到端的令牌撤销流程参见 [JWT 集成](../authentication/jwt-integration.md)。
+
 ### 缓存接口
 
 所有缓存接口都扩展了 CoCache 的 `Cache<K, V>` 接口，提供统一的 L1（Caffeine）和 L2（Redis）缓存 API：
@@ -118,6 +131,7 @@ sequenceDiagram
 | `GlobalPolicyIndexCache` | `String`（固定键） | `Set<String>`（策略 ID） | 所有全局策略 ID 的索引 |
 | `AppPermissionCache` | `AppId` | `AppPermission` | 应用权限定义 |
 | `RolePermissionCache` | `SpacedRoleId` | `Set<PermissionId>` | 角色到权限的映射 |
+| `RevokedTokenCache` | `String`（令牌 ID / jti） | `Boolean` | 支撑 `CoCacheTokenStore` 的已撤销令牌标记 |
 
 ### GlobalPolicyIndexKeyConverter
 
@@ -134,6 +148,9 @@ cosec:
       policy:
         maximum-size: 100000
       role:
+        maximum-size: 100000
+      token: # RevokedTokenCache 的本地层（通过 cosec.jwt.token-revocation.enabled 按需开启）
+        expire-after-write: 30
         maximum-size: 100000
 ```
 
@@ -175,8 +192,11 @@ graph TD
 
 ## 参考资料
 
-- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt#L26) -- 策略仓库
-- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisAppRolePermissionRepository.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisAppRolePermissionRepository.kt#L27) -- 角色权限仓库
+- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt#L27) -- 策略仓库
+- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisAppRolePermissionRepository.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisAppRolePermissionRepository.kt#L28) -- 角色权限仓库
+- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RevokedTokenCache.kt:30](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RevokedTokenCache.kt#L30) -- 已撤销令牌缓存接口
+- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoCacheTokenStore.kt:29](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoCacheTokenStore.kt#L29) -- 基于 RevokedTokenCache 的 TokenStore
+- [cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/CoSecTokenRevocationCacheAutoConfiguration.kt:38](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/CoSecTokenRevocationCacheAutoConfiguration.kt#L38) -- 令牌撤销缓存装配
 - [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/PolicyCache.kt:23](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/PolicyCache.kt#L23) -- 策略缓存接口
 - [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/AppPermissionCache.kt:20](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/AppPermissionCache.kt#L20) -- 应用权限缓存接口
 - [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/GlobalPolicyIndexCache.kt:22](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/GlobalPolicyIndexCache.kt#L22) -- 全局策略索引缓存
@@ -186,5 +206,6 @@ graph TD
 
 - [Spring Cloud Gateway 集成](./spring-cloud-gateway.md)
 - [OpenTelemetry 集成](./opentelemetry.md)
+- [JWT 集成](../authentication/jwt-integration.md)
 - [性能](../operations/performance.md)
 - [部署](../operations/deployment.md)

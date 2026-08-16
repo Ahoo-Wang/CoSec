@@ -84,9 +84,11 @@ sequenceDiagram
 `AuthorizationFilter.doFilter` 的关键行为：
 
 1. **委托**给 `AbstractAuthorizationInterceptor.authorize()`。
-2. **捕获** `TooManyRequestsException` 并返回 HTTP 429。
-3. **捕获**意外异常，记录错误日志并返回 HTTP 500。
-4. 授权成功后，调用 `chain.doFilter(request, response)`。
+2. **捕获** `InvalidRequestPathException`（格式错误/非法路径）并返回 HTTP 400。
+3. **捕获** `TooManyRequestsException` 并返回 HTTP 429。
+4. **捕获** `RegexTimeoutException`（正则条件超出时间预算，即 ReDoS 防护）并以失败关闭（fail-closed）方式返回 HTTP 403 拒绝。
+5. **捕获**意外异常，记录错误日志并返回 HTTP 500。
+6. 授权成功后，调用 `chain.doFilter(request, response)`。
 
 ### AbstractAuthorizationInterceptor
 
@@ -149,11 +151,11 @@ graph TD
 
 ## 参考资料
 
-- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt:42](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt#L42) -- Servlet 过滤器入口
+- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt:45](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt#L45) -- Servlet 过滤器入口
 - [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt:51](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt#L51) -- 包含授权逻辑的基类拦截器
-- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt:31](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt#L31) -- 请求解析
+- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt:32](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt#L32) -- 请求解析
 - [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/CoSecServletRequest.kt:22](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/CoSecServletRequest.kt#L22) -- 请求数据类
-- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/InjectSecurityContextFilter.kt:40](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/InjectSecurityContextFilter.kt#L40) -- 下游上下文注入
+- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/InjectSecurityContextFilter.kt:43](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/InjectSecurityContextFilter.kt#L43) -- 下游上下文注入
 - [cosec-core/src/main/kotlin/me/ahoo/cosec/context/SecurityContextHolder.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/SecurityContextHolder.kt#L26) -- 线程本地上下文持有者
 
 ## 相关页面

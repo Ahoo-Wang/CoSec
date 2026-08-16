@@ -24,7 +24,7 @@ Each implementation declares the concrete `Credentials` subclass it handles via 
 
 ### Credentials Hierarchy
 
-[Credentials](cosec-api/src/main/kotlin/me/ahoo/cosec/api/authentication/Credentials.kt) is a marker interface at the root of a type hierarchy. Concrete implementations include `SocialCredentials`, `JustAuthCredentials`, `RefreshTokenCredentials`, and others. The dispatcher uses `credentials.javaClass` to look up the correct `Authentication` instance.
+[Credentials](cosec-api/src/main/kotlin/me/ahoo/cosec/api/authentication/Credentials.kt) is a marker interface at the root of a type hierarchy. Implementations include the `SocialCredentials` and `RefreshTokenCredentials` interfaces and the `JustAuthCredentials` class, among others. The dispatcher uses `credentials.javaClass` to look up the correct `Authentication` instance.
 
 ### AuthenticationProvider Registry
 
@@ -112,7 +112,7 @@ sequenceDiagram
     participant AuthImpl as Authentication Impl
     Client->>CompositeAuth: authenticate(credentials)
     CompositeAuth->>CompositeAuth: credentials.javaClass
-    CompositeAuth->>Provider: get(credentialsType)
+    CompositeAuth->>Provider: getRequired(credentialsType)
     alt Direct match found
         Provider-->>CompositeAuth: Authentication instance
     else Fallback assignability check

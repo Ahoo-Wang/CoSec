@@ -187,30 +187,31 @@ flowchart TD
 
 ```
 
-`authorize` 方法（[SimpleAuthorization.kt:213-232](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L213)）遵循以下序列：
+`authorize` 方法（[SimpleAuthorization.kt:221-240](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221)）遵循以下序列：
 
-1. **根用户绕过**（[第 146 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L146)）—— 如果 `context.principal.isRoot` 为 true，立即返回 `ALLOW`。
-2. **黑名单检查**（[第 221 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221)）—— `BlacklistChecker` 验证请求未被阻止。如果被阻止，返回 `EXPLICIT_DENY`。
-3. **全局策略**（[第 156 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L156)）—— 通过 `PolicyRepository.getGlobalPolicy()` 获取并评估全局策略。
-4. **主体策略**（[第 166 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L166)）—— 通过 `PolicyRepository.getPolicies()` 获取并评估附加到主体的策略。
-5. **角色权限**（[第 180 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L180)）—— 通过 `AppRolePermissionRepository.getAppRolePermission()` 获取并评估应用特定的角色权限。
-6. **隐式拒绝**（[第 206 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L206)）—— 如果没有策略匹配，返回 `IMPLICIT_DENY`。
+1. **根用户绕过**（[verifyRoot，第 154-162 行，在第 225 行被调用](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L154)）—— 如果 `context.principal.isRoot` 为 true，立即返回 `ALLOW`。
+2. **黑名单检查**（[第 229-230 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L229)）—— `BlacklistChecker` 验证请求未被阻止。如果被阻止，返回 `EXPLICIT_DENY`。
+3. **全局策略**（[第 164-172 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L164)）—— 通过 `PolicyRepository.getGlobalPolicy()` 获取并评估全局策略。
+4. **主体策略**（[第 174-186 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L174)）—— 通过 `PolicyRepository.getPolicies()` 获取并评估附加到主体的策略。
+5. **角色权限**（[第 188-200 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L188)）—— 通过 `AppRolePermissionRepository.getAppRolePermission()` 获取并评估应用特定的角色权限。
+6. **隐式拒绝**（[第 214-218 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L214)）—— 如果没有策略匹配，返回 `IMPLICIT_DENY`。
 
 每个阶段使用 `Mono.switchIfEmpty` 来级联到下一阶段，形成响应式链。
 
 ## 大规模拒绝优先评估
 
-`evaluateDenyFirst` 方法（[SimpleAuthorization.kt:61-80](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61)）是一个通用辅助方法，用于策略语句和角色权限。它将项目作为 `Sequence` 处理以实现惰性评估，先按 `Effect.DENY` 过滤，再按 `Effect.ALLOW` 过滤：
+`evaluateDenyFirst` 方法（[SimpleAuthorization.kt:68-88](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68)）是一个通用辅助方法，用于策略语句和角色权限。它将传入的项目一次性分区 —— 先按 `Effect.DENY`，再按 `Effect.ALLOW` —— 从而确保任何 ALLOW 项目之前先验证所有 DENY 项目，首个匹配者胜出：
 
 ```
-1. 过滤所有 effect == DENY 的项目
+1. 将所有项目分区为 denyItems（effect == DENY）和 allowItems（effect == ALLOW）
 2. 对每个 DENY 项目调用 verifyItem()
 3. 如果有任何返回 EXPLICIT_DENY，短路返回
-4. 过滤所有 effect == ALLOW 的项目
-5. 对每个 ALLOW 项目调用 verifyItem()
-6. 如果有任何返回 ALLOW，短路返回
-7. 返回 null（无匹配）
+4. 对每个 ALLOW 项目调用 verifyItem()
+5. 如果有任何返回 ALLOW，短路返回
+6. 返回 null（无匹配）
 ```
+
+该序列是有意一次性物化的（[SimpleAuthorization.kt:74](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L74)）：上游条件（如策略级速率限制器）在每次授权中恰好执行一次 —— 包括位于匹配的早期 DENY 之后的条件 —— 因此被拒绝的请求也会统一消耗速率限制器许可。
 
 此算法同时应用于 `PolicyStatementEntry` 对象（全局和主体策略）和 `RolePermissionEntry` 对象（基于角色的应用权限），确保所有授权来源具有一致的拒绝优先语义。
 

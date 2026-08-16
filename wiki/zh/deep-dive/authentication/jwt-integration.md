@@ -43,8 +43,8 @@ data class TokenValidity(
 {
   "jti": "<generated-unique-id>",
   "sub": "<principal.id>",
-  "iat": 1684000000000,
-  "exp": 1684000600000,
+  "iat": 1684000000,
+  "exp": 1684000600,
   "policies": ["policy-id-1", "policy-id-2"],
   "roles": ["admin", "user"],
   "attributes": {"key": "value"},
@@ -56,9 +56,9 @@ data class TokenValidity(
 
 - **`sub`**（主题）：设置为 `principal.id` -- 唯一用户标识符
 - **`jti`**（JWT ID）：由 `IdGenerator` 生成（默认：UUID）。用于令牌吊销（见下文《注销登录（Token 吊销）》小节）和刷新令牌绑定
-- **`policies`**: `PolicyCapable.POLICY_KEY` 声明 -- 分配给主体的策略 ID 列表
-- **`roles`**: `RoleCapable.ROLE_KEY` 声明 -- 角色 ID 列表
-- **`attributes`**: `CoSecPrincipal::attributes.name` 声明 -- 任意键值元数据
+- **`policies`**: `PolicyCapable.POLICY_KEY` 声明 -- 分配给主体的策略 ID 列表（仅在非空时写入）
+- **`roles`**: `RoleCapable.ROLE_KEY` 声明 -- 角色 ID 列表（仅在非空时写入）
+- **`attributes`**: `CoSecPrincipal::attributes.name` 声明 -- 任意键值元数据（仅在非空时写入）
 - **`tenantId`**: `Tenant.TENANT_ID_KEY` 声明 -- 仅当主体实现了 `TenantCapable` 时存在
 
 刷新令牌的结构更简单：
@@ -67,8 +67,8 @@ data class TokenValidity(
 {
   "jti": "<refresh-token-id>",
   "sub": "<access-token-id>",
-  "iat": 1684000000000,
-  "exp": 1685209600000
+  "iat": 1684000000,
+  "exp": 1685209600
 }
 ```
 
@@ -94,7 +94,7 @@ class JwtTokenConverter(
 [JwtTokenVerifier](../../../../cosec-jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt) 实现了 `TokenVerifier`，提供：
 
 - **`verify(AccessToken)`**：验证签名，检查过期时间，提取 `TokenPrincipal`
-- **`refresh(CompositeToken)`**：验证刷新令牌，确保其 `sub` 与访问令牌的 `jti` 匹配，然后从（可能已过期的）访问令牌中提取主体
+- **`refresh(CompositeToken)`**：验证刷新令牌，验证访问令牌的签名（其有效期可能已过），确保其 `sub` 与访问令牌的 `jti` 匹配，然后从（可能已过期的）访问令牌中提取主体
 
 ### Jwts 工具类
 
@@ -119,7 +119,7 @@ sequenceDiagram
     participant JWT as JWT.create()
 
     Auth->>CA: authenticate(credentials)
-    CA->>AP: get(credentialsType)
+    CA->>AP: getRequired(credentialsType)
     AP-->>CA: Authentication instance
     CA->>Impl: authenticate(credentials)
     Impl-->>Auth: CoSecPrincipal
@@ -141,7 +141,9 @@ flowchart TD
     C --> D{"Verification result"}
     D -->|"TokenExpiredException"| E["throw TokenExpiredException"]
     D -->|"Other Exception"| F["throw TokenVerificationException"]
-    D -->|"Valid DecodedJWT"| G["Jwts.toPrincipal(decodedJWT)"]
+    D -->|"Valid DecodedJWT"| N{"revoked (jti in TokenStore)?"}
+    N -->|"yes"| R["throw TokenRevokedException (401)"]
+    N -->|"no"| G["Jwts.toPrincipal(decodedJWT)"]
     G --> H["Extract sub, policies, roles, attributes"]
     H --> I{"tenantId claim present?"}
     I -->|"yes"| J["return TokenTenantPrincipal"]
@@ -158,6 +160,8 @@ flowchart TD
     style I fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style J fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style K fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style N fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style R fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
 
@@ -174,8 +178,9 @@ sequenceDiagram
     Client->>Verifier: refresh(CompositeToken)
     Verifier->>JWT: verify(refreshToken)
     JWT-->>Verifier: DecodedJWT (refresh)
-    Verifier->>Jwts: decode(accessToken) -- no verification
+    Verifier->>Jwts: decode(accessToken) -- signature verified next, expiry not re-checked
     Jwts-->>Verifier: DecodedJWT (access, possibly expired)
+    Verifier->>Verifier: verifyAccessTokenSignature(accessJWT)
     Verifier->>Verifier: require(refresh.sub == access.jti)
     Verifier->>Jwts: toPrincipal(accessJWT)
     Jwts-->>Verifier: TokenPrincipal
@@ -286,11 +291,11 @@ cosec:
 
 - [JwtTokenConverter.kt:42](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt#L42) - 包含声明的 JWT 令牌创建
 - [JwtTokenVerifier.kt:37](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt#L37) - JWT 验证和主体提取
-- [Jwts.kt:41](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt#L41) - JWT 工具函数（decode、toPrincipal、removeBearerPrefix）
-- [CoSecJwtAutoConfiguration.kt:47](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/CoSecJwtAutoConfiguration.kt#L47) - Spring Boot 自动配置
+- [Jwts.kt:44](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt#L44) - JWT 工具函数（decode、toPrincipal、removeBearerPrefix）
+- [CoSecJwtAutoConfiguration.kt:52](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/CoSecJwtAutoConfiguration.kt#L52) - Spring Boot 自动配置
 - [JwtProperties.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties.kt#L28) - 配置属性
-- [TokenStore.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/token/TokenStore.kt#L28) - 令牌吊销存储 SPI
-- [CoCacheTokenStore.kt:25](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoCacheTokenStore.kt#L25) - 基于 Redis 的吊销存储
+- [TokenStore.kt:33](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/token/TokenStore.kt#L33) - 令牌吊销存储 SPI
+- [CoCacheTokenStore.kt:29](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoCacheTokenStore.kt#L29) - 基于 Redis 的吊销存储
 
 ## 相关页面
 

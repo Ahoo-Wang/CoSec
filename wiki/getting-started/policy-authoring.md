@@ -98,7 +98,7 @@ flowchart TD
 
 ```
 
-This logic is implemented in the `Policy.verify` method ([cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/Policy.kt:76](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/Policy.kt#L76)) and `SimpleAuthorization.evaluateDenyFirst` ([cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:61](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61)).
+This logic is implemented in the `Policy.verify` method ([cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/Policy.kt:76](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/Policy.kt#L76)) and `SimpleAuthorization.evaluateDenyFirst` ([cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:68](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68)).
 
 ## Statement Matching Flow
 
@@ -283,6 +283,22 @@ Applies rate limiting to requests. Throws `TooManyRequestsException` when the li
   "condition": {
     "rateLimiter": {
       "permitsPerSecond": 100
+    }
+  }
+}
+```
+
+#### Grouped Rate Limiter Condition (`groupedRateLimiter`)
+
+`rateLimiter` is global — a single limiter shared by all requests. For per-user or per-group rate limiting, use `GroupedRateLimiterConditionMatcher` (the `RateLimiterConditionMatcher` KDoc explicitly points to it). It maintains one `RateLimiter` per distinct value of the `part` expression (e.g. `context.principal.id` for per-user, `request.remoteIp` for per-IP), evicting idle limiters after `expireAfterAccessSecond` seconds:
+
+```json
+{
+  "condition": {
+    "groupedRateLimiter": {
+      "part": "context.principal.id",
+      "permitsPerSecond": 10,
+      "expireAfterAccessSecond": 600
     }
   }
 }

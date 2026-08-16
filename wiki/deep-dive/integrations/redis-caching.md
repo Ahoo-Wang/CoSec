@@ -5,7 +5,7 @@ description: How CoSec uses CoCache with Redis for distributed caching of polici
 
 # Redis Caching with CoCache
 
-CoSec leverages CoCache to provide a two-level distributed caching layer (local Caffeine + Redis) for policies and role permissions. This ensures fast authorization decisions while maintaining consistency across multiple gateway instances.
+CoSec leverages CoCache to provide a two-level distributed caching layer (local Caffeine + Redis) for policies, role permissions, and revoked tokens. This ensures fast authorization decisions while maintaining consistency across multiple gateway instances.
 
 ## Architecture Overview
 
@@ -108,6 +108,19 @@ sequenceDiagram
 
 ```
 
+### RevokedTokenCache (Token Revocation)
+
+Beyond policies and permissions, a fifth cache tracks **revoked JWTs**. `RevokedTokenCache` is keyed by token id (`jti`) and stores `true` for revoked tokens; each entry carries its own absolute expiry, matching the remaining lifetime of the revoked token. `CoCacheTokenStore` implements the `TokenStore` SPI on top of this cache, so revocation is shared across all gateway instances while local hits cost no network.
+
+The wiring lives in `CoSecTokenRevocationCacheAutoConfiguration` ([source](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/CoSecTokenRevocationCacheAutoConfiguration.kt#L38)):
+
+- `@EnableCoCache(caches = [RevokedTokenCache::class])` registers the two-level cache.
+- The `coCacheTokenStore` bean exposes it as a `TokenStore`.
+- The key converter prefixes keys with `cosec:token:revoked:`.
+- The local tier defaults to `expireAfterWrite=30s` / `maximumSize=100_000` (configurable via `cosec.authorization.cache.token.*`).
+
+The feature is opt-in via `cosec.jwt.token-revocation.enabled` (default `false`). See [JWT Integration](../authentication/jwt-integration.md) for the end-to-end token revocation flow.
+
 ### Cache Interfaces
 
 All cache interfaces extend CoCache's `Cache<K, V>` interface, providing a unified API with L1 (Caffeine) and L2 (Redis) caching:
@@ -118,6 +131,7 @@ All cache interfaces extend CoCache's `Cache<K, V>` interface, providing a unifi
 | `GlobalPolicyIndexCache` | `String` (fixed key) | `Set<String>` (policy IDs) | Index of all global policy IDs |
 | `AppPermissionCache` | `AppId` | `AppPermission` | Application permission definitions |
 | `RolePermissionCache` | `SpacedRoleId` | `Set<PermissionId>` | Role-to-permission mappings |
+| `RevokedTokenCache` | `String` (token id / jti) | `Boolean` | Revoked-token markers backing `CoCacheTokenStore` |
 
 ### GlobalPolicyIndexKeyConverter
 
@@ -134,6 +148,9 @@ cosec:
       policy:
         maximum-size: 100000
       role:
+        maximum-size: 100000
+      token: # local tier of RevokedTokenCache (opt-in via cosec.jwt.token-revocation.enabled)
+        expire-after-write: 30
         maximum-size: 100000
 ```
 
@@ -175,8 +192,11 @@ graph TD
 
 ## References
 
-- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt#L26) -- Policy repository
-- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisAppRolePermissionRepository.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisAppRolePermissionRepository.kt#L27) -- Role permission repository
+- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt#L27) -- Policy repository
+- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisAppRolePermissionRepository.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisAppRolePermissionRepository.kt#L28) -- Role permission repository
+- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RevokedTokenCache.kt:30](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RevokedTokenCache.kt#L30) -- Revoked token cache interface
+- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoCacheTokenStore.kt:29](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoCacheTokenStore.kt#L29) -- TokenStore backed by RevokedTokenCache
+- [cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/CoSecTokenRevocationCacheAutoConfiguration.kt:38](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/CoSecTokenRevocationCacheAutoConfiguration.kt#L38) -- Token revocation cache wiring
 - [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/PolicyCache.kt:23](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/PolicyCache.kt#L23) -- Policy cache interface
 - [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/AppPermissionCache.kt:20](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/AppPermissionCache.kt#L20) -- App permission cache interface
 - [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/GlobalPolicyIndexCache.kt:22](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/GlobalPolicyIndexCache.kt#L22) -- Global policy index cache
@@ -186,5 +206,6 @@ graph TD
 
 - [Spring Cloud Gateway Integration](./spring-cloud-gateway.md)
 - [OpenTelemetry Integration](./opentelemetry.md)
+- [JWT Integration](../authentication/jwt-integration.md)
 - [Performance](../operations/performance.md)
 - [Deployment](../operations/deployment.md)

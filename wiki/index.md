@@ -29,7 +29,7 @@ features:
     link: /deep-dive/architecture/multi-tenancy
   - icon: 🔑
     title: JWT & Social Auth
-    details: JWT token lifecycle with refresh tokens, plus OAuth social login via JustAuth with 20+ providers.
+    details: JWT token lifecycle with refresh tokens and revocation-based logout (TokenRevoker, cosec.jwt.token-revocation.enabled), plus OAuth social login via JustAuth with 20+ providers.
     link: /deep-dive/authentication/authentication-system
   - icon: 🔌
     title: Extensible SPI
@@ -64,11 +64,11 @@ cosec:
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| Kotlin | 2.3.20 | Primary language |
+| Kotlin | 2.4.10 | Primary language |
 | Java | 17 | Target JVM |
-| Spring Boot | 4.0.5 | Application framework |
+| Spring Boot | 4.1.0 | Application framework |
 | Project Reactor | - | Reactive programming |
-| auth0/java-jwt | 4.5.1 | JWT token handling |
-| CoCache | 4.0.2 | Distributed Redis caching |
+| auth0/java-jwt | 4.6.0 | JWT token handling |
+| CoCache | 4.3.0 | Distributed Redis caching |
 | JustAuth | 1.16.7 | OAuth social authentication |
-| OpenTelemetry | 2.26.1 | Observability tracing |
+| OpenTelemetry | 2.30.0 | Observability tracing |

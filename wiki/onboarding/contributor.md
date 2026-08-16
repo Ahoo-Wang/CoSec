@@ -136,7 +136,7 @@ Reactive streams form pipelines using operators. Here are the most common operat
 | `onErrorResume` | `try/except` | `promise.catch(handler)` | Handle errors reactively |
 | `toMono()` | `Future(result)` | `Promise.resolve(result)` | Wrap value in Mono |
 
-A real example from `SimpleAuthorization.authorize()` at [SimpleAuthorization.kt:213](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L213):
+A real example from `SimpleAuthorization.authorize()` at [SimpleAuthorization.kt:221](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221):
 
 ```kotlin
 override fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
@@ -187,7 +187,7 @@ class CoSecAutoConfiguration {
 
 Conditional annotations control when features are activated:
 
-- `@ConditionalOnCoSecEnabled` -- checks `cosec.enabled` property ([ConditionalOnCoSecEnabled.kt:23](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/ConditionalOnCoSecEnabled.kt#L23))
+- `@ConditionalOnCoSecEnabled` -- checks `cosec.enabled` property ([ConditionalOnCoSecEnabled.kt:24](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/ConditionalOnCoSecEnabled.kt#L24))
 - `@ConditionalOnJwtEnabled` -- activates JWT support
 - `@ConditionalOnAuthorizationEnabled` -- activates authorization
 - `@ConditionalOnGatewayEnabled` -- activates Spring Cloud Gateway integration
@@ -407,20 +407,6 @@ classDiagram
     Authorization ..> SecurityContext : uses
     Authorization ..> AuthorizeResult : returns
 
-    style CoSecPrincipal fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style Policy fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style Statement fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style SecurityContext fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style Authorization fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style Authentication fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style Request fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style ActionMatcher fill:#161b22,stroke:#30363d,color:#e6edf3
-    style ConditionMatcher fill:#161b22,stroke:#30363d,color:#e6edf3
-    style Effect fill:#161b22,stroke:#30363d,color:#e6edf3
-    style AuthorizeResult fill:#161b22,stroke:#30363d,color:#e6edf3
-    style RoleCapable fill:#161b22,stroke:#30363d,color:#e6edf3
-    style PolicyCapable fill:#161b22,stroke:#30363d,color:#e6edf3
-    style TenantPrincipal fill:#161b22,stroke:#30363d,color:#e6edf3
 ```
 
 <!-- Sources:
@@ -438,8 +424,8 @@ classDiagram
 **CoSecPrincipal** ([CoSecPrincipal.kt:35](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L35)) -- The central identity type. Extends `java.security.Principal`, `PolicyCapable`, and `RoleCapable`. Key properties:
 
 - `id` -- unique identifier ([line 42](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L42))
-- `anonymous` -- true when `id == ANONYMOUS_ID` (`"(0)"`) ([line 61](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L61))
-- `authenticated` -- inverse of `anonymous` ([line 68](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L68))
+- `anonymous` -- true when `id == ANONYMOUS_ID` (`"(0)"`) ([line 60](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L60))
+- `authenticated` -- inverse of `anonymous` ([line 67](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L67))
 - `ROOT_ID` -- defaults to `"cosec"`, configurable via system property `cosec.root` ([line 80](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L80))
 - `ANONYMOUS_ID` -- `"(0)"` ([line 87](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L87))
 - `isRoot` -- extension property checking `ROOT_ID == id` ([line 94](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L94))
@@ -517,25 +503,25 @@ flowchart TD
 ```
 
 <!-- Sources:
-  cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:213-232
-  cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt:66-116
+  cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:221-240
+  cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt:68-139
 -->
 
 #### Authorization Flow Detail (SimpleAuthorization)
 
-`SimpleAuthorization` at [SimpleAuthorization.kt:48](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48) is the core authorization implementation. The `authorize()` method at [line 213](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L213) follows this exact order:
+`SimpleAuthorization` at [SimpleAuthorization.kt:48](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48) is the core authorization implementation. The `authorize()` method at [line 221](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221) follows this exact order:
 
-1. **Root user check** ([line 217](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L217)) -- If `context.principal.isRoot`, return `ALLOW` immediately. Root bypasses everything.
+1. **Root user check** ([line 225](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L225)) -- If `context.principal.isRoot`, return `ALLOW` immediately. Root bypasses everything.
 
-2. **Blacklist check** ([line 221](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221)) -- If the `BlacklistChecker` ([BlacklistChecker.kt:29](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/blacklist/BlacklistChecker.kt#L29)) blocks the request, return `EXPLICIT_DENY`. Default is `NoOp` which passes everything.
+2. **Blacklist check** ([line 229](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L229)) -- If the `BlacklistChecker` ([BlacklistChecker.kt:29](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/blacklist/BlacklistChecker.kt#L29)) blocks the request, return `EXPLICIT_DENY`. Default is `NoOp` which passes everything.
 
-3. **Verify pipeline** ([line 194](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L194)) -- A reactive chain using `switchIfEmpty`:
-   - `verifyGlobalPolicies` ([line 156](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L156)) -- Evaluate global policies from `PolicyRepository.getGlobalPolicy()`.
-   - `verifyPrincipalPolicies` ([line 166](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L166)) -- Evaluate policies assigned to the principal.
-   - `verifyAppRolePermission` ([line 180](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L180)) -- Evaluate role-based permissions.
+3. **Verify pipeline** ([line 202](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L202)) -- A reactive chain using `switchIfEmpty`:
+   - `verifyGlobalPolicies` ([line 164](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L164)) -- Evaluate global policies from `PolicyRepository.getGlobalPolicy()`.
+   - `verifyPrincipalPolicies` ([line 174](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L174)) -- Evaluate policies assigned to the principal.
+   - `verifyAppRolePermission` ([line 188](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L188)) -- Evaluate role-based permissions.
    - If none matches, return `IMPLICIT_DENY`.
 
-Each policy verification uses the `evaluateDenyFirst` helper ([line 61](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61)) which always processes DENY statements before ALLOW statements.
+Each policy verification uses the `evaluateDenyFirst` helper ([line 68](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68)) which always processes DENY statements before ALLOW statements.
 
 ### Integration Layer: How Requests Enter CoSec
 
@@ -588,19 +574,19 @@ flowchart LR
   cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt
 -->
 
-**WebFlux** (`cosec-webflux`): `ReactiveAuthorizationFilter` at [ReactiveAuthorizationFilter.kt:36](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36) implements `WebFilter` and `Ordered`. It extends `ReactiveSecurityFilter` which contains the shared filtering logic at [ReactiveSecurityFilter.kt:57](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L57). The filter order is `1000`, set at [line 49](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L49).
+**WebFlux** (`cosec-webflux`): `ReactiveAuthorizationFilter` at [ReactiveAuthorizationFilter.kt:36](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36) implements `WebFilter` and `Ordered`. It extends `ReactiveSecurityFilter` which contains the shared filtering logic at [ReactiveSecurityFilter.kt:59](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59). The filter order is `1000`, set at [line 49](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L49).
 
 **Gateway** (`cosec-gateway`): `AuthorizationGatewayFilter` at [AuthorizationGatewayFilter.kt:31](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt#L31) implements Spring Cloud Gateway's `GlobalFilter`. It also extends `ReactiveSecurityFilter`. The filter order is `HIGHEST_PRECEDENCE + 10` at [line 42](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt#L42).
 
-**Security Filter Logic**: The `ReactiveSecurityFilter.filterInternal()` method at [ReactiveSecurityFilter.kt:66](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L66) handles the full request lifecycle:
-- Parse the request using `RequestParser` ([line 70](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L70))
-- Extract security context using `SecurityContextParser` ([line 73](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L73))
-- On `TokenVerificationException`, fall back to anonymous context ([line 75](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L75))
-- Call `authorization.authorize()` ([line 85](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L85))
-- If authorized, set principal on exchange and continue filter chain ([line 89](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L89))
-- If unauthorized and anonymous: HTTP 401 ([line 99](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L99))
-- If unauthorized and authenticated: HTTP 403 ([line 101](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L101))
-- Handle `TooManyRequestsException`: HTTP 429 ([line 106](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L106))
+**Security Filter Logic**: The `ReactiveSecurityFilter.filterInternal()` method at [ReactiveSecurityFilter.kt:68](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L68) handles the full request lifecycle:
+- Parse the request using `RequestParser` ([line 72](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L72))
+- Extract security context using `SecurityContextParser` ([lines 79-81](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L79))
+- On `TokenVerificationException`, fall back to anonymous context ([lines 82-88](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L82))
+- Call `authorization.authorize()` ([line 92](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L92))
+- If authorized, set principal on exchange and continue filter chain ([lines 95-100](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L95))
+- If unauthorized and anonymous: HTTP 401 ([line 104](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L104))
+- If unauthorized and authenticated: HTTP 403 ([line 106](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L106))
+- Handle `TooManyRequestsException`: HTTP 429 ([line 121](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L121))
 
 ### SPI Extension Points
 
@@ -704,12 +690,13 @@ To add a new action or condition matcher:
 
 ### Policy Evaluation Flow
 
-The `DefaultPolicyEvaluator` at [DefaultPolicyEvaluator.kt:25](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L25) provides policy validation (not authorization). It creates a mock `EvaluateRequest` ([line 64](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L64)) and runs through all conditions, actions, and statements to catch configuration errors before the policy is used in production.
+The `DefaultPolicyEvaluator` at [DefaultPolicyEvaluator.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L26) provides policy validation (not authorization). It creates a mock `EvaluateRequest` ([line 29](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L29)) and runs through all conditions, actions, and statements to catch configuration errors before the policy is used in production.
 
 ### Authentication Pipeline
 
 ```mermaid
 sequenceDiagram
+    autonumber
     participant C as Client
     participant F as Security Filter
     participant SP as SecurityContextParser
@@ -988,7 +975,7 @@ CoSec uses a layered testing approach with specific libraries at each level.
 
 #### Writing Tests for Authorization Logic
 
-The test for `SimpleAuthorization` at [SimpleAuthorizationTest.kt:41](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/test/kotlin/me/ahoo/cosec/authorization/SimpleAuthorizationTest.kt#L41) is a good reference. Key patterns:
+The test for `SimpleAuthorization` at [SimpleAuthorizationTest.kt:42](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/test/kotlin/me/ahoo/cosec/authorization/SimpleAuthorizationTest.kt#L42) is a good reference. Key patterns:
 
 **1. Mocking with MockK**:
 
@@ -1060,7 +1047,7 @@ To enable debug logging, configure Logback in `config/logback.xml`:
 
 **2. Unexpected IMPLICIT_DENY**: The most common cause is a policy condition that does not match. Use debug logging to trace which policies and statements are being evaluated. Check that the policy's top-level `condition` is `AllConditionMatcher` (matches everything) or that it matches your request context.
 
-**3. TokenVerificationException swallowed**: The `ReactiveSecurityFilter` catches `TokenVerificationException` and falls back to an anonymous context ([ReactiveSecurityFilter.kt:75](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L75)). If you see unexpected 403 responses, check whether the token parsing is failing silently.
+**3. TokenVerificationException swallowed**: The `ReactiveSecurityFilter` catches `TokenVerificationException` and falls back to an anonymous context ([ReactiveSecurityFilter.kt:82-88](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L82)). If you see unexpected 403 responses, check whether the token parsing is failing silently.
 
 **4. StepVerifier timeouts**: If a `Mono` never completes, `StepVerifier.verifyComplete()` will hang. Use `.verify(Duration)` to set a timeout and check that all reactive chains produce a value.
 
@@ -1127,7 +1114,7 @@ When writing policy evaluation tests, always test both the ALLOW and DENY paths.
 
 #### 7. RateLimiter Exceptions in Policy Evaluation
 
-`DefaultPolicyEvaluator` catches `TooManyRequestsException` during evaluation ([DefaultPolicyEvaluator.kt:48](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L48)). If your policy uses rate limiter conditions, do not expect them to throw during evaluation -- they are silently skipped.
+`DefaultPolicyEvaluator` catches `TooManyRequestsException` during evaluation ([DefaultPolicyEvaluator.kt:52](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/DefaultPolicyEvaluator.kt#L52)). If your policy uses rate limiter conditions, do not expect them to throw during evaluation -- they are silently skipped.
 
 #### 8. Thread Safety of SecurityContext
 
@@ -1373,25 +1360,26 @@ All CoSec properties are prefixed with `cosec.`:
 | `cosec.authentication.enabled` | `true` | Enable authentication |
 | `cosec.authorization.enabled` | `true` | Enable authorization |
 | `cosec.jwt.enabled` | `true` | Enable JWT support |
-| `cosec.gateway.enabled` | `false` | Enable Gateway integration |
-| `cosec.social.enabled` | `false` | Enable social authentication |
-| `cosec.cache.enabled` | `false` | Enable Redis caching |
-| `cosec.ip2region.enabled` | `false` | Enable IP geolocation |
-| `cosec.openapi.enabled` | `false` | Enable OpenAPI integration |
-| `cosec.opentelemetry.enabled` | `false` | Enable OpenTelemetry tracing |
+| `cosec.authorization.gateway.enabled` | `true` | Enable Gateway integration |
+| `cosec.authentication.social.enabled` | `true` | Enable social authentication |
+| `cosec.authorization.cache.enabled` | `true` | Enable Redis caching |
+| `cosec.ip2region.enabled` | `true` | Enable IP geolocation |
+| `cosec.openapi.enabled` | `true` | Enable OpenAPI integration |
 | `cosec.inject.enabled` | `false` | Enable security context injection |
+
+> OpenTelemetry tracing has no `cosec.opentelemetry.enabled` property; its auto-configuration is purely classpath-conditional (activated when `cosec-opentelemetry` and the OpenTelemetry API are on the classpath).
 
 #### Tech Stack Quick Reference
 
 | Component | Version | Source |
 |---|---|---|
-| Kotlin | 2.3.20 | [libs.versions.toml:26](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L26) |
+| Kotlin | 2.4.10 | [libs.versions.toml:26](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L26) |
 | Java Target | 17 | [build.gradle.kts:83](https://github.com/Ahoo-Wang/CoSec/blob/main/build.gradle.kts#L83) |
-| Spring Boot | 4.0.5 | [libs.versions.toml:3](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L3) |
-| Spring Cloud | 2025.1.1 | [libs.versions.toml:4](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L4) |
-| JUnit | 6.0.3 | [libs.versions.toml:18](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L18) |
-| MockK | 1.14.9 | [libs.versions.toml:21](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L21) |
-| FluentAssert | 0.2.6 | [libs.versions.toml:19](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L19) |
+| Spring Boot | 4.1.0 | [libs.versions.toml:3](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L3) |
+| Spring Cloud | 2025.1.2 | [libs.versions.toml:4](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L4) |
+| JUnit | 6.1.3 | [libs.versions.toml:18](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L18) |
+| MockK | 1.14.11 | [libs.versions.toml:21](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L21) |
+| FluentAssert | 1.0.0 | [libs.versions.toml:19](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L19) |
 | Detekt | 1.23.8 | [libs.versions.toml:24](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L24) |
-| Jackson (JWT) | 4.5.1 | [libs.versions.toml:12](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L12) |
+| auth0 java-jwt | 4.6.0 | [libs.versions.toml:12](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L12) |
 | OGNL | 3.4.11 | [libs.versions.toml:11](https://github.com/Ahoo-Wang/CoSec/blob/main/gradle/libs.versions.toml#L11) |

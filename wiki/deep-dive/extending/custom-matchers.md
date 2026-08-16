@@ -58,7 +58,7 @@ interface ActionMatcherFactory {
 |--------------|------|-------------|
 | `AllActionMatcherFactory` | `all` | Matches all actions unconditionally |
 | `PathActionMatcherFactory` | `path` | Matches by URL path pattern and HTTP method |
-| `CompositeActionMatcherFactory` | `composite` | Combines multiple matchers with AND/OR logic |
+| `CompositeActionMatcherFactory` | `composite` | Combines multiple matchers with OR logic (any match wins) |
 
 ## ConditionMatcherFactory
 
@@ -75,7 +75,7 @@ interface ConditionMatcherFactory {
 
 | Category | Matchers | Description |
 |----------|----------|-------------|
-| Path-based | `Eq`, `Contains`, `StartsWith`, `EndsWith`, `In`, `Regular` | Match request properties against values |
+| Path-based | `Eq`, `Contains`, `StartsWith`, `EndsWith`, `In`, `Regular`, `Path` | Match request properties against values |
 | Context-based | `Authenticated`, `InRole`, `InTenant` | Match security context properties |
 | Rate limiting | Rate limiter matchers | Enforce request rate limits |
 | Expression | `OGNL`, `SpEL` | Evaluate custom expressions |
@@ -98,8 +98,9 @@ me.ahoo.cosec.policy.action.CompositeActionMatcherFactory
 
 ```
 me.ahoo.cosec.policy.condition.AllConditionMatcherFactory
-me.ahoo.cosec.policy.condition.authenticated.AuthenticatedConditionMatcherFactory
-me.ahoo.cosec.policy.condition.eq.EqConditionMatcherFactory
+me.ahoo.cosec.policy.condition.context.AuthenticatedConditionMatcherFactory
+me.ahoo.cosec.policy.condition.part.EqConditionMatcherFactory
+me.ahoo.cosec.policy.condition.part.PathConditionMatcherFactory
 ...
 ```
 
@@ -166,9 +167,17 @@ graph TD
 
 ### Step 1: Implement the Matcher
 
+Custom matchers extend [AbstractActionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/AbstractActionMatcher.kt), which supplies the `type` and `configuration` properties required by `RequestMatcher` and implements the two-parameter `match(request, securityContext)`; subclasses only implement `internalMatch`:
+
 ```kotlin
-class HttpMethodActionMatcher(private val method: String) : ActionMatcher {
-    override fun match(request: Request): Boolean {
+class HttpMethodActionMatcher(
+    private val method: String,
+    configuration: Configuration
+) : AbstractActionMatcher(HttpMethodActionMatcherFactory.TYPE, configuration) {
+    override fun internalMatch(
+        request: Request,
+        securityContext: SecurityContext
+    ): Boolean {
         return request.method.equals(method, ignoreCase = true)
     }
 }
@@ -178,10 +187,16 @@ class HttpMethodActionMatcher(private val method: String) : ActionMatcher {
 
 ```kotlin
 class HttpMethodActionMatcherFactory : ActionMatcherFactory {
-    override val type = "httpMethod"
+    companion object {
+        const val TYPE = "httpMethod"
+    }
+
+    override val type: String
+        get() = TYPE
+
     override fun create(configuration: Configuration): ActionMatcher {
-        val method = configuration.getConfigValue("method", String::class.java)
-        return HttpMethodActionMatcher(method)
+        val method = configuration.getRequired("method").asString()
+        return HttpMethodActionMatcher(method, configuration)
     }
 }
 ```
@@ -196,12 +211,15 @@ com.example.HttpMethodActionMatcherFactory
 
 ### Step 4: Use in Policy JSON
 
+In the object form, the first property's key is the factory `type` and its value becomes the matcher's configuration:
+
 ```json
 {
   "effect": "ALLOW",
   "action": {
-    "type": "httpMethod",
-    "method": "GET"
+    "httpMethod": {
+      "method": "GET"
+    }
   }
 }
 ```

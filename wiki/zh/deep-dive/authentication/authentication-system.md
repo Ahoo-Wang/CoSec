@@ -24,7 +24,7 @@ interface Authentication<C : Credentials, out P : CoSecPrincipal> {
 
 ### 凭据层次结构
 
-[Credentials](../../../../cosec-api/src/main/kotlin/me/ahoo/cosec/api/authentication/Credentials.kt) 是类型层次结构根部的标记接口。具体实现包括 `SocialCredentials`、`JustAuthCredentials`、`RefreshTokenCredentials` 等。分发器使用 `credentials.javaClass` 查找正确的 `Authentication` 实例。
+[Credentials](../../../../cosec-api/src/main/kotlin/me/ahoo/cosec/api/authentication/Credentials.kt) 是类型层次结构根部的标记接口。实现包括 `SocialCredentials` 和 `RefreshTokenCredentials` 接口以及 `JustAuthCredentials` 类等。分发器使用 `credentials.javaClass` 查找正确的 `Authentication` 实例。
 
 ### AuthenticationProvider 注册表
 
@@ -112,7 +112,7 @@ sequenceDiagram
     participant AuthImpl as Authentication Impl
     Client->>CompositeAuth: authenticate(credentials)
     CompositeAuth->>CompositeAuth: credentials.javaClass
-    CompositeAuth->>Provider: get(credentialsType)
+    CompositeAuth->>Provider: getRequired(credentialsType)
     alt Direct match found
         Provider-->>CompositeAuth: Authentication instance
     else Fallback assignability check

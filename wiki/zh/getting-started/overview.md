@@ -29,6 +29,7 @@ CoSec 旨在填补这一空白：
 | 多种集成方式 | WebFlux、WebMvc、Spring Cloud Gateway |
 | JSON 策略语言 | 声明式策略，支持路径模式、条件和速率限制 |
 | JWT 认证 | 内置 JWT 令牌管理，可配置算法 |
+| 令牌撤销 | 撤销访问/刷新令牌以实现登出，由 CoCache 支撑 |
 | Redis 缓存 | 通过 CoCache 实现策略和权限缓存 |
 
 ## 架构概览
@@ -156,7 +157,7 @@ flowchart BT
 
 | 模块 | 描述 |
 |------|------|
-| `cosec-api` | 核心接口 —— `CoSecPrincipal`、`Authorization`、`Authentication`、`Policy`、`Statement`。无框架依赖。 |
+| `cosec-api` | 核心接口 —— `CoSecPrincipal`、`Authorization`、`Authentication`、`Policy`、`Statement`。无 Spring 依赖；仅依赖 Project Reactor。 |
 | `cosec-core` | 策略评估引擎、认证/授权实现、条件和动作匹配器。 |
 | `cosec-jwt` | 使用 `java-jwt` 库进行 JWT 令牌创建和验证。 |
 | `cosec-cocache` | 通过 CoCache 实现基于 Redis 的策略和权限缓存。 |

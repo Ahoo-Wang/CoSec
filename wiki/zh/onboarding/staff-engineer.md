@@ -22,8 +22,6 @@ CoSec 是一个面向 JVM 的响应式、多租户、基于策略的授权框架
 
 关键不变量：`cosec-api` **没有** Spring、Reactor 或 Jackson 的导入。所有公共契约都在那里。所有实现都在 `cosec-core` 或集成模块中。如果你正在给 `cosec-api` 添加 Spring 导入，说明你进错了模块。
 
-<!-- Sources: cosec-api/build.gradle.kts, cosec-api/src/main/kotlin/me/ahoo/cosec/api/ -->
-
 ## 核心架构洞察
 
 整个授权决策归结为一个递归模式：**条件门控，然后 DENY 优先扫描，然后 ALLOW 扫描**。这个模式在三个层级上完全相同：Policy、Statement 和顶层 SimpleAuthorization 编排器。
@@ -48,9 +46,7 @@ def evaluate_deny_first(items, get_effect, verify):
 # SimpleAuthorization.authorize() 将此模式应用于整个策略链
 ```
 
-[`SimpleAuthorization`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61) 中的 `evaluateDenyFirst` 函数同时用于策略语句和角色权限。架构是分形的：每一层都是相同的模式。
-
-<!-- Sources: cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61-80 -->
+[`SimpleAuthorization`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68) 中的 `evaluateDenyFirst` 函数同时用于策略语句和角色权限。架构是分形的：每一层都是相同的模式。
 
 ## 系统架构
 
@@ -247,6 +243,7 @@ Gateway 过滤器**不**继承 `ReactiveAuthorizationFilter`。它直接实现 `
 
 ```mermaid
 sequenceDiagram
+    autonumber
     participant Client
     participant Filter as 运行时过滤器<br>Gateway/WebFlux/WebMvc
     participant Parser as SecurityContextParser
@@ -316,9 +313,9 @@ sequenceDiagram
     end
 ```
 
-<!-- Sources: cosec-core/authorization/SimpleAuthorization.kt#L213-232, cosec-webflux/ReactiveSecurityFilter.kt#L66-116 -->
+<!-- Sources: cosec-core/authorization/SimpleAuthorization.kt#L221-240, cosec-webflux/ReactiveSecurityFilter.kt#L68-139 -->
 
-`ReactiveSecurityFilter.filterInternal()` 方法（[`ReactiveSecurityFilter.kt:66`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L66)）包含错误处理矩阵：
+`ReactiveSecurityFilter.filterInternal()` 方法（[`ReactiveSecurityFilter.kt:68`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L68)）包含错误处理矩阵：
 
 ```python
 # 错误处理矩阵（来自 ReactiveSecurityFilter 的伪代码）
@@ -365,7 +362,7 @@ stateDiagram-v2
     IMPLICIT_DENY --> [*]
 ```
 
-<!-- Sources: cosec-core/authorization/SimpleAuthorization.kt#L194-232 -->
+<!-- Sources: cosec-core/authorization/SimpleAuthorization.kt#L202-219 -->
 
 ### 策略评估状态机
 
@@ -415,10 +412,10 @@ Action 匹配作为快速路径先执行。如果 action 模式不匹配，条�
 | # | 决策 | 理由 | 可见位置 |
 |---|------|------|----------|
 | D1 | API 模块零框架依赖 | 接口必须在 classpath 中没有 Spring 的情况下可实现 | [`cosec-api/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/build.gradle.kts) |
-| D2 | DENY 优先评估顺序 | 防止权限提升：宽泛的 ALLOW 不能覆盖有针对性的 DENY | [`SimpleAuthorization.kt:61`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61) |
+| D2 | DENY 优先评估顺序 | 防止权限提升：宽泛的 ALLOW 不能覆盖有针对性的 DENY | [`SimpleAuthorization.kt:68`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68) |
 | D3 | 基于 SPI 的匹配器发现 | 允许第三方扩展而无需修改核心 | [`META-INF/services/me.ahoo.cosec.policy.action.ActionMatcherFactory`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/resources/META-INF/services/me.ahoo.cosec.policy.action.ActionMatcherFactory) |
 | D4 | 全链路响应式（`Mono<T>`） | 非阻塞授权在高负载下可扩展；与 Spring WebFlux 一致 | [`Authorization.kt:43`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/authorization/Authorization.kt#L43) |
-| D5 | Root 绕过基于身份而非角色 | Root 检查（`principal.isRoot`）在所有其他检查之前发生，包括黑名单 | [`SimpleAuthorization.kt:146-154`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L146) |
+| D5 | Root 绕过基于身份而非角色 | Root 检查（`verifyRoot`，`principal.isRoot`）在所有其他检查之前发生，包括黑名单 | [`SimpleAuthorization.kt:154-160`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L154) |
 | D6 | SecurityContext 属性可变且并发 | 下游组件可写入路径变量、限流计数器等 | [`SimpleSecurityContext.kt:41`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/SimpleSecurityContext.kt#L41) |
 | D7 | 从 header、query 或 cookie 提取 Token | 支持浏览器、API 和遗留客户端 | [`DefaultSecurityContextParser.kt:27-31`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/DefaultSecurityContextParser.kt#L27) |
 | D8 | Gateway 过滤器顺序接近最高优先级 | 授权必须在可能修改 exchange 的路由过滤器之前运行 | [`AuthorizationGatewayFilter.kt:42`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt#L42) |
@@ -473,15 +470,15 @@ graph TD
 
 | 依赖 | 版本 | 原因 |
 |------|------|------|
-| Kotlin | 2.3.20 | 语言版本；`-Xjsr305=strict` 用于空安全互操作 |
-| Spring Boot | 4.0.5 | 运行时；驱动 WebFlux/WebMvc/Gateway API 兼容性 |
-| Spring Cloud | 2025.1.1 | Gateway 过滤器集成 |
-| auth0/java-jwt | 4.5.1 | JWT token 创建与验证 |
+| Kotlin | 2.4.10 | 语言版本；`-Xjsr305=strict` 用于空安全互操作 |
+| Spring Boot | 4.1.0 | 运行时；驱动 WebFlux/WebMvc/Gateway API 兼容性 |
+| Spring Cloud | 2025.1.2 | Gateway 过滤器集成 |
+| auth0/java-jwt | 4.6.0 | JWT token 创建与验证 |
 | JustAuth | 1.16.7 | 多供应商 OAuth（微信、GitHub 等） |
 | OGNL | 3.4.11 | 基于表达式的条件匹配 |
-| CoCache | 4.0.2 | 两级分布式缓存（本地 + Redis） |
-| CosId | 3.0.5 | 分布式 ID 生成 |
-| Guava RateLimiter | 33.5.0-jre | 条件中的令牌桶限流 |
+| CoCache | 4.3.0 | 两级分布式缓存（本地 + Redis） |
+| CosId | 3.2.0 | 分布式 ID 生成 |
+| Guava RateLimiter | 33.6.0-jre | 条件中的令牌桶限流 |
 
 ### 为什么 OGNL 和 SpEL 同时存在
 
@@ -553,11 +550,11 @@ JSON 通过 `CoSecModule`（[`CoSecModule.kt`](https://github.com/Ahoo-Wang/CoSe
 
 | 故障 | 行为 | 来源 |
 |------|------|------|
-| **JWT 过期** | `TokenVerificationException` 在 `filterInternal` 中被捕获，上下文回退到匿名，然后继续授权（大概率返回 401） | [`ReactiveSecurityFilter.kt:73-79`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L73) |
-| **超出限流** | `TooManyRequestsException` 从条件匹配器抛出，被捕获并返回 429 | [`ReactiveSecurityFilter.kt:106-108`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L106) |
-| **PolicyRepository 不可用** | `Mono` 传播错误；被 `onErrorResume` 捕获返回 500 | [`ReactiveSecurityFilter.kt:109-114`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L109) |
-| **无匹配策略** | 返回 `IMPLICIT_DENY`（默认拒绝）。已认证用户得到 403，匿名用户得到 401 | [`SimpleAuthorization.kt:207-210`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L207) |
-| **黑名单阻止请求** | 在任何策略评估之前立即返回 `EXPLICIT_DENY` | [`SimpleAuthorization.kt:221-228`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221) |
+| **JWT 过期** | `TokenVerificationException` 在 `filterInternal` 中被捕获，上下文回退到匿名，然后继续授权（大概率返回 401） | [`ReactiveSecurityFilter.kt:80-88`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L80) |
+| **超出限流** | `TooManyRequestsException` 从条件匹配器抛出，被捕获并返回 429 | [`ReactiveSecurityFilter.kt:121-124`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L121) |
+| **PolicyRepository 不可用** | `Mono` 传播错误；被 `onErrorResume` 捕获返回 500 | [`ReactiveSecurityFilter.kt:131-138`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L131) |
+| **无匹配策略** | 返回 `IMPLICIT_DENY`（默认拒绝）。已认证用户得到 403，匿名用户得到 401 | [`SimpleAuthorization.kt:212-218`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L212) |
+| **黑名单阻止请求** | 在任何策略评估之前立即返回 `EXPLICIT_DENY` | [`SimpleAuthorization.kt:229-240`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L229) |
 | **格式错误的策略 JSON** | `CoSecJsonSerializer.readValue` 抛出异常；被 `LocalPolicyLoader` 捕获并记录日志，跳过该策略 | [`LocalPolicyLoader.kt:63-67`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/LocalPolicyLoader.kt#L63) |
 | **未知 action matcher 类型** | SPI 查找在反序列化时失败；策略加载失败 | `ActionMatcherFactoryProvider` |
 
@@ -607,7 +604,7 @@ graph TD
     style R403 fill:#2d333b,stroke:#da3633,color:#e6edf3
 ```
 
-<!-- Sources: SimpleAuthorization.kt#L213-232, ReactiveSecurityFilter.kt#L86-115 -->
+<!-- Sources: SimpleAuthorization.kt#L221-240, ReactiveSecurityFilter.kt#L92-114 -->
 
 ## API 表面
 
@@ -711,8 +708,8 @@ class Request:
 | `cosec.authorization.local-policy.force-refresh` | `false` | starter | 覆盖仓库中已有的策略 |
 | `cosec.authentication.enabled` | `true` | starter | 认证功能开关 |
 | `cosec.jwt.enabled` | `true` | starter | JWT token 处理开关 |
-| `cosec.social.enabled` | `false` | starter | OAuth 社交登录开关 |
-| `cosec.gateway.enabled` | `true` | starter | Gateway 过滤器开关 |
+| `cosec.authentication.social.enabled` | `true` | starter | OAuth 社交登录开关 |
+| `cosec.authorization.gateway.enabled` | `true` | starter | Gateway 过滤器开关 |
 
 ### 自动配置层级
 
@@ -814,11 +811,11 @@ JMH 依赖版本为 `1.37`（[`libs.versions.toml:21`](https://github.com/Ahoo-W
 
 ### 绝不可违反的不变量
 
-1. **DENY 始终获胜。** [`SimpleAuthorization.kt:61`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61) 中的 `evaluateDenyFirst` 模式绝不可被修改为允许 ALLOW 覆盖 DENY。
+1. **DENY 始终获胜。** [`SimpleAuthorization.kt:68`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68) 中的 `evaluateDenyFirst` 模式绝不可被修改为允许 ALLOW 覆盖 DENY。
 
-2. **Root 绕过是绝对的。** 如果 `principal.isRoot` 返回 true，授权立即返回 ALLOW（[`SimpleAuthorization.kt:217-219`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L217)）。这包括绕过黑名单。这是设计如此。
+2. **Root 绕过是绝对的。** 如果 `principal.isRoot` 返回 true，授权立即返回 ALLOW（[`SimpleAuthorization.kt:225-228`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L225)）。这包括绕过黑名单。这是设计如此。
 
-3. **默认是拒绝。** 如果没有策略匹配，结果始终是 `IMPLICIT_DENY`（[`SimpleAuthorization.kt:207-210`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L207)）。
+3. **默认是拒绝。** 如果没有策略匹配，结果始终是 `IMPLICIT_DENY`（[`SimpleAuthorization.kt:212-218`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L212)）。
 
 4. **匿名主体没有角色或策略。** `SimpleTenantPrincipal.ANONYMOUS`（[`SimpleTenantPrincipal.kt:42`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/principal/SimpleTenantPrincipal.kt#L42)）包装了 `SimplePrincipal.ANONYMOUS` 和默认租户。它只能访问全局策略明确允许匿名访问的资源。
 
@@ -840,9 +837,9 @@ JMH 依赖版本为 `1.37`（[`libs.versions.toml:21`](https://github.com/Ahoo-W
 
 | 工具 | 版本 | 用途 |
 |------|------|------|
-| JUnit 5 | 6.0.3 | 测试框架 |
-| MockK | 1.14.9 | Kotlin 原生 Mock |
-| FluentAssert | 0.2.6 | 流式测试断言（`me.ahoo.test.asserts.assert`） |
+| JUnit | 6.1.3 | 测试框架 |
+| MockK | 1.14.11 | Kotlin 原生 Mock |
+| FluentAssert | 1.0.0 | 流式测试断言（`me.ahoo.test.asserts.assert`） |
 | Hamcrest | 3.0 | 匹配器库 |
 | Reactor Test | （来自 Spring Boot） | `Mono`/`Flux` 测试的 `StepVerifier` |
 | JMH | 1.37 | 性能基准测试 |
@@ -891,7 +888,7 @@ JMH 依赖版本为 `1.37`（[`libs.versions.toml:21`](https://github.com/Ahoo-W
 
 ### 显式技术债务
 
-1. **Root 绕过黑名单。** Root 检查（[`SimpleAuthorization.kt:217`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L217)）在黑名单检查之前返回 ALLOW。这是有意为之，但应记录在案以防止意外。被攻陷的 Root 主体没有第二道防线。
+1. **Root 绕过黑名单。** Root 检查（[`SimpleAuthorization.kt:225`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L225)）在黑名单检查之前返回 ALLOW。这是有意为之，但应记录在案以防止意外。被攻陷的 Root 主体没有第二道防线。
 
 2. **评估中的限流器副作用。** `RateLimiterConditionMatcher` 将 `TooManyRequestsException`（[`RateLimiterConditionMatcher.kt:49`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/limiter/RateLimiterConditionMatcher.kt#L49)）作为控制流抛出。这意味着 DENY 语句中的限流器可以阻止 ALLOW 语句被评估，这是正确行为但很微妙。
 

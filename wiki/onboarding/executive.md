@@ -19,9 +19,9 @@ CoSec is an open-source, RBAC and policy-based security framework purpose-built 
 | **Language** | Kotlin on JVM (Java 17+) |
 | **Concurrency Model** | Reactive (Project Reactor) — non-blocking I/O throughout |
 | **Framework Integration** | Spring Boot 4, Spring Cloud Gateway 2025.x |
-| **Codebase Scale** | ~18,000 lines of Kotlin across 328 source files, 102 test files |
+| **Codebase Scale** | ~12,030 lines of Kotlin across 235 source files, 118 test files |
 | **Module Count** | 15 modules (12 publishable libraries, 2 BOMs, 1 standalone server) |
-| **Release Cadence** | Active — 424 commits since January 2025, latest release v4.3.5 |
+| **Release Cadence** | Active — 505 commits since January 2025, latest release v4.8.0 (v4.9.0 in development on main) |
 | **Repository** | [github.com/Ahoo-Wang/CoSec](https://github.com/Ahoo-Wang/CoSec) |
 
 **Why it matters**: CoSec eliminates the need for a separate security gateway infrastructure layer by embedding policy-driven authorization directly into application code. This reduces latency, simplifies deployment topology, and gives developers fine-grained control over access decisions at the service boundary.
@@ -37,6 +37,7 @@ The following table maps CoSec capabilities to business outcomes, enabling leade
 | **Policy-Based Authorization** | AWS IAM-like model with Effect (ALLOW/DENY), ActionMatcher, and ConditionMatcher | Reduces time-to-implement new access rules from days to hours; auditable policy-as-code |
 | **Multi-Tenant Isolation** | First-class `TenantPrincipal` and tenant-scoped policies via `TenantCapable` | Enables SaaS multi-tenancy without separate deployments per customer |
 | **JWT Authentication** | Token issuance and verification via `com.auth0:java-jwt` | Stateless auth scales horizontally with no session-store dependency |
+| **Token Revocation** | Opt-in `cosec.jwt.token-revocation.enabled`; `RevokedTokenCache` + `CoCacheTokenStore` backed by CoCache/Redis | Immediate logout of compromised tokens, consistent across all instances |
 | **Social OAuth Login** | GitHub, Google, WeChat, and 30+ providers via JustAuth integration | Accelerates user onboarding by leveraging existing identity providers |
 | **Rate Limiting** | `RateLimiterConditionMatcher` and `GroupedRateLimiterConditionMatcher` as policy conditions | Protects APIs from abuse without external rate-limiting infrastructure |
 | **IP Geolocation** | `ip2region` integration enriches request context with geographic data | Enables geo-based access policies and compliance with data residency rules |
@@ -120,7 +121,7 @@ graph TB
 - **Reactive throughout**: Every authorization check returns `Mono<AuthorizeResult>`, enabling non-blocking I/O. This means CoSec adds negligible latency overhead under high concurrency — critical for gateway deployments handling thousands of requests per second.
 - **API/Implementation split**: `cosec-api` has zero framework dependencies, making it safe to depend on in domain modules without pulling in Spring. This enforces clean architectural boundaries.
 - **SPI-based extensibility**: Custom policy matchers are registered via Java SPI (`META-INF/services`), requiring no changes to core code. New condition types (e.g., time-of-day restrictions, custom header checks) can be added without forking.
-- **Single maintainer with bot assistance**: 252 commits from the primary author and 342 from Renovate bot (automated dependency updates) since 2024. The bot handles dependency freshness; the maintainer focuses on features.
+- **Single maintainer with bot assistance**: 328 commits from the primary author and 347 from Renovate bot (automated dependency updates) since 2024. The bot handles dependency freshness; the maintainer focuses on features.
 
 ---
 
@@ -130,10 +131,10 @@ Understanding who maintains CoSec and how to engage is critical for adoption ris
 
 | Dimension | Finding | Evidence |
 |---|---|---|
-| **Primary Maintainer** | Ahoo Wang (ahoowang@qq.com) | Git author analysis: 252 commits since 2024 |
-| **Automation** | Renovate bot handles dependency updates | 342 bot commits for dependency version bumps |
-| **CI/CD Maturity** | GitHub Actions with parallel test jobs, code coverage, signed releases | 6 workflow files in `.github/workflows/` |
-| **Test Infrastructure** | JUnit 5 + MockK + FluentAssert; Redis via service containers for integration tests | CI runs 7 parallel module test jobs; Redis-dependent modules use service containers |
+| **Primary Maintainer** | Ahoo Wang (ahoowang@qq.com) | Git author analysis: 328 commits since 2024 |
+| **Automation** | Renovate bot handles dependency updates | 347 bot commits for dependency version bumps |
+| **CI/CD Maturity** | GitHub Actions with parallel test jobs, code coverage, signed releases | 7 workflow files in `.github/workflows/` |
+| **Test Infrastructure** | JUnit 5 + MockK + FluentAssert; Redis via service containers for integration tests | CI runs 8 parallel module test jobs; Redis-dependent modules use service containers |
 | **Release Process** | Automated publishing to Sonatype Central + GitHub Packages on Git tag creation | `package-deploy.yml` triggers on `release: created` |
 | **Community** | Open-source Apache 2.0; issues and PRs via GitHub | POM metadata references GitHub issue tracker |
 
@@ -348,7 +349,7 @@ CoSec provides built-in observability hooks that enable engineering teams to mon
 
 | Gate | Tool | Coverage |
 |---|---|---|
-| Unit and integration tests | JUnit 5 + Testcontainers | 7 parallel CI jobs covering core, JWT, social, cocache, webflux, webmvc, starter |
+| Unit and integration tests | JUnit 5 + MockK + FluentAssert (Redis via GitHub Actions service containers) | 8 parallel CI jobs covering core, opentelemetry, JWT, social, cocache, webflux, webmvc, starter |
 | Static analysis | Detekt 1.23.8 with auto-correct | Enforced on all source files; config at `config/detekt/detekt.yml` |
 | Code coverage | JaCoCo | Report generation via `code-coverage-report` module |
 | Dependency freshness | Renovate bot | Automated PRs for version bumps |
@@ -378,11 +379,11 @@ Transparent assessment of areas requiring attention.
 
 | Area | Status | Evidence | Recommended Action |
 |---|---|---|---|
-| **Test coverage breadth** | Good | 102 test files covering 328 source files (1:3.2 ratio); all modules have test suites | Maintain current standard; add integration tests for multi-tenant scenarios |
-| **Dependency currency** | Excellent | Renovate bot produces 342 automated update commits; Spring Boot 4.0.5, Kotlin 2.3.20 | No action needed — automated process handles it |
+| **Test coverage breadth** | Good | 118 test files covering 235 source files (1:2 ratio); all modules have test suites | Maintain current standard; add integration tests for multi-tenant scenarios |
+| **Dependency currency** | Excellent | Renovate bot produces 347 automated update commits; Spring Boot 4.1.0, Kotlin 2.4.10 | No action needed — automated process handles it |
 | **Code quality tooling** | Strong | Detekt static analysis with auto-correct enforced at build time | No action needed |
 | **Documentation** | Growing | VitePress wiki with i18n support recently added; CLAUDE.md for AI-assisted development | Continue investing in operational runbooks for adopters |
-| **Single maintainer concentration** | Acknowledged | 1 maintainer + automated bot; 424 commits in 2025 alone | Budget for internal contributor onboarding; consider sponsoring the project |
+| **Single maintainer concentration** | Acknowledged | 1 maintainer + automated bot; 505 commits since January 2025 | Budget for internal contributor onboarding; consider sponsoring the project |
 | **JMH benchmark coverage** | Present but shallow | Every module has JMH plugin configured; benchmark results not published | Publish benchmark results to track performance regressions over releases |
 
 ---

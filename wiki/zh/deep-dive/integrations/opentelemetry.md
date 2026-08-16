@@ -145,7 +145,7 @@ Span 名称 `cosec.authorize` 可用于在可观测性后端中过滤追踪。`c
 - [cosec-opentelemetry/src/main/kotlin/me/ahoo/cosec/opentelemetry/CoSecInstrumenter.kt:36](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-opentelemetry/src/main/kotlin/me/ahoo/cosec/opentelemetry/CoSecInstrumenter.kt#L36) -- Instrumenter 和属性提取器
 - [cosec-opentelemetry/src/main/kotlin/me/ahoo/cosec/opentelemetry/AuthorizationMono.kt:23](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-opentelemetry/src/main/kotlin/me/ahoo/cosec/opentelemetry/AuthorizationMono.kt#L23) -- 响应式追踪订阅者
 - [cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:48](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48) -- 被委托的授权实现
-- [cosec-spring-boot-starter/src/main/kotlin/.../CoSecAutoConfiguration.kt:37](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecAutoConfiguration.kt#L37) -- 自动配置
+- [cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/opentelemetry/CoSecOpenTelemetryAutoConfiguration.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/opentelemetry/CoSecOpenTelemetryAutoConfiguration.kt#L26) -- 注册 `@Primary` 的 `tracingAuthorization` Bean，用 `TracingAuthorization` 装饰被委托的 `Authorization`
 
 ## 相关页面
 

@@ -19,9 +19,9 @@ CoSec 是一个开源的、基于 RBAC 和策略驱动的安全框架，专为�
 | **编程语言** | Kotlin，运行于 JVM（Java 17+） |
 | **并发模型** | 响应式（Project Reactor）——全链路非阻塞 I/O |
 | **框架集成** | Spring Boot 4、Spring Cloud Gateway 2025.x |
-| **代码规模** | 约 18,000 行 Kotlin 代码，328 个源文件，102 个测试文件 |
+| **代码规模** | 约 12,030 行 Kotlin 代码，235 个源文件，118 个测试文件 |
 | **模块数量** | 15 个模块（12 个可发布库、2 个 BOM、1 个独立服务器） |
-| **发布节奏** | 活跃——自 2025 年 1 月以来 424 次提交，最新版本 v4.3.5 |
+| **发布节奏** | 活跃——自 2025 年 1 月以来 505 次提交，最新版本 v4.8.0（主干 v4.9.0 开发中） |
 | **仓库地址** | [github.com/Ahoo-Wang/CoSec](https://github.com/Ahoo-Wang/CoSec) |
 
 **核心价值**：CoSec 通过将策略驱动的授权能力直接嵌入应用代码，消除了对独立安全网关基础设施层的依赖。这降低了延迟，简化了部署拓扑，并使开发团队能够在服务边界处对访问决策实现精细控制。
@@ -37,6 +37,7 @@ CoSec 是一个开源的、基于 RBAC 和策略驱动的安全框架，专为�
 | **基于策略的授权** | 类似 AWS IAM 的模型，支持 Effect（ALLOW/DENY）、ActionMatcher 和 ConditionMatcher | 将新增访问规则的实施周期从数天缩短至数小时；策略即代码，满足审计要求 |
 | **多租户隔离** | 一等公民 `TenantPrincipal` 和基于 `TenantCapable` 的租户作用域策略 | 实现 SaaS 多租户而无需为每个客户单独部署 |
 | **JWT 认证** | 通过 `com.auth0:java-jwt` 进行令牌签发与验证 | 无状态认证可水平扩展，不依赖会话存储 |
+| **令牌撤销** | 按需开启的 `cosec.jwt.token-revocation.enabled`；由 CoCache/Redis 支撑的 `RevokedTokenCache` + `CoCacheTokenStore` | 被入侵令牌可立即注销，且在所有实例间保持一致 |
 | **社交 OAuth 登录** | 通过 JustAuth 集成 GitHub、Google、微信等 30+ 提供商 | 利用现有身份提供商，加速用户注册与登录流程 |
 | **速率限制** | `RateLimiterConditionMatcher` 和 `GroupedRateLimiterConditionMatcher` 作为策略条件 | 无需外部限流基础设施即可保护 API 免受滥用 |
 | **IP 地理定位** | 集成 `ip2region` 为请求上下文补充地理数据 | 支持基于地理位置的访问策略，满足数据驻留合规要求 |
@@ -120,7 +121,7 @@ graph TB
 - **全链路响应式**：每次授权检查都返回 `Mono<AuthorizeResult>`，实现非阻塞 I/O。这意味着 CoSec 在高并发场景下增加的延迟开销几乎可以忽略——对于处理每秒数千请求的网关部署至关重要。
 - **API/实现分离**：`cosec-api` 零框架依赖，可安全地在领域模块中引用而不会引入 Spring。这强制了清晰的架构边界。
 - **基于 SPI 的可扩展性**：自定义策略匹配器通过 Java SPI（`META-INF/services`）注册，无需修改核心代码。新增条件类型（例如时间段限制、自定义 Header 检查）可以在不 fork 项目的情况下实现。
-- **单人维护 + 自动化辅助**：自 2024 年以来，主要作者贡献了 252 次提交，Renovate 机器人贡献了 342 次提交（自动化依赖更新）。机器人负责依赖更新，维护者专注于功能开发。
+- **单人维护 + 自动化辅助**：自 2024 年以来，主要作者贡献了 328 次提交，Renovate 机器人贡献了 347 次提交（自动化依赖更新）。机器人负责依赖更新，维护者专注于功能开发。
 
 ---
 
@@ -130,10 +131,10 @@ graph TB
 
 | 维度 | 发现 | 依据 |
 |---|---|---|
-| **主要维护者** | Ahoo Wang（ahoowang@qq.com） | Git 作者分析：自 2024 年以来 252 次提交 |
-| **自动化程度** | Renovate 机器人处理依赖更新 | 342 次机器人提交用于依赖版本升级 |
-| **CI/CD 成熟度** | GitHub Actions，并行测试任务，代码覆盖率，签名发布 | `.github/workflows/` 下 6 个工作流文件 |
-| **测试基础设施** | JUnit 5 + MockK + FluentAssert；集成测试使用 Redis 服务容器 | CI 运行 7 个并行模块测试任务；Redis 相关模块使用服务容器 |
+| **主要维护者** | Ahoo Wang（ahoowang@qq.com） | Git 作者分析：自 2024 年以来 328 次提交 |
+| **自动化程度** | Renovate 机器人处理依赖更新 | 347 次机器人提交用于依赖版本升级 |
+| **CI/CD 成熟度** | GitHub Actions，并行测试任务，代码覆盖率，签名发布 | `.github/workflows/` 下 7 个工作流文件 |
+| **测试基础设施** | JUnit 5 + MockK + FluentAssert；集成测试使用 Redis 服务容器 | CI 运行 8 个并行模块测试任务；Redis 相关模块使用服务容器 |
 | **发布流程** | Git 标签创建时自动发布到 Sonatype Central + GitHub Packages | `package-deploy.yml` 在 `release: created` 事件触发 |
 | **社区生态** | Apache 2.0 开源；通过 GitHub 管理议题和 PR | POM 元数据引用 GitHub Issue Tracker |
 
@@ -348,7 +349,7 @@ CoSec 提供了内置的可观测性钩子，使工程团队能够在生产环�
 
 | 门禁 | 工具 | 覆盖范围 |
 |---|---|---|
-| 单元与集成测试 | JUnit 5 + Testcontainers | 7 个并行 CI 任务，覆盖 core、JWT、social、cocache、webflux、webmvc、starter |
+| 单元与集成测试 | JUnit 5 + MockK + FluentAssert（Redis 通过 GitHub Actions 服务容器提供） | 8 个并行 CI 任务，覆盖 core、opentelemetry、JWT、social、cocache、webflux、webmvc、starter |
 | 静态分析 | Detekt 1.23.8，支持自动修正 | 所有源文件强制执行；配置文件位于 `config/detekt/detekt.yml` |
 | 代码覆盖率 | JaCoCo | 通过 `code-coverage-report` 模块生成报告 |
 | 依赖时效性 | Renovate 机器人 | 自动创建版本升级 PR |
@@ -378,11 +379,11 @@ CoSec 与常见工程组织优先级的契合情况。
 
 | 领域 | 状态 | 依据 | 建议措施 |
 |---|---|---|---|
-| **测试覆盖广度** | 良好 | 102 个测试文件覆盖 328 个源文件（1:3.2 比例）；所有模块均有测试套件 | 保持当前标准；为多租户场景增加集成测试 |
-| **依赖时效性** | 优秀 | Renovate 机器人产生 342 次自动更新提交；Spring Boot 4.0.5、Kotlin 2.3.20 | 无需额外行动——自动化流程已覆盖 |
+| **测试覆盖广度** | 良好 | 118 个测试文件覆盖 235 个源文件（1:2 比例）；所有模块均有测试套件 | 保持当前标准；为多租户场景增加集成测试 |
+| **依赖时效性** | 优秀 | Renovate 机器人产生 347 次自动更新提交；Spring Boot 4.1.0、Kotlin 2.4.10 | 无需额外行动——自动化流程已覆盖 |
 | **代码质量工具** | 强健 | Detekt 静态分析，支持自动修正，构建时强制执行 | 无需额外行动 |
 | **文档** | 增长中 | 近期新增 VitePress Wiki，支持 i18n；CLAUDE.md 用于 AI 辅助开发 | 持续投入，为采纳者提供运维手册 |
-| **单人维护集中度** | 已认知 | 1 名维护者 + 自动化机器人；仅 2025 年就有 424 次提交 | 预算分配用于内部贡献者培训；考虑赞助该项目 |
+| **单人维护集中度** | 已认知 | 1 名维护者 + 自动化机器人；自 2025 年 1 月以来 505 次提交 | 预算分配用于内部贡献者培训；考虑赞助该项目 |
 | **JMH 基准测试覆盖** | 存在但有限 | 每个模块已配置 JMH 插件；但基准测试结果未发布 | 发布基准测试结果，跟踪各版本的性能回归 |
 
 ---

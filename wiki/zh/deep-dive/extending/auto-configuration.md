@@ -7,32 +7,36 @@ description: CoSec 的 Spring Boot 自动配置如何装配所有安全组件、
 
 CoSec 使用 Spring Boot 的自动配置机制，根据类路径存在和属性配置自动装配所有安全组件。这使得应用程序只需添加依赖并进行少量配置即可集成 CoSec。
 
-## 配置层次结构
+## 自动配置概览
+
+全部 15 个 CoSec 自动配置类都作为**独立的扁平条目**注册在 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 中 -- 它们之间没有父/子层次结构。将它们联系在一起的是共享的 `@ConditionalOnCoSecEnabled` 门控（`cosec.enabled`，默认为 `true`）；若干类在此之上叠加了额外的条件（例如 `CoSecAuthorizationAutoConfiguration` 还要求 `@ConditionalOnAuthorizationEnabled`，`CoSecGatewayAuthorizationAutoConfiguration` 额外要求 `@ConditionalOnGatewayEnabled` 和 `@ConditionalOnClass(AuthorizationGatewayFilter::class)`）。唯一的例外是 `CoSecEndpointAutoConfiguration`，它仅由类路径存在性激活。
 
 ```mermaid
 graph TD
-    A["CoSecAutoConfiguration<br>(root)"] --> B["CoSecAuthorizationAutoConfiguration"]
-    A --> C["CoSecJwtAutoConfiguration"]
-    A --> D["CoSecGatewayAuthorizationAutoConfiguration"]
-    A --> E["CoSecPolicyCacheAutoConfiguration"]
-    A --> F["Ip2RegionAutoConfiguration"]
-    A --> G["CoSecSocialAutoConfiguration"]
-    A --> H["CoSecOpenTelemetryAutoConfiguration"]
-    B --> I["WebFlux (ReactiveAuthorizationFilter)"]
-    B --> J["WebMVC (AuthorizationFilter)"]
-    B --> K["InjectSecurityContext"]
-    C --> L["JwtTokenConverter"]
-    C --> M["JwtTokenVerifier"]
-    C --> N["TokenCompositeAuthentication"]
-    D --> O["AuthorizationGatewayFilter"]
+    G["@ConditionalOnCoSecEnabled<br>(cosec.enabled=true)"]
+    G --> A["CoSecAutoConfiguration"]
+    G --> B["CoSecAuthenticationAutoConfiguration"]
+    G --> C["CoSecSocialAuthenticationAutoConfiguration"]
+    G --> D["CoSecPolicyCacheAutoConfiguration"]
+    G --> E["CoSecPermissionCacheAutoConfiguration"]
+    G --> F["CoSecRequestParserAutoConfiguration"]
+    G --> H["CoSecAuthorizationAutoConfiguration"]
+    G --> I["CoSecGatewayAuthorizationAutoConfiguration"]
+    G --> J["InjectSecurityContextAutoConfiguration"]
+    G --> K["CoSecTokenRevocationCacheAutoConfiguration"]
+    G --> L["CoSecJwtAutoConfiguration"]
+    G --> M["CoSecOpenTelemetryAutoConfiguration"]
+    G --> N["Ip2RegionAutoConfiguration"]
+    G --> O["CoSecOpenAPIAutoConfiguration"]
+    P["CoSecEndpointAutoConfiguration<br>(classpath-only gate)"]
 
+    style G fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style A fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style B fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style C fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style D fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style E fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style F fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style G fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style H fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style I fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style J fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -41,6 +45,7 @@ graph TD
     style M fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style N fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style O fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style P fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
 
@@ -54,6 +59,7 @@ graph TD
 @EnableConfigurationProperties(CoSecProperties::class)
 class CoSecAutoConfiguration {
     @Bean
+    @ConditionalOnMissingBean
     fun coSecModule(): CoSecModule = CoSecModule()
 
     @Bean
@@ -63,7 +69,7 @@ class CoSecAutoConfiguration {
 }
 ```
 
-注册两个 Bean：
+注册两个 Bean（当应用定义了自己的 `CoSecModule` 时，`coSecModule` Bean 会通过 `@ConditionalOnMissingBean` 退避）：
 1. **`CoSecModule`** -- 用于序列化 CoSec 类型（策略、语句、匹配器）的 Jackson 模块。
 2. **`MatcherFactoryRegister`** -- Spring `SmartLifecycle`，从应用上下文中注册所有 `ActionMatcherFactory` 和 `ConditionMatcherFactory` Bean。
 
@@ -108,8 +114,8 @@ graph TD
     A["CoSecAuthorizationAutoConfiguration"] --> B["securityContextParser<br>(DefaultSecurityContextParser)"]
     A --> C["cosecAuthorization<br>(SimpleAuthorization)"]
     A --> D["blacklistChecker<br>(BlacklistChecker.NoOp)"]
-    A --> E["localPolicyLoader"]
-    A --> F["localPolicyInitializer"]
+    A --> E["localPolicyLoader<br>(local-policy.enabled)"]
+    A --> F["localPolicyInitializer<br>(local-policy.init-repository)"]
     A --> G["WebFlux config"]
     A --> H["WebMVC config"]
     G --> I["reactiveAuthorizationFilter<br>(ReactiveAuthorizationFilter)"]
@@ -131,7 +137,9 @@ graph TD
 嵌套的 `WebFlux` 和 `WebMVC` 配置根据类路径存在情况有条件地激活：
 - **WebFlux**：当 `ReactiveAuthorizationFilter` 在类路径上且 Spring Cloud Gateway 不在时激活。
 - **WebMVC**：当 `AuthorizationFilter` 在类路径上时激活。
-- **Gateway**：由单独的 `CoSecGatewayAuthorizationAutoConfiguration` 处理，通过 `@ConditionalOnMissingClass` 优先于普通 WebFlux 过滤器。
+- **Gateway**：由单独的 `CoSecGatewayAuthorizationAutoConfiguration` 处理，通过 `@ConditionalOnClass(AuthorizationGatewayFilter::class)` 激活；普通 WebFlux 的 `reactiveAuthorizationFilter` Bean 自身带有 `@ConditionalOnMissingClass("org.springframework.cloud.gateway.filter.GlobalFilter")`，因此当 Spring Cloud Gateway 在类路径上时它会自动退避。
+
+`localPolicyLoader` 和 `localPolicyInitializer` Bean **默认关闭**：两者分别由 `@ConditionalOnProperty`（`cosec.authorization.local-policy.enabled` 和 `cosec.authorization.local-policy.init-repository`）守卫，且 `matchIfMissing = false`，因此只有在显式启用时才会创建这两个 Bean。
 
 ## CoSecJwtAutoConfiguration
 
@@ -158,7 +166,25 @@ cosec:
 
 ## Spring 自动配置注册
 
-CoSec 使用 Spring Boot 的 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 文件注册所有自动配置类。这是 `spring.factories` 的现代替代方案。
+CoSec 使用 Spring Boot 的 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 文件注册所有自动配置类。这是 `spring.factories` 的现代替代方案。starter 将全部 15 个自动配置类注册为扁平的独立条目：
+
+```
+me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authentication.social.CoSecSocialAuthenticationAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPolicyCacheAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPermissionCacheAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authorization.gateway.CoSecGatewayAuthorizationAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.inject.InjectSecurityContextAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.opentelemetry.CoSecOpenTelemetryAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.actuate.CoSecEndpointAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.openapi.CoSecOpenAPIAutoConfiguration
+```
 
 ```mermaid
 sequenceDiagram

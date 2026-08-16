@@ -156,7 +156,7 @@ The `spaceId` often maps to a tenant identifier, allowing the authorization laye
 
 The `Policy` interface ([Policy.kt:45](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/Policy.kt#L45)) extends `Tenant`, meaning every policy has a `tenantId`. This allows the `PolicyRepository` to fetch only policies relevant to the current tenant, and enables condition matchers to enforce tenant boundaries.
 
-During authorization, `SimpleAuthorization` ([SimpleAuthorization.kt:82-113](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L82)) filters policies by their condition matchers, which can include tenant-aware checks like `InTenant` conditions.
+During authorization, `SimpleAuthorization` ([SimpleAuthorization.kt:90-121](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L90)) filters policies by their condition matchers, which can include tenant-aware checks like `InTenant` conditions.
 
 ## Tenant Hierarchy
 
@@ -189,7 +189,7 @@ graph TD
 
 ```
 
-The platform tenant is the administrative root. Platform administrators can define global policies that apply across all tenants, or create tenant-specific policies for individual customers. The `SimpleAuthorization` evaluation order ensures global policies (which may be platform-tenant-scoped) are evaluated before principal-specific policies ([SimpleAuthorization.kt:156-178](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L156)).
+The platform tenant is the administrative root. Platform administrators can define global policies that apply across all tenants, or create tenant-specific policies for individual customers. The `SimpleAuthorization` evaluation order ensures global policies (which may be platform-tenant-scoped) are evaluated before principal-specific policies ([SimpleAuthorization.kt:164-186](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L164)).
 
 ## SPI Extension Points for Tenant Conditions
 

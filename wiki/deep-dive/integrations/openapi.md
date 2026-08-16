@@ -115,6 +115,17 @@ object BearerAuthOpenApiCustomizer : Consumer<OpenAPI> {
 
 The security scheme name is `cosec.BearerAuth`, prefixed with `cosec.` to avoid conflicts with other security schemes in the spec.
 
+## Auto-Configuration & Actuator Endpoints
+
+`CoSecOpenAPIAutoConfiguration` ([source](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/openapi/CoSecOpenAPIAutoConfiguration.kt#L30)) registers a single `OpenApiCustomizer` bean that wraps `BearerAuthOpenApiCustomizer.accept(it)`, so SpringDoc picks up the Bearer scheme automatically. It is conditional on `cosec.openapi.enabled` (default `true`) and the springdoc classes being on the classpath.
+
+For the generator side, `CoSecEndpointAutoConfiguration` ([source](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/actuate/CoSecEndpointAutoConfiguration.kt#L31)) exposes two Spring Boot actuator endpoints that invoke the generators on demand:
+
+| Endpoint | Bean | Purpose |
+|----------|------|---------|
+| `cosecPolicyGenerator` | `CoSecPolicyGeneratorEndpoint` | Generates a `Policy` from the app's `OpenAPI` bean |
+| `cosecAppPermissionGenerator` | `CoSecAppPermissionGeneratorEndpoint` | Generates an `AppPermission` from the app's `OpenAPI` bean |
+
 ## Workflow: From OpenAPI to Permissions
 
 ```mermaid

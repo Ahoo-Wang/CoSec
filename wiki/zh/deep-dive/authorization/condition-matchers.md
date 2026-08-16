@@ -110,7 +110,7 @@ fun interface PartExtractor {
 
 `RateLimiterConditionMatcher` 创建一个跨所有请求共享的单个速率限制器。`GroupedRateLimiterConditionMatcher` 创建一个按提取的部分值为键的 `LoadingCache` 速率限制器，访问后自动过期。
 
-当超出速率限制时，会抛出 `TooManyRequestsException`，授权层会捕获并将其转换为 `AuthorizeResult.TOO_MANY_REQUESTS`。
+当超出速率限制时，会抛出 `TooManyRequestsException`。CoSec 的 Web 过滤器（WebFlux 的 `ReactiveSecurityFilter`、WebMVC 的 `AuthorizationFilter`）会捕获它并将响应转换为 `AuthorizeResult.TOO_MANY_REQUESTS`。
 
 ### 基于表达式的匹配器
 

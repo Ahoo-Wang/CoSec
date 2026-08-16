@@ -29,6 +29,7 @@ CoSec exists to fill this gap:
 | Multiple Integrations | WebFlux, WebMvc, Spring Cloud Gateway |
 | JSON Policy Language | Declarative policies with path patterns, conditions, and rate limiting |
 | JWT Authentication | Built-in JWT token management with configurable algorithms |
+| Token Revocation | Revoke access/refresh tokens for logout, backed by CoCache |
 | Redis Caching | Policy and permission caching via CoCache |
 
 ## Architecture Overview
@@ -156,7 +157,7 @@ flowchart BT
 
 | Module | Description |
 |--------|-------------|
-| `cosec-api` | Core interfaces — `CoSecPrincipal`, `Authorization`, `Authentication`, `Policy`, `Statement`. No framework dependencies. |
+| `cosec-api` | Core interfaces — `CoSecPrincipal`, `Authorization`, `Authentication`, `Policy`, `Statement`. No Spring dependencies; only Project Reactor. |
 | `cosec-core` | Policy evaluation engine, authentication/authorization implementations, condition and action matchers. |
 | `cosec-jwt` | JWT token creation and verification using the `java-jwt` library. |
 | `cosec-cocache` | Redis-backed caching for policies and permissions via CoCache. |

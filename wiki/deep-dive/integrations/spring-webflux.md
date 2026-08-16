@@ -97,10 +97,10 @@ sequenceDiagram
 
 The `filterInternal` method handles:
 
-1. **Request parsing** -- converts the `ServerWebExchange` into a CoSec `Request`.
+1. **Request parsing** -- converts the `ServerWebExchange` into a CoSec `Request`; an `InvalidRequestPathException` (malformed/invalid path) short-circuits with **400 Bad Request**.
 2. **Token verification** -- catches `TokenVerificationException` and falls back to an anonymous `SimpleSecurityContext`.
 3. **Authorization decision** -- calls `Authorization.authorize()` and maps the result to HTTP status codes.
-4. **Error handling** -- maps `TooManyRequestsException` to 429 and unexpected errors to 500.
+4. **Error handling** -- maps `TooManyRequestsException` to 429, `RegexTimeoutException` (a regex condition exceeding its time budget, i.e. the ReDoS guard) to 403 as a fail-closed deny, and unexpected errors to 500.
 
 ### ReactiveRequestParser
 
@@ -165,8 +165,8 @@ Choose between `ReactiveAuthorizationFilter` and `ReactiveInjectSecurityContextW
 ## References
 
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt:36](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36) -- Filter entry point
-- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt:57](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L57) -- Base class with `filterInternal`
-- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt#L27) -- Request parsing
+- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt:59](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59) -- Base class with `filterInternal`
+- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt#L28) -- Request parsing
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequest.kt:22](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequest.kt#L22) -- Request data class
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityContexts.kt:21](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityContexts.kt#L21) -- Context propagation
 

@@ -110,7 +110,7 @@ These inspect the security context directly:
 
 `RateLimiterConditionMatcher` creates a single rate limiter shared across all requests. `GroupedRateLimiterConditionMatcher` creates a `LoadingCache` of rate limiters keyed by the extracted part value, with automatic expiration after access.
 
-When a rate limit is exceeded, `TooManyRequestsException` is thrown, which the authorization layer catches and converts to `AuthorizeResult.TOO_MANY_REQUESTS`.
+When a rate limit is exceeded, `TooManyRequestsException` is thrown. CoSec's web filters (`ReactiveSecurityFilter` for WebFlux, `AuthorizationFilter` for WebMVC) catch it and convert the response to `AuthorizeResult.TOO_MANY_REQUESTS`.
 
 ### Expression-Based Matchers
 

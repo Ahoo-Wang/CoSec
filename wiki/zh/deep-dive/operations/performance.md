@@ -117,7 +117,7 @@ flowchart TD
 
 ## JMH 基准测试
 
-CoSec 通过 `me.champeau.jmh` Gradle 插件在每个模块中包含 JMH（Java 微基准测试工具）基准测试。
+CoSec 将 `me.champeau.jmh` Gradle 插件应用于所有子项目，但基准测试源码目前仅存在于 `cosec-core`（`PathPatternBenchmark`）和 `cosec-jwt`（`JwtTokenConverterBenchmark`）。
 
 ### PathPatternBenchmark
 
@@ -151,7 +151,7 @@ open class PathPatternBenchmark {
 ./gradlew :cosec-core:jmh -PjmhIncludes=*.PathPatternBenchmark
 
 # 使用自定义 JMH 选项运行
-./gradlew :cosec-core:jmh -PjmhIncludes="*" -PjmhParams="mode=avgt"
+./gradlew :cosec-core:jmh -PjmhIncludes="*" -PjmhMode=avgt
 ```
 
 ## 缓存策略
@@ -219,8 +219,8 @@ cosec:
 ## 参考资料
 
 - [cosec-core/src/jmh/kotlin/me/ahoo/cosec/policy/action/PathPatternBenchmark.kt:19](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/jmh/kotlin/me/ahoo/cosec/policy/action/PathPatternBenchmark.kt#L19) -- JMH 基准测试
-- [cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:61](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61) -- 基于序列的 evaluateDenyFirst
-- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt#L26) -- 缓存的策略仓库
+- [cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:68](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68) -- 基于序列的 evaluateDenyFirst
+- [cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt#L27) -- 缓存的策略仓库
 - [k8s/cosec-gateway-config.yaml](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/cosec-gateway-config.yaml) -- 缓存配置
 - [cosec-gateway-server/build.gradle.kts:35](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/build.gradle.kts#L35) -- JVM 性能选项
 

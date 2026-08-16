@@ -19,8 +19,8 @@ flowchart TD
     ROOT --> AUTHZ["cosec.authorization.*"]
     ROOT --> IP2R["cosec.ip2region.*"]
     ROOT --> OPENAPI["cosec.openapi.*"]
-    ROOT --> SOCIAL["cosec.social.*"]
-    ROOT --> INJECT["cosec.inject-security-context.*"]
+    ROOT --> SOCIAL["cosec.authentication.social.*"]
+    ROOT --> INJECT["cosec.inject.*"]
 
     AUTHZ --> LP["authorization.local-policy.*"]
     AUTHZ --> CACHE["authorization.cache.*"]
@@ -71,6 +71,7 @@ flowchart TD
 | `cosec.jwt.secret` | `String` | *必填* | HMAC 签名的密钥 |
 | `cosec.jwt.token-validity.access` | `Duration` | `PT10M` | 访问令牌有效期（10 分钟） |
 | `cosec.jwt.token-validity.refresh` | `Duration` | `P7D` | 刷新令牌有效期（7 天） |
+| `cosec.jwt.token-revocation.enabled` | `Boolean` | `false` | 启用用于登出的令牌撤销；被撤销的令牌记录在授权令牌缓存中 |
 
 定义在 `JwtProperties`（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties.kt#L28)）中。条件激活由 `@ConditionalOnJwtEnabled` 控制（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/ConditionalOnJwtEnabled.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/ConditionalOnJwtEnabled.kt)）。
 
@@ -93,6 +94,7 @@ flowchart TD
 | `cosec.authorization.local-policy.locations` | `Set<String>` | `classpath:cosec-policy/*-policy.json` | 策略文件位置的 Glob 模式 |
 | `cosec.authorization.local-policy.init-repository` | `Boolean` | `false` | 启动时使用本地文件初始化策略仓库 |
 | `cosec.authorization.local-policy.force-refresh` | `Boolean` | `false` | 启动时强制刷新本地策略 |
+| `cosec.authorization.remote-ip.max-trusted-index` | `Int` | `1` | X-Forwarded-For 信任深度：`0` 完全忽略该头（直接暴露部署）；`N` 信任 N 个代理跳数，取最近的受信任代理追加的最右侧条目 |
 
 定义在 `AuthorizationProperties`（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/AuthorizationProperties.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/AuthorizationProperties.kt#L27)）中。
 
@@ -105,13 +107,25 @@ flowchart TD
 | `cosec.authorization.cache.enabled` | `Boolean` | `true` | 启用缓存 |
 | `cosec.authorization.cache.key-prefix` | `String` | `cosec` | Redis 键前缀 |
 | `cosec.authorization.cache.policy.initialCapacity` | `Int` | *未设置* | Guava 缓存初始容量（策略缓存） |
+| `cosec.authorization.cache.policy.concurrencyLevel` | `Int` | *未设置* | Guava 缓存并发级别（策略缓存） |
 | `cosec.authorization.cache.policy.maximumSize` | `Long` | *未设置* | Guava 缓存最大大小（策略缓存） |
-| `cosec.authorization.cache.policy.expireAfterWrite` | `Long` | *未设置* | 写入后过期时间（秒）（策略缓存） |
-| `cosec.authorization.cache.policy.expireAfterAccess` | `Long` | *未设置* | 访问后过期时间（秒）（策略缓存） |
+| `cosec.authorization.cache.policy.expireUnit` | `TimeUnit` | `SECONDS` | expireAfterWrite/expireAfterAccess 的时间单位（策略缓存） |
+| `cosec.authorization.cache.policy.expireAfterWrite` | `Long` | *未设置* | 写入后过期（策略缓存） |
+| `cosec.authorization.cache.policy.expireAfterAccess` | `Long` | *未设置* | 访问后过期（策略缓存） |
 | `cosec.authorization.cache.role.initialCapacity` | `Int` | *未设置* | Guava 缓存初始容量（角色缓存） |
+| `cosec.authorization.cache.role.concurrencyLevel` | `Int` | *未设置* | Guava 缓存并发级别（角色缓存） |
 | `cosec.authorization.cache.role.maximumSize` | `Long` | *未设置* | Guava 缓存最大大小（角色缓存） |
-| `cosec.authorization.cache.role.expireAfterWrite` | `Long` | *未设置* | 写入后过期时间（秒）（角色缓存） |
-| `cosec.authorization.cache.role.expireAfterAccess` | `Long` | *未设置* | 访问后过期时间（秒）（角色缓存） |
+| `cosec.authorization.cache.role.expireUnit` | `TimeUnit` | `SECONDS` | expireAfterWrite/expireAfterAccess 的时间单位（角色缓存） |
+| `cosec.authorization.cache.role.expireAfterWrite` | `Long` | *未设置* | 写入后过期（角色缓存） |
+| `cosec.authorization.cache.role.expireAfterAccess` | `Long` | *未设置* | 访问后过期（角色缓存） |
+| `cosec.authorization.cache.token.initialCapacity` | `Int` | *未设置* | Guava 缓存初始容量（被撤销令牌缓存） |
+| `cosec.authorization.cache.token.concurrencyLevel` | `Int` | *未设置* | Guava 缓存并发级别（被撤销令牌缓存） |
+| `cosec.authorization.cache.token.maximumSize` | `Long` | `100000` | Guava 缓存最大大小（被撤销令牌缓存） |
+| `cosec.authorization.cache.token.expireUnit` | `TimeUnit` | `SECONDS` | expireAfterWrite/expireAfterAccess 的时间单位（被撤销令牌缓存） |
+| `cosec.authorization.cache.token.expireAfterWrite` | `Long` | `30` | 写入后过期（被撤销令牌缓存）；限定跨实例撤销传播的延迟上界 |
+| `cosec.authorization.cache.token.expireAfterAccess` | `Long` | *未设置* | 访问后过期（被撤销令牌缓存） |
+
+被撤销令牌的派生 Redis 键前缀为 `cosec:token:revoked:`（即 `${key-prefix}:token:revoked:`）。它为登出提供令牌撤销支撑（`cosec.jwt.token-revocation.enabled`）。
 
 定义在 `CacheProperties`（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt:34](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt#L34)）中。
 
@@ -152,9 +166,9 @@ sequenceDiagram
     autonumber
     participant SB as Spring Boot
     participant CA as CoSecAutoConfiguration
-    participant JA as JwtAutoConfiguration
-    participant AA as AuthAutoConfiguration
-    participant AZ as AuthzAutoConfiguration
+    participant JA as CoSecJwtAutoConfiguration
+    participant AA as CoSecAuthenticationAutoConfiguration
+    participant AZ as CoSecAuthorizationAutoConfiguration
     participant MA as MatcherFactoryRegister
 
     SB->>CA: Check @ConditionalOnCoSecEnabled

@@ -295,8 +295,10 @@ CoSec uses a single configuration prefix (`cosec.*`) with feature flags that can
 | `cosec.authorization.local-policy.force-refresh` | `false` | Force re-reading policy files on every startup |
 | `cosec.authorization.gateway.enabled` | `true` | Whether the Spring Cloud Gateway integration is active |
 | `cosec.jwt.enabled` | `true` | Whether JWT token support is active |
+| `cosec.jwt.token-revocation.enabled` | `false` | Whether issued JWTs can be revoked (the "log a user out" capability). When enabled, revoked token ids are tracked in a shared `RevokedTokenCache` (CoCache/Redis) via `CoCacheTokenStore` |
 | `cosec.authorization.cache.enabled` | `true` | Whether policy and permission caching is enabled |
-| `cosec.opentelemetry.enabled` | `true` | Whether security decision tracing is active |
+
+> OpenTelemetry tracing has no feature-flag property. It activates automatically when the `cosec-opentelemetry` module is on the classpath (classpath-conditional auto-configuration).
 
 ### Token Configuration
 

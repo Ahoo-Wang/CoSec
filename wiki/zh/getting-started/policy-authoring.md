@@ -98,7 +98,7 @@ flowchart TD
 
 ```
 
-此逻辑在 `Policy.verify` 方法（[cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/Policy.kt:76](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/Policy.kt#L76)）和 `SimpleAuthorization.evaluateDenyFirst`（[cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:61](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61)）中实现。
+此逻辑在 `Policy.verify` 方法（[cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/Policy.kt:76](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/Policy.kt#L76)）和 `SimpleAuthorization.evaluateDenyFirst`（[cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt:68](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68)）中实现。
 
 ## 语句匹配流程
 
@@ -283,6 +283,22 @@ flowchart TD
   "condition": {
     "rateLimiter": {
       "permitsPerSecond": 100
+    }
+  }
+}
+```
+
+#### 分组速率限制条件（`groupedRateLimiter`）
+
+`rateLimiter` 是全局的 —— 所有请求共享同一个限流器。如需按用户或按分组限流，请使用 `GroupedRateLimiterConditionMatcher`（`RateLimiterConditionMatcher` 的 KDoc 明确指向它）。它为 `part` 表达式的每个不同取值（如 `context.principal.id` 按用户、`request.remoteIp` 按 IP）维护一个独立的 `RateLimiter`，并在空闲 `expireAfterAccessSecond` 秒后回收：
+
+```json
+{
+  "condition": {
+    "groupedRateLimiter": {
+      "part": "context.principal.id",
+      "permitsPerSecond": 10,
+      "expireAfterAccessSecond": 600
     }
   }
 }

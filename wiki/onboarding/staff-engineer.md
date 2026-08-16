@@ -46,7 +46,7 @@ def evaluate_deny_first(items, get_effect, verify):
 # SimpleAuthorization.authorize() applies it to the full policy chain
 ```
 
-The same function `evaluateDenyFirst` in [`SimpleAuthorization`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61) is used for both policy statements and role permissions. The architecture is fractal: the same pattern at every level.
+The same function `evaluateDenyFirst` in [`SimpleAuthorization`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68) is used for both policy statements and role permissions. The architecture is fractal: the same pattern at every level.
 
 ## System Architecture
 
@@ -243,6 +243,7 @@ This is the most important sequence diagram in the entire system. Read it top to
 
 ```mermaid
 sequenceDiagram
+    autonumber
     participant Client
     participant Filter as Runtime Filter<br>Gateway/WebFlux/WebMvc
     participant Parser as SecurityContextParser
@@ -312,9 +313,9 @@ sequenceDiagram
     end
 ```
 
-<!-- Sources: cosec-core/authorization/SimpleAuthorization.kt:213-232, cosec-webflux/ReactiveSecurityFilter.kt:66-116 -->
+<!-- Sources: cosec-core/authorization/SimpleAuthorization.kt:221-240, cosec-webflux/ReactiveSecurityFilter.kt:68-139 -->
 
-The `ReactiveSecurityFilter.filterInternal()` method ([`ReactiveSecurityFilter.kt:66`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L66)) contains the error handling matrix:
+The `ReactiveSecurityFilter.filterInternal()` method ([`ReactiveSecurityFilter.kt:68`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L68)) contains the error handling matrix:
 
 ```python
 # Error handling matrix (pseudocode from ReactiveSecurityFilter)
@@ -361,7 +362,7 @@ stateDiagram-v2
     IMPLICIT_DENY --> [*]
 ```
 
-<!-- Sources: cosec-core/authorization/SimpleAuthorization.kt:194-232 -->
+<!-- Sources: cosec-core/authorization/SimpleAuthorization.kt:202-219 -->
 
 ### Policy Evaluation State Machine
 
@@ -411,10 +412,10 @@ These are the architectural decisions that shape every interaction with the code
 | # | Decision | Rationale | Where Visible |
 |---|----------|-----------|---------------|
 | D1 | API module has zero framework deps | Interfaces must be implementable without Spring on classpath | [`cosec-api/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/build.gradle.kts) |
-| D2 | DENY-first evaluation order | Prevents privilege escalation: a broad ALLOW cannot override a targeted DENY | [`SimpleAuthorization.kt:61`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61) |
+| D2 | DENY-first evaluation order | Prevents privilege escalation: a broad ALLOW cannot override a targeted DENY | [`SimpleAuthorization.kt:68`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68) |
 | D3 | SPI-based matcher discovery | Allows third-party extensions without core changes | [`META-INF/services/me.ahoo.cosec.policy.action.ActionMatcherFactory`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/resources/META-INF/services/me.ahoo.cosec.policy.action.ActionMatcherFactory) |
 | D4 | Reactive throughout (`Mono<T>`) | Non-blocking authorization scales under load; consistent with Spring WebFlux | [`Authorization.kt:43`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/authorization/Authorization.kt#L43) |
-| D5 | Root bypass is identity-based, not role-based | Root check (`principal.isRoot`) happens before all other checks, including blacklist | [`SimpleAuthorization.kt:146-154`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L146) |
+| D5 | Root bypass is identity-based, not role-based | Root check (`verifyRoot`, `principal.isRoot`) happens before all other checks, including blacklist | [`SimpleAuthorization.kt:154-160`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L154) |
 | D6 | SecurityContext attributes are mutable and concurrent | Downstream components can write path variables, rate limit counters, etc. | [`SimpleSecurityContext.kt:41`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/SimpleSecurityContext.kt#L41) |
 | D7 | Token extraction from header, query, or cookie | Supports browser-based, API, and legacy clients | [`DefaultSecurityContextParser.kt:27-31`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/DefaultSecurityContextParser.kt#L27) |
 | D8 | Gateway filter order is near-max priority | Authorization must run before route filters that might modify the exchange | [`AuthorizationGatewayFilter.kt:42`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt#L42) |
@@ -469,15 +470,15 @@ All dependency versions are centralized in [`gradle/libs.versions.toml`](https:/
 
 | Dependency | Version | Why |
 |------------|---------|-----|
-| Kotlin | 2.3.20 | Language version; `-Xjsr305=strict` for null-safety interop |
-| Spring Boot | 4.0.5 | Runtime; drives WebFlux/WebMvc/Gateway API compatibility |
-| Spring Cloud | 2025.1.1 | Gateway filter integration |
-| auth0/java-jwt | 4.5.1 | JWT token creation and verification |
+| Kotlin | 2.4.10 | Language version; `-Xjsr305=strict` for null-safety interop |
+| Spring Boot | 4.1.0 | Runtime; drives WebFlux/WebMvc/Gateway API compatibility |
+| Spring Cloud | 2025.1.2 | Gateway filter integration |
+| auth0/java-jwt | 4.6.0 | JWT token creation and verification |
 | JustAuth | 1.16.7 | Multi-provider OAuth (WeChat, GitHub, etc.) |
 | OGNL | 3.4.11 | Expression-based condition matching |
-| CoCache | 4.0.2 | Two-level distributed caching (local + Redis) |
-| CosId | 3.0.5 | Distributed ID generation |
-| Guava RateLimiter | 33.5.0-jre | Token-bucket rate limiting in conditions |
+| CoCache | 4.3.0 | Two-level distributed caching (local + Redis) |
+| CosId | 3.2.0 | Distributed ID generation |
+| Guava RateLimiter | 33.6.0-jre | Token-bucket rate limiting in conditions |
 
 ### Why OGNL and SpEL Both Exist
 
@@ -549,11 +550,11 @@ Understanding failure modes is critical for production operation.
 
 | Failure | Behavior | Source |
 |---------|----------|--------|
-| **JWT expired** | `TokenVerificationException` caught in `filterInternal`, context falls back to anonymous, then authorization proceeds (likely 401) | [`ReactiveSecurityFilter.kt:73-79`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L73) |
-| **Rate limit exceeded** | `TooManyRequestsException` thrown from condition matcher, caught and returns 429 | [`ReactiveSecurityFilter.kt:106-108`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L106) |
-| **PolicyRepository unavailable** | `Mono` propagates the error; caught by `onErrorResume` returning 500 | [`ReactiveSecurityFilter.kt:109-114`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L109) |
-| **No matching policy** | Returns `IMPLICIT_DENY` (default deny). Authenticated user gets 403, anonymous gets 401 | [`SimpleAuthorization.kt:207-210`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L207) |
-| **Blacklist blocks request** | Immediate `EXPLICIT_DENY` before any policy evaluation | [`SimpleAuthorization.kt:221-228`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L221) |
+| **JWT expired** | `TokenVerificationException` caught in `filterInternal`, context falls back to anonymous, then authorization proceeds (likely 401) | [`ReactiveSecurityFilter.kt:80-88`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L80) |
+| **Rate limit exceeded** | `TooManyRequestsException` thrown from condition matcher, caught and returns 429 | [`ReactiveSecurityFilter.kt:121-124`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L121) |
+| **PolicyRepository unavailable** | `Mono` propagates the error; caught by `onErrorResume` returning 500 | [`ReactiveSecurityFilter.kt:131-138`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L131) |
+| **No matching policy** | Returns `IMPLICIT_DENY` (default deny). Authenticated user gets 403, anonymous gets 401 | [`SimpleAuthorization.kt:212-218`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L212) |
+| **Blacklist blocks request** | Immediate `EXPLICIT_DENY` before any policy evaluation | [`SimpleAuthorization.kt:229-240`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L229) |
 | **Malformed policy JSON** | `CoSecJsonSerializer.readValue` throws; caught by `LocalPolicyLoader` and logged, policy skipped | [`LocalPolicyLoader.kt:63-67`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/LocalPolicyLoader.kt#L63) |
 | **Unknown action matcher type** | SPI lookup fails at deserialization time; policy load fails | `ActionMatcherFactoryProvider` |
 
@@ -603,7 +604,7 @@ graph TD
     style R403 fill:#2d333b,stroke:#da3633,color:#e6edf3
 ```
 
-<!-- Sources: SimpleAuthorization.kt:213-232, ReactiveSecurityFilter.kt:86-115 -->
+<!-- Sources: SimpleAuthorization.kt:221-240, ReactiveSecurityFilter.kt:92-114 -->
 
 ## API Surface
 
@@ -707,8 +708,8 @@ All properties are prefixed with `cosec.`:
 | `cosec.authorization.local-policy.force-refresh` | `false` | starter | Overwrite existing policies in repository |
 | `cosec.authentication.enabled` | `true` | starter | Authentication feature toggle |
 | `cosec.jwt.enabled` | `true` | starter | JWT token handling toggle |
-| `cosec.social.enabled` | `false` | starter | OAuth social login toggle |
-| `cosec.gateway.enabled` | `true` | starter | Gateway filter toggle |
+| `cosec.authentication.social.enabled` | `true` | starter | OAuth social login toggle |
+| `cosec.authorization.gateway.enabled` | `true` | starter | Gateway filter toggle |
 
 ### Auto-Configuration Hierarchy
 
@@ -810,11 +811,11 @@ The JMH dependency version is `1.37` ([`libs.versions.toml:21`](https://github.c
 
 ### Invariants You Must Never Violate
 
-1. **DENY always wins.** The `evaluateDenyFirst` pattern in [`SimpleAuthorization.kt:61`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L61) must never be changed to allow ALLOW to override DENY.
+1. **DENY always wins.** The `evaluateDenyFirst` pattern in [`SimpleAuthorization.kt:68`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L68) must never be changed to allow ALLOW to override DENY.
 
-2. **Root bypass is absolute.** If `principal.isRoot` returns true, the authorization returns ALLOW immediately ([`SimpleAuthorization.kt:217-219`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L217)). This includes bypassing the blacklist. This is by design.
+2. **Root bypass is absolute.** If `principal.isRoot` returns true, the authorization returns ALLOW immediately ([`SimpleAuthorization.kt:225-228`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L225)). This includes bypassing the blacklist. This is by design.
 
-3. **Default is deny.** If no policy matches, the result is always `IMPLICIT_DENY` ([`SimpleAuthorization.kt:207-210`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L207)).
+3. **Default is deny.** If no policy matches, the result is always `IMPLICIT_DENY` ([`SimpleAuthorization.kt:212-218`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L212)).
 
 4. **Anonymous principal has no roles or policies.** The `SimpleTenantPrincipal.ANONYMOUS` ([`SimpleTenantPrincipal.kt:42`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/principal/SimpleTenantPrincipal.kt#L42)) wraps `SimplePrincipal.ANONYMOUS` with the default tenant. It can only access resources where a GLOBAL policy explicitly allows anonymous access.
 
@@ -836,9 +837,9 @@ Policies are scoped to tenants via the `Tenant` interface. The `Policy` interfac
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| JUnit 5 | 6.0.3 | Test framework |
-| MockK | 1.14.9 | Kotlin-native mocking |
-| FluentAssert | 0.2.6 | Fluent test assertions (`me.ahoo.test.asserts.assert`) |
+| JUnit | 6.1.3 | Test framework |
+| MockK | 1.14.11 | Kotlin-native mocking |
+| FluentAssert | 1.0.0 | Fluent test assertions (`me.ahoo.test.asserts.assert`) |
 | Hamcrest | 3.0 | Matcher library |
 | Reactor Test | (from Spring Boot) | `StepVerifier` for `Mono`/`Flux` testing |
 | JMH | 1.37 | Performance benchmarks |
@@ -887,7 +888,7 @@ Policies are scoped to tenants via the `Tenant` interface. The `Policy` interfac
 
 ### Explicit Technical Debt
 
-1. **Root bypasses blacklist.** The root check ([`SimpleAuthorization.kt:217`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L217)) returns ALLOW before the blacklist check. This is intentional but should be documented to prevent surprise. A compromised root principal has no secondary defense.
+1. **Root bypasses blacklist.** The root check ([`SimpleAuthorization.kt:225`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L225)) returns ALLOW before the blacklist check. This is intentional but should be documented to prevent surprise. A compromised root principal has no secondary defense.
 
 2. **Rate limiter side effects in evaluation.** The `RateLimiterConditionMatcher` throws `TooManyRequestsException` ([`RateLimiterConditionMatcher.kt:49`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/limiter/RateLimiterConditionMatcher.kt#L49)) as control flow. This means a rate limiter in a DENY statement can prevent ALLOW statements from being evaluated, which is correct behavior but subtle.
 

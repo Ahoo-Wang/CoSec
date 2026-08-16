@@ -9,7 +9,7 @@ CoSec is organized as a multi-module Gradle Kotlin DSL project with a clear sepa
 
 ## High-Level Module Architecture
 
-The project is declared in [settings.gradle.kts](https://github.com/Ahoo-Wang/CoSec/blob/main/settings.gradle.kts), which lists all 15 included modules. The architecture follows a layered approach where the API module defines contracts, the core module provides implementations, and integration modules adapt to various runtime environments.
+The project is declared in [settings.gradle.kts](https://github.com/Ahoo-Wang/CoSec/blob/main/settings.gradle.kts#L16), which contains 16 `include(...)` calls — 15 CoSec modules plus the `code-coverage-report` build aggregation module. The architecture follows a layered approach where the API module defines contracts, the core module provides implementations, and integration modules adapt to various runtime environments.
 
 ```mermaid
 graph TB
@@ -59,6 +59,11 @@ graph TB
     STARTER -.-> OTEL
     STARTER -.-> OPENAPI
     GWSERVER --> STARTER
+    GWSERVER --> COCACHE
+    GWSERVER --> WEBFLUX
+    GWSERVER --> GATEWAY
+    GWSERVER --> OTEL
+    GWSERVER --> IP2REGION
 
     style API fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style CORE fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -82,17 +87,17 @@ graph TB
 |--------|---------------|-------------|--------------|
 | `cosec-api` | Core interfaces, no framework deps | [CoSecPrincipal](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L35), [Authorization](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/authorization/Authorization.kt#L35), [Policy](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/policy/Policy.kt#L45), [Tenant](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/tenant/Tenant.kt#L22) | None (pure API) |
 | `cosec-core` | Policy evaluation, authentication, authorization | [SimpleAuthorization](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48), PolicyRepository, BlacklistChecker | `cosec-api` |
-| `cosec-jwt` | JWT token creation and verification | JwtTokenVerifier, TokenConverter | `cosec-core` |
-| `cosec-cocache` | Redis-backed distributed caching for policies/permissions | CachedPolicyRepository, CachedAppRolePermissionRepository | `cosec-core` |
-| `cosec-social` | OAuth social authentication via JustAuth | SocialAuthentication, OAuthService | `cosec-core` |
-| `cosec-ip2region` | IP geolocation for condition matching | Ip2RegionConditionMatcher | `cosec-core` |
-| `cosec-opentelemetry` | OpenTelemetry tracing for security operations | SecurityTracingFilter | `cosec-core` |
-| `cosec-openapi` | Swagger/OpenAPI integration for security endpoints | CoSecOpenApiCustomizer | `cosec-core` |
-| `cosec-webflux` | Reactive WebFilter for Spring WebFlux | [ReactiveSecurityFilter](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L57), [ReactiveAuthorizationFilter](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36) | `cosec-core` |
-| `cosec-webmvc` | Servlet filter for Spring WebMVC | ServletAuthorizationFilter, ServletSecurityFilter | `cosec-core` |
+| `cosec-jwt` | JWT token creation and verification | JwtTokenVerifier, JwtTokenConverter | `cosec-core` |
+| `cosec-cocache` | Redis-backed distributed caching for policies/permissions | RedisPolicyRepository, RedisAppRolePermissionRepository, PolicyCache, RolePermissionCache, AppPermissionCache, GlobalPolicyIndexCache, CoCacheTokenStore, RevokedTokenCache | `cosec-core` |
+| `cosec-social` | OAuth social authentication via JustAuth | SocialAuthentication, SocialAuthenticationProvider, SocialProviderManager, justauth/JustAuthProvider | `cosec-core` |
+| `cosec-ip2region` | IP geolocation for condition matching | Ip2RegionRequestAttributesAppender | `cosec-core` |
+| `cosec-opentelemetry` | OpenTelemetry tracing for security operations | CoSecInstrumenter, TracingAuthorization, AuthorizationMono | `cosec-core` |
+| `cosec-openapi` | Swagger/OpenAPI integration for security endpoints | BearerAuthOpenApiCustomizer, OpenAPIPolicyGenerator, OpenAPIAppPermissionGenerator | `cosec-core` |
+| `cosec-webflux` | Reactive WebFilter for Spring WebFlux | [ReactiveSecurityFilter](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59), [ReactiveAuthorizationFilter](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36) | `cosec-core`, `cosec-jwt` |
+| `cosec-webmvc` | Servlet filter for Spring WebMVC (package `me.ahoo.cosec.servlet`) | AuthorizationFilter, AbstractAuthorizationInterceptor, ServletRequestParser, InjectSecurityContextFilter | `cosec-core`, `cosec-jwt` |
 | `cosec-gateway` | Spring Cloud Gateway GlobalFilter | [AuthorizationGatewayFilter](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt#L31) | `cosec-webflux` |
 | `cosec-spring-boot-starter` | Auto-configuration, aggregates all modules | CoSecAutoConfiguration, conditional features | `cosec-core`, `cosec-jwt`, optional modules |
-| `cosec-gateway-server` | Standalone gateway application (not published) | GatewayApplication | `cosec-spring-boot-starter` |
+| `cosec-gateway-server` | Standalone gateway application (not published) | GatewayServer | `cosec-spring-boot-starter`, `cosec-cocache`, `cosec-webflux`, `cosec-gateway`, `cosec-opentelemetry`, `cosec-ip2region` |
 | `cosec-dependencies` | Version catalog for dependency management | libs.versions.toml | None |
 | `cosec-bom` | Bill of Materials for consistent versioning | BOM definition | `cosec-dependencies` |
 
@@ -128,14 +133,22 @@ graph LR
 
 ```
 
-Consumers of the starter can opt in to specific features by declaring the corresponding dependency:
+Consumers of the starter opt in to specific features by requiring the corresponding capability on the same `cosec-spring-boot-starter` artifact:
 
 ```kotlin
 // Only WebFlux support
-implementation("me.ahoo.cosec:cosec-spring-boot-starter-webflux-support")
+implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+    capabilities {
+        requireCapability("me.ahoo.cosec:webflux-support")
+    }
+}
 
 // Only Gateway support (pulls in WebFlux transitively)
-implementation("me.ahoo.cosec:cosec-spring-boot-starter-gateway-support")
+implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+    capabilities {
+        requireCapability("me.ahoo.cosec:gateway-support")
+    }
+}
 ```
 
 ## Dependency Layering Principles
@@ -171,7 +184,7 @@ Key architectural principles:
 
 2. **Core as Single Implementation** -- `cosec-core` is the sole provider of concrete implementations. As seen in [SimpleAuthorization](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48), the core authorization logic delegates to `PolicyRepository` and `AppRolePermissionRepository` interfaces, which are wired by higher layers.
 
-3. **Integration Unawareness** -- Integration modules (`cosec-webflux`, `cosec-webmvc`, `cosec-gateway`) depend only on `cosec-core`, not on each other. The gateway module is a special case that extends the WebFlux filter since both operate in a reactive context.
+3. **Integration Unawareness** -- Integration modules (`cosec-webflux`, `cosec-webmvc`, `cosec-gateway`) depend on `cosec-core` and `cosec-jwt`, not on each other. The gateway module is a special case that extends the WebFlux filter since both operate in a reactive context.
 
 4. **Optional Feature Composition** -- The starter module uses Gradle's `registerFeature` mechanism (see [build.gradle.kts:18-49](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts#L18)) to provide optional modules without forcing transitive dependencies on consumers.
 
@@ -179,7 +192,7 @@ Key architectural principles:
 
 ## References
 
-- [settings.gradle.kts](https://github.com/Ahoo-Wang/CoSec/blob/main/settings.gradle.kts#L14) -- All module declarations
+- [settings.gradle.kts](https://github.com/Ahoo-Wang/CoSec/blob/main/settings.gradle.kts#L16) -- All module declarations
 - [cosec-spring-boot-starter/build.gradle.kts](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts#L18) -- Feature variant registration
 - [SimpleAuthorization.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L48) -- Core authorization implementation
 - [CoSecPrincipal.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/CoSecPrincipal.kt#L35) -- Principal interface (API layer)

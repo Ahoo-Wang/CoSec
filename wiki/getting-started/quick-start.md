@@ -30,15 +30,17 @@ The starter transitively pulls in `cosec-core`, `cosec-api`, and `cosec-jwt`. Ad
 dependencies {
     implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
         capabilities {
-            requireCapability("me.ahoo.cosec:cosec-spring-boot-starter:webflux-support")
+            requireCapability("me.ahoo.cosec:webflux-support")
         }
     }
     // Or for Gateway:
-    // requireCapability("me.ahoo.cosec:cosec-spring-boot-starter:gateway-support")
+    // requireCapability("me.ahoo.cosec:gateway-support")
     // Or for caching (Redis):
-    // requireCapability("me.ahoo.cosec:cosec-spring-boot-starter:cache-support")
+    // requireCapability("me.ahoo.cosec:cache-support")
 }
 ```
+
+Capabilities are declared on the starter itself as `group:name` pairs (e.g. `me.ahoo.cosec:webflux-support`), not as separate artifacts.
 
 The starter auto-configures security components based on detected dependencies. The auto-configuration is gated by `@ConditionalOnCoSecEnabled` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/ConditionalOnCoSecEnabled.kt](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/ConditionalOnCoSecEnabled.kt)).
 
@@ -70,6 +72,7 @@ cosec:
 | `cosec.jwt.secret` | `String` | *required* | Secret key for JWT signing |
 | `cosec.jwt.token-validity.access` | `Duration` | `PT10M` | Access token TTL |
 | `cosec.jwt.token-validity.refresh` | `Duration` | `P7D` | Refresh token TTL |
+| `cosec.jwt.token-revocation.enabled` | `Boolean` | `false` | Enable token revocation for logout (revoked tokens are tracked in a cache) |
 | `cosec.authorization.enabled` | `Boolean` | `true` | Enable authorization |
 | `cosec.authorization.local-policy.enabled` | `Boolean` | `false` | Load policies from local JSON files |
 | `cosec.authorization.local-policy.locations` | `Set<String>` | `classpath:cosec-policy/*-policy.json` | Glob patterns for policy files |
@@ -141,8 +144,8 @@ curl -v http://localhost:8080/actuator/health
 
 ```bash
 curl -v http://localhost:8080/api/users
-# Expected: 401 Unauthorized (no credentials)
-# or 403 Forbidden (anonymous, no matching ALLOW policy)
+# Expected: 401 Unauthorized (anonymous request, no matching ALLOW policy)
+# 403 Forbidden is only returned for authenticated principals denied by policy
 ```
 
 ## Authentication Flow
@@ -208,10 +211,12 @@ class UsernamePasswordAuthentication(
             .filter { passwordEncoder.matches(credentials.password, it.hashedPassword) }
             .map { user ->
                 SimpleTenantPrincipal(
-                    id = user.id,
-                    roles = user.roles,
-                    policies = user.policies,
-                    tenantId = user.tenantId
+                    SimplePrincipal(
+                        id = user.id,
+                        roles = user.roles,
+                        policies = user.policies
+                    ),
+                    SimpleTenant(user.tenantId)
                 )
             }
     }

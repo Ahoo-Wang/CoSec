@@ -295,8 +295,10 @@ CoSec 使用统一的配置前缀（`cosec.*`），各功能开关可以独立�
 | `cosec.authorization.local-policy.force-refresh` | `false` | 每次启动时强制重新读取策略文件 |
 | `cosec.authorization.gateway.enabled` | `true` | 是否启用 Spring Cloud Gateway 集成 |
 | `cosec.jwt.enabled` | `true` | 是否启用 JWT 令牌支持 |
+| `cosec.jwt.token-revocation.enabled` | `false` | 是否支持撤销已签发的 JWT（即"注销用户"能力）。启用后，被撤销的令牌 ID 通过 `CoCacheTokenStore` 记录在共享的 `RevokedTokenCache`（CoCache/Redis）中 |
 | `cosec.authorization.cache.enabled` | `true` | 是否启用策略和权限缓存 |
-| `cosec.opentelemetry.enabled` | `true` | 是否启用安全决策追踪 |
+
+> OpenTelemetry 追踪没有功能开关属性。只要 `cosec-opentelemetry` 模块位于 classpath 上，它就会自动激活（基于 classpath 的条件化自动配置）。
 
 ### 令牌配置
 
