@@ -23,8 +23,7 @@ RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
 
 ### Token Revocation (Logout)
 
-CoSec tokens are stateless JWTs by default. To make logout effective, provide a `TokenStore`
-and enable the revocation cache:
+CoSec tokens are stateless JWTs by default. To make logout effective, enable token revocation:
 
 ```yaml
 cosec:
@@ -33,8 +32,13 @@ cosec:
       enabled: true
 ```
 
-Then call `TokenRevoker.revoke(accessToken)` from your own logout endpoint. The token (and the
-refresh token bound to it) is rejected immediately cluster-wide via CoCache (Redis).
+This wires the Redis-backed `CoCacheTokenStore` (requires the `cosec-cocache` dependency -- the
+starter's `cacheSupport` Gradle feature -- and Redis); custom implementations provide their own
+`TokenStore` bean. Then call `TokenRevoker.revoke(accessToken)` from your own logout endpoint.
+The token (and the refresh token bound to it) is rejected immediately cluster-wide via CoCache
+(Redis). Note the fail-open caveat: when Redis is unreachable, revocation checks fall back to
+allowing requests (`isRevoked` returns `false`); set `cocache.redis.strict-failure=true` to
+fail closed instead.
 
 ## Authorization
 

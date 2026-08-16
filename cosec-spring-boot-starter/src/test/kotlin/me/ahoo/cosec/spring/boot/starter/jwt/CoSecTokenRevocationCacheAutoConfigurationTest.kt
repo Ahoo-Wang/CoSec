@@ -12,15 +12,16 @@
  */
 package me.ahoo.cosec.spring.boot.starter.jwt
 
-import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cache.proxy.CacheProxyFactory
+import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.cache.CoCacheTokenStore
 import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.token.TokenStore
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
+import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.data.redis.core.StringRedisTemplate
@@ -53,13 +54,10 @@ class CoSecTokenRevocationCacheAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
                 "${JwtProperties.PREFIX}.token-revocation.enabled=true",
             )
-            .withBean(StringRedisTemplate::class.java, { mockk(relaxed = true) })
-            .withBean(CacheProxyFactory::class.java, {
-                mockk {
-                    every { create<RevokedTokenCache>(any()) } returns mockk()
-                }
-            })
             .withUserConfiguration(
+                JacksonAutoConfiguration::class.java,
+                DataRedisAutoConfiguration::class.java,
+                CoCacheAutoConfiguration::class.java,
                 CoSecTokenRevocationCacheAutoConfiguration::class.java,
                 CoSecJwtAutoConfiguration::class.java,
             )
@@ -67,6 +65,7 @@ class CoSecTokenRevocationCacheAutoConfigurationTest {
                 AssertionsForInterfaceTypes.assertThat(context)
                     .hasSingleBean(RevokedTokenCache::class.java)
                     .hasSingleBean(TokenStore::class.java)
+                    .hasBean(CoSecTokenRevocationCacheAutoConfiguration.REVOKED_TOKEN_CACHE_KEY_CONVERTER_BEAN_NAME)
                 context.getBean(TokenStore::class.java)
                     .assert()
                     .isInstanceOf(CoCacheTokenStore::class.java)

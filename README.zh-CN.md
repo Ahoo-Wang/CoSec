@@ -23,7 +23,7 @@
 
 ### 注销登录（Token 吊销）
 
-CoSec 默认使用无状态 JWT。如需让登出生效，需提供 `TokenStore` 并启用吊销缓存：
+CoSec 默认使用无状态 JWT。如需让登出生效，启用令牌吊销：
 
 ```yaml
 cosec:
@@ -32,8 +32,12 @@ cosec:
       enabled: true
 ```
 
+这将接入基于 Redis 的 `CoCacheTokenStore`（需要 `cosec-cocache` 依赖——即启动器的
+`cacheSupport` Gradle 特性——以及 Redis）；自定义实现可提供自己的 `TokenStore` Bean。
 然后在你自己的登出端点中调用 `TokenRevoker.revoke(accessToken)`。token（及其绑定的
-refresh token）会通过 CoCache（Redis）在集群内立即失效。
+refresh token）会通过 CoCache（Redis）在集群内立即失效。注意 fail-open 语义：当 Redis
+不可达时，吊销检查会回退为放行（`isRevoked` 返回 `false`）；如需 fail-closed，可设置
+`cocache.redis.strict-failure=true`。
 
 ## 授权
 

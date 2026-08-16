@@ -1,6 +1,6 @@
 ---
 title: JWT 集成
-description: CoSec 如何创建、签名和验证 JWT 令牌，包括声明结构、令牌生命周期和 Spring Boot 自动配置。
+description: CoSec 如何创建、签名和验证 JWT 令牌，包括声明结构、令牌生命周期、注销登录（Token 吊销）和 Spring Boot 自动配置。
 ---
 
 # JWT 集成
@@ -55,7 +55,7 @@ data class TokenValidity(
 关键映射：
 
 - **`sub`**（主题）：设置为 `principal.id` -- 唯一用户标识符
-- **`jti`**（JWT ID）：由 `IdGenerator` 生成（默认：UUID）。用于令牌撤销和刷新令牌绑定
+- **`jti`**（JWT ID）：由 `IdGenerator` 生成（默认：UUID）。用于令牌吊销（见下文《注销登录（Token 吊销）》小节）和刷新令牌绑定
 - **`policies`**: `PolicyCapable.POLICY_KEY` 声明 -- 分配给主体的策略 ID 列表
 - **`roles`**: `RoleCapable.ROLE_KEY` 声明 -- 角色 ID 列表
 - **`attributes`**: `CoSecPrincipal::attributes.name` 声明 -- 任意键值元数据
@@ -183,6 +183,52 @@ sequenceDiagram
 
 ```
 
+## 注销登录（Token 吊销）
+
+JWT 默认是无状态的——仅在客户端删除令牌并不会让服务端令牌失效。CoSec 通过以令牌的 `jti` 声明为键的可选吊销机制弥补了这一缺口。
+
+### 功能说明
+
+- `TokenRevoker.revoke(accessToken)` 验证令牌并将其 `jti` 记录到吊销存储中。请在自定义的登出端点中调用它。
+- 被吊销的访问令牌会立即失效并返回 `401`——每次验证都会经过 `RevocableTokenVerifier`，它在接受令牌前会先检查吊销存储。
+- 刷新令牌绑定到访问令牌的 `jti`（即其 `sub` 声明），因此被吊销令牌的刷新请求同样会被拒绝。
+- 吊销条目的存活时间为刷新令牌的有效期（`cosec.jwt.token-validity.refresh`），因此它绝不会早于所绑定的刷新令牌过期。
+
+### 如何启用
+
+```yaml
+cosec:
+  jwt:
+    token-revocation:
+      enabled: true
+```
+
+这将接入基于 Redis 的 `CoCacheTokenStore`，它需要 `cosec-cocache` 依赖（启动器的 `cacheSupport` Gradle 特性）以及 Redis 连接：
+
+```kotlin
+dependencies {
+    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+        capabilities {
+            requireCapability("me.ahoo.cosec:cosec-spring-boot-starter-cache-support")
+        }
+    }
+}
+```
+
+### TokenStore SPI
+
+吊销存储通过 `TokenStore` SPI 实现可插拔：
+
+- **默认 `NoOp`** —— 无状态空实现。升级 CoSec 后行为零变化，保持无状态默认行为。
+- **`CoCacheTokenStore`** —— 开箱即用的 Redis 实现（CoCache 两级缓存：本地 + Redis），在启用该属性且类路径上存在 cosec-cocache 时自动装配。
+- **自定义** —— 提供自己的 `TokenStore` Bean，可将吊销信息存储到其他任何地方。
+
+### 运维注意事项
+
+- **注入模式**：通过网关请求头注入安全上下文的下游服务不验证 JWT 签名，因此它们自身无法检查吊销状态。吊销的执行发生在验证边缘（网关）。
+- **传播**：CoCache 通过 Redis pub/sub 驱逐本地条目，因此在集群健康时吊销几乎实时地在所有实例上生效。最坏情况下，传播时间受本地缓存 TTL 限制（默认 30 秒，可通过 `cosec.authorization.cache.token.*` 配置）。
+- **Redis 故障时失效（fail-open）**：在 CoCache 默认的 `strictFailure=false` 下，Redis 不可达会使 `isRevoked` 回退为 `false`（被吊销的令牌可能重新通过认证），吊销写入也会被丢弃。偏好 fail-closed 行为的部署可以设置 `cocache.redis.strict-failure=true`。
+
 ## Spring Boot 自动配置
 
 [CoSecJwtAutoConfiguration](../../../../cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/CoSecJwtAutoConfiguration.kt) 在以下条件满足时激活：
@@ -191,13 +237,15 @@ sequenceDiagram
 2. `cosec.jwt.enabled=true`（默认）
 3. `JwtTokenConverter` 在类路径上
 
-它注册三个 Bean：
+它注册五个 Bean：
 
 | Bean | 类型 | 用途 |
 |------|------|------|
 | `cosecTokenAlgorithm` | `Algorithm` | 来自配置的 HMAC 算法 |
 | `cosecTokenConverter` | `TokenConverter` | 创建 JWT 令牌 |
-| `cosecJwtTokenVerifier` | `TokenVerifier` | 验证 JWT 令牌 |
+| `cosecTokenStore` | `TokenStore` | 吊销存储（默认 `NoOp`，除非接入缓存实现，见《注销登录（Token 吊销）》小节） |
+| `cosecJwtTokenVerifier` | `TokenVerifier` | 验证 JWT 令牌并拒绝已吊销的令牌 |
+| `cosecTokenRevoker` | `TokenRevoker` | 注销时吊销令牌 |
 
 当认证也被启用时，它还会注册 `TokenCompositeAuthentication`，将基于凭据的认证与令牌签发链接在一起。
 
@@ -221,6 +269,8 @@ cosec:
 - [Jwts.kt:41](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt#L41) - JWT 工具函数（decode、toPrincipal、removeBearerPrefix）
 - [CoSecJwtAutoConfiguration.kt:47](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/CoSecJwtAutoConfiguration.kt#L47) - Spring Boot 自动配置
 - [JwtProperties.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties.kt#L28) - 配置属性
+- [TokenStore.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/token/TokenStore.kt#L28) - 令牌吊销存储 SPI
+- [CoCacheTokenStore.kt:25](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoCacheTokenStore.kt#L25) - 基于 Redis 的吊销存储
 
 ## 相关页面
 
