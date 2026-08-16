@@ -1,0 +1,86 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.token
+
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.token.AccessToken
+import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.api.token.TokenPrincipal
+
+/**
+ * [TokenVerifier] decorator that rejects revoked tokens.
+ *
+ * Both the request path ([verify] and its [toPrincipal] alias used by
+ * [me.ahoo.cosec.context.SecurityContextParser]) and the renewal path ([refresh])
+ * consult the [TokenStore] after the delegate succeeds, so a logged-out token
+ * can neither authenticate nor be refreshed back to life.
+ *
+ * @param delegate the actual verification implementation
+ * @param tokenStore the revocation store
+ * @throws TokenRevokedException when a delegate-verified token's id is revoked
+ */
+class RevocableTokenVerifier(
+    private val delegate: TokenVerifier,
+    private val tokenStore: TokenStore
+) : TokenVerifier by delegate {
+
+    /**
+     * @param T the expected principal type
+     * @param accessToken the access token to verify
+     * @return the verified token principal
+     * @throws TokenVerificationException if the delegate rejects the token
+     * @throws TokenRevokedException if the token has been revoked
+     */
+    override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T {
+        val tokenPrincipal = delegate.verify<TokenPrincipal>(accessToken)
+        checkNotRevoked(tokenPrincipal)
+        @Suppress("UNCHECKED_CAST")
+        return tokenPrincipal as T
+    }
+
+    /**
+     * Routes through [verify] so the revocation check cannot be bypassed.
+     *
+     * This override must stay explicit: `TokenVerifier by delegate` would otherwise
+     * forward this interface default method straight to the delegate, and the
+     * per-request path ([me.ahoo.cosec.context.SecurityContextParser]) calls it.
+     *
+     * @param accessToken the access token to convert
+     * @return the principal of the verified token
+     * @throws TokenVerificationException if the token is invalid
+     * @throws TokenRevokedException if the token has been revoked
+     */
+    override fun toPrincipal(accessToken: AccessToken): CoSecPrincipal = verify(accessToken)
+
+    /**
+     * @param T the expected principal type
+     * @param token the composite token containing the refresh token
+     * @return the token principal carried by the old access token
+     * @throws TokenVerificationException if the delegate rejects the refresh token
+     * or its binding to the access token
+     * @throws TokenRevokedException if the old access token's id has been revoked
+     */
+    override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {
+        val tokenPrincipal = delegate.refresh<TokenPrincipal>(token)
+        checkNotRevoked(tokenPrincipal)
+        @Suppress("UNCHECKED_CAST")
+        return tokenPrincipal as T
+    }
+
+    private fun checkNotRevoked(tokenPrincipal: TokenPrincipal) {
+        if (tokenStore.isRevoked(tokenPrincipal.tokenId)) {
+            throw TokenRevokedException("Token [${tokenPrincipal.tokenId}] has been revoked.")
+        }
+    }
+}

@@ -15,8 +15,12 @@ package me.ahoo.cosec.spring.boot.starter.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
+import me.ahoo.cosec.token.DefaultTokenRevoker
+import me.ahoo.cosec.token.RevocableTokenVerifier
 import me.ahoo.cosec.token.TokenCompositeAuthentication
 import me.ahoo.cosec.token.TokenConverter
+import me.ahoo.cosec.token.TokenRevoker
+import me.ahoo.cosec.token.TokenStore
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
@@ -25,6 +29,8 @@ import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import org.springframework.test.util.ReflectionTestUtils
+import java.time.Duration
 
 class CoSecJwtAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
@@ -95,6 +101,50 @@ class CoSecJwtAutoConfigurationTest {
                     .hasFailed()
                     .getFailure()
                     .hasRootCauseInstanceOf(IllegalArgumentException::class.java)
+            }
+    }
+
+    @Test
+    fun contextLoadsTokenRevocationDefaults() {
+        val refreshValidity = Duration.ofHours(72)
+        contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+                "${JwtProperties.PREFIX}.token-validity.refresh=PT72H",
+            )
+            .withUserConfiguration(
+                CoSecJwtAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                AssertionsForInterfaceTypes.assertThat(context)
+                    .hasSingleBean(TokenStore::class.java)
+                    .hasSingleBean(TokenRevoker::class.java)
+                context.getBean(TokenStore::class.java).assert().isSameAs(TokenStore.NoOp)
+                context.getBean(TokenVerifier::class.java)
+                    .assert()
+                    .isInstanceOf(RevocableTokenVerifier::class.java)
+                val revoker = context.getBean(TokenRevoker::class.java)
+                revoker.assert().isInstanceOf(DefaultTokenRevoker::class.java)
+                ReflectionTestUtils.getField(revoker, "revocationTtl").assert().isEqualTo(refreshValidity)
+            }
+    }
+
+    @Test
+    fun contextLoadsWhenCustomTokenStore() {
+        val customTokenStore = object : TokenStore {
+            override fun revoke(tokenId: String, ttl: Duration) = Unit
+            override fun isRevoked(tokenId: String): Boolean = false
+        }
+        contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+            )
+            .withBean(TokenStore::class.java, { customTokenStore })
+            .withUserConfiguration(
+                CoSecJwtAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                context.getBean(TokenStore::class.java).assert().isSameAs(customTokenStore)
             }
     }
 }

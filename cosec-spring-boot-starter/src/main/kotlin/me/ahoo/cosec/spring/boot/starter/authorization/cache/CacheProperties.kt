@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
+import me.ahoo.cache.api.annotation.CoCache
 import me.ahoo.cache.api.annotation.GuavaCache
 import me.ahoo.cache.api.annotation.GuavaCache.Companion.UNSET_INT
 import me.ahoo.cache.api.annotation.GuavaCache.Companion.UNSET_LONG
@@ -37,7 +38,9 @@ class CacheProperties(
     @NestedConfigurationProperty
     var policy: CacheConfiguration = CacheConfiguration(),
     @NestedConfigurationProperty
-    var role: CacheConfiguration = CacheConfiguration()
+    var role: CacheConfiguration = CacheConfiguration(),
+    @NestedConfigurationProperty
+    var token: CacheConfiguration = CacheConfiguration(expireAfterWrite = 30, maximumSize = 100_000),
 ) : EnabledCapable {
     companion object {
         const val PREFIX: String = AuthorizationProperties.PREFIX + ".cache"
@@ -47,6 +50,7 @@ class CacheProperties(
     val policyKeyPrefix: String = "$keyPrefix:policy:"
     val appPermissionKeyPrefix: String = "$keyPrefix:app:permission:"
     val rolePermissionKeyPrefix: String = "$keyPrefix:role:permission:"
+    val revokedTokenKeyPrefix: String = "$keyPrefix:token:revoked:"
 }
 
 data class CacheConfiguration(
@@ -57,7 +61,7 @@ data class CacheConfiguration(
     var expireAfterWrite: Long = UNSET_LONG,
     var expireAfterAccess: Long = UNSET_LONG
 ) {
-    fun <V> toGuavaClientSideCache(): GuavaClientSideCache<V> {
+    fun <V> toGuavaClientSideCache(ttl: Long = CoCache.DEFAULT_TTL): GuavaClientSideCache<V> {
         return GuavaCache(
             initialCapacity = initialCapacity,
             concurrencyLevel = concurrencyLevel,
@@ -65,6 +69,6 @@ data class CacheConfiguration(
             expireUnit = expireUnit,
             expireAfterWrite = expireAfterWrite,
             expireAfterAccess = expireAfterAccess
-        ).toClientSideCache()
+        ).toClientSideCache(ttl = ttl)
     }
 }

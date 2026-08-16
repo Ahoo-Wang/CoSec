@@ -13,13 +13,18 @@
 package me.ahoo.cosec.spring.boot.starter.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.authentication.CompositeAuthentication
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnAuthenticationEnabled
+import me.ahoo.cosec.token.DefaultTokenRevoker
+import me.ahoo.cosec.token.RevocableTokenVerifier
 import me.ahoo.cosec.token.TokenCompositeAuthentication
 import me.ahoo.cosec.token.TokenConverter
+import me.ahoo.cosec.token.TokenRevoker
+import me.ahoo.cosec.token.TokenStore
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.jvm.UuidGenerator
@@ -45,6 +50,10 @@ import org.springframework.context.annotation.Configuration
     JwtProperties::class,
 )
 class CoSecJwtAutoConfiguration {
+
+    companion object {
+        private val log = KotlinLogging.logger {}
+    }
 
     @Bean
     @ConditionalOnMissingBean
@@ -86,10 +95,39 @@ class CoSecJwtAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    fun cosecTokenStore(jwtProperties: JwtProperties): TokenStore {
+        if (jwtProperties.tokenRevocation.enabled) {
+            log.warn {
+                "Token revocation is enabled but no TokenStore implementation is available, " +
+                    "so logout will NOT take effect. " +
+                    "Please add the cosec-cocache dependency (the cosec-spring-boot-starter cacheSupport Gradle feature) " +
+                    "to provide the Redis-backed CoCacheTokenStore."
+            }
+        }
+        return TokenStore.NoOp
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     fun cosecJwtTokenVerifier(
-        algorithm: Algorithm
+        algorithm: Algorithm,
+        tokenStore: TokenStore
     ): TokenVerifier {
-        return JwtTokenVerifier(algorithm)
+        return RevocableTokenVerifier(JwtTokenVerifier(algorithm), tokenStore)
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecTokenRevoker(
+        tokenVerifier: TokenVerifier,
+        tokenStore: TokenStore,
+        jwtProperties: JwtProperties
+    ): TokenRevoker {
+        return DefaultTokenRevoker(
+            tokenVerifier,
+            tokenStore,
+            jwtProperties.tokenValidity.refresh
+        )
     }
 
     @Configuration

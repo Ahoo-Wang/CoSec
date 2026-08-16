@@ -4,10 +4,19 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.token.PrincipalConverter
+import me.ahoo.cosec.token.RevocableTokenVerifier
+import me.ahoo.cosec.token.SimpleAccessToken
+import me.ahoo.cosec.token.SimpleTokenPrincipal
+import me.ahoo.cosec.token.TokenRevokedException
+import me.ahoo.cosec.token.TokenStore
+import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.test.asserts.assert
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 class DefaultSecurityContextParserTest {
 
@@ -75,6 +84,25 @@ class DefaultSecurityContextParserTest {
         securityContext.principal.anonymous.assert().isTrue()
         verify {
             request.getHeader(AUTHORIZATION_HEADER_KEY)
+        }
+    }
+
+    @Test
+    fun parseWhenTokenRevoked() {
+        val request = mockk<Request> {
+            every { getHeader(AUTHORIZATION_HEADER_KEY) } returns "revoked-token"
+        }
+        val tokenPrincipal = SimpleTokenPrincipal("tokenId", SimplePrincipal.ANONYMOUS)
+        val accessToken = SimpleAccessToken("revoked-token")
+        val delegateVerifier = mockk<TokenVerifier>()
+        every { delegateVerifier.verify<TokenPrincipal>(accessToken) } returns tokenPrincipal
+        every { delegateVerifier.toPrincipal(accessToken) } returns tokenPrincipal
+        val tokenStore = mockk<TokenStore>()
+        every { tokenStore.isRevoked("tokenId") } returns true
+        val securityContextParser = DefaultSecurityContextParser(RevocableTokenVerifier(delegateVerifier, tokenStore))
+
+        assertThrows<TokenRevokedException> {
+            securityContextParser.parse(request)
         }
     }
 }

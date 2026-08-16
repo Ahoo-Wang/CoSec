@@ -29,7 +29,8 @@ class JwtProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
     @DefaultValue("hmac256") var algorithm: Algorithm = Algorithm.HMAC256,
     @DefaultValue("") var secret: String = "",
-    @NestedConfigurationProperty var tokenValidity: TokenValidity = TokenValidity()
+    @NestedConfigurationProperty var tokenValidity: TokenValidity = TokenValidity(),
+    @NestedConfigurationProperty var tokenRevocation: TokenRevocation = TokenRevocation(),
 ) : EnabledCapable {
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "jwt"
@@ -38,6 +39,10 @@ class JwtProperties(
     data class TokenValidity(
         var access: Duration = Duration.ofMinutes(10),
         var refresh: Duration = Duration.ofDays(7)
+    )
+
+    data class TokenRevocation(
+        @DefaultValue("false") var enabled: Boolean = false
     )
 
     enum class Algorithm {
