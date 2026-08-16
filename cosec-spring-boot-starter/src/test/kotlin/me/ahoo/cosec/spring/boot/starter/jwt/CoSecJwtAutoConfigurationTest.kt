@@ -15,8 +15,11 @@ package me.ahoo.cosec.spring.boot.starter.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
+import me.ahoo.cosec.token.RevocableTokenVerifier
 import me.ahoo.cosec.token.TokenCompositeAuthentication
 import me.ahoo.cosec.token.TokenConverter
+import me.ahoo.cosec.token.TokenRevoker
+import me.ahoo.cosec.token.TokenStore
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
@@ -95,6 +98,42 @@ class CoSecJwtAutoConfigurationTest {
                     .hasFailed()
                     .getFailure()
                     .hasRootCauseInstanceOf(IllegalArgumentException::class.java)
+            }
+    }
+
+    @Test
+    fun contextLoadsTokenRevocationDefaults() {
+        contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+            )
+            .withUserConfiguration(
+                CoSecJwtAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                AssertionsForInterfaceTypes.assertThat(context)
+                    .hasSingleBean(TokenStore::class.java)
+                    .hasSingleBean(TokenRevoker::class.java)
+                context.getBean(TokenStore::class.java).assert().isSameAs(TokenStore.NoOp)
+                context.getBean(TokenVerifier::class.java)
+                    .assert()
+                    .isInstanceOf(RevocableTokenVerifier::class.java)
+            }
+    }
+
+    @Test
+    fun contextLoadsWhenCustomTokenStore() {
+        val customTokenStore = TokenStore.NoOp
+        contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+            )
+            .withBean(TokenStore::class.java, { customTokenStore })
+            .withUserConfiguration(
+                CoSecJwtAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                context.getBean(TokenStore::class.java).assert().isSameAs(customTokenStore)
             }
     }
 }

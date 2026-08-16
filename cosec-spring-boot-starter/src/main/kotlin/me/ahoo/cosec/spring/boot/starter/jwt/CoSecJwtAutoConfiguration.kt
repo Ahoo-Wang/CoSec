@@ -18,8 +18,12 @@ import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnAuthenticationEnabled
+import me.ahoo.cosec.token.DefaultTokenRevoker
+import me.ahoo.cosec.token.RevocableTokenVerifier
 import me.ahoo.cosec.token.TokenCompositeAuthentication
 import me.ahoo.cosec.token.TokenConverter
+import me.ahoo.cosec.token.TokenRevoker
+import me.ahoo.cosec.token.TokenStore
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.jvm.UuidGenerator
@@ -86,10 +90,31 @@ class CoSecJwtAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    fun cosecTokenStore(): TokenStore {
+        return TokenStore.NoOp
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     fun cosecJwtTokenVerifier(
-        algorithm: Algorithm
+        algorithm: Algorithm,
+        tokenStore: TokenStore
     ): TokenVerifier {
-        return JwtTokenVerifier(algorithm)
+        return RevocableTokenVerifier(JwtTokenVerifier(algorithm), tokenStore)
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecTokenRevoker(
+        tokenVerifier: TokenVerifier,
+        tokenStore: TokenStore,
+        jwtProperties: JwtProperties
+    ): TokenRevoker {
+        return DefaultTokenRevoker(
+            tokenVerifier,
+            tokenStore,
+            jwtProperties.tokenValidity.refresh
+        )
     }
 
     @Configuration
