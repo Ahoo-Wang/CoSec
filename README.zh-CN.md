@@ -21,6 +21,20 @@
 
 ![Social-Authentication](document/design/assets/Social-Authentication.svg)
 
+### 注销登录（Token 吊销）
+
+CoSec 默认使用无状态 JWT。如需让登出生效，需提供 `TokenStore` 并启用吊销缓存：
+
+```yaml
+cosec:
+  jwt:
+    token-revocation:
+      enabled: true
+```
+
+然后在你自己的登出端点中调用 `TokenRevoker.revoke(accessToken)`。token（及其绑定的
+refresh token）会通过 CoCache（Redis）在集群内立即失效。
+
 ## 授权
 
 ![Authorization-Flow](document/design/assets/Authorization-Flow.svg)
