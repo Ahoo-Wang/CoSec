@@ -122,6 +122,30 @@ class AuditingAuthorizationTest {
     }
 
     @Test
+    fun extractorFailureDoesNotAffectAuthorization() {
+        val throwingRequest = mockk<Request> {
+            every { appId } returns "app"
+            every { spaceId } returns "0"
+            every { deviceId } returns ""
+            every { requestId } returns "req-1"
+            every { remoteIp } returns "1.2.3.4"
+            every { method } returns "POST"
+            every { path } throws IllegalStateException("boom")
+        }
+        val events = mutableListOf<AuditEvent>()
+        val sink = AuditEventSink(events::add)
+        val delegate = mockk<Authorization> {
+            every { authorize(throwingRequest, context) } returns AuthorizeResult.ALLOW.toMono()
+        }
+        val authorization = AuditingAuthorization(delegate, sink)
+        authorization.authorize(throwingRequest, context)
+            .test()
+            .expectNext(AuthorizeResult.ALLOW)
+            .verifyComplete()
+        events.size.assert().isEqualTo(0)
+    }
+
+    @Test
     fun elapsedNanosMeasuredFromSubscribeToSignal() {
         val (authorization, events) = authorization(
             Mono.delay(Duration.ofMillis(50)).map { AuthorizeResult.ALLOW },

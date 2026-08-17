@@ -23,8 +23,9 @@ import me.ahoo.cosec.api.context.request.Request
 import reactor.core.publisher.Mono
 
 /**
- * [Authorization] decorator that publishes an audit event for every decision,
- * without altering the delegated result or error signals.
+ * [Authorization] decorator that publishes an audit event for every decision.
+ * Every audit step (event construction and publishing) is failure-isolated
+ * and never alters the delegated result or error signals.
  */
 class AuditingAuthorization(
     override val delegate: Authorization,
@@ -37,32 +38,32 @@ class AuditingAuthorization(
             val startNanos = System.nanoTime()
             delegate.authorize(request = request, context = context)
                 .doOnNext { result ->
-                    publishSafely(
+                    publishSafely {
                         AuditEventExtractor.fromDecision(
                             request = request,
                             context = context,
                             result = result,
                             elapsedNanos = System.nanoTime() - startNanos,
-                        ),
-                    )
+                        )
+                    }
                 }
                 .doOnError { error ->
-                    publishSafely(
+                    publishSafely {
                         AuditEventExtractor.fromError(
                             request = request,
                             context = context,
                             error = error,
                             elapsedNanos = System.nanoTime() - startNanos,
-                        ),
-                    )
+                        )
+                    }
                 }
         }
     }
 
     @Suppress("TooGenericExceptionCaught")
-    private fun publishSafely(event: me.ahoo.cosec.api.audit.AuditEvent) {
+    private inline fun publishSafely(eventSupplier: () -> me.ahoo.cosec.api.audit.AuditEvent) {
         try {
-            auditEventSink.publish(event)
+            auditEventSink.publish(eventSupplier())
         } catch (e: Exception) {
             log.warn(e) { "Failed to publish audit event." }
         }
