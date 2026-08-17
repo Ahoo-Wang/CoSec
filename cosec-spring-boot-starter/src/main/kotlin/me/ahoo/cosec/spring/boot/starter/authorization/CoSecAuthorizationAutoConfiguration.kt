@@ -136,4 +136,8 @@ class CoSecAuthorizationAutoConfiguration {
             return ReactiveAuthorizationFilter(securityContextParser, requestParser, authorization)
         }
     }
+
+    companion object {
+        const val BEAN_NAME = "cosecAuthorization"
+    }
 }
