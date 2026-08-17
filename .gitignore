@@ -20,3 +20,4 @@ docs/superpowers/
 
 # Local Redis dump from cocache integration tests
 dump.rdb
+.zcode/

@@ -114,6 +114,9 @@ class RedisSlidingWindowRateLimiterTest {
         // Quota 1000 in one window; 2000 concurrent acquisitions share the same
         // injected timestamp, so the Lua script is the only arbiter.
         val limiter = rateLimiter(permitsPerSecond = CONCURRENT_QUOTA.toDouble(), windowSeconds = 1)
+        // Preload the script before the burst: on a fresh Redis the first
+        // concurrent EVALSHA can race script loading (see warmUp).
+        RedisSlidingWindowRateLimiter.warmUp(stringRedisTemplate)
         val allowed = AtomicInteger()
         val rejected = AtomicInteger()
         val startLatch = CountDownLatch(1)
