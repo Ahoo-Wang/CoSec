@@ -14,20 +14,37 @@
 package me.ahoo.cosec.spring.boot.starter.opentelemetry
 
 import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.audit.AuditingAuthorization
 import me.ahoo.cosec.opentelemetry.TracingAuthorization
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.starter.audit.CoSecAuditAutoConfiguration
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary
 
-@AutoConfiguration
+@AutoConfiguration(after = [CoSecAuditAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
 @ConditionalOnOpenTelemetryEnabled
 class CoSecOpenTelemetryAutoConfiguration {
 
     @Bean
     @Primary
+    @ConditionalOnMissingBean(AuditingAuthorization::class)
     fun tracingAuthorization(authorization: Authorization): Authorization {
         return TracingAuthorization(authorization)
+    }
+
+    @Bean
+    @Primary
+    @ConditionalOnBean(AuditingAuthorization::class)
+    fun auditedTracingAuthorization(
+        @Qualifier(
+            CoSecAuditAutoConfiguration.AUDITING_AUTHORIZATION_INNER_BEAN_NAME
+        ) auditingAuthorization: Authorization,
+    ): Authorization {
+        return TracingAuthorization(auditingAuthorization)
     }
 }
