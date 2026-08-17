@@ -107,8 +107,30 @@ fun interface PartExtractor {
 |--------|--------|------|
 | [RateLimiterConditionMatcher](../../../../cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/limiter/RateLimiterConditionMatcher.kt) | `rateLimiter` | 使用 Guava `RateLimiter` 的全局速率限制 |
 | [GroupedRateLimiterConditionMatcher](../../../../cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/limiter/GroupedRateLimiterConditionMatcher.kt) | `groupedRateLimiter` | 按组的速率限制（例如，按用户、按 IP） |
+| [RedisRateLimiterConditionMatcher](../../../../cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/limiter/RedisRateLimiterConditionMatcher.kt) | `redisRateLimiter` | 基于 Redis 的集群级速率限制（滑动窗口） |
+| [RedisGroupedRateLimiterConditionMatcher](../../../../cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/limiter/RedisGroupedRateLimiterConditionMatcher.kt) | `redisGroupedRateLimiter` | 基于 Redis 的集群级按组速率限制 |
 
 `RateLimiterConditionMatcher` 创建一个跨所有请求共享的单个速率限制器。`GroupedRateLimiterConditionMatcher` 创建一个按提取的部分值为键的 `LoadingCache` 速率限制器，访问后自动过期。
+
+`rateLimiter` 与 `groupedRateLimiter` 是纯内存实现：每个实例独立计数，N 个实例会把有效配额放大 N 倍。集群部署请改用基于 Redis 的 `redisRateLimiter` / `redisGroupedRateLimiter`（需要 `cacheSupport` Gradle feature 和 Redis）。它们通过单条 Lua 脚本原子地实现滑动窗口（插值计数）算法，配额在集群范围内生效，每个组的内存开销为 O(1)：
+
+```json
+{
+  "redisRateLimiter": {
+    "permitsPerSecond": 10
+  }
+}
+```
+
+| 键 | 必填 | 默认值 | 描述 |
+|----|------|--------|------|
+| `permitsPerSecond` | 是 | - | 每秒允许的请求数 |
+| `windowSeconds` | 否 | `1` | 滑动窗口大小；更大的窗口容忍突发流量（窗口配额 = `permitsPerSecond * windowSeconds`） |
+| `strictFailure` | 否 | `false` | `false` 时 Redis 不可达则放行（fail-open）；`true` 时拒绝请求（fail-closed，抛 `TooManyRequestsException`） |
+
+Redis key 前缀可通过 `cosec.limiter.key-prefix` 配置（默认 `cosec:rate-limiter`）。配置相同的策略共享同一个集群级配额；配置不同的策略自动隔离。
+
+> **重要**：key 前缀必须按应用唯一。两个应用（或生产/预发环境）共用同一 Redis 且前缀与限流配置相同时，会静默共享同一个配额。每个部署请设置独立的 `cosec.limiter.key-prefix`。
 
 当超出速率限制时，会抛出 `TooManyRequestsException`。CoSec 的 Web 过滤器（WebFlux 的 `ReactiveSecurityFilter`、WebMVC 的 `AuthorizationFilter`）会捕获它并将响应转换为 `AuthorizeResult.TOO_MANY_REQUESTS`。
 

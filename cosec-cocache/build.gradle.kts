@@ -14,6 +14,7 @@
 dependencies {
     api(project(":cosec-core"))
     api("me.ahoo.cocache:cocache-core")
+    api("org.springframework.data:spring-data-redis")
     testImplementation("me.ahoo.cocache:cocache-spring-redis")
     testImplementation("io.lettuce:lettuce-core")
     testImplementation("me.ahoo.cosid:cosid-core")

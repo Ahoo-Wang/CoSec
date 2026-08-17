@@ -51,6 +51,12 @@
     },
     "regular": {
       "$ref": "#/definitions/regularConditionMatcher"
+    },
+    "redisRateLimiter": {
+      "$ref": "#/definitions/redisRateLimiterConditionMatcher"
+    },
+    "redisGroupedRateLimiter": {
+      "$ref": "#/definitions/redisGroupedRateLimiterConditionMatcher"
     }
   },
   "maxProperties": 1,
@@ -376,7 +382,46 @@
       },
       "minProperties": 1,
       "additionalProperties": false
+    },
+    "redisRateLimiterConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "permitsPerSecond": {
+          "type": "number"
+        },
+        "windowSeconds": {
+          "type": "integer"
+        },
+        "strictFailure": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "permitsPerSecond"
+      ],
+      "additionalProperties": false
+    },
+    "redisGroupedRateLimiterConditionMatcher": {
+      "type": "object",
+      "properties": {
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "permitsPerSecond": {
+          "type": "number"
+        },
+        "windowSeconds": {
+          "type": "integer"
+        },
+        "strictFailure": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "part",
+        "permitsPerSecond"
+      ],
+      "additionalProperties": false
     }
   }
 }
-

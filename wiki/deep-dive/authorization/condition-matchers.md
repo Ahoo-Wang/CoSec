@@ -107,8 +107,30 @@ These inspect the security context directly:
 |---------|----------|-------------|
 | [RateLimiterConditionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/limiter/RateLimiterConditionMatcher.kt) | `rateLimiter` | Global rate limiting using Guava `RateLimiter` |
 | [GroupedRateLimiterConditionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/limiter/GroupedRateLimiterConditionMatcher.kt) | `groupedRateLimiter` | Per-group rate limiting (e.g., per-user, per-IP) |
+| [RedisRateLimiterConditionMatcher](cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/limiter/RedisRateLimiterConditionMatcher.kt) | `redisRateLimiter` | Cluster-wide rate limiting via Redis (sliding window) |
+| [RedisGroupedRateLimiterConditionMatcher](cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/limiter/RedisGroupedRateLimiterConditionMatcher.kt) | `redisGroupedRateLimiter` | Cluster-wide per-group rate limiting via Redis |
 
 `RateLimiterConditionMatcher` creates a single rate limiter shared across all requests. `GroupedRateLimiterConditionMatcher` creates a `LoadingCache` of rate limiters keyed by the extracted part value, with automatic expiration after access.
+
+The `rateLimiter` and `groupedRateLimiter` matchers are in-memory only: each instance counts independently, so N instances multiply the effective quota by N. For cluster deployments, use the Redis-backed `redisRateLimiter` / `redisGroupedRateLimiter` matchers instead (requires the `cacheSupport` Gradle feature and Redis). They implement the sliding-window (interpolated counters) algorithm atomically in a single Lua script, so the limit is enforced cluster-wide with O(1) memory per group:
+
+```json
+{
+  "redisRateLimiter": {
+    "permitsPerSecond": 10
+  }
+}
+```
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `permitsPerSecond` | yes | - | Allowed requests per second |
+| `windowSeconds` | no | `1` | Sliding window size; larger windows tolerate bursts (quota per window = `permitsPerSecond * windowSeconds`) |
+| `strictFailure` | no | `false` | `false` fails open (requests pass) when Redis is unreachable; `true` fails closed (rejects with `TooManyRequestsException`) |
+
+Redis key prefix is configurable via `cosec.limiter.key-prefix` (default `cosec:rate-limiter`). Policies with identical limiter configurations share one cluster-wide quota; different configurations are isolated automatically.
+
+> **Important**: the key prefix must be unique per application. Two applications (or prod and staging) sharing one Redis with the same prefix and identical limiter configs will silently share a single quota. Change `cosec.limiter.key-prefix` per deployment.
 
 When a rate limit is exceeded, `TooManyRequestsException` is thrown. CoSec's web filters (`ReactiveSecurityFilter` for WebFlux, `AuthorizationFilter` for WebMVC) catch it and convert the response to `AuthorizeResult.TOO_MANY_REQUESTS`.
 
