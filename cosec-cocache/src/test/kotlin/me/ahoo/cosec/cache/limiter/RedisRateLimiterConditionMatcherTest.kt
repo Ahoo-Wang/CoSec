@@ -36,37 +36,19 @@ class RedisRateLimiterConditionMatcherTest {
     }
 
     @Test
-    fun matchAllowsRequestsWithinWindowLimit() {
-        // windowSeconds=5 -> quota per window is 2*5=10; the larger window keeps the
-        // burst-fill assertions robust against scheduler pauses (a gap between calls
-        // only flips the outcome once it exceeds half the window).
+    fun matchThenRejectWhenQuotaExhausted() {
+        // quota = 1e-7 per window: after the first acquire the estimate is at least
+        // one weight step (0.001) above the quota, so the rejection is independent
+        // of where the real-time window boundary falls mid-test. Window-roll decay
+        // semantics are covered deterministically in RedisSlidingWindowRateLimiterTest.
         val conditionMatcher = factory()
             .create(
-                mapOf(
-                    RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY to 2,
-                    REDIS_RATE_LIMITER_CONDITION_MATCHER_WINDOW_SECONDS_KEY to 5,
-                ).asConfiguration(),
+                mapOf(RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY to 0.0000001).asConfiguration(),
             )
-        repeat(WINDOW_QUOTA) {
-            conditionMatcher.match(mockk(), mockk()).assert().isTrue()
-        }
-        assertThrows(TooManyRequestsException::class.java) {
-            conditionMatcher.match(mockk(), mockk())
-        }
-    }
-
-    @Test
-    fun matchRecoversAfterWindowRolls() {
-        val conditionMatcher = factory()
-            .create(mapOf(RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY to 2).asConfiguration())
-        conditionMatcher.match(mockk(), mockk()).assert().isTrue()
         conditionMatcher.match(mockk(), mockk()).assert().isTrue()
         assertThrows(TooManyRequestsException::class.java) {
             conditionMatcher.match(mockk(), mockk())
         }
-        // After the window rolls, the previous window's weight decays and requests are allowed again.
-        Thread.sleep(WINDOW_ROLL_MARGIN_MS)
-        conditionMatcher.match(mockk(), mockk()).assert().isTrue()
     }
 
     @Test
@@ -91,9 +73,6 @@ class RedisRateLimiterConditionMatcherTest {
     }
 
     companion object {
-        private const val WINDOW_ROLL_MARGIN_MS = 1_200L
-        private const val WINDOW_QUOTA = 10
-
         private lateinit var stringRedisTemplate: StringRedisTemplate
         private lateinit var badStringRedisTemplate: StringRedisTemplate
 

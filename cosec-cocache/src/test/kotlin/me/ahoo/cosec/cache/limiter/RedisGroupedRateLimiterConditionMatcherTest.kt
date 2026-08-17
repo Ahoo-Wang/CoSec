@@ -43,12 +43,14 @@ class RedisGroupedRateLimiterConditionMatcherTest {
 
     @Test
     fun matchAllowsIndependentlyPerGroup() {
+        // quota = 1e-7 per window: group A's rejection after its first acquire is
+        // independent of where the real-time window boundary falls mid-test, and
+        // group B's empty counters allow its first request regardless of time.
         val conditionMatcher = factory()
             .create(
                 mapOf(
                     CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
-                    RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY to 2,
-                    REDIS_RATE_LIMITER_CONDITION_MATCHER_WINDOW_SECONDS_KEY to 5,
+                    RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY to 0.0000001,
                 ).asConfiguration(),
             )
         val requestA: Request = mockk {
@@ -57,10 +59,7 @@ class RedisGroupedRateLimiterConditionMatcherTest {
         val requestB: Request = mockk {
             every { remoteIp } returns "ip-b"
         }
-        // windowSeconds=5 -> quota per window is 2*5=10.
-        repeat(WINDOW_QUOTA) {
-            conditionMatcher.match(requestA, mockk()).assert().isTrue()
-        }
+        conditionMatcher.match(requestA, mockk()).assert().isTrue()
         assertThrows(TooManyRequestsException::class.java) {
             conditionMatcher.match(requestA, mockk())
         }
@@ -69,8 +68,6 @@ class RedisGroupedRateLimiterConditionMatcherTest {
     }
 
     companion object {
-        private const val WINDOW_QUOTA = 10
-
         private lateinit var stringRedisTemplate: StringRedisTemplate
 
         @BeforeAll
