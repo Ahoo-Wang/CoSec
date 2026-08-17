@@ -156,6 +156,9 @@ to the logger `me.ahoo.cosec.audit` — denials at `WARN`, unexpected errors at
 `ERROR`, allows at `DEBUG` (so the default `INFO` level only surfaces denials).
 Set `logging.level.me.ahoo.cosec.audit=DEBUG` for full auditing, or register your
 own `AuditEventSink` bean to ship events to Kafka/Elasticsearch/your database.
+If you replace the default `Authorization` bean with your own, audit wiring steps
+aside automatically (the decorator only wraps the auto-configured
+`cosecAuthorization` bean).
 
 ### Gateway Properties (`cosec.authorization.gateway.*`)
 

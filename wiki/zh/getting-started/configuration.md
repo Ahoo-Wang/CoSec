@@ -154,7 +154,9 @@ flowchart TD
 `LoggingAuditEventSink` 以单行 JSON 输出到 logger `me.ahoo.cosec.audit`——拒绝为
 `WARN`、未预期异常为 `ERROR`、放行为 `DEBUG`（默认 `INFO` 级别下仅输出拒绝事件）。
 设置 `logging.level.me.ahoo.cosec.audit=DEBUG` 可开启全量审计；注册自定义
-`AuditEventSink` bean 可将事件接入 Kafka/ES/数据库。
+`AuditEventSink` bean 可将事件接入 Kafka/ES/数据库。若你用自定义 bean 替换了默认的
+`Authorization`，审计装配会自动让位（装饰器仅包裹自动配置的 `cosecAuthorization`
+bean）。
 
 ### 网关属性（`cosec.authorization.gateway.*`）
 

@@ -46,7 +46,7 @@ class CoSecAuditAutoConfiguration {
         return LoggingAuditEventSink()
     }
 
-    @Bean
+    @Bean(AUDITING_AUTHORIZATION_BEAN_NAME)
     @Primary
     @ConditionalOnBean(name = [CoSecAuthorizationAutoConfiguration.BEAN_NAME])
     @ConditionalOnMissingClass(OPENTELEMETRY_INSTRUMENTER_CLASS)
