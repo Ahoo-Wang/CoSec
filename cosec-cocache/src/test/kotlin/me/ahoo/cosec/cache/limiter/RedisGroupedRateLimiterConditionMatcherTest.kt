@@ -33,6 +33,15 @@ import java.util.UUID
 class RedisGroupedRateLimiterConditionMatcherTest {
 
     @Test
+    fun createWhenPermitsPerSecondMissing() {
+        assertThrows(IllegalArgumentException::class.java) {
+            factory().create(
+                mapOf(CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP).asConfiguration(),
+            )
+        }
+    }
+
+    @Test
     fun matchAllowsIndependentlyPerGroup() {
         val conditionMatcher = factory()
             .create(

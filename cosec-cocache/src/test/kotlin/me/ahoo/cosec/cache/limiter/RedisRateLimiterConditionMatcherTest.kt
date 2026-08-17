@@ -29,6 +29,13 @@ import java.util.UUID
 class RedisRateLimiterConditionMatcherTest {
 
     @Test
+    fun createWhenPermitsPerSecondMissing() {
+        assertThrows(IllegalArgumentException::class.java) {
+            factory().create(emptyMap<String, Any>().asConfiguration())
+        }
+    }
+
+    @Test
     fun matchAllowsRequestsWithinWindowLimit() {
         // windowSeconds=5 -> quota per window is 2*5=10; the larger window keeps the
         // burst-fill assertions robust against scheduler pauses (a gap between calls

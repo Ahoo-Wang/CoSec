@@ -38,6 +38,20 @@ import kotlin.concurrent.thread
 class RedisSlidingWindowRateLimiterTest {
 
     @Test
+    fun initWhenPermitsPerSecondNotPositive() {
+        assertThrows(IllegalArgumentException::class.java) {
+            rateLimiter(permitsPerSecond = 0.0, windowSeconds = 5)
+        }
+    }
+
+    @Test
+    fun initWhenWindowSecondsBelowOne() {
+        assertThrows(IllegalArgumentException::class.java) {
+            rateLimiter(permitsPerSecond = 2.0, windowSeconds = 0)
+        }
+    }
+
+    @Test
     fun weightDecayAllowsAfterWindowRoll() {
         // Quota per window: 2/s * 5s = 10.
         val limiter = rateLimiter(permitsPerSecond = 2.0, windowSeconds = 5)

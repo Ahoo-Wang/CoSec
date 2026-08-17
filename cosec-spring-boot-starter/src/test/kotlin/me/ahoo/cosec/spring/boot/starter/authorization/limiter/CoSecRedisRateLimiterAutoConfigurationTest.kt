@@ -40,6 +40,38 @@ internal class CoSecRedisRateLimiterAutoConfigurationTest {
     }
 
     @Test
+    fun propertiesBindFromConfiguration() {
+        contextRunner
+            .withPropertyValues(
+                "cosec.limiter.key-prefix=my-app:rl",
+            )
+            .withUserConfiguration(
+                DataRedisAutoConfiguration::class.java,
+                CoSecRedisRateLimiterAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                val properties = context.getBean(LimiterProperties::class.java)
+                assertThat(properties.keyPrefix).isEqualTo("my-app:rl")
+                assertThat(properties.enabled).isTrue()
+            }
+    }
+
+    @Test
+    fun notLoadedWhenDisabled() {
+        contextRunner
+            .withPropertyValues("cosec.limiter.enabled=false")
+            .withUserConfiguration(
+                DataRedisAutoConfiguration::class.java,
+                CoSecRedisRateLimiterAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                assertThat(context)
+                    .doesNotHaveBean(CoSecRedisRateLimiterAutoConfiguration::class.java)
+                    .doesNotHaveBean(RedisRateLimiterConditionMatcherFactory::class.java)
+            }
+    }
+
+    @Test
     fun notLoadedWithoutRedisTemplate() {
         contextRunner
             .withUserConfiguration(CoSecRedisRateLimiterAutoConfiguration::class.java)
