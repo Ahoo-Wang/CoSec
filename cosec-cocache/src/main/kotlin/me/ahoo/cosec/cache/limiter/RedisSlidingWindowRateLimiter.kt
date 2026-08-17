@@ -61,23 +61,6 @@ class RedisSlidingWindowRateLimiter(
             return script.bufferedReader().use { it.readText() }
         }
 
-        /**
-         * Preloads the Lua script so the very first concurrent burst never races
-         * script loading: on a fresh Redis, concurrent EVALSHA calls can hit
-         * NOSCRIPT while the fallback EVAL is in flight, and a missed fallback
-         * would surface as a failure (fail-open). Warm up at startup (or in
-         * tests) to close that window. Uses a dedicated key, so no quota is touched.
-         */
-        fun warmUp(stringRedisTemplate: StringRedisTemplate) {
-            stringRedisTemplate.execute(
-                SCRIPT,
-                listOf("warmup", "warmup-prev"),
-                "1",
-                "1000",
-                "0",
-            )
-        }
-
         private fun sha1Hex(value: String): String {
             val digest = MessageDigest.getInstance("SHA-1").digest(value.toByteArray())
             return digest.joinToString("") { "%02x".format(it) }.take(12)

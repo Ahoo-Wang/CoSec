@@ -14,9 +14,7 @@ package me.ahoo.cosec.spring.boot.starter.authorization.limiter
 
 import me.ahoo.cosec.cache.limiter.RedisGroupedRateLimiterConditionMatcherFactory
 import me.ahoo.cosec.cache.limiter.RedisRateLimiterConditionMatcherFactory
-import me.ahoo.cosec.cache.limiter.RedisSlidingWindowRateLimiter
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import org.springframework.boot.ApplicationRunner
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.AutoConfigureAfter
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -58,14 +56,5 @@ class CoSecRedisRateLimiterAutoConfiguration(private val limiterProperties: Limi
         stringRedisTemplate: StringRedisTemplate,
     ): RedisGroupedRateLimiterConditionMatcherFactory {
         return RedisGroupedRateLimiterConditionMatcherFactory(stringRedisTemplate, limiterProperties.keyPrefix)
-    }
-
-    @Bean
-    fun redisRateLimiterScriptWarmer(stringRedisTemplate: StringRedisTemplate): ApplicationRunner {
-        return ApplicationRunner {
-            // Preload the Lua script at startup so the first concurrent burst never
-            // races script loading on a fresh Redis (see RedisSlidingWindowRateLimiter.warmUp).
-            RedisSlidingWindowRateLimiter.warmUp(stringRedisTemplate)
-        }
     }
 }

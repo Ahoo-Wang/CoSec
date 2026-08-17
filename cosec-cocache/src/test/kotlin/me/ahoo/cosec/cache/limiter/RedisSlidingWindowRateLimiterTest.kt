@@ -113,10 +113,10 @@ class RedisSlidingWindowRateLimiterTest {
     fun concurrentAcquisitionIsAtomic() {
         // Quota 1000 in one window; 2000 concurrent acquisitions share the same
         // injected timestamp, so the Lua script is the only arbiter.
-        val limiter = rateLimiter(permitsPerSecond = CONCURRENT_QUOTA.toDouble(), windowSeconds = 1)
-        // Preload the script before the burst: on a fresh Redis the first
-        // concurrent EVALSHA can race script loading (see warmUp).
-        RedisSlidingWindowRateLimiter.warmUp(stringRedisTemplate)
+        // windowSeconds=20 -> quota 1000 per window with a 40s key TTL. A 1s window (2s TTL)
+        // could expire mid-burst on slow CI runners: the injected clock stays frozen at nowMs=0
+        // while PEXPIRE ticks in real time, resetting the counter and opening a second window.
+        val limiter = rateLimiter(permitsPerSecond = 50.0, windowSeconds = 20)
         val allowed = AtomicInteger()
         val rejected = AtomicInteger()
         val startLatch = CountDownLatch(1)
