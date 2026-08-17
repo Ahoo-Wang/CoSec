@@ -140,6 +140,22 @@ flowchart TD
 
 定义在 `LimiterProperties`（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/limiter/LimiterProperties.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/limiter/LimiterProperties.kt#L26)）中。
 
+### 审计日志（`cosec.audit.*`）
+
+控制授权决策的审计日志。
+
+| 属性 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `cosec.audit.enabled` | `Boolean` | `true` | 是否审计授权决策。 |
+
+定义在 `AuditProperties`（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/audit/AuditProperties.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/audit/AuditProperties.kt#L26)）中。
+
+每次授权决策都会作为结构化 `AuditEvent` 发布到 `AuditEventSink` SPI。默认的
+`LoggingAuditEventSink` 以单行 JSON 输出到 logger `me.ahoo.cosec.audit`——拒绝为
+`WARN`、未预期异常为 `ERROR`、放行为 `DEBUG`（默认 `INFO` 级别下仅输出拒绝事件）。
+设置 `logging.level.me.ahoo.cosec.audit=DEBUG` 可开启全量审计；注册自定义
+`AuditEventSink` bean 可将事件接入 Kafka/ES/数据库。
+
 ### 网关属性（`cosec.authorization.gateway.*`）
 
 | 属性 | 类型 | 默认值 | 描述 |
