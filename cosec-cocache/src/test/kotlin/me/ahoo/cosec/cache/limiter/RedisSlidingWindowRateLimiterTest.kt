@@ -67,7 +67,8 @@ class RedisSlidingWindowRateLimiterTest {
         limiter.tryAcquireInternal("t", 6_000L).assert().isTrue()
         // Same window at t=9000ms: weight = 0.2, estimate = 10*0.2 + 1 = 3 < 10 -> allowed.
         limiter.tryAcquireInternal("t", 9_000L).assert().isTrue()
-        // Window 2 at t=10000ms: estimate = 0 -> allowed.
+        // Window 2 at t=10000ms: previous window holds 2 acquires at weight 1.0,
+        // estimate = 2 < 10 -> allowed.
         limiter.tryAcquireInternal("t", 10_000L).assert().isTrue()
     }
 
