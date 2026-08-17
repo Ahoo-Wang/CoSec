@@ -129,6 +129,17 @@ The derived Redis key prefix for revoked tokens is `cosec:token:revoked:` (i.e. 
 
 Defined in `CacheProperties` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt:34](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt#L34)).
 
+### Redis Rate Limiter Properties (`cosec.limiter.*`)
+
+Controls the Redis-backed distributed rate limiter matchers (`redisRateLimiter`, `redisGroupedRateLimiter`).
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `cosec.limiter.enabled` | `Boolean` | `true` | Enable the Redis rate limiter matcher factories (registered only when a `StringRedisTemplate` bean exists) |
+| `cosec.limiter.key-prefix` | `String` | `cosec:rate-limiter` | Redis key prefix for limiter counters; **must be unique per application** — identical prefixes on one Redis share a single quota |
+
+Defined in `LimiterProperties` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/limiter/LimiterProperties.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/limiter/LimiterProperties.kt#L26)).
+
 ### Gateway Properties (`cosec.authorization.gateway.*`)
 
 | Property | Type | Default | Description |

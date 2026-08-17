@@ -129,6 +129,17 @@ flowchart TD
 
 定义在 `CacheProperties`（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt:34](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/cache/CacheProperties.kt#L34)）中。
 
+### Redis 限流器属性（`cosec.limiter.*`）
+
+控制基于 Redis 的分布式限流匹配器（`redisRateLimiter`、`redisGroupedRateLimiter`）。
+
+| 属性 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `cosec.limiter.enabled` | `Boolean` | `true` | 启用 Redis 限流匹配器工厂（仅在存在 `StringRedisTemplate` Bean 时注册） |
+| `cosec.limiter.key-prefix` | `String` | `cosec:rate-limiter` | 限流计数器的 Redis 键前缀；**必须按应用唯一**——同一 Redis 上相同前缀会共享同一个配额 |
+
+定义在 `LimiterProperties`（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/limiter/LimiterProperties.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/limiter/LimiterProperties.kt#L26)）中。
+
 ### 网关属性（`cosec.authorization.gateway.*`）
 
 | 属性 | 类型 | 默认值 | 描述 |
