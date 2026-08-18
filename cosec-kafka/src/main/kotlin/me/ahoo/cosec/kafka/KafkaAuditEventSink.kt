@@ -18,25 +18,39 @@ import me.ahoo.cosec.api.audit.AuditEvent
 import me.ahoo.cosec.api.audit.AuditEventSink
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import org.springframework.kafka.core.KafkaOperations
+import reactor.core.scheduler.Scheduler
+import reactor.core.scheduler.Schedulers
 
 class KafkaAuditEventSink(
     private val kafkaOperations: KafkaOperations<String, String>,
     private val topic: String,
+    private val scheduler: Scheduler = Schedulers.boundedElastic(),
 ) : AuditEventSink {
     init {
         require(topic.isNotBlank()) { "topic must not be blank." }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     override fun publish(event: AuditEvent) {
-        kafkaOperations.send(
-            topic,
-            "${event.tenantId}:${event.principalId}",
-            CoSecJsonSerializer.writeValueAsString(event),
-        ).whenComplete { _, error ->
-            if (error != null) {
-                log.warn(error) { "Failed to publish audit event to Kafka topic [$topic]." }
+        scheduler.schedule {
+            try {
+                kafkaOperations.send(
+                    topic,
+                    CoSecJsonSerializer.writeValueAsString(arrayOf(event.tenantId, event.principalId)),
+                    CoSecJsonSerializer.writeValueAsString(event),
+                ).whenComplete { _, error ->
+                    if (error != null) {
+                        logFailure(error)
+                    }
+                }
+            } catch (error: Exception) {
+                logFailure(error)
             }
         }
+    }
+
+    private fun logFailure(error: Throwable) {
+        log.warn(error) { "Failed to publish audit event to Kafka topic [$topic]." }
     }
 
     companion object {

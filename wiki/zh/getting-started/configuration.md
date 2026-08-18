@@ -161,8 +161,8 @@ flowchart TD
 bean）。
 
 `kafka-support` 功能会使用异步 `KafkaAuditEventSink` 替代日志 Sink。每条消息以
-`tenantId:principalId` 为 Key，以单行 `AuditEvent` JSON 为 Value。Broker 通过
-`spring.kafka.*` 配置；CoSec 不负责创建 Topic。
+JSON `[tenantId, principalId]` 二元组为 Key，以单行 `AuditEvent` JSON 为 Value。
+Broker 通过 `spring.kafka.*` 配置；CoSec 不负责创建 Topic。
 
 ### 网关属性（`cosec.authorization.gateway.*`）
 

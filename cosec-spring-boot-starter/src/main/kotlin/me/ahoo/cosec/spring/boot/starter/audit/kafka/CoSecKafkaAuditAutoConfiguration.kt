@@ -14,10 +14,12 @@
 package me.ahoo.cosec.spring.boot.starter.audit.kafka
 
 import me.ahoo.cosec.api.audit.AuditEventSink
+import me.ahoo.cosec.audit.LoggingAuditEventSink
 import me.ahoo.cosec.kafka.KafkaAuditEventSink
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.audit.CoSecAuditAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.audit.ConditionalOnAuditEnabled
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -46,9 +48,10 @@ import org.springframework.kafka.core.KafkaTemplate
 class CoSecKafkaAuditAutoConfiguration {
     @Bean
     fun kafkaAuditEventSink(
-        kafkaTemplate: KafkaTemplate<String, String>,
+        kafkaTemplates: ObjectProvider<KafkaTemplate<String, String>>,
         properties: KafkaAuditProperties,
-    ): KafkaAuditEventSink {
+    ): AuditEventSink {
+        val kafkaTemplate = kafkaTemplates.getIfUnique() ?: return LoggingAuditEventSink()
         return KafkaAuditEventSink(kafkaTemplate, properties.topic)
     }
 }

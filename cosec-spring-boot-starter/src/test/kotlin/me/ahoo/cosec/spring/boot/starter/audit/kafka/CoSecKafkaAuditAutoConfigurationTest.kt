@@ -24,8 +24,18 @@ import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.core.KafkaTemplate
 import java.util.function.Supplier
+
+private class DomainEvent
+
+@Configuration(proxyBeanMethods = false)
+private class DomainKafkaTemplateTestConfiguration {
+    @Bean
+    fun domainKafkaTemplate(): KafkaTemplate<String, DomainEvent> = mockk(relaxed = true)
+}
 
 class CoSecKafkaAuditAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
@@ -62,6 +72,37 @@ class CoSecKafkaAuditAutoConfigurationTest {
         contextRunner.run { context ->
             context.getBean(AuditEventSink::class.java).assert().isInstanceOf(LoggingAuditEventSink::class.java)
         }
+    }
+
+    @Test
+    fun nonStringKafkaTemplateFallsBackToLogging() {
+        contextRunner
+            .withUserConfiguration(DomainKafkaTemplateTestConfiguration::class.java)
+            .run { context ->
+                context.getBean(AuditEventSink::class.java).assert().isInstanceOf(LoggingAuditEventSink::class.java)
+            }
+    }
+
+    @Test
+    fun customTopicIsBound() {
+        contextRunner
+            .withKafkaTemplate()
+            .withPropertyValues("cosec.audit.kafka.topic=security-audit")
+            .run { context ->
+                context.getBean(KafkaAuditProperties::class.java).topic.assert().isEqualTo("security-audit")
+            }
+    }
+
+    @Test
+    fun kafkaPropertiesDefaults() {
+        val properties = KafkaAuditProperties()
+
+        properties.enabled.assert().isTrue()
+        properties.topic.assert().isEqualTo(KafkaAuditProperties.DEFAULT_TOPIC)
+        properties.enabled = false
+        properties.topic = "security-audit"
+        properties.enabled.assert().isFalse()
+        properties.topic.assert().isEqualTo("security-audit")
     }
 
     @Test

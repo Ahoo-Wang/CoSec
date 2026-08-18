@@ -163,9 +163,9 @@ aside automatically (the decorator only wraps the auto-configured
 `cosecAuthorization` bean).
 
 The `kafka-support` feature replaces the logging sink with an asynchronous
-`KafkaAuditEventSink`. Each record uses `tenantId:principalId` as its key and a
-single-line `AuditEvent` JSON value. Configure the broker with `spring.kafka.*`;
-CoSec does not create the topic.
+`KafkaAuditEventSink`. Each record uses a JSON `[tenantId, principalId]` tuple
+as its key and a single-line `AuditEvent` JSON value. Configure the broker with
+`spring.kafka.*`; CoSec does not create the topic.
 
 ### Gateway Properties (`cosec.authorization.gateway.*`)
 
