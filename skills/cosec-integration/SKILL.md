@@ -1,259 +1,105 @@
 ---
 name: cosec-integration
-description: "Use when adding CoSec to a Spring Boot application, choosing WebFlux/WebMVC/Gateway modules, configuring JWT authentication, authorization filters, local policies, Redis policy caching, social login, IP enrichment, OpenAPI, or OpenTelemetry integration."
+description: Integrate CoSec into Spring Boot by selecting WebFlux, WebMVC, or Gateway support and configuring JWT, local policies, Redis, auditing, or optional integrations. Do not use for policy-only authoring or diagnosis.
 ---
 
-# CoSec Integration Guide
+# CoSec Spring Boot Integration
 
-This skill guides you through integrating CoSec into a Spring Boot application. CoSec is a reactive, multi-tenant RBAC + Policy-based security framework built on Spring Boot and Project Reactor.
+Make the smallest integration that fits the target application. Preserve its build tool, dependency-management style, HTTP stack, configuration format, and existing security boundaries.
 
-## Step 1: Add Dependencies
+## Inspect first
 
-CoSec modules are published to Maven Central under the `me.ahoo.cosec` group. Use the BOM for version management.
+Determine:
 
-### Gradle (Kotlin DSL)
+- Spring WebFlux, Spring MVC, or Spring Cloud Gateway; add exactly the matching CoSec transport.
+- The CoSec version already managed by a BOM, version catalog, parent, or lockfile. Never copy a version from this skill.
+- Whether policies are local-only or must initialize a shared repository.
+- Whether Redis, OAuth, IP enrichment, tracing, OpenAPI, Kafka, or token revocation is actually required.
+
+The starter already brings `cosec-core` and `cosec-jwt`. Prefer its Gradle feature capabilities because they include the integration and its runtime dependencies:
+
+| Need | Starter capability | CoSec module |
+|---|---|---|
+| Spring MVC | `webmvc-support` | `cosec-webmvc` |
+| Spring WebFlux | `webflux-support` | `cosec-webflux` |
+| Spring Cloud Gateway | `gateway-support` | `cosec-gateway` |
+| Social OAuth | `oauth-support` | `cosec-social` |
+| Redis cache, revocation, distributed limiters | `cache-support` | `cosec-cocache` |
+| IP region | `ip2region-support` | `cosec-ip2region` |
+| OpenTelemetry | `opentelemetry-support` | `cosec-opentelemetry` |
+| OpenAPI | `openapi-support` | `cosec-openapi` |
+| Kafka audit sink | `kafka-support` | `cosec-kafka` |
+
+For Gradle, select a capability on the starter dependency:
 
 ```kotlin
-// gradle/libs.versions.toml
-[versions]
-cosec = "4.9.0"  // check latest at https://central.sonatype.com/artifact/me.ahoo.cosec/cosec-bom
-
-[libraries]
-cosec-bom = { module = "me.ahoo.cosec:cosec-bom", version.ref = "cosec" }
-cosec-spring-boot-starter = { module = "me.ahoo.cosec:cosec-spring-boot-starter" }
-cosec-webflux = { module = "me.ahoo.cosec:cosec-webflux" }
-cosec-webmvc = { module = "me.ahoo.cosec:cosec-webmvc" }
-cosec-gateway = { module = "me.ahoo.cosec:cosec-gateway" }
-cosec-jwt = { module = "me.ahoo.cosec:cosec-jwt" }
-cosec-cocache = { module = "me.ahoo.cosec:cosec-cocache" }
-cosec-social = { module = "me.ahoo.cosec:cosec-social" }
-cosec-ip2region = { module = "me.ahoo.cosec:cosec-ip2region" }
-cosec-opentelemetry = { module = "me.ahoo.cosec:cosec-opentelemetry" }
-cosec-openapi = { module = "me.ahoo.cosec:cosec-openapi" }
-```
-
-```kotlin
-// build.gradle.kts
-dependencies {
-    implementation(platform(libs.cosec.bom))
-    implementation(libs.cosec.spring.boot.starter)
-    implementation(libs.cosec.webflux)   // for WebFlux apps
-    // implementation(libs.cosec.webmvc)  // for Servlet apps
-    // implementation(libs.cosec.gateway) // for Spring Cloud Gateway
-    implementation(libs.cosec.jwt)       // JWT token handling
-    // implementation(libs.cosec.cocache) // Redis policy caching
+implementation(platform(libs.cosec.bom))
+implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+    capabilities {
+        requireCapability("me.ahoo.cosec:webflux-support")
+    }
 }
 ```
 
-### Maven
+Declare the starter again for each additional capability. The module column is a mapping, not a complete dependency set. With Maven or a build that cannot select Gradle variants, use the BOM, starter, one transport module, and mirror the selected feature's runtime dependencies. In the current build, cache support also needs `org.springframework.boot:spring-boot-data-redis` and `me.ahoo.cocache:cocache-spring-boot-starter`, OpenAPI support needs `org.springframework.boot:spring-boot-starter-actuator` and `org.springdoc:springdoc-openapi-starter-common`, and Kafka support needs `org.springframework.boot:spring-boot-starter-kafka`.
 
-```xml
-<dependencyManagement>
-    <dependencies>
-        <dependency>
-            <groupId>me.ahoo.cosec</groupId>
-            <artifactId>cosec-bom</artifactId>
-            <version>4.9.0</version>
-            <type>pom</type>
-            <scope>import</scope>
-        </dependency>
-    </dependencies>
-</dependencyManagement>
-
-<dependencies>
-    <dependency>
-        <groupId>me.ahoo.cosec</groupId>
-        <artifactId>cosec-spring-boot-starter</artifactId>
-    </dependency>
-    <dependency>
-        <groupId>me.ahoo.cosec</groupId>
-        <artifactId>cosec-webflux</artifactId>
-    </dependency>
-    <dependency>
-        <groupId>me.ahoo.cosec</groupId>
-        <artifactId>cosec-jwt</artifactId>
-    </dependency>
-</dependencies>
-```
-
-### Module Selection Guide
-
-| Use Case | Required Modules |
-|----------|-----------------|
-| Basic WebFlux app | `cosec-spring-boot-starter` + `cosec-webflux` |
-| Servlet/WebMVC app | `cosec-spring-boot-starter` + `cosec-webmvc` |
-| API Gateway | `cosec-spring-boot-starter` + `cosec-gateway` |
-| JWT authentication | add `cosec-jwt` |
-| Redis policy caching | add `cosec-cocache` |
-| Social OAuth login | add `cosec-social` |
-| IP geolocation conditions | add `cosec-ip2region` |
-| Authorization tracing | add `cosec-opentelemetry` |
-| OpenAPI/Swagger integration | add `cosec-openapi` |
-
-## Step 2: Configure application.yaml
+## Minimal configuration
 
 ```yaml
 cosec:
-  enabled: true                        # master switch (default: true)
-  authentication:
-    enabled: true                      # enable authentication (default: true)
-  authorization:
-    enabled: true                      # enable authorization (default: true)
-    local-policy:
-      enabled: true                    # load policies from local JSON files
-      locations: classpath:cosec-policy/*-policy.json
-      init-repository: true            # push local policies to repository on startup
-  jwt:
-    algorithm: hmac256                 # hmac256 (default), hmac384, hmac512
-    secret: your-256-bit-secret-key    # required for HMAC algorithms
-```
-
-### Property Reference
-
-| Property | Default | Description |
-|----------|---------|-------------|
-| `cosec.enabled` | `true` | Master enable/disable switch |
-| `cosec.authentication.enabled` | `true` | Enable/disable authentication |
-| `cosec.authorization.enabled` | `true` | Enable/disable authorization |
-| `cosec.authorization.local-policy.enabled` | `false` | Load policies from local JSON files |
-| `cosec.authorization.local-policy.locations` | `classpath:cosec-policy/*-policy.json` | Resource patterns for policy files |
-| `cosec.authorization.local-policy.init-repository` | `false` | Push local policies to repository on startup |
-| `cosec.authorization.local-policy.force-refresh` | `false` | Force-refresh repository policies on init |
-| `cosec.authorization.remote-ip.max-trusted-index` | `1` | Trusted proxy hops for X-Forwarded-For resolution; `0` ignores the header |
-| `cosec.jwt.enabled` | `true` | Enable JWT auto-configuration |
-| `cosec.jwt.algorithm` | `hmac256` | JWT algorithm (`hmac256`, `hmac384`, `hmac512` — RSA is not supported) |
-| `cosec.jwt.secret` | — | JWT secret key (required for HMAC algorithms) |
-| `cosec.jwt.token-validity.access` | `10m` | Access token time-to-live |
-| `cosec.jwt.token-validity.refresh` | `7d` | Refresh token time-to-live |
-| `cosec.jwt.token-revocation.enabled` | `false` | Reject revoked tokens (logout support; back the revocation store with `cosec-cocache` for distributed setups) |
-| `cosec.ip2region.enabled` | `true` | Enable IP geolocation (takes effect when `cosec-ip2region` is on the classpath) |
-| `cosec.openapi.enabled` | `true` | Enable OpenAPI integration (takes effect when `cosec-openapi` is on the classpath) |
-
-## Step 3: Create Policy Files
-
-Place policy JSON files in `src/main/resources/cosec-policy/`. Files must match the pattern `*-policy.json`.
-
-### Minimal Example — Public Health Endpoint
-
-```json
-{
-  "id": "(health-probe)",
-  "name": "Health Probe",
-  "type": "global",
-  "tenantId": "(platform)",
-  "statements": [
-    {
-      "name": "actuator",
-      "action": [
-        "/actuator/health",
-        "/actuator/health/readiness",
-        "/actuator/health/liveness"
-      ]
-    }
-  ]
-}
-```
-
-### Typical Example — API with Auth
-
-```json
-{
-  "id": "api-policy",
-  "name": "API Policy",
-  "type": "global",
-  "tenantId": "(platform)",
-  "statements": [
-    {
-      "name": "PublicEndpoints",
-      "action": ["/auth/login", "/auth/register"]
-    },
-    {
-      "name": "AuthenticatedApi",
-      "action": "/api/**",
-      "condition": { "authenticated": {} }
-    },
-    {
-      "name": "AdminEndpoints",
-      "action": "/admin/**",
-      "condition": { "inRole": { "value": "admin" } }
-    }
-  ]
-}
-```
-
-See the `cosec-policy-author` skill for full policy JSON reference.
-
-## Step 4: Spring Boot Application
-
-No special annotations or configuration classes needed. CoSec auto-configures everything based on classpath and properties.
-
-```kotlin
-@SpringBootApplication
-class MyApp
-
-fun main(args: Array<String>) {
-    runApplication<MyApp>(*args)
-}
-```
-
-The auto-configuration automatically registers:
-- `ReactiveAuthorizationFilter` (WebFlux) or `AuthorizationFilter` (WebMVC) or `AuthorizationGatewayFilter` (Gateway)
-- `SecurityContextParser` for extracting security context from requests
-- `SimpleAuthorization` for policy evaluation
-- `LocalPolicyLoader` / `LocalPolicyInitializer` for loading local policy files
-- JWT token converter and verifier (if `cosec-jwt` is on classpath)
-- Token revocation beans (`TokenStore` / `TokenRevoker` / `RevocableTokenVerifier`) — revocation takes effect only with `cosec.jwt.token-revocation.enabled=true` plus a Redis-backed store (`cosec-cocache`)
-- Request parsers for both reactive and servlet environments
-
-## Gateway Server Reference
-
-The `cosec-gateway-server` module is a complete reference implementation. Key configuration:
-
-```yaml
-# application.yaml
-cosec:
-  authentication:
-    enabled: false          # Gateway relies on token injection from upstream
   jwt:
     algorithm: hmac256
-    secret: ${COSEC_JWT_SECRET:change-me-in-production}
+    secret: ${COSEC_JWT_SECRET}
   authorization:
     local-policy:
       enabled: true
       init-repository: true
+      locations:
+        - classpath:cosec-policy/*-policy.json
 ```
 
-Gateway-specific dependencies:
-```kotlin
-implementation(libs.cosec.cocache)        // Redis caching
-implementation(libs.cosec.gateway)         // Gateway filter
-implementation(libs.cosec.opentelemetry)   // Tracing
-implementation(libs.cosec.ip2region)       // IP geolocation
-implementation("org.springframework.cloud:spring-cloud-starter-gateway-server-webflux")
+Keep the JWT secret outside source control. A blank secret fails startup while JWT is enabled. Supported algorithms are `hmac256`, `hmac384`, and `hmac512`; issuer and verifier must agree.
+
+`LocalPolicyLoader` only parses files; authorization reads `PolicyRepository`. This bootstrap configuration therefore initializes the repository at startup and requires `PolicyRepository` and `AppRolePermissionRepository` beans. The cache capability supplies Redis-backed implementations; otherwise provide them explicitly.
+
+Create policies under `src/main/resources/cosec-policy/` using the configured pattern. A safe complete skeleton is:
+
+```json
+{
+  "id": "service-access",
+  "name": "Service Access",
+  "category": "access",
+  "description": "Service endpoint access",
+  "type": "global",
+  "tenantId": "(platform)",
+  "statements": [
+    {
+      "name": "Health",
+      "action": "/actuator/health"
+    }
+  ]
+}
 ```
 
-## Disabling Features
+Use `$cosec-policy-author` when the requested policy is more than this bootstrap rule.
 
-Use conditional properties to disable specific features:
+## Optional behavior
 
-```yaml
-cosec:
-  enabled: false              # disable everything
-  authorization:
-    enabled: false            # disable only authorization
-  jwt:
-    enabled: false            # disable JWT auto-config
-  ip2region:
-    enabled: false
-```
+- `local-policy.init-repository` is `false` by default. The bootstrap above enables it because the repository is not otherwise populated from local files. Disable it only when policies are already stored elsewhere; use `force-refresh` only when overwriting repository state is intended.
+- `cosec.jwt.token-revocation.enabled=true` needs a real `TokenStore`; the cache capability supplies the Redis-backed implementation. Without it, logout does not revoke tokens and the starter logs a warning.
+- The cache capability and a `StringRedisTemplate` enable `redisRateLimiter` and `redisGroupedRateLimiter`. Spring registers these factories after `LocalPolicyInitializer` runs, so bootstrapped local files cannot use them; prepopulate those policies in the repository or register the factories before local initialization. Configure their shared prefix with `cosec.limiter.key-prefix`; use per-policy `strictFailure` when Redis outage behavior must fail closed.
+- With the starter's auto-configured `Authorization`, audit logging is enabled by default. The logging sink records denies at WARN and allows at DEBUG under `me.ahoo.cosec.audit`; the Kafka capability replaces it when a unique Kafka template is available. A custom `Authorization` bean is not wrapped automatically, so compose it with `AuditingAuthorization` explicitly.
+- Set `cosec.authorization.remote-ip.max-trusted-index` to the real trusted-proxy depth. `0` ignores `X-Forwarded-For`.
 
-Each auto-configuration class has a corresponding `@ConditionalOn*Enabled` annotation that checks these properties.
+## Verification
 
-## Troubleshooting
+Start the application or run its context test, then verify:
 
-- **403 on all requests**: Check that policy files exist and match the `locations` pattern. Enable debug logging: `logging.level.me.ahoo.cosec.authorization.SimpleAuthorization=debug`
-- **JWT token not recognized**: Verify `cosec.jwt.secret` and `cosec.jwt.algorithm` match what the token issuer uses
-- **Policies not loading**: Ensure `cosec.authorization.local-policy.enabled=true` and files are in the correct classpath location
-- **Root user bypasses everything**: This is by design. Root user ID defaults to `"cosec"` (override with the `cosec.root` system property)
+- policy resources are loaded with no skipped-file errors;
+- an allowed anonymous request succeeds;
+- an unmatched anonymous request returns 401;
+- an authenticated but denied request returns 403;
+- a tripped limiter returns 429;
+- Redis-backed features work from more than one instance when cluster-wide behavior is required.
 
-For deeper debugging workflows, see the `cosec-troubleshoot` skill.
+In a CoSec checkout, treat `cosec-spring-boot-starter/build.gradle.kts` and the `*Properties.kt` / auto-configuration classes under `cosec-spring-boot-starter/src/main/kotlin` as the source of truth for capabilities, defaults, and activation conditions.

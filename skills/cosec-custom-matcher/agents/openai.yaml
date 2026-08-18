@@ -1,4 +1,4 @@
 interface:
   display_name: "CoSec Custom Matchers"
   short_description: "Build CoSec matcher extensions"
-  default_prompt: "Use $cosec-custom-matcher to implement a custom CoSec condition matcher and register it with SPI."
+  default_prompt: "Use $cosec-custom-matcher to implement and register a custom CoSec action or condition matcher."
