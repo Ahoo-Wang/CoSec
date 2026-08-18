@@ -21,10 +21,12 @@ import org.springframework.beans.factory.DisposableBean
 import org.springframework.kafka.core.KafkaOperations
 import reactor.core.scheduler.Scheduler
 import reactor.core.scheduler.Schedulers
+import java.time.Duration
 import java.util.concurrent.RejectedExecutionException
 
 private const val MAX_PENDING_AUDIT_EVENTS = 1024
 private const val KAFKA_AUDIT_SCHEDULER_NAME = "cosec-kafka-audit"
+private val DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(10)
 
 class KafkaAuditEventSink(
     private val kafkaOperations: KafkaOperations<String, String>,
@@ -34,6 +36,7 @@ class KafkaAuditEventSink(
         MAX_PENDING_AUDIT_EVENTS,
         KAFKA_AUDIT_SCHEDULER_NAME,
     ),
+    private val shutdownTimeout: Duration = DEFAULT_SHUTDOWN_TIMEOUT,
 ) : AuditEventSink,
     DisposableBean {
     init {
@@ -64,8 +67,14 @@ class KafkaAuditEventSink(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     override fun destroy() {
-        scheduler.dispose()
+        try {
+            scheduler.disposeGracefully().block(shutdownTimeout)
+        } catch (error: RuntimeException) {
+            log.warn(error) { "Timed out while draining the Kafka audit queue; forcing shutdown." }
+            scheduler.dispose()
+        }
     }
 
     private fun logFailure(error: Throwable) {

@@ -27,8 +27,10 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.kafka.core.KafkaOperations
 import org.springframework.kafka.support.SendResult
+import reactor.core.publisher.Mono
 import reactor.core.scheduler.Scheduler
 import reactor.core.scheduler.Schedulers
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
@@ -170,5 +172,52 @@ class KafkaAuditEventSinkTest {
         sink(kafkaOperations, scheduler).publish(event)
 
         verify(exactly = 0) { kafkaOperations.send(any(), any(), any()) }
+    }
+
+    @Test
+    fun destroyDrainsAcceptedTasks() {
+        val firstStarted = CountDownLatch(1)
+        val releaseFirst = CountDownLatch(1)
+        val sent = CountDownLatch(2)
+        var sendCount = 0
+        val kafkaOperations = mockk<KafkaOperations<String, String>> {
+            every { send(any(), any(), any()) } answers {
+                if (sendCount++ == 0) {
+                    firstStarted.countDown()
+                    releaseFirst.await(5, TimeUnit.SECONDS)
+                }
+                sent.countDown()
+                CompletableFuture.completedFuture(mockk())
+            }
+        }
+        val sink = KafkaAuditEventSink(kafkaOperations, "cosec-audit")
+
+        sink.publish(event.copy(requestId = "request-1"))
+        firstStarted.await(5, TimeUnit.SECONDS).assert().isTrue()
+        sink.publish(event.copy(requestId = "request-2"))
+        val destroyed = CompletableFuture.runAsync(sink::destroy)
+        destroyed.isDone.assert().isFalse()
+        releaseFirst.countDown()
+
+        destroyed.get(5, TimeUnit.SECONDS)
+        sent.await(5, TimeUnit.SECONDS).assert().isTrue()
+        verify(exactly = 2) { kafkaOperations.send(any(), any(), any()) }
+    }
+
+    @Test
+    fun destroyForcesShutdownAfterTimeout() {
+        val scheduler = mockk<Scheduler>(relaxed = true) {
+            every { disposeGracefully() } returns Mono.never()
+        }
+        val sink = KafkaAuditEventSink(
+            kafkaOperations = mockk(),
+            topic = "cosec-audit",
+            scheduler = scheduler,
+            shutdownTimeout = Duration.ofMillis(1),
+        )
+
+        sink.destroy()
+
+        verify(exactly = 1) { scheduler.dispose() }
     }
 }

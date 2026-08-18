@@ -163,7 +163,8 @@ bean）。
 `kafka-support` 功能会使用异步 `KafkaAuditEventSink` 替代日志 Sink。每条消息以
 JSON `[tenantId, principalId]` 二元组为 Key，以单行 `AuditEvent` JSON 为 Value。
 Broker 通过 `spring.kafka.*` 配置；CoSec 不负责创建 Topic。为避免 Kafka 故障时阻塞
-授权，Sink 最多排队 1024 个事件；队列已满时丢弃新事件并记录警告。
+授权，Sink 最多排队 1024 个事件；队列已满时丢弃新事件并记录警告。应用关闭时最多
+等待 10 秒排空已接受事件，之后强制关闭调度器。
 
 ### 网关属性（`cosec.authorization.gateway.*`）
 
