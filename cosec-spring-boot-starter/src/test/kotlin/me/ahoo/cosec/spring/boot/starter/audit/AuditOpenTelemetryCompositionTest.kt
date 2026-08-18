@@ -48,6 +48,12 @@ class AuditOpenTelemetryCompositionTest {
                 assertThat(context).hasSingleBean(TracingAuthorization::class.java)
                 val authorization = context.getBean(Authorization::class.java)
                 assertThat(authorization).isInstanceOf(TracingAuthorization::class.java)
+                assertThat(
+                    context.getBean(
+                        CoSecOpenTelemetryAutoConfiguration.TRACING_AUTHORIZATION_BEAN_NAME,
+                        Authorization::class.java,
+                    )
+                ).isSameAs(authorization)
                 val tracing = authorization as TracingAuthorization
                 assertThat(tracing.delegate).isInstanceOf(AuditingAuthorization::class.java)
                 val auditing = tracing.delegate as AuditingAuthorization

@@ -36,7 +36,7 @@ class CoSecOpenTelemetryAutoConfiguration {
         return TracingAuthorization(authorization)
     }
 
-    @Bean(AUDITED_TRACING_AUTHORIZATION_BEAN_NAME)
+    @Bean(name = [AUDITED_TRACING_AUTHORIZATION_BEAN_NAME, TRACING_AUTHORIZATION_BEAN_NAME])
     @Primary
     @ConditionalOnBean(name = [CoSecAuditAutoConfiguration.AUDITING_AUTHORIZATION_BEAN_NAME])
     fun auditedTracingAuthorization(
