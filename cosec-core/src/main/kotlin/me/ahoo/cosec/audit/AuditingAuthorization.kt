@@ -23,6 +23,8 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.authorization.VerifyContextScope
 import me.ahoo.cosec.token.TokenVerificationContexts.getTokenVerificationException
 import me.ahoo.cosec.token.toAuthorizeResult
+import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.jvm.UuidGenerator
 import reactor.core.publisher.Mono
 
 /**
@@ -30,9 +32,10 @@ import reactor.core.publisher.Mono
  * Every audit step (event construction and publishing) is failure-isolated
  * and never alters the delegated result or error signals.
  */
-class AuditingAuthorization(
+class AuditingAuthorization @JvmOverloads constructor(
     override val delegate: Authorization,
     private val auditEventSink: AuditEventSink,
+    private val idGenerator: IdGenerator = UuidGenerator.INSTANCE,
 ) : Authorization,
     Delegated<Authorization> {
 
@@ -54,6 +57,7 @@ class AuditingAuthorization(
                             result = effectiveResult,
                             elapsedNanos = System.nanoTime() - startNanos,
                             verifyContext = verifyContextScope.value,
+                            eventId = idGenerator.generateAsString(),
                         )
                     }
                 }
@@ -65,6 +69,7 @@ class AuditingAuthorization(
                             error = error,
                             elapsedNanos = System.nanoTime() - startNanos,
                             verifyContext = verifyContextScope.value,
+                            eventId = idGenerator.generateAsString(),
                         )
                     }
                 }

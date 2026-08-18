@@ -3,6 +3,7 @@ package me.ahoo.cosec.opentelemetry
 import io.mockk.every
 import io.mockk.mockk
 import io.opentelemetry.api.GlobalOpenTelemetry
+import io.opentelemetry.api.trace.SpanContext
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
 import io.opentelemetry.context.propagation.ContextPropagators
 import io.opentelemetry.sdk.OpenTelemetrySdk
@@ -151,6 +152,13 @@ class TracingAuthorizationTest {
 
         trace.traceId.assert().isNotBlank()
         trace.spanId.assert().isNotBlank()
+    }
+
+    @Test
+    fun invalidSpanContextDoesNotAddAuditTrace() {
+        val request = TestRequest()
+
+        request.withAuditTrace(SpanContext.getInvalid()).assert().isSameAs(request)
     }
 
     @Test
