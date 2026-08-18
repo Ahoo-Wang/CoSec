@@ -36,6 +36,9 @@ spring:
               filters:
                 - StripPrefix=1
 cosec:
+  audit:
+    kafka:
+      enabled: false
   authentication:
     enabled: false
   jwt:

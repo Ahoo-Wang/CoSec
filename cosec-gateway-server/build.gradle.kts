@@ -60,7 +60,11 @@ dependencies {
     implementation(project(":cosec-webflux"))
     implementation(project(":cosec-gateway"))
     implementation(project(":cosec-opentelemetry"))
-    implementation(project(":cosec-spring-boot-starter"))
+    implementation(project(":cosec-spring-boot-starter")) {
+        capabilities {
+            requireCapability("me.ahoo.cosec:kafka-support")
+        }
+    }
     implementation(project(":cosec-ip2region"))
     implementation("me.ahoo.cocache:cocache-spring-boot-starter")
     implementation("com.github.ben-manes.caffeine:caffeine")
