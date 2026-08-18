@@ -55,4 +55,19 @@ class GatewayRouteRequestAttributesAppenderTest {
 
         appender.append(request).assert().isSameAs(request)
     }
+
+    @Test
+    fun reactiveRequestWithoutRouteKeepsRequest() {
+        val request = ReactiveRequest(
+            delegate = MockServerWebExchange.from(MockServerHttpRequest.get("/").build()),
+            path = "/",
+            method = "GET",
+            remoteIp = "127.0.0.1",
+            origin = URI.create(""),
+            referer = URI.create(""),
+            requestId = "request-1",
+        )
+
+        appender.append(request).assert().isSameAs(request)
+    }
 }

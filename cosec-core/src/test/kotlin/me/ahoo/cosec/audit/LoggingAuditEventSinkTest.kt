@@ -17,17 +17,9 @@ import io.github.oshai.kotlinlogging.KLogger
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
-import me.ahoo.cosec.api.audit.AuditAuthorization
 import me.ahoo.cosec.api.audit.AuditDecision
-import me.ahoo.cosec.api.audit.AuditDevice
-import me.ahoo.cosec.api.audit.AuditEvent
-import me.ahoo.cosec.api.audit.AuditPolicy
-import me.ahoo.cosec.api.audit.AuditPrincipal
 import me.ahoo.cosec.api.audit.AuditReasonCode
-import me.ahoo.cosec.api.audit.AuditRequest
-import me.ahoo.cosec.api.audit.AuditSource
 import me.ahoo.cosec.api.audit.AuditSourceType
-import me.ahoo.cosec.api.audit.AuditStatement
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -39,17 +31,17 @@ class LoggingAuditEventSinkTest {
         val json = StringBuilder()
     }
 
-    private fun event(decision: AuditDecision) = AuditEvent(
+    private fun event(decision: AuditDecision) = AuditEventData(
         eventId = "event-1",
         timestamp = Instant.ofEpochMilli(1),
         tenantId = "t1",
-        principal = AuditPrincipal(
+        principal = AuditPrincipalData(
             id = "u1",
             authenticated = true,
             roles = setOf("admin@0"),
             policies = emptySet(),
         ),
-        request = AuditRequest(
+        request = AuditRequestData(
             id = "req-1",
             appId = "app",
             spaceId = null,
@@ -57,19 +49,19 @@ class LoggingAuditEventSinkTest {
             method = "POST",
             path = "/api/orders",
             routeId = null,
-            device = AuditDevice(id = "device-1", userAgent = "test-agent"),
+            device = AuditDeviceData(id = "device-1", userAgent = "test-agent"),
         ),
-        authorization = AuditAuthorization(
+        authorization = AuditAuthorizationData(
             decision = decision,
             reasonCode = AuditReasonCode.valueOf(decision.name),
             reason = "Explicit Deny",
             elapsedNanos = 350000,
-            source = AuditSource(
+            source = AuditSourceData(
                 type = AuditSourceType.GLOBAL_POLICY,
-                policy = AuditPolicy(
+                policy = AuditPolicyData(
                     id = "deny-write",
                     type = PolicyType.GLOBAL,
-                    statement = AuditStatement(index = 0, name = "deny-orders-write"),
+                    statement = AuditStatementData(index = 0, name = "deny-orders-write"),
                 ),
             ),
         ),

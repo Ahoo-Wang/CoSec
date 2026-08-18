@@ -16,19 +16,19 @@ package me.ahoo.cosec.kafka
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import me.ahoo.cosec.api.audit.AuditAuthorization
 import me.ahoo.cosec.api.audit.AuditDecision
-import me.ahoo.cosec.api.audit.AuditDevice
-import me.ahoo.cosec.api.audit.AuditEvent
-import me.ahoo.cosec.api.audit.AuditPolicy
-import me.ahoo.cosec.api.audit.AuditPrincipal
 import me.ahoo.cosec.api.audit.AuditReasonCode
-import me.ahoo.cosec.api.audit.AuditRequest
-import me.ahoo.cosec.api.audit.AuditSource
 import me.ahoo.cosec.api.audit.AuditSourceType
-import me.ahoo.cosec.api.audit.AuditStatement
-import me.ahoo.cosec.api.audit.AuditTrace
 import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.audit.AuditAuthorizationData
+import me.ahoo.cosec.audit.AuditDeviceData
+import me.ahoo.cosec.audit.AuditEventData
+import me.ahoo.cosec.audit.AuditPolicyData
+import me.ahoo.cosec.audit.AuditPrincipalData
+import me.ahoo.cosec.audit.AuditRequestData
+import me.ahoo.cosec.audit.AuditSourceData
+import me.ahoo.cosec.audit.AuditStatementData
+import me.ahoo.cosec.audit.AuditTraceData
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
@@ -49,17 +49,17 @@ import java.util.concurrent.TimeUnit
 class KafkaAuditEventSinkTest {
     private val sinks = mutableListOf<KafkaAuditEventSink>()
 
-    private val event = AuditEvent(
+    private val event = AuditEventData(
         eventId = "event-1",
         timestamp = Instant.parse("2026-08-18T00:00:00Z"),
         tenantId = "tenant-1",
-        principal = AuditPrincipal(
+        principal = AuditPrincipalData(
             id = "principal-1",
             authenticated = true,
             roles = setOf("admin"),
             policies = setOf("orders"),
         ),
-        request = AuditRequest(
+        request = AuditRequestData(
             id = "request-1",
             appId = "app-1",
             spaceId = "space-1",
@@ -67,23 +67,23 @@ class KafkaAuditEventSinkTest {
             method = "GET",
             path = "/orders/1",
             routeId = "orders",
-            device = AuditDevice(id = "device-1", userAgent = "test-agent"),
+            device = AuditDeviceData(id = "device-1", userAgent = "test-agent"),
         ),
-        authorization = AuditAuthorization(
+        authorization = AuditAuthorizationData(
             decision = AuditDecision.ALLOW,
             reasonCode = AuditReasonCode.ALLOW,
             reason = "Allow",
             elapsedNanos = 100,
-            source = AuditSource(
+            source = AuditSourceData(
                 type = AuditSourceType.GLOBAL_POLICY,
-                policy = AuditPolicy(
+                policy = AuditPolicyData(
                     id = "orders",
                     type = PolicyType.GLOBAL,
-                    statement = AuditStatement(index = 0, name = "read"),
+                    statement = AuditStatementData(index = 0, name = "read"),
                 ),
             ),
         ),
-        trace = AuditTrace(traceId = "trace-1", spanId = "span-1"),
+        trace = AuditTraceData(traceId = "trace-1", spanId = "span-1"),
     )
 
     @AfterEach

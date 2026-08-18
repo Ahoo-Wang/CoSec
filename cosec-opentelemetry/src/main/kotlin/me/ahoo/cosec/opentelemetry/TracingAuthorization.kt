@@ -26,7 +26,11 @@ class TracingAuthorization(override val delegate: Authorization) :
     Delegated<Authorization> {
     override fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
         val parentContext = Context.current()
-        val source = delegate.authorize(request = request, context = context)
-        return CoSecMonoTrace(parentContext = parentContext, securityContext = context, source = source)
+        return CoSecMonoTrace(
+            parentContext = parentContext,
+            securityContext = context,
+            request = request,
+            delegate = delegate,
+        )
     }
 }

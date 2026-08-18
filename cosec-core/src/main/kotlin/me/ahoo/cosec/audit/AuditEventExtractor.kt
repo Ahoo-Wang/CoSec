@@ -13,19 +13,11 @@
 
 package me.ahoo.cosec.audit
 
-import me.ahoo.cosec.api.audit.AuditAuthorization
 import me.ahoo.cosec.api.audit.AuditDecision
-import me.ahoo.cosec.api.audit.AuditDevice
 import me.ahoo.cosec.api.audit.AuditEvent
-import me.ahoo.cosec.api.audit.AuditPermission
-import me.ahoo.cosec.api.audit.AuditPolicy
-import me.ahoo.cosec.api.audit.AuditPrincipal
 import me.ahoo.cosec.api.audit.AuditReasonCode
 import me.ahoo.cosec.api.audit.AuditRequest
-import me.ahoo.cosec.api.audit.AuditRole
-import me.ahoo.cosec.api.audit.AuditSource
 import me.ahoo.cosec.api.audit.AuditSourceType
-import me.ahoo.cosec.api.audit.AuditStatement
 import me.ahoo.cosec.api.audit.AuditTrace
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
@@ -124,17 +116,17 @@ object AuditEventExtractor {
         elapsedNanos: Long,
         verifyContext: VerifyContext?,
     ): AuditEvent {
-        return AuditEvent(
+        return AuditEventData(
             eventId = UUID.randomUUID().toString(),
             timestamp = Instant.now(),
             tenantId = context.tenant.tenantId,
-            principal = AuditPrincipal(
+            principal = AuditPrincipalData(
                 id = context.principal.id,
                 authenticated = context.principal.authenticated,
                 roles = context.principal.roles.toSet(),
                 policies = context.principal.policies.toSet(),
             ),
-            request = AuditRequest(
+            request = AuditRequestData(
                 id = request.requestId.ifBlank { null },
                 appId = request.appId.ifBlank { null },
                 spaceId = request.spaceId.ifBlank { null },
@@ -142,12 +134,12 @@ object AuditEventExtractor {
                 method = request.method,
                 path = request.path,
                 routeId = request.attributes[AuditRequest.ROUTE_ID_ATTRIBUTE_KEY],
-                device = AuditDevice(
+                device = AuditDeviceData(
                     id = request.deviceId.ifBlank { null },
                     userAgent = request.getHeader(USER_AGENT_HEADER).ifBlank { null },
                 ),
             ),
-            authorization = AuditAuthorization(
+            authorization = AuditAuthorizationData(
                 decision = decision,
                 reasonCode = reasonCode,
                 reason = reason,
@@ -158,46 +150,46 @@ object AuditEventExtractor {
         )
     }
 
-    private fun sourceOf(verifyContext: VerifyContext?): AuditSource {
+    private fun sourceOf(verifyContext: VerifyContext?): AuditSourceData {
         return when (verifyContext) {
-            is PolicyVerifyContext -> AuditSource(
+            is PolicyVerifyContext -> AuditSourceData(
                 type = when (verifyContext.source) {
                     PolicyVerifySource.GLOBAL -> AuditSourceType.GLOBAL_POLICY
                     PolicyVerifySource.PRINCIPAL -> AuditSourceType.PRINCIPAL_POLICY
                 },
-                policy = AuditPolicy(
+                policy = AuditPolicyData(
                     id = verifyContext.policy.id,
                     type = verifyContext.policy.type,
-                    statement = AuditStatement(
+                    statement = AuditStatementData(
                         index = verifyContext.statementIndex,
                         name = verifyContext.statement.name,
                     ),
                 ),
             )
 
-            is RoleVerifyContext -> AuditSource(
+            is RoleVerifyContext -> AuditSourceData(
                 type = AuditSourceType.ROLE_PERMISSION,
-                role = AuditRole(
+                role = AuditRoleData(
                     id = verifyContext.roleId,
-                    permission = AuditPermission(
+                    permission = AuditPermissionData(
                         id = verifyContext.permission.id,
                         name = verifyContext.permission.name,
                     ),
                 ),
             )
 
-            RootVerifyContext -> AuditSource(AuditSourceType.ROOT)
-            BlacklistVerifyContext -> AuditSource(AuditSourceType.BLACKLIST)
-            NoMatchVerifyContext -> AuditSource(AuditSourceType.NONE)
-            null -> AuditSource(AuditSourceType.UNKNOWN)
-            else -> AuditSource(AuditSourceType.UNKNOWN)
+            RootVerifyContext -> AuditSourceData(AuditSourceType.ROOT)
+            BlacklistVerifyContext -> AuditSourceData(AuditSourceType.BLACKLIST)
+            NoMatchVerifyContext -> AuditSourceData(AuditSourceType.NONE)
+            null -> AuditSourceData(AuditSourceType.UNKNOWN)
+            else -> AuditSourceData(AuditSourceType.UNKNOWN)
         }
     }
 
-    private fun traceOf(request: Request): AuditTrace? {
+    private fun traceOf(request: Request): AuditTraceData? {
         val traceId = request.attributes[AuditTrace.TRACE_ID_ATTRIBUTE_KEY] ?: return null
         val spanId = request.attributes[AuditTrace.SPAN_ID_ATTRIBUTE_KEY] ?: return null
-        return AuditTrace(traceId = traceId, spanId = spanId)
+        return AuditTraceData(traceId = traceId, spanId = spanId)
     }
 
     private const val USER_AGENT_HEADER = "User-Agent"

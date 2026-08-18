@@ -13,12 +13,27 @@
 
 package me.ahoo.cosec.api.audit
 
-import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import java.time.Instant
 
 class AuditEventTest {
+    @Test
+    fun auditModelsAreInterfaces() {
+        listOf(
+            AuditPrincipal::class,
+            AuditDevice::class,
+            AuditRequest::class,
+            AuditStatement::class,
+            AuditPolicy::class,
+            AuditPermission::class,
+            AuditRole::class,
+            AuditSource::class,
+            AuditAuthorization::class,
+            AuditTrace::class,
+            AuditEvent::class,
+        ).all { it.java.isInterface }.assert().isTrue()
+    }
+
     @Test
     fun auditDecisionValues() {
         val decisions = AuditDecision.entries.map { it.name }.toSet()
@@ -44,44 +59,17 @@ class AuditEventTest {
     }
 
     @Test
-    fun auditEventEquality() {
-        val event = AuditEvent(
-            eventId = "event-1",
-            timestamp = Instant.ofEpochMilli(1),
-            tenantId = "t1",
-            principal = AuditPrincipal(
-                id = "u1",
-                authenticated = true,
-                roles = setOf("admin@0"),
-                policies = setOf("p1"),
+    fun auditSourceTypeValues() {
+        AuditSourceType.entries.map { it.name }.toSet().assert().isEqualTo(
+            setOf(
+                "ROOT",
+                "BLACKLIST",
+                "GLOBAL_POLICY",
+                "PRINCIPAL_POLICY",
+                "ROLE_PERMISSION",
+                "NONE",
+                "UNKNOWN",
             ),
-            request = AuditRequest(
-                id = "req-1",
-                appId = "app",
-                spaceId = "0",
-                remoteIp = "127.0.0.1",
-                method = "GET",
-                path = "/api",
-                routeId = "api",
-                device = AuditDevice(id = null, userAgent = "test-agent"),
-            ),
-            authorization = AuditAuthorization(
-                decision = AuditDecision.ALLOW,
-                reasonCode = AuditReasonCode.ALLOW,
-                reason = "Allow",
-                elapsedNanos = 1,
-                source = AuditSource(
-                    type = AuditSourceType.GLOBAL_POLICY,
-                    policy = AuditPolicy(
-                        id = "p1",
-                        type = PolicyType.GLOBAL,
-                        statement = AuditStatement(index = 0, name = "read"),
-                    ),
-                ),
-            ),
-            trace = AuditTrace(traceId = "trace-1", spanId = "span-1"),
         )
-        event.copy(request = event.request.copy(path = "/other")).assert().isNotEqualTo(event)
-        event.assert().isEqualTo(event.copy())
     }
 }

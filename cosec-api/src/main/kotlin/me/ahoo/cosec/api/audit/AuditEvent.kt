@@ -45,87 +45,87 @@ enum class AuditSourceType {
     UNKNOWN,
 }
 
-data class AuditPrincipal(
-    val id: String,
-    val authenticated: Boolean,
-    val roles: Set<String>,
-    val policies: Set<String>,
-)
+interface AuditPrincipal {
+    val id: String
+    val authenticated: Boolean
+    val roles: Set<String>
+    val policies: Set<String>
+}
 
-data class AuditDevice(
-    val id: String?,
-    val userAgent: String?,
-)
+interface AuditDevice {
+    val id: String?
+    val userAgent: String?
+}
 
-data class AuditRequest(
-    val id: String?,
-    val appId: String?,
-    val spaceId: String?,
-    val remoteIp: String,
-    val method: String,
-    val path: String,
-    val routeId: String?,
-    val device: AuditDevice,
-) {
+interface AuditRequest {
+    val id: String?
+    val appId: String?
+    val spaceId: String?
+    val remoteIp: String
+    val method: String
+    val path: String
+    val routeId: String?
+    val device: AuditDevice
+
     companion object {
         const val ROUTE_ID_ATTRIBUTE_KEY = "cosec.audit.routeId"
     }
 }
 
-data class AuditStatement(
-    val index: Int,
-    val name: String,
-)
+interface AuditStatement {
+    val index: Int
+    val name: String
+}
 
-data class AuditPolicy(
-    val id: String,
-    val type: PolicyType,
-    val statement: AuditStatement,
-)
+interface AuditPolicy {
+    val id: String
+    val type: PolicyType
+    val statement: AuditStatement
+}
 
-data class AuditPermission(
-    val id: String,
-    val name: String,
-)
+interface AuditPermission {
+    val id: String
+    val name: String
+}
 
-data class AuditRole(
-    val id: String,
-    val permission: AuditPermission,
-)
+interface AuditRole {
+    val id: String
+    val permission: AuditPermission
+}
 
-data class AuditSource(
-    val type: AuditSourceType,
-    val policy: AuditPolicy? = null,
-    val role: AuditRole? = null,
-)
+interface AuditSource {
+    val type: AuditSourceType
+    val policy: AuditPolicy?
+    val role: AuditRole?
+}
 
-data class AuditAuthorization(
-    val decision: AuditDecision,
-    val reasonCode: AuditReasonCode,
-    val reason: String,
-    val elapsedNanos: Long,
-    val source: AuditSource,
-)
+interface AuditAuthorization {
+    val decision: AuditDecision
+    val reasonCode: AuditReasonCode
+    val reason: String
+    val elapsedNanos: Long
+    val source: AuditSource
+}
 
-data class AuditTrace(
-    val traceId: String,
-    val spanId: String,
-) {
+interface AuditTrace {
+    val traceId: String
+    val spanId: String
+
     companion object {
         const val TRACE_ID_ATTRIBUTE_KEY = "cosec.audit.traceId"
         const val SPAN_ID_ATTRIBUTE_KEY = "cosec.audit.spanId"
     }
 }
 
-data class AuditEvent(
-    val eventId: String,
-    val timestamp: Instant,
-    val tenantId: String,
-    val principal: AuditPrincipal,
-    val request: AuditRequest,
-    val authorization: AuditAuthorization,
-    val trace: AuditTrace?,
-)
+interface AuditEvent {
+    val eventId: String
+    val timestamp: Instant
+    val tenantId: String
+    val principal: AuditPrincipal
+    val request: AuditRequest
+    val authorization: AuditAuthorization
+    val trace: AuditTrace?
+}
 
 /**
  * SPI for consuming audit events.

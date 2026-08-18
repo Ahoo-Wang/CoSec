@@ -32,6 +32,7 @@ import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.authorization.PolicyVerifySource
 import me.ahoo.cosec.authorization.RoleVerifyContext
+import me.ahoo.cosec.authorization.VerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.test.asserts.assert
@@ -85,7 +86,7 @@ class AuditEventExtractorTest {
         event.tenantId.assert().isEqualTo("t1")
         event.principal.id.assert().isEqualTo("u1")
         event.principal.roles.assert().isEqualTo(setOf("admin@0"))
-        event.trace.assert().isEqualTo(AuditTrace("trace-1", "span-1"))
+        event.trace.assert().isEqualTo(AuditTraceData("trace-1", "span-1"))
         event.eventId.assert().isNotBlank()
         Instant.ofEpochMilli(0).assert().isBefore(event.timestamp)
     }
@@ -131,6 +132,29 @@ class AuditEventExtractorTest {
     }
 
     @Test
+    fun fromDecisionWhenPrincipalPolicyVerifyContext() {
+        val policy = mockk<Policy> {
+            every { id } returns "principal-policy"
+            every { type } returns PolicyType.CUSTOM
+        }
+        val statement = mockk<Statement> { every { name } returns "read" }
+        context.setVerifyContext(
+            PolicyVerifyContext(
+                PolicyVerifySource.PRINCIPAL,
+                policy,
+                statementIndex = 1,
+                statement = statement,
+                result = VerifyResult.ALLOW,
+            ),
+        )
+
+        val event = AuditEventExtractor.fromDecision(request, context, AuthorizeResult.ALLOW, elapsedNanos = 1)
+
+        event.authorization.source.type.assert().isEqualTo(AuditSourceType.PRINCIPAL_POLICY)
+        event.authorization.source.policy?.type.assert().isEqualTo(PolicyType.CUSTOM)
+    }
+
+    @Test
     fun fromDecisionWhenImplicitDeny() {
         val event = AuditEventExtractor.fromDecision(request, context, AuthorizeResult.IMPLICIT_DENY, elapsedNanos = 1)
         event.authorization.decision.assert().isEqualTo(me.ahoo.cosec.api.audit.AuditDecision.IMPLICIT_DENY)
@@ -166,6 +190,49 @@ class AuditEventExtractorTest {
         event.authorization.decision.assert().isEqualTo(me.ahoo.cosec.api.audit.AuditDecision.EXPLICIT_DENY)
         event.authorization.reasonCode.assert().isEqualTo(AuditReasonCode.TOKEN_EXPIRED)
         event.authorization.reason.assert().isEqualTo("Token Expired")
+    }
+
+    @Test
+    fun fromDecisionWhenTokenInvalid() {
+        val event = AuditEventExtractor.fromDecision(
+            request,
+            context,
+            AuthorizeResult.deny("Token Invalid"),
+            elapsedNanos = 1,
+        )
+
+        event.authorization.reasonCode.assert().isEqualTo(AuditReasonCode.TOKEN_INVALID)
+    }
+
+    @Test
+    fun fromDecisionWithoutTrace() {
+        every { request.attributes } returns emptyMap()
+
+        val event = AuditEventExtractor.fromDecision(request, context, AuthorizeResult.ALLOW, elapsedNanos = 1)
+
+        event.trace.assert().isNull()
+    }
+
+    @Test
+    fun fromDecisionWithIncompleteTrace() {
+        every { request.attributes } returns mapOf(AuditTrace.TRACE_ID_ATTRIBUTE_KEY to "trace-1")
+
+        val event = AuditEventExtractor.fromDecision(request, context, AuthorizeResult.ALLOW, elapsedNanos = 1)
+
+        event.trace.assert().isNull()
+    }
+
+    @Test
+    fun fromDecisionWithUnknownVerifyContext() {
+        context.setVerifyContext(
+            object : VerifyContext {
+                override val result: VerifyResult = VerifyResult.ALLOW
+            },
+        )
+
+        val event = AuditEventExtractor.fromDecision(request, context, AuthorizeResult.ALLOW, elapsedNanos = 1)
+
+        event.authorization.source.type.assert().isEqualTo(AuditSourceType.UNKNOWN)
     }
 
     @Test
