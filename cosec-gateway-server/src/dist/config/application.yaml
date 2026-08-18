@@ -9,6 +9,9 @@ spring:
       whitelabel:
         enabled: false
 cosec:
+  audit:
+    kafka:
+      enabled: false
   authentication:
     enabled: false
   authorization:
