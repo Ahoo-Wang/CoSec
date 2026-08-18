@@ -1,0 +1,19 @@
+{
+  "id": "redis-rate-limiter",
+  "name": "Redis Rate Limiter",
+  "category": "rate-limit",
+  "description": "Verifies Spring matcher registration before local policy initialization",
+  "type": "global",
+  "tenantId": "(platform)",
+  "statements": [
+    {
+      "name": "RateLimitedApi",
+      "action": "/api/**",
+      "condition": {
+        "redisRateLimiter": {
+          "permitsPerSecond": 10
+        }
+      }
+    }
+  ]
+}

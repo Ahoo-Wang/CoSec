@@ -27,6 +27,7 @@ import me.ahoo.cosec.servlet.AuthorizationFilter
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.REACTIVE_REQUEST_PARSER_BEAN_NAME
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.SERVLET_REQUEST_PARSER_BEAN_NAME
+import me.ahoo.cosec.spring.boot.starter.policy.LocalPolicyInitializerLifecycle
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosec.webflux.ReactiveAuthorizationFilter
 import org.springframework.beans.factory.annotation.Qualifier
@@ -72,7 +73,7 @@ class CoSecAuthorizationAutoConfiguration {
         return LocalPolicyLoader(authorizationProperties.localPolicy.locations)
     }
 
-    @Bean(initMethod = "init")
+    @Bean
     @ConditionalOnProperty(
         value = [AuthorizationProperties.LOCAL_POLICY_INIT_REPOSITORY],
         matchIfMissing = false,
@@ -88,6 +89,18 @@ class CoSecAuthorizationAutoConfiguration {
             policyRepository = policyRepository,
             forceRefresh = authorizationProperties.localPolicy.forceRefresh
         )
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+        value = [AuthorizationProperties.LOCAL_POLICY_INIT_REPOSITORY],
+        matchIfMissing = false,
+        havingValue = "true",
+    )
+    fun localPolicyInitializerLifecycle(
+        @Qualifier("localPolicyInitializer") localPolicyInitializer: LocalPolicyInitializer
+    ): LocalPolicyInitializerLifecycle {
+        return LocalPolicyInitializerLifecycle(localPolicyInitializer)
     }
 
     @Bean

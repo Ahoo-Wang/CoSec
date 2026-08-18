@@ -13,27 +13,42 @@
 
 package me.ahoo.cosec.spring.boot.starter.authorization
 
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.authorization.AppRolePermissionRepository
+import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.blacklist.BlacklistChecker
+import me.ahoo.cosec.cache.limiter.RedisRateLimiterConditionMatcherFactory
 import me.ahoo.cosec.context.DefaultSecurityContextParser
 import me.ahoo.cosec.policy.LocalPolicyInitializer
 import me.ahoo.cosec.policy.LocalPolicyLoader
 import me.ahoo.cosec.servlet.AuthorizationFilter
+import me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPermissionCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPolicyCacheAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.authorization.limiter.CoSecRedisRateLimiterAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.starter.policy.LocalPolicyInitializerLifecycle
+import me.ahoo.cosec.spring.boot.starter.policy.MatcherFactoryRegister
+import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import org.springframework.data.redis.core.StringRedisTemplate
+import reactor.core.publisher.Mono
 
 internal class CoSecAuthorizationAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
@@ -45,6 +60,8 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
                 "${AuthorizationProperties.LOCAL_POLICY_ENABLED}=true",
                 "${AuthorizationProperties.LOCAL_POLICY_INIT_REPOSITORY}=true",
+                "${AuthorizationProperties.LOCAL_POLICY_PREFIX}.locations=" +
+                    "classpath:cosec-policy/missing-policy.json",
             )
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
@@ -65,10 +82,91 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                     .hasSingleBean(CoSecAuthorizationAutoConfiguration::class.java)
                     .hasSingleBean(LocalPolicyLoader::class.java)
                     .hasSingleBean(LocalPolicyInitializer::class.java)
+                    .hasSingleBean(LocalPolicyInitializerLifecycle::class.java)
                     .hasSingleBean(DefaultSecurityContextParser::class.java)
                     .hasSingleBean(BlacklistChecker::class.java)
                     .hasSingleBean(Authorization::class.java)
                     .hasSingleBean(AuthorizationFilter::class.java)
+                context.getBean(LocalPolicyInitializerLifecycle::class.java).isRunning.assert().isTrue()
             }
+    }
+
+    @Test
+    fun localPolicyInitializationRunsAfterMatcherRegistration() {
+        val storedPolicies = mutableListOf<Policy>()
+        val policyRepository = mockk<PolicyRepository> {
+            every { getPolicies(any()) } returns Mono.just(listOf())
+            every { setPolicy(capture(storedPolicies)) } returns Mono.empty()
+        }
+
+        contextRunner
+            .withPropertyValues(
+                "${AuthorizationProperties.LOCAL_POLICY_ENABLED}=true",
+                "${AuthorizationProperties.LOCAL_POLICY_INIT_REPOSITORY}=true",
+                "${AuthorizationProperties.LOCAL_POLICY_PREFIX}.locations=" +
+                    "classpath:cosec-policy/redis-rate-limiter-policy.json",
+            )
+            .withBean(PolicyRepository::class.java, { policyRepository })
+            .withBean(AppRolePermissionRepository::class.java, { mockk() })
+            .withBean(TokenVerifier::class.java, { mockk() })
+            .withBean(StringRedisTemplate::class.java, { mockk(relaxed = true) })
+            .withUserConfiguration(
+                CoSecAutoConfiguration::class.java,
+                CoSecRedisRateLimiterAutoConfiguration::class.java,
+                CoSecRequestParserAutoConfiguration::class.java,
+                CoSecAuthorizationAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                assertThat(context)
+                    .hasNotFailed()
+                    .hasSingleBean(MatcherFactoryRegister::class.java)
+                    .hasSingleBean(LocalPolicyInitializerLifecycle::class.java)
+                context.getBean(MatcherFactoryRegister::class.java).isRunning.assert().isTrue()
+                context.getBean(LocalPolicyInitializerLifecycle::class.java).apply {
+                    isRunning.assert().isTrue()
+                    phase.assert().isGreaterThan(MatcherFactoryRegister.PHASE)
+                }
+                storedPolicies.single().statements.single().condition.type.assert()
+                    .isEqualTo(RedisRateLimiterConditionMatcherFactory.TYPE)
+            }
+    }
+
+    @Test
+    fun userManagedLocalPolicyInitializerIsNotStartedWhenBootstrapIsDisabled() {
+        val localPolicyInitializer = mockk<LocalPolicyInitializer>(relaxed = true)
+
+        contextRunner
+            .withBean(LocalPolicyInitializer::class.java, { localPolicyInitializer })
+            .withBean(PolicyRepository::class.java, { mockk() })
+            .withBean(AppRolePermissionRepository::class.java, { mockk() })
+            .withBean(TokenVerifier::class.java, { mockk() })
+            .withUserConfiguration(
+                CoSecAutoConfiguration::class.java,
+                CoSecRequestParserAutoConfiguration::class.java,
+                CoSecAuthorizationAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                assertThat(context)
+                    .hasNotFailed()
+                    .doesNotHaveBean(LocalPolicyInitializerLifecycle::class.java)
+                verify(exactly = 0) {
+                    localPolicyInitializer.init()
+                }
+            }
+    }
+
+    @Test
+    fun localPolicyInitializerRunsOnceAcrossLifecycleRestarts() {
+        val localPolicyInitializer = mockk<LocalPolicyInitializer>(relaxed = true)
+
+        LocalPolicyInitializerLifecycle(localPolicyInitializer).apply {
+            start()
+            stop()
+            start()
+        }
+
+        verify(exactly = 1) {
+            localPolicyInitializer.init()
+        }
     }
 }

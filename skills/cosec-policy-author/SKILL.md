@@ -93,7 +93,7 @@ Order deny statements before allow statements for readability, not behavior.
 | `redisRateLimiter` | `permitsPerSecond`; optional `windowSeconds`, `strictFailure` | Cluster-wide Redis limit |
 | `redisGroupedRateLimiter` | `part`, `permitsPerSecond`; optional `windowSeconds`, `strictFailure` | Cluster-wide Redis per-part limit |
 
-The Redis types exist only when cache support and `StringRedisTemplate` activate their Spring factories. They use an atomic sliding window, return 429 when exceeded, fail open on Redis errors by default, and fail closed when `strictFailure` is `true`. Because the starter registers these factories after local repository initialization, bootstrap local policy files cannot use them; store those policies in the repository or register the factories earlier. The in-memory limiters also return 429 when exceeded.
+The Redis types exist only when cache support and `StringRedisTemplate` activate their Spring factories. They use an atomic sliding window, return 429 when exceeded, fail open on Redis errors by default, and fail closed when `strictFailure` is `true`. The auto-configured local-policy lifecycle starts after matcher registration, so bootstrap files may use them. The in-memory limiters also return 429 when exceeded.
 
 `negate` is handled only by matchers based on `AbstractConditionMatcher`; the ungrouped `rateLimiter` and `redisRateLimiter` do not support it. Avoid negating any limiter because an exceeded quota throws before boolean negation.
 
