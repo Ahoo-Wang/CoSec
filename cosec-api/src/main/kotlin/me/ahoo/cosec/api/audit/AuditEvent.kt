@@ -26,6 +26,18 @@ enum class AuditDecision {
     ERROR,
 }
 
+data class AuditDevice(
+    val id: String?,
+    val userAgent: String?,
+)
+
+data class AuditMatch(
+    val policyId: String? = null,
+    val statementName: String? = null,
+    val roleId: String? = null,
+    val permissionId: String? = null,
+)
+
 /**
  * Structured audit event for a single authorization decision.
  */
@@ -38,7 +50,7 @@ data class AuditEvent(
     val policies: Set<String>,
     val appId: String?,
     val spaceId: String?,
-    val deviceId: String?,
+    val device: AuditDevice,
     val requestId: String?,
     val remoteIp: String,
     val method: String,
@@ -46,10 +58,7 @@ data class AuditEvent(
     val decision: AuditDecision,
     val reason: String,
     val elapsedNanos: Long,
-    val matchedPolicyId: String?,
-    val matchedStatementName: String?,
-    val matchedRoleId: String?,
-    val matchedPermissionId: String?,
+    val match: AuditMatch?,
 )
 
 /**

@@ -18,7 +18,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import me.ahoo.cosec.api.audit.AuditDecision
+import me.ahoo.cosec.api.audit.AuditDevice
 import me.ahoo.cosec.api.audit.AuditEvent
+import me.ahoo.cosec.api.audit.AuditMatch
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -38,7 +40,7 @@ class LoggingAuditEventSinkTest {
         policies = emptySet(),
         appId = "app",
         spaceId = null,
-        deviceId = null,
+        device = AuditDevice(id = "device-1", userAgent = "test-agent"),
         requestId = "req-1",
         remoteIp = "1.2.3.4",
         method = "POST",
@@ -46,10 +48,7 @@ class LoggingAuditEventSinkTest {
         decision = decision,
         reason = "Explicit Deny",
         elapsedNanos = 350000,
-        matchedPolicyId = "deny-write",
-        matchedStatementName = "deny-orders-write",
-        matchedRoleId = null,
-        matchedPermissionId = null,
+        match = AuditMatch(policyId = "deny-write", statementName = "deny-orders-write"),
     )
 
     private fun loggerFor(recording: Recording): KLogger {
@@ -93,7 +92,8 @@ class LoggingAuditEventSinkTest {
         recording.levels.toString().assert().isEqualTo("warn")
         val json = recording.json.toString()
         json.assert().contains("\"decision\":\"EXPLICIT_DENY\"")
-        json.assert().contains("\"matchedPolicyId\":\"deny-write\"")
+        json.assert().contains("\"device\":{\"id\":\"device-1\",\"userAgent\":\"test-agent\"}")
+        json.assert().contains("\"match\":{\"policyId\":\"deny-write\",\"statementName\":\"deny-orders-write\"")
         json.assert().contains("\"elapsedNanos\":350000")
     }
 

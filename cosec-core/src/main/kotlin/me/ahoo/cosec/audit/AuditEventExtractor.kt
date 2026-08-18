@@ -14,7 +14,9 @@
 package me.ahoo.cosec.audit
 
 import me.ahoo.cosec.api.audit.AuditDecision
+import me.ahoo.cosec.api.audit.AuditDevice
 import me.ahoo.cosec.api.audit.AuditEvent
+import me.ahoo.cosec.api.audit.AuditMatch
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
@@ -78,22 +80,18 @@ object AuditEventExtractor {
         elapsedNanos: Long,
         verifyContext: me.ahoo.cosec.authorization.VerifyContext?,
     ): AuditEvent {
-        var matchedPolicyId: String? = null
-        var matchedStatementName: String? = null
-        var matchedRoleId: String? = null
-        var matchedPermissionId: String? = null
-        when (verifyContext) {
-            is PolicyVerifyContext -> {
-                matchedPolicyId = verifyContext.policy.id
-                matchedStatementName = verifyContext.statement.name
-            }
+        val match = when (verifyContext) {
+            is PolicyVerifyContext -> AuditMatch(
+                policyId = verifyContext.policy.id,
+                statementName = verifyContext.statement.name,
+            )
 
-            is RoleVerifyContext -> {
-                matchedRoleId = verifyContext.roleId
-                matchedPermissionId = verifyContext.permission.id
-            }
+            is RoleVerifyContext -> AuditMatch(
+                roleId = verifyContext.roleId,
+                permissionId = verifyContext.permission.id,
+            )
 
-            null -> Unit
+            else -> null
         }
         return AuditEvent(
             timestamp = Instant.now(),
@@ -104,7 +102,10 @@ object AuditEventExtractor {
             policies = context.principal.policies.toSet(),
             appId = request.appId.ifBlank { null },
             spaceId = request.spaceId.ifBlank { null },
-            deviceId = request.deviceId.ifBlank { null },
+            device = AuditDevice(
+                id = request.deviceId.ifBlank { null },
+                userAgent = request.getHeader(USER_AGENT_HEADER).ifBlank { null },
+            ),
             requestId = request.requestId.ifBlank { null },
             remoteIp = request.remoteIp,
             method = request.method,
@@ -112,10 +113,9 @@ object AuditEventExtractor {
             decision = decision,
             reason = reason,
             elapsedNanos = elapsedNanos,
-            matchedPolicyId = matchedPolicyId,
-            matchedStatementName = matchedStatementName,
-            matchedRoleId = matchedRoleId,
-            matchedPermissionId = matchedPermissionId,
+            match = match,
         )
     }
+
+    private const val USER_AGENT_HEADER = "User-Agent"
 }

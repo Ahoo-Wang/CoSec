@@ -37,7 +37,7 @@ class AuditEventTest {
             policies = setOf("p1"),
             appId = "app",
             spaceId = "0",
-            deviceId = null,
+            device = AuditDevice(id = null, userAgent = "test-agent"),
             requestId = "req-1",
             remoteIp = "127.0.0.1",
             method = "GET",
@@ -45,10 +45,7 @@ class AuditEventTest {
             decision = AuditDecision.ALLOW,
             reason = "Allow",
             elapsedNanos = 1,
-            matchedPolicyId = null,
-            matchedStatementName = null,
-            matchedRoleId = null,
-            matchedPermissionId = null,
+            match = null,
         )
         event.copy(path = "/other").assert().isNotEqualTo(event)
         event.assert().isEqualTo(event.copy())

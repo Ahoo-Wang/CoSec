@@ -41,6 +41,7 @@ class AuditEventExtractorTest {
         every { remoteIp } returns "1.2.3.4"
         every { method } returns "POST"
         every { path } returns "/api/orders"
+        every { getHeader("User-Agent") } returns "test-agent"
     }
     private val principal = mockk<CoSecPrincipal> {
         every { id } returns "u1"
@@ -66,7 +67,8 @@ class AuditEventExtractorTest {
         event.decision.assert().isEqualTo(me.ahoo.cosec.api.audit.AuditDecision.ALLOW)
         event.reason.assert().isEqualTo("Allow")
         event.elapsedNanos.assert().isEqualTo(100)
-        event.deviceId.assert().isNull()
+        event.device.id.assert().isNull()
+        event.device.userAgent.assert().isEqualTo("test-agent")
         event.tenantId.assert().isEqualTo("t1")
         event.principalId.assert().isEqualTo("u1")
         event.roles.assert().isEqualTo(setOf("admin@0"))
@@ -82,9 +84,9 @@ class AuditEventExtractorTest {
         )
         val event = AuditEventExtractor.fromDecision(request, context, AuthorizeResult.EXPLICIT_DENY, elapsedNanos = 1)
         event.decision.assert().isEqualTo(me.ahoo.cosec.api.audit.AuditDecision.EXPLICIT_DENY)
-        event.matchedPolicyId.assert().isEqualTo("deny-write")
-        event.matchedStatementName.assert().isEqualTo("deny-orders-write")
-        event.matchedRoleId.assert().isNull()
+        event.match?.policyId.assert().isEqualTo("deny-write")
+        event.match?.statementName.assert().isEqualTo("deny-orders-write")
+        event.match?.roleId.assert().isNull()
     }
 
     @Test
@@ -94,9 +96,9 @@ class AuditEventExtractorTest {
             RoleVerifyContext(roleId = "admin", permission = permission, result = VerifyResult.ALLOW)
         )
         val event = AuditEventExtractor.fromDecision(request, context, AuthorizeResult.ALLOW, elapsedNanos = 1)
-        event.matchedRoleId.assert().isEqualTo("admin")
-        event.matchedPermissionId.assert().isEqualTo("permissionId")
-        event.matchedPolicyId.assert().isNull()
+        event.match?.roleId.assert().isEqualTo("admin")
+        event.match?.permissionId.assert().isEqualTo("permissionId")
+        event.match?.policyId.assert().isNull()
     }
 
     @Test

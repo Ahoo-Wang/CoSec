@@ -47,6 +47,7 @@ class AuditingAuthorizationTest {
         every { remoteIp } returns "1.2.3.4"
         every { method } returns "POST"
         every { path } returns "/api/orders"
+        every { getHeader("User-Agent") } returns "test-agent"
     }
     private val context = mockk<SecurityContext> {
         every { tenant.tenantId } returns "t1"
@@ -115,8 +116,7 @@ class AuditingAuthorizationTest {
         authorization.authorize(request, context).block()
         events.single().apply {
             decision.assert().isEqualTo(AuditDecision.IMPLICIT_DENY)
-            matchedPolicyId.assert().isNull()
-            matchedStatementName.assert().isNull()
+            match.assert().isNull()
         }
     }
 
@@ -191,6 +191,7 @@ class AuditingAuthorizationTest {
             every { remoteIp } returns "1.2.3.4"
             every { method } returns "POST"
             every { path } throws IllegalStateException("boom")
+            every { getHeader("User-Agent") } returns "test-agent"
         }
         val events = mutableListOf<AuditEvent>()
         val sink = AuditEventSink(events::add)
