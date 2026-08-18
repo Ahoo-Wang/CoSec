@@ -53,11 +53,14 @@ cosec:
   authorization:
     local-policy:
       enabled: true
+      init-repository: true
       locations:
         - classpath:cosec-policy/*-policy.json
 ```
 
 Keep the JWT secret outside source control. A blank secret fails startup while JWT is enabled. Supported algorithms are `hmac256`, `hmac384`, and `hmac512`; issuer and verifier must agree.
+
+`LocalPolicyLoader` only parses files; authorization reads `PolicyRepository`. This bootstrap configuration therefore initializes the repository at startup and requires `PolicyRepository` and `AppRolePermissionRepository` beans. The cache capability supplies Redis-backed implementations; otherwise provide them explicitly.
 
 Create policies under `src/main/resources/cosec-policy/` using the configured pattern. A safe complete skeleton is:
 
@@ -82,10 +85,10 @@ Use `$cosec-policy-author` when the requested policy is more than this bootstrap
 
 ## Optional behavior
 
-- `local-policy.init-repository` is `false` by default. Enable it only when startup should write local policies to the configured repository; use `force-refresh` only when overwriting repository state is intended.
+- `local-policy.init-repository` is `false` by default. The bootstrap above enables it because the repository is not otherwise populated from local files. Disable it only when policies are already stored elsewhere; use `force-refresh` only when overwriting repository state is intended.
 - `cosec.jwt.token-revocation.enabled=true` needs a real `TokenStore`; the cache capability supplies the Redis-backed implementation. Without it, logout does not revoke tokens and the starter logs a warning.
-- The cache capability and a `StringRedisTemplate` enable `redisRateLimiter` and `redisGroupedRateLimiter`. Configure their shared prefix with `cosec.limiter.key-prefix`; use per-policy `strictFailure` when Redis outage behavior must fail closed.
-- Authorization audit logging is enabled by default. The logging sink records denies at WARN and allows at DEBUG under `me.ahoo.cosec.audit`. The Kafka capability replaces it when a unique Kafka template is available; configure `cosec.audit.kafka.topic` as needed.
+- The cache capability and a `StringRedisTemplate` enable `redisRateLimiter` and `redisGroupedRateLimiter`. Spring registers these factories after `LocalPolicyInitializer` runs, so bootstrapped local files cannot use them; prepopulate those policies in the repository or register the factories before local initialization. Configure their shared prefix with `cosec.limiter.key-prefix`; use per-policy `strictFailure` when Redis outage behavior must fail closed.
+- With the starter's auto-configured `Authorization`, audit logging is enabled by default. The logging sink records denies at WARN and allows at DEBUG under `me.ahoo.cosec.audit`; the Kafka capability replaces it when a unique Kafka template is available. A custom `Authorization` bean is not wrapped automatically, so compose it with `AuditingAuthorization` explicitly.
 - Set `cosec.authorization.remote-ip.max-trusted-index` to the real trusted-proxy depth. `0` ignores `X-Forwarded-For`.
 
 ## Verification

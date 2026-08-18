@@ -20,7 +20,7 @@ logging:
     me.ahoo.cosec.audit: DEBUG
 ```
 
-`SimpleAuthorization` identifies the matched policy/statement or role/permission. The default audit sink emits structured deny events at WARN and allow events at DEBUG, including principal, request, decision, and matched rule when available.
+`SimpleAuthorization` identifies the matched policy/statement or role/permission. When `AuditingAuthorization` is active, the default sink emits structured deny events at WARN and allow events at DEBUG, including principal, request, decision, and matched rule when available. A custom `Authorization` bean is not wrapped automatically.
 
 ## Interpret the status first
 
@@ -75,9 +75,10 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 ### Policy file has no effect
 
 - Confirm `cosec.authorization.local-policy.enabled=true` and the file matches `local-policy.locations`.
-- Inspect startup errors: `LocalPolicyLoader` logs and skips malformed JSON, missing required fields, unknown matcher types, and invalid matcher configuration rather than failing the application.
+- Inspect startup errors: `LocalPolicyLoader` logs and skips malformed JSON, missing required fields, unknown matcher types, and constructor-time configuration errors rather than failing the application.
+- Deferred matcher errors still load. For example, an unsupported `part` throws during authorization and the transport returns 500; reproduce it with `DefaultPolicyEvaluator` or the failing request.
 - Local policies are deduplicated by ID after location expansion; assert that the expected ID and content loaded.
-- `init-repository` controls repository writes, not local parsing. Use `force-refresh` only when overwriting repository state is intended.
+- `LocalPolicyLoader` does not serve authorization decisions directly. Enable `init-repository` or prepopulate `PolicyRepository`; use `force-refresh` only when overwriting repository state is intended.
 
 ### Matcher mismatch
 
