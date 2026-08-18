@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.spring.boot.starter.policy
 
-import me.ahoo.cosec.policy.LocalPolicyInitializer
 import me.ahoo.cosec.policy.action.ActionMatcherFactory
 import me.ahoo.cosec.policy.action.ActionMatcherFactoryProvider
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
@@ -23,6 +22,10 @@ import org.springframework.context.ApplicationContext
 import org.springframework.context.SmartLifecycle
 
 class MatcherFactoryRegister(private val applicationContext: ApplicationContext) : SmartLifecycle {
+    companion object {
+        const val PHASE = 0
+    }
+
     @Volatile
     private var running = false
     override fun start() {
@@ -31,9 +34,6 @@ class MatcherFactoryRegister(private val applicationContext: ApplicationContext)
         }
         applicationContext.getBeansOfType<ActionMatcherFactory>().values.forEach {
             ActionMatcherFactoryProvider.register(it)
-        }
-        applicationContext.getBeansOfType<LocalPolicyInitializer>().values.forEach {
-            it.init()
         }
         running = true
     }
@@ -45,4 +45,6 @@ class MatcherFactoryRegister(private val applicationContext: ApplicationContext)
     override fun isRunning(): Boolean {
         return running
     }
+
+    override fun getPhase(): Int = PHASE
 }

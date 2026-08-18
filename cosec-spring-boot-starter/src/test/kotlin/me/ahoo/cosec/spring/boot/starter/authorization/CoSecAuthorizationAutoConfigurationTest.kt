@@ -15,6 +15,7 @@ package me.ahoo.cosec.spring.boot.starter.authorization
 
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.policy.Policy
@@ -34,6 +35,7 @@ import me.ahoo.cosec.spring.boot.starter.authorization.limiter.CoSecRedisRateLim
 import me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.starter.policy.LocalPolicyInitializerLifecycle
 import me.ahoo.cosec.spring.boot.starter.policy.MatcherFactoryRegister
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.IdGenerator
@@ -58,6 +60,8 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
                 "${AuthorizationProperties.LOCAL_POLICY_ENABLED}=true",
                 "${AuthorizationProperties.LOCAL_POLICY_INIT_REPOSITORY}=true",
+                "${AuthorizationProperties.LOCAL_POLICY_PREFIX}.locations=" +
+                    "classpath:cosec-policy/missing-policy.json",
             )
             .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
@@ -78,10 +82,12 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                     .hasSingleBean(CoSecAuthorizationAutoConfiguration::class.java)
                     .hasSingleBean(LocalPolicyLoader::class.java)
                     .hasSingleBean(LocalPolicyInitializer::class.java)
+                    .hasSingleBean(LocalPolicyInitializerLifecycle::class.java)
                     .hasSingleBean(DefaultSecurityContextParser::class.java)
                     .hasSingleBean(BlacklistChecker::class.java)
                     .hasSingleBean(Authorization::class.java)
                     .hasSingleBean(AuthorizationFilter::class.java)
+                context.getBean(LocalPolicyInitializerLifecycle::class.java).isRunning.assert().isTrue()
             }
     }
 
@@ -114,9 +120,38 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 assertThat(context)
                     .hasNotFailed()
                     .hasSingleBean(MatcherFactoryRegister::class.java)
+                    .hasSingleBean(LocalPolicyInitializerLifecycle::class.java)
                 context.getBean(MatcherFactoryRegister::class.java).isRunning.assert().isTrue()
+                context.getBean(LocalPolicyInitializerLifecycle::class.java).apply {
+                    isRunning.assert().isTrue()
+                    phase.assert().isGreaterThan(MatcherFactoryRegister.PHASE)
+                }
                 storedPolicies.single().statements.single().condition.type.assert()
                     .isEqualTo(RedisRateLimiterConditionMatcherFactory.TYPE)
+            }
+    }
+
+    @Test
+    fun userManagedLocalPolicyInitializerIsNotStartedWhenBootstrapIsDisabled() {
+        val localPolicyInitializer = mockk<LocalPolicyInitializer>(relaxed = true)
+
+        contextRunner
+            .withBean(LocalPolicyInitializer::class.java, { localPolicyInitializer })
+            .withBean(PolicyRepository::class.java, { mockk() })
+            .withBean(AppRolePermissionRepository::class.java, { mockk() })
+            .withBean(TokenVerifier::class.java, { mockk() })
+            .withUserConfiguration(
+                CoSecAutoConfiguration::class.java,
+                CoSecRequestParserAutoConfiguration::class.java,
+                CoSecAuthorizationAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                assertThat(context)
+                    .hasNotFailed()
+                    .doesNotHaveBean(LocalPolicyInitializerLifecycle::class.java)
+                verify(exactly = 0) {
+                    localPolicyInitializer.init()
+                }
             }
     }
 }
