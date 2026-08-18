@@ -23,6 +23,7 @@ import reactor.core.scheduler.Scheduler
 import reactor.core.scheduler.Schedulers
 import java.time.Duration
 import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val MAX_PENDING_AUDIT_EVENTS = 1024
 private const val KAFKA_AUDIT_SCHEDULER_NAME = "cosec-kafka-audit"
@@ -31,11 +32,7 @@ private val DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(10)
 class KafkaAuditEventSink(
     private val kafkaOperations: KafkaOperations<String, String>,
     private val topic: String,
-    private val scheduler: Scheduler = Schedulers.newBoundedElastic(
-        1,
-        MAX_PENDING_AUDIT_EVENTS,
-        KAFKA_AUDIT_SCHEDULER_NAME,
-    ),
+    scheduler: Scheduler? = null,
     private val shutdownTimeout: Duration = DEFAULT_SHUTDOWN_TIMEOUT,
 ) : AuditEventSink,
     DisposableBean {
@@ -43,11 +40,20 @@ class KafkaAuditEventSink(
         require(topic.isNotBlank()) { "topic must not be blank." }
     }
 
+    private val ownsScheduler = scheduler == null
+    private val scheduler = scheduler ?: Schedulers.newBoundedElastic(
+        1,
+        MAX_PENDING_AUDIT_EVENTS,
+        KAFKA_AUDIT_SCHEDULER_NAME,
+    )
+    private val queueFullWarningLogged = AtomicBoolean()
+
     @Suppress("TooGenericExceptionCaught")
     override fun publish(event: AuditEvent) {
         try {
             // ponytail: one bounded scheduler preserves order; shard by key if throughput becomes a bottleneck.
             scheduler.schedule {
+                queueFullWarningLogged.set(false)
                 try {
                     kafkaOperations.send(
                         topic,
@@ -62,13 +68,18 @@ class KafkaAuditEventSink(
                     logFailure(error)
                 }
             }
-        } catch (error: RejectedExecutionException) {
-            log.warn(error) { "Dropped audit event because the Kafka audit queue is full or shutting down." }
+        } catch (_: RejectedExecutionException) {
+            if (queueFullWarningLogged.compareAndSet(false, true)) {
+                log.warn { "Dropping audit events because the Kafka audit queue is full or shutting down." }
+            }
         }
     }
 
     @Suppress("TooGenericExceptionCaught")
     override fun destroy() {
+        if (!ownsScheduler) {
+            return
+        }
         try {
             scheduler.disposeGracefully().block(shutdownTimeout)
         } catch (error: RuntimeException) {
