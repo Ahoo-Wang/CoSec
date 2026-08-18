@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.api.audit
 
+import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -27,27 +28,60 @@ class AuditEventTest {
     }
 
     @Test
+    fun auditReasonCodeValues() {
+        AuditReasonCode.entries.map { it.name }.toSet().assert().isEqualTo(
+            setOf(
+                "ALLOW",
+                "EXPLICIT_DENY",
+                "IMPLICIT_DENY",
+                "TOKEN_EXPIRED",
+                "TOKEN_INVALID",
+                "TOO_MANY_REQUESTS",
+                "REGEX_TIMEOUT",
+                "ERROR",
+            ),
+        )
+    }
+
+    @Test
     fun auditEventEquality() {
         val event = AuditEvent(
+            eventId = "event-1",
             timestamp = Instant.ofEpochMilli(1),
             tenantId = "t1",
-            principalId = "u1",
-            authenticated = true,
-            roles = setOf("admin@0"),
-            policies = setOf("p1"),
-            appId = "app",
-            spaceId = "0",
-            device = AuditDevice(id = null, userAgent = "test-agent"),
-            requestId = "req-1",
-            remoteIp = "127.0.0.1",
-            method = "GET",
-            path = "/api",
-            decision = AuditDecision.ALLOW,
-            reason = "Allow",
-            elapsedNanos = 1,
-            match = null,
+            principal = AuditPrincipal(
+                id = "u1",
+                authenticated = true,
+                roles = setOf("admin@0"),
+                policies = setOf("p1"),
+            ),
+            request = AuditRequest(
+                id = "req-1",
+                appId = "app",
+                spaceId = "0",
+                remoteIp = "127.0.0.1",
+                method = "GET",
+                path = "/api",
+                routeId = "api",
+                device = AuditDevice(id = null, userAgent = "test-agent"),
+            ),
+            authorization = AuditAuthorization(
+                decision = AuditDecision.ALLOW,
+                reasonCode = AuditReasonCode.ALLOW,
+                reason = "Allow",
+                elapsedNanos = 1,
+                source = AuditSource(
+                    type = AuditSourceType.GLOBAL_POLICY,
+                    policy = AuditPolicy(
+                        id = "p1",
+                        type = PolicyType.GLOBAL,
+                        statement = AuditStatement(index = 0, name = "read"),
+                    ),
+                ),
+            ),
+            trace = AuditTrace(traceId = "trace-1", spanId = "span-1"),
         )
-        event.copy(path = "/other").assert().isNotEqualTo(event)
+        event.copy(request = event.request.copy(path = "/other")).assert().isNotEqualTo(event)
         event.assert().isEqualTo(event.copy())
     }
 }

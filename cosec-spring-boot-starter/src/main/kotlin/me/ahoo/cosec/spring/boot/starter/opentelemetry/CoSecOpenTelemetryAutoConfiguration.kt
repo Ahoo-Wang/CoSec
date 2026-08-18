@@ -14,9 +14,11 @@
 package me.ahoo.cosec.spring.boot.starter.opentelemetry
 
 import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.opentelemetry.OpenTelemetryRequestAttributesAppender
 import me.ahoo.cosec.opentelemetry.TracingAuthorization
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.audit.CoSecAuditAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.audit.ConditionalOnAuditEnabled
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -28,6 +30,12 @@ import org.springframework.context.annotation.Primary
 @ConditionalOnCoSecEnabled
 @ConditionalOnOpenTelemetryEnabled
 class CoSecOpenTelemetryAutoConfiguration {
+
+    @Bean
+    @ConditionalOnAuditEnabled
+    fun openTelemetryRequestAttributesAppender(): OpenTelemetryRequestAttributesAppender {
+        return OpenTelemetryRequestAttributesAppender()
+    }
 
     @Bean(TRACING_AUTHORIZATION_BEAN_NAME)
     @Primary

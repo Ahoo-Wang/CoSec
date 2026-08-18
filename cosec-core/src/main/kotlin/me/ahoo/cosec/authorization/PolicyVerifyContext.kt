@@ -53,6 +53,11 @@ internal class VerifyContextScope {
     var value: VerifyContext? = null
 }
 
+enum class PolicyVerifySource {
+    GLOBAL,
+    PRINCIPAL,
+}
+
 /**
  * Verification context for policy-based authorization.
  *
@@ -62,6 +67,7 @@ internal class VerifyContextScope {
  * @param result The verification result
  */
 data class PolicyVerifyContext(
+    val source: PolicyVerifySource,
     val policy: Policy,
     val statementIndex: Int,
     val statement: Statement,
@@ -80,3 +86,15 @@ data class RoleVerifyContext(
     val permission: Permission,
     override val result: VerifyResult
 ) : VerifyContext
+
+data object RootVerifyContext : VerifyContext {
+    override val result: VerifyResult = VerifyResult.ALLOW
+}
+
+data object BlacklistVerifyContext : VerifyContext {
+    override val result: VerifyResult = VerifyResult.EXPLICIT_DENY
+}
+
+data object NoMatchVerifyContext : VerifyContext {
+    override val result: VerifyResult = VerifyResult.IMPLICIT_DENY
+}

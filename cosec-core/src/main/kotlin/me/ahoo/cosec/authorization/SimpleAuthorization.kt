@@ -30,6 +30,7 @@ import me.ahoo.cosec.blacklist.BlacklistChecker
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.switchIfEmpty
 import reactor.kotlin.core.publisher.toMono
+import reactor.util.context.ContextView
 
 /**
  * Simple Authorization implementation.
@@ -88,6 +89,7 @@ class SimpleAuthorization(
     }
 
     private fun verifyPolicies(
+        source: PolicyVerifySource,
         policies: List<Policy>,
         request: Request,
         securityContext: SecurityContext
@@ -111,6 +113,7 @@ class SimpleAuthorization(
                     "Verify [$request] [$securityContext] matched Policy[${entry.policy.id}] Statement[${entry.index}][${entry.statement.name}] - [$result]."
                 }
                 PolicyVerifyContext(
+                    source = source,
                     policy = entry.policy,
                     statementIndex = entry.index,
                     statement = entry.statement,
@@ -168,7 +171,7 @@ class SimpleAuthorization(
         policyRepository
             .getGlobalPolicy()
             .mapNotNull { policies: List<Policy> ->
-                verifyPolicies(policies, request, context)
+                verifyPolicies(PolicyVerifySource.GLOBAL, policies, request, context)
             }
 
     private fun verifyPrincipalPolicies(
@@ -181,7 +184,7 @@ class SimpleAuthorization(
         return policyRepository
             .getPolicies(context.principal.policies)
             .mapNotNull { policies: List<Policy> ->
-                verifyPolicies(policies, request, context)
+                verifyPolicies(PolicyVerifySource.PRINCIPAL, policies, request, context)
             }
     }
 
@@ -209,33 +212,51 @@ class SimpleAuthorization(
             }.switchIfEmpty {
                 verifyAppRolePermission(request, context)
             }.map {
-                context.setVerifyContext(it)
-                reactorContext.getOrEmpty<VerifyContextScope>(VerifyContextScope::class.java)
-                    .ifPresent { scope -> scope.value = it }
+                recordVerifyContext(context, reactorContext, it)
                 it.result.toAuthorizeResult()
             }.switchIfEmpty {
                 log.debug {
                     "Verify [$request] [$context] No policies matched - [Implicit Deny]."
                 }
+                recordVerifyContext(reactorContext, NoMatchVerifyContext)
                 AuthorizeResult.IMPLICIT_DENY.toMono()
             }
+    }
+
+    private fun recordVerifyContext(
+        context: SecurityContext,
+        reactorContext: ContextView,
+        verifyContext: VerifyContext,
+    ) {
+        context.setVerifyContext(verifyContext)
+        recordVerifyContext(reactorContext, verifyContext)
+    }
+
+    private fun recordVerifyContext(
+        reactorContext: ContextView,
+        verifyContext: VerifyContext,
+    ) {
+        reactorContext.getOrEmpty<VerifyContextScope>(VerifyContextScope::class.java)
+            .ifPresent { scope -> scope.value = verifyContext }
     }
 
     override fun authorize(
         request: Request,
         context: SecurityContext
-    ): Mono<AuthorizeResult> {
+    ): Mono<AuthorizeResult> = Mono.deferContextual { reactorContext ->
         val verifyResult = verifyRoot(context)
         if (verifyResult == VerifyResult.ALLOW) {
-            return AuthorizeResult.ALLOW.toMono()
+            recordVerifyContext(reactorContext, RootVerifyContext)
+            return@deferContextual AuthorizeResult.ALLOW.toMono()
         }
-        return blacklistChecker
+        blacklistChecker
             .check(request, context)
             .flatMap { allowed ->
                 if (!allowed) {
                     log.debug {
                         "Request [$request] is blocked by the blacklist."
                     }
+                    recordVerifyContext(reactorContext, BlacklistVerifyContext)
                     return@flatMap AuthorizeResult.EXPLICIT_DENY.toMono()
                 }
                 verify(request, context)

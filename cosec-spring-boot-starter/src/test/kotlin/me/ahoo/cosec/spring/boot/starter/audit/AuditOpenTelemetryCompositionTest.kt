@@ -17,6 +17,7 @@ import io.mockk.mockk
 import me.ahoo.cosec.api.audit.AuditEventSink
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.audit.AuditingAuthorization
+import me.ahoo.cosec.opentelemetry.OpenTelemetryRequestAttributesAppender
 import me.ahoo.cosec.opentelemetry.TracingAuthorization
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.opentelemetry.CoSecOpenTelemetryAutoConfiguration
@@ -42,6 +43,7 @@ class AuditOpenTelemetryCompositionTest {
             .run { context: AssertableApplicationContext ->
                 context.getBeansOfType(AuditingAuthorization::class.java).assert().hasSize(1)
                 context.getBeansOfType(TracingAuthorization::class.java).assert().hasSize(1)
+                context.getBeansOfType(OpenTelemetryRequestAttributesAppender::class.java).assert().hasSize(1)
                 val authorization = context.getBean(Authorization::class.java)
                 authorization.assert().isInstanceOf(TracingAuthorization::class.java)
                 context.getBean(
@@ -70,6 +72,7 @@ class AuditOpenTelemetryCompositionTest {
             .run { context: AssertableApplicationContext ->
                 context.getBeansOfType(AuditingAuthorization::class.java).assert().isEmpty()
                 context.getBeansOfType(TracingAuthorization::class.java).assert().hasSize(1)
+                context.getBeansOfType(OpenTelemetryRequestAttributesAppender::class.java).assert().isEmpty()
                 context.getBean(Authorization::class.java).assert().isInstanceOf(TracingAuthorization::class.java)
             }
     }
