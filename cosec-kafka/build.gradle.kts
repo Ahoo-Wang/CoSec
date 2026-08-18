@@ -11,22 +11,8 @@
  * limitations under the License.
  */
 
-rootProject.name = "CoSec"
-
-include(":cosec-bom")
-include(":cosec-dependencies")
-include(":cosec-api")
-include(":cosec-core")
-include(":cosec-jwt")
-include(":cosec-cocache")
-include(":cosec-social")
-include(":cosec-webmvc")
-include(":cosec-webflux")
-include(":cosec-spring-boot-starter")
-include(":cosec-gateway")
-include(":cosec-gateway-server")
-include(":cosec-opentelemetry")
-include(":cosec-ip2region")
-include(":code-coverage-report")
-include(":cosec-openapi")
-include(":cosec-kafka")
+dependencies {
+    api(project(":cosec-api"))
+    api("org.springframework.kafka:spring-kafka")
+    implementation(project(":cosec-core"))
+}

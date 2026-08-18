@@ -147,6 +147,8 @@ flowchart TD
 | 属性 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
 | `cosec.audit.enabled` | `Boolean` | `true` | 是否审计授权决策。 |
+| `cosec.audit.kafka.enabled` | `Boolean` | `true` | 存在 `kafka-support` 时使用 Kafka 替代日志 Sink。 |
+| `cosec.audit.kafka.topic` | `String` | `cosec-audit` | 审计事件发送到的 Kafka Topic。 |
 
 定义在 `AuditProperties`（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/audit/AuditProperties.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/audit/AuditProperties.kt#L26)）中。
 
@@ -157,6 +159,10 @@ flowchart TD
 `AuditEventSink` bean 可将事件接入 Kafka/ES/数据库。若你用自定义 bean 替换了默认的
 `Authorization`，审计装配会自动让位（装饰器仅包裹自动配置的 `cosecAuthorization`
 bean）。
+
+`kafka-support` 功能会使用异步 `KafkaAuditEventSink` 替代日志 Sink。每条消息以
+`tenantId:principalId` 为 Key，以单行 `AuditEvent` JSON 为 Value。Broker 通过
+`spring.kafka.*` 配置；CoSec 不负责创建 Topic。
 
 ### 网关属性（`cosec.authorization.gateway.*`）
 
@@ -225,6 +231,10 @@ sequenceDiagram
 ## 示例 Application.yaml
 
 ```yaml
+spring:
+  kafka:
+    bootstrap-servers: "localhost:9092"
+
 cosec:
   # 主开关
   enabled: true
@@ -267,6 +277,13 @@ cosec:
     gateway:
       enabled: true
 
+  # 审计
+  audit:
+    enabled: true
+    kafka:
+      enabled: true
+      topic: "cosec-audit"
+
   # IP 地理定位
   ip2region:
     enabled: true
@@ -290,6 +307,7 @@ flowchart LR
     STARTER --> IP["ip2region-support"]
     STARTER --> OT["opentelemetry-support"]
     STARTER --> OAPI["openapi-support"]
+    STARTER --> K["kafka-support"]
 
     style STARTER fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style W fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -300,6 +318,7 @@ flowchart LR
     style IP fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style OT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style OAPI fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style K fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
 
@@ -313,6 +332,7 @@ flowchart LR
 | `ip2region-support` | `cosec-ip2region` | ip2region 库 |
 | `opentelemetry-support` | `cosec-opentelemetry` | OpenTelemetry |
 | `openapi-support` | `cosec-openapi` | SpringDoc OpenAPI |
+| `kafka-support` | `cosec-kafka` | Spring for Apache Kafka |
 
 功能变体在 `build.gradle.kts`（[cosec-spring-boot-starter/build.gradle.kts:18](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts#L18)）中声明。
 

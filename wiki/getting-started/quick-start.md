@@ -37,6 +37,8 @@ dependencies {
     // requireCapability("me.ahoo.cosec:gateway-support")
     // Or for caching (Redis):
     // requireCapability("me.ahoo.cosec:cache-support")
+    // Or for Kafka auditing:
+    // requireCapability("me.ahoo.cosec:kafka-support")
 }
 ```
 
