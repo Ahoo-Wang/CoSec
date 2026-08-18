@@ -42,15 +42,15 @@ interface VerifyContext {
             this.setAttributeValue(KEY, verifyContext)
         }
 
-        fun SecurityContext.clearVerifyContext() {
-            attributes.remove(KEY)
-        }
-
         /**
          * Gets the verification context from a security context.
          */
         fun SecurityContext.getVerifyContext(): VerifyContext? = this.getAttributeValue(KEY)
     }
+}
+
+internal class VerifyContextScope {
+    var value: VerifyContext? = null
 }
 
 /**

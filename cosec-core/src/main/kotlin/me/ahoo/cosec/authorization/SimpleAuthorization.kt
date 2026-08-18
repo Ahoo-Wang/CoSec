@@ -202,7 +202,7 @@ class SimpleAuthorization(
     private fun verify(
         request: Request,
         context: SecurityContext
-    ): Mono<AuthorizeResult> =
+    ): Mono<AuthorizeResult> = Mono.deferContextual { reactorContext ->
         verifyGlobalPolicies(request, context)
             .switchIfEmpty {
                 verifyPrincipalPolicies(request, context)
@@ -210,6 +210,8 @@ class SimpleAuthorization(
                 verifyAppRolePermission(request, context)
             }.map {
                 context.setVerifyContext(it)
+                reactorContext.getOrEmpty<VerifyContextScope>(VerifyContextScope::class.java)
+                    .ifPresent { scope -> scope.value = it }
                 it.result.toAuthorizeResult()
             }.switchIfEmpty {
                 log.debug {
@@ -217,6 +219,7 @@ class SimpleAuthorization(
                 }
                 AuthorizeResult.IMPLICIT_DENY.toMono()
             }
+    }
 
     override fun authorize(
         request: Request,

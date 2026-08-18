@@ -22,6 +22,7 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.authorization.RoleVerifyContext
+import me.ahoo.cosec.authorization.VerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.getVerifyContext
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
@@ -37,8 +38,8 @@ object AuditEventExtractor {
         context: SecurityContext,
         result: AuthorizeResult,
         elapsedNanos: Long,
+        verifyContext: VerifyContext? = context.getVerifyContext(),
     ): AuditEvent {
-        val verifyContext = context.getVerifyContext()
         return eventOf(
             request = request,
             context = context,
@@ -54,13 +55,14 @@ object AuditEventExtractor {
         context: SecurityContext,
         error: Throwable,
         elapsedNanos: Long,
+        verifyContext: VerifyContext? = context.getVerifyContext(),
     ): AuditEvent {
         val (decision, reason) = when (error) {
             is TooManyRequestsException -> AuditDecision.TOO_MANY_REQUESTS to AuthorizeResult.TOO_MANY_REQUESTS.reason
             is RegexTimeoutException -> AuditDecision.IMPLICIT_DENY to AuthorizeResult.IMPLICIT_DENY.reason
             else -> AuditDecision.ERROR to error.javaClass.simpleName
         }
-        return eventOf(request, context, decision, reason, elapsedNanos, verifyContext = context.getVerifyContext())
+        return eventOf(request, context, decision, reason, elapsedNanos, verifyContext)
     }
 
     private fun toDecision(result: AuthorizeResult): AuditDecision {
@@ -78,7 +80,7 @@ object AuditEventExtractor {
         decision: AuditDecision,
         reason: String,
         elapsedNanos: Long,
-        verifyContext: me.ahoo.cosec.authorization.VerifyContext?,
+        verifyContext: VerifyContext?,
     ): AuditEvent {
         val match = when (verifyContext) {
             is PolicyVerifyContext -> AuditMatch(

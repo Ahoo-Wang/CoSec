@@ -20,7 +20,7 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.authorization.VerifyContext.Companion.clearVerifyContext
+import me.ahoo.cosec.authorization.VerifyContextScope
 import me.ahoo.cosec.token.TokenVerificationContexts.getTokenVerificationException
 import me.ahoo.cosec.token.toAuthorizeResult
 import reactor.core.publisher.Mono
@@ -39,7 +39,7 @@ class AuditingAuthorization(
     override fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
         return Mono.defer {
             val startNanos = System.nanoTime()
-            context.clearVerifyContext()
+            val verifyContextScope = VerifyContextScope()
             Mono.defer { delegate.authorize(request = request, context = context) }
                 .doOnSuccess { result ->
                     publishSafely {
@@ -53,6 +53,7 @@ class AuditingAuthorization(
                             context = context,
                             result = effectiveResult,
                             elapsedNanos = System.nanoTime() - startNanos,
+                            verifyContext = verifyContextScope.value,
                         )
                     }
                 }
@@ -63,9 +64,11 @@ class AuditingAuthorization(
                             context = context,
                             error = error,
                             elapsedNanos = System.nanoTime() - startNanos,
+                            verifyContext = verifyContextScope.value,
                         )
                     }
                 }
+                .contextWrite { it.put(VerifyContextScope::class.java, verifyContextScope) }
         }
     }
 

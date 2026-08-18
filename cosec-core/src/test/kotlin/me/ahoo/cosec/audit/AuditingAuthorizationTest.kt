@@ -22,20 +22,35 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
+import me.ahoo.cosec.authorization.AppRolePermissionRepository
+import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.PolicyVerifyContext
+import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
+import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.policy.StatementData
+import me.ahoo.cosec.policy.action.AllActionMatcher
+import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
+import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.toMono
 import reactor.kotlin.test.test
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class AuditingAuthorizationTest {
     private val attributeMap = mutableMapOf<String, Any>()
@@ -118,6 +133,62 @@ class AuditingAuthorizationTest {
             decision.assert().isEqualTo(AuditDecision.IMPLICIT_DENY)
             match.assert().isNull()
         }
+    }
+
+    @Test
+    fun isolateVerifyContextPerConcurrentAuthorization() {
+        val firstPolicy = mockk<Policy> {
+            every { id } returns "first-policy"
+            every { condition } returns AllConditionMatcher.INSTANCE
+            every { statements } returns listOf(
+                StatementData(name = "first-statement", effect = Effect.ALLOW, action = AllActionMatcher.INSTANCE),
+            )
+        }
+        val secondPolicy = mockk<Policy> {
+            every { id } returns "second-policy"
+            every { condition } returns AllConditionMatcher.INSTANCE
+            every { statements } returns listOf(
+                StatementData(name = "second-statement", effect = Effect.ALLOW, action = AllActionMatcher.INSTANCE),
+            )
+        }
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returnsMany listOf(listOf(firstPolicy).toMono(), listOf(secondPolicy).toMono())
+        }
+        val delegate = SimpleAuthorization(policyRepository, mockk<AppRolePermissionRepository>())
+        val events = CopyOnWriteArrayList<AuditEvent>()
+        val authorization = AuditingAuthorization(delegate, AuditEventSink(events::add))
+        val firstStored = CountDownLatch(1)
+        val secondStored = CountDownLatch(1)
+        val backingAttributes = ConcurrentHashMap<String, Any>()
+        val attributes = object : MutableMap<String, Any> by backingAttributes {
+            override fun put(key: String, value: Any): Any? {
+                val previous = backingAttributes.put(key, value)
+                when ((value as? PolicyVerifyContext)?.policy?.id) {
+                    "first-policy" -> {
+                        firstStored.countDown()
+                        secondStored.await(5, TimeUnit.SECONDS).assert().isTrue()
+                    }
+
+                    "second-policy" -> secondStored.countDown()
+                }
+                return previous
+            }
+        }
+        val sharedContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS, attributes = attributes)
+        val firstRequest = requestForPath("/first")
+        val secondRequest = requestForPath("/second")
+
+        val first = authorization.authorize(firstRequest, sharedContext)
+            .subscribeOn(Schedulers.boundedElastic())
+            .toFuture()
+        firstStored.await(5, TimeUnit.SECONDS).assert().isTrue()
+        val second = authorization.authorize(secondRequest, sharedContext)
+            .subscribeOn(Schedulers.boundedElastic())
+            .toFuture()
+        CompletableFuture.allOf(first, second).get(5, TimeUnit.SECONDS)
+
+        events.single { it.path == "/first" }.match?.policyId.assert().isEqualTo("first-policy")
+        events.single { it.path == "/second" }.match?.policyId.assert().isEqualTo("second-policy")
     }
 
     @Test
@@ -223,5 +294,16 @@ class AuditingAuthorizationTest {
         val delegate = mockk<Authorization>()
         val authorization = AuditingAuthorization(delegate, AuditEventSink { })
         authorization.delegate.assert().isSameAs(delegate)
+    }
+
+    private fun requestForPath(path: String) = mockk<Request> {
+        every { appId } returns "app"
+        every { spaceId } returns "0"
+        every { deviceId } returns ""
+        every { requestId } returns path
+        every { remoteIp } returns "1.2.3.4"
+        every { method } returns "GET"
+        every { this@mockk.path } returns path
+        every { getHeader("User-Agent") } returns "test-agent"
     }
 }
