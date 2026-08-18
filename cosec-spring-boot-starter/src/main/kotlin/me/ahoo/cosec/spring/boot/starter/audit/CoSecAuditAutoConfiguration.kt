@@ -22,12 +22,9 @@ import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoCon
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Primary
 
 /**
  * CoSec Audit AutoConfiguration.
@@ -47,9 +44,7 @@ class CoSecAuditAutoConfiguration {
     }
 
     @Bean(AUDITING_AUTHORIZATION_BEAN_NAME)
-    @Primary
     @ConditionalOnBean(name = [CoSecAuthorizationAutoConfiguration.BEAN_NAME])
-    @ConditionalOnMissingClass(OPENTELEMETRY_INSTRUMENTER_CLASS)
     fun cosecAuditingAuthorization(
         @Qualifier(CoSecAuthorizationAutoConfiguration.BEAN_NAME) authorization: Authorization,
         auditEventSink: AuditEventSink,
@@ -57,24 +52,7 @@ class CoSecAuditAutoConfiguration {
         return AuditingAuthorization(authorization, auditEventSink)
     }
 
-    @Bean(AUDITING_AUTHORIZATION_INNER_BEAN_NAME)
-    @ConditionalOnBean(name = [CoSecAuthorizationAutoConfiguration.BEAN_NAME])
-    @ConditionalOnClass(
-        name = [
-            OPENTELEMETRY_INSTRUMENTER_CLASS,
-            "io.opentelemetry.api.trace.Span",
-        ],
-    )
-    fun cosecAuditingAuthorizationInner(
-        @Qualifier(CoSecAuthorizationAutoConfiguration.BEAN_NAME) authorization: Authorization,
-        auditEventSink: AuditEventSink,
-    ): AuditingAuthorization {
-        return AuditingAuthorization(authorization, auditEventSink)
-    }
-
     companion object {
-        const val AUDITING_AUTHORIZATION_INNER_BEAN_NAME = "cosecAuditingAuthorizationInner"
         const val AUDITING_AUTHORIZATION_BEAN_NAME = "cosecAuditingAuthorization"
-        private const val OPENTELEMETRY_INSTRUMENTER_CLASS = "me.ahoo.cosec.opentelemetry.CoSecInstrumenter"
     }
 }

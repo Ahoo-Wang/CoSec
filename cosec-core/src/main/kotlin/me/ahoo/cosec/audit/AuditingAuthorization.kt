@@ -36,7 +36,7 @@ class AuditingAuthorization(
     override fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
         return Mono.defer {
             val startNanos = System.nanoTime()
-            delegate.authorize(request = request, context = context)
+            Mono.defer { delegate.authorize(request = request, context = context) }
                 .doOnNext { result ->
                     publishSafely {
                         AuditEventExtractor.fromDecision(

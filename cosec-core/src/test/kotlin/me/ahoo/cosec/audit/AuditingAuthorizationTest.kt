@@ -107,6 +107,20 @@ class AuditingAuthorizationTest {
     }
 
     @Test
+    fun publishWhenDelegateThrowsSynchronously() {
+        val events = mutableListOf<AuditEvent>()
+        val delegate = mockk<Authorization> {
+            every { authorize(request, context) } throws TooManyRequestsException()
+        }
+        val authorization = AuditingAuthorization(delegate, AuditEventSink(events::add))
+        authorization.authorize(request, context)
+            .test()
+            .expectError(TooManyRequestsException::class.java)
+            .verify()
+        events.single().decision.assert().isEqualTo(AuditDecision.TOO_MANY_REQUESTS)
+    }
+
+    @Test
     fun sinkFailureDoesNotAffectAuthorization() {
         val delegate = mockk<Authorization> {
             every { authorize(request, context) } returns AuthorizeResult.ALLOW.toMono()

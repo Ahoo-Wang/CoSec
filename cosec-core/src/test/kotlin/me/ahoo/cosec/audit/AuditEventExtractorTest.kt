@@ -27,6 +27,7 @@ import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
+import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -121,6 +122,13 @@ class AuditEventExtractorTest {
         )
         event.decision.assert().isEqualTo(me.ahoo.cosec.api.audit.AuditDecision.TOO_MANY_REQUESTS)
         event.reason.assert().isEqualTo("Too Many Requests")
+    }
+
+    @Test
+    fun fromErrorWhenRegexTimeout() {
+        val event = AuditEventExtractor.fromError(request, context, RegexTimeoutException("timeout"), elapsedNanos = 1)
+        event.decision.assert().isEqualTo(me.ahoo.cosec.api.audit.AuditDecision.IMPLICIT_DENY)
+        event.reason.assert().isEqualTo("Implicit Deny")
     }
 
     @Test

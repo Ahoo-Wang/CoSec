@@ -34,7 +34,10 @@ class CoSecAuditAutoConfigurationTest {
         contextRunner
             .withClassLoader(FilteredClassLoader("me.ahoo.cosec.opentelemetry.CoSecInstrumenter"))
             .withBean(CoSecAuthorizationAutoConfiguration.BEAN_NAME, Authorization::class.java, Supplier { mockk() })
-            .withUserConfiguration(CoSecAuditAutoConfiguration::class.java)
+            .withUserConfiguration(
+                CoSecAuditAutoConfiguration::class.java,
+                CoSecAuditFallbackAutoConfiguration::class.java,
+            )
             .run { context: AssertableApplicationContext ->
                 assertThat(context).hasSingleBean(AuditingAuthorization::class.java)
                 assertThat(context).hasSingleBean(LoggingAuditEventSink::class.java)
@@ -77,6 +80,20 @@ class CoSecAuditAutoConfigurationTest {
             .withUserConfiguration(CoSecAuditAutoConfiguration::class.java)
             .run { context: AssertableApplicationContext ->
                 assertThat(context).doesNotHaveBean(AuditingAuthorization::class.java)
+            }
+    }
+
+    @Test
+    fun auditRemainsPrimaryWhenOpenTelemetryAutoConfigurationIsAbsent() {
+        contextRunner
+            .withBean(CoSecAuthorizationAutoConfiguration.BEAN_NAME, Authorization::class.java, Supplier { mockk() })
+            .withUserConfiguration(
+                CoSecAuditAutoConfiguration::class.java,
+                CoSecAuditFallbackAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                assertThat(context).hasSingleBean(AuditingAuthorization::class.java)
+                assertThat(context.getBean(Authorization::class.java)).isInstanceOf(AuditingAuthorization::class.java)
             }
     }
 }

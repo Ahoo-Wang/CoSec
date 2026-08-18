@@ -23,6 +23,7 @@ import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.getVerifyContext
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
+import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import java.time.Instant
 
 /**
@@ -53,13 +54,10 @@ object AuditEventExtractor {
         error: Throwable,
         elapsedNanos: Long,
     ): AuditEvent {
-        val decision = when (error) {
-            is TooManyRequestsException -> AuditDecision.TOO_MANY_REQUESTS
-            else -> AuditDecision.ERROR
-        }
-        val reason = when (error) {
-            is TooManyRequestsException -> AuthorizeResult.TOO_MANY_REQUESTS.reason
-            else -> error.javaClass.simpleName
+        val (decision, reason) = when (error) {
+            is TooManyRequestsException -> AuditDecision.TOO_MANY_REQUESTS to AuthorizeResult.TOO_MANY_REQUESTS.reason
+            is RegexTimeoutException -> AuditDecision.IMPLICIT_DENY to AuthorizeResult.IMPLICIT_DENY.reason
+            else -> AuditDecision.ERROR to error.javaClass.simpleName
         }
         return eventOf(request, context, decision, reason, elapsedNanos, verifyContext = context.getVerifyContext())
     }

@@ -14,6 +14,7 @@
 package me.ahoo.cosec.spring.boot.starter.audit
 
 import io.mockk.mockk
+import me.ahoo.cosec.api.audit.AuditEventSink
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.audit.AuditingAuthorization
 import me.ahoo.cosec.opentelemetry.TracingAuthorization
@@ -39,7 +40,8 @@ class AuditOpenTelemetryCompositionTest {
             )
             .withUserConfiguration(
                 CoSecAuditAutoConfiguration::class.java,
-                CoSecOpenTelemetryAutoConfiguration::class.java
+                CoSecOpenTelemetryAutoConfiguration::class.java,
+                CoSecAuditFallbackAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
                 assertThat(context).hasSingleBean(AuditingAuthorization::class.java)
@@ -66,7 +68,8 @@ class AuditOpenTelemetryCompositionTest {
             )
             .withUserConfiguration(
                 CoSecAuditAutoConfiguration::class.java,
-                CoSecOpenTelemetryAutoConfiguration::class.java
+                CoSecOpenTelemetryAutoConfiguration::class.java,
+                CoSecAuditFallbackAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
                 assertThat(context).doesNotHaveBean(AuditingAuthorization::class.java)
@@ -84,9 +87,33 @@ class AuditOpenTelemetryCompositionTest {
                 Authorization::class.java,
                 Supplier { mockk() },
             )
-            .withUserConfiguration(CoSecAuditAutoConfiguration::class.java)
+            .withUserConfiguration(
+                CoSecAuditAutoConfiguration::class.java,
+                CoSecAuditFallbackAutoConfiguration::class.java,
+            )
             .run { context: AssertableApplicationContext ->
                 assertThat(context.getBean(Authorization::class.java)).isInstanceOf(AuditingAuthorization::class.java)
+            }
+    }
+
+    @Test
+    fun customAuditingAuthorizationIsTracedWithoutInternalBeanName() {
+        val customAuthorization = AuditingAuthorization(mockk(), AuditEventSink { })
+        contextRunner
+            .withBean(
+                "customAuthorization",
+                AuditingAuthorization::class.java,
+                Supplier { customAuthorization },
+            )
+            .withUserConfiguration(
+                CoSecAuditAutoConfiguration::class.java,
+                CoSecOpenTelemetryAutoConfiguration::class.java,
+                CoSecAuditFallbackAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                val authorization = context.getBean(Authorization::class.java)
+                assertThat(authorization).isInstanceOf(TracingAuthorization::class.java)
+                assertThat((authorization as TracingAuthorization).delegate).isSameAs(customAuthorization)
             }
     }
 }
