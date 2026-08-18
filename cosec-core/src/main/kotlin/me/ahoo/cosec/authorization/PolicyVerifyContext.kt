@@ -49,6 +49,10 @@ interface VerifyContext {
     }
 }
 
+internal class VerifyContextScope {
+    var value: VerifyContext? = null
+}
+
 /**
  * Verification context for policy-based authorization.
  *

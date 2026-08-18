@@ -140,6 +140,26 @@ Controls the Redis-backed distributed rate limiter matchers (`redisRateLimiter`,
 
 Defined in `LimiterProperties` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/limiter/LimiterProperties.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/limiter/LimiterProperties.kt#L26)).
 
+### Audit Log (`cosec.audit.*`)
+
+Controls audit logging of authorization decisions.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `cosec.audit.enabled` | `Boolean` | `true` | Whether to audit authorization decisions. |
+
+Defined in `AuditProperties` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/audit/AuditProperties.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/audit/AuditProperties.kt#L26)).
+
+Every authorization decision is published as a structured `AuditEvent` to the
+`AuditEventSink` SPI. The default `LoggingAuditEventSink` writes single-line JSON
+to the logger `me.ahoo.cosec.audit` — denials at `WARN`, unexpected errors at
+`ERROR`, allows at `DEBUG` (so the default `INFO` level only surfaces denials).
+Set `logging.level.me.ahoo.cosec.audit=DEBUG` for full auditing, or register your
+own `AuditEventSink` bean to ship events to Kafka/Elasticsearch/your database.
+If you replace the default `Authorization` bean with your own, audit wiring steps
+aside automatically (the decorator only wraps the auto-configured
+`cosecAuthorization` bean).
+
 ### Gateway Properties (`cosec.authorization.gateway.*`)
 
 | Property | Type | Default | Description |

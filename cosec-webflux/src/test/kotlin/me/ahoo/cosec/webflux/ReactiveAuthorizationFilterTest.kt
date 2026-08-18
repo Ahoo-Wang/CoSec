@@ -21,6 +21,7 @@ import io.mockk.runs
 import io.mockk.verify
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.RequestIdCapable
 import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
 import me.ahoo.cosec.context.SecurityContextParser
@@ -30,6 +31,7 @@ import me.ahoo.cosec.jwt.Jwts
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.token.TokenVerificationContexts.getTokenVerificationException
 import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.webflux.ReactiveAuthorizationFilter.Companion.REACTIVE_AUTHORIZATION_FILTER_ORDER
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
@@ -85,7 +87,10 @@ internal class ReactiveAuthorizationFilterTest {
     @Test
     fun filterWhenTokenInvalid() {
         val authorization = mockk<Authorization> {
-            every { authorize(any(), any()) } returns AuthorizeResult.EXPLICIT_DENY.toMono()
+            every { authorize(any(), any()) } answers {
+                secondArg<SecurityContext>().getTokenVerificationException().assert().isNotNull()
+                AuthorizeResult.EXPLICIT_DENY.toMono()
+            }
         }
         val securityContextParser = mockk<SecurityContextParser> {
             every { parse(any()) } throws TokenVerificationException()

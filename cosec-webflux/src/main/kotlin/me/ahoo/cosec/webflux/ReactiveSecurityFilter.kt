@@ -26,6 +26,8 @@ import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.token.TokenVerificationContexts.getTokenVerificationException
+import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationException
 import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.toAuthorizeResult
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
@@ -75,7 +77,6 @@ abstract class ReactiveSecurityFilter(
             exchange.response.statusCode = HttpStatus.BAD_REQUEST
             return Mono.empty()
         }
-        var tokenVerificationException: TokenVerificationException? = null
         val securityContext =
             try {
                 securityContextParser.parse(request)
@@ -83,8 +84,9 @@ abstract class ReactiveSecurityFilter(
                 log.debug(verificationException) {
                     "Parse request to security context failed."
                 }
-                tokenVerificationException = verificationException
-                SimpleSecurityContext.anonymous()
+                SimpleSecurityContext.anonymous().also {
+                    it.setTokenVerificationException(verificationException)
+                }
             }
         securityContext.setRequest(request)
         exchange.setSecurityContext(securityContext)
@@ -106,7 +108,7 @@ abstract class ReactiveSecurityFilter(
                     exchange.response.statusCode = HttpStatus.FORBIDDEN
                 }
                 exchange.response.writeWithAuthorizeResult(
-                    tokenVerificationException?.toAuthorizeResult() ?: authorizeResult,
+                    securityContext.getTokenVerificationException()?.toAuthorizeResult() ?: authorizeResult,
                 ).then(Mono.empty())
             }.onAuthorizeError(exchange, request)
         return authorizedExchange.flatMap { authorized ->

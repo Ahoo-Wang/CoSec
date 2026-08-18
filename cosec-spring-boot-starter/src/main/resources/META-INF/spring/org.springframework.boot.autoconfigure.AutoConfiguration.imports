@@ -14,3 +14,5 @@ me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.actuate.CoSecEndpointAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.openapi.CoSecOpenAPIAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.authorization.limiter.CoSecRedisRateLimiterAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.audit.CoSecAuditAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.audit.CoSecAuditFallbackAutoConfiguration

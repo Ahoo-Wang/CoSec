@@ -16,18 +16,39 @@ package me.ahoo.cosec.spring.boot.starter.opentelemetry
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.opentelemetry.TracingAuthorization
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.starter.audit.CoSecAuditAutoConfiguration
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Primary
 
-@AutoConfiguration
+@AutoConfiguration(after = [CoSecAuditAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
 @ConditionalOnOpenTelemetryEnabled
 class CoSecOpenTelemetryAutoConfiguration {
 
-    @Bean
+    @Bean(TRACING_AUTHORIZATION_BEAN_NAME)
     @Primary
+    @ConditionalOnMissingBean(name = [CoSecAuditAutoConfiguration.AUDITING_AUTHORIZATION_BEAN_NAME])
     fun tracingAuthorization(authorization: Authorization): Authorization {
         return TracingAuthorization(authorization)
+    }
+
+    @Bean(name = [AUDITED_TRACING_AUTHORIZATION_BEAN_NAME, TRACING_AUTHORIZATION_BEAN_NAME])
+    @Primary
+    @ConditionalOnBean(name = [CoSecAuditAutoConfiguration.AUDITING_AUTHORIZATION_BEAN_NAME])
+    fun auditedTracingAuthorization(
+        @Qualifier(
+            CoSecAuditAutoConfiguration.AUDITING_AUTHORIZATION_BEAN_NAME
+        ) auditingAuthorization: Authorization,
+    ): Authorization {
+        return TracingAuthorization(auditingAuthorization)
+    }
+
+    companion object {
+        const val TRACING_AUTHORIZATION_BEAN_NAME = "tracingAuthorization"
+        const val AUDITED_TRACING_AUTHORIZATION_BEAN_NAME = "auditedTracingAuthorization"
     }
 }
