@@ -22,16 +22,22 @@ import me.ahoo.cosec.api.audit.AuditEvent
 import me.ahoo.cosec.api.audit.AuditMatch
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.kafka.core.KafkaOperations
 import org.springframework.kafka.support.SendResult
+import reactor.core.scheduler.Scheduler
 import reactor.core.scheduler.Schedulers
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
+import java.util.concurrent.TimeUnit
 
 class KafkaAuditEventSinkTest {
+    private val sinks = mutableListOf<KafkaAuditEventSink>()
+
     private val event = AuditEvent(
         timestamp = Instant.parse("2026-08-18T00:00:00Z"),
         tenantId = "tenant-1",
@@ -52,6 +58,18 @@ class KafkaAuditEventSinkTest {
         match = AuditMatch(policyId = "orders", statementName = "read"),
     )
 
+    @AfterEach
+    fun destroySinks() {
+        sinks.forEach(KafkaAuditEventSink::destroy)
+    }
+
+    private fun sink(
+        kafkaOperations: KafkaOperations<String, String>,
+        scheduler: Scheduler = Schedulers.immediate(),
+    ): KafkaAuditEventSink {
+        return KafkaAuditEventSink(kafkaOperations, "cosec-audit", scheduler).also(sinks::add)
+    }
+
     @Test
     fun publishSchedulesJsonSend() {
         val result = CompletableFuture<SendResult<String, String>>()
@@ -60,7 +78,7 @@ class KafkaAuditEventSinkTest {
         }
         var scheduledTask: Runnable? = null
         val scheduler = Schedulers.fromExecutor(Executor { scheduledTask = it })
-        val sink = KafkaAuditEventSink(kafkaOperations, "cosec-audit", scheduler)
+        val sink = sink(kafkaOperations, scheduler)
 
         sink.publish(event)
 
@@ -82,7 +100,7 @@ class KafkaAuditEventSinkTest {
         val kafkaOperations = mockk<KafkaOperations<String, String>> {
             every { send(any(), capture(keys), any()) } returns CompletableFuture.completedFuture(mockk())
         }
-        val sink = KafkaAuditEventSink(kafkaOperations, "cosec-audit", Schedulers.immediate())
+        val sink = sink(kafkaOperations)
 
         sink.publish(event.copy(tenantId = "a", principalId = "b:c"))
         sink.publish(event.copy(tenantId = "a:b", principalId = "c"))
@@ -100,7 +118,7 @@ class KafkaAuditEventSinkTest {
             )
         }
 
-        KafkaAuditEventSink(kafkaOperations, "cosec-audit", Schedulers.immediate()).publish(event)
+        sink(kafkaOperations).publish(event)
     }
 
     @Test
@@ -109,7 +127,7 @@ class KafkaAuditEventSinkTest {
             every { send(any(), any(), any()) } throws IllegalStateException("Kafka unavailable")
         }
 
-        KafkaAuditEventSink(kafkaOperations, "cosec-audit", Schedulers.immediate()).publish(event)
+        sink(kafkaOperations).publish(event)
     }
 
     @Test
@@ -117,5 +135,27 @@ class KafkaAuditEventSinkTest {
         assertThrows<IllegalArgumentException> {
             KafkaAuditEventSink(mockk(), " ")
         }
+    }
+
+    @Test
+    fun serialSchedulerPreservesSendOrder() {
+        val values = mutableListOf<String>()
+        val sent = CountDownLatch(2)
+        val kafkaOperations = mockk<KafkaOperations<String, String>> {
+            every { send(any(), any(), capture(values)) } answers {
+                sent.countDown()
+                CompletableFuture.completedFuture(mockk())
+            }
+        }
+        val sink = KafkaAuditEventSink(kafkaOperations, "cosec-audit").also(sinks::add)
+        val first = event.copy(requestId = "request-1")
+        val second = event.copy(requestId = "request-2")
+
+        sink.publish(first)
+        sink.publish(second)
+
+        sent.await(5, TimeUnit.SECONDS).assert().isTrue()
+        values[0].assert().isEqualTo(CoSecJsonSerializer.writeValueAsString(first))
+        values[1].assert().isEqualTo(CoSecJsonSerializer.writeValueAsString(second))
     }
 }

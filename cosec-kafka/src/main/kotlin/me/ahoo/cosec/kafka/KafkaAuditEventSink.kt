@@ -17,6 +17,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.audit.AuditEvent
 import me.ahoo.cosec.api.audit.AuditEventSink
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import org.springframework.beans.factory.DisposableBean
 import org.springframework.kafka.core.KafkaOperations
 import reactor.core.scheduler.Scheduler
 import reactor.core.scheduler.Schedulers
@@ -24,14 +25,16 @@ import reactor.core.scheduler.Schedulers
 class KafkaAuditEventSink(
     private val kafkaOperations: KafkaOperations<String, String>,
     private val topic: String,
-    private val scheduler: Scheduler = Schedulers.boundedElastic(),
-) : AuditEventSink {
+    private val scheduler: Scheduler = Schedulers.newSingle("cosec-kafka-audit"),
+) : AuditEventSink,
+    DisposableBean {
     init {
         require(topic.isNotBlank()) { "topic must not be blank." }
     }
 
     @Suppress("TooGenericExceptionCaught")
     override fun publish(event: AuditEvent) {
+        // ponytail: one scheduler preserves audit order; shard by key if send throughput becomes a bottleneck.
         scheduler.schedule {
             try {
                 kafkaOperations.send(
@@ -47,6 +50,10 @@ class KafkaAuditEventSink(
                 logFailure(error)
             }
         }
+    }
+
+    override fun destroy() {
+        scheduler.dispose()
     }
 
     private fun logFailure(error: Throwable) {

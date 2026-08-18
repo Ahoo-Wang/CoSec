@@ -21,10 +21,10 @@ import me.ahoo.cosec.spring.boot.starter.audit.CoSecAuditAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.audit.ConditionalOnAuditEnabled
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.kafka.core.KafkaTemplate
@@ -36,7 +36,7 @@ import org.springframework.kafka.core.KafkaTemplate
 @ConditionalOnCoSecEnabled
 @ConditionalOnAuditEnabled
 @ConditionalOnClass(KafkaAuditEventSink::class, KafkaTemplate::class)
-@ConditionalOnSingleCandidate(KafkaTemplate::class)
+@ConditionalOnBean(KafkaTemplate::class)
 @ConditionalOnMissingBean(AuditEventSink::class)
 @ConditionalOnProperty(
     prefix = KafkaAuditProperties.PREFIX,

@@ -37,6 +37,15 @@ private class DomainKafkaTemplateTestConfiguration {
     fun domainKafkaTemplate(): KafkaTemplate<String, DomainEvent> = mockk(relaxed = true)
 }
 
+@Configuration(proxyBeanMethods = false)
+private class HeterogeneousKafkaTemplateTestConfiguration {
+    @Bean
+    fun stringKafkaTemplate(): KafkaTemplate<String, String> = mockk(relaxed = true)
+
+    @Bean
+    fun domainKafkaTemplate(): KafkaTemplate<String, DomainEvent> = mockk(relaxed = true)
+}
+
 class CoSecKafkaAuditAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
         .withConfiguration(
@@ -80,6 +89,15 @@ class CoSecKafkaAuditAutoConfigurationTest {
             .withUserConfiguration(DomainKafkaTemplateTestConfiguration::class.java)
             .run { context ->
                 context.getBean(AuditEventSink::class.java).assert().isInstanceOf(LoggingAuditEventSink::class.java)
+            }
+    }
+
+    @Test
+    fun heterogeneousKafkaTemplatesSelectStringTemplate() {
+        contextRunner
+            .withUserConfiguration(HeterogeneousKafkaTemplateTestConfiguration::class.java)
+            .run { context ->
+                context.getBean(AuditEventSink::class.java).assert().isInstanceOf(KafkaAuditEventSink::class.java)
             }
     }
 
