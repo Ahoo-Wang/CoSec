@@ -25,6 +25,8 @@ import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
+import me.ahoo.cosec.token.TokenVerificationContexts.getTokenVerificationException
+import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationException
 import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.toAuthorizeResult
 import org.springframework.http.HttpStatus
@@ -62,13 +64,13 @@ abstract class AbstractAuthorizationInterceptor(
         servletResponse: HttpServletResponse
     ): Boolean {
         val request = requestParser.parse(servletRequest)
-        var tokenVerificationException: TokenVerificationException? = null
         val securityContext =
             try {
                 securityContextParser.parse(request)
             } catch (verificationException: TokenVerificationException) {
-                tokenVerificationException = verificationException
-                SimpleSecurityContext.anonymous()
+                SimpleSecurityContext.anonymous().also {
+                    it.setTokenVerificationException(verificationException)
+                }
             }
         securityContext.setRequest(request)
         SecurityContextHolder.setContext(securityContext)
@@ -85,7 +87,7 @@ abstract class AbstractAuthorizationInterceptor(
                     }
 
                     servletResponse.writeWithAuthorizeResult(
-                        tokenVerificationException?.toAuthorizeResult() ?: it,
+                        securityContext.getTokenVerificationException()?.toAuthorizeResult() ?: it,
                     )
                     return@map false
                 }

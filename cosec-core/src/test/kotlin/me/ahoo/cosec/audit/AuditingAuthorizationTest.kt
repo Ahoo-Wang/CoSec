@@ -22,7 +22,14 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.api.policy.VerifyResult
+import me.ahoo.cosec.authorization.PolicyVerifyContext
+import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
+import me.ahoo.cosec.token.TokenExpiredException
+import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
@@ -83,6 +90,45 @@ class AuditingAuthorizationTest {
             .expectNext(AuthorizeResult.EXPLICIT_DENY)
             .verifyComplete()
         events[0].decision.assert().isEqualTo(AuditDecision.EXPLICIT_DENY)
+    }
+
+    @Test
+    fun publishImplicitDenyWhenDelegateCompletesEmpty() {
+        val (authorization, events) = authorization(Mono.empty())
+        authorization.authorize(request, context)
+            .test()
+            .verifyComplete()
+        events.single().decision.assert().isEqualTo(AuditDecision.IMPLICIT_DENY)
+    }
+
+    @Test
+    fun clearStaleVerifyContextBeforeAuthorization() {
+        context.setVerifyContext(
+            PolicyVerifyContext(
+                policy = mockk<Policy> { every { id } returns "stale-policy" },
+                statementIndex = 0,
+                statement = mockk<Statement> { every { name } returns "stale-statement" },
+                result = VerifyResult.EXPLICIT_DENY,
+            )
+        )
+        val (authorization, events) = authorization(AuthorizeResult.IMPLICIT_DENY.toMono())
+        authorization.authorize(request, context).block()
+        events.single().apply {
+            decision.assert().isEqualTo(AuditDecision.IMPLICIT_DENY)
+            matchedPolicyId.assert().isNull()
+            matchedStatementName.assert().isNull()
+        }
+    }
+
+    @Test
+    fun publishTokenFailureReturnedToClient() {
+        context.setTokenVerificationException(TokenExpiredException())
+        val (authorization, events) = authorization(AuthorizeResult.IMPLICIT_DENY.toMono())
+        authorization.authorize(request, context).block()
+        events.single().apply {
+            decision.assert().isEqualTo(AuditDecision.EXPLICIT_DENY)
+            reason.assert().isEqualTo("Token Expired")
+        }
     }
 
     @Test

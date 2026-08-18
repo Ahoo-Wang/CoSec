@@ -20,7 +20,7 @@ import me.ahoo.cosec.audit.AuditingAuthorization
 import me.ahoo.cosec.opentelemetry.TracingAuthorization
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.opentelemetry.CoSecOpenTelemetryAutoConfiguration
-import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
@@ -44,22 +44,20 @@ class AuditOpenTelemetryCompositionTest {
                 CoSecAuditFallbackAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
-                assertThat(context).hasSingleBean(AuditingAuthorization::class.java)
-                assertThat(context).hasSingleBean(TracingAuthorization::class.java)
+                context.getBeansOfType(AuditingAuthorization::class.java).assert().hasSize(1)
+                context.getBeansOfType(TracingAuthorization::class.java).assert().hasSize(1)
                 val authorization = context.getBean(Authorization::class.java)
-                assertThat(authorization).isInstanceOf(TracingAuthorization::class.java)
-                assertThat(
-                    context.getBean(
-                        CoSecOpenTelemetryAutoConfiguration.TRACING_AUTHORIZATION_BEAN_NAME,
-                        Authorization::class.java,
-                    )
-                ).isSameAs(authorization)
+                authorization.assert().isInstanceOf(TracingAuthorization::class.java)
+                context.getBean(
+                    CoSecOpenTelemetryAutoConfiguration.TRACING_AUTHORIZATION_BEAN_NAME,
+                    Authorization::class.java,
+                ).assert().isSameAs(authorization)
                 val tracing = authorization as TracingAuthorization
-                assertThat(tracing.delegate).isInstanceOf(AuditingAuthorization::class.java)
+                tracing.delegate.assert().isInstanceOf(AuditingAuthorization::class.java)
                 val auditing = tracing.delegate as AuditingAuthorization
-                assertThat(
-                    auditing.delegate
-                ).isSameAs(context.getBean(CoSecAuthorizationAutoConfiguration.BEAN_NAME, Authorization::class.java))
+                auditing.delegate.assert().isSameAs(
+                    context.getBean(CoSecAuthorizationAutoConfiguration.BEAN_NAME, Authorization::class.java)
+                )
             }
     }
 
@@ -78,9 +76,9 @@ class AuditOpenTelemetryCompositionTest {
                 CoSecAuditFallbackAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
-                assertThat(context).doesNotHaveBean(AuditingAuthorization::class.java)
-                assertThat(context).hasSingleBean(TracingAuthorization::class.java)
-                assertThat(context.getBean(Authorization::class.java)).isInstanceOf(TracingAuthorization::class.java)
+                context.getBeansOfType(AuditingAuthorization::class.java).assert().isEmpty()
+                context.getBeansOfType(TracingAuthorization::class.java).assert().hasSize(1)
+                context.getBean(Authorization::class.java).assert().isInstanceOf(TracingAuthorization::class.java)
             }
     }
 
@@ -98,7 +96,7 @@ class AuditOpenTelemetryCompositionTest {
                 CoSecAuditFallbackAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
-                assertThat(context.getBean(Authorization::class.java)).isInstanceOf(AuditingAuthorization::class.java)
+                context.getBean(Authorization::class.java).assert().isInstanceOf(AuditingAuthorization::class.java)
             }
     }
 
@@ -118,8 +116,8 @@ class AuditOpenTelemetryCompositionTest {
             )
             .run { context: AssertableApplicationContext ->
                 val authorization = context.getBean(Authorization::class.java)
-                assertThat(authorization).isInstanceOf(TracingAuthorization::class.java)
-                assertThat((authorization as TracingAuthorization).delegate).isSameAs(customAuthorization)
+                authorization.assert().isInstanceOf(TracingAuthorization::class.java)
+                (authorization as TracingAuthorization).delegate.assert().isSameAs(customAuthorization)
             }
     }
 }

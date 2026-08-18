@@ -23,6 +23,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.RequestIdCapable
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
@@ -33,7 +34,9 @@ import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
+import me.ahoo.cosec.token.TokenVerificationContexts.getTokenVerificationException
 import me.ahoo.cosec.token.TokenVerificationException
+import me.ahoo.test.asserts.assert
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.equalTo
 import org.hamcrest.Matchers.nullValue
@@ -126,7 +129,10 @@ internal class AuthorizationFilterTest {
     @Test
     fun doFilterWhenTokenInvalid() {
         val authorization = mockk<Authorization> {
-            every { authorize(any(), any()) } returns AuthorizeResult.EXPLICIT_DENY.toMono()
+            every { authorize(any(), any()) } answers {
+                secondArg<SecurityContext>().getTokenVerificationException().assert().isNotNull()
+                AuthorizeResult.EXPLICIT_DENY.toMono()
+            }
         }
         val securityContextParser = mockk<SecurityContextParser> {
             every { parse(any()) } throws TokenVerificationException()

@@ -19,7 +19,7 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.audit.AuditingAuthorization
 import me.ahoo.cosec.audit.LoggingAuditEventSink
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
-import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
@@ -39,10 +39,10 @@ class CoSecAuditAutoConfigurationTest {
                 CoSecAuditFallbackAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
-                assertThat(context).hasSingleBean(AuditingAuthorization::class.java)
-                assertThat(context).hasSingleBean(LoggingAuditEventSink::class.java)
+                context.getBeansOfType(AuditingAuthorization::class.java).assert().hasSize(1)
+                context.getBeansOfType(LoggingAuditEventSink::class.java).assert().hasSize(1)
                 val authorization = context.getBean(Authorization::class.java)
-                assertThat(authorization).isInstanceOf(AuditingAuthorization::class.java)
+                authorization.assert().isInstanceOf(AuditingAuthorization::class.java)
             }
     }
 
@@ -54,8 +54,8 @@ class CoSecAuditAutoConfigurationTest {
             .withBean(CoSecAuthorizationAutoConfiguration.BEAN_NAME, Authorization::class.java, Supplier { mockk() })
             .withUserConfiguration(CoSecAuditAutoConfiguration::class.java)
             .run { context: AssertableApplicationContext ->
-                assertThat(context).doesNotHaveBean(AuditingAuthorization::class.java)
-                assertThat(context).doesNotHaveBean(AuditEventSink::class.java)
+                context.getBeansOfType(AuditingAuthorization::class.java).assert().isEmpty()
+                context.getBeansOfType(AuditEventSink::class.java).assert().isEmpty()
             }
     }
 
@@ -68,7 +68,7 @@ class CoSecAuditAutoConfigurationTest {
             .withUserConfiguration(CoSecAuditAutoConfiguration::class.java)
             .run { context: AssertableApplicationContext ->
                 val sink = context.getBean(AuditEventSink::class.java)
-                assertThat(sink).isNotInstanceOf(LoggingAuditEventSink::class.java)
+                (sink is LoggingAuditEventSink).assert().isFalse()
             }
     }
 
@@ -79,7 +79,7 @@ class CoSecAuditAutoConfigurationTest {
             .withBean("customAuthorization", Authorization::class.java, Supplier { mockk() })
             .withUserConfiguration(CoSecAuditAutoConfiguration::class.java)
             .run { context: AssertableApplicationContext ->
-                assertThat(context).doesNotHaveBean(AuditingAuthorization::class.java)
+                context.getBeansOfType(AuditingAuthorization::class.java).assert().isEmpty()
             }
     }
 
@@ -92,8 +92,8 @@ class CoSecAuditAutoConfigurationTest {
                 CoSecAuditFallbackAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
-                assertThat(context).hasSingleBean(AuditingAuthorization::class.java)
-                assertThat(context.getBean(Authorization::class.java)).isInstanceOf(AuditingAuthorization::class.java)
+                context.getBeansOfType(AuditingAuthorization::class.java).assert().hasSize(1)
+                context.getBean(Authorization::class.java).assert().isInstanceOf(AuditingAuthorization::class.java)
             }
     }
 }
