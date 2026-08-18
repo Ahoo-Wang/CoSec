@@ -46,6 +46,7 @@ object AuditEventExtractor {
         result: AuthorizeResult,
         elapsedNanos: Long,
         verifyContext: VerifyContext? = context.getVerifyContext(),
+        eventId: String = UUID.randomUUID().toString(),
     ): AuditEvent {
         val decision = toDecision(result)
         return eventOf(
@@ -56,6 +57,7 @@ object AuditEventExtractor {
             reason = result.reason,
             elapsedNanos = elapsedNanos,
             verifyContext = verifyContext,
+            eventId = eventId,
         )
     }
 
@@ -65,6 +67,7 @@ object AuditEventExtractor {
         error: Throwable,
         elapsedNanos: Long,
         verifyContext: VerifyContext? = context.getVerifyContext(),
+        eventId: String = UUID.randomUUID().toString(),
     ): AuditEvent {
         val (decision, reasonCode, reason) = when (error) {
             is TooManyRequestsException -> Triple(
@@ -81,7 +84,7 @@ object AuditEventExtractor {
 
             else -> Triple(AuditDecision.ERROR, AuditReasonCode.ERROR, error.javaClass.simpleName)
         }
-        return eventOf(request, context, decision, reasonCode, reason, elapsedNanos, verifyContext)
+        return eventOf(request, context, decision, reasonCode, reason, elapsedNanos, verifyContext, eventId)
     }
 
     private fun toDecision(result: AuthorizeResult): AuditDecision {
@@ -115,9 +118,10 @@ object AuditEventExtractor {
         reason: String,
         elapsedNanos: Long,
         verifyContext: VerifyContext?,
+        eventId: String,
     ): AuditEvent {
         return AuditEventData(
-            eventId = UUID.randomUUID().toString(),
+            eventId = eventId,
             timestamp = Instant.now(),
             tenantId = context.tenant.tenantId,
             principal = AuditPrincipalData(

@@ -19,6 +19,9 @@ import me.ahoo.cosec.audit.AuditingAuthorization
 import me.ahoo.cosec.audit.LoggingAuditEventSink
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
+import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.jvm.UuidGenerator
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -51,8 +54,13 @@ class CoSecAuditAutoConfiguration {
     fun cosecAuditingAuthorization(
         @Qualifier(CoSecAuthorizationAutoConfiguration.BEAN_NAME) authorization: Authorization,
         auditEventSink: AuditEventSink,
+        idGeneratorProvider: ObjectProvider<IdGenerator>,
     ): AuditingAuthorization {
-        return AuditingAuthorization(authorization, auditEventSink)
+        return AuditingAuthorization(
+            authorization,
+            auditEventSink,
+            idGeneratorProvider.getIfAvailable { UuidGenerator.INSTANCE },
+        )
     }
 
     companion object {

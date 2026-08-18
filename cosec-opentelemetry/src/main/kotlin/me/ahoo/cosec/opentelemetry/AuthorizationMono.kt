@@ -14,6 +14,7 @@
 package me.ahoo.cosec.opentelemetry
 
 import io.opentelemetry.api.trace.Span
+import io.opentelemetry.api.trace.SpanContext
 import io.opentelemetry.context.Context
 import me.ahoo.cosec.api.audit.AuditTrace
 import me.ahoo.cosec.api.authorization.Authorization
@@ -37,17 +38,24 @@ class CoSecMonoTrace(
         }
         val otelContext = CoSecInstrumenter.INSTRUMENTER.start(parentContext, securityContext)
         val spanContext = Span.fromContext(otelContext).spanContext
-        val tracedRequest = request.mergeAttributes(
-            mapOf(
-                AuditTrace.TRACE_ID_ATTRIBUTE_KEY to spanContext.traceId,
-                AuditTrace.SPAN_ID_ATTRIBUTE_KEY to spanContext.spanId,
-            ),
-        )
+        val tracedRequest = request.withAuditTrace(spanContext)
         otelContext.makeCurrent().use {
             Mono.defer { delegate.authorize(tracedRequest, securityContext) }
                 .subscribe(TraceFilterSubscriber(otelContext, securityContext, actual))
         }
     }
+}
+
+internal fun Request.withAuditTrace(spanContext: SpanContext): Request {
+    if (!spanContext.isValid) {
+        return this
+    }
+    return mergeAttributes(
+        mapOf(
+            AuditTrace.TRACE_ID_ATTRIBUTE_KEY to spanContext.traceId,
+            AuditTrace.SPAN_ID_ATTRIBUTE_KEY to spanContext.spanId,
+        ),
+    )
 }
 
 class TraceFilterSubscriber(
