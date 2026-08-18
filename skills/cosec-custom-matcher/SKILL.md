@@ -1,296 +1,102 @@
 ---
 name: cosec-custom-matcher
-description: "Use when extending CoSec policy matching with custom ActionMatcher or ConditionMatcher implementations, condition types, matcher factories, ServiceLoader SPI registration, or Spring bean matcher registration."
+description: Extend CoSec with custom ActionMatcher or ConditionMatcher implementations and register their factories through ServiceLoader or Spring. Do not use for policies that built-in matchers already express.
 ---
 
-# CoSec Custom Matcher Development
+# CoSec Custom Matchers
 
-This skill helps you create custom `ActionMatcher` and `ConditionMatcher` implementations to extend CoSec's policy evaluation logic. CoSec uses Java SPI (ServiceLoader) to discover matcher factories.
+Add a matcher only after confirming that the built-ins cannot express the rule. Prefer composing `path`, `bool`, part matchers, or the local/Redis rate limiters over new code.
 
-## Architecture Overview
+## Extension contract
 
-Policy matching has two sides:
-- **ActionMatcher** — determines if a request's action (path + method) matches a policy pattern
-- **ConditionMatcher** — determines if contextual conditions are met (user attributes, request properties, etc.)
+- `ActionMatcher` and `ConditionMatcher` live in `cosec-api` and extend `RequestMatcher`.
+- Their factory interfaces and providers live in `cosec-core` under `me.ahoo.cosec.policy.action` and `me.ahoo.cosec.policy.condition`.
+- A factory's `type` is the object key used in policy JSON. It must not collide with another factory; later registration replaces the existing entry.
+- Do not change the SPI interfaces to add a matcher. Implement them and register the factory.
+- Keep matching synchronous and side-effect free unless the matcher intentionally enforces a stateful control such as rate limiting.
 
-Both extend `RequestMatcher`. The matcher interfaces live in `cosec-api` (`me.ahoo.cosec.api.policy`); the factory interfaces live in `cosec-core` (`me.ahoo.cosec.policy.action` / `me.ahoo.cosec.policy.condition`), and factory implementations are discovered via Java SPI (ServiceLoader).
+Before editing, inspect the target CoSec version's interfaces and the nearest built-in matcher. In a CoSec checkout, the authoritative files are:
 
-```
-Policy
-├── condition: ConditionMatcher (policy-level gate)
-└── statements[]
-    ├── Statement (effect: DENY)
-    │   ├── action: ActionMatcher
-    │   └── condition: ConditionMatcher
-    └── Statement (effect: ALLOW)
-        ├── action: ActionMatcher
-        └── condition: ConditionMatcher
-```
+- `cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/RequestMatcher.kt`
+- `cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/`
+- `cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/`
 
-## Creating a Custom ConditionMatcher
+## Minimal condition matcher
 
-### Step 1: Implement the ConditionMatcher
+Use `AbstractConditionMatcher` when `negate` support is desirable. Parse and validate configuration once during construction, not on every request.
 
 ```kotlin
-package com.example.cosec.condition
+class PremiumUserConditionMatcher(configuration: Configuration) :
+    AbstractConditionMatcher(PremiumUserConditionMatcherFactory.TYPE, configuration) {
 
-import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.api.policy.ConditionMatcher
-import me.ahoo.cosec.api.configuration.Configuration
+    private val requiredTier = configuration.getRequired("tier").asString()
 
-class PremiumUserConditionMatcher(
-    override val configuration: Configuration
-) : ConditionMatcher {
-
-    override val type: String = "premiumUser"
-
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        val isPremium = securityContext.principal.attributes["premium"]
-        return isPremium == "true"
+    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
+        val tier = securityContext.principal.attributes["tier"]?.toString()
+        return tier == requiredTier
     }
 }
-```
-
-Key points:
-- `type` — unique string identifier used in policy JSON
-- `configuration` — arbitrary key-value config passed from the policy JSON
-- `match()` — return `true` if the condition is satisfied. Throwing here fails the evaluation, so prefer returning `false` for non-matches and reserve exceptions for genuine misconfiguration (the built-in rate limiter, for example, throws to signal TOO_MANY_REQUESTS)
-
-### Step 2: Implement the Factory
-
-```kotlin
-package com.example.cosec.condition
-
-import me.ahoo.cosec.api.configuration.Configuration
-import me.ahoo.cosec.api.policy.ConditionMatcher
-import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
 class PremiumUserConditionMatcherFactory : ConditionMatcherFactory {
-
-    override val type: String = "premiumUser"
-
-    override fun create(configuration: Configuration): ConditionMatcher {
-        return PremiumUserConditionMatcher(configuration)
+    companion object {
+        const val TYPE = "premiumUser"
     }
+
+    override val type: String = TYPE
+
+    override fun create(configuration: Configuration): ConditionMatcher =
+        PremiumUserConditionMatcher(configuration)
 }
 ```
 
-### Step 3: Register via SPI
+Register it for non-Spring and Spring environments with:
 
-Create file: `src/main/resources/META-INF/services/me.ahoo.cosec.policy.condition.ConditionMatcherFactory`
-
+```text
+# src/main/resources/META-INF/services/me.ahoo.cosec.policy.condition.ConditionMatcherFactory
+com.example.cosec.PremiumUserConditionMatcherFactory
 ```
-com.example.cosec.condition.PremiumUserConditionMatcherFactory
-```
-
-### Step 4: Use in Policy JSON
 
 ```json
 {
-  "name": "PremiumEndpoints",
   "action": "/api/premium/**",
   "condition": {
-    "premiumUser": {}
+    "premiumUser": { "tier": "gold" }
   }
 }
 ```
 
-With configuration:
-```json
-{
-  "name": "TieredAccess",
-  "action": "/api/**",
-  "condition": {
-    "premiumUser": {
-      "minTier": "gold"
-    }
-  }
-}
+For an action matcher, use the same pattern with `AbstractActionMatcher`, `ActionMatcherFactory`, and:
+
+```text
+src/main/resources/META-INF/services/me.ahoo.cosec.policy.action.ActionMatcherFactory
 ```
 
-Access configuration in the matcher:
-```kotlin
-val minTier = configuration.getRequired("minTier").asString()
-```
+## Spring registration
 
-## Creating a Custom ActionMatcher
-
-### Step 1: Implement the ActionMatcher
+When a factory needs Spring-managed dependencies, expose it as a bean instead of adding a service file:
 
 ```kotlin
-package com.example.cosec.action
-
-import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.api.policy.ActionMatcher
-import me.ahoo.cosec.api.configuration.Configuration
-
-class HttpMethodActionMatcher(
-    override val configuration: Configuration
-) : ActionMatcher {
-
-    override val type: String = "httpMethod"
-
-    private val allowedMethods: Set<String> = configuration.getRequired("methods")
-        .asString()
-        .split(",")
-        .map { it.trim().uppercase() }
-        .toSet()
-
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        return request.method.uppercase() in allowedMethods
-    }
-}
+@Bean
+fun premiumUserConditionMatcherFactory(): ConditionMatcherFactory =
+    PremiumUserConditionMatcherFactory()
 ```
 
-### Step 2: Implement the Factory
+`MatcherFactoryRegister` registers all action and condition factory beans at startup. Do not register the same type through both mechanisms unless replacement is intentional.
 
-```kotlin
-package com.example.cosec.action
+## Useful API surface
 
-import me.ahoo.cosec.api.configuration.Configuration
-import me.ahoo.cosec.api.policy.ActionMatcher
-import me.ahoo.cosec.policy.action.ActionMatcherFactory
+Read configuration through `get`/`getRequired` followed by `asString`, `asBoolean`, `asInt`, `asLong`, `asDouble`, `asList`, or `asMap`.
 
-class HttpMethodActionMatcherFactory : ActionMatcherFactory {
+Request matching commonly uses `path`, `method`, `remoteIp`, `origin`, `referer`, `appId`, `spaceId`, `deviceId`, `requestId`, headers, queries, cookies, and request attributes. Context matching commonly uses principal ID/authentication/roles/policies/attributes, tenant ID, and context attributes. Inspect the target interfaces rather than assuming fields from another CoSec version.
 
-    override val type: String = "httpMethod"
+## Existing type names
 
-    override fun create(configuration: Configuration): ActionMatcher {
-        return HttpMethodActionMatcher(configuration)
-    }
-}
-```
+Do not replace these unless the user explicitly wants an override:
 
-### Step 3: Register via SPI
+- Actions: `all`, `path`, `composite`
+- Conditions: `all`, `authenticated`, `inRole`, `inTenant`, `eq`, `contains`, `startsWith`, `endsWith`, `in`, `regular`, `path`, `bool`, `spel`, `ognl`, `rateLimiter`, `groupedRateLimiter`
+- With Redis cache support: `redisRateLimiter`, `redisGroupedRateLimiter`
 
-Create file: `src/main/resources/META-INF/services/me.ahoo.cosec.policy.action.ActionMatcherFactory`
+## Verification
 
-```
-com.example.cosec.action.HttpMethodActionMatcherFactory
-```
-
-### Step 4: Use in Policy JSON
-
-```json
-{
-  "name": "ReadOnlyAccess",
-  "action": {
-    "httpMethod": {
-      "methods": "GET,HEAD,OPTIONS"
-    }
-  }
-}
-```
-
-## Accessing Configuration Values
-
-The `Configuration` interface is a tree of typed nodes — there are no convenience accessors like `getRequiredString`; chain a `get`/`getRequired` with an `as*` conversion:
-
-```kotlin
-// Required (getRequired throws IllegalArgumentException if missing)
-val value: String = configuration.getRequired("key").asString()
-val count: Int = configuration.getRequired("key").asInt()
-
-// Optional with default
-val value: String = configuration.get("key")?.asString() ?: "default"
-
-// Nested configuration (getRequired returns a Configuration directly)
-val nested: Configuration = configuration.getRequired("nested")
-
-// Collections
-val list: List<String> = configuration.getRequired("tags").asStringList()
-val map: Map<String, String> = configuration.getRequired("labels").asStringMap()
-
-// Existence check
-if (configuration.has("key")) { ... }
-```
-
-## Accessing Request and Context Data
-
-### Request properties
-```kotlin
-request.path           // URL path
-request.method         // HTTP method
-request.remoteIp       // client IP
-request.origin         // Origin as URI; request.origin.host for the host part
-request.referer        // Referer as URI; request.referer.host for the host part
-request.appId          // application ID
-request.spaceId        // space ID
-request.deviceId       // device ID
-request.requestId      // request ID
-request.getHeader("X-Custom")    // any header
-request.getQuery("param")        // query parameter
-request.getCookieValue("name")   // cookie value
-```
-
-### SecurityContext properties
-```kotlin
-securityContext.principal                    // CoSecPrincipal
-securityContext.principal.id                 // user ID
-securityContext.principal.authenticated      // boolean
-securityContext.principal.anonymous          // boolean
-securityContext.principal.roles              // Set<RoleId> (RoleCapable, RoleId = String)
-securityContext.principal.policies           // Set<String> of attached policy IDs (PolicyCapable)
-securityContext.principal.attributes         // Map<String, Any>
-securityContext.tenant                       // Tenant (use .tenantId)
-securityContext.attributes                   // MutableMap<String, Any> (carries path variables etc.)
-```
-
-## Built-in ConditionMatcher Types Reference
-
-For reference, here are all built-in types:
-
-| Type | Description | Key Config |
-|------|-------------|------------|
-| `all` | Match all (the default when `condition` is omitted) | — |
-| `authenticated` | User must be logged in | — |
-| `inRole` | User must have role | `value`: role name |
-| `inTenant` | Must be from tenant type | `value`: `default` / `user` / `platform` |
-| `eq` | Exact match | `part`, `value` |
-| `contains` | Substring match | `part`, `value` |
-| `startsWith` | Prefix match | `part`, `value` |
-| `endsWith` | Suffix match | `part`, `value` |
-| `in` | Value in list | `part`, `value`: array |
-| `regular` | Regex match | `part`, `pattern`, `negate` |
-| `path` | Path pattern match | `part`, `pattern`, `options` |
-| `bool` | Boolean logic | `and`: array, `or`: array |
-| `spel` | Spring Expression | `expression` |
-| `ognl` | OGNL expression | `expression` |
-| `rateLimiter` | Rate limiting | `permitsPerSecond` |
-| `groupedRateLimiter` | Grouped rate limit | `part`, `permitsPerSecond`, `expireAfterAccessSecond` |
-
-`negate: true` is accepted by **every** condition matcher above (it is handled centrally in `AbstractConditionMatcher`, not just by `regular`); `rateLimiter` is the only one without it.
-
-Avoid redefining these type names — SPI registration and Spring registration both key off the `type` string, and a duplicate overrides the built-in factory.
-
-## Built-in ActionMatcher Types Reference
-
-| Type | Description | Key Config |
-|------|-------------|------------|
-| `path` | URL path matching | `pattern`, `method`, `options` |
-| `all` | Wildcard | `method` (optional) |
-| `composite` | OR combination | array of matchers |
-
-## Spring Registration (Alternative to SPI)
-
-You can also register matcher factories as Spring beans. The `MatcherFactoryRegister` lifecycle bean picks up every `ConditionMatcherFactory` / `ActionMatcherFactory` bean from the `ApplicationContext` at startup:
-
-```kotlin
-@Configuration
-class CustomMatcherConfig {
-
-    @Bean
-    fun premiumUserConditionMatcherFactory(): ConditionMatcherFactory {
-        return PremiumUserConditionMatcherFactory()
-    }
-
-    @Bean
-    fun httpMethodActionMatcherFactory(): ActionMatcherFactory {
-        return HttpMethodActionMatcherFactory()
-    }
-}
-```
-
-This approach is simpler when your matcher needs Spring dependencies (e.g., a database or external service).
+Add one focused test that creates the matcher through its factory and checks a match and non-match. If registration changed, also deserialize one policy using the custom type so a missing service entry or Spring bean fails the test. Run the narrow module test and the repository's static analysis command.
