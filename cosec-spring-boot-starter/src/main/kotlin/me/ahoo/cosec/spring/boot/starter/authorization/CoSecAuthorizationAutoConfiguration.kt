@@ -72,7 +72,7 @@ class CoSecAuthorizationAutoConfiguration {
         return LocalPolicyLoader(authorizationProperties.localPolicy.locations)
     }
 
-    @Bean(initMethod = "init")
+    @Bean
     @ConditionalOnProperty(
         value = [AuthorizationProperties.LOCAL_POLICY_INIT_REPOSITORY],
         matchIfMissing = false,

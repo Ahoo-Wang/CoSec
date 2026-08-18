@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.policy
 
+import me.ahoo.cosec.policy.LocalPolicyInitializer
 import me.ahoo.cosec.policy.action.ActionMatcherFactory
 import me.ahoo.cosec.policy.action.ActionMatcherFactoryProvider
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
@@ -25,13 +26,16 @@ class MatcherFactoryRegister(private val applicationContext: ApplicationContext)
     @Volatile
     private var running = false
     override fun start() {
-        running = true
         applicationContext.getBeansOfType<ConditionMatcherFactory>().values.forEach {
             ConditionMatcherFactoryProvider.register(it)
         }
         applicationContext.getBeansOfType<ActionMatcherFactory>().values.forEach {
             ActionMatcherFactoryProvider.register(it)
         }
+        applicationContext.getBeansOfType<LocalPolicyInitializer>().values.forEach {
+            it.init()
+        }
+        running = true
     }
 
     override fun stop() {
