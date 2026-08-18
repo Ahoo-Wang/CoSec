@@ -16,7 +16,9 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.gateway.AuthorizationGatewayFilter
+import me.ahoo.cosec.gateway.GatewayRouteRequestAttributesAppender
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.starter.audit.ConditionalOnAuditEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.REACTIVE_REQUEST_PARSER_BEAN_NAME
 import me.ahoo.cosec.spring.boot.starter.authorization.ConditionalOnAuthorizationEnabled
 import org.springframework.beans.factory.annotation.Qualifier
@@ -41,6 +43,12 @@ import org.springframework.web.server.ServerWebExchange
     GatewayProperties::class,
 )
 class CoSecGatewayAuthorizationAutoConfiguration {
+
+    @Bean
+    @ConditionalOnAuditEnabled
+    fun gatewayRouteRequestAttributesAppender(): GatewayRouteRequestAttributesAppender {
+        return GatewayRouteRequestAttributesAppender()
+    }
 
     @Bean
     @ConditionalOnMissingBean

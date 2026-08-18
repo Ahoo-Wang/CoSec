@@ -18,24 +18,30 @@ import io.mockk.mockk
 import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditEvent
 import me.ahoo.cosec.api.audit.AuditEventSink
+import me.ahoo.cosec.api.audit.AuditSourceType
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.PolicyVerifyContext
+import me.ahoo.cosec.authorization.PolicyVerifySource
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
+import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
+import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationException
@@ -63,6 +69,7 @@ class AuditingAuthorizationTest {
         every { method } returns "POST"
         every { path } returns "/api/orders"
         every { getHeader("User-Agent") } returns "test-agent"
+        every { attributes } returns emptyMap()
     }
     private val context = mockk<SecurityContext> {
         every { tenant.tenantId } returns "t1"
@@ -95,7 +102,7 @@ class AuditingAuthorizationTest {
             .expectNext(AuthorizeResult.ALLOW)
             .verifyComplete()
         events.size.assert().isEqualTo(1)
-        events[0].decision.assert().isEqualTo(AuditDecision.ALLOW)
+        events[0].authorization.decision.assert().isEqualTo(AuditDecision.ALLOW)
     }
 
     @Test
@@ -105,7 +112,53 @@ class AuditingAuthorizationTest {
             .test()
             .expectNext(AuthorizeResult.EXPLICIT_DENY)
             .verifyComplete()
-        events[0].decision.assert().isEqualTo(AuditDecision.EXPLICIT_DENY)
+        events[0].authorization.decision.assert().isEqualTo(AuditDecision.EXPLICIT_DENY)
+    }
+
+    @Test
+    fun publishRootSource() {
+        val events = mutableListOf<AuditEvent>()
+        val rootContext = SimpleSecurityContext(SimplePrincipal(CoSecPrincipal.ROOT_ID))
+        val authorization = AuditingAuthorization(
+            SimpleAuthorization(mockk(), mockk()),
+            AuditEventSink(events::add),
+        )
+
+        authorization.authorize(request, rootContext).block()
+
+        events.single().authorization.source.type.assert().isEqualTo(AuditSourceType.ROOT)
+    }
+
+    @Test
+    fun publishBlacklistSource() {
+        val events = mutableListOf<AuditEvent>()
+        val blacklistChecker = mockk<BlacklistChecker> {
+            every { check(request, context) } returns Mono.just(false)
+        }
+        val authorization = AuditingAuthorization(
+            SimpleAuthorization(mockk(), mockk(), blacklistChecker),
+            AuditEventSink(events::add),
+        )
+
+        authorization.authorize(request, context).block()
+
+        events.single().authorization.source.type.assert().isEqualTo(AuditSourceType.BLACKLIST)
+    }
+
+    @Test
+    fun publishNoMatchSource() {
+        val events = mutableListOf<AuditEvent>()
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.just(emptyList())
+        }
+        val authorization = AuditingAuthorization(
+            SimpleAuthorization(policyRepository, mockk()),
+            AuditEventSink(events::add),
+        )
+
+        authorization.authorize(request, context).block()
+
+        events.single().authorization.source.type.assert().isEqualTo(AuditSourceType.NONE)
     }
 
     @Test
@@ -114,14 +167,18 @@ class AuditingAuthorizationTest {
         authorization.authorize(request, context)
             .test()
             .verifyComplete()
-        events.single().decision.assert().isEqualTo(AuditDecision.IMPLICIT_DENY)
+        events.single().authorization.decision.assert().isEqualTo(AuditDecision.IMPLICIT_DENY)
     }
 
     @Test
     fun clearStaleVerifyContextBeforeAuthorization() {
         context.setVerifyContext(
             PolicyVerifyContext(
-                policy = mockk<Policy> { every { id } returns "stale-policy" },
+                source = PolicyVerifySource.GLOBAL,
+                policy = mockk<Policy> {
+                    every { id } returns "stale-policy"
+                    every { type } returns PolicyType.GLOBAL
+                },
                 statementIndex = 0,
                 statement = mockk<Statement> { every { name } returns "stale-statement" },
                 result = VerifyResult.EXPLICIT_DENY,
@@ -130,8 +187,8 @@ class AuditingAuthorizationTest {
         val (authorization, events) = authorization(AuthorizeResult.IMPLICIT_DENY.toMono())
         authorization.authorize(request, context).block()
         events.single().apply {
-            decision.assert().isEqualTo(AuditDecision.IMPLICIT_DENY)
-            match.assert().isNull()
+            this.authorization.decision.assert().isEqualTo(AuditDecision.IMPLICIT_DENY)
+            this.authorization.source.policy.assert().isNull()
         }
     }
 
@@ -139,6 +196,7 @@ class AuditingAuthorizationTest {
     fun isolateVerifyContextPerConcurrentAuthorization() {
         val firstPolicy = mockk<Policy> {
             every { id } returns "first-policy"
+            every { type } returns PolicyType.GLOBAL
             every { condition } returns AllConditionMatcher.INSTANCE
             every { statements } returns listOf(
                 StatementData(name = "first-statement", effect = Effect.ALLOW, action = AllActionMatcher.INSTANCE),
@@ -146,6 +204,7 @@ class AuditingAuthorizationTest {
         }
         val secondPolicy = mockk<Policy> {
             every { id } returns "second-policy"
+            every { type } returns PolicyType.GLOBAL
             every { condition } returns AllConditionMatcher.INSTANCE
             every { statements } returns listOf(
                 StatementData(name = "second-statement", effect = Effect.ALLOW, action = AllActionMatcher.INSTANCE),
@@ -187,8 +246,10 @@ class AuditingAuthorizationTest {
             .toFuture()
         CompletableFuture.allOf(first, second).get(5, TimeUnit.SECONDS)
 
-        events.single { it.path == "/first" }.match?.policyId.assert().isEqualTo("first-policy")
-        events.single { it.path == "/second" }.match?.policyId.assert().isEqualTo("second-policy")
+        events.single { it.request.path == "/first" }.authorization.source.policy?.id.assert()
+            .isEqualTo("first-policy")
+        events.single { it.request.path == "/second" }.authorization.source.policy?.id.assert()
+            .isEqualTo("second-policy")
     }
 
     @Test
@@ -197,8 +258,8 @@ class AuditingAuthorizationTest {
         val (authorization, events) = authorization(AuthorizeResult.IMPLICIT_DENY.toMono())
         authorization.authorize(request, context).block()
         events.single().apply {
-            decision.assert().isEqualTo(AuditDecision.EXPLICIT_DENY)
-            reason.assert().isEqualTo("Token Expired")
+            this.authorization.decision.assert().isEqualTo(AuditDecision.EXPLICIT_DENY)
+            this.authorization.reason.assert().isEqualTo("Token Expired")
         }
     }
 
@@ -210,7 +271,7 @@ class AuditingAuthorizationTest {
             .expectError(TooManyRequestsException::class.java)
             .verify()
         events.size.assert().isEqualTo(1)
-        events[0].decision.assert().isEqualTo(AuditDecision.TOO_MANY_REQUESTS)
+        events[0].authorization.decision.assert().isEqualTo(AuditDecision.TOO_MANY_REQUESTS)
     }
 
     @Test
@@ -220,7 +281,7 @@ class AuditingAuthorizationTest {
             .test()
             .expectError(IllegalStateException::class.java)
             .verify()
-        events[0].decision.assert().isEqualTo(AuditDecision.ERROR)
+        events[0].authorization.decision.assert().isEqualTo(AuditDecision.ERROR)
     }
 
     @Test
@@ -234,7 +295,7 @@ class AuditingAuthorizationTest {
             .test()
             .expectError(TooManyRequestsException::class.java)
             .verify()
-        events.single().decision.assert().isEqualTo(AuditDecision.TOO_MANY_REQUESTS)
+        events.single().authorization.decision.assert().isEqualTo(AuditDecision.TOO_MANY_REQUESTS)
     }
 
     @Test
@@ -263,6 +324,7 @@ class AuditingAuthorizationTest {
             every { method } returns "POST"
             every { path } throws IllegalStateException("boom")
             every { getHeader("User-Agent") } returns "test-agent"
+            every { attributes } returns emptyMap()
         }
         val events = mutableListOf<AuditEvent>()
         val sink = AuditEventSink(events::add)
@@ -286,7 +348,7 @@ class AuditingAuthorizationTest {
             .test()
             .expectNext(AuthorizeResult.ALLOW)
             .verifyComplete()
-        events[0].elapsedNanos.assert().isGreaterThanOrEqualTo(50_000_000)
+        events[0].authorization.elapsedNanos.assert().isGreaterThanOrEqualTo(50_000_000)
     }
 
     @Test
@@ -305,5 +367,6 @@ class AuditingAuthorizationTest {
         every { method } returns "GET"
         every { this@mockk.path } returns path
         every { getHeader("User-Agent") } returns "test-agent"
+        every { attributes } returns emptyMap()
     }
 }

@@ -57,7 +57,7 @@ class KafkaAuditEventSink(
                 try {
                     kafkaOperations.send(
                         topic,
-                        CoSecJsonSerializer.writeValueAsString(arrayOf(event.tenantId, event.principalId)),
+                        CoSecJsonSerializer.writeValueAsString(arrayOf(event.tenantId, event.principal.id)),
                         CoSecJsonSerializer.writeValueAsString(event),
                     ).whenComplete { _, error ->
                         if (error != null) {

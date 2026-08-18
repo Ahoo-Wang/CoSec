@@ -18,9 +18,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import me.ahoo.cosec.api.audit.AuditDecision
-import me.ahoo.cosec.api.audit.AuditDevice
-import me.ahoo.cosec.api.audit.AuditEvent
-import me.ahoo.cosec.api.audit.AuditMatch
+import me.ahoo.cosec.api.audit.AuditReasonCode
+import me.ahoo.cosec.api.audit.AuditSourceType
+import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -31,24 +31,41 @@ class LoggingAuditEventSinkTest {
         val json = StringBuilder()
     }
 
-    private fun event(decision: AuditDecision) = AuditEvent(
+    private fun event(decision: AuditDecision) = AuditEventData(
+        eventId = "event-1",
         timestamp = Instant.ofEpochMilli(1),
         tenantId = "t1",
-        principalId = "u1",
-        authenticated = true,
-        roles = setOf("admin@0"),
-        policies = emptySet(),
-        appId = "app",
-        spaceId = null,
-        device = AuditDevice(id = "device-1", userAgent = "test-agent"),
-        requestId = "req-1",
-        remoteIp = "1.2.3.4",
-        method = "POST",
-        path = "/api/orders",
-        decision = decision,
-        reason = "Explicit Deny",
-        elapsedNanos = 350000,
-        match = AuditMatch(policyId = "deny-write", statementName = "deny-orders-write"),
+        principal = AuditPrincipalData(
+            id = "u1",
+            authenticated = true,
+            roles = setOf("admin@0"),
+            policies = emptySet(),
+        ),
+        request = AuditRequestData(
+            id = "req-1",
+            appId = "app",
+            spaceId = null,
+            remoteIp = "1.2.3.4",
+            method = "POST",
+            path = "/api/orders",
+            routeId = null,
+            device = AuditDeviceData(id = "device-1", userAgent = "test-agent"),
+        ),
+        authorization = AuditAuthorizationData(
+            decision = decision,
+            reasonCode = AuditReasonCode.valueOf(decision.name),
+            reason = "Explicit Deny",
+            elapsedNanos = 350000,
+            source = AuditSourceData(
+                type = AuditSourceType.GLOBAL_POLICY,
+                policy = AuditPolicyData(
+                    id = "deny-write",
+                    type = PolicyType.GLOBAL,
+                    statement = AuditStatementData(index = 0, name = "deny-orders-write"),
+                ),
+            ),
+        ),
+        trace = null,
     )
 
     private fun loggerFor(recording: Recording): KLogger {
@@ -92,8 +109,9 @@ class LoggingAuditEventSinkTest {
         recording.levels.toString().assert().isEqualTo("warn")
         val json = recording.json.toString()
         json.assert().contains("\"decision\":\"EXPLICIT_DENY\"")
+        json.assert().contains("\"principal\":{\"id\":\"u1\",\"authenticated\":true")
         json.assert().contains("\"device\":{\"id\":\"device-1\",\"userAgent\":\"test-agent\"}")
-        json.assert().contains("\"match\":{\"policyId\":\"deny-write\",\"statementName\":\"deny-orders-write\"")
+        json.assert().contains("\"policy\":{\"id\":\"deny-write\",\"type\":\"global\"")
         json.assert().contains("\"elapsedNanos\":350000")
     }
 

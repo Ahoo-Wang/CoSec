@@ -30,7 +30,7 @@ class LoggingAuditEventSink(
 ) : AuditEventSink {
 
     override fun publish(event: AuditEvent) {
-        when (event.decision) {
+        when (event.authorization.decision) {
             AuditDecision.ALLOW -> logger.debug { CoSecJsonSerializer.writeValueAsString(event) }
             AuditDecision.EXPLICIT_DENY,
             AuditDecision.IMPLICIT_DENY,

@@ -15,9 +15,25 @@ package me.ahoo.cosec.api.audit
 
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import java.time.Instant
 
 class AuditEventTest {
+    @Test
+    fun auditModelsAreInterfaces() {
+        listOf(
+            AuditPrincipal::class,
+            AuditDevice::class,
+            AuditRequest::class,
+            AuditStatement::class,
+            AuditPolicy::class,
+            AuditPermission::class,
+            AuditRole::class,
+            AuditSource::class,
+            AuditAuthorization::class,
+            AuditTrace::class,
+            AuditEvent::class,
+        ).all { it.java.isInterface }.assert().isTrue()
+    }
+
     @Test
     fun auditDecisionValues() {
         val decisions = AuditDecision.entries.map { it.name }.toSet()
@@ -27,27 +43,33 @@ class AuditEventTest {
     }
 
     @Test
-    fun auditEventEquality() {
-        val event = AuditEvent(
-            timestamp = Instant.ofEpochMilli(1),
-            tenantId = "t1",
-            principalId = "u1",
-            authenticated = true,
-            roles = setOf("admin@0"),
-            policies = setOf("p1"),
-            appId = "app",
-            spaceId = "0",
-            device = AuditDevice(id = null, userAgent = "test-agent"),
-            requestId = "req-1",
-            remoteIp = "127.0.0.1",
-            method = "GET",
-            path = "/api",
-            decision = AuditDecision.ALLOW,
-            reason = "Allow",
-            elapsedNanos = 1,
-            match = null,
+    fun auditReasonCodeValues() {
+        AuditReasonCode.entries.map { it.name }.toSet().assert().isEqualTo(
+            setOf(
+                "ALLOW",
+                "EXPLICIT_DENY",
+                "IMPLICIT_DENY",
+                "TOKEN_EXPIRED",
+                "TOKEN_INVALID",
+                "TOO_MANY_REQUESTS",
+                "REGEX_TIMEOUT",
+                "ERROR",
+            ),
         )
-        event.copy(path = "/other").assert().isNotEqualTo(event)
-        event.assert().isEqualTo(event.copy())
+    }
+
+    @Test
+    fun auditSourceTypeValues() {
+        AuditSourceType.entries.map { it.name }.toSet().assert().isEqualTo(
+            setOf(
+                "ROOT",
+                "BLACKLIST",
+                "GLOBAL_POLICY",
+                "PRINCIPAL_POLICY",
+                "ROLE_PERMISSION",
+                "NONE",
+                "UNKNOWN",
+            ),
+        )
     }
 }

@@ -13,9 +13,13 @@
 
 package me.ahoo.cosec.opentelemetry
 
+import io.opentelemetry.api.trace.Span
 import io.opentelemetry.context.Context
+import me.ahoo.cosec.api.audit.AuditTrace
+import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.Request
 import org.reactivestreams.Subscription
 import reactor.core.CoreSubscriber
 import reactor.core.publisher.Mono
@@ -23,16 +27,25 @@ import reactor.core.publisher.Mono
 class CoSecMonoTrace(
     private val parentContext: Context,
     private val securityContext: SecurityContext,
-    private val source: Mono<AuthorizeResult>
+    private val request: Request,
+    private val delegate: Authorization,
 ) : Mono<AuthorizeResult>() {
     override fun subscribe(actual: CoreSubscriber<in AuthorizeResult>) {
         if (!CoSecInstrumenter.INSTRUMENTER.shouldStart(parentContext, securityContext)) {
-            source.subscribe(actual)
+            Mono.defer { delegate.authorize(request, securityContext) }.subscribe(actual)
             return
         }
         val otelContext = CoSecInstrumenter.INSTRUMENTER.start(parentContext, securityContext)
+        val spanContext = Span.fromContext(otelContext).spanContext
+        val tracedRequest = request.mergeAttributes(
+            mapOf(
+                AuditTrace.TRACE_ID_ATTRIBUTE_KEY to spanContext.traceId,
+                AuditTrace.SPAN_ID_ATTRIBUTE_KEY to spanContext.spanId,
+            ),
+        )
         otelContext.makeCurrent().use {
-            source.subscribe(TraceFilterSubscriber(otelContext, securityContext, actual))
+            Mono.defer { delegate.authorize(tracedRequest, securityContext) }
+                .subscribe(TraceFilterSubscriber(otelContext, securityContext, actual))
         }
     }
 }

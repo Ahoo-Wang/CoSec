@@ -17,9 +17,18 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import me.ahoo.cosec.api.audit.AuditDecision
-import me.ahoo.cosec.api.audit.AuditDevice
-import me.ahoo.cosec.api.audit.AuditEvent
-import me.ahoo.cosec.api.audit.AuditMatch
+import me.ahoo.cosec.api.audit.AuditReasonCode
+import me.ahoo.cosec.api.audit.AuditSourceType
+import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.audit.AuditAuthorizationData
+import me.ahoo.cosec.audit.AuditDeviceData
+import me.ahoo.cosec.audit.AuditEventData
+import me.ahoo.cosec.audit.AuditPolicyData
+import me.ahoo.cosec.audit.AuditPrincipalData
+import me.ahoo.cosec.audit.AuditRequestData
+import me.ahoo.cosec.audit.AuditSourceData
+import me.ahoo.cosec.audit.AuditStatementData
+import me.ahoo.cosec.audit.AuditTraceData
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
@@ -40,24 +49,41 @@ import java.util.concurrent.TimeUnit
 class KafkaAuditEventSinkTest {
     private val sinks = mutableListOf<KafkaAuditEventSink>()
 
-    private val event = AuditEvent(
+    private val event = AuditEventData(
+        eventId = "event-1",
         timestamp = Instant.parse("2026-08-18T00:00:00Z"),
         tenantId = "tenant-1",
-        principalId = "principal-1",
-        authenticated = true,
-        roles = setOf("admin"),
-        policies = setOf("orders"),
-        appId = "app-1",
-        spaceId = "space-1",
-        device = AuditDevice(id = "device-1", userAgent = "test-agent"),
-        requestId = "request-1",
-        remoteIp = "127.0.0.1",
-        method = "GET",
-        path = "/orders/1",
-        decision = AuditDecision.ALLOW,
-        reason = "Allow",
-        elapsedNanos = 100,
-        match = AuditMatch(policyId = "orders", statementName = "read"),
+        principal = AuditPrincipalData(
+            id = "principal-1",
+            authenticated = true,
+            roles = setOf("admin"),
+            policies = setOf("orders"),
+        ),
+        request = AuditRequestData(
+            id = "request-1",
+            appId = "app-1",
+            spaceId = "space-1",
+            remoteIp = "127.0.0.1",
+            method = "GET",
+            path = "/orders/1",
+            routeId = "orders",
+            device = AuditDeviceData(id = "device-1", userAgent = "test-agent"),
+        ),
+        authorization = AuditAuthorizationData(
+            decision = AuditDecision.ALLOW,
+            reasonCode = AuditReasonCode.ALLOW,
+            reason = "Allow",
+            elapsedNanos = 100,
+            source = AuditSourceData(
+                type = AuditSourceType.GLOBAL_POLICY,
+                policy = AuditPolicyData(
+                    id = "orders",
+                    type = PolicyType.GLOBAL,
+                    statement = AuditStatementData(index = 0, name = "read"),
+                ),
+            ),
+        ),
+        trace = AuditTraceData(traceId = "trace-1", spanId = "span-1"),
     )
 
     @AfterEach
@@ -104,12 +130,26 @@ class KafkaAuditEventSinkTest {
         }
         val sink = sink(kafkaOperations)
 
-        sink.publish(event.copy(tenantId = "a", principalId = "b:c"))
-        sink.publish(event.copy(tenantId = "a:b", principalId = "c"))
+        sink.publish(event.copy(tenantId = "a", principal = event.principal.copy(id = "b:c")))
+        sink.publish(event.copy(tenantId = "a:b", principal = event.principal.copy(id = "c")))
 
         keys[0].assert().isEqualTo("[\"a\",\"b:c\"]")
         keys[1].assert().isEqualTo("[\"a:b\",\"c\"]")
         keys.toSet().assert().hasSize(2)
+    }
+
+    @Test
+    fun serializesFieldsByOwner() {
+        val json = CoSecJsonSerializer.readTree(CoSecJsonSerializer.writeValueAsString(event))
+
+        json.has("principalId").assert().isFalse()
+        json.has("requestId").assert().isFalse()
+        json.has("decision").assert().isFalse()
+        json.get("principal").get("id").asString().assert().isEqualTo("principal-1")
+        json.get("request").get("id").asString().assert().isEqualTo("request-1")
+        json.get("authorization").get("source").get("policy").get("id").asString().assert()
+            .isEqualTo("orders")
+        json.get("trace").get("traceId").asString().assert().isEqualTo("trace-1")
     }
 
     @Test
@@ -150,8 +190,8 @@ class KafkaAuditEventSinkTest {
             }
         }
         val sink = KafkaAuditEventSink(kafkaOperations, "cosec-audit").also(sinks::add)
-        val first = event.copy(requestId = "request-1")
-        val second = event.copy(requestId = "request-2")
+        val first = event.copy(request = event.request.copy(id = "request-1"))
+        val second = event.copy(request = event.request.copy(id = "request-2"))
 
         sink.publish(first)
         sink.publish(second)
@@ -204,9 +244,9 @@ class KafkaAuditEventSinkTest {
         }
         val sink = KafkaAuditEventSink(kafkaOperations, "cosec-audit")
 
-        sink.publish(event.copy(requestId = "request-1"))
+        sink.publish(event.copy(request = event.request.copy(id = "request-1")))
         firstStarted.await(5, TimeUnit.SECONDS).assert().isTrue()
-        sink.publish(event.copy(requestId = "request-2"))
+        sink.publish(event.copy(request = event.request.copy(id = "request-2")))
         val destroyed = CompletableFuture.runAsync(sink::destroy)
         destroyed.isDone.assert().isFalse()
         releaseFirst.countDown()
