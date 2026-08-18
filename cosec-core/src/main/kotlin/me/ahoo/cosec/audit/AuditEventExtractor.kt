@@ -18,7 +18,6 @@ import me.ahoo.cosec.api.audit.AuditEvent
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.getVerifyContext
@@ -41,7 +40,7 @@ object AuditEventExtractor {
         return eventOf(
             request = request,
             context = context,
-            decision = toDecision(context, result),
+            decision = toDecision(result),
             reason = result.reason,
             elapsedNanos = elapsedNanos,
             verifyContext = verifyContext,
@@ -62,17 +61,13 @@ object AuditEventExtractor {
         return eventOf(request, context, decision, reason, elapsedNanos, verifyContext = context.getVerifyContext())
     }
 
-    private fun toDecision(context: SecurityContext, result: AuthorizeResult): AuditDecision {
-        if (result.authorized) {
-            return AuditDecision.ALLOW
+    private fun toDecision(result: AuthorizeResult): AuditDecision {
+        return when {
+            result.authorized -> AuditDecision.ALLOW
+            AuthorizeResult.TOO_MANY_REQUESTS.reason == result.reason -> AuditDecision.TOO_MANY_REQUESTS
+            AuthorizeResult.IMPLICIT_DENY.reason == result.reason -> AuditDecision.IMPLICIT_DENY
+            else -> AuditDecision.EXPLICIT_DENY
         }
-        if (context.getVerifyContext()?.result == VerifyResult.EXPLICIT_DENY) {
-            return AuditDecision.EXPLICIT_DENY
-        }
-        if (AuthorizeResult.IMPLICIT_DENY.reason == result.reason) {
-            return AuditDecision.IMPLICIT_DENY
-        }
-        return AuditDecision.EXPLICIT_DENY
     }
 
     private fun eventOf(
@@ -105,8 +100,8 @@ object AuditEventExtractor {
             tenantId = context.tenant.tenantId,
             principalId = context.principal.id,
             authenticated = context.principal.authenticated,
-            roles = context.principal.roles,
-            policies = context.principal.policies,
+            roles = context.principal.roles.toSet(),
+            policies = context.principal.policies.toSet(),
             appId = request.appId.ifBlank { null },
             spaceId = request.spaceId.ifBlank { null },
             deviceId = request.deviceId.ifBlank { null },

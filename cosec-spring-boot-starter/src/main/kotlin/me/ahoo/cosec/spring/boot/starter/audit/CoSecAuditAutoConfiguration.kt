@@ -44,7 +44,10 @@ class CoSecAuditAutoConfiguration {
     }
 
     @Bean(AUDITING_AUTHORIZATION_BEAN_NAME)
-    @ConditionalOnBean(name = [CoSecAuthorizationAutoConfiguration.BEAN_NAME])
+    @ConditionalOnBean(
+        name = [CoSecAuthorizationAutoConfiguration.BEAN_NAME],
+        annotation = [CoSecAuthorizationAutoConfiguration.AutoConfigured::class],
+    )
     fun cosecAuditingAuthorization(
         @Qualifier(CoSecAuthorizationAutoConfiguration.BEAN_NAME) authorization: Authorization,
         auditEventSink: AuditEventSink,

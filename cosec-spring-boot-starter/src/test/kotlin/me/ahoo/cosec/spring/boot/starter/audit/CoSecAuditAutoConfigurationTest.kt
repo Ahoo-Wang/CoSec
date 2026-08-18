@@ -24,7 +24,16 @@ import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 import java.util.function.Supplier
+
+@Configuration(proxyBeanMethods = false)
+class AutoConfiguredAuthorizationTestConfiguration {
+    @Bean(CoSecAuthorizationAutoConfiguration.BEAN_NAME)
+    @CoSecAuthorizationAutoConfiguration.AutoConfigured
+    fun cosecAuthorization(): Authorization = mockk()
+}
 
 class CoSecAuditAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
@@ -33,8 +42,8 @@ class CoSecAuditAutoConfigurationTest {
     fun auditOnWhenOpenTelemetryAbsent() {
         contextRunner
             .withClassLoader(FilteredClassLoader("me.ahoo.cosec.opentelemetry.CoSecInstrumenter"))
-            .withBean(CoSecAuthorizationAutoConfiguration.BEAN_NAME, Authorization::class.java, Supplier { mockk() })
             .withUserConfiguration(
+                AutoConfiguredAuthorizationTestConfiguration::class.java,
                 CoSecAuditAutoConfiguration::class.java,
                 CoSecAuditFallbackAutoConfiguration::class.java,
             )
@@ -51,8 +60,10 @@ class CoSecAuditAutoConfigurationTest {
         contextRunner
             .withPropertyValues("cosec.audit.enabled=false")
             .withClassLoader(FilteredClassLoader("me.ahoo.cosec.opentelemetry.CoSecInstrumenter"))
-            .withBean(CoSecAuthorizationAutoConfiguration.BEAN_NAME, Authorization::class.java, Supplier { mockk() })
-            .withUserConfiguration(CoSecAuditAutoConfiguration::class.java)
+            .withUserConfiguration(
+                AutoConfiguredAuthorizationTestConfiguration::class.java,
+                CoSecAuditAutoConfiguration::class.java,
+            )
             .run { context: AssertableApplicationContext ->
                 context.getBeansOfType(AuditingAuthorization::class.java).assert().isEmpty()
                 context.getBeansOfType(AuditEventSink::class.java).assert().isEmpty()
@@ -63,9 +74,11 @@ class CoSecAuditAutoConfigurationTest {
     fun customSinkWins() {
         contextRunner
             .withClassLoader(FilteredClassLoader("me.ahoo.cosec.opentelemetry.CoSecInstrumenter"))
-            .withBean(CoSecAuthorizationAutoConfiguration.BEAN_NAME, Authorization::class.java, Supplier { mockk() })
             .withBean("customSink", AuditEventSink::class.java, Supplier { mockk() })
-            .withUserConfiguration(CoSecAuditAutoConfiguration::class.java)
+            .withUserConfiguration(
+                AutoConfiguredAuthorizationTestConfiguration::class.java,
+                CoSecAuditAutoConfiguration::class.java,
+            )
             .run { context: AssertableApplicationContext ->
                 val sink = context.getBean(AuditEventSink::class.java)
                 (sink is LoggingAuditEventSink).assert().isFalse()
@@ -84,10 +97,31 @@ class CoSecAuditAutoConfigurationTest {
     }
 
     @Test
+    fun skippedWhenPrimaryAuthorizationUsesAutoConfiguredBeanName() {
+        val customAuthorization = mockk<Authorization>()
+        contextRunner
+            .withClassLoader(FilteredClassLoader("me.ahoo.cosec.opentelemetry.CoSecInstrumenter"))
+            .withBean(
+                CoSecAuthorizationAutoConfiguration.BEAN_NAME,
+                Authorization::class.java,
+                Supplier { customAuthorization },
+                { it.isPrimary = true },
+            )
+            .withUserConfiguration(
+                CoSecAuditAutoConfiguration::class.java,
+                CoSecAuditFallbackAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                context.getBeansOfType(AuditingAuthorization::class.java).assert().isEmpty()
+                context.getBean(Authorization::class.java).assert().isSameAs(customAuthorization)
+            }
+    }
+
+    @Test
     fun auditRemainsPrimaryWhenOpenTelemetryAutoConfigurationIsAbsent() {
         contextRunner
-            .withBean(CoSecAuthorizationAutoConfiguration.BEAN_NAME, Authorization::class.java, Supplier { mockk() })
             .withUserConfiguration(
+                AutoConfiguredAuthorizationTestConfiguration::class.java,
                 CoSecAuditAutoConfiguration::class.java,
                 CoSecAuditFallbackAutoConfiguration::class.java,
             )

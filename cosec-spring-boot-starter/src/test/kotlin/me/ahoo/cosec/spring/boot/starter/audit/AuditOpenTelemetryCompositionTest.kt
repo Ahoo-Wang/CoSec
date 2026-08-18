@@ -33,12 +33,8 @@ class AuditOpenTelemetryCompositionTest {
     @Test
     fun auditOnAndOtelOnTracingWrapsAuditing() {
         contextRunner
-            .withBean(
-                CoSecAuthorizationAutoConfiguration.BEAN_NAME,
-                Authorization::class.java,
-                Supplier { mockk() },
-            )
             .withUserConfiguration(
+                AutoConfiguredAuthorizationTestConfiguration::class.java,
                 CoSecAuditAutoConfiguration::class.java,
                 CoSecOpenTelemetryAutoConfiguration::class.java,
                 CoSecAuditFallbackAutoConfiguration::class.java,
@@ -65,12 +61,8 @@ class AuditOpenTelemetryCompositionTest {
     fun auditOffAndOtelOnKeepsCurrentBehavior() {
         contextRunner
             .withPropertyValues("cosec.audit.enabled=false")
-            .withBean(
-                CoSecAuthorizationAutoConfiguration.BEAN_NAME,
-                Authorization::class.java,
-                Supplier { mockk() },
-            )
             .withUserConfiguration(
+                AutoConfiguredAuthorizationTestConfiguration::class.java,
                 CoSecAuditAutoConfiguration::class.java,
                 CoSecOpenTelemetryAutoConfiguration::class.java,
                 CoSecAuditFallbackAutoConfiguration::class.java,
@@ -86,12 +78,8 @@ class AuditOpenTelemetryCompositionTest {
     fun auditOnAndOtelOffAuditingIsPrimary() {
         contextRunner
             .withClassLoader(FilteredClassLoader("me.ahoo.cosec.opentelemetry.CoSecInstrumenter"))
-            .withBean(
-                CoSecAuthorizationAutoConfiguration.BEAN_NAME,
-                Authorization::class.java,
-                Supplier { mockk() },
-            )
             .withUserConfiguration(
+                AutoConfiguredAuthorizationTestConfiguration::class.java,
                 CoSecAuditAutoConfiguration::class.java,
                 CoSecAuditFallbackAutoConfiguration::class.java,
             )

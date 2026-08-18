@@ -106,6 +106,30 @@ class AuditEventExtractorTest {
     }
 
     @Test
+    fun fromDecisionWhenTooManyRequests() {
+        val event = AuditEventExtractor.fromDecision(
+            request,
+            context,
+            AuthorizeResult.TOO_MANY_REQUESTS,
+            elapsedNanos = 1,
+        )
+        event.decision.assert().isEqualTo(me.ahoo.cosec.api.audit.AuditDecision.TOO_MANY_REQUESTS)
+    }
+
+    @Test
+    fun snapshotPrincipalGrants() {
+        val roles = mutableSetOf("admin@0")
+        val policies = mutableSetOf("p1")
+        every { principal.roles } returns roles
+        every { principal.policies } returns policies
+        val event = AuditEventExtractor.fromDecision(request, context, AuthorizeResult.ALLOW, elapsedNanos = 1)
+        roles += "operator@0"
+        policies += "p2"
+        event.roles.assert().isEqualTo(setOf("admin@0"))
+        event.policies.assert().isEqualTo(setOf("p1"))
+    }
+
+    @Test
     fun fromDecisionWhenTokenExpiredCollapsesToExplicitDeny() {
         val event = AuditEventExtractor.fromDecision(request, context, AuthorizeResult.TOKEN_EXPIRED, elapsedNanos = 1)
         event.decision.assert().isEqualTo(me.ahoo.cosec.api.audit.AuditDecision.EXPLICIT_DENY)

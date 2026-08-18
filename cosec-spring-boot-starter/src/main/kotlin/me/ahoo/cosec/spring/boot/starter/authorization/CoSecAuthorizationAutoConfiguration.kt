@@ -52,6 +52,10 @@ import org.springframework.web.server.ServerWebExchange
     AuthorizationProperties::class,
 )
 class CoSecAuthorizationAutoConfiguration {
+    @Target(AnnotationTarget.FUNCTION)
+    @Retention(AnnotationRetention.RUNTIME)
+    internal annotation class AutoConfigured
+
     @Bean
     @ConditionalOnMissingBean
     fun securityContextParser(tokenVerifier: TokenVerifier): SecurityContextParser {
@@ -93,6 +97,7 @@ class CoSecAuthorizationAutoConfiguration {
     }
 
     @Bean
+    @AutoConfigured
     @ConditionalOnMissingBean
     fun cosecAuthorization(
         policyRepository: PolicyRepository,
