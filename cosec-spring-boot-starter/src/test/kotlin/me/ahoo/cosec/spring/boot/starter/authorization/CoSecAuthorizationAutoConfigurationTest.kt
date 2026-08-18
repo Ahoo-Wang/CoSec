@@ -154,4 +154,19 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 }
             }
     }
+
+    @Test
+    fun localPolicyInitializerRunsOnceAcrossLifecycleRestarts() {
+        val localPolicyInitializer = mockk<LocalPolicyInitializer>(relaxed = true)
+
+        LocalPolicyInitializerLifecycle(localPolicyInitializer).apply {
+            start()
+            stop()
+            start()
+        }
+
+        verify(exactly = 1) {
+            localPolicyInitializer.init()
+        }
+    }
 }

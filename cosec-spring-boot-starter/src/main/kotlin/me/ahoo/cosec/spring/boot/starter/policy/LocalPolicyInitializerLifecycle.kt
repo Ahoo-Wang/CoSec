@@ -19,11 +19,16 @@ import org.springframework.context.SmartLifecycle
 class LocalPolicyInitializerLifecycle(
     private val localPolicyInitializer: LocalPolicyInitializer
 ) : SmartLifecycle {
+    private var initialized = false
+
     @Volatile
     private var running = false
 
     override fun start() {
-        localPolicyInitializer.init()
+        if (!initialized) {
+            localPolicyInitializer.init()
+            initialized = true
+        }
         running = true
     }
 
