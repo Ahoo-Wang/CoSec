@@ -21,11 +21,19 @@ import org.springframework.beans.factory.DisposableBean
 import org.springframework.kafka.core.KafkaOperations
 import reactor.core.scheduler.Scheduler
 import reactor.core.scheduler.Schedulers
+import java.util.concurrent.RejectedExecutionException
+
+private const val MAX_PENDING_AUDIT_EVENTS = 1024
+private const val KAFKA_AUDIT_SCHEDULER_NAME = "cosec-kafka-audit"
 
 class KafkaAuditEventSink(
     private val kafkaOperations: KafkaOperations<String, String>,
     private val topic: String,
-    private val scheduler: Scheduler = Schedulers.newSingle("cosec-kafka-audit"),
+    private val scheduler: Scheduler = Schedulers.newBoundedElastic(
+        1,
+        MAX_PENDING_AUDIT_EVENTS,
+        KAFKA_AUDIT_SCHEDULER_NAME,
+    ),
 ) : AuditEventSink,
     DisposableBean {
     init {
@@ -34,21 +42,25 @@ class KafkaAuditEventSink(
 
     @Suppress("TooGenericExceptionCaught")
     override fun publish(event: AuditEvent) {
-        // ponytail: one scheduler preserves audit order; shard by key if send throughput becomes a bottleneck.
-        scheduler.schedule {
-            try {
-                kafkaOperations.send(
-                    topic,
-                    CoSecJsonSerializer.writeValueAsString(arrayOf(event.tenantId, event.principalId)),
-                    CoSecJsonSerializer.writeValueAsString(event),
-                ).whenComplete { _, error ->
-                    if (error != null) {
-                        logFailure(error)
+        try {
+            // ponytail: one bounded scheduler preserves order; shard by key if throughput becomes a bottleneck.
+            scheduler.schedule {
+                try {
+                    kafkaOperations.send(
+                        topic,
+                        CoSecJsonSerializer.writeValueAsString(arrayOf(event.tenantId, event.principalId)),
+                        CoSecJsonSerializer.writeValueAsString(event),
+                    ).whenComplete { _, error ->
+                        if (error != null) {
+                            logFailure(error)
+                        }
                     }
+                } catch (error: Exception) {
+                    logFailure(error)
                 }
-            } catch (error: Exception) {
-                logFailure(error)
             }
+        } catch (error: RejectedExecutionException) {
+            log.warn(error) { "Dropped audit event because the Kafka audit queue is full or shutting down." }
         }
     }
 

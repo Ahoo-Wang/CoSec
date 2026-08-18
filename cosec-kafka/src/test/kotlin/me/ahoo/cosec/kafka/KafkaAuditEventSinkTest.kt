@@ -33,6 +33,7 @@ import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 
 class KafkaAuditEventSinkTest {
@@ -157,5 +158,17 @@ class KafkaAuditEventSinkTest {
         sent.await(5, TimeUnit.SECONDS).assert().isTrue()
         values[0].assert().isEqualTo(CoSecJsonSerializer.writeValueAsString(first))
         values[1].assert().isEqualTo(CoSecJsonSerializer.writeValueAsString(second))
+    }
+
+    @Test
+    fun rejectedTaskIsDropped() {
+        val scheduler = mockk<Scheduler>(relaxed = true) {
+            every { schedule(any<Runnable>()) } throws RejectedExecutionException("Queue full")
+        }
+        val kafkaOperations = mockk<KafkaOperations<String, String>>(relaxed = true)
+
+        sink(kafkaOperations, scheduler).publish(event)
+
+        verify(exactly = 0) { kafkaOperations.send(any(), any(), any()) }
     }
 }
