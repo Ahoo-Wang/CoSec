@@ -32,6 +32,25 @@ jobs:
       - name: Test CoSec-Core
         run: ./gradlew cosec-core:clean cosec-core:check
 
+  cosec-kafka-test:
+    name: CoSec Kafka Test
+    needs: [ cosec-core-test ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@master
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Test CoSec-Kafka
+        run: ./gradlew cosec-kafka:clean cosec-kafka:check
+
   cosec-opentelemetry-test:
     name: CoSec OpenTelemetry Test
     needs: [ cosec-core-test ]
