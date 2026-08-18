@@ -11,22 +11,19 @@
  * limitations under the License.
  */
 
-rootProject.name = "CoSec"
+package me.ahoo.cosec.spring.boot.starter.audit.kafka
 
-include(":cosec-bom")
-include(":cosec-dependencies")
-include(":cosec-api")
-include(":cosec-core")
-include(":cosec-jwt")
-include(":cosec-cocache")
-include(":cosec-social")
-include(":cosec-webmvc")
-include(":cosec-webflux")
-include(":cosec-spring-boot-starter")
-include(":cosec-gateway")
-include(":cosec-gateway-server")
-include(":cosec-opentelemetry")
-include(":cosec-ip2region")
-include(":code-coverage-report")
-include(":cosec-openapi")
-include(":cosec-kafka")
+import me.ahoo.cosec.spring.boot.starter.EnabledCapable
+import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.bind.DefaultValue
+
+@ConfigurationProperties(KafkaAuditProperties.PREFIX)
+data class KafkaAuditProperties(
+    @DefaultValue("true") override var enabled: Boolean = true,
+    @DefaultValue(DEFAULT_TOPIC) var topic: String = DEFAULT_TOPIC,
+) : EnabledCapable {
+    companion object {
+        const val PREFIX: String = "cosec.audit.kafka"
+        const val DEFAULT_TOPIC: String = "cosec-audit"
+    }
+}

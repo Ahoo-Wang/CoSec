@@ -47,6 +47,10 @@ java {
         usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
         capability(group.toString(), "openapi-support", version.toString())
     }
+    registerFeature("kafkaSupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "kafka-support", version.toString())
+    }
 }
 dependencies {
     kapt(platform(project(":cosec-dependencies")))
@@ -64,6 +68,8 @@ dependencies {
     "openapiSupportImplementation"(project(":cosec-openapi"))
     "openapiSupportImplementation"("org.springframework.boot:spring-boot-starter-actuator")
     "openapiSupportImplementation"("org.springdoc:springdoc-openapi-starter-common")
+    "kafkaSupportImplementation"(project(":cosec-kafka"))
+    "kafkaSupportImplementation"("org.springframework.boot:spring-boot-starter-kafka")
     api("org.springframework.boot:spring-boot-starter")
     api("org.springframework.boot:spring-boot-starter-jackson")
     kapt("org.springframework.boot:spring-boot-configuration-processor")

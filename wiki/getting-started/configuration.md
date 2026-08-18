@@ -147,6 +147,8 @@ Controls audit logging of authorization decisions.
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `cosec.audit.enabled` | `Boolean` | `true` | Whether to audit authorization decisions. |
+| `cosec.audit.kafka.enabled` | `Boolean` | `true` | Use Kafka instead of the logging sink when `kafka-support` is present. |
+| `cosec.audit.kafka.topic` | `String` | `cosec-audit` | Kafka topic for audit events. |
 
 Defined in `AuditProperties` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/audit/AuditProperties.kt:26](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/audit/AuditProperties.kt#L26)).
 
@@ -159,6 +161,15 @@ own `AuditEventSink` bean to ship events to Kafka/Elasticsearch/your database.
 If you replace the default `Authorization` bean with your own, audit wiring steps
 aside automatically (the decorator only wraps the auto-configured
 `cosecAuthorization` bean).
+
+The `kafka-support` feature replaces the logging sink with an asynchronous
+`KafkaAuditEventSink`. Each record uses a JSON `[tenantId, principalId]` tuple
+as its key and a single-line `AuditEvent` JSON value. Configure the broker with
+`spring.kafka.*`; CoSec does not create the topic. To keep authorization
+non-blocking during an outage, the sink queues at most 1024 events and drops
+new events when that queue is full, logging once until queue processing resumes.
+During shutdown it waits up to 10 seconds for accepted events to drain before
+forcing the scheduler closed.
 
 ### Gateway Properties (`cosec.authorization.gateway.*`)
 
@@ -227,6 +238,10 @@ sequenceDiagram
 ## Example Application.yaml
 
 ```yaml
+spring:
+  kafka:
+    bootstrap-servers: "localhost:9092"
+
 cosec:
   # Master switch
   enabled: true
@@ -269,6 +284,13 @@ cosec:
     gateway:
       enabled: true
 
+  # Audit
+  audit:
+    enabled: true
+    kafka:
+      enabled: true
+      topic: "cosec-audit"
+
   # IP Geolocation
   ip2region:
     enabled: true
@@ -292,6 +314,7 @@ flowchart LR
     STARTER --> IP["ip2region-support"]
     STARTER --> OT["opentelemetry-support"]
     STARTER --> OAPI["openapi-support"]
+    STARTER --> K["kafka-support"]
 
     style STARTER fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style W fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -302,6 +325,7 @@ flowchart LR
     style IP fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style OT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style OAPI fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style K fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
 
@@ -315,6 +339,7 @@ flowchart LR
 | `ip2region-support` | `cosec-ip2region` | ip2region library |
 | `opentelemetry-support` | `cosec-opentelemetry` | OpenTelemetry |
 | `openapi-support` | `cosec-openapi` | SpringDoc OpenAPI |
+| `kafka-support` | `cosec-kafka` | Spring for Apache Kafka |
 
 Feature variants are declared in `build.gradle.kts` ([cosec-spring-boot-starter/build.gradle.kts:18](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts#L18)).
 

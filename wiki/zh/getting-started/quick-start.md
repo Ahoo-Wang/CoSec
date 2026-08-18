@@ -37,6 +37,8 @@ dependencies {
     // requireCapability("me.ahoo.cosec:gateway-support")
     // 或者用于缓存（Redis）：
     // requireCapability("me.ahoo.cosec:cache-support")
+    // 或者用于 Kafka 审计：
+    // requireCapability("me.ahoo.cosec:kafka-support")
 }
 ```
 
