@@ -9,7 +9,7 @@ CoSec 使用 Spring Boot 的自动配置机制，根据类路径存在和属性�
 
 ## 自动配置概览
 
-全部 15 个 CoSec 自动配置类都作为**独立的扁平条目**注册在 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 中 -- 它们之间没有父/子层次结构。将它们联系在一起的是共享的 `@ConditionalOnCoSecEnabled` 门控（`cosec.enabled`，默认为 `true`）；若干类在此之上叠加了额外的条件（例如 `CoSecAuthorizationAutoConfiguration` 还要求 `@ConditionalOnAuthorizationEnabled`，`CoSecGatewayAuthorizationAutoConfiguration` 额外要求 `@ConditionalOnGatewayEnabled` 和 `@ConditionalOnClass(AuthorizationGatewayFilter::class)`）。唯一的例外是 `CoSecEndpointAutoConfiguration`，它仅由类路径存在性激活。
+全部 19 个 CoSec 自动配置类都作为**独立的扁平条目**注册在 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 中 -- 它们之间没有父/子层次结构。将它们联系在一起的是共享的 `@ConditionalOnCoSecEnabled` 门控（`cosec.enabled`，默认为 `true`）；若干类在此之上叠加了额外的条件（例如 `CoSecAuthorizationAutoConfiguration` 还要求 `@ConditionalOnAuthorizationEnabled`，`CoSecGatewayAuthorizationAutoConfiguration` 额外要求 `@ConditionalOnGatewayEnabled` 和 `@ConditionalOnClass(AuthorizationGatewayFilter::class)`）。唯一的例外是 `CoSecEndpointAutoConfiguration`，它仅由类路径存在性激活。
 
 ```mermaid
 graph TD
@@ -28,6 +28,10 @@ graph TD
     G --> M["CoSecOpenTelemetryAutoConfiguration"]
     G --> N["Ip2RegionAutoConfiguration"]
     G --> O["CoSecOpenAPIAutoConfiguration"]
+    G --> Q["CoSecRedisRateLimiterAutoConfiguration"]
+    G --> R["CoSecKafkaAuditAutoConfiguration"]
+    G --> S["CoSecAuditAutoConfiguration"]
+    G --> T["CoSecAuditFallbackAutoConfiguration"]
     P["CoSecEndpointAutoConfiguration<br>(classpath-only gate)"]
 
     style G fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -45,6 +49,10 @@ graph TD
     style M fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style N fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style O fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style Q fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style R fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style S fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style T fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style P fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
@@ -116,6 +124,7 @@ graph TD
     A --> D["blacklistChecker<br>(BlacklistChecker.NoOp)"]
     A --> E["localPolicyLoader<br>(local-policy.enabled)"]
     A --> F["localPolicyInitializer<br>(local-policy.init-repository)"]
+    A --> K["localPolicyInitializerLifecycle<br>(local-policy.init-repository)"]
     A --> G["WebFlux config"]
     A --> H["WebMVC config"]
     G --> I["reactiveAuthorizationFilter<br>(ReactiveAuthorizationFilter)"]
@@ -127,6 +136,7 @@ graph TD
     style D fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style E fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style F fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style K fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style G fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style H fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style I fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -139,7 +149,7 @@ graph TD
 - **WebMVC**：当 `AuthorizationFilter` 在类路径上时激活。
 - **Gateway**：由单独的 `CoSecGatewayAuthorizationAutoConfiguration` 处理，通过 `@ConditionalOnClass(AuthorizationGatewayFilter::class)` 激活；普通 WebFlux 的 `reactiveAuthorizationFilter` Bean 自身带有 `@ConditionalOnMissingClass("org.springframework.cloud.gateway.filter.GlobalFilter")`，因此当 Spring Cloud Gateway 在类路径上时它会自动退避。
 
-`localPolicyLoader` 和 `localPolicyInitializer` Bean **默认关闭**：两者分别由 `@ConditionalOnProperty`（`cosec.authorization.local-policy.enabled` 和 `cosec.authorization.local-policy.init-repository`）守卫，且 `matchIfMissing = false`，因此只有在显式启用时才会创建这两个 Bean。
+`localPolicyLoader` 和 `localPolicyInitializer` Bean **默认关闭**：两者分别由 `@ConditionalOnProperty`（`cosec.authorization.local-policy.enabled` 和 `cosec.authorization.local-policy.init-repository`）守卫，且 `matchIfMissing = false`，因此只有在显式启用时才会创建这两个 Bean。`localPolicyInitializerLifecycle` Bean 由相同的 `init-repository` 属性守卫；它是一个 `SmartLifecycle`，其 phase 紧随 `MatcherFactoryRegister` 之后执行，因此本地策略只会在所有 SPI 匹配器工厂注册完成之后初始化一次。
 
 ## CoSecJwtAutoConfiguration
 
@@ -166,7 +176,7 @@ cosec:
 
 ## Spring 自动配置注册
 
-CoSec 使用 Spring Boot 的 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 文件注册所有自动配置类。这是 `spring.factories` 的现代替代方案。starter 将全部 15 个自动配置类注册为扁平的独立条目：
+CoSec 使用 Spring Boot 的 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 文件注册所有自动配置类。这是 `spring.factories` 的现代替代方案。starter 将全部 19 个自动配置类注册为扁平的独立条目：
 
 ```
 me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration
@@ -184,7 +194,13 @@ me.ahoo.cosec.spring.boot.starter.opentelemetry.CoSecOpenTelemetryAutoConfigurat
 me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.actuate.CoSecEndpointAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.openapi.CoSecOpenAPIAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authorization.limiter.CoSecRedisRateLimiterAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.audit.kafka.CoSecKafkaAuditAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.audit.CoSecAuditAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.audit.CoSecAuditFallbackAutoConfiguration
 ```
+
+audit 相关条目额外受 `@ConditionalOnAuditEnabled` 守卫（[CoSecAuditAutoConfiguration.kt:39](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/audit/CoSecAuditAutoConfiguration.kt#L39)）。
 
 ```mermaid
 sequenceDiagram

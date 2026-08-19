@@ -219,6 +219,7 @@ sequenceDiagram
 
 ```kotlin
 data class PolicyVerifyContext(
+    val source: PolicyVerifySource,
     val policy: Policy,
     val statementIndex: Int,
     val statement: Statement,
@@ -226,7 +227,7 @@ data class PolicyVerifyContext(
 ) : VerifyContext
 ```
 
-这使得下游代码（审计日志、调试、OpenTelemetry 追踪）能够准确了解哪个策略和声明产生了授权决策。
+这使得下游代码（审计日志、调试、OpenTelemetry 追踪）能够准确了解哪个策略和声明产生了授权决策。`source` 属性记录匹配来自哪个策略组 —— 全局策略为 `PolicyVerifySource.GLOBAL`，主体分配的策略为 `PolicyVerifySource.PRINCIPAL`。
 
 ## 性能：基于序列的评估
 

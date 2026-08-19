@@ -19,9 +19,9 @@ CoSec is an open-source, RBAC and policy-based security framework purpose-built 
 | **Language** | Kotlin on JVM (Java 17+) |
 | **Concurrency Model** | Reactive (Project Reactor) — non-blocking I/O throughout |
 | **Framework Integration** | Spring Boot 4, Spring Cloud Gateway 2025.x |
-| **Codebase Scale** | ~12,030 lines of Kotlin across 235 source files, 118 test files |
-| **Module Count** | 15 modules (12 publishable libraries, 2 BOMs, 1 standalone server) |
-| **Release Cadence** | Active — 505 commits since January 2025, latest release v4.8.0 (v4.9.0 in development on main) |
+| **Codebase Scale** | ~13,570 lines of Kotlin across 254 source files, 131 test files |
+| **Module Count** | 16 modules (13 publishable libraries, 2 BOMs, 1 standalone server) |
+| **Release Cadence** | Active — 531 commits since January 2025, latest release v5.1.0 |
 | **Repository** | [github.com/Ahoo-Wang/CoSec](https://github.com/Ahoo-Wang/CoSec) |
 
 **Why it matters**: CoSec eliminates the need for a separate security gateway infrastructure layer by embedding policy-driven authorization directly into application code. This reduces latency, simplifies deployment topology, and gives developers fine-grained control over access decisions at the service boundary.
@@ -379,11 +379,11 @@ Transparent assessment of areas requiring attention.
 
 | Area | Status | Evidence | Recommended Action |
 |---|---|---|---|
-| **Test coverage breadth** | Good | 118 test files covering 235 source files (1:2 ratio); all modules have test suites | Maintain current standard; add integration tests for multi-tenant scenarios |
+| **Test coverage breadth** | Good | 131 test files covering 254 source files (1:2 ratio); all modules have test suites | Maintain current standard; add integration tests for multi-tenant scenarios |
 | **Dependency currency** | Excellent | Renovate bot produces 347 automated update commits; Spring Boot 4.1.0, Kotlin 2.4.10 | No action needed — automated process handles it |
 | **Code quality tooling** | Strong | Detekt static analysis with auto-correct enforced at build time | No action needed |
 | **Documentation** | Growing | VitePress wiki with i18n support recently added; CLAUDE.md for AI-assisted development | Continue investing in operational runbooks for adopters |
-| **Single maintainer concentration** | Acknowledged | 1 maintainer + automated bot; 505 commits since January 2025 | Budget for internal contributor onboarding; consider sponsoring the project |
+| **Single maintainer concentration** | Acknowledged | 1 maintainer + automated bot; 531 commits since January 2025 | Budget for internal contributor onboarding; consider sponsoring the project |
 | **JMH benchmark coverage** | Present but shallow | Every module has JMH plugin configured; benchmark results not published | Publish benchmark results to track performance regressions over releases |
 
 ---

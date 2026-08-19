@@ -40,7 +40,7 @@ graph TD
 
 ## Sequence-Based Evaluation
 
-A key performance optimization (commit `de927e6`) replaced `List`-based policy evaluation with Kotlin `Sequence`-based evaluation. This change eliminates intermediate collection allocations during the deny-first algorithm.
+A key performance optimization (commit `de927e6`) replaced `List`-based policy evaluation with Kotlin `Sequence`-based evaluation. The incoming sequence is materialized exactly once by `partition`, which builds the deny and allow lists, so every upstream item is pulled exactly once per authorization.
 
 ### Before vs. After
 
@@ -53,12 +53,11 @@ flowchart TD
         B1 --> E1["filter ALLOW statements -> new List"]
         E1 --> F1["forEach ALLOW -> verify"]
     end
-    subgraph "After: Sequence-based (lazy)"
+    subgraph "After: Sequence-based (single-pass partition)"
         A2["Sequence of matched policies"] --> B2["flatMap to Sequence of statements"]
-        B2 --> C2["filter DENY (lazy)"]
-        C2 --> D2["forEach DENY -> verify (short-circuit)"]
-        B2 --> E2["filter ALLOW (lazy)"]
-        E2 --> F2["forEach ALLOW -> verify (short-circuit)"]
+        B2 --> C2["partition { DENY } (single pass)"]
+        C2 --> D2["denyItems -> verify (short-circuit)"]
+        C2 --> E2["allowItems -> verify (short-circuit)"]
     end
 
     style A1 fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -72,14 +71,13 @@ flowchart TD
     style C2 fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style D2 fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style E2 fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style F2 fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
 
 The `evaluateDenyFirst` function in `SimpleAuthorization` operates on a `Sequence<T>`, which means:
 
-1. **No intermediate collections** -- `filter` and `flatMap` return lazy sequences.
-2. **Short-circuit evaluation** -- the first DENY match stops iteration immediately.
+1. **Materialized exactly once** -- `items.partition { ... }` builds the deny and allow lists in a single pass, so every upstream condition (e.g. a policy-level rate limiter) is evaluated exactly once per authorization, including conditions positioned after a matching early DENY.
+2. **Short-circuit evaluation** -- within each pass, verification stops at the first decisive result: the DENY pass at the first `EXPLICIT_DENY`, the ALLOW pass at the first `ALLOW`.
 3. **Two-pass design** -- DENY statements are evaluated first, then ALLOW statements, guaranteeing that deny rules always take precedence.
 
 ### The evaluateDenyFirst Algorithm

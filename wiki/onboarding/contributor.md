@@ -275,6 +275,7 @@ The module dependency order is defined in `settings.gradle.kts` ([settings.gradl
 | `cosec-ip2region` | `cosec-core` | Yes | IP geolocation enrichment |
 | `cosec-opentelemetry` | `cosec-core` | Yes | OpenTelemetry tracing |
 | `cosec-openapi` | `cosec-core` | Yes | Swagger/OpenAPI integration |
+| `cosec-kafka` | `cosec-api`, `cosec-core` | Yes | Kafka-based audit event sink |
 | `cosec-webflux` | `cosec-core` | Yes | Reactive WebFilter integration |
 | `cosec-webmvc` | `cosec-core` | Yes | Servlet filter integration |
 | `cosec-gateway` | `cosec-webflux` | Yes | Spring Cloud Gateway GlobalFilter |

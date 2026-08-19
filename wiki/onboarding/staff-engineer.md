@@ -943,4 +943,4 @@ The critical difference from Spring Security: CoSec does not use a filter chain 
 
 ---
 
-This guide covers the architectural spine of CoSec. The codebase is around 15 modules with clear separation of concerns. When in doubt, start from the `cosec-api` interfaces and trace implementations in `cosec-core`. The SPI files in `META-INF/services/` tell you every built-in extension. The auto-configuration in `cosec-spring-boot-starter` tells you how the pieces assemble.
+This guide covers the architectural spine of CoSec. The codebase is around 16 modules with clear separation of concerns. When in doubt, start from the `cosec-api` interfaces and trace implementations in `cosec-core`. The SPI files in `META-INF/services/` tell you every built-in extension. The auto-configuration in `cosec-spring-boot-starter` tells you how the pieces assemble.

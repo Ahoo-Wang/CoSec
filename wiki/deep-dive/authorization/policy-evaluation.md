@@ -219,6 +219,7 @@ When a policy or statement matches during authorization, a [PolicyVerifyContext]
 
 ```kotlin
 data class PolicyVerifyContext(
+    val source: PolicyVerifySource,
     val policy: Policy,
     val statementIndex: Int,
     val statement: Statement,
@@ -226,7 +227,7 @@ data class PolicyVerifyContext(
 ) : VerifyContext
 ```
 
-This enables downstream code (audit logging, debugging, OpenTelemetry tracing) to know exactly which policy and statement produced the authorization decision.
+This enables downstream code (audit logging, debugging, OpenTelemetry tracing) to know exactly which policy and statement produced the authorization decision. The `source` property records which policy group produced the match — `PolicyVerifySource.GLOBAL` for global policies or `PolicyVerifySource.PRINCIPAL` for principal-assigned policies.
 
 ## Performance: Sequence-Based Evaluation
 

@@ -40,7 +40,7 @@ graph TD
 
 ## 基于序列的评估
 
-一项关键的性能优化（提交 `de927e6`）将基于 `List` 的策略评估替换为基于 Kotlin `Sequence` 的评估。这一变更消除了拒绝优先算法中的中间集合分配。
+一项关键的性能优化（提交 `de927e6`）将基于 `List` 的策略评估替换为基于 Kotlin `Sequence` 的评估。传入的序列通过 `partition` 恰好物化一次，构建拒绝列表和允许列表，因此每个上游条目在每次授权中只被拉取一次。
 
 ### 优化前与优化后
 
@@ -53,12 +53,11 @@ flowchart TD
         B1 --> E1["filter ALLOW statements -> new List"]
         E1 --> F1["forEach ALLOW -> verify"]
     end
-    subgraph "After: Sequence-based (lazy)"
+    subgraph "After: Sequence-based (single-pass partition)"
         A2["Sequence of matched policies"] --> B2["flatMap to Sequence of statements"]
-        B2 --> C2["filter DENY (lazy)"]
-        C2 --> D2["forEach DENY -> verify (short-circuit)"]
-        B2 --> E2["filter ALLOW (lazy)"]
-        E2 --> F2["forEach ALLOW -> verify (short-circuit)"]
+        B2 --> C2["partition { DENY } (single pass)"]
+        C2 --> D2["denyItems -> verify (short-circuit)"]
+        C2 --> E2["allowItems -> verify (short-circuit)"]
     end
 
     style A1 fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -72,14 +71,13 @@ flowchart TD
     style C2 fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style D2 fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style E2 fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style F2 fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
 
 `SimpleAuthorization` 中的 `evaluateDenyFirst` 函数在 `Sequence<T>` 上操作，这意味着：
 
-1. **无中间集合** -- `filter` 和 `flatMap` 返回惰性序列。
-2. **短路评估** -- 第一个 DENY 匹配立即停止迭代。
+1. **恰好物化一次** -- `items.partition { ... }` 单趟构建拒绝列表和允许列表，每个上游条件（例如策略级速率限制器）在每次授权中恰好被评估一次，包括位于匹配的早期 DENY 之后的条件。
+2. **短路评估** -- 每一轮扫描在第一个决定性结果处停止：DENY 轮在第一个 `EXPLICIT_DENY` 处停止，ALLOW 轮在第一个 `ALLOW` 处停止。
 3. **两遍设计** -- DENY 语句先评估，然后是 ALLOW 语句，确保拒绝规则始终优先。
 
 ### evaluateDenyFirst 算法

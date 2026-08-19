@@ -41,6 +41,7 @@ cosec-social/       - OAuth social auth via JustAuth
 cosec-ip2region/    - IP geolocation enrichment
 cosec-opentelemetry/ - OpenTelemetry tracing instrumentation
 cosec-openapi/      - Swagger/OpenAPI integration
+cosec-kafka/        - Kafka audit event sink
 cosec-webflux/      - Reactive WebFilter integration
 cosec-webmvc/       - Servlet filter integration
 cosec-gateway/      - Spring Cloud Gateway GlobalFilter

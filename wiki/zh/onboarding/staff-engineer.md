@@ -943,4 +943,4 @@ JMH 依赖版本为 `1.37`（[`libs.versions.toml:21`](https://github.com/Ahoo-W
 
 ---
 
-本指南涵盖了 CoSec 的架构脊柱。代码库约 15 个模块，关注点分离清晰。如有疑问，从 `cosec-api` 接口开始，在 `cosec-core` 中追踪实现。`META-INF/services/` 中的 SPI 文件告诉你每一个内置扩展。`cosec-spring-boot-starter` 中的自动配置告诉你各部分如何组装。
+本指南涵盖了 CoSec 的架构脊柱。代码库约 16 个模块，关注点分离清晰。如有疑问，从 `cosec-api` 接口开始，在 `cosec-core` 中追踪实现。`META-INF/services/` 中的 SPI 文件告诉你每一个内置扩展。`cosec-spring-boot-starter` 中的自动配置告诉你各部分如何组装。

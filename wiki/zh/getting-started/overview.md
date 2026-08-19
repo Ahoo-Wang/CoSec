@@ -123,6 +123,7 @@ flowchart BT
     IP2R["cosec-ip2region\nIP Geolocation"]
     OTEL["cosec-opentelemetry\nObservability"]
     OPENAPI["cosec-openapi\nSwagger Integration"]
+    KAFKA["cosec-kafka\nKafka Audit Sink"]
     WEBFLUX["cosec-webflux\nWebFilter Integration"]
     WEBMVC["cosec-webmvc\nServlet Filter"]
     GW["cosec-gateway\nGateway GlobalFilter"]
@@ -135,6 +136,7 @@ flowchart BT
     CORE --> IP2R
     CORE --> OTEL
     CORE --> OPENAPI
+    CORE --> KAFKA
     CORE --> WEBFLUX
     CORE --> WEBMVC
     CORE --> GW
@@ -148,6 +150,7 @@ flowchart BT
     style IP2R fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style OTEL fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style OPENAPI fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style KAFKA fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style WEBFLUX fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style WEBMVC fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style GW fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -165,6 +168,7 @@ flowchart BT
 | `cosec-ip2region` | 用于基于区域访问控制的 IP 地理定位。 |
 | `cosec-opentelemetry` | 用于分布式追踪的 OpenTelemetry 集成。 |
 | `cosec-openapi` | Swagger/OpenAPI 集成和策略生成端点。 |
+| `cosec-kafka` | 通过 Spring for Apache Kafka 的审计事件 Sink。 |
 | `cosec-webflux` | 面向 Spring WebFlux 应用的响应式 WebFilter 集成。 |
 | `cosec-webmvc` | 面向 Spring WebMvc 应用的 Servlet 过滤器集成。 |
 | `cosec-gateway` | 面向 Spring Cloud Gateway 的 GlobalFilter 集成。 |

@@ -9,7 +9,7 @@ CoSec uses Spring Boot's auto-configuration mechanism to automatically wire up a
 
 ## Auto-Configuration Overview
 
-All 15 CoSec auto-configuration classes are registered as **independent, flat entries** in `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` -- there is no parent/child hierarchy among them. What ties them together is the shared `@ConditionalOnCoSecEnabled` gate (`cosec.enabled`, default `true`); several classes layer additional conditions on top (for example, `CoSecAuthorizationAutoConfiguration` also requires `@ConditionalOnAuthorizationEnabled`, and `CoSecGatewayAuthorizationAutoConfiguration` additionally requires `@ConditionalOnGatewayEnabled` and `@ConditionalOnClass(AuthorizationGatewayFilter::class)`). The one exception is `CoSecEndpointAutoConfiguration`, which is activated purely by classpath presence.
+All 19 CoSec auto-configuration classes are registered as **independent, flat entries** in `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` -- there is no parent/child hierarchy among them. What ties them together is the shared `@ConditionalOnCoSecEnabled` gate (`cosec.enabled`, default `true`); several classes layer additional conditions on top (for example, `CoSecAuthorizationAutoConfiguration` also requires `@ConditionalOnAuthorizationEnabled`, and `CoSecGatewayAuthorizationAutoConfiguration` additionally requires `@ConditionalOnGatewayEnabled` and `@ConditionalOnClass(AuthorizationGatewayFilter::class)`). The one exception is `CoSecEndpointAutoConfiguration`, which is activated purely by classpath presence.
 
 ```mermaid
 graph TD
@@ -28,6 +28,10 @@ graph TD
     G --> M["CoSecOpenTelemetryAutoConfiguration"]
     G --> N["Ip2RegionAutoConfiguration"]
     G --> O["CoSecOpenAPIAutoConfiguration"]
+    G --> Q["CoSecRedisRateLimiterAutoConfiguration"]
+    G --> R["CoSecKafkaAuditAutoConfiguration"]
+    G --> S["CoSecAuditAutoConfiguration"]
+    G --> T["CoSecAuditFallbackAutoConfiguration"]
     P["CoSecEndpointAutoConfiguration<br>(classpath-only gate)"]
 
     style G fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -45,6 +49,10 @@ graph TD
     style M fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style N fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style O fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style Q fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style R fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style S fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style T fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style P fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
@@ -116,6 +124,7 @@ graph TD
     A --> D["blacklistChecker<br>(BlacklistChecker.NoOp)"]
     A --> E["localPolicyLoader<br>(local-policy.enabled)"]
     A --> F["localPolicyInitializer<br>(local-policy.init-repository)"]
+    A --> K["localPolicyInitializerLifecycle<br>(local-policy.init-repository)"]
     A --> G["WebFlux config"]
     A --> H["WebMVC config"]
     G --> I["reactiveAuthorizationFilter<br>(ReactiveAuthorizationFilter)"]
@@ -127,6 +136,7 @@ graph TD
     style D fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style E fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style F fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style K fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style G fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style H fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style I fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -139,7 +149,7 @@ The nested `WebFlux` and `WebMVC` configurations are conditionally activated bas
 - **WebMVC**: activated when `AuthorizationFilter` is on the classpath.
 - **Gateway**: handled by the separate `CoSecGatewayAuthorizationAutoConfiguration`, activated via `@ConditionalOnClass(AuthorizationGatewayFilter::class)`; the plain WebFlux `reactiveAuthorizationFilter` bean itself carries `@ConditionalOnMissingClass("org.springframework.cloud.gateway.filter.GlobalFilter")`, so it backs off when Spring Cloud Gateway is on the classpath.
 
-The `localPolicyLoader` and `localPolicyInitializer` beans are **off by default**: each is guarded by `@ConditionalOnProperty` (`cosec.authorization.local-policy.enabled` and `cosec.authorization.local-policy.init-repository` respectively) with `matchIfMissing = false`, so both beans are only created when explicitly enabled.
+The `localPolicyLoader` and `localPolicyInitializer` beans are **off by default**: each is guarded by `@ConditionalOnProperty` (`cosec.authorization.local-policy.enabled` and `cosec.authorization.local-policy.init-repository` respectively) with `matchIfMissing = false`, so both beans are only created when explicitly enabled. The `localPolicyInitializerLifecycle` bean is guarded by the same `init-repository` property; it is a `SmartLifecycle` whose phase runs right after `MatcherFactoryRegister`, so local policies are initialized exactly once, after all SPI matcher factories have been registered.
 
 ## CoSecJwtAutoConfiguration
 
@@ -166,7 +176,7 @@ cosec:
 
 ## Spring Auto-Configuration Registration
 
-CoSec uses Spring Boot's `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` file to register all auto-configuration classes. This is the modern replacement for `spring.factories`. The starter registers all 15 auto-configuration classes as flat, independent entries:
+CoSec uses Spring Boot's `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` file to register all auto-configuration classes. This is the modern replacement for `spring.factories`. The starter registers all 19 auto-configuration classes as flat, independent entries:
 
 ```
 me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration
@@ -184,7 +194,13 @@ me.ahoo.cosec.spring.boot.starter.opentelemetry.CoSecOpenTelemetryAutoConfigurat
 me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.actuate.CoSecEndpointAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.openapi.CoSecOpenAPIAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.authorization.limiter.CoSecRedisRateLimiterAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.audit.kafka.CoSecKafkaAuditAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.audit.CoSecAuditAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.audit.CoSecAuditFallbackAutoConfiguration
 ```
+
+The audit entries are additionally guarded by `@ConditionalOnAuditEnabled` ([CoSecAuditAutoConfiguration.kt:39](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/audit/CoSecAuditAutoConfiguration.kt#L39)).
 
 ```mermaid
 sequenceDiagram
