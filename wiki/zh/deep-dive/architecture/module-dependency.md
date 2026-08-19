@@ -9,7 +9,7 @@ CoSec 采用多模块 Gradle Kotlin DSL 项目组织，具有清晰的关注点�
 
 ## 高层模块架构
 
-项目在 [settings.gradle.kts](https://github.com/Ahoo-Wang/CoSec/blob/main/settings.gradle.kts#L16) 中声明，包含 16 个 `include(...)` 调用 —— 15 个 CoSec 模块加上 `code-coverage-report` 构建聚合模块。架构采用分层方法，API 模块定义契约，核心模块提供实现，集成模块适配各种运行时环境。
+项目在 [settings.gradle.kts](https://github.com/Ahoo-Wang/CoSec/blob/main/settings.gradle.kts#L16) 中声明，包含 17 个 `include(...)` 调用 —— 16 个 CoSec 模块加上 `code-coverage-report` 构建聚合模块。架构采用分层方法，API 模块定义契约，核心模块提供实现，集成模块适配各种运行时环境。
 
 ```mermaid
 graph TB
@@ -26,6 +26,7 @@ graph TB
         IP2REGION["cosec-ip2region"]
         OTEL["cosec-opentelemetry"]
         OPENAPI["cosec-openapi"]
+        KAFKA["cosec-kafka"]
     end
 
     subgraph "Core Layer"
@@ -47,6 +48,7 @@ graph TB
     IP2REGION --> CORE
     OTEL --> CORE
     OPENAPI --> CORE
+    KAFKA --> CORE
     CORE --> API
     STARTER --> CORE
     STARTER --> JWT
@@ -58,6 +60,7 @@ graph TB
     STARTER -.-> IP2REGION
     STARTER -.-> OTEL
     STARTER -.-> OPENAPI
+    STARTER -.-> KAFKA
     GWSERVER --> STARTER
     GWSERVER --> COCACHE
     GWSERVER --> WEBFLUX
@@ -75,6 +78,7 @@ graph TB
     style IP2REGION fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style OTEL fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style OPENAPI fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style KAFKA fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style WEBMVC fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style WEBFLUX fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style GATEWAY fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -93,6 +97,7 @@ graph TB
 | `cosec-ip2region` | 用于条件匹配的 IP 地理定位 | Ip2RegionRequestAttributesAppender | `cosec-core` |
 | `cosec-opentelemetry` | 安全操作的 OpenTelemetry 追踪 | CoSecInstrumenter, TracingAuthorization, AuthorizationMono | `cosec-core` |
 | `cosec-openapi` | 安全端点的 Swagger/OpenAPI 集成 | BearerAuthOpenApiCustomizer, OpenAPIPolicyGenerator, OpenAPIAppPermissionGenerator | `cosec-core` |
+| `cosec-kafka` | 基于 Kafka 的审计事件 Sink | KafkaAuditEventSink | `cosec-api`, `cosec-core` |
 | `cosec-webflux` | Spring WebFlux 的响应式 WebFilter | [ReactiveSecurityFilter](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59), [ReactiveAuthorizationFilter](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36) | `cosec-core`, `cosec-jwt` |
 | `cosec-webmvc` | Spring WebMVC 的 Servlet 过滤器（包 `me.ahoo.cosec.servlet`） | AuthorizationFilter, AbstractAuthorizationInterceptor, ServletRequestParser, InjectSecurityContextFilter | `cosec-core`, `cosec-jwt` |
 | `cosec-gateway` | Spring Cloud Gateway GlobalFilter | [AuthorizationGatewayFilter](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt#L31) | `cosec-webflux` |
@@ -118,6 +123,7 @@ graph LR
     STARTER --> |ip2regionSupport| IP2R["cosec-ip2region"]
     STARTER --> |opentelemetrySupport| OTEL["cosec-opentelemetry"]
     STARTER --> |openapiSupport| OPENAPI["cosec-openapi"]
+    STARTER --> |kafkaSupport| KAFKA["cosec-kafka"]
 
     style STARTER fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style CORE fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -130,6 +136,7 @@ graph LR
     style IP2R fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style OTEL fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style OPENAPI fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style KAFKA fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
 

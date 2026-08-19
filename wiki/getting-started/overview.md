@@ -123,6 +123,7 @@ flowchart BT
     IP2R["cosec-ip2region\nIP Geolocation"]
     OTEL["cosec-opentelemetry\nObservability"]
     OPENAPI["cosec-openapi\nSwagger Integration"]
+    KAFKA["cosec-kafka\nKafka Audit Sink"]
     WEBFLUX["cosec-webflux\nWebFilter Integration"]
     WEBMVC["cosec-webmvc\nServlet Filter"]
     GW["cosec-gateway\nGateway GlobalFilter"]
@@ -135,6 +136,7 @@ flowchart BT
     CORE --> IP2R
     CORE --> OTEL
     CORE --> OPENAPI
+    CORE --> KAFKA
     CORE --> WEBFLUX
     CORE --> WEBMVC
     CORE --> GW
@@ -148,6 +150,7 @@ flowchart BT
     style IP2R fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style OTEL fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style OPENAPI fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style KAFKA fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style WEBFLUX fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style WEBMVC fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style GW fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -165,6 +168,7 @@ flowchart BT
 | `cosec-ip2region` | IP geolocation for region-based access control. |
 | `cosec-opentelemetry` | OpenTelemetry integration for distributed tracing. |
 | `cosec-openapi` | Swagger/OpenAPI integration and policy generation endpoints. |
+| `cosec-kafka` | Kafka-based audit event sink via Spring for Apache Kafka. |
 | `cosec-webflux` | Reactive WebFilter integration for Spring WebFlux applications. |
 | `cosec-webmvc` | Servlet filter integration for Spring WebMvc applications. |
 | `cosec-gateway` | GlobalFilter integration for Spring Cloud Gateway. |

@@ -275,6 +275,7 @@ graph TB
 | `cosec-ip2region` | `cosec-core` | 是 | IP 地理位置信息增强 |
 | `cosec-opentelemetry` | `cosec-core` | 是 | OpenTelemetry 链路追踪 |
 | `cosec-openapi` | `cosec-core` | 是 | Swagger/OpenAPI 集成 |
+| `cosec-kafka` | `cosec-api`, `cosec-core` | 是 | 基于 Kafka 的审计事件 Sink |
 | `cosec-webflux` | `cosec-core` | 是 | 响应式 WebFilter 集成 |
 | `cosec-webmvc` | `cosec-core` | 是 | Servlet Filter 集成 |
 | `cosec-gateway` | `cosec-webflux` | 是 | Spring Cloud Gateway GlobalFilter |
