@@ -61,8 +61,8 @@ class RedisSlidingWindowRateLimiter(
             return script.bufferedReader().use { it.readText() }
         }
 
-        private fun sha1Hex(value: String): String {
-            val digest = MessageDigest.getInstance("SHA-1").digest(value.toByteArray())
+        private fun sha256Hex(value: String): String {
+            val digest = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
             return digest.joinToString("") { "%02x".format(it) }.take(12)
         }
     }
@@ -76,7 +76,7 @@ class RedisSlidingWindowRateLimiter(
      * Config-derived key segment, so policies with different limits never share
      * counters while policies with identical limits share one cluster-wide quota.
      */
-    private val configHash: String = sha1Hex("$permitsPerSecond|$windowSeconds|$strictFailure")
+    private val configHash: String = sha256Hex("$permitsPerSecond|$windowSeconds|$strictFailure")
 
     private val keyPrefix: String = keyPrefix.trimEnd(':')
 

@@ -63,7 +63,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
                     .hasSingleBean(SocialAuthentication::class.java)
                     .getBean(AuthenticationProvider::class.java)
                     .extracting {
-                        it.getRequired<SocialCredentials, CoSecPrincipal, SocialAuthentication>(
+                        it!!.getRequired<SocialCredentials, CoSecPrincipal, SocialAuthentication>(
                             SocialCredentials::class.java,
                         )
                     }
@@ -71,8 +71,8 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
                 assertThat(context)
                     .getBean(SocialProviderManager::class.java)
                     .extracting {
-                        it.getRequired("google")
-                        it.getRequired("github")
+                        it!!.getRequired("google")
+                        it!!.getRequired("github")
                     }
             }
     }

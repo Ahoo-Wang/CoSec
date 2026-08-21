@@ -17,6 +17,7 @@ import me.zhyd.oauth.config.AuthDefaultSource
 import org.hamcrest.CoreMatchers.equalTo
 import org.hamcrest.MatcherAssert.*
 import org.junit.jupiter.api.Test
+import java.util.UUID
 
 class SocialAuthenticationPropertiesTest {
 
@@ -24,9 +25,9 @@ class SocialAuthenticationPropertiesTest {
     fun toJustAuthConfig() {
         val provider = SocialAuthenticationProperties.Provider(
             type = AuthDefaultSource.GITHUB,
-            clientId = "clientId",
-            clientSecret = "clientSecret",
-            redirectUri = "redirectUri",
+            clientId = UUID.randomUUID().toString(),
+            clientSecret = UUID.randomUUID().toString(),
+            redirectUri = UUID.randomUUID().toString(),
         )
         val authConfig = provider.toJustAuthConfig()
         assertThat(authConfig.clientId, equalTo(provider.clientId))
