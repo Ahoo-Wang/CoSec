@@ -15,8 +15,8 @@ importers:
         specifier: ^1.6.4
         version: 1.6.4(@algolia/client-search@5.52.1)(postcss@8.5.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(search-insights@2.17.3)
       vitepress-mermaid-renderer:
-        specifier: ^1.2.0
-        version: 1.2.0(mermaid@11.15.0)(tailwindcss@4.3.3)(vue@3.5.34)
+        specifier: ^1.2.1
+        version: 1.2.1(mermaid@11.15.0)(tailwindcss@4.3.3)(vue@3.5.34)
 
 packages:
 
@@ -1432,8 +1432,8 @@ packages:
       terser:
         optional: true
 
-  vitepress-mermaid-renderer@1.2.0:
-    resolution: {integrity: sha512-rIg1AsHOKA84i5SUavoZcIhBmChOoBRyH/1QUOpvIEHZU4h/cIqFl9yhOweXi6uSbIrrFZPrSTOMMaXsRBo0IA==}
+  vitepress-mermaid-renderer@1.2.1:
+    resolution: {integrity: sha512-MoS3KGnzid+hjnb7n/yNpMuOLlKcelu5L1PrhAs5U6i9zUGSt3y8n50PVWVrsnlbx2dnL+sJ+7vHZcajaDLeiA==}
     engines: {node: '>=16.0.0'}
     peerDependencies:
       mermaid: ^11.0.0
@@ -2898,7 +2898,7 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
-  vitepress-mermaid-renderer@1.2.0(mermaid@11.15.0)(tailwindcss@4.3.3)(vue@3.5.34):
+  vitepress-mermaid-renderer@1.2.1(mermaid@11.15.0)(tailwindcss@4.3.3)(vue@3.5.34):
     dependencies:
       '@mermaid-js/mermaid-zenuml': 0.2.3(mermaid@11.15.0)(tailwindcss@4.3.3)
       mermaid: 11.15.0
