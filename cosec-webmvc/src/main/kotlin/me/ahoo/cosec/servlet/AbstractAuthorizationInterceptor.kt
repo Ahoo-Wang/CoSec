@@ -10,94 +10,70 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package me.ahoo.cosec.servlet
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_KEY
-import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
-import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.pipeline.SecurityPipeline
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
-import me.ahoo.cosec.token.TokenVerificationContexts.getTokenVerificationException
-import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationException
-import me.ahoo.cosec.token.TokenVerificationException
-import me.ahoo.cosec.token.toAuthorizeResult
-import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 
 /**
  * Abstract base class for authorization interceptors in servlet applications.
  *
- * This class provides the core authorization logic for servlet-based applications,
- * including:
- * - Parsing requests to extract security context
- * - Authorization decision making
- * - Error handling for authentication failures
+ * Runs each request through a [SecurityPipeline] and translates the resulting
+ * [me.ahoo.cosec.pipeline.SecurityDecision] into a servlet response. All authorization and error-mapping
+ * logic lives in the pipeline, shared with the reactive integration.
  *
- * Note: The authorization algorithm in this class mirrors the logic in
- * [me.ahoo.cosec.webflux.ReactiveSecurityFilter]. Changes to the algorithm
- * here should be reflected in the reactive counterpart.
+ * The resolved security context is bound to [SecurityContextHolder]; callers must clear it once the
+ * request completes.
  *
- * @param requestParser Parser for converting servlet requests
- * @param securityContextParser Parser for extracting security context
- * @param authorization The authorization service
+ * @param pipeline the security pipeline evaluating each request
  * @see AuthorizationFilter
  */
 abstract class AbstractAuthorizationInterceptor(
-    private val requestParser: RequestParser<HttpServletRequest>,
-    private val securityContextParser: SecurityContextParser,
-    private val authorization: Authorization
+    val pipeline: SecurityPipeline<HttpServletRequest>
 ) {
-    companion object {
-        private val log = KotlinLogging.logger {}
-    }
+    constructor(
+        requestParser: RequestParser<HttpServletRequest>,
+        securityContextParser: SecurityContextParser,
+        authorization: Authorization
+    ) : this(SecurityPipeline(requestParser, securityContextParser, authorization))
 
+    /**
+     * @return true when the request is authorized and may proceed; otherwise the response has been written
+     */
     protected fun authorize(
         servletRequest: HttpServletRequest,
         servletResponse: HttpServletResponse
     ): Boolean {
-        val request = requestParser.parse(servletRequest)
-        val securityContext =
-            try {
-                securityContextParser.parse(request)
-            } catch (verificationException: TokenVerificationException) {
-                SimpleSecurityContext.anonymous().also {
-                    it.setTokenVerificationException(verificationException)
-                }
-            }
-        securityContext.setRequest(request)
-        SecurityContextHolder.setContext(securityContext)
-        servletRequest.setSecurityContext(securityContext)
-        servletResponse.setHeader(REQUEST_ID_KEY, request.requestId)
-        return authorization
-            .authorize(request, securityContext)
-            .map {
-                if (!it.authorized) {
-                    if (!securityContext.principal.authenticated) {
-                        servletResponse.status = HttpStatus.UNAUTHORIZED.value()
-                    } else {
-                        servletResponse.status = HttpStatus.FORBIDDEN.value()
-                    }
-
-                    servletResponse.writeWithAuthorizeResult(
-                        securityContext.getTokenVerificationException()?.toAuthorizeResult() ?: it,
-                    )
-                    return@map false
-                }
-                true
-            }.block() ?: run {
-            log.warn { "Authorization returned empty result for request [$request]. Denying by default." }
-            servletResponse.status = HttpStatus.FORBIDDEN.value()
-            servletResponse.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
-            false
+        val decision = checkNotNull(pipeline.evaluate(servletRequest).block()) {
+            "SecurityPipeline must always emit a decision."
         }
+        val request = decision.request
+        if (request == null) {
+            servletResponse.status = decision.status.code
+            return false
+        }
+        decision.securityContext?.let {
+            SecurityContextHolder.setContext(it)
+            servletRequest.setSecurityContext(it)
+        }
+        servletResponse.setHeader(REQUEST_ID_KEY, request.requestId)
+        if (!decision.allowed) {
+            servletResponse.status = decision.status.code
+            servletResponse.writeWithAuthorizeResult(decision.result)
+            return false
+        }
+        return true
     }
 
     fun HttpServletResponse.writeWithAuthorizeResult(authorizeResult: AuthorizeResult) {

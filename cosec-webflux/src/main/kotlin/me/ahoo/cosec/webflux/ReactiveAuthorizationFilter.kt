@@ -15,6 +15,7 @@ package me.ahoo.cosec.webflux
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.pipeline.SecurityPipeline
 import org.springframework.core.Ordered
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilter
@@ -36,13 +37,17 @@ import reactor.core.scheduler.Schedulers
  * @see ReactiveSecurityFilter
  */
 class ReactiveAuthorizationFilter(
-    securityContextParser: SecurityContextParser,
-    requestParser: RequestParser<ServerWebExchange>,
-    authorization: Authorization,
-    securityContextParseScheduler: Scheduler = Schedulers.immediate()
-) : ReactiveSecurityFilter(securityContextParser, requestParser, authorization, securityContextParseScheduler),
+    pipeline: SecurityPipeline<ServerWebExchange>
+) : ReactiveSecurityFilter(pipeline),
     WebFilter,
     Ordered {
+    constructor(
+        securityContextParser: SecurityContextParser,
+        requestParser: RequestParser<ServerWebExchange>,
+        authorization: Authorization,
+        securityContextParseScheduler: Scheduler = Schedulers.immediate()
+    ) : this(SecurityPipeline(requestParser, securityContextParser, authorization, securityContextParseScheduler))
+
     companion object {
         /**
          * Filter order for reactive authorization.

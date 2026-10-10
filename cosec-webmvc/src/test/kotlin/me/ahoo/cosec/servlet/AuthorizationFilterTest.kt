@@ -326,7 +326,7 @@ internal class AuthorizationFilterTest {
         val servletResponse = mockk<HttpServletResponse> {
             every { setHeader(RequestIdCapable.REQUEST_ID_KEY, any()) } just runs
             every { contentType = MediaType.APPLICATION_JSON_VALUE } just runs
-            every { status = HttpStatus.FORBIDDEN.value() } returns Unit
+            every { status = HttpStatus.UNAUTHORIZED.value() } returns Unit
             every { outputStream.write(any() as ByteArray) } returns Unit
             every { outputStream.flush() } returns Unit
         }
@@ -335,7 +335,7 @@ internal class AuthorizationFilterTest {
 
         verify {
             servletResponse.contentType = MediaType.APPLICATION_JSON_VALUE
-            servletResponse.status = HttpStatus.FORBIDDEN.value()
+            servletResponse.status = HttpStatus.UNAUTHORIZED.value()
             servletResponse.outputStream.write(any() as ByteArray)
             servletResponse.outputStream.flush()
         }

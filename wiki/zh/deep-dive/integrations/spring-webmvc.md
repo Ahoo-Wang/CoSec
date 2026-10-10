@@ -5,7 +5,7 @@ description: CoSec 如何通过 jakarta.servlet.Filter、请求解析和线程�
 
 # Spring WebMVC 集成
 
-CoSec 通过 `jakarta.servlet.Filter` 实现为传统 Spring MVC 应用提供基于 Servlet 的集成路径。Servlet 集成与响应式 WebFlux 集成类似，但使用线程本地上下文传播代替 Reactor Context。
+CoSec 通过 `jakarta.servlet.Filter` 实现为传统 Spring MVC 应用提供基于 Servlet 的集成路径。Servlet 集成与响应式 WebFlux 集成共用与传输无关的 `SecurityPipeline`，并使用线程本地上下文传播代替 Reactor Context。
 
 ## 架构概览
 
@@ -44,64 +44,51 @@ graph TD
 
 ### AuthorizationFilter
 
-Servlet 过滤器入口点。它实现了 `jakarta.servlet.Filter` 并扩展了 `AbstractAuthorizationInterceptor`，对每个传入请求执行授权检查。
+Servlet 过滤器入口。它实现 `jakarta.servlet.Filter` 并继承 `AbstractAuthorizationInterceptor`，后者把每个请求交给共享的、与传输无关的 [`SecurityPipeline`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityPipeline.kt) 处理。
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Client
-    participant Filter as AuthorizationFilter
-    participant Interceptor as AbstractAuthorizationInterceptor
-    participant RParser as ServletRequestParser
+    participant Adapter as AuthorizationFilter
+    participant Pipeline as SecurityPipeline
     participant SCParser as SecurityContextParser
     participant Auth as Authorization
     participant Chain as FilterChain
 
-    Client->>Filter: doFilter(request, response, chain)
-    Filter->>Interceptor: authorize(httpRequest, httpResponse)
-    Interceptor->>RParser: parse(servletRequest)
-    RParser-->>Interceptor: CoSecServletRequest
-    Interceptor->>SCParser: parse(request)
-    Note over Interceptor,SCParser: TokenVerificationException caught<br>falls back to anonymous context
-    SCParser-->>Interceptor: SecurityContext
-    Interceptor->>Auth: authorize(request, securityContext).block()
-    Auth-->>Interceptor: AuthorizeResult
-    alt Authorized
-        Interceptor-->>Filter: true
-        Filter->>Chain: chain.doFilter(request, response)
-    else Not Authenticated
-        Interceptor-->>Filter: false
-        Filter-->>Client: HTTP 401 UNAUTHORIZED
-    else Forbidden
-        Interceptor-->>Filter: false
-        Filter-->>Client: HTTP 403 FORBIDDEN
+    Client->>Adapter: doFilter(request, response, chain)
+    Adapter->>Pipeline: evaluate(servletRequest).block()
+    Pipeline->>Pipeline: RequestParser.parse
+    Pipeline->>SCParser: parse(request)
+    Note over Pipeline,SCParser: TokenVerificationException<br>falls back to anonymous context
+    Pipeline->>Auth: decide(request, securityContext)
+    Auth-->>Pipeline: AuthorizationDecision
+    Pipeline-->>Adapter: SecurityDecision(status, result, ...)
+    alt ALLOWED
+        Adapter->>Chain: chain.doFilter(request, response)
+    else rejected
+        Adapter-->>Client: HTTP status.code + AuthorizeResult JSON
     end
-
-
-
 ```
 
-`AuthorizationFilter.doFilter` 的关键行为：
-
-1. **委托**给 `AbstractAuthorizationInterceptor.authorize()`。
-2. **捕获** `InvalidRequestPathException`（格式错误/非法路径）并返回 HTTP 400。
-3. **捕获** `TooManyRequestsException` 并返回 HTTP 429。
-4. **捕获** `RegexTimeoutException`（正则条件超出时间预算，即 ReDoS 防护）并以失败关闭（fail-closed）方式返回 HTTP 403 拒绝。
-5. **捕获**意外异常，记录错误日志并返回 HTTP 500。
-6. 授权成功后，调用 `chain.doFilter(request, response)`。
+`AuthorizationFilter.doFilter` 调用 `authorize()`，仅在其返回 `true` 时执行 `chain.doFilter`，并始终在 `finally` 中清理 `SecurityContextHolder`。
 
 ### AbstractAuthorizationInterceptor
 
-包含授权算法的基类。它与 `ReactiveSecurityFilter` 中的逻辑保持一致 -- 此处的任何更改都应同步到响应式对应类中。
+将 `SecurityDecision` 转换为 Servlet 响应。它自身不包含授权逻辑——状态码和错误映射都来自 `SecurityPipeline`，因此 WebMvc 与 WebFlux 的响应完全一致（由 `WebAdapterParityTest` 保证）：
 
-`authorize()` 方法：
+| 场景 | `SecurityStatus` | HTTP | 响应体 |
+|---|---|---|---|
+| 请求路径非法（`InvalidRequestPathException`） | `BAD_REQUEST` | 400 | 无 |
+| 授权通过 | `ALLOWED` | -- | 请求继续 |
+| 拒绝，匿名主体 | `UNAUTHORIZED` | 401 | 授权结果（Token 校验失败原因如 `Token Expired` 优先） |
+| 拒绝，已认证主体 | `FORBIDDEN` | 403 | 授权结果 |
+| `TooManyRequestsException` | `TOO_MANY_REQUESTS` | 429 | `Too Many Requests` |
+| `RegexTimeoutException`（ReDoS 防护） | `FORBIDDEN` | 403 | `Implicit Deny`（失败即拒绝，而非 5xx） |
+| 其他任何错误，包括安全上下文解析失败 | `ERROR` | 500 | `Implicit Deny` |
+| 授权未产生结果 | 按 `IMPLICIT_DENY` 处理 | 401 / 403 | `Implicit Deny` |
 
-1. 通过 `ServletRequestParser` 将 Servlet 请求解析为 CoSec `Request`。
-2. 通过 `SecurityContextParser` 解析 `SecurityContext`，捕获 `TokenVerificationException`。
-3. 将上下文存储到 `SecurityContextHolder`（线程本地）和请求属性中。
-4. 设置 `X-Request-Id` 响应头。
-5. 调用 `authorization.authorize()` 并阻塞等待结果（`.block()`）。
-6. 如果被拒绝返回 `false`，如果被允许返回 `true`。
+请求解析成功时，`authorize()` 会把安全上下文绑定到 `SecurityContextHolder` 与请求属性，并设置 `CoSec-Request-Id` 响应头。
 
 ### ServletRequestParser
 

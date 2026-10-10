@@ -46,61 +46,66 @@ The entry point for WebFlux security. It implements both `WebFilter` and `Ordere
 
 ```kotlin
 class ReactiveAuthorizationFilter(
-    securityContextParser: SecurityContextParser,
-    requestParser: RequestParser<ServerWebExchange>,
-    authorization: Authorization
-) : ReactiveSecurityFilter(securityContextParser, requestParser, authorization),
+    pipeline: SecurityPipeline<ServerWebExchange>
+) : ReactiveSecurityFilter(pipeline),
     WebFilter,
-    Ordered
+    Ordered {
+    constructor(
+        securityContextParser: SecurityContextParser,
+        requestParser: RequestParser<ServerWebExchange>,
+        authorization: Authorization,
+        securityContextParseScheduler: Scheduler = Schedulers.immediate()
+    )
+}
 ```
 
 - **Order**: `REACTIVE_AUTHORIZATION_FILTER_ORDER = 1000` -- runs after CORS and other infrastructure filters.
-- Delegates the real work to [ReactiveSecurityFilter.filterInternal](#reactivesecurityfilter).
+- Delegates the real work to [ReactiveSecurityFilter](#reactivesecurityfilter), which runs the shared `SecurityPipeline`.
 - On success, calls `chain.filter(exchange)` so downstream handlers receive an enriched exchange with the principal set.
 
 ### ReactiveSecurityFilter
 
-The shared base class that contains all authorization logic. It is also extended by the Spring Cloud Gateway integration.
+The shared base class for the WebFlux filter and the Spring Cloud Gateway filter. It contains no authorization logic of its own: it runs each exchange through a transport-agnostic [`SecurityPipeline`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityPipeline.kt) (shared with the servlet integration) and translates the resulting `SecurityDecision` into a response.
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Client
-    participant Filter as ReactiveSecurityFilter
-    participant RParser as ReactiveRequestParser
+    participant Adapter as ReactiveSecurityFilter
+    participant Pipeline as SecurityPipeline
     participant SCParser as SecurityContextParser
     participant Auth as Authorization
     participant Chain as WebFilterChain
 
-    Client->>Filter: filterInternal(exchange, chain)
-    Filter->>RParser: parse(exchange)
-    RParser-->>Filter: ReactiveRequest
-    Filter->>SCParser: parse(request)
-    Note over Filter,SCParser: TokenVerificationException caught<br>falls back to anonymous context
-    SCParser-->>Filter: SecurityContext
-    Filter->>Auth: authorize(request, securityContext)
-    Auth-->>Filter: AuthorizeResult
-    alt Authorized
-        Filter->>Chain: chain.filter(mutatedExchange)
-        Note over Filter: Write SecurityContext to Reactor Context
-    else Not Authenticated
-        Filter-->>Client: HTTP 401 UNAUTHORIZED
-    else Forbidden
-        Filter-->>Client: HTTP 403 FORBIDDEN
-    else Rate Limited
-        Filter-->>Client: HTTP 429 TOO_MANY_REQUESTS
+    Client->>Adapter: filterInternal(exchange, chain)
+    Adapter->>Pipeline: evaluate(exchange)
+    Pipeline->>Pipeline: RequestParser.parse
+    Pipeline->>SCParser: parse(request)
+    Note over Pipeline,SCParser: TokenVerificationException<br>falls back to anonymous context
+    Pipeline->>Auth: decide(request, securityContext)
+    Auth-->>Pipeline: AuthorizationDecision
+    Pipeline-->>Adapter: SecurityDecision(status, result, ...)
+    alt ALLOWED
+        Adapter->>Chain: chain(mutatedExchange) + SecurityContext in Reactor Context
+    else rejected
+        Adapter-->>Client: HTTP status.code + AuthorizeResult JSON
     end
-
-
-
 ```
 
-The `filterInternal` method handles:
+`SecurityPipeline` maps every outcome, including errors, to a `SecurityDecision`, so WebFlux and WebMvc respond identically (enforced by `WebAdapterParityTest`):
 
-1. **Request parsing** -- converts the `ServerWebExchange` into a CoSec `Request`; an `InvalidRequestPathException` (malformed/invalid path) short-circuits with **400 Bad Request**.
-2. **Token verification** -- catches `TokenVerificationException` and falls back to an anonymous `SimpleSecurityContext`.
-3. **Authorization decision** -- calls `Authorization.authorize()` and maps the result to HTTP status codes.
-4. **Error handling** -- maps `TooManyRequestsException` to 429, `RegexTimeoutException` (a regex condition exceeding its time budget, i.e. the ReDoS guard) to 403 as a fail-closed deny, and unexpected errors to 500.
+| Situation | `SecurityStatus` | HTTP | Response body |
+|---|---|---|---|
+| Invalid request path (`InvalidRequestPathException`) | `BAD_REQUEST` | 400 | none |
+| Authorized | `ALLOWED` | -- | request proceeds |
+| Denied, anonymous principal | `UNAUTHORIZED` | 401 | result (token failure reason, e.g. `Token Expired`, takes precedence) |
+| Denied, authenticated principal | `FORBIDDEN` | 403 | result |
+| `TooManyRequestsException` | `TOO_MANY_REQUESTS` | 429 | `Too Many Requests` |
+| `RegexTimeoutException` (ReDoS guard) | `FORBIDDEN` | 403 | `Implicit Deny` (fail-closed deny, not a 5xx) |
+| Any other error, including security context parse failures | `ERROR` | 500 | `Implicit Deny` |
+| Authorization emitted no result | treated as `IMPLICIT_DENY` | 401 / 403 | `Implicit Deny` |
+
+Security context parsing runs on `securityContextParseScheduler` (default `Schedulers.immediate()`). The starter switches it to `Schedulers.boundedElastic()` when `cosec.jwt.token-revocation.enabled=true`, because the revocation check may block on Redis.
 
 ### ReactiveRequestParser
 
@@ -165,7 +170,7 @@ Choose between `ReactiveAuthorizationFilter` and `ReactiveInjectSecurityContextW
 ## References
 
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt:36](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36) -- Filter entry point
-- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt:59](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59) -- Base class with `filterInternal`
+- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt:59](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59) -- Base class translating `SecurityDecision` into a WebFlux response
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt#L28) -- Request parsing
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequest.kt:22](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequest.kt#L22) -- Request data class
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityContexts.kt:21](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityContexts.kt#L21) -- Context propagation
