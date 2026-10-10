@@ -258,7 +258,7 @@ sequenceDiagram
 
     Filter->>Parser: parse(request)
     alt 存在 Token
-        Parser->>Parser: 从 header/query/cookie 提取 JWT
+        Parser->>Parser: 从 header/cookie 提取 JWT（query 需显式开启）
         Parser-->>Filter: SecurityContext(principal)
     else 无 Token
         Parser-->>Filter: SecurityContext(anonymous)
@@ -417,7 +417,7 @@ Action 匹配作为快速路径先执行。如果 action 模式不匹配，条�
 | D4 | 全链路响应式（`Mono<T>`） | 非阻塞授权在高负载下可扩展；与 Spring WebFlux 一致 | [`Authorization.kt:43`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/authorization/Authorization.kt#L43) |
 | D5 | Root 绕过基于身份而非角色 | Root 检查（`verifyRoot`，`principal.isRoot`）在所有其他检查之前发生，包括黑名单 | [`SimpleAuthorization.kt:154-160`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L154) |
 | D6 | SecurityContext 属性可变且并发 | 下游组件可写入路径变量、限流计数器等 | [`SimpleSecurityContext.kt:41`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/SimpleSecurityContext.kt#L41) |
-| D7 | 从 header、query 或 cookie 提取 Token | 支持浏览器、API 和遗留客户端 | [`DefaultSecurityContextParser.kt:27-31`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/DefaultSecurityContextParser.kt#L27) |
+| D7 | 从 header 或 cookie 提取 Token；query 参数需通过 `cosec.authorization.allow-query-token` 显式开启 | 支持浏览器和 API 客户端，默认不让 Token 出现在 URL 中 | [`DefaultSecurityContextParser.kt:27-31`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/DefaultSecurityContextParser.kt#L27) |
 | D8 | Gateway 过滤器顺序接近最高优先级 | 授权必须在可能修改 exchange 的路由过滤器之前运行 | [`AuthorizationGatewayFilter.kt:42`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt#L42) |
 
 ## 依赖关系论证
@@ -819,7 +819,7 @@ JMH 依赖版本为 `1.37`（[`libs.versions.toml:21`](https://github.com/Ahoo-W
 
 4. **匿名主体没有角色或策略。** `SimpleTenantPrincipal.ANONYMOUS`（[`SimpleTenantPrincipal.kt:42`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/principal/SimpleTenantPrincipal.kt#L42)）包装了 `SimplePrincipal.ANONYMOUS` 和默认租户。它只能访问全局策略明确允许匿名访问的资源。
 
-5. **Token 提取是多源的。** `DefaultSecurityContextParser` 按 header、query 参数、cookie 的顺序检查（[`DefaultSecurityContextParser.kt:27-31`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/DefaultSecurityContextParser.kt#L27)）。其中任何一个都可以携带 JWT。
+5. **Token 提取是多源的。** `DefaultSecurityContextParser` 按 header、query 参数（仅在开启 `allowQueryToken` 时）、cookie 的顺序检查（[`DefaultSecurityContextParser.kt:27-31`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/DefaultSecurityContextParser.kt#L27)）。其中任何一个都可以携带 JWT。
 
 6. **限流器异常是终结性的。** 当 `RateLimiterConditionMatcher` 无法获取令牌时，它抛出 `TooManyRequestsException`（[`RateLimiterConditionMatcher.kt:49`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/limiter/RateLimiterConditionMatcher.kt#L49)）。此异常从授权链中传播出来，被过滤器层捕获，返回 429。
 

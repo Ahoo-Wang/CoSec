@@ -27,7 +27,13 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 class AuthorizationProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
     var localPolicy: LocalPolicy = LocalPolicy(),
-    var remoteIp: RemoteIp = RemoteIp()
+    var remoteIp: RemoteIp = RemoteIp(),
+    /**
+     * Whether to accept the access token from the `authorization` query parameter.
+     * Disabled by default: tokens in URLs leak into access logs, browser history and `Referer` headers.
+     */
+    @DefaultValue("false")
+    var allowQueryToken: Boolean = false
 ) : EnabledCapable {
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "authorization"

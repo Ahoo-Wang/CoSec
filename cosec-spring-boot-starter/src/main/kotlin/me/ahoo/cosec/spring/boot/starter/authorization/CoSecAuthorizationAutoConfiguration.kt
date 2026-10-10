@@ -59,8 +59,11 @@ class CoSecAuthorizationAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    fun securityContextParser(tokenVerifier: TokenVerifier): SecurityContextParser {
-        return DefaultSecurityContextParser(tokenVerifier)
+    fun securityContextParser(
+        tokenVerifier: TokenVerifier,
+        authorizationProperties: AuthorizationProperties
+    ): SecurityContextParser {
+        return DefaultSecurityContextParser(tokenVerifier, authorizationProperties.allowQueryToken)
     }
 
     @Bean

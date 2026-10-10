@@ -95,6 +95,7 @@ Controls the authorization engine and policy loading behavior.
 | `cosec.authorization.local-policy.init-repository` | `Boolean` | `false` | Initialize the policy repository with local files on startup |
 | `cosec.authorization.local-policy.force-refresh` | `Boolean` | `false` | Force refresh of local policies on startup |
 | `cosec.authorization.remote-ip.max-trusted-index` | `Int` | `1` | X-Forwarded-For trust depth: `0` ignores the header entirely (directly exposed deployments); `N` trusts N proxy hops and takes the rightmost entry appended by the closest trusted proxy |
+| `cosec.authorization.allow-query-token` | `Boolean` | `false` | Whether to accept the access token from the `authorization` query parameter. Disabled by default because tokens in URLs leak into access logs, browser history and `Referer` headers |
 
 Defined in `AuthorizationProperties` ([cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/AuthorizationProperties.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/AuthorizationProperties.kt#L27)).
 

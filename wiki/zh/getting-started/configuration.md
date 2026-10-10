@@ -95,6 +95,7 @@ flowchart TD
 | `cosec.authorization.local-policy.init-repository` | `Boolean` | `false` | 启动时使用本地文件初始化策略仓库 |
 | `cosec.authorization.local-policy.force-refresh` | `Boolean` | `false` | 启动时强制刷新本地策略 |
 | `cosec.authorization.remote-ip.max-trusted-index` | `Int` | `1` | X-Forwarded-For 信任深度：`0` 完全忽略该头（直接暴露部署）；`N` 信任 N 个代理跳数，取最近的受信任代理追加的最右侧条目 |
+| `cosec.authorization.allow-query-token` | `Boolean` | `false` | 是否允许从 `authorization` 查询参数读取访问令牌。默认关闭：URL 中的令牌会泄露到访问日志、浏览器历史和 `Referer` 头 |
 
 定义在 `AuthorizationProperties`（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/AuthorizationProperties.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/AuthorizationProperties.kt#L27)）中。
 
