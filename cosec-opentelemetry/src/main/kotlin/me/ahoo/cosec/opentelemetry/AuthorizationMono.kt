@@ -17,30 +17,28 @@ import io.opentelemetry.api.trace.Span
 import io.opentelemetry.api.trace.SpanContext
 import io.opentelemetry.context.Context
 import me.ahoo.cosec.api.audit.AuditTrace
-import me.ahoo.cosec.api.authorization.Authorization
-import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import org.reactivestreams.Subscription
 import reactor.core.CoreSubscriber
 import reactor.core.publisher.Mono
 
-class CoSecMonoTrace(
+class CoSecMonoTrace<T : Any>(
     private val parentContext: Context,
     private val securityContext: SecurityContext,
     private val request: Request,
-    private val delegate: Authorization,
-) : Mono<AuthorizeResult>() {
-    override fun subscribe(actual: CoreSubscriber<in AuthorizeResult>) {
+    private val source: (Request) -> Mono<T>,
+) : Mono<T>() {
+    override fun subscribe(actual: CoreSubscriber<in T>) {
         if (!CoSecInstrumenter.INSTRUMENTER.shouldStart(parentContext, securityContext)) {
-            Mono.defer { delegate.authorize(request, securityContext) }.subscribe(actual)
+            Mono.defer { source(request) }.subscribe(actual)
             return
         }
         val otelContext = CoSecInstrumenter.INSTRUMENTER.start(parentContext, securityContext)
         val spanContext = Span.fromContext(otelContext).spanContext
         val tracedRequest = request.withAuditTrace(spanContext)
         otelContext.makeCurrent().use {
-            Mono.defer { delegate.authorize(tracedRequest, securityContext) }
+            Mono.defer { source(tracedRequest) }
                 .subscribe(TraceFilterSubscriber(otelContext, securityContext, actual))
         }
     }
@@ -58,11 +56,11 @@ internal fun Request.withAuditTrace(spanContext: SpanContext): Request {
     )
 }
 
-class TraceFilterSubscriber(
+class TraceFilterSubscriber<T : Any>(
     private val otelContext: Context,
     private val securityContext: SecurityContext,
-    private val actual: CoreSubscriber<in AuthorizeResult>
-) : CoreSubscriber<AuthorizeResult> {
+    private val actual: CoreSubscriber<in T>
+) : CoreSubscriber<T> {
     override fun currentContext(): reactor.util.context.Context {
         return actual.currentContext()
     }
@@ -71,8 +69,8 @@ class TraceFilterSubscriber(
         actual.onSubscribe(subscription)
     }
 
-    override fun onNext(authorizeResult: AuthorizeResult) {
-        actual.onNext(authorizeResult)
+    override fun onNext(value: T) {
+        actual.onNext(value)
     }
 
     override fun onError(throwable: Throwable) {

@@ -49,10 +49,6 @@ interface VerifyContext {
     }
 }
 
-internal class VerifyContextScope {
-    var value: VerifyContext? = null
-}
-
 enum class PolicyVerifySource {
     GLOBAL,
     PRINCIPAL,

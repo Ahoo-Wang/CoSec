@@ -16,21 +16,22 @@ package me.ahoo.cosec.opentelemetry
 import io.opentelemetry.context.Context
 import me.ahoo.cosec.Delegated
 import me.ahoo.cosec.api.authorization.Authorization
-import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.authorization.AuthorizationDecision
+import me.ahoo.cosec.authorization.DecisionAuthorization
+import me.ahoo.cosec.authorization.decide
 import reactor.core.publisher.Mono
 
 class TracingAuthorization(override val delegate: Authorization) :
-    Authorization,
+    DecisionAuthorization,
     Delegated<Authorization> {
-    override fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
+    override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> {
         val parentContext = Context.current()
         return CoSecMonoTrace(
             parentContext = parentContext,
             securityContext = context,
             request = request,
-            delegate = delegate,
-        )
+        ) { tracedRequest -> delegate.decide(tracedRequest, context) }
     }
 }

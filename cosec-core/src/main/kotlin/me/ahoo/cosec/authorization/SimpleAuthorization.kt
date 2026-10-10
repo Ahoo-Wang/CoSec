@@ -13,7 +13,6 @@
 package me.ahoo.cosec.authorization
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
@@ -30,7 +29,6 @@ import me.ahoo.cosec.blacklist.BlacklistChecker
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.switchIfEmpty
 import reactor.kotlin.core.publisher.toMono
-import reactor.util.context.ContextView
 
 /**
  * Simple Authorization implementation.
@@ -53,9 +51,12 @@ class SimpleAuthorization(
     private val policyRepository: PolicyRepository,
     private val appRolePermissionRepository: AppRolePermissionRepository,
     private val blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp
-) : Authorization {
+) : DecisionAuthorization {
     companion object {
         private val log = KotlinLogging.logger {}
+        private val ROOT_DECISION = AuthorizationDecision(AuthorizeResult.ALLOW, RootVerifyContext)
+        private val BLACKLIST_DECISION = AuthorizationDecision(AuthorizeResult.EXPLICIT_DENY, BlacklistVerifyContext)
+        private val IMPLICIT_DENY_DECISION = AuthorizationDecision(AuthorizeResult.IMPLICIT_DENY, NoMatchVerifyContext)
     }
 
     private data class PolicyStatementEntry(val policy: Policy, val index: Int, val statement: Statement)
@@ -225,49 +226,29 @@ class SimpleAuthorization(
     private fun verify(
         request: Request,
         context: SecurityContext
-    ): Mono<AuthorizeResult> = Mono.deferContextual { reactorContext ->
+    ): Mono<AuthorizationDecision> =
         verifyGlobalPolicies(request, context)
             .thenVerify {
                 verifyPrincipalPolicies(request, context)
             }.thenVerify {
                 verifyAppRolePermission(request, context)
             }.map {
-                recordVerifyContext(context, reactorContext, it)
-                it.result.toAuthorizeResult()
+                context.setVerifyContext(it)
+                AuthorizationDecision(it.result.toAuthorizeResult(), it)
             }.switchIfEmpty {
                 log.debug {
                     "Verify [$request] [$context] No policies matched - [Implicit Deny]."
                 }
-                recordVerifyContext(reactorContext, NoMatchVerifyContext)
-                AuthorizeResult.IMPLICIT_DENY.toMono()
+                IMPLICIT_DENY_DECISION.toMono()
             }
-    }
 
-    private fun recordVerifyContext(
-        context: SecurityContext,
-        reactorContext: ContextView,
-        verifyContext: VerifyContext,
-    ) {
-        context.setVerifyContext(verifyContext)
-        recordVerifyContext(reactorContext, verifyContext)
-    }
-
-    private fun recordVerifyContext(
-        reactorContext: ContextView,
-        verifyContext: VerifyContext,
-    ) {
-        reactorContext.getOrEmpty<VerifyContextScope>(VerifyContextScope::class.java)
-            .ifPresent { scope -> scope.value = verifyContext }
-    }
-
-    override fun authorize(
+    override fun decide(
         request: Request,
         context: SecurityContext
-    ): Mono<AuthorizeResult> = Mono.deferContextual { reactorContext ->
+    ): Mono<AuthorizationDecision> = Mono.defer {
         val verifyResult = verifyRoot(context)
         if (verifyResult == VerifyResult.ALLOW) {
-            recordVerifyContext(reactorContext, RootVerifyContext)
-            return@deferContextual AuthorizeResult.ALLOW.toMono()
+            return@defer ROOT_DECISION.toMono()
         }
         blacklistChecker
             .check(request, context)
@@ -276,8 +257,7 @@ class SimpleAuthorization(
                     log.debug {
                         "Request [$request] is blocked by the blacklist."
                     }
-                    recordVerifyContext(reactorContext, BlacklistVerifyContext)
-                    return@flatMap AuthorizeResult.EXPLICIT_DENY.toMono()
+                    return@flatMap BLACKLIST_DECISION.toMono()
                 }
                 verify(request, context)
             }
