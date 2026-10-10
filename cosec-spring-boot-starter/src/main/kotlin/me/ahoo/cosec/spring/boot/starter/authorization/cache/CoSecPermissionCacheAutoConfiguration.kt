@@ -13,16 +13,16 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cache.api.client.ClientSideCache
-import me.ahoo.cache.converter.KeyConverter
+import me.ahoo.cache.api.converter.KeyConverter
+import me.ahoo.cache.api.distributed.DistributedCache
 import me.ahoo.cache.converter.ToStringKeyConverter
-import me.ahoo.cache.distributed.DistributedCache
 import me.ahoo.cache.spring.EnableCoCache
 import me.ahoo.cache.spring.client.SpringClientSideCacheFactory.Companion.CLIENT_SIDE_CACHE_SUFFIX
 import me.ahoo.cache.spring.converter.SpringKeyConverterFactory.Companion.KEY_CONVERTER_SUFFIX
 import me.ahoo.cache.spring.redis.RedisDistributedCache
 import me.ahoo.cache.spring.redis.RedisDistributedCacheFactory.Companion.DISTRIBUTED_CACHE_SUFFIX
 import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
-import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.cache.AppPermissionCache
@@ -87,8 +87,8 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
 
     @Bean(ROLE_PERMISSION_CACHE_CLIENT_BEAN_NAME)
     @ConditionalOnMissingBean(name = [ROLE_PERMISSION_CACHE_CLIENT_BEAN_NAME])
-    fun policyCacheClientSideCache(): ClientSideCache<Policy> {
-        return cacheProperties.role.toGuavaClientSideCache()
+    fun rolePermissionCacheClientSideCache(): ClientSideCache<Set<PermissionId>> {
+        return cacheProperties.role.toClientSideCache()
     }
 
     @Bean(ROLE_PERMISSION_CACHE_DISTRIBUTED_CACHE_BEAN_NAME)

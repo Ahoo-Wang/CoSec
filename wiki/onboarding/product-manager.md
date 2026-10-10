@@ -391,7 +391,7 @@ CoSec exposes its functionality through well-defined interfaces that application
 
 The system uses a two-level cache for policy and permission data:
 
-- **Level 1 (Local):** In-memory cache within each application instance using Guava. Configurable size, expiration, and concurrency settings.
+- **Level 1 (Local):** In-memory cache within each application instance using Caffeine. Configurable size and expiration settings.
 - **Level 2 (Distributed):** Redis-based shared cache across all application instances. Ensures policy changes propagate to all instances.
 
 This two-level approach means most authorization checks never leave the application instance, while still ensuring consistency when policies change.

@@ -12,8 +12,6 @@
  */
 package me.ahoo.cosec.cache
 
-import me.ahoo.cache.ComputedTtlAt
-import me.ahoo.cache.DefaultCacheValue
 import me.ahoo.cache.api.CacheValue
 import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
 import me.ahoo.cosec.api.policy.Policy
@@ -68,18 +66,18 @@ internal class PolicyCodecExecutorTest {
             statements = listOf(StatementData(action = AllActionMatcher.INSTANCE)),
         )
         val key = "policy:" + MockIdGenerator.INSTANCE.generateAsString()
-        val cacheValue: CacheValue<Policy> = DefaultCacheValue.forever(policy)
+        val cacheValue: CacheValue<Policy> = CacheValue.forever(policy)
         codecExecutor.executeAndEncode(key, cacheValue)
-        val value = requireNotNull(codecExecutor.executeAndDecode(key, ComputedTtlAt.FOREVER)).value
+        val value = requireNotNull(codecExecutor.executeAndDecode(key)).value
         assertThat(value, `is`(policy))
     }
 
     @Test
     fun executeAndEncodeMissing() {
         val key = "policy:" + MockIdGenerator.INSTANCE.generateAsString()
-        val cacheValue: CacheValue<Policy> = DefaultCacheValue.missingGuard()
+        val cacheValue: CacheValue<Policy> = CacheValue.missing()
         codecExecutor.executeAndEncode(key, cacheValue)
-        val actual = codecExecutor.executeAndDecode(key, ComputedTtlAt.FOREVER)
+        val actual = codecExecutor.executeAndDecode(key)
         assertThat(actual, `is`(cacheValue))
     }
 }

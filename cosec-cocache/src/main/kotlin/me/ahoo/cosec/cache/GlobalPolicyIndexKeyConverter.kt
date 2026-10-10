@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.cache
 
-import me.ahoo.cache.converter.KeyConverter
+import me.ahoo.cache.api.converter.KeyConverter
 
 class GlobalPolicyIndexKeyConverter(private val key: String) : KeyConverter<String> {
     override fun toStringKey(sourceKey: String): String {

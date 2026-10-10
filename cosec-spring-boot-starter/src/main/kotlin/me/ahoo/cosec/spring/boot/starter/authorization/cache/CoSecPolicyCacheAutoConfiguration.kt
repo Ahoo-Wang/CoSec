@@ -13,9 +13,9 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cache.api.client.ClientSideCache
-import me.ahoo.cache.converter.KeyConverter
+import me.ahoo.cache.api.converter.KeyConverter
+import me.ahoo.cache.api.distributed.DistributedCache
 import me.ahoo.cache.converter.ToStringKeyConverter
-import me.ahoo.cache.distributed.DistributedCache
 import me.ahoo.cache.spring.EnableCoCache
 import me.ahoo.cache.spring.client.SpringClientSideCacheFactory.Companion.CLIENT_SIDE_CACHE_SUFFIX
 import me.ahoo.cache.spring.converter.SpringKeyConverterFactory.Companion.KEY_CONVERTER_SUFFIX
@@ -90,7 +90,7 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
     @Bean(POLICY_CACHE_CLIENT_BEAN_NAME)
     @ConditionalOnMissingBean(name = [POLICY_CACHE_CLIENT_BEAN_NAME])
     fun policyCacheClientSideCache(): ClientSideCache<Policy> {
-        return cacheProperties.policy.toGuavaClientSideCache()
+        return cacheProperties.policy.toClientSideCache()
     }
 
     @Bean(POLICY_CACHE_KEY_CONVERTER_BEAN_NAME)

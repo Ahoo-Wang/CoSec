@@ -12,12 +12,10 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import me.ahoo.cache.api.annotation.CoCache
-import me.ahoo.cache.api.annotation.GuavaCache
-import me.ahoo.cache.api.annotation.GuavaCache.Companion.UNSET_INT
-import me.ahoo.cache.api.annotation.GuavaCache.Companion.UNSET_LONG
-import me.ahoo.cache.client.GuavaClientSideCache
-import me.ahoo.cache.client.GuavaClientSideCache.Companion.toClientSideCache
+import com.github.benmanes.caffeine.cache.Caffeine
+import me.ahoo.cache.api.annotation.CaffeineCache
+import me.ahoo.cache.api.client.ClientSideCache
+import me.ahoo.cache.client.CaffeineClientSideCache
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import me.ahoo.cosec.spring.boot.starter.authorization.AuthorizationProperties
@@ -53,22 +51,35 @@ class CacheProperties(
     val revokedTokenKeyPrefix: String = "$keyPrefix:token:revoked:"
 }
 
+/**
+ * Local (client-side) cache settings. Unset values ([UNSET]) fall back to Caffeine defaults, except
+ * [maximumSize], which falls back to CoCache's bounded default ([CaffeineCache.DEFAULT_MAXIMUM_SIZE]).
+ */
 data class CacheConfiguration(
-    var initialCapacity: Int = UNSET_INT,
-    var concurrencyLevel: Int = UNSET_INT,
-    var maximumSize: Long = UNSET_LONG,
+    var initialCapacity: Int = UNSET.toInt(),
+    @Deprecated("Caffeine has no concurrency level; ignored since CoCache 5.")
+    var concurrencyLevel: Int = UNSET.toInt(),
+    var maximumSize: Long = UNSET,
     var expireUnit: TimeUnit = TimeUnit.SECONDS,
-    var expireAfterWrite: Long = UNSET_LONG,
-    var expireAfterAccess: Long = UNSET_LONG
+    var expireAfterWrite: Long = UNSET,
+    var expireAfterAccess: Long = UNSET
 ) {
-    fun <V> toGuavaClientSideCache(ttl: Long = CoCache.DEFAULT_TTL): GuavaClientSideCache<V> {
-        return GuavaCache(
-            initialCapacity = initialCapacity,
-            concurrencyLevel = concurrencyLevel,
-            maximumSize = maximumSize,
-            expireUnit = expireUnit,
-            expireAfterWrite = expireAfterWrite,
-            expireAfterAccess = expireAfterAccess
-        ).toClientSideCache(ttl = ttl)
+    companion object {
+        const val UNSET = -1L
+    }
+
+    fun <V> toClientSideCache(): ClientSideCache<V> {
+        val builder = Caffeine.newBuilder()
+            .maximumSize(maximumSize.takeIf { it != UNSET } ?: CaffeineCache.DEFAULT_MAXIMUM_SIZE)
+        if (initialCapacity != UNSET.toInt()) {
+            builder.initialCapacity(initialCapacity)
+        }
+        if (expireAfterWrite != UNSET) {
+            builder.expireAfterWrite(expireAfterWrite, expireUnit)
+        }
+        if (expireAfterAccess != UNSET) {
+            builder.expireAfterAccess(expireAfterAccess, expireUnit)
+        }
+        return CaffeineClientSideCache(builder.build())
     }
 }

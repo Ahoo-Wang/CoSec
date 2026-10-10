@@ -14,7 +14,11 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cache.api.Cache
+import me.ahoo.cache.api.TtlAt
+import me.ahoo.cache.api.annotation.CoCache
 import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.principal.SpacedRoleId
 
+// Redis is the store of record (no CacheSource), so entries must never expire; CoCache 5 defaults ttl to 3600s.
+@CoCache(ttl = TtlAt.FOREVER)
 interface RolePermissionCache : Cache<SpacedRoleId, Set<PermissionId>>
