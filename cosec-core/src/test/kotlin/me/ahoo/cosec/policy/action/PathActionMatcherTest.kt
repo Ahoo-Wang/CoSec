@@ -21,6 +21,7 @@ import me.ahoo.cosec.context.SimpleSecurityContext
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
+import org.springframework.web.util.pattern.PathPatternParser
 
 internal class PathActionMatcherTest {
 
@@ -78,5 +79,34 @@ internal class PathActionMatcherTest {
             ) as PathActionMatcher
         assertThat(actionMatcher.type, equalTo(PathActionMatcherFactory.TYPE))
         assertThat(actionMatcher.method, hasItem("GET"))
+    }
+
+    @Test
+    fun parseRequestPathIsReusedPerRequest() {
+        val securityContext = SimpleSecurityContext.anonymous()
+        val request = mockk<Request> {
+            every { path } returns "/orders/1"
+        }
+        val options = PathPatternParser.defaultInstance.pathOptions
+        val first = securityContext.parseRequestPath(request, options)
+        assertThat(securityContext.parseRequestPath(request, options), sameInstance(first))
+
+        val otherRequest = mockk<Request> {
+            every { path } returns "/orders/2"
+        }
+        val other = securityContext.parseRequestPath(otherRequest, options)
+        assertThat(other.value(), equalTo("/orders/2"))
+    }
+
+    @Test
+    fun matchersSharingContextMatchIndependently() {
+        val securityContext = SimpleSecurityContext.anonymous()
+        val request = mockk<Request> {
+            every { path } returns "/orders/1"
+        }
+        val factory = PathActionMatcherFactory()
+        assertThat(factory.create("/users/*".asConfiguration()).match(request, securityContext), `is`(false))
+        assertThat(factory.create("/orders/{id}".asConfiguration()).match(request, securityContext), `is`(true))
+        assertThat(securityContext.getPathVariables(), hasEntry("id", "1"))
     }
 }

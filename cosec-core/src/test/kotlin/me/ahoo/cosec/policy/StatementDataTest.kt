@@ -15,7 +15,6 @@ package me.ahoo.cosec.policy
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.VerifyResult
@@ -84,12 +83,12 @@ internal class StatementDataTest {
 
         assertThat(statementData.verify(request, securityContext), `is`(VerifyResult.ALLOW))
 
-        val securityContextNotMine = mockk<SecurityContext> {
-            every { principal } returns mockk {
+        val securityContextNotMine = SimpleSecurityContext(
+            principal = mockk {
                 every { id } returns "2"
                 every { authenticated } returns true
             }
-        }
+        )
         assertThat(statementData.verify(request, securityContextNotMine), `is`(VerifyResult.IMPLICIT_DENY))
     }
 
