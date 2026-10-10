@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.policy.action
 
+import com.google.common.cache.Cache
+import com.google.common.cache.CacheBuilder
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
@@ -63,19 +65,30 @@ class ReplaceablePathActionMatcher(
     private val pattern: String,
     configuration: Configuration
 ) : AbstractActionMatcher(PathActionMatcherFactory.TYPE, configuration) {
+    companion object {
+        private const val PATH_PATTERN_CACHE_SIZE = 1024L
+    }
+
     private val expression = pattern.asTemplateExpression()
+
+    /**
+     * Resolved patterns vary per principal/tenant, so parsed patterns are cached in a bounded LRU
+     * to avoid re-parsing on every request.
+     */
+    private val pathPatternCache: Cache<String, PathPattern> = CacheBuilder.newBuilder()
+        .maximumSize(PATH_PATTERN_CACHE_SIZE)
+        .build()
 
     override fun internalMatch(
         request: Request,
         securityContext: SecurityContext
     ): Boolean {
-        val pathPattern = requireNotNull(expression.getValue(securityContext))
-        val pathContainer = PathContainer.parsePath(request.path)
-        patternParser.parse(pathPattern).let {
-            val pathMatchInfo = it.matchAndExtract(pathContainer) ?: return false
-            securityContext.setPathVariables(pathMatchInfo.uriVariables)
-            return true
-        }
+        val resolvedPattern = requireNotNull(expression.getValue(securityContext))
+        val pathPattern = pathPatternCache.get(resolvedPattern) { patternParser.parse(resolvedPattern) }
+        val pathContainer = PathContainer.parsePath(request.path, patternParser.pathOptions)
+        val pathMatchInfo = pathPattern.matchAndExtract(pathContainer) ?: return false
+        securityContext.setPathVariables(pathMatchInfo.uriVariables)
+        return true
     }
 }
 
