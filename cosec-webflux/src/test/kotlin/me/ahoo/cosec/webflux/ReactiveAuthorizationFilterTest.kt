@@ -107,7 +107,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.remoteAddress?.hostString } returns "hostName"
             every { response.setStatusCode(HttpStatus.UNAUTHORIZED) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
@@ -152,7 +152,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.remoteAddress?.hostString } returns "hostName"
             every { response.setStatusCode(HttpStatus.UNAUTHORIZED) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
@@ -197,7 +197,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.remoteAddress?.hostString } returns "hostName"
             every { response.setStatusCode(HttpStatus.FORBIDDEN) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
@@ -241,7 +241,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.remoteAddress?.hostString } returns "hostName"
             every { response.setStatusCode(HttpStatus.TOO_MANY_REQUESTS) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
@@ -284,7 +284,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.remoteAddress?.hostString } returns "hostName"
             every { response.setStatusCode(HttpStatus.FORBIDDEN) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
@@ -326,7 +326,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostName } returns "hostName"
+            every { request.remoteAddress?.hostString } returns "hostName"
             every { response.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()

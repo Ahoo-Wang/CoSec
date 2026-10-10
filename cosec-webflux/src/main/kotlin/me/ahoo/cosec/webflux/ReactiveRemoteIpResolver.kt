@@ -17,7 +17,11 @@ import me.ahoo.cosec.context.request.RemoteIpResolver
 import org.springframework.web.server.ServerWebExchange
 
 object ReactiveRemoteIpResolver : RemoteIpResolver<ServerWebExchange> {
+    /**
+     * Uses [java.net.InetSocketAddress.getHostString] rather than `getHostName`, which may trigger a
+     * blocking reverse DNS lookup on the event loop and return a host name instead of the IP.
+     */
     override fun resolve(request: ServerWebExchange): String {
-        return request.request.remoteAddress?.hostName.orEmpty()
+        return request.request.remoteAddress?.hostString.orEmpty()
     }
 }

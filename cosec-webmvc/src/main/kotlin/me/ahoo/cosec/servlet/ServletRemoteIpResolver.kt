@@ -17,7 +17,10 @@ import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.context.request.RemoteIpResolver
 
 object ServletRemoteIpResolver : RemoteIpResolver<HttpServletRequest> {
+    /**
+     * Uses `remoteAddr` rather than `remoteHost`, which may resolve (via reverse DNS) to a host name instead of the IP.
+     */
     override fun resolve(request: HttpServletRequest): String {
-        return request.remoteHost.orEmpty()
+        return request.remoteAddr.orEmpty()
     }
 }
