@@ -74,7 +74,7 @@ sequenceDiagram
 
 ```
 
-When `setPolicy()` is called, the policy is first validated via `DefaultPolicyEvaluator.evaluate(policy)` to ensure it is well-formed before caching. If the policy is a global policy, the global index is updated atomically.
+When `setPolicy()` is called, the policy is first validated via `DefaultPolicyEvaluator.evaluate(policy)` to ensure it is well-formed before caching. If the policy is a global policy, the global index is updated under an in-process lock (concurrent writers on different instances can still lose updates; moving the index to a native Redis set is planned).
 
 ### RedisAppRolePermissionRepository
 

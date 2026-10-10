@@ -23,6 +23,8 @@ import me.ahoo.cosec.policy.DefaultPolicyEvaluator
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.toMono
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 class RedisPolicyRepository(
     private val globalPolicyIndexCache: GlobalPolicyIndexCache,
@@ -47,6 +49,26 @@ class RedisPolicyRepository(
         }.subscribeOn(Schedulers.boundedElastic())
     }
 
+    /**
+     * Guards the read-modify-write of the global policy index so concurrent [setPolicy] calls
+     * within this instance cannot lose updates.
+     *
+     * NOTE: this does not protect against concurrent writers on other instances; that requires
+     * storing the index as a native Redis set (SADD/SREM) instead of a single cached value.
+     */
+    private val globalPolicyIndexLock = ReentrantLock()
+
+    private fun updateGlobalPolicyIndex(policy: Policy) = globalPolicyIndexLock.withLock {
+        val globalPolicies = globalPolicyIndexCache[CACHE_KEY]
+        if (policy.type == PolicyType.GLOBAL) {
+            if (globalPolicies == null || globalPolicies.contains(policy.id).not()) {
+                globalPolicyIndexCache[CACHE_KEY] = (globalPolicies ?: emptySet()) + policy.id
+            }
+        } else if (globalPolicies != null && globalPolicies.contains(policy.id)) {
+            globalPolicyIndexCache[CACHE_KEY] = globalPolicies - policy.id
+        }
+    }
+
     override fun setPolicy(policy: Policy): Mono<Void> {
         return Mono.fromRunnable<Void> {
             log.info {
@@ -54,14 +76,7 @@ class RedisPolicyRepository(
             }
             DefaultPolicyEvaluator.evaluate(policy)
             policyCache[policy.id] = policy
-            val globalPolicies = globalPolicyIndexCache[CACHE_KEY]
-            if (policy.type == PolicyType.GLOBAL) {
-                if (globalPolicies == null || globalPolicies.contains(policy.id).not()) {
-                    globalPolicyIndexCache[CACHE_KEY] = (globalPolicies ?: emptySet()) + policy.id
-                }
-            } else if (globalPolicies != null && globalPolicies.contains(policy.id)) {
-                globalPolicyIndexCache[CACHE_KEY] = globalPolicies - policy.id
-            }
+            updateGlobalPolicyIndex(policy)
         }.subscribeOn(Schedulers.boundedElastic())
     }
 }

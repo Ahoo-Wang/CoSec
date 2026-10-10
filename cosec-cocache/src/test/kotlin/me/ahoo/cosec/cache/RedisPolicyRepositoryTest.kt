@@ -19,7 +19,9 @@ import io.mockk.verify
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import me.ahoo.cosec.policy.PolicyData
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import reactor.core.publisher.Flux
 import reactor.kotlin.test.test
 
 internal class RedisPolicyRepositoryTest {
@@ -104,6 +106,40 @@ internal class RedisPolicyRepositoryTest {
             globalPolicyIndexCache.set(CACHE_KEY, any())
         }
     }
+
+    @Test
+    fun setPolicyConcurrentlyKeepsAllGlobalIndexEntries() {
+        var index: Set<String>? = null
+        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
+        every { globalPolicyIndexCache.get(CACHE_KEY) } answers {
+            val current = index
+            // widen the read-modify-write window
+            Thread.sleep(1)
+            current
+        }
+        every { globalPolicyIndexCache.set(CACHE_KEY, any()) } answers { index = secondArg() }
+        val policyCache = mockk<PolicyCache>(relaxed = true)
+        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
+        val policyIds = (1..32).map { "policy-$it" }
+
+        Flux.fromIterable(policyIds)
+            .flatMap { policyRepository.setPolicy(policyData.copyWithId(it)) }
+            .then()
+            .test()
+            .verifyComplete()
+
+        index.assert().isEqualTo(policyIds.toSet())
+    }
+
+    private fun PolicyData.copyWithId(id: String) = PolicyData(
+        id = id,
+        category = category,
+        name = name,
+        description = description,
+        type = type,
+        tenantId = tenantId,
+        statements = statements,
+    )
 
     @Test
     fun setPolicyIfGlobalContains() {
