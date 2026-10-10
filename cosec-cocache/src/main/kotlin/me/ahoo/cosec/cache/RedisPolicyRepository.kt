@@ -34,19 +34,40 @@ class RedisPolicyRepository(
         private val log = KotlinLogging.logger {}
     }
 
-    override fun getGlobalPolicy(): Mono<List<Policy>> {
-        return Mono.defer {
+    /**
+     * Served without a scheduler hop when the index and every policy are already in the local cache;
+     * otherwise falls back to a blocking (Redis) lookup on [Schedulers.boundedElastic].
+     */
+    override fun getGlobalPolicy(): Mono<List<Policy>> = Mono.defer {
+        val index = globalPolicyIndexCache.lookupLocal(CACHE_KEY)
+        if (index is LocalLookup.Hit) {
+            localPolicies(index.value.orEmpty())?.let { return@defer it.toMono() }
+        }
+        Mono.fromCallable {
             val globalPolicyIds = globalPolicyIndexCache[CACHE_KEY].orEmpty()
-            globalPolicyIds.mapNotNull { policyCache[it] }.toMono()
+            globalPolicyIds.mapNotNull { policyCache[it] }
         }.subscribeOn(Schedulers.boundedElastic())
     }
 
-    override fun getPolicies(policyIds: Set<PolicyId>): Mono<List<Policy>> {
-        return Mono.defer {
-            policyIds.mapNotNull {
-                policyCache[it]
-            }.toMono()
+    override fun getPolicies(policyIds: Set<PolicyId>): Mono<List<Policy>> = Mono.defer {
+        localPolicies(policyIds)?.let { return@defer it.toMono() }
+        Mono.fromCallable {
+            policyIds.mapNotNull { policyCache[it] }
         }.subscribeOn(Schedulers.boundedElastic())
+    }
+
+    /**
+     * Resolves [policyIds] from the local cache only; null when any of them needs a Redis lookup.
+     */
+    private fun localPolicies(policyIds: Collection<PolicyId>): List<Policy>? {
+        val policies = ArrayList<Policy>(policyIds.size)
+        for (policyId in policyIds) {
+            when (val lookup = policyCache.lookupLocal(policyId)) {
+                is LocalLookup.Hit -> lookup.value?.let { policies.add(it) }
+                LocalLookup.Miss -> return null
+            }
+        }
+        return policies
     }
 
     /**

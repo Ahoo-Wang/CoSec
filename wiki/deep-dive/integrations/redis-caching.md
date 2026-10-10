@@ -50,6 +50,8 @@ Implements `PolicyRepository` backed by Redis caches. Provides three operations:
 2. **`getPolicies(policyIds)`** -- fetches specific policies by ID from `PolicyCache`.
 3. **`setPolicy(policy)`** -- stores a policy in `PolicyCache`. If the policy is `PolicyType.GLOBAL`, it also adds the policy ID to the `GlobalPolicyIndexCache`.
 
+**Threading.** CoCache reads are blocking, so a lookup that needs Redis runs on `Schedulers.boundedElastic()`. When everything a read needs is already in the in-process cache (including cached "missing" entries), `getGlobalPolicy`, `getPolicies` and `RedisAppRolePermissionRepository.getAppRolePermission` answer on the calling thread without a scheduler hop. This uses CoCache 5's public `CoherentCache.configuration.clientSideCache` and mirrors its local-hit semantics (same key conversion, expired entries count as misses).
+
 ```mermaid
 sequenceDiagram
     autonumber

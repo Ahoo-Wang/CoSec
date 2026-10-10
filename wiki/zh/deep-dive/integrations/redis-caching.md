@@ -50,6 +50,8 @@ graph TD
 2. **`getPolicies(policyIds)`** -- 从 `PolicyCache` 根据 ID 获取特定策略。
 3. **`setPolicy(policy)`** -- 将策略存储到 `PolicyCache`。如果策略类型为 `PolicyType.GLOBAL`，还会将策略 ID 添加到 `GlobalPolicyIndexCache`。
 
+**线程模型。** CoCache 的读取是阻塞的，因此需要访问 Redis 的查询运行在 `Schedulers.boundedElastic()` 上。当一次读取所需的数据都已在进程内缓存中（包括已缓存的"不存在"条目）时，`getGlobalPolicy`、`getPolicies` 和 `RedisAppRolePermissionRepository.getAppRolePermission` 会直接在调用线程上返回，不切换线程。该实现基于 CoCache 5 公开的 `CoherentCache.configuration.clientSideCache`，与其本地命中语义保持一致（相同的键转换，过期条目视为未命中）。
+
 ```mermaid
 sequenceDiagram
     autonumber
