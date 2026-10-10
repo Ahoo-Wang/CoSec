@@ -42,6 +42,9 @@ import reactor.util.context.ContextView
  * 4. Principal-specific policies
  * 5. Role-based permissions
  *
+ * Layers 3-5 are combined deny-first: an EXPLICIT_DENY matched in any layer wins over
+ * an ALLOW matched in any other layer.
+ *
  * @param policyRepository Repository for accessing policies
  * @param appRolePermissionRepository Repository for accessing role permissions
  * @param blacklistChecker Optional blacklist checker for blocking requests
@@ -202,14 +205,31 @@ class SimpleAuthorization(
             }
     }
 
+    /**
+     * Chains the next verification layer so that an explicit deny in any layer wins:
+     * a matched EXPLICIT_DENY short-circuits, while a matched ALLOW is only granted
+     * once the remaining layers have produced no EXPLICIT_DENY.
+     */
+    private fun Mono<VerifyContext>.thenVerify(nextLayer: () -> Mono<VerifyContext>): Mono<VerifyContext> =
+        flatMap { matched ->
+            if (matched.result == VerifyResult.EXPLICIT_DENY) {
+                return@flatMap matched.toMono()
+            }
+            nextLayer()
+                .filter { it.result == VerifyResult.EXPLICIT_DENY }
+                .defaultIfEmpty(matched)
+        }.switchIfEmpty {
+            nextLayer()
+        }
+
     private fun verify(
         request: Request,
         context: SecurityContext
     ): Mono<AuthorizeResult> = Mono.deferContextual { reactorContext ->
         verifyGlobalPolicies(request, context)
-            .switchIfEmpty {
+            .thenVerify {
                 verifyPrincipalPolicies(request, context)
-            }.switchIfEmpty {
+            }.thenVerify {
                 verifyAppRolePermission(request, context)
             }.map {
                 recordVerifyContext(context, reactorContext, it)

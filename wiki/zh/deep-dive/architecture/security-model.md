@@ -159,15 +159,17 @@ flowchart TD
     ROOT -->|No| BLACKLIST{"Blacklist check<br>passed?"}
     BLACKLIST -->|No| DENY_BLACKLIST(["Return EXPLICIT_DENY"])
     BLACKLIST -->|Yes| GLOBAL["Evaluate global policies"]
-    GLOBAL --> GLOBAL_MATCH{"Global policies<br>matched?"}
-    GLOBAL_MATCH -->|Yes| GLOBAL_RESULT(["Return matched result"])
-    GLOBAL_MATCH -->|No| PRINCIPAL["Evaluate principal policies"]
-    PRINCIPAL --> PRINCIPAL_MATCH{"Principal policies<br>matched?"}
-    PRINCIPAL_MATCH -->|Yes| PRINCIPAL_RESULT(["Return matched result"])
-    PRINCIPAL_MATCH -->|No| ROLE["Evaluate role-based<br>app permissions"]
-    ROLE --> ROLE_MATCH{"Role permissions<br>matched?"}
-    ROLE_MATCH -->|Yes| ROLE_RESULT(["Return matched result"])
-    ROLE_MATCH -->|No| IMPLICIT(["Return IMPLICIT_DENY"])
+    GLOBAL --> GLOBAL_DENY{"EXPLICIT_DENY?"}
+    GLOBAL_DENY -->|Yes| DENY_RESULT(["Return EXPLICIT_DENY"])
+    GLOBAL_DENY -->|No| PRINCIPAL["Evaluate principal policies"]
+    PRINCIPAL --> PRINCIPAL_DENY{"EXPLICIT_DENY?"}
+    PRINCIPAL_DENY -->|Yes| DENY_RESULT
+    PRINCIPAL_DENY -->|No| ROLE["Evaluate role-based<br>app permissions"]
+    ROLE --> ROLE_DENY{"EXPLICIT_DENY?"}
+    ROLE_DENY -->|Yes| DENY_RESULT
+    ROLE_DENY -->|No| ANY_ALLOW{"Any layer<br>matched ALLOW?"}
+    ANY_ALLOW -->|Yes| ALLOW_RESULT(["Return ALLOW"])
+    ANY_ALLOW -->|No| IMPLICIT(["Return IMPLICIT_DENY"])
 
     style START fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style ROOT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -175,14 +177,14 @@ flowchart TD
     style BLACKLIST fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style DENY_BLACKLIST fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style GLOBAL fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style GLOBAL_MATCH fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style GLOBAL_RESULT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style PRINCIPAL fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style PRINCIPAL_MATCH fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style PRINCIPAL_RESULT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style ROLE fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style ROLE_MATCH fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style ROLE_RESULT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style GLOBAL_DENY fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style PRINCIPAL_DENY fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style ROLE_DENY fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style DENY_RESULT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style ANY_ALLOW fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style ALLOW_RESULT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style IMPLICIT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
@@ -194,9 +196,9 @@ flowchart TD
 3. **全局策略**（[第 164-172 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L164)）—— 通过 `PolicyRepository.getGlobalPolicy()` 获取并评估全局策略。
 4. **主体策略**（[第 174-186 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L174)）—— 通过 `PolicyRepository.getPolicies()` 获取并评估附加到主体的策略。
 5. **角色权限**（[第 188-200 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L188)）—— 通过 `AppRolePermissionRepository.getAppRolePermission()` 获取并评估应用特定的角色权限。
-6. **隐式拒绝**（[第 214-218 行](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L214)）—— 如果没有策略匹配，返回 `IMPLICIT_DENY`。
+6. **隐式拒绝** —— 如果没有任何层命中，返回 `IMPLICIT_DENY`。
 
-每个阶段使用 `Mono.switchIfEmpty` 来级联到下一阶段，形成响应式链。
+阶段 3-5 按拒绝优先的方式跨层合并：任一层命中 `EXPLICIT_DENY` 即短路并生效；前面层命中的 `ALLOW` 只有在后续各层都没有 `EXPLICIT_DENY` 时才会生效。因此全局 `ALLOW` 无法覆盖主体或角色层的 `DENY`。
 
 ## 大规模拒绝优先评估
 

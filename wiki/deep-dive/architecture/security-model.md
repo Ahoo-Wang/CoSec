@@ -159,15 +159,17 @@ flowchart TD
     ROOT -->|No| BLACKLIST{"Blacklist check<br>passed?"}
     BLACKLIST -->|No| DENY_BLACKLIST(["Return EXPLICIT_DENY"])
     BLACKLIST -->|Yes| GLOBAL["Evaluate global policies"]
-    GLOBAL --> GLOBAL_MATCH{"Global policies<br>matched?"}
-    GLOBAL_MATCH -->|Yes| GLOBAL_RESULT(["Return matched result"])
-    GLOBAL_MATCH -->|No| PRINCIPAL["Evaluate principal policies"]
-    PRINCIPAL --> PRINCIPAL_MATCH{"Principal policies<br>matched?"}
-    PRINCIPAL_MATCH -->|Yes| PRINCIPAL_RESULT(["Return matched result"])
-    PRINCIPAL_MATCH -->|No| ROLE["Evaluate role-based<br>app permissions"]
-    ROLE --> ROLE_MATCH{"Role permissions<br>matched?"}
-    ROLE_MATCH -->|Yes| ROLE_RESULT(["Return matched result"])
-    ROLE_MATCH -->|No| IMPLICIT(["Return IMPLICIT_DENY"])
+    GLOBAL --> GLOBAL_DENY{"EXPLICIT_DENY?"}
+    GLOBAL_DENY -->|Yes| DENY_RESULT(["Return EXPLICIT_DENY"])
+    GLOBAL_DENY -->|No| PRINCIPAL["Evaluate principal policies"]
+    PRINCIPAL --> PRINCIPAL_DENY{"EXPLICIT_DENY?"}
+    PRINCIPAL_DENY -->|Yes| DENY_RESULT
+    PRINCIPAL_DENY -->|No| ROLE["Evaluate role-based<br>app permissions"]
+    ROLE --> ROLE_DENY{"EXPLICIT_DENY?"}
+    ROLE_DENY -->|Yes| DENY_RESULT
+    ROLE_DENY -->|No| ANY_ALLOW{"Any layer<br>matched ALLOW?"}
+    ANY_ALLOW -->|Yes| ALLOW_RESULT(["Return ALLOW"])
+    ANY_ALLOW -->|No| IMPLICIT(["Return IMPLICIT_DENY"])
 
     style START fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style ROOT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -175,14 +177,14 @@ flowchart TD
     style BLACKLIST fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style DENY_BLACKLIST fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style GLOBAL fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style GLOBAL_MATCH fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style GLOBAL_RESULT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style PRINCIPAL fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style PRINCIPAL_MATCH fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style PRINCIPAL_RESULT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style ROLE fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style ROLE_MATCH fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    style ROLE_RESULT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style GLOBAL_DENY fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style PRINCIPAL_DENY fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style ROLE_DENY fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style DENY_RESULT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style ANY_ALLOW fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style ALLOW_RESULT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style IMPLICIT fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
 
 ```
@@ -194,9 +196,9 @@ The `authorize` method ([SimpleAuthorization.kt:221-240](https://github.com/Ahoo
 3. **Global policies** ([lines 164-172](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L164)) -- Fetch and evaluate global policies via `PolicyRepository.getGlobalPolicy()`.
 4. **Principal policies** ([lines 174-186](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L174)) -- Fetch and evaluate policies attached to the principal via `PolicyRepository.getPolicies()`.
 5. **Role permissions** ([lines 188-200](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L188)) -- Fetch and evaluate app-specific role permissions via `AppRolePermissionRepository.getAppRolePermission()`.
-6. **Implicit deny** ([lines 214-218](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L214)) -- If no policy matched, return `IMPLICIT_DENY`.
+6. **Implicit deny** -- If no layer matched, return `IMPLICIT_DENY`.
 
-Each stage uses `Mono.switchIfEmpty` to fall through to the next stage, forming a reactive chain.
+Stages 3-5 are combined deny-first across layers: an `EXPLICIT_DENY` matched in any layer short-circuits and wins, while an `ALLOW` matched in an earlier layer is only granted once the remaining layers have produced no `EXPLICIT_DENY`. A global `ALLOW` therefore cannot override a principal- or role-level `DENY`.
 
 ## Deny-First Evaluation at Scale
 

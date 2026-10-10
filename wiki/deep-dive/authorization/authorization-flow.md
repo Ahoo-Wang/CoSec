@@ -5,7 +5,7 @@ description: The SimpleAuthorization algorithm including root user bypass, black
 
 # Authorization Flow
 
-CoSec's authorization is implemented by [SimpleAuthorization](cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt), which follows an AWS IAM-inspired **deny-first** evaluation strategy. The pipeline checks multiple authorization sources in a defined priority order, returning the first decisive result or falling back to implicit deny.
+CoSec's authorization is implemented by [SimpleAuthorization](cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt), which follows an AWS IAM-inspired **deny-first** evaluation strategy. The pipeline checks multiple authorization sources in a defined order; an explicit deny in any source wins over an allow from any other source, and unmatched requests fall back to implicit deny.
 
 ## Authorization Algorithm
 
@@ -30,6 +30,10 @@ Policies explicitly assigned to the principal (via `principal.policies`) are eva
 ### Step 5: Role-Based App Permissions
 
 App-specific permissions are evaluated using the principal's roles. The `AppRolePermissionRepository` fetches role-permission mappings for the requested `appId` and `spaceId`.
+
+### Combining Steps 3-5
+
+Steps 3-5 are combined deny-first across layers. An `EXPLICIT_DENY` matched in any layer short-circuits and is returned. An `ALLOW` matched in an earlier layer is only granted after the remaining layers have produced no `EXPLICIT_DENY`, so a global `ALLOW` cannot override a principal- or role-level `DENY`.
 
 ### Step 6: Implicit Deny
 
@@ -95,15 +99,17 @@ flowchart TD
     B -->|"no"| D{"blacklist check"}
     D -->|"blocked"| E["return EXPLICIT_DENY"]
     D -->|"allowed"| F["verifyGlobalPolicies"]
-    F --> G{"Global policy matched?"}
-    G -->|"yes"| H["return matched result"]
+    F --> G{"Global EXPLICIT_DENY?"}
+    G -->|"yes"| H["return EXPLICIT_DENY"]
     G -->|"no"| I["verifyPrincipalPolicies"]
-    I --> J{"Principal policy matched?"}
-    J -->|"yes"| K["return matched result"]
+    I --> J{"Principal EXPLICIT_DENY?"}
+    J -->|"yes"| H
     J -->|"no"| L["verifyAppRolePermission"]
-    L --> M{"Role permission matched?"}
-    M -->|"yes"| N["return matched result"]
-    M -->|"no"| O["return IMPLICIT_DENY"]
+    L --> M{"Role EXPLICIT_DENY?"}
+    M -->|"yes"| H
+    M -->|"no"| N{"Any layer matched ALLOW?"}
+    N -->|"yes"| K["return ALLOW"]
+    N -->|"no"| O["return IMPLICIT_DENY"]
 
     style A fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style B fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -152,7 +158,7 @@ sequenceDiagram
         end
     end
     Eval-->>Auth: null (no match)
-    Auth->>Auth: try next source or IMPLICIT_DENY
+    Auth->>Auth: combine with next layer (any EXPLICIT_DENY wins)
 
 ```
 
@@ -178,18 +184,20 @@ sequenceDiagram
         BL-->>Auth: true (allowed)
         Auth->>GR: getGlobalPolicy()
         GR-->>Auth: global policies
-        alt global policy matched
-            Auth-->>Filter: result
-        else no global match
+        alt global EXPLICIT_DENY
+            Auth-->>Filter: EXPLICIT_DENY
+        else no global deny
             Auth->>GR: getPolicies(principal.policies)
             GR-->>Auth: principal policies
-            alt principal policy matched
-                Auth-->>Filter: result
-            else no principal match
+            alt principal EXPLICIT_DENY
+                Auth-->>Filter: EXPLICIT_DENY
+            else no principal deny
                 Auth->>PR: getAppRolePermission(appId, spaceId, roles)
                 PR-->>Auth: AppRolePermission
-                alt role permission matched
-                    Auth-->>Filter: result
+                alt role EXPLICIT_DENY
+                    Auth-->>Filter: EXPLICIT_DENY
+                else any layer matched ALLOW
+                    Auth-->>Filter: ALLOW
                 else no match
                     Auth-->>Filter: IMPLICIT_DENY
                 end
@@ -202,17 +210,17 @@ sequenceDiagram
 
 ## Reactive Chain
 
-The authorization pipeline uses Reactor's `switchIfEmpty` to chain sources:
+The authorization pipeline chains sources with `thenVerify`, which combines layers deny-first:
 
 ```kotlin
 verifyGlobalPolicies(request, context)
-    .switchIfEmpty { verifyPrincipalPolicies(request, context) }
-    .switchIfEmpty { verifyAppRolePermission(request, context) }
+    .thenVerify { verifyPrincipalPolicies(request, context) }
+    .thenVerify { verifyAppRolePermission(request, context) }
     .map { context.setVerifyContext(it); it.result.toAuthorizeResult() }
     .switchIfEmpty { AuthorizeResult.IMPLICIT_DENY.toMono() }
 ```
 
-Each source returns `Mono.empty()` when no match is found, causing the chain to proceed to the next source. This keeps the entire flow non-blocking.
+A matched `EXPLICIT_DENY` short-circuits; a matched `ALLOW` is only kept once the remaining layers have produced no `EXPLICIT_DENY`. Each source returns `Mono.empty()` when nothing matches, and the entire flow stays non-blocking.
 
 ## References
 

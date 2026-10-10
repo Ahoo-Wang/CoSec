@@ -169,6 +169,7 @@ internal class SimpleAuthorizationTest {
             every { principal.authenticated } returns false
             every { principal.id } returns ""
             every { principal.policies } returns setOf("principalPolicy")
+            every { principal.roles } returns emptySet()
             every { setAttributeValue(any(), any()) } returns this
         }
         val policyRepository = mockk<PolicyRepository> {
@@ -423,5 +424,109 @@ internal class SimpleAuthorizationTest {
             .verifyComplete()
 
         matchCount.assert().isEqualTo(1)
+    }
+
+    private fun allPolicy(policyId: String, effect: Effect): Policy = mockk {
+        every { id } returns policyId
+        every { condition } returns AllConditionMatcher.INSTANCE
+        every { statements } returns listOf(StatementData(effect = effect, action = AllActionMatcher.INSTANCE))
+    }
+
+    private fun allRolePermission(effect: Effect): AppRolePermissionData = AppRolePermissionData(
+        appPermission = AppPermissionData(
+            id = "appId",
+            groups = listOf(
+                PermissionGroupData(
+                    "groupName",
+                    permissions = listOf(
+                        PermissionData(
+                            id = "permissionId",
+                            name = "",
+                            effect = effect,
+                            action = AllActionMatcher.INSTANCE
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        rolePermissions = listOf(RolePermissionData(id = "roleId", permissions = setOf("permissionId"))),
+    )
+
+    private fun authorizeLayers(
+        globalPolicy: Policy?,
+        principalPolicy: Policy?,
+        rolePermission: AppRolePermissionData?
+    ): Mono<AuthorizeResult> {
+        val securityContext = mockk<SecurityContext> {
+            every { principal.id } returns "userId"
+            every { principal.policies } returns setOf("principalPolicy")
+            every { principal.roles } returns setOf("roleId")
+            every { setAttributeValue(any(), any()) } returns this
+        }
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.justOrEmpty(globalPolicy).map { listOf(it) }
+            every { getPolicies(any()) } returns Mono.justOrEmpty(principalPolicy).map { listOf(it) }
+        }
+        val permissionRepository = mockk<AppRolePermissionRepository> {
+            every { getAppRolePermission(any(), any(), any()) } returns Mono.justOrEmpty(rolePermission)
+        }
+        val request = mockk<Request> {
+            every { appId } returns "appId"
+            every { spaceId } returns "spaceId"
+        }
+        return SimpleAuthorization(policyRepository, permissionRepository).authorize(request, securityContext)
+    }
+
+    @Test
+    fun authorizeWhenGlobalAllowAndPrincipalDeny() {
+        authorizeLayers(allPolicy("global", Effect.ALLOW), allPolicy("principal", Effect.DENY), null)
+            .test()
+            .expectNext(AuthorizeResult.EXPLICIT_DENY)
+            .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenGlobalAllowAndRoleDeny() {
+        authorizeLayers(allPolicy("global", Effect.ALLOW), null, allRolePermission(Effect.DENY))
+            .test()
+            .expectNext(AuthorizeResult.EXPLICIT_DENY)
+            .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenPrincipalAllowAndRoleDeny() {
+        authorizeLayers(null, allPolicy("principal", Effect.ALLOW), allRolePermission(Effect.DENY))
+            .test()
+            .expectNext(AuthorizeResult.EXPLICIT_DENY)
+            .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenGlobalAllowAndOtherLayersAllow() {
+        authorizeLayers(
+            allPolicy("global", Effect.ALLOW),
+            allPolicy("principal", Effect.ALLOW),
+            allRolePermission(Effect.ALLOW)
+        ).test()
+            .expectNext(AuthorizeResult.ALLOW)
+            .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenGlobalDenyShortCircuitsOtherLayers() {
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.just(listOf(allPolicy("global", Effect.DENY)))
+        }
+        val permissionRepository = mockk<AppRolePermissionRepository>()
+        val securityContext = mockk<SecurityContext> {
+            every { principal.id } returns "userId"
+            every { principal.policies } returns setOf("principalPolicy")
+            every { principal.roles } returns setOf("roleId")
+            every { setAttributeValue(any(), any()) } returns this
+        }
+        SimpleAuthorization(policyRepository, permissionRepository).authorize(mockk(), securityContext)
+            .test()
+            .expectNext(AuthorizeResult.EXPLICIT_DENY)
+            .verifyComplete()
     }
 }

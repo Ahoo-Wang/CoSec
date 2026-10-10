@@ -5,7 +5,7 @@ description: SimpleAuthorization 算法，包括根用户绕过、黑名单检�
 
 # 授权流程
 
-CoSec 的授权由 [SimpleAuthorization](../../../../cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt) 实现，遵循受 AWS IAM 启发的**拒绝优先**评估策略。管道按定义的优先级顺序检查多个授权源，返回第一个决定性结果或回退到隐式拒绝。
+CoSec 的授权由 [SimpleAuthorization](../../../../cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt) 实现，遵循受 AWS IAM 启发的**拒绝优先**评估策略。管道按定义的顺序检查多个授权源；任一授权源的显式拒绝优先于其他授权源的允许，未命中的请求回退到隐式拒绝。
 
 ## 授权算法
 
@@ -30,6 +30,10 @@ CoSec 的授权由 [SimpleAuthorization](../../../../cosec-core/src/main/kotlin/
 ### 步骤 5：基于角色的应用权限
 
 使用主体的角色评估应用特定权限。`AppRolePermissionRepository` 获取请求的 `appId` 和 `spaceId` 的角色-权限映射。
+
+### 合并步骤 3-5
+
+步骤 3-5 按拒绝优先的方式跨层合并。任一层命中 `EXPLICIT_DENY` 即短路返回；前面层命中的 `ALLOW` 只有在后续各层都没有 `EXPLICIT_DENY` 时才会生效，因此全局 `ALLOW` 无法覆盖主体或角色层的 `DENY`。
 
 ### 步骤 6：隐式拒绝
 
@@ -95,15 +99,17 @@ flowchart TD
     B -->|"no"| D{"blacklist check"}
     D -->|"blocked"| E["return EXPLICIT_DENY"]
     D -->|"allowed"| F["verifyGlobalPolicies"]
-    F --> G{"Global policy matched?"}
-    G -->|"yes"| H["return matched result"]
+    F --> G{"Global EXPLICIT_DENY?"}
+    G -->|"yes"| H["return EXPLICIT_DENY"]
     G -->|"no"| I["verifyPrincipalPolicies"]
-    I --> J{"Principal policy matched?"}
-    J -->|"yes"| K["return matched result"]
+    I --> J{"Principal EXPLICIT_DENY?"}
+    J -->|"yes"| H
     J -->|"no"| L["verifyAppRolePermission"]
-    L --> M{"Role permission matched?"}
-    M -->|"yes"| N["return matched result"]
-    M -->|"no"| O["return IMPLICIT_DENY"]
+    L --> M{"Role EXPLICIT_DENY?"}
+    M -->|"yes"| H
+    M -->|"no"| N{"Any layer matched ALLOW?"}
+    N -->|"yes"| K["return ALLOW"]
+    N -->|"no"| O["return IMPLICIT_DENY"]
 
     style A fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     style B fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
@@ -152,7 +158,7 @@ sequenceDiagram
         end
     end
     Eval-->>Auth: null (no match)
-    Auth->>Auth: try next source or IMPLICIT_DENY
+    Auth->>Auth: combine with next layer (any EXPLICIT_DENY wins)
 
 ```
 
@@ -178,18 +184,20 @@ sequenceDiagram
         BL-->>Auth: true (allowed)
         Auth->>GR: getGlobalPolicy()
         GR-->>Auth: global policies
-        alt global policy matched
-            Auth-->>Filter: result
-        else no global match
+        alt global EXPLICIT_DENY
+            Auth-->>Filter: EXPLICIT_DENY
+        else no global deny
             Auth->>GR: getPolicies(principal.policies)
             GR-->>Auth: principal policies
-            alt principal policy matched
-                Auth-->>Filter: result
-            else no principal match
+            alt principal EXPLICIT_DENY
+                Auth-->>Filter: EXPLICIT_DENY
+            else no principal deny
                 Auth->>PR: getAppRolePermission(appId, spaceId, roles)
                 PR-->>Auth: AppRolePermission
-                alt role permission matched
-                    Auth-->>Filter: result
+                alt role EXPLICIT_DENY
+                    Auth-->>Filter: EXPLICIT_DENY
+                else any layer matched ALLOW
+                    Auth-->>Filter: ALLOW
                 else no match
                     Auth-->>Filter: IMPLICIT_DENY
                 end
@@ -202,17 +210,17 @@ sequenceDiagram
 
 ## 响应式链
 
-授权管道使用 Reactor 的 `switchIfEmpty` 来链接授权源：
+授权管道通过 `thenVerify` 串联各授权源，并按拒绝优先的方式合并各层结果：
 
 ```kotlin
 verifyGlobalPolicies(request, context)
-    .switchIfEmpty { verifyPrincipalPolicies(request, context) }
-    .switchIfEmpty { verifyAppRolePermission(request, context) }
+    .thenVerify { verifyPrincipalPolicies(request, context) }
+    .thenVerify { verifyAppRolePermission(request, context) }
     .map { context.setVerifyContext(it); it.result.toAuthorizeResult() }
     .switchIfEmpty { AuthorizeResult.IMPLICIT_DENY.toMono() }
 ```
 
-每个源在未找到匹配时返回 `Mono.empty()`，使链继续到下一个源。这保持了整个流程的非阻塞特性。
+任一层命中 `EXPLICIT_DENY` 即短路返回；前面层命中的 `ALLOW` 只有在后续各层都没有 `EXPLICIT_DENY` 时才会生效。各授权源未命中时返回 `Mono.empty()`，整个流程保持非阻塞。
 
 ## 参考文献
 
