@@ -21,12 +21,14 @@ import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.audit.ConditionalOnAuditEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.REACTIVE_REQUEST_PARSER_BEAN_NAME
 import me.ahoo.cosec.spring.boot.starter.authorization.ConditionalOnAuthorizationEnabled
+import me.ahoo.cosec.spring.boot.starter.authorization.securityContextParseScheduler
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import org.springframework.core.env.Environment
 import org.springframework.web.server.ServerWebExchange
 
 /**
@@ -55,8 +57,14 @@ class CoSecGatewayAuthorizationAutoConfiguration {
     fun authorizationGatewayFilter(
         securityContextParser: SecurityContextParser,
         @Qualifier(REACTIVE_REQUEST_PARSER_BEAN_NAME) requestParser: RequestParser<ServerWebExchange>,
-        authorization: Authorization
+        authorization: Authorization,
+        environment: Environment
     ): AuthorizationGatewayFilter {
-        return AuthorizationGatewayFilter(securityContextParser, requestParser, authorization)
+        return AuthorizationGatewayFilter(
+            securityContextParser,
+            requestParser,
+            authorization,
+            environment.securityContextParseScheduler()
+        )
     }
 }

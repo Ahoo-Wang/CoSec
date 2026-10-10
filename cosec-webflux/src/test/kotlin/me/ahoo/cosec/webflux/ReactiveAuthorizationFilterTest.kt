@@ -47,6 +47,7 @@ import org.springframework.mock.web.server.MockServerWebExchange
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
+import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.toMono
 
 internal class ReactiveAuthorizationFilterTest {
@@ -386,6 +387,46 @@ internal class ReactiveAuthorizationFilterTest {
         exchange.response.statusCode.assert().isEqualTo(HttpStatus.BAD_REQUEST)
         verify(exactly = 0) { authorization.authorize(any(), any()) }
         // A traversal path must not reach the filter chain.
+        verify(exactly = 0) { filterChain.filter(any()) }
+    }
+
+    @Test
+    fun filterParsesSecurityContextOnScheduler() {
+        val authorization = mockk<Authorization> {
+            every { authorize(any(), any()) } returns AuthorizeResult.ALLOW.toMono()
+        }
+        var parseThreadName: String? = null
+        val securityContextParser = SecurityContextParser {
+            parseThreadName = Thread.currentThread().name
+            InjectSecurityContextParser.parse(it)
+        }
+        val filter = ReactiveAuthorizationFilter(
+            securityContextParser,
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
+            authorization,
+            Schedulers.boundedElastic(),
+        )
+        val exchange = MockServerWebExchange.builder(MockServerHttpRequest.get("/path").build()).build()
+        filter.filter(exchange) { Mono.empty() }.block()
+
+        parseThreadName.assert().startsWith("boundedElastic")
+    }
+
+    @Test
+    fun filterWhenSecurityContextParseFails() {
+        val authorization = mockk<Authorization>()
+        val securityContextParser = SecurityContextParser { throw IllegalStateException("store unavailable") }
+        val filter = ReactiveAuthorizationFilter(
+            securityContextParser,
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
+            authorization,
+        )
+        val exchange = MockServerWebExchange.builder(MockServerHttpRequest.get("/path").build()).build()
+        val filterChain = mockk<WebFilterChain>()
+        filter.filter(exchange, filterChain).block()
+
+        exchange.response.statusCode.assert().isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
+        verify(exactly = 0) { authorization.authorize(any(), any()) }
         verify(exactly = 0) { filterChain.filter(any()) }
     }
 }

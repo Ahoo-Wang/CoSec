@@ -22,6 +22,8 @@ import org.springframework.cloud.gateway.filter.GlobalFilter
 import org.springframework.core.Ordered
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
+import reactor.core.scheduler.Scheduler
+import reactor.core.scheduler.Schedulers
 
 /**
  * Authorization Gateway Filter .
@@ -31,8 +33,11 @@ import reactor.core.publisher.Mono
 class AuthorizationGatewayFilter(
     securityContextParser: SecurityContextParser,
     requestParser: RequestParser<ServerWebExchange>,
-    authorization: Authorization
-) : GlobalFilter, Ordered, ReactiveSecurityFilter(securityContextParser, requestParser, authorization) {
+    authorization: Authorization,
+    securityContextParseScheduler: Scheduler = Schedulers.immediate()
+) : GlobalFilter,
+    Ordered,
+    ReactiveSecurityFilter(securityContextParser, requestParser, authorization, securityContextParseScheduler) {
     companion object {
         /**
          * Filter order for gateway authorization.

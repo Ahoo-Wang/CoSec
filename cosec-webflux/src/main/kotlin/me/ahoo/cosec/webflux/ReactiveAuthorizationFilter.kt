@@ -20,6 +20,8 @@ import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilter
 import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
+import reactor.core.scheduler.Scheduler
+import reactor.core.scheduler.Schedulers
 
 /**
  * WebFilter that performs authorization for reactive applications.
@@ -36,8 +38,9 @@ import reactor.core.publisher.Mono
 class ReactiveAuthorizationFilter(
     securityContextParser: SecurityContextParser,
     requestParser: RequestParser<ServerWebExchange>,
-    authorization: Authorization
-) : ReactiveSecurityFilter(securityContextParser, requestParser, authorization),
+    authorization: Authorization,
+    securityContextParseScheduler: Scheduler = Schedulers.immediate()
+) : ReactiveSecurityFilter(securityContextParser, requestParser, authorization, securityContextParseScheduler),
     WebFilter,
     Ordered {
     companion object {

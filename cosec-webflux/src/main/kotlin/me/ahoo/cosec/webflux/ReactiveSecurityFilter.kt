@@ -16,6 +16,7 @@ package me.ahoo.cosec.webflux
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_KEY
 import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
@@ -37,6 +38,8 @@ import org.springframework.http.MediaType
 import org.springframework.http.server.reactive.ServerHttpResponse
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
+import reactor.core.scheduler.Scheduler
+import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.toMono
 
 /**
@@ -61,11 +64,31 @@ import reactor.kotlin.core.publisher.toMono
 abstract class ReactiveSecurityFilter(
     val securityContextParser: SecurityContextParser,
     val requestParser: RequestParser<ServerWebExchange>,
-    val authorization: Authorization
+    val authorization: Authorization,
+    /**
+     * Scheduler that [securityContextParser] runs on. Defaults to [Schedulers.immediate]; use a blocking-capable
+     * scheduler (e.g. [Schedulers.boundedElastic]) when parsing may block, such as a token revocation check
+     * backed by Redis, so it never runs on the event loop.
+     */
+    val securityContextParseScheduler: Scheduler = Schedulers.immediate()
 ) {
     companion object {
         private val log = KotlinLogging.logger {}
     }
+
+    private fun parseSecurityContext(request: Request): Mono<SecurityContext> =
+        Mono.fromCallable<SecurityContext> {
+            try {
+                securityContextParser.parse(request)
+            } catch (verificationException: TokenVerificationException) {
+                log.debug(verificationException) {
+                    "Parse request to security context failed."
+                }
+                SimpleSecurityContext.anonymous().also {
+                    it.setTokenVerificationException(verificationException)
+                }
+            }
+        }.subscribeOn(securityContextParseScheduler)
 
     fun filterInternal(
         exchange: ServerWebExchange,
@@ -77,42 +100,39 @@ abstract class ReactiveSecurityFilter(
             exchange.response.statusCode = HttpStatus.BAD_REQUEST
             return Mono.empty()
         }
-        val securityContext =
-            try {
-                securityContextParser.parse(request)
-            } catch (verificationException: TokenVerificationException) {
-                log.debug(verificationException) {
-                    "Parse request to security context failed."
-                }
-                SimpleSecurityContext.anonymous().also {
-                    it.setTokenVerificationException(verificationException)
-                }
-            }
-        securityContext.setRequest(request)
-        exchange.setSecurityContext(securityContext)
         exchange.response.headers.trySet(REQUEST_ID_KEY, request.requestId)
-        val authorizedExchange = authorization
-            .authorize(request, securityContext)
-            .flatMap<ServerWebExchange> { authorizeResult ->
-                if (authorizeResult.authorized) {
-                    return@flatMap exchange
-                        .mutate()
-                        .principal(securityContext.principal.toMono())
-                        .build()
-                        .toMono()
+        return parseSecurityContext(request).onErrorResume { cause ->
+            log.error(cause) {
+                "Unexpected error while parsing security context of request [${request.path}] [${request.method}]."
+            }
+            exchange.response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR
+            exchange.response.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY).then(Mono.empty())
+        }.flatMap { securityContext ->
+            securityContext.setRequest(request)
+            exchange.setSecurityContext(securityContext)
+            authorization
+                .authorize(request, securityContext)
+                .flatMap<ServerWebExchange> { authorizeResult ->
+                    if (authorizeResult.authorized) {
+                        return@flatMap exchange
+                            .mutate()
+                            .principal(securityContext.principal.toMono())
+                            .build()
+                            .toMono()
+                    }
+                    val principal = securityContext.principal
+                    if (!principal.authenticated) {
+                        exchange.response.statusCode = HttpStatus.UNAUTHORIZED
+                    } else {
+                        exchange.response.statusCode = HttpStatus.FORBIDDEN
+                    }
+                    exchange.response.writeWithAuthorizeResult(
+                        securityContext.getTokenVerificationException()?.toAuthorizeResult() ?: authorizeResult,
+                    ).then(Mono.empty())
+                }.onAuthorizeError(exchange, request)
+                .flatMap { authorized ->
+                    chain(authorized, request).writeSecurityContext(securityContext)
                 }
-                val principal = securityContext.principal
-                if (!principal.authenticated) {
-                    exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-                } else {
-                    exchange.response.statusCode = HttpStatus.FORBIDDEN
-                }
-                exchange.response.writeWithAuthorizeResult(
-                    securityContext.getTokenVerificationException()?.toAuthorizeResult() ?: authorizeResult,
-                ).then(Mono.empty())
-            }.onAuthorizeError(exchange, request)
-        return authorizedExchange.flatMap { authorized ->
-            chain(authorized, request).writeSecurityContext(securityContext)
         }
     }
 
