@@ -7,7 +7,7 @@ export default defineConfig({
     title: 'CoSec',
     // Fail the build on broken internal links.
     ignoreDeadLinks: false,
-    description: 'RBAC-based and Policy-based Multi-Tenant Reactive Security Framework',
+    description: 'Multi-tenant reactive security for Spring: IAM-style policies and role-based permissions, evaluated deny-first.',
     sitemap: {
         hostname: 'https://cosec.ahoo.me',
     },
@@ -38,6 +38,7 @@ export default defineConfig({
                   { text: 'Authentication', link: '/guide/authentication' },
                   { text: 'Web Integration', link: '/guide/web-integration' },
                   { text: 'Operations', link: '/guide/operations' },
+                  { text: 'Troubleshooting', link: '/guide/troubleshooting' },
                 ],
               },
             ],
@@ -86,6 +87,7 @@ export default defineConfig({
                   { text: '认证', link: '/zh/guide/authentication' },
                   { text: 'Web 集成', link: '/zh/guide/web-integration' },
                   { text: '运维', link: '/zh/guide/operations' },
+                  { text: '故障排查', link: '/zh/guide/troubleshooting' },
                 ],
               },
             ],

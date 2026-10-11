@@ -76,6 +76,23 @@ Policies and audit events use the client IP (`request.remoteIp`). Behind proxies
 proxy hops you trust, so the IP comes from the right `X-Forwarded-For` entry and cannot be spoofed by the
 client. The IP is never resolved through reverse DNS.
 
+## Request attributes
+
+Request attributes are string values attached to the request before authorization. Conditions read them as
+`request.attributes.<name>`, and they appear in audit events.
+
+| Attribute | Added by | Value |
+|---|---|---|
+| `ipRegion` | `ip2region-support` | The client IP's location (country, region, city, ISP), looked up in an embedded [ip2region](https://github.com/lionsoul2014/ip2region) database. Absent if the lookup fails. |
+| `cosec.audit.routeId` | `gateway-support`, with auditing enabled (the default) | The id of the matched gateway route. |
+
+```json
+{ "contains": { "part": "request.attributes.ipRegion", "value": "中国" } }
+```
+
+To add your own attributes, provide a [`RequestAttributesAppender`](../architecture/extending.md#request-and-security-context)
+bean.
+
 ## CORS
 
 Browsers send CORS preflight requests without credentials. With WebFlux, register `OrderedCorsWebFilter`
@@ -88,7 +105,6 @@ fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source
 
 ## Gateway notes
 
-- With auditing enabled (the default), the matched route id is added to the request attributes
-  (`cosec.audit.routeId`), so it appears in audit events and can be used in conditions
-  (`request.attributes.cosec.audit.routeId`).
+- The gateway filter forwards `CoSec-Request-Id` downstream and adds the matched route id as a
+  [request attribute](#request-attributes).
 - [`cosec-gateway-server`](./operations.md#deployment) is a ready-to-run gateway built on this filter.

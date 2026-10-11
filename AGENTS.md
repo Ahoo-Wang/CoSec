@@ -71,7 +71,8 @@ Every fact has one home. Update it in the same PR as the code change:
 |---|---|
 | Policy language (action/condition types, options, parts, evaluation) | `wiki/guide/policies.md`, `schema/*.schema.json`, `skills/cosec-policy-author` |
 | `cosec.*` property or default | `wiki/guide/configuration.md` |
-| Status codes, adapters, security-context access | `wiki/guide/web-integration.md` |
+| Status codes, adapters, security-context access, request attributes | `wiki/guide/web-integration.md` |
+| Failure symptoms and how to diagnose them | `wiki/guide/troubleshooting.md`, `skills/cosec-troubleshoot` |
 | Tokens, login, revocation | `wiki/guide/authentication.md` |
 | Architecture, invariants, performance | `wiki/architecture/overview.md` |
 | Extension points | `wiki/architecture/extending.md` |

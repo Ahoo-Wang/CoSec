@@ -70,6 +70,21 @@ val securityContext = httpServletRequest.getSecurityContext()
 [`cosec.authorization.remote-ip.max-trusted-index`](./configuration.md#authorization) 设为你信任的代理层数，
 这样 IP 会取自 `X-Forwarded-For` 中正确的那一项，客户端无法伪造。IP 从不通过反向 DNS 解析。
 
+## 请求属性 {#request-attributes}
+
+请求属性是在授权之前附加到请求上的字符串值。条件以 `request.attributes.<name>` 读取它们，审计事件中也会包含它们。
+
+| 属性 | 由谁添加 | 取值 |
+|---|---|---|
+| `ipRegion` | `ip2region-support` | 在内置 [ip2region](https://github.com/lionsoul2014/ip2region) 数据库中查到的客户端 IP 位置（国家、地区、城市、运营商）。查询失败时不存在。 |
+| `cosec.audit.routeId` | `gateway-support`，且启用了审计（默认启用） | 命中的网关路由 id。 |
+
+```json
+{ "contains": { "part": "request.attributes.ipRegion", "value": "中国" } }
+```
+
+要添加自己的属性，请提供一个 [`RequestAttributesAppender`](../architecture/extending.md#request-and-security-context) Bean。
+
 ## CORS {#cors}
 
 浏览器发送的 CORS 预检请求不带凭证。使用 WebFlux 时，请注册 `OrderedCorsWebFilter`（顺序 `999`，在授权之前），
@@ -82,6 +97,5 @@ fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source
 
 ## 网关说明 {#gateway-notes}
 
-- 启用审计时（默认启用），命中的路由 id 会加入请求属性（`cosec.audit.routeId`），因此会出现在审计事件中，
-  也可以在条件中使用（`request.attributes.cosec.audit.routeId`）。
+- 网关过滤器会把 `CoSec-Request-Id` 转发给下游，并把命中的路由 id 作为[请求属性](#request-attributes)加入。
 - [`cosec-gateway-server`](./operations.md#deployment) 是基于该过滤器、开箱即用的网关。

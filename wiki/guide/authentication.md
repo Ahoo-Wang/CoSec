@@ -24,7 +24,8 @@ Because roles and policies travel in the token, changes to them apply from the n
 
 **Sending the token.** Clients send the access token in the `Authorization` header (`Bearer` prefix
 optional) or an `authorization` cookie. The `authorization` query parameter is accepted only with
-`cosec.authorization.allow-query-token=true`.
+`cosec.authorization.allow-query-token=true`. With `openapi-support`, the OpenAPI document declares bearer
+authentication, so API explorers such as Swagger UI can send tokens.
 
 A missing, expired or invalid token makes the caller anonymous, and policies decide what anonymous callers
 may do. If the request is then denied, the response is `401` with reason `Token Expired` or `Token Invalid`
