@@ -1,0 +1,126 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Pull request hygiene:
+# - semantic-title: PR titles must follow Conventional Commits; the title becomes the squash/merge
+#   message and drives release notes and semantic versioning.
+# - labels: path labels (.github/labeler.yml) plus a type label derived from the title, matching the
+#   release note categories in .github/release.yml.
+#
+# pull_request_target runs with the base branch's workflow and a write token so labels can be applied to
+# pull requests from forks. It never checks out or executes code from the pull request.
+name: Pull Request
+on:
+  pull_request_target:
+    types: [ opened, edited, synchronize, reopened ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pull-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  semantic-title:
+    name: Semantic PR Title
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            perf
+            refactor
+            docs
+            test
+            build
+            ci
+            chore
+            revert
+            style
+          requireScope: false
+
+  labels:
+    name: Label
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Path labels
+        uses: actions/labeler@v7.0.0
+        with:
+          sync-labels: false
+
+      - name: Type labels from title
+        uses: actions/github-script@v9.0.0
+        with:
+          script: |
+            // Keep in sync with .github/release.yml categories.
+            const typeLabels = {
+              feat: 'enhancement',
+              fix: 'bug',
+              perf: 'performance',
+              docs: 'documentation',
+              refactor: 'maintenance',
+              test: 'maintenance',
+              build: 'maintenance',
+              ci: 'maintenance',
+              chore: 'maintenance',
+              style: 'maintenance',
+              revert: 'maintenance',
+            };
+            const labelSpecs = {
+              enhancement: ['a2eeef', 'New feature or request'],
+              bug: ['d73a4a', 'Something isn\'t working'],
+              performance: ['fbca04', 'Performance improvement'],
+              documentation: ['0075ca', 'Improvements or additions to documentation'],
+              maintenance: ['c5def5', 'Refactoring, build, CI and other maintenance'],
+              dependencies: ['0366d6', 'Dependency updates'],
+              'breaking-change': ['b60205', 'Introduces a breaking change (major version)'],
+            };
+            const pr = context.payload.pull_request;
+            const match = /^(\w+)(\(([^)]+)\))?(!)?:/.exec(pr.title);
+            if (!match) {
+              core.info(`Title is not a Conventional Commit: ${pr.title}`);
+              return;
+            }
+            const [, type, , scope, bang] = match;
+            const labels = new Set();
+            if (scope === 'deps') {
+              labels.add('dependencies');
+            } else if (typeLabels[type]) {
+              labels.add(typeLabels[type]);
+            }
+            if (bang || /^BREAKING[ -]CHANGE:/m.test(pr.body || '')) {
+              labels.add('breaking-change');
+            }
+            for (const name of labels) {
+              try {
+                await github.rest.issues.getLabel({ ...context.repo, name });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                const [color, description] = labelSpecs[name];
+                await github.rest.issues.createLabel({ ...context.repo, name, color, description });
+              }
+            }
+            if (labels.size > 0) {
+              await github.rest.issues.addLabels({ ...context.repo, issue_number: pr.number, labels: [...labels] });
+            }
