@@ -69,6 +69,6 @@ cosec:
 | Spring Boot | 4.1.0 | Application framework |
 | Project Reactor | - | Reactive programming |
 | auth0/java-jwt | 4.6.0 | JWT token handling |
-| CoCache | 5.0.1 | Distributed Redis caching |
+| CoCache | 5.1.0 | Distributed Redis caching |
 | JustAuth | 1.16.7 | OAuth social authentication |
 | OpenTelemetry | 2.30.0 | Observability tracing |

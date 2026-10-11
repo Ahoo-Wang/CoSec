@@ -69,6 +69,6 @@ cosec:
 | Spring Boot | 4.1.0 | 应用框架 |
 | Project Reactor | - | 响应式编程 |
 | JWT (auth0) | 4.6.0 | 令牌处理 |
-| CoCache | 5.0.1 | 分布式缓存 |
+| CoCache | 5.1.0 | 分布式缓存 |
 | JustAuth | 1.16.7 | 社交认证 |
 | OpenTelemetry | 2.30.0 | 可观测性 |

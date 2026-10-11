@@ -13,6 +13,7 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cache.api.Cache
+import me.ahoo.cache.api.SetElementsCache
 import me.ahoo.cache.api.TtlAt
 import me.ahoo.cache.api.annotation.CoCache
 
@@ -23,7 +24,9 @@ import me.ahoo.cache.api.annotation.CoCache
  */
 // Redis is the store of record (no CacheSource), so entries must never expire; CoCache 5 defaults ttl to 3600s.
 @CoCache(ttl = TtlAt.FOREVER)
-interface GlobalPolicyIndexCache : Cache<String, Set<String>> {
+interface GlobalPolicyIndexCache :
+    Cache<String, Set<String>>,
+    SetElementsCache<String, String> {
     companion object {
         const val CACHE_KEY = ""
     }

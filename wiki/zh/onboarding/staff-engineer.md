@@ -476,7 +476,7 @@ graph TD
 | auth0/java-jwt | 4.6.0 | JWT token 创建与验证 |
 | JustAuth | 1.16.7 | 多供应商 OAuth（微信、GitHub 等） |
 | OGNL | 3.4.11 | 基于表达式的条件匹配 |
-| CoCache | 5.0.1 | 两级分布式缓存（本地 + Redis） |
+| CoCache | 5.1.0 | 两级分布式缓存（本地 + Redis） |
 | CosId | 3.2.0 | 分布式 ID 生成 |
 | Guava RateLimiter | 33.6.0-jre | 条件中的令牌桶限流 |
 

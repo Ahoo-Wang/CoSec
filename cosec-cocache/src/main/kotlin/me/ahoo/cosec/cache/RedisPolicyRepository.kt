@@ -23,8 +23,6 @@ import me.ahoo.cosec.policy.DefaultPolicyEvaluator
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.toMono
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
 class RedisPolicyRepository(
     private val globalPolicyIndexCache: GlobalPolicyIndexCache,
@@ -71,22 +69,15 @@ class RedisPolicyRepository(
     }
 
     /**
-     * Guards the read-modify-write of the global policy index so concurrent [setPolicy] calls
-     * within this instance cannot lose updates.
-     *
-     * NOTE: this does not protect against concurrent writers on other instances; that requires
-     * storing the index as a native Redis set (SADD/SREM) instead of a single cached value.
+     * Adds or removes [policy] in the global policy index with an atomic, idempotent element update, so
+     * concurrent writers on any instance cannot lose entries.
      */
-    private val globalPolicyIndexLock = ReentrantLock()
-
-    private fun updateGlobalPolicyIndex(policy: Policy) = globalPolicyIndexLock.withLock {
-        val globalPolicies = globalPolicyIndexCache[CACHE_KEY]
+    private fun updateGlobalPolicyIndex(policy: Policy) {
+        val policyIds = listOf(policy.id)
         if (policy.type == PolicyType.GLOBAL) {
-            if (globalPolicies == null || globalPolicies.contains(policy.id).not()) {
-                globalPolicyIndexCache[CACHE_KEY] = (globalPolicies ?: emptySet()) + policy.id
-            }
-        } else if (globalPolicies != null && globalPolicies.contains(policy.id)) {
-            globalPolicyIndexCache[CACHE_KEY] = globalPolicies - policy.id
+            globalPolicyIndexCache.addElements(CACHE_KEY, policyIds)
+        } else {
+            globalPolicyIndexCache.removeElements(CACHE_KEY, policyIds)
         }
     }
 

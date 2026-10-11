@@ -22,6 +22,7 @@ import me.ahoo.cache.spring.client.SpringClientSideCacheFactory.Companion.CLIENT
 import me.ahoo.cache.spring.converter.SpringKeyConverterFactory.Companion.KEY_CONVERTER_SUFFIX
 import me.ahoo.cache.spring.redis.RedisDistributedCache
 import me.ahoo.cache.spring.redis.RedisDistributedCacheFactory.Companion.DISTRIBUTED_CACHE_SUFFIX
+import me.ahoo.cache.spring.redis.RedisSetDistributedCache
 import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
 import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
 import me.ahoo.cosec.api.policy.Policy
@@ -90,8 +91,9 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
         redisTemplate: StringRedisTemplate,
         cocacheProperties: CoCacheProperties
     ): DistributedCache<Set<String>> {
+        // RedisSetDistributedCache supports the atomic element updates GlobalPolicyIndexCache relies on
         val codecExecutor = SetToSetCodecExecutor(redisTemplate, cocacheProperties.redis.missingGuardSentinel)
-        return RedisDistributedCache(redisTemplate, codecExecutor, STRICT_CACHE_FAILURE)
+        return RedisSetDistributedCache(redisTemplate, codecExecutor, STRICT_CACHE_FAILURE)
     }
 
     /**
