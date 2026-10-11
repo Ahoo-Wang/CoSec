@@ -16,6 +16,7 @@ import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
+import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.context.DefaultSecurityContextParser
@@ -114,17 +115,25 @@ class CoSecAuthorizationAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean
+    fun rootPrincipalMatcher(authorizationProperties: AuthorizationProperties): RootPrincipalMatcher {
+        return if (authorizationProperties.rootEnabled) RootPrincipalMatcher.DEFAULT else RootPrincipalMatcher.NONE
+    }
+
+    @Bean
     @AutoConfigured
     @ConditionalOnMissingBean
     fun cosecAuthorization(
         policyRepository: PolicyRepository,
         appRolePermissionRepository: AppRolePermissionRepository,
-        blacklistChecker: BlacklistChecker
+        blacklistChecker: BlacklistChecker,
+        rootPrincipalMatcher: RootPrincipalMatcher
     ): Authorization {
         return SimpleAuthorization(
             policyRepository = policyRepository,
             appRolePermissionRepository = appRolePermissionRepository,
-            blacklistChecker = blacklistChecker
+            blacklistChecker = blacklistChecker,
+            rootPrincipalMatcher = rootPrincipalMatcher,
         )
     }
 

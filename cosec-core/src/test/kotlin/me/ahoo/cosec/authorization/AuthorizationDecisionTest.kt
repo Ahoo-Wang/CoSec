@@ -21,6 +21,7 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.EvaluateRequest
+import me.ahoo.cosec.principal.SimplePrincipal
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
@@ -68,6 +69,23 @@ class AuthorizationDecisionTest {
         }
         val authorization = SimpleAuthorization(policyRepository, mockk())
         authorization.decide(EvaluateRequest(), SimpleSecurityContext.anonymous())
+            .test()
+            .expectNext(AuthorizationDecision(AuthorizeResult.IMPLICIT_DENY, NoMatchVerifyContext))
+            .verifyComplete()
+    }
+
+    @Test
+    fun simpleAuthorizationWithoutRootPrincipal() {
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.empty()
+        }
+        val authorization = SimpleAuthorization(
+            policyRepository,
+            mockk(),
+            rootPrincipalMatcher = RootPrincipalMatcher.NONE,
+        )
+        val rootIdContext = SimpleSecurityContext(SimplePrincipal(CoSecPrincipal.ROOT_ID))
+        authorization.decide(EvaluateRequest(), rootIdContext)
             .test()
             .expectNext(AuthorizationDecision(AuthorizeResult.IMPLICIT_DENY, NoMatchVerifyContext))
             .verifyComplete()

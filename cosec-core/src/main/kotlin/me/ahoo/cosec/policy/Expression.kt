@@ -45,12 +45,13 @@ class SpelExpression<RESULT>(
     private val resultType: Class<RESULT>
 ) : Expression<RESULT> {
     override fun getValue(root: Any): RESULT? {
-        val context = SimpleEvaluationContext.forReadOnlyDataBinding().withRootObject(root).build()
-        return expression.getValue(context, resultType as Class<RESULT & Any>?)
+        // The context carries no per-call state (the root object is passed separately), so it is shared.
+        return expression.getValue(READ_ONLY_CONTEXT, root, resultType as Class<RESULT & Any>?)
     }
 
     companion object {
         internal val SPEL_PARSER = SpelExpressionParser()
+        private val READ_ONLY_CONTEXT = SimpleEvaluationContext.forReadOnlyDataBinding().build()
 
         fun String.isSpelTemplate(): Boolean =
             contains(TEMPLATE_EXPRESSION.expressionPrefix) &&

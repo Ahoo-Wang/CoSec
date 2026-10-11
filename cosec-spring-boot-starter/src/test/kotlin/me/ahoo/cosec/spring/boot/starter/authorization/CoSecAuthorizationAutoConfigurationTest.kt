@@ -21,6 +21,7 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
+import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.cache.limiter.RedisRateLimiterConditionMatcherFactory
 import me.ahoo.cosec.context.DefaultSecurityContextParser
@@ -167,6 +168,24 @@ internal class CoSecAuthorizationAutoConfigurationTest {
 
         verify(exactly = 1) {
             localPolicyInitializer.init()
+        }
+    }
+
+    @Test
+    fun rootPrincipalMatcherFollowsRootEnabled() {
+        val runner = contextRunner
+            .withBean(PolicyRepository::class.java, { mockk() })
+            .withBean(AppRolePermissionRepository::class.java, { mockk() })
+            .withBean(TokenVerifier::class.java, { mockk() })
+            .withUserConfiguration(
+                CoSecRequestParserAutoConfiguration::class.java,
+                CoSecAuthorizationAutoConfiguration::class.java,
+            )
+        runner.run { context ->
+            context.getBean(RootPrincipalMatcher::class.java).assert().isSameAs(RootPrincipalMatcher.DEFAULT)
+        }
+        runner.withPropertyValues("${AuthorizationProperties.PREFIX}.root-enabled=false").run { context ->
+            context.getBean(RootPrincipalMatcher::class.java).assert().isSameAs(RootPrincipalMatcher.NONE)
         }
     }
 }

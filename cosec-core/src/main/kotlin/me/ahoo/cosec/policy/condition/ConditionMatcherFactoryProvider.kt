@@ -13,38 +13,14 @@
 
 package me.ahoo.cosec.policy.condition
 
-import io.github.oshai.kotlinlogging.KotlinLogging
-import java.util.*
-import java.util.concurrent.ConcurrentHashMap
+import me.ahoo.cosec.policy.MatcherFactoryRegistry
 
 object ConditionMatcherFactoryProvider {
-    private val log = KotlinLogging.logger {}
-    private val actionMatcherFactories: ConcurrentHashMap<String, ConditionMatcherFactory> = ConcurrentHashMap()
+    private val registry = MatcherFactoryRegistry(ConditionMatcherFactory::class.java) { it.type }
 
-    init {
-        ServiceLoader.load(ConditionMatcherFactory::class.java)
-            .forEach {
-                log.info {
-                    "Load $it to register."
-                }
-                register(it)
-            }
-    }
+    fun register(factory: ConditionMatcherFactory) = registry.register(factory)
 
-    fun register(conditionMatcherFactory: ConditionMatcherFactory) {
-        log.info {
-            "Register $conditionMatcherFactory."
-        }
-        actionMatcherFactories[conditionMatcherFactory.type] = conditionMatcherFactory
-    }
+    fun get(type: String): ConditionMatcherFactory? = registry.get(type)
 
-    fun get(type: String): ConditionMatcherFactory? {
-        return actionMatcherFactories[type]
-    }
-
-    fun getRequired(type: String): ConditionMatcherFactory {
-        return requireNotNull(get(type)) {
-            "ConditionMatcherFactory[$type] not found."
-        }
-    }
+    fun getRequired(type: String): ConditionMatcherFactory = registry.getRequired(type)
 }

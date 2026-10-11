@@ -33,7 +33,13 @@ class AuthorizationProperties(
      * Disabled by default: tokens in URLs leak into access logs, browser history and `Referer` headers.
      */
     @DefaultValue("false")
-    var allowQueryToken: Boolean = false
+    var allowQueryToken: Boolean = false,
+    /**
+     * Whether the principal whose id equals the `cosec.root` system property (`cosec` by default) bypasses all
+     * authorization checks. Disable it where principal ids can be chosen by users.
+     */
+    @DefaultValue("true")
+    var rootEnabled: Boolean = true
 ) : EnabledCapable {
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "authorization"
