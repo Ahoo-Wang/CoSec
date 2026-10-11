@@ -15,7 +15,9 @@ Security fixes are released for the latest minor version of the latest major rel
 
 **Do not open a public issue, pull request, or discussion for a vulnerability.**
 
-Report it privately by email to **ahoowang@qq.com** with the subject `[CoSec Security]`. Include:
+Report it privately through GitHub's
+[**Report a vulnerability**](https://github.com/Ahoo-Wang/CoSec/security/advisories/new) form (preferred).
+If you cannot use GitHub, email **ahoowang@qq.com** with the subject `[CoSec Security]`. Include:
 
 - the affected version(s) and module(s);
 - a description of the issue and its impact (for example, an authorization bypass or a fail-open path);

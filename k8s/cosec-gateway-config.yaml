@@ -49,7 +49,7 @@ data:
         enabled: false
       jwt:
         algorithm: hmac256
-        secret: ${COSEC_JWT_SECRET:change-me-in-production}
+        secret: ${COSEC_JWT_SECRET} # no fallback: startup fails if the secret is missing
       ip2region:
         enabled: false
       authorization:

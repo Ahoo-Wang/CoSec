@@ -41,13 +41,13 @@ Use the full field set above so both runtime deserialization and the bundled JSO
 
 ## Evaluation semantics
 
-Authorization evaluates in tiers: root bypass, blacklist, global policies, principal-attached policies, then role permissions. The first tier that produces a result stops evaluation.
+Authorization evaluates in tiers: root bypass, blacklist, global policies, principal-attached policies, then role permissions. The policy and permission tiers are combined deny-first (CoSec 6+): an explicit deny in any tier ends evaluation, and an allow is returned only after every tier has had the chance to deny.
 
 Within a policy tier, CoSec first evaluates every matched policy-level condition, pools their statements, checks all `deny` statements, then all `allow` statements. Therefore:
 
 - a matching deny overrides every allow in the same tier, regardless of file or array order;
 - a false policy-level condition skips that policy; it does not deny the request;
-- an allow in an earlier tier prevents later tiers from running, so a principal or role deny cannot override a global allow;
+- a deny in any tier overrides an allow from any other tier, so a principal or role deny overrides a global allow;
 - if no statement in any tier matches, the result is implicit deny.
 
 Order deny statements before allow statements for readability, not behavior.
@@ -129,7 +129,7 @@ Use singular `request.header`, and use `request.path.var.id` only after the acti
 
 Check the final policy for:
 
-- accidental broad global allows that short-circuit stricter principal or role tiers;
+- broad global allows that grant more than intended to everyone (a principal or role deny still overrides them, but nothing else will);
 - deny conditions whose negation is reversed;
 - missing HTTP method constraints on state-changing endpoints;
 - trusted-proxy assumptions behind `request.remoteIp`;

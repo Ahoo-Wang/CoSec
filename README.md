@@ -1,6 +1,7 @@
 # CoSec
 
-RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
+Multi-tenant, reactive security for Spring: IAM-style policies and role-based permissions, evaluated
+deny-first for every request.
 
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![GitHub release](https://img.shields.io/github/release/Ahoo-Wang/CoSec.svg)](https://github.com/Ahoo-Wang/CoSec/releases)
@@ -12,397 +13,110 @@ RBAC-based And Policy-based Multi-Tenant Reactive Security Framework.
 [![Awesome Kotlin Badge](https://kotlin.link/awesome-kotlin.svg)](https://github.com/KotlinBy/awesome-kotlin)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Ahoo-Wang/CoSec)
 
-> [中文文档](https://cosec.ahoo.me/zh/) | [English Document](https://cosec.ahoo.me/)
+> [Documentation](https://cosec.ahoo.me/) | [中文文档](https://cosec.ahoo.me/zh/)
 
-## Authentication
+## Why CoSec
 
-![Authentication-Flow](document/design/assets/Authentication-Flow.svg)
+- **Policies as data.** JSON policies with path actions, composable conditions (roles, tenants, headers,
+  IP, expressions) and rate limits. Change them at runtime; every instance sees the change immediately.
+- **Deny wins, everywhere.** Global policies, the principal's own policies and role permissions are combined
+  deny-first, unmatched requests are denied, and errors deny.
+- **Multi-tenant and role-based.** Tenant-aware principals, plus per-application permission catalogs
+  granted to roles per space.
+- **One pipeline, three stacks.** Spring WebFlux, Spring MVC and Spring Cloud Gateway share the same
+  security pipeline and respond identically.
+- **Fast and reactive.** Built on Project Reactor. About 2 µs per decision, with no event-loop blocking.
+- **Auditable.** An audit event (log or Kafka) and an OpenTelemetry span for every decision, naming the
+  policy or permission that decided it.
 
-### Social Authentication
+## How a decision is made
 
-![Social-Authentication](document/design/assets/Social-Authentication.svg)
+```mermaid
+flowchart LR
+    R([Request + JWT]) --> ROOT{Root?}
+    ROOT -->|yes| ALLOW([ALLOW])
+    ROOT -->|no| L["Global policies<br>Principal policies<br>Role permissions"]
+    L --> D{Any DENY matched?}
+    D -->|yes| DENY([EXPLICIT_DENY])
+    D -->|no| A{Any ALLOW matched?}
+    A -->|yes| ALLOW
+    A -->|no| IMP([IMPLICIT_DENY])
+```
 
-### Token Revocation (Logout)
+Denied anonymous callers get `401`, authenticated callers `403`, and rate-limited requests `429`.
 
-CoSec tokens are stateless JWTs by default. To make logout effective, enable token revocation:
+## Quick start
+
+```kotlin
+dependencies {
+    implementation(platform("me.ahoo.cosec:cosec-bom:<version>"))
+    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+        capabilities { requireCapability("me.ahoo.cosec:webflux-support") } // or webmvc-support / gateway-support
+    }
+    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+        capabilities { requireCapability("me.ahoo.cosec:cache-support") }   // Redis-backed policy storage
+    }
+}
+```
 
 ```yaml
 cosec:
   jwt:
-    token-revocation:
-      enabled: true
+    secret: ${COSEC_JWT_SECRET}
+  authorization:
+    local-policy:
+      enabled: true          # classpath:cosec-policy/*-policy.json
+      init-repository: true
 ```
-
-This wires the Redis-backed `CoCacheTokenStore` (requires the `cosec-cocache` dependency -- the
-starter's `cacheSupport` Gradle feature -- and Redis); custom implementations provide their own
-`TokenStore` bean. Then call `TokenRevoker.revoke(accessToken)` from your own logout endpoint.
-The token (and the refresh token bound to it) is rejected immediately cluster-wide via CoCache
-(Redis). Note the fail-open caveat: when Redis is unreachable, revocation checks fall back to
-allowing requests (`isRevoked` returns `false`); set `cocache.redis.strict-failure=true` to
-fail closed instead.
-
-## Authorization
-
-![Authorization-Flow](document/design/assets/Authorization-Flow.svg)
-
-## Modeling
-
-![Modeling](document/design/assets/Modeling.svg)
-
-## Gateway
-
-![Gateway](document/design/assets/Gateway.svg)
-
-## Authorization Policy
-
-![Authorization Policy](document/design/assets/Authorization-Policy.svg)
-
-## Build In Policy
-
-### ActionMatcher
-
-![ActionMatcher](document/design/assets/ActionMatcher.svg)
-
-#### How to customize `ActionMatcher` (SPI)
-
-> Refer to [PathActionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/PathActionMatcher.kt) 
-
-```kotlin
-class CustomActionMatcherFactory : ActionMatcherFactory {
-    companion object {
-        const val TYPE = "[CustomActionType]"
-    }
-
-    override val type: String
-        get() = TYPE
-
-    override fun create(configuration: Configuration): ConditionMatcher {
-        return CustomActionMatcher(configuration)
-    }
-}
-class CustomActionMatcher(override val configuration: Configuration) : ActionMatcher {
-
-    override val type: String
-        get() = CustomActionMatcherFactory.TYPE
-
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        //Custom matching logic
-    }
-}
-```
-
-> META-INF/services/me.ahoo.cosec.policy.action.ActionMatcherFactory
-
-```properties
-# CustomActionMatcherFactory fully qualified name
-```
-
-### ConditionMatcher
-
-![ConditionMatcher](document/design/assets/ConditionMatcher.svg)
-
-#### How to customize `ConditionMatcher` (SPI)
-
-> Refer to [ContainsConditionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/part/ContainsConditionMatcher.kt)
-
-```kotlin
-class CustomConditionMatcherFactory : ConditionMatcherFactory {
-    companion object {
-        const val TYPE = "[CustomConditionType]"
-    }
-
-    override val type: String
-        get() = TYPE
-
-    override fun create(configuration: Configuration): ConditionMatcher {
-        return CustomConditionMatcher(configuration)
-    }
-}
-class CustomConditionMatcher(configuration: Configuration) :
-    AbstractConditionMatcher(CustomConditionMatcherFactory.TYPE, configuration) {
-
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        //Custom matching logic
-    }
-}
-```
-
-> META-INF/services/me.ahoo.cosec.policy.condition.ConditionMatcherFactory
-
-```properties
-# CustomConditionMatcherFactory fully qualified name
-```
-
-## Policy Schema
-
-Configure [Policy Schema](schema/cosec-policy.schema.json) to support IDE ([IntelliJ IDEA](https://www.jetbrains.com/help/idea/json.html#ws_json_using_schemas)) input autocompletion.
-
-> Policy Demo
 
 ```json
 {
-  "id": "id",
-  "name": "name",
-  "category": "category",
-  "description": "description",
-  "type": "global",
-  "tenantId": "tenantId",
-  "condition": {
-    "bool": {
-      "and": [
-        {
-          "authenticated": {}
-        },
-        {
-          "rateLimiter": {
-            "permitsPerSecond": 10
-          }
-        }
-      ]
-    }
-  },
+  "id": "app", "name": "App", "category": "app", "description": "", "type": "global", "tenantId": "(platform)",
   "statements": [
-    {
-      "action": {
-        "path": {
-          "pattern": "/user/#{principal.id}/*",
-          "options": {
-            "caseSensitive": false,
-            "separator": "/",
-            "decodeAndParseSegments": false
-          }
-        }
-      }
-    },
-    {
-      "name": "Anonymous",
-      "action": [
-        "/auth/register",
-        "/auth/login"
-      ]
-    },
-    {
-      "name": "UserScope",
-      "action": "/user/#{principal.id}/*",
-      "condition": {
-        "authenticated": {}
-      }
-    },
-    {
-      "name": "Developer",
-      "action": "*",
-      "condition": {
-        "in": {
-          "part": "context.principal.id",
-          "value": [
-            "developerId"
-          ]
-        }
-      }
-    },
-    {
-      "name": "RequestOriginDeny",
-      "effect": "deny",
-      "action": "*",
-      "condition": {
-        "regular": {
-          "negate": true,
-          "part": "request.origin",
-          "pattern": "^(http|https)://github.com"
-        }
-      }
-    },
-    {
-      "name": "IpBlacklist",
-      "effect": "deny",
-      "action": "*",
-      "condition": {
-        "path": {
-          "part": "request.remoteIp",
-          "pattern": "192.168.0.*",
-          "options": {
-            "caseSensitive": false,
-            "separator": ".",
-            "decodeAndParseSegments": false
-          }
-        }
-      }
-    },
-    {
-      "name": "RegionWhitelist",
-      "effect": "deny",
-      "action": "*",
-      "condition": {
-        "regular": {
-          "negate": true,
-          "part": "request.attributes.ipRegion",
-          "pattern": "^中国\\|0\\|(上海|广东省)\\|.*"
-        }
-      }
-    },
-    {
-      "name": "AllowDeveloperOrIpRange",
-      "action": "*",
-      "condition": {
-        "bool": {
-          "and": [
-            {
-              "authenticated": {}
-            }
-          ],
-          "or": [
-            {
-              "in": {
-                "part": "context.principal.id",
-                "value": [
-                  "developerId"
-                ]
-              }
-            },
-            {
-              "path": {
-                "part": "request.remoteIp",
-                "pattern": "192.168.0.*",
-                "options": {
-                  "caseSensitive": false,
-                  "separator": ".",
-                  "decodeAndParseSegments": false
-                }
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "name": "TestContains",
-      "effect": "allow",
-      "action": "*",
-      "condition": {
-        "contains": {
-          "part": "request.attributes.ipRegion",
-          "value": "上海"
-        }
-      }
-    },
-    {
-      "name": "TestStartsWith",
-      "effect": "allow",
-      "action": "*",
-      "condition": {
-        "startsWith": {
-          "part": "request.attributes.ipRegion",
-          "value": "中国"
-        }
-      }
-    },
-    {
-      "name": "TestEndsWith",
-      "effect": "allow",
-      "action": "*",
-      "condition": {
-        "endsWith": {
-          "part": "request.attributes.remoteIp",
-          "value": ".168.0.1"
-        }
-      }
-    }
+    { "name": "public", "action": ["/auth/login", "/actuator/health"] },
+    { "name": "authenticated", "action": "/api/**", "condition": { "authenticated": {} } },
+    { "name": "admins-only", "effect": "deny", "action": "/api/admin/**",
+      "condition": { "inRole": { "value": "admin", "negate": true } } }
   ]
 }
 ```
 
-## App Permission Metadata Schema
+Continue with the [Quick Start](https://cosec.ahoo.me/guide/quick-start) to issue tokens, then the
+[policy reference](https://cosec.ahoo.me/guide/policies).
 
-Configure [App Permission Schema](schema/cosec-app-permission.schema.json) to support IDE ([IntelliJ IDEA](https://www.jetbrains.com/help/idea/json.html#ws_json_using_schemas)) input autocompletion.
+## Modules
 
-> App Permission Demo
+| Module | Purpose |
+|---|---|
+| `cosec-api` | Public interfaces: principal, policy, authorization, request, tenant |
+| `cosec-core` | Policy engine, matchers, authorization, security pipeline, auditing |
+| `cosec-jwt` | JWT issuing and verification |
+| `cosec-webflux` · `cosec-webmvc` · `cosec-gateway` | Spring WebFlux, Spring MVC and Spring Cloud Gateway adapters |
+| `cosec-cocache` | Redis-backed policies, permissions and token revocation; Redis rate limiters |
+| `cosec-social` | OAuth social login via JustAuth |
+| `cosec-opentelemetry` · `cosec-openapi` · `cosec-ip2region` · `cosec-kafka` | Tracing, policy generation from OpenAPI, IP geolocation, Kafka audit sink |
+| `cosec-spring-boot-starter` | Auto-configuration; integrations are opt-in Gradle capabilities |
+| `cosec-gateway-server` | Ready-to-run gateway image (`ahoowang/cosec-gateway`) |
 
-```json
-{
-  "id": "manage",
-  "condition": {
-    "bool": {
-      "and": [
-        {
-          "authenticated": {}
-        },
-        {
-          "groupedRateLimiter": {
-            "part": "request.remoteIp",
-            "permitsPerSecond": 10,
-            "expireAfterAccessSecond": 1000
-          }
-        },
-        {
-          "inTenant": {
-            "value": "default"
-          }
-        }
-      ]
-    }
-  },
-  "groups": [
-    {
-      "name": "order",
-      "description": "order management",
-      "permissions": [
-        {
-          "id": "manage.order.ship",
-          "name": "Ship",
-          "description": "Ship",
-          "action": "/order/ship"
-        },
-        {
-          "id": "manage.order.issueInvoice",
-          "name": "Issue an invoice",
-          "description": "Issue an invoice",
-          "action": "/order/issueInvoice"
-        }
-      ]
-    }
-  ]
-}
-```
+## Documentation
 
-## Obtain the current security context
-
-### WebFlux
-
-```kotlin
-     Mono.deferContextual {
-        val securityContext = it.getSecurityContext()
-        //TODO
-    }
-```
-
-### WebMvc
-
-```
-SecurityContextHolder.context
-```
-## OpenTelemetry
-
-[CoSec-OpenTelemetry](cosec-opentelemetry)
-
-> CoSec follows the OpenTelemetry [General identity attributes](https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/#general-identity-attributes) specification。
-
-![CoSec-OpenTelemetry](document/design/assets/CoSec-OpenTelemetry.png)
-
-## Thanks
-
-CoSec permission policy design refers to [AWS IAM](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html) .
+- **Guide**: [Introduction](https://cosec.ahoo.me/guide/introduction) ·
+  [Quick Start](https://cosec.ahoo.me/guide/quick-start) · [Policies](https://cosec.ahoo.me/guide/policies) ·
+  [Configuration](https://cosec.ahoo.me/guide/configuration) · [Authentication](https://cosec.ahoo.me/guide/authentication) ·
+  [Web Integration](https://cosec.ahoo.me/guide/web-integration) · [Operations](https://cosec.ahoo.me/guide/operations)
+- **Architecture**: [Overview](https://cosec.ahoo.me/architecture/overview) · [Extending](https://cosec.ahoo.me/architecture/extending)
+- **Releases**: [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)
 
 ## Contributing
 
-Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the branching model, Conventional
-Commits PR titles, coding conventions, testing and coverage requirements, code review, and the
-semantic-versioning release process. This project follows a [Code of Conduct](CODE_OF_CONDUCT.md).
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow, quality gates and
+release process. This project follows a [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 
-Please report vulnerabilities privately as described in [SECURITY.md](SECURITY.md); do not open public
-issues for them.
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md); do not open public issues for them.
 
 ## License
 
-CoSec is released under the [Apache License 2.0](LICENSE).
+CoSec is released under the [Apache License 2.0](LICENSE). Its policy model is inspired by
+[AWS IAM](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html).

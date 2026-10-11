@@ -1,8 +1,8 @@
 # Contributing to CoSec
 
 Thanks for helping improve CoSec. This guide describes how work flows from an issue to a release, and the
-quality bar every change has to meet. For a deeper tour of the codebase, see the
-[contributor onboarding guide](https://cosec.ahoo.me/onboarding/contributor).
+quality bar every change has to meet. For a tour of the codebase and the invariants every change must keep, read the
+[architecture overview](https://cosec.ahoo.me/architecture/overview).
 
 ## 1. Start from an issue
 
@@ -54,7 +54,7 @@ description. They are listed under 💥 Breaking Changes and require a major ver
 - Every source file starts with the Apache-2.0 license header in
   [config/detekt/license.template](config/detekt/license.template). Detekt fails the build otherwise.
 - Public APIs are interfaces in `cosec-api`; implementations live in `cosec-core` and the integration
-  modules. See the [security model](https://cosec.ahoo.me/deep-dive/architecture/security-model).
+  modules. See the [architecture overview](https://cosec.ahoo.me/architecture/overview).
 
 ## 5. Tests and coverage
 
