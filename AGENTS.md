@@ -47,7 +47,8 @@ the web adapters or caching. The essentials:
 - **Fail closed**: errors deny. The only allowed fail-open paths are non-strict Redis rate limiters and the
   token revocation check; both are documented.
 - **No blocking on the event loop**: Redis and other blocking calls run on `boundedElastic`, unless answered
-  from the local cache.
+  from the local cache. Condition matchers that block (Redis rate limiters) implement `BlockingAware`, and
+  `SimpleAuthorization` evaluates only the layers that contain one on `boundedElastic`.
 - **One decision path**: status codes and error mapping live only in `SecurityPipeline`.
 - **Store of record**: policy/permission caches must keep `ttl = FOREVER` (`CacheTtlPolicyTest`).
 - **Performance claims need evidence**: changes to the hot path come with a JMH before/after.

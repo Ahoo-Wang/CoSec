@@ -44,6 +44,9 @@ class BusinessHoursConditionMatcher(configuration: Configuration) :
   `META-INF/services/me.ahoo.cosec.policy.condition.ConditionMatcherFactory`（或 `…action.ActionMatcherFactory`）中声明。
   用已有类型名注册的工厂会替换内置实现。
 - **让匹配器保持快速、不做 I/O。** 匹配器对每个请求都会执行，并且可能运行在事件循环上。请在构造函数中一次性读取配置；抛出异常会拒绝请求。
+- **标记会阻塞的匹配器。** 如果条件匹配器必须阻塞（网络或数据库调用），请像 Redis 限流器一样实现
+  `me.ahoo.cosec.policy.BlockingAware` 并令 `requiresBlocking = true`。授权会把使用它的层放到 `boundedElastic` 上评估。
+  包装其他匹配器的组合匹配器应在任一子匹配器需要阻塞时返回 `true`，`bool` 就是这样做的。
 
 ## 授权扩展点 {#authorization-hooks}
 

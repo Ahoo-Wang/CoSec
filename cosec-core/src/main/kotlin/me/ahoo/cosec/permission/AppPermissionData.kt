@@ -18,13 +18,18 @@ import me.ahoo.cosec.api.permission.Permission
 import me.ahoo.cosec.api.permission.PermissionGroup
 import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.policy.BlockingAware
+import me.ahoo.cosec.policy.computeRequiresBlocking
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 
 data class AppPermissionData(
     override val id: String,
     override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
     override val groups: List<PermissionGroup> = listOf()
-) : AppPermission {
+) : AppPermission, BlockingAware {
+    override val requiresBlocking: Boolean =
+        computeRequiresBlocking(condition, groups.flatMap { group -> group.permissions.map { it.condition } })
+
     @delegate:Transient
     override val permissionIndexer: Map<PermissionId, Permission> by lazy(this) {
         super.permissionIndexer

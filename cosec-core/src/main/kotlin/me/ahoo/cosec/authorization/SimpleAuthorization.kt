@@ -25,7 +25,9 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.blacklist.BlacklistChecker
+import me.ahoo.cosec.policy.requiresBlocking
 import reactor.core.publisher.Mono
+import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.switchIfEmpty
 import reactor.kotlin.core.publisher.toMono
 
@@ -41,6 +43,11 @@ import reactor.kotlin.core.publisher.toMono
  *
  * Layers 3-5 are combined deny-first: an EXPLICIT_DENY matched in any layer wins over
  * an ALLOW matched in any other layer.
+ *
+ * Matchers are evaluated synchronously on the subscribing thread. A layer whose policies or app permission
+ * contain a blocking matcher (see [me.ahoo.cosec.policy.BlockingAware], e.g. a Redis rate limiter) is evaluated
+ * on [Schedulers.boundedElastic] instead, so it never blocks an event loop even when the repositories answer
+ * from the local cache. Layers without one are evaluated in place.
  *
  * @param policyRepository Repository for accessing policies
  * @param appRolePermissionRepository Repository for accessing role permissions
@@ -154,6 +161,29 @@ class SimpleAuthorization(
         }
     }
 
+    /**
+     * Runs [verifier] in place, or on [Schedulers.boundedElastic] when it may block.
+     * Exceptions thrown by [verifier] (e.g. `TooManyRequestsException`) become error signals either way.
+     */
+    private inline fun evaluate(
+        requiresBlocking: Boolean,
+        crossinline verifier: () -> VerifyContext?
+    ): Mono<VerifyContext> {
+        if (!requiresBlocking) {
+            return Mono.justOrEmpty(verifier())
+        }
+        return Mono.fromCallable { verifier() }.subscribeOn(Schedulers.boundedElastic())
+    }
+
+    private fun List<Policy>.anyRequiresBlocking(): Boolean {
+        for (policy in this) {
+            if (policy.requiresBlocking) {
+                return true
+            }
+        }
+        return false
+    }
+
     private fun verifyRoot(context: SecurityContext): VerifyResult =
         if (rootPrincipalMatcher.isRoot(context.principal)) {
             log.debug {
@@ -170,8 +200,10 @@ class SimpleAuthorization(
     ): Mono<VerifyContext> =
         policyRepository
             .getGlobalPolicy()
-            .mapNotNull { policies: List<Policy> ->
-                verifyPolicies(PolicyVerifySource.GLOBAL, policies, request, context)
+            .flatMap { policies: List<Policy> ->
+                evaluate(policies.anyRequiresBlocking()) {
+                    verifyPolicies(PolicyVerifySource.GLOBAL, policies, request, context)
+                }
             }
 
     private fun verifyPrincipalPolicies(
@@ -183,8 +215,10 @@ class SimpleAuthorization(
         }
         return policyRepository
             .getPolicies(context.principal.policies)
-            .mapNotNull { policies: List<Policy> ->
-                verifyPolicies(PolicyVerifySource.PRINCIPAL, policies, request, context)
+            .flatMap { policies: List<Policy> ->
+                evaluate(policies.anyRequiresBlocking()) {
+                    verifyPolicies(PolicyVerifySource.PRINCIPAL, policies, request, context)
+                }
             }
     }
 
@@ -197,8 +231,10 @@ class SimpleAuthorization(
         }
         return appRolePermissionRepository
             .getAppRolePermission(request.appId, request.spaceId, context.principal.roles)
-            .mapNotNull {
-                verifyAppRolePermission(it, request, context)
+            .flatMap { appRolePermission ->
+                evaluate(appRolePermission.appPermission.requiresBlocking) {
+                    verifyAppRolePermission(appRolePermission, request, context)
+                }
             }
     }
 

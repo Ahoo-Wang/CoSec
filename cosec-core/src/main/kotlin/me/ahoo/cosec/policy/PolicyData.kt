@@ -41,7 +41,9 @@ class PolicyData(
     override val tenantId: String,
     override val condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
     override val statements: List<Statement> = listOf()
-) : Policy {
+) : Policy, BlockingAware {
+    override val requiresBlocking: Boolean = computeRequiresBlocking(condition, statements.map { it.condition })
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
