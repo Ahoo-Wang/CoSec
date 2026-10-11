@@ -1,0 +1,43 @@
+name: "🎉 Feature request"
+description: Propose new behavior or an improvement.
+labels: [ "enhancement" ]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and why is it hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: How should CoSec behave? Include API, configuration, or policy examples where possible.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Concrete, testable conditions that must hold for this to be considered done.
+      placeholder: |
+        - Given ..., when ..., then ...
+        - Existing policies without the new field behave exactly as before.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: compatibility
+    attributes:
+      label: Compatibility
+      description: Does this change existing public APIs, configuration properties, or authorization semantics?
+      options:
+        - Backwards compatible
+        - Breaking change (requires a major version)
+        - Not sure
+    validations:
+      required: true

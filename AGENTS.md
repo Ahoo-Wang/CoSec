@@ -58,6 +58,8 @@ cosec-bom/          - Bill of Materials
 - Reactive throughout: core interfaces return `Mono<T>`
 - No comments by default; only add when WHY is non-obvious
 - Detekt with auto-correct for linting
+- Every source file starts with the license header in `config/detekt/license.template` (enforced by detekt)
+- PR titles follow Conventional Commits (CI-enforced); see `CONTRIBUTING.md`
 
 ## Architecture
 

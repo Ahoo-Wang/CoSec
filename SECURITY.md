@@ -1,0 +1,36 @@
+# Security Policy
+
+CoSec is a security framework, so we treat vulnerability reports with priority.
+
+## Supported versions
+
+Security fixes are released for the latest minor version of the latest major release line.
+
+| Version | Supported |
+|---|---|
+| 6.x | ✅ |
+| < 6.0 | ❌ |
+
+## Reporting a vulnerability
+
+**Do not open a public issue, pull request, or discussion for a vulnerability.**
+
+Report it privately by email to **ahoowang@qq.com** with the subject `[CoSec Security]`. Include:
+
+- the affected version(s) and module(s);
+- a description of the issue and its impact (for example, an authorization bypass or a fail-open path);
+- steps or a minimal policy/configuration to reproduce it;
+- any suggested fix, if you have one.
+
+## What to expect
+
+- We acknowledge the report within **3 business days**.
+- We confirm the issue, assess its severity, and agree on a disclosure timeline with you.
+- Fixes are released as a patch version and announced in the GitHub release notes, credited to you
+  unless you prefer to stay anonymous.
+
+## Scope
+
+In scope: authorization decisions (policy evaluation, deny-first semantics, root principal handling),
+token verification and revocation, request parsing (path traversal, remote IP resolution), expression
+conditions (OGNL/SpEL sandboxing, ReDoS guards), and caching behavior that could fail open.

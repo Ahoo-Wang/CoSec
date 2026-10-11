@@ -8,6 +8,7 @@
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/b3133cf684a74192a55abbefe2a0759a)](https://www.codacy.com/gh/Ahoo-Wang/CoSec/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Ahoo-Wang/CoSec&amp;utm_campaign=Badge_Grade)
 [![codecov](https://codecov.io/gh/Ahoo-Wang/CoSec/branch/main/graph/badge.svg?token=AL0RyJbMZv)](https://codecov.io/gh/Ahoo-Wang/CoSec)
 [![Integration Test Status](https://github.com/Ahoo-Wang/CoSec/actions/workflows/integration-test.yml/badge.svg)](https://github.com/Ahoo-Wang/CoSec)
+[![CodeQL](https://github.com/Ahoo-Wang/CoSec/actions/workflows/codeql.yml/badge.svg)](https://github.com/Ahoo-Wang/CoSec/actions/workflows/codeql.yml)
 [![Awesome Kotlin Badge](https://kotlin.link/awesome-kotlin.svg)](https://github.com/KotlinBy/awesome-kotlin)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Ahoo-Wang/CoSec)
 
@@ -391,3 +392,16 @@ SecurityContextHolder.context
 ## 感谢
 
 CoSec 权限策略设计参考 [AWS IAM](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html) 。
+
+## 参与贡献
+
+欢迎贡献。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，了解分支模型、Conventional Commits 格式的 PR 标题、
+编码规范、测试与覆盖率要求、代码评审以及基于语义化版本的发布流程。本项目遵循[行为准则](CODE_OF_CONDUCT.md)。
+
+## 安全
+
+请按照 [SECURITY.md](SECURITY.md) 私下报告安全漏洞，不要通过公开 issue 报告。
+
+## 许可证
+
+CoSec 基于 [Apache License 2.0](LICENSE) 发布。

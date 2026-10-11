@@ -862,7 +862,7 @@ The base package is `me.ahoo.cosec`. Subpackages map to domain concepts:
 
 1. **Fork and branch**: Fork the repository on GitHub, then create a feature branch:
    ```bash
-   git checkout -b feature/my-new-feature
+   git checkout -b feat/my-new-feature
    ```
 
 2. **Write the code**: Follow the conventions described below.
@@ -883,7 +883,7 @@ The base package is `me.ahoo.cosec`. Subpackages map to domain concepts:
    test(core): add tests for RateLimiterConditionMatcher
    ```
 
-6. **Open a Pull Request**: Push your branch to your fork and open a PR against the `main` branch.
+6. **Open a Pull Request**: Push your branch to your fork and open a PR against the `main` branch. The PR title must follow Conventional Commits (a CI check enforces it, and it drives labels, release notes and the version bump). See [CONTRIBUTING.md](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md) for the review, coverage and release requirements.
 
 #### Adding a New Condition Matcher: Step-by-Step Example
 

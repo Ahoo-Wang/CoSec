@@ -862,7 +862,7 @@ cosec-<module>/
 
 1. **Fork 和分支**：在 GitHub 上 Fork 仓库，然后创建功能分支：
    ```bash
-   git checkout -b feature/my-new-feature
+   git checkout -b feat/my-new-feature
    ```
 
 2. **编写代码**：遵循下面描述的约定。
@@ -883,7 +883,7 @@ cosec-<module>/
    test(core): add tests for RateLimiterConditionMatcher
    ```
 
-6. **发起 Pull Request**：将分支推送到你的 Fork 并对 `main` 分支发起 PR。
+6. **发起 Pull Request**：将分支推送到你的 Fork 并对 `main` 分支发起 PR。PR 标题必须遵循 Conventional Commits（由 CI 检查强制执行，并据此生成标签、发布说明和版本号）。评审、覆盖率与发布要求见 [CONTRIBUTING.md](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md)。
 
 #### 添加新条件匹配器：分步示例
 
