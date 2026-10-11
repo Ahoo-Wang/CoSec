@@ -38,8 +38,7 @@ class RedisRateLimiterConditionMatcher(
 ) : ConditionMatcher, BlockingAware {
 
     /** Every match is a Redis round trip, so authorization evaluates it off the event loop. */
-    override val requiresBlocking: Boolean
-        get() = true
+    override val requiresBlocking: Boolean = true
 
     override val type: String
         get() = RedisRateLimiterConditionMatcherFactory.TYPE

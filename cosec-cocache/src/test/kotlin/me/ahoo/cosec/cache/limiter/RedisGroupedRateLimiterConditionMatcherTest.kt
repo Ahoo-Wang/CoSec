@@ -20,6 +20,7 @@ import me.ahoo.cosec.policy.condition.limiter.RATE_LIMITER_CONDITION_MATCHER_PER
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.CONDITION_MATCHER_PART_KEY
 import me.ahoo.cosec.policy.condition.part.RequestParts
+import me.ahoo.cosec.policy.requiresBlocking
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -39,6 +40,17 @@ class RedisGroupedRateLimiterConditionMatcherTest {
                 mapOf(CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP).asConfiguration(),
             )
         }
+    }
+
+    @Test
+    fun requiresBlocking() {
+        factory()
+            .create(
+                mapOf(
+                    CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
+                    RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY to 3,
+                ).asConfiguration(),
+            ).requiresBlocking.assert().isTrue()
     }
 
     @Test

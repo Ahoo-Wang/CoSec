@@ -32,8 +32,7 @@ class RedisGroupedRateLimiterConditionMatcher(
 ) : PartConditionMatcher(RedisGroupedRateLimiterConditionMatcherFactory.TYPE, configuration), BlockingAware {
 
     /** Every match is a Redis round trip, so authorization evaluates it off the event loop. */
-    override val requiresBlocking: Boolean
-        get() = true
+    override val requiresBlocking: Boolean = true
 
     private val permitsPerSecond: Double =
         requireNotNull(configuration.get(RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY)) {

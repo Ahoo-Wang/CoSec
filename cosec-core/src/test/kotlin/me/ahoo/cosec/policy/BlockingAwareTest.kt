@@ -17,6 +17,7 @@ import io.mockk.mockk
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
@@ -111,6 +112,28 @@ class BlockingAwareTest {
             every { statements } returns emptyList()
         }
         nonBlocking.requiresBlocking.assert().isFalse()
+    }
+
+    @Test
+    fun appPermissionWithoutCachedFlag() {
+        fun app(permissionCondition: ConditionMatcher) = mockk<AppPermission> {
+            every { condition } returns AllConditionMatcher.INSTANCE
+            every { groups } returns listOf(
+                PermissionGroupData(
+                    name = "group",
+                    permissions = listOf(
+                        PermissionData(
+                            id = "p",
+                            name = "p",
+                            action = AllActionMatcher.INSTANCE,
+                            condition = permissionCondition,
+                        ),
+                    ),
+                ),
+            )
+        }
+        app(BlockingMatcher()).requiresBlocking.assert().isTrue()
+        app(AllConditionMatcher.INSTANCE).requiresBlocking.assert().isFalse()
     }
 
     @Test
