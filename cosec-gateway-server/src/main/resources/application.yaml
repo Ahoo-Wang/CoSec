@@ -43,7 +43,8 @@ cosec:
     enabled: false
   jwt:
     algorithm: hmac256
-    secret: ${COSEC_JWT_SECRET:change-me-in-production}
+    # Required. No fallback: a well-known default would let anyone mint valid tokens.
+    secret: ${COSEC_JWT_SECRET}
   ip2region:
     enabled: false
   authorization:
