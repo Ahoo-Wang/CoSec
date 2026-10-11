@@ -32,7 +32,7 @@ internal class ServletRequestParserTest {
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
             every { method } returns "GET"
-            every { remoteHost } returns "remoteHost"
+            every { remoteAddr } returns "remoteAddr"
             every { getHeader(HttpHeaders.ORIGIN) } returns "ORIGIN"
             every { getHeader(HttpHeaders.REFERER) } returns "REFERER"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns "requestId"
@@ -40,6 +40,7 @@ internal class ServletRequestParserTest {
         val request = servletRequestParser.parse(servletRequest)
         assertThat(request.path, equalTo("/path"))
         assertThat(request.method, equalTo("GET"))
+        assertThat(request.remoteIp, equalTo("remoteAddr"))
     }
 
     @Test

@@ -258,7 +258,7 @@ sequenceDiagram
 
     Filter->>Parser: parse(request)
     alt Token present
-        Parser->>Parser: Extract JWT from header/query/cookie
+        Parser->>Parser: Extract JWT from header/cookie (query opt-in)
         Parser-->>Filter: SecurityContext(principal)
     else No token
         Parser-->>Filter: SecurityContext(anonymous)
@@ -417,7 +417,7 @@ These are the architectural decisions that shape every interaction with the code
 | D4 | Reactive throughout (`Mono<T>`) | Non-blocking authorization scales under load; consistent with Spring WebFlux | [`Authorization.kt:43`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-api/src/main/kotlin/me/ahoo/cosec/api/authorization/Authorization.kt#L43) |
 | D5 | Root bypass is identity-based, not role-based | Root check (`verifyRoot`, `principal.isRoot`) happens before all other checks, including blacklist | [`SimpleAuthorization.kt:154-160`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt#L154) |
 | D6 | SecurityContext attributes are mutable and concurrent | Downstream components can write path variables, rate limit counters, etc. | [`SimpleSecurityContext.kt:41`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/SimpleSecurityContext.kt#L41) |
-| D7 | Token extraction from header, query, or cookie | Supports browser-based, API, and legacy clients | [`DefaultSecurityContextParser.kt:27-31`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/DefaultSecurityContextParser.kt#L27) |
+| D7 | Token extraction from header or cookie; query parameter opt-in via `cosec.authorization.allow-query-token` | Supports browser-based and API clients without leaking tokens into URLs by default | [`DefaultSecurityContextParser.kt:27-31`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/DefaultSecurityContextParser.kt#L27) |
 | D8 | Gateway filter order is near-max priority | Authorization must run before route filters that might modify the exchange | [`AuthorizationGatewayFilter.kt:42`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt#L42) |
 
 ## Dependency Rationale
@@ -476,7 +476,7 @@ All dependency versions are centralized in [`gradle/libs.versions.toml`](https:/
 | auth0/java-jwt | 4.6.0 | JWT token creation and verification |
 | JustAuth | 1.16.7 | Multi-provider OAuth (WeChat, GitHub, etc.) |
 | OGNL | 3.4.11 | Expression-based condition matching |
-| CoCache | 4.3.0 | Two-level distributed caching (local + Redis) |
+| CoCache | 5.0.1 | Two-level distributed caching (local + Redis) |
 | CosId | 3.2.0 | Distributed ID generation |
 | Guava RateLimiter | 33.6.0-jre | Token-bucket rate limiting in conditions |
 
@@ -819,7 +819,7 @@ The JMH dependency version is `1.37` ([`libs.versions.toml:21`](https://github.c
 
 4. **Anonymous principal has no roles or policies.** The `SimpleTenantPrincipal.ANONYMOUS` ([`SimpleTenantPrincipal.kt:42`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/principal/SimpleTenantPrincipal.kt#L42)) wraps `SimplePrincipal.ANONYMOUS` with the default tenant. It can only access resources where a GLOBAL policy explicitly allows anonymous access.
 
-5. **Token extraction is multi-source.** The `DefaultSecurityContextParser` checks header, query parameter, and cookie in that order ([`DefaultSecurityContextParser.kt:27-31`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/DefaultSecurityContextParser.kt#L27)). Any of these can carry the JWT.
+5. **Token extraction is multi-source.** The `DefaultSecurityContextParser` checks header, then query parameter (only when `allowQueryToken` is enabled), then cookie ([`DefaultSecurityContextParser.kt:27-31`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/context/DefaultSecurityContextParser.kt#L27)). Any of these can carry the JWT.
 
 6. **Rate limiter exceptions are terminal.** When a `RateLimiterConditionMatcher` fails to acquire a permit, it throws `TooManyRequestsException` ([`RateLimiterConditionMatcher.kt:49`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/limiter/RateLimiterConditionMatcher.kt#L49)). This exception propagates out of the authorization chain and is caught by the filter layer, returning 429.
 

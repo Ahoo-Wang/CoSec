@@ -41,21 +41,35 @@ class DefaultSecurityContextParserTest {
     fun parseIfEmpty() {
         val request = mockk<Request> {
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns ""
-            every { getQuery(AUTHORIZATION_HEADER_KEY) } returns ""
+            every { getCookieValue(AUTHORIZATION_HEADER_KEY) } returns ""
         }
 
         val securityContextParser = DefaultSecurityContextParser(mockk())
-        val securityContext = securityContextParser.ensureParse(request)
-        securityContext.assert().isNotNull()
+        val securityContext = securityContextParser.parse(request)
         securityContext.principal.anonymous.assert().isTrue()
         verify {
             request.getHeader(AUTHORIZATION_HEADER_KEY)
-            request.getQuery(AUTHORIZATION_HEADER_KEY)
+            request.getCookieValue(AUTHORIZATION_HEADER_KEY)
         }
     }
 
     @Test
-    fun parseHeaderEmpty() {
+    fun parseIgnoresQueryTokenByDefault() {
+        val request = mockk<Request> {
+            every { getHeader(AUTHORIZATION_HEADER_KEY) } returns ""
+            every { getQuery(AUTHORIZATION_HEADER_KEY) } returns "Bearer token"
+            every { getCookieValue(AUTHORIZATION_HEADER_KEY) } returns ""
+        }
+        val securityContextParser = DefaultSecurityContextParser(mockk())
+        val securityContext = securityContextParser.parse(request)
+        securityContext.principal.anonymous.assert().isTrue()
+        verify(exactly = 0) {
+            request.getQuery(any())
+        }
+    }
+
+    @Test
+    fun parseQueryTokenWhenAllowed() {
         val request = mockk<Request> {
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns ""
             every { getQuery(AUTHORIZATION_HEADER_KEY) } returns "Bearer token"
@@ -63,12 +77,27 @@ class DefaultSecurityContextParserTest {
         val principalConverter = mockk<PrincipalConverter> {
             every { toPrincipal(any()) } returns mockk()
         }
-        val securityContextParser = DefaultSecurityContextParser(principalConverter)
-        val securityContext = securityContextParser.ensureParse(request)
-        securityContext.assert().isNotNull()
+        val securityContextParser = DefaultSecurityContextParser(principalConverter, allowQueryToken = true)
+        securityContextParser.parse(request).assert().isNotNull()
         verify {
             request.getHeader(AUTHORIZATION_HEADER_KEY)
             request.getQuery(AUTHORIZATION_HEADER_KEY)
+            principalConverter.toPrincipal(any())
+        }
+    }
+
+    @Test
+    fun parseCookieToken() {
+        val request = mockk<Request> {
+            every { getHeader(AUTHORIZATION_HEADER_KEY) } returns ""
+            every { getCookieValue(AUTHORIZATION_HEADER_KEY) } returns "Bearer token"
+        }
+        val principalConverter = mockk<PrincipalConverter> {
+            every { toPrincipal(any()) } returns mockk()
+        }
+        val securityContextParser = DefaultSecurityContextParser(principalConverter)
+        securityContextParser.parse(request).assert().isNotNull()
+        verify {
             principalConverter.toPrincipal(any())
         }
     }

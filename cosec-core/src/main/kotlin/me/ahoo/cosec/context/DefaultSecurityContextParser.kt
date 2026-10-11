@@ -20,12 +20,20 @@ import me.ahoo.cosec.token.SimpleAccessToken
 /**
  * Default Security Context Parser .
  *
+ * Resolves the access token from the `authorization` header, then the `authorization` cookie.
+ *
+ * @param allowQueryToken whether to also accept the token from the `authorization` query parameter.
+ * Disabled by default, because tokens in URLs leak into access logs, browser history and `Referer` headers.
+ *
  * @author ahoo wang
  */
-open class DefaultSecurityContextParser(private val principalConverter: PrincipalConverter) : SecurityContextParser {
+open class DefaultSecurityContextParser(
+    private val principalConverter: PrincipalConverter,
+    private val allowQueryToken: Boolean = false
+) : SecurityContextParser {
     private fun getAuthorization(request: Request): String {
         return request.getHeader(AUTHORIZATION_HEADER_KEY).ifBlank {
-            request.getQuery(AUTHORIZATION_HEADER_KEY)
+            if (allowQueryToken) request.getQuery(AUTHORIZATION_HEADER_KEY) else ""
         }.ifBlank {
             request.getCookieValue(AUTHORIZATION_HEADER_KEY)
         }

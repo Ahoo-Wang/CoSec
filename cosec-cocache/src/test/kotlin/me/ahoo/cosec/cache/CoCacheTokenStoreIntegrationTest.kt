@@ -12,17 +12,15 @@
  */
 package me.ahoo.cosec.cache
 
+import me.ahoo.cache.TtlPolicy
 import me.ahoo.cache.api.Cache
-import me.ahoo.cache.api.annotation.GuavaCache
 import me.ahoo.cache.api.source.CacheSource
-import me.ahoo.cache.client.GuavaClientSideCache
-import me.ahoo.cache.client.GuavaClientSideCache.Companion.toClientSideCache
+import me.ahoo.cache.client.CaffeineClientSideCache
 import me.ahoo.cache.consistency.CoherentCache
 import me.ahoo.cache.consistency.CoherentCacheConfiguration
 import me.ahoo.cache.consistency.DefaultCoherentCache
 import me.ahoo.cache.consistency.NoOpCacheEvictedEventBus
 import me.ahoo.cache.converter.ToStringKeyConverter
-import me.ahoo.cache.filter.NoOpKeyFilter
 import me.ahoo.cache.spring.redis.RedisDistributedCache
 import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
@@ -35,7 +33,6 @@ import org.springframework.data.redis.connection.RedisStandaloneConfiguration
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
 import org.springframework.data.redis.core.StringRedisTemplate
 import java.time.Duration
-import java.util.concurrent.TimeUnit
 
 /**
  * CoCacheTokenStore Integration Test against a real Redis-backed two-level CoCache.
@@ -60,23 +57,20 @@ internal class CoCacheTokenStoreIntegrationTest {
         val distributedCache = RedisDistributedCache<Boolean>(
             stringRedisTemplate,
             codecExecutor,
-            DISTRIBUTED_TTL,
-            DISTRIBUTED_TTL_AMPLITUDE,
             strictFailure = false,
         )
-        val clientSideCache: GuavaClientSideCache<Boolean> = GuavaCache(
-            maximumSize = 1_000,
-            expireUnit = TimeUnit.SECONDS,
-            expireAfterWrite = 30,
-        ).toClientSideCache(ttl = MISSING_GUARD_TTL.toSeconds(), ttlAmplitude = 0)
         val cacheConfiguration = CoherentCacheConfiguration<String, Boolean>(
             cacheName = "RevokedTokenCache",
             clientId = "CoCacheTokenStoreIntegrationTest",
             keyConverter = ToStringKeyConverter(KEY_PREFIX),
             distributedCache = distributedCache,
-            clientSideCache = clientSideCache,
+            clientSideCache = CaffeineClientSideCache.build(1_000),
             cacheSource = CacheSource.noOp(),
-            keyFilter = NoOpKeyFilter,
+            ttlPolicy = TtlPolicy(
+                ttl = DISTRIBUTED_TTL,
+                ttlAmplitude = DISTRIBUTED_TTL_AMPLITUDE,
+                missingTtl = MISSING_GUARD_TTL.toSeconds(),
+            ),
         )
         coherentCache = DefaultCoherentCache(cacheConfiguration, NoOpCacheEvictedEventBus)
         tokenStore = CoCacheTokenStore(IntegrationRevokedTokenCache(coherentCache))

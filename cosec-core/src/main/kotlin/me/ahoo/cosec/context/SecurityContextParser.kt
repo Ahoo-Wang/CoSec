@@ -50,7 +50,7 @@ fun interface SecurityContextParser {
     fun ensureParse(request: Request): SecurityContext =
         try {
             parse(request)
-        } catch (ignored: Throwable) {
+        } catch (ignored: Exception) {
             if (LOG.isDebugEnabled) {
                 LOG.debug(ignored.message, ignored)
             }

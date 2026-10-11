@@ -16,12 +16,15 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_KEY
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.pipeline.SecurityPipeline
 import me.ahoo.cosec.webflux.ReactiveSecurityFilter
 import org.springframework.cloud.gateway.filter.GatewayFilterChain
 import org.springframework.cloud.gateway.filter.GlobalFilter
 import org.springframework.core.Ordered
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
+import reactor.core.scheduler.Scheduler
+import reactor.core.scheduler.Schedulers
 
 /**
  * Authorization Gateway Filter .
@@ -29,10 +32,17 @@ import reactor.core.publisher.Mono
  * @author ahoo wang
  */
 class AuthorizationGatewayFilter(
-    securityContextParser: SecurityContextParser,
-    requestParser: RequestParser<ServerWebExchange>,
-    authorization: Authorization
-) : GlobalFilter, Ordered, ReactiveSecurityFilter(securityContextParser, requestParser, authorization) {
+    pipeline: SecurityPipeline<ServerWebExchange>
+) : GlobalFilter,
+    Ordered,
+    ReactiveSecurityFilter(pipeline) {
+    constructor(
+        securityContextParser: SecurityContextParser,
+        requestParser: RequestParser<ServerWebExchange>,
+        authorization: Authorization,
+        securityContextParseScheduler: Scheduler = Schedulers.immediate()
+    ) : this(SecurityPipeline(requestParser, securityContextParser, authorization, securityContextParseScheduler))
+
     companion object {
         /**
          * Filter order for gateway authorization.

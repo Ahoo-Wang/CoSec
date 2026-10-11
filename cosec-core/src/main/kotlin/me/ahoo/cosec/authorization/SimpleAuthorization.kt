@@ -13,24 +13,22 @@
 package me.ahoo.cosec.authorization
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.permission.AppRolePermission
 import me.ahoo.cosec.api.permission.Permission
+import me.ahoo.cosec.api.permission.PermissionId
+import me.ahoo.cosec.api.permission.RolePermission
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.CoSecPrincipal.Companion.isRoot
-import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.switchIfEmpty
 import reactor.kotlin.core.publisher.toMono
-import reactor.util.context.ContextView
 
 /**
  * Simple Authorization implementation.
@@ -42,6 +40,9 @@ import reactor.util.context.ContextView
  * 4. Principal-specific policies
  * 5. Role-based permissions
  *
+ * Layers 3-5 are combined deny-first: an EXPLICIT_DENY matched in any layer wins over
+ * an ALLOW matched in any other layer.
+ *
  * @param policyRepository Repository for accessing policies
  * @param appRolePermissionRepository Repository for accessing role permissions
  * @param blacklistChecker Optional blacklist checker for blocking requests
@@ -50,108 +51,106 @@ class SimpleAuthorization(
     private val policyRepository: PolicyRepository,
     private val appRolePermissionRepository: AppRolePermissionRepository,
     private val blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp
-) : Authorization {
+) : DecisionAuthorization {
     companion object {
         private val log = KotlinLogging.logger {}
+        private val ROOT_DECISION = AuthorizationDecision(AuthorizeResult.ALLOW, RootVerifyContext)
+        private val BLACKLIST_DECISION = AuthorizationDecision(AuthorizeResult.EXPLICIT_DENY, BlacklistVerifyContext)
+        private val IMPLICIT_DENY_DECISION = AuthorizationDecision(AuthorizeResult.IMPLICIT_DENY, NoMatchVerifyContext)
+        private val DENY_FIRST = arrayOf(Effect.DENY, Effect.ALLOW)
+
+        private fun Effect.decisiveResult(): VerifyResult = when (this) {
+            Effect.DENY -> VerifyResult.EXPLICIT_DENY
+            Effect.ALLOW -> VerifyResult.ALLOW
+        }
     }
-
-    private data class PolicyStatementEntry(val policy: Policy, val index: Int, val statement: Statement)
-
-    private data class RolePermissionEntry(val roleId: RoleId, val permission: Permission)
 
     /**
-     * Deny-first evaluation: all DENY items are verified before any ALLOW item, first match wins.
+     * Deny-first evaluation of policy statements: every DENY statement of every matched policy is verified
+     * before any ALLOW statement; first match wins.
      *
-     * The incoming sequence is materialized once so every upstream condition (e.g. a policy-level
-     * rate limiter) is evaluated exactly once per authorization — including conditions positioned
-     * after a matching early DENY — meaning denied requests uniformly consume rate-limiter permits.
+     * Policy conditions are evaluated exactly once, up front, so a policy-level condition (e.g. a rate
+     * limiter) runs for every matched policy regardless of which statement decides — denied requests
+     * uniformly consume rate-limiter permits.
+     *
+     * Plain loops over the source lists keep this hot path allocation-free apart from the matched-policy list.
      */
-    private inline fun <T> evaluateDenyFirst(
-        items: Sequence<T>,
-        crossinline effectExtractor: (T) -> Effect,
-        crossinline verifyItem: (T) -> VerifyResult,
-        crossinline onMatch: (T, VerifyResult) -> VerifyContext
-    ): VerifyContext? {
-        val (denyItems, allowItems) = items.partition { effectExtractor(it) == Effect.DENY }
-        denyItems.forEach { item ->
-            val result = verifyItem(item)
-            if (result == VerifyResult.EXPLICIT_DENY) {
-                return onMatch(item, result)
-            }
-        }
-        allowItems.forEach { item ->
-            val result = verifyItem(item)
-            if (result == VerifyResult.ALLOW) {
-                return onMatch(item, result)
-            }
-        }
-        return null
-    }
-
     private fun verifyPolicies(
         source: PolicyVerifySource,
         policies: List<Policy>,
         request: Request,
         securityContext: SecurityContext
     ): VerifyContext? {
-        val matchedPolicies = policies.asSequence().filter { policy ->
+        val matchedPolicies = policies.filter { policy ->
             policy.condition.match(request = request, securityContext = securityContext)
         }
-
-        val allStatements = matchedPolicies.flatMap { policy ->
-            policy.statements.asSequence().mapIndexed { index, statement ->
-                PolicyStatementEntry(policy, index, statement)
+        for (effect in DENY_FIRST) {
+            val decisive = effect.decisiveResult()
+            for (policy in matchedPolicies) {
+                policy.statements.forEachIndexed { index, statement ->
+                    if (statement.effect == effect && statement.verify(request, securityContext) == decisive) {
+                        log.debug {
+                            "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [$decisive]."
+                        }
+                        return PolicyVerifyContext(
+                            source = source,
+                            policy = policy,
+                            statementIndex = index,
+                            statement = statement,
+                            result = decisive,
+                        )
+                    }
+                }
             }
         }
-
-        return evaluateDenyFirst(
-            items = allStatements,
-            effectExtractor = { it.statement.effect },
-            verifyItem = { it.statement.verify(request, securityContext) },
-            onMatch = { entry, result ->
-                log.debug {
-                    "Verify [$request] [$securityContext] matched Policy[${entry.policy.id}] Statement[${entry.index}][${entry.statement.name}] - [$result]."
-                }
-                PolicyVerifyContext(
-                    source = source,
-                    policy = entry.policy,
-                    statementIndex = entry.index,
-                    statement = entry.statement,
-                    result = result,
-                )
-            }
-        )
+        return null
     }
 
+    /**
+     * Deny-first evaluation of the principal's role permissions, iterating the role → permission-id
+     * assignments directly instead of materializing [AppRolePermission.rolePermissionIndexer] per request.
+     */
     private fun verifyAppRolePermission(
         appRolePermission: AppRolePermission,
         request: Request,
         context: SecurityContext
     ): VerifyContext? {
-        if (!appRolePermission.appPermission.condition.match(request, context)) {
+        val appPermission = appRolePermission.appPermission
+        if (!appPermission.condition.match(request, context)) {
             return null
         }
-
-        val allPermissions =
-            appRolePermission.rolePermissionIndexer.entries.asSequence().flatMap { (roleId, permissions) ->
-                permissions.asSequence().map { permission -> RolePermissionEntry(roleId, permission) }
-            }
-
-        return evaluateDenyFirst(
-            items = allPermissions,
-            effectExtractor = { it.permission.effect },
-            verifyItem = { it.permission.verify(request, context) },
-            onMatch = { entry, result ->
-                log.debug {
-                    "Verify [$request] [$context] matched Role[${entry.roleId}] Permission[${entry.permission.id}][${entry.permission.name}] - [$result]."
+        val permissionIndexer = appPermission.permissionIndexer
+        for (effect in DENY_FIRST) {
+            val decisive = effect.decisiveResult()
+            for (rolePermission in appRolePermission.rolePermissions) {
+                rolePermission.forEachPermission(permissionIndexer) { permission ->
+                    if (permission.effect == effect && permission.verify(request, context) == decisive) {
+                        log.debug {
+                            "Verify [$request] [$context] matched Role[${rolePermission.id}] Permission[${permission.id}][${permission.name}] - [$decisive]."
+                        }
+                        return RoleVerifyContext(
+                            roleId = rolePermission.id,
+                            permission = permission,
+                            result = decisive,
+                        )
+                    }
                 }
-                RoleVerifyContext(
-                    roleId = entry.roleId,
-                    permission = entry.permission,
-                    result = result,
-                )
             }
-        )
+        }
+        return null
+    }
+
+    private inline fun RolePermission.forEachPermission(
+        permissionIndexer: Map<PermissionId, Permission>,
+        action: (Permission) -> Unit
+    ) {
+        if (permissions.contains(AppRolePermission.ALL_PERMISSION_ID)) {
+            permissionIndexer.values.forEach(action)
+            return
+        }
+        permissions.forEach { permissionId ->
+            permissionIndexer[permissionId]?.let(action)
+        }
     }
 
     private fun verifyRoot(context: SecurityContext): VerifyResult =
@@ -202,52 +201,49 @@ class SimpleAuthorization(
             }
     }
 
+    /**
+     * Chains the next verification layer so that an explicit deny in any layer wins:
+     * a matched EXPLICIT_DENY short-circuits, while a matched ALLOW is only granted
+     * once the remaining layers have produced no EXPLICIT_DENY.
+     */
+    private fun Mono<VerifyContext>.thenVerify(nextLayer: () -> Mono<VerifyContext>): Mono<VerifyContext> =
+        flatMap { matched ->
+            if (matched.result == VerifyResult.EXPLICIT_DENY) {
+                return@flatMap matched.toMono()
+            }
+            nextLayer()
+                .filter { it.result == VerifyResult.EXPLICIT_DENY }
+                .defaultIfEmpty(matched)
+        }.switchIfEmpty {
+            nextLayer()
+        }
+
     private fun verify(
         request: Request,
         context: SecurityContext
-    ): Mono<AuthorizeResult> = Mono.deferContextual { reactorContext ->
+    ): Mono<AuthorizationDecision> =
         verifyGlobalPolicies(request, context)
-            .switchIfEmpty {
+            .thenVerify {
                 verifyPrincipalPolicies(request, context)
-            }.switchIfEmpty {
+            }.thenVerify {
                 verifyAppRolePermission(request, context)
             }.map {
-                recordVerifyContext(context, reactorContext, it)
-                it.result.toAuthorizeResult()
+                context.setVerifyContext(it)
+                AuthorizationDecision(it.result.toAuthorizeResult(), it)
             }.switchIfEmpty {
                 log.debug {
                     "Verify [$request] [$context] No policies matched - [Implicit Deny]."
                 }
-                recordVerifyContext(reactorContext, NoMatchVerifyContext)
-                AuthorizeResult.IMPLICIT_DENY.toMono()
+                IMPLICIT_DENY_DECISION.toMono()
             }
-    }
 
-    private fun recordVerifyContext(
-        context: SecurityContext,
-        reactorContext: ContextView,
-        verifyContext: VerifyContext,
-    ) {
-        context.setVerifyContext(verifyContext)
-        recordVerifyContext(reactorContext, verifyContext)
-    }
-
-    private fun recordVerifyContext(
-        reactorContext: ContextView,
-        verifyContext: VerifyContext,
-    ) {
-        reactorContext.getOrEmpty<VerifyContextScope>(VerifyContextScope::class.java)
-            .ifPresent { scope -> scope.value = verifyContext }
-    }
-
-    override fun authorize(
+    override fun decide(
         request: Request,
         context: SecurityContext
-    ): Mono<AuthorizeResult> = Mono.deferContextual { reactorContext ->
+    ): Mono<AuthorizationDecision> = Mono.defer {
         val verifyResult = verifyRoot(context)
         if (verifyResult == VerifyResult.ALLOW) {
-            recordVerifyContext(reactorContext, RootVerifyContext)
-            return@deferContextual AuthorizeResult.ALLOW.toMono()
+            return@defer ROOT_DECISION.toMono()
         }
         blacklistChecker
             .check(request, context)
@@ -256,8 +252,7 @@ class SimpleAuthorization(
                     log.debug {
                         "Request [$request] is blocked by the blacklist."
                     }
-                    recordVerifyContext(reactorContext, BlacklistVerifyContext)
-                    return@flatMap AuthorizeResult.EXPLICIT_DENY.toMono()
+                    return@flatMap BLACKLIST_DECISION.toMono()
                 }
                 verify(request, context)
             }

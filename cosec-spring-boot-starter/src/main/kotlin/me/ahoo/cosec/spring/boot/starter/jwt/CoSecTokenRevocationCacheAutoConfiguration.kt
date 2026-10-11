@@ -12,9 +12,8 @@
  */
 package me.ahoo.cosec.spring.boot.starter.jwt
 
-import me.ahoo.cache.api.annotation.GuavaCache
 import me.ahoo.cache.api.client.ClientSideCache
-import me.ahoo.cache.converter.KeyConverter
+import me.ahoo.cache.api.converter.KeyConverter
 import me.ahoo.cache.converter.ToStringKeyConverter
 import me.ahoo.cache.spring.EnableCoCache
 import me.ahoo.cache.spring.client.SpringClientSideCacheFactory.Companion.CLIENT_SIDE_CACHE_SUFFIX
@@ -52,7 +51,6 @@ class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: Ca
             "${REVOKED_TOKEN_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
         const val REVOKED_TOKEN_CACHE_CLIENT_BEAN_NAME =
             "${REVOKED_TOKEN_CACHE_BEAN_NAME}$CLIENT_SIDE_CACHE_SUFFIX"
-        const val DEFAULT_MISSING_GUARD_TTL_SECONDS = 30L
     }
 
     @Bean
@@ -70,13 +68,7 @@ class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: Ca
     @Bean(REVOKED_TOKEN_CACHE_CLIENT_BEAN_NAME)
     @ConditionalOnMissingBean(name = [REVOKED_TOKEN_CACHE_CLIENT_BEAN_NAME])
     fun revokedTokenCacheClientSideCache(): ClientSideCache<Boolean> {
-        val tokenCache = cacheProperties.token
-        // Every isRevoked miss writes a missing guard to both cache levels;
-        // a FOREVER ttl would grow Redis monotonically with every checked token id.
-        val missingGuardTtl = tokenCache.expireAfterWrite
-            .takeIf { it != GuavaCache.UNSET_LONG }
-            ?.let { tokenCache.expireUnit.toSeconds(it) }
-            ?: DEFAULT_MISSING_GUARD_TTL_SECONDS
-        return tokenCache.toGuavaClientSideCache(ttl = missingGuardTtl.coerceAtLeast(1))
+        // "not revoked" lookups are cached as missing values for RevokedTokenCache.MISSING_TTL_SECONDS
+        return cacheProperties.token.toClientSideCache()
     }
 }

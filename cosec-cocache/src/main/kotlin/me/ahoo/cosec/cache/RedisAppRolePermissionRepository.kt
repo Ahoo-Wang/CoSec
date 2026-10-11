@@ -23,24 +23,49 @@ import me.ahoo.cosec.permission.AppRolePermissionData
 import me.ahoo.cosec.permission.RolePermissionData
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
-import reactor.kotlin.core.publisher.toMono
 
 class RedisAppRolePermissionRepository(
     private val appPermissionCache: AppPermissionCache,
     private val rolePermissionCache: RolePermissionCache
 ) : AppRolePermissionRepository {
-    override fun getAppRolePermission(appId: AppId, spaceId: SpaceId, roleIds: Set<RoleId>): Mono<AppRolePermission> {
-        return Mono.defer {
-            val appPermission = appPermissionCache[appId] ?: return@defer Mono.empty<AppRolePermission>()
-            val rolePermissions = roleIds.mapNotNull {
-                val spacedRoleId = SpacedRoleId(roleId = it, spaceId = spaceId)
-                val permissions = rolePermissionCache[spacedRoleId] ?: return@mapNotNull null
-                RolePermissionData(
-                    id = it,
-                    permissions = permissions,
-                )
+    /**
+     * Served without a scheduler hop when the app permission and every role's permissions are already in the
+     * local cache; otherwise falls back to a blocking (Redis) lookup on [Schedulers.boundedElastic].
+     */
+    override fun getAppRolePermission(appId: AppId, spaceId: SpaceId, roleIds: Set<RoleId>): Mono<AppRolePermission> =
+        Mono.defer {
+            when (val local = lookupLocal(appId, spaceId, roleIds)) {
+                is LocalLookup.Hit -> Mono.justOrEmpty<AppRolePermission>(local.value)
+                LocalLookup.Miss -> Mono.fromCallable<AppRolePermission> { load(appId, spaceId, roleIds) }
+                    .subscribeOn(Schedulers.boundedElastic())
             }
-            AppRolePermissionData(appPermission, rolePermissions).toMono()
-        }.subscribeOn(Schedulers.boundedElastic())
+        }
+
+    private fun load(appId: AppId, spaceId: SpaceId, roleIds: Set<RoleId>): AppRolePermission? {
+        val appPermission = appPermissionCache[appId] ?: return null
+        val rolePermissions = roleIds.mapNotNull {
+            val permissions = rolePermissionCache[SpacedRoleId(roleId = it, spaceId = spaceId)] ?: return@mapNotNull null
+            RolePermissionData(id = it, permissions = permissions)
+        }
+        return AppRolePermissionData(appPermission, rolePermissions)
+    }
+
+    private fun lookupLocal(appId: AppId, spaceId: SpaceId, roleIds: Set<RoleId>): LocalLookup<AppRolePermission> {
+        val appPermission = when (val lookup = appPermissionCache.lookupLocal(appId)) {
+            is LocalLookup.Hit -> lookup.value ?: return LocalLookup.Hit(null)
+            LocalLookup.Miss -> return LocalLookup.Miss
+        }
+        val rolePermissions = ArrayList<RolePermissionData>(roleIds.size)
+        for (roleId in roleIds) {
+            when (val lookup = rolePermissionCache.lookupLocal(SpacedRoleId(roleId = roleId, spaceId = spaceId))) {
+                is LocalLookup.Hit -> lookup.value?.let {
+                    rolePermissions.add(
+                        RolePermissionData(id = roleId, permissions = it)
+                    )
+                }
+                LocalLookup.Miss -> return LocalLookup.Miss
+            }
+        }
+        return LocalLookup.Hit(AppRolePermissionData(appPermission, rolePermissions))
     }
 }

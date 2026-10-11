@@ -13,6 +13,7 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cache.api.Cache
+import me.ahoo.cache.api.annotation.CoCache
 
 /**
  * Revoked Token Cache .
@@ -27,4 +28,11 @@ import me.ahoo.cache.api.Cache
  * @author ahoo wang
  * @see CoCacheTokenStore
  */
-interface RevokedTokenCache : Cache<String, Boolean>
+// Revoked entries are always written with an explicit ttlAt (the token's remaining lifetime).
+// missingTtl bounds how long a "not revoked" lookup is cached locally if an eviction message is lost.
+@CoCache(missingTtl = RevokedTokenCache.MISSING_TTL_SECONDS)
+interface RevokedTokenCache : Cache<String, Boolean> {
+    companion object {
+        const val MISSING_TTL_SECONDS = 30L
+    }
+}

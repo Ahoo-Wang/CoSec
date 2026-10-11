@@ -13,23 +13,14 @@
 
 package me.ahoo.cosec.webflux
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.context.request.RequestIdCapable.Companion.REQUEST_ID_KEY
-import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SecurityContextParser
-import me.ahoo.cosec.context.SimpleSecurityContext
-import me.ahoo.cosec.context.request.InvalidRequestPathException
 import me.ahoo.cosec.context.request.RequestParser
-import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
-import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
+import me.ahoo.cosec.pipeline.SecurityPipeline
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.token.TokenVerificationContexts.getTokenVerificationException
-import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationException
-import me.ahoo.cosec.token.TokenVerificationException
-import me.ahoo.cosec.token.toAuthorizeResult
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.springframework.http.HttpStatus
@@ -37,107 +28,64 @@ import org.springframework.http.MediaType
 import org.springframework.http.server.reactive.ServerHttpResponse
 import org.springframework.web.server.ServerWebExchange
 import reactor.core.publisher.Mono
+import reactor.core.scheduler.Scheduler
+import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.toMono
 
 /**
  * Base class for reactive security filters.
  *
- * This abstract class provides the core security filtering logic for WebFlux applications,
- * including:
- * - Parsing requests to extract security context
- * - Authorization decision making
- * - Error handling for authentication failures
+ * Runs each exchange through a [SecurityPipeline] and translates the resulting
+ * [me.ahoo.cosec.pipeline.SecurityDecision] into a WebFlux response. All authorization and error-mapping
+ * logic lives in the pipeline, shared with the servlet integration.
  *
- * Note: The authorization algorithm in this class mirrors the logic in
- * [me.ahoo.cosec.servlet.AbstractAuthorizationInterceptor]. Changes to the
- * algorithm here should be reflected in the servlet counterpart.
- *
- * @param securityContextParser Parser for extracting security context from requests
- * @param requestParser Parser for converting exchanges to requests
- * @param authorization The authorization service
+ * @param pipeline the security pipeline evaluating each exchange
  * @see ReactiveAuthorizationFilter
- * @see ReactiveInjectSecurityContextWebFilter
+ * @see me.ahoo.cosec.gateway.AuthorizationGatewayFilter
  */
 abstract class ReactiveSecurityFilter(
-    val securityContextParser: SecurityContextParser,
-    val requestParser: RequestParser<ServerWebExchange>,
-    val authorization: Authorization
+    val pipeline: SecurityPipeline<ServerWebExchange>
 ) {
-    companion object {
-        private val log = KotlinLogging.logger {}
-    }
+    /**
+     * @param securityContextParseScheduler see [SecurityPipeline.securityContextParseScheduler]
+     */
+    constructor(
+        securityContextParser: SecurityContextParser,
+        requestParser: RequestParser<ServerWebExchange>,
+        authorization: Authorization,
+        securityContextParseScheduler: Scheduler = Schedulers.immediate()
+    ) : this(SecurityPipeline(requestParser, securityContextParser, authorization, securityContextParseScheduler))
+
+    val securityContextParser: SecurityContextParser
+        get() = pipeline.securityContextParser
+    val requestParser: RequestParser<ServerWebExchange>
+        get() = pipeline.requestParser
+    val authorization: Authorization
+        get() = pipeline.authorization
 
     fun filterInternal(
         exchange: ServerWebExchange,
         chain: (ServerWebExchange, Request) -> Mono<Void>
-    ): Mono<Void> {
-        val request = try {
-            requestParser.parse(exchange)
-        } catch (_: InvalidRequestPathException) {
-            exchange.response.statusCode = HttpStatus.BAD_REQUEST
-            return Mono.empty()
+    ): Mono<Void> = pipeline.evaluate(exchange).flatMap { decision ->
+        val response = exchange.response
+        val request = decision.request
+        if (request == null) {
+            response.statusCode = HttpStatus.valueOf(decision.status.code)
+            return@flatMap Mono.empty()
         }
-        val securityContext =
-            try {
-                securityContextParser.parse(request)
-            } catch (verificationException: TokenVerificationException) {
-                log.debug(verificationException) {
-                    "Parse request to security context failed."
-                }
-                SimpleSecurityContext.anonymous().also {
-                    it.setTokenVerificationException(verificationException)
-                }
-            }
-        securityContext.setRequest(request)
-        exchange.setSecurityContext(securityContext)
-        exchange.response.headers.trySet(REQUEST_ID_KEY, request.requestId)
-        val authorizedExchange = authorization
-            .authorize(request, securityContext)
-            .flatMap<ServerWebExchange> { authorizeResult ->
-                if (authorizeResult.authorized) {
-                    return@flatMap exchange
-                        .mutate()
-                        .principal(securityContext.principal.toMono())
-                        .build()
-                        .toMono()
-                }
-                val principal = securityContext.principal
-                if (!principal.authenticated) {
-                    exchange.response.statusCode = HttpStatus.UNAUTHORIZED
-                } else {
-                    exchange.response.statusCode = HttpStatus.FORBIDDEN
-                }
-                exchange.response.writeWithAuthorizeResult(
-                    securityContext.getTokenVerificationException()?.toAuthorizeResult() ?: authorizeResult,
-                ).then(Mono.empty())
-            }.onAuthorizeError(exchange, request)
-        return authorizedExchange.flatMap { authorized ->
-            chain(authorized, request).writeSecurityContext(securityContext)
+        response.headers.trySet(REQUEST_ID_KEY, request.requestId)
+        val securityContext = decision.securityContext
+        securityContext?.let { exchange.setSecurityContext(it) }
+        if (!decision.allowed) {
+            response.statusCode = HttpStatus.valueOf(decision.status.code)
+            return@flatMap response.writeWithAuthorizeResult(decision.result)
         }
-    }
-
-    private fun Mono<ServerWebExchange>.onAuthorizeError(
-        exchange: ServerWebExchange,
-        request: Request
-    ): Mono<ServerWebExchange> {
-        return onErrorResume(TooManyRequestsException::class.java) { _ ->
-            exchange.response.statusCode = HttpStatus.TOO_MANY_REQUESTS
-            exchange.response.writeWithAuthorizeResult(AuthorizeResult.TOO_MANY_REQUESTS)
-                .then(Mono.empty())
-        }.onErrorResume(RegexTimeoutException::class.java) { _ ->
-            // A regex condition exceeding its time budget (ReDoS guard) is an expected, fail-closed
-            // authorization outcome -> deny, not a 5xx server error (which would invite client retries).
-            exchange.response.statusCode = HttpStatus.FORBIDDEN
-            exchange.response.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
-                .then(Mono.empty())
-        }.onErrorResume { cause ->
-            log.error(cause) {
-                "Unexpected error during authorization of request [${request.path}] [${request.method}]."
-            }
-            exchange.response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR
-            exchange.response.writeWithAuthorizeResult(AuthorizeResult.IMPLICIT_DENY)
-                .then(Mono.empty())
-        }
+        checkNotNull(securityContext) { "An allowed decision must carry a SecurityContext." }
+        val authorizedExchange = exchange
+            .mutate()
+            .principal(securityContext.principal.toMono())
+            .build()
+        chain(authorizedExchange, request).writeSecurityContext(securityContext)
     }
 
     fun ServerHttpResponse.writeWithAuthorizeResult(authorizeResult: AuthorizeResult): Mono<Void> {

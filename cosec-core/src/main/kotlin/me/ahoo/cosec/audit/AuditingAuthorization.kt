@@ -20,7 +20,9 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.authorization.VerifyContextScope
+import me.ahoo.cosec.authorization.AuthorizationDecision
+import me.ahoo.cosec.authorization.DecisionAuthorization
+import me.ahoo.cosec.authorization.decide
 import me.ahoo.cosec.token.TokenVerificationContexts.getTokenVerificationException
 import me.ahoo.cosec.token.toAuthorizeResult
 import me.ahoo.cosid.IdGenerator
@@ -36,16 +38,16 @@ class AuditingAuthorization @JvmOverloads constructor(
     override val delegate: Authorization,
     private val auditEventSink: AuditEventSink,
     private val idGenerator: IdGenerator = UuidGenerator.INSTANCE,
-) : Authorization,
+) : DecisionAuthorization,
     Delegated<Authorization> {
 
-    override fun authorize(request: Request, context: SecurityContext): Mono<AuthorizeResult> {
+    override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> {
         return Mono.defer {
             val startNanos = System.nanoTime()
-            val verifyContextScope = VerifyContextScope()
-            Mono.defer { delegate.authorize(request = request, context = context) }
-                .doOnSuccess { result ->
+            Mono.defer { delegate.decide(request = request, context = context) }
+                .doOnSuccess { decision ->
                     publishSafely {
+                        val result = decision?.result
                         val effectiveResult = when {
                             result == null -> AuthorizeResult.IMPLICIT_DENY
                             result.authorized -> result
@@ -56,7 +58,7 @@ class AuditingAuthorization @JvmOverloads constructor(
                             context = context,
                             result = effectiveResult,
                             elapsedNanos = System.nanoTime() - startNanos,
-                            verifyContext = verifyContextScope.value,
+                            verifyContext = decision?.verifyContext,
                             eventId = idGenerator.generateAsString(),
                         )
                     }
@@ -68,12 +70,11 @@ class AuditingAuthorization @JvmOverloads constructor(
                             context = context,
                             error = error,
                             elapsedNanos = System.nanoTime() - startNanos,
-                            verifyContext = verifyContextScope.value,
+                            verifyContext = null,
                             eventId = idGenerator.generateAsString(),
                         )
                     }
                 }
-                .contextWrite { it.put(VerifyContextScope::class.java, verifyContextScope) }
         }
     }
 

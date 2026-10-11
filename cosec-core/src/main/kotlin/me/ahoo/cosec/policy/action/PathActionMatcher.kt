@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.policy.action
 
+import com.google.common.cache.Cache
+import com.google.common.cache.CacheBuilder
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
@@ -24,6 +26,7 @@ import me.ahoo.cosec.policy.asTemplateExpression
 import org.springframework.http.server.PathContainer
 import org.springframework.web.util.pattern.PathPattern
 import org.springframework.web.util.pattern.PathPatternParser
+import java.util.concurrent.ConcurrentHashMap
 
 const val PATH_VARIABLES_KEY = "PATH_VARIABLES"
 
@@ -39,6 +42,34 @@ fun SecurityContext.setPathVariables(pathVariables: Map<String, String>) {
  */
 fun SecurityContext.getPathVariables(): Map<String, String>? = getAttributeValue(PATH_VARIABLES_KEY)
 
+private const val PARSED_REQUEST_PATH_KEY = "COSEC_PARSED_REQUEST_PATH"
+
+/**
+ * Request path parsed per [PathContainer.Options], shared by all path matchers evaluating one request.
+ *
+ * Without it every path matcher re-parses the same request path, which dominated authorization allocations.
+ */
+private class ParsedRequestPath(val path: String) {
+    private val containers = ConcurrentHashMap<PathContainer.Options, PathContainer>(2)
+
+    fun get(options: PathContainer.Options): PathContainer =
+        // look up first: computeIfAbsent would allocate a capturing lambda on every hit
+        containers[options] ?: containers.computeIfAbsent(options) { PathContainer.parsePath(path, it) }
+}
+
+/**
+ * Parses [Request.path] with [options], reusing the result across matchers for the same request.
+ */
+internal fun SecurityContext.parseRequestPath(request: Request, options: PathContainer.Options): PathContainer {
+    val cached = getAttributeValue<ParsedRequestPath>(PARSED_REQUEST_PATH_KEY)
+    if (cached != null && cached.path == request.path) {
+        return cached.get(options)
+    }
+    val parsed = ParsedRequestPath(request.path)
+    setAttributeValue(PARSED_REQUEST_PATH_KEY, parsed)
+    return parsed.get(options)
+}
+
 class PathActionMatcher(
     private val patternParser: PathPatternParser,
     private val pathPattern: PathPattern,
@@ -48,13 +79,10 @@ class PathActionMatcher(
         request: Request,
         securityContext: SecurityContext
     ): Boolean {
-        PathContainer
-            .parsePath(request.path, patternParser.pathOptions)
-            .let { pathContainer ->
-                val pathMatchInfo = pathPattern.matchAndExtract(pathContainer) ?: return false
-                securityContext.setPathVariables(pathMatchInfo.uriVariables)
-                return true
-            }
+        val pathContainer = securityContext.parseRequestPath(request, patternParser.pathOptions)
+        val pathMatchInfo = pathPattern.matchAndExtract(pathContainer) ?: return false
+        securityContext.setPathVariables(pathMatchInfo.uriVariables)
+        return true
     }
 }
 
@@ -63,19 +91,30 @@ class ReplaceablePathActionMatcher(
     private val pattern: String,
     configuration: Configuration
 ) : AbstractActionMatcher(PathActionMatcherFactory.TYPE, configuration) {
+    companion object {
+        private const val PATH_PATTERN_CACHE_SIZE = 1024L
+    }
+
     private val expression = pattern.asTemplateExpression()
+
+    /**
+     * Resolved patterns vary per principal/tenant, so parsed patterns are cached in a bounded LRU
+     * to avoid re-parsing on every request.
+     */
+    private val pathPatternCache: Cache<String, PathPattern> = CacheBuilder.newBuilder()
+        .maximumSize(PATH_PATTERN_CACHE_SIZE)
+        .build()
 
     override fun internalMatch(
         request: Request,
         securityContext: SecurityContext
     ): Boolean {
-        val pathPattern = requireNotNull(expression.getValue(securityContext))
-        val pathContainer = PathContainer.parsePath(request.path)
-        patternParser.parse(pathPattern).let {
-            val pathMatchInfo = it.matchAndExtract(pathContainer) ?: return false
-            securityContext.setPathVariables(pathMatchInfo.uriVariables)
-            return true
-        }
+        val resolvedPattern = requireNotNull(expression.getValue(securityContext))
+        val pathPattern = pathPatternCache.get(resolvedPattern) { patternParser.parse(resolvedPattern) }
+        val pathContainer = securityContext.parseRequestPath(request, patternParser.pathOptions)
+        val pathMatchInfo = pathPattern.matchAndExtract(pathContainer) ?: return false
+        securityContext.setPathVariables(pathMatchInfo.uriVariables)
+        return true
     }
 }
 

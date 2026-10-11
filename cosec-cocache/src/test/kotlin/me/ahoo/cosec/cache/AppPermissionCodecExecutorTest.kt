@@ -12,8 +12,6 @@
  */
 package me.ahoo.cosec.cache
 
-import me.ahoo.cache.ComputedTtlAt
-import me.ahoo.cache.DefaultCacheValue
 import me.ahoo.cache.api.CacheValue
 import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
 import me.ahoo.cosec.api.permission.AppPermission
@@ -68,18 +66,18 @@ internal class AppPermissionCodecExecutorTest {
             ),
         )
         val key = "app:" + MockIdGenerator.INSTANCE.generateAsString()
-        val cacheValue: CacheValue<AppPermission> = DefaultCacheValue.forever(appPermission)
+        val cacheValue: CacheValue<AppPermission> = CacheValue.forever(appPermission)
         codecExecutor.executeAndEncode(key, cacheValue)
-        val value = requireNotNull(codecExecutor.executeAndDecode(key, ComputedTtlAt.FOREVER)).value
+        val value = requireNotNull(codecExecutor.executeAndDecode(key)).value
         assertThat(value, `is`(appPermission))
     }
 
     @Test
     fun executeAndEncodeMissing() {
         val key = "app:" + MockIdGenerator.INSTANCE.generateAsString()
-        val cacheValue: CacheValue<AppPermission> = DefaultCacheValue.missingGuard()
+        val cacheValue: CacheValue<AppPermission> = CacheValue.missing()
         codecExecutor.executeAndEncode(key, cacheValue)
-        val actual = codecExecutor.executeAndDecode(key, ComputedTtlAt.FOREVER)
+        val actual = codecExecutor.executeAndDecode(key)
         assertThat(actual, `is`(cacheValue))
     }
 }

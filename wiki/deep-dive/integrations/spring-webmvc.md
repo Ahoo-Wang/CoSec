@@ -5,7 +5,7 @@ description: How CoSec integrates with Spring MVC servlet applications via jakar
 
 # Spring WebMVC Integration
 
-CoSec provides a servlet-based integration path for traditional Spring MVC applications through `jakarta.servlet.Filter` implementations. The servlet integration mirrors the reactive WebFlux integration but uses thread-local context propagation instead of Reactor Context.
+CoSec provides a servlet-based integration path for traditional Spring MVC applications through `jakarta.servlet.Filter` implementations. The servlet integration shares the transport-agnostic `SecurityPipeline` with the reactive WebFlux integration, and uses thread-local context propagation instead of Reactor Context.
 
 ## Architecture Overview
 
@@ -44,64 +44,51 @@ graph TD
 
 ### AuthorizationFilter
 
-The servlet filter entry point. It implements `jakarta.servlet.Filter` and extends `AbstractAuthorizationInterceptor` to perform authorization checks on every incoming request.
+The servlet filter entry point. It implements `jakarta.servlet.Filter` and extends `AbstractAuthorizationInterceptor`, which runs each request through the shared, transport-agnostic [`SecurityPipeline`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityPipeline.kt).
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Client
-    participant Filter as AuthorizationFilter
-    participant Interceptor as AbstractAuthorizationInterceptor
-    participant RParser as ServletRequestParser
+    participant Adapter as AuthorizationFilter
+    participant Pipeline as SecurityPipeline
     participant SCParser as SecurityContextParser
     participant Auth as Authorization
     participant Chain as FilterChain
 
-    Client->>Filter: doFilter(request, response, chain)
-    Filter->>Interceptor: authorize(httpRequest, httpResponse)
-    Interceptor->>RParser: parse(servletRequest)
-    RParser-->>Interceptor: CoSecServletRequest
-    Interceptor->>SCParser: parse(request)
-    Note over Interceptor,SCParser: TokenVerificationException caught<br>falls back to anonymous context
-    SCParser-->>Interceptor: SecurityContext
-    Interceptor->>Auth: authorize(request, securityContext).block()
-    Auth-->>Interceptor: AuthorizeResult
-    alt Authorized
-        Interceptor-->>Filter: true
-        Filter->>Chain: chain.doFilter(request, response)
-    else Not Authenticated
-        Interceptor-->>Filter: false
-        Filter-->>Client: HTTP 401 UNAUTHORIZED
-    else Forbidden
-        Interceptor-->>Filter: false
-        Filter-->>Client: HTTP 403 FORBIDDEN
+    Client->>Adapter: doFilter(request, response, chain)
+    Adapter->>Pipeline: evaluate(servletRequest).block()
+    Pipeline->>Pipeline: RequestParser.parse
+    Pipeline->>SCParser: parse(request)
+    Note over Pipeline,SCParser: TokenVerificationException<br>falls back to anonymous context
+    Pipeline->>Auth: decide(request, securityContext)
+    Auth-->>Pipeline: AuthorizationDecision
+    Pipeline-->>Adapter: SecurityDecision(status, result, ...)
+    alt ALLOWED
+        Adapter->>Chain: chain.doFilter(request, response)
+    else rejected
+        Adapter-->>Client: HTTP status.code + AuthorizeResult JSON
     end
-
-
-
 ```
 
-Key behaviors of `AuthorizationFilter.doFilter`:
-
-1. **Delegates** to `AbstractAuthorizationInterceptor.authorize()`.
-2. **Catches** `InvalidRequestPathException` (malformed/invalid path) and returns HTTP 400.
-3. **Catches** `TooManyRequestsException` and returns HTTP 429.
-4. **Catches** `RegexTimeoutException` (a regex condition exceeding its time budget, i.e. the ReDoS guard) and returns HTTP 403 as a fail-closed deny.
-5. **Catches** unexpected exceptions, logs an error, and returns HTTP 500.
-6. On successful authorization, calls `chain.doFilter(request, response)`.
+`AuthorizationFilter.doFilter` calls `authorize()`, proceeds with `chain.doFilter` only when it returns `true`, and always clears `SecurityContextHolder` in a `finally` block.
 
 ### AbstractAuthorizationInterceptor
 
-The base class containing the authorization algorithm. It mirrors the logic in `ReactiveSecurityFilter` -- any changes here should be reflected in the reactive counterpart.
+Translates a `SecurityDecision` into a servlet response. It holds no authorization logic of its own -- status codes and error mapping come from `SecurityPipeline`, so WebMvc and WebFlux respond identically (enforced by `WebAdapterParityTest`):
 
-The `authorize()` method:
+| Situation | `SecurityStatus` | HTTP | Response body |
+|---|---|---|---|
+| Invalid request path (`InvalidRequestPathException`) | `BAD_REQUEST` | 400 | none |
+| Authorized | `ALLOWED` | -- | request proceeds |
+| Denied, anonymous principal | `UNAUTHORIZED` | 401 | result (token failure reason, e.g. `Token Expired`, takes precedence) |
+| Denied, authenticated principal | `FORBIDDEN` | 403 | result |
+| `TooManyRequestsException` | `TOO_MANY_REQUESTS` | 429 | `Too Many Requests` |
+| `RegexTimeoutException` (ReDoS guard) | `FORBIDDEN` | 403 | `Implicit Deny` (fail-closed deny, not a 5xx) |
+| Any other error, including security context parse failures | `ERROR` | 500 | `Implicit Deny` |
+| Authorization emitted no result | treated as `IMPLICIT_DENY` | 401 / 403 | `Implicit Deny` |
 
-1. Parses the servlet request into a CoSec `Request` via `ServletRequestParser`.
-2. Parses the `SecurityContext` via `SecurityContextParser`, catching `TokenVerificationException`.
-3. Stores the context in both `SecurityContextHolder` (thread-local) and as a request attribute.
-4. Sets the `X-Request-Id` response header.
-5. Calls `authorization.authorize()` and blocks on the result (`.block()`).
-6. Returns `false` if denied, `true` if allowed.
+When the request could be parsed, `authorize()` binds the security context to `SecurityContextHolder` and the request attributes, and sets the `CoSec-Request-Id` response header.
 
 ### ServletRequestParser
 
@@ -152,7 +139,7 @@ Both are set in `AbstractAuthorizationInterceptor.authorize()` so downstream cod
 ## References
 
 - [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt:45](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt#L45) -- Servlet filter entry point
-- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt:51](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt#L51) -- Base interceptor with authorization logic
+- [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt:51](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt#L51) -- Base interceptor translating `SecurityDecision` into a servlet response
 - [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt:32](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt#L32) -- Request parsing
 - [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/CoSecServletRequest.kt:22](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/CoSecServletRequest.kt#L22) -- Request data class
 - [cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/InjectSecurityContextFilter.kt:43](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/InjectSecurityContextFilter.kt#L43) -- Downstream context injection

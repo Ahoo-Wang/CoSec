@@ -46,61 +46,66 @@ WebFlux 安全的入口点。它同时实现了 `WebFilter` 和 `Ordered`，排�
 
 ```kotlin
 class ReactiveAuthorizationFilter(
-    securityContextParser: SecurityContextParser,
-    requestParser: RequestParser<ServerWebExchange>,
-    authorization: Authorization
-) : ReactiveSecurityFilter(securityContextParser, requestParser, authorization),
+    pipeline: SecurityPipeline<ServerWebExchange>
+) : ReactiveSecurityFilter(pipeline),
     WebFilter,
-    Ordered
+    Ordered {
+    constructor(
+        securityContextParser: SecurityContextParser,
+        requestParser: RequestParser<ServerWebExchange>,
+        authorization: Authorization,
+        securityContextParseScheduler: Scheduler = Schedulers.immediate()
+    )
+}
 ```
 
 - **排序值**: `REACTIVE_AUTHORIZATION_FILTER_ORDER = 1000` -- 在 CORS 和其他基础设施过滤器之后运行。
-- 将实际工作委托给 [ReactiveSecurityFilter.filterInternal](#reactivesecurityfilter)。
+- 将实际工作委托给 [ReactiveSecurityFilter](#reactivesecurityfilter)，由其运行共享的 `SecurityPipeline`。
 - 成功后，调用 `chain.filter(exchange)` 使下游处理器接收到已设置主体信息的增强 exchange。
 
 ### ReactiveSecurityFilter
 
-包含所有授权逻辑的共享基类。Spring Cloud Gateway 集成也扩展了此类。
+WebFlux 过滤器与 Spring Cloud Gateway 过滤器共享的基类。它自身不包含授权逻辑：每个 exchange 都交给与传输无关的 [`SecurityPipeline`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityPipeline.kt)（与 Servlet 集成共用）处理，再把得到的 `SecurityDecision` 转换为响应。
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Client
-    participant Filter as ReactiveSecurityFilter
-    participant RParser as ReactiveRequestParser
+    participant Adapter as ReactiveSecurityFilter
+    participant Pipeline as SecurityPipeline
     participant SCParser as SecurityContextParser
     participant Auth as Authorization
     participant Chain as WebFilterChain
 
-    Client->>Filter: filterInternal(exchange, chain)
-    Filter->>RParser: parse(exchange)
-    RParser-->>Filter: ReactiveRequest
-    Filter->>SCParser: parse(request)
-    Note over Filter,SCParser: TokenVerificationException caught<br>falls back to anonymous context
-    SCParser-->>Filter: SecurityContext
-    Filter->>Auth: authorize(request, securityContext)
-    Auth-->>Filter: AuthorizeResult
-    alt Authorized
-        Filter->>Chain: chain.filter(mutatedExchange)
-        Note over Filter: Write SecurityContext to Reactor Context
-    else Not Authenticated
-        Filter-->>Client: HTTP 401 UNAUTHORIZED
-    else Forbidden
-        Filter-->>Client: HTTP 403 FORBIDDEN
-    else Rate Limited
-        Filter-->>Client: HTTP 429 TOO_MANY_REQUESTS
+    Client->>Adapter: filterInternal(exchange, chain)
+    Adapter->>Pipeline: evaluate(exchange)
+    Pipeline->>Pipeline: RequestParser.parse
+    Pipeline->>SCParser: parse(request)
+    Note over Pipeline,SCParser: TokenVerificationException<br>falls back to anonymous context
+    Pipeline->>Auth: decide(request, securityContext)
+    Auth-->>Pipeline: AuthorizationDecision
+    Pipeline-->>Adapter: SecurityDecision(status, result, ...)
+    alt ALLOWED
+        Adapter->>Chain: chain(mutatedExchange) + SecurityContext in Reactor Context
+    else rejected
+        Adapter-->>Client: HTTP status.code + AuthorizeResult JSON
     end
-
-
-
 ```
 
-`filterInternal` 方法处理以下内容：
+`SecurityPipeline` 把所有结果（包括错误）都映射为 `SecurityDecision`，因此 WebFlux 与 WebMvc 的响应完全一致（由 `WebAdapterParityTest` 保证）：
 
-1. **请求解析** -- 将 `ServerWebExchange` 转换为 CoSec `Request`；若抛出 `InvalidRequestPathException`（格式错误/非法路径），则直接以 **400 Bad Request** 短路返回。
-2. **令牌验证** -- 捕获 `TokenVerificationException` 并回退到匿名的 `SimpleSecurityContext`。
-3. **授权决策** -- 调用 `Authorization.authorize()` 并将结果映射为 HTTP 状态码。
-4. **错误处理** -- 将 `TooManyRequestsException` 映射为 429；将 `RegexTimeoutException`（正则条件超出时间预算，即 ReDoS 防护）以失败关闭（fail-closed）方式映射为 403 拒绝；将意外错误映射为 500。
+| 场景 | `SecurityStatus` | HTTP | 响应体 |
+|---|---|---|---|
+| 请求路径非法（`InvalidRequestPathException`） | `BAD_REQUEST` | 400 | 无 |
+| 授权通过 | `ALLOWED` | -- | 请求继续 |
+| 拒绝，匿名主体 | `UNAUTHORIZED` | 401 | 授权结果（Token 校验失败原因如 `Token Expired` 优先） |
+| 拒绝，已认证主体 | `FORBIDDEN` | 403 | 授权结果 |
+| `TooManyRequestsException` | `TOO_MANY_REQUESTS` | 429 | `Too Many Requests` |
+| `RegexTimeoutException`（ReDoS 防护） | `FORBIDDEN` | 403 | `Implicit Deny`（失败即拒绝，而非 5xx） |
+| 其他任何错误，包括安全上下文解析失败 | `ERROR` | 500 | `Implicit Deny` |
+| 授权未产生结果 | 按 `IMPLICIT_DENY` 处理 | 401 / 403 | `Implicit Deny` |
+
+安全上下文解析运行在 `securityContextParseScheduler` 上（默认 `Schedulers.immediate()`）。当 `cosec.jwt.token-revocation.enabled=true` 时，starter 会切换为 `Schedulers.boundedElastic()`，因为吊销检查可能阻塞在 Redis 上。
 
 ### ReactiveRequestParser
 
@@ -165,7 +170,7 @@ graph TD
 ## 参考资料
 
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt:36](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveAuthorizationFilter.kt#L36) -- 过滤器入口
-- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt:59](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59) -- 包含 `filterInternal` 的基类
+- [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt:59](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt#L59) -- 将 `SecurityDecision` 转换为 WebFlux 响应的基类
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt:28](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequestParser.kt#L28) -- 请求解析
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequest.kt:22](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveRequest.kt#L22) -- 请求数据类
 - [cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityContexts.kt:21](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityContexts.kt#L21) -- 上下文传播

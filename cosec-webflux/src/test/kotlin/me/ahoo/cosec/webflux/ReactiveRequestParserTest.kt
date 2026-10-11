@@ -22,6 +22,7 @@ import org.junit.jupiter.api.assertThrows
 import org.springframework.http.HttpMethod
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.server.MockServerWebExchange
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.URI
 
@@ -37,6 +38,15 @@ internal class ReactiveRequestParserTest {
         val request = requestParser.parse(serverWebExchange)
         assertThat(request.path, `is`("/path"))
         assertThat(request.method, `is`("GET"))
+    }
+
+    @Test
+    fun parseRemoteIpWithoutReverseLookup() {
+        val requestParser = ReactiveRequestParser(ReactiveRemoteIpResolver)
+        val remoteAddress = InetSocketAddress(InetAddress.getByAddress(byteArrayOf(10, 0, 0, 1)), 8080)
+        val serverRequest = MockServerHttpRequest.get("/path").remoteAddress(remoteAddress)
+        val request = requestParser.parse(MockServerWebExchange.from(serverRequest))
+        assertThat(request.remoteIp, `is`("10.0.0.1"))
     }
 
     @Test

@@ -39,6 +39,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.env.Environment
 import org.springframework.web.server.ServerWebExchange
 
 /**
@@ -59,8 +60,11 @@ class CoSecAuthorizationAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    fun securityContextParser(tokenVerifier: TokenVerifier): SecurityContextParser {
-        return DefaultSecurityContextParser(tokenVerifier)
+    fun securityContextParser(
+        tokenVerifier: TokenVerifier,
+        authorizationProperties: AuthorizationProperties
+    ): SecurityContextParser {
+        return DefaultSecurityContextParser(tokenVerifier, authorizationProperties.allowQueryToken)
     }
 
     @Bean
@@ -149,9 +153,15 @@ class CoSecAuthorizationAutoConfiguration {
         fun reactiveAuthorizationFilter(
             securityContextParser: SecurityContextParser,
             @Qualifier(REACTIVE_REQUEST_PARSER_BEAN_NAME) requestParser: RequestParser<ServerWebExchange>,
-            authorization: Authorization
+            authorization: Authorization,
+            environment: Environment
         ): ReactiveAuthorizationFilter {
-            return ReactiveAuthorizationFilter(securityContextParser, requestParser, authorization)
+            return ReactiveAuthorizationFilter(
+                securityContextParser,
+                requestParser,
+                authorization,
+                environment.securityContextParseScheduler()
+            )
         }
     }
 

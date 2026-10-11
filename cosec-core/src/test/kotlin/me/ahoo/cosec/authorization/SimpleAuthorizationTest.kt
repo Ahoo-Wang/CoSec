@@ -23,15 +23,19 @@ import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.blacklist.BlacklistChecker
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.AppRolePermissionData
 import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.permission.PermissionGroupData
 import me.ahoo.cosec.permission.RolePermissionData
+import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcher
+import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
+import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
@@ -169,6 +173,7 @@ internal class SimpleAuthorizationTest {
             every { principal.authenticated } returns false
             every { principal.id } returns ""
             every { principal.policies } returns setOf("principalPolicy")
+            every { principal.roles } returns emptySet()
             every { setAttributeValue(any(), any()) } returns this
         }
         val policyRepository = mockk<PolicyRepository> {
@@ -423,5 +428,145 @@ internal class SimpleAuthorizationTest {
             .verifyComplete()
 
         matchCount.assert().isEqualTo(1)
+    }
+
+    private fun allPolicy(policyId: String, effect: Effect): Policy = mockk {
+        every { id } returns policyId
+        every { condition } returns AllConditionMatcher.INSTANCE
+        every { statements } returns listOf(StatementData(effect = effect, action = AllActionMatcher.INSTANCE))
+    }
+
+    private fun allRolePermission(effect: Effect): AppRolePermissionData = AppRolePermissionData(
+        appPermission = AppPermissionData(
+            id = "appId",
+            groups = listOf(
+                PermissionGroupData(
+                    "groupName",
+                    permissions = listOf(
+                        PermissionData(
+                            id = "permissionId",
+                            name = "",
+                            effect = effect,
+                            action = AllActionMatcher.INSTANCE
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        rolePermissions = listOf(RolePermissionData(id = "roleId", permissions = setOf("permissionId"))),
+    )
+
+    private fun authorizeLayers(
+        globalPolicy: Policy?,
+        principalPolicy: Policy?,
+        rolePermission: AppRolePermissionData?
+    ): Mono<AuthorizeResult> {
+        val securityContext = mockk<SecurityContext> {
+            every { principal.id } returns "userId"
+            every { principal.policies } returns setOf("principalPolicy")
+            every { principal.roles } returns setOf("roleId")
+            every { setAttributeValue(any(), any()) } returns this
+        }
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.justOrEmpty(globalPolicy).map { listOf(it) }
+            every { getPolicies(any()) } returns Mono.justOrEmpty(principalPolicy).map { listOf(it) }
+        }
+        val permissionRepository = mockk<AppRolePermissionRepository> {
+            every { getAppRolePermission(any(), any(), any()) } returns Mono.justOrEmpty(rolePermission)
+        }
+        val request = mockk<Request> {
+            every { appId } returns "appId"
+            every { spaceId } returns "spaceId"
+        }
+        return SimpleAuthorization(policyRepository, permissionRepository).authorize(request, securityContext)
+    }
+
+    @Test
+    fun authorizeWhenGlobalAllowAndPrincipalDeny() {
+        authorizeLayers(allPolicy("global", Effect.ALLOW), allPolicy("principal", Effect.DENY), null)
+            .test()
+            .expectNext(AuthorizeResult.EXPLICIT_DENY)
+            .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenGlobalAllowAndRoleDeny() {
+        authorizeLayers(allPolicy("global", Effect.ALLOW), null, allRolePermission(Effect.DENY))
+            .test()
+            .expectNext(AuthorizeResult.EXPLICIT_DENY)
+            .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenPrincipalAllowAndRoleDeny() {
+        authorizeLayers(null, allPolicy("principal", Effect.ALLOW), allRolePermission(Effect.DENY))
+            .test()
+            .expectNext(AuthorizeResult.EXPLICIT_DENY)
+            .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenGlobalAllowAndOtherLayersAllow() {
+        authorizeLayers(
+            allPolicy("global", Effect.ALLOW),
+            allPolicy("principal", Effect.ALLOW),
+            allRolePermission(Effect.ALLOW)
+        ).test()
+            .expectNext(AuthorizeResult.ALLOW)
+            .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenGlobalDenyShortCircuitsOtherLayers() {
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.just(listOf(allPolicy("global", Effect.DENY)))
+        }
+        val permissionRepository = mockk<AppRolePermissionRepository>()
+        val securityContext = mockk<SecurityContext> {
+            every { principal.id } returns "userId"
+            every { principal.policies } returns setOf("principalPolicy")
+            every { principal.roles } returns setOf("roleId")
+            every { setAttributeValue(any(), any()) } returns this
+        }
+        SimpleAuthorization(policyRepository, permissionRepository).authorize(mockk(), securityContext)
+            .test()
+            .expectNext(AuthorizeResult.EXPLICIT_DENY)
+            .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenWildcardRoleMatchesNoPermission() {
+        val appRolePermission = AppRolePermissionData(
+            appPermission = AppPermissionData(
+                id = "appId",
+                groups = listOf(
+                    PermissionGroupData(
+                        "groupName",
+                        permissions = listOf(
+                            PermissionData(
+                                id = "unmatched",
+                                name = "",
+                                effect = Effect.ALLOW,
+                                action = PathActionMatcherFactory.INSTANCE.create("/other/**".asConfiguration()),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            rolePermissions = listOf(RolePermissionData(id = "admin", permissions = setOf("*"))),
+        )
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.empty()
+            every { getPolicies(any()) } returns Mono.empty()
+        }
+        val permissionRepository = mockk<AppRolePermissionRepository> {
+            every { getAppRolePermission(any(), any(), any()) } returns appRolePermission.toMono()
+        }
+        val securityContext = SimpleSecurityContext(SimplePrincipal("user", roles = setOf("admin")))
+        SimpleAuthorization(policyRepository, permissionRepository)
+            .authorize(EvaluateRequest(path = "/orders/1"), securityContext)
+            .test()
+            .expectNext(AuthorizeResult.IMPLICIT_DENY)
+            .verifyComplete()
     }
 }

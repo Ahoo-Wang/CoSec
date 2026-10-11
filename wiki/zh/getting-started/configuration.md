@@ -95,6 +95,7 @@ flowchart TD
 | `cosec.authorization.local-policy.init-repository` | `Boolean` | `false` | 启动时使用本地文件初始化策略仓库 |
 | `cosec.authorization.local-policy.force-refresh` | `Boolean` | `false` | 启动时强制刷新本地策略 |
 | `cosec.authorization.remote-ip.max-trusted-index` | `Int` | `1` | X-Forwarded-For 信任深度：`0` 完全忽略该头（直接暴露部署）；`N` 信任 N 个代理跳数，取最近的受信任代理追加的最右侧条目 |
+| `cosec.authorization.allow-query-token` | `Boolean` | `false` | 是否允许从 `authorization` 查询参数读取访问令牌。默认关闭：URL 中的令牌会泄露到访问日志、浏览器历史和 `Referer` 头 |
 
 定义在 `AuthorizationProperties`（[cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/AuthorizationProperties.kt:27](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/AuthorizationProperties.kt#L27)）中。
 
@@ -106,21 +107,21 @@ flowchart TD
 |------|------|--------|------|
 | `cosec.authorization.cache.enabled` | `Boolean` | `true` | 启用缓存 |
 | `cosec.authorization.cache.key-prefix` | `String` | `cosec` | Redis 键前缀 |
-| `cosec.authorization.cache.policy.initialCapacity` | `Int` | *未设置* | Guava 缓存初始容量（策略缓存） |
-| `cosec.authorization.cache.policy.concurrencyLevel` | `Int` | *未设置* | Guava 缓存并发级别（策略缓存） |
-| `cosec.authorization.cache.policy.maximumSize` | `Long` | *未设置* | Guava 缓存最大大小（策略缓存） |
+| `cosec.authorization.cache.policy.initialCapacity` | `Int` | *未设置* | 本地（Caffeine）缓存初始容量（策略缓存） |
+| `cosec.authorization.cache.policy.concurrencyLevel` | `Int` | *未设置* | **已弃用，自 CoCache 5 起忽略**（Caffeine 无并发级别）（策略缓存） |
+| `cosec.authorization.cache.policy.maximumSize` | `Long` | `10000` | 本地（Caffeine）缓存最大大小（策略缓存） |
 | `cosec.authorization.cache.policy.expireUnit` | `TimeUnit` | `SECONDS` | expireAfterWrite/expireAfterAccess 的时间单位（策略缓存） |
 | `cosec.authorization.cache.policy.expireAfterWrite` | `Long` | *未设置* | 写入后过期（策略缓存） |
 | `cosec.authorization.cache.policy.expireAfterAccess` | `Long` | *未设置* | 访问后过期（策略缓存） |
-| `cosec.authorization.cache.role.initialCapacity` | `Int` | *未设置* | Guava 缓存初始容量（角色缓存） |
-| `cosec.authorization.cache.role.concurrencyLevel` | `Int` | *未设置* | Guava 缓存并发级别（角色缓存） |
-| `cosec.authorization.cache.role.maximumSize` | `Long` | *未设置* | Guava 缓存最大大小（角色缓存） |
+| `cosec.authorization.cache.role.initialCapacity` | `Int` | *未设置* | 本地（Caffeine）缓存初始容量（角色缓存） |
+| `cosec.authorization.cache.role.concurrencyLevel` | `Int` | *未设置* | **已弃用，自 CoCache 5 起忽略**（Caffeine 无并发级别）（角色缓存） |
+| `cosec.authorization.cache.role.maximumSize` | `Long` | `10000` | 本地（Caffeine）缓存最大大小（角色缓存） |
 | `cosec.authorization.cache.role.expireUnit` | `TimeUnit` | `SECONDS` | expireAfterWrite/expireAfterAccess 的时间单位（角色缓存） |
 | `cosec.authorization.cache.role.expireAfterWrite` | `Long` | *未设置* | 写入后过期（角色缓存） |
 | `cosec.authorization.cache.role.expireAfterAccess` | `Long` | *未设置* | 访问后过期（角色缓存） |
-| `cosec.authorization.cache.token.initialCapacity` | `Int` | *未设置* | Guava 缓存初始容量（被撤销令牌缓存） |
-| `cosec.authorization.cache.token.concurrencyLevel` | `Int` | *未设置* | Guava 缓存并发级别（被撤销令牌缓存） |
-| `cosec.authorization.cache.token.maximumSize` | `Long` | `100000` | Guava 缓存最大大小（被撤销令牌缓存） |
+| `cosec.authorization.cache.token.initialCapacity` | `Int` | *未设置* | 本地（Caffeine）缓存初始容量（被撤销令牌缓存） |
+| `cosec.authorization.cache.token.concurrencyLevel` | `Int` | *未设置* | **已弃用，自 CoCache 5 起忽略**（Caffeine 无并发级别）（被撤销令牌缓存） |
+| `cosec.authorization.cache.token.maximumSize` | `Long` | `100000` | 本地（Caffeine）缓存最大大小（被撤销令牌缓存） |
 | `cosec.authorization.cache.token.expireUnit` | `TimeUnit` | `SECONDS` | expireAfterWrite/expireAfterAccess 的时间单位（被撤销令牌缓存） |
 | `cosec.authorization.cache.token.expireAfterWrite` | `Long` | `30` | 写入后过期（被撤销令牌缓存）；限定跨实例撤销传播的延迟上界 |
 | `cosec.authorization.cache.token.expireAfterAccess` | `Long` | *未设置* | 访问后过期（被撤销令牌缓存） |

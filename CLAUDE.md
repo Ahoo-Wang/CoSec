@@ -77,6 +77,8 @@ The security model follows an AWS IAM-like policy design:
 5. Role-based app permissions evaluation
 6. Default: IMPLICIT_DENY
 
+Steps 3-5 are combined deny-first across layers: an EXPLICIT_DENY in any layer wins over an ALLOW from any other layer.
+
 ### SPI Extension Points
 
 Custom policy matchers use Java SPI (META-INF/services):
@@ -87,6 +89,8 @@ Custom policy matchers use Java SPI (META-INF/services):
 To add a custom matcher: implement the factory interface, register in `META-INF/services/me.ahoo.cosec.policy.action.ActionMatcherFactory` (or condition variant).
 
 ### Spring Integration
+
+All web adapters share the transport-agnostic `SecurityPipeline` (`cosec-core`, package `me.ahoo.cosec.pipeline`): parse request → resolve `SecurityContext` → `Authorization.decide()` → `SecurityDecision` (status + result). All status/error mapping lives there; adapters only translate the decision into a response. `WebAdapterParityTest` (starter) asserts WebFlux and WebMvc respond identically. Authorization decorators should implement `DecisionAuthorization` so the `AuthorizationDecision` (incl. `VerifyContext`) flows through.
 
 - **WebFlux** (`cosec-webflux`): `ReactiveAuthorizationFilter` implements `WebFilter`, wraps `ReactiveSecurityFilter`
 - **Gateway** (`cosec-gateway`): `AuthorizationGatewayFilter` implements Spring Cloud Gateway `GlobalFilter`

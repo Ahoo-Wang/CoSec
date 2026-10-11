@@ -48,4 +48,27 @@ internal class ReplaceablePathActionMatcherTest {
         }
         assertThat(actionMatcher.match(request2, securityContext), equalTo(false))
     }
+
+    @Test
+    fun matchWithCustomSeparator() {
+        val securityContext = SimpleSecurityContext(
+            principal = mockk {
+                every { id } returns "1"
+            }
+        )
+        val configuration = mapOf(
+            "pattern" to "order.#{principal.id}.*",
+            "options" to mapOf("separator" to "."),
+        ).asConfiguration()
+        val actionMatcher = PathActionMatcherFactory().create(configuration)
+        assertThat(actionMatcher, instanceOf(ReplaceablePathActionMatcher::class.java))
+        val matchedRequest = mockk<Request> {
+            every { path } returns "order.1.1"
+        }
+        assertThat(actionMatcher.match(matchedRequest, securityContext), equalTo(true))
+        val unmatchedRequest = mockk<Request> {
+            every { path } returns "order.2.1"
+        }
+        assertThat(actionMatcher.match(unmatchedRequest, securityContext), equalTo(false))
+    }
 }

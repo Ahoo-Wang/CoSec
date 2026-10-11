@@ -47,7 +47,6 @@ exceptions:
       - "**/SecurityContextParser.kt"
       - "**/LocalPolicyLoader.kt"
       - "**/Ip2RegionRequestAttributesAppender.kt"
-      - "**/AuthorizationFilter.kt"
 
   ThrowingExceptionsWithoutMessageOrCause:
     active: false
