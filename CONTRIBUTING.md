@@ -77,7 +77,8 @@ description. They are listed under 💥 Breaking Changes and require a major ver
 
 - Fill in the pull request template: linked issue, what changed, and how it was tested.
 - All CI checks must pass: per-module tests and detekt, Codecov, CodeQL, and the semantic title check.
-- At least one approving review from a code owner ([CODEOWNERS](.github/CODEOWNERS)) is required.
+- Approving reviews are not required: only maintainers can merge, and [CODEOWNERS](.github/CODEOWNERS) are
+  requested as reviewers automatically. Review conversations must be resolved before merging.
 - Reviewers check correctness (including fail-closed behavior for security decisions), tests, public API
   compatibility, and documentation.
 - Labels are applied automatically from changed paths and the PR title.
