@@ -23,7 +23,6 @@ import me.ahoo.cosec.api.permission.RolePermission
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.VerifyResult
-import me.ahoo.cosec.api.principal.CoSecPrincipal.Companion.isRoot
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import reactor.core.publisher.Mono
@@ -46,11 +45,13 @@ import reactor.kotlin.core.publisher.toMono
  * @param policyRepository Repository for accessing policies
  * @param appRolePermissionRepository Repository for accessing role permissions
  * @param blacklistChecker Optional blacklist checker for blocking requests
+ * @param rootPrincipalMatcher Decides which principals are root (bypass all checks)
  */
 class SimpleAuthorization(
     private val policyRepository: PolicyRepository,
     private val appRolePermissionRepository: AppRolePermissionRepository,
-    private val blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp
+    private val blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp,
+    private val rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.DEFAULT
 ) : DecisionAuthorization {
     companion object {
         private val log = KotlinLogging.logger {}
@@ -154,7 +155,7 @@ class SimpleAuthorization(
     }
 
     private fun verifyRoot(context: SecurityContext): VerifyResult =
-        if (context.principal.isRoot) {
+        if (rootPrincipalMatcher.isRoot(context.principal)) {
             log.debug {
                 "Verify [$context] matched Root - [Allow]."
             }

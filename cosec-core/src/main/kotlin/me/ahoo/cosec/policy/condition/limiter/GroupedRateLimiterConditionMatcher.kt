@@ -38,7 +38,7 @@ class GroupedRateLimiterConditionMatcher(
         requireNotNull(configuration.get(GROUPED_RATE_LIMITER_CONDITION_MATCHER_EXPIRE_AFTER_ACCESS_SECOND_KEY)) {
             "expireAfterAccessSecond is required!"
         }.asLong()
-    private var rateLimiters: LoadingCache<String, RateLimiter> = CacheBuilder.newBuilder()
+    private val rateLimiters: LoadingCache<String, RateLimiter> = CacheBuilder.newBuilder()
         .expireAfterAccess(expireAfterAccessSecond, TimeUnit.SECONDS)
         .build(RateLimiterLoader())
 
