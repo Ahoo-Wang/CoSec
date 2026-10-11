@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/Ahoo-Wang/CoSec/blob/main/SECURITY.md
+    about: Please report vulnerabilities privately, as described in the security policy.
+  - name: 📖 Documentation
+    url: https://cosec.ahoo.me/
+    about: Guides, architecture, and configuration reference.

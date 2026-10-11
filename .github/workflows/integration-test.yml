@@ -13,19 +13,28 @@
 
 name: Integration Test
 on: [ pull_request ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   cosec-core-test:
     name: CoSec Core Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
 
@@ -38,13 +47,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
 
@@ -57,13 +67,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
 
@@ -76,13 +87,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
 
@@ -105,13 +117,14 @@ jobs:
           - 6379:6379
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
 
@@ -134,13 +147,14 @@ jobs:
           - 6379:6379
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
 
@@ -153,13 +167,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
 
@@ -172,13 +187,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
 
@@ -201,13 +217,14 @@ jobs:
           - 6379:6379
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
         uses: actions/setup-java@v6
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
 

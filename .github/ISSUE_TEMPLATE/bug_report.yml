@@ -1,0 +1,68 @@
+name: "🐛 Bug report"
+description: Something isn't working as expected.
+labels: [ "bug" ]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. **Do not report security vulnerabilities here**; see [SECURITY.md](https://github.com/Ahoo-Wang/CoSec/blob/main/SECURITY.md).
+        Please search [existing issues](https://github.com/Ahoo-Wang/CoSec/issues?q=is%3Aissue) first.
+  - type: input
+    id: version
+    attributes:
+      label: CoSec version
+      placeholder: "6.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: modules
+    attributes:
+      label: Affected module(s)
+      multiple: true
+      options:
+        - cosec-api
+        - cosec-core
+        - cosec-jwt
+        - cosec-cocache
+        - cosec-social
+        - cosec-webflux
+        - cosec-webmvc
+        - cosec-gateway
+        - cosec-spring-boot-starter
+        - cosec-opentelemetry
+        - cosec-openapi
+        - cosec-ip2region
+        - cosec-kafka
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include error messages, stack traces, and the authorization result (status code and response body) if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: A minimal policy or permission configuration and a request that triggers the problem, or a link to a reproducer.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: JDK, Spring Boot / Spring Cloud Gateway version, WebFlux or WebMvc, Redis version.
+  - type: textarea
+    id: analysis
+    attributes:
+      label: Analysis (optional)
+      description: Your understanding of the cause, if you have one.

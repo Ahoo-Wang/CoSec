@@ -1,0 +1,70 @@
+# Path-based pull request labels (actions/labeler), namespaced `module:` / `area:`.
+# Release-note categories (.github/release.yml) are driven only by the type labels derived from the
+# Conventional Commits PR title in .github/workflows/pull-request.yml, so path labels must never reuse
+# category label names: GitHub files each PR under the first matching category.
+
+'module: api':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-api/**'
+'module: core':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-core/**'
+'module: jwt':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-jwt/**'
+'module: cocache':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-cocache/**'
+'module: social':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-social/**'
+'module: webmvc':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-webmvc/**'
+'module: webflux':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-webflux/**'
+'module: gateway':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-gateway/**'
+'module: gateway-server':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-gateway-server/**'
+'module: opentelemetry':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-opentelemetry/**'
+'module: ip2region':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-ip2region/**'
+'module: openapi':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-openapi/**'
+'module: kafka':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-kafka/**'
+'module: spring-boot-starter':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-spring-boot-starter/**'
+'module: bom':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-bom/**'
+'module: dependencies':
+  - changed-files:
+      - any-glob-to-any-file: 'cosec-dependencies/**'
+
+'area: docs':
+  - changed-files:
+      - any-glob-to-any-file: ['wiki/**', 'document/**', '**/*.md', 'llms.txt']
+
+'area: ci':
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
+
+'area: build':
+  - changed-files:
+      - any-glob-to-any-file: ['**/*.gradle.kts', 'gradle/**', 'gradle.properties', 'config/**', 'wiki/package.json', 'wiki/pnpm-lock.yaml']
+
+
+'area: test':
+  - changed-files:
+      - any-glob-to-any-file: ['**/src/test/**', '**/src/jmh/**']

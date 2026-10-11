@@ -5,11 +5,13 @@ coverage:
   status:
     patch:
       default:
-        target: 60%
+        # new and changed lines must be well tested
+        target: 80%
         threshold: 1%
     project:
       default:
-        target: 80%
+        # coverage must not drop by more than 1% from the base commit
+        target: auto
         threshold: 1%
 ignore:
   - "document/.*"

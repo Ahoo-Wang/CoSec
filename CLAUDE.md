@@ -108,6 +108,8 @@ Tenants are first-class in the security model. `TenantPrincipal` extends `CoSecP
 - Reactive throughout: core interfaces return `Mono<T>` (Project Reactor)
 - Tests use JUnit 5, MockK, Hamcrest, and FluentAssert (`me.ahoo.test:fluent-assert-core`)
 - Detekt for static analysis with auto-correct enabled; config at `config/detekt/detekt.yml`
+- Every source file must start with the license header in `config/detekt/license.template` (detekt `AbsentOrWrongFileLicense` fails the build otherwise)
+- PR titles follow Conventional Commits (CI-enforced; drives labels, release notes and semver); see `CONTRIBUTING.md`
 - Dependency versions centralized in `gradle/libs.versions.toml` (version catalog)
 - Every module has JMH benchmark support via `me.champeau.jmh` plugin
 - Logging via `io.github.oshai:kotlin-logging-jvm` + Logback
