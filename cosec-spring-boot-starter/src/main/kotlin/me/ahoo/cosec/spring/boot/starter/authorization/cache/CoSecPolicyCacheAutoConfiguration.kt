@@ -17,10 +17,12 @@ import me.ahoo.cache.api.converter.KeyConverter
 import me.ahoo.cache.api.distributed.DistributedCache
 import me.ahoo.cache.converter.ToStringKeyConverter
 import me.ahoo.cache.spring.EnableCoCache
+import me.ahoo.cache.spring.boot.starter.CoCacheProperties
 import me.ahoo.cache.spring.client.SpringClientSideCacheFactory.Companion.CLIENT_SIDE_CACHE_SUFFIX
 import me.ahoo.cache.spring.converter.SpringKeyConverterFactory.Companion.KEY_CONVERTER_SUFFIX
 import me.ahoo.cache.spring.redis.RedisDistributedCache
 import me.ahoo.cache.spring.redis.RedisDistributedCacheFactory.Companion.DISTRIBUTED_CACHE_SUFFIX
+import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
 import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.PolicyRepository
@@ -35,6 +37,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.data.redis.core.StringRedisTemplate
+import tools.jackson.databind.ObjectMapper
 
 /**
  * CoSec Policy Cache AutoConfiguration.
@@ -60,6 +63,7 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
         const val POLICY_CACHE_BEAN_NAME = "PolicyCache"
         const val POLICY_CACHE_KEY_CONVERTER_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
         const val POLICY_CACHE_CLIENT_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}$CLIENT_SIDE_CACHE_SUFFIX"
+        const val POLICY_CACHE_DISTRIBUTED_CACHE_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}$DISTRIBUTED_CACHE_SUFFIX"
     }
 
     @Bean
@@ -82,9 +86,32 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
 
     @Bean(GLOBAL_POLICY_INDEX_CACHE_DISTRIBUTED_CACHE_BEAN_NAME)
     @ConditionalOnMissingBean(name = [GLOBAL_POLICY_INDEX_CACHE_DISTRIBUTED_CACHE_BEAN_NAME])
-    fun globalPolicyIndexCacheDistributedCache(redisTemplate: StringRedisTemplate): DistributedCache<Set<String>> {
-        val codecExecutor = SetToSetCodecExecutor(redisTemplate)
-        return RedisDistributedCache(redisTemplate, codecExecutor)
+    fun globalPolicyIndexCacheDistributedCache(
+        redisTemplate: StringRedisTemplate,
+        cocacheProperties: CoCacheProperties
+    ): DistributedCache<Set<String>> {
+        val codecExecutor = SetToSetCodecExecutor(redisTemplate, cocacheProperties.redis.missingGuardSentinel)
+        return RedisDistributedCache(redisTemplate, codecExecutor, STRICT_CACHE_FAILURE)
+    }
+
+    /**
+     * Same codec as CoCache's default distributed cache (application ObjectMapper, configured sentinel),
+     * declared explicitly to opt into [STRICT_CACHE_FAILURE].
+     */
+    @Bean(POLICY_CACHE_DISTRIBUTED_CACHE_BEAN_NAME)
+    @ConditionalOnMissingBean(name = [POLICY_CACHE_DISTRIBUTED_CACHE_BEAN_NAME])
+    fun policyCacheDistributedCache(
+        redisTemplate: StringRedisTemplate,
+        objectMapper: ObjectMapper,
+        cocacheProperties: CoCacheProperties
+    ): DistributedCache<Policy> {
+        val codecExecutor = ObjectToJsonCodecExecutor<Policy>(
+            Policy::class.java,
+            redisTemplate,
+            objectMapper,
+            cocacheProperties.redis.missingGuardSentinel,
+        )
+        return RedisDistributedCache(redisTemplate, codecExecutor, STRICT_CACHE_FAILURE)
     }
 
     @Bean(POLICY_CACHE_CLIENT_BEAN_NAME)
