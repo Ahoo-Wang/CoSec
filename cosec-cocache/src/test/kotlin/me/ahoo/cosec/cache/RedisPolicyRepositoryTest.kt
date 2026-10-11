@@ -19,9 +19,7 @@ import io.mockk.verify
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import me.ahoo.cosec.policy.PolicyData
-import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import reactor.core.publisher.Flux
 import reactor.kotlin.test.test
 
 internal class RedisPolicyRepositoryTest {
@@ -90,48 +88,41 @@ internal class RedisPolicyRepositoryTest {
     }
 
     @Test
-    fun setPolicy() {
-        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
-        every { globalPolicyIndexCache.get(CACHE_KEY) } returns setOf()
-        every { globalPolicyIndexCache.set(CACHE_KEY, any()) } returns Unit
+    fun setPolicyAddsGlobalPolicyToIndex() {
+        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>(relaxed = true)
         val policyCache = mockPolicyCache()
-        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
-        policyRepository.setPolicy(policyData)
+        RedisPolicyRepository(globalPolicyIndexCache, policyCache).setPolicy(policyData)
             .test()
             .verifyComplete()
 
         verify {
-            policyCache.set(any(), any())
+            policyCache.set(policyData.id, policyData)
+            globalPolicyIndexCache.addElements(CACHE_KEY, listOf(policyData.id))
+        }
+        verify(exactly = 0) {
             globalPolicyIndexCache.get(any())
-            globalPolicyIndexCache.set(CACHE_KEY, any())
+            globalPolicyIndexCache.set(any(), any())
         }
     }
 
     @Test
-    fun setPolicyConcurrentlyKeepsAllGlobalIndexEntries() {
-        var index: Set<String>? = null
-        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
-        every { globalPolicyIndexCache.get(CACHE_KEY) } answers {
-            val current = index
-            // widen the read-modify-write window
-            Thread.sleep(1)
-            current
-        }
-        every { globalPolicyIndexCache.set(CACHE_KEY, any()) } answers { index = secondArg() }
+    fun setPolicyRemovesNonGlobalPolicyFromIndex() {
+        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>(relaxed = true)
+        val systemPolicy = policyData.copyWithType(PolicyType.SYSTEM)
         val policyCache = mockk<PolicyCache>(relaxed = true)
-        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
-        val policyIds = (1..32).map { "policy-$it" }
-
-        Flux.fromIterable(policyIds)
-            .flatMap { policyRepository.setPolicy(policyData.copyWithId(it)) }
-            .then()
+        RedisPolicyRepository(globalPolicyIndexCache, policyCache).setPolicy(systemPolicy)
             .test()
             .verifyComplete()
 
-        index.assert().isEqualTo(policyIds.toSet())
+        verify {
+            globalPolicyIndexCache.removeElements(CACHE_KEY, listOf(systemPolicy.id))
+        }
+        verify(exactly = 0) {
+            globalPolicyIndexCache.addElements(any(), any())
+        }
     }
 
-    private fun PolicyData.copyWithId(id: String) = PolicyData(
+    private fun PolicyData.copyWithType(type: PolicyType) = PolicyData(
         id = id,
         category = category,
         name = name,
@@ -140,100 +131,6 @@ internal class RedisPolicyRepositoryTest {
         tenantId = tenantId,
         statements = statements,
     )
-
-    @Test
-    fun setPolicyIfGlobalContains() {
-        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
-        every { globalPolicyIndexCache.get(CACHE_KEY) } returns setOf(policyData.id)
-        every { globalPolicyIndexCache.set(CACHE_KEY, any()) } returns Unit
-        val policyCache = mockPolicyCache()
-        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
-        policyRepository.setPolicy(policyData)
-            .test()
-            .verifyComplete()
-
-        verify {
-            policyCache.set(any(), any())
-            globalPolicyIndexCache.get(any())
-        }
-    }
-
-    @Test
-    fun setPolicyIfSystem() {
-        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
-        every { globalPolicyIndexCache.get(CACHE_KEY) } returns null
-        val policyCache = mockPolicyCache()
-        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
-        val systemPolicy = PolicyData(
-            id = "policyId",
-            category = "policyName",
-            name = "policyDesc",
-            description = "policyType",
-            type = PolicyType.SYSTEM,
-            tenantId = "tenantId",
-            statements = listOf(),
-        )
-        policyRepository.setPolicy(systemPolicy)
-            .test()
-            .verifyComplete()
-
-        verify {
-            policyCache.set(any(), any())
-        }
-    }
-
-    @Test
-    fun setPolicyWhenDemotedFromGlobal() {
-        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
-        every { globalPolicyIndexCache.get(CACHE_KEY) } returns setOf(policyData.id)
-        every { globalPolicyIndexCache.set(CACHE_KEY, any()) } returns Unit
-        val policyCache = mockPolicyCache()
-        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
-        val systemPolicy = PolicyData(
-            id = "policyId",
-            category = "policyName",
-            name = "policyDesc",
-            description = "policyType",
-            type = PolicyType.SYSTEM,
-            tenantId = "tenantId",
-            statements = listOf(),
-        )
-        policyRepository.setPolicy(systemPolicy)
-            .test()
-            .verifyComplete()
-
-        verify {
-            policyCache.set(any(), any())
-            globalPolicyIndexCache.set(CACHE_KEY, emptySet())
-        }
-    }
-
-    @Test
-    fun setPolicyIfSystemWhenNotInGlobalIndex() {
-        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>()
-        every { globalPolicyIndexCache.get(CACHE_KEY) } returns null
-        val policyCache = mockPolicyCache()
-        val policyRepository = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
-        val systemPolicy = PolicyData(
-            id = "policyId",
-            category = "policyName",
-            name = "policyDesc",
-            description = "policyType",
-            type = PolicyType.SYSTEM,
-            tenantId = "tenantId",
-            statements = listOf(),
-        )
-        policyRepository.setPolicy(systemPolicy)
-            .test()
-            .verifyComplete()
-
-        verify {
-            policyCache.set(any(), any())
-        }
-        verify(exactly = 0) {
-            globalPolicyIndexCache.set(any(), any())
-        }
-    }
 
     @Test
     fun getPoliciesEvaluatedPerSubscription() {

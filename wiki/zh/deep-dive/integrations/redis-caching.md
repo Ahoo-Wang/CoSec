@@ -78,7 +78,7 @@ sequenceDiagram
 
 ```
 
-当调用 `setPolicy()` 时，策略首先通过 `DefaultPolicyEvaluator.evaluate(policy)` 进行验证以确保格式正确，然后再进行缓存。如果策略是全局策略，全局索引会在实例内加锁更新（多实例并发写入仍可能丢失更新，后续计划改为 Redis 原生 Set）。
+当调用 `setPolicy()` 时，策略首先通过 `DefaultPolicyEvaluator.evaluate(policy)` 进行验证以确保格式正确，然后再进行缓存。全局索引通过 CoCache 的原子操作 `SetElementsCache.addElements` / `removeElements` 更新（在 Redis 原生 Set 上一次 Lua 往返完成），任意实例的并发写入都不会丢失更新。
 
 ### RedisAppRolePermissionRepository
 

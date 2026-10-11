@@ -476,7 +476,7 @@ All dependency versions are centralized in [`gradle/libs.versions.toml`](https:/
 | auth0/java-jwt | 4.6.0 | JWT token creation and verification |
 | JustAuth | 1.16.7 | Multi-provider OAuth (WeChat, GitHub, etc.) |
 | OGNL | 3.4.11 | Expression-based condition matching |
-| CoCache | 5.0.1 | Two-level distributed caching (local + Redis) |
+| CoCache | 5.1.0 | Two-level distributed caching (local + Redis) |
 | CosId | 3.2.0 | Distributed ID generation |
 | Guava RateLimiter | 33.6.0-jre | Token-bucket rate limiting in conditions |
 

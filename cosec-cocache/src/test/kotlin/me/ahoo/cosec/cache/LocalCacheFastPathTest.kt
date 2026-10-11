@@ -15,6 +15,7 @@ package me.ahoo.cosec.cache
 
 import io.mockk.mockk
 import me.ahoo.cache.TtlPolicy
+import me.ahoo.cache.api.SetElementsCache
 import me.ahoo.cache.api.TtlAt
 import me.ahoo.cache.api.source.CacheSource
 import me.ahoo.cache.client.CaffeineClientSideCache
@@ -47,7 +48,9 @@ class LocalCacheFastPathTest {
 
     private class TestGlobalPolicyIndexCache(cache: CoherentCache<String, Set<String>>) :
         GlobalPolicyIndexCache,
-        CoherentCache<String, Set<String>> by cache
+        CoherentCache<String, Set<String>> by cache,
+        @Suppress("UNCHECKED_CAST")
+        SetElementsCache<String, String> by (cache as SetElementsCache<String, String>)
 
     private fun <V> coherentCache(name: String): CoherentCache<String, V> = coherentCacheOf(name)
 
@@ -72,6 +75,8 @@ class LocalCacheFastPathTest {
         val indexCache = TestGlobalPolicyIndexCache(coherentCache("GlobalPolicyIndexCache"))
         val repository = RedisPolicyRepository(indexCache, policyCache)
         repository.setPolicy(policy).block()
+        // the atomic index update evicts the local copy, so the first read after a write reloads it from L1
+        repository.getGlobalPolicy().block()
 
         val callerThread = Thread.currentThread().name
         var emittedOn: String? = null

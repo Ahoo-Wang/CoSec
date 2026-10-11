@@ -15,6 +15,7 @@ package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import io.mockk.mockk
 import me.ahoo.cache.TtlPolicy
+import me.ahoo.cache.api.SetElementsCache
 import me.ahoo.cache.api.TtlAt
 import me.ahoo.cache.api.distributed.DistributedCache
 import me.ahoo.cache.api.source.CacheSource
@@ -168,7 +169,9 @@ class StrictCacheFailureTest {
 
     private class TestIndexCache(cache: CoherentCache<String, Set<String>>) :
         GlobalPolicyIndexCache,
-        CoherentCache<String, Set<String>> by cache
+        CoherentCache<String, Set<String>> by cache,
+        @Suppress("UNCHECKED_CAST")
+        SetElementsCache<String, String> by (cache as SetElementsCache<String, String>)
 
     private class TestPolicyCache(cache: CoherentCache<String, Policy>) :
         PolicyCache,

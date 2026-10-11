@@ -78,7 +78,7 @@ sequenceDiagram
 
 ```
 
-When `setPolicy()` is called, the policy is first validated via `DefaultPolicyEvaluator.evaluate(policy)` to ensure it is well-formed before caching. If the policy is a global policy, the global index is updated under an in-process lock (concurrent writers on different instances can still lose updates; moving the index to a native Redis set is planned).
+When `setPolicy()` is called, the policy is first validated via `DefaultPolicyEvaluator.evaluate(policy)` to ensure it is well-formed before caching. The global index is updated with CoCache's atomic `SetElementsCache.addElements` / `removeElements` (a single Lua round trip on the native Redis set), so concurrent writers on any instance never lose entries.
 
 ### RedisAppRolePermissionRepository
 
