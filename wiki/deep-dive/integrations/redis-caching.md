@@ -50,6 +50,8 @@ Implements `PolicyRepository` backed by Redis caches. Provides three operations:
 2. **`getPolicies(policyIds)`** -- fetches specific policies by ID from `PolicyCache`.
 3. **`setPolicy(policy)`** -- stores a policy in `PolicyCache`. If the policy is `PolicyType.GLOBAL`, it also adds the policy ID to the `GlobalPolicyIndexCache`.
 
+**Failure handling.** The policy, global policy index, app permission and role permission caches use `strictFailure = true`: Redis is their store of record (no `CacheSource`), and CoCache's degraded mode would read a failure as an empty result, silently skipping global DENY policies. A Redis failure therefore surfaces as an error, and the security pipeline denies the request (500). The revoked-token cache keeps the degraded mode, so a Redis outage does not reject every authenticated request.
+
 **Threading.** CoCache reads are blocking, so a lookup that needs Redis runs on `Schedulers.boundedElastic()`. When everything a read needs is already in the in-process cache (including cached "missing" entries), `getGlobalPolicy`, `getPolicies` and `RedisAppRolePermissionRepository.getAppRolePermission` answer on the calling thread without a scheduler hop. This uses CoCache 5's public `CoherentCache.configuration.clientSideCache` and mirrors its local-hit semantics (same key conversion, expired entries count as misses).
 
 ```mermaid
