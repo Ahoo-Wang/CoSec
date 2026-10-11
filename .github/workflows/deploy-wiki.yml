@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - 'wiki/**'
+  # Build and check the docs on pull requests too, so broken links or diagrams are caught before merge.
+  pull_request:
+    paths:
+      - 'wiki/**'
   workflow_dispatch:
 
 permissions:
@@ -13,8 +17,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('wiki-pr-{0}', github.event.pull_request.number) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -38,10 +42,19 @@ jobs:
           node-version: 24.21.0
 
       - name: Setup Pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v6
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        working-directory: wiki
+
+      - name: Validate Mermaid diagrams
+        run: node .vitepress/validate-mermaid.mjs
+        working-directory: wiki
+
+      - name: Check links, anchors and en/zh parity
+        run: node .vitepress/check-docs.mjs
         working-directory: wiki
 
       - name: Build with VitePress
@@ -49,11 +62,13 @@ jobs:
         working-directory: wiki
 
       - name: Upload artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5
         with:
           path: wiki/.vitepress/dist
 
   deploy:
+    if: github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

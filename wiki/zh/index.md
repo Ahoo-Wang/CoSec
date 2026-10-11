@@ -2,73 +2,41 @@
 layout: home
 hero:
   name: CoSec
-  text: 多租户响应式安全框架
-  tagline: 基于 RBAC 和策略的 JVM 访问控制框架，灵感来自 AWS IAM
+  text: 面向 Spring 的多租户响应式安全框架
+  tagline: IAM 风格的策略与基于角色的权限，每个请求都按“拒绝优先”求值。
   actions:
     - theme: brand
-      text: 快速开始
-      link: /zh/getting-started/overview
+      text: 开始使用
+      link: /zh/guide/introduction
     - theme: alt
-      text: 深入了解
-      link: /zh/deep-dive/architecture/security-model
+      text: 快速开始
+      link: /zh/guide/quick-start
     - theme: alt
       text: GitHub
       link: https://github.com/Ahoo-Wang/CoSec
 features:
   - icon: 🛡️
-    title: 基于策略的授权
-    details: AWS IAM 启发的拒绝优先评估引擎。可组合的策略，支持 ActionMatcher 和 ConditionMatcher SPI 扩展。
-    link: /zh/deep-dive/authorization/authorization-flow
-  - icon: ⚡
-    title: 全响应式
-    details: 基于 Project Reactor 构建，Mono 链式认证。集成 WebFlux、WebMvc 和 Spring Cloud Gateway。
-    link: /zh/deep-dive/architecture/reactive-design
+    title: 策略即数据
+    details: 用 JSON 编写策略，支持路径动作、可组合的条件和限流。任何一层的拒绝都优先于允许，未匹配的请求一律拒绝。
+    link: /zh/guide/policies
   - icon: 🏢
-    title: 原生多租户
-    details: 一流的租户支持，TenantPrincipal、租户范围策略，以及基于空间的角色权限。
-    link: /zh/deep-dive/architecture/multi-tenancy
-  - icon: 🔑
-    title: JWT 与社交认证
-    details: JWT 令牌生命周期管理（含刷新令牌与基于撤销的登出：TokenRevoker、cosec.jwt.token-revocation.enabled），通过 JustAuth 支持 20+ 社交登录提供商。
-    link: /zh/deep-dive/authentication/authentication-system
+    title: 多租户与角色权限
+    details: 主体可感知租户；按应用定义权限目录，并按空间授予角色。
+    link: /zh/guide/policies#app-permissions-and-roles
+  - icon: ⚡
+    title: 响应式且高性能
+    details: 基于 Project Reactor，单次授权约 2 µs，不阻塞事件循环。
+    link: /zh/architecture/overview#performance
   - icon: 🔌
-    title: 可扩展 SPI
-    details: 基于 Java ServiceLoader 的扩展点，支持自定义 ActionMatcher 和 ConditionMatcher 实现。
-    link: /zh/deep-dive/extending/custom-matchers
+    title: WebFlux、MVC 与 Gateway
+    details: 三种适配器共用同一条安全处理流程，响应行为完全一致。
+    link: /zh/guide/web-integration
+  - icon: 🔑
+    title: JWT 与社交登录
+    details: 支持签发、刷新与立即吊销令牌，并通过 JustAuth 支持 OAuth 登录。
+    link: /zh/guide/authentication
   - icon: 📊
-    title: OpenTelemetry 链路追踪
-    details: 分布式追踪，记录授权决策、匹配策略和角色的详细 span 属性。
-    link: /zh/deep-dive/integrations/opentelemetry
+    title: 可审计
+    details: 每次授权决策都会产生审计事件和 OpenTelemetry Span，并记录做出决定的策略或权限。
+    link: /zh/guide/operations#auditing
 ---
-
-## 快速开始
-
-```kotlin
-// build.gradle.kts
-implementation("me.ahoo.cosec:cosec-spring-boot-starter:<version>")
-```
-
-```yaml
-# application.yaml
-cosec:
-  jwt:
-    algorithm: hmac256
-    secret: your-secret-key-here
-  authorization:
-    local-policy:
-      enabled: true
-      init-repository: true
-```
-
-## 技术栈
-
-| 技术 | 版本 | 用途 |
-|------|------|------|
-| Kotlin | 2.4.10 | 主要语言 |
-| Java | 17 | 目标 JVM |
-| Spring Boot | 4.1.0 | 应用框架 |
-| Project Reactor | - | 响应式编程 |
-| JWT (auth0) | 4.6.0 | 令牌处理 |
-| CoCache | 5.1.0 | 分布式缓存 |
-| JustAuth | 1.16.7 | 社交认证 |
-| OpenTelemetry | 2.30.0 | 可观测性 |

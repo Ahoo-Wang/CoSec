@@ -2,73 +2,41 @@
 layout: home
 hero:
   name: CoSec
-  text: Multi-Tenant Reactive Security Framework
-  tagline: RBAC-based and Policy-based access control for JVM applications, inspired by AWS IAM
+  text: Multi-tenant reactive security for Spring
+  tagline: IAM-style policies and role-based permissions, evaluated deny-first for every request.
   actions:
     - theme: brand
       text: Get Started
-      link: /getting-started/overview
+      link: /guide/introduction
     - theme: alt
-      text: Deep Dive
-      link: /deep-dive/architecture/security-model
+      text: Quick Start
+      link: /guide/quick-start
     - theme: alt
       text: GitHub
       link: https://github.com/Ahoo-Wang/CoSec
 features:
   - icon: 🛡️
-    title: Policy-Based Authorization
-    details: AWS IAM-inspired deny-first evaluation engine. Composable policies with ActionMatcher and ConditionMatcher SPI.
-    link: /deep-dive/authorization/authorization-flow
-  - icon: ⚡
-    title: Fully Reactive
-    details: Built on Project Reactor with Mono-based auth chain. Integrates with WebFlux, WebMvc, and Spring Cloud Gateway.
-    link: /deep-dive/architecture/reactive-design
+    title: Policies as data
+    details: JSON policies with path actions, composable conditions and rate limits. Deny wins across every layer, and anything unmatched is denied.
+    link: /guide/policies
   - icon: 🏢
-    title: Multi-Tenant Native
-    details: First-class tenant support with TenantPrincipal, tenant-scoped policies, and role-based permissions per space.
-    link: /deep-dive/architecture/multi-tenancy
-  - icon: 🔑
-    title: JWT & Social Auth
-    details: JWT token lifecycle with refresh tokens and revocation-based logout (TokenRevoker, cosec.jwt.token-revocation.enabled), plus OAuth social login via JustAuth with 20+ providers.
-    link: /deep-dive/authentication/authentication-system
+    title: Multi-tenant, role-based
+    details: Tenant-aware principals, plus per-application permission catalogs granted to roles per space.
+    link: /guide/policies#app-permissions-and-roles
+  - icon: ⚡
+    title: Reactive and fast
+    details: Built on Project Reactor. About 2 µs per decision, with no event-loop blocking.
+    link: /architecture/overview#performance
   - icon: 🔌
-    title: Extensible SPI
-    details: Java ServiceLoader-based extension points for custom ActionMatcher and ConditionMatcher implementations.
-    link: /deep-dive/extending/custom-matchers
+    title: WebFlux, MVC and Gateway
+    details: One security pipeline behind three adapters that respond identically.
+    link: /guide/web-integration
+  - icon: 🔑
+    title: JWT and social login
+    details: Token issuing, refresh and immediate revocation, plus OAuth login through JustAuth.
+    link: /guide/authentication
   - icon: 📊
-    title: OpenTelemetry Tracing
-    details: Distributed tracing with detailed span attributes for authorization decisions, matched policies, and roles.
-    link: /deep-dive/integrations/opentelemetry
+    title: Auditable
+    details: An audit event and an OpenTelemetry span for every decision, naming the policy or permission that decided it.
+    link: /guide/operations#auditing
 ---
-
-## Quick Start
-
-```kotlin
-// build.gradle.kts
-implementation("me.ahoo.cosec:cosec-spring-boot-starter:<version>")
-```
-
-```yaml
-# application.yaml
-cosec:
-  jwt:
-    algorithm: hmac256
-    secret: your-secret-key-here
-  authorization:
-    local-policy:
-      enabled: true
-      init-repository: true
-```
-
-## Tech Stack
-
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| Kotlin | 2.4.10 | Primary language |
-| Java | 17 | Target JVM |
-| Spring Boot | 4.1.0 | Application framework |
-| Project Reactor | - | Reactive programming |
-| auth0/java-jwt | 4.6.0 | JWT token handling |
-| CoCache | 5.1.0 | Distributed Redis caching |
-| JustAuth | 1.16.7 | OAuth social authentication |
-| OpenTelemetry | 2.30.0 | Observability tracing |
