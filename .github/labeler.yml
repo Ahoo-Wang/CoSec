@@ -1,5 +1,7 @@
-# Path-based pull request labels (actions/labeler). Type labels (bug, enhancement, ...) are derived
-# from the Conventional Commits PR title by .github/workflows/pull-request.yml.
+# Path-based pull request labels (actions/labeler), namespaced `module:` / `area:`.
+# Release-note categories (.github/release.yml) are driven only by the type labels derived from the
+# Conventional Commits PR title in .github/workflows/pull-request.yml, so path labels must never reuse
+# category label names: GitHub files each PR under the first matching category.
 
 'module: api':
   - changed-files:
@@ -50,22 +52,19 @@
   - changed-files:
       - any-glob-to-any-file: 'cosec-dependencies/**'
 
-documentation:
+'area: docs':
   - changed-files:
       - any-glob-to-any-file: ['wiki/**', 'document/**', '**/*.md', 'llms.txt']
 
-ci:
+'area: ci':
   - changed-files:
       - any-glob-to-any-file: '.github/**'
 
-build:
+'area: build':
   - changed-files:
-      - any-glob-to-any-file: ['**/*.gradle.kts', 'gradle/**', 'gradle.properties', 'config/**']
+      - any-glob-to-any-file: ['**/*.gradle.kts', 'gradle/**', 'gradle.properties', 'config/**', 'wiki/package.json', 'wiki/pnpm-lock.yaml']
 
-dependencies:
-  - changed-files:
-      - any-glob-to-any-file: ['gradle/libs.versions.toml', 'gradle/wrapper/**', 'wiki/package.json', 'wiki/pnpm-lock.yaml']
 
-test:
+'area: test':
   - changed-files:
       - any-glob-to-any-file: ['**/src/test/**', '**/src/jmh/**']
