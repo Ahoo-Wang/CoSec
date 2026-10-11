@@ -37,7 +37,7 @@ Produce the smallest policy that expresses the requested access rule. Establish 
 }
 ```
 
-Use the full field set above so both runtime deserialization and the bundled JSON Schema accept the policy. Runtime requires `id`, `name`, `type`, and `tenantId`, while the current schema requires `category`, `name`, `description`, `tenantId`, `type`, and `statements` but omits `id`. A statement requires `action`; `effect` defaults to `allow` and `condition` defaults to match-all. Local files normally live under `src/main/resources/cosec-policy/` and match `*-policy.json`.
+Runtime deserialization and the bundled JSON Schema both require `id`, `name`, `type`, and `tenantId`; include `category`, `description`, and `statements` anyway for readability. A statement requires `action`; `effect` defaults to `allow` and `condition` defaults to match-all. Local files normally live under `src/main/resources/cosec-policy/` and match `*-policy.json`.
 
 ## Evaluation semantics
 
@@ -81,9 +81,9 @@ Order deny statements before allow statements for readability, not behavior.
 | `authenticated` | none | Require a non-anonymous principal |
 | `inRole` | `value` | Match a principal role |
 | `inTenant` | `value`: `default`, `user`, or `platform` | Match tenant type, not tenant ID |
-| `eq`, `contains`, `startsWith`, `endsWith` | `part`, `value` | Compare an extracted string |
+| `eq`, `contains`, `startsWith`, `endsWith` | `part`, `value`; optional `ignoreCase` | Compare an extracted string; only `eq.value` accepts a `#{...}` SpEL template |
 | `in` | `part`, array `value` | Match one of several values |
-| `regular` | `part`, `pattern` | Regex match with a time budget |
+| `regular` | `part`, `pattern`; optional `timeout` (ms, default 1000) | Case-insensitive whole-value regex match with a time budget |
 | `path` | `part`, `pattern`, optional `options` | Spring path-pattern match on an extracted value |
 | `bool` | optional sibling arrays `and`, `or` | Combine conditions |
 | `spel` | `expression` | Evaluate against root properties `request` and `context` |
@@ -93,7 +93,7 @@ Order deny statements before allow statements for readability, not behavior.
 | `redisRateLimiter` | `permitsPerSecond`; optional `windowSeconds`, `strictFailure` | Cluster-wide Redis limit |
 | `redisGroupedRateLimiter` | `part`, `permitsPerSecond`; optional `windowSeconds`, `strictFailure` | Cluster-wide Redis per-part limit |
 
-The Redis types exist only when cache support and `StringRedisTemplate` activate their Spring factories. They use an atomic sliding window, return 429 when exceeded, fail open on Redis errors by default, and fail closed when `strictFailure` is `true`. The auto-configured local-policy lifecycle starts after matcher registration, so bootstrap files may use them. The in-memory limiters also return 429 when exceeded.
+The Redis types exist only when cache support and `StringRedisTemplate` activate their Spring factories. They use an atomic sliding window allowing `permitsPerSecond × windowSeconds` requests per window, return 429 when exceeded, fail open on Redis errors by default, and return 429 on Redis errors when `strictFailure` is `true`. Their Redis counter is keyed by configuration (`permitsPerSecond`, `windowSeconds`, `strictFailure`) plus the grouped `part` value, so limiters with identical settings share one quota even across policies; vary a setting to separate them. The auto-configured local-policy lifecycle starts after matcher registration, so bootstrap files may use them. The in-memory limiters also return 429 when exceeded.
 
 `negate` is handled only by matchers based on `AbstractConditionMatcher`; the ungrouped `rateLimiter` and `redisRateLimiter` do not support it. Avoid negating any limiter because an exceeded quota throws before boolean negation.
 
@@ -123,7 +123,7 @@ All `and` entries must match. If `or` is present, at least one entry must match.
 - `request.header.{name}`, `request.attributes.{key}`, `request.path.var.{name}`
 - `context.tenantId`, `context.principal.id`, `context.principal.attributes.{key}`
 
-Use singular `request.header`, and use `request.path.var.id` only after the action matcher captures `{id}`. An unsupported part throws during evaluation.
+Use singular `request.header`, and use `request.path.var.id` only after the action matcher captures `{id}`. A part absent from the request reads as an empty string; an unsupported part name throws during evaluation (HTTP 500), not at load time. Never base a deny on a header the client can omit or forge.
 
 ## Security review
 
@@ -138,6 +138,8 @@ Check the final policy for:
 - local limiters used where a cluster-wide quota is required.
 
 ## Validation
+
+The human-facing reference is https://cosec.ahoo.me/guide/policies.
 
 Validate with CoSec's runtime parser, not JSON syntax alone. In a CoSec-based test:
 

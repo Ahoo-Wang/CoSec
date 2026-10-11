@@ -47,7 +47,7 @@ the web adapters or caching. The essentials:
 - **Fail closed**: errors deny. The only allowed fail-open paths are non-strict Redis rate limiters and the
   token revocation check; both are documented.
 - **No blocking on the event loop**: Redis and other blocking calls run on `boundedElastic`, unless answered
-  from the local cache.
+  from the local cache. Redis rate-limit conditions are a known exception (they call Redis during matching).
 - **One decision path**: status codes and error mapping live only in `SecurityPipeline`.
 - **Store of record**: policy/permission caches must keep `ttl = FOREVER` (`CacheTtlPolicyTest`).
 - **Performance claims need evidence**: changes to the hot path come with a JMH before/after.
@@ -70,7 +70,8 @@ Every fact has one home. Update it in the same PR as the code change:
 |---|---|
 | Policy language (action/condition types, options, parts, evaluation) | `wiki/guide/policies.md`, `schema/*.schema.json`, `skills/cosec-policy-author` |
 | `cosec.*` property or default | `wiki/guide/configuration.md` |
-| Status codes, adapters, security-context access | `wiki/guide/web-integration.md` |
+| Status codes, adapters, security-context access, request attributes | `wiki/guide/web-integration.md` |
+| Failure symptoms and how to diagnose them | `wiki/guide/troubleshooting.md`, `skills/cosec-troubleshoot` |
 | Tokens, login, revocation | `wiki/guide/authentication.md` |
 | Architecture, invariants, performance | `wiki/architecture/overview.md` |
 | Extension points | `wiki/architecture/extending.md` |

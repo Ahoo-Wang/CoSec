@@ -81,24 +81,16 @@ cosec:
 
 ## 模块
 
-| 模块 | 用途 |
-|---|---|
-| `cosec-api` | 公共接口：主体、策略、授权、请求、租户 |
-| `cosec-core` | 策略引擎、匹配器、授权、安全处理流程、审计 |
-| `cosec-jwt` | JWT 签发与校验 |
-| `cosec-webflux` · `cosec-webmvc` · `cosec-gateway` | Spring WebFlux、Spring MVC、Spring Cloud Gateway 适配器 |
-| `cosec-cocache` | 基于 Redis 的策略、权限与令牌吊销；Redis 限流器 |
-| `cosec-social` | 通过 JustAuth 实现 OAuth 社交登录 |
-| `cosec-opentelemetry` · `cosec-openapi` · `cosec-ip2region` · `cosec-kafka` | 链路追踪、基于 OpenAPI 生成策略、IP 地理位置、Kafka 审计 |
-| `cosec-spring-boot-starter` | 自动配置；各项集成通过 Gradle 能力按需启用 |
-| `cosec-gateway-server` | 开箱即用的网关镜像（`ahoowang/cosec-gateway`） |
+starter 自带核心、JWT 支持和自动配置；各项集成（WebFlux、MVC、Gateway、Redis、OAuth、OpenTelemetry、OpenAPI、
+ip2region、Kafka）都是按需启用的 Gradle 能力。完整列表见[模块](https://cosec.ahoo.me/zh/guide/introduction#modules)。
+开箱即用的网关以容器镜像 `ahoowang/cosec-gateway` 发布。
 
 ## 文档
 
 - **指南**：[简介](https://cosec.ahoo.me/zh/guide/introduction) · [快速开始](https://cosec.ahoo.me/zh/guide/quick-start) ·
   [策略](https://cosec.ahoo.me/zh/guide/policies) · [配置](https://cosec.ahoo.me/zh/guide/configuration) ·
   [认证](https://cosec.ahoo.me/zh/guide/authentication) · [Web 集成](https://cosec.ahoo.me/zh/guide/web-integration) ·
-  [运维](https://cosec.ahoo.me/zh/guide/operations)
+  [运维](https://cosec.ahoo.me/zh/guide/operations) · [故障排查](https://cosec.ahoo.me/zh/guide/troubleshooting)
 - **架构**：[概览](https://cosec.ahoo.me/zh/architecture/overview) · [扩展](https://cosec.ahoo.me/zh/architecture/extending)
 - **发布记录**：[GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)
 

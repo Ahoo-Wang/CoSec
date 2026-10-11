@@ -25,10 +25,10 @@ dependencies {
 }
 ```
 
-可用的能力：`webflux-support`、`webmvc-support`、`gateway-support`、`cache-support`、
-`oauth-support`、`opentelemetry-support`、`openapi-support`、`ip2region-support`、`kafka-support`。
+所有能力及其引入的模块见[模块](./introduction.md#modules)。
 
-使用 Maven（不支持 feature variant）时，直接添加 starter 和对应的模块，例如 `cosec-webflux` 和 `cosec-cocache`。
+使用 Maven（不支持 feature variant）时，直接添加 starter 和对应的模块，例如 `cosec-webflux` 和 `cosec-cocache`，
+以及这些模块所需的第三方依赖（`cosec-cocache` 需要 Spring Data Redis 和 `me.ahoo.cocache:cocache-spring-boot-starter`）。
 
 ::: tip 为什么需要 Redis？
 授权通过 `PolicyRepository` 读取策略，通过 `AppRolePermissionRepository` 读取角色权限。
@@ -76,17 +76,17 @@ cosec:
       "condition": { "authenticated": {} }
     },
     {
-      "name": "no-admin-from-outside",
+      "name": "admins-only",
       "effect": "deny",
       "action": "/api/admin/**",
-      "condition": { "in": { "part": "request.header.X-Network", "value": ["public"] } }
+      "condition": { "inRole": { "value": "admin", "negate": true } }
     }
   ]
 }
 ```
 
 语句默认是允许；`"effect": "deny"` 表示拒绝。由于拒绝优先，即使第二条语句允许了 `/api/**`，
-第三条语句仍会阻止来自公网的 `/api/admin/**` 请求。
+第三条语句仍会对所有没有 `admin` 角色的调用方阻止 `/api/admin/**`。未列出的路径（例如 `/internal/**`）默认被拒绝。
 
 ## 4. 签发令牌 {#_4-issue-tokens}
 

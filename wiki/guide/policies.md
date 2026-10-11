@@ -1,7 +1,8 @@
 # Policies
 
 A policy is a JSON document that grants or denies access. This page is the reference for the policy
-language: structure, actions, conditions, how policies combine, and role-based app permissions.
+language: structure, actions, conditions, how policies combine, role-based app permissions, and how
+policies are loaded and checked.
 
 JSON Schemas for editors and CI live in [`schema/`](https://github.com/Ahoo-Wang/CoSec/tree/main/schema):
 `cosec-policy.schema.json` and `cosec-app-permission.schema.json`.
@@ -27,11 +28,12 @@ JSON Schemas for editors and CI live in [`schema/`](https://github.com/Ahoo-Wang
 | Field | Required | Meaning |
 |---|---|---|
 | `id` | yes | Unique policy id. Principals reference non-global policies by this id. |
-| `name`, `category`, `description` | yes | Descriptive metadata. |
+| `name` | yes | Display name. |
 | `type` | yes | `global`: evaluated for every request. `system` / `custom`: evaluated only for principals whose `policies` include this id. |
 | `tenantId` | yes | Owning tenant (`(platform)` for platform-wide policies). |
+| `category`, `description` | no | Descriptive metadata. |
 | `condition` | no | Policy-level condition. If it does not match, the whole policy is skipped. |
-| `statements` | yes | The rules. |
+| `statements` | no | The rules. A policy without statements never matches. |
 
 Enum values (`type`, `effect`) are case-insensitive.
 
@@ -44,19 +46,21 @@ Enum values (`type`, `effect`) are case-insensitive.
 | `action` | yes | | Which requests the statement covers. |
 | `condition` | no | always | When the statement applies. |
 
-A statement **matches** when its action and its condition both match. A matched `allow` yields
+A statement **matches** when its action matches and then its condition matches. A matched `allow` yields
 `ALLOW`; a matched `deny` yields `EXPLICIT_DENY`.
 
 ## Actions
 
-An action selects requests, usually by path. It can be written four ways:
+An action selects requests, usually by path. It can be written in these forms:
 
 | Form | Example | Meaning |
 |---|---|---|
 | `"*"` | `"action": "*"` | Every request. |
 | string | `"action": "/orders/{id}"` | One path pattern, any method. |
-| array | `"action": ["/a/**", "/b"]` | Any of several actions; elements may be strings or objects. |
-| object | `"action": { "path": { ... } }` | A typed action matcher with options. |
+| array | `"action": ["/a/**", { "path": { ... } }]` | Any of several actions; elements are strings or objects. |
+| `path` | `"action": { "path": { ... } }` | Path patterns with methods and options (below). |
+| `all` | `"action": { "all": { "method": "GET" } }` | Every path, optionally limited to some methods. |
+| `composite` | `"action": { "composite": [ ... ] }` | Same as the array form. |
 
 The `path` action matcher:
 
@@ -72,16 +76,29 @@ The `path` action matcher:
 
 - `pattern`: a string or array of Spring [`PathPattern`](https://docs.spring.io/spring-framework/reference/web/webflux/controller/ann-requestmapping.html#webflux-ann-requestmapping-uri-templates)s
   (`*`, `**`, `{var}`, `{*rest}`).
-- `method`: optional; a string or array of HTTP methods. Omitted means any method.
+- `method`: optional; a string or array of HTTP methods, case-insensitive. Omitted means any method.
 - `options`: optional; how paths are split and compared. The separator also makes non-HTTP
   "paths" possible, such as `order.read` with `"separator": "."`.
 
-**Path variables.** Variables captured by the matching action are available to conditions as
-`request.path.var.<name>`.
+**Path variables.** Variables captured by the matching action are available to the statement's condition
+as `request.path.var.<name>`.
 
-**Templated patterns.** A pattern containing `#{...}` is a SpEL template evaluated against the security
-context, so a pattern can depend on the caller. For example, `"/users/#{principal.id}/**"` lets each
-user reach only their own resources.
+## Templates
+
+A pattern or value containing `#{...}` is a read-only SpEL template evaluated against the security context,
+so a rule can depend on the caller. The template root exposes `principal` (with `id`, `roles`,
+`attributes`) and `tenant` (with `tenantId`).
+
+Templates are accepted in two places:
+
+- **path patterns**: `"/users/#{principal.id}/**"` lets each user reach only their own resources;
+- **the `eq` condition's `value`**: compare a request part with the caller, as below.
+
+```json
+{ "name": "own-orders",
+  "action": "/users/{userId}/orders/**",
+  "condition": { "eq": { "part": "request.path.var.userId", "value": "#{principal.id}" } } }
+```
 
 ## Conditions
 
@@ -91,7 +108,8 @@ A condition is a single-key object: the key is the condition type, the value is 
 "condition": { "eq": { "part": "context.tenantId", "value": "(platform)" } }
 ```
 
-Every condition accepts `"negate": true` to invert its result.
+Every condition except `rateLimiter` and `redisRateLimiter` accepts `"negate": true` to invert its result.
+Do not negate rate limits: an exhausted limit rejects the request before negation applies.
 
 ### Context conditions
 
@@ -102,35 +120,44 @@ Every condition accepts `"negate": true` to invert its result.
 | `inRole` | `{ "value": "admin" }` | the principal has the role |
 | `inTenant` | `{ "value": "default" \| "user" \| "platform" }` | the tenant is the default tenant `(0)`, a user tenant, or the platform tenant `(platform)` |
 
+`inTenant` checks the *kind* of tenant. To check a specific tenant id, use
+`{ "eq": { "part": "context.tenantId", "value": "..." } }`.
+
 ### Value conditions
 
 These read one **part** of the request or security context and compare it.
 
 | Type | Configuration | Matches when the part … |
 |---|---|---|
-| `eq` | `part`, `value`, `ignoreCase` | equals `value` |
+| `eq` | `part`, `value` ([template](#templates) allowed), `ignoreCase` | equals `value` |
 | `in` | `part`, `value` (array) | is one of `value` |
 | `contains` | `part`, `value`, `ignoreCase` | contains `value` |
 | `startsWith` | `part`, `value`, `ignoreCase` | starts with `value` |
 | `endsWith` | `part`, `value`, `ignoreCase` | ends with `value` |
-| `regular` | `part`, `pattern`, `timeout` (ms, default `1000`) | matches the regular expression |
+| `regular` | `part`, `pattern`, `timeout` (ms, default `1000`) | matches the regular expression as a whole, ignoring case |
 | `path` | `part`, `pattern`, `options` | matches the path pattern |
 
-`regular` runs under a time budget as a ReDoS guard. Exceeding it denies the request (`403`); it is
-never treated as a match.
+`ignoreCase` defaults to `false`. `regular` runs under a time budget as a ReDoS guard. Exceeding it denies
+the request (`403`); it is never treated as a match.
 
 **Parts:**
 
 | Part | Value |
 |---|---|
-| `request.path`, `request.method`, `request.remoteIp` | path, HTTP method, client IP (see [remote IP](./configuration.md#authorization)) |
+| `request.path`, `request.method`, `request.remoteIp` | path, HTTP method, client IP (see [client IP](./web-integration.md#client-ip-behind-proxies)) |
 | `request.appId`, `request.spaceId`, `request.deviceId` | `CoSec-App-Id`, `CoSec-Space-Id`, `CoSec-Device-Id` header (or query parameter) |
 | `request.origin`, `request.origin.host`, `request.referer`, `request.referer.host` | `Origin` / `Referer` and their hosts |
 | `request.header.<name>` | any request header |
-| `request.attributes.<name>` | request attributes, e.g. `ipRegion` from [IP geolocation](./operations.md#ip-geolocation) or the gateway route id |
+| `request.attributes.<name>` | a [request attribute](./web-integration.md#request-attributes), such as `ipRegion` |
 | `request.path.var.<name>` | a path variable captured by the matched action |
 | `context.tenantId`, `context.principal.id` | tenant and principal id |
 | `context.principal.attributes.<name>` | a principal attribute (a JWT `attributes` claim entry) |
+
+A part that is absent from the request reads as an empty string. Any other part name is a policy error:
+it is not detected when the policy loads, and every request that reaches the condition fails with `500`.
+
+Headers, `request.remoteIp` and request attributes are only as trustworthy as their source. Never
+base a decision on a header the client can set unless a trusted proxy overwrites it.
 
 ### Composing conditions
 
@@ -149,10 +176,10 @@ of them must match too.
 
 ### Expressions
 
-| Type | Configuration | Notes |
+| Type | Configuration | Evaluated against |
 |---|---|---|
-| `spel` | `expression` | Spring Expression Language, read-only; the root object exposes `request` and `context`. |
-| `ognl` | `expression` | OGNL in a sandbox: read-only navigation of `request` and `context`; no mutators, reflection, object construction or type references. |
+| `spel` | `expression` | Spring Expression Language, read-only. The root object has the properties `request` and `context`, e.g. `context.principal.attributes['tier'] == 'gold'`. |
+| `ognl` | `expression` | OGNL in a sandbox. The root object is the request; the security context is the variable `#context` (the request is also `#request`). No mutators, reflection, object construction or type references. |
 
 Prefer the declarative conditions above. Expressions are harder to review and test.
 
@@ -164,18 +191,25 @@ is rejected with `429 Too Many Requests`.
 | Type | Configuration | Scope |
 |---|---|---|
 | `rateLimiter` | `permitsPerSecond` | per application instance |
-| `groupedRateLimiter` | `part`, `permitsPerSecond`, `expireAfterAccessSecond` | per instance, one limiter per value of `part` (e.g. per user) |
+| `groupedRateLimiter` | `part`, `permitsPerSecond`, `expireAfterAccessSecond` (all required) | per instance, one limiter per value of `part` (e.g. per user); idle limiters are dropped after `expireAfterAccessSecond` |
 | `redisRateLimiter` | `permitsPerSecond`, `windowSeconds` (default `1`), `strictFailure` (default `false`) | cluster-wide (Redis, sliding window) |
 | `redisGroupedRateLimiter` | the above plus `part` | cluster-wide, per value of `part` |
-
-Redis limiters need `cache-support`. With `strictFailure: false`, a Redis outage lets requests
-through rather than blocking all traffic; set it to `true` to fail closed.
 
 ```json
 { "name": "login-throttle",
   "action": { "path": { "pattern": "/auth/login", "method": "POST" } },
   "condition": { "redisGroupedRateLimiter": { "part": "request.remoteIp", "permitsPerSecond": 5 } } }
 ```
+
+Redis limiters need `cache-support`. Their specifics:
+
+- **Window.** A window of `windowSeconds` allows `permitsPerSecond × windowSeconds` requests.
+- **Shared quotas.** The Redis counter is keyed by the limiter's configuration (`permitsPerSecond`,
+  `windowSeconds`, `strictFailure`) and the `part` value, not by the policy or statement. Two statements with
+  identical settings share one quota; change one setting to separate them.
+- **Redis outages.** With `strictFailure: false`, a Redis outage lets requests through rather than blocking
+  all traffic. With `true`, requests are rejected with `429` while Redis is unavailable.
+- **Key prefix.** Keys start with [`cosec.limiter.key-prefix`](./configuration.md#rate-limiting).
 
 ## How policies combine
 
@@ -187,11 +221,12 @@ For each request, CoSec evaluates three layers:
 
 Within each layer, and across all layers, **deny wins**: if any matched statement or permission is a
 `deny`, the result is `EXPLICIT_DENY`, even if another layer allowed the request. Otherwise any
-matched `allow` grants access. If nothing matched, the result is `IMPLICIT_DENY`.
+matched `allow` grants access. If nothing matched, the result is `IMPLICIT_DENY`. The order of policies and
+statements never changes the result, only which matching rule is reported.
 
-Two principals bypass this: the **root** principal (id `cosec`, configurable, see
-[Configuration](./configuration.md#authorization)) is always allowed, and a blacklisted request is
-always denied.
+Two checks come before the layers: the **root** principal (id `cosec`, configurable, see
+[Configuration](./configuration.md#authorization)) is always allowed, and a request rejected by the
+blacklist is always denied.
 
 ::: tip Policy conditions run first
 A policy's own `condition` is evaluated once, before its statements. A rate limit placed there
@@ -239,9 +274,32 @@ CoSec reads permissions and grants; your administration service owns writing the
 
 - **Local files**: with `cosec.authorization.local-policy.enabled=true`, policies are loaded from
   `classpath:cosec-policy/*-policy.json`. With `init-repository=true` they are written to the
-  `PolicyRepository` on startup (existing ids are kept unless `force-refresh=true`).
+  `PolicyRepository` on startup (existing ids are kept unless `force-refresh=true`). Authorization only reads
+  the repository, so without `init-repository` local files have no effect.
 - **At runtime**: write policies through `PolicyRepository.setPolicy`. The Redis-backed repository
   validates a policy before storing it, and every instance sees the change.
-- **From OpenAPI**: with `openapi-support`, the actuator endpoints `cosecPolicyGenerator` and
-  `cosecAppPermissionGenerator` generate a policy or app permission from your API description as a
-  starting point. See [Operations](./operations.md#openapi).
+- **From OpenAPI**: with `openapi-support` and Spring Boot Actuator,
+  `GET /actuator/cosecPolicyGenerator` generates a policy and `GET /actuator/cosecAppPermissionGenerator`
+  an app permission from your OpenAPI description: one `allow` entry per operation (path and method), with a
+  placeholder id and metadata. Use them as starting points: set the ids, narrow the rules, and review
+  before deploying.
+
+::: warning Invalid files are skipped
+A local policy file that cannot be parsed (invalid JSON, a missing required field, an unknown condition
+type, a bad matcher configuration) is logged at `ERROR` and skipped; the application still starts. Check
+the startup log, or validate policies in a test as below.
+:::
+
+## Validating policies
+
+Validate policies in a unit test with the runtime parser, not only the JSON Schema:
+
+```kotlin
+val policies = LocalPolicyLoader(setOf("classpath:cosec-policy/*-policy.json")).policies
+check(policies.any { it.id == "order-service" })   // the file was not skipped
+policies.forEach(DefaultPolicyEvaluator::evaluate)  // matchers run against a sample request
+```
+
+`DefaultPolicyEvaluator` runs every condition and action once against a sample request, so configuration
+errors that only show at request time (such as an unknown part) fail the test. Add one authorization test
+per allow/deny boundary that matters, using `SimpleAuthorization` with in-memory repositories.

@@ -45,16 +45,24 @@ Web 集成把决策转换为响应：匿名调用方返回 `401`，已认证调�
 
 ## 模块 {#modules}
 
-| 模块 | 用途 |
-|---|---|
-| `cosec-api` | 只有接口：主体、策略、授权、请求、租户。 |
-| `cosec-core` | 策略引擎、匹配器、授权、安全处理流程、本地策略加载、审计。 |
-| `cosec-jwt` | JWT 签发与校验。 |
-| `cosec-webflux` / `cosec-webmvc` / `cosec-gateway` | Spring WebFlux、Spring MVC 和 Spring Cloud Gateway 的适配器。 |
-| `cosec-cocache` | 基于 Redis 存储策略、权限和已吊销令牌，并带本地缓存（[CoCache](https://github.com/Ahoo-Wang/CoCache)）；Redis 限流器。 |
-| `cosec-social` | 通过 [JustAuth](https://github.com/justauth/JustAuth) 实现 OAuth 社交登录。 |
-| `cosec-opentelemetry` · `cosec-openapi` · `cosec-ip2region` · `cosec-kafka` | 链路追踪、基于 OpenAPI 生成策略、IP 地理位置、审计事件发送到 Kafka。 |
-| `cosec-spring-boot-starter` | 上述所有模块的自动配置，按功能启用。 |
-| `cosec-gateway-server` | 基于上述模块、开箱即用的网关（不作为库发布）。 |
+应用依赖 `cosec-spring-boot-starter`，并以 Gradle 能力（capability）的形式按需引入集成
+（见[快速开始](./quick-start.md#_1-add-the-dependency)）。每个能力引入一个模块及其第三方依赖。
+
+| 模块 | Starter 能力 | 用途 |
+|---|---|---|
+| `cosec-api` | 始终包含 | 公共契约：主体、策略、授权、请求、安全上下文。 |
+| `cosec-core` | 始终包含 | 策略引擎、匹配器、授权、安全处理流程、本地策略加载、审计。 |
+| `cosec-jwt` | 始终包含 | JWT 签发与校验。 |
+| `cosec-webflux` | `webflux-support` | Spring WebFlux 适配器。 |
+| `cosec-webmvc` | `webmvc-support` | Spring MVC 适配器。 |
+| `cosec-gateway` | `gateway-support` | Spring Cloud Gateway 适配器。 |
+| `cosec-cocache` | `cache-support` | 基于 Redis 存储策略、权限和已吊销令牌，并带本地缓存（[CoCache](https://github.com/Ahoo-Wang/CoCache)）；Redis 限流器。 |
+| `cosec-social` | `oauth-support` | 通过 [JustAuth](https://github.com/justauth/JustAuth) 实现 OAuth 社交登录。 |
+| `cosec-opentelemetry` | `opentelemetry-support` | 为每次决策生成一个链路追踪 span。 |
+| `cosec-openapi` | `openapi-support` | 根据 OpenAPI 描述生成策略；在 OpenAPI 文档中声明 Bearer 认证。 |
+| `cosec-ip2region` | `ip2region-support` | 把 IP 地理位置作为请求属性。 |
+| `cosec-kafka` | `kafka-support` | 把审计事件发送到 Kafka。 |
+| `cosec-bom` | | 统一所有模块的版本。 |
+| `cosec-gateway-server` | | 基于上述模块、开箱即用的网关（是应用，不是库）。 |
 
 下一步：[快速开始](./quick-start.md)。

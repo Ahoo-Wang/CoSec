@@ -48,16 +48,25 @@ authenticated ones, `429` when a rate limit is hit. See [Web Integration](./web-
 
 ## Modules
 
-| Module | Purpose |
-|---|---|
-| `cosec-api` | Interfaces only: principal, policy, authorization, request, tenant. |
-| `cosec-core` | Policy engine, matchers, authorization, security pipeline, local policy loading, auditing. |
-| `cosec-jwt` | JWT issuing and verification. |
-| `cosec-webflux` / `cosec-webmvc` / `cosec-gateway` | Adapters for Spring WebFlux, Spring MVC and Spring Cloud Gateway. |
-| `cosec-cocache` | Redis-backed policy, permission and revoked-token storage with a local cache ([CoCache](https://github.com/Ahoo-Wang/CoCache)); Redis rate limiters. |
-| `cosec-social` | OAuth social login via [JustAuth](https://github.com/justauth/JustAuth). |
-| `cosec-opentelemetry` · `cosec-openapi` · `cosec-ip2region` · `cosec-kafka` | Tracing, policy generation from OpenAPI, IP geolocation, audit events to Kafka. |
-| `cosec-spring-boot-starter` | Auto-configuration for all of the above, enabled per feature. |
-| `cosec-gateway-server` | A ready-to-run gateway built from the modules above (not published as a library). |
+Applications depend on `cosec-spring-boot-starter` and request integrations as Gradle capabilities
+(see [Quick Start](./quick-start.md#_1-add-the-dependency)). Each capability adds one module plus its
+third-party dependencies.
+
+| Module | Starter capability | Purpose |
+|---|---|---|
+| `cosec-api` | always | Public contracts: principal, policy, authorization, request, security context. |
+| `cosec-core` | always | Policy engine, matchers, authorization, security pipeline, local policy loading, auditing. |
+| `cosec-jwt` | always | JWT issuing and verification. |
+| `cosec-webflux` | `webflux-support` | Spring WebFlux adapter. |
+| `cosec-webmvc` | `webmvc-support` | Spring MVC adapter. |
+| `cosec-gateway` | `gateway-support` | Spring Cloud Gateway adapter. |
+| `cosec-cocache` | `cache-support` | Redis-backed policies, permissions and revoked tokens with a local cache ([CoCache](https://github.com/Ahoo-Wang/CoCache)); Redis rate limiters. |
+| `cosec-social` | `oauth-support` | OAuth social login via [JustAuth](https://github.com/justauth/JustAuth). |
+| `cosec-opentelemetry` | `opentelemetry-support` | A tracing span per decision. |
+| `cosec-openapi` | `openapi-support` | Policy generation from your OpenAPI description; bearer auth in the OpenAPI document. |
+| `cosec-ip2region` | `ip2region-support` | IP geolocation as a request attribute. |
+| `cosec-kafka` | `kafka-support` | Audit events to Kafka. |
+| `cosec-bom` | | Version alignment for all modules. |
+| `cosec-gateway-server` | | A ready-to-run gateway built from the modules above (an application, not a library). |
 
 Next: [Quick Start](./quick-start.md).
