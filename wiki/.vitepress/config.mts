@@ -5,7 +5,8 @@ const REPO_URL = 'https://github.com/Ahoo-Wang/CoSec'
 export default defineConfig({
     lang: 'en',
     title: 'CoSec',
-    ignoreDeadLinks: true,
+    // Fail the build on broken internal links.
+    ignoreDeadLinks: false,
     description: 'RBAC-based and Policy-based Multi-Tenant Reactive Security Framework',
     sitemap: {
         hostname: 'https://cosec.ahoo.me',
@@ -21,110 +22,31 @@ export default defineConfig({
         lang: 'en',
         themeConfig: {
           nav: [
-            { text: 'Guide', link: '/getting-started/overview' },
-            { text: 'Deep Dive', link: '/deep-dive/architecture/security-model' },
-            {
-              text: 'Integrations',
-              items: [
-                { text: 'Spring WebFlux', link: '/deep-dive/integrations/spring-webflux' },
-                { text: 'Spring WebMvc', link: '/deep-dive/integrations/spring-webmvc' },
-                { text: 'Spring Cloud Gateway', link: '/deep-dive/integrations/spring-cloud-gateway' },
-                { text: 'Redis Caching', link: '/deep-dive/integrations/redis-caching' },
-              ],
-            },
-            {
-              text: 'Resources',
-              items: [
-                { text: 'API Reference', link: '/deep-dive/extending/custom-matchers' },
-                { text: 'Onboarding', link: '/onboarding/' },
-              ],
-            },
+            { text: 'Guide', link: '/guide/introduction' },
+            { text: 'Architecture', link: '/architecture/overview' },
+            { text: 'Releases', link: `${REPO_URL}/releases` },
           ],
           sidebar: {
-            '/getting-started/': [
+            '/guide/': [
               {
-                text: 'Getting Started',
-                collapsed: false,
+                text: 'Guide',
                 items: [
-                  { text: 'Overview', link: '/getting-started/overview' },
-                  { text: 'Quick Start', link: '/getting-started/quick-start' },
-                  { text: 'Configuration Reference', link: '/getting-started/configuration' },
-                  { text: 'Policy Authoring Guide', link: '/getting-started/policy-authoring' },
+                  { text: 'Introduction', link: '/guide/introduction' },
+                  { text: 'Quick Start', link: '/guide/quick-start' },
+                  { text: 'Policies', link: '/guide/policies' },
+                  { text: 'Configuration', link: '/guide/configuration' },
+                  { text: 'Authentication', link: '/guide/authentication' },
+                  { text: 'Web Integration', link: '/guide/web-integration' },
+                  { text: 'Operations', link: '/guide/operations' },
                 ],
               },
             ],
-            '/deep-dive/': [
+            '/architecture/': [
               {
                 text: 'Architecture',
-                collapsed: false,
                 items: [
-                  { text: 'Module Dependency Graph', link: '/deep-dive/architecture/module-dependency' },
-                  { text: 'Security Model', link: '/deep-dive/architecture/security-model' },
-                  { text: 'Reactive Design', link: '/deep-dive/architecture/reactive-design' },
-                  { text: 'Multi-Tenancy', link: '/deep-dive/architecture/multi-tenancy' },
-                ],
-              },
-              {
-                text: 'Authentication',
-                collapsed: true,
-                items: [
-                  { text: 'Authentication System', link: '/deep-dive/authentication/authentication-system' },
-                  { text: 'JWT Integration', link: '/deep-dive/authentication/jwt-integration' },
-                  { text: 'Social Authentication', link: '/deep-dive/authentication/social-authentication' },
-                  { text: 'Token Management', link: '/deep-dive/authentication/token-management' },
-                ],
-              },
-              {
-                text: 'Authorization',
-                collapsed: true,
-                items: [
-                  { text: 'Authorization Flow', link: '/deep-dive/authorization/authorization-flow' },
-                  { text: 'Policy Evaluation', link: '/deep-dive/authorization/policy-evaluation' },
-                  { text: 'Action Matchers', link: '/deep-dive/authorization/action-matchers' },
-                  { text: 'Condition Matchers', link: '/deep-dive/authorization/condition-matchers' },
-                  { text: 'Permissions and Roles', link: '/deep-dive/authorization/permissions-roles' },
-                ],
-              },
-              {
-                text: 'Integrations',
-                collapsed: true,
-                items: [
-                  { text: 'Spring WebFlux', link: '/deep-dive/integrations/spring-webflux' },
-                  { text: 'Spring WebMvc', link: '/deep-dive/integrations/spring-webmvc' },
-                  { text: 'Spring Cloud Gateway', link: '/deep-dive/integrations/spring-cloud-gateway' },
-                  { text: 'Redis Caching', link: '/deep-dive/integrations/redis-caching' },
-                  { text: 'OpenTelemetry', link: '/deep-dive/integrations/opentelemetry' },
-                  { text: 'OpenAPI / Swagger', link: '/deep-dive/integrations/openapi' },
-                  { text: 'IP Geolocation', link: '/deep-dive/integrations/ip-geolocation' },
-                ],
-              },
-              {
-                text: 'Extending CoSec',
-                collapsed: true,
-                items: [
-                  { text: 'Custom Matchers (SPI)', link: '/deep-dive/extending/custom-matchers' },
-                  { text: 'Auto-Configuration', link: '/deep-dive/extending/auto-configuration' },
-                ],
-              },
-              {
-                text: 'Operations',
-                collapsed: true,
-                items: [
-                  { text: 'Deployment', link: '/deep-dive/operations/deployment' },
-                  { text: 'Testing Guide', link: '/deep-dive/operations/testing' },
-                  { text: 'Performance and Benchmarks', link: '/deep-dive/operations/performance' },
-                ],
-              },
-            ],
-            '/onboarding/': [
-              {
-                text: 'Onboarding',
-                collapsed: false,
-                items: [
-                  { text: 'Contributor Guide', link: '/onboarding/contributor' },
-                  { text: 'Staff Engineer Guide', link: '/onboarding/staff-engineer' },
-                  { text: 'Executive Guide', link: '/onboarding/executive' },
-                  { text: 'Product Manager Guide', link: '/onboarding/product-manager' },
+                  { text: 'Overview', link: '/architecture/overview' },
+                  { text: 'Extending', link: '/architecture/extending' },
                 ],
               },
             ],
@@ -148,110 +70,31 @@ export default defineConfig({
         link: '/zh/',
         themeConfig: {
           nav: [
-            { text: '指南', link: '/zh/getting-started/overview' },
-            { text: '深入', link: '/zh/deep-dive/architecture/security-model' },
-            {
-              text: '集成',
-              items: [
-                { text: 'Spring WebFlux', link: '/zh/deep-dive/integrations/spring-webflux' },
-                { text: 'Spring WebMvc', link: '/zh/deep-dive/integrations/spring-webmvc' },
-                { text: 'Spring Cloud Gateway', link: '/zh/deep-dive/integrations/spring-cloud-gateway' },
-                { text: 'Redis 缓存', link: '/zh/deep-dive/integrations/redis-caching' },
-              ],
-            },
-            {
-              text: '资源',
-              items: [
-                { text: 'API 参考', link: '/zh/deep-dive/extending/custom-matchers' },
-                { text: '入门指南', link: '/zh/onboarding/' },
-              ],
-            },
+            { text: '指南', link: '/zh/guide/introduction' },
+            { text: '架构', link: '/zh/architecture/overview' },
+            { text: '发布记录', link: `${REPO_URL}/releases` },
           ],
           sidebar: {
-            '/zh/getting-started/': [
+            '/zh/guide/': [
               {
-                text: '快速开始',
-                collapsed: false,
+                text: '指南',
                 items: [
-                  { text: '概述', link: '/zh/getting-started/overview' },
-                  { text: '快速入门', link: '/zh/getting-started/quick-start' },
-                  { text: '配置参考', link: '/zh/getting-started/configuration' },
-                  { text: '策略编写指南', link: '/zh/getting-started/policy-authoring' },
+                  { text: '简介', link: '/zh/guide/introduction' },
+                  { text: '快速开始', link: '/zh/guide/quick-start' },
+                  { text: '策略', link: '/zh/guide/policies' },
+                  { text: '配置', link: '/zh/guide/configuration' },
+                  { text: '认证', link: '/zh/guide/authentication' },
+                  { text: 'Web 集成', link: '/zh/guide/web-integration' },
+                  { text: '运维', link: '/zh/guide/operations' },
                 ],
               },
             ],
-            '/zh/deep-dive/': [
+            '/zh/architecture/': [
               {
                 text: '架构',
-                collapsed: false,
                 items: [
-                  { text: '模块依赖图', link: '/zh/deep-dive/architecture/module-dependency' },
-                  { text: '安全模型', link: '/zh/deep-dive/architecture/security-model' },
-                  { text: '响应式设计', link: '/zh/deep-dive/architecture/reactive-design' },
-                  { text: '多租户', link: '/zh/deep-dive/architecture/multi-tenancy' },
-                ],
-              },
-              {
-                text: '认证',
-                collapsed: true,
-                items: [
-                  { text: '认证系统', link: '/zh/deep-dive/authentication/authentication-system' },
-                  { text: 'JWT 集成', link: '/zh/deep-dive/authentication/jwt-integration' },
-                  { text: '社交认证', link: '/zh/deep-dive/authentication/social-authentication' },
-                  { text: '令牌管理', link: '/zh/deep-dive/authentication/token-management' },
-                ],
-              },
-              {
-                text: '授权',
-                collapsed: true,
-                items: [
-                  { text: '授权流程', link: '/zh/deep-dive/authorization/authorization-flow' },
-                  { text: '策略评估', link: '/zh/deep-dive/authorization/policy-evaluation' },
-                  { text: '动作匹配器', link: '/zh/deep-dive/authorization/action-matchers' },
-                  { text: '条件匹配器', link: '/zh/deep-dive/authorization/condition-matchers' },
-                  { text: '权限和角色', link: '/zh/deep-dive/authorization/permissions-roles' },
-                ],
-              },
-              {
-                text: '集成',
-                collapsed: true,
-                items: [
-                  { text: 'Spring WebFlux', link: '/zh/deep-dive/integrations/spring-webflux' },
-                  { text: 'Spring WebMvc', link: '/zh/deep-dive/integrations/spring-webmvc' },
-                  { text: 'Spring Cloud Gateway', link: '/zh/deep-dive/integrations/spring-cloud-gateway' },
-                  { text: 'Redis 缓存', link: '/zh/deep-dive/integrations/redis-caching' },
-                  { text: 'OpenTelemetry', link: '/zh/deep-dive/integrations/opentelemetry' },
-                  { text: 'OpenAPI / Swagger', link: '/zh/deep-dive/integrations/openapi' },
-                  { text: 'IP 地理位置', link: '/zh/deep-dive/integrations/ip-geolocation' },
-                ],
-              },
-              {
-                text: '扩展 CoSec',
-                collapsed: true,
-                items: [
-                  { text: '自定义匹配器 (SPI)', link: '/zh/deep-dive/extending/custom-matchers' },
-                  { text: '自动配置', link: '/zh/deep-dive/extending/auto-configuration' },
-                ],
-              },
-              {
-                text: '运维',
-                collapsed: true,
-                items: [
-                  { text: '部署', link: '/zh/deep-dive/operations/deployment' },
-                  { text: '测试指南', link: '/zh/deep-dive/operations/testing' },
-                  { text: '性能与基准测试', link: '/zh/deep-dive/operations/performance' },
-                ],
-              },
-            ],
-            '/zh/onboarding/': [
-              {
-                text: '入门指南',
-                collapsed: false,
-                items: [
-                  { text: '贡献者指南', link: '/zh/onboarding/contributor' },
-                  { text: '高级工程师指南', link: '/zh/onboarding/staff-engineer' },
-                  { text: '管理者指南', link: '/zh/onboarding/executive' },
-                  { text: '产品经理指南', link: '/zh/onboarding/product-manager' },
+                  { text: '概览', link: '/zh/architecture/overview' },
+                  { text: '扩展', link: '/zh/architecture/extending' },
                 ],
               },
             ],

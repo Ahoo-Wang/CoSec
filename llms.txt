@@ -1,68 +1,31 @@
 # CoSec
 
-> RBAC-based and Policy-based Multi-Tenant Reactive Security Framework for JVM applications. Built on Spring Boot 4 and Project Reactor with AWS IAM-inspired policy model.
+> Multi-tenant, reactive security framework for Spring Boot (WebFlux, MVC, Spring Cloud Gateway). IAM-style JSON policies and role-based app permissions, evaluated deny-first across global, principal and role layers; JWT authentication; Redis-backed policy storage via CoCache. Kotlin, Java 17, Spring Boot 4, Project Reactor.
 
-## Onboarding
+Key facts: a DENY matched in any layer overrides any ALLOW; unmatched requests are denied (IMPLICIT_DENY); errors deny. Anonymous denials return 401, authenticated denials 403, rate limits 429. Policies are JSON with `action` (path patterns) and `condition` (single-key objects such as `{"authenticated":{}}`).
 
-- [Contributor Guide](wiki/onboarding/contributor.md) - Setup, architecture, testing, and contributing
-- [Staff Engineer Guide](wiki/onboarding/staff-engineer.md) - Architecture deep-dive, design tradeoffs
-- [Executive Guide](wiki/onboarding/executive.md) - Capability map, risk assessment, investment thesis
-- [Product Manager Guide](wiki/onboarding/product-manager.md) - User journeys, feature map, FAQ
+## Guide
+
+- [Introduction](https://cosec.ahoo.me/guide/introduction): concepts (principal, tenant, policy, statement, app permission) and the decision model
+- [Quick Start](https://cosec.ahoo.me/guide/quick-start): Gradle capabilities, configuration, first policy, issuing tokens
+- [Policies](https://cosec.ahoo.me/guide/policies): policy language reference (actions, conditions and request parts, rate limits, evaluation order, roles and app permissions)
+- [Configuration](https://cosec.ahoo.me/guide/configuration): every `cosec.*` property with defaults
+- [Authentication](https://cosec.ahoo.me/guide/authentication): JWT claims, login, refresh, revocation, multi-tenancy, social login, the gateway trust boundary
+- [Web Integration](https://cosec.ahoo.me/guide/web-integration): adapters, status codes, accessing the security context, client IP, CORS
+- [Operations](https://cosec.ahoo.me/guide/operations): Redis failure modes, auditing, OpenTelemetry, OpenAPI, ip2region, deployment, performance
 
 ## Architecture
 
-- [Module Dependency Graph](wiki/deep-dive/architecture/module-dependency.md) - Module structure and dependencies
-- [Security Model](wiki/deep-dive/architecture/security-model.md) - Principal hierarchy, policy model, deny-first algorithm
-- [Reactive Design](wiki/deep-dive/architecture/reactive-design.md) - Project Reactor integration throughout
-- [Multi-Tenancy](wiki/deep-dive/architecture/multi-tenancy.md) - Tenant model and scoped policies
+- [Overview](https://cosec.ahoo.me/architecture/overview): modules, request path, decision algorithm, invariants, caching
+- [Extending](https://cosec.ahoo.me/architecture/extending): custom matchers (SPI), authorization and context hooks, audit sinks
 
-## Getting Started
+## Reference
 
-- [Overview](wiki/getting-started/overview.md) - What is CoSec, key features, comparison
-- [Quick Start](wiki/getting-started/quick-start.md) - Step-by-step integration guide
-- [Configuration Reference](wiki/getting-started/configuration.md) - All cosec.* properties
-- [Policy Authoring Guide](wiki/getting-started/policy-authoring.md) - Writing JSON policies
-
-## Deep Dive
-
-### Authentication
-
-- [Authentication System](wiki/deep-dive/authentication/authentication-system.md) - Auth provider, composite auth, credentials
-- [JWT Integration](wiki/deep-dive/authentication/jwt-integration.md) - Token creation, verification, claims
-- [Social Authentication](wiki/deep-dive/authentication/social-authentication.md) - OAuth via JustAuth
-- [Token Management](wiki/deep-dive/authentication/token-management.md) - Token hierarchy and lifecycle
-
-### Authorization
-
-- [Authorization Flow](wiki/deep-dive/authorization/authorization-flow.md) - Root → blacklist → policies → roles → implicit deny
-- [Policy Evaluation](wiki/deep-dive/authorization/policy-evaluation.md) - Deny-first algorithm, verify context
-- [Action Matchers](wiki/deep-dive/authorization/action-matchers.md) - Path, wildcard, composite matchers
-- [Condition Matchers](wiki/deep-dive/authorization/condition-matchers.md) - Path, context, rate limit, expression matchers
-- [Permissions and Roles](wiki/deep-dive/authorization/permissions-roles.md) - RBAC model, app permissions
-
-### Integrations
-
-- [Spring WebFlux](wiki/deep-dive/integrations/spring-webflux.md) - Reactive WebFilter integration
-- [Spring WebMvc](wiki/deep-dive/integrations/spring-webmvc.md) - Servlet filter integration
-- [Spring Cloud Gateway](wiki/deep-dive/integrations/spring-cloud-gateway.md) - GlobalFilter for API gateway
-- [Redis Caching](wiki/deep-dive/integrations/redis-caching.md) - CoCache-based policy caching
-- [OpenTelemetry](wiki/deep-dive/integrations/opentelemetry.md) - Distributed tracing
-- [OpenAPI / Swagger](wiki/deep-dive/integrations/openapi.md) - Auto-generate permissions from API specs
-- [IP Geolocation](wiki/deep-dive/integrations/ip-geolocation.md) - IP region enrichment
-
-### Extending CoSec
-
-- [Custom Matchers (SPI)](wiki/deep-dive/extending/custom-matchers.md) - Java SPI for custom matchers
-- [Auto-Configuration](wiki/deep-dive/extending/auto-configuration.md) - Spring Boot auto-config internals
-
-### Operations
-
-- [Deployment](wiki/deep-dive/operations/deployment.md) - Docker, Kubernetes, CI/CD
-- [Testing Guide](wiki/deep-dive/operations/testing.md) - Testing policies and authorization
-- [Performance](wiki/deep-dive/operations/performance.md) - JMH benchmarks, optimization
+- [Policy JSON Schema](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-policy.schema.json) and [app permission JSON Schema](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-app-permission.schema.json)
+- [Agent skills](https://github.com/Ahoo-Wang/CoSec/tree/main/skills): policy authoring, integration, custom matchers, troubleshooting
+- [Releases](https://github.com/Ahoo-Wang/CoSec/releases): changes and migration notes
 
 ## Optional
 
-- [CLAUDE.md](CLAUDE.md) - AI coding assistant instructions
-- [README.md](README.md) - Project README with design diagrams
-- [schema/](schema/) - JSON Schema files for policy and permission validation
+- [Contributing](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md): workflow, quality gates, release process
+- [Agent rules for changing CoSec](https://github.com/Ahoo-Wang/CoSec/blob/main/AGENTS.md)

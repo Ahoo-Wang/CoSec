@@ -1,6 +1,7 @@
 # CoSec
 
-基于 RBAC 和策略的多租户响应式安全框架。
+面向 Spring 的多租户响应式安全框架：IAM 风格的策略与基于角色的权限，每个请求都按“拒绝优先”求值。
+
 
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![GitHub release](https://img.shields.io/github/release/Ahoo-Wang/CoSec.svg)](https://github.com/Ahoo-Wang/CoSec/releases)
@@ -12,391 +13,98 @@
 [![Awesome Kotlin Badge](https://kotlin.link/awesome-kotlin.svg)](https://github.com/KotlinBy/awesome-kotlin)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Ahoo-Wang/CoSec)
 
-> [中文文档](https://cosec.ahoo.me/zh/) | [English Document](https://cosec.ahoo.me/)
+> [中文文档](https://cosec.ahoo.me/zh/) | [Documentation](https://cosec.ahoo.me/)
 
-## 认证
+## 为什么选择 CoSec
 
-![Authentication-Flow](document/design/assets/Authentication-Flow.svg)
+- **策略即数据。** 用 JSON 编写策略，支持路径动作、可组合的条件（角色、租户、请求头、IP、表达式）以及限流；
+  可在运行时修改，所有实例立即生效。
+- **拒绝处处优先。** 全局策略、主体自身的策略和角色权限按“拒绝优先”合并；未匹配的请求一律拒绝，出错也拒绝。
+- **多租户与角色权限。** 主体可感知租户；按应用定义权限目录，并按空间授予角色。
+- **一条流程，三种技术栈。** Spring WebFlux、Spring MVC 和 Spring Cloud Gateway 共用同一条安全处理流程，响应行为完全一致。
+- **响应式且高性能。** 基于 Project Reactor，单次授权约 2 µs，不阻塞事件循环。
+- **可审计。** 每次决策都会产生审计事件（日志或 Kafka）和 OpenTelemetry Span，并记录做出决定的策略或权限。
 
-### 社会化认证
+## 如何做出决策
 
-![Social-Authentication](document/design/assets/Social-Authentication.svg)
+```mermaid
+flowchart LR
+    R([请求 + JWT]) --> ROOT{root 主体?}
+    ROOT -->|是| ALLOW([ALLOW])
+    ROOT -->|否| L["全局策略<br>主体策略<br>角色权限"]
+    L --> D{命中任何 DENY?}
+    D -->|是| DENY([EXPLICIT_DENY])
+    D -->|否| A{命中任何 ALLOW?}
+    A -->|是| ALLOW
+    A -->|否| IMP([IMPLICIT_DENY])
+```
 
-### 注销登录（Token 吊销）
+被拒绝时，匿名调用方返回 `401`，已认证调用方返回 `403`，触发限流返回 `429`。
 
-CoSec 默认使用无状态 JWT。如需让登出生效，启用令牌吊销：
+## 快速开始
+
+```kotlin
+dependencies {
+    implementation(platform("me.ahoo.cosec:cosec-bom:<version>"))
+    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+        capabilities { requireCapability("me.ahoo.cosec:webflux-support") } // 或 webmvc-support / gateway-support
+    }
+    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+        capabilities { requireCapability("me.ahoo.cosec:cache-support") }   // 基于 Redis 的策略存储
+    }
+}
+```
 
 ```yaml
 cosec:
   jwt:
-    token-revocation:
-      enabled: true
+    secret: ${COSEC_JWT_SECRET}
+  authorization:
+    local-policy:
+      enabled: true          # classpath:cosec-policy/*-policy.json
+      init-repository: true
 ```
-
-这将接入基于 Redis 的 `CoCacheTokenStore`（需要 `cosec-cocache` 依赖——即启动器的
-`cacheSupport` Gradle 特性——以及 Redis）；自定义实现可提供自己的 `TokenStore` Bean。
-然后在你自己的登出端点中调用 `TokenRevoker.revoke(accessToken)`。token（及其绑定的
-refresh token）会通过 CoCache（Redis）在集群内立即失效。注意 fail-open 语义：当 Redis
-不可达时，吊销检查会回退为放行（`isRevoked` 返回 `false`）；如需 fail-closed，可设置
-`cocache.redis.strict-failure=true`。
-
-## 授权
-
-![Authorization-Flow](document/design/assets/Authorization-Flow.svg)
-
-## 建模类图
-
-![Modeling](document/design/assets/Modeling.svg)
-
-## 安全网关服务
-
-![Gateway](document/design/assets/Gateway.svg)
-
-## 授权策略流程
-
-![Authorization Policy](document/design/assets/Authorization-Policy.svg)
-
-## 内置策略匹配器
-
-### ActionMatcher
-
-![ActionMatcher](document/design/assets/ActionMatcher.svg)
-
-#### 如何自定义 `ActionMatcher` (SPI)
-
-> 参考 [PathActionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/PathActionMatcher.kt)
-
-```kotlin
-class CustomActionMatcherFactory : ActionMatcherFactory {
-    companion object {
-        const val TYPE = "[CustomActionType]"
-    }
-
-    override val type: String
-        get() = TYPE
-
-    override fun create(configuration: Configuration): ConditionMatcher {
-        return CustomActionMatcher(configuration)
-    }
-}
-class CustomActionMatcher(override val configuration: Configuration) : ActionMatcher {
-
-    override val type: String
-        get() = CustomActionMatcherFactory.TYPE
-
-    override fun match(request: Request, securityContext: SecurityContext): Boolean {
-        //Custom matching logic
-    }
-}
-```
-
-> META-INF/services/me.ahoo.cosec.policy.action.ActionMatcherFactory
-
-```properties
-# CustomActionMatcherFactory fully qualified name
-```
-
-### ConditionMatcher
-
-![ConditionMatcher](document/design/assets/ConditionMatcher.svg)
-
-#### 如何自定义 `ConditionMatcher` (SPI)
-
-> 参考 [ContainsConditionMatcher](cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/part/ContainsConditionMatcher.kt)
-
-```kotlin
-class CustomConditionMatcherFactory : ConditionMatcherFactory {
-    companion object {
-        const val TYPE = "[CustomConditionType]"
-    }
-
-    override val type: String
-        get() = TYPE
-
-    override fun create(configuration: Configuration): ConditionMatcher {
-        return CustomConditionMatcher(configuration)
-    }
-}
-class CustomConditionMatcher(configuration: Configuration) :
-    AbstractConditionMatcher(CustomConditionMatcherFactory.TYPE, configuration) {
-
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        //Custom matching logic
-    }
-}
-```
-
-> META-INF/services/me.ahoo.cosec.policy.condition.ConditionMatcherFactory
-
-```properties
-# CustomConditionMatcherFactory fully qualified name
-```
-
-## 策略 Schema
-
-配置 [Policy Schema](schema/cosec-policy.schema.json) 以支持 IDE ([IntelliJ IDEA](https://www.jetbrains.com/help/idea/json.html#ws_json_using_schemas)) 输入自动完成。
-
-
-> 策略 Demo
 
 ```json
 {
-  "id": "id",
-  "name": "name",
-  "category": "category",
-  "description": "description",
-  "type": "global",
-  "tenantId": "tenantId",
-  "condition": {
-    "bool": {
-      "and": [
-        {
-          "authenticated": {}
-        },
-        {
-          "rateLimiter": {
-            "permitsPerSecond": 10
-          }
-        }
-      ]
-    }
-  },
+  "id": "app", "name": "App", "category": "app", "description": "", "type": "global", "tenantId": "(platform)",
   "statements": [
-    {
-      "action": {
-        "path": {
-          "pattern": "/user/#{principal.id}/*",
-          "options": {
-            "caseSensitive": false,
-            "separator": "/",
-            "decodeAndParseSegments": false
-          }
-        }
-      }
-    },
-    {
-      "name": "Anonymous",
-      "action": [
-        "/auth/register",
-        "/auth/login"
-      ]
-    },
-    {
-      "name": "UserScope",
-      "action": "/user/#{principal.id}/*",
-      "condition": {
-        "authenticated": {}
-      }
-    },
-    {
-      "name": "Developer",
-      "action": "*",
-      "condition": {
-        "in": {
-          "part": "context.principal.id",
-          "value": [
-            "developerId"
-          ]
-        }
-      }
-    },
-    {
-      "name": "RequestOriginDeny",
-      "effect": "deny",
-      "action": "*",
-      "condition": {
-        "regular": {
-          "negate": true,
-          "part": "request.origin",
-          "pattern": "^(http|https)://github.com"
-        }
-      }
-    },
-    {
-      "name": "IpBlacklist",
-      "effect": "deny",
-      "action": "*",
-      "condition": {
-        "path": {
-          "part": "request.remoteIp",
-          "pattern": "192.168.0.*",
-          "options": {
-            "caseSensitive": false,
-            "separator": ".",
-            "decodeAndParseSegments": false
-          }
-        }
-      }
-    },
-    {
-      "name": "RegionWhitelist",
-      "effect": "deny",
-      "action": "*",
-      "condition": {
-        "regular": {
-          "negate": true,
-          "part": "request.attributes.ipRegion",
-          "pattern": "^中国\\|0\\|(上海|广东省)\\|.*"
-        }
-      }
-    },
-    {
-      "name": "AllowDeveloperOrIpRange",
-      "action": "*",
-      "condition": {
-        "bool": {
-          "and": [
-            {
-              "authenticated": {}
-            }
-          ],
-          "or": [
-            {
-              "in": {
-                "part": "context.principal.id",
-                "value": [
-                  "developerId"
-                ]
-              }
-            },
-            {
-              "path": {
-                "part": "request.remoteIp",
-                "pattern": "192.168.0.*",
-                "options": {
-                  "caseSensitive": false,
-                  "separator": ".",
-                  "decodeAndParseSegments": false
-                }
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "name": "TestContains",
-      "effect": "allow",
-      "action": "*",
-      "condition": {
-        "contains": {
-          "part": "request.attributes.ipRegion",
-          "value": "上海"
-        }
-      }
-    },
-    {
-      "name": "TestStartsWith",
-      "effect": "allow",
-      "action": "*",
-      "condition": {
-        "startsWith": {
-          "part": "request.attributes.ipRegion",
-          "value": "中国"
-        }
-      }
-    },
-    {
-      "name": "TestEndsWith",
-      "effect": "allow",
-      "action": "*",
-      "condition": {
-        "endsWith": {
-          "part": "request.attributes.remoteIp",
-          "value": ".168.0.1"
-        }
-      }
-    }
+    { "name": "public", "action": ["/auth/login", "/actuator/health"] },
+    { "name": "authenticated", "action": "/api/**", "condition": { "authenticated": {} } },
+    { "name": "admins-only", "effect": "deny", "action": "/api/admin/**",
+      "condition": { "inRole": { "value": "admin", "negate": true } } }
   ]
 }
-
-```
-## 应用权限元数据 Schema
-
-配置 [App Permission Schema](schema/cosec-app-permission.schema.json) 以支持 IDE ([IntelliJ IDEA](https://www.jetbrains.com/help/idea/json.html#ws_json_using_schemas)) 输入自动完成。
-
-> 应用权限元数据 Demo
-
-```json
-{
-  "id": "manage",
-  "condition": {
-    "bool": {
-      "and": [
-        {
-          "authenticated": {}
-        },
-        {
-          "groupedRateLimiter": {
-            "part": "request.remoteIp",
-            "permitsPerSecond": 10,
-            "expireAfterAccessSecond": 1000
-          }
-        },
-        {
-          "inTenant": {
-            "value": "default"
-          }
-        }
-      ]
-    }
-  },
-  "groups": [
-    {
-      "name": "order",
-      "description": "order management",
-      "permissions": [
-        {
-          "id": "manage.order.ship",
-          "name": "Ship",
-          "description": "Ship",
-          "action": "/order/ship"
-        },
-        {
-          "id": "manage.order.issueInvoice",
-          "name": "Issue an invoice",
-          "description": "Issue an invoice",
-          "action": "/order/issueInvoice"
-        }
-      ]
-    }
-  ]
-}
-
-```
-## 获取当前安全上下文
-
-### WebFlux
-
-```kotlin
-     Mono.deferContextual {
-        val securityContext = it.getSecurityContext()
-        //TODO
-    }
 ```
 
-### WebMvc
+接下来阅读[快速开始](https://cosec.ahoo.me/zh/guide/quick-start)了解如何签发令牌，再阅读[策略参考](https://cosec.ahoo.me/zh/guide/policies)。
 
-```
-SecurityContextHolder.context
-```
+## 模块
 
-## OpenTelemetry
+| 模块 | 用途 |
+|---|---|
+| `cosec-api` | 公共接口：主体、策略、授权、请求、租户 |
+| `cosec-core` | 策略引擎、匹配器、授权、安全处理流程、审计 |
+| `cosec-jwt` | JWT 签发与校验 |
+| `cosec-webflux` · `cosec-webmvc` · `cosec-gateway` | Spring WebFlux、Spring MVC、Spring Cloud Gateway 适配器 |
+| `cosec-cocache` | 基于 Redis 的策略、权限与令牌吊销；Redis 限流器 |
+| `cosec-social` | 通过 JustAuth 实现 OAuth 社交登录 |
+| `cosec-opentelemetry` · `cosec-openapi` · `cosec-ip2region` · `cosec-kafka` | 链路追踪、基于 OpenAPI 生成策略、IP 地理位置、Kafka 审计 |
+| `cosec-spring-boot-starter` | 自动配置；各项集成通过 Gradle 能力按需启用 |
+| `cosec-gateway-server` | 开箱即用的网关镜像（`ahoowang/cosec-gateway`） |
 
-[CoSec-OpenTelemetry](cosec-opentelemetry)
+## 文档
 
-> CoSec 遵循 OpenTelemetry [General identity attributes](https://opentelemetry.io/docs/reference/specification/trace/semantic_conventions/span-general/#general-identity-attributes) 规范。
-
-![CoSec-OpenTelemetry](document/design/assets/CoSec-OpenTelemetry.png)
-
-## 感谢
-
-CoSec 权限策略设计参考 [AWS IAM](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html) 。
+- **指南**：[简介](https://cosec.ahoo.me/zh/guide/introduction) · [快速开始](https://cosec.ahoo.me/zh/guide/quick-start) ·
+  [策略](https://cosec.ahoo.me/zh/guide/policies) · [配置](https://cosec.ahoo.me/zh/guide/configuration) ·
+  [认证](https://cosec.ahoo.me/zh/guide/authentication) · [Web 集成](https://cosec.ahoo.me/zh/guide/web-integration) ·
+  [运维](https://cosec.ahoo.me/zh/guide/operations)
+- **架构**：[概览](https://cosec.ahoo.me/zh/architecture/overview) · [扩展](https://cosec.ahoo.me/zh/architecture/extending)
+- **发布记录**：[GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)
 
 ## 参与贡献
 
-欢迎贡献。请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，了解分支模型、Conventional Commits 格式的 PR 标题、
-编码规范、测试与覆盖率要求、代码评审以及基于语义化版本的发布流程。本项目遵循[行为准则](CODE_OF_CONDUCT.md)。
+欢迎贡献。工作流程、质量门禁与发布流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。本项目遵循[行为准则](CODE_OF_CONDUCT.md)。
 
 ## 安全
 
@@ -404,4 +112,4 @@ CoSec 权限策略设计参考 [AWS IAM](https://docs.aws.amazon.com/IAM/latest/
 
 ## 许可证
 
-CoSec 基于 [Apache License 2.0](LICENSE) 发布。
+CoSec 基于 [Apache License 2.0](LICENSE) 发布，其策略模型参考了 [AWS IAM](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html)。
