@@ -155,4 +155,71 @@ class LocalCacheFastPathTest {
             .verifyComplete()
         emittedOn.assert().isEqualTo(callerThread)
     }
+
+    @Test
+    fun lookupLocalTreatsExpiredEntryAsMiss() {
+        val cache = coherentCache<Policy>("PolicyCache")
+        cache.set("policy", TtlAt.currentTime() - 1, policy)
+        cache.lookupLocal("policy").assert().isEqualTo(LocalLookup.Miss)
+    }
+
+    @Test
+    fun getGlobalPolicyFallsBackWhenIndexLocalButPolicyNot() {
+        val coherentPolicyCache = coherentCache<Policy>("PolicyCache")
+        val repository = RedisPolicyRepository(
+            TestGlobalPolicyIndexCache(coherentCache("GlobalPolicyIndexCache")),
+            TestPolicyCache(coherentPolicyCache),
+        )
+        repository.setPolicy(policy).block()
+        coherentPolicyCache.configuration.clientSideCache.clear()
+
+        var emittedOn: String? = null
+        repository.getGlobalPolicy()
+            .doOnNext { emittedOn = Thread.currentThread().name }
+            .test()
+            .expectNext(listOf(policy))
+            .verifyComplete()
+        emittedOn.assert().startsWith("boundedElastic")
+    }
+
+    @Test
+    fun cachedMissingPolicyIsResolvedLocally() {
+        val repository = RedisPolicyRepository(
+            TestGlobalPolicyIndexCache(coherentCache("GlobalPolicyIndexCache")),
+            TestPolicyCache(coherentCache("PolicyCache")),
+        )
+        // first lookup goes to the blocking path and caches the miss
+        repository.getPolicies(setOf("unknown")).test().expectNext(emptyList()).verifyComplete()
+
+        val callerThread = Thread.currentThread().name
+        var emittedOn: String? = null
+        repository.getPolicies(setOf("unknown"))
+            .doOnNext { emittedOn = Thread.currentThread().name }
+            .test()
+            .expectNext(emptyList())
+            .verifyComplete()
+        emittedOn.assert().isEqualTo(callerThread)
+    }
+
+    @Test
+    fun getAppRolePermissionEmptyWhenAppPermissionCachedMissing() {
+        val repository = RedisAppRolePermissionRepository(
+            TestAppPermissionCache(coherentCacheOf("AppPermissionCache")),
+            TestRolePermissionCache(coherentCacheOf("RolePermissionCache")),
+        )
+        // first lookup goes to the blocking path and caches the missing app permission
+        var firstCompletedOn: String? = null
+        repository.getAppRolePermission("unknown", "space", setOf("admin"))
+            .doOnSuccess { firstCompletedOn = Thread.currentThread().name }
+            .test()
+            .verifyComplete()
+        firstCompletedOn.assert().startsWith("boundedElastic")
+
+        var completedOn: String? = null
+        repository.getAppRolePermission("unknown", "space", setOf("admin"))
+            .doOnSuccess { completedOn = Thread.currentThread().name }
+            .test()
+            .verifyComplete()
+        completedOn.assert().isEqualTo(Thread.currentThread().name)
+    }
 }

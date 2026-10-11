@@ -23,15 +23,19 @@ import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.blacklist.BlacklistChecker
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.AppRolePermissionData
 import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.permission.PermissionGroupData
 import me.ahoo.cosec.permission.RolePermissionData
+import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcher
+import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
+import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
@@ -527,6 +531,42 @@ internal class SimpleAuthorizationTest {
         SimpleAuthorization(policyRepository, permissionRepository).authorize(mockk(), securityContext)
             .test()
             .expectNext(AuthorizeResult.EXPLICIT_DENY)
+            .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenWildcardRoleMatchesNoPermission() {
+        val appRolePermission = AppRolePermissionData(
+            appPermission = AppPermissionData(
+                id = "appId",
+                groups = listOf(
+                    PermissionGroupData(
+                        "groupName",
+                        permissions = listOf(
+                            PermissionData(
+                                id = "unmatched",
+                                name = "",
+                                effect = Effect.ALLOW,
+                                action = PathActionMatcherFactory.INSTANCE.create("/other/**".asConfiguration()),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            rolePermissions = listOf(RolePermissionData(id = "admin", permissions = setOf("*"))),
+        )
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.empty()
+            every { getPolicies(any()) } returns Mono.empty()
+        }
+        val permissionRepository = mockk<AppRolePermissionRepository> {
+            every { getAppRolePermission(any(), any(), any()) } returns appRolePermission.toMono()
+        }
+        val securityContext = SimpleSecurityContext(SimplePrincipal("user", roles = setOf("admin")))
+        SimpleAuthorization(policyRepository, permissionRepository)
+            .authorize(EvaluateRequest(path = "/orders/1"), securityContext)
+            .test()
+            .expectNext(AuthorizeResult.IMPLICIT_DENY)
             .verifyComplete()
     }
 }
