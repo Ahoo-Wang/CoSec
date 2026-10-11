@@ -84,9 +84,9 @@ Every change must keep these.
 |---|---|
 | **Deny-first** | No combination of policies or layers lets an `ALLOW` win over a matched `DENY`. |
 | **Fail closed** | Errors deny (`500`, regex timeout `403`). The only exceptions are documented degraded modes: non-strict Redis rate limiters, and the revocation check. Policy and permission caches use strict Redis failure. |
-| **No blocking on the event loop** | Blocking work (Redis, token revocation) runs on `boundedElastic`. Reads answered from the local cache stay on the caller's thread. |
+| **No blocking on the event loop** | Blocking work (repository reads from Redis, token revocation) runs on `boundedElastic`. Reads answered from the local cache stay on the caller's thread. Known exception: Redis rate-limit conditions call Redis synchronously during matching, which runs on the caller's thread. |
 | **One decision path** | Status codes and error mapping live only in `SecurityPipeline`. Adapters never decide. |
-| **Matchers do no I/O** | Matchers only read the request and security context. Path matchers record path variables in the context, and rate limiters hold state (Redis limiters call Redis) by design. |
+| **Matchers do no I/O** | Matchers only read the request and security context. Path matchers record path variables in the context, and rate limiters hold state by design. Redis rate limiters are the only matchers that do I/O. |
 | **Policies are data** | Policies and permissions are JSON. Matchers are created through factories registered by type (`ServiceLoader` or Spring beans). |
 
 ## Data and caching

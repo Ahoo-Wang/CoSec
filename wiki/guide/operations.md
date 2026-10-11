@@ -1,7 +1,7 @@
 # Operations
 
-Running CoSec in production: storage and failure modes, auditing, observability, optional integrations,
-deployment, and performance.
+Running CoSec in production: storage and failure modes, auditing, observability, deployment, and
+performance.
 
 ## Redis and caching
 
@@ -25,7 +25,7 @@ also holds revoked token ids. Each instance keeps an in-process copy
 |---|---|
 | Policies, global index, app permissions, role grants | Locally cached data keeps working. Anything else fails, and the request is **denied** (`500`). |
 | Revoked tokens | The check **allows** the token, so an outage doesn't reject every authenticated request. |
-| Redis rate limiters | Allow, unless the condition sets `strictFailure: true`. |
+| Redis rate limiters | Allow, unless the condition sets `strictFailure: true` (then `429`). |
 
 Rolling upgrades: CoSec 6 keeps the Redis keys and formats of 5.x, so 5.x and 6.x instances can share one
 Redis during an upgrade.
@@ -62,27 +62,6 @@ With `opentelemetry-support`, each authorization is a span named `cosec.authoriz
 Decisions are also logged at debug level by `me.ahoo.cosec.authorization.SimpleAuthorization`, including the
 matched policy statement or role permission.
 
-## OpenAPI
-
-With `openapi-support` and Spring Boot Actuator:
-
-- `GET /actuator/cosecPolicyGenerator` generates a policy from your OpenAPI description, and
-  `GET /actuator/cosecAppPermissionGenerator` generates an app permission: one `allow` entry per operation
-  (path and method), with a placeholder id and metadata. Use them as starting points: set the ids, narrow
-  the rules, and review before deploying.
-- The OpenAPI document declares bearer authentication, so API explorers can send tokens.
-
-## IP geolocation
-
-With `ip2region-support`, the client IP is looked up in an embedded
-[ip2region](https://github.com/lionsoul2014/ip2region) database, and the result is added as the request
-attribute `ipRegion`. Conditions can then use `request.attributes.ipRegion`, for example to restrict
-access by country:
-
-```json
-{ "contains": { "part": "request.attributes.ipRegion", "value": "中国" } }
-```
-
 ## Deployment
 
 `cosec-gateway-server` is a ready-to-run Spring Cloud Gateway with CoSec authorization, Redis-backed
@@ -109,12 +88,6 @@ Checklist for any deployment:
 
 ## Performance
 
-Authorization runs in-process. On JDK 17, `SimpleAuthorizationBenchmark`
-(about 80 path rules across global, principal and role layers) measures about **2 µs per decision** and
-1.8–6.6 KB allocated. With data in the local cache, repository reads add no thread switch.
-
-To reproduce:
-
-```bash
-./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark
-```
+Authorization runs in-process and takes about 2 µs per decision; reads served from the local cache add no
+thread switch. Benchmark details and how to reproduce them are in the
+[architecture overview](../architecture/overview.md#performance).

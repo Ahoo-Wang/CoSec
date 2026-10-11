@@ -6,13 +6,14 @@ Key facts: a DENY matched in any layer overrides any ALLOW; unmatched requests a
 
 ## Guide
 
-- [Introduction](https://cosec.ahoo.me/guide/introduction): concepts (principal, tenant, policy, statement, app permission) and the decision model
+- [Introduction](https://cosec.ahoo.me/guide/introduction): concepts (principal, tenant, policy, statement, app permission), the decision model, modules and their Gradle capabilities
 - [Quick Start](https://cosec.ahoo.me/guide/quick-start): Gradle capabilities, configuration, first policy, issuing tokens
-- [Policies](https://cosec.ahoo.me/guide/policies): policy language reference (actions, conditions and request parts, rate limits, evaluation order, roles and app permissions)
+- [Policies](https://cosec.ahoo.me/guide/policies): policy language reference (actions, templates, conditions and request parts, rate limits, evaluation order, roles and app permissions, loading, OpenAPI generation, validating policies in tests)
 - [Configuration](https://cosec.ahoo.me/guide/configuration): every `cosec.*` property with defaults
 - [Authentication](https://cosec.ahoo.me/guide/authentication): JWT claims, login, refresh, revocation, multi-tenancy, social login, the gateway trust boundary
-- [Web Integration](https://cosec.ahoo.me/guide/web-integration): adapters, status codes, accessing the security context, client IP, CORS
-- [Operations](https://cosec.ahoo.me/guide/operations): Redis failure modes, auditing, OpenTelemetry, OpenAPI, ip2region, deployment, performance
+- [Web Integration](https://cosec.ahoo.me/guide/web-integration): adapters, status codes, accessing the security context, client IP, request attributes (ipRegion, gateway route id), CORS
+- [Operations](https://cosec.ahoo.me/guide/operations): Redis failure modes, auditing, OpenTelemetry, deployment, performance
+- [Troubleshooting](https://cosec.ahoo.me/guide/troubleshooting): diagnosing 401/403/429/500, policies with no effect, unexpected allows, rate limits
 
 ## Architecture
 

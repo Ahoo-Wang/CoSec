@@ -40,12 +40,10 @@
     }
   },
   "required": [
-    "category",
+    "id",
     "name",
-    "description",
     "tenantId",
-    "type",
-    "statements"
+    "type"
   ],
   "definitions": {
     "policyType": {

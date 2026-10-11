@@ -25,11 +25,11 @@ dependencies {
 }
 ```
 
-Available capabilities: `webflux-support`, `webmvc-support`, `gateway-support`, `cache-support`,
-`oauth-support`, `opentelemetry-support`, `openapi-support`, `ip2region-support`, `kafka-support`.
+Every capability and the module it adds is listed under [Modules](./introduction.md#modules).
 
 With Maven (no feature variants), add the starter plus the matching modules directly, for example
-`cosec-webflux` and `cosec-cocache`.
+`cosec-webflux` and `cosec-cocache`, together with the third-party dependencies those modules need (for
+`cosec-cocache`: Spring Data Redis and `me.ahoo.cocache:cocache-spring-boot-starter`).
 
 ::: tip Why Redis?
 Authorization reads policies through a `PolicyRepository` and role permissions through an
@@ -78,17 +78,18 @@ Create `src/main/resources/cosec-policy/app-policy.json`:
       "condition": { "authenticated": {} }
     },
     {
-      "name": "no-admin-from-outside",
+      "name": "admins-only",
       "effect": "deny",
       "action": "/api/admin/**",
-      "condition": { "in": { "part": "request.header.X-Network", "value": ["public"] } }
+      "condition": { "inRole": { "value": "admin", "negate": true } }
     }
   ]
 }
 ```
 
 A statement allows by default; `"effect": "deny"` makes it a deny. Because deny wins, the third
-statement blocks `/api/admin/**` for public traffic even though the second statement allows `/api/**`.
+statement blocks `/api/admin/**` for everyone without the `admin` role, even though the second statement
+allows `/api/**`. Anything not listed, such as `/internal/**`, is denied by default.
 
 ## 4. Issue tokens
 

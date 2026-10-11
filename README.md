@@ -86,24 +86,18 @@ Continue with the [Quick Start](https://cosec.ahoo.me/guide/quick-start) to issu
 
 ## Modules
 
-| Module | Purpose |
-|---|---|
-| `cosec-api` | Public interfaces: principal, policy, authorization, request, tenant |
-| `cosec-core` | Policy engine, matchers, authorization, security pipeline, auditing |
-| `cosec-jwt` | JWT issuing and verification |
-| `cosec-webflux` · `cosec-webmvc` · `cosec-gateway` | Spring WebFlux, Spring MVC and Spring Cloud Gateway adapters |
-| `cosec-cocache` | Redis-backed policies, permissions and token revocation; Redis rate limiters |
-| `cosec-social` | OAuth social login via JustAuth |
-| `cosec-opentelemetry` · `cosec-openapi` · `cosec-ip2region` · `cosec-kafka` | Tracing, policy generation from OpenAPI, IP geolocation, Kafka audit sink |
-| `cosec-spring-boot-starter` | Auto-configuration; integrations are opt-in Gradle capabilities |
-| `cosec-gateway-server` | Ready-to-run gateway image (`ahoowang/cosec-gateway`) |
+The starter brings the core, JWT support and auto-configuration; each integration (WebFlux, MVC, Gateway,
+Redis, OAuth, OpenTelemetry, OpenAPI, ip2region, Kafka) is an opt-in Gradle capability. See
+[Modules](https://cosec.ahoo.me/guide/introduction#modules) for the full list. A ready-to-run gateway is
+published as the container image `ahoowang/cosec-gateway`.
 
 ## Documentation
 
 - **Guide**: [Introduction](https://cosec.ahoo.me/guide/introduction) ·
   [Quick Start](https://cosec.ahoo.me/guide/quick-start) · [Policies](https://cosec.ahoo.me/guide/policies) ·
   [Configuration](https://cosec.ahoo.me/guide/configuration) · [Authentication](https://cosec.ahoo.me/guide/authentication) ·
-  [Web Integration](https://cosec.ahoo.me/guide/web-integration) · [Operations](https://cosec.ahoo.me/guide/operations)
+  [Web Integration](https://cosec.ahoo.me/guide/web-integration) · [Operations](https://cosec.ahoo.me/guide/operations) ·
+  [Troubleshooting](https://cosec.ahoo.me/guide/troubleshooting)
 - **Architecture**: [Overview](https://cosec.ahoo.me/architecture/overview) · [Extending](https://cosec.ahoo.me/architecture/extending)
 - **Releases**: [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)
 

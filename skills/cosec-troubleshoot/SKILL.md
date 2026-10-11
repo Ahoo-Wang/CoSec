@@ -5,6 +5,8 @@ description: Diagnose CoSec authentication and authorization failures, including
 
 # CoSec Troubleshooting
 
+The human-facing guide is https://cosec.ahoo.me/guide/troubleshooting; this skill adds the agent workflow.
+
 Find the first incorrect transition from request parsing to authentication, policy loading, matching, and response mapping. Gather evidence before proposing a policy or code change.
 
 ## Start with observable facts
@@ -92,7 +94,7 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 - `rateLimiter` and `groupedRateLimiter` are in-memory and per JVM.
 - `redisRateLimiter` and `redisGroupedRateLimiter` are cluster-wide and require cache support plus `StringRedisTemplate`.
 - Redis limiter outages fail open by default. Set the matcher's `strictFailure: true` only when availability loss should return 429.
-- Check `cosec.limiter.key-prefix`, `windowSeconds`, grouping `part`, and whether multiple policies intentionally share an identical quota configuration.
+- Check `cosec.limiter.key-prefix`, `windowSeconds`, and grouping `part`. Redis limiters with identical `permitsPerSecond`, `windowSeconds`, and `strictFailure` share one Redis counter even across policies, so an unrelated statement can consume the same quota.
 
 ## Reproduce narrowly
 

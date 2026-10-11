@@ -1,0 +1,86 @@
+# 故障排查 {#troubleshooting}
+
+先看响应告诉了你什么，再找出是哪条规则做的决定，最后检查这条规则看到的输入。
+
+## 找出做决定的规则 {#find-out-what-decided}
+
+每次决策都会指明做出决定的规则。打开调试日志：
+
+```yaml
+logging:
+  level:
+    me.ahoo.cosec.authorization.SimpleAuthorization: DEBUG   # matched policy statement or role permission
+    me.ahoo.cosec.audit: DEBUG                               # audit events (denials are logged at WARN)
+```
+
+每条审计事件都记录了主体、请求、结果及其**来源**：`ROOT`、`BLACKLIST`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、
+`ROLE_PERMISSION`，什么都没命中时为 `NONE`（见[审计](./operations.md#auditing)）。通过 `CoSec-Request-Id`
+响应头把响应和它的审计事件对应起来。使用 `opentelemetry-support` 时，`cosec.authorize` span 上也有同样的信息。
+
+## 按状态码排查 {#by-status-code}
+
+状态码及其原因的定义见 [Web 集成](./web-integration.md#responses)。
+
+| 状态码 | 原因 | 排查方向 |
+|---|---|---|
+| `400` | — | 路径包含 `.` / `..` 段或格式错误的百分号转义。请修复客户端。 |
+| `401` | `Token Expired` / `Token Invalid` | 问题在令牌而不在策略：见[意外的 401](#unexpected-401)。 |
+| `401` | `Implicit Deny` | 没有找到令牌，且没有规则允许匿名访问该路径。 |
+| `401` / `403` | `Explicit Deny` | 命中了一条 `deny` 语句或权限。调试日志会指出是哪一条。 |
+| `403` | `Implicit Deny` | 调用方已认证，但没有规则允许该请求；或者 `regular` 条件超时。 |
+| `429` | `Too Many Requests` | 限流条件：见[限流行为不符合预期](#rate-limits-behave-unexpectedly)。 |
+| `500` | `Implicit Deny` | 授权过程中出错。应用日志里有异常栈。 |
+
+## 意外的 401 {#unexpected-401}
+
+调用方被当作了匿名用户。
+
+- **令牌是否放在了 CoSec 读取的位置？** `Authorization` 请求头或 `authorization` Cookie；只有设置
+  `cosec.authorization.allow-query-token=true` 时才读取查询参数。见[认证](./authentication.md#tokens)。
+- **`Token Invalid`**：签发方和本服务必须使用相同的 `cosec.jwt.secret` 和 `cosec.jwt.algorithm`。
+  已吊销的令牌也报告为无效。
+- **`Token Expired`**：刷新令牌（[刷新](./authentication.md#refreshing)），或检查时钟和
+  `cosec.jwt.token-validity.access`。
+
+## 意外的 403 {#unexpected-403}
+
+调用方身份已知，但没有规则允许该请求，或者有规则拒绝了它。
+
+- 在调试日志中查看命中的规则。`Explicit Deny` 会指出胜出的那条拒绝；拒绝在所有层之间都优先，
+  因此全局 `allow` 无法覆盖它。
+- 对于 `Implicit Deny`，检查你预期会命中的那条规则：
+  - 它的**动作**：方法、末尾斜杠、`*`（一段）与 `**`（任意段）的区别；
+  - 它的**条件**以及它看到的主体：角色、属性和租户都来自令牌，变更要在重新登录或刷新后才生效；
+  - 对于主体策略，确认策略 id 在令牌的 `policies` 中；
+  - 对于角色权限，确认 `CoSec-App-Id` 和 `CoSec-Space-Id` 请求头，以及该角色在该空间中的授权。
+- `inTenant` 接收的是租户*种类*（`default`、`user`、`platform`），而不是租户 id。
+
+## 请求被意外放行 {#request-allowed-unexpectedly}
+
+- **root 主体**：`cosec.authorization.root-enabled` 为 `true` 时，主体 id `cosec`（或 `cosec.root` 系统属性的值）绕过所有检查。
+- **过宽的允许规则**：查找使用 `"*"`、`/**` 或没有条件的全局 `allow`。添加一条 `deny`，或收窄这条允许规则。
+- **没有命中的拒绝规则**：动作和条件必须都匹配。条件取反写错是常见错误。
+
+## 策略没有生效 {#policy-has-no-effect}
+
+- **本地文件已加载但没被使用。** 授权读取的是 `PolicyRepository`。请设置
+  `cosec.authorization.local-policy.init-repository=true`，或自行把策略写入仓储。
+- **策略已经存在。** 启动时，已存在的 id 会被保留，除非设置了 `force-refresh=true`。
+- **文件被跳过了。** 无效文件会以 `ERROR` 级别记录日志并被跳过（[加载策略](./policies.md#loading-and-generating-policies)）。
+  在启动日志中搜索该文件名。
+- **另一个文件使用了相同的 id。** 同一个 id 只会加载第一个。
+- **策略类型不对。** 只有 `global` 策略对所有人生效；`system` 和 `custom` 策略只对列出它们的主体生效。
+
+## 所有请求都返回 500 {#every-request-fails-with-500}
+
+- **Redis 不可达**，且策略或权限不在本地缓存中。这是有意为之：读取策略出错即拒绝（[Redis 与缓存](./operations.md#redis-and-caching)）。
+- **条件使用了不支持的 part。** 日志中会出现 `Unsupported part`；可用的 part 见[取值条件](./policies.md#value-conditions)。
+  [校验策略](./policies.md#validating-policies)可以在部署前发现这个问题。
+- **自定义匹配器或仓储抛出了异常。** 异常栈会指出是哪一个。
+
+## 限流行为不符合预期 {#rate-limits-behave-unexpectedly}
+
+- `rateLimiter` 和 `groupedRateLimiter` **按实例**计数；有 N 个实例时，实际限额是 N 倍。需要全集群限额时请使用 Redis 版本。
+- 配置完全相同的 Redis 限流器**共享同一份配额**，即使它们位于不同的策略中（[限流](./policies.md#rate-limits)）。
+- 放在**策略级**条件中的限流，会对该策略作用的每个请求消耗一个许可。
+- Redis 故障期间，除非 `strictFailure` 为 `true`，Redis 限流器会放行请求。

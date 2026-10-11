@@ -1,6 +1,6 @@
 # 运维 {#operations}
 
-在生产环境运行 CoSec：存储与故障模式、审计、可观测性、可选集成、部署与性能。
+在生产环境运行 CoSec：存储与故障模式、审计、可观测性、部署与性能。
 
 ## Redis 与缓存 {#redis-and-caching}
 
@@ -18,7 +18,7 @@
 |---|---|
 | 策略、全局索引、应用权限、角色授权 | 已在本地缓存的数据照常可用；其他读取失败，请求被**拒绝**（`500`）。 |
 | 已吊销的令牌 | 检查会**放行**令牌，避免一次故障就拒绝所有已认证的请求。 |
-| Redis 限流器 | 放行，除非条件设置了 `strictFailure: true`。 |
+| Redis 限流器 | 放行，除非条件设置了 `strictFailure: true`（此时返回 `429`）。 |
 
 滚动升级：CoSec 6 沿用 5.x 的 Redis 键和数据格式，升级期间 5.x 与 6.x 实例可以共用同一个 Redis。
 
@@ -51,24 +51,6 @@
 
 `me.ahoo.cosec.authorization.SimpleAuthorization` 还会以 debug 级别记录决策，包括命中的策略语句或角色权限。
 
-## OpenAPI {#openapi}
-
-使用 `openapi-support` 和 Spring Boot Actuator 时：
-
-- `GET /actuator/cosecPolicyGenerator` 根据你的 OpenAPI 描述生成一份策略，
-  `GET /actuator/cosecAppPermissionGenerator` 生成一份应用权限：每个操作（路径和方法）一条 `allow`，
-  id 和元数据都是占位值。请把它们当作起点：设置 id、收窄规则，部署前仔细审查。
-- OpenAPI 文档会声明 Bearer 认证，便于 API 调试工具携带令牌。
-
-## IP 地理位置 {#ip-geolocation}
-
-使用 `ip2region-support` 时，客户端 IP 会在内置的 [ip2region](https://github.com/lionsoul2014/ip2region)
-数据库中查询，结果作为请求属性 `ipRegion` 加入。条件随后可以使用 `request.attributes.ipRegion`，例如按国家限制访问：
-
-```json
-{ "contains": { "part": "request.attributes.ipRegion", "value": "中国" } }
-```
-
 ## 部署 {#deployment}
 
 `cosec-gateway-server` 是开箱即用的 Spring Cloud Gateway，带有 CoSec 授权、基于 Redis 的策略和本地策略初始化。
@@ -93,11 +75,5 @@ Secret 读取 JWT 密钥，请先创建它（`kubectl create secret generic cose
 
 ## 性能 {#performance}
 
-授权在进程内完成。在 JDK 17 上，`SimpleAuthorizationBenchmark`（全局、主体和角色三层共约 80 条路径规则）
-测得每次决策约 **2 µs**，分配 1.8–6.6 KB。数据在本地缓存时，读取仓储不会切换线程。
-
-复现方法：
-
-```bash
-./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark
-```
+授权在进程内完成，每次决策约 2 µs；从本地缓存读取数据不会切换线程。基准测试细节及复现方法见
+[架构概览](../architecture/overview.md#performance)。

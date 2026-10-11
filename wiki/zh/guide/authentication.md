@@ -21,7 +21,8 @@ CoSec 在每个请求上校验 JWT，并把它转换成供策略求值的主体�
 由于角色和策略随令牌传递，对它们的修改要到下一次登录或刷新时才生效。
 
 **发送令牌。** 客户端通过 `Authorization` 请求头（`Bearer` 前缀可选）或 `authorization` Cookie 发送访问令牌。
-只有设置 `cosec.authorization.allow-query-token=true` 时，才接受 `authorization` 查询参数。
+只有设置 `cosec.authorization.allow-query-token=true` 时，才接受 `authorization` 查询参数。使用 `openapi-support` 时，
+OpenAPI 文档会声明 Bearer 认证，Swagger UI 等 API 调试工具因此可以携带令牌。
 
 缺失、过期或无效的令牌会让调用方变成匿名，匿名调用方能做什么由策略决定。如果请求随后被拒绝，响应是 `401`，
 原因为 `Token Expired` 或 `Token Invalid`，而不是通用的 `Implicit Deny`。

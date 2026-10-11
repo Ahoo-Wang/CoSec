@@ -1,6 +1,7 @@
 # 策略 {#policies}
 
-策略是一份授予或拒绝访问的 JSON 文档。本页是策略语言的参考：结构、动作、条件、策略如何组合，以及基于角色的应用权限。
+策略是一份授予或拒绝访问的 JSON 文档。本页是策略语言的参考：结构、动作、条件、策略如何组合、基于角色的应用权限，
+以及策略如何加载和校验。
 
 供编辑器和 CI 使用的 JSON Schema 位于 [`schema/`](https://github.com/Ahoo-Wang/CoSec/tree/main/schema)：
 `cosec-policy.schema.json` 和 `cosec-app-permission.schema.json`。
@@ -26,11 +27,12 @@
 | 字段 | 必填 | 含义 |
 |---|---|---|
 | `id` | 是 | 策略的唯一 id。主体通过它引用非全局策略。 |
-| `name`、`category`、`description` | 是 | 描述性元数据。 |
+| `name` | 是 | 显示名称。 |
 | `type` | 是 | `global`：对每个请求都求值。`system` / `custom`：只对 `policies` 中包含该 id 的主体求值。 |
 | `tenantId` | 是 | 所属租户（平台级策略为 `(platform)`）。 |
+| `category`、`description` | 否 | 描述性元数据。 |
 | `condition` | 否 | 策略级条件。不匹配时整条策略被跳过。 |
-| `statements` | 是 | 规则列表。 |
+| `statements` | 否 | 规则列表。没有语句的策略永远不会命中。 |
 
 枚举值（`type`、`effect`）不区分大小写。
 
@@ -43,18 +45,20 @@
 | `action` | 是 | | 语句覆盖哪些请求。 |
 | `condition` | 否 | 始终 | 语句何时生效。 |
 
-动作和条件都匹配时语句才算**命中**。命中的 `allow` 得到 `ALLOW`，命中的 `deny` 得到 `EXPLICIT_DENY`。
+先匹配动作、再匹配条件，两者都匹配时语句才算**命中**。命中的 `allow` 得到 `ALLOW`，命中的 `deny` 得到 `EXPLICIT_DENY`。
 
 ## 动作 {#actions}
 
-动作用于选择请求，通常按路径选择。有四种写法：
+动作用于选择请求，通常按路径选择。有以下写法：
 
 | 写法 | 示例 | 含义 |
 |---|---|---|
 | `"*"` | `"action": "*"` | 所有请求。 |
 | 字符串 | `"action": "/orders/{id}"` | 一个路径模式，任意方法。 |
-| 数组 | `"action": ["/a/**", "/b"]` | 多个动作中任意一个；元素可以是字符串或对象。 |
-| 对象 | `"action": { "path": { ... } }` | 带选项的、指定类型的动作匹配器。 |
+| 数组 | `"action": ["/a/**", { "path": { ... } }]` | 多个动作中任意一个；元素是字符串或对象。 |
+| `path` | `"action": { "path": { ... } }` | 带方法和选项的路径模式（见下文）。 |
+| `all` | `"action": { "all": { "method": "GET" } }` | 所有路径，可限定部分方法。 |
+| `composite` | `"action": { "composite": [ ... ] }` | 与数组写法相同。 |
 
 `path` 动作匹配器：
 
@@ -70,13 +74,26 @@
 
 - `pattern`：一个或一组 Spring [`PathPattern`](https://docs.spring.io/spring-framework/reference/web/webflux/controller/ann-requestmapping.html#webflux-ann-requestmapping-uri-templates)
   （`*`、`**`、`{var}`、`{*rest}`）。
-- `method`：可选；一个或一组 HTTP 方法。省略表示任意方法。
+- `method`：可选；一个或一组 HTTP 方法，不区分大小写。省略表示任意方法。
 - `options`：可选；路径如何切分和比较。借助分隔符也可以匹配非 HTTP 的“路径”，例如 `"separator": "."` 时的 `order.read`。
 
-**路径变量。** 命中的动作捕获的变量，可以在条件中以 `request.path.var.<name>` 读取。
+**路径变量。** 命中的动作捕获的变量，可以在该语句的条件中以 `request.path.var.<name>` 读取。
 
-**模板模式。** 包含 `#{...}` 的模式是 SpEL 模板，会针对安全上下文求值，因此模式可以随调用方变化。
-例如 `"/users/#{principal.id}/**"` 让每个用户只能访问自己的资源。
+## 模板 {#templates}
+
+包含 `#{...}` 的模式或取值是只读的 SpEL 模板，会针对安全上下文求值，因此规则可以随调用方变化。模板的根对象提供
+`principal`（含 `id`、`roles`、`attributes`）和 `tenant`（含 `tenantId`）。
+
+模板可用于两处：
+
+- **路径模式**：`"/users/#{principal.id}/**"` 让每个用户只能访问自己的资源；
+- **`eq` 条件的 `value`**：把请求的某个部分与调用方比较，如下所示。
+
+```json
+{ "name": "own-orders",
+  "action": "/users/{userId}/orders/**",
+  "condition": { "eq": { "part": "request.path.var.userId", "value": "#{principal.id}" } } }
+```
 
 ## 条件 {#conditions}
 
@@ -86,7 +103,8 @@
 "condition": { "eq": { "part": "context.tenantId", "value": "(platform)" } }
 ```
 
-所有条件都支持 `"negate": true`，用于取反结果。
+除 `rateLimiter` 和 `redisRateLimiter` 外，所有条件都支持 `"negate": true`，用于取反结果。
+不要对限流条件取反：许可用尽时请求在取反之前就已被拒绝。
 
 ### 上下文条件 {#context-conditions}
 
@@ -97,34 +115,43 @@
 | `inRole` | `{ "value": "admin" }` | 主体拥有该角色 |
 | `inTenant` | `{ "value": "default" \| "user" \| "platform" }` | 租户是默认租户 `(0)`、用户租户或平台租户 `(platform)` |
 
+`inTenant` 判断的是租户的*种类*。要判断具体的租户 id，请使用
+`{ "eq": { "part": "context.tenantId", "value": "..." } }`。
+
 ### 取值条件 {#value-conditions}
 
 这类条件读取请求或安全上下文的某个**部分**（part），再进行比较。
 
 | 类型 | 配置 | 当该部分…时匹配 |
 |---|---|---|
-| `eq` | `part`、`value`、`ignoreCase` | 等于 `value` |
+| `eq` | `part`、`value`（可用[模板](#templates)）、`ignoreCase` | 等于 `value` |
 | `in` | `part`、`value`（数组） | 是 `value` 之一 |
 | `contains` | `part`、`value`、`ignoreCase` | 包含 `value` |
 | `startsWith` | `part`、`value`、`ignoreCase` | 以 `value` 开头 |
 | `endsWith` | `part`、`value`、`ignoreCase` | 以 `value` 结尾 |
-| `regular` | `part`、`pattern`、`timeout`（毫秒，默认 `1000`） | 匹配该正则表达式 |
+| `regular` | `part`、`pattern`、`timeout`（毫秒，默认 `1000`） | 整体匹配该正则表达式（不区分大小写） |
 | `path` | `part`、`pattern`、`options` | 匹配该路径模式 |
 
-`regular` 在时间预算内执行，以防范 ReDoS。超时会拒绝请求（`403`），绝不会被当作匹配。
+`ignoreCase` 默认为 `false`。`regular` 在时间预算内执行，以防范 ReDoS。超时会拒绝请求（`403`），绝不会被当作匹配。
 
 **可用的部分（part）：**
 
 | Part | 取值 |
 |---|---|
-| `request.path`、`request.method`、`request.remoteIp` | 路径、HTTP 方法、客户端 IP（见[客户端 IP](./configuration.md#authorization)） |
+| `request.path`、`request.method`、`request.remoteIp` | 路径、HTTP 方法、客户端 IP（见[客户端 IP](./web-integration.md#client-ip-behind-proxies)） |
 | `request.appId`、`request.spaceId`、`request.deviceId` | `CoSec-App-Id`、`CoSec-Space-Id`、`CoSec-Device-Id` 请求头（或查询参数） |
 | `request.origin`、`request.origin.host`、`request.referer`、`request.referer.host` | `Origin` / `Referer` 及其主机名 |
 | `request.header.<name>` | 任意请求头 |
-| `request.attributes.<name>` | 请求属性，例如来自 [IP 地理位置](./operations.md#ip-geolocation) 的 `ipRegion`，或网关路由 id |
+| `request.attributes.<name>` | [请求属性](./web-integration.md#request-attributes)，例如 `ipRegion` |
 | `request.path.var.<name>` | 命中的动作捕获的路径变量 |
 | `context.tenantId`、`context.principal.id` | 租户 id 和主体 id |
 | `context.principal.attributes.<name>` | 主体属性（JWT `attributes` 声明中的一项） |
+
+请求中不存在的部分读作空字符串。其他任何 part 名称都是策略错误：加载策略时不会被发现，
+每个执行到该条件的请求都会以 `500` 失败。
+
+请求头、`request.remoteIp` 和请求属性的可信度取决于它们的来源。除非有可信代理覆盖该请求头，
+否则不要基于客户端可以自行设置的请求头做决策。
 
 ### 组合条件 {#composing-conditions}
 
@@ -142,10 +169,10 @@
 
 ### 表达式 {#expressions}
 
-| 类型 | 配置 | 说明 |
+| 类型 | 配置 | 求值对象 |
 |---|---|---|
-| `spel` | `expression` | Spring 表达式语言，只读；根对象提供 `request` 和 `context`。 |
-| `ognl` | `expression` | 运行在沙箱中的 OGNL：只能只读地访问 `request` 和 `context`；不能调用修改方法、使用反射、构造对象或引用类型。 |
+| `spel` | `expression` | Spring 表达式语言，只读。根对象有 `request` 和 `context` 两个属性，例如 `context.principal.attributes['tier'] == 'gold'`。 |
+| `ognl` | `expression` | 运行在沙箱中的 OGNL。根对象是请求；安全上下文是变量 `#context`（请求也可用 `#request` 访问）。不能调用修改方法、使用反射、构造对象或引用类型。 |
 
 优先使用上面的声明式条件。表达式更难审查和测试。
 
@@ -156,18 +183,24 @@
 | 类型 | 配置 | 作用范围 |
 |---|---|---|
 | `rateLimiter` | `permitsPerSecond` | 每个应用实例 |
-| `groupedRateLimiter` | `part`、`permitsPerSecond`、`expireAfterAccessSecond` | 每个实例，`part` 的每个取值各一个限流器（例如按用户） |
+| `groupedRateLimiter` | `part`、`permitsPerSecond`、`expireAfterAccessSecond`（均必填） | 每个实例，`part` 的每个取值各一个限流器（例如按用户）；空闲超过 `expireAfterAccessSecond` 的限流器会被回收 |
 | `redisRateLimiter` | `permitsPerSecond`、`windowSeconds`（默认 `1`）、`strictFailure`（默认 `false`） | 全集群（Redis，滑动窗口） |
 | `redisGroupedRateLimiter` | 以上配置，再加 `part` | 全集群，按 `part` 的取值分别限流 |
-
-Redis 限流器需要 `cache-support`。`strictFailure: false` 时，Redis 故障会放行请求，而不是拦截所有流量；
-设为 `true` 则出错即拒绝。
 
 ```json
 { "name": "login-throttle",
   "action": { "path": { "pattern": "/auth/login", "method": "POST" } },
   "condition": { "redisGroupedRateLimiter": { "part": "request.remoteIp", "permitsPerSecond": 5 } } }
 ```
+
+Redis 限流器需要 `cache-support`。需要注意：
+
+- **窗口。** 一个 `windowSeconds` 长的窗口允许 `permitsPerSecond × windowSeconds` 个请求。
+- **共享配额。** Redis 计数器以限流器的配置（`permitsPerSecond`、`windowSeconds`、`strictFailure`）和 `part`
+  的取值为键，而不是以策略或语句为键。配置完全相同的两条语句共享同一份配额；改动其中任一配置即可分开。
+- **Redis 故障。** `strictFailure: false` 时，Redis 故障会放行请求，而不是拦截所有流量；设为 `true` 时，
+  Redis 不可用期间请求以 `429` 被拒绝。
+- **键前缀。** 键以 [`cosec.limiter.key-prefix`](./configuration.md#rate-limiting) 开头。
 
 ## 策略如何组合 {#how-policies-combine}
 
@@ -179,10 +212,10 @@ Redis 限流器需要 `cache-support`。`strictFailure: false` 时，Redis 故�
 
 在每一层内部以及各层之间，都是**拒绝优先**：只要有任何命中的语句或权限是 `deny`，结果就是
 `EXPLICIT_DENY`，即使另一层允许了该请求。否则只要命中任意 `allow` 就放行。什么都没命中时，结果是
-`IMPLICIT_DENY`。
+`IMPLICIT_DENY`。策略和语句的顺序从不改变结果，只影响报告的是哪条命中规则。
 
-有两种情况绕过上述流程：**root** 主体（id 为 `cosec`，可配置，见[配置](./configuration.md#authorization)）
-始终放行；在黑名单中的请求始终拒绝。
+在这三层之前还有两项检查：**root** 主体（id 为 `cosec`，可配置，见[配置](./configuration.md#authorization)）
+始终放行；被黑名单拦截的请求始终拒绝。
 
 ::: tip 策略级条件最先执行
 策略自身的 `condition` 在它的语句之前、每个请求只求值一次。放在这里的限流条件，会对该策略作用的每个请求消耗一个许可，无论最终由哪条语句做出决定。
@@ -228,6 +261,26 @@ CoSec 只读取权限和授权，写入由你的管理服务负责。
 
 - **本地文件**：`cosec.authorization.local-policy.enabled=true` 时，从 `classpath:cosec-policy/*-policy.json`
   加载策略。`init-repository=true` 时在启动时写入 `PolicyRepository`（已存在的 id 会保留，除非 `force-refresh=true`）。
+  授权只读取仓储，所以没有 `init-repository`，本地文件不会生效。
 - **运行时**：通过 `PolicyRepository.setPolicy` 写入策略。基于 Redis 的仓储会在存储前校验策略，所有实例都会立即看到变更。
-- **基于 OpenAPI**：使用 `openapi-support` 时，actuator 端点 `cosecPolicyGenerator` 和 `cosecAppPermissionGenerator`
-  会根据你的 API 描述生成一份策略或应用权限作为起点。详见[运维](./operations.md#openapi)。
+- **基于 OpenAPI**：使用 `openapi-support` 和 Spring Boot Actuator 时，`GET /actuator/cosecPolicyGenerator`
+  生成一份策略，`GET /actuator/cosecAppPermissionGenerator` 生成一份应用权限：每个接口（路径和方法）一条 `allow`，
+  id 和元数据为占位值。请把它们当作起点：设置 id、收窄规则，审查后再上线。
+
+::: warning 无效文件会被跳过
+无法解析的本地策略文件（JSON 无效、缺少必填字段、未知的条件类型、匹配器配置错误）会以 `ERROR` 级别记录日志并被跳过，
+应用仍会正常启动。请检查启动日志，或按下文在测试中校验策略。
+:::
+
+## 校验策略 {#validating-policies}
+
+在单元测试中用运行时解析器校验策略，而不只是 JSON Schema：
+
+```kotlin
+val policies = LocalPolicyLoader(setOf("classpath:cosec-policy/*-policy.json")).policies
+check(policies.any { it.id == "order-service" })   // the file was not skipped
+policies.forEach(DefaultPolicyEvaluator::evaluate)  // matchers run against a sample request
+```
+
+`DefaultPolicyEvaluator` 会用一个示例请求把每个条件和动作执行一遍，因此只在请求时才暴露的配置错误（例如未知的 part）
+会让测试失败。对每个重要的允许/拒绝边界，再用 `SimpleAuthorization` 搭配内存仓储写一个授权测试。
