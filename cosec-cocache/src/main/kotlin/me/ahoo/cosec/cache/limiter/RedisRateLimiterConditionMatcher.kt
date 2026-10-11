@@ -16,6 +16,7 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.policy.BlockingAware
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.limiter.RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY
 import org.springframework.data.redis.core.StringRedisTemplate
@@ -34,7 +35,10 @@ class RedisRateLimiterConditionMatcher(
     override val configuration: Configuration,
     private val stringRedisTemplate: StringRedisTemplate,
     private val keyPrefix: String = DEFAULT_REDIS_RATE_LIMITER_KEY_PREFIX
-) : ConditionMatcher {
+) : ConditionMatcher, BlockingAware {
+
+    /** Every match is a Redis round trip, so authorization evaluates it off the event loop. */
+    override val requiresBlocking: Boolean = true
 
     override val type: String
         get() = RedisRateLimiterConditionMatcherFactory.TYPE

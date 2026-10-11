@@ -15,6 +15,7 @@ package me.ahoo.cosec.cache.limiter
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.policy.BlockingAware
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.limiter.RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY
 import me.ahoo.cosec.policy.condition.part.PartConditionMatcher
@@ -28,7 +29,10 @@ class RedisGroupedRateLimiterConditionMatcher(
     configuration: Configuration,
     private val stringRedisTemplate: StringRedisTemplate,
     private val keyPrefix: String = DEFAULT_REDIS_RATE_LIMITER_KEY_PREFIX
-) : PartConditionMatcher(RedisGroupedRateLimiterConditionMatcherFactory.TYPE, configuration) {
+) : PartConditionMatcher(RedisGroupedRateLimiterConditionMatcherFactory.TYPE, configuration), BlockingAware {
+
+    /** Every match is a Redis round trip, so authorization evaluates it off the event loop. */
+    override val requiresBlocking: Boolean = true
 
     private val permitsPerSecond: Double =
         requireNotNull(configuration.get(RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY)) {

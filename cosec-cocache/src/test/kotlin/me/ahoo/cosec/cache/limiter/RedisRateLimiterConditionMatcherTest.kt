@@ -16,6 +16,7 @@ import io.mockk.mockk
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.policy.condition.limiter.RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
+import me.ahoo.cosec.policy.requiresBlocking
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -33,6 +34,13 @@ class RedisRateLimiterConditionMatcherTest {
         assertThrows(IllegalArgumentException::class.java) {
             factory().create(emptyMap<String, Any>().asConfiguration())
         }
+    }
+
+    @Test
+    fun requiresBlocking() {
+        factory()
+            .create(mapOf(RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY to 3).asConfiguration())
+            .requiresBlocking.assert().isTrue()
     }
 
     @Test

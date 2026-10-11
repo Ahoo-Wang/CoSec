@@ -18,6 +18,8 @@ import me.ahoo.cosec.api.configuration.asObject
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.policy.BlockingAware
+import me.ahoo.cosec.policy.requiresBlocking
 
 const val BOOL_CONDITION_MATCHER_AND_KEY = "and"
 const val BOOL_CONDITION_MATCHER_OR_KEY = "or"
@@ -37,7 +39,8 @@ class BoolConditionMatcher(
 ) : AbstractConditionMatcher(
     BoolConditionMatcherFactory.TYPE,
     configuration,
-) {
+),
+    BlockingAware {
     val and: List<ConditionMatcher> =
         configuration
             .get(BOOL_CONDITION_MATCHER_AND_KEY)
@@ -50,6 +53,8 @@ class BoolConditionMatcher(
             ?.asList()
             ?.map { it.asObject<ConditionMatcher>() }
             .orEmpty()
+
+    override val requiresBlocking: Boolean = and.any { it.requiresBlocking } || or.any { it.requiresBlocking }
 
     override fun internalMatch(
         request: Request,

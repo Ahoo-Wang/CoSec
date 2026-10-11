@@ -47,6 +47,10 @@ class BusinessHoursConditionMatcher(configuration: Configuration) :
   A factory registered under an existing type replaces the built-in one.
 - **Keep matchers fast and free of I/O.** They run for every request, possibly on an event loop. Read
   configuration once, in the constructor. Throwing denies the request.
+- **Mark blocking matchers.** If a condition matcher must block (a network or database call), implement
+  `me.ahoo.cosec.policy.BlockingAware` with `requiresBlocking = true`, as the Redis rate limiters do.
+  Authorization then evaluates the layers that use it on `boundedElastic`. A composite matcher that wraps
+  other matchers should report `true` when any child does, as `bool` does.
 
 ## Authorization hooks
 
