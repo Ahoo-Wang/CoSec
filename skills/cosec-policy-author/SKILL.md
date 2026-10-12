@@ -86,6 +86,7 @@ Order deny statements before allow statements for readability, not behavior.
 | `regular` | `part`, `pattern`; optional `timeout` (ms, default 1000) | Case-insensitive whole-value regex match with a time budget |
 | `path` | `part`, `pattern`, optional `options` | Spring path-pattern match on an extracted value |
 | `bool` | optional sibling arrays `and`, `or` | Combine conditions |
+| `time` | at least one of `notBefore`, `notAfter` (ISO date-times, exclusive end), `daysOfWeek`, `from`/`to` (`HH:mm`, may cross midnight); optional `zone` (default UTC) | Validity periods (self-expiring grants) and recurring windows, read from the server clock |
 | `spel` | `expression` | Evaluate against root properties `request` and `context` |
 | `ognl` | `expression` | Sandboxed expression using `#request` and `#context` |
 `negate` is handled by matchers based on `AbstractConditionMatcher`, which covers every built-in condition.

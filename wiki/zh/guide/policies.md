@@ -117,6 +117,29 @@
 `inTenant` 判断的是租户的*种类*。要判断具体的租户 id，请使用
 `{ "eq": { "part": "context.tenantId", "value": "..." } }`。
 
+### 时间条件 {#time-conditions}
+
+`time` 在有效期内、以及可选的每日周期时间窗内匹配。它读取服务器时钟，从不读取请求中的时间。
+
+| 配置 | 含义 |
+|---|---|
+| `notBefore`、`notAfter` | 有效期，取值为 ISO 日期时间；`notAfter` 不包含在内。不带时区偏移的日期时间按 `zone` 解读。 |
+| `daysOfWeek` | 时间窗生效的星期，例如 `["MON", "TUE", "WED", "THU", "FRI"]`（也可以写全称）。 |
+| `from`、`to` | 每日时间窗 `[from, to)`，格式为 `HH:mm`。`from` 晚于 `to` 时时间窗跨越午夜，凌晨的部分属于它开始的那一天。 |
+| `zone` | 时间窗以及不带偏移的日期时间所用的时区，默认 `UTC`。 |
+
+有效期、`daysOfWeek`、`from`/`to` 至少要设置一项。需要到期自动失效的授权，就是一条带 `notAfter` 的语句：
+
+```json
+{ "name": "temporary-support-access",
+  "action": "/orders/**",
+  "condition": { "bool": { "and": [
+    { "inRole": { "value": "support" } },
+    { "time": { "notAfter": "2026-10-20T00:00:00", "zone": "Asia/Shanghai" } } ] } } }
+```
+
+`negate` 可以把时间窗变成“时间窗之外”，例如在工作时间之外拒绝写操作。
+
 ### 取值条件 {#value-conditions}
 
 这类条件读取请求或安全上下文的某个**部分**（part），再进行比较。
