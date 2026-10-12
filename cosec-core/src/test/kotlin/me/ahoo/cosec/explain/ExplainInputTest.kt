@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.spring.boot.starter.explain
+package me.ahoo.cosec.explain
 
 import me.ahoo.cosec.api.principal.TenantPrincipal
 import me.ahoo.test.asserts.assert

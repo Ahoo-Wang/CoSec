@@ -1,0 +1,32 @@
+{
+  "name": "orders",
+  "policies": ["classpath:cosec-policy-test/policies/*-policy.json"],
+  "appPermissions": ["classpath:cosec-policy/test-app-permission.json"],
+  "roles": { "shipper": ["manage.order.ship"] },
+  "cases": [
+    {
+      "name": "users read orders",
+      "principal": { "id": "alice" },
+      "request": { "path": "/orders/42" },
+      "expect": { "result": "ALLOW", "policyId": "orders", "statementName": "read-orders" }
+    },
+    {
+      "name": "anonymous callers read nothing",
+      "principal": { "id": "(0)" },
+      "request": { "path": "/orders/42" },
+      "expect": { "result": "IMPLICIT_DENY" }
+    },
+    {
+      "name": "internal orders are denied",
+      "principal": { "id": "alice" },
+      "request": { "path": "/orders/internal/1" },
+      "expect": { "result": "EXPLICIT_DENY", "statementName": "no-internal" }
+    },
+    {
+      "name": "shippers ship from the office network",
+      "principal": { "id": "bob", "roles": ["shipper"] },
+      "request": { "path": "/order/ship", "method": "POST", "appId": "manage", "remoteIp": "192.168.1.9" },
+      "expect": { "result": "ALLOW", "roleId": "shipper", "permissionId": "manage.order.ship" }
+    }
+  ]
+}

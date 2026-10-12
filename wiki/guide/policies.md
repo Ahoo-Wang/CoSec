@@ -376,3 +376,38 @@ sampled request, so keep `sample-rate` low on busy services. Candidates run on a
 as a policy evaluation, so custom matchers can skip side effects, and no rate limit is spent. A shadow file that
 cannot be read stops the application from starting, because a candidate left out would report "no difference" for
 a change it never evaluated. Once the diffs look right, move the candidates into the enforced policies.
+
+### Policy test cases
+
+Write the decisions you rely on as data, and run them in CI. A test suite is a JSON file that names the policies
+(and optionally app permissions and role grants) and lists cases: a principal, a request, and the expected
+result, optionally with the rule that must decide.
+
+```json
+{
+  "name": "orders",
+  "policies": ["classpath:cosec-policy/*-policy.json"],
+  "appPermissions": ["classpath:cosec-policy/*-app-permission.json"],
+  "roles": { "shipper": ["manage.order.ship"] },
+  "cases": [
+    { "name": "users read orders",
+      "principal": { "id": "alice" },
+      "request": { "path": "/orders/42" },
+      "expect": { "result": "ALLOW", "policyId": "orders", "statementName": "read-orders" } },
+    { "name": "internal orders are denied",
+      "principal": { "id": "alice" },
+      "request": { "path": "/orders/internal/1" },
+      "expect": { "result": "EXPLICIT_DENY" } }
+  ]
+}
+```
+
+```kotlin
+@Test
+fun policies() = PolicyTestKit.run("classpath:cosec-policy-test/*.json").assertPasses()
+```
+
+`principal` and `request` take the same fields as [explaining a decision](./troubleshooting.md#explain-a-decision),
+and `expect.result` is `ALLOW`, `EXPLICIT_DENY` or `IMPLICIT_DENY`. Each case runs through the explainer against
+in-memory repositories, so a failure names the rule that decided instead and any warning, such as a policy id the
+principal lists but no file defines. Policy files that cannot be read fail the run instead of being skipped.
