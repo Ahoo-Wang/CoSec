@@ -50,6 +50,9 @@ class BusinessHoursConditionMatcher(configuration: Configuration) :
 - **Mark blocking matchers.** If a condition matcher must block (a network or database call), implement
   `me.ahoo.cosec.policy.BlockingAware` with `requiresBlocking = true`. Authorization then evaluates the layers that use it on `boundedElastic`. A composite matcher that wraps
   other matchers should report `true` when any child does, as `bool` does.
+- **Skip side effects during validation.** Saving a policy validates it by running every condition once
+  against a mock request. A custom matcher with an unavoidable external side effect must check `securityContext.isPolicyEvaluation` (`me.ahoo.cosec.policy`) and return
+  without the side effect when it is `true`. The marker can't be forged from policy or request data.
 
 ## Authorization hooks
 
