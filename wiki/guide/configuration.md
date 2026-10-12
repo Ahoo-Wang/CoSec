@@ -69,6 +69,8 @@ cached in-process.
 | `cosec.authorization.cache.policy.*` | | Local cache for policies. |
 | `cosec.authorization.cache.role.*` | | Local cache for role grants. |
 | `cosec.authorization.cache.token.*` | `expire-after-write: 30`, `maximum-size: 100000` | Local cache for revocation lookups. |
+| `cosec.authorization.cache.history.enabled` | `false` | Record a [revision](./policies.md#policy-history-and-rollback) of every saved policy (`cosec:policy:history:*`). |
+| `cosec.authorization.cache.history.max-revisions` | `50` | Revisions kept per policy. |
 
 Each local cache (`policy`, `role`, `token`) accepts:
 

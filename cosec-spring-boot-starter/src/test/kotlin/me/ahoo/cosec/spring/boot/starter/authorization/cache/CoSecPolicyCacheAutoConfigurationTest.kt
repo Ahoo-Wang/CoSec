@@ -14,11 +14,18 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
+import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache
 import me.ahoo.cosec.cache.PolicyCache
+import me.ahoo.cosec.cache.RedisPolicyRepository
+import me.ahoo.cosec.policy.PolicyData
+import me.ahoo.cosec.policy.history.PolicyHistory
+import me.ahoo.cosec.policy.history.PolicyRevisions
+import me.ahoo.cosec.policy.history.VersionedPolicyRepository
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
@@ -47,6 +54,53 @@ internal class CoSecPolicyCacheAutoConfigurationTest {
                     .hasBean(CoSecPolicyCacheAutoConfiguration.POLICY_CACHE_BEAN_NAME)
                     .hasSingleBean(PolicyCache::class.java)
                     .hasSingleBean(PolicyRepository::class.java)
+            }
+    }
+
+    @Test
+    fun recordsPolicyHistoryWhenEnabled() {
+        val policyId = "history-${java.util.UUID.randomUUID()}"
+        contextRunner
+            .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
+            .withPropertyValues(
+                "${CoSecPolicyCacheAutoConfiguration.POLICY_HISTORY_ENABLED_KEY}=true",
+                "cosec.authorization.cache.history.max-revisions=5",
+            )
+            .withUserConfiguration(
+                JacksonAutoConfiguration::class.java,
+                DataRedisAutoConfiguration::class.java,
+                CoCacheAutoConfiguration::class.java,
+                CoSecPolicyCacheAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                assertThat(context).hasNotFailed().hasSingleBean(PolicyHistory::class.java)
+                val repository = context.getBean(PolicyRepository::class.java)
+                assertThat(repository).isInstanceOf(VersionedPolicyRepository::class.java)
+                val policy = PolicyData(policyId, "", "v1", "", PolicyType.CUSTOM, "t")
+                repository.setPolicy(policy).contextWrite(PolicyRevisions.author("alice")).block()
+                val revision = checkNotNull(
+                    context.getBean(PolicyHistory::class.java).history(policyId).block()
+                ).single()
+                revision.author.assert().isEqualTo("alice")
+                revision.policy.name.assert().isEqualTo("v1")
+            }
+    }
+
+    @Test
+    fun noHistoryByDefault() {
+        contextRunner
+            .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
+            .withUserConfiguration(
+                JacksonAutoConfiguration::class.java,
+                DataRedisAutoConfiguration::class.java,
+                CoCacheAutoConfiguration::class.java,
+                CoSecPolicyCacheAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                assertThat(context).doesNotHaveBean(PolicyHistory::class.java)
+                assertThat(
+                    context.getBean(PolicyRepository::class.java)
+                ).isInstanceOf(RedisPolicyRepository::class.java)
             }
     }
 }

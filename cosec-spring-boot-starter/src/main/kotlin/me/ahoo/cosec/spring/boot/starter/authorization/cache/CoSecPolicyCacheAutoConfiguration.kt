@@ -31,10 +31,16 @@ import me.ahoo.cosec.cache.GlobalPolicyIndexCache
 import me.ahoo.cosec.cache.GlobalPolicyIndexKeyConverter
 import me.ahoo.cosec.cache.PolicyCache
 import me.ahoo.cosec.cache.RedisPolicyRepository
+import me.ahoo.cosec.cache.RedisPolicyRevisionStore
+import me.ahoo.cosec.policy.history.PolicyHistory
+import me.ahoo.cosec.policy.history.PolicyRevisionStore
+import me.ahoo.cosec.policy.history.VersionedPolicyRepository
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.data.redis.core.StringRedisTemplate
@@ -65,19 +71,39 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
         const val POLICY_CACHE_KEY_CONVERTER_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
         const val POLICY_CACHE_CLIENT_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}$CLIENT_SIDE_CACHE_SUFFIX"
         const val POLICY_CACHE_DISTRIBUTED_CACHE_BEAN_NAME = "${POLICY_CACHE_BEAN_NAME}$DISTRIBUTED_CACHE_SUFFIX"
+        const val POLICY_HISTORY_ENABLED_KEY = "${CacheProperties.PREFIX}.history.enabled"
     }
 
     @Bean
     @ConditionalOnMissingBean
     fun redisPolicyRepository(
         globalPolicyIndexCache: GlobalPolicyIndexCache,
-        policyCache: PolicyCache
+        policyCache: PolicyCache,
+        policyRevisionStore: ObjectProvider<PolicyRevisionStore>
     ): PolicyRepository {
-        return RedisPolicyRepository(
+        val repository = RedisPolicyRepository(
             globalPolicyIndexCache,
             policyCache,
         )
+        val revisionStore = policyRevisionStore.ifAvailable ?: return repository
+        return VersionedPolicyRepository(repository, revisionStore)
     }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(value = [POLICY_HISTORY_ENABLED_KEY], havingValue = "true")
+    fun redisPolicyRevisionStore(redisTemplate: StringRedisTemplate): PolicyRevisionStore =
+        RedisPolicyRevisionStore(
+            redisTemplate,
+            cacheProperties.policyHistoryKeyPrefix,
+            cacheProperties.history.maxRevisions
+        )
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnProperty(value = [POLICY_HISTORY_ENABLED_KEY], havingValue = "true")
+    fun policyHistory(policyRepository: PolicyRepository, policyRevisionStore: PolicyRevisionStore): PolicyHistory =
+        PolicyHistory(policyRepository, policyRevisionStore)
 
     @Bean(GLOBAL_POLICY_INDEX_CACHE_KEY_CONVERTER_BEAN_NAME)
     @ConditionalOnMissingBean(name = [GLOBAL_POLICY_INDEX_CACHE_KEY_CONVERTER_BEAN_NAME])

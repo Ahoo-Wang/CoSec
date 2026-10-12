@@ -17,6 +17,7 @@ import me.ahoo.cache.api.annotation.CaffeineCache
 import me.ahoo.cache.api.client.ClientSideCache
 import me.ahoo.cache.client.CaffeineClientSideCache
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.policy.history.PolicyRevisions
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import me.ahoo.cosec.spring.boot.starter.authorization.AuthorizationProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -39,6 +40,8 @@ class CacheProperties(
     var role: CacheConfiguration = CacheConfiguration(),
     @NestedConfigurationProperty
     var token: CacheConfiguration = CacheConfiguration(expireAfterWrite = 30, maximumSize = 100_000),
+    @NestedConfigurationProperty
+    var history: PolicyHistoryConfiguration = PolicyHistoryConfiguration(),
 ) : EnabledCapable {
     companion object {
         const val PREFIX: String = AuthorizationProperties.PREFIX + ".cache"
@@ -49,7 +52,17 @@ class CacheProperties(
     val appPermissionKeyPrefix: String = "$keyPrefix:app:permission:"
     val rolePermissionKeyPrefix: String = "$keyPrefix:role:permission:"
     val revokedTokenKeyPrefix: String = "$keyPrefix:token:revoked:"
+    val policyHistoryKeyPrefix: String = "$keyPrefix:policy:history"
 }
+
+/**
+ * Revision history of policies saved through the Redis repository.
+ */
+data class PolicyHistoryConfiguration(
+    var enabled: Boolean = false,
+    /** Revisions kept per policy; older ones are dropped. */
+    var maxRevisions: Int = PolicyRevisions.DEFAULT_MAX_REVISIONS,
+)
 
 /**
  * Local (client-side) cache settings. Unset values ([UNSET]) fall back to Caffeine defaults, except

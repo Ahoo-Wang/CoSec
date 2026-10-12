@@ -325,6 +325,28 @@ type, a bad matcher configuration) is logged at `ERROR` and skipped; the applica
 the startup log, or validate policies in a test as below.
 :::
 
+### Policy history and rollback
+
+Redis holds only the current version of each policy. With `cosec.authorization.cache.history.enabled=true`,
+every save through the repository also records a revision: an increasing number, the time, the author, a note and
+the full policy, newest first, up to `max-revisions` per policy. Pass the author through the Reactor context:
+
+```kotlin
+policyRepository.setPolicy(policy)
+    .contextWrite(PolicyRevisions.author("alice", "TICKET-42: allow exports"))
+```
+
+The `PolicyHistory` bean reads and restores revisions. A rollback saves the old content as a new revision, so the
+history only grows and records who rolled back:
+
+```kotlin
+policyHistory.history("orders")                 // newest first
+policyHistory.rollback("orders", revision = 3, author = "bob")
+```
+
+Saves without an author are recorded as `unknown`. The policy is written before its revision, so the history
+never shows a version that was not applied.
+
 ## Validating policies
 
 Validate policies in a unit test with the runtime parser, not only the JSON Schema:
