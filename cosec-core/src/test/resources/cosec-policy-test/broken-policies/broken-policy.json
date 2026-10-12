@@ -1,0 +1,9 @@
+{
+  "id": "broken",
+  "name": "Broken",
+  "type": "global",
+  "tenantId": "(platform)",
+  "statements": [
+    { "name": "bad-part", "action": "/broken/**", "condition": { "eq": { "part": "no.such.part", "value": "x" } } }
+  ]
+}

@@ -46,4 +46,16 @@ class PolicyTestKitTest {
             PolicyTestKit.run(PolicyTestSuite(policies = listOf("classpath:not-exists/x.json")))
         }
     }
+
+    @Test
+    fun errorsAndMissingRules() {
+        val failures = PolicyTestKit.run("classpath:cosec-policy-test/broken/*.json").failures
+        failures.single { it.case == "a matcher error" }.message.assert()
+            .contains("authorization failed with an error")
+            .contains("Matching policy [broken] statement [0] failed")
+        failures.single { it.case == "a rule that never decides" }.message.assert()
+            .contains("expected role [admin]")
+            .contains("expected permission [p]")
+            .contains("no rule (nothing matched)")
+    }
 }
