@@ -15,6 +15,7 @@ a property can only enable a feature whose module is on the classpath.
 | `cosec.authorization.gateway.enabled` | `true` | the Spring Cloud Gateway filter (`gateway-support`) |
 | `cosec.authorization.cache.enabled` | `true` | Redis-backed policy and permission repositories (`cache-support`) |
 | `cosec.jwt.enabled` | `true` | JWT issuing and verification |
+| `cosec.api-key.enabled` | `false` | [API keys](./authentication.md#api-keys) for machine clients |
 | `cosec.inject.enabled` | `false` | trusting a token already verified upstream (see [Authentication](./authentication.md#behind-a-gateway)) |
 | `cosec.audit.enabled` | `true` | audit events for every decision |
 | `cosec.shadow.enabled` | `false` | [shadow evaluation of candidate policies](./policies.md#trying-changes-in-shadow-mode) |
@@ -48,6 +49,14 @@ OpenTelemetry tracing has no switch: it is active whenever `opentelemetry-suppor
 | `cosec.jwt.token-validity.access` | `10m` | Access token lifetime. |
 | `cosec.jwt.token-validity.refresh` | `7d` | Refresh token lifetime. |
 | `cosec.jwt.token-revocation.enabled` | `false` | Check every token against a revocation store, so logout takes effect immediately (needs `cache-support`). See [Authentication](./authentication.md#logout-and-revocation). |
+
+## API keys
+
+| Property | Default | Description |
+|---|---|---|
+| `cosec.api-key.header` | `X-API-Key` | Request header carrying the key. |
+| `cosec.api-key.store-blocking` | `false` | Parse the security context off the event loop, for an `ApiKeyStore` that blocks. |
+| `cosec.api-key.keys[n]` | — | Keys of the built-in store: `id`, `hash` (SHA-256 hex of the key), `principal-id`, `tenant-id`, `roles`, `policies`, `attributes`, `expires-at`, `enabled`. |
 
 ## Cache
 

@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.authorization
 
+import me.ahoo.cosec.spring.boot.starter.apikey.ApiKeyProperties
 import me.ahoo.cosec.spring.boot.starter.jwt.ConditionalOnTokenRevocationEnabled
 import org.springframework.core.env.Environment
 import reactor.core.scheduler.Scheduler
@@ -28,5 +29,7 @@ import reactor.core.scheduler.Schedulers
 internal fun Environment.securityContextParseScheduler(): Scheduler {
     val tokenRevocationEnabled =
         getProperty(ConditionalOnTokenRevocationEnabled.ENABLED_KEY, Boolean::class.java, false)
-    return if (tokenRevocationEnabled) Schedulers.boundedElastic() else Schedulers.immediate()
+    val apiKeyStoreBlocking = getProperty(ApiKeyProperties.ENABLED_KEY, Boolean::class.java, false) &&
+        getProperty(ApiKeyProperties.STORE_BLOCKING_KEY, Boolean::class.java, false)
+    return if (tokenRevocationEnabled || apiKeyStoreBlocking) Schedulers.boundedElastic() else Schedulers.immediate()
 }
