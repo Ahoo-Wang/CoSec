@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.explain
 
+import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.permission.AppRolePermission
 import me.ahoo.cosec.api.policy.Effect
@@ -24,6 +25,7 @@ import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.explain.AuthorizationExplainer
 import me.ahoo.cosec.explain.ExplainLayer
+import me.ahoo.cosec.explain.ExplainWarningCode
 import me.ahoo.cosec.pipeline.SecurityStatus
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.StatementData
@@ -32,6 +34,7 @@ import me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.limiter.CoSecRateLimitAutoConfiguration
+import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
@@ -73,7 +76,9 @@ internal class CoSecExplainAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
         .withBean(PolicyRepository::class.java, { policyRepository })
         .withBean(AppRolePermissionRepository::class.java, { appRolePermissionRepository })
-        .withBean(TokenVerifier::class.java, { mockk() })
+        .withBean(TokenVerifier::class.java, {
+            mockk<TokenVerifier> { every { toPrincipal(any()) } throws TokenExpiredException() }
+        })
         .withUserConfiguration(
             CoSecAutoConfiguration::class.java,
             CoSecRateLimitAutoConfiguration::class.java,
@@ -127,6 +132,29 @@ internal class CoSecExplainAutoConfigurationTest {
                 )
                 denied.status.assert().isEqualTo(SecurityStatus.FORBIDDEN)
                 denied.decidedBy.assert().isNull()
+            }
+    }
+
+    @Test
+    fun endpointExplainsTheRequestsToken() {
+        contextRunner
+            .withPropertyValues("cosec.explain.enabled=true")
+            .run { context ->
+                val endpoint = context.getBean(CoSecExplainEndpoint::class.java)
+                val anonymous = checkNotNull(endpoint.explain(null, mapOf("path" to "/orders/1"), null, null))
+                anonymous.status.assert().isEqualTo(SecurityStatus.ALLOWED)
+                anonymous.warnings.assert().isEmpty()
+                val expired = checkNotNull(
+                    endpoint.explain(
+                        principal = null,
+                        request = mapOf("path" to "/users", "headers" to mapOf("Authorization" to "Bearer expired")),
+                        exhaustive = null,
+                        detail = null,
+                    ),
+                )
+                expired.status.assert().isEqualTo(SecurityStatus.UNAUTHORIZED)
+                expired.reason.assert().isEqualTo("Token Expired")
+                expired.warnings.single().code.assert().isEqualTo(ExplainWarningCode.TOKEN_INVALID)
             }
     }
 }

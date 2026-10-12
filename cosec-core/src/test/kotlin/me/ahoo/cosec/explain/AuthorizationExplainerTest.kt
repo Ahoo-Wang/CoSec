@@ -31,6 +31,8 @@ import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.limiter.RateLimit
 import me.ahoo.cosec.limiter.RateLimitRule
 import me.ahoo.cosec.limiter.RateLimitRuleProvider
@@ -47,6 +49,7 @@ import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.policy.isPolicyEvaluation
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
@@ -327,6 +330,51 @@ class AuthorizationExplainerTest {
             listOf(RateLimitRule(id = "public", action = path("/public/**"), rateLimit = RateLimit(1.0))),
         )
         explainer(rateLimitRuleProvider = rules).explainOf("/public/a").rateLimitRules.assert().isEmpty()
+    }
+
+    private val tokenParser = SecurityContextParser { request ->
+        when (request.getHeader("Authorization")) {
+            "good" -> SimpleSecurityContext(SimplePrincipal("token-user", policies = setOf("mine")))
+            "expired" -> throw TokenExpiredException()
+            else -> SimpleSecurityContext.anonymous()
+        }
+    }
+
+    private fun tokenExplainer() = AuthorizationExplainer(
+        policyRepository,
+        appRolePermissionRepository,
+        securityContextParser = tokenParser,
+    )
+
+    private fun tokenRequest(token: String) =
+        EvaluateRequest(path = "/mine/1", headers = mapOf("Authorization" to token))
+
+    @Test
+    fun explainsTheTokensPrincipal() {
+        storedPolicies["mine"] = policy("mine", allow("/mine/**"), type = PolicyType.CUSTOM)
+        val explanation = checkNotNull(tokenExplainer().explain(tokenRequest("good")).block())
+        explanation.authorized.assert().isTrue()
+        explanation.decidedBy?.policyId.assert().isEqualTo("mine")
+        explanation.warnings.assert().isEmpty()
+    }
+
+    @Test
+    fun rejectedTokenIsExplainedAsAnonymous() {
+        storedPolicies["mine"] = policy("mine", allow("/mine/**"), type = PolicyType.CUSTOM)
+        val explanation = checkNotNull(tokenExplainer().explain(tokenRequest("expired")).block())
+        explanation.status.assert().isEqualTo(SecurityStatus.UNAUTHORIZED)
+        explanation.reason.assert().isEqualTo("Token Expired")
+        explanation.warnings.single().apply {
+            code.assert().isEqualTo(ExplainWarningCode.TOKEN_INVALID)
+            message.assert().contains("Token Expired")
+        }
+    }
+
+    @Test
+    fun tokenModeNeedsAParser() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException::class.java) {
+            explainer().explain(tokenRequest("good"))
+        }
     }
 
     private class RecordingCondition(

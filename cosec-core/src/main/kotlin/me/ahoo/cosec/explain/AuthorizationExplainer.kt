@@ -36,6 +36,9 @@ import me.ahoo.cosec.limiter.RateLimitRuleProvider
 import me.ahoo.cosec.pipeline.SecurityDecision
 import me.ahoo.cosec.pipeline.SecurityPipeline
 import me.ahoo.cosec.policy.markPolicyEvaluation
+import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationException
+import me.ahoo.cosec.token.TokenVerificationException
+import me.ahoo.cosec.token.toAuthorizeResult
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import java.util.Optional
@@ -58,30 +61,66 @@ class AuthorizationExplainer(
     private val appRolePermissionRepository: AppRolePermissionRepository,
     private val blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp,
     private val rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.DEFAULT,
-    private val rateLimitRuleProvider: RateLimitRuleProvider? = null
+    private val rateLimitRuleProvider: RateLimitRuleProvider? = null,
+    private val securityContextParser: SecurityContextParser? = null
 ) {
     /**
-     * Runs on [Schedulers.boundedElastic]: an explanation reads repositories and may run blocking custom matchers.
+     * Explains the decision for a described [principal]. Runs on [Schedulers.boundedElastic]: an explanation reads
+     * repositories and may run blocking custom matchers.
      */
     fun explain(
         request: Request,
         principal: CoSecPrincipal,
         options: ExplainOptions = ExplainOptions()
+    ): Mono<Explanation> = explain(request, options) { SimpleSecurityContext(principal) }
+
+    /**
+     * Explains the decision for whoever [request] authenticates as (its `Authorization` token or API key), parsed by
+     * [securityContextParser] exactly as a real request would be, including revocation checks. A rejected credential
+     * is explained as the anonymous request it becomes, with a [ExplainWarningCode.TOKEN_INVALID] warning.
+     */
+    fun explain(request: Request, options: ExplainOptions = ExplainOptions()): Mono<Explanation> {
+        val parser = requireNotNull(securityContextParser) { "Explaining a token needs a SecurityContextParser." }
+        return explain(request, options) { parser.parse(request) }
+    }
+
+    private fun explain(
+        request: Request,
+        options: ExplainOptions,
+        contextOf: () -> SecurityContext
     ): Mono<Explanation> = Mono.defer {
         val policies = SnapshotPolicyRepository(policyRepository)
         val permissions = SnapshotAppRolePermissionRepository(appRolePermissionRepository)
-        decide(request, principal, policies, permissions).flatMap { decision ->
-            val narrator = Narrator(request, dryRunContext(principal), options)
+        decide(request, contextOf, policies, permissions).flatMap { decision ->
+            val warnings = mutableListOf<ExplainWarning>()
+            val narrator = Narrator(request, dryRunContext(contextOf, warnings), options, warnings)
             narrator.narrate(policies, permissions).map { trace -> explanation(decision, trace, narrator) }
         }
     }.subscribeOn(Schedulers.boundedElastic())
 
-    private fun dryRunContext(principal: CoSecPrincipal): SecurityContext =
-        SimpleSecurityContext(principal).markPolicyEvaluation()
+    /**
+     * The context [contextOf] produces, marked as a policy evaluation. A rejected credential becomes an anonymous
+     * context carrying the rejection, which is how [SecurityPipeline] maps it to `401` with the token's reason.
+     */
+    private fun dryRunContext(
+        contextOf: () -> SecurityContext,
+        warnings: MutableList<ExplainWarning>? = null
+    ): SecurityContext =
+        try {
+            contextOf().markPolicyEvaluation()
+        } catch (rejected: TokenVerificationException) {
+            warnings?.add(
+                ExplainWarning(
+                    ExplainWarningCode.TOKEN_INVALID,
+                    "The credential was rejected: ${rejected.toAuthorizeResult().reason}."
+                ),
+            )
+            SimpleSecurityContext.anonymous().markPolicyEvaluation().setTokenVerificationException(rejected)
+        }
 
     private fun decide(
         request: Request,
-        principal: CoSecPrincipal,
+        contextOf: () -> SecurityContext,
         policies: PolicyRepository,
         permissions: AppRolePermissionRepository
     ): Mono<SecurityDecision> {
@@ -89,7 +128,7 @@ class AuthorizationExplainer(
             override fun parse(request: Request): Request = request
         }
         val authorization = SimpleAuthorization(policies, permissions, blacklistChecker, rootPrincipalMatcher)
-        return SecurityPipeline(requestParser, SecurityContextParser { dryRunContext(principal) }, authorization)
+        return SecurityPipeline(requestParser, SecurityContextParser { dryRunContext(contextOf) }, authorization)
             .evaluate(request)
     }
 
@@ -132,9 +171,9 @@ class AuthorizationExplainer(
     private inner class Narrator(
         private val request: Request,
         private val context: SecurityContext,
-        private val options: ExplainOptions
+        private val options: ExplainOptions,
+        private val warnings: MutableList<ExplainWarning>
     ) {
-        private val warnings = mutableListOf<ExplainWarning>()
 
         fun narrate(policies: PolicyRepository, permissions: AppRolePermissionRepository): Mono<Trace> {
             val principal = context.principal
