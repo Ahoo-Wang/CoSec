@@ -52,6 +52,7 @@ class ExplainInputTest {
         request.deviceId.assert().isEqualTo("device")
         request.origin.host.assert().isEqualTo("example.com")
         request.getHeader("X-Tier").assert().isEqualTo("gold")
+        request.getHeader("x-tier").assert().isEqualTo("gold")
         request.getQuery("q").assert().isEqualTo("1")
         request.getCookieValue("c").assert().isEqualTo("2")
         request.attributes.assert().containsEntry("ipRegion", "cn")

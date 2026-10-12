@@ -23,7 +23,8 @@ import org.springframework.boot.actuate.endpoint.annotation.Endpoint
 import org.springframework.boot.actuate.endpoint.annotation.WriteOperation
 
 /**
- * `POST /actuator/cosecExplain`: explains the authorization decision for a described principal and request.
+ * `POST /actuator/cosecExplain`: explains the authorization decision for a request, either for a described
+ * `principal` or, without one, for the token or API key in the request's headers.
  *
  * The call itself goes through CoSec authorization like any other request, so grant it only to administrators.
  */
@@ -32,7 +33,7 @@ class CoSecExplainEndpoint(private val explainer: AuthorizationExplainer) {
 
     @WriteOperation
     fun explain(
-        principal: Map<String, Any>,
+        principal: Map<String, Any>?,
         request: Map<String, Any>,
         exhaustive: Boolean?,
         detail: String?
@@ -41,10 +42,11 @@ class CoSecExplainEndpoint(private val explainer: AuthorizationExplainer) {
             exhaustive = exhaustive ?: false,
             detail = detail?.let { ExplainDetail.valueOf(it.uppercase()) } ?: ExplainDetail.SUMMARY,
         )
-        return explainer.explain(
-            CoSecJsonSerializer.convertValue(request, ExplainRequest::class.java).toRequest(),
-            CoSecJsonSerializer.convertValue(principal, ExplainPrincipal::class.java).toPrincipal(),
-            options,
-        ).block()
+        val explainRequest = CoSecJsonSerializer.convertValue(request, ExplainRequest::class.java).toRequest()
+        // Without a described principal, the request's own token or API key decides who is explained.
+        val explanation = principal?.let {
+            explainer.explain(explainRequest, CoSecJsonSerializer.convertValue(it, ExplainPrincipal::class.java).toPrincipal(), options)
+        } ?: explainer.explain(explainRequest, options)
+        return explanation.block()
     }
 }

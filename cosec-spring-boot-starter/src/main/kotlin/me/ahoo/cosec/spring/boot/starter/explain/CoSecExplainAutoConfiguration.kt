@@ -16,6 +16,7 @@ import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.blacklist.BlacklistChecker
+import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.explain.AuthorizationExplainer
 import me.ahoo.cosec.limiter.RateLimitRuleProvider
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
@@ -49,7 +50,8 @@ class CoSecExplainAutoConfiguration {
         appRolePermissionRepository: AppRolePermissionRepository,
         blacklistChecker: ObjectProvider<BlacklistChecker>,
         rootPrincipalMatcher: ObjectProvider<RootPrincipalMatcher>,
-        rateLimitRuleProvider: ObjectProvider<RateLimitRuleProvider>
+        rateLimitRuleProvider: ObjectProvider<RateLimitRuleProvider>,
+        securityContextParser: ObjectProvider<SecurityContextParser>
     ): AuthorizationExplainer {
         return AuthorizationExplainer(
             policyRepository = policyRepository,
@@ -57,6 +59,7 @@ class CoSecExplainAutoConfiguration {
             blacklistChecker = blacklistChecker.getIfAvailable { BlacklistChecker.NoOp },
             rootPrincipalMatcher = rootPrincipalMatcher.getIfAvailable { RootPrincipalMatcher.DEFAULT },
             rateLimitRuleProvider = rateLimitRuleProvider.ifAvailable,
+            securityContextParser = securityContextParser.ifAvailable,
         )
     }
 

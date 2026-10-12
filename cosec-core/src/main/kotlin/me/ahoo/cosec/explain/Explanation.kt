@@ -160,6 +160,9 @@ enum class ExplainWarningCode {
     /** A matcher threw; authorization fails closed on it. */
     MATCHER_ERROR,
 
+    /** The request's token or API key was rejected (invalid, expired, revoked); it is explained as anonymous. */
+    TOKEN_INVALID,
+
     /** The trace disagrees with the real decision. Trust the decision; please report this. */
     TRACE_INCONSISTENT,
 }

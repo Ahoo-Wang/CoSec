@@ -71,7 +71,8 @@ data class ExplainRequest(
             origin = URI.create(origin),
             referer = URI.create(referer),
             attributes = attributes,
-            headers = headers + cosecHeaders,
+            // HTTP header names are case-insensitive: "Authorization" must reach a parser reading "authorization".
+            headers = (headers + cosecHeaders).toSortedMap(String.CASE_INSENSITIVE_ORDER),
             queries = query,
             cookies = cookies,
         )

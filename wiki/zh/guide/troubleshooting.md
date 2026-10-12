@@ -56,7 +56,12 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 | `layers` | `ROOT`、`BLACKLIST`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、`ROLE_PERMISSION`，每层的状态为 `EVALUATED`、`NOT_EVALUATED`（之前的显式拒绝已结束求值）、`EMPTY`，或 `EVALUATED_AFTER_DECISION`（设置 `exhaustive: true` 时）。每条语句和权限都有结果：`MATCHED`、`ACTION_MISS`、`CONDITION_MISS`、`NOT_EVALUATED`（所属策略或应用的条件未匹配）或 `ERROR`。 |
 | `overriddenAllows` | 被后续层的显式拒绝覆盖掉的放行。 |
 | `rateLimitRules` | 请求被放行时将会消耗许可的[限流规则](./rate-limiting.md)。 |
-| `warnings` | `MISSING_POLICY`（主体列出的策略 id 在仓储中不存在）、`NO_APP_PERMISSION`（有角色，但该应用和空间没有应用权限）、`MATCHER_ERROR`，以及 `TRACE_INCONSISTENT`（追踪与真实决策不一致；以决策为准，并请反馈）。 |
+| `warnings` | `MISSING_POLICY`（主体列出的策略 id 在仓储中不存在）、`NO_APP_PERMISSION`（有角色，但该应用和空间没有应用权限）、`MATCHER_ERROR`、`TOKEN_INVALID`（请求中的令牌或 API Key 被拒绝），以及 `TRACE_INCONSISTENT`（追踪与真实决策不一致；以决策为准，并请反馈）。 |
+
+要解释某个真实调用方得到的决策，可以不传 `principal`，而是把他的凭证放进请求的 headers，例如
+`"headers": { "Authorization": "Bearer eyJ..." }` 或 `{ "X-API-Key": "..." }`。凭证由应用自己的安全上下文解析器解析，
+包括吊销检查和 API Key。被拒绝的凭证会按它变成的匿名请求来解释，并给出真实的 `401` 原因和 `TOKEN_INVALID` 警告。
+凭证只从请求体中读取，从不记录日志。
 
 `detail: "full"` 会附上每个匹配器的配置。没有 Actuator 时，可以注入 `AuthorizationExplainer` bean 自行调用
 `explain(request, principal)`，例如在测试中固定“谁可以做什么”。

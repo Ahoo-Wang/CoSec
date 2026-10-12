@@ -61,7 +61,13 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 | `layers` | `ROOT`, `BLACKLIST`, `GLOBAL_POLICY`, `PRINCIPAL_POLICY`, `ROLE_PERMISSION`, each `EVALUATED`, `NOT_EVALUATED` (an earlier explicit deny ended evaluation), `EMPTY`, or `EVALUATED_AFTER_DECISION` (with `exhaustive: true`). Every statement and permission has an outcome: `MATCHED`, `ACTION_MISS`, `CONDITION_MISS`, `NOT_EVALUATED` (its policy's or app's condition did not match) or `ERROR`. |
 | `overriddenAllows` | Allows that a later layer's explicit deny overrode. |
 | `rateLimitRules` | The [rate limit rules](./rate-limiting.md) the request would spend a permit from, if it is allowed. |
-| `warnings` | `MISSING_POLICY` (the principal lists a policy id the repository lacks), `NO_APP_PERMISSION` (roles but no app permission for the app and space), `MATCHER_ERROR`, and `TRACE_INCONSISTENT` (the trace disagrees with the real decision; trust the decision and report it). |
+| `warnings` | `MISSING_POLICY` (the principal lists a policy id the repository lacks), `NO_APP_PERMISSION` (roles but no app permission for the app and space), `MATCHER_ERROR`, `TOKEN_INVALID` (the request's token or API key was rejected), and `TRACE_INCONSISTENT` (the trace disagrees with the real decision; trust the decision and report it). |
+
+To explain what a real caller gets, leave out `principal` and put their credential in the request's headers, for
+example `"headers": { "Authorization": "Bearer eyJ..." }` or `{ "X-API-Key": "..." }`. The credential is parsed by
+the application's own security context parser, including revocation checks and API keys. A rejected credential is
+explained as the anonymous request it becomes, with its real `401` reason and a `TOKEN_INVALID` warning. The
+credential is only read from the request body, never logged.
 
 `detail: "full"` adds each matcher's configuration. Without Actuator, inject the `AuthorizationExplainer`
 bean and call `explain(request, principal)` yourself, for example in a test that pins down who may do what.
