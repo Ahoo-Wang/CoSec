@@ -27,6 +27,7 @@ The starter already brings `cosec-core` and `cosec-jwt`. Prefer its Gradle featu
 | Redis cache, revocation, cluster-wide rate limits | `cache-support` | `cosec-cocache` |
 | IP region | `ip2region-support` | `cosec-ip2region` |
 | OpenTelemetry | `opentelemetry-support` | `cosec-opentelemetry` |
+| Micrometer metrics | `micrometer-support` | `cosec-micrometer` |
 | OpenAPI | `openapi-support` | `cosec-openapi` |
 | Kafka audit sink | `kafka-support` | `cosec-kafka` |
 

@@ -61,6 +61,18 @@ With `opentelemetry-support`, each authorization is a span named `cosec.authoriz
 | `cosec.authorize.policy.id`, `cosec.authorize.statement.index`, `cosec.authorize.statement.name` | the matched policy statement |
 | `cosec.authorize.role.id`, `cosec.authorize.permission.id` | the matched role permission |
 
+With `micrometer-support` and a `MeterRegistry` (for example from Spring Boot Actuator), every decision is
+recorded by the timer `cosec.authorization` (`cosec.metrics.enabled`, default on). It has two tags, each with a
+small fixed set of values, so the number of time series stays bounded:
+
+| Tag | Values |
+|---|---|
+| `result` | `allow`, `explicit_deny`, `implicit_deny`, `too_many_requests`, `error` |
+| `source` | `global_policy`, `principal_policy`, `role_permission`, `root`, `blacklist`, `none`, `unknown` |
+
+Alert on the rate of `explicit_deny` and `error`. A sudden rise usually means an attack, a broken policy or an
+unreachable policy store. The timer measures authorization only, not token parsing.
+
 Decisions are also logged at debug level by `me.ahoo.cosec.authorization.SimpleAuthorization`, including the
 matched policy statement or role permission.
 

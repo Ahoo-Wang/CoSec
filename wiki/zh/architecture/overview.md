@@ -11,6 +11,7 @@ flowchart BT
     cocache[cosec-cocache] --> core
     social[cosec-social] --> core
     otel[cosec-opentelemetry] --> core
+    micrometer[cosec-micrometer] --> core
     openapi[cosec-openapi] --> core
     ip2r[cosec-ip2region] --> core
     kafka[cosec-kafka] --> core
@@ -18,7 +19,7 @@ flowchart BT
     webmvc[cosec-webmvc] --> jwt
     gateway[cosec-gateway] --> webflux
     starter[cosec-spring-boot-starter] --> jwt
-    starter -. feature variants .-> webflux & webmvc & gateway & cocache & social & otel & openapi & ip2r & kafka
+    starter -. feature variants .-> webflux & webmvc & gateway & cocache & social & otel & micrometer & openapi & ip2r & kafka
     server[cosec-gateway-server] --> starter
 ```
 
@@ -34,7 +35,7 @@ sequenceDiagram
     autonumber
     participant A as Web 适配器<br>(WebFlux / WebMvc / Gateway)
     participant P as SecurityPipeline
-    participant Z as Authorization<br>(Tracing → Auditing → RateLimiting → Shadow → Simple)
+    participant Z as Authorization<br>(Tracing → Auditing → Metrics → RateLimiting → Shadow → Simple)
     participant R as 策略 / 权限<br>仓储
     A->>P: evaluate(exchange 或 servlet 请求)
     P->>P: RequestParser：路径安全、客户端 IP、请求 id、属性
