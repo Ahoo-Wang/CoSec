@@ -28,6 +28,11 @@ data class ShadowProperties(
      */
     @DefaultValue(DEFAULT_LOCATION) var locations: Set<String> = setOf(DEFAULT_LOCATION),
     /**
+     * Resource patterns of the candidate app permission files, one app permission per file.
+     */
+    @DefaultValue(DEFAULT_APP_PERMISSION_LOCATION)
+    var appPermissionLocations: Set<String> = setOf(DEFAULT_APP_PERMISSION_LOCATION),
+    /**
      * Share of requests evaluated against the candidates, from 0 to 1. Each costs a second evaluation.
      */
     @DefaultValue("1.0") var sampleRate: Double = 1.0,
@@ -40,5 +45,6 @@ data class ShadowProperties(
         const val PREFIX: String = "cosec.shadow"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY
         const val DEFAULT_LOCATION = "classpath:cosec-shadow/*-policy.json"
+        const val DEFAULT_APP_PERMISSION_LOCATION = "classpath:cosec-shadow/*-app-permission.json"
     }
 }

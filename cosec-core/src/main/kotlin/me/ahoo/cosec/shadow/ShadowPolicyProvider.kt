@@ -14,6 +14,7 @@
 package me.ahoo.cosec.shadow
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver
@@ -27,6 +28,12 @@ import java.io.FileNotFoundException
  */
 fun interface ShadowPolicyProvider {
     fun getPolicies(): List<Policy>
+
+    /**
+     * Candidate app permissions. Each replaces the enforced app permission with the same app id; role grants are
+     * kept. Same instance rules as [getPolicies].
+     */
+    fun getAppPermissions(): List<AppPermission> = emptyList()
 }
 
 /**
@@ -35,7 +42,10 @@ fun interface ShadowPolicyProvider {
  * Unlike local policies, an unreadable file fails startup: a candidate that is silently skipped would make the
  * shadow run report "no difference" for a change it never evaluated.
  */
-class LocalShadowPolicyProvider(private val locations: Set<String>) : ShadowPolicyProvider {
+class LocalShadowPolicyProvider(
+    private val locations: Set<String>,
+    private val appPermissionLocations: Set<String> = emptySet()
+) : ShadowPolicyProvider {
     companion object {
         private val log = KotlinLogging.logger {}
         private val resourceResolver = PathMatchingResourcePatternResolver()
@@ -48,25 +58,36 @@ class LocalShadowPolicyProvider(private val locations: Set<String>) : ShadowPoli
         }
     }
 
+    private val loadedAppPermissions: List<AppPermission> by lazy {
+        load(appPermissionLocations, AppPermission::class.java).also { appPermissions ->
+            val duplicates = appPermissions.groupBy { it.id }.filterValues { it.size > 1 }.keys
+            require(duplicates.isEmpty()) { "Duplicate shadow app permission ids: $duplicates." }
+        }
+    }
+
     override fun getPolicies(): List<Policy> = loadedPolicies
 
-    private fun loadPolicies(): List<Policy> =
+    override fun getAppPermissions(): List<AppPermission> = loadedAppPermissions
+
+    private fun loadPolicies(): List<Policy> = load(locations, Policy::class.java)
+
+    private fun <T> load(locations: Set<String>, type: Class<T>): List<T> =
         locations
             .flatMap { location ->
                 try {
                     resourceResolver.getResources(location).filter { it.exists() }
                 } catch (_: FileNotFoundException) {
-                    log.info { "No shadow policies found at [$location]." }
+                    log.info { "No shadow candidates found at [$location]." }
                     emptyList()
                 }
             }.map { resource ->
-                log.info { "Load shadow policy [$resource]." }
+                log.info { "Load shadow candidate [$resource]." }
                 try {
-                    CoSecJsonSerializer.readValue(resource.contentAsByteArray, Policy::class.java)
+                    CoSecJsonSerializer.readValue(resource.contentAsByteArray, type)
                 } catch (cause: JacksonException) {
-                    throw IllegalStateException("Failed to load shadow policy [$resource].", cause)
+                    throw IllegalStateException("Failed to load shadow candidate [$resource].", cause)
                 } catch (cause: IllegalArgumentException) {
-                    throw IllegalStateException("Failed to load shadow policy [$resource].", cause)
+                    throw IllegalStateException("Failed to load shadow candidate [$resource].", cause)
                 }
             }
 }

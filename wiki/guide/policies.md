@@ -379,7 +379,12 @@ cosec:
 A shadow file holds one policy, in the same format as a local policy file. A candidate replaces the enforced
 policy with the same `id` everywhere that policy applies. A candidate with a new `id` is added: as a global
 policy if its type is `global`, otherwise for principals that list it. To try removing a policy, give its
-candidate no statements. Shadow mode covers policies only, not app permissions or role grants.
+candidate no statements.
+
+App permissions can be shadowed too: a file matching `classpath:cosec-shadow/*-app-permission.json` (one app
+permission per file) replaces the enforced app permission with the same app `id`, its catalog and its condition.
+Role grants are kept as enforced, so a grant naming a permission the candidate removed grants nothing. Role grants
+themselves are not shadowed.
 
 | Diff | Meaning |
 |---|---|

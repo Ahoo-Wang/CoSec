@@ -45,4 +45,14 @@ class LocalShadowPolicyProviderTest {
                 .getPolicies()
         }
     }
+
+    @Test
+    fun loadAppPermissions() {
+        val provider = LocalShadowPolicyProvider(
+            setOf("classpath:cosec-shadow/*-policy.json"),
+            setOf("classpath:cosec-shadow/*-app-permission.json"),
+        )
+        provider.getAppPermissions().single().id.assert().isEqualTo("shop")
+        LocalShadowPolicyProvider(setOf("classpath:cosec-shadow/*-policy.json")).getAppPermissions().assert().isEmpty()
+    }
 }

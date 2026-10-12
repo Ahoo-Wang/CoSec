@@ -100,6 +100,7 @@ See [Operations](./operations.md#redis-and-caching).
 | Property | Default | Description |
 |---|---|---|
 | `cosec.shadow.locations` | `classpath:cosec-shadow/*-policy.json` | Resource patterns of the candidate policy files, one policy per file. |
+| `cosec.shadow.app-permission-locations` | `classpath:cosec-shadow/*-app-permission.json` | Resource patterns of the candidate app permission files, one per file. |
 | `cosec.shadow.sample-rate` | `1.0` | Share of requests evaluated against the candidates, from `0` to `1`. Each costs a second evaluation. |
 | `cosec.shadow.report-rule-changes` | `false` | Also report requests with the same result but a different deciding rule. |
 

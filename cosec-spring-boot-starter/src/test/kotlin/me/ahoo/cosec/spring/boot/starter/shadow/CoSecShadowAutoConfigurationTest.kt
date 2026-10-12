@@ -98,6 +98,9 @@ internal class CoSecShadowAutoConfigurationTest {
                     .hasSingleBean(ShadowProperties::class.java)
                     .hasSingleBean(ShadowPolicyLoaderLifecycle::class.java)
                 context.getBean(ShadowPolicyProvider::class.java).getPolicies().single().id.assert().isEqualTo("orders")
+                context.getBean(
+                    ShadowPolicyProvider::class.java
+                ).getAppPermissions().single().id.assert().isEqualTo("shop")
                 val authorization = context.getBean(Authorization::class.java) as RateLimitingAuthorization
                 assertThat(authorization.delegate).isInstanceOf(ShadowAuthorization::class.java)
                 authorization.authorize(

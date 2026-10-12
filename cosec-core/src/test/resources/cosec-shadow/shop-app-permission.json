@@ -1,0 +1,6 @@
+{
+  "id": "shop",
+  "groups": [
+    { "name": "orders", "permissions": [ { "id": "order.ship", "name": "Ship", "action": "/orders/*/ship" } ] }
+  ]
+}

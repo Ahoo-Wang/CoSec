@@ -18,6 +18,7 @@ import me.ahoo.cosec.Delegated
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.AuthorizationDecision
@@ -37,7 +38,7 @@ import kotlin.random.Random
  * Evaluates candidate policies next to the enforced ones and reports where they decide differently, without ever
  * changing a response: the [delegate]'s decision is always the one returned.
  *
- * The candidates come from [policyProvider], laid over the enforced policies by id, and are evaluated by a second
+ * The candidates come from [policyProvider], policies laid over the enforced ones by id and app permissions by app id, and are evaluated by a second
  * [SimpleAuthorization] on a fresh security context marked as a policy evaluation, so custom matchers can skip
  * side effects. The candidate run happens inline, while the request is still alive, because transport requests
  * (servlet requests in particular) must not be read after they complete. It costs a second evaluation on every
@@ -69,7 +70,11 @@ class ShadowAuthorization(
         require(sampleRate in 0.0..1.0) { "sampleRate must be between 0 and 1, but was [$sampleRate]." }
     }
 
-    private class Candidate(val policies: List<Policy>, val authorization: Authorization)
+    private class Candidate(
+        val policies: List<Policy>,
+        val appPermissions: List<AppPermission>,
+        val authorization: Authorization
+    )
 
     @Volatile
     private var candidate: Candidate? = null
@@ -109,20 +114,22 @@ class ShadowAuthorization(
             }.then()
     }
 
-    /** Rebuilt only when the provider returns a different list instance. Null when there are no candidates. */
+    /** Rebuilt only when the provider returns different list instances. Null when there are no candidates. */
     private fun candidateAuthorization(): Authorization? {
         val policies = policyProvider.getPolicies()
-        if (policies.isEmpty()) {
+        val appPermissions = policyProvider.getAppPermissions()
+        if (policies.isEmpty() && appPermissions.isEmpty()) {
             return null
         }
-        candidate?.takeIf { it.policies === policies }?.let { return it.authorization }
+        candidate?.takeIf { it.policies === policies && it.appPermissions === appPermissions }
+            ?.let { return it.authorization }
         val authorization = SimpleAuthorization(
             OverlayPolicyRepository(policyRepository, policies),
-            appRolePermissionRepository,
+            OverlayAppRolePermissionRepository(appRolePermissionRepository, appPermissions),
             blacklistChecker,
             rootPrincipalMatcher,
         )
-        candidate = Candidate(policies, authorization)
+        candidate = Candidate(policies, appPermissions, authorization)
         return authorization
     }
 

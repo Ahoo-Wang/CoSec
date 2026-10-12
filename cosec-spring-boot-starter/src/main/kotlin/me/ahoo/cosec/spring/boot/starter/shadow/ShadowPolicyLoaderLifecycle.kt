@@ -26,6 +26,7 @@ class ShadowPolicyLoaderLifecycle(private val policyProvider: ShadowPolicyProvid
 
     override fun start() {
         policyProvider.getPolicies()
+        policyProvider.getAppPermissions()
         running = true
     }
 
