@@ -173,4 +173,6 @@ require(policies.isNotEmpty())
 policies.forEach(DefaultPolicyEvaluator::evaluate)
 ```
 
+Prefer declarative cases: a JSON suite (`policies`, optional `appPermissions` and `roles`, and `cases` of `principal`, `request`, `expect.result` = `ALLOW` | `EXPLICIT_DENY` | `IMPLICIT_DENY`, optionally `policyId` / `statementName` / `roleId` / `permissionId`) run with `PolicyTestKit.run("classpath:cosec-policy-test/*.json").assertPasses()`. Failures name the rule that decided instead.
+
 `LocalPolicyLoader` logs and skips malformed policies, so assert that the expected policy ID loaded. `DefaultPolicyEvaluator` catches expected regex-timeout signals but surfaces other matcher configuration errors. Add one authorization test for each meaningful allow/deny boundary.

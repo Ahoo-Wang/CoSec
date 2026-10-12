@@ -10,7 +10,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.explain
+package me.ahoo.cosec.explain
 
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.DeviceIdCapable

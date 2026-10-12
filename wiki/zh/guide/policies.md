@@ -316,3 +316,36 @@ cosec:
 设得低一些。候选策略在一个单独的、被标记为策略评估的安全上下文中运行，自定义匹配器可以据此跳过副作用，也不会消耗限流许可。
 无法读取的影子文件会阻止应用启动，因为被漏掉的候选策略会对一个从未评估过的变更报告“没有差异”。差异符合预期后，
 再把候选策略移入生效的策略中。
+
+### 策略测试用例 {#policy-test-cases}
+
+把你依赖的决策写成数据，并在 CI 中运行。测试套件是一个 JSON 文件，指明所用的策略（以及可选的应用权限和角色授权），
+并列出用例：一个主体、一个请求和期望的结果，还可以指定必须由哪条规则做出决定。
+
+```json
+{
+  "name": "orders",
+  "policies": ["classpath:cosec-policy/*-policy.json"],
+  "appPermissions": ["classpath:cosec-policy/*-app-permission.json"],
+  "roles": { "shipper": ["manage.order.ship"] },
+  "cases": [
+    { "name": "users read orders",
+      "principal": { "id": "alice" },
+      "request": { "path": "/orders/42" },
+      "expect": { "result": "ALLOW", "policyId": "orders", "statementName": "read-orders" } },
+    { "name": "internal orders are denied",
+      "principal": { "id": "alice" },
+      "request": { "path": "/orders/internal/1" },
+      "expect": { "result": "EXPLICIT_DENY" } }
+  ]
+}
+```
+
+```kotlin
+@Test
+fun policies() = PolicyTestKit.run("classpath:cosec-policy-test/*.json").assertPasses()
+```
+
+`principal` 和 `request` 的字段与[解释一次决策](./troubleshooting.md#explain-a-decision)相同，`expect.result` 取值为
+`ALLOW`、`EXPLICIT_DENY` 或 `IMPLICIT_DENY`。每个用例都通过解释器在内存仓储上运行，因此失败时会指出实际做出决定的规则以及所有警告，
+例如主体列出了某个策略 id 却没有文件定义它。无法读取的策略文件会让本次运行失败，而不是被跳过。

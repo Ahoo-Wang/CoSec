@@ -15,6 +15,8 @@ package me.ahoo.cosec.spring.boot.starter.explain
 import me.ahoo.cosec.explain.AuthorizationExplainer
 import me.ahoo.cosec.explain.ExplainDetail
 import me.ahoo.cosec.explain.ExplainOptions
+import me.ahoo.cosec.explain.ExplainPrincipal
+import me.ahoo.cosec.explain.ExplainRequest
 import me.ahoo.cosec.explain.Explanation
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint
