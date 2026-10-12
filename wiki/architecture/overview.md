@@ -90,6 +90,9 @@ Every change must keep these.
 | **Authorization is a pure decision** | Built-in matchers only read the request and security context, do no I/O and keep no state (path matchers record path variables in the context). Rate limiting, which spends permits, is a separate decorator that runs only for allowed requests (see [Rate Limiting](../guide/rate-limiting.md)). |
 | **Policies are data** | Policies and permissions are JSON. Matchers are created through factories registered by type (`ServiceLoader` or Spring beans). |
 
+`AuthorizationChecker` reuses this algorithm for checks in code: a plain `SimpleAuthorization`, outside the
+decorator chain, so checks are neither audited nor rate limited.
+
 ## Data and caching
 
 The repositories (`PolicyRepository`, `AppRolePermissionRepository`) are interfaces in `cosec-core`. The
