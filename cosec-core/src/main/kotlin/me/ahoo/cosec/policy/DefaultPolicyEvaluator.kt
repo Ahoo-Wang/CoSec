@@ -18,7 +18,6 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyEvaluator
 import me.ahoo.cosec.context.SimpleSecurityContext
-import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import java.net.URI
@@ -49,8 +48,6 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
     internal fun safeEvaluate(verifyFun: () -> Unit) {
         try {
             verifyFun()
-        } catch (e: TooManyRequestsException) {
-            logger.debug(e) { "Rate limit condition triggered during policy evaluation - skipping." }
         } catch (e: RegexTimeoutException) {
             logger.debug(e) { "Regular condition match exceeded its time budget during policy evaluation - skipping." }
         }

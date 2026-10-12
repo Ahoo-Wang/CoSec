@@ -12,13 +12,13 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.limiter
 
-import me.ahoo.cosec.cache.limiter.RedisGroupedRateLimiterConditionMatcherFactory
-import me.ahoo.cosec.cache.limiter.RedisRateLimiterConditionMatcherFactory
+import me.ahoo.cosec.cache.limiter.RedisRateLimiter
+import me.ahoo.cosec.limiter.RateLimiter
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import org.springframework.boot.autoconfigure.AutoConfiguration
-import org.springframework.boot.autoconfigure.AutoConfigureAfter
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
@@ -28,33 +28,22 @@ import org.springframework.data.redis.core.StringRedisTemplate
 /**
  * CoSec Redis Rate Limiter AutoConfiguration.
  *
- * Registers the distributed rate limiter matcher factories as beans, so
- * [me.ahoo.cosec.spring.boot.starter.policy.MatcherFactoryRegister] wires them
- * into the matcher providers. Only active when Redis is on the classpath and a
- * [StringRedisTemplate] bean exists.
+ * Registers the cluster-wide [RedisRateLimiter] as the [RateLimiter] when Redis is on the classpath and a
+ * [StringRedisTemplate] bean exists; otherwise [CoSecRateLimitAutoConfiguration] falls back to the in-memory one.
  *
  * @author ahoo wang
  */
-@AutoConfiguration
-@AutoConfigureAfter(DataRedisAutoConfiguration::class)
+@AutoConfiguration(after = [DataRedisAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
 @ConditionalOnProperty(value = [LimiterProperties.ENABLED_KEY], matchIfMissing = true, havingValue = "true")
-@ConditionalOnClass(name = ["me.ahoo.cosec.cache.limiter.RedisRateLimiterConditionMatcherFactory"])
+@ConditionalOnClass(name = ["me.ahoo.cosec.cache.limiter.RedisRateLimiter"])
 @ConditionalOnBean(StringRedisTemplate::class)
 @EnableConfigurationProperties(LimiterProperties::class)
 class CoSecRedisRateLimiterAutoConfiguration(private val limiterProperties: LimiterProperties) {
 
     @Bean
-    fun redisRateLimiterConditionMatcherFactory(
-        stringRedisTemplate: StringRedisTemplate,
-    ): RedisRateLimiterConditionMatcherFactory {
-        return RedisRateLimiterConditionMatcherFactory(stringRedisTemplate, limiterProperties.keyPrefix)
-    }
-
-    @Bean
-    fun redisGroupedRateLimiterConditionMatcherFactory(
-        stringRedisTemplate: StringRedisTemplate,
-    ): RedisGroupedRateLimiterConditionMatcherFactory {
-        return RedisGroupedRateLimiterConditionMatcherFactory(stringRedisTemplate, limiterProperties.keyPrefix)
+    @ConditionalOnMissingBean(RateLimiter::class)
+    fun redisRateLimiter(stringRedisTemplate: StringRedisTemplate): RateLimiter {
+        return RedisRateLimiter(stringRedisTemplate, limiterProperties.keyPrefix)
     }
 }

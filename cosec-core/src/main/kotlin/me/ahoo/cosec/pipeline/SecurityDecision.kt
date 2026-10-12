@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.authorization.VerifyContext
+import me.ahoo.cosec.limiter.RateLimitResult
 
 /**
  * Transport-neutral outcome of a request passing through [SecurityPipeline].
@@ -40,18 +41,42 @@ enum class SecurityStatus(val code: Int) {
  * @param request the parsed request; null only when [status] is [SecurityStatus.BAD_REQUEST]
  * @param securityContext the resolved security context; null when the request or context could not be parsed
  * @param verifyContext what produced the authorization result, when reported by the authorization
+ * @param rateLimit the tightest rate limit applied to the request, when one matched
  */
 data class SecurityDecision(
     val status: SecurityStatus,
     val result: AuthorizeResult,
     val request: Request? = null,
     val securityContext: SecurityContext? = null,
-    val verifyContext: VerifyContext? = null
+    val verifyContext: VerifyContext? = null,
+    val rateLimit: RateLimitResult? = null
 ) {
     val allowed: Boolean
         get() = status == SecurityStatus.ALLOWED
 
+    /**
+     * Headers a transport writes on the response, whether the request is allowed or not.
+     */
+    val responseHeaders: Map<String, String>
+        get() {
+            val rateLimit = rateLimit ?: return emptyMap()
+            val resetSeconds = rateLimit.resetAfter.toSeconds().coerceAtLeast(1).toString()
+            val headers = linkedMapOf(
+                RATE_LIMIT_LIMIT_HEADER to rateLimit.limit.toString(),
+                RATE_LIMIT_REMAINING_HEADER to rateLimit.remaining.toString(),
+                RATE_LIMIT_RESET_HEADER to resetSeconds,
+            )
+            if (!rateLimit.allowed) {
+                headers[RETRY_AFTER_HEADER] = resetSeconds
+            }
+            return headers
+        }
+
     companion object {
+        const val RATE_LIMIT_LIMIT_HEADER = "RateLimit-Limit"
+        const val RATE_LIMIT_REMAINING_HEADER = "RateLimit-Remaining"
+        const val RATE_LIMIT_RESET_HEADER = "RateLimit-Reset"
+        const val RETRY_AFTER_HEADER = "Retry-After"
         val BAD_REQUEST = SecurityDecision(SecurityStatus.BAD_REQUEST, AuthorizeResult.IMPLICIT_DENY)
     }
 }

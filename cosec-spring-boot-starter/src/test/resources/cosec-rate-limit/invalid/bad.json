@@ -1,0 +1,5 @@
+{
+  "id": "bad id with spaces",
+  "action": "*",
+  "permitsPerSecond": 1
+}

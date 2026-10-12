@@ -12,24 +12,32 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.limiter
 
-import me.ahoo.cosec.cache.limiter.DEFAULT_REDIS_RATE_LIMITER_KEY_PREFIX
 import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
 
 /**
- * CoSec Redis Rate Limiter Properties.
+ * CoSec rate limiting properties.
  *
  * @author ahoo wang
  */
 @ConfigurationProperties(LimiterProperties.PREFIX)
 data class LimiterProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
-    @DefaultValue(DEFAULT_REDIS_RATE_LIMITER_KEY_PREFIX) var keyPrefix: String = DEFAULT_REDIS_RATE_LIMITER_KEY_PREFIX,
+    /**
+     * Resource patterns of the rate limit rule files. Each file holds one rule or an array of rules.
+     */
+    @DefaultValue(DEFAULT_LOCATION) var locations: Set<String> = setOf(DEFAULT_LOCATION),
+    /**
+     * Redis key prefix of the counters, when the Redis rate limiter is in use.
+     */
+    @DefaultValue(DEFAULT_KEY_PREFIX) var keyPrefix: String = DEFAULT_KEY_PREFIX,
 ) : EnabledCapable {
     companion object {
         const val PREFIX: String = "cosec.limiter"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY
+        const val DEFAULT_LOCATION = "classpath:cosec-rate-limit/*-rate-limit.json"
+        const val DEFAULT_KEY_PREFIX = "cosec:rate-limiter"
     }
 }

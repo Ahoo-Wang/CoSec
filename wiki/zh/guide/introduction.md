@@ -40,7 +40,7 @@ flowchart TD
 - **默认拒绝。** 没有任何规则命中时，请求被拒绝（`IMPLICIT_DENY`）。
 - **出错即拒绝。** 策略存储不可达、条件出错或正则超出时间预算，都不会放行请求。
 
-Web 集成把决策转换为响应：匿名调用方返回 `401`，已认证调用方返回 `403`，触发限流返回 `429`。
+Web 集成把决策转换为响应：匿名调用方返回 `401`，已认证调用方返回 `403`，触发[限流](./rate-limiting.md)返回 `429`。
 详见 [Web 集成](./web-integration.md)。
 
 ## 模块 {#modules}
@@ -56,7 +56,7 @@ Web 集成把决策转换为响应：匿名调用方返回 `401`，已认证调�
 | `cosec-webflux` | `webflux-support` | Spring WebFlux 适配器。 |
 | `cosec-webmvc` | `webmvc-support` | Spring MVC 适配器。 |
 | `cosec-gateway` | `gateway-support` | Spring Cloud Gateway 适配器。 |
-| `cosec-cocache` | `cache-support` | 基于 Redis 存储策略、权限和已吊销令牌，并带本地缓存（[CoCache](https://github.com/Ahoo-Wang/CoCache)）；Redis 限流器。 |
+| `cosec-cocache` | `cache-support` | 基于 Redis 存储策略、权限和已吊销令牌，并带本地缓存（[CoCache](https://github.com/Ahoo-Wang/CoCache)）；全集群的限流计数器。 |
 | `cosec-social` | `oauth-support` | 通过 [JustAuth](https://github.com/justauth/JustAuth) 实现 OAuth 社交登录。 |
 | `cosec-opentelemetry` | `opentelemetry-support` | 为每次决策生成一个链路追踪 span。 |
 | `cosec-openapi` | `openapi-support` | 根据 OpenAPI 描述生成策略；在 OpenAPI 文档中声明 Bearer 认证。 |

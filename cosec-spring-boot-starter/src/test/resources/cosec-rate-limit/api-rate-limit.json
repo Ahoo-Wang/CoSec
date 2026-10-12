@@ -1,0 +1,6 @@
+{
+  "id": "api-by-ip",
+  "action": "/api/**",
+  "key": "request.remoteIp",
+  "permitsPerSecond": 100
+}

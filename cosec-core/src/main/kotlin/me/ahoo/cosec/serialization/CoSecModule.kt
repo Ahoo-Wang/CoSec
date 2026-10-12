@@ -23,6 +23,7 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.configuration.JsonConfiguration
+import me.ahoo.cosec.limiter.RateLimitRule
 import tools.jackson.databind.module.SimpleModule
 
 /**
@@ -39,6 +40,7 @@ import tools.jackson.databind.module.SimpleModule
  * - PermissionGroup
  * - AppPermission
  * - JsonConfiguration
+ * - RateLimitRule
  *
  * @see CoSecJsonSerializer
  */
@@ -64,5 +66,7 @@ class CoSecModule : SimpleModule() {
         addDeserializer(PermissionGroup::class.java, JsonPermissionGroupDeserializer)
         addSerializer(AppPermission::class.java, JsonAppPermissionSerializer)
         addDeserializer(AppPermission::class.java, JsonAppPermissionDeserializer)
+        addSerializer(RateLimitRule::class.java, JsonRateLimitRuleSerializer)
+        addDeserializer(RateLimitRule::class.java, JsonRateLimitRuleDeserializer)
     }
 }

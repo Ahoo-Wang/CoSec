@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.limiter.RateLimitResult
 import reactor.core.publisher.Mono
 
 /**
@@ -25,10 +26,13 @@ import reactor.core.publisher.Mono
  * @param result the authorization result
  * @param verifyContext what matched (policy statement, role permission, root, blacklist, ...),
  * or null when the [Authorization] does not report it
+ * @param rateLimit the tightest rate limit applied to the request, see [me.ahoo.cosec.limiter.RateLimitingAuthorization];
+ * when not [RateLimitResult.allowed], the request exceeded it and [result] is [AuthorizeResult.TOO_MANY_REQUESTS]
  */
 data class AuthorizationDecision(
     val result: AuthorizeResult,
-    val verifyContext: VerifyContext? = null
+    val verifyContext: VerifyContext? = null,
+    val rateLimit: RateLimitResult? = null
 )
 
 /**

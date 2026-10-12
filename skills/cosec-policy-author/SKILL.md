@@ -1,6 +1,6 @@
 ---
 name: cosec-policy-author
-description: Write, review, validate, or explain CoSec policy JSON, including allow/deny precedence, action and condition matchers, tenant and role rules, and local or Redis rate limits. Do not use for Spring Boot setup.
+description: Write, review, validate, or explain CoSec policy and rate limit rule JSON, including allow/deny precedence, action and condition matchers, tenant and role rules, and per-IP or per-user quotas. Do not use for Spring Boot setup.
 ---
 
 # CoSec Policy Authoring
@@ -88,14 +88,33 @@ Order deny statements before allow statements for readability, not behavior.
 | `bool` | optional sibling arrays `and`, `or` | Combine conditions |
 | `spel` | `expression` | Evaluate against root properties `request` and `context` |
 | `ognl` | `expression` | Sandboxed expression using `#request` and `#context` |
-| `rateLimiter` | `permitsPerSecond` | One in-memory limit per matcher/JVM |
-| `groupedRateLimiter` | `part`, `permitsPerSecond`, `expireAfterAccessSecond` | In-memory per-part limit |
-| `redisRateLimiter` | `permitsPerSecond`; optional `windowSeconds`, `strictFailure` | Cluster-wide Redis limit |
-| `redisGroupedRateLimiter` | `part`, `permitsPerSecond`; optional `windowSeconds`, `strictFailure` | Cluster-wide Redis per-part limit |
+`negate` is handled by matchers based on `AbstractConditionMatcher`, which covers every built-in condition.
 
-The Redis types exist only when cache support and `StringRedisTemplate` activate their Spring factories. They use an atomic sliding window allowing `permitsPerSecond × windowSeconds` requests per window, return 429 when exceeded, fail open on Redis errors by default, and return 429 on Redis errors when `strictFailure` is `true`. Their Redis counter is keyed by configuration (`permitsPerSecond`, `windowSeconds`, `strictFailure`) plus the grouped `part` value, so limiters with identical settings share one quota even across policies; vary a setting to separate them. The auto-configured local-policy lifecycle starts after matcher registration, so bootstrap files may use them. The in-memory limiters also return 429 when exceeded.
+### Rate limits
 
-`negate` is handled only by matchers based on `AbstractConditionMatcher`; the ungrouped `rateLimiter` and `redisRateLimiter` do not support it. Avoid negating any limiter because an exceeded quota throws before boolean negation.
+Rate limits are not policy conditions; since 6.1.0 the `rateLimiter`, `groupedRateLimiter`, `redisRateLimiter`, and `redisGroupedRateLimiter` conditions no longer exist, and a policy using one fails to parse. Write a rate limit rule instead, in a file matching `cosec.limiter.locations` (default `classpath:cosec-rate-limit/*-rate-limit.json`, one rule or an array, schema `schema/rate-limit-rule.schema.json`):
+
+```json
+{
+  "id": "login-by-ip",
+  "action": { "path": { "pattern": "/auth/login", "method": "POST" } },
+  "condition": { "authenticated": { "negate": true } },
+  "key": "request.remoteIp",
+  "permitsPerSecond": 0.1,
+  "windowSeconds": 60,
+  "strictFailure": true
+}
+```
+
+| Field | Notes |
+|---|---|
+| `id` | Required, `[A-Za-z0-9_.-]+`, unique. The quota belongs to the id. |
+| `action`, `condition` | Same syntax as a statement; `condition` defaults to always. |
+| `key` | Optional part (e.g. `request.remoteIp`, `context.principal.id`) giving one bucket per value; omit for one shared bucket. Empty values share one bucket. |
+| `permitsPerSecond`, `windowSeconds` | A window of `windowSeconds` (default 1) allows `permitsPerSecond × windowSeconds` requests, at least one. |
+| `strictFailure` | `false` (default) skips the rule when the counter store fails; `true` returns 429. |
+
+Only requests that authorization allows spend permits. Every matching rule spends one, in order, and the first exhausted rule returns 429 with `Retry-After`. Counters are cluster-wide in Redis when the cache capability and `StringRedisTemplate` are present, otherwise per JVM. An unreadable rule file fails application startup. When migrating an old limiter condition, move the statement's action into `action`, its other conditions into `condition`, and `part` into `key`.
 
 ### Boolean example
 
@@ -135,7 +154,7 @@ Check the final policy for:
 - trusted-proxy assumptions behind `request.remoteIp`;
 - tenant type (`inTenant`) being confused with tenant ID (`context.tenantId`);
 - unsafe or needlessly complex expressions when a built-in matcher suffices;
-- local limiters used where a cluster-wide quota is required.
+- rate limit rules that count per JVM (no Redis) where a cluster-wide quota is required.
 
 ## Validation
 
@@ -149,4 +168,4 @@ require(policies.isNotEmpty())
 policies.forEach(DefaultPolicyEvaluator::evaluate)
 ```
 
-`LocalPolicyLoader` logs and skips malformed policies, so assert that the expected policy ID loaded. `DefaultPolicyEvaluator` catches expected rate-limit and regex-timeout signals but surfaces other matcher configuration errors. Add one authorization test for each meaningful allow/deny boundary.
+`LocalPolicyLoader` logs and skips malformed policies, so assert that the expected policy ID loaded. `DefaultPolicyEvaluator` catches expected regex-timeout signals but surfaces other matcher configuration errors. Add one authorization test for each meaningful allow/deny boundary.

@@ -74,6 +74,7 @@ abstract class ReactiveSecurityFilter(
             return@flatMap Mono.empty()
         }
         response.headers.trySet(REQUEST_ID_KEY, request.requestId)
+        decision.responseHeaders.forEach { (name, value) -> response.headers.trySet(name, value) }
         val securityContext = decision.securityContext
         securityContext?.let { exchange.setSecurityContext(it) }
         if (!decision.allowed) {

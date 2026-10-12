@@ -1,18 +1,16 @@
 {
-  "id": "redis-rate-limiter",
-  "name": "Redis Rate Limiter",
-  "category": "rate-limit",
+  "id": "spring-matcher",
+  "name": "Spring Matcher",
+  "category": "test",
   "description": "Verifies Spring matcher registration before local policy initialization",
   "type": "global",
   "tenantId": "(platform)",
   "statements": [
     {
-      "name": "RateLimitedApi",
+      "name": "SpringMatchedApi",
       "action": "/api/**",
       "condition": {
-        "redisRateLimiter": {
-          "permitsPerSecond": 10
-        }
+        "springBean": {}
       }
     }
   ]

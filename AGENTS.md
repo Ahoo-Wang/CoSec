@@ -34,16 +34,18 @@ adapters or caching. The parts that take several files to see:
 
 - **Layers.** `cosec-api` = public contracts only (depends on Reactor alone). `cosec-core` = every algorithm
   plus the SPIs (`PolicyRepository`, `AppRolePermissionRepository`, `ActionMatcherFactory`,
-  `ConditionMatcherFactory`, `RootPrincipalMatcher`). Every other module adapts exactly one technology.
+  `ConditionMatcherFactory`, `RootPrincipalMatcher`, `RateLimiter`, `RateLimitRuleProvider`). Every other module adapts exactly one technology.
   `cosec-spring-boot-starter` wires them through Gradle feature variants (`webfluxSupport`, `cacheSupport`, …),
   so an application pulls in only what it asks for.
 - **Request path.** Adapter (WebFlux / WebMvc / Gateway) → `SecurityPipeline` (parse request, resolve
   principal from token, authorize, map to status) → `SecurityDecision` → adapter writes it. Adapters translate;
   they never decide.
-- **Authorization** is a decorator chain (tracing → auditing → `SimpleAuthorization`) over
+- **Authorization** is a decorator chain (tracing → auditing → rate limiting → `SimpleAuthorization`) over
   `DecisionAuthorization`, so the matched `VerifyContext` travels as a value. `SimpleAuthorization`: root →
   blacklist → global policies → principal policies → app/space role permissions. Each layer checks every deny
   before any allow; an explicit deny in any layer ends evaluation; no match = `IMPLICIT_DENY`.
+  `RateLimitingAuthorization` then spends one permit per matching rule for allowed requests only; an exhausted
+  rule turns the decision into `TOO_MANY_REQUESTS`, which the pipeline maps to `429`.
 - **Policies are data.** Policies and permissions are JSON. Action/condition matchers are built by factories
   looked up by `type`, registered through `META-INF/services` in `cosec-core` or as Spring beans.
 - **Caching.** Redis repositories in `cosec-cocache` are built on CoCache. Redis is the store of record; the
@@ -56,10 +58,10 @@ Each one exists for a reason, and most have a test guarding it. Never weaken the
 | Invariant | Why | Guard |
 |---|---|---|
 | **Deny-first**: no `ALLOW` wins over a matched `DENY`, within or across layers | Otherwise adding a policy can widen access | `SimpleAuthorizationTest` |
-| **Fail closed**: errors deny. Only exceptions: non-strict Redis rate limiters and the token revocation check (documented) | An outage must not open the gate | `SecurityPipelineTest` |
+| **Fail closed**: errors deny. Only exceptions: rate limit rules without `strictFailure` and the token revocation check (documented) | An outage must not open the gate | `SecurityPipelineTest` |
 | **One decision path**: status codes and error mapping live only in `SecurityPipeline` | Three adapters must answer identically | `WebAdapterParityTest` |
-| **No blocking on the event loop**: Redis and other blocking calls run on `boundedElastic` unless answered from the local cache. Blocking condition matchers implement `BlockingAware`; only layers containing one hop threads | Blocking a Netty thread stalls every request on it | `RedisRateLimiterOffEventLoopTest` |
-| **Matchers do no I/O** (Redis rate limiters are the one exception) | Keeps evaluation fast and predictable | review |
+| **No blocking on the event loop**: Redis and other blocking calls run on `boundedElastic` unless answered from the local cache. Blocking custom condition matchers implement `BlockingAware`; only layers containing one hop threads | Blocking a Netty thread stalls every request on it | `RedisRateLimitingOffEventLoopTest` |
+| **Authorization is a pure decision**: built-in matchers do no I/O and keep no state; rate limiting is a separate decorator that spends permits only for allowed requests | Keeps evaluation fast, predictable and explainable; denied requests never use up quotas | review, `RateLimitingAuthorizationTest` |
 | **Policy/permission caches keep `ttl = FOREVER`, `strictFailure = true`** | Redis is the store of record; expiry or a swallowed error would silently drop policies | `CacheTtlPolicyTest` |
 | **Hot-path changes come with a JMH before/after** | Authorization runs on every request | `SimpleAuthorizationBenchmark` |
 
@@ -73,6 +75,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | New action/condition type or option | factory in `cosec-core` + its `META-INF/services` entry, `schema/*.schema.json` (no test checks it), `wiki/guide/policies.md`, `skills/cosec-policy-author` |
 | `cosec.*` property or default | `wiki/guide/configuration.md` |
 | Status codes, adapters, security-context access, request attributes | `wiki/guide/web-integration.md` |
+| Rate limit rules, backends, headers | `wiki/guide/rate-limiting.md`, `schema/rate-limit-rule.schema.json` |
 | New failure symptom | `wiki/guide/troubleshooting.md`, `skills/cosec-troubleshoot` |
 | Tokens, login, revocation | `wiki/guide/authentication.md` |
 | Architecture, invariants, performance numbers | `wiki/architecture/overview.md` |

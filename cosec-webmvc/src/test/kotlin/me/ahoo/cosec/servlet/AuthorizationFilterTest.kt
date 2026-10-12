@@ -24,13 +24,16 @@ import jakarta.servlet.http.HttpServletResponse
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.context.request.RequestIdCapable
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.authorization.AuthorizationDecision
+import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.jwt.InjectSecurityContextParser
-import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
+import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
@@ -46,6 +49,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
+import java.time.Duration
 
 internal class AuthorizationFilterTest {
 
@@ -172,8 +176,10 @@ internal class AuthorizationFilterTest {
 
     @Test
     fun doFilterWhenTooManyRequests() {
-        val authorization = mockk<Authorization> {
-            every { authorize(any(), any()) } throws TooManyRequestsException()
+        val rateLimit = RateLimitResult(allowed = false, limit = 5, remaining = 0, resetAfter = Duration.ofSeconds(3))
+        val authorization = object : DecisionAuthorization {
+            override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> =
+                AuthorizationDecision(AuthorizeResult.TOO_MANY_REQUESTS, rateLimit = rateLimit).toMono()
         }
         val filter = AuthorizationFilter(
             InjectSecurityContextParser,
@@ -193,7 +199,7 @@ internal class AuthorizationFilterTest {
             every { setSecurityContext(any()) } returns Unit
         }
         val servletResponse = mockk<HttpServletResponse> {
-            every { setHeader(RequestIdCapable.REQUEST_ID_KEY, any()) } just runs
+            every { setHeader(any(), any()) } just runs
             every { contentType = MediaType.APPLICATION_JSON_VALUE } just runs
             every { status = HttpStatus.TOO_MANY_REQUESTS.value() } returns Unit
             every { outputStream.write(any() as ByteArray) } returns Unit
@@ -205,12 +211,13 @@ internal class AuthorizationFilterTest {
         filter.doFilter(servletRequest, servletResponse, filterChain)
 
         verify {
-            servletResponse.contentType = MediaType.APPLICATION_JSON_VALUE
             servletResponse.status = HttpStatus.TOO_MANY_REQUESTS.value()
+            servletResponse.setHeader("Retry-After", "3")
+            servletResponse.setHeader("RateLimit-Limit", "5")
+            servletResponse.setHeader("RateLimit-Remaining", "0")
             servletResponse.outputStream.write(any() as ByteArray)
-            servletResponse.outputStream.flush()
         }
-        // The request was denied by the rate limiter, so it must not reach the filter chain.
+        // The request exceeded a rate limit, so it must not reach the filter chain.
         verify(exactly = 0) { filterChain.doFilter(any(), any()) }
     }
 

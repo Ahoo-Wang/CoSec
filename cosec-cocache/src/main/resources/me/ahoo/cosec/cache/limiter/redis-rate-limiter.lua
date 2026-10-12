@@ -6,7 +6,8 @@
 -- ARGV[2] - window size in milliseconds
 -- ARGV[3] - current epoch millis
 --
--- Returns 1 when the request is allowed (and counted), 0 when the quota is exceeded.
+-- Returns {allowed, estimate}: allowed is 1 when the request is allowed (and counted), 0 when the quota is
+-- exceeded; estimate is the weighted count before this request, in thousandths (Redis truncates Lua numbers).
 -- The check and the count happen atomically, so the limit is enforced cluster-wide.
 --
 -- Note: the two keys are not wrapped in a Redis Cluster hashtag; CoSec has no
@@ -18,11 +19,12 @@ local windowMs = tonumber(ARGV[2])
 local nowMs = tonumber(ARGV[3])
 local previousWeight = (windowMs - (nowMs % windowMs)) / windowMs
 local estimate = previous * previousWeight + current
+local scaledEstimate = math.floor(estimate * 1000)
 if estimate >= tonumber(ARGV[1]) then
-  return 0
+  return {0, scaledEstimate}
 end
 redis.call('INCR', KEYS[1])
 if current == 0 then
   redis.call('PEXPIRE', KEYS[1], windowMs * 2)
 end
-return 1
+return {1, scaledEstimate}

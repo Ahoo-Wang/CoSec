@@ -44,7 +44,7 @@ flowchart TD
   regex time budget never let a request through.
 
 The web integration turns the decision into a response: `401` for anonymous callers, `403` for
-authenticated ones, `429` when a rate limit is hit. See [Web Integration](./web-integration.md).
+authenticated ones, `429` when a [rate limit](./rate-limiting.md) is hit. See [Web Integration](./web-integration.md).
 
 ## Modules
 
@@ -60,7 +60,7 @@ third-party dependencies.
 | `cosec-webflux` | `webflux-support` | Spring WebFlux adapter. |
 | `cosec-webmvc` | `webmvc-support` | Spring MVC adapter. |
 | `cosec-gateway` | `gateway-support` | Spring Cloud Gateway adapter. |
-| `cosec-cocache` | `cache-support` | Redis-backed policies, permissions and revoked tokens with a local cache ([CoCache](https://github.com/Ahoo-Wang/CoCache)); Redis rate limiters. |
+| `cosec-cocache` | `cache-support` | Redis-backed policies, permissions and revoked tokens with a local cache ([CoCache](https://github.com/Ahoo-Wang/CoCache)); cluster-wide rate limit counters. |
 | `cosec-social` | `oauth-support` | OAuth social login via [JustAuth](https://github.com/justauth/JustAuth). |
 | `cosec-opentelemetry` | `opentelemetry-support` | A tracing span per decision. |
 | `cosec-openapi` | `openapi-support` | Policy generation from your OpenAPI description; bearer auth in the OpenAPI document. |

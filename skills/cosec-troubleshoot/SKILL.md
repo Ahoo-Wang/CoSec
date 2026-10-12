@@ -1,6 +1,6 @@
 ---
 name: cosec-troubleshoot
-description: Diagnose CoSec authentication and authorization failures, including unexpected 401/403/429 responses, policy loading, JWT rejection, matcher mismatches, Redis limiters, and unexplained access decisions. Do not change behavior unless the user asks for a fix.
+description: Diagnose CoSec authentication and authorization failures, including unexpected 401/403/429 responses, policy loading, JWT rejection, matcher mismatches, rate limit rules, and unexplained access decisions. Do not change behavior unless the user asks for a fix.
 ---
 
 # CoSec Troubleshooting
@@ -31,7 +31,7 @@ logging:
 | 400 | Invalid normalized request path |
 | 401 | Authorization denied while the parsed principal is anonymous; invalid/expired tokens also fall back to anonymous and preserve the token reason |
 | 403 | An authenticated principal was denied, or a regex matcher timed out and failed closed |
-| 429 | A local or Redis rate limiter threw `TooManyRequestsException` |
+| 429 | An allowed request exceeded a rate limit rule (`RateLimitingAuthorization`) |
 | 500 | Unexpected authorization error, including Redis being unavailable for policy/permission reads (those caches fail closed); inspect the server exception |
 
 The authorization result alone does not choose 401 versus 403; the filter maps a denied anonymous principal to 401 and a denied authenticated principal to 403.
@@ -91,10 +91,11 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 
 ### Rate limiting differs across instances
 
-- `rateLimiter` and `groupedRateLimiter` are in-memory and per JVM.
-- `redisRateLimiter` and `redisGroupedRateLimiter` are cluster-wide and require cache support plus `StringRedisTemplate`.
-- Redis limiter outages fail open by default. Set the matcher's `strictFailure: true` only when availability loss should return 429.
-- Check `cosec.limiter.key-prefix`, `windowSeconds`, and grouping `part`. Redis limiters with identical `permitsPerSecond`, `windowSeconds`, and `strictFailure` share one Redis counter even across policies, so an unrelated statement can consume the same quota.
+- Without the cache capability and a `StringRedisTemplate` bean, the `RateLimiter` is `LocalRateLimiter`: per JVM, so N instances allow N times the limit. Check which `RateLimiter` bean is active.
+- Counter-store outages skip a rule by default. Set the rule's `strictFailure: true` only when availability loss should return 429.
+- Denied requests (401/403) never spend permits. A rule that never applies usually has a non-matching `action`/`condition`, or its file is outside `cosec.limiter.locations`.
+- A rule without `key` shares one bucket among all matching requests; requests whose `key` part is empty also share one bucket. Quotas belong to the rule `id`.
+- After upgrading to 6.1, policies using `rateLimiter`, `groupedRateLimiter`, `redisRateLimiter`, or `redisGroupedRateLimiter` fail to parse: migrate them to rate limit rules.
 
 ## Reproduce narrowly
 

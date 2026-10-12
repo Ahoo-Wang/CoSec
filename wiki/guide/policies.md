@@ -108,8 +108,7 @@ A condition is a single-key object: the key is the condition type, the value is 
 "condition": { "eq": { "part": "context.tenantId", "value": "(platform)" } }
 ```
 
-Every condition except `rateLimiter` and `redisRateLimiter` accepts `"negate": true` to invert its result.
-Do not negate rate limits: an exhausted limit rejects the request before negation applies.
+Every condition accepts `"negate": true` to invert its result.
 
 ### Context conditions
 
@@ -183,33 +182,10 @@ of them must match too.
 
 Prefer the declarative conditions above. Expressions are harder to review and test.
 
-### Rate limits
-
-A rate-limit condition matches while there are permits left. When the limit is exhausted the request
-is rejected with `429 Too Many Requests`.
-
-| Type | Configuration | Scope |
-|---|---|---|
-| `rateLimiter` | `permitsPerSecond` | per application instance |
-| `groupedRateLimiter` | `part`, `permitsPerSecond`, `expireAfterAccessSecond` (all required) | per instance, one limiter per value of `part` (e.g. per user); idle limiters are dropped after `expireAfterAccessSecond` |
-| `redisRateLimiter` | `permitsPerSecond`, `windowSeconds` (default `1`), `strictFailure` (default `false`) | cluster-wide (Redis, sliding window) |
-| `redisGroupedRateLimiter` | the above plus `part` | cluster-wide, per value of `part` |
-
-```json
-{ "name": "login-throttle",
-  "action": { "path": { "pattern": "/auth/login", "method": "POST" } },
-  "condition": { "redisGroupedRateLimiter": { "part": "request.remoteIp", "permitsPerSecond": 5 } } }
-```
-
-Redis limiters need `cache-support`. Their specifics:
-
-- **Window.** A window of `windowSeconds` allows `permitsPerSecond × windowSeconds` requests.
-- **Shared quotas.** The Redis counter is keyed by the limiter's configuration (`permitsPerSecond`,
-  `windowSeconds`, `strictFailure`) and the `part` value, not by the policy or statement. Two statements with
-  identical settings share one quota; change one setting to separate them.
-- **Redis outages.** With `strictFailure: false`, a Redis outage lets requests through rather than blocking
-  all traffic. With `true`, requests are rejected with `429` while Redis is unavailable.
-- **Key prefix.** Keys start with [`cosec.limiter.key-prefix`](./configuration.md#rate-limiting).
+::: tip Rate limits are not conditions
+Policies decide whether a request is allowed. How often allowed requests may pass is set by separate
+[rate limit rules](./rate-limiting.md).
+:::
 
 ## How policies combine
 
@@ -228,10 +204,7 @@ Two checks come before the layers: the **root** principal (id `cosec`, configura
 [Configuration](./configuration.md#authorization)) is always allowed, and a request rejected by the
 blacklist is always denied.
 
-::: tip Policy conditions run first
-A policy's own `condition` is evaluated once, before its statements. A rate limit placed there
-consumes a permit for every request the policy applies to, whichever statement decides.
-:::
+A policy's own `condition` is evaluated once, before its statements.
 
 ## App permissions and roles
 

@@ -30,6 +30,8 @@ import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
+import me.ahoo.cosec.authorization.AuthorizationDecision
+import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.authorization.PolicyVerifySource
@@ -37,10 +39,10 @@ import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
-import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.token.TokenExpiredException
@@ -281,14 +283,23 @@ class AuditingAuthorizationTest {
     }
 
     @Test
-    fun publishWhenTooManyRequestsAndErrorPropagates() {
-        val (authorization, events) = authorization(TooManyRequestsException().toMono<AuthorizeResult>())
-        authorization.authorize(request, context)
+    fun publishWhenRateLimitedKeepsTooManyRequests() {
+        // A token failure must not mask the rate limit: the request was allowed, then limited.
+        context.setTokenVerificationException(TokenExpiredException())
+        val events = mutableListOf<AuditEvent>()
+        val rateLimit = RateLimitResult(allowed = false, limit = 1, remaining = 0, resetAfter = Duration.ofSeconds(1))
+        val delegate = object : DecisionAuthorization {
+            override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> =
+                AuthorizationDecision(AuthorizeResult.TOO_MANY_REQUESTS, rateLimit = rateLimit).toMono()
+        }
+        AuditingAuthorization(delegate, AuditEventSink(events::add)).decide(request, context)
             .test()
-            .expectError(TooManyRequestsException::class.java)
-            .verify()
-        events.size.assert().isEqualTo(1)
-        events[0].authorization.decision.assert().isEqualTo(AuditDecision.TOO_MANY_REQUESTS)
+            .consumeNextWith { it.rateLimit.assert().isEqualTo(rateLimit) }
+            .verifyComplete()
+        events.single().authorization.apply {
+            decision.assert().isEqualTo(AuditDecision.TOO_MANY_REQUESTS)
+            reason.assert().isEqualTo("Too Many Requests")
+        }
     }
 
     @Test
@@ -305,14 +316,14 @@ class AuditingAuthorizationTest {
     fun publishWhenDelegateThrowsSynchronously() {
         val events = mutableListOf<AuditEvent>()
         val delegate = mockk<Authorization> {
-            every { authorize(request, context) } throws TooManyRequestsException()
+            every { authorize(request, context) } throws IllegalStateException()
         }
         val authorization = AuditingAuthorization(delegate, AuditEventSink(events::add))
         authorization.authorize(request, context)
             .test()
-            .expectError(TooManyRequestsException::class.java)
+            .expectError(IllegalStateException::class.java)
             .verify()
-        events.single().authorization.decision.assert().isEqualTo(AuditDecision.TOO_MANY_REQUESTS)
+        events.single().authorization.decision.assert().isEqualTo(AuditDecision.ERROR)
     }
 
     @Test

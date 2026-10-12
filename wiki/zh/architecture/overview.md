@@ -34,7 +34,7 @@ sequenceDiagram
     autonumber
     participant A as Web 适配器<br>(WebFlux / WebMvc / Gateway)
     participant P as SecurityPipeline
-    participant Z as Authorization<br>(Tracing → Auditing → Simple)
+    participant Z as Authorization<br>(Tracing → Auditing → RateLimiting → Simple)
     participant R as 策略 / 权限<br>仓储
     A->>P: evaluate(exchange 或 servlet 请求)
     P->>P: RequestParser：路径安全、客户端 IP、请求 id、属性
@@ -42,8 +42,9 @@ sequenceDiagram
     P->>Z: decide(request, context)
     Z->>R: 全局策略、主体策略、角色权限
     R-->>Z: （先查本地缓存，未命中再查 Redis）
-    Z-->>P: AuthorizationDecision(result, verifyContext)
-    P-->>A: SecurityDecision(status, result, request, context)
+    Z->>Z: 放行时：每条匹配的限流规则消耗一个许可
+    Z-->>P: AuthorizationDecision(result, verifyContext, rateLimit)
+    P-->>A: SecurityDecision(status, result, request, context, rateLimit)
     A->>A: 写回 4xx/5xx，或带着安全上下文继续过滤器链
 ```
 
@@ -75,10 +76,10 @@ sequenceDiagram
 | 不变量 | 含义 |
 |---|---|
 | **拒绝优先** | 任何策略或层的组合，都不能让 `ALLOW` 压过已命中的 `DENY`。 |
-| **出错即拒绝** | 错误一律拒绝（`500`，正则超时为 `403`）。仅有的例外是有文档说明的降级模式：非严格的 Redis 限流器，以及吊销检查。策略和权限缓存使用严格的 Redis 失败模式。 |
-| **不阻塞事件循环** | 阻塞操作（从 Redis 读取仓储、令牌吊销）在 `boundedElastic` 上执行；能从本地缓存返回的读取留在调用方线程。会阻塞的条件匹配器（例如 Redis 限流器）实现 `BlockingAware`：只有当某一层的策略或应用权限包含这类匹配器时，`SimpleAuthorization` 才会把该层放到 `boundedElastic` 上评估，其他策略不产生线程切换。 |
+| **出错即拒绝** | 错误一律拒绝（`500`，正则超时为 `403`）。仅有的例外是有文档说明的降级模式：未设置 `strictFailure` 的限流规则，以及吊销检查。策略和权限缓存使用严格的 Redis 失败模式。 |
+| **不阻塞事件循环** | 阻塞操作（从 Redis 读取仓储、令牌吊销、Redis 限流计数器）在 `boundedElastic` 上执行；能从本地缓存返回的读取留在调用方线程。必须阻塞的自定义条件匹配器实现 `BlockingAware`：只有当某一层的策略或应用权限包含这类匹配器时，`SimpleAuthorization` 才会把该层放到 `boundedElastic` 上评估，其他策略不产生线程切换。 |
 | **只有一条决策路径** | 状态码和错误映射只存在于 `SecurityPipeline`，适配器从不自行决策。 |
-| **匹配器不做 I/O** | 匹配器只读取请求和安全上下文。路径匹配器会把路径变量记录到上下文中，限流器按设计持有状态。Redis 限流器是唯一会做 I/O 的匹配器。 |
+| **授权是纯决策** | 内置匹配器只读取请求和安全上下文，不做 I/O、不持有状态（路径匹配器会把路径变量记录到上下文中）。会消耗许可的限流是一个独立的装饰器，只对被放行的请求执行（见[限流](../guide/rate-limiting.md)）。 |
 | **策略即数据** | 策略和权限都是 JSON。匹配器通过按类型注册的工厂创建（`ServiceLoader` 或 Spring bean）。 |
 
 ## 数据与缓存 {#data-and-caching}
@@ -105,3 +106,6 @@ sequenceDiagram
 
 起决定作用的有两点：每个请求只解析一次路径并在所有路径匹配器间共享；拒绝优先的求值直接遍历原始列表，不为每一项创建包装对象。
 任何性能改动都应附上 JMH 对比。
+
+`RateLimitingAuthorizationBenchmark` 在 JDK 21 上测量限流在一个总是放行的授权（17 ns）之上增加的开销：没有规则约 20 ns，
+没有规则匹配约 40 ns，命中一条在内存中计数的按 IP 规则约 250 ns。由 Redis 计数的规则还会增加一次 Redis 往返。

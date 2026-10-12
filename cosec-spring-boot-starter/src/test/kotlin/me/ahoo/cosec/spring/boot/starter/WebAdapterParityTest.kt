@@ -15,9 +15,14 @@ package me.ahoo.cosec.spring.boot.starter
 
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.authorization.AuthorizationDecision
+import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
-import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
+import me.ahoo.cosec.limiter.RateLimitResult
+import me.ahoo.cosec.pipeline.SecurityDecision
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.servlet.AuthorizationFilter
@@ -28,6 +33,7 @@ import me.ahoo.cosec.webflux.ReactiveAuthorizationFilter
 import me.ahoo.cosec.webflux.ReactiveRemoteIpResolver
 import me.ahoo.cosec.webflux.ReactiveRequestParser
 import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
@@ -38,12 +44,13 @@ import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.mock.web.server.MockServerWebExchange
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
+import java.time.Duration
 
 /**
  * Drives the WebFlux and WebMvc adapters with the same scenarios and asserts they respond identically.
  */
 class WebAdapterParityTest {
-    data class Outcome(val status: Int, val body: String, val proceeded: Boolean)
+    data class Outcome(val status: Int, val body: String, val proceeded: Boolean, val headers: Map<String, String?>)
 
     companion object {
         private val anonymous = SecurityContextParser { SimpleSecurityContext.anonymous() }
@@ -53,6 +60,24 @@ class WebAdapterParityTest {
 
         private fun returning(result: AuthorizeResult) = Authorization { _, _ -> result.toMono() }
         private fun failing(error: Throwable) = Authorization { _, _ -> Mono.error(error) }
+        private fun rateLimited(result: AuthorizeResult, allowed: Boolean) = object : DecisionAuthorization {
+            override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> {
+                val rateLimit = RateLimitResult(
+                    allowed,
+                    limit = 10,
+                    remaining = if (allowed) 9 else 0,
+                    Duration.ofSeconds(2)
+                )
+                return AuthorizationDecision(result, rateLimit = rateLimit).toMono()
+            }
+        }
+
+        private val headerNames = listOf(
+            SecurityDecision.RATE_LIMIT_LIMIT_HEADER,
+            SecurityDecision.RATE_LIMIT_REMAINING_HEADER,
+            SecurityDecision.RATE_LIMIT_RESET_HEADER,
+            SecurityDecision.RETRY_AFTER_HEADER,
+        )
 
         @JvmStatic
         fun scenarios(): List<Arguments> = listOf(
@@ -61,7 +86,18 @@ class WebAdapterParityTest {
             Arguments.of("authenticated denied", "/path", authenticated, returning(AuthorizeResult.EXPLICIT_DENY)),
             Arguments.of("expired token", "/path", expiredToken, returning(AuthorizeResult.IMPLICIT_DENY)),
             Arguments.of("empty result", "/path", authenticated, Authorization { _, _ -> Mono.empty() }),
-            Arguments.of("rate limited", "/path", anonymous, failing(TooManyRequestsException())),
+            Arguments.of(
+                "rate limit exceeded",
+                "/path",
+                authenticated,
+                rateLimited(AuthorizeResult.TOO_MANY_REQUESTS, allowed = false),
+            ),
+            Arguments.of(
+                "within rate limit",
+                "/path",
+                authenticated,
+                rateLimited(AuthorizeResult.ALLOW, allowed = true)
+            ),
             Arguments.of("regex timeout", "/path", anonymous, failing(RegexTimeoutException("timeout"))),
             Arguments.of("unexpected error", "/path", anonymous, failing(IllegalStateException())),
             Arguments.of("context parse error", "/path", brokenParser, returning(AuthorizeResult.ALLOW)),
@@ -80,6 +116,21 @@ class WebAdapterParityTest {
         val reactive = reactiveOutcome(path, securityContextParser, authorization)
         val servlet = servletOutcome(path, securityContextParser, authorization)
         servlet.assert().isEqualTo(reactive)
+    }
+
+    @Test
+    fun rateLimitExceededWritesRetryAfter() {
+        val outcome = servletOutcome("/path", authenticated, rateLimited(AuthorizeResult.TOO_MANY_REQUESTS, false))
+        outcome.status.assert().isEqualTo(429)
+        outcome.proceeded.assert().isFalse()
+        outcome.headers.assert().isEqualTo(
+            mapOf(
+                SecurityDecision.RATE_LIMIT_LIMIT_HEADER to "10",
+                SecurityDecision.RATE_LIMIT_REMAINING_HEADER to "0",
+                SecurityDecision.RATE_LIMIT_RESET_HEADER to "2",
+                SecurityDecision.RETRY_AFTER_HEADER to "2",
+            ),
+        )
     }
 
     private fun reactiveOutcome(
@@ -103,6 +154,7 @@ class WebAdapterParityTest {
             status = response.statusCode?.value() ?: 200,
             body = response.bodyAsString.block().orEmpty(),
             proceeded = proceeded,
+            headers = headerNames.associateWith { response.headers.getFirst(it) },
         )
     }
 
@@ -124,6 +176,7 @@ class WebAdapterParityTest {
             status = response.status,
             body = response.contentAsString,
             proceeded = chain.request != null,
+            headers = headerNames.associateWith { response.getHeader(it) },
         )
     }
 }

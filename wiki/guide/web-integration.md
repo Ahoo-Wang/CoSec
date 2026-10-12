@@ -24,11 +24,15 @@ Rejected requests get a JSON body, `{"authorized": false, "reason": "..."}`, and
 | Path with `.` or `..` segments (also percent-encoded) or a malformed percent-escape | `400` | — (no body) |
 | Denied, anonymous caller | `401` | `Implicit Deny`, `Explicit Deny`, `Token Expired` or `Token Invalid` |
 | Denied, authenticated caller | `403` | `Implicit Deny` or `Explicit Deny` |
-| Rate limit exhausted | `429` | `Too Many Requests` |
+| [Rate limit](./rate-limiting.md) exhausted | `429` | `Too Many Requests` |
 | Regex condition over its time budget | `403` | `Implicit Deny` |
 | Any other error (including an unreachable policy store) | `500` | `Implicit Deny` |
 
-Errors deny. The only deliberate exceptions are two documented degraded modes: Redis rate limiters without
+When a rate limit rule matched, allowed and rejected responses also carry the `RateLimit-Limit`,
+`RateLimit-Remaining` and `RateLimit-Reset` headers, and `429` responses carry `Retry-After` (see
+[Responses](./rate-limiting.md#responses)).
+
+Errors deny. The only deliberate exceptions are two documented degraded modes: rate limit rules without
 `strictFailure`, and the [token revocation check](./authentication.md#logout-and-revocation).
 
 ## Accessing the security context

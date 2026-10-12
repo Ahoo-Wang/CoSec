@@ -28,7 +28,7 @@ import java.util.stream.Stream
 
 class PermissionSerializerTest {
     private val json = """
-{"id":"manage","condition":{"bool":{"and":[{"authenticated":{}},{"rateLimiter":{"permitsPerSecond":10}},{"inTenant":{"value":"default"}}]}},"groups":[{"name":"order","description":"order management","permissions":[{"name":"Ship","effect":"allow","action":"/order/ship","condition":{"all":{}},"id":"manage.order.ship","description":"Ship"},{"name":"Issue an invoice","effect":"allow","action":"/order/issueInvoice","condition":{"all":{}},"id":"manage.order.issueInvoice","description":"Issue an invoice"}]}]}
+{"id":"manage","condition":{"bool":{"and":[{"authenticated":{}},{"authenticated":{}},{"inTenant":{"value":"default"}}]}},"groups":[{"name":"order","description":"order management","permissions":[{"name":"Ship","effect":"allow","action":"/order/ship","condition":{"all":{}},"id":"manage.order.ship","description":"Ship"},{"name":"Issue an invoice","effect":"allow","action":"/order/issueInvoice","condition":{"all":{}},"id":"manage.order.issueInvoice","description":"Issue an invoice"}]}]}
     """.trimIndent()
 
     @Test

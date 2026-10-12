@@ -24,8 +24,8 @@ import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.InvalidRequestPathException
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.policy.EvaluateRequest
-import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.token.TokenExpiredException
@@ -38,6 +38,7 @@ import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.toMono
 import reactor.kotlin.test.test
+import java.time.Duration
 
 class SecurityPipelineTest {
     companion object {
@@ -101,13 +102,6 @@ class SecurityPipelineTest {
                 AuthorizeResult.IMPLICIT_DENY
             ),
             case(
-                "rate limited",
-                anonymousParser,
-                failing(TooManyRequestsException()),
-                SecurityStatus.TOO_MANY_REQUESTS,
-                AuthorizeResult.TOO_MANY_REQUESTS
-            ),
-            case(
                 "regex timeout",
                 anonymousParser,
                 failing(RegexTimeoutException("timeout")),
@@ -124,9 +118,9 @@ class SecurityPipelineTest {
             case(
                 "synchronous throw",
                 anonymousParser,
-                throwing(TooManyRequestsException()),
-                SecurityStatus.TOO_MANY_REQUESTS,
-                AuthorizeResult.TOO_MANY_REQUESTS
+                throwing(RegexTimeoutException("timeout")),
+                SecurityStatus.FORBIDDEN,
+                AuthorizeResult.IMPLICIT_DENY
             ),
             case("context parse error", brokenParser, allow, SecurityStatus.ERROR, AuthorizeResult.IMPLICIT_DENY),
         )
@@ -194,5 +188,68 @@ class SecurityPipelineTest {
             .evaluate("/path")
             .block()
         parseThreadName.assert().startsWith("boundedElastic")
+    }
+
+    private fun deciding(decision: AuthorizationDecision) = object : DecisionAuthorization {
+        override fun decide(request: Request, context: me.ahoo.cosec.api.context.SecurityContext) = decision.toMono()
+    }
+
+    @Test
+    fun evaluateWhenRateLimitExceeded() {
+        val rateLimit = RateLimitResult(
+            allowed = false,
+            limit = 10,
+            remaining = 0,
+            resetAfter = Duration.ofMillis(1500)
+        )
+        // An expired token must not mask the rate limit: the request was allowed, then limited.
+        SecurityPipeline(
+            requestParser,
+            expiredTokenParser,
+            deciding(AuthorizationDecision(AuthorizeResult.TOO_MANY_REQUESTS, RootVerifyContext, rateLimit)),
+        )
+            .evaluate("/path")
+            .test()
+            .consumeNextWith {
+                it.status.assert().isEqualTo(SecurityStatus.TOO_MANY_REQUESTS)
+                it.result.assert().isEqualTo(AuthorizeResult.TOO_MANY_REQUESTS)
+                it.verifyContext.assert().isEqualTo(RootVerifyContext)
+                it.responseHeaders.assert().isEqualTo(
+                    mapOf(
+                        SecurityDecision.RATE_LIMIT_LIMIT_HEADER to "10",
+                        SecurityDecision.RATE_LIMIT_REMAINING_HEADER to "0",
+                        SecurityDecision.RATE_LIMIT_RESET_HEADER to "1",
+                        SecurityDecision.RETRY_AFTER_HEADER to "1",
+                    ),
+                )
+            }.verifyComplete()
+    }
+
+    @Test
+    fun evaluateWhenAllowedWithinRateLimit() {
+        val rateLimit = RateLimitResult(allowed = true, limit = 10, remaining = 9, resetAfter = Duration.ofSeconds(3))
+        SecurityPipeline(
+            requestParser,
+            authenticatedParser,
+            deciding(AuthorizationDecision(AuthorizeResult.ALLOW, rateLimit = rateLimit)),
+        )
+            .evaluate("/path")
+            .test()
+            .consumeNextWith {
+                it.allowed.assert().isTrue()
+                it.rateLimit.assert().isEqualTo(rateLimit)
+                it.responseHeaders.assert().isEqualTo(
+                    mapOf(
+                        SecurityDecision.RATE_LIMIT_LIMIT_HEADER to "10",
+                        SecurityDecision.RATE_LIMIT_REMAINING_HEADER to "9",
+                        SecurityDecision.RATE_LIMIT_RESET_HEADER to "3",
+                    ),
+                )
+            }.verifyComplete()
+    }
+
+    @Test
+    fun responseHeadersWithoutRateLimit() {
+        SecurityDecision.BAD_REQUEST.responseHeaders.assert().isEmpty()
     }
 }

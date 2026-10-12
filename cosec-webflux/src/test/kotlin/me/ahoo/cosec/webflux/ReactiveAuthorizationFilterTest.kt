@@ -22,13 +22,16 @@ import io.mockk.verify
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.context.request.RequestIdCapable
+import me.ahoo.cosec.authorization.AuthorizationDecision
+import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.context.AUTHORIZATION_HEADER_KEY
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.jwt.InjectSecurityContextParser
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.Jwts
-import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
+import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.token.TokenVerificationContexts.getTokenVerificationException
@@ -49,6 +52,7 @@ import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.toMono
+import java.time.Duration
 
 internal class ReactiveAuthorizationFilterTest {
     companion object {
@@ -224,45 +228,28 @@ internal class ReactiveAuthorizationFilterTest {
 
     @Test
     fun filterWhenTooManyRequests() {
-        val authorization = mockk<Authorization> {
-            every { authorize(any(), any()) } returns TooManyRequestsException().toMono()
+        val rateLimit = RateLimitResult(allowed = false, limit = 5, remaining = 0, resetAfter = Duration.ofSeconds(3))
+        val authorization = object : DecisionAuthorization {
+            override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> =
+                AuthorizationDecision(AuthorizeResult.TOO_MANY_REQUESTS, rateLimit = rateLimit).toMono()
         }
         val filter = ReactiveAuthorizationFilter(
             InjectSecurityContextParser,
             ReactiveRequestParser(ReactiveRemoteIpResolver),
             authorization,
         )
-        val exchange = mockk<ServerWebExchange> {
-            every { request.headers.getFirst(RequestIdCapable.REQUEST_ID_KEY) } returns null
-            every { response.headers.set(RequestIdCapable.REQUEST_ID_KEY, any()) } returns Unit
-            every { request.headers.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
-            every { request.queryParams.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
-            every { request.cookies.getFirst(AUTHORIZATION_HEADER_KEY) } returns null
-            every { request.headers.origin } returns "origin"
-            every { request.headers.getFirst(HttpHeaders.REFERER) } returns "REFERER"
-            every { request.path.value() } returns "/path"
-            every { request.method.name() } returns "GET"
-            every { request.remoteAddress?.hostString } returns "hostName"
-            every { response.setStatusCode(HttpStatus.TOO_MANY_REQUESTS) } returns true
-            every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
-            every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
-            every { response.writeWith(any()) } returns Mono.empty()
-            every { setSecurityContext(any()) } just runs
-            every {
-                mutate()
-                    .principal(any())
-                    .build()
-            } returns this
-        }
-
-        filter.filter(exchange, mockk()).block()
-        verify {
-            authorization.authorize(any(), any())
-            exchange.response.statusCode = HttpStatus.TOO_MANY_REQUESTS
-            exchange.response.bufferFactory().wrap(any() as ByteArray)
-            exchange.response.writeWith(any())
-            exchange.setSecurityContext(any())
-        }
+        val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/path"))
+        var proceeded = false
+        filter.filter(exchange) {
+            proceeded = true
+            Mono.empty()
+        }.block()
+        exchange.response.statusCode.assert().isEqualTo(HttpStatus.TOO_MANY_REQUESTS)
+        exchange.response.headers.getFirst("Retry-After").assert().isEqualTo("3")
+        exchange.response.headers.getFirst("RateLimit-Limit").assert().isEqualTo("5")
+        exchange.response.headers.getFirst("RateLimit-Remaining").assert().isEqualTo("0")
+        // The request exceeded a rate limit, so it must not reach the filter chain.
+        proceeded.assert().isFalse()
     }
 
     @Test

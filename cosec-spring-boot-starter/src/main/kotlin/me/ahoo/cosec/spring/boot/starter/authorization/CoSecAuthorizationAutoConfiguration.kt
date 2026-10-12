@@ -22,6 +22,9 @@ import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.context.DefaultSecurityContextParser
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.limiter.RateLimitRuleProvider
+import me.ahoo.cosec.limiter.RateLimiter
+import me.ahoo.cosec.limiter.RateLimitingAuthorization
 import me.ahoo.cosec.policy.LocalPolicyInitializer
 import me.ahoo.cosec.policy.LocalPolicyLoader
 import me.ahoo.cosec.servlet.AuthorizationFilter
@@ -31,6 +34,7 @@ import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoCon
 import me.ahoo.cosec.spring.boot.starter.policy.LocalPolicyInitializerLifecycle
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosec.webflux.ReactiveAuthorizationFilter
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -127,14 +131,20 @@ class CoSecAuthorizationAutoConfiguration {
         policyRepository: PolicyRepository,
         appRolePermissionRepository: AppRolePermissionRepository,
         blacklistChecker: BlacklistChecker,
-        rootPrincipalMatcher: RootPrincipalMatcher
+        rootPrincipalMatcher: RootPrincipalMatcher,
+        rateLimitRuleProvider: ObjectProvider<RateLimitRuleProvider>,
+        rateLimiter: ObjectProvider<RateLimiter>
     ): Authorization {
-        return SimpleAuthorization(
+        val authorization = SimpleAuthorization(
             policyRepository = policyRepository,
             appRolePermissionRepository = appRolePermissionRepository,
             blacklistChecker = blacklistChecker,
             rootPrincipalMatcher = rootPrincipalMatcher,
         )
+        // Rate limiting sits inside auditing and tracing, which wrap this bean, so 429s are audited and traced.
+        val ruleProvider = rateLimitRuleProvider.ifAvailable ?: return authorization
+        val limiter = rateLimiter.ifAvailable ?: return authorization
+        return RateLimitingAuthorization(authorization, ruleProvider, limiter)
     }
 
     @Configuration

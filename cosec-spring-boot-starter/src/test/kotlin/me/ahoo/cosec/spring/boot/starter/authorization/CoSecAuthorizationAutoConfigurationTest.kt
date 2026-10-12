@@ -18,21 +18,24 @@ import io.mockk.mockk
 import io.mockk.verify
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.api.configuration.Configuration
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.blacklist.BlacklistChecker
-import me.ahoo.cosec.cache.limiter.RedisRateLimiterConditionMatcherFactory
 import me.ahoo.cosec.context.DefaultSecurityContextParser
 import me.ahoo.cosec.policy.LocalPolicyInitializer
 import me.ahoo.cosec.policy.LocalPolicyLoader
+import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 import me.ahoo.cosec.servlet.AuthorizationFilter
 import me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPermissionCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPolicyCacheAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.authorization.limiter.CoSecRedisRateLimiterAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
@@ -48,10 +51,23 @@ import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfigurat
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
-import org.springframework.data.redis.core.StringRedisTemplate
 import reactor.core.publisher.Mono
 
 internal class CoSecAuthorizationAutoConfigurationTest {
+    companion object {
+        private const val SPRING_BEAN_CONDITION_TYPE = "springBean"
+
+        /** A matcher factory only known as a Spring bean, like the ip2region one. */
+        private val springBeanConditionMatcherFactory = object : ConditionMatcherFactory {
+            override val type: String = SPRING_BEAN_CONDITION_TYPE
+            override fun create(configuration: Configuration): ConditionMatcher = object : ConditionMatcher {
+                override val type: String = SPRING_BEAN_CONDITION_TYPE
+                override val configuration: Configuration = configuration
+                override fun match(request: Request, securityContext: SecurityContext): Boolean = true
+            }
+        }
+    }
+
     private val contextRunner = ApplicationContextRunner()
 
     @Test
@@ -105,15 +121,14 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 "${AuthorizationProperties.LOCAL_POLICY_ENABLED}=true",
                 "${AuthorizationProperties.LOCAL_POLICY_INIT_REPOSITORY}=true",
                 "${AuthorizationProperties.LOCAL_POLICY_PREFIX}.locations=" +
-                    "classpath:cosec-policy/redis-rate-limiter-policy.json",
+                    "classpath:cosec-policy/spring-matcher-policy.json",
             )
             .withBean(PolicyRepository::class.java, { policyRepository })
             .withBean(AppRolePermissionRepository::class.java, { mockk() })
             .withBean(TokenVerifier::class.java, { mockk() })
-            .withBean(StringRedisTemplate::class.java, { mockk(relaxed = true) })
+            .withBean(ConditionMatcherFactory::class.java, { springBeanConditionMatcherFactory })
             .withUserConfiguration(
                 CoSecAutoConfiguration::class.java,
-                CoSecRedisRateLimiterAutoConfiguration::class.java,
                 CoSecRequestParserAutoConfiguration::class.java,
                 CoSecAuthorizationAutoConfiguration::class.java,
             )
@@ -128,7 +143,7 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                     phase.assert().isGreaterThan(MatcherFactoryRegister.PHASE)
                 }
                 storedPolicies.single().statements.single().condition.type.assert()
-                    .isEqualTo(RedisRateLimiterConditionMatcherFactory.TYPE)
+                    .isEqualTo(SPRING_BEAN_CONDITION_TYPE)
             }
     }
 

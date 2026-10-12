@@ -29,7 +29,7 @@ The status codes and their reasons are defined in [Web Integration](./web-integr
 | `401` | `Implicit Deny` | No token was found, and no rule allows anonymous access to this path. |
 | `401` / `403` | `Explicit Deny` | A `deny` statement or permission matched. The debug log names it. |
 | `403` | `Implicit Deny` | The caller is authenticated but no rule allowed the request, or a `regular` condition timed out. |
-| `429` | `Too Many Requests` | A rate-limit condition: see [Rate limits behave unexpectedly](#rate-limits-behave-unexpectedly). |
+| `429` | `Too Many Requests` | A [rate limit rule](./rate-limiting.md): see [Rate limits behave unexpectedly](#rate-limits-behave-unexpectedly). |
 | `500` | `Implicit Deny` | An error during authorization. The application log has the stack trace. |
 
 ## Unexpected 401
@@ -89,9 +89,16 @@ The caller is known, but nothing allowed the request, or something denied it.
 
 ## Rate limits behave unexpectedly
 
-- `rateLimiter` and `groupedRateLimiter` count **per instance**; with N instances the effective limit is N
-  times higher. Use the Redis variants for a cluster-wide limit.
-- Redis limiters with identical settings **share one quota**, even in different policies
-  ([Rate limits](./policies.md#rate-limits)).
-- A limit in a **policy-level** condition consumes a permit for every request the policy applies to.
-- During a Redis outage, Redis limiters let requests through unless `strictFailure` is `true`.
+- **The limit is N times higher than configured.** Without `cache-support` and a `StringRedisTemplate`,
+  `LocalRateLimiter` counts per instance. Add Redis for a cluster-wide limit
+  ([Counting](./rate-limiting.md#counting)).
+- **A rule never applies.** Check its `action` and `condition` like a policy statement's, and that the file
+  matches [`cosec.limiter.locations`](./configuration.md#rate-limiting). Denied requests are never limited,
+  so a request that gets `401` / `403` spends no permit.
+- **Unrelated callers share a limit.** A rule without `key` has one bucket for all matching requests, and
+  requests whose `key` part is empty (e.g. a missing header) share one bucket too.
+- **Requests pass during a Redis outage.** Rules skip themselves on backend failures unless they set
+  `strictFailure: true`.
+- **Policies fail after upgrading to 6.1.** The `rateLimiter`, `groupedRateLimiter`, `redisRateLimiter` and
+  `redisGroupedRateLimiter` conditions were removed: see
+  [Migrating from rate-limit conditions](./rate-limiting.md#migrating-from-rate-limit-conditions).

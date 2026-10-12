@@ -11,13 +11,20 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.condition.limiter
+package me.ahoo.cosec.limiter
+
+import reactor.core.publisher.Mono
 
 /**
- * Exception thrown when rate limit is exceeded.
+ * Counts permits per bucket. The backend of [RateLimitingAuthorization].
  *
- * @see RateLimiterConditionMatcher
+ * Implementations must not block the subscribing thread, which is a Netty event loop under WebFlux and
+ * Gateway: run blocking I/O (such as a Redis round trip) on `Schedulers.boundedElastic()`.
+ * A failure is signalled as an error; [RateLimitRule.strictFailure] decides what it means.
  */
-class TooManyRequestsException(
-    message: String = ""
-) : RuntimeException(message)
+fun interface RateLimiter {
+    /**
+     * Acquires one permit of [rateLimit] from the bucket [bucket] of rule [ruleId].
+     */
+    fun tryAcquire(ruleId: String, bucket: String, rateLimit: RateLimit): Mono<RateLimitResult>
+}

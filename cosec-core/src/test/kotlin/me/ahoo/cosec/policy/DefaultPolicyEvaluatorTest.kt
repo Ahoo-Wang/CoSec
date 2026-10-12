@@ -23,7 +23,6 @@ import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
-import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.test.asserts.assert
 import org.hamcrest.MatcherAssert.assertThat
@@ -112,16 +111,6 @@ internal class DefaultPolicyEvaluatorTest {
         )
         evaluateRequest.getCookieValue("sessionId").assert().isEqualTo("abc123")
         evaluateRequest.getCookieValue("missing").assert().isEmpty()
-    }
-
-    @Test
-    fun safeEvaluateSwallowsTooManyRequestsException() {
-        var executed = false
-        DefaultPolicyEvaluator.safeEvaluate {
-            executed = true
-            throw TooManyRequestsException()
-        }
-        assertThat(executed, equalTo(true))
     }
 
     @Test

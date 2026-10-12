@@ -163,7 +163,7 @@ class SimpleAuthorization(
 
     /**
      * Runs [verifier] in place, or on [Schedulers.boundedElastic] when it may block.
-     * Exceptions thrown by [verifier] (e.g. `TooManyRequestsException`) become error signals either way.
+     * Exceptions thrown by [verifier] (e.g. `RegexTimeoutException`) become error signals either way.
      */
     private inline fun evaluate(
         requiresBlocking: Boolean,
