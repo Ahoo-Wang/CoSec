@@ -16,7 +16,8 @@ package me.ahoo.cosec.policy
 import me.ahoo.cosec.api.context.SecurityContext
 
 /**
- * Marks the [SecurityContext] of a policy validation dry run (see [DefaultPolicyEvaluator]).
+ * Marks the [SecurityContext] of a dry run: policy validation (see [DefaultPolicyEvaluator]) and decision
+ * explanations (see `me.ahoo.cosec.explain.AuthorizationExplainer`).
  *
  * Validation runs every condition against a mock request, so a custom matcher with an unavoidable external side
  * effect must check [isPolicyEvaluation] and skip that side effect. Built-in matchers have none: rate limits are

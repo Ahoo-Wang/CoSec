@@ -24,6 +24,8 @@ logging:
 
 `SimpleAuthorization` identifies the matched policy/statement or role/permission. When `AuditingAuthorization` is active, the default sink emits structured deny events at WARN and allow events at DEBUG, including principal, request, decision, and matched rule when available. A custom `Authorization` bean is not wrapped automatically.
 
+When `cosec.explain.enabled=true`, prefer explaining the decision over reading logs: inject `AuthorizationExplainer` (or call `POST /actuator/cosecExplain` with `principal` and `request` objects) to get the real status, the deciding rule, every statement's and permission's outcome (`MATCHED`, `ACTION_MISS`, `CONDITION_MISS`, `NOT_EVALUATED`, `ERROR`), overridden allows, matching rate limit rules, and warnings such as `MISSING_POLICY` or `NO_APP_PERMISSION`. It spends no rate-limit permits. Treat `TRACE_INCONSISTENT` as a CoSec bug and trust the reported decision.
+
 ## Interpret the status first
 
 | HTTP status | CoSec meaning |

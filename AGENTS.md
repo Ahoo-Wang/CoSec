@@ -76,6 +76,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | `cosec.*` property or default | `wiki/guide/configuration.md` |
 | Status codes, adapters, security-context access, request attributes | `wiki/guide/web-integration.md` |
 | Rate limit rules, backends, headers | `wiki/guide/rate-limiting.md`, `schema/rate-limit-rule.schema.json` |
+| Decision order or combination in `SimpleAuthorization` | the narration in `AuthorizationExplainer` (`ExplainerConsistencyTest` fails until they agree) |
 | New failure symptom | `wiki/guide/troubleshooting.md`, `skills/cosec-troubleshoot` |
 | Tokens, login, revocation | `wiki/guide/authentication.md` |
 | Architecture, invariants, performance numbers | `wiki/architecture/overview.md` |

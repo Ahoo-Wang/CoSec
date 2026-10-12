@@ -18,6 +18,54 @@ Each audit event records the principal, the request, the result and its **source
 [Auditing](./operations.md#auditing)). Correlate a response with its event through the `CoSec-Request-Id`
 header. With `opentelemetry-support` the same information is on the `cosec.authorize` span.
 
+To see every rule that was checked, not just the one that decided, [explain the decision](#explain-a-decision).
+
+## Explain a decision
+
+To see why a principal gets a decision for a request, without sending the real request, ask the explainer.
+It runs the real authorization against a snapshot of the repositories, then walks every policy statement and
+role permission and says which matched, which missed on the action, and which missed on the condition. Nothing
+is spent or changed: rate limits are only listed, and custom matchers can skip side effects by checking
+`securityContext.isPolicyEvaluation`.
+
+Enable it with `cosec.explain.enabled=true`. With Spring Boot Actuator, expose the endpoint and allow only
+administrators to call it, because an explanation reveals your policy structure:
+
+```yaml
+cosec:
+  explain:
+    enabled: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: cosecExplain
+```
+
+The endpoint goes through CoSec like any other request, so it also needs a policy that allows
+`POST /actuator/cosecExplain` for your administrators.
+
+```bash
+curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/json' -d '{
+  "principal": { "id": "user-1", "tenantId": "t1", "roles": ["clerk"], "policies": ["orders"] },
+  "request":   { "path": "/orders/42", "method": "DELETE", "appId": "shop" },
+  "exhaustive": false,
+  "detail": "summary"
+}'
+```
+
+| Field | Meaning |
+|---|---|
+| `status`, `authorized`, `reason` | The real decision, mapped to a status exactly as for a real request. |
+| `decidedBy` | The rule that decided: layer, policy id and statement index, or role and permission id. `null` when nothing matched. |
+| `layers` | `ROOT`, `BLACKLIST`, `GLOBAL_POLICY`, `PRINCIPAL_POLICY`, `ROLE_PERMISSION`, each `EVALUATED`, `NOT_EVALUATED` (an earlier explicit deny ended evaluation), `EMPTY`, or `EVALUATED_AFTER_DECISION` (with `exhaustive: true`). Every statement and permission has an outcome: `MATCHED`, `ACTION_MISS`, `CONDITION_MISS`, `NOT_EVALUATED` (its policy's or app's condition did not match) or `ERROR`. |
+| `overriddenAllows` | Allows that a later layer's explicit deny overrode. |
+| `rateLimitRules` | The [rate limit rules](./rate-limiting.md) the request would spend a permit from, if it is allowed. |
+| `warnings` | `MISSING_POLICY` (the principal lists a policy id the repository lacks), `NO_APP_PERMISSION` (roles but no app permission for the app and space), `MATCHER_ERROR`, and `TRACE_INCONSISTENT` (the trace disagrees with the real decision; trust the decision and report it). |
+
+`detail: "full"` adds each matcher's configuration. Without Actuator, inject the `AuthorizationExplainer`
+bean and call `explain(request, principal)` yourself, for example in a test that pins down who may do what.
+
 ## By status code
 
 The status codes and their reasons are defined in [Web Integration](./web-integration.md#responses).

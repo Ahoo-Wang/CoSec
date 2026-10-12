@@ -17,6 +17,50 @@ logging:
 `ROLE_PERMISSION`，什么都没命中时为 `NONE`（见[审计](./operations.md#auditing)）。通过 `CoSec-Request-Id`
 响应头把响应和它的审计事件对应起来。使用 `opentelemetry-support` 时，`cosec.authorize` span 上也有同样的信息。
 
+想看到检查过的每一条规则，而不只是做决定的那一条，请[解释这次决策](#explain-a-decision)。
+
+## 解释一次决策 {#explain-a-decision}
+
+想知道某个主体对某个请求为什么得到这样的决策，又不想发送真实请求时，可以使用解释器。它先基于仓储快照运行真实的授权，
+再遍历每条策略语句和角色权限，指出哪些命中、哪些在动作上未命中、哪些在条件上未命中。整个过程不消耗也不修改任何东西：
+限流规则只会被列出，自定义匹配器可以通过检查 `securityContext.isPolicyEvaluation` 跳过副作用。
+
+用 `cosec.explain.enabled=true` 开启。引入 Spring Boot Actuator 时，暴露该端点并只允许管理员调用，因为解释结果会暴露策略结构：
+
+```yaml
+cosec:
+  explain:
+    enabled: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: cosecExplain
+```
+
+该端点和其他请求一样经过 CoSec 授权，因此还需要一条策略，为管理员放行 `POST /actuator/cosecExplain`。
+
+```bash
+curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/json' -d '{
+  "principal": { "id": "user-1", "tenantId": "t1", "roles": ["clerk"], "policies": ["orders"] },
+  "request":   { "path": "/orders/42", "method": "DELETE", "appId": "shop" },
+  "exhaustive": false,
+  "detail": "summary"
+}'
+```
+
+| 字段 | 含义 |
+|---|---|
+| `status`、`authorized`、`reason` | 真实的决策，并按与真实请求完全相同的规则映射为状态码。 |
+| `decidedBy` | 做出决定的规则：所在层、策略 id 和语句下标，或角色和权限 id。什么都没命中时为 `null`。 |
+| `layers` | `ROOT`、`BLACKLIST`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、`ROLE_PERMISSION`，每层的状态为 `EVALUATED`、`NOT_EVALUATED`（之前的显式拒绝已结束求值）、`EMPTY`，或 `EVALUATED_AFTER_DECISION`（设置 `exhaustive: true` 时）。每条语句和权限都有结果：`MATCHED`、`ACTION_MISS`、`CONDITION_MISS`、`NOT_EVALUATED`（所属策略或应用的条件未匹配）或 `ERROR`。 |
+| `overriddenAllows` | 被后续层的显式拒绝覆盖掉的放行。 |
+| `rateLimitRules` | 请求被放行时将会消耗许可的[限流规则](./rate-limiting.md)。 |
+| `warnings` | `MISSING_POLICY`（主体列出的策略 id 在仓储中不存在）、`NO_APP_PERMISSION`（有角色，但该应用和空间没有应用权限）、`MATCHER_ERROR`，以及 `TRACE_INCONSISTENT`（追踪与真实决策不一致；以决策为准，并请反馈）。 |
+
+`detail: "full"` 会附上每个匹配器的配置。没有 Actuator 时，可以注入 `AuthorizationExplainer` bean 自行调用
+`explain(request, principal)`，例如在测试中固定“谁可以做什么”。
+
 ## 按状态码排查 {#by-status-code}
 
 状态码及其原因的定义见 [Web 集成](./web-integration.md#responses)。
