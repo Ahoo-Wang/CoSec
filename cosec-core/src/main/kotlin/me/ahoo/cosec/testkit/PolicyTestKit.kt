@@ -30,11 +30,8 @@ import me.ahoo.cosec.explain.Explanation
 import me.ahoo.cosec.permission.AppRolePermissionData
 import me.ahoo.cosec.permission.RolePermissionData
 import me.ahoo.cosec.pipeline.SecurityStatus
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import org.springframework.core.io.Resource
-import org.springframework.core.io.support.PathMatchingResourcePatternResolver
+import me.ahoo.cosec.serialization.JsonResources
 import reactor.core.publisher.Mono
-import java.io.FileNotFoundException
 
 enum class ExpectedResult {
     ALLOW,
@@ -111,12 +108,8 @@ class PolicyTestReport(val results: List<PolicyTestResult>) {
  * ```
  */
 object PolicyTestKit {
-    private val resourceResolver = PathMatchingResourcePatternResolver()
-
     fun load(vararg locations: String): List<PolicyTestSuite> =
-        resources(
-            locations.toList()
-        ).map { CoSecJsonSerializer.readValue(it.contentAsByteArray, PolicyTestSuite::class.java) }
+        JsonResources.readAll(locations.toList(), PolicyTestSuite::class.java)
 
     fun run(vararg locations: String): PolicyTestReport {
         val suites = load(*locations)
@@ -125,12 +118,11 @@ object PolicyTestKit {
     }
 
     fun run(suite: PolicyTestSuite): List<PolicyTestResult> {
-        val policies = resources(
-            suite.policies
-        ).map { CoSecJsonSerializer.readValue(it.contentAsByteArray, Policy::class.java) }
-        val appPermissions = resources(suite.appPermissions)
-            .map { CoSecJsonSerializer.readValue(it.contentAsByteArray, AppPermission::class.java) }
-            .associateBy { it.id }
+        val policies = JsonResources.readAll(suite.policies, Policy::class.java)
+        val appPermissions = JsonResources.readAll(
+            suite.appPermissions,
+            AppPermission::class.java
+        ).associateBy { it.id }
         val explainer = AuthorizationExplainer(
             InMemoryPolicyRepository(policies),
             InMemoryAppRolePermissionRepository(appPermissions, suite.roles)
@@ -188,17 +180,6 @@ object PolicyTestKit {
             statementName?.let { "'$it'" },
         ).joinToString(" ")
     }
-
-    private fun resources(locations: List<String>): List<Resource> =
-        locations.flatMap { location ->
-            val found = try {
-                resourceResolver.getResources(location).filter { it.exists() }
-            } catch (_: FileNotFoundException) {
-                emptyList()
-            }
-            require(found.isNotEmpty()) { "Nothing found at [$location]." }
-            found
-        }
 
     private class InMemoryPolicyRepository(private val policies: List<Policy>) : PolicyRepository {
         override fun getGlobalPolicy(): Mono<List<Policy>> = Mono.just(policies.filter { it.type == PolicyType.GLOBAL })
