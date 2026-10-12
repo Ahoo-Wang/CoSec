@@ -17,8 +17,10 @@ deny-first for every request.
 
 ## Why CoSec
 
-- **Policies as data.** JSON policies with path actions, composable conditions (roles, tenants, headers,
-  IP, expressions) and rate limits. Change them at runtime; every instance sees the change immediately.
+- **Policies as data.** JSON policies with path actions and composable conditions (roles, tenants, headers,
+  IP, expressions). Change them at runtime; every instance sees the change immediately.
+- **Rate limits.** Per-IP, per-user or shared quotas on allowed requests, counted cluster-wide in Redis, with
+  `RateLimit-*` and `Retry-After` headers.
 - **Deny wins, everywhere.** Global policies, the principal's own policies and role permissions are combined
   deny-first, unmatched requests are denied, and errors deny.
 - **Multi-tenant and role-based.** Tenant-aware principals, plus per-application permission catalogs

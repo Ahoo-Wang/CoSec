@@ -25,10 +25,12 @@ also holds revoked token ids. Each instance keeps an in-process copy
 |---|---|
 | Policies, global index, app permissions, role grants | Locally cached data keeps working. Anything else fails, and the request is **denied** (`500`). |
 | Revoked tokens | The check **allows** the token, so an outage doesn't reject every authenticated request. |
-| Redis rate limiters | Allow, unless the condition sets `strictFailure: true` (then `429`). |
+| Rate limit counters | Allow, unless the rule sets `strictFailure: true` (then `429`). |
 
 Rolling upgrades: CoSec 6 keeps the Redis keys and formats of 5.x, so 5.x and 6.x instances can share one
-Redis during an upgrade.
+Redis during an upgrade. The exception is rate limit counters: 6.1 keys them by rule id, so during an upgrade
+old and new instances count separately (see
+[Migrating from rate-limit conditions](./rate-limiting.md#migrating-from-rate-limit-conditions)).
 
 ## Auditing
 

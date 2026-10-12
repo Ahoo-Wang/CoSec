@@ -103,8 +103,7 @@
 "condition": { "eq": { "part": "context.tenantId", "value": "(platform)" } }
 ```
 
-除 `rateLimiter` 和 `redisRateLimiter` 外，所有条件都支持 `"negate": true`，用于取反结果。
-不要对限流条件取反：许可用尽时请求在取反之前就已被拒绝。
+所有条件都支持 `"negate": true`，用于取反结果。
 
 ### 上下文条件 {#context-conditions}
 
@@ -176,31 +175,9 @@
 
 优先使用上面的声明式条件。表达式更难审查和测试。
 
-### 限流 {#rate-limits}
-
-限流条件在还有许可时匹配。许可用尽时，请求以 `429 Too Many Requests` 被拒绝。
-
-| 类型 | 配置 | 作用范围 |
-|---|---|---|
-| `rateLimiter` | `permitsPerSecond` | 每个应用实例 |
-| `groupedRateLimiter` | `part`、`permitsPerSecond`、`expireAfterAccessSecond`（均必填） | 每个实例，`part` 的每个取值各一个限流器（例如按用户）；空闲超过 `expireAfterAccessSecond` 的限流器会被回收 |
-| `redisRateLimiter` | `permitsPerSecond`、`windowSeconds`（默认 `1`）、`strictFailure`（默认 `false`） | 全集群（Redis，滑动窗口） |
-| `redisGroupedRateLimiter` | 以上配置，再加 `part` | 全集群，按 `part` 的取值分别限流 |
-
-```json
-{ "name": "login-throttle",
-  "action": { "path": { "pattern": "/auth/login", "method": "POST" } },
-  "condition": { "redisGroupedRateLimiter": { "part": "request.remoteIp", "permitsPerSecond": 5 } } }
-```
-
-Redis 限流器需要 `cache-support`。需要注意：
-
-- **窗口。** 一个 `windowSeconds` 长的窗口允许 `permitsPerSecond × windowSeconds` 个请求。
-- **共享配额。** Redis 计数器以限流器的配置（`permitsPerSecond`、`windowSeconds`、`strictFailure`）和 `part`
-  的取值为键，而不是以策略或语句为键。配置完全相同的两条语句共享同一份配额；改动其中任一配置即可分开。
-- **Redis 故障。** `strictFailure: false` 时，Redis 故障会放行请求，而不是拦截所有流量；设为 `true` 时，
-  Redis 不可用期间请求以 `429` 被拒绝。
-- **键前缀。** 键以 [`cosec.limiter.key-prefix`](./configuration.md#rate-limiting) 开头。
+::: tip 限流不是条件
+策略决定请求是否被允许。被允许的请求可以多频繁地通过，由独立的[限流规则](./rate-limiting.md)决定。
+:::
 
 ## 策略如何组合 {#how-policies-combine}
 
@@ -217,9 +194,7 @@ Redis 限流器需要 `cache-support`。需要注意：
 在这三层之前还有两项检查：**root** 主体（id 为 `cosec`，可配置，见[配置](./configuration.md#authorization)）
 始终放行；被黑名单拦截的请求始终拒绝。
 
-::: tip 策略级条件最先执行
-策略自身的 `condition` 在它的语句之前、每个请求只求值一次。放在这里的限流条件，会对该策略作用的每个请求消耗一个许可，无论最终由哪条语句做出决定。
-:::
+策略自身的 `condition` 在它的语句之前、每个请求只求值一次。
 
 ## 应用权限与角色 {#app-permissions-and-roles}
 

@@ -38,7 +38,7 @@ sequenceDiagram
     autonumber
     participant A as Web adapter<br>(WebFlux / WebMvc / Gateway)
     participant P as SecurityPipeline
-    participant Z as Authorization<br>(Tracing → Auditing → Simple)
+    participant Z as Authorization<br>(Tracing → Auditing → RateLimiting → Simple)
     participant R as Policy / permission<br>repositories
     A->>P: evaluate(exchange or servlet request)
     P->>P: RequestParser: path safety, remote IP, request id, attributes
@@ -46,8 +46,9 @@ sequenceDiagram
     P->>Z: decide(request, context)
     Z->>R: global policies, principal policies, role permissions
     R-->>Z: (local cache first, Redis on a miss)
-    Z-->>P: AuthorizationDecision(result, verifyContext)
-    P-->>A: SecurityDecision(status, result, request, context)
+    Z->>Z: allowed: spend a permit of each matching rate limit rule
+    Z-->>P: AuthorizationDecision(result, verifyContext, rateLimit)
+    P-->>A: SecurityDecision(status, result, request, context, rateLimit)
     A->>A: write 4xx/5xx, or continue the chain with the security context
 ```
 
@@ -83,10 +84,10 @@ Every change must keep these.
 | Invariant | Meaning |
 |---|---|
 | **Deny-first** | No combination of policies or layers lets an `ALLOW` win over a matched `DENY`. |
-| **Fail closed** | Errors deny (`500`, regex timeout `403`). The only exceptions are documented degraded modes: non-strict Redis rate limiters, and the revocation check. Policy and permission caches use strict Redis failure. |
-| **No blocking on the event loop** | Blocking work (repository reads from Redis, token revocation) runs on `boundedElastic`. Reads answered from the local cache stay on the caller's thread. Condition matchers that block, such as the Redis rate limiters, implement `BlockingAware`: `SimpleAuthorization` evaluates a layer on `boundedElastic` only when its policies or app permission contain one, so other policies pay no thread hop. |
+| **Fail closed** | Errors deny (`500`, regex timeout `403`). The only exceptions are documented degraded modes: rate limit rules without `strictFailure`, and the revocation check. Policy and permission caches use strict Redis failure. |
+| **No blocking on the event loop** | Blocking work (repository reads from Redis, token revocation, Redis rate limit counters) runs on `boundedElastic`. Reads answered from the local cache stay on the caller's thread. A custom condition matcher that must block implements `BlockingAware`: `SimpleAuthorization` evaluates a layer on `boundedElastic` only when its policies or app permission contain one, so other policies pay no thread hop. |
 | **One decision path** | Status codes and error mapping live only in `SecurityPipeline`. Adapters never decide. |
-| **Matchers do no I/O** | Matchers only read the request and security context. Path matchers record path variables in the context, and rate limiters hold state by design. Redis rate limiters are the only matchers that do I/O. |
+| **Authorization is a pure decision** | Built-in matchers only read the request and security context, do no I/O and keep no state (path matchers record path variables in the context). Rate limiting, which spends permits, is a separate decorator that runs only for allowed requests (see [Rate Limiting](../guide/rate-limiting.md)). |
 | **Policies are data** | Policies and permissions are JSON. Matchers are created through factories registered by type (`ServiceLoader` or Spring beans). |
 
 ## Data and caching
@@ -116,3 +117,7 @@ on JDK 17:
 Two decisions dominate this: each request parses its path once and shares it across all path matchers, and
 deny-first evaluation loops over the source lists without per-item wrappers. Any performance change should
 come with a JMH comparison.
+
+`RateLimitingAuthorizationBenchmark` measures, on JDK 21, what rate limiting adds on top of an authorization that always
+allows (17 ns): about 20 ns with no rules, 40 ns when no rule matches, and 250 ns for one matching per-IP rule
+counted in memory. A Redis-counted rule adds a Redis round trip.

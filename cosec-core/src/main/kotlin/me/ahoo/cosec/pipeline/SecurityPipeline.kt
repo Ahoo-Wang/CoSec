@@ -25,7 +25,6 @@ import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.InvalidRequestPathException
 import me.ahoo.cosec.context.request.RequestParser
-import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.token.TokenVerificationContexts.getTokenVerificationException
 import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationException
@@ -45,10 +44,10 @@ import reactor.kotlin.core.publisher.toMono
  *
  * Status mapping:
  * - invalid request path → [SecurityStatus.BAD_REQUEST]
+ * - over a rate limit ([AuthorizationDecision.rateLimit] not allowed) → [SecurityStatus.TOO_MANY_REQUESTS]
  * - authorized → [SecurityStatus.ALLOWED]
  * - denied, anonymous principal → [SecurityStatus.UNAUTHORIZED]; authenticated → [SecurityStatus.FORBIDDEN].
  *   A token verification failure replaces the result reason (e.g. Token Expired).
- * - [TooManyRequestsException] → [SecurityStatus.TOO_MANY_REQUESTS]
  * - [RegexTimeoutException] (ReDoS guard) → [SecurityStatus.FORBIDDEN], an expected deny rather than a 5xx
  * - any other error → [SecurityStatus.ERROR]
  *
@@ -115,6 +114,16 @@ class SecurityPipeline<S : Any>(
         securityContext: SecurityContext,
         decision: AuthorizationDecision
     ): SecurityDecision {
+        if (decision.rateLimit?.allowed == false) {
+            return SecurityDecision(
+                status = SecurityStatus.TOO_MANY_REQUESTS,
+                result = AuthorizeResult.TOO_MANY_REQUESTS,
+                request = request,
+                securityContext = securityContext,
+                verifyContext = decision.verifyContext,
+                rateLimit = decision.rateLimit,
+            )
+        }
         if (decision.result.authorized) {
             return SecurityDecision(
                 status = SecurityStatus.ALLOWED,
@@ -122,6 +131,7 @@ class SecurityPipeline<S : Any>(
                 request = request,
                 securityContext = securityContext,
                 verifyContext = decision.verifyContext,
+                rateLimit = decision.rateLimit,
             )
         }
         val status = if (securityContext.principal.authenticated) {
@@ -144,7 +154,6 @@ class SecurityPipeline<S : Any>(
         cause: Throwable
     ): SecurityDecision {
         val (status, result) = when (cause) {
-            is TooManyRequestsException -> SecurityStatus.TOO_MANY_REQUESTS to AuthorizeResult.TOO_MANY_REQUESTS
             is RegexTimeoutException -> SecurityStatus.FORBIDDEN to AuthorizeResult.IMPLICIT_DENY
             else -> {
                 log.error(cause) {

@@ -10,10 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package me.ahoo.cosec.spring.boot.starter.authorization.limiter
 
-import me.ahoo.cosec.cache.limiter.RedisGroupedRateLimiterConditionMatcherFactory
-import me.ahoo.cosec.cache.limiter.RedisRateLimiterConditionMatcherFactory
+import me.ahoo.cosec.cache.limiter.RedisRateLimiter
+import me.ahoo.cosec.limiter.RateLimiter
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
@@ -29,13 +30,14 @@ internal class CoSecRedisRateLimiterAutoConfigurationTest {
             .withUserConfiguration(
                 DataRedisAutoConfiguration::class.java,
                 CoSecRedisRateLimiterAutoConfiguration::class.java,
+                CoSecRateLimitAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
                 assertThat(context)
                     .hasSingleBean(LimiterProperties::class.java)
                     .hasSingleBean(CoSecRedisRateLimiterAutoConfiguration::class.java)
-                    .hasSingleBean(RedisRateLimiterConditionMatcherFactory::class.java)
-                    .hasSingleBean(RedisGroupedRateLimiterConditionMatcherFactory::class.java)
+                    .hasSingleBean(RateLimiter::class.java)
+                assertThat(context.getBean(RateLimiter::class.java)).isInstanceOf(RedisRateLimiter::class.java)
             }
     }
 
@@ -44,6 +46,7 @@ internal class CoSecRedisRateLimiterAutoConfigurationTest {
         contextRunner
             .withPropertyValues(
                 "cosec.limiter.key-prefix=my-app:rl",
+                "cosec.limiter.locations=classpath:my-rules/*.json",
             )
             .withUserConfiguration(
                 DataRedisAutoConfiguration::class.java,
@@ -52,6 +55,7 @@ internal class CoSecRedisRateLimiterAutoConfigurationTest {
             .run { context: AssertableApplicationContext ->
                 val properties = context.getBean(LimiterProperties::class.java)
                 assertThat(properties.keyPrefix).isEqualTo("my-app:rl")
+                assertThat(properties.locations).containsExactly("classpath:my-rules/*.json")
                 assertThat(properties.enabled).isTrue()
             }
     }
@@ -67,7 +71,7 @@ internal class CoSecRedisRateLimiterAutoConfigurationTest {
             .run { context: AssertableApplicationContext ->
                 assertThat(context)
                     .doesNotHaveBean(CoSecRedisRateLimiterAutoConfiguration::class.java)
-                    .doesNotHaveBean(RedisRateLimiterConditionMatcherFactory::class.java)
+                    .doesNotHaveBean(RateLimiter::class.java)
             }
     }
 
@@ -76,9 +80,7 @@ internal class CoSecRedisRateLimiterAutoConfigurationTest {
         contextRunner
             .withUserConfiguration(CoSecRedisRateLimiterAutoConfiguration::class.java)
             .run { context: AssertableApplicationContext ->
-                assertThat(context)
-                    .doesNotHaveBean(RedisRateLimiterConditionMatcherFactory::class.java)
-                    .doesNotHaveBean(RedisGroupedRateLimiterConditionMatcherFactory::class.java)
+                assertThat(context).doesNotHaveBean(RateLimiter::class.java)
             }
     }
 }

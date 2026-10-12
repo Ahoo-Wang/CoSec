@@ -7,10 +7,9 @@
           "authenticated": {}
         },
         {
-          "groupedRateLimiter": {
+          "startsWith": {
             "part": "request.remoteIp",
-            "permitsPerSecond": 10,
-            "expireAfterAccessSecond": 1000
+            "value": "192.168."
           }
         },
         {

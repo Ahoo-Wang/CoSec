@@ -22,11 +22,14 @@ classpath 上有 Spring Cloud Gateway 时，网关过滤器取代 WebFlux 过滤
 | 路径含 `.` 或 `..` 段（包括百分号编码形式），或百分号转义格式错误 | `400` | —（无响应体） |
 | 被拒绝，匿名调用方 | `401` | `Implicit Deny`、`Explicit Deny`、`Token Expired` 或 `Token Invalid` |
 | 被拒绝，已认证调用方 | `403` | `Implicit Deny` 或 `Explicit Deny` |
-| 限流许可用尽 | `429` | `Too Many Requests` |
+| [限流](./rate-limiting.md)许可用尽 | `429` | `Too Many Requests` |
 | 正则条件超出时间预算 | `403` | `Implicit Deny` |
 | 其他任何错误（包括策略存储不可达） | `500` | `Implicit Deny` |
 
-出错即拒绝。仅有的两个例外是有文档说明的降级模式：未设置 `strictFailure` 的 Redis 限流器，以及
+有限流规则匹配时，放行和拒绝的响应都会带上 `RateLimit-Limit`、`RateLimit-Remaining` 和 `RateLimit-Reset` 响应头，
+`429` 响应还会带上 `Retry-After`（见[响应](./rate-limiting.md#responses)）。
+
+出错即拒绝。仅有的两个例外是有文档说明的降级模式：未设置 `strictFailure` 的限流规则，以及
 [令牌吊销检查](./authentication.md#logout-and-revocation)。
 
 ## 获取安全上下文 {#accessing-the-security-context}

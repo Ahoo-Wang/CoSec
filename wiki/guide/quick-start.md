@@ -132,6 +132,7 @@ Rejected requests get a JSON body explaining why, for example
 
 ## Next steps
 
-- [Policies](./policies.md): actions, conditions, rate limits, roles and permissions.
+- [Policies](./policies.md): actions, conditions, roles and permissions.
+- [Rate Limiting](./rate-limiting.md): per-IP, per-user and shared quotas.
 - [Authentication](./authentication.md): refresh, logout and revocation, social login, multi-tenancy.
 - [Web Integration](./web-integration.md): status codes, accessing the security context, gateways.

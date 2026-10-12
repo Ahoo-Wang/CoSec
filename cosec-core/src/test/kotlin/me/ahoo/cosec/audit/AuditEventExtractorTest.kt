@@ -236,19 +236,6 @@ class AuditEventExtractorTest {
     }
 
     @Test
-    fun fromErrorWhenTooManyRequests() {
-        val event = AuditEventExtractor.fromError(
-            request,
-            context,
-            me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException(),
-            elapsedNanos = 1,
-        )
-        event.authorization.decision.assert().isEqualTo(me.ahoo.cosec.api.audit.AuditDecision.TOO_MANY_REQUESTS)
-        event.authorization.reasonCode.assert().isEqualTo(AuditReasonCode.TOO_MANY_REQUESTS)
-        event.authorization.reason.assert().isEqualTo("Too Many Requests")
-    }
-
-    @Test
     fun fromErrorWhenRegexTimeout() {
         val event = AuditEventExtractor.fromError(request, context, RegexTimeoutException("timeout"), elapsedNanos = 1)
         event.authorization.decision.assert().isEqualTo(me.ahoo.cosec.api.audit.AuditDecision.IMPLICIT_DENY)

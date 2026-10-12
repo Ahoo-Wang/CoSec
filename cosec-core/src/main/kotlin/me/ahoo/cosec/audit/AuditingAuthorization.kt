@@ -50,7 +50,7 @@ class AuditingAuthorization @JvmOverloads constructor(
                         val result = decision?.result
                         val effectiveResult = when {
                             result == null -> AuthorizeResult.IMPLICIT_DENY
-                            result.authorized -> result
+                            result.authorized || decision?.rateLimit?.allowed == false -> result
                             else -> context.getTokenVerificationException()?.toAuthorizeResult() ?: result
                         }
                         AuditEventExtractor.fromDecision(

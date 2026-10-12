@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/rate-limit-rule.schema.json",
+  "title": "CoSec Rate Limit Rule Schema",
+  "description": "A rate limit rules file: one rule or an array of rules.",
+  "oneOf": [
+    {
+      "$ref": "#/definitions/rule"
+    },
+    {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/rule"
+      }
+    }
+  ],
+  "definitions": {
+    "rule": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Names the quota; counters belong to the id. Must be unique.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "action": {
+          "$ref": "action.schema.json"
+        },
+        "condition": {
+          "$ref": "condition.schema.json"
+        },
+        "key": {
+          "description": "The part that splits the quota into one bucket per value. Omit to share one bucket.",
+          "$ref": "condition.schema.json#/definitions/partValue"
+        },
+        "permitsPerSecond": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "windowSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "strictFailure": {
+          "description": "Whether a backend failure rejects the request (true) or skips the rule (false).",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "id",
+        "action",
+        "permitsPerSecond"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

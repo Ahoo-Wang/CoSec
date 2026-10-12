@@ -30,7 +30,6 @@ import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.RootVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.getVerifyContext
-import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import java.time.Instant
 import java.util.UUID
@@ -70,12 +69,6 @@ object AuditEventExtractor {
         eventId: String = UUID.randomUUID().toString(),
     ): AuditEvent {
         val (decision, reasonCode, reason) = when (error) {
-            is TooManyRequestsException -> Triple(
-                AuditDecision.TOO_MANY_REQUESTS,
-                AuditReasonCode.TOO_MANY_REQUESTS,
-                AuthorizeResult.TOO_MANY_REQUESTS.reason,
-            )
-
             is RegexTimeoutException -> Triple(
                 AuditDecision.IMPLICIT_DENY,
                 AuditReasonCode.REGEX_TIMEOUT,

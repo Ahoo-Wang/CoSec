@@ -18,7 +18,7 @@ a property can only enable a feature whose module is on the classpath.
 | `cosec.inject.enabled` | `false` | trusting a token already verified upstream (see [Authentication](./authentication.md#behind-a-gateway)) |
 | `cosec.audit.enabled` | `true` | audit events for every decision |
 | `cosec.audit.kafka.enabled` | `true` | sending audit events to Kafka (`kafka-support` and a `KafkaTemplate` bean) |
-| `cosec.limiter.enabled` | `true` | Redis rate-limit conditions (`cache-support`) |
+| `cosec.limiter.enabled` | `true` | [rate limit rules](./rate-limiting.md) |
 | `cosec.ip2region.enabled` | `true` | IP geolocation (`ip2region-support`) |
 | `cosec.openapi.enabled` | `true` | OpenAPI integration (`openapi-support`) |
 
@@ -76,7 +76,8 @@ See [Operations](./operations.md#redis-and-caching).
 
 | Property | Default | Description |
 |---|---|---|
-| `cosec.limiter.key-prefix` | `cosec:rate-limiter` | Redis key prefix for `redisRateLimiter` / `redisGroupedRateLimiter` conditions. |
+| `cosec.limiter.locations` | `classpath:cosec-rate-limit/*-rate-limit.json` | Resource patterns of the [rate limit rule](./rate-limiting.md#rules) files. |
+| `cosec.limiter.key-prefix` | `cosec:rate-limiter` | Redis key prefix of the counters, when Redis counts (`cache-support`). |
 
 ## Audit
 

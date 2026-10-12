@@ -17,7 +17,7 @@
 | `cosec.inject.enabled` | `false` | 信任上游已校验过的令牌（见[认证](./authentication.md#behind-a-gateway)） |
 | `cosec.audit.enabled` | `true` | 为每次决策产生审计事件 |
 | `cosec.audit.kafka.enabled` | `true` | 把审计事件发送到 Kafka（需要 `kafka-support` 和一个 `KafkaTemplate` bean） |
-| `cosec.limiter.enabled` | `true` | Redis 限流条件（`cache-support`） |
+| `cosec.limiter.enabled` | `true` | [限流规则](./rate-limiting.md) |
 | `cosec.ip2region.enabled` | `true` | IP 地理位置（`ip2region-support`） |
 | `cosec.openapi.enabled` | `true` | OpenAPI 集成（`openapi-support`） |
 
@@ -73,7 +73,8 @@ Redis 出错，请求会被拒绝。详见[运维](./operations.md#redis-and-cac
 
 | 属性 | 默认值 | 说明 |
 |---|---|---|
-| `cosec.limiter.key-prefix` | `cosec:rate-limiter` | `redisRateLimiter` / `redisGroupedRateLimiter` 条件使用的 Redis 键前缀。 |
+| `cosec.limiter.locations` | `classpath:cosec-rate-limit/*-rate-limit.json` | [限流规则](./rate-limiting.md#rules)文件的资源路径模式。 |
+| `cosec.limiter.key-prefix` | `cosec:rate-limiter` | 由 Redis 计数时（`cache-support`）计数器的键前缀。 |
 
 ## 审计 {#audit}
 

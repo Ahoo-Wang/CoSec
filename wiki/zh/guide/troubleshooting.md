@@ -28,7 +28,7 @@ logging:
 | `401` | `Implicit Deny` | 没有找到令牌，且没有规则允许匿名访问该路径。 |
 | `401` / `403` | `Explicit Deny` | 命中了一条 `deny` 语句或权限。调试日志会指出是哪一条。 |
 | `403` | `Implicit Deny` | 调用方已认证，但没有规则允许该请求；或者 `regular` 条件超时。 |
-| `429` | `Too Many Requests` | 限流条件：见[限流行为不符合预期](#rate-limits-behave-unexpectedly)。 |
+| `429` | `Too Many Requests` | [限流规则](./rate-limiting.md)：见[限流行为不符合预期](#rate-limits-behave-unexpectedly)。 |
 | `500` | `Implicit Deny` | 授权过程中出错。应用日志里有异常栈。 |
 
 ## 意外的 401 {#unexpected-401}
@@ -80,7 +80,11 @@ logging:
 
 ## 限流行为不符合预期 {#rate-limits-behave-unexpectedly}
 
-- `rateLimiter` 和 `groupedRateLimiter` **按实例**计数；有 N 个实例时，实际限额是 N 倍。需要全集群限额时请使用 Redis 版本。
-- 配置完全相同的 Redis 限流器**共享同一份配额**，即使它们位于不同的策略中（[限流](./policies.md#rate-limits)）。
-- 放在**策略级**条件中的限流，会对该策略作用的每个请求消耗一个许可。
-- Redis 故障期间，除非 `strictFailure` 为 `true`，Redis 限流器会放行请求。
+- **实际限额是配置的 N 倍。** 没有 `cache-support` 和 `StringRedisTemplate` 时，`LocalRateLimiter` 按实例计数。
+  需要全集群限额时请引入 Redis（[计数](./rate-limiting.md#counting)）。
+- **规则从不生效。** 像检查策略语句一样检查它的 `action` 和 `condition`，并确认文件匹配
+  [`cosec.limiter.locations`](./configuration.md#rate-limiting)。被拒绝的请求从不受限流约束，返回 `401` / `403` 的请求不消耗许可。
+- **互不相关的调用方共享限额。** 没有 `key` 的规则只有一个桶，所有匹配的请求共用；`key` 部件取值为空（例如缺少请求头）的请求也共用一个桶。
+- **Redis 故障期间请求被放行。** 除非规则设置了 `strictFailure: true`，后端故障时规则会跳过自身。
+- **升级到 6.1 后策略失效。** `rateLimiter`、`groupedRateLimiter`、`redisRateLimiter` 和 `redisGroupedRateLimiter`
+  条件已被移除：见[从限流条件迁移](./rate-limiting.md#migrating-from-rate-limit-conditions)。

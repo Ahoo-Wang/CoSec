@@ -5,7 +5,7 @@ description: Extend CoSec with custom ActionMatcher or ConditionMatcher implemen
 
 # CoSec Custom Matchers
 
-Add a matcher only after confirming that the built-ins cannot express the rule. Prefer composing `path`, `bool`, part matchers, or the local/Redis rate limiters over new code.
+Add a matcher only after confirming that the built-ins cannot express the rule. Prefer composing `path`, `bool`, and part matchers over new code. For quotas, write a rate limit rule (`cosec.limiter.locations`) instead of a stateful matcher, or implement the `RateLimiter` / `RateLimitRuleProvider` SPIs in `me.ahoo.cosec.limiter` to change where counters or rules live.
 
 ## Extension contract
 
@@ -13,8 +13,8 @@ Add a matcher only after confirming that the built-ins cannot express the rule. 
 - Their factory interfaces and providers live in `cosec-core` under `me.ahoo.cosec.policy.action` and `me.ahoo.cosec.policy.condition`.
 - A factory's `type` is the object key used in policy JSON. It must not collide with another factory; later registration replaces the existing entry.
 - Do not change the SPI interfaces to add a matcher. Implement them and register the factory.
-- Keep matching synchronous and side-effect free unless the matcher intentionally enforces a stateful control such as rate limiting.
-- A stateful matcher must skip its side effect when `securityContext.isPolicyEvaluation` (`me.ahoo.cosec.policy`) is `true`: saving a policy validates it by running each condition once, and that run must not spend real quota.
+- Keep matching synchronous and side-effect free. Authorization is a pure decision: matchers run for denied requests too, so a stateful control such as a quota belongs in `RateLimitingAuthorization`, not in a matcher.
+- If a custom matcher has an unavoidable external side effect, skip it when `securityContext.isPolicyEvaluation` (`me.ahoo.cosec.policy`) is `true`: saving a policy validates it by running each condition once against a mock request.
 
 Before editing, inspect the target CoSec version's interfaces and the nearest built-in matcher. In a CoSec checkout, the authoritative files are:
 
@@ -95,8 +95,7 @@ Request matching commonly uses `path`, `method`, `remoteIp`, `origin`, `referer`
 Do not replace these unless the user explicitly wants an override:
 
 - Actions: `all`, `path`, `composite`
-- Conditions: `all`, `authenticated`, `inRole`, `inTenant`, `eq`, `contains`, `startsWith`, `endsWith`, `in`, `regular`, `path`, `bool`, `spel`, `ognl`, `rateLimiter`, `groupedRateLimiter`
-- With Redis cache support: `redisRateLimiter`, `redisGroupedRateLimiter`
+- Conditions: `all`, `authenticated`, `inRole`, `inTenant`, `eq`, `contains`, `startsWith`, `endsWith`, `in`, `regular`, `path`, `bool`, `spel`, `ognl`
 
 ## Verification
 

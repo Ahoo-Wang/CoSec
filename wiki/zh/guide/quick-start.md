@@ -128,6 +128,7 @@ curl -i -H "Authorization: Bearer $TOKEN" localhost:8080/api/orders   # 200
 
 ## 下一步 {#next-steps}
 
-- [策略](./policies.md)：动作、条件、限流、角色与权限。
+- [策略](./policies.md)：动作、条件、角色与权限。
+- [限流](./rate-limiting.md)：按 IP、按用户和共享配额。
 - [认证](./authentication.md)：刷新、登出与吊销、社交登录、多租户。
 - [Web 集成](./web-integration.md)：状态码、获取安全上下文、网关。

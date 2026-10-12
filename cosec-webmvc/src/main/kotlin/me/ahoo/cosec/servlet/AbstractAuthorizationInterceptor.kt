@@ -68,6 +68,7 @@ abstract class AbstractAuthorizationInterceptor(
             servletRequest.setSecurityContext(it)
         }
         servletResponse.setHeader(REQUEST_ID_KEY, request.requestId)
+        decision.responseHeaders.forEach { (name, value) -> servletResponse.setHeader(name, value) }
         if (!decision.allowed) {
             servletResponse.status = decision.status.code
             servletResponse.writeWithAuthorizeResult(decision.result)
