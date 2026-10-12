@@ -40,6 +40,15 @@ object RequestParts {
     const val PATH_VAR_PREFIX = "$PATH.var."
 }
 
+/**
+ * Attributes of the object an action targets. They are request attributes named `resource.<name>`, set by
+ * [me.ahoo.cosec.authorization.CheckRequest.resource] or by a request attributes appender, and empty when the
+ * resource is not known (as in the request filter, before the handler has loaded it).
+ */
+object ResourceParts {
+    const val PREFIX = "resource."
+}
+
 object SecurityContextParts {
     const val PREFIX = "context."
     const val TENANT_ID = PREFIX + "tenantId"
@@ -73,6 +82,9 @@ data class DefaultPartExtractor(val part: String) : PartExtractor {
                 if (part.startsWith(RequestParts.ATTRIBUTES_PREFIX)) {
                     val requestAttributeKey = part.substring(RequestParts.ATTRIBUTES_PREFIX.length)
                     return request.attributes[requestAttributeKey].orEmpty()
+                }
+                if (part.startsWith(ResourceParts.PREFIX)) {
+                    return request.attributes[part].orEmpty()
                 }
                 if (part.startsWith(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX)) {
                     val principalAttributeKey = part.substring(SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX.length)

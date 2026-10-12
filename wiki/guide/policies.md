@@ -173,6 +173,7 @@ the request (`403`); it is never treated as a match.
 | `request.origin`, `request.origin.host`, `request.referer`, `request.referer.host` | `Origin` / `Referer` and their hosts |
 | `request.header.<name>` | any request header |
 | `request.attributes.<name>` | a [request attribute](./web-integration.md#request-attributes), such as `ipRegion` |
+| `resource.<name>` | an attribute of the target object, set by a check in code; empty in the request filter (see [Object-level rules](#object-level-rules)) |
 | `request.path.var.<name>` | a path variable captured by the matched action |
 | `context.tenantId`, `context.principal.id` | tenant and principal id |
 | `context.principal.attributes.<name>` | a principal attribute (a JWT `attributes` claim entry) |
@@ -230,6 +231,42 @@ Two checks come before the layers: the **root** principal (id `cosec`, configura
 blacklist is always denied.
 
 A policy's own `condition` is evaluated once, before its statements.
+
+## Object-level rules
+
+Whether a user may change *this* order depends on the order: its owner, tenant or status. Those live in your
+database, and the request filter runs before your handler has loaded anything, so CoSec decides object-level
+rules in two steps:
+
+1. **In the request filter** the route is authorized as usual. The resource is unknown there, so every
+   `resource.<name>` part is empty.
+2. **In your code**, after loading the object, an [`AuthorizationChecker`](./web-integration.md#checking-permissions-in-code)
+   check passes its attributes as `resource`, and conditions read them as `resource.<name>`.
+
+Write object rules as **denies that apply only when the resource is known**. The same path then passes the filter
+and is denied in the check for anyone but the owner:
+
+```json
+{ "name": "only-own-orders",
+  "effect": "deny",
+  "action": "/orders/**",
+  "condition": { "bool": { "and": [
+    { "eq": { "part": "resource.ownerId", "value": "", "negate": true } },
+    { "eq": { "part": "resource.ownerId", "value": "#{principal.id}", "negate": true } } ] } } }
+```
+
+```kotlin
+val order = orderRepository.findById(id)
+val allowed = checker.check(
+    securityContext,
+    CheckRequest("/orders/$id", "PUT", resource = mapOf("ownerId" to order.ownerId)),
+).awaitSingle()
+if (!allowed) throw AccessDeniedException()
+```
+
+An `allow` that needs a resource part would deny the route in the filter, where the part is empty. Keep allows on
+what the request itself carries, and put object conditions on denies. The check must run in your code: a handler
+that skips it is not protected by object rules.
 
 ## App permissions and roles
 

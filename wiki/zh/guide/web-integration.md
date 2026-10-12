@@ -70,7 +70,7 @@ val securityContext = httpServletRequest.getSecurityContext()
 ## 在代码中检查权限 {#checking-permissions-in-code}
 
 想知道当前主体能否执行某个操作，又不真的发出请求时，例如决定页面上显示哪些按钮，或者在消息消费者中做校验，
-可以注入 `AuthorizationChecker` bean。检查的写法和它代表的请求一样：路径和方法，以及可选的应用、空间、请求头和属性。
+可以注入 `AuthorizationChecker` bean。检查的写法和它代表的请求一样：路径和方法，以及可选的应用、空间、请求头、属性，以及它针对的 `resource`（见[对象级规则](./policies.md#object-level-rules)）。
 不指定应用和空间时，检查沿用当前请求的应用和空间，也会沿用当前的客户端 IP。
 
 ```kotlin

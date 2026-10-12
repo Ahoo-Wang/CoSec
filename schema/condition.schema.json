@@ -78,7 +78,8 @@
         "request.path.var.",
         "context.tenantId",
         "context.principal.id",
-        "context.principal.attributes."
+        "context.principal.attributes.",
+        "resource."
       ]
     },
     "partValue": {

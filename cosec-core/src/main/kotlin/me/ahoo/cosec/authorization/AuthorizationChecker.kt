@@ -22,6 +22,7 @@ import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.context.RequestSecurityContexts.getRequest
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.EvaluateRequest
+import me.ahoo.cosec.policy.condition.part.ResourceParts
 import me.ahoo.cosec.policy.markPolicyEvaluation
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
@@ -31,6 +32,8 @@ import reactor.core.publisher.Mono
  *
  * @param appId the app whose role permissions apply; null takes the app of the current request
  * @param spaceId the space whose role permissions apply; null takes the space of the current request
+ * @param resource attributes of the object the action targets (owner, tenant, status, ...), loaded by the caller;
+ * conditions read them as the parts `resource.<name>`
  */
 data class CheckRequest(
     val path: String,
@@ -38,7 +41,8 @@ data class CheckRequest(
     val appId: String? = null,
     val spaceId: String? = null,
     val headers: Map<String, String> = emptyMap(),
-    val attributes: Map<String, String> = emptyMap()
+    val attributes: Map<String, String> = emptyMap(),
+    val resource: Map<String, String> = emptyMap()
 )
 
 /**
@@ -88,7 +92,7 @@ class AuthorizationChecker(private val authorization: Authorization) {
             path = path,
             method = method,
             remoteIp = current?.remoteIp ?: EvaluateRequest().remoteIp,
-            attributes = attributes,
+            attributes = attributes + resource.mapKeys { ResourceParts.PREFIX + it.key },
             headers = headers + routing,
         )
     }

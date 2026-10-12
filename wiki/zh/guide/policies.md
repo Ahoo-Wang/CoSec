@@ -165,6 +165,7 @@
 | `request.origin`、`request.origin.host`、`request.referer`、`request.referer.host` | `Origin` / `Referer` 及其主机名 |
 | `request.header.<name>` | 任意请求头 |
 | `request.attributes.<name>` | [请求属性](./web-integration.md#request-attributes)，例如 `ipRegion` |
+| `resource.<name>` | 目标对象的属性，由代码中的检查设置；在请求过滤器中为空（见[对象级规则](#object-level-rules)） |
 | `request.path.var.<name>` | 命中的动作捕获的路径变量 |
 | `context.tenantId`、`context.principal.id` | 租户 id 和主体 id |
 | `context.principal.attributes.<name>` | 主体属性（JWT `attributes` 声明中的一项） |
@@ -218,6 +219,38 @@
 始终放行；被黑名单拦截的请求始终拒绝。
 
 策略自身的 `condition` 在它的语句之前、每个请求只求值一次。
+
+## 对象级规则 {#object-level-rules}
+
+用户能否修改*这一张*订单取决于订单本身：它的属主、租户或状态。这些数据在你的数据库里，而请求过滤器在处理器加载任何数据之前就已运行，
+因此 CoSec 分两步判断对象级规则：
+
+1. **在请求过滤器中**照常对路由授权。此时资源未知，所有 `resource.<name>` 部件都为空。
+2. **在你的代码中**加载对象之后，用 [`AuthorizationChecker`](./web-integration.md#checking-permissions-in-code)
+   做一次检查，把对象的属性作为 `resource` 传入，条件以 `resource.<name>` 读取它们。
+
+把对象规则写成**仅在资源已知时生效的拒绝**。这样同一条路径能通过过滤器，而在检查中对属主以外的人拒绝：
+
+```json
+{ "name": "only-own-orders",
+  "effect": "deny",
+  "action": "/orders/**",
+  "condition": { "bool": { "and": [
+    { "eq": { "part": "resource.ownerId", "value": "", "negate": true } },
+    { "eq": { "part": "resource.ownerId", "value": "#{principal.id}", "negate": true } } ] } } }
+```
+
+```kotlin
+val order = orderRepository.findById(id)
+val allowed = checker.check(
+    securityContext,
+    CheckRequest("/orders/$id", "PUT", resource = mapOf("ownerId" to order.ownerId)),
+).awaitSingle()
+if (!allowed) throw AccessDeniedException()
+```
+
+需要资源部件的 `allow` 会在过滤器中拒绝该路由，因为那时部件为空。请让放行只依赖请求本身携带的信息，把对象条件放在拒绝上。
+检查必须在你的代码中执行：跳过检查的处理器不受对象规则保护。
 
 ## 应用权限与角色 {#app-permissions-and-roles}
 
