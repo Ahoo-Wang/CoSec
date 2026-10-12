@@ -82,6 +82,9 @@ sequenceDiagram
 | **授权是纯决策** | 内置匹配器只读取请求和安全上下文，不做 I/O、不持有状态（路径匹配器会把路径变量记录到上下文中）。会消耗许可的限流是一个独立的装饰器，只对被放行的请求执行（见[限流](../guide/rate-limiting.md)）。 |
 | **策略即数据** | 策略和权限都是 JSON。匹配器通过按类型注册的工厂创建（`ServiceLoader` 或 Spring bean）。 |
 
+`AuthorizationChecker` 在代码中的检查复用同一套算法：它使用不在装饰器链中的普通 `SimpleAuthorization`，
+因此检查既不会被审计，也不会被限流。
+
 ## 数据与缓存 {#data-and-caching}
 
 仓储（`PolicyRepository`、`AppRolePermissionRepository`）是 `cosec-core` 中的接口。`cosec-cocache` 中的 Redis 实现基于

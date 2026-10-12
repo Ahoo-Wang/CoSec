@@ -73,6 +73,32 @@ The holder is cleared when the request completes.
 [`cosec.inject.enabled`](./authentication.md#behind-a-gateway) to populate the security context without
 running authorization.
 
+## Checking permissions in code
+
+To ask whether the current principal may do something, without making the request, for example to decide
+which buttons a page shows or to guard a message consumer, inject the `AuthorizationChecker` bean. A check is
+described like the request it stands for: a path and method, and optionally an app, space, headers and
+attributes. When you leave out the app and space, the check uses those of the current request; it also keeps
+the current client IP.
+
+```kotlin
+@RestController
+class PermissionController(private val checker: AuthorizationChecker) {
+    // WebFlux; with Spring MVC, take SecurityContextHolder.requiredContext instead of the exchange
+    @PostMapping("/permissions/check")
+    fun check(@RequestBody actions: Map<String, CheckRequest>, exchange: ServerWebExchange): Mono<Map<String, Boolean>> =
+        checker.checkAll(exchange.getSecurityContext(), actions)
+}
+```
+
+A UI then posts `{"edit": {"path": "/orders/42", "method": "PUT"}, "delete": {"path": "/orders/42", "method": "DELETE"}}`
+and gets `{"edit": true, "delete": false}`. The endpoint itself needs a policy that allows authenticated callers.
+
+Checks decide exactly like the authorization of a real request (same policies, roles, root and blacklist), but
+they are queries: they write no audit events, spend no rate limit, and run on their own copy of the security
+context. A check that fails to evaluate answers `false`. A check answers what the policies allow, not what the
+target endpoint will do with the request, so keep enforcing on the real request.
+
 ## Client IP behind proxies
 
 Policies and audit events use the client IP (`request.remoteIp`). Behind proxies, set

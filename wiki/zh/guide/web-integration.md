@@ -67,6 +67,29 @@ val securityContext = httpServletRequest.getSecurityContext()
 **不做授权时。** 位于校验网关之后的服务可以启用
 [`cosec.inject.enabled`](./authentication.md#behind-a-gateway)，只填充安全上下文而不执行授权。
 
+## 在代码中检查权限 {#checking-permissions-in-code}
+
+想知道当前主体能否执行某个操作，又不真的发出请求时，例如决定页面上显示哪些按钮，或者在消息消费者中做校验，
+可以注入 `AuthorizationChecker` bean。检查的写法和它代表的请求一样：路径和方法，以及可选的应用、空间、请求头和属性。
+不指定应用和空间时，检查沿用当前请求的应用和空间，也会沿用当前的客户端 IP。
+
+```kotlin
+@RestController
+class PermissionController(private val checker: AuthorizationChecker) {
+    // WebFlux；Spring MVC 下改用 SecurityContextHolder.requiredContext 代替 exchange
+    @PostMapping("/permissions/check")
+    fun check(@RequestBody actions: Map<String, CheckRequest>, exchange: ServerWebExchange): Mono<Map<String, Boolean>> =
+        checker.checkAll(exchange.getSecurityContext(), actions)
+}
+```
+
+前端提交 `{"edit": {"path": "/orders/42", "method": "PUT"}, "delete": {"path": "/orders/42", "method": "DELETE"}}`，
+得到 `{"edit": true, "delete": false}`。这个端点本身也需要一条放行已认证调用方的策略。
+
+检查的决策方式与真实请求的授权完全相同（同样的策略、角色、root 和黑名单），但它是查询：不写审计事件、不消耗限流许可，
+并在自己的安全上下文副本上运行。求值失败的检查返回 `false`。检查回答的是策略允许什么，而不是目标端点会如何处理请求，
+因此真实请求上的授权仍然要保留。
+
 ## 代理之后的客户端 IP {#client-ip-behind-proxies}
 
 策略和审计事件使用客户端 IP（`request.remoteIp`）。位于代理之后时，请把
