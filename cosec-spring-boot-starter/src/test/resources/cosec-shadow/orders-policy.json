@@ -1,0 +1,7 @@
+{
+  "id": "orders",
+  "name": "Orders",
+  "type": "global",
+  "tenantId": "(platform)",
+  "statements": [{ "name": "ReadOrders", "action": "/orders/**" }]
+}

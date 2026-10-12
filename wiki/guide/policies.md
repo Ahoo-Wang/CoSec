@@ -276,3 +276,41 @@ policies.forEach(DefaultPolicyEvaluator::evaluate)  // matchers run against a sa
 `DefaultPolicyEvaluator` runs every condition and action once against a sample request, so configuration
 errors that only show at request time (such as an unknown part) fail the test. Add one authorization test
 per allow/deny boundary that matters, using `SimpleAuthorization` with in-memory repositories.
+
+## Trying changes in shadow mode
+
+A test shows what a policy change does to the requests you thought of. Shadow mode shows what it does to real
+traffic, before it takes effect. Put the candidate versions of your policies in shadow files, and CoSec
+evaluates every sampled request twice: once with the enforced policies, whose decision is the one returned,
+and once with the candidates laid over them. Every request on which the two disagree is reported.
+
+```yaml
+cosec:
+  shadow:
+    enabled: true
+    locations: classpath:cosec-shadow/*-policy.json   # default
+    sample-rate: 0.1
+```
+
+A shadow file holds one policy, in the same format as a local policy file. A candidate replaces the enforced
+policy with the same `id` everywhere that policy applies. A candidate with a new `id` is added: as a global
+policy if its type is `global`, otherwise for principals that list it. To try removing a policy, give its
+candidate no statements. Shadow mode covers policies only, not app permissions or role grants.
+
+| Diff | Meaning |
+|---|---|
+| `WIDENED` | Denied today, allowed by the candidates: the change grants access. Review these before enforcing. |
+| `NARROWED` | Allowed today, denied by the candidates: the change revokes access. |
+| `CANDIDATE_ERROR` | A candidate failed to evaluate, for example a matcher threw. Enforced, it would deny with an error. |
+| `RULE_CHANGED` | Same result, decided by a different rule. Reported only with `report-rule-changes: true`. |
+
+Each diff carries the request (id, tenant, principal, app, method, path) and both outcomes with the rule that
+decided them. By default diffs are logged under `me.ahoo.cosec.shadow`: access changes at `WARN`, rule changes at
+`INFO`. Declare a `ShadowEventSink` bean to send them elsewhere, or a `ShadowPolicyProvider` bean to supply
+candidates from somewhere other than files.
+
+Shadow mode never changes a response, and its errors are only logged. It does cost a second evaluation on every
+sampled request, so keep `sample-rate` low on busy services. Candidates run on a separate security context marked
+as a policy evaluation, so custom matchers can skip side effects, and no rate limit is spent. A shadow file that
+cannot be read stops the application from starting, because a candidate left out would report "no difference" for
+a change it never evaluated. Once the diffs look right, move the candidates into the enforced policies.

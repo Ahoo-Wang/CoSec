@@ -156,6 +156,10 @@ Check the final policy for:
 - unsafe or needlessly complex expressions when a built-in matcher suffices;
 - rate limit rules that count per JVM (no Redis) where a cluster-wide quota is required.
 
+## Rolling out changes
+
+For changes to production policies, suggest shadow mode before enforcing: with `cosec.shadow.enabled=true`, candidate versions placed in `classpath:cosec-shadow/*-policy.json` (one policy per file, same `id` replaces, new `id` adds) are evaluated next to the enforced policies on sampled traffic (`cosec.shadow.sample-rate`), and every `WIDENED`, `NARROWED`, or `CANDIDATE_ERROR` diff is logged under `me.ahoo.cosec.shadow`. Responses never change. Treat any `WIDENED` diff as a grant to review. Shadow mode covers policies, not app permissions or role grants.
+
 ## Validation
 
 The human-facing reference is https://cosec.ahoo.me/guide/policies.

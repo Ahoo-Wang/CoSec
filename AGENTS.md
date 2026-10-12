@@ -40,7 +40,7 @@ adapters or caching. The parts that take several files to see:
 - **Request path.** Adapter (WebFlux / WebMvc / Gateway) → `SecurityPipeline` (parse request, resolve
   principal from token, authorize, map to status) → `SecurityDecision` → adapter writes it. Adapters translate;
   they never decide.
-- **Authorization** is a decorator chain (tracing → auditing → rate limiting → `SimpleAuthorization`) over
+- **Authorization** is a decorator chain (tracing → auditing → rate limiting → shadow → `SimpleAuthorization`) over
   `DecisionAuthorization`, so the matched `VerifyContext` travels as a value. `SimpleAuthorization`: root →
   blacklist → global policies → principal policies → app/space role permissions. Each layer checks every deny
   before any allow; an explicit deny in any layer ends evaluation; no match = `IMPLICIT_DENY`.
@@ -76,6 +76,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | `cosec.*` property or default | `wiki/guide/configuration.md` |
 | Status codes, adapters, security-context access, request attributes | `wiki/guide/web-integration.md` |
 | Rate limit rules, backends, headers | `wiki/guide/rate-limiting.md`, `schema/rate-limit-rule.schema.json` |
+| Shadow mode (candidates, diffs) | `wiki/guide/policies.md#trying-changes-in-shadow-mode` |
 | Decision order or combination in `SimpleAuthorization` | the narration in `AuthorizationExplainer` (`ExplainerConsistencyTest` fails until they agree) |
 | New failure symptom | `wiki/guide/troubleshooting.md`, `skills/cosec-troubleshoot` |
 | Tokens, login, revocation | `wiki/guide/authentication.md` |
