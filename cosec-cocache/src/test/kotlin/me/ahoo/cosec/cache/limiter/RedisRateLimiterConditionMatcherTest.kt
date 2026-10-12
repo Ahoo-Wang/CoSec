@@ -14,6 +14,7 @@ package me.ahoo.cosec.cache.limiter
 
 import io.mockk.mockk
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.condition.limiter.RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.requiresBlocking
@@ -53,9 +54,9 @@ class RedisRateLimiterConditionMatcherTest {
             .create(
                 mapOf(RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY to 0.0000001).asConfiguration(),
             )
-        conditionMatcher.match(mockk(), mockk()).assert().isTrue()
+        conditionMatcher.match(mockk(), SimpleSecurityContext.anonymous()).assert().isTrue()
         assertThrows(TooManyRequestsException::class.java) {
-            conditionMatcher.match(mockk(), mockk())
+            conditionMatcher.match(mockk(), SimpleSecurityContext.anonymous())
         }
     }
 
@@ -63,7 +64,7 @@ class RedisRateLimiterConditionMatcherTest {
     fun failOpenWhenRedisUnavailable() {
         val conditionMatcher = badFactory()
             .create(mapOf(RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY to 3).asConfiguration())
-        conditionMatcher.match(mockk(), mockk()).assert().isTrue()
+        conditionMatcher.match(mockk(), SimpleSecurityContext.anonymous()).assert().isTrue()
     }
 
     @Test
@@ -76,7 +77,7 @@ class RedisRateLimiterConditionMatcherTest {
                 ).asConfiguration(),
             )
         assertThrows(TooManyRequestsException::class.java) {
-            conditionMatcher.match(mockk(), mockk())
+            conditionMatcher.match(mockk(), SimpleSecurityContext.anonymous())
         }
     }
 
