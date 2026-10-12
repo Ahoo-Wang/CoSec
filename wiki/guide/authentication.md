@@ -69,6 +69,33 @@ possible, otherwise it reads Redis on a worker thread rather than the event loop
 the check **allows** the token rather than rejecting every authenticated request. Signature and expiry are
 still enforced, so keep access tokens short-lived.
 
+## API keys
+
+Machine clients (jobs, partner integrations, internal services) often cannot log in. Give them an API key: whoever
+sends it in the `X-API-Key` header acts as the key's principal, with its roles and policies, and is authorized like
+anyone else.
+
+```yaml
+cosec:
+  api-key:
+    enabled: true
+    keys:
+      - id: billing-sync
+        hash: <SHA-256 hex of the key, from ApiKeys.hash(key)>
+        principal-id: svc-billing
+        roles: [billing]
+        expires-at: 2027-01-01T00:00:00Z
+```
+
+Create a key with `ApiKeys.generate()`, give it to the client once, and configure only `ApiKeys.hash(key)`. CoSec
+never stores or logs the key itself. A request that carries a key is judged by the key alone. An unknown, disabled
+(`enabled: false`) or expired key makes the request anonymous with the reason `Token Invalid`, so a denial answers
+`401`. The principal gets the attribute `apiKeyId`, naming the key used.
+
+To keep keys elsewhere, for example in a database, declare an `ApiKeyStore` bean that looks keys up by hash. If it
+blocks, set `cosec.api-key.store-blocking=true` so the security context is parsed off the event loop. Rotate a key by
+adding the new one, moving the client over, then removing the old one.
+
 ## Multi-tenancy
 
 A principal may act within a tenant. When it does, the token carries `tenantId` and the security context

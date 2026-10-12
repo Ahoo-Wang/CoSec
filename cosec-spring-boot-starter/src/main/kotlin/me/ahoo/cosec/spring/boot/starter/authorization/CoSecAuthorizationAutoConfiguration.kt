@@ -14,6 +14,8 @@ package me.ahoo.cosec.spring.boot.starter.authorization
 
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.authorization.Authorization
+import me.ahoo.cosec.apikey.ApiKeySecurityContextParser
+import me.ahoo.cosec.apikey.ApiKeyStore
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
@@ -33,6 +35,7 @@ import me.ahoo.cosec.shadow.ShadowAuthorization
 import me.ahoo.cosec.shadow.ShadowEventSink
 import me.ahoo.cosec.shadow.ShadowPolicyProvider
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.starter.apikey.ApiKeyProperties
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.REACTIVE_REQUEST_PARSER_BEAN_NAME
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.SERVLET_REQUEST_PARSER_BEAN_NAME
 import me.ahoo.cosec.spring.boot.starter.policy.LocalPolicyInitializerLifecycle
@@ -72,9 +75,14 @@ class CoSecAuthorizationAutoConfiguration {
     @ConditionalOnMissingBean
     fun securityContextParser(
         tokenVerifier: TokenVerifier,
-        authorizationProperties: AuthorizationProperties
+        authorizationProperties: AuthorizationProperties,
+        apiKeyStore: ObjectProvider<ApiKeyStore>,
+        apiKeyProperties: ObjectProvider<ApiKeyProperties>
     ): SecurityContextParser {
-        return DefaultSecurityContextParser(tokenVerifier, authorizationProperties.allowQueryToken)
+        val tokenParser = DefaultSecurityContextParser(tokenVerifier, authorizationProperties.allowQueryToken)
+        val store = apiKeyStore.ifAvailable ?: return tokenParser
+        val header = apiKeyProperties.ifAvailable?.header ?: ApiKeySecurityContextParser.DEFAULT_HEADER
+        return ApiKeySecurityContextParser(tokenParser, store, header)
     }
 
     @Bean

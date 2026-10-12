@@ -61,6 +61,30 @@ cosec:
 启用吊销后，每个请求都会检查吊销存储。能命中本地缓存时直接返回，否则在工作线程（而不是事件循环）上读取 Redis。
 Redis 不可达时，检查会**放行**令牌，而不是拒绝所有已认证的请求；签名和过期仍会校验，因此请让访问令牌保持较短的有效期。
 
+## API Key {#api-keys}
+
+机器客户端（定时任务、合作方集成、内部服务）往往无法登录。可以给它们发放 API Key：在 `X-API-Key` 请求头中携带它的调用方，
+会以该 key 对应的主体身份、带着其角色和策略访问，并像其他调用方一样被授权。
+
+```yaml
+cosec:
+  api-key:
+    enabled: true
+    keys:
+      - id: billing-sync
+        hash: <key 的 SHA-256 十六进制，由 ApiKeys.hash(key) 得到>
+        principal-id: svc-billing
+        roles: [billing]
+        expires-at: 2027-01-01T00:00:00Z
+```
+
+用 `ApiKeys.generate()` 生成 key，只交给客户端一次，配置中只写 `ApiKeys.hash(key)`。CoSec 从不保存也不记录 key 本身。
+携带了 key 的请求只依据 key 判断。未知、已禁用（`enabled: false`）或已过期的 key 会让请求变为匿名，原因为 `Token Invalid`，
+因此被拒绝时返回 `401`。主体会带有属性 `apiKeyId`，指明所用的 key。
+
+要把 key 存在别处（例如数据库），请声明一个按哈希查找 key 的 `ApiKeyStore` bean。如果它会阻塞，请设置
+`cosec.api-key.store-blocking=true`，让安全上下文在事件循环之外解析。轮换 key 时，先添加新 key，让客户端切换过去，再删除旧 key。
+
 ## 多租户 {#multi-tenancy}
 
 主体可以在某个租户内活动。此时令牌携带 `tenantId`，安全上下文会把该租户提供给策略（`context.tenantId`、`inTenant`）。

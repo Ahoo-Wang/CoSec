@@ -14,6 +14,7 @@
 | `cosec.authorization.gateway.enabled` | `true` | Spring Cloud Gateway 过滤器（`gateway-support`） |
 | `cosec.authorization.cache.enabled` | `true` | 基于 Redis 的策略与权限仓储（`cache-support`） |
 | `cosec.jwt.enabled` | `true` | JWT 签发与校验 |
+| `cosec.api-key.enabled` | `false` | 面向机器客户端的 [API Key](./authentication.md#api-keys) |
 | `cosec.inject.enabled` | `false` | 信任上游已校验过的令牌（见[认证](./authentication.md#behind-a-gateway)） |
 | `cosec.audit.enabled` | `true` | 为每次决策产生审计事件 |
 | `cosec.shadow.enabled` | `false` | [候选策略的影子评估](./policies.md#trying-changes-in-shadow-mode) |
@@ -47,6 +48,14 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 | `cosec.jwt.token-validity.access` | `10m` | 访问令牌有效期。 |
 | `cosec.jwt.token-validity.refresh` | `7d` | 刷新令牌有效期。 |
 | `cosec.jwt.token-revocation.enabled` | `false` | 每个令牌都对照吊销存储检查，使登出立即生效（需要 `cache-support`）。见[认证](./authentication.md#logout-and-revocation)。 |
+
+## API Key {#api-keys}
+
+| 属性 | 默认值 | 说明 |
+|---|---|---|
+| `cosec.api-key.header` | `X-API-Key` | 携带 key 的请求头。 |
+| `cosec.api-key.store-blocking` | `false` | 在事件循环之外解析安全上下文，适用于会阻塞的 `ApiKeyStore`。 |
+| `cosec.api-key.keys[n]` | — | 内置存储中的 key：`id`、`hash`（key 的 SHA-256 十六进制）、`principal-id`、`tenant-id`、`roles`、`policies`、`attributes`、`expires-at`、`enabled`。 |
 
 ## 缓存 {#cache}
 
