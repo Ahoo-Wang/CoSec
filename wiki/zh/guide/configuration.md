@@ -16,6 +16,7 @@
 | `cosec.jwt.enabled` | `true` | JWT 签发与校验 |
 | `cosec.inject.enabled` | `false` | 信任上游已校验过的令牌（见[认证](./authentication.md#behind-a-gateway)） |
 | `cosec.audit.enabled` | `true` | 为每次决策产生审计事件 |
+| `cosec.explain.enabled` | `false` | [解释决策](./troubleshooting.md#explain-a-decision)以及 `cosecExplain` Actuator 端点 |
 | `cosec.audit.kafka.enabled` | `true` | 把审计事件发送到 Kafka（需要 `kafka-support` 和一个 `KafkaTemplate` bean） |
 | `cosec.limiter.enabled` | `true` | [限流规则](./rate-limiting.md) |
 | `cosec.ip2region.enabled` | `true` | IP 地理位置（`ip2region-support`） |

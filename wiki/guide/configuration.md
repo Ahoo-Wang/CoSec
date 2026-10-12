@@ -17,6 +17,7 @@ a property can only enable a feature whose module is on the classpath.
 | `cosec.jwt.enabled` | `true` | JWT issuing and verification |
 | `cosec.inject.enabled` | `false` | trusting a token already verified upstream (see [Authentication](./authentication.md#behind-a-gateway)) |
 | `cosec.audit.enabled` | `true` | audit events for every decision |
+| `cosec.explain.enabled` | `false` | [explaining decisions](./troubleshooting.md#explain-a-decision) and the `cosecExplain` Actuator endpoint |
 | `cosec.audit.kafka.enabled` | `true` | sending audit events to Kafka (`kafka-support` and a `KafkaTemplate` bean) |
 | `cosec.limiter.enabled` | `true` | [rate limit rules](./rate-limiting.md) |
 | `cosec.ip2region.enabled` | `true` | IP geolocation (`ip2region-support`) |
