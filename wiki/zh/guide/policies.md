@@ -303,6 +303,25 @@ CoSec 只读取权限和授权，写入由你的管理服务负责。
 应用仍会正常启动。请检查启动日志，或按下文在测试中校验策略。
 :::
 
+### 策略历史与回滚 {#policy-history-and-rollback}
+
+Redis 中只保存每条策略的当前版本。设置 `cosec.authorization.cache.history.enabled=true` 后，每次通过仓储保存策略时都会额外记录一个修订版本：
+递增的版本号、时间、作者、说明以及完整的策略内容，按从新到旧排列，每条策略最多保留 `max-revisions` 个。作者通过 Reactor Context 传入：
+
+```kotlin
+policyRepository.setPolicy(policy)
+    .contextWrite(PolicyRevisions.author("alice", "TICKET-42: allow exports"))
+```
+
+`PolicyHistory` bean 用于读取和恢复修订版本。回滚会把旧内容保存为一个新的修订版本，因此历史只增不减，并会记录是谁执行了回滚：
+
+```kotlin
+policyHistory.history("orders")                 // 从新到旧
+policyHistory.rollback("orders", revision = 3, author = "bob")
+```
+
+没有提供作者的保存记录为 `unknown`。策略先写入、再追加修订版本，因此历史中不会出现未生效的版本。
+
 ## 校验策略 {#validating-policies}
 
 在单元测试中用运行时解析器校验策略，而不只是 JSON Schema：

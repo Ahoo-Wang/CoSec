@@ -69,6 +69,8 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 | `cosec.authorization.cache.policy.*` | | 策略的本地缓存。 |
 | `cosec.authorization.cache.role.*` | | 角色授权的本地缓存。 |
 | `cosec.authorization.cache.token.*` | `expire-after-write: 30`、`maximum-size: 100000` | 吊销查询的本地缓存。 |
+| `cosec.authorization.cache.history.enabled` | `false` | 为每次保存的策略记录一个[修订版本](./policies.md#policy-history-and-rollback)（`cosec:policy:history:*`）。 |
+| `cosec.authorization.cache.history.max-revisions` | `50` | 每条策略保留的修订版本数。 |
 
 每个本地缓存（`policy`、`role`、`token`）支持：
 

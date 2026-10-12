@@ -166,6 +166,10 @@ For changes to production policies, suggest shadow mode before enforcing: with `
 
 To answer "who can call X?" or "what can principal Y reach?" across policies, app permissions and role grants, use `AccessAnalyzer.load(policyLocations, appPermissionLocations, roles)` then `whoCan(request)` (allows and denies whose action matches, flagged `conditional` and `templated`) or `grantsOf(principal, appId)`. It matches actions only and errs on the side of listing a rule; use explanations for one concrete principal and request.
 
+## History and rollback
+
+With `cosec.authorization.cache.history.enabled=true`, every policy save records a revision (author via `setPolicy(p).contextWrite(PolicyRevisions.author("name", "note"))`). Use the `PolicyHistory` bean to list revisions and `rollback(policyId, revision, author)`; a rollback is itself a new revision.
+
 ## Validation
 
 The human-facing reference is https://cosec.ahoo.me/guide/policies.
