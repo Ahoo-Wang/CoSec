@@ -30,6 +30,9 @@ internal fun Environment.securityContextParseScheduler(): Scheduler {
     val tokenRevocationEnabled =
         getProperty(ConditionalOnTokenRevocationEnabled.ENABLED_KEY, Boolean::class.java, false)
     val apiKeyStoreBlocking = getProperty(ApiKeyProperties.ENABLED_KEY, Boolean::class.java, false) &&
-        getProperty(ApiKeyProperties.STORE_BLOCKING_KEY, Boolean::class.java, false)
+        (
+            getProperty(ApiKeyProperties.STORE_BLOCKING_KEY, Boolean::class.java, false) ||
+                getProperty(ApiKeyProperties.STORE_KEY, "memory").equals("redis", ignoreCase = true)
+            )
     return if (tokenRevocationEnabled || apiKeyStoreBlocking) Schedulers.boundedElastic() else Schedulers.immediate()
 }

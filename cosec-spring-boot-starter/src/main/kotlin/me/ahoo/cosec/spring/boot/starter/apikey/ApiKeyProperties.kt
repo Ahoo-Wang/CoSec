@@ -33,12 +33,20 @@ data class ApiKeyProperties(
         ApiKeySecurityContextParser.DEFAULT_HEADER
     ) var header: String = ApiKeySecurityContextParser.DEFAULT_HEADER,
     /**
+     * Where keys live: `memory` (the [keys] below) or `redis` (shared by every instance, needs `cache-support`).
+     */
+    @DefaultValue("memory") var store: Store = Store.MEMORY,
+    /**
+     * Redis key prefix, when [store] is `redis`.
+     */
+    @DefaultValue(DEFAULT_KEY_PREFIX) var keyPrefix: String = DEFAULT_KEY_PREFIX,
+    /**
      * Whether the [me.ahoo.cosec.apikey.ApiKeyStore] blocks (a database or Redis lookup), so the security context is
      * parsed off the event loop.
      */
     @DefaultValue("false") var storeBlocking: Boolean = false,
     /**
-     * Keys of the built-in in-memory store, by their SHA-256 hash.
+     * Keys of the in-memory store, by their SHA-256 hash. Ignored with the Redis store.
      */
     var keys: List<Key> = emptyList(),
 ) : EnabledCapable {
@@ -46,6 +54,13 @@ data class ApiKeyProperties(
         const val PREFIX: String = "cosec.api-key"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY
         const val STORE_BLOCKING_KEY: String = "$PREFIX.store-blocking"
+        const val STORE_KEY: String = "$PREFIX.store"
+        const val DEFAULT_KEY_PREFIX = "cosec:api-key"
+    }
+
+    enum class Store {
+        MEMORY,
+        REDIS,
     }
 
     data class Key(

@@ -92,8 +92,12 @@ never stores or logs the key itself. A request that carries a key is judged by t
 (`enabled: false`) or expired key makes the request anonymous with the reason `Token Invalid`, so a denial answers
 `401`. The principal gets the attribute `apiKeyId`, naming the key used.
 
-To keep keys elsewhere, for example in a database, declare an `ApiKeyStore` bean that looks keys up by hash. If it
-blocks, set `cosec.api-key.store-blocking=true` so the security context is parsed off the event loop. Rotate a key by
+With `cache-support`, `cosec.api-key.store: redis` keeps keys in Redis, shared by every instance and changeable at
+runtime. Issue and revoke them through the `RedisApiKeyStore` bean: `issue(apiKey)` returns the new key once and stores
+only its hash, `save(hash, apiKey)` updates one (for example `enabled = false`), and `revoke(hash)` removes it. The
+security context is then parsed off the event loop, and a Redis failure fails the request closed. To keep keys
+elsewhere, declare your own `ApiKeyStore` bean that looks keys up by hash; if it blocks, set
+`cosec.api-key.store-blocking=true`. Rotate a key by
 adding the new one, moving the client over, then removing the old one.
 
 ## Multi-tenancy

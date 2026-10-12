@@ -55,6 +55,8 @@ OpenTelemetry tracing has no switch: it is active whenever `opentelemetry-suppor
 | Property | Default | Description |
 |---|---|---|
 | `cosec.api-key.header` | `X-API-Key` | Request header carrying the key. |
+| `cosec.api-key.store` | `memory` | `memory` (the keys below) or `redis` (shared, needs `cache-support`). |
+| `cosec.api-key.key-prefix` | `cosec:api-key` | Redis key prefix of the Redis store. |
 | `cosec.api-key.store-blocking` | `false` | Parse the security context off the event loop, for an `ApiKeyStore` that blocks. |
 | `cosec.api-key.keys[n]` | — | Keys of the built-in store: `id`, `hash` (SHA-256 hex of the key), `principal-id`, `tenant-id`, `roles`, `policies`, `attributes`, `expires-at`, `enabled`. |
 
