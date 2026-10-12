@@ -2,27 +2,29 @@
 
 > Multi-tenant, reactive security framework for Spring Boot (WebFlux, MVC, Spring Cloud Gateway). IAM-style JSON policies and role-based app permissions, evaluated deny-first across global, principal and role layers; JWT authentication; Redis-backed policy storage via CoCache. Kotlin, Java 17, Spring Boot 4, Project Reactor.
 
-Key facts: a DENY matched in any layer overrides any ALLOW; unmatched requests are denied (IMPLICIT_DENY); errors deny. Anonymous denials return 401, authenticated denials 403, rate limits 429. Policies are JSON with `action` (path patterns) and `condition` (single-key objects such as `{"authenticated":{}}`).
+Key facts: a DENY matched in any layer overrides any ALLOW; unmatched requests are denied (IMPLICIT_DENY); errors deny. Anonymous denials return 401, authenticated denials 403, exceeded rate limit rules 429. Policies are JSON with `action` (path patterns) and `condition` (single-key objects such as `{"authenticated":{}}`).
 
 ## Guide
 
 - [Introduction](https://cosec.ahoo.me/guide/introduction): concepts (principal, tenant, policy, statement, app permission), the decision model, modules and their Gradle capabilities
 - [Quick Start](https://cosec.ahoo.me/guide/quick-start): Gradle capabilities, configuration, first policy, issuing tokens
-- [Policies](https://cosec.ahoo.me/guide/policies): policy language reference (actions, templates, conditions and request parts, rate limits, evaluation order, roles and app permissions, loading, OpenAPI generation, validating policies in tests)
+- [Policies](https://cosec.ahoo.me/guide/policies): policy language reference (actions, templates, conditions including `time`, request and `resource.*` parts, evaluation order, roles and app permissions, object-level rules, loading, shadow mode, history and rollback, OpenAPI generation, policy test cases)
+- [Rate Limiting](https://cosec.ahoo.me/guide/rate-limiting): rate limit rules (per IP, per user, shared), Redis or in-memory counting, 429 and RateLimit headers, migrating from the removed rate-limit conditions
 - [Configuration](https://cosec.ahoo.me/guide/configuration): every `cosec.*` property with defaults
-- [Authentication](https://cosec.ahoo.me/guide/authentication): JWT claims, login, refresh, revocation, multi-tenancy, social login, the gateway trust boundary
-- [Web Integration](https://cosec.ahoo.me/guide/web-integration): adapters, status codes, accessing the security context, client IP, request attributes (ipRegion, gateway route id), CORS
-- [Operations](https://cosec.ahoo.me/guide/operations): Redis failure modes, auditing, OpenTelemetry, deployment, performance
-- [Troubleshooting](https://cosec.ahoo.me/guide/troubleshooting): diagnosing 401/403/429/500, policies with no effect, unexpected allows, rate limits
+- [Authentication](https://cosec.ahoo.me/guide/authentication): JWT claims, login, refresh, revocation, API keys for machine clients, multi-tenancy, social login, the gateway trust boundary
+- [Web Integration](https://cosec.ahoo.me/guide/web-integration): adapters, status codes, accessing the security context, checking permissions in code (AuthorizationChecker), client IP, request attributes (ipRegion, gateway route id), CORS
+- [Operations](https://cosec.ahoo.me/guide/operations): Redis failure modes, auditing, OpenTelemetry and Micrometer metrics, access reviews (AccessAnalyzer), deployment, performance
+- [Troubleshooting](https://cosec.ahoo.me/guide/troubleshooting): explaining a decision (cosecExplain), diagnosing 401/403/429/500, policies with no effect, unexpected allows, rate limits
+- [Upgrading](https://cosec.ahoo.me/guide/upgrading): breaking changes, new features and a checklist per version (6.0 to 6.1)
 
 ## Architecture
 
 - [Overview](https://cosec.ahoo.me/architecture/overview): modules, request path, decision algorithm, invariants, caching
-- [Extending](https://cosec.ahoo.me/architecture/extending): custom matchers (SPI), authorization and context hooks, audit sinks
+- [Extending](https://cosec.ahoo.me/architecture/extending): custom matchers (SPI), authorization and context hooks (including rate limiter backends, shadow providers, CoSecAuthorizationCustomizer), audit sinks
 
 ## Reference
 
-- [Policy JSON Schema](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-policy.schema.json) and [app permission JSON Schema](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-app-permission.schema.json)
+- [Policy JSON Schema](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-policy.schema.json), [app permission JSON Schema](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-app-permission.schema.json) and [rate limit rule JSON Schema](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/rate-limit-rule.schema.json)
 - [Agent skills](https://github.com/Ahoo-Wang/CoSec/tree/main/skills): policy authoring, integration, custom matchers, troubleshooting
 - [Releases](https://github.com/Ahoo-Wang/CoSec/releases): changes and migration notes
 
