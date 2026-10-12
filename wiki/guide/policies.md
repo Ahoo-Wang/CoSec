@@ -122,6 +122,31 @@ Every condition accepts `"negate": true` to invert its result.
 `inTenant` checks the *kind* of tenant. To check a specific tenant id, use
 `{ "eq": { "part": "context.tenantId", "value": "..." } }`.
 
+### Time conditions
+
+`time` matches inside a validity period and, optionally, a recurring daily window. It reads the server clock,
+never the request.
+
+| Configuration | Meaning |
+|---|---|
+| `notBefore`, `notAfter` | The period, as ISO date-times; `notAfter` is exclusive. A date-time without an offset is read in `zone`. |
+| `daysOfWeek` | The days the window applies, e.g. `["MON", "TUE", "WED", "THU", "FRI"]` (full names work too). |
+| `from`, `to` | A daily window `[from, to)` as `HH:mm`. When `from` is after `to` the window crosses midnight, and its early-morning part belongs to the day it started on. |
+| `zone` | Time zone of the window and of offset-less date-times, default `UTC`. |
+
+At least one of the period, `daysOfWeek` or `from`/`to` is required. A grant that should expire on its own is a
+statement with `notAfter`:
+
+```json
+{ "name": "temporary-support-access",
+  "action": "/orders/**",
+  "condition": { "bool": { "and": [
+    { "inRole": { "value": "support" } },
+    { "time": { "notAfter": "2026-10-20T00:00:00", "zone": "Asia/Shanghai" } } ] } } }
+```
+
+`negate` turns a window into "outside the window", for example to deny writes outside business hours.
+
 ### Value conditions
 
 These read one **part** of the request or security context and compare it.

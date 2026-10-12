@@ -45,6 +45,9 @@
     },
     "regular": {
       "$ref": "#/definitions/regularConditionMatcher"
+    },
+    "time": {
+      "$ref": "#/definitions/timeConditionMatcher"
     }
   },
   "maxProperties": 1,
@@ -337,6 +340,53 @@
         }
       },
       "minProperties": 1,
+      "additionalProperties": false
+    },
+    "timeConditionMatcher": {
+      "type": "object",
+      "description": "Matches inside a validity period and, optionally, a recurring daily window. At least one of notBefore, notAfter, daysOfWeek or from/to is required.",
+      "properties": {
+        "negate": {
+          "type": "boolean"
+        },
+        "notBefore": {
+          "type": "string",
+          "description": "ISO date-time; without an offset it is read in zone."
+        },
+        "notAfter": {
+          "type": "string",
+          "description": "ISO date-time, exclusive; without an offset it is read in zone."
+        },
+        "zone": {
+          "type": "string",
+          "description": "Time zone id, default UTC.",
+          "default": "UTC"
+        },
+        "daysOfWeek": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^(?i)(MON|TUE|WED|THU|FRI|SAT|SUN|MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY)$"
+          }
+        },
+        "from": {
+          "type": "string",
+          "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
+        },
+        "to": {
+          "type": "string",
+          "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
+        }
+      },
+      "dependencies": {
+        "from": [
+          "to"
+        ],
+        "to": [
+          "from"
+        ]
+      },
       "additionalProperties": false
     }
   }

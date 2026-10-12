@@ -95,7 +95,7 @@ Request matching commonly uses `path`, `method`, `remoteIp`, `origin`, `referer`
 Do not replace these unless the user explicitly wants an override:
 
 - Actions: `all`, `path`, `composite`
-- Conditions: `all`, `authenticated`, `inRole`, `inTenant`, `eq`, `contains`, `startsWith`, `endsWith`, `in`, `regular`, `path`, `bool`, `spel`, `ognl`
+- Conditions: `all`, `authenticated`, `inRole`, `inTenant`, `eq`, `contains`, `startsWith`, `endsWith`, `in`, `regular`, `path`, `bool`, `spel`, `ognl`, `time`
 
 ## Verification
 
