@@ -18,15 +18,24 @@ import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.authorization.AuthorizationDecision
 import me.ahoo.cosec.authorization.BlacklistVerifyContext
 import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.authorization.NoMatchVerifyContext
+import me.ahoo.cosec.authorization.PolicyVerifyContext
+import me.ahoo.cosec.authorization.PolicyVerifySource
+import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.RootVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.limiter.RateLimitResult
+import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.policy.EvaluateRequest
+import me.ahoo.cosec.policy.PolicyData
+import me.ahoo.cosec.policy.StatementData
+import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -97,5 +106,24 @@ class MeteredAuthorizationTest {
         MeteredAuthorization(Authorization { _, _ -> AuthorizeResult.ALLOW.toMono() }, registry)
             .authorize(request, context).test().expectNext(AuthorizeResult.ALLOW).verifyComplete()
         count("allow", "unknown").assert().isEqualTo(1)
+    }
+
+    @Test
+    fun policyAndRoleSources() {
+        val statement = StatementData(name = "s", action = AllActionMatcher.INSTANCE)
+        val policy = PolicyData("p", "", "p", "", PolicyType.GLOBAL, "t", statements = listOf(statement))
+        decide(
+            AuthorizeResult.ALLOW,
+            PolicyVerifyContext(PolicyVerifySource.GLOBAL, policy, 0, statement, VerifyResult.ALLOW)
+        )
+        decide(
+            AuthorizeResult.EXPLICIT_DENY,
+            PolicyVerifyContext(PolicyVerifySource.PRINCIPAL, policy, 0, statement, VerifyResult.EXPLICIT_DENY),
+        )
+        val permission = PermissionData(id = "perm", name = "perm", action = AllActionMatcher.INSTANCE)
+        decide(AuthorizeResult.ALLOW, RoleVerifyContext("admin", permission, VerifyResult.ALLOW))
+        count("allow", "global_policy").assert().isEqualTo(1)
+        count("explicit_deny", "principal_policy").assert().isEqualTo(1)
+        count("allow", "role_permission").assert().isEqualTo(1)
     }
 }

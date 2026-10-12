@@ -22,6 +22,7 @@ import me.ahoo.cosec.apikey.ApiKeyStore
 import me.ahoo.cosec.apikey.ApiKeys
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
+import me.ahoo.cosec.cache.RedisApiKeyStore
 import me.ahoo.cosec.context.DefaultSecurityContextParser
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.policy.EvaluateRequest
@@ -33,6 +34,7 @@ import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
+import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
@@ -117,5 +119,17 @@ internal class CoSecApiKeyAutoConfigurationTest {
                 "cosec.api-key.keys[0].principal-id=svc",
             )
             .run { context -> assertThat(context).hasFailed() }
+    }
+
+    @Test
+    fun redisStore() {
+        contextRunner
+            .withUserConfiguration(DataRedisAutoConfiguration::class.java)
+            .withPropertyValues("cosec.api-key.enabled=true", "cosec.api-key.store=redis")
+            .run { context ->
+                assertThat(context).hasNotFailed()
+                assertThat(context.getBean(ApiKeyStore::class.java)).isInstanceOf(RedisApiKeyStore::class.java)
+                context.environment.securityContextParseScheduler().assert().isSameAs(Schedulers.boundedElastic())
+            }
     }
 }

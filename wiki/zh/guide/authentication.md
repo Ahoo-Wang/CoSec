@@ -82,8 +82,10 @@ cosec:
 携带了 key 的请求只依据 key 判断。未知、已禁用（`enabled: false`）或已过期的 key 会让请求变为匿名，原因为 `Token Invalid`，
 因此被拒绝时返回 `401`。主体会带有属性 `apiKeyId`，指明所用的 key。
 
-要把 key 存在别处（例如数据库），请声明一个按哈希查找 key 的 `ApiKeyStore` bean。如果它会阻塞，请设置
-`cosec.api-key.store-blocking=true`，让安全上下文在事件循环之外解析。轮换 key 时，先添加新 key，让客户端切换过去，再删除旧 key。
+引入 `cache-support` 时，设置 `cosec.api-key.store: redis` 可以把 key 存在 Redis 中，所有实例共享，并可在运行时修改。通过
+`RedisApiKeyStore` bean 发放和吊销 key：`issue(apiKey)` 只返回一次新 key，并且只保存其哈希；`save(hash, apiKey)` 更新某个 key
+（例如设置 `enabled = false`）；`revoke(hash)` 删除它。此时安全上下文在事件循环之外解析，Redis 故障会让请求按出错即拒绝处理。
+要把 key 存在别处，请声明自己的按哈希查找 key 的 `ApiKeyStore` bean；如果它会阻塞，请设置 `cosec.api-key.store-blocking=true`。轮换 key 时，先添加新 key，让客户端切换过去，再删除旧 key。
 
 ## 多租户 {#multi-tenancy}
 

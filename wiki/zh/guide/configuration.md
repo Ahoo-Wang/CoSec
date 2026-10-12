@@ -54,6 +54,8 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 | 属性 | 默认值 | 说明 |
 |---|---|---|
 | `cosec.api-key.header` | `X-API-Key` | 携带 key 的请求头。 |
+| `cosec.api-key.store` | `memory` | `memory`（下面配置的 key）或 `redis`（共享，需要 `cache-support`）。 |
+| `cosec.api-key.key-prefix` | `cosec:api-key` | Redis 存储的键前缀。 |
 | `cosec.api-key.store-blocking` | `false` | 在事件循环之外解析安全上下文，适用于会阻塞的 `ApiKeyStore`。 |
 | `cosec.api-key.keys[n]` | — | 内置存储中的 key：`id`、`hash`（key 的 SHA-256 十六进制）、`principal-id`、`tenant-id`、`roles`、`policies`、`attributes`、`expires-at`、`enabled`。 |
 
