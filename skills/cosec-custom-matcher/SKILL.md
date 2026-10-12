@@ -14,6 +14,7 @@ Add a matcher only after confirming that the built-ins cannot express the rule. 
 - A factory's `type` is the object key used in policy JSON. It must not collide with another factory; later registration replaces the existing entry.
 - Do not change the SPI interfaces to add a matcher. Implement them and register the factory.
 - Keep matching synchronous and side-effect free unless the matcher intentionally enforces a stateful control such as rate limiting.
+- A stateful matcher must skip its side effect when `securityContext.isPolicyEvaluation` (`me.ahoo.cosec.policy`) is `true`: saving a policy validates it by running each condition once, and that run must not spend real quota.
 
 Before editing, inspect the target CoSec version's interfaces and the nearest built-in matcher. In a CoSec checkout, the authoritative files are:
 

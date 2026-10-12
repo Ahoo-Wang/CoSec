@@ -19,6 +19,7 @@ import me.ahoo.cosec.policy.BlockingAware
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.limiter.RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY
 import me.ahoo.cosec.policy.condition.part.PartConditionMatcher
+import me.ahoo.cosec.policy.isPolicyEvaluation
 import org.springframework.data.redis.core.StringRedisTemplate
 
 /**
@@ -54,6 +55,10 @@ class RedisGroupedRateLimiterConditionMatcher(
     )
 
     override fun matchPart(partValue: String, securityContext: SecurityContext): Boolean {
+        // Validating a policy must not spend permits from the live, shared quota.
+        if (securityContext.isPolicyEvaluation) {
+            return true
+        }
         return rateLimiter.tryAcquire(partValue)
     }
 }

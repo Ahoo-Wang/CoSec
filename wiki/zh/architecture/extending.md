@@ -47,6 +47,8 @@ class BusinessHoursConditionMatcher(configuration: Configuration) :
 - **标记会阻塞的匹配器。** 如果条件匹配器必须阻塞（网络或数据库调用），请像 Redis 限流器一样实现
   `me.ahoo.cosec.policy.BlockingAware` 并令 `requiresBlocking = true`。授权会把使用它的层放到 `boundedElastic` 上评估。
   包装其他匹配器的组合匹配器应在任一子匹配器需要阻塞时返回 `true`，`bool` 就是这样做的。
+- **校验时跳过副作用。** 保存策略时会用模拟请求把每个条件执行一次来校验策略。带外部副作用的匹配器（Redis 限流器会从共享配额中消耗许可）
+  必须检查 `securityContext.isPolicyEvaluation`（`me.ahoo.cosec.policy`），为 `true` 时直接返回、不产生副作用。策略数据或请求数据无法伪造这个标记。
 
 ## 授权扩展点 {#authorization-hooks}
 

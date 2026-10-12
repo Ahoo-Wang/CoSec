@@ -16,6 +16,7 @@ import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.condition.limiter.RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY
 import me.ahoo.cosec.policy.condition.limiter.TooManyRequestsException
 import me.ahoo.cosec.policy.condition.part.CONDITION_MATCHER_PART_KEY
@@ -71,12 +72,12 @@ class RedisGroupedRateLimiterConditionMatcherTest {
         val requestB: Request = mockk {
             every { remoteIp } returns "ip-b"
         }
-        conditionMatcher.match(requestA, mockk()).assert().isTrue()
+        conditionMatcher.match(requestA, SimpleSecurityContext.anonymous()).assert().isTrue()
         assertThrows(TooManyRequestsException::class.java) {
-            conditionMatcher.match(requestA, mockk())
+            conditionMatcher.match(requestA, SimpleSecurityContext.anonymous())
         }
         // Group B has its own independent quota.
-        conditionMatcher.match(requestB, mockk()).assert().isTrue()
+        conditionMatcher.match(requestB, SimpleSecurityContext.anonymous()).assert().isTrue()
     }
 
     companion object {

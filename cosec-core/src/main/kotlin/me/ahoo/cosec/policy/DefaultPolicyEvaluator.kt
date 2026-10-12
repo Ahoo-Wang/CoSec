@@ -27,7 +27,7 @@ object DefaultPolicyEvaluator : PolicyEvaluator {
     private val logger = KotlinLogging.logger { }
     override fun evaluate(policy: Policy) {
         val evaluateRequest = EvaluateRequest()
-        val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
+        val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS).markPolicyEvaluation()
         safeEvaluate {
             policy.condition.match(request = evaluateRequest, securityContext = mockContext)
         }
