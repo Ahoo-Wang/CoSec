@@ -64,6 +64,7 @@ class BusinessHoursConditionMatcher(configuration: Configuration) :
 | `PolicyRepository`, `AppRolePermissionRepository` | Keep policies and role grants somewhere other than Redis. Return `Mono`s and keep blocking I/O off the caller's thread. |
 | `ShadowPolicyProvider`, `ShadowEventSink` | Supply [shadow](../guide/policies.md#trying-changes-in-shadow-mode) candidate policies from somewhere other than files, and send the diffs somewhere other than the log. |
 | `RateLimitRuleProvider` | Load [rate limit rules](../guide/rate-limiting.md#rules) from somewhere other than JSON files. Called on every allowed request: answer from memory. |
+| `CoSecAuthorizationCustomizer` | Wrap the starter's authorization (outside rate limiting, inside auditing and tracing), as the metrics do. |
 | `Authorization` | Wrap or replace the decision. Decorators should implement `DecisionAuthorization` and forward `decide(...)`, so tracing and auditing still see what matched. |
 
 ## Rate limiter backends

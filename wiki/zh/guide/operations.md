@@ -50,6 +50,16 @@
 | `cosec.authorize.policy.id`、`cosec.authorize.statement.index`、`cosec.authorize.statement.name` | 命中的策略语句 |
 | `cosec.authorize.role.id`、`cosec.authorize.permission.id` | 命中的角色权限 |
 
+引入 `micrometer-support` 且存在 `MeterRegistry`（例如来自 Spring Boot Actuator）时，每次决策都会被计时器 `cosec.authorization`
+记录（`cosec.metrics.enabled`，默认开启）。它有两个标签，取值都是固定的小集合，因此时间序列的数量有上限：
+
+| 标签 | 取值 |
+|---|---|
+| `result` | `allow`、`explicit_deny`、`implicit_deny`、`too_many_requests`、`error` |
+| `source` | `global_policy`、`principal_policy`、`role_permission`、`root`、`blacklist`、`none`、`unknown` |
+
+请对 `explicit_deny` 和 `error` 的速率设置告警。它们突然升高通常意味着攻击、策略错误或策略存储不可达。该计时器只统计授权，不包括令牌解析。
+
 `me.ahoo.cosec.authorization.SimpleAuthorization` 还会以 debug 级别记录决策，包括命中的策略语句或角色权限。
 
 ## 部署 {#deployment}

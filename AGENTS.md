@@ -40,7 +40,7 @@ adapters or caching. The parts that take several files to see:
 - **Request path.** Adapter (WebFlux / WebMvc / Gateway) → `SecurityPipeline` (parse request, resolve
   principal from token, authorize, map to status) → `SecurityDecision` → adapter writes it. Adapters translate;
   they never decide.
-- **Authorization** is a decorator chain (tracing → auditing → rate limiting → shadow → `SimpleAuthorization`) over
+- **Authorization** is a decorator chain (tracing → auditing → metrics → rate limiting → shadow → `SimpleAuthorization`) over
   `DecisionAuthorization`, so the matched `VerifyContext` travels as a value. `SimpleAuthorization`: root →
   blacklist → global policies → principal policies → app/space role permissions. Each layer checks every deny
   before any allow; an explicit deny in any layer ends evaluation; no match = `IMPLICIT_DENY`.

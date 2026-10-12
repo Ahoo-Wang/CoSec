@@ -17,6 +17,7 @@
 | `cosec.inject.enabled` | `false` | 信任上游已校验过的令牌（见[认证](./authentication.md#behind-a-gateway)） |
 | `cosec.audit.enabled` | `true` | 为每次决策产生审计事件 |
 | `cosec.shadow.enabled` | `false` | [候选策略的影子评估](./policies.md#trying-changes-in-shadow-mode) |
+| `cosec.metrics.enabled` | `true` | [`cosec.authorization` 计时器](./operations.md#observability)（需要 `micrometer-support` 和 `MeterRegistry`） |
 | `cosec.explain.enabled` | `false` | [解释决策](./troubleshooting.md#explain-a-decision)以及 `cosecExplain` Actuator 端点 |
 | `cosec.audit.kafka.enabled` | `true` | 把审计事件发送到 Kafka（需要 `kafka-support` 和一个 `KafkaTemplate` bean） |
 | `cosec.limiter.enabled` | `true` | [限流规则](./rate-limiting.md) |

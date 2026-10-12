@@ -141,7 +141,8 @@ class CoSecAuthorizationAutoConfiguration {
         rateLimiter: ObjectProvider<RateLimiter>,
         shadow: ObjectProvider<ShadowProperties>,
         shadowPolicyProvider: ObjectProvider<ShadowPolicyProvider>,
-        shadowEventSink: ObjectProvider<ShadowEventSink>
+        shadowEventSink: ObjectProvider<ShadowEventSink>,
+        customizers: ObjectProvider<CoSecAuthorizationCustomizer>
     ): Authorization {
         val simpleAuthorization = SimpleAuthorization(
             policyRepository = policyRepository,
@@ -168,9 +169,16 @@ class CoSecAuthorizationAutoConfiguration {
             simpleAuthorization
         }
         // Rate limiting sits inside auditing and tracing, which wrap this bean, so 429s are audited and traced.
-        val ruleProvider = rateLimitRuleProvider.ifAvailable ?: return authorization
-        val limiter = rateLimiter.ifAvailable ?: return authorization
-        return RateLimitingAuthorization(authorization, ruleProvider, limiter)
+        val ruleProvider = rateLimitRuleProvider.ifAvailable
+        val limiter = rateLimiter.ifAvailable
+        val limited: Authorization = if (ruleProvider != null && limiter != null) {
+            RateLimitingAuthorization(authorization, ruleProvider, limiter)
+        } else {
+            authorization
+        }
+        return customizers.orderedStream().toList().fold(
+            limited
+        ) { current, customizer -> customizer.customize(current) }
     }
 
     @Configuration

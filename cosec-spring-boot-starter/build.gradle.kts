@@ -43,6 +43,10 @@ java {
         usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
         capability(group.toString(), "opentelemetry-support", version.toString())
     }
+    registerFeature("micrometerSupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "micrometer-support", version.toString())
+    }
     registerFeature("openapiSupport") {
         usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
         capability(group.toString(), "openapi-support", version.toString())
@@ -65,6 +69,8 @@ dependencies {
     "cacheSupportImplementation"("me.ahoo.cocache:cocache-spring-boot-starter")
     "opentelemetrySupportImplementation"(project(":cosec-opentelemetry"))
     "ip2regionSupportImplementation"(project(":cosec-ip2region"))
+    "micrometerSupportImplementation"(project(":cosec-micrometer"))
+    "micrometerSupportImplementation"("io.micrometer:micrometer-core")
     "openapiSupportImplementation"(project(":cosec-openapi"))
     "openapiSupportImplementation"("org.springframework.boot:spring-boot-starter-actuator")
     "openapiSupportImplementation"("org.springdoc:springdoc-openapi-starter-common")

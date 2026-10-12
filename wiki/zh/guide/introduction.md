@@ -59,6 +59,7 @@ Web 集成把决策转换为响应：匿名调用方返回 `401`，已认证调�
 | `cosec-cocache` | `cache-support` | 基于 Redis 存储策略、权限和已吊销令牌，并带本地缓存（[CoCache](https://github.com/Ahoo-Wang/CoCache)）；全集群的限流计数器。 |
 | `cosec-social` | `oauth-support` | 通过 [JustAuth](https://github.com/justauth/JustAuth) 实现 OAuth 社交登录。 |
 | `cosec-opentelemetry` | `opentelemetry-support` | 为每次决策生成一个链路追踪 span。 |
+| `cosec-micrometer` | `micrometer-support` | 按结果和来源统计的 `cosec.authorization` 计时器。 |
 | `cosec-openapi` | `openapi-support` | 根据 OpenAPI 描述生成策略；在 OpenAPI 文档中声明 Bearer 认证。 |
 | `cosec-ip2region` | `ip2region-support` | 把 IP 地理位置作为请求属性。 |
 | `cosec-kafka` | `kafka-support` | 把审计事件发送到 Kafka。 |

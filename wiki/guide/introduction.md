@@ -63,6 +63,7 @@ third-party dependencies.
 | `cosec-cocache` | `cache-support` | Redis-backed policies, permissions and revoked tokens with a local cache ([CoCache](https://github.com/Ahoo-Wang/CoCache)); cluster-wide rate limit counters. |
 | `cosec-social` | `oauth-support` | OAuth social login via [JustAuth](https://github.com/justauth/JustAuth). |
 | `cosec-opentelemetry` | `opentelemetry-support` | A tracing span per decision. |
+| `cosec-micrometer` | `micrometer-support` | A `cosec.authorization` timer by result and source. |
 | `cosec-openapi` | `openapi-support` | Policy generation from your OpenAPI description; bearer auth in the OpenAPI document. |
 | `cosec-ip2region` | `ip2region-support` | IP geolocation as a request attribute. |
 | `cosec-kafka` | `kafka-support` | Audit events to Kafka. |

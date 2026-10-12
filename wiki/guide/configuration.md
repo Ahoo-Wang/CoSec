@@ -18,6 +18,7 @@ a property can only enable a feature whose module is on the classpath.
 | `cosec.inject.enabled` | `false` | trusting a token already verified upstream (see [Authentication](./authentication.md#behind-a-gateway)) |
 | `cosec.audit.enabled` | `true` | audit events for every decision |
 | `cosec.shadow.enabled` | `false` | [shadow evaluation of candidate policies](./policies.md#trying-changes-in-shadow-mode) |
+| `cosec.metrics.enabled` | `true` | the [`cosec.authorization` timer](./operations.md#observability) (`micrometer-support` and a `MeterRegistry`) |
 | `cosec.explain.enabled` | `false` | [explaining decisions](./troubleshooting.md#explain-a-decision) and the `cosecExplain` Actuator endpoint |
 | `cosec.audit.kafka.enabled` | `true` | sending audit events to Kafka (`kafka-support` and a `KafkaTemplate` bean) |
 | `cosec.limiter.enabled` | `true` | [rate limit rules](./rate-limiting.md) |
