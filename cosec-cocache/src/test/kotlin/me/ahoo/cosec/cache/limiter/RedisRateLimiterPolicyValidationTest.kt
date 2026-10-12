@@ -14,6 +14,7 @@ package me.ahoo.cosec.cache.limiter
 
 import io.mockk.mockk
 import me.ahoo.cosec.api.configuration.Configuration
+import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.PolicyType
@@ -22,6 +23,10 @@ import me.ahoo.cosec.cache.PolicyCache
 import me.ahoo.cosec.cache.RedisPolicyRepository
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.permission.AppPermissionData
+import me.ahoo.cosec.permission.DefaultAppPermissionEvaluator
+import me.ahoo.cosec.permission.PermissionData
+import me.ahoo.cosec.permission.PermissionGroupData
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.StatementData
@@ -61,6 +66,7 @@ class RedisRateLimiterPolicyValidationTest {
 
         // Random per run: window keys outlive the test, and a shared prefix would hide a leaked permit.
         private val keyPrefix = "test:rl-validation:${UUID.randomUUID()}"
+        private val appPermissionKeyPrefix = "test:rl-validation-app:${UUID.randomUUID()}"
 
         @BeforeAll
         @JvmStatic
@@ -85,7 +91,7 @@ class RedisRateLimiterPolicyValidationTest {
         }
     }
 
-    private fun limiterKeys(): Set<String> = stringRedisTemplate.keys("$keyPrefix:*")
+    private fun limiterKeys(prefix: String = keyPrefix): Set<String> = stringRedisTemplate.keys("$prefix:*")
 
     @Test
     fun setPolicyLeavesRateLimiterCountersUntouched() {
@@ -134,7 +140,8 @@ class RedisRateLimiterPolicyValidationTest {
         limiterKeys().assert().isEmpty()
 
         // Real requests still acquire, and still fail closed once the full quota is spent.
-        val request = EvaluateRequest()
+        // Delegating keeps EvaluateRequest's defaults without being one, which the limiters treat as validation.
+        val request = object : Request by EvaluateRequest() {}
         val context = SimpleSecurityContext.anonymous()
         limiter.match(request, context).assert().isTrue()
         limiterKeys().assert().isNotEmpty()
@@ -145,5 +152,27 @@ class RedisRateLimiterPolicyValidationTest {
         assertThrows(TooManyRequestsException::class.java) {
             groupedLimiter.match(request, context)
         }
+    }
+
+    @Test
+    fun appPermissionValidationLeavesRateLimiterCountersUntouched() {
+        val limiter = RedisRateLimiterConditionMatcherFactory(stringRedisTemplate, appPermissionKeyPrefix).create(
+            mapOf(RATE_LIMITER_CONDITION_MATCHER_PERMITS_PER_SECOND_KEY to TINY_PERMITS_PER_SECOND).asConfiguration(),
+        )
+        val permission = PermissionData(
+            id = "p",
+            name = "p",
+            action = AllActionMatcher.INSTANCE,
+            condition = limiter,
+        )
+        val appPermission = AppPermissionData(
+            id = "app",
+            condition = limiter,
+            groups = listOf(PermissionGroupData("g", permissions = listOf(permission))),
+        )
+
+        DefaultAppPermissionEvaluator.evaluate(appPermission)
+
+        limiterKeys(appPermissionKeyPrefix).assert().isEmpty()
     }
 }

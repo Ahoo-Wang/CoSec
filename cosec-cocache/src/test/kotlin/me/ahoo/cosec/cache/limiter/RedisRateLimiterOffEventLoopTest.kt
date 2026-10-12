@@ -153,7 +153,9 @@ class RedisRateLimiterOffEventLoopTest {
 
     private fun SimpleAuthorization.authorizeOnEventLoop(): Mono<AuthorizeResult> {
         val principal = SimplePrincipal(id = "user", policies = setOf("policy"), roles = setOf("role"))
-        return authorize(EvaluateRequest(), SimpleSecurityContext(principal)).subscribeOn(eventLoop)
+        // Delegating keeps EvaluateRequest's defaults without being one, which the limiters treat as validation.
+        val request = object : Request by EvaluateRequest() {}
+        return authorize(request, SimpleSecurityContext(principal)).subscribeOn(eventLoop)
     }
 
     private fun assertRedisRanOffEventLoop() {

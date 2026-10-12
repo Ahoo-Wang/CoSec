@@ -51,10 +51,10 @@ class BusinessHoursConditionMatcher(configuration: Configuration) :
   `me.ahoo.cosec.policy.BlockingAware` with `requiresBlocking = true`, as the Redis rate limiters do.
   Authorization then evaluates the layers that use it on `boundedElastic`. A composite matcher that wraps
   other matchers should report `true` when any child does, as `bool` does.
-- **Skip side effects during validation.** Saving a policy validates it by running every condition once
-  against a mock request. A matcher with an external side effect (the Redis rate limiters spend a permit
-  from a shared quota) must check `securityContext.isPolicyEvaluation` (`me.ahoo.cosec.policy`) and return
-  without the side effect when it is `true`. The marker can't be forged from policy or request data.
+- **Skip side effects during validation.** Saving a policy or an app permission validates it by running
+  every condition once against a `me.ahoo.cosec.policy.EvaluateRequest`. A matcher with an external side
+  effect (the Redis rate limiters spend a permit from a shared quota) must return without the side effect
+  when `request is EvaluateRequest`.
 
 ## Authorization hooks
 
