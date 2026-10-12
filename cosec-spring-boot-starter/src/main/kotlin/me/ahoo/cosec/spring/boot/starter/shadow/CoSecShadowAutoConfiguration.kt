@@ -39,7 +39,7 @@ class CoSecShadowAutoConfiguration(private val shadowProperties: ShadowPropertie
     @Bean
     @ConditionalOnMissingBean
     fun shadowPolicyProvider(): ShadowPolicyProvider {
-        return LocalShadowPolicyProvider(shadowProperties.locations)
+        return LocalShadowPolicyProvider(shadowProperties.locations, shadowProperties.appPermissionLocations)
     }
 
     @Bean

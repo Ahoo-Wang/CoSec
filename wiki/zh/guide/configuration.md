@@ -97,6 +97,7 @@ Redis 出错，请求会被拒绝。详见[运维](./operations.md#redis-and-cac
 | 属性 | 默认值 | 说明 |
 |---|---|---|
 | `cosec.shadow.locations` | `classpath:cosec-shadow/*-policy.json` | 候选策略文件的资源路径模式，每个文件一条策略。 |
+| `cosec.shadow.app-permission-locations` | `classpath:cosec-shadow/*-app-permission.json` | 候选应用权限文件的资源路径模式，每个文件一份。 |
 | `cosec.shadow.sample-rate` | `1.0` | 用候选策略评估的请求比例，取值 `0` 到 `1`。每个被采样的请求都要多评估一次。 |
 | `cosec.shadow.report-rule-changes` | `false` | 结果相同但做出决定的规则不同时也上报。 |
 
