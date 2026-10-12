@@ -1,0 +1,9 @@
+{
+  "id": "orders",
+  "name": "Orders v2",
+  "type": "global",
+  "tenantId": "(platform)",
+  "statements": [
+    { "name": "ReadOrders", "action": { "path": { "pattern": "/orders/**", "method": "GET" } } }
+  ]
+}

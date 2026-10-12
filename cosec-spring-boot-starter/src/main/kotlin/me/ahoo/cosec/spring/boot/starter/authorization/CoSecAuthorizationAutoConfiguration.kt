@@ -28,10 +28,15 @@ import me.ahoo.cosec.limiter.RateLimitingAuthorization
 import me.ahoo.cosec.policy.LocalPolicyInitializer
 import me.ahoo.cosec.policy.LocalPolicyLoader
 import me.ahoo.cosec.servlet.AuthorizationFilter
+import me.ahoo.cosec.shadow.LoggingShadowEventSink
+import me.ahoo.cosec.shadow.ShadowAuthorization
+import me.ahoo.cosec.shadow.ShadowEventSink
+import me.ahoo.cosec.shadow.ShadowPolicyProvider
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.REACTIVE_REQUEST_PARSER_BEAN_NAME
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.SERVLET_REQUEST_PARSER_BEAN_NAME
 import me.ahoo.cosec.spring.boot.starter.policy.LocalPolicyInitializerLifecycle
+import me.ahoo.cosec.spring.boot.starter.shadow.ShadowProperties
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosec.webflux.ReactiveAuthorizationFilter
 import org.springframework.beans.factory.ObjectProvider
@@ -133,14 +138,35 @@ class CoSecAuthorizationAutoConfiguration {
         blacklistChecker: BlacklistChecker,
         rootPrincipalMatcher: RootPrincipalMatcher,
         rateLimitRuleProvider: ObjectProvider<RateLimitRuleProvider>,
-        rateLimiter: ObjectProvider<RateLimiter>
+        rateLimiter: ObjectProvider<RateLimiter>,
+        shadow: ObjectProvider<ShadowProperties>,
+        shadowPolicyProvider: ObjectProvider<ShadowPolicyProvider>,
+        shadowEventSink: ObjectProvider<ShadowEventSink>
     ): Authorization {
-        val authorization = SimpleAuthorization(
+        val simpleAuthorization = SimpleAuthorization(
             policyRepository = policyRepository,
             appRolePermissionRepository = appRolePermissionRepository,
             blacklistChecker = blacklistChecker,
             rootPrincipalMatcher = rootPrincipalMatcher,
         )
+        // Shadowing compares pure decisions, so it wraps SimpleAuthorization directly, inside rate limiting.
+        val shadowProperties = shadow.ifAvailable
+        val candidates = shadowPolicyProvider.ifAvailable
+        val authorization = if (shadowProperties != null && candidates != null) {
+            ShadowAuthorization(
+                delegate = simpleAuthorization,
+                policyRepository = policyRepository,
+                appRolePermissionRepository = appRolePermissionRepository,
+                policyProvider = candidates,
+                sink = shadowEventSink.getIfAvailable { LoggingShadowEventSink() },
+                blacklistChecker = blacklistChecker,
+                rootPrincipalMatcher = rootPrincipalMatcher,
+                sampleRate = shadowProperties.sampleRate,
+                reportRuleChanges = shadowProperties.reportRuleChanges,
+            )
+        } else {
+            simpleAuthorization
+        }
         // Rate limiting sits inside auditing and tracing, which wrap this bean, so 429s are audited and traced.
         val ruleProvider = rateLimitRuleProvider.ifAvailable ?: return authorization
         val limiter = rateLimiter.ifAvailable ?: return authorization

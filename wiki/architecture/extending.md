@@ -62,6 +62,7 @@ class BusinessHoursConditionMatcher(configuration: Configuration) :
 | `BlacklistChecker` | Deny requests before any policy is evaluated (`check(request, context): Mono<Boolean>`; `false` = blocked). |
 | `RootPrincipalMatcher` | Decide which principals bypass authorization, for example by a signed claim instead of an id. |
 | `PolicyRepository`, `AppRolePermissionRepository` | Keep policies and role grants somewhere other than Redis. Return `Mono`s and keep blocking I/O off the caller's thread. |
+| `ShadowPolicyProvider`, `ShadowEventSink` | Supply [shadow](../guide/policies.md#trying-changes-in-shadow-mode) candidate policies from somewhere other than files, and send the diffs somewhere other than the log. |
 | `RateLimitRuleProvider` | Load [rate limit rules](../guide/rate-limiting.md#rules) from somewhere other than JSON files. Called on every allowed request: answer from memory. |
 | `Authorization` | Wrap or replace the decision. Decorators should implement `DecisionAuthorization` and forward `decide(...)`, so tracing and auditing still see what matched. |
 

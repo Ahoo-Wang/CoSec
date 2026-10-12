@@ -38,7 +38,7 @@ sequenceDiagram
     autonumber
     participant A as Web adapter<br>(WebFlux / WebMvc / Gateway)
     participant P as SecurityPipeline
-    participant Z as Authorization<br>(Tracing → Auditing → RateLimiting → Simple)
+    participant Z as Authorization<br>(Tracing → Auditing → RateLimiting → Shadow → Simple)
     participant R as Policy / permission<br>repositories
     A->>P: evaluate(exchange or servlet request)
     P->>P: RequestParser: path safety, remote IP, request id, attributes
@@ -123,4 +123,5 @@ come with a JMH comparison.
 
 `RateLimitingAuthorizationBenchmark` measures, on JDK 21, what rate limiting adds on top of an authorization that always
 allows (17 ns): about 20 ns with no rules, 40 ns when no rule matches, and 250 ns for one matching per-IP rule
-counted in memory. A Redis-counted rule adds a Redis round trip.
+counted in memory. A Redis-counted rule adds a Redis round trip. Shadow mode adds one more `SimpleAuthorization`
+evaluation to each sampled request.

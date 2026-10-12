@@ -17,6 +17,7 @@ a property can only enable a feature whose module is on the classpath.
 | `cosec.jwt.enabled` | `true` | JWT issuing and verification |
 | `cosec.inject.enabled` | `false` | trusting a token already verified upstream (see [Authentication](./authentication.md#behind-a-gateway)) |
 | `cosec.audit.enabled` | `true` | audit events for every decision |
+| `cosec.shadow.enabled` | `false` | [shadow evaluation of candidate policies](./policies.md#trying-changes-in-shadow-mode) |
 | `cosec.explain.enabled` | `false` | [explaining decisions](./troubleshooting.md#explain-a-decision) and the `cosecExplain` Actuator endpoint |
 | `cosec.audit.kafka.enabled` | `true` | sending audit events to Kafka (`kafka-support` and a `KafkaTemplate` bean) |
 | `cosec.limiter.enabled` | `true` | [rate limit rules](./rate-limiting.md) |
@@ -79,6 +80,14 @@ See [Operations](./operations.md#redis-and-caching).
 |---|---|---|
 | `cosec.limiter.locations` | `classpath:cosec-rate-limit/*-rate-limit.json` | Resource patterns of the [rate limit rule](./rate-limiting.md#rules) files. |
 | `cosec.limiter.key-prefix` | `cosec:rate-limiter` | Redis key prefix of the counters, when Redis counts (`cache-support`). |
+
+## Shadow mode
+
+| Property | Default | Description |
+|---|---|---|
+| `cosec.shadow.locations` | `classpath:cosec-shadow/*-policy.json` | Resource patterns of the candidate policy files, one policy per file. |
+| `cosec.shadow.sample-rate` | `1.0` | Share of requests evaluated against the candidates, from `0` to `1`. Each costs a second evaluation. |
+| `cosec.shadow.report-rule-changes` | `false` | Also report requests with the same result but a different deciding rule. |
 
 ## Audit
 

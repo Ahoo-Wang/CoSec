@@ -25,15 +25,9 @@ import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.RequestMatcher
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
-import me.ahoo.cosec.authorization.BlacklistVerifyContext
 import me.ahoo.cosec.authorization.PolicyRepository
-import me.ahoo.cosec.authorization.PolicyVerifyContext
-import me.ahoo.cosec.authorization.PolicyVerifySource
-import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
-import me.ahoo.cosec.authorization.RootVerifyContext
 import me.ahoo.cosec.authorization.SimpleAuthorization
-import me.ahoo.cosec.authorization.VerifyContext
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
@@ -121,31 +115,6 @@ class AuthorizationExplainer(
             rateLimitRules = rateLimitRules,
             warnings = warnings,
         )
-    }
-
-    private fun VerifyContext.toDecisionRef(): DecisionRef? = when (this) {
-        is PolicyVerifyContext -> DecisionRef(
-            layer = source.toLayer(),
-            policyId = policy.id,
-            statementIndex = statementIndex,
-            statementName = statement.name,
-        )
-
-        is RoleVerifyContext -> DecisionRef(
-            layer = ExplainLayer.ROLE_PERMISSION,
-            roleId = roleId,
-            permissionId = permission.id,
-            statementName = permission.name,
-        )
-
-        RootVerifyContext -> DecisionRef(ExplainLayer.ROOT)
-        BlacklistVerifyContext -> DecisionRef(ExplainLayer.BLACKLIST)
-        else -> null
-    }
-
-    private fun PolicyVerifySource.toLayer(): ExplainLayer = when (this) {
-        PolicyVerifySource.GLOBAL -> ExplainLayer.GLOBAL_POLICY
-        PolicyVerifySource.PRINCIPAL -> ExplainLayer.PRINCIPAL_POLICY
     }
 
     private data class Trace(

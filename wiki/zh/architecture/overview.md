@@ -34,7 +34,7 @@ sequenceDiagram
     autonumber
     participant A as Web 适配器<br>(WebFlux / WebMvc / Gateway)
     participant P as SecurityPipeline
-    participant Z as Authorization<br>(Tracing → Auditing → RateLimiting → Simple)
+    participant Z as Authorization<br>(Tracing → Auditing → RateLimiting → Shadow → Simple)
     participant R as 策略 / 权限<br>仓储
     A->>P: evaluate(exchange 或 servlet 请求)
     P->>P: RequestParser：路径安全、客户端 IP、请求 id、属性
@@ -111,4 +111,4 @@ sequenceDiagram
 任何性能改动都应附上 JMH 对比。
 
 `RateLimitingAuthorizationBenchmark` 在 JDK 21 上测量限流在一个总是放行的授权（17 ns）之上增加的开销：没有规则约 20 ns，
-没有规则匹配约 40 ns，命中一条在内存中计数的按 IP 规则约 250 ns。由 Redis 计数的规则还会增加一次 Redis 往返。
+没有规则匹配约 40 ns，命中一条在内存中计数的按 IP 规则约 250 ns。由 Redis 计数的规则还会增加一次 Redis 往返。影子模式会让每个被采样的请求多一次 `SimpleAuthorization` 评估。

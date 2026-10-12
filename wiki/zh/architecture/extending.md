@@ -57,6 +57,7 @@ class BusinessHoursConditionMatcher(configuration: Configuration) :
 | `BlacklistChecker` | 在求值任何策略之前拒绝请求（`check(request, context): Mono<Boolean>`；`false` 表示拦截）。 |
 | `RootPrincipalMatcher` | 决定哪些主体绕过授权，例如依据签名声明而不是 id。 |
 | `PolicyRepository`、`AppRolePermissionRepository` | 把策略和角色授权存放在 Redis 之外。返回 `Mono`，阻塞 I/O 不要放在调用方线程上。 |
+| `ShadowPolicyProvider`、`ShadowEventSink` | 从文件以外的地方提供[影子模式](../guide/policies.md#trying-changes-in-shadow-mode)的候选策略，并把差异发送到日志以外的地方。 |
 | `RateLimitRuleProvider` | 从 JSON 文件以外的地方加载[限流规则](../guide/rate-limiting.md#rules)。每个被放行的请求都会调用它：请从内存中返回。 |
 | `Authorization` | 包装或替换决策。装饰器应实现 `DecisionAuthorization` 并转发 `decide(...)`，这样链路追踪和审计仍能看到命中的规则。 |
 
