@@ -142,6 +142,7 @@ All `and` entries must match. If `or` is present, at least one entry must match.
 - `request.appId`, `request.spaceId`, `request.deviceId`
 - `request.header.{name}`, `request.attributes.{key}`, `request.path.var.{name}`
 - `context.tenantId`, `context.principal.id`, `context.principal.attributes.{key}`
+- `resource.{key}`: attributes of the target object, passed by `AuthorizationChecker` checks in code (`CheckRequest(resource = ...)`) and empty in the request filter. Write object-level rules as denies guarded by a non-empty check (`eq` with `value: ""` and `negate: true`), e.g. deny unless `resource.ownerId` equals `#{principal.id}`; an allow that needs a resource part would block the route in the filter.
 
 Use singular `request.header`, and use `request.path.var.id` only after the action matcher captures `{id}`. A part absent from the request reads as an empty string; an unsupported part name throws during evaluation (HTTP 500), not at load time. Never base a deny on a header the client can omit or forge.
 

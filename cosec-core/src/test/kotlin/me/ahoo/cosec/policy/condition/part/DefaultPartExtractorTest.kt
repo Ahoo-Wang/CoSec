@@ -177,4 +177,11 @@ class DefaultPartExtractorTest {
             DefaultPartExtractor("wrongPart").extract(mockk(), mockk())
         }
     }
+
+    @Test
+    fun extractResource() {
+        val request: Request = EvaluateRequest(attributes = mapOf("resource.ownerId" to "alice"))
+        DefaultPartExtractor("resource.ownerId").extract(request, mockk()).assert().isEqualTo("alice")
+        DefaultPartExtractor("resource.status").extract(request, mockk()).assert().isEmpty()
+    }
 }

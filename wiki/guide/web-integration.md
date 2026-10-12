@@ -77,8 +77,8 @@ running authorization.
 
 To ask whether the current principal may do something, without making the request, for example to decide
 which buttons a page shows or to guard a message consumer, inject the `AuthorizationChecker` bean. A check is
-described like the request it stands for: a path and method, and optionally an app, space, headers and
-attributes. When you leave out the app and space, the check uses those of the current request; it also keeps
+described like the request it stands for: a path and method, and optionally an app, space, headers,
+attributes, and the `resource` it targets (see [Object-level rules](./policies.md#object-level-rules)). When you leave out the app and space, the check uses those of the current request; it also keeps
 the current client IP.
 
 ```kotlin
