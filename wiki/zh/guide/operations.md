@@ -62,6 +62,35 @@
 
 `me.ahoo.cosec.authorization.SimpleAuthorization` 还会以 debug 级别记录决策，包括命中的策略语句或角色权限。
 
+## 访问复核 {#access-reviews}
+
+审计关心两个问题：*谁能做这件事？*以及*这个人能做什么？*`AccessAnalyzer` 根据你的策略文件、应用权限和角色授权回答这两个问题，
+通常放在测试或一个小的报表任务中运行：
+
+```kotlin
+val analyzer = AccessAnalyzer.load(
+    policyLocations = listOf("classpath:cosec-policy/*-policy.json"),
+    appPermissionLocations = listOf("classpath:cosec-policy/*-app-permission.json"),
+    roles = mapOf("shop" to mapOf("admin" to setOf("*"), "clerk" to setOf("order.read"))),
+)
+
+val paths = analyzer.whoCan(EvaluateRequest(path = "/orders/42", method = "DELETE",
+    headers = mapOf(AppIdCapable.APP_ID_KEY to "shop")))
+paths.allows   // 可能放行它的每一条规则：全局策略、按 id 授予的策略、角色及其权限
+paths.denies   // 可能拒绝它的每一条规则
+
+val grants = analyzer.grantsOf(SimplePrincipal("alice", policies = setOf("ops"), roles = setOf("clerk")))
+```
+
+每条规则都指明来源（`GLOBAL_POLICY` 适用于所有人，`PRINCIPAL_POLICY` 适用于列出该策略的主体，`ROLE_PERMISSION`
+适用于该应用中拥有该角色的成员）、对应的语句或权限、它的动作和条件，以及两个标记：
+
+- `conditional`：还必须满足某个条件，因此该规则只适用于部分调用方或请求。
+- `templated`：动作依赖调用者，例如 `/users/#{principal.id}/**`。每个模板都会被放宽为一个路径段，只要某个调用者可能匹配，就会列出该规则。
+
+仓储无法列出全部策略和角色，因此分析基于你提供的数据。它只匹配动作，条件只报告不求值；拿不准时宁可列出规则也不遗漏。
+要检查某个具体的主体和请求，请[解释这次决策](./troubleshooting.md#explain-a-decision)。
+
 ## 部署 {#deployment}
 
 `cosec-gateway-server` 是开箱即用的 Spring Cloud Gateway，带有 CoSec 授权、基于 Redis 的策略和本地策略初始化。

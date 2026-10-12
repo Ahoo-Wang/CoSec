@@ -76,6 +76,38 @@ unreachable policy store. The timer measures authorization only, not token parsi
 Decisions are also logged at debug level by `me.ahoo.cosec.authorization.SimpleAuthorization`, including the
 matched policy statement or role permission.
 
+## Access reviews
+
+Audits ask two questions: *who can do this?* and *what can this person do?* `AccessAnalyzer` answers both from your
+policy files, app permissions and role grants, typically in a test or a small reporting job:
+
+```kotlin
+val analyzer = AccessAnalyzer.load(
+    policyLocations = listOf("classpath:cosec-policy/*-policy.json"),
+    appPermissionLocations = listOf("classpath:cosec-policy/*-app-permission.json"),
+    roles = mapOf("shop" to mapOf("admin" to setOf("*"), "clerk" to setOf("order.read"))),
+)
+
+val paths = analyzer.whoCan(EvaluateRequest(path = "/orders/42", method = "DELETE",
+    headers = mapOf(AppIdCapable.APP_ID_KEY to "shop")))
+paths.allows   // every rule that could allow it: global policies, policies by id, roles and permissions
+paths.denies   // every deny that could stop it
+
+val grants = analyzer.grantsOf(SimplePrincipal("alice", policies = setOf("ops"), roles = setOf("clerk")))
+```
+
+Each rule names its source (`GLOBAL_POLICY` applies to everyone, `PRINCIPAL_POLICY` to principals listing the
+policy, `ROLE_PERMISSION` to members of the role in that app), the statement or permission, its action and
+condition, and two flags:
+
+- `conditional`: a condition must also match, so the rule applies only to some callers or requests.
+- `templated`: the action depends on the caller, for example `/users/#{principal.id}/**`. Each template is
+  widened to one path segment, so the rule is listed whenever some caller could match it.
+
+Repositories cannot list every policy or role, so the analysis works on the data you give it. It matches actions
+only and reports conditions without evaluating them, and when in doubt it lists a rule rather than leaving it out.
+To check one concrete principal and request, [explain the decision](./troubleshooting.md#explain-a-decision).
+
 ## Deployment
 
 `cosec-gateway-server` is a ready-to-run Spring Cloud Gateway with CoSec authorization, Redis-backed
