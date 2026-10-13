@@ -83,6 +83,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | Architecture, invariants, performance numbers | `wiki/architecture/overview.md` |
 | Extension points | `wiki/architecture/extending.md`, `skills/cosec-custom-matcher` |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
+| Breaking change (public API, `cosec.*` property, authorization semantics) | `wiki/guide/upgrading.md`: what breaks and how to migrate |
 
 Docs: link to files, never line numbers; verify claims against code, not other docs. Mermaid labels use
 `<br>` (not `<br/>`); sequence diagrams use `autonumber`.
