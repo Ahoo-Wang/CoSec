@@ -6,7 +6,7 @@ allowBuilds:
 overrides:
   vite: ^6.4.4
   mermaid: ^11.17.2
-  vue: ^3.5.43
-  '@vue/server-renderer': ^3.5.43
+  vue: ^3.5.44
+  '@vue/server-renderer': ^3.5.44
   katex: ^0.18.2
   source-map-js: ^1.2.2
