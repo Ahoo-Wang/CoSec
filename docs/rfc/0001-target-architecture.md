@@ -1,6 +1,6 @@
 # RFC 0001：CoSec 目标架构（不考虑兼容性的重构设计）
 
-> 状态：草案 · 基线：`main` @ 6.1.0（`153e2b0c`）· 范围：全部模块
+> 状态：草案（第 2 版：已按自审结论修订）· 基线：`main` @ 6.1.0（`153e2b0c`）· 范围：全部模块
 
 ## 0. 结论先行
 
@@ -19,10 +19,10 @@ decide(Subject, Action, Resource, Environment, PolicySnapshot) -> Decision
 
 1. **把决策引擎变成纯函数**：同步、无 I/O、无共享可变状态、输入不可变、输出带可选 trace。
 2. **把策略从"解释执行"改为"编译执行"**：JSON → AST → 编译、索引后的不可变 `PolicySnapshot`。
-3. **把数据访问从"每请求查缓存"改为"快照推送"**：热路径上不再有 Reactor、调度器切换或 `BlockingAware`。
+3. **把策略数据从"每请求查缓存"改为"快照推送"**：只有低基数数据进快照；成员关系、黑名单这类高基数数据在评估前预取（P11）。热路径上不再有 Reactor、调度器切换或 `BlockingAware`。
 4. **统一策略模型**：RBAC 的角色权限只是"绑定到角色的策略"，不再是独立的评估层。
 5. **显式化信任边界**：`appId`/`spaceId` 不再直接取自客户端 Header，必须经过成员关系校验。
-6. **分离控制面与数据面**：策略写入、修订、校验、仿真属于控制面；数据面只读快照。
+6. **分离控制面与数据面**：策略写入、修订、校验、仿真属于控制面；数据面只读快照。控制面自身的写操作也要授权，并且不能越权授权（P12）。
 
 ---
 
@@ -82,6 +82,8 @@ decide(Subject, Action, Resource, Environment, PolicySnapshot) -> Decision
 | **P8 判断与执行分离** | 授权只给 Permit/Deny + 义务（obligations）；限流、审计等是 Pipeline 阶段或监听器 | 装饰器链 |
 | **P9 控制面 / 数据面分离** | 写、修订、校验、仿真在控制面；数据面只订阅快照 | `setPolicy` 在读 SPI 中 |
 | **P10 受限表达式** | 一种非图灵完备、可静态类型检查、成本有界的表达式语言（CEL） | D6 |
+| **P11 数据按基数分层** | 低基数、变化慢的数据（策略、角色定义、限流规则）进快照；高基数、变化快的数据（主体的角色和成员关系、黑名单）不进快照，在评估前预取 | 快照无法容纳用户级数据 |
+| **P12 控制面同样受授权** | 写策略、写绑定本身就是需要授权的操作，并且不能授出超过授权者自身的权限 | 控制面是权限最高的入口 |
 
 ---
 
@@ -107,7 +109,7 @@ flowchart LR
         ADP[适配器<br>WebFlux / Servlet / Gateway] --> PIPE[Pipeline]
         PIPE --> AUTHN[Authenticator]
         PIPE --> SCOPE[ScopeResolver]
-        PIPE --> PIP[AttributeProviders]
+        PIPE --> PIP[Membership / Attribute<br>Providers]
         PIPE --> ENG[Engine.evaluate<br>纯函数]
         HOLDER --> ENG
         PIPE --> OBL[Obligations<br>限流等]
@@ -136,7 +138,7 @@ data class Subject(
     val tenant: TenantId,
     val authenticated: Boolean,
     val attributes: Map<String, Value>,
-    // 不再在 token 里携带 roles/policies 原始字符串；由快照中的 Binding 决定
+    val memberships: Memberships,  // 按作用域区分的角色与空间成员关系，来源见下文"数据分层"
 )
 
 sealed interface Decision {
@@ -157,8 +159,25 @@ sealed interface Decision {
 "全局策略"就是绑定到 `*` 的策略；"角色权限"就是绑定到角色、作用域为 `(tenant, app, space)` 的策略。
 D3 在模型层面消失：一个绑定不写 `app` 就不会匹配到别的应用。
 
-**root** 不再是魔法 id，而是一条显式的 break-glass `Binding`（只能由控制面创建，强制审计，可以设置过期时间）；
-黑名单是绑定到 `*` 的 DENY 策略，root 同样受它约束，除非显式豁免。
+**数据分层（P11）**：`Binding` 描述的是"角色 → 策略"，属于低基数数据，放进快照。"主体 → 角色 / 空间"属于
+**成员关系**，是用户级的高基数数据，**不进快照**，有两个来源可选，由部署方决定：
+
+| 来源 | 适用场景 | 撤销延迟 |
+|---|---|---|
+| 签名 token 中按作用域写的声明（如 `roles: {"blog/team-a": ["editor"]}`） | 成员关系变化少，追求零 I/O | 最长等到 token 过期，因此 token 寿命要短 |
+| `MembershipProvider`（带缓存，评估前预取） | 成员关系变化频繁，或需要即时撤销 | 等于缓存 TTL，变更事件到达时立即失效 |
+
+撤销延迟的上限是部署时的显式配置项，必须写进运维文档，不能是实现细节。
+
+**平台层与租户层**：跨所有租户生效的策略（平台黑名单规则、平台边界策略）属于**平台快照**。加载租户快照时，
+把平台层一起合并、编译成一份 `PolicySnapshot`，版本号是 `(platformVersion, tenantVersion)` 这一对。
+平台层更新会触发所有已加载租户的重新编译，这样一次评估始终只读一份快照（P7）。
+
+**root** 不再是魔法 id，而是一条显式的 break-glass `Binding`（只能由控制面创建，强制审计，可以设置过期时间）。
+
+**黑名单**拆成两部分：判断规则（"已拉黑就拒绝"）是平台层的一条 DENY 策略，留在快照里；名单本身（IP、设备、主体）
+变化频繁、条目多，放在专门的快速集合里，由 `AttributeProvider` 以 `environment.blocked` 之类的属性提供。封禁一个 IP
+不需要重新编译快照。root 同样受这条 DENY 约束，除非显式豁免。
 
 ### 3.3 引擎（`cosec-engine`，同步、纯函数）
 
@@ -166,7 +185,7 @@ D3 在模型层面消失：一个绑定不写 `app` 就不会匹配到别的应�
 interface Engine {
     fun evaluate(request: AuthzRequest, snapshot: PolicySnapshot, trace: TraceLevel = TraceLevel.OFF): Evaluation
 }
-data class Evaluation(val decision: Decision, val trace: Trace?)   // trace 关闭时为 null，零额外分配
+data class Evaluation(val decision: Decision, val trace: Trace?)   // trace 关闭时为 null，不产生 trace 相关的分配
 ```
 
 **编译**：`PolicyDocument (JSON) → AST → 类型检查 → CompiledPolicy`。
@@ -177,17 +196,38 @@ data class Evaluation(val decision: Decision, val trace: Trace?)   // trace 关�
   直接作为 CEL 函数提供，不再各自写一个 `ConditionMatcherFactory`。
 - 引用完整性在编译期检查：`Binding` 指向不存在的策略，编译就失败，快照不会发布（D2 在发布前被拦住；
   运行时仍然缺失则返回 `Indeterminate`）。
+- **索引不得漏掉任何语句**：索引给出的候选集必须包含暴力匹配会命中的全部语句，否则一条被漏掉的 DENY 就会悄悄
+  破坏 deny-first。运行时才能确定的模式（模板路径）以及无法从动作和资源推出适用性的语句，一律放进"总是候选"桶。
+  这一条由性质测试守护：随机策略集加随机请求，比较索引结果与暴力扫描结果。
 
 **组合算法**（唯一实现）：
 
 ```
 applicable = snapshot.bindingsFor(subject, scope)            // 主体 ∪ 其角色 ∪ "*"，按作用域过滤
 candidates = snapshot.index.lookup(action, resource) ∩ applicable
-for s in candidates where s.effect == DENY:   if match(s) -> return Deny(s)
-                                              if error   -> return Indeterminate
-for s in candidates where s.effect == ALLOW:  if match(s) -> permit = s   // 继续检查？不需要：DENY 已全部检查完
-return permit?.let(::Permit) ?: Deny(null)
+for s in candidates where s.effect == DENY:
+    when match(s):
+        MATCH   -> return Deny(s)
+        ERROR   -> return Indeterminate(MatchError(s))   // 无法确认这条 DENY 不适用
+        NO_MATCH -> continue
+for s in candidates where s.effect == ALLOW:      // 此时所有 DENY 都已确认不适用
+    when match(s):
+        MATCH   -> return withinBoundary(Permit(s)) // 第一条命中的 ALLOW 即可，顺序只影响 trace
+        ERROR   -> continue                       // 记入 trace；按未命中处理，结果只可能更严
+        NO_MATCH -> continue
+return Deny(null)
 ```
+
+`withinBoundary`：租户有平台边界策略时（见 3.7），Permit 还必须同时落在边界之内，否则返回 `Deny(boundary)`；
+边界匹配出错时返回 `Indeterminate`。
+
+DENY 出错必须返回 `Indeterminate`，因为跳过它可能放行；ALLOW 出错按未命中处理就已经 fail closed，没有必要让
+整个请求失败。
+
+**属性缺失**：语句引用的属性没有取到时，按策略声明的 `onMissing` 处理：`indeterminate`（默认，请求返回 503）或
+`nomatch`（只允许用于 ALLOW 语句，或者用于缺失时应当放过的 DENY 语句，例如"命中某名单才拒绝"）。选择 `nomatch`
+意味着依赖故障时这条 DENY 失效，所以控制面在发布这类 DENY 时要求显式确认并记入审计。这样，外部依赖的可用性
+对决策的影响是由策略作者显式决定的，而不是隐含的。
 
 deny-first 不再依赖"层"的顺序和 `thenVerify` 的组合技巧，而是对整个候选集直接成立，`SimpleAuthorizationTest`
 可以改写成性质测试：对任意策略集合，加入一条匹配的 DENY 后，结果绝不会是 Permit。
@@ -195,27 +235,34 @@ deny-first 不再依赖"层"的顺序和 `thenVerify` 的组合技巧，而是�
 **匹配不写状态**：`match(statement, request) : MatchResult`，路径变量作为 `bindings` 返回并只在该语句的条件里可见（D1 消失）。
 
 **trace 即解释**：`TraceLevel.FULL` 时记录每个候选语句的匹配结果。`AuthorizationExplainer`、
-`ExplainerConsistencyTest` 和 `Policy.verify` 默认方法全部删除。
+`ExplainerConsistencyTest` 和 `Policy.verify` 默认方法全部删除。解释一次历史决策时，必须针对该决策记录的快照版本
+重新评估（见 3.6），否则解释的是另一份策略。
 
 ### 3.4 快照与分发
 
 ```kotlin
-class PolicySnapshot(val tenant: TenantId, val version: Long, /* 编译结果、索引、绑定表 */)
+data class SnapshotVersion(val platform: Long, val tenant: Long)
+class PolicySnapshot(val tenant: TenantId, val version: SnapshotVersion, /* 平台层与租户层合并后的编译结果、索引、绑定表、边界策略 */)
 
-interface SnapshotSource {                       // 数据面唯一的存储 SPI
-    fun current(tenant: TenantId): PolicySnapshot?    // 同步、内存读
-    fun updates(): Flow<SnapshotChange>               // 版本变更
+interface SnapshotSource {                              // 数据面唯一的策略存储 SPI
+    suspend fun snapshot(tenant: TenantId): PolicySnapshot   // 已加载时直接返回；未加载时异步加载并编译
+    fun updates(): Flow<SnapshotChange>                      // 版本变更通知
 }
 ```
 
 - 控制面每次发布写入一个新版本（Redis 里存序列化后的完整租户文档 + 版本号，或者 JDBC），
   通过 Redis Pub/Sub / Kafka 广播 `(tenant, version)`。
 - 数据面实例在后台拉取、编译、原子替换引用；编译失败就保留旧版本并告警（不会出现"半个新版本"，D4 消失）。
-- 冷启动未就绪 → `/readiness` 不就绪；运行中某租户快照缺失 → `Indeterminate` → 503。
+- **按需加载**：租户很多时，每个实例只保留活跃租户的快照（LRU）。冷租户的第一个请求在 Pipeline 中异步加载，
+  同一租户的并发加载合并为一次。引擎仍然只接收已经加载好的快照，自身不做 I/O。可以配置一组预热租户，在启动时加载。
+- **通知会丢，所以要对账**：Pub/Sub 最多投递一次。每个实例定期比对已加载快照的版本号与存储中的版本号，落后就重新
+  拉取。暴露快照落后时长的指标；超过配置的最大落后时长后的行为必须显式配置：`alert`（默认，只告警）或
+  `fail-closed`（该租户的请求返回 503）。
+- 启动时预热租户未就绪 → `/readiness` 不就绪；加载失败 → `Indeterminate` → 503。
 - 热路径上不再有 `Mono`、调度器切换、`LocalCacheLookup`、`BlockingAware`。
   `CacheTtlPolicyTest` 要守的不变量（"缓存不能过期丢策略"）也自然成立：快照只会被更新的版本替换。
 
-**规模假设**：单租户策略在万级语句以内时可以全量驻留内存。超大租户可以按应用分片快照，接口不变。
+**规模假设**：快照只包含低基数数据（P11），单租户在万级语句以内时可以全量驻留内存。超大租户可以按应用分片快照，接口不变。
 
 ### 3.5 数据面 Pipeline（`cosec-runtime`，挂起函数，见 3.8）
 
@@ -226,25 +273,34 @@ sequenceDiagram
     participant P as Pipeline
     participant N as Authenticator
     participant S as ScopeResolver
-    participant I as AttributeProviders
+    participant I as Membership / AttributeProviders
     participant E as Engine
     participant O as Obligations
     participant L as Listeners
-    A->>P: HttpFacts（方法、规范化路径、Header、IP）
+    A->>P: HttpFacts（方法、原始路径、Header、IP）
+    P->>P: 路径规范化，有歧义则 400
     P->>N: suspend authenticate(credentials)（JWT / API Key / 吊销检查）
-    P->>S: 声明的 app/space + Subject → Scope（校验成员关系）
-    P->>I: 预取策略声明需要的外部属性（可选，异步，带超时）
+    P->>P: suspend snapshot(subject.tenant)（通常命中内存）
+    P->>I: 预取成员关系（token 声明已带时跳过，带超时）
+    P->>S: 声明的 app/space + Subject.memberships → Scope
+    P->>I: 预取策略声明需要的属性（异步并发，带超时）
     P->>E: evaluate(request, snapshot)（同步）
     P->>O: Permit 时执行义务：限流扣减
     P->>L: DecisionEvent（审计、指标、追踪、影子采样）
     P-->>A: Outcome(status, headers, subject)
 ```
 
+- **路径规范化**只在 Pipeline 中定义一次：解码一次、合并重复斜杠、处理 `.`/`..`、剥离或拒绝 `;` 矩阵参数，并明确
+  大小写与尾斜杠的处理规则。出现二次编码、编码后的 `/` 或 `..` 等无法无歧义解释的路径，一律 400，不去猜测。
+  授权判断用的路径必须与后端路由用的路径一致，否则就是一个绕过漏洞，所以规范化规则也要写进各适配器的文档。
+  三类适配器对同一组恶意路径语料的处理结果必须完全一致（并入 `WebAdapterParityTest`）。
 - **Authenticator** 是挂起函数 `suspend (Credentials) -> AuthnResult`，结果为 `Authenticated | Anonymous | Rejected(reason)`。
   Token 过期属于认证结果，不再塞进 `AuthorizeResult`。
-- **ScopeResolver** 是新增的信任边界：客户端只能*声明*想访问哪个 app/space，必须由成员关系数据（同样来自快照）确认。
+- **ScopeResolver** 是新增的信任边界：客户端只能*声明*想访问哪个 app/space，必须由 `Subject.memberships` 确认
+  （来源见 3.2 的数据分层）。它是内置实现，规则来自快照；`Scope` 只能由它构造，所以不作为 SPI 开放。
+  需要扩展的是成员关系的*来源*（`MembershipProvider`），而不是判断逻辑。
 - **AttributeProvider（PIP）** 取代"阻塞的自定义条件匹配器"：策略编译时就能知道需要哪些外部属性，
-  Pipeline 在评估前一次性取齐；取不到 → `Indeterminate`。引擎永远不做 I/O。
+  Pipeline 在评估前一次性并发取齐；取不到时按语句的 `onMissing` 处理（见 3.3）。引擎永远不做 I/O。
 - **Obligations**：限流是 Permit 附带的义务（来自限流规则，规则本身也是快照的一部分）。
   执行失败时按规则的 `strictFailure` 决定拒绝还是放行——这仍然是唯一被文档化的降级例外。
 - **状态映射**只在 Pipeline 中定义一次：
@@ -256,18 +312,34 @@ sequenceDiagram
 | `Deny` 且匿名 | 401 |
 | `Deny` 且已认证 | 403 |
 | 义务失败：配额耗尽 | 429 |
-| `Indeterminate`（快照未就绪、属性缺失、匹配出错） | 503 / 500 |
+| `Indeterminate`：快照未就绪、依赖不可用、属性缺失（可重试） | 503 |
+| `Indeterminate`：内部错误、DENY 匹配出错 | 500 |
 | `Permit` | 继续 |
 
 ### 3.6 观察：监听器，而不是装饰器
 
 ```kotlin
-fun interface DecisionListener { fun onDecision(event: DecisionEvent) }   // 不能改变决策
+interface DecisionListener {
+    val delivery: Delivery                                  // REQUIRED 或 BEST_EFFORT，见下表
+    suspend fun onDecision(event: DecisionEvent)            // 不能改变决策；REQUIRED 失败只会让请求变成拒绝
+}
 ```
 
 审计（日志 / Kafka）、Micrometer、OpenTelemetry 都只是监听器，各自模块各一个实现。
 **影子评估**也是监听器：采样后用 `candidateSnapshot = base.overlay(candidates)` 再调用一次 `Engine.evaluate`，
 比较两个 `Decision`。候选快照在候选集变化时编译一次，`OverlayPolicyRepository` 等类全部删除。
+
+**`DecisionEvent` 必须包含**：快照版本 `SnapshotVersion(platform, tenant)`、做出决策的 `StatementRef`、
+`Scope`、请求 id。这样才能事后回答"是哪个版本的哪条语句做出的这个决策"，explain 也才能针对同一个版本重新评估。
+
+**投递语义**按监听器分为两类，注册时声明：
+
+| 类别 | 投递方式 | 失败时 | 用于 |
+|---|---|---|---|
+| `REQUIRED` | 同步，写入成功后才放行 | 拒绝请求（`Indeterminate`，503） | 合规要求不能丢失的审计 |
+| `BEST_EFFORT`（默认） | 异步，有界队列 | 丢弃并计数，绝不阻塞或影响决策 | 指标、追踪、普通审计、影子评估 |
+
+影子评估还要满足：采样，在有界队列中异步执行，不占用请求延迟，队列满时直接丢弃。
 
 ### 3.7 控制面（`cosec-control`）
 
@@ -277,14 +349,25 @@ fun interface DecisionListener { fun onDecision(event: DecisionEvent) }   // 不
   它们都调用同一个 `Engine`。
 - `schema/*.schema.json` 由模型代码生成，不再手写（AGENTS.md 里"没有测试检查它"的问题随之消失）。
 
+**控制面自身的授权（P12）**：控制面是权限最高的入口，所以它的每个写操作也要经过 CoSec 授权，即用同一个引擎来保护自己：
+
+- 控制面的动作有自己的命名空间，例如 `cosec:policy:write`、`cosec:binding:create`，资源是 `(tenant, app?, space?)`。
+  "谁能改哪个租户的策略"就是普通的策略和绑定。
+- **不能越权授权**：创建或修改一个绑定时，被授出的动作和资源必须是授权者本人在同一作用域内拥有的权限的子集。
+  这样就不会出现租户管理员把自己绑到更宽的策略上、或者创建 `*` 绑定来提权的情况。这个子集检查在编译期对策略做
+  静态包含判断；判断不了的（例如带条件的语句）一律拒绝，由平台管理员处理。
+- **平台边界**（permission boundary）：平台层可以给每个租户设一条边界策略，租户内的任何 Permit 都必须同时落在边界
+  之内（即 3.3 组合算法中的 `withinBoundary`）。
+- break-glass root 绑定只能由平台管理员创建，必须设置过期时间，创建和每一次使用都写入 `REQUIRED` 类审计。
+
 
 ### 3.8 编程模型：同步引擎 + 协程运行时，Reactor 只留在适配器里
 
 **决定**：引擎同步；`cosec-runtime` 及其全部 SPI 使用 Kotlin 协程（`suspend` + `Flow`）；Reactor 只出现在
 WebFlux / Gateway 适配器中，每个请求在边界桥接一次（`mono { pipeline.evaluate(facts) }`）。不使用虚拟线程作为主模型。
 
-**为什么不用 Reactor 作为通用模型**：Reactor 的价值在于组合非阻塞 I/O 流。在目标架构中，热路径上已经没有 I/O
-（快照在内存里），剩下的是"认证 → 作用域 → 预取属性 → 决策 → 义务"这样的**顺序编排**加少量并发。
+**为什么不用 Reactor 作为通用模型**：Reactor 的价值在于组合非阻塞 I/O 流。在目标架构中，热路径上不再有策略 I/O
+（快照在内存里），剩下的是"认证 → 取快照 → 预取成员关系和属性 → 作用域 → 决策 → 义务"这样的**顺序编排**加少量并发。
 对顺序编排，`flatMap`/`switchIfEmpty`/`onErrorResume` 是负担：错误路径分散，fail-closed 很难靠审查确认
 （`SecurityPipeline` 里那个"同步抛出也要映射成决策"的 `defer` 注释就是例证）。
 
@@ -303,7 +386,8 @@ WebFlux / Gateway 适配器中，每个请求在边界桥接一次（`mono { pip
 运行，遇到 I/O 时挂起，适用的宿主更多。Servlet 宿主可以自行开启虚拟线程（见 3.9），适配器的 `runBlocking` 跑在虚拟线程上，两者并不冲突。
 
 **约束（新增不变量）**：
-- runtime 的 SPI 实现**只能用非阻塞客户端**（Lettuce 协程 API、R2DBC 等）。不再有 `BlockingAware`，也不再有 `Dispatchers.IO` 兜底；
+- 数据面 runtime 的 SPI 实现**只能用非阻塞客户端**（Lettuce 协程 API、R2DBC 等）。不再有 `BlockingAware`，也不再有 `Dispatchers.IO` 兜底
+  （控制面不在请求路径上，允许用 `Dispatchers.IO` 包装 JDBC，见 3.9）；
   用 `BlockHound` 在测试中检测事件循环上的阻塞调用。
 - 引擎不得依赖 `kotlinx.coroutines`：决策始终是同步纯函数，可以在任何线程模型下复用。
 - 上下文桥接只允许出现在适配器里，并且只有一处：WebFlux / Gateway 适配器把 Reactor `Context` 和 OTel 上下文转换为
@@ -354,15 +438,15 @@ API 时再提高基线。
 
 | 新模块 | 依赖 | 内容 | 来自 |
 |---|---|---|---|
-| `cosec-model` | 无 | 值类型、策略 AST、`Decision`、JSON 编解码 | `cosec-api` 大部分 + `serialization` |
+| `cosec-model` | 仅 `kotlinx-serialization-core`（注解与接口） | 值类型、策略 AST、`Decision`、JSON 编解码 | `cosec-api` 大部分 + `serialization` |
 | `cosec-engine` | model, CEL | 编译器、索引、评估、trace | `SimpleAuthorization`、matchers、`explain`、`analysis` |
-| `cosec-runtime` | engine, kotlinx-coroutines | Pipeline、SPI（`SnapshotSource`、`Authenticator`、`ScopeResolver`、`AttributeProvider`、`RateLimiter`、`DecisionListener`） | `pipeline`、`limiter`、`audit`、`shadow` |
+| `cosec-runtime` | engine, kotlinx-coroutines | Pipeline、路径规范化、内置 `ScopeResolver`、SPI（`SnapshotSource`、`Authenticator`、`MembershipProvider`、`AttributeProvider`、`RateLimiter`、`DecisionListener`） | `pipeline`、`limiter`、`audit`、`shadow` |
 | `cosec-authn-jwt` / `cosec-authn-apikey` / `cosec-authn-social` | runtime | 认证器 | `cosec-jwt`、`apikey`、`cosec-social` |
-| `cosec-store-redis` | runtime | 快照存储 + 变更广播 + 限流计数 + 吊销表 | `cosec-cocache` |
+| `cosec-store-redis` | runtime | 快照存储 + 变更广播 + 版本对账 + 限流计数 + 吊销表 + 黑名单集合 + 成员关系缓存 | `cosec-cocache` |
 | `cosec-http-webflux` / `cosec-http-servlet` / `cosec-gateway` | runtime | 只做 `HttpFacts` ↔ `Outcome` 转换 | 现有三个适配器 |
 | `cosec-observability-{otel,micrometer,kafka}` | runtime | 监听器 | 现有对应模块 |
 | `cosec-ip2region`、`cosec-openapi` | runtime | `AttributeProvider`；OpenAPI → `Catalog` + 路由映射 | 现有对应模块 |
-| `cosec-control` | engine | 控制面库（可以嵌入到管理服务中） | `policy/history`、生成器 endpoint |
+| `cosec-control` | engine, runtime | 控制面库（可以嵌入到管理服务中），自身的写操作经 Pipeline 授权 | `policy/history`、生成器 endpoint |
 | `cosec-spring-boot-starter` | 以上全部（feature variants） | 每个模块对应一个自动配置 | 现有 starter |
 | `cosec-testkit` | engine | `PolicyTestKit`、性质测试生成器 | `testkit` |
 
@@ -376,13 +460,18 @@ API 时再提高基线。
 | 不变量 | 如何保证 |
 |---|---|
 | Deny-first | 单一组合算法 + 性质测试（随机策略集合） |
+| 索引完整 | 索引候选集 ⊇ 暴力匹配命中集；随机策略加随机请求的性质测试 |
 | 失败即拒绝 | `Indeterminate` 是一等结果；Pipeline 的 `when` 穷举 sealed 类型，编译器强制 |
 | 一条决策路径 | 只有 Pipeline 映射状态码；`WebAdapterParityTest` 保留 |
-| 不阻塞事件循环 | 引擎同步且无 I/O（ArchUnit：`engine` 不得引用 I/O、协程与 Reactor 包）；所有 I/O 都在 runtime 的挂起 SPI 中，只能用非阻塞客户端实现（见 3.8） |
+| 路径一致 | 规范化只在 Pipeline 定义一次；歧义路径返回 400；三类适配器对恶意路径语料的处理结果一致（`WebAdapterParityTest`） |
+| 不阻塞事件循环 | 引擎同步且无 I/O（ArchUnit：`engine` 不得引用 I/O、协程与 Reactor 包）；数据面的 I/O 都在 runtime 的挂起 SPI 中，只能用非阻塞客户端实现；控制面不在请求路径上，可以用 `Dispatchers.IO`（见 3.8、3.9） |
 | 纯决策 | 匹配函数签名中没有可变参数；义务在评估之后执行 |
-| 快照一致 | 一次评估只持有一个 `PolicySnapshot` 引用 |
+| 快照一致 | 一次评估只持有一个 `PolicySnapshot` 引用（平台层已合并进去） |
+| 快照新鲜度有界 | 版本定期对账；落后时长有指标；超过上限时的行为（告警或 503）是显式配置 |
+| 决策可追溯 | 每个 `DecisionEvent` 都带有快照版本号对与 `StatementRef` |
+| 不能越权授权 | 控制面的每个写操作都经过授权；被授出的权限必须是授权者在同一作用域内权限的子集；无法静态判断的一律拒绝 |
 | 作用域可信 | `Scope` 只能由 `ScopeResolver` 构造（`internal` 构造器） |
-| 热路径有基准 | JMH 继续保留；目标是 trace 关闭时评估零额外分配 |
+| 热路径有基准 | JMH 继续保留；目标是 trace 关闭时，每个请求的分配量不随策略数量增长 |
 
 ---
 
@@ -394,11 +483,15 @@ API 时再提高基线。
    D5（root 改为显式配置）、D7（路径变量按匹配器隔离）改变授权语义，需要先确定语义。
 2. **抽出纯引擎**：新建 `cosec-model` / `cosec-engine`，`SimpleAuthorization` 改为
    "取数据 → 调用 `Engine.evaluate`"，删除 `Policy.verify` 默认方法和 `AuthorizationExplainer` 的叙述逻辑。
-3. **快照分发**：`SnapshotSource` + Redis 实现，删除 `LocalCacheLookup`、`BlockingAware`，热路径变为同步调用。
-4. **统一模型**：`Binding` 取代 `principal.policies` / `RolePermission` / `GLOBAL`；
+   **切换门槛**：新引擎上线前，用现有的影子模式同时运行旧实现和新实现，先在离线请求语料上、再在生产流量采样上
+   逐条比对决策。差异为零（或者每一条差异都已被确认为旧实现的缺陷并登记在案）才能切换。之后每个改变语义的阶段
+   都沿用这道门槛。
+3. **快照分发**：`SnapshotSource` + Redis 实现（按需加载、版本对账），删除 `LocalCacheLookup`、`BlockingAware`；热路径上的策略读取都命中内存。
+4. **统一模型**：`Binding` 取代 `principal.policies` / `RolePermission` / `GLOBAL`；成员关系改为按作用域写的
+   token 声明或 `MembershipProvider`；平台层与租户层分开；黑名单拆成规则加名单两部分；
    提供一次性的数据转换工具；用 CEL 取代 OGNL/SpEL 和各个 part 匹配器。
 5. **Pipeline 重组**：协程化，挂起的 `Authenticator`、`ScopeResolver`、`AttributeProvider`、义务、监听器；删除装饰器链。
-6. **控制面**：`cosec-control`，发布流程强制校验 + 编译 + 影子窗口；从模型生成 schema。
+6. **控制面**：`cosec-control`，发布流程强制校验 + 编译 + 影子窗口；控制面的写操作经过授权，加上不能越权授权检查和平台边界；从模型生成 schema。
 
 每个阶段都要更新 `wiki/`（中英文）和 `skills/`，阶段 2 起附 JMH 前后对比。
 
@@ -407,6 +500,11 @@ API 时再提高基线。
 ## 7. 待决问题
 
 - **D3 的真实影响**：上游（token 签发方 / 网关）是否已经约束了 `appId`/`spaceId`？这决定阶段 1 的修复是否属于安全公告。
-- **快照规模上限**：需要用真实租户数据测一下编译耗时和内存，决定是否需要按应用分片。
+- **快照规模上限**：需要用真实租户数据测一下编译耗时和内存，决定是否需要按应用分片，以及每个实例能常驻多少个活跃租户。
+- **成员关系的默认来源**：默认用 token 声明（零 I/O，撤销慢），还是默认用 `MembershipProvider`（撤销快，多一次预取）？
+  以及撤销延迟上限的默认值。
+- **不能越权授权的静态判断能力**：带条件的语句之间的包含关系一般不可判定。需要确定能精确判断的子集（纯动作和资源
+  模式），以及判断不了时的审批流程。
+- **快照最大落后时长的默认值**，以及默认行为应该是告警还是 503。
 - **CEL 的引入**：需要评估 `cel-java` 的依赖体积和性能；替代方案是自研一个只包含内置运算符的小型表达式 AST。
 - **Action 词汇**：是否在服务内部推广 `service:verb` 形式的 action，还是继续只支持 HTTP 路径？这影响 OpenAPI 模块的定位。
