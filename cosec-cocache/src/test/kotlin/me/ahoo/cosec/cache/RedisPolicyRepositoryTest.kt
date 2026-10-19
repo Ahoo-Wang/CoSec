@@ -76,7 +76,8 @@ internal class RedisPolicyRepositoryTest {
 
     @Test
     fun getPoliciesWhenCacheMiss() {
-        // A policy id missing from the cache is silently dropped from the result.
+        // The repository returns the policies it found (PolicyRepository contract, relied on by
+        // LocalPolicyInitializer); SimpleAuthorization fails closed on the missing one (MissingPolicyFailClosedTest).
         val policyCache = mockk<PolicyCache>()
         every { policyCache.get("policyId") } returns policyData
         every { policyCache.get("unknownPolicyId") } returns null

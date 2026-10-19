@@ -3,9 +3,24 @@
 What changes between versions and what to do about it. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
-## 6.0 to 6.1
+## 6.1 to 7.0
 
 ### Breaking changes
+
+**A principal policy that does not exist fails authorization.** When a principal lists a policy id that the
+`PolicyRepository` does not return (deleted, never written, lost from Redis), `SimpleAuthorization` now fails with
+`MissingPolicyException`, which the pipeline maps to `500`. Before, the id was skipped and the remaining policies
+decided: when the missing policy was a deny, such as one that suspends an account, a global allow let the request
+through. `AuthorizationChecker` answers `false` for such a principal, and an explanation reports the `500` with a
+`MISSING_POLICY` warning.
+
+Before upgrading, find principals (tokens, API keys, user records) that list policy ids your repository does not
+have, and either write those policies or remove the ids. `PolicyRepository.getPolicies` itself is unchanged: it
+still returns the policies it found, so custom repositories need no change.
+
+## 6.0 to 6.1
+
+### Breaking changes {#breaking-changes-1}
 
 **Rate limits are rules, not policy conditions.** The `rateLimiter`, `groupedRateLimiter`, `redisRateLimiter` and
 `redisGroupedRateLimiter` conditions are removed, together with `TooManyRequestsException`. A policy that still uses
