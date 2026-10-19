@@ -46,7 +46,7 @@ Rules are JSON files, by default every `classpath:cosec-rate-limit/*-rate-limit.
 | `id` | yes | Names the quota. Letters, digits, `_`, `.` and `-`. Counters belong to the id, so two rules never share a quota by accident. Ids must be unique. |
 | `action` | yes | Which requests the rule applies to, written like a statement's [action](./policies.md#actions). |
 | `condition` | no | Narrows the rule further, written like a statement's [condition](./policies.md#conditions). Defaults to always. |
-| `key` | no | A request or context [part](./policies.md#value-conditions) that splits the quota into one bucket per value, e.g. per IP or per user. Without it, all matching requests share one bucket. Requests whose part is empty share one bucket, so leaving out a header does not get around the limit. |
+| `key` | no | A request or context [part](./policies.md#value-conditions) that splits the quota into one bucket per value, e.g. per IP or per user. Without it, all matching requests share one bucket. Requests whose part is empty share one bucket, so leaving out a header does not get around the limit. `request.path.var.<name>` reads the variables captured by this rule's own `path` action, whatever other rules match the same request. |
 | `permitsPerSecond` | yes | The allowed rate. A window allows `permitsPerSecond × windowSeconds` requests, and at least one. |
 | `windowSeconds` | no | Window length, default `1`. Use a longer window for low rates: `0.1` per second over `60` seconds is 6 requests a minute. |
 | `strictFailure` | no | What a backend failure means: `false` (default) skips the rule, `true` rejects the request with `429`. |
