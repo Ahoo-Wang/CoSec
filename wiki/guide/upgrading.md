@@ -26,6 +26,38 @@ grants of a same-named role in another space. In 7.0:
   made for that app and space.
 - The explainer adds the `NO_ROLE_IN_SPACE` warning.
 
+#### Migrating role grants
+
+6.x grants do not record the app they were meant for, so CoSec cannot migrate them on its own: you name the
+target app, and nothing is copied to every app. `RolePermissionKeyMigration` (a bean with `cache-support`) does
+the copy. It is a class you call, not an actuator endpoint, because an endpoint that writes authorization data
+would itself have to be secured and would stay exposed long after the one-off migration.
+
+1. Decide which app each 6.x role (and space) belongs to. When roles of several apps share the old key space,
+   split them with the `roleIds` argument.
+2. Issue roles as `role@space` for every non-default space, in tokens and API keys.
+3. Before 7.0 serves traffic, run the migration once from a 7.0 process against the same Redis, for example an
+   admin application or a one-off job. Start with a dry run and read the report:
+
+   ```kotlin
+   @Bean
+   fun migrateRoleGrants(migration: RolePermissionKeyMigration) = ApplicationRunner {
+       val report = migration.migrate(appId = "order-app", dryRun = true) // then dryRun = false
+       log.info { "migrated=${report.migrated} conflicts=${report.conflicts} skipped=${report.skipped}" }
+   }
+   ```
+
+   Writes go through `RolePermissionCache`, so running instances drop their local copies. A run is idempotent:
+   grants already migrated are reported as `unchanged`, and a target that holds different grants is reported as a
+   conflict and kept. Keys holding a cached miss, keys that are not sets, and keys with an ambiguous role or space
+   (more than one `@`, or an empty part) are reported as `skipped`.
+4. Roll out 7.0. 6.x instances keep reading the old keys meanwhile. If grants change through 6.x during the
+   rollout, run the migration again with `overwrite = true`.
+5. Once every instance runs 7.0 and the grants are verified, delete the old keys with `deleteLegacy()` (it also
+   takes `dryRun`).
+
+Until a role's grants are migrated to an app, requests that rely on them are denied in that app.
+
 ## 6.0 to 6.1
 
 ### Breaking changes {#breaking-changes-1}

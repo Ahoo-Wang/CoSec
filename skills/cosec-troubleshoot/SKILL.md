@@ -68,7 +68,7 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 - Check the action's HTTP method, path, trailing slash, and captured variables.
 - Check condition parts and the actual principal roles/attributes/tenant.
 - Remember that `inTenant.value` is `default`, `user`, or `platform`, not a tenant ID.
-- For role permissions (CoSec 7+): grants are keyed by app, role and space (`<prefix>:app:role:permission:<appId>:<roleId>[@<spaceId>]`) and apply only in their own app. With `CoSec-Space-Id: x`, only token roles written `role@x` count; without it, only unsuffixed roles. A grant under the 6.x key `<prefix>:role:permission:<roleId>` is never read.
+- For role permissions (CoSec 7+): grants are keyed by app, role and space (`<prefix>:app:role:permission:<appId>:<roleId>[@<spaceId>]`) and apply only in their own app. With `CoSec-Space-Id: x`, only token roles written `role@x` count; without it, only unsuffixed roles. A grant under the 6.x key `<prefix>:role:permission:<roleId>` is never read: migrate it to its app with `RolePermissionKeyMigration.migrate(appId)` (see the upgrading guide).
 
 ### Request allowed unexpectedly
 

@@ -19,6 +19,32 @@
   且去掉了 `@space` 后缀的角色；自定义仓储只能返回为该应用和该空间做出的授权。
 - 解释器新增 `NO_ROLE_IN_SPACE` 警告。
 
+#### 迁移角色授权 {#migrating-role-grants}
+
+6.x 的授权没有记录它属于哪个应用，所以 CoSec 无法自行迁移：由你指定目标应用，不会把数据复制到所有应用。
+复制由 `RolePermissionKeyMigration` 完成（启用 `cache-support` 时它是一个 Bean）。它是一个由你调用的类，而不是 actuator 端点：
+写入授权数据的端点本身也需要保护，而且在一次性的迁移完成后仍会一直暴露。
+
+1. 确定每个 6.x 角色（及其空间）属于哪个应用。如果多个应用的角色共用旧的键空间，用 `roleIds` 参数把它们分开。
+2. 在令牌和 API Key 中，为每个非默认空间以 `role@space` 的形式签发角色。
+3. 在 7.0 承接流量之前，从一个 7.0 进程（例如管理应用或一次性任务）连接同一个 Redis，执行一次迁移。先做一次演练（dry run）并查看报告：
+
+   ```kotlin
+   @Bean
+   fun migrateRoleGrants(migration: RolePermissionKeyMigration) = ApplicationRunner {
+       val report = migration.migrate(appId = "order-app", dryRun = true) // 然后改为 dryRun = false
+       log.info { "migrated=${report.migrated} conflicts=${report.conflicts} skipped=${report.skipped}" }
+   }
+   ```
+
+   写入经过 `RolePermissionCache`，因此运行中的实例会丢弃本地副本。迁移可以重复执行：已经迁移过的授权报告为 `unchanged`，
+   目标键中已有不同授权时报告为冲突并保留原值。保存了缓存未命中标记的键、不是集合的键，以及角色或空间有歧义的键
+   （多于一个 `@`，或某一部分为空）报告为 `skipped`。
+4. 滚动升级到 7.0。期间 6.x 实例仍读取旧键。如果升级期间通过 6.x 修改了授权，用 `overwrite = true` 再执行一次迁移。
+5. 所有实例都运行 7.0、并核对过授权之后，用 `deleteLegacy()` 删除旧键（它同样支持 `dryRun`）。
+
+某个角色的授权迁移到某个应用之前，依赖这些授权的请求在该应用中会被拒绝。
+
 ## 从 6.0 升级到 6.1 {#_6-0-to-6-1}
 
 ### 破坏性变更 {#breaking-changes-1}

@@ -18,6 +18,7 @@ import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.cache.AppPermissionCache
 import me.ahoo.cosec.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.RolePermissionCache
+import me.ahoo.cosec.cache.RolePermissionKeyMigration
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
@@ -50,6 +51,7 @@ internal class CoSecPermissionCacheAutoConfigurationTest {
                     .hasBean(CoSecPermissionCacheAutoConfiguration.ROLE_PERMISSION_CACHE_BEAN_NAME)
                     .hasSingleBean(RolePermissionCache::class.java)
                     .hasSingleBean(AppRolePermissionRepository::class.java)
+                    .hasSingleBean(RolePermissionKeyMigration::class.java)
             }
     }
 

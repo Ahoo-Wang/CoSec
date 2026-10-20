@@ -114,7 +114,7 @@ The caller is known, but nothing allowed the request, or something denied it.
   - for role permissions, the `CoSec-App-Id` and `CoSec-Space-Id` headers and the role's grants in that app
     and space. Grants apply only in their own app, and with `CoSec-Space-Id: x` only roles written `role@x` in
     the token count (without the header, only unsuffixed roles). After upgrading to 7.0, grants that were not
-    migrated to an app are missing ([Upgrading](./upgrading.md#_6-1-to-7-0)).
+    migrated to an app are missing ([Migrating role grants](./upgrading.md#migrating-role-grants)).
 - `inTenant` takes a tenant *kind* (`default`, `user`, `platform`), not a tenant id.
 
 ## Request allowed unexpectedly

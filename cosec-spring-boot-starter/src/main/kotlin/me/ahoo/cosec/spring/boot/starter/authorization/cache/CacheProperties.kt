@@ -56,6 +56,12 @@ class CacheProperties(
      * (`<keyPrefix>:role:permission:<roleId>`, whose role id may contain `:`) from ever reading as an app-scoped one.
      */
     val rolePermissionKeyPrefix: String = "$keyPrefix:app:role:permission:"
+
+    /**
+     * Role grants of 6.x, keyed without the app (`<prefix><roleId>[@<spaceId>]`). Authorization never reads them;
+     * only [me.ahoo.cosec.cache.RolePermissionKeyMigration] does.
+     */
+    val legacyRolePermissionKeyPrefix: String = "$keyPrefix:role:permission:"
     val revokedTokenKeyPrefix: String = "$keyPrefix:token:revoked:"
     val policyHistoryKeyPrefix: String = "$keyPrefix:policy:history"
 }

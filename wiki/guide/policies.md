@@ -327,8 +327,8 @@ rolePermissionCache[AppSpacedRoleId(appId = "order-app", roleId = "clerk", space
     setOf("order.read")
 ```
 
-Keys of 6.x (`cosec:role:permission:<roleId>[@<spaceId>]`, without the app) are never read; see
-[Upgrading](./upgrading.md#_6-1-to-7-0).
+Keys of 6.x (`cosec:role:permission:<roleId>[@<spaceId>]`, without the app) are never read; migrate them with
+`RolePermissionKeyMigration` ([Upgrading](./upgrading.md#migrating-role-grants)).
 
 ## Loading and generating policies
 

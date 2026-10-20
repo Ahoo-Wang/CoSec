@@ -105,7 +105,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
   - 对于主体策略，确认策略 id 在令牌的 `policies` 中；
   - 对于角色权限，确认 `CoSec-App-Id` 和 `CoSec-Space-Id` 请求头，以及该角色在该应用、该空间中的授权。
     授权只在自己的应用中生效；带 `CoSec-Space-Id: x` 时只有令牌中写成 `role@x` 的角色有效（不带该请求头时只有不带后缀的角色有效）。
-    升级到 7.0 后，没有迁移到某个应用的授权会缺失（见[升级](./upgrading.md#_6-1-to-7-0)）。
+    升级到 7.0 后，没有迁移到某个应用的授权会缺失（见[迁移角色授权](./upgrading.md#migrating-role-grants)）。
 - `inTenant` 接收的是租户*种类*（`default`、`user`、`platform`），而不是租户 id。
 
 ## 请求被意外放行 {#request-allowed-unexpectedly}

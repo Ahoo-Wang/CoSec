@@ -306,7 +306,8 @@ rolePermissionCache[AppSpacedRoleId(appId = "order-app", roleId = "clerk", space
     setOf("order.read")
 ```
 
-6.x 的键（`cosec:role:permission:<roleId>[@<spaceId>]`，不含应用）不会再被读取，见[升级](./upgrading.md#_6-1-to-7-0)。
+6.x 的键（`cosec:role:permission:<roleId>[@<spaceId>]`，不含应用）不会再被读取，请用 `RolePermissionKeyMigration`
+迁移（见[升级](./upgrading.md#migrating-role-grants)）。
 
 ## 加载与生成策略 {#loading-and-generating-policies}
 

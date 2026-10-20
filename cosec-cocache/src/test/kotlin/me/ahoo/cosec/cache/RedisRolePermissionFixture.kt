@@ -89,7 +89,10 @@ class RedisRolePermissionFixture : AutoCloseable {
             ttlPolicy = TtlPolicy(ttl = TtlAt.FOREVER),
         ),
         eventBus,
-    ).also { caches.add(it) }
+    ).also {
+        eventBus.register(it)
+        caches.add(it)
+    }
 
     override fun close() {
         caches.forEach { it.close() }

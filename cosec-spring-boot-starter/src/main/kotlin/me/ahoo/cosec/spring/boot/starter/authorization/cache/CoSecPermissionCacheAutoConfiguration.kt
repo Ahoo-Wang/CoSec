@@ -31,7 +31,9 @@ import me.ahoo.cosec.cache.AppPermissionCache
 import me.ahoo.cosec.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.RedisAppRolePermissionRepository
 import me.ahoo.cosec.cache.RolePermissionCache
+import me.ahoo.cosec.cache.RolePermissionKeyMigration
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -78,6 +80,24 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
     ): AppRolePermissionRepository {
         return RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
     }
+
+    /**
+     * Does nothing on its own: operators call it once to move 6.x role grants to an app (see the upgrading guide).
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    fun rolePermissionKeyMigration(
+        redisTemplate: StringRedisTemplate,
+        rolePermissionCache: RolePermissionCache,
+        @Qualifier(ROLE_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME) keyConverter: KeyConverter<AppSpacedRoleId>,
+        cocacheProperties: CoCacheProperties
+    ): RolePermissionKeyMigration = RolePermissionKeyMigration(
+        redisTemplate = redisTemplate,
+        rolePermissionCache = rolePermissionCache,
+        keyConverter = keyConverter,
+        legacyKeyPrefix = cacheProperties.legacyRolePermissionKeyPrefix,
+        missingGuardSentinel = cocacheProperties.redis.missingGuardSentinel,
+    )
 
     @Bean(APP_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME)
     @ConditionalOnMissingBean(name = [APP_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME])
