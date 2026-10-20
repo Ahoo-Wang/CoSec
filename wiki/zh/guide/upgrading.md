@@ -6,6 +6,14 @@
 
 ### 破坏性变更 {#breaking-changes}
 
+**主体引用的策略不存在时，授权失败。** 主体列出的策略 id 在 `PolicyRepository` 中查不到时（已删除、从未写入、从 Redis 中丢失），
+`SimpleAuthorization` 现在会以 `MissingPolicyException` 失败，管道将其映射为 `500`。以前，这个 id 会被跳过，由其余策略做决定：
+如果缺失的是一条拒绝策略（例如封禁账号的策略），全局放行策略就会让请求通过。对这样的主体，`AuthorizationChecker` 返回 `false`；
+解释结果会给出 `500` 并带有 `MISSING_POLICY` 警告。
+
+升级前，请找出引用了仓储中不存在的策略 id 的主体（令牌、API Key、用户记录），补写这些策略或移除这些 id。
+`PolicyRepository.getPolicies` 本身没有变化：它仍然只返回找到的策略，因此自定义仓储无需修改。
+
 **路径变量只属于捕获它的语句。** 以前，`request.path.var.*` 读到的是本次请求中最后一个命中的 `path` 动作捕获的变量，
 不论它属于哪条语句、哪个策略、哪一层。因此条件可能依赖别的语句：一条从未命中的拒绝语句可以让一条 `all` 动作的允许语句命中
 （加一条 deny 反而放宽了访问），策略级条件会读到 global 层的变量，没有 `path` 动作的限流规则会读到策略的变量。现在：

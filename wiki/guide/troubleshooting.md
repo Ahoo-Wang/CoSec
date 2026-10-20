@@ -61,7 +61,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 | `layers` | `ROOT`, `BLACKLIST`, `GLOBAL_POLICY`, `PRINCIPAL_POLICY`, `ROLE_PERMISSION`, each `EVALUATED`, `NOT_EVALUATED` (an earlier explicit deny ended evaluation), `EMPTY`, or `EVALUATED_AFTER_DECISION` (with `exhaustive: true`). Every statement and permission has an outcome: `MATCHED`, `ACTION_MISS`, `CONDITION_MISS`, `NOT_EVALUATED` (its policy's or app's condition did not match) or `ERROR`. |
 | `overriddenAllows` | Allows that a later layer's explicit deny overrode. |
 | `rateLimitRules` | The [rate limit rules](./rate-limiting.md) the request would spend a permit from, if it is allowed. |
-| `warnings` | `MISSING_POLICY` (the principal lists a policy id the repository lacks), `NO_APP_PERMISSION` (roles but no app permission for the app and space), `MATCHER_ERROR`, `TOKEN_INVALID` (the request's token or API key was rejected), and `TRACE_INCONSISTENT` (the trace disagrees with the real decision; trust the decision and report it). |
+| `warnings` | `MISSING_POLICY` (the principal lists a policy id the repository lacks, so authorization fails with `500`), `NO_APP_PERMISSION` (roles but no app permission for the app and space), `MATCHER_ERROR`, `TOKEN_INVALID` (the request's token or API key was rejected), and `TRACE_INCONSISTENT` (the trace disagrees with the real decision; trust the decision and report it). |
 
 To explain what a real caller gets, leave out `principal` and put their credential in the request's headers, for
 example `"headers": { "Authorization": "Bearer eyJ..." }` or `{ "X-API-Key": "..." }`. The credential is parsed by
@@ -154,6 +154,14 @@ its own captures the variables. The message names the file, the policy, statemen
 Move the reference into a statement (or rule) whose `path` action declares the variable, or move a policy
 condition into its statements' conditions ([Path variables](./policies.md#actions)). Before 7.0 such a reference
 read the variables of whichever statement had matched last.
+
+## One principal always gets 500
+
+The log shows `MissingPolicyException` with the policy ids. The principal lists a policy that the repository
+does not have: it was deleted, never written, or lost from Redis. Authorization fails closed rather than skipping
+it, because a missing deny would otherwise let a broader allow through. Write the policy again (for local policies,
+see [Policy has no effect](#policy-has-no-effect)), or remove the id from the principal's token or record.
+An [explanation](#explain-a-decision) reports it as a `MISSING_POLICY` warning.
 
 ## Rate limits behave unexpectedly
 

@@ -21,6 +21,7 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.configuration.JsonConfiguration
@@ -32,6 +33,7 @@ import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.permission.PermissionGroupData
 import me.ahoo.cosec.permission.RolePermissionData
 import me.ahoo.cosec.policy.EvaluateRequest
+import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.action.PathActionMatcherFactory
@@ -173,7 +175,7 @@ internal class SimpleAuthorizationTest {
         val securityContext = mockk<SecurityContext> {
             every { principal.authenticated } returns false
             every { principal.id } returns ""
-            every { principal.policies } returns setOf("principalPolicy")
+            every { principal.policies } returns setOf("policyId")
             every { principal.roles } returns emptySet()
             every { setAttributeValue(any(), any()) } returns this
         }
@@ -209,7 +211,7 @@ internal class SimpleAuthorizationTest {
         val securityContext = mockk<SecurityContext> {
             every { principal.authenticated } returns false
             every { principal.id } returns ""
-            every { principal.policies } returns setOf("principalPolicy")
+            every { principal.policies } returns setOf("policyId")
             every { setAttributeValue(any(), any()) } returns this
         }
         val policyRepository = mockk<PolicyRepository> {
@@ -465,7 +467,7 @@ internal class SimpleAuthorizationTest {
     ): Mono<AuthorizeResult> {
         val securityContext = mockk<SecurityContext> {
             every { principal.id } returns "userId"
-            every { principal.policies } returns setOf("principalPolicy")
+            every { principal.policies } returns setOfNotNull(principalPolicy?.id)
             every { principal.roles } returns setOf("roleId")
             every { setAttributeValue(any(), any()) } returns this
         }
@@ -570,5 +572,47 @@ internal class SimpleAuthorizationTest {
             .test()
             .expectNext(AuthorizeResult.IMPLICIT_DENY)
             .verifyComplete()
+    }
+
+    private val allowAll = PolicyData(
+        id = "allow-all",
+        category = "",
+        name = "allow-all",
+        description = "",
+        type = PolicyType.GLOBAL,
+        tenantId = "",
+        statements = listOf(StatementData(effect = Effect.ALLOW, action = AllActionMatcher.INSTANCE)),
+    )
+
+    private fun missingPolicyAuthorization(principalPolicies: Mono<List<Policy>>) = SimpleAuthorization(
+        mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.just(listOf(allowAll))
+            every { getPolicies(any()) } returns principalPolicies
+        },
+        mockk(),
+    )
+
+    @Test
+    fun missingPrincipalPolicyFailsClosed() {
+        // The missing policy may be the deny that keeps the principal out: the global allow must not win.
+        val context = SimpleSecurityContext(SimplePrincipal("user", policies = setOf("allow-all", "suspended")))
+        missingPolicyAuthorization(Mono.just(listOf(allowAll)))
+            .authorize(EvaluateRequest(path = "/orders"), context)
+            .test()
+            .expectErrorSatisfies {
+                it.assert().isInstanceOf(MissingPolicyException::class.java)
+                (it as MissingPolicyException).policyIds.assert().containsExactly("suspended")
+            }
+            .verify()
+    }
+
+    @Test
+    fun emptyPrincipalPoliciesFailClosed() {
+        val context = SimpleSecurityContext(SimplePrincipal("user", policies = setOf("suspended")))
+        missingPolicyAuthorization(Mono.empty())
+            .authorize(EvaluateRequest(path = "/orders"), context)
+            .test()
+            .expectError(MissingPolicyException::class.java)
+            .verify()
     }
 }

@@ -137,9 +137,10 @@ class AuthorizationExplainer(
     private fun explanation(decision: SecurityDecision, trace: Trace, narrator: Narrator): Explanation {
         val warnings = trace.warnings.toMutableList()
         val decidedBy = decision.verifyContext?.toDecisionRef()
-        // A matcher error aborts real authorization wherever it occurs, which the trace does not model.
-        val matcherFailed = warnings.any { it.code == ExplainWarningCode.MATCHER_ERROR }
-        if (!matcherFailed && decidedBy != trace.decidedBy) {
+        // A matcher error or a missing principal policy aborts real authorization (fail closed), which the trace
+        // does not model: it narrates the policies that were found.
+        val aborted = warnings.any { it.code in ABORTING_WARNINGS }
+        if (!aborted && decidedBy != trace.decidedBy) {
             warnings += ExplainWarning(
                 ExplainWarningCode.TRACE_INCONSISTENT,
                 "Authorization was decided by [$decidedBy], but the trace points at [${trace.decidedBy}].",
@@ -214,7 +215,8 @@ class AuthorizationExplainer(
                 (policyIds - found.map { it.id }.toSet()).forEach { missing ->
                     warnings += ExplainWarning(
                         ExplainWarningCode.MISSING_POLICY,
-                        "The principal lists policy [$missing], which the repository does not have.",
+                        "The principal lists policy [$missing], which the repository does not have; " +
+                            "authorization fails closed.",
                     )
                 }
                 Optional.of(found)
@@ -439,6 +441,7 @@ class AuthorizationExplainer(
     }
 
     private companion object {
+        val ABORTING_WARNINGS = setOf(ExplainWarningCode.MATCHER_ERROR, ExplainWarningCode.MISSING_POLICY)
         val POLICY_LAYERS = listOf(
             ExplainLayer.GLOBAL_POLICY,
             ExplainLayer.PRINCIPAL_POLICY,

@@ -56,7 +56,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 | `layers` | `ROOT`、`BLACKLIST`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、`ROLE_PERMISSION`，每层的状态为 `EVALUATED`、`NOT_EVALUATED`（之前的显式拒绝已结束求值）、`EMPTY`，或 `EVALUATED_AFTER_DECISION`（设置 `exhaustive: true` 时）。每条语句和权限都有结果：`MATCHED`、`ACTION_MISS`、`CONDITION_MISS`、`NOT_EVALUATED`（所属策略或应用的条件未匹配）或 `ERROR`。 |
 | `overriddenAllows` | 被后续层的显式拒绝覆盖掉的放行。 |
 | `rateLimitRules` | 请求被放行时将会消耗许可的[限流规则](./rate-limiting.md)。 |
-| `warnings` | `MISSING_POLICY`（主体列出的策略 id 在仓储中不存在）、`NO_APP_PERMISSION`（有角色，但该应用和空间没有应用权限）、`MATCHER_ERROR`、`TOKEN_INVALID`（请求中的令牌或 API Key 被拒绝），以及 `TRACE_INCONSISTENT`（追踪与真实决策不一致；以决策为准，并请反馈）。 |
+| `warnings` | `MISSING_POLICY`（主体列出的策略 id 在仓储中不存在，因此授权以 `500` 失败）、`NO_APP_PERMISSION`（有角色，但该应用和空间没有应用权限）、`MATCHER_ERROR`、`TOKEN_INVALID`（请求中的令牌或 API Key 被拒绝），以及 `TRACE_INCONSISTENT`（追踪与真实决策不一致；以决策为准，并请反馈）。 |
 
 要解释某个真实调用方得到的决策，可以不传 `principal`，而是把他的凭证放进请求的 headers，例如
 `"headers": { "Authorization": "Bearer eyJ..." }` 或 `{ "X-API-Key": "..." }`。凭证由应用自己的安全上下文解析器解析，
@@ -137,6 +137,13 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 某个本地策略文件、应用权限或限流规则在没有自己的 `path` 动作捕获变量的位置读取了 `request.path.var.*`。
 错误信息会指出文件、策略、语句或规则，以及动作类型。把引用移到 `path` 动作声明了该变量的语句（或规则）中，
 或把策略级条件移到各条语句的条件中（见[路径变量](./policies.md#actions)）。7.0 之前，这样的引用读到的是最后一条命中语句的变量。
+
+## 某个主体总是得到 500 {#one-principal-always-gets-500}
+
+日志中出现 `MissingPolicyException` 及相应的策略 id。主体列出的策略在仓储中不存在：它被删除了、从未写入，或从 Redis 中丢失。
+授权会直接失败而不是跳过它，因为缺失的若是一条拒绝策略，更宽泛的放行策略就会让请求通过。重新写入该策略（本地策略见
+[策略没有生效](#policy-has-no-effect)），或从主体的令牌或记录中移除这个 id。[解释决策](#explain-a-decision)会把它报告为
+`MISSING_POLICY` 警告。
 
 ## 限流行为不符合预期 {#rate-limits-behave-unexpectedly}
 
