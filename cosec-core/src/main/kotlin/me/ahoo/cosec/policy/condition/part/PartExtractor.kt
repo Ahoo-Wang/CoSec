@@ -58,6 +58,36 @@ object SecurityContextParts {
 }
 
 data class DefaultPartExtractor(val part: String) : PartExtractor {
+    companion object {
+        private val PARTS = setOf(
+            RequestParts.PATH,
+            RequestParts.METHOD,
+            RequestParts.APP_ID,
+            RequestParts.SPACE_ID,
+            RequestParts.DEVICE_ID,
+            RequestParts.REMOTE_IP,
+            RequestParts.ORIGIN,
+            RequestParts.ORIGIN_HOST,
+            RequestParts.REFERER,
+            RequestParts.REFERER_HOST,
+            SecurityContextParts.TENANT_ID,
+            SecurityContextParts.PRINCIPAL_ID,
+        )
+        private val PREFIXES = listOf(
+            RequestParts.HEADER_PREFIX,
+            RequestParts.ATTRIBUTES_PREFIX,
+            ResourceParts.PREFIX,
+            SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX,
+            RequestParts.PATH_VAR_PREFIX,
+        )
+
+        /**
+         * Whether [extract] supports [part], decided without a request, so configuration can be rejected when it
+         * loads instead of failing every matching request. A prefixed part needs a name after the prefix.
+         */
+        fun isSupported(part: String): Boolean =
+            part in PARTS || PREFIXES.any { part.length > it.length && part.startsWith(it) }
+    }
 
     @Suppress("CyclomaticComplexMethod")
     override fun extract(request: Request, securityContext: SecurityContext): String {
