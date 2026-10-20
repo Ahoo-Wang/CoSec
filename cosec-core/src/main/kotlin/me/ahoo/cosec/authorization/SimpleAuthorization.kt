@@ -42,7 +42,8 @@ import reactor.kotlin.core.publisher.toMono
  * 5. Role-based permissions
  *
  * Layers 3-5 are combined deny-first: an EXPLICIT_DENY matched in any layer wins over
- * an ALLOW matched in any other layer.
+ * an ALLOW matched in any other layer. A principal policy the repository does not have fails the
+ * authorization with [MissingPolicyException] instead of being skipped.
  *
  * Matchers are evaluated synchronously on the subscribing thread. A layer whose policies or app permission
  * contain a blocking matcher (see [me.ahoo.cosec.policy.BlockingAware], e.g. a Redis rate limiter) is evaluated
@@ -184,6 +185,19 @@ class SimpleAuthorization(
         return false
     }
 
+    /**
+     * [PolicyRepository.getPolicies] returns only the policies it found. A missing one may be the deny that keeps
+     * the request out, so evaluating the rest could widen access. A nested scan: principals list few policies.
+     */
+    private fun List<Policy>.containsAll(policyIds: Set<String>): Boolean {
+        for (policyId in policyIds) {
+            if (none { it.id == policyId }) {
+                return false
+            }
+        }
+        return true
+    }
+
     private fun verifyRoot(context: SecurityContext): VerifyResult =
         if (rootPrincipalMatcher.isRoot(context.principal)) {
             log.debug {
@@ -213,9 +227,14 @@ class SimpleAuthorization(
         if (context.principal.policies.isEmpty()) {
             return Mono.empty()
         }
+        val policyIds = context.principal.policies
         return policyRepository
-            .getPolicies(context.principal.policies)
+            .getPolicies(policyIds)
+            .defaultIfEmpty(emptyList())
             .flatMap { policies: List<Policy> ->
+                if (!policies.containsAll(policyIds)) {
+                    return@flatMap Mono.error(MissingPolicyException(policyIds - policies.map { it.id }.toSet()))
+                }
                 evaluate(policies.anyRequiresBlocking()) {
                     verifyPolicies(PolicyVerifySource.PRINCIPAL, policies, request, context)
                 }

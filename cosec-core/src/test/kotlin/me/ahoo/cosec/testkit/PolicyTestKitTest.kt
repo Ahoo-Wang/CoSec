@@ -32,8 +32,10 @@ class PolicyTestKitTest {
         val failure = report.failures.single()
         failure.case.assert().isEqualTo("expects a deny that does not exist")
         failure.message.assert()
-            .contains("expected EXPLICIT_DENY, got ALLOW")
-            .contains("GLOBAL_POLICY policy [orders] statement [0] 'read-orders'")
+            // The principal lists a policy that does not exist: authorization fails closed instead of letting the
+            // global allow win.
+            .contains("authorization failed with an error")
+            .contains("expected EXPLICIT_DENY, got IMPLICIT_DENY")
             .contains("[gone]")
         val error = assertThrows(AssertionError::class.java) { report.assertPasses() }
         error.message.assert().startsWith("1 of 2 policy test cases failed").contains("wrong › expects a deny")

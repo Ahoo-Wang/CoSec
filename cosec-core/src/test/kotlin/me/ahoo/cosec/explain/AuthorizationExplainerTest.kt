@@ -285,6 +285,19 @@ class AuthorizationExplainerTest {
             ExplainWarningCode.NO_APP_PERMISSION,
         )
         explanation.layer(ExplainLayer.ROLE_PERMISSION).state.assert().isEqualTo(LayerState.EMPTY)
+        // Authorization fails closed on the missing policy.
+        explanation.status.assert().isEqualTo(SecurityStatus.ERROR)
+        explanation.authorized.assert().isFalse()
+    }
+
+    @Test
+    fun missingPolicyOverridesGlobalAllowWithoutInconsistency() {
+        globalPolicies += policy("public", allow("/**"))
+        val explanation = explainer().explainOf("/orders", SimplePrincipal("user", policies = setOf("gone")))
+        explanation.status.assert().isEqualTo(SecurityStatus.ERROR)
+        explanation.authorized.assert().isFalse()
+        // The trace narrates the found policies (the global allow); real authorization aborted before deciding.
+        explanation.warnings.map { it.code }.assert().containsExactly(ExplainWarningCode.MISSING_POLICY)
     }
 
     @Test

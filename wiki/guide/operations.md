@@ -15,6 +15,9 @@ also holds revoked token ids. Each instance keeps an in-process copy
   changes apply cluster-wide immediately.
 - **Global policy index** updates are atomic Redis set operations, so concurrent writers on different
   instances never lose entries.
+- **Publishing a policy** writes its content and its global index entry separately, not atomically. The order
+  keeps a failure safe: a policy becoming global is indexed only after its content is written, and a policy
+  leaving global leaves the index before its content changes. A failed publish returns an error; retry it.
 - Policy and permission entries **never expire**. Local caches are bounded
   ([`maximum-size`](./configuration.md#cache), default 10,000 entries per cache) and reload from Redis on
   a miss.

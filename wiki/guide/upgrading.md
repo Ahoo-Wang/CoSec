@@ -7,6 +7,17 @@ What changes between versions and what to do about it. Release notes for every v
 
 ### Breaking changes
 
+**A principal policy that does not exist fails authorization.** When a principal lists a policy id that the
+`PolicyRepository` does not return (deleted, never written, lost from Redis), `SimpleAuthorization` now fails with
+`MissingPolicyException`, which the pipeline maps to `500`. Before, the id was skipped and the remaining policies
+decided: when the missing policy was a deny, such as one that suspends an account, a global allow let the request
+through. `AuthorizationChecker` answers `false` for such a principal, and an explanation reports the `500` with a
+`MISSING_POLICY` warning.
+
+Before upgrading, find principals (tokens, API keys, user records) that list policy ids your repository does not
+have, and either write those policies or remove the ids. `PolicyRepository.getPolicies` itself is unchanged: it
+still returns the policies it found, so custom repositories need no change.
+
 **Root is off by default, limited to the platform tenant, and subject to the blacklist.** Before, any principal
 whose id was `cosec` (or the `-Dcosec.root` system property) bypassed every check, including the blacklist, and
 `cosec.authorization.root-enabled` defaulted to `true`. A user tenant whose identity provider let a user pick the

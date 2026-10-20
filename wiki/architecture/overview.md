@@ -85,7 +85,7 @@ Every change must keep these.
 | Invariant | Meaning |
 |---|---|
 | **Deny-first** | No combination of policies or layers lets an `ALLOW` win over a matched `DENY`. |
-| **Fail closed** | Errors deny (`500`, regex timeout `403`). The only exceptions are documented degraded modes: rate limit rules without `strictFailure`, and the revocation check. Policy and permission caches use strict Redis failure. |
+| **Fail closed** | Errors deny (`500`, regex timeout `403`). The only exceptions are documented degraded modes: rate limit rules without `strictFailure`, and the revocation check. Policy and permission caches use strict Redis failure, and a principal policy the repository does not have fails authorization rather than being skipped. |
 | **No blocking on the event loop** | Blocking work (repository reads from Redis, token revocation, Redis rate limit counters) runs on `boundedElastic`. Reads answered from the local cache stay on the caller's thread. A custom condition matcher that must block implements `BlockingAware`: `SimpleAuthorization` evaluates a layer on `boundedElastic` only when its policies or app permission contain one, so other policies pay no thread hop. |
 | **One decision path** | Status codes and error mapping live only in `SecurityPipeline`. Adapters never decide. |
 | **Authorization is a pure decision** | Built-in matchers only read the request and security context, do no I/O and keep no state (path matchers record path variables in the context). Rate limiting, which spends permits, is a separate decorator that runs only for allowed requests (see [Rate Limiting](../guide/rate-limiting.md)). |

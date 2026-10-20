@@ -56,15 +56,32 @@ class RateLimitingAuthorization(
                 if (!decision.result.authorized) {
                     return@flatMap decision.toMono()
                 }
-                val matchedRules = ruleProvider.getRules().filter { it.matches(request, context) }
+                val matchedRules = matchRules(request, context)
                 if (matchedRules.isEmpty()) {
                     return@flatMap decision.toMono()
                 }
                 acquire(matchedRules, 0, request, context, decision)
             }
 
+    /**
+     * Matches every rule and resolves its bucket right after its own match: path matchers write their variables
+     * into the shared context, so a later matching rule would replace the variables an earlier rule's key reads.
+     *
+     * A bucket that cannot be resolved is kept as a failure and thrown only when its rule's turn comes, so rules
+     * before it still spend permits (and may already reject the request) exactly as before.
+     */
+    private fun matchRules(request: Request, context: SecurityContext): List<MatchedRule> =
+        ruleProvider.getRules().mapNotNull { rule ->
+            if (!rule.matches(request, context)) {
+                return@mapNotNull null
+            }
+            MatchedRule(rule, runCatching { rule.bucketOf(request, context) })
+        }
+
+    private class MatchedRule(val rule: RateLimitRule, val bucket: Result<String>)
+
     private fun acquire(
-        rules: List<RateLimitRule>,
+        rules: List<MatchedRule>,
         index: Int,
         request: Request,
         context: SecurityContext,
@@ -73,10 +90,11 @@ class RateLimitingAuthorization(
         if (index == rules.size) {
             return decision.toMono()
         }
-        val rule = rules[index]
+        val matched = rules[index]
+        val rule = matched.rule
         // Outside the failure handler: a rule that cannot resolve its key is a configuration error and fails
         // closed, rather than being skipped like an unavailable backend.
-        val bucket = rule.bucketOf(request, context)
+        val bucket = matched.bucket.getOrThrow()
         return Mono.defer { rateLimiter.tryAcquire(rule.id, bucket, rule.rateLimit) }
             .onErrorResume { cause -> onFailure(rule, cause) }
             .map<AuthorizationDecision> { result ->
