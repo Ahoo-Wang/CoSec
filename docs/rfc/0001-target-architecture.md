@@ -102,7 +102,7 @@ flowchart LR
         SIM --> STORE
     end
 
-    STORE -- 变更流<br>tenant, version --> DIST[SnapshotDistributor]
+    STORE -- CoCache 6 失效广播<br>陈旧时间有上界 --> DIST[SnapshotSource]
 
     subgraph DP[数据面 每个实例]
         DIST --> HOLDER[SnapshotHolder<br>原子引用, 按租户分区]
@@ -250,14 +250,17 @@ interface SnapshotSource {                              // 数据面唯一的策
 }
 ```
 
-- 控制面每次发布写入一个新版本（Redis 里存序列化后的完整租户文档 + 版本号，或者 JDBC），
-  通过 Redis Pub/Sub / Kafka 广播 `(tenant, version)`。
-- 数据面实例在后台拉取、编译、原子替换引用；编译失败就保留旧版本并告警（不会出现"半个新版本"，D4 消失）。
+- 控制面每次发布写入一个新版本：每个租户（以及平台层）是**一个**带版本号的完整文档，存放在一个 CoCache 6 的
+  `Cache<TenantId, SnapshotDocument>` 中（`ttl = FOREVER`，严格读失败模式）。一次发布只写一个 key，由 CoCache
+  完成原子删除和广播，不再出现 D4 那种跨两个缓存的部分写入。
+- 数据面通过 CoCache 读取文档，按 `(tenant, version)` 缓存编译结果，并原子替换引用；编译失败就保留旧版本并告警
+  （不会出现"半个新版本"，D4 消失）。
 - **按需加载**：租户很多时，每个实例只保留活跃租户的快照（LRU）。冷租户的第一个请求在 Pipeline 中异步加载，
   同一租户的并发加载合并为一次。引擎仍然只接收已经加载好的快照，自身不做 I/O。可以配置一组预热租户，在启动时加载。
-- **通知会丢，所以要对账**：Pub/Sub 最多投递一次。每个实例定期比对已加载快照的版本号与存储中的版本号，落后就重新
-  拉取。暴露快照落后时长的指标；超过配置的最大落后时长后的行为必须显式配置：`alert`（默认，只告警）或
-  `fail-closed`（该租户的请求返回 503）。
+- **失效事件会丢，陈旧时间必须有上界**：这一点直接由 CoCache 6 的一致性协议保证，不再自己实现 Pub/Sub 和对账。
+  按 CoCache RFC 0003 的 G1，事件送达时本地副本的陈旧时间不超过事件延迟；事件丢失时不超过
+  `min(localMaxAge, 心跳超时 + 重连时长)`。CoSec 把 `localMaxAge` 设为快照最大落后时长，并在此之上暴露快照落后时长的
+  指标；超过上限时的行为必须显式配置：`alert`（默认，只告警）或 `fail-closed`（该租户的请求返回 503）。
 - 启动时预热租户未就绪 → `/readiness` 不就绪；加载失败 → `Indeterminate` → 503。
 - 热路径上不再有 `Mono`、调度器切换、`LocalCacheLookup`、`BlockingAware`。
   `CacheTtlPolicyTest` 要守的不变量（"缓存不能过期丢策略"）也自然成立：快照只会被更新的版本替换。
@@ -379,6 +382,7 @@ WebFlux / Gateway 适配器中，每个请求在边界桥接一次（`mono { pip
 | 有界的外部调用 | `withTimeout` 加结构化并发：属性预取用 `coroutineScope { async {...} }`，任何一个失败或超时都会取消其余调用，并返回 `Indeterminate` |
 | 上下文传播 | 主体、请求 id、trace 放进有类型的 `CoroutineContext.Element`，不再用 Reactor `Context` 的字符串 key，也不再用 `SecurityContext` 里的 `attributes` map。OTel 用 `opentelemetry-extension-kotlin` 的 `asContextElement()` 传播 |
 | 流 | 快照变更用 `Flow`，DecisionListener 的异步投递（Kafka 审计）用 `Channel`，背压语义明确 |
+| 缓存 | CoCache 6.4 的 `cache.suspending()` 直接提供 `SuspendingCache`：L2 命中不分配协程状态，调用方被取消不会取消共享的加载，不阻塞任何线程。快照文档、成员关系、API Key、吊销表都用它，不需要自己桥接 |
 | 统一两类宿主 | 响应式宿主用 `mono {}` 桥接，可以在事件循环上运行，挂起时不阻塞；Servlet 宿主直接在请求线程（或虚拟线程）上 `runBlocking` |
 
 **为什么不选虚拟线程作为主模型**：虚拟线程让阻塞代码变得便宜，但 Netty 事件循环本身不能阻塞。在 WebFlux / Gateway
@@ -386,7 +390,7 @@ WebFlux / Gateway 适配器中，每个请求在边界桥接一次（`mono { pip
 运行，遇到 I/O 时挂起，适用的宿主更多。Servlet 宿主可以自行开启虚拟线程（见 3.9），适配器的 `runBlocking` 跑在虚拟线程上，两者并不冲突。
 
 **约束（新增不变量）**：
-- 数据面 runtime 的 SPI 实现**只能用非阻塞客户端**（Lettuce 协程 API、R2DBC 等）。不再有 `BlockingAware`，也不再有 `Dispatchers.IO` 兜底
+- 数据面 runtime 的 SPI 实现**只能用非阻塞客户端**（CoCache 6.4 的 `cocache-coroutines`、Lettuce 协程 API、R2DBC 等）。不再有 `BlockingAware`，也不再有 `Dispatchers.IO` 兜底
   （控制面不在请求路径上，允许用 `Dispatchers.IO` 包装 JDBC，见 3.9）；
   用 `BlockHound` 在测试中检测事件循环上的阻塞调用。
 - 引擎不得依赖 `kotlinx.coroutines`：决策始终是同步纯函数，可以在任何线程模型下复用。
@@ -432,6 +436,39 @@ API 时再提高基线。
 **何时提高基线**：出现一个具体的代码需求，而且没有合理的替代办法时（例如 CoSec 必须自己创建虚拟线程执行器）。到那时
 直接升到当时最新的 LTS。
 
+### 3.10 关键依赖：CoCache 6.4、CosId 4.0
+
+**决定**：目标架构以 **CoCache 6.4**（当前 5.1.0）和 **CosId 4.0**（当前 3.2.1）为准，并随它们的后续版本更新。
+两者的基线都是 JDK 17 与 Spring Boot 4，与 3.9 一致。
+
+**CoCache 6.x 对目标架构的影响**
+
+| CoCache 6.x 能力 | 版本 | 在目标架构中的用途 |
+|---|---|---|
+| 一致性协议：带 lease 的填充、失效戳、原子删除加广播 | 6.0 | 快照分发不再自己实现 Pub/Sub 和对账（3.4）；单 key 发布消除 D4 那种跨缓存的部分写入 |
+| 有上界的陈旧时间（`localMaxAge`，事件丢失时同样成立） | 6.0 | 直接成为"快照新鲜度有界"这条不变量的实现手段 |
+| 严格读失败模式 | 6.0 | 延续 `CacheTtlPolicyTest` 守护的不变量：Redis 是权威存储，读失败不能被当成"没有数据" |
+| `cocache.backend: memory` | 6.0 | 测试用真实的一致性引擎，而不是 mock（AGENTS.md 对缓存测试的要求） |
+| 原生异步 API、`putAll` | 6.3 | 控制面批量发布；成员关系缓存批量预热 |
+| `cocache-coroutines`：`SuspendingCache` | 6.4 | runtime 的挂起 SPI（3.8）直接基于它实现，L2 命中不分配协程状态 |
+| per-key actuator、健康检查、Micrometer 指标 | 6.0 | 运维可以查看和失效某个租户的快照，不需要 CoSec 自己做 endpoint |
+
+**CosId 4.0 对目标架构的影响**
+
+CoSec 只用 CosId 生成标识：请求 id、审计事件 id、token id（`jti`）、社交登录的 `state`、策略修订 id。目标架构里：
+- 标识生成是 runtime 的一个端口（`StringIdGenerator`），默认由 CosId 4.0 实现。4.0 的 UUID 生成器和 `CosIdGenerator` 都只实现
+  `StringIdGenerator`，正好对应这个端口。
+- 需要可排序的标识（审计事件、策略修订）时用 `CosIdGenerator`；只需要唯一的（`jti`、`state`）时用 UUID。
+- `cosec-model` 和 `cosec-engine` 不依赖 CosId。目前 `cosec-core` 以 `api` 方式暴露 `cosid-core`，所有使用者都被迫依赖它，
+  新架构中不再这样做。
+
+**升级到现有代码时的注意事项**（可以放进 7.0 这一批破坏性变更）：
+- CoCache 5.x 到 6.0 **不支持滚动升级**：Redis 值的布局和失效通道都变了，所有实例必须同时切换。最小化的 Redis ACL 需要加上
+  `+hkeys +hget`。缓存声明和 `KeyConverter` 要按 6.0 的接口风格重写，`LocalCacheLookup` 这类依赖 5.x 内部结构的代码要删除。
+- CosId 4.0 要求重新编译：`UuidGenerator` 不再实现 `IdGenerator`，CoSec 中注入 `IdGenerator` 的地方要改成 `StringIdGenerator`。
+  CoSec 只用 UUID 生成器，不涉及机器号租约，所以 CosId 自身的迁移步骤（JDBC 加列、代理 token）对 CoSec 用户没有影响，
+  除非应用自己也在用 CosId 的其他后端。
+
 ---
 
 ## 4. 模块布局
@@ -440,9 +477,9 @@ API 时再提高基线。
 |---|---|---|---|
 | `cosec-model` | 仅 `kotlinx-serialization-core`（注解与接口） | 值类型、策略 AST、`Decision`、JSON 编解码 | `cosec-api` 大部分 + `serialization` |
 | `cosec-engine` | model | 编译器、索引、评估、trace | `SimpleAuthorization`、matchers、`explain`、`analysis` |
-| `cosec-runtime` | engine, kotlinx-coroutines | Pipeline、路径规范化、内置 `ScopeResolver`、SPI（`SnapshotSource`、`Authenticator`、`MembershipProvider`、`AttributeProvider`、`RateLimiter`、`DecisionListener`） | `pipeline`、`limiter`、`audit`、`shadow` |
+| `cosec-runtime` | engine, kotlinx-coroutines, `cosid-core`（标识端口的默认实现） | Pipeline、路径规范化、内置 `ScopeResolver`、SPI（`SnapshotSource`、`Authenticator`、`MembershipProvider`、`AttributeProvider`、`RateLimiter`、`DecisionListener`） | `pipeline`、`limiter`、`audit`、`shadow` |
 | `cosec-authn-jwt` / `cosec-authn-apikey` / `cosec-authn-social` | runtime | 认证器 | `cosec-jwt`、`apikey`、`cosec-social` |
-| `cosec-store-redis` | runtime | 快照存储 + 变更广播 + 版本对账 + 限流计数 + 吊销表 + 黑名单集合 + 成员关系缓存 | `cosec-cocache` |
+| `cosec-store-redis` | runtime, CoCache 6.4（含 `cocache-coroutines`） | 快照文档缓存 + 限流计数 + 吊销表 + 黑名单集合 + 成员关系缓存 + API Key | `cosec-cocache` |
 | `cosec-http-webflux` / `cosec-http-servlet` / `cosec-gateway` | runtime | 只做 `HttpFacts` ↔ `Outcome` 转换 | 现有三个适配器 |
 | `cosec-observability-{otel,micrometer,kafka}` | runtime | 监听器 | 现有对应模块 |
 | `cosec-ip2region`、`cosec-openapi` | runtime | `AttributeProvider`；OpenAPI → `Catalog` + 路由映射 | 现有对应模块 |
@@ -467,7 +504,7 @@ API 时再提高基线。
 | 不阻塞事件循环 | 引擎同步且无 I/O（ArchUnit：`engine` 不得引用 I/O、协程与 Reactor 包）；数据面的 I/O 都在 runtime 的挂起 SPI 中，只能用非阻塞客户端实现；控制面不在请求路径上，可以用 `Dispatchers.IO`（见 3.8、3.9） |
 | 纯决策 | 匹配函数签名中没有可变参数；义务在评估之后执行 |
 | 快照一致 | 一次评估只持有一个 `PolicySnapshot` 引用（平台层已合并进去） |
-| 快照新鲜度有界 | 版本定期对账；落后时长有指标；超过上限时的行为（告警或 503）是显式配置 |
+| 快照新鲜度有界 | 由 CoCache 6 的 `localMaxAge` 保证（事件丢失时同样成立）；落后时长有指标；超过上限时的行为（告警或 503）是显式配置 |
 | 决策可追溯 | 每个 `DecisionEvent` 都带有快照版本号对与 `StatementRef` |
 | 不能越权授权 | 控制面的每个写操作都经过授权；被授出的权限必须是授权者在同一作用域内权限的子集；无法静态判断的一律拒绝 |
 | 作用域可信 | `Scope` 只能由 `ScopeResolver` 构造（`internal` 构造器） |
@@ -486,12 +523,15 @@ API 时再提高基线。
    **切换门槛**：新引擎上线前，用现有的影子模式同时运行旧实现和新实现，先在离线请求语料上、再在生产流量采样上
    逐条比对决策。差异为零（或者每一条差异都已被确认为旧实现的缺陷并登记在案）才能切换。之后每个改变语义的阶段
    都沿用这道门槛。
-3. **快照分发**：`SnapshotSource` + Redis 实现（按需加载、版本对账），删除 `LocalCacheLookup`、`BlockingAware`；热路径上的策略读取都命中内存。
+3. **快照分发**：`SnapshotSource` 基于 CoCache 6.4 实现（按需加载，陈旧时间有上界），删除 `LocalCacheLookup`、`BlockingAware`；热路径上的策略读取都命中内存。
 4. **统一模型**：`Binding` 取代 `principal.policies` / `RolePermission` / `GLOBAL`；成员关系改为按作用域写的
    token 声明或 `MembershipProvider`；平台层与租户层分开；黑名单拆成规则加名单两部分；
    提供一次性的数据转换工具；用条件 AST 取代 OGNL/SpEL 和各个 part 匹配器。
 5. **Pipeline 重组**：协程化，挂起的 `Authenticator`、`ScopeResolver`、`AttributeProvider`、义务、监听器；删除装饰器链。
 6. **控制面**：`cosec-control`，发布流程强制校验 + 编译 + 影子窗口；控制面的写操作经过授权，加上不能越权授权检查和平台边界；从模型生成 schema。
+
+依赖升级（CoCache 6.4、CosId 4.0）放在阶段 1，与 D2–D7 的修复一起进入 7.0：阶段 3 的快照分发和阶段 5 的协程化都以
+CoCache 6.4 为前提。由于 CoCache 6 不支持从 5.x 滚动升级，7.0 的升级说明必须写明"所有实例同时切换"。
 
 每个阶段都要更新 `wiki/`（中英文）和 `skills/`，阶段 2 起附 JMH 前后对比。
 
@@ -514,4 +554,6 @@ API 时再提高基线。
 
 - **D3 的真实影响**：上游（token 签发方 / 网关）是否已经约束了 `appId`/`spaceId`？这决定 D3 的修复是否需要发安全公告。
 - **快照规模上限**：需要用真实租户数据测编译耗时和内存，决定是否需要按应用分片，以及每个实例能常驻多少个活跃租户。
+- **快照文档放进 CoCache 是否合适**：需要用最大的租户文档实测 CoCache 6 的读写和失效开销，并确认 L2 缓存的是文档而
+  不是编译结果时，按 `(tenant, version)` 缓存编译结果的做法没有问题。
 - **各项默认值的最终数字**（token 寿命、声明大小阈值、快照落后上限）：上表给的是建议值，落地时用真实部署数据校准。
