@@ -164,7 +164,7 @@ For changes to production policies, suggest shadow mode before enforcing: with `
 
 ## Access review
 
-To answer "who can call X?" or "what can principal Y reach?" across policies, app permissions and role grants, use `AccessAnalyzer.load(policyLocations, appPermissionLocations, roles)` then `whoCan(request)` (allows and denies whose action matches, flagged `conditional` and `templated`) or `grantsOf(principal, appId)`. It matches actions only and errs on the side of listing a rule; use explanations for one concrete principal and request.
+To answer "who can call X?" or "what can principal Y reach?" across policies, app permissions and role grants, use `AccessAnalyzer.load(policyLocations, appPermissionLocations, roles)` (roles: app id → role → permission ids, `role@space` for a non-default space) then `whoCan(request)` (allows and denies whose action matches in the request's app and space, flagged `conditional` and `templated`) or `grantsOf(principal, appId, spaceId)`. It matches actions only and errs on the side of listing a rule; use explanations for one concrete principal and request.
 
 ## History and rollback
 
@@ -182,6 +182,6 @@ require(policies.isNotEmpty())
 policies.forEach(DefaultPolicyEvaluator::evaluate)
 ```
 
-Prefer declarative cases: a JSON suite (`policies`, optional `appPermissions` and `roles`, and `cases` of `principal`, `request`, `expect.result` = `ALLOW` | `EXPLICIT_DENY` | `IMPLICIT_DENY`, optionally `policyId` / `statementName` / `roleId` / `permissionId`) run with `PolicyTestKit.run("classpath:cosec-policy-test/*.json").assertPasses()`. Failures name the rule that decided instead.
+Prefer declarative cases: a JSON suite (`policies`, optional `appPermissions`, `roles` granted in every app and `appRoles` granted in one app, with `role@space` for a non-default space, and `cases` of `principal`, `request`, `expect.result` = `ALLOW` | `EXPLICIT_DENY` | `IMPLICIT_DENY`, optionally `policyId` / `statementName` / `roleId` / `permissionId`) run with `PolicyTestKit.run("classpath:cosec-policy-test/*.json").assertPasses()`. Failures name the rule that decided instead.
 
 `LocalPolicyLoader` logs and skips malformed policies, so assert that the expected policy ID loaded. `DefaultPolicyEvaluator` catches expected regex-timeout signals but surfaces other matcher configuration errors. Add one authorization test for each meaningful allow/deny boundary.

@@ -1,0 +1,15 @@
+{
+  "id": "billing",
+  "groups": [
+    {
+      "name": "invoices",
+      "permissions": [
+        {
+          "id": "manage.order.issueInvoice",
+          "name": "Issue an invoice",
+          "action": "/order/issueInvoice"
+        }
+      ]
+    }
+  ]
+}

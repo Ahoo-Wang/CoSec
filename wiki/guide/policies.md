@@ -458,7 +458,8 @@ result, optionally with the rule that must decide.
   "name": "orders",
   "policies": ["classpath:cosec-policy/*-policy.json"],
   "appPermissions": ["classpath:cosec-policy/*-app-permission.json"],
-  "roles": { "shipper": ["manage.order.ship"] },
+  "roles": { "shipper": ["manage.order.ship"], "shipper@team-a": ["manage.order.ship"] },
+  "appRoles": { "manage": { "invoicer": ["manage.order.issueInvoice"] } },
   "cases": [
     { "name": "users read orders",
       "principal": { "id": "alice" },
@@ -481,3 +482,9 @@ fun policies() = PolicyTestKit.run("classpath:cosec-policy-test/*.json").assertP
 and `expect.result` is `ALLOW`, `EXPLICIT_DENY` or `IMPLICIT_DENY`. Each case runs through the explainer against
 in-memory repositories, so a failure names the rule that decided instead and any warning, such as a policy id the
 principal lists but no file defines. Policy files that cannot be read fail the run instead of being skipped.
+
+Role grants follow [role grant scope](#role-grant-scope). A role is written as in principals' roles: `shipper` is
+granted in the default space, `shipper@team-a` in `team-a` only, and a case's principal reaches a grant only through
+a role it holds in the request's space. `roles` grants in every app the suite loads; `appRoles` grants in one app
+(app id to role to permission ids), which must be defined by one of `appPermissions`. A malformed role or an
+unknown app in `appRoles` fails the run.

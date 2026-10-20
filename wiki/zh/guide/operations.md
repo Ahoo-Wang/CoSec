@@ -73,7 +73,8 @@
 val analyzer = AccessAnalyzer.load(
     policyLocations = listOf("classpath:cosec-policy/*-policy.json"),
     appPermissionLocations = listOf("classpath:cosec-policy/*-app-permission.json"),
-    roles = mapOf("shop" to mapOf("admin" to setOf("*"), "clerk" to setOf("order.read"))),
+    // 应用 id → 角色 → 权限 id；`role@space` 只在该空间授权
+    roles = mapOf("shop" to mapOf("admin" to setOf("*"), "clerk" to setOf("order.read"), "clerk@east" to setOf("*"))),
 )
 
 val paths = analyzer.whoCan(EvaluateRequest(path = "/orders/42", method = "DELETE",
@@ -84,8 +85,13 @@ paths.denies   // 可能拒绝它的每一条规则
 val grants = analyzer.grantsOf(SimplePrincipal("alice", policies = setOf("ops"), roles = setOf("clerk")))
 ```
 
+角色授权遵循[角色授权的作用域](./policies.md#role-grant-scope)：每条授权属于一个应用、一个角色和一个空间，写法与主体的角色相同：
+`clerk` 在默认空间授权，`clerk@east` 只在 `east` 授权。`whoCan` 列出在请求的应用（`CoSec-App-Id`）和空间（`CoSec-Space-Id`）中做出的授权。
+`grantsOf` 只通过主体在某个空间拥有的角色到达该空间的授权，所以上例中的 `clerk` 到达不了 `clerk@east` 的授权；
+传入 `appId` 和 `spaceId` 可以限定到某个应用或空间。格式错误的角色（角色或空间为空，或含有多个 `@`）会让 `AccessAnalyzer` 构造失败。
+
 每条规则都指明来源（`GLOBAL_POLICY` 适用于所有人，`PRINCIPAL_POLICY` 适用于列出该策略的主体，`ROLE_PERMISSION`
-适用于该应用中拥有该角色的成员）、对应的语句或权限、它的动作和条件，以及两个标记：
+适用于在该应用和空间中拥有该角色的成员，由 `roleId` 和 `spaceId` 给出）、对应的语句或权限、它的动作和条件，以及两个标记：
 
 - `conditional`：还必须满足某个条件，因此该规则只适用于部分调用方或请求。
 - `templated`：动作依赖调用者，例如 `/users/#{principal.id}/**`。每个模板都会被放宽为一个路径段，只要某个调用者可能匹配，就会列出该规则。

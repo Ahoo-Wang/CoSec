@@ -53,6 +53,11 @@ grants of a same-named role in another space. In 7.0:
   roles that apply in the space, without the `@space` suffix; a custom repository must return only the grants
   made for that app and space.
 - The explainer adds the `NO_ROLE_IN_SPACE` warning.
+- `AccessAnalyzer` and `PolicyTestKit` scope role grants the same way. A grant role written without a suffix is
+  granted in the default space only; write `role@space` for grants in another space. `whoCan` takes grants from the
+  request's space, `grantsOf` reaches a grant only through a role held in its space and takes an optional
+  `spaceId`, and `AccessRule` adds `spaceId`. Test suites add `appRoles` for grants made in one app; `roles` still
+  grants in every app. Malformed roles now fail instead of never matching.
 
 #### Migrating role grants
 

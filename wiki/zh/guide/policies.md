@@ -417,7 +417,8 @@ cosec:
   "name": "orders",
   "policies": ["classpath:cosec-policy/*-policy.json"],
   "appPermissions": ["classpath:cosec-policy/*-app-permission.json"],
-  "roles": { "shipper": ["manage.order.ship"] },
+  "roles": { "shipper": ["manage.order.ship"], "shipper@team-a": ["manage.order.ship"] },
+  "appRoles": { "manage": { "invoicer": ["manage.order.issueInvoice"] } },
   "cases": [
     { "name": "users read orders",
       "principal": { "id": "alice" },
@@ -439,3 +440,7 @@ fun policies() = PolicyTestKit.run("classpath:cosec-policy-test/*.json").assertP
 `principal` 和 `request` 的字段与[解释一次决策](./troubleshooting.md#explain-a-decision)相同，`expect.result` 取值为
 `ALLOW`、`EXPLICIT_DENY` 或 `IMPLICIT_DENY`。每个用例都通过解释器在内存仓储上运行，因此失败时会指出实际做出决定的规则以及所有警告，
 例如主体列出了某个策略 id 却没有文件定义它。无法读取的策略文件会让本次运行失败，而不是被跳过。
+
+角色授权遵循[角色授权的作用域](#role-grant-scope)。角色的写法与主体的角色相同：`shipper` 在默认空间授权，`shipper@team-a` 只在 `team-a` 授权；
+用例的主体只能通过它在请求所在空间拥有的角色到达授权。`roles` 在套件加载的每个应用中授权；`appRoles` 只在一个应用中授权
+（应用 id → 角色 → 权限 id），该应用必须由某个 `appPermissions` 文件定义。格式错误的角色，或 `appRoles` 中未知的应用，都会让本次运行失败。

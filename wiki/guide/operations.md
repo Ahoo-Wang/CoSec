@@ -88,7 +88,8 @@ policy files, app permissions and role grants, typically in a test or a small re
 val analyzer = AccessAnalyzer.load(
     policyLocations = listOf("classpath:cosec-policy/*-policy.json"),
     appPermissionLocations = listOf("classpath:cosec-policy/*-app-permission.json"),
-    roles = mapOf("shop" to mapOf("admin" to setOf("*"), "clerk" to setOf("order.read"))),
+    // app id to role to permission ids; `role@space` grants in that space only
+    roles = mapOf("shop" to mapOf("admin" to setOf("*"), "clerk" to setOf("order.read"), "clerk@east" to setOf("*"))),
 )
 
 val paths = analyzer.whoCan(EvaluateRequest(path = "/orders/42", method = "DELETE",
@@ -99,8 +100,15 @@ paths.denies   // every deny that could stop it
 val grants = analyzer.grantsOf(SimplePrincipal("alice", policies = setOf("ops"), roles = setOf("clerk")))
 ```
 
+Role grants follow [role grant scope](./policies.md#role-grant-scope): each one belongs to an app, a role and a
+space, written as in principals' roles: `clerk` is granted in the default space, `clerk@east` in `east` only.
+`whoCan` lists the grants made in the request's app (`CoSec-App-Id`) and space (`CoSec-Space-Id`). `grantsOf`
+reaches a grant only through a role the principal holds in that space, so `clerk` above does not reach the
+`clerk@east` grant; pass `appId` and `spaceId` to narrow it to one app or space. A malformed role (an empty role
+or space, or more than one `@`) fails `AccessAnalyzer` construction.
+
 Each rule names its source (`GLOBAL_POLICY` applies to everyone, `PRINCIPAL_POLICY` to principals listing the
-policy, `ROLE_PERMISSION` to members of the role in that app), the statement or permission, its action and
+policy, `ROLE_PERMISSION` to members of the role in that app and space, given by `roleId` and `spaceId`), the statement or permission, its action and
 condition, and two flags:
 
 - `conditional`: a condition must also match, so the rule applies only to some callers or requests.

@@ -38,6 +38,9 @@
 - `AppRolePermissionRepository.getAppRolePermission` 的签名不变。`SimpleAuthorization` 现在传入在该空间生效、
   且去掉了 `@space` 后缀的角色；自定义仓储只能返回为该应用和该空间做出的授权。
 - 解释器新增 `NO_ROLE_IN_SPACE` 警告。
+- `AccessAnalyzer` 和 `PolicyTestKit` 以相同方式限定角色授权的作用域。授权中不带后缀的角色只在默认空间授权；在其他空间授权要写成 `role@space`。
+  `whoCan` 取请求所在空间的授权，`grantsOf` 只通过在授权所在空间拥有的角色到达授权，并新增可选的 `spaceId` 参数，`AccessRule` 新增 `spaceId`。
+  测试套件新增 `appRoles`，用于只在一个应用中授权；`roles` 仍在每个应用中授权。格式错误的角色现在会直接失败，而不是永远不匹配。
 
 #### 迁移角色授权 {#migrating-role-grants}
 
