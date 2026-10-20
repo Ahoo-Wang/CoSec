@@ -48,7 +48,7 @@ spec:
             - name: JAVA_OPTS
               # https://github.com/netty/netty/issues/16082
               value: -Djava.net.preferIPv4Stack=true
-          image: ghcr.io/ahoo-wang/cosec-gateway:6.1.0
+          image: ghcr.io/ahoo-wang/cosec-gateway:7.0.0
           startupProbe:
             httpGet:
               port: http
