@@ -13,22 +13,48 @@
 
 package me.ahoo.cosec.policy
 
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.hasSize
+import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.io.File
 
 class LocalPolicyLoaderTest {
 
-    private val localPolicyRepository = LocalPolicyLoader(
-        setOf(
-            "classpath:cosec-policy-not-found",
-            "classpath:cosec-policy",
-            "classpath:cosec-policy/*.json"
-        )
-    )
-
     @Test
     fun getPolicies() {
-        assertThat(localPolicyRepository.policies, hasSize(1))
+        val loader = LocalPolicyLoader(
+            setOf(
+                "classpath:cosec-policy-not-found",
+                "classpath:cosec-policy/*-policy.json",
+                "classpath:cosec-policy/test-policy.json"
+            )
+        )
+        loader.policies.map { it.id }.assert().containsExactly("id")
+    }
+
+    @Test
+    fun invalidPolicyFailsLoadingInsteadOfBeingSkipped() {
+        assertThrownBy<IllegalStateException> {
+            LocalPolicyLoader(
+                setOf("classpath:cosec-policy/test-policy.json", "classpath:cosec-policy-invalid/*.json")
+            ).policies
+        }.hasMessageContaining("error-policy.json")
+    }
+
+    @Test
+    fun unknownMatcherTypeFailsLoading(@TempDir dir: File) {
+        dir.resolve("unknown-policy.json").writeText(
+            """
+            {
+              "id": "unknown", "name": "unknown", "category": "", "description": "", "type": "global",
+              "tenantId": "(platform)",
+              "statements": [{ "effect": "deny", "action": "*", "condition": { "noSuchMatcher": { "value": "x" } } }]
+            }
+            """.trimIndent(),
+        )
+        assertThrownBy<IllegalStateException> {
+            LocalPolicyLoader(setOf("file:${dir.absolutePath}/*.json")).policies
+        }.hasMessageContaining("unknown-policy.json")
     }
 }
