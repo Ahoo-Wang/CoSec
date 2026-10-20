@@ -188,6 +188,17 @@ stored copy cannot be read, startup fails with that read error, even if the loca
   scope, which 7.0 rejects. Fix the stored policy, or start once with `force-refresh=true` so the local files
   overwrite the stored copies without reading them.
 
+## Publishing a policy fails before the migration
+
+`setPolicy` (an administration API, or local policies with `force-refresh=true` at startup) fails with
+`CacheWriteException` caused by `ForeignFormatException`, naming the global policy index key
+(`cosec:global:policy`) and `format[0]`. The index is still the native SET CoSec 6.x wrote, and CoCache 6 does not
+overwrite it: the index is left unchanged, and requests keep failing with `500` until the data is migrated. Run the
+[data migration](./upgrading.md#migrating-the-data), then repeat the publish. Do not delete the key or set
+`foreign-format=reclaim` on it: it is the only copy of the global policy ids. A global policy's content was already
+written in the 7.0 format before the index update failed, so the migration skips it and a rollback keeps it in the
+7.0 format.
+
 ## One principal always gets 500
 
 The log shows `MissingPolicyException` with the policy ids. The principal lists a policy that the repository

@@ -125,6 +125,13 @@ CoSec 7.0 基于 [CoCache 6.5](https://cocache.ahoo.me/guide/migration-6) 和
 `ForeignFormatException`），该值原样保留在 Redis 中，请求以 `500` 被拒绝。即使设置了 `cocache.defaults.foreign-format=reclaim`，
 策略和权限缓存也始终保持这一行为：它们没有数据源，回收（reclaim）会删除唯一的副本。
 
+**迁移完成前的写入。** 每次 `setPolicy` 都会更新全局策略索引，而索引仍是 6.x 的原生 SET 时，CoCache 6 不会覆盖它：
+发布失败，抛出 `CacheWriteException`，原因是指明索引键（`cosec:global:policy`）的 `ForeignFormatException`；索引保持原样，
+之后的迁移仍能正常转换它。`setPolicy` 以这个错误结束（`force-refresh=true` 的本地策略会使启动失败，
+见[故障排查](./troubleshooting.md#publishing-a-policy-fails-before-the-migration)），请求仍以 `500` 被拒绝。
+其他写入不受这项检查：全局策略的内容（在索引之前写入）和应用权限会以 7.0 格式替换该键上的 6.x 值，
+迁移随后跳过这个键且不为它备份，回滚也就无法恢复它的 6.x 值。角色授权写入新的键，迁移前写入的授权会在角色授权迁移中报告为冲突。因此迁移完成前不能有任何写入。
+
 **全局策略索引会与策略内容核对。** 索引和策略内容是 Redis 中不同的键。6.x 会跳过索引中没有内容的 id，丢失的全局 `DENY`
 因此悄悄失效；7.0 会以 `MissingPolicyException` 使读取失败，请求以 `500` 被拒绝（见[故障排查](./troubleshooting.md#every-request-fails-with-500)）。
 索引中 id 对应的内容类型不是 `global` 时（并发或未完成的重新发布），该策略被忽略，而不会作用于所有人。
@@ -141,8 +148,9 @@ CoCache 6 读不了 CoSec 6.x 用 CoCache 5 写入的值，而 Redis 是策略�
 
 按以下顺序执行：
 
-1. **停止所有写入方。** 停止所有 6.x 实例，以及其他写入 CoSec 键的程序（例如写入策略或授权的管理服务）。迁移期间不能有任何写入：
-   迁移某个键时它被修改，会使本次执行中止。
+1. **停止所有写入方。** 停止所有 6.x 实例，以及其他写入 CoSec 键的程序（例如写入策略或授权的管理服务），也不要启动会写入的
+   7.0 实例。迁移期间不能有任何写入：迁移某个键时它被修改，会使本次执行中止；已被 7.0 先写入的键会被跳过且没有备份
+   （见[迁移完成前的写入](#cocache-6-and-cosid-4)）。
 2. **执行 CoCache 迁移。** 先演练（dry run），它读取并解码每个值但不写入，然后正式迁移。查看每次的报告：按缓存列出 `read`（读取）、
    `written`（写入）、`skipped`（已迁移而跳过）和 `negatives`（缓存的未命中，迁移为缓存的未命中）。无法解码的值会使执行中止，
    抛出指明该键的 `CoCache5MigrationException`；修正后重新执行。已迁移的键会被跳过，因此可以重复执行。

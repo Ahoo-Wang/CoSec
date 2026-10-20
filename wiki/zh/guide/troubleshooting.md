@@ -165,6 +165,14 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 - `PathVariableScopeException`：已存储的副本（通常是从 6.x 迁移来的）在作用域之外读取 `request.path.var.*`，7.0 拒绝这样的策略。
   修正已存储的策略，或者以 `force-refresh=true` 启动一次，让本地文件直接覆盖已存储的副本而不读取它们。
 
+## 迁移前发布策略失败 {#publishing-a-policy-fails-before-the-migration}
+
+`setPolicy`（管理接口，或启动时 `force-refresh=true` 的本地策略）失败，抛出 `CacheWriteException`，原因是
+`ForeignFormatException`，其中指明全局策略索引键（`cosec:global:policy`）和 `format[0]`。索引仍是 CoSec 6.x 写入的原生 SET，
+CoCache 6 不会覆盖它：索引保持不变，在数据迁移之前请求仍以 `500` 失败。执行[数据迁移](./upgrading.md#migrating-the-data)，
+然后重新发布。不要删除这个键，也不要对它设置 `foreign-format=reclaim`：它是全局策略 id 的唯一副本。
+全局策略的内容在索引更新失败之前已经以 7.0 格式写入，因此迁移会跳过它，回滚后它也仍是 7.0 格式。
+
 ## 某个主体总是得到 500 {#one-principal-always-gets-500}
 
 日志中出现 `MissingPolicyException` 及相应的策略 id。主体列出的策略在仓储中不存在：它被删除了、从未写入，或从 Redis 中丢失。

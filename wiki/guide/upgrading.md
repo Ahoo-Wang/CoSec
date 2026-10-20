@@ -167,6 +167,17 @@ application uses CosId itself, follow CosId's
 denied with `500`. Policy and permission caches always keep this behavior, even with
 `cocache.defaults.foreign-format=reclaim`: with no loader, a reclaim would delete the only copy.
 
+**Writes before the migration.** Every `setPolicy` updates the global policy index, which CoCache 6 does not
+overwrite while it still holds the 6.x native SET: the publish fails with `CacheWriteException`, caused by
+`ForeignFormatException` naming the index key (`cosec:global:policy`), the index is left as it was, and the
+migration still converts it. `setPolicy` completes with this error (a local policy
+with `force-refresh=true` stops startup, see [troubleshooting](./troubleshooting.md#publishing-a-policy-fails-before-the-migration)),
+and requests are still denied with `500`. Other writes are not checked: a global policy's content (written before
+the index) and app permissions replace the 6.x value of their key in the 7.0 format. The migration then skips that
+key and keeps no backup of it, so a rollback cannot restore its 6.x value. Role grants go to new keys, and one
+written before its migration is reported there as a conflict. This is why nothing may write before the migration
+has finished.
+
 **The global policy index is checked against the policies.** The index and the policy contents are separate Redis
 keys. In 6.x an indexed id without content was skipped, so a lost global `DENY` silently stopped applying; 7.0
 fails the read with `MissingPolicyException` and the request is denied with `500`
@@ -189,8 +200,9 @@ application or a one-off job using the starter with `cache-support`), not actuat
 In order:
 
 1. **Stop every writer.** Stop all 6.x instances, and anything else that writes CoSec keys (an administration
-   service writing policies or grants). Nothing may write during the migration: a key changed while it is
-   migrated aborts the run.
+   service writing policies or grants), and start no 7.0 instance that writes. Nothing may write during the
+   migration: a key changed while it is migrated aborts the run, and a key 7.0 wrote first is skipped without a
+   backup ([Writes before the migration](#cocache-6-and-cosid-4)).
 2. **Run the CoCache migration.** First a dry run, which reads and decodes every value and writes nothing, then the
    migration. Read the report of each: per cache, the keys `read`, `written`, `skipped` (already migrated) and
    `negatives` (cached misses, migrated as cached misses). A value that cannot be decoded aborts the run with a
