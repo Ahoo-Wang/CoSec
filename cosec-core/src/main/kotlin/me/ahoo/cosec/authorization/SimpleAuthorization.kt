@@ -25,7 +25,9 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.blacklist.BlacklistChecker
+import me.ahoo.cosec.policy.action.clearPathVariables
 import me.ahoo.cosec.policy.requiresBlocking
+import me.ahoo.cosec.policy.verifyScoped
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.switchIfEmpty
@@ -81,6 +83,10 @@ class SimpleAuthorization(
      * limiter) runs for every matched policy regardless of which statement decides — denied requests
      * uniformly consume rate-limiter permits.
      *
+     * Path variables are cleared before the policy conditions and before every statement (see [verifyScoped]), so a
+     * condition only sees the variables its own statement's action captured, never those another statement, policy
+     * or layer left.
+     *
      * Plain loops over the source lists keep this hot path allocation-free apart from the matched-policy list.
      */
     private fun verifyPolicies(
@@ -89,6 +95,7 @@ class SimpleAuthorization(
         request: Request,
         securityContext: SecurityContext
     ): VerifyContext? {
+        securityContext.clearPathVariables()
         val matchedPolicies = policies.filter { policy ->
             policy.condition.match(request = request, securityContext = securityContext)
         }
@@ -96,7 +103,7 @@ class SimpleAuthorization(
             val decisive = effect.decisiveResult()
             for (policy in matchedPolicies) {
                 policy.statements.forEachIndexed { index, statement ->
-                    if (statement.effect == effect && statement.verify(request, securityContext) == decisive) {
+                    if (statement.effect == effect && statement.verifyScoped(request, securityContext) == decisive) {
                         log.debug {
                             "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [$decisive]."
                         }
@@ -124,6 +131,7 @@ class SimpleAuthorization(
         context: SecurityContext
     ): VerifyContext? {
         val appPermission = appRolePermission.appPermission
+        context.clearPathVariables()
         if (!appPermission.condition.match(request, context)) {
             return null
         }
@@ -132,7 +140,7 @@ class SimpleAuthorization(
             val decisive = effect.decisiveResult()
             for (rolePermission in appRolePermission.rolePermissions) {
                 rolePermission.forEachPermission(permissionIndexer) { permission ->
-                    if (permission.effect == effect && permission.verify(request, context) == decisive) {
+                    if (permission.effect == effect && permission.verifyScoped(request, context) == decisive) {
                         log.debug {
                             "Verify [$request] [$context] matched Role[${rolePermission.id}] Permission[${permission.id}][${permission.name}] - [$decisive]."
                         }

@@ -2,9 +2,30 @@
 
 各版本之间有哪些变化，以及你需要做什么。每个版本的发布说明见 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
-## 从 6.0 升级到 6.1 {#_6-0-to-6-1}
+## 从 6.1 升级到 7.0 {#_6-1-to-7-0}
 
 ### 破坏性变更 {#breaking-changes}
+
+**路径变量只属于捕获它的语句。** 以前，`request.path.var.*` 读到的是本次请求中最后一个命中的 `path` 动作捕获的变量，
+不论它属于哪条语句、哪个策略、哪一层。因此条件可能依赖别的语句：一条从未命中的拒绝语句可以让一条 `all` 动作的允许语句命中
+（加一条 deny 反而放宽了访问），策略级条件会读到 global 层的变量，没有 `path` 动作的限流规则会读到策略的变量。现在：
+
+- 每条语句、权限和限流规则在匹配自己的动作之前，以及策略和应用权限的条件求值之前，都会清空路径变量，
+  因此条件只能读到本语句 `path` 动作捕获的变量；
+- 在本语句或本规则没有 `path` 动作捕获变量的位置读取路径变量，属于加载错误 `PathVariableScopeException`：
+  策略或应用权限的 `condition`、动作不是 `path` 的语句或权限的条件、动作不是 `path` 的限流规则的 `condition` 或 `key`
+  （见[路径变量](./policies.md#actions)）。
+
+解析这样的策略、应用权限或限流规则会失败，用它们构造 `PolicyData`、`AppPermissionData` 或 `RateLimitRule` 也会失败；
+`RedisPolicyRepository.setPolicy` 会拒绝写入。含有这类引用的本地策略文件会阻止应用启动，而不是像其他无效文件那样被跳过。
+已经存储在 Redis 中的此类策略读取失败，请求会以 `500` 被拒绝。
+
+升级前，请在策略、应用权限和限流规则中搜索 `request.path.var.` 和 `PATH_VARIABLES`，把每处引用移到 `path`
+动作捕获了该变量的语句中，例如把 `"action": "*"` 换成声明该变量的模式；把策略级条件移到各条语句的条件中。
+
+## 从 6.0 升级到 6.1 {#_6-0-to-6-1}
+
+### 破坏性变更 {#breaking-changes-1}
 
 **限流改为规则，不再是策略条件。** `rateLimiter`、`groupedRateLimiter`、`redisRateLimiter` 和 `redisGroupedRateLimiter`
 条件已被移除，`TooManyRequestsException` 也一并移除。仍在使用它们的策略将无法解析：使用它们的本地策略文件会被跳过并记录 `ERROR` 日志，

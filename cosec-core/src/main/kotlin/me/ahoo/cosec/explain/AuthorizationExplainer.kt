@@ -35,7 +35,9 @@ import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.limiter.RateLimitRuleProvider
 import me.ahoo.cosec.pipeline.SecurityDecision
 import me.ahoo.cosec.pipeline.SecurityPipeline
+import me.ahoo.cosec.policy.action.clearPathVariables
 import me.ahoo.cosec.policy.markPolicyEvaluation
+import me.ahoo.cosec.policy.verifyScoped
 import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationException
 import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.toAuthorizeResult
@@ -390,7 +392,7 @@ class AuthorizationExplainer(
             @Suppress("TooGenericExceptionCaught")
             return try {
                 val outcome = when {
-                    statement.verify(request, context) != VerifyResult.IMPLICIT_DENY -> StatementOutcome.MATCHED
+                    statement.verifyScoped(request, context) != VerifyResult.IMPLICIT_DENY -> StatementOutcome.MATCHED
                     !statement.action.match(request, context) -> StatementOutcome.ACTION_MISS
                     else -> StatementOutcome.CONDITION_MISS
                 }
@@ -401,9 +403,11 @@ class AuthorizationExplainer(
             }
         }
 
+        /** Matches a policy or app condition, which runs before any action and so sees no path variables. */
         @Suppress("TooGenericExceptionCaught")
         private fun match(condition: ConditionMatcher, where: () -> String): Boolean? =
             try {
+                context.clearPathVariables()
                 condition.match(request, context)
             } catch (cause: Exception) {
                 matcherError(where(), cause)

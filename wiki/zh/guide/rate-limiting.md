@@ -49,6 +49,10 @@ flowchart LR
 | `windowSeconds` | 否 | 窗口长度，默认 `1`。低速率请用更长的窗口：每秒 `0.1`、窗口 `60` 秒即每分钟 6 个请求。 |
 | `strictFailure` | 否 | 后端故障时的处理：`false`（默认）跳过该规则，`true` 以 `429` 拒绝请求。 |
 
+只有 `action` 是 `path` 动作的规则，才能在 `condition` 或 `key` 中读取 `request.path.var.<name>`，读到的是该动作捕获的变量，
+而不是策略或其他规则捕获的变量。动作不是 `path` 的规则读取路径变量时，会加载失败并抛出 `PathVariableScopeException`
+（见[路径变量](./policies.md#actions)）。
+
 每条匹配的规则按顺序各消耗一个许可。第一条用尽的规则拒绝请求，其后的规则不再消耗。无法读取的规则文件会阻止应用启动，
 因为被悄悄丢弃的限流会在无人察觉的情况下撤掉一道防护。
 

@@ -62,6 +62,10 @@ class LocalPolicyLoader(
                 try {
                     return@mapNotNull CoSecJsonSerializer.readValue(it.contentAsByteArray, Policy::class.java)
                 } catch (e: Throwable) {
+                    // Skipping such a policy could drop a deny and widen access, so it fails loading instead.
+                    e.findPathVariableScopeException()?.let { cause ->
+                        throw IllegalStateException("Failed to load policy [$it]: ${cause.message}", e)
+                    }
                     log.error(e) { e.message }
                     null
                 }
@@ -70,3 +74,6 @@ class LocalPolicyLoader(
             }
     }
 }
+
+private fun Throwable.findPathVariableScopeException(): PathVariableScopeException? =
+    generateSequence(this) { it.cause }.filterIsInstance<PathVariableScopeException>().firstOrNull()

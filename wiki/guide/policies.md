@@ -80,8 +80,24 @@ The `path` action matcher:
 - `options`: optional; how paths are split and compared. The separator also makes non-HTTP
   "paths" possible, such as `order.read` with `"separator": "."`.
 
-**Path variables.** Variables captured by the matching action are available to the statement's condition
-as `request.path.var.<name>`.
+**Path variables.** A `path` action that matches captures its `{var}`s, and the condition of the same statement
+reads them as `request.path.var.<name>`. They belong to that statement alone: they are cleared before every
+statement, permission and [rate limit rule](./rate-limiting.md#rules) matches its action, so a condition never
+sees what another statement captured, and a variable its own pattern does not declare reads as empty.
+
+Reading path variables anywhere else is a policy error, and the policy fails to load with
+`PathVariableScopeException`:
+
+- in a policy's or an app permission's `condition`, which runs before any action;
+- in the condition of a statement or permission whose action is not a `path` action: `all`, `["*", ...]`, a
+  `composite` with any non-path member, or a custom action type;
+- in the `condition` or `key` of a rate limit rule whose action is not a `path` action.
+
+The check recognizes every `part` and rate limit `key` that starts with `request.path.var.`, and every
+string in the matcher's configuration (OGNL and SpEL expressions, `#{...}` templates) that mentions
+`PATH_VARIABLES`, the context attribute that holds the variables. It cannot recognize an expression that builds
+that name at run time, or a custom matcher that reads the variables in code. Those still read nothing outside
+their own statement, because the variables are cleared.
 
 ## Templates
 
@@ -174,7 +190,7 @@ the request (`403`); it is never treated as a match.
 | `request.header.<name>` | any request header |
 | `request.attributes.<name>` | a [request attribute](./web-integration.md#request-attributes), such as `ipRegion` |
 | `resource.<name>` | an attribute of the target object, set by a check in code; empty in the request filter (see [Object-level rules](#object-level-rules)) |
-| `request.path.var.<name>` | a path variable captured by the matched action |
+| `request.path.var.<name>` | a path variable captured by the same statement's `path` action (see [Actions](#actions)) |
 | `context.tenantId`, `context.principal.id` | tenant and principal id |
 | `context.principal.attributes.<name>` | a principal attribute (a JWT `attributes` claim entry) |
 
@@ -322,7 +338,9 @@ CoSec reads permissions and grants; your administration service owns writing the
 ::: warning Invalid files are skipped
 A local policy file that cannot be parsed (invalid JSON, a missing required field, an unknown condition
 type, a bad matcher configuration) is logged at `ERROR` and skipped; the application still starts. Check
-the startup log, or validate policies in a test as below.
+the startup log, or validate policies in a test as below. The exception is a policy that reads
+[path variables](#actions) outside their scope: it stops the application from starting, because skipping it could
+drop a deny.
 :::
 
 ### Policy history and rollback

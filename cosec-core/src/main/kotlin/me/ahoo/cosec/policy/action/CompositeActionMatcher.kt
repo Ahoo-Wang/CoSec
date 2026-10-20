@@ -31,7 +31,7 @@ import me.ahoo.cosec.api.policy.ActionMatcher
  */
 class CompositeActionMatcher(
     override val type: String,
-    private val actionMatchers: List<ActionMatcher>,
+    val actionMatchers: List<ActionMatcher>,
     override val configuration: Configuration
 ) : ActionMatcher {
     override fun match(
