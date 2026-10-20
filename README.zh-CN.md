@@ -32,7 +32,7 @@
 flowchart LR
     R([请求 + JWT]) --> BL{在黑名单中?}
     BL -->|是| DENY([EXPLICIT_DENY])
-    BL -->|否| ROOT{root 主体?}
+    BL -->|否| ROOT{"root 主体?<br>（仅在开启 root 时）"}
     ROOT -->|是| ALLOW([ALLOW])
     ROOT -->|否| L["全局策略<br>主体策略<br>角色权限"]
     L --> D{命中任何 DENY?}

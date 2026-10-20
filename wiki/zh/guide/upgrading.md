@@ -21,9 +21,11 @@
 - 开启后，`RootPrincipalMatcher.DEFAULT` 只把 id 等于 root id **并且**租户为平台租户（`(platform)`，即 `Tenant.PLATFORM_TENANT_ID`）的主体视为 root。
   用户租户、默认租户中的 root id，以及不带租户的主体，都只是普通主体。
 - 黑名单在 root 之前检查，因此 root 发出的、被黑名单拦截的请求会被拒绝。解释结果中 `BLACKLIST` 层现在排在 `ROOT` 之前，`ExplainLayer` 也按这个顺序列出。
+- 直接构造 `SimpleAuthorization`、`AuthorizationExplainer` 或 `ShadowAuthorization` 的代码，默认同样使用 `RootPrincipalMatcher.NONE`，
+  与 starter 和 `PolicyTestKit` 一致：不传 `rootPrincipalMatcher` 参数时，没有任何主体是 root。
 
 如果依赖 root，请设置 `cosec.authorization.root-enabled=true`，并为 root 主体签发 `tenantId` 为 `(platform)` 的令牌。
-直接构造 `SimpleAuthorization`、`AuthorizationExplainer` 或 `ShadowAuthorization` 的代码，默认仍使用 `RootPrincipalMatcher.DEFAULT`，但采用新的租户规则。`PolicyTestKit` 则与 starter 一致：除非向 `run` 传入 `RootPrincipalMatcher`，否则没有任何主体是 root。
+直接构造这些类的代码请传入 `rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT`，`PolicyTestKit` 则把它作为 `run` 的匹配器参数传入。
 如果 root 需要按其他方式判定，请提供自己的 `RootPrincipalMatcher` bean。
 
 **角色授权的作用域限定在应用和空间之内。** 6.x 按角色和空间保存角色授权，不含应用，而应用（`CoSec-App-Id`）和空间（`CoSec-Space-Id`）
@@ -68,7 +70,13 @@
 
 **任何无效的本地策略文件都会阻止启动。** `LocalPolicyLoader` 以前遇到无法解析或构建的策略文件（JSON 格式错误、未知的匹配器类型、
 无效的选项）时只记录日志并跳过，这可能悄悄丢掉一条拒绝。现在任何这样的文件都会导致加载失败（限流规则文件早已如此），
-错误中会给出文件名。不存在的位置仍然只记录警告并跳过（见[故障排查](./troubleshooting.md#startup-fails-loading-a-policy-file)）。
+错误中会给出文件名（见[故障排查](./troubleshooting.md#startup-fails-loading-a-policy-file)）。
+
+**本地策略 id 重复、本地策略位置不存在都会阻止启动。** `LocalPolicyLoader` 以前遇到两个文件声明相同的策略 id 时，只保留其中一个、悄悄丢掉另一个；
+`cosec.authorization.local-policy.locations` 中的位置不存在或匹配不到任何文件时，也只记录一条警告。两者都可能在不知不觉中丢掉拒绝规则，
+例如只存放拒绝策略的位置写错了路径。现在两者都会导致加载失败，错误中会给出该 id 或位置。默认位置 `classpath:cosec-policy/*-policy.json`
+仍然允许匹配不到文件，因此没有本地策略的应用不受影响。升级前，请确认每个配置的位置都存在，并且策略 id 在各文件之间不重复；
+通过两个位置访问到的同一个文件只会加载一次。
 
 **限流规则的 `key` 在加载时校验。** 不受支持的 `key`（例如把 `request.remoteIp` 写成 `request.ip`）以前可以加载，
 然后在前面的规则已经消耗许可之后，让每个匹配的请求都以 `500` 失败。现在构造或加载这样的规则会直接失败（见[限流](./rate-limiting.md)）。
@@ -234,7 +242,7 @@ CoCache 6 读不了 CoSec 6.x 用 CoCache 5 写入的值，而 Redis 是策略�
 ### 破坏性变更 {#breaking-changes-1}
 
 **限流改为规则，不再是策略条件。** `rateLimiter`、`groupedRateLimiter`、`redisRateLimiter` 和 `redisGroupedRateLimiter`
-条件已被移除，`TooManyRequestsException` 也一并移除。仍在使用它们的策略将无法解析：使用它们的本地策略文件会被跳过并记录 `ERROR` 日志，
+条件已被移除，`TooManyRequestsException` 也一并移除。仍在使用它们的策略将无法解析：使用它们的本地策略文件会被跳过并记录 `ERROR` 日志（从 7.0 起会阻止启动），
 存储在 Redis 中的此类策略读取失败，请求会被拒绝。升级前，请按照[迁移对照表](./rate-limiting.md#migrating-from-rate-limit-conditions)
 把每个限流改写为[限流规则](./rate-limiting.md#rules)。随之变化的行为有三点：
 

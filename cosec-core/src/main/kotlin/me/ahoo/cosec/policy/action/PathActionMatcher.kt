@@ -119,6 +119,9 @@ class ReplaceablePathActionMatcher(
         request: Request,
         securityContext: SecurityContext
     ): Boolean {
+        // The template is evaluated before this action captures anything: a template that builds the attribute name
+        // at run time (and so passes the load-time check) must not see another statement's path variables.
+        securityContext.clearPathVariables()
         val resolvedPattern = requireNotNull(expression.getValue(securityContext))
         val pathPattern = pathPatternCache.get(resolvedPattern) { patternParser.parse(resolvedPattern) }
         val pathContainer = securityContext.parseRequestPath(request, patternParser.pathOptions)

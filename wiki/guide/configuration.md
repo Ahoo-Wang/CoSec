@@ -36,7 +36,7 @@ OpenTelemetry tracing has no switch: it is active whenever `opentelemetry-suppor
 | `cosec.authorization.root-enabled` | `false` | Whether the root principal bypasses policy and permission checks. Root is the principal of the platform tenant (`(platform)`) whose id is `cosec`, or the value of the `-Dcosec.root` system property. A principal of any other tenant, or without a tenant, is never root, and the blacklist applies to root too. For a different rule, provide a `RootPrincipalMatcher` bean. |
 | `cosec.authorization.remote-ip.max-trusted-index` | `1` | How many proxy hops to trust in `X-Forwarded-For` when resolving the client IP. `0` ignores the header (the service is exposed directly). `N` takes the entry appended by the N-th closest proxy. |
 | `cosec.authorization.local-policy.enabled` | `false` | Load policies from local JSON files. |
-| `cosec.authorization.local-policy.locations` | `classpath:cosec-policy/*-policy.json` | Resource patterns to load. |
+| `cosec.authorization.local-policy.locations` | `classpath:cosec-policy/*-policy.json` | Resource patterns to load. A location that matches no file, other than the default, stops startup, and so do two files with the same policy id. |
 | `cosec.authorization.local-policy.init-repository` | `false` | Write loaded policies into the `PolicyRepository` on startup. |
 | `cosec.authorization.local-policy.force-refresh` | `false` | Overwrite policies that already exist in the repository. |
 

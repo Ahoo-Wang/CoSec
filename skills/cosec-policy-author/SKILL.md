@@ -79,7 +79,7 @@ Order deny statements before allow statements for readability, not behavior.
 |---|---|---|
 | `all` | none | Always match |
 | `authenticated` | none | Require a non-anonymous principal |
-| `inRole` | `value` | Match a principal role. Bare `admin` matches `admin` (any space) or `admin@<request space>`; `admin@team-a` matches that exact role string. `in`/SpEL/OGNL over `context.principal.roles` see raw `role@space` strings |
+| `inRole` | `value` | Match a principal role. Bare `admin` matches `admin` (any space) or `admin@<request space>`; `admin@team-a` matches that exact role string in any request space. Neither limits an allow to the request's space (deliberately, so a deny cannot be escaped by changing `CoSec-Space-Id`); add `{ "eq": { "part": "request.spaceId", "value": "team-a" } }` to scope an allow. Role grants in app permissions are already space-scoped (`RoleScope`). `in`/SpEL/OGNL over `context.principal.roles` see raw `role@space` strings |
 | `inTenant` | `value`: `default`, `user`, or `platform` | Match tenant type, not tenant ID |
 | `eq`, `contains`, `startsWith`, `endsWith` | `part`, `value`; optional `ignoreCase` | Compare an extracted string; only `eq.value` accepts a `#{...}` SpEL template |
 | `in` | `part`, array `value` | Match one of several values |
@@ -155,6 +155,7 @@ Check the final policy for:
 - missing HTTP method constraints on state-changing endpoints;
 - trusted-proxy assumptions behind `request.remoteIp`;
 - tenant type (`inTenant`) being confused with tenant ID (`context.tenantId`);
+- `inRole` allows meant for one space without a `request.spaceId` condition (they match in every request space);
 - unsafe or needlessly complex expressions when a built-in matcher suffices;
 - rate limit rules that count per JVM (no Redis) where a cluster-wide quota is required.
 
@@ -184,4 +185,4 @@ policies.forEach(DefaultPolicyEvaluator::evaluate)
 
 Prefer declarative cases: a JSON suite (`policies`, optional `appPermissions`, `roles` granted in every app and `appRoles` granted in one app, with `role@space` for a non-default space, and `cases` of `principal`, `request`, `expect.result` = `ALLOW` | `EXPLICIT_DENY` | `IMPLICIT_DENY`, optionally `policyId` / `statementName` / `roleId` / `permissionId`) run with `PolicyTestKit.run("classpath:cosec-policy-test/*.json").assertPasses()`. Failures name the rule that decided instead.
 
-`LocalPolicyLoader` logs and skips malformed policies, so assert that the expected policy ID loaded. `DefaultPolicyEvaluator` catches expected regex-timeout signals but surfaces other matcher configuration errors. Add one authorization test for each meaningful allow/deny boundary.
+Since 7.0 `LocalPolicyLoader` fails loading (and the application fails to start) on any file it cannot parse or build, on two files declaring the same policy ID, and on a configured location that matches no file (only the default `classpath:cosec-policy/*-policy.json` may match nothing); the error names the file, ID or location. Still assert that the expected policy ID loaded, which catches a file outside the configured locations. `DefaultPolicyEvaluator` catches expected regex-timeout signals but surfaces other matcher configuration errors. Add one authorization test for each meaningful allow/deny boundary.

@@ -35,7 +35,7 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 | `cosec.authorization.root-enabled` | `false` | root 主体是否绕过策略和权限检查。root 是平台租户（`(platform)`）中 id 为 `cosec`（或 `-Dcosec.root` 系统属性的值）的主体。其他租户中的主体、以及不带租户的主体都不是 root；黑名单对 root 同样生效。如需其他判定规则，请提供一个 `RootPrincipalMatcher` bean。 |
 | `cosec.authorization.remote-ip.max-trusted-index` | `1` | 解析客户端 IP 时，信任 `X-Forwarded-For` 中的几层代理。`0` 表示忽略该请求头（服务直接对外暴露）；`N` 表示取第 N 个最近的代理追加的那一项。 |
 | `cosec.authorization.local-policy.enabled` | `false` | 从本地 JSON 文件加载策略。 |
-| `cosec.authorization.local-policy.locations` | `classpath:cosec-policy/*-policy.json` | 要加载的资源路径模式。 |
+| `cosec.authorization.local-policy.locations` | `classpath:cosec-policy/*-policy.json` | 要加载的资源路径模式。除默认位置外，匹配不到任何文件的位置会阻止启动；两个文件的策略 id 相同也会阻止启动。 |
 | `cosec.authorization.local-policy.init-repository` | `false` | 启动时把加载的策略写入 `PolicyRepository`。 |
 | `cosec.authorization.local-policy.force-refresh` | `false` | 覆盖仓储中已存在的策略。 |
 

@@ -77,8 +77,6 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
                 "${AuthorizationProperties.LOCAL_POLICY_ENABLED}=true",
                 "${AuthorizationProperties.LOCAL_POLICY_INIT_REPOSITORY}=true",
-                "${AuthorizationProperties.LOCAL_POLICY_PREFIX}.locations=" +
-                    "classpath:cosec-policy/missing-policy.json",
             )
             .withBean(StringIdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
@@ -121,7 +119,7 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 "${AuthorizationProperties.LOCAL_POLICY_ENABLED}=true",
                 "${AuthorizationProperties.LOCAL_POLICY_INIT_REPOSITORY}=true",
                 "${AuthorizationProperties.LOCAL_POLICY_PREFIX}.locations=" +
-                    "classpath:cosec-policy/spring-matcher-policy.json",
+                    "classpath:cosec-policy/spring-matcher.json",
             )
             .withBean(PolicyRepository::class.java, { policyRepository })
             .withBean(AppRolePermissionRepository::class.java, { mockk() })

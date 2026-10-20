@@ -13,6 +13,7 @@
 package me.ahoo.cosec.spring.boot.starter.authorization
 
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.policy.LocalPolicyLoader
 import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -69,7 +70,7 @@ class AuthorizationProperties(
         var forceRefresh: Boolean = false
     ) : EnabledCapable {
         companion object {
-            const val DEFAULT_LOCATION = "classpath:cosec-policy/*-policy.json"
+            const val DEFAULT_LOCATION = LocalPolicyLoader.DEFAULT_LOCATION
         }
     }
 }

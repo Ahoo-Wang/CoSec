@@ -16,26 +16,34 @@ package me.ahoo.cosec.policy
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import org.springframework.core.io.Resource
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import org.springframework.core.io.support.ResourcePatternResolver
 import java.io.FileNotFoundException
+import java.io.IOException
 
 /**
  * Loads policies from local file system locations.
  *
  * This loader reads policy definitions from JSON files in specified
- * locations using Spring's resource pattern resolution. A file that cannot be read or built fails loading: skipping
- * it could drop a deny and widen access.
+ * locations using Spring's resource pattern resolution. Anything that could silently drop a deny and widen access
+ * fails loading instead:
+ * - a file that cannot be read or built;
+ * - two different files declaring the same policy id;
+ * - a location that matches no file, unless it is [DEFAULT_LOCATION], which applications without local policies
+ *   leave in place.
  *
  * @param locations Set of resource patterns to load policies from
+ * @param resourceResolver Resolves [locations]
  * @see Policy
  */
 class LocalPolicyLoader(
-    private val locations: Set<String>
+    private val locations: Set<String>,
+    private val resourceResolver: ResourcePatternResolver = PathMatchingResourcePatternResolver()
 ) {
     companion object {
+        const val DEFAULT_LOCATION = "classpath:cosec-policy/*-policy.json"
         private val log = KotlinLogging.logger {}
-        private val resourceResolver: ResourcePatternResolver = PathMatchingResourcePatternResolver()
     }
 
     val policies: List<Policy> by lazy {
@@ -43,36 +51,53 @@ class LocalPolicyLoader(
     }
 
     private fun loadPolicies(): List<Policy> {
-        return locations
-            .flatMap {
+        val loaded = locations
+            .flatMap { location ->
                 log.info {
-                    "Load Location [$it]."
+                    "Load Location [$location]."
                 }
-                try {
-                    resourceResolver.getResources(it).filter { resource ->
-                        resource.exists().also { exists ->
-                            if (!exists) log.warn { "Policy location [$resource] does not exist." }
-                        }
-                    }
-                } catch (e: FileNotFoundException) {
-                    log.error(e) {
-                        e.message
-                    }
-                    listOf()
-                }
+                resolve(location)
+            }.distinctBy {
+                it.identity()
             }.map {
                 log.info {
                     "Load Policy [$it]."
                 }
                 try {
-                    CoSecJsonSerializer.readValue(it.contentAsByteArray, Policy::class.java)
+                    it to CoSecJsonSerializer.readValue(it.contentAsByteArray, Policy::class.java)
                 } catch (e: Exception) {
                     throw IllegalStateException("Failed to load policy [$it]: ${e.reason()}", e)
                 }
-            }.distinctBy {
-                it.id
             }
+        loaded.groupBy({ it.second.id }, { it.first }).forEach { (id, resources) ->
+            check(resources.size == 1) {
+                "Policy id [$id] is declared by more than one file: $resources."
+            }
+        }
+        return loaded.map { it.second }
     }
+
+    private fun resolve(location: String): List<Resource> {
+        val resources = try {
+            resourceResolver.getResources(location).filter { it.exists() }
+        } catch (ignored: FileNotFoundException) {
+            listOf()
+        }
+        if (resources.isNotEmpty()) {
+            return resources
+        }
+        check(location == DEFAULT_LOCATION) {
+            "Policy location [$location] matches no file."
+        }
+        log.info { "Default policy location [$location] matches no file." }
+        return resources
+    }
+}
+
+private fun Resource.identity(): Any = try {
+    uri
+} catch (ignored: IOException) {
+    description
 }
 
 private fun Throwable.reason(): String? =

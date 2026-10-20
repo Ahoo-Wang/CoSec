@@ -135,6 +135,21 @@
 `CoSec-Space-Id` 中指定其他空间无法绕过这样的拒绝。其他读取 `context.principal.roles` 的条件（`in`、`spel`、`ognl`）
 看到的是原始字符串，包括 `suspended@team-a`。
 
+两种写法都不会把**放行**限定在请求所在空间，放行一侧的行为与 6.x 相同：基于 `inRole: admin@team-a` 的放行在请求指定空间
+`team-b`、或者不指定空间时同样匹配；基于不带后缀的 `inRole: admin` 的放行，对不带后缀持有 `admin` 的主体在每个空间都匹配。
+匹配范围这样宽，是为了让拒绝规则无法通过修改 `CoSec-Space-Id` 绕过。要让放行只在请求所在空间生效，请给语句加一个
+`request.spaceId` 条件：
+
+```json
+{ "name": "team-a-admins",
+  "action": "/team-a/**",
+  "condition": { "bool": { "and": [
+    { "inRole": { "value": "admin@team-a" } },
+    { "eq": { "part": "request.spaceId", "value": "team-a" } } ] } } }
+```
+
+应用权限中的角色授权不需要这样的条件：它们本身已经限定在请求所在空间（见[角色授权的作用域](#role-grant-scope)）。
+
 ### 时间条件 {#time-conditions}
 
 `time` 在有效期内、以及可选的每日周期时间窗内匹配。它读取服务器时钟，从不读取请求中的时间。
@@ -336,10 +351,11 @@ Redis 中的值带有二进制头（CoCache 6），因此用 Redis 命令直接�
   生成一份策略，`GET /actuator/cosecAppPermissionGenerator` 生成一份应用权限：每个接口（路径和方法）一条 `allow`，
   id 和元数据为占位值。请把它们当作起点：设置 id、收窄规则，审查后再上线。
 
-::: warning 无效文件会被跳过
-无法解析的本地策略文件（JSON 无效、缺少必填字段、未知的条件类型、匹配器配置错误）会以 `ERROR` 级别记录日志并被跳过，
-应用仍会正常启动。请检查启动日志，或按下文在测试中校验策略。例外是在作用域之外读取[路径变量](#actions)的策略：
-它会阻止应用启动，因为跳过它可能会丢掉一条拒绝规则。
+::: warning 无效文件会阻止启动
+无法解析或构建的本地策略文件（JSON 无效、缺少必填字段、未知的动作或条件类型、匹配器配置错误、在作用域之外读取[路径变量](#actions)）
+会导致加载失败，应用无法启动，因为跳过它可能会丢掉一条拒绝规则。错误中会给出文件名。两个文件声明了相同的策略 id，
+或者显式配置的位置匹配不到任何文件，同样会阻止启动；只有默认位置 `classpath:cosec-policy/*-policy.json` 允许匹配不到文件。
+请按下文在测试中校验策略，在上线前发现这些问题（见[故障排查](./troubleshooting.md#startup-fails-loading-a-policy-file)）。
 :::
 
 ### 策略历史与回滚 {#policy-history-and-rollback}
@@ -367,7 +383,7 @@ policyHistory.rollback("orders", revision = 3, author = "bob")
 
 ```kotlin
 val policies = LocalPolicyLoader(setOf("classpath:cosec-policy/*-policy.json")).policies
-check(policies.any { it.id == "order-service" })   // the file was not skipped
+check(policies.any { it.id == "order-service" })   // the location includes the file
 policies.forEach(DefaultPolicyEvaluator::evaluate)  // matchers run against a sample request
 ```
 

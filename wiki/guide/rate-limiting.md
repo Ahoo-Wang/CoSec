@@ -95,8 +95,8 @@ allowed the request.
 
 Up to 6.0, rate limits were conditions inside policies (`rateLimiter`, `groupedRateLimiter`,
 `redisRateLimiter`, `redisGroupedRateLimiter`). They were removed in 6.1.0. A policy that still uses one no
-longer parses: a local policy file is skipped with an `ERROR` log, and a policy stored in Redis fails its read,
-which denies the request. Move each one into a rule before upgrading:
+longer parses: a local policy file that uses one stops startup (since 7.0; 6.1 skipped it with an `ERROR` log),
+and a policy stored in Redis fails its read, which denies the request. Move each one into a rule before upgrading:
 
 | Before | After |
 |---|---|
