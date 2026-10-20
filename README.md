@@ -35,11 +35,13 @@ deny-first for every request.
 
 ```mermaid
 flowchart LR
-    R([Request + JWT]) --> ROOT{Root?}
+    R([Request + JWT]) --> BL{Blacklisted?}
+    BL -->|yes| DENY([EXPLICIT_DENY])
+    BL -->|no| ROOT{Root principal?}
     ROOT -->|yes| ALLOW([ALLOW])
     ROOT -->|no| L["Global policies<br>Principal policies<br>Role permissions"]
     L --> D{Any DENY matched?}
-    D -->|yes| DENY([EXPLICIT_DENY])
+    D -->|yes| DENY
     D -->|no| A{Any ALLOW matched?}
     A -->|yes| ALLOW
     A -->|no| IMP([IMPLICIT_DENY])

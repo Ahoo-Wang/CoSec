@@ -79,7 +79,7 @@ Order deny statements before allow statements for readability, not behavior.
 |---|---|---|
 | `all` | none | Always match |
 | `authenticated` | none | Require a non-anonymous principal |
-| `inRole` | `value` | Match a principal role |
+| `inRole` | `value` | Match a principal role. Bare `admin` matches `admin` (any space) or `admin@<request space>`; `admin@team-a` matches that exact role string. `in`/SpEL/OGNL over `context.principal.roles` see raw `role@space` strings |
 | `inTenant` | `value`: `default`, `user`, or `platform` | Match tenant type, not tenant ID |
 | `eq`, `contains`, `startsWith`, `endsWith` | `part`, `value`; optional `ignoreCase` | Compare an extracted string; only `eq.value` accepts a `#{...}` SpEL template |
 | `in` | `part`, array `value` | Match one of several values |
@@ -144,7 +144,7 @@ All `and` entries must match. If `or` is present, at least one entry must match.
 - `context.tenantId`, `context.principal.id`, `context.principal.attributes.{key}`
 - `resource.{key}`: attributes of the target object, passed by `AuthorizationChecker` checks in code (`CheckRequest(resource = ...)`) and empty in the request filter. Write object-level rules as denies guarded by a non-empty check (`eq` with `value: ""` and `negate: true`), e.g. deny unless `resource.ownerId` equals `#{principal.id}`; an allow that needs a resource part would block the route in the filter.
 
-Use singular `request.header`. Path variables are scoped to one statement: `request.path.var.id` reads the `{id}` captured by the same statement's (or rate limit rule's) `path` action, and the variables are cleared before every statement. Reading them in a policy or app permission `condition`, or in a statement, permission or rate limit rule whose action is not `path` (`*`, `all`, `["*", ...]`, a `composite` with a non-path member), fails loading with `PathVariableScopeException`; this also covers OGNL/SpEL expressions and `#{...}` templates that mention `PATH_VARIABLES`. A part absent from the request reads as an empty string; an unsupported part name throws during evaluation (HTTP 500), not at load time. Never base a deny on a header the client can omit or forge.
+Use singular `request.header`. Path variables are scoped to one statement: `request.path.var.id` reads the `{id}` captured by the same statement's (or rate limit rule's) `path` action, and the variables are cleared before every statement. Reading them in a policy or app permission `condition`, or in a statement, permission or rate limit rule whose action is not `path` (`*`, `all`, `["*", ...]`, a `composite` with a non-path member), fails loading with `PathVariableScopeException`; this also covers OGNL/SpEL expressions and `#{...}` templates in conditions that mention `PATH_VARIABLES`. Any action configuration (e.g. a `path` template) that mentions `PATH_VARIABLES` or `request.path.var.` is rejected outright, because templates are evaluated before the action captures anything. A part absent from the request reads as an empty string; an unsupported part name in a condition throws during evaluation (HTTP 500), not at load time, while an unsupported rate limit `key` fails when the rule loads. Never base a deny on a header the client can omit or forge.
 
 ## Security review
 
