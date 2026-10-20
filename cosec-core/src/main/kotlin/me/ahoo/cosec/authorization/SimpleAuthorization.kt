@@ -35,8 +35,8 @@ import reactor.kotlin.core.publisher.toMono
  * Simple Authorization implementation.
  *
  * This class provides the core authorization logic by evaluating:
- * 1. Root user bypass (root users always get ALLOW)
- * 2. Blacklist checks
+ * 1. Blacklist checks (apply to root as well)
+ * 2. Root user bypass (root users get ALLOW unless blacklisted)
  * 3. Global policies
  * 4. Principal-specific policies
  * 5. Role-based permissions
@@ -52,7 +52,7 @@ import reactor.kotlin.core.publisher.toMono
  * @param policyRepository Repository for accessing policies
  * @param appRolePermissionRepository Repository for accessing role permissions
  * @param blacklistChecker Optional blacklist checker for blocking requests
- * @param rootPrincipalMatcher Decides which principals are root (bypass all checks)
+ * @param rootPrincipalMatcher Decides which principals are root (bypass every check except the blacklist)
  */
 class SimpleAuthorization(
     private val policyRepository: PolicyRepository,
@@ -278,10 +278,6 @@ class SimpleAuthorization(
         request: Request,
         context: SecurityContext
     ): Mono<AuthorizationDecision> = Mono.defer {
-        val verifyResult = verifyRoot(context)
-        if (verifyResult == VerifyResult.ALLOW) {
-            return@defer ROOT_DECISION.toMono()
-        }
         blacklistChecker
             .check(request, context)
             .flatMap { allowed ->
@@ -290,6 +286,9 @@ class SimpleAuthorization(
                         "Request [$request] is blocked by the blacklist."
                     }
                     return@flatMap BLACKLIST_DECISION.toMono()
+                }
+                if (verifyRoot(context) == VerifyResult.ALLOW) {
+                    return@flatMap ROOT_DECISION.toMono()
                 }
                 verify(request, context)
             }

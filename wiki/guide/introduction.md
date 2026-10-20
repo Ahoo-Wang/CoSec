@@ -23,11 +23,11 @@ Policies and permissions are JSON documents. See [Policies](./policies.md) for t
 
 ```mermaid
 flowchart TD
-    R([Request + SecurityContext]) --> ROOT{Root principal?}
-    ROOT -->|yes| ALLOW([ALLOW])
-    ROOT -->|no| BL{Blacklisted?}
+    R([Request + SecurityContext]) --> BL{Blacklisted?}
     BL -->|yes| DENY([EXPLICIT_DENY])
-    BL -->|no| G[Global policies]
+    BL -->|no| ROOT{Root principal?}
+    ROOT -->|yes| ALLOW([ALLOW])
+    ROOT -->|no| G[Global policies]
     G --> P[Principal's policies]
     P --> RP[Role permissions for appId / spaceId]
     RP --> D{Any layer matched a DENY?}

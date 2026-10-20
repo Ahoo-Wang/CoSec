@@ -22,6 +22,8 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.tenant.SimpleTenant
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
@@ -53,9 +55,9 @@ class AuthorizationDecisionTest {
     @Test
     fun simpleAuthorizationReportsRootVerifyContext() {
         val authorization = SimpleAuthorization(mockk(), mockk())
-        val securityContext = mockk<SecurityContext> {
-            every { principal.id } returns CoSecPrincipal.ROOT_ID
-        }
+        val securityContext = SimpleSecurityContext(
+            SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM),
+        )
         authorization.decide(EvaluateRequest(), securityContext)
             .test()
             .expectNext(AuthorizationDecision(AuthorizeResult.ALLOW, RootVerifyContext))

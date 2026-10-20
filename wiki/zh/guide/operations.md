@@ -111,7 +111,8 @@ Secret 读取 JWT 密钥，请先创建它（`kubectl create secret generic cose
 - 从密钥存储中设置 `cosec.jwt.secret`，并让访问令牌保持较短的有效期。
 - 按你的代理链设置 `cosec.authorization.remote-ip.max-trusted-index`。
 - 只在只能经由校验网关访问的服务上启用 `cosec.inject.enabled`。
-- 如果用户可以自行选择主体 id，请关闭 `cosec.authorization.root-enabled`。
+- 除非需要 root，否则保持 `cosec.authorization.root-enabled` 关闭（默认值）。开启后，root 只认平台租户中的 root id，
+  因此平台租户的令牌必须由用户无法影响的来源签发。
 
 ## 性能 {#performance}
 

@@ -2,9 +2,25 @@
 
 各版本之间有哪些变化，以及你需要做什么。每个版本的发布说明见 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
-## 从 6.0 升级到 6.1 {#_6-0-to-6-1}
+## 从 6.1 升级到 7.0 {#_6-1-to-7-0}
 
 ### 破坏性变更 {#breaking-changes}
+
+**root 默认关闭，只在平台租户中生效，并且受黑名单约束。** 以前，任何 id 为 `cosec`（或 `-Dcosec.root` 系统属性的值）的主体都会绕过所有检查，
+包括黑名单；`cosec.authorization.root-enabled` 默认为 `true`。如果某个用户租户的身份源允许用户自选 id `cosec`，这个用户就拿到了整个平台的权限。现在：
+
+- `cosec.authorization.root-enabled` 默认为 `false`：不开启时，没有任何主体是 root。
+- 开启后，`RootPrincipalMatcher.DEFAULT` 只把 id 等于 root id **并且**租户为平台租户（`(platform)`，即 `Tenant.PLATFORM_TENANT_ID`）的主体视为 root。
+  用户租户、默认租户中的 root id，以及不带租户的主体，都只是普通主体。
+- 黑名单在 root 之前检查，因此 root 发出的、被黑名单拦截的请求会被拒绝。解释结果中 `BLACKLIST` 层现在排在 `ROOT` 之前，`ExplainLayer` 也按这个顺序列出。
+
+如果依赖 root，请设置 `cosec.authorization.root-enabled=true`，并为 root 主体签发 `tenantId` 为 `(platform)` 的令牌。
+直接构造 `SimpleAuthorization`、`AuthorizationExplainer` 或 `ShadowAuthorization` 的代码，默认仍使用 `RootPrincipalMatcher.DEFAULT`，但采用新的租户规则。
+如果 root 需要按其他方式判定，请提供自己的 `RootPrincipalMatcher` bean。
+
+## 从 6.0 升级到 6.1 {#_6-0-to-6-1}
+
+### 破坏性变更 {#breaking-changes-1}
 
 **限流改为规则，不再是策略条件。** `rateLimiter`、`groupedRateLimiter`、`redisRateLimiter` 和 `redisGroupedRateLimiter`
 条件已被移除，`TooManyRequestsException` 也一并移除。仍在使用它们的策略将无法解析：使用它们的本地策略文件会被跳过并记录 `ERROR` 日志，

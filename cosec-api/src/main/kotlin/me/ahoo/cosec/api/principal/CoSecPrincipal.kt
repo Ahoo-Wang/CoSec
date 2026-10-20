@@ -74,8 +74,8 @@ interface CoSecPrincipal :
 
         /**
          * The root user ID.
-         * Root users have full permissions and bypass all policy checks.
          * Can be customized via system property "cosec.root".
+         * The id alone does not make a principal root: `RootPrincipalMatcher` in `cosec-core` decides that.
          */
         val ROOT_ID: String = System.getProperty(ROOT_KEY, CoSec.COSEC)
 
@@ -87,7 +87,8 @@ interface CoSecPrincipal :
         const val ANONYMOUS_ID = CoSec.DEFAULT
 
         /**
-         * Extension property to check if a principal is the root user.
+         * Extension property to check if a principal's id is the root user id.
+         * It ignores the tenant, so it is not an authorization decision on its own.
          *
          * @return true if this principal's ID equals [ROOT_ID]
          */
