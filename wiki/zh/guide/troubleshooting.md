@@ -53,7 +53,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 |---|---|
 | `status`、`authorized`、`reason` | 真实的决策，并按与真实请求完全相同的规则映射为状态码。 |
 | `decidedBy` | 做出决定的规则：所在层、策略 id 和语句下标，或角色和权限 id。什么都没命中时为 `null`。 |
-| `layers` | `ROOT`、`BLACKLIST`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、`ROLE_PERMISSION`，每层的状态为 `EVALUATED`、`NOT_EVALUATED`（之前的显式拒绝已结束求值）、`EMPTY`，或 `EVALUATED_AFTER_DECISION`（设置 `exhaustive: true` 时）。每条语句和权限都有结果：`MATCHED`、`ACTION_MISS`、`CONDITION_MISS`、`NOT_EVALUATED`（所属策略或应用的条件未匹配）或 `ERROR`。 |
+| `layers` | `BLACKLIST`、`ROOT`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、`ROLE_PERMISSION`，每层的状态为 `EVALUATED`、`NOT_EVALUATED`（之前的显式拒绝已结束求值）、`EMPTY`，或 `EVALUATED_AFTER_DECISION`（设置 `exhaustive: true` 时）。每条语句和权限都有结果：`MATCHED`、`ACTION_MISS`、`CONDITION_MISS`、`NOT_EVALUATED`（所属策略或应用的条件未匹配）或 `ERROR`。 |
 | `overriddenAllows` | 被后续层的显式拒绝覆盖掉的放行。 |
 | `rateLimitRules` | 请求被放行时将会消耗许可的[限流规则](./rate-limiting.md)。 |
 | `warnings` | `MISSING_POLICY`（主体列出的策略 id 在仓储中不存在，因此授权以 `500` 失败）、`NO_APP_PERMISSION`（在该空间中有角色，但该应用没有应用权限）、`NO_ROLE_IN_SPACE`（有角色，但没有一个是为请求所在空间写的，见[角色授权的作用域](./policies.md#role-grant-scope)）、`MATCHER_ERROR`、`TOKEN_INVALID`（请求中的令牌或 API Key 被拒绝），以及 `TRACE_INCONSISTENT`（追踪与真实决策不一致；以决策为准，并请反馈）。 |
@@ -110,7 +110,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 
 ## 请求被意外放行 {#request-allowed-unexpectedly}
 
-- **root 主体**：`cosec.authorization.root-enabled` 为 `true` 时，主体 id `cosec`（或 `cosec.root` 系统属性的值）绕过所有检查。
+- **root 主体**：`cosec.authorization.root-enabled` 为 `true` 时，平台租户中 id 为 `cosec`（或 `cosec.root` 系统属性的值）的主体绕过除黑名单以外的所有检查。
 - **过宽的允许规则**：查找使用 `"*"`、`/**` 或没有条件的全局 `allow`。添加一条 `deny`，或收窄这条允许规则。
 - **没有命中的拒绝规则**：动作和条件必须都匹配。条件取反写错是常见错误。
 

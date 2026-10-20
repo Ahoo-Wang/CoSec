@@ -32,7 +32,7 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 | 属性 | 默认值 | 说明 |
 |---|---|---|
 | `cosec.authorization.allow-query-token` | `false` | 是否同时接受 `authorization` 查询参数中的访问令牌。默认关闭，因为 URL 会泄露到访问日志、浏览器历史和 `Referer` 头中。 |
-| `cosec.authorization.root-enabled` | `true` | root 主体是否绕过所有检查。root id 为 `cosec`，或 `-Dcosec.root` 系统属性的值。如果用户可以自行选择主体 id，请关闭它，或提供一个 `RootPrincipalMatcher` bean。 |
+| `cosec.authorization.root-enabled` | `false` | root 主体是否绕过策略和权限检查。root 是平台租户（`(platform)`）中 id 为 `cosec`（或 `-Dcosec.root` 系统属性的值）的主体。其他租户中的主体、以及不带租户的主体都不是 root；黑名单对 root 同样生效。如需其他判定规则，请提供一个 `RootPrincipalMatcher` bean。 |
 | `cosec.authorization.remote-ip.max-trusted-index` | `1` | 解析客户端 IP 时，信任 `X-Forwarded-For` 中的几层代理。`0` 表示忽略该请求头（服务直接对外暴露）；`N` 表示取第 N 个最近的代理追加的那一项。 |
 | `cosec.authorization.local-policy.enabled` | `false` | 从本地 JSON 文件加载策略。 |
 | `cosec.authorization.local-policy.locations` | `classpath:cosec-policy/*-policy.json` | 要加载的资源路径模式。 |

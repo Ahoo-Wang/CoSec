@@ -62,8 +62,8 @@ sequenceDiagram
 
 [`SimpleAuthorization`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt)：
 
-1. root 主体（由 `RootPrincipalMatcher` 判定）直接放行。
-2. 黑名单中的请求（`BlacklistChecker`）直接拒绝。
+1. 黑名单中的请求（`BlacklistChecker`）直接拒绝，无论主体是谁。
+2. root 主体（由 `RootPrincipalMatcher` 判定；默认只认平台租户中的 root id）直接放行。
 3. 依次求值三层：全局策略、主体的策略，以及角色权限（取主体在请求所在空间中的角色 `role@space`，按它们在请求所在应用中的授权求值）。每一层内都先检查所有 `deny`，再检查 `allow`。
    各层之间同样拒绝优先：任一层出现 `EXPLICIT_DENY` 就结束求值；只有每一层都有机会拒绝之后，才会返回 `ALLOW`。
 4. 否则结果为 `IMPLICIT_DENY`。

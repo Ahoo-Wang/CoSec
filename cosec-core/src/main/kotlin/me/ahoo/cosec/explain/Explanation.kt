@@ -58,8 +58,8 @@ data class Explanation(
 )
 
 enum class ExplainLayer {
-    ROOT,
     BLACKLIST,
+    ROOT,
     GLOBAL_POLICY,
     PRINCIPAL_POLICY,
     ROLE_PERMISSION,

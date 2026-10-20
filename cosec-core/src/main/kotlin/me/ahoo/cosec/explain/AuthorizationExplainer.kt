@@ -179,28 +179,29 @@ class AuthorizationExplainer(
 
         fun narrate(policies: PolicyRepository, permissions: AppRolePermissionRepository): Mono<Trace> {
             val principal = context.principal
-            if (rootPrincipalMatcher.isRoot(principal)) {
-                val root = DecisionRef(ExplainLayer.ROOT)
-                val layers = listOf(LayerTrace(ExplainLayer.ROOT, LayerState.EVALUATED, VerifyResult.ALLOW, root)) +
-                    notEvaluated(ExplainLayer.BLACKLIST) + POLICY_LAYERS.map { notEvaluated(it) }
-                return Trace(layers, root, emptyList(), warnings).toMono()
-            }
-            val rootLayer = LayerTrace(ExplainLayer.ROOT, LayerState.EVALUATED, VerifyResult.IMPLICIT_DENY)
             return blacklistChecker.check(request, context).flatMap { allowed ->
                 if (!allowed) {
                     val blacklist = DecisionRef(ExplainLayer.BLACKLIST)
                     val blacklistLayer =
                         LayerTrace(ExplainLayer.BLACKLIST, LayerState.EVALUATED, VerifyResult.EXPLICIT_DENY, blacklist)
-                    val layers = listOf(rootLayer, blacklistLayer) + POLICY_LAYERS.map { notEvaluated(it) }
+                    val layers = listOf(blacklistLayer, notEvaluated(ExplainLayer.ROOT)) +
+                        POLICY_LAYERS.map { notEvaluated(it) }
                     return@flatMap Trace(layers, blacklist, emptyList(), warnings).toMono()
                 }
                 val blacklistLayer = LayerTrace(ExplainLayer.BLACKLIST, LayerState.EVALUATED, VerifyResult.ALLOW)
+                if (rootPrincipalMatcher.isRoot(principal)) {
+                    val root = DecisionRef(ExplainLayer.ROOT)
+                    val rootLayer = LayerTrace(ExplainLayer.ROOT, LayerState.EVALUATED, VerifyResult.ALLOW, root)
+                    val layers = listOf(blacklistLayer, rootLayer) + POLICY_LAYERS.map { notEvaluated(it) }
+                    return@flatMap Trace(layers, root, emptyList(), warnings).toMono()
+                }
+                val rootLayer = LayerTrace(ExplainLayer.ROOT, LayerState.EVALUATED, VerifyResult.IMPLICIT_DENY)
                 Mono.zip(
                     policies.getGlobalPolicy().defaultIfEmpty(emptyList()),
                     principalPolicies(policies),
                     appRolePermission(permissions),
                 ).map { sources ->
-                    narrateLayers(listOf(rootLayer, blacklistLayer), sources.t1, sources.t2, sources.t3.orElse(null))
+                    narrateLayers(listOf(blacklistLayer, rootLayer), sources.t1, sources.t2, sources.t3.orElse(null))
                 }
             }
         }

@@ -58,7 +58,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 |---|---|
 | `status`, `authorized`, `reason` | The real decision, mapped to a status exactly as for a real request. |
 | `decidedBy` | The rule that decided: layer, policy id and statement index, or role and permission id. `null` when nothing matched. |
-| `layers` | `ROOT`, `BLACKLIST`, `GLOBAL_POLICY`, `PRINCIPAL_POLICY`, `ROLE_PERMISSION`, each `EVALUATED`, `NOT_EVALUATED` (an earlier explicit deny ended evaluation), `EMPTY`, or `EVALUATED_AFTER_DECISION` (with `exhaustive: true`). Every statement and permission has an outcome: `MATCHED`, `ACTION_MISS`, `CONDITION_MISS`, `NOT_EVALUATED` (its policy's or app's condition did not match) or `ERROR`. |
+| `layers` | `BLACKLIST`, `ROOT`, `GLOBAL_POLICY`, `PRINCIPAL_POLICY`, `ROLE_PERMISSION`, each `EVALUATED`, `NOT_EVALUATED` (an earlier explicit deny ended evaluation), `EMPTY`, or `EVALUATED_AFTER_DECISION` (with `exhaustive: true`). Every statement and permission has an outcome: `MATCHED`, `ACTION_MISS`, `CONDITION_MISS`, `NOT_EVALUATED` (its policy's or app's condition did not match) or `ERROR`. |
 | `overriddenAllows` | Allows that a later layer's explicit deny overrode. |
 | `rateLimitRules` | The [rate limit rules](./rate-limiting.md) the request would spend a permit from, if it is allowed. |
 | `warnings` | `MISSING_POLICY` (the principal lists a policy id the repository lacks, so authorization fails with `500`), `NO_APP_PERMISSION` (roles in the space, but no app permission for the app), `NO_ROLE_IN_SPACE` (roles, but none written for the request's space; see [Role grant scope](./policies.md#role-grant-scope)), `MATCHER_ERROR`, `TOKEN_INVALID` (the request's token or API key was rejected), and `TRACE_INCONSISTENT` (the trace disagrees with the real decision; trust the decision and report it). |
@@ -119,8 +119,8 @@ The caller is known, but nothing allowed the request, or something denied it.
 
 ## Request allowed unexpectedly
 
-- **Root principal**: the principal id `cosec` (or the `cosec.root` system property) bypasses all checks
-  while `cosec.authorization.root-enabled` is `true`.
+- **Root principal**: while `cosec.authorization.root-enabled` is `true`, the platform tenant's principal with id
+  `cosec` (or the `cosec.root` system property) bypasses every check except the blacklist.
 - **A broad allow**: look for a global `allow` with `"*"`, `/**` or no condition. Add a `deny`, or narrow the
   allow.
 - **A deny that does not match**: its action and its condition must both match. A negated condition is a
