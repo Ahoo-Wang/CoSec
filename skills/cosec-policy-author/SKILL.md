@@ -93,7 +93,7 @@ Order deny statements before allow statements for readability, not behavior.
 
 ### Rate limits
 
-Rate limits are not policy conditions; since 6.1.0 the `rateLimiter`, `groupedRateLimiter`, `redisRateLimiter`, and `redisGroupedRateLimiter` conditions no longer exist, and a policy using one fails to parse. Write a rate limit rule instead, in a file matching `cosec.limiter.locations` (default `classpath:cosec-rate-limit/*-rate-limit.json`, one rule or an array, schema `schema/rate-limit-rule.schema.json`):
+Rate limits are not policy conditions; since 6.1.0 the `rateLimiter`, `groupedRateLimiter`, `redisRateLimiter`, and `redisGroupedRateLimiter` conditions no longer exist, and a policy using one fails to parse. Write a rate limit rule instead, in a file matching `cosec.limiter.locations` (default `classpath:cosec-rate-limit/*-rate-limit.json`, one rule or an array, schema `schema/rate-limit-rule.schema.json`; a configured location that matches no file or a duplicate rule id fails startup, only the default may match nothing):
 
 ```json
 {

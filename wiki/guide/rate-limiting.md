@@ -57,8 +57,14 @@ any other action that reads path variables fails to load with `PathVariableScope
 ([Path variables](./policies.md#actions)).
 
 Every matching rule spends one permit, in order. The first exhausted rule rejects the request, and the rules
-after it spend nothing. A rule file that cannot be read stops the application from starting, because a
-rate limit that is silently dropped removes a protection without anyone noticing.
+after it spend nothing.
+
+Rule files load like local policy files: anything that would silently drop a rule stops the application from
+starting, because a rate limit that is silently dropped removes a protection without anyone noticing. That is a
+file that cannot be read, a rule id declared twice (in one file or in two), and a configured location that does not
+exist or matches no file, usually a typo in the path. Only the default location
+`classpath:cosec-rate-limit/*-rate-limit.json` may match nothing, so applications without rules need no setting. A
+file matched by two locations is loaded once.
 
 To load rules from somewhere else, such as a database, declare your own `RateLimitRuleProvider` bean. It is
 called on every allowed request, so it must answer from memory.

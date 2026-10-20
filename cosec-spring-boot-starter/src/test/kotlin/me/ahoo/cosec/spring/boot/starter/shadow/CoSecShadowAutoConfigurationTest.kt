@@ -121,4 +121,18 @@ internal class CoSecShadowAutoConfigurationTest {
             )
             .run { context -> assertThat(context).hasFailed() }
     }
+
+    @Test
+    fun missingCandidateLocationFailsStartup() {
+        contextRunner
+            .withPropertyValues(
+                "cosec.shadow.enabled=true",
+                "cosec.shadow.locations=classpath:cosec-shadow-typo/*-policy.json"
+            )
+            .run { context ->
+                assertThat(context).hasFailed()
+                assertThat(context.startupFailure).rootCause()
+                    .hasMessageContaining("Shadow policy location [classpath:cosec-shadow-typo/*-policy.json]")
+            }
+    }
 }

@@ -14,8 +14,12 @@
 package me.ahoo.cosec.limiter
 
 import me.ahoo.test.asserts.assert
-import org.junit.jupiter.api.Assertions.assertThrows
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver
+import java.io.File
+import java.net.URLClassLoader
 
 class LocalRateLimitRuleLoaderTest {
     @Test
@@ -29,21 +33,59 @@ class LocalRateLimitRuleLoaderTest {
     }
 
     @Test
-    fun missingLocationLoadsNothing() {
-        LocalRateLimitRuleLoader(setOf("classpath:not-exists/*.json")).getRules().assert().isEmpty()
+    fun fileMatchedByTwoLocationsIsLoadedOnce() {
+        LocalRateLimitRuleLoader(
+            setOf("classpath:cosec-rate-limit/*-rate-limit.json", "classpath:cosec-rate-limit/login-rate-limit.json")
+        ).getRules().map { it.id }.assert().containsExactlyInAnyOrder("login-by-ip", "export-free-tier", "global-api")
+    }
+
+    @Test
+    fun explicitLocationThatDoesNotExistFailsLoading() {
+        assertThrownBy<IllegalStateException> {
+            LocalRateLimitRuleLoader(setOf("classpath:cosec-rate-limit-not-found")).getRules()
+        }.hasMessage("Rate limit rule location [classpath:cosec-rate-limit-not-found] matches no file.")
+    }
+
+    @Test
+    fun explicitPatternMatchingNoFileFailsLoading(@TempDir dir: File) {
+        assertThrownBy<IllegalStateException> {
+            LocalRateLimitRuleLoader(setOf("classpath:not-exists/*.json")).getRules()
+        }.hasMessageContaining("matches no file")
+        assertThrownBy<IllegalStateException> {
+            LocalRateLimitRuleLoader(setOf("file:${dir.absolutePath}/*.json")).getRules()
+        }.hasMessageContaining("matches no file")
+    }
+
+    @Test
+    fun defaultLocationMayMatchNoFile() {
+        // This module's test classpath has cosec-rate-limit/*-rate-limit.json, so resolve against an empty class loader.
+        val emptyClasspath = PathMatchingResourcePatternResolver(URLClassLoader(arrayOf(), null))
+        LocalRateLimitRuleLoader(setOf(LocalRateLimitRuleLoader.DEFAULT_LOCATION), emptyClasspath).getRules()
+            .assert().isEmpty()
     }
 
     @Test
     fun invalidRuleFailsFast() {
-        assertThrows(IllegalStateException::class.java) {
+        assertThrownBy<IllegalStateException> {
             LocalRateLimitRuleLoader(setOf("classpath:cosec-rate-limit/invalid/*.json")).getRules()
-        }
+        }.hasMessageContaining("missing-rate.json")
     }
 
     @Test
-    fun duplicateIdsFailFast() {
-        assertThrows(IllegalArgumentException::class.java) {
+    fun duplicateIdsAcrossFilesFailLoading() {
+        assertThrownBy<IllegalStateException> {
             LocalRateLimitRuleLoader(setOf("classpath:cosec-rate-limit/duplicate/*.json")).getRules()
-        }
+        }.hasMessageContaining("Rate limit rule id [login-by-ip] is declared more than once")
+            .hasMessageContaining("a.json")
+            .hasMessageContaining("b.json")
+    }
+
+    @Test
+    fun duplicateIdsInOneFileFailLoading(@TempDir dir: File) {
+        val rule = """{ "id": "r", "action": "*", "key": "request.remoteIp", "permitsPerSecond": 1 }"""
+        dir.resolve("rules.json").writeText("[$rule, $rule]")
+        assertThrownBy<IllegalStateException> {
+            LocalRateLimitRuleLoader(setOf("file:${dir.absolutePath}/*.json")).getRules()
+        }.hasMessageContaining("Rate limit rule id [r] is declared more than once")
     }
 }

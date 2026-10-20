@@ -141,11 +141,11 @@ object PolicyTestKit {
         suite: PolicyTestSuite,
         rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE
     ): List<PolicyTestResult> {
-        val policies = JsonResources.readAll(suite.policies, Policy::class.java)
+        val policies = JsonResources.readAll(suite.policies, Policy::class.java) { it.id }
         val appPermissions = JsonResources.readAll(
             suite.appPermissions,
             AppPermission::class.java
-        ).associateBy { it.id }
+        ) { it.id }.associateBy { it.id }
         val explainer = AuthorizationExplainer(
             InMemoryPolicyRepository(policies),
             InMemoryAppRolePermissionRepository(appPermissions, grantsOf(suite, appPermissions.keys)),

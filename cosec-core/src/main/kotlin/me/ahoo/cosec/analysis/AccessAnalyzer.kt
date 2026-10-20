@@ -106,15 +106,16 @@ class AccessAnalyzer(
         private val TEMPLATE = Regex("#\\{[^}]*}")
 
         /**
-         * Builds an analyzer from JSON resources, failing on any that cannot be read.
+         * Builds an analyzer from JSON resources, failing on a location that matches no file, a file that cannot be read
+         * and two files with the same id.
          */
         fun load(
             policyLocations: List<String>,
             appPermissionLocations: List<String> = emptyList(),
             roles: Map<String, Map<String, Set<String>>> = emptyMap()
         ): AccessAnalyzer = AccessAnalyzer(
-            policies = JsonResources.readAll(policyLocations, Policy::class.java),
-            appPermissions = JsonResources.readAll(appPermissionLocations, AppPermission::class.java),
+            policies = JsonResources.readAll(policyLocations, Policy::class.java) { it.id },
+            appPermissions = JsonResources.readAll(appPermissionLocations, AppPermission::class.java) { it.id },
             roles = roles,
         )
     }

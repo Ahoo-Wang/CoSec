@@ -72,6 +72,19 @@ internal class CoSecRateLimitAutoConfigurationTest {
     }
 
     @Test
+    fun missingRuleLocationFailsStartup() {
+        contextRunner
+            .withPropertyValues("cosec.limiter.locations=classpath:cosec-rate-limit-typo/*-rate-limit.json")
+            .run { context ->
+                assertThat(context).hasFailed()
+                assertThat(context.startupFailure).rootCause()
+                    .hasMessageContaining(
+                        "Rate limit rule location [classpath:cosec-rate-limit-typo/*-rate-limit.json]"
+                    )
+            }
+    }
+
+    @Test
     fun disabledKeepsPlainAuthorization() {
         contextRunner
             .withPropertyValues("cosec.limiter.enabled=false")
