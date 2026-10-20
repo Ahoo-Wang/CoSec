@@ -78,7 +78,7 @@
 
 ### CoCache 6 与 CosId 4 {#cocache-6-and-cosid-4}
 
-CoSec 7.0 基于 [CoCache 6.5](https://cocache.ahoo.me/guide/migration-6) 和
+CoSec 7.0 基于 [CoCache 6.6](https://cocache.ahoo.me/guide/migration-6) 和
 [CosId 4.0](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md)。CoCache 6 改变了值在 Redis 中的存储方式，
 因此这次升级需要短暂停机，并做一次性的数据迁移（[迁移数据](#migrating-the-data)）。
 

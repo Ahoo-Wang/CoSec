@@ -438,7 +438,7 @@ API 时再提高基线。
 
 ### 3.10 关键依赖：CoCache 6.4、CosId 4.0
 
-**决定**：目标架构以 **CoCache 6.4** 和 **CosId 4.0** 为准，并随它们的后续版本更新。main 已升级到 CoCache 6.5.0 和 CosId 4.0.2（7.0）。
+**决定**：目标架构以 **CoCache 6.4** 和 **CosId 4.0** 为准，并随它们的后续版本更新。main 已升级到 CoCache 6.6.0 和 CosId 4.0.2（7.0）。
 两者的基线都是 JDK 17 与 Spring Boot 4，与 3.9 一致。
 
 **CoCache 6.x 对目标架构的影响**

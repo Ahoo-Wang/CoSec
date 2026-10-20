@@ -108,7 +108,7 @@ gets the id `orders-api`; clients must send the new id in `CoSec-App-Id`, and it
 
 ### CoCache 6 and CosId 4
 
-CoSec 7.0 runs on [CoCache 6.5](https://cocache.ahoo.me/guide/migration-6) and
+CoSec 7.0 runs on [CoCache 6.6](https://cocache.ahoo.me/guide/migration-6) and
 [CosId 4.0](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md). CoCache 6 changed how values are
 stored in Redis, so this upgrade needs a short stop and a one-off data migration
 ([Migrating the data](#migrating-the-data)).
