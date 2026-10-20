@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.limiter
 
+import me.ahoo.cosec.limiter.LocalRateLimitRuleLoader
 import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -37,7 +38,7 @@ data class LimiterProperties(
     companion object {
         const val PREFIX: String = "cosec.limiter"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY
-        const val DEFAULT_LOCATION = "classpath:cosec-rate-limit/*-rate-limit.json"
+        const val DEFAULT_LOCATION = LocalRateLimitRuleLoader.DEFAULT_LOCATION
         const val DEFAULT_KEY_PREFIX = "cosec:rate-limiter"
     }
 }

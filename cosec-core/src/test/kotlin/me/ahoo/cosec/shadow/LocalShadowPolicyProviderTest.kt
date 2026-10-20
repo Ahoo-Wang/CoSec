@@ -14,8 +14,12 @@
 package me.ahoo.cosec.shadow
 
 import me.ahoo.test.asserts.assert
-import org.junit.jupiter.api.Assertions.assertThrows
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver
+import java.io.File
+import java.net.URLClassLoader
 
 class LocalShadowPolicyProviderTest {
     @Test
@@ -25,25 +29,66 @@ class LocalShadowPolicyProviderTest {
     }
 
     @Test
-    fun missingLocationLoadsNothing() {
-        LocalShadowPolicyProvider(setOf("classpath:not-exists/*-policy.json")).getPolicies().assert().isEmpty()
+    fun fileMatchedByTwoLocationsIsLoadedOnce() {
+        LocalShadowPolicyProvider(
+            setOf("classpath:cosec-shadow/*-policy.json", "classpath*:cosec-shadow/orders-policy.json")
+        ).getPolicies().single().id.assert().isEqualTo("orders")
+    }
+
+    @Test
+    fun explicitLocationThatMatchesNoFileFailsLoading(@TempDir dir: File) {
+        assertThrownBy<IllegalStateException> {
+            LocalShadowPolicyProvider(setOf("classpath:not-exists/*-policy.json")).getPolicies()
+        }.hasMessage("Shadow policy location [classpath:not-exists/*-policy.json] matches no file.")
+        assertThrownBy<IllegalStateException> {
+            LocalShadowPolicyProvider(setOf("file:${dir.absolutePath}/missing.json")).getPolicies()
+        }.hasMessageContaining("matches no file")
+        assertThrownBy<IllegalStateException> {
+            LocalShadowPolicyProvider(emptySet(), setOf("classpath:not-exists/*-app-permission.json"))
+                .getAppPermissions()
+        }.hasMessageContaining("Shadow app permission location [classpath:not-exists/*-app-permission.json]")
+    }
+
+    @Test
+    fun defaultLocationsMayMatchNoFile() {
+        // This module's test classpath has cosec-shadow/ candidates, so resolve against an empty class loader.
+        val emptyClasspath = PathMatchingResourcePatternResolver(URLClassLoader(arrayOf(), null))
+        val provider = LocalShadowPolicyProvider(
+            setOf(LocalShadowPolicyProvider.DEFAULT_LOCATION),
+            setOf(LocalShadowPolicyProvider.DEFAULT_APP_PERMISSION_LOCATION),
+            emptyClasspath,
+        )
+        provider.getPolicies().assert().isEmpty()
+        provider.getAppPermissions().assert().isEmpty()
     }
 
     @Test
     fun invalidPolicyFailsFast() {
-        assertThrows(IllegalStateException::class.java) {
+        assertThrownBy<IllegalStateException> {
             LocalShadowPolicyProvider(setOf("classpath:cosec-shadow/invalid/*.json")).getPolicies()
-        }
+        }.hasMessageContaining("bad-policy.json")
     }
 
     @Test
-    fun duplicateIdsFailFast() {
-        assertThrows(IllegalArgumentException::class.java) {
+    fun duplicatePolicyIdsAcrossFilesFailLoading(@TempDir dir: File) {
+        dir.resolve("copy-policy.json").writeText(resource("/cosec-shadow/orders-policy.json"))
+        assertThrownBy<IllegalStateException> {
             LocalShadowPolicyProvider(
-                setOf("classpath:cosec-shadow/*-policy.json", "classpath*:cosec-shadow/orders-policy.json")
-            )
-                .getPolicies()
-        }
+                setOf("classpath:cosec-shadow/*-policy.json", "file:${dir.absolutePath}/*-policy.json")
+            ).getPolicies()
+        }.hasMessageContaining("Shadow policy id [orders] is declared more than once")
+            .hasMessageContaining("copy-policy.json")
+    }
+
+    @Test
+    fun duplicateAppPermissionIdsAcrossFilesFailLoading(@TempDir dir: File) {
+        dir.resolve("copy-app-permission.json").writeText(resource("/cosec-shadow/shop-app-permission.json"))
+        assertThrownBy<IllegalStateException> {
+            LocalShadowPolicyProvider(
+                setOf("classpath:cosec-shadow/*-policy.json"),
+                setOf("classpath:cosec-shadow/*-app-permission.json", "file:${dir.absolutePath}/*.json"),
+            ).getAppPermissions()
+        }.hasMessageContaining("Shadow app permission id [shop] is declared more than once")
     }
 
     @Test
@@ -55,4 +100,6 @@ class LocalShadowPolicyProviderTest {
         provider.getAppPermissions().single().id.assert().isEqualTo("shop")
         LocalShadowPolicyProvider(setOf("classpath:cosec-shadow/*-policy.json")).getAppPermissions().assert().isEmpty()
     }
+
+    private fun resource(path: String): String = File(javaClass.getResource(path)!!.toURI()).readText()
 }

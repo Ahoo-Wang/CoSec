@@ -180,11 +180,18 @@ silently drop a deny. Fix or remove the file.
 
 Two other errors stop startup for the same reason:
 
-- `Policy id [<id>] is declared by more than one file`: before 7.0 only one of them was loaded, silently. Give each
-  policy its own id, or remove the copy.
+- `Policy id [<id>] is declared more than once`, followed by the files: before 7.0 only one of them was loaded,
+  silently. Give each policy its own id, or remove the copy.
 - `Policy location [<location>] matches no file`: a location in `cosec.authorization.local-policy.locations` that does
   not exist or whose pattern matches nothing, usually a typo in the path. Before 7.0 it was only logged as a warning.
   Only the default location `classpath:cosec-policy/*-policy.json` may match nothing.
+
+Rate limit rule files (`cosec.limiter.locations`) and shadow candidates (`cosec.shadow.locations`,
+`cosec.shadow.app-permission-locations`) fail the same way since 7.0, with `Rate limit rule`, `Shadow policy` or
+`Shadow app permission` in place of `Policy`: `Rate limit rule location [<location>] matches no file`,
+`Rate limit rule id [<id>] is declared more than once`, and so on. Before 7.0 a missing location loaded nothing,
+silently. Only the defaults `classpath:cosec-rate-limit/*-rate-limit.json`, `classpath:cosec-shadow/*-policy.json`
+and `classpath:cosec-shadow/*-app-permission.json` may match nothing.
 
 ## Startup fails reading a stored policy
 

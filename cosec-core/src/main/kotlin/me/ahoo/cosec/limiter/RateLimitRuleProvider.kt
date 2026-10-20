@@ -21,13 +21,9 @@ fun interface RateLimitRuleProvider {
 
     companion object {
         fun of(rules: List<RateLimitRule>): RateLimitRuleProvider {
-            requireUniqueIds(rules)
-            return RateLimitRuleProvider { rules }
-        }
-
-        internal fun requireUniqueIds(rules: List<RateLimitRule>) {
             val duplicates = rules.groupBy { it.id }.filterValues { it.size > 1 }.keys
             require(duplicates.isEmpty()) { "Duplicate rate limit rule ids: $duplicates." }
+            return RateLimitRuleProvider { rules }
         }
     }
 }

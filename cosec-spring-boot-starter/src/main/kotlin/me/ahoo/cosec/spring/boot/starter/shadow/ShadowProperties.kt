@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter.shadow
 
+import me.ahoo.cosec.shadow.LocalShadowPolicyProvider
 import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -44,7 +45,7 @@ data class ShadowProperties(
     companion object {
         const val PREFIX: String = "cosec.shadow"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY
-        const val DEFAULT_LOCATION = "classpath:cosec-shadow/*-policy.json"
-        const val DEFAULT_APP_PERMISSION_LOCATION = "classpath:cosec-shadow/*-app-permission.json"
+        const val DEFAULT_LOCATION = LocalShadowPolicyProvider.DEFAULT_LOCATION
+        const val DEFAULT_APP_PERMISSION_LOCATION = LocalShadowPolicyProvider.DEFAULT_APP_PERMISSION_LOCATION
     }
 }

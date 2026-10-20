@@ -19,8 +19,11 @@ import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.io.File
 
 class AccessAnalyzerTest {
     private val analyzer = AccessAnalyzer.load(
@@ -147,11 +150,20 @@ class AccessAnalyzerTest {
 
     @Test
     fun loadFailsOnMissingOrBrokenFiles() {
-        assertThrows(IllegalArgumentException::class.java) {
+        assertThrows(IllegalStateException::class.java) {
             AccessAnalyzer.load(listOf("classpath:not-exists/*.json"))
         }
         assertThrows(IllegalStateException::class.java) {
             AccessAnalyzer.load(listOf("classpath:cosec-policy-invalid/error-policy.json"))
         }
+    }
+
+    @Test
+    fun loadFailsOnDuplicateIdsAcrossFiles(@TempDir dir: File) {
+        val policy = File(javaClass.getResource("/cosec-policy/test-policy.json")!!.toURI()).readText()
+        dir.resolve("copy-policy.json").writeText(policy)
+        assertThrownBy<IllegalStateException> {
+            AccessAnalyzer.load(listOf("classpath:cosec-policy/test-policy.json", "file:${dir.absolutePath}/*.json"))
+        }.hasMessageContaining("Policy id [id] is declared more than once")
     }
 }

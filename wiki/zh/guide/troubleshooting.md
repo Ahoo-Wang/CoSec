@@ -158,9 +158,15 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 
 出于同样的原因，另外两种错误也会阻止启动：
 
-- `Policy id [<id>] is declared by more than one file`：7.0 之前只会悄悄加载其中一个。请给每条策略单独的 id，或删除重复的文件。
+- `Policy id [<id>] is declared more than once`，后面列出相关文件：7.0 之前只会悄悄加载其中一个。请给每条策略单独的 id，或删除重复的文件。
 - `Policy location [<location>] matches no file`：`cosec.authorization.local-policy.locations` 中的某个位置不存在，或其模式匹配不到任何文件，
   通常是路径写错了。7.0 之前只会记录一条警告。只有默认位置 `classpath:cosec-policy/*-policy.json` 允许匹配不到文件。
+
+从 7.0 起，限流规则文件（`cosec.limiter.locations`）和影子候选（`cosec.shadow.locations`、`cosec.shadow.app-permission-locations`）
+也以同样的方式失败，只是把 `Policy` 换成 `Rate limit rule`、`Shadow policy` 或 `Shadow app permission`：
+`Rate limit rule location [<location>] matches no file`、`Rate limit rule id [<id>] is declared more than once` 等。
+7.0 之前，位置缺失时什么也不加载，也没有任何提示。只有默认位置 `classpath:cosec-rate-limit/*-rate-limit.json`、
+`classpath:cosec-shadow/*-policy.json` 和 `classpath:cosec-shadow/*-app-permission.json` 允许匹配不到文件。
 
 ## 启动时读取已存储的策略失败 {#startup-fails-reading-a-stored-policy}
 

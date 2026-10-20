@@ -90,8 +90,8 @@ class PolicyTestKitTest {
 
     @Test
     fun missingLocationsFail() {
-        assertThrows(IllegalArgumentException::class.java) { PolicyTestKit.run("classpath:not-exists/*.json") }
-        assertThrows(IllegalArgumentException::class.java) {
+        assertThrows(IllegalStateException::class.java) { PolicyTestKit.run("classpath:not-exists/*.json") }
+        assertThrows(IllegalStateException::class.java) {
             PolicyTestKit.run(PolicyTestSuite(policies = listOf("classpath:not-exists/x.json")))
         }
     }

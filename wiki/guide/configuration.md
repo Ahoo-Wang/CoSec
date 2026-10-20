@@ -107,15 +107,15 @@ over the `cosec.*` one. `AppPermissionCache` and `GlobalPolicyIndexCache` have n
 
 | Property | Default | Description |
 |---|---|---|
-| `cosec.limiter.locations` | `classpath:cosec-rate-limit/*-rate-limit.json` | Resource patterns of the [rate limit rule](./rate-limiting.md#rules) files. |
+| `cosec.limiter.locations` | `classpath:cosec-rate-limit/*-rate-limit.json` | Resource patterns of the [rate limit rule](./rate-limiting.md#rules) files. A location that matches no file, other than the default, stops startup, and so does a rule id declared twice. |
 | `cosec.limiter.key-prefix` | `cosec:rate-limiter` | Redis key prefix of the counters, when Redis counts (`cache-support`). |
 
 ## Shadow mode
 
 | Property | Default | Description |
 |---|---|---|
-| `cosec.shadow.locations` | `classpath:cosec-shadow/*-policy.json` | Resource patterns of the candidate policy files, one policy per file. |
-| `cosec.shadow.app-permission-locations` | `classpath:cosec-shadow/*-app-permission.json` | Resource patterns of the candidate app permission files, one per file. |
+| `cosec.shadow.locations` | `classpath:cosec-shadow/*-policy.json` | Resource patterns of the candidate policy files, one policy per file. A location that matches no file, other than the default, stops startup, and so do two files with the same policy id. |
+| `cosec.shadow.app-permission-locations` | `classpath:cosec-shadow/*-app-permission.json` | Resource patterns of the candidate app permission files, one per file. A location that matches no file, other than the default, stops startup, and so do two files with the same app permission id. |
 | `cosec.shadow.sample-rate` | `1.0` | Share of requests evaluated against the candidates, from `0` to `1`. Each costs a second evaluation. |
 | `cosec.shadow.report-rule-changes` | `false` | Also report requests with the same result but a different deciding rule. |
 

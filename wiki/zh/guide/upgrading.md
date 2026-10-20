@@ -78,6 +78,18 @@
 仍然允许匹配不到文件，因此没有本地策略的应用不受影响。升级前，请确认每个配置的位置都存在，并且策略 id 在各文件之间不重复；
 通过两个位置访问到的同一个文件只会加载一次。
 
+**限流规则文件和影子候选文件的加载与本地策略一样严格。** `LocalRateLimitRuleLoader` 和 `LocalShadowPolicyProvider`
+以前遇到不存在或匹配不到任何文件的位置时什么也不加载，因此 `cosec.limiter.locations` 写错路径会悄悄丢掉其中的所有配额，
+`cosec.shadow.locations` 或 `cosec.shadow.app-permission-locations` 写错路径会让影子模式对一个从未评估过的变更报告“没有差异”。
+现在这样的位置会阻止启动（`Rate limit rule location [...] matches no file`、`Shadow policy location [...]`、
+`Shadow app permission location [...]`）；只有默认位置（`classpath:cosec-rate-limit/*-rate-limit.json`、
+`classpath:cosec-shadow/*-policy.json`、`classpath:cosec-shadow/*-app-permission.json`）允许匹配不到文件。
+限流规则 id、影子策略 id 或影子应用权限 id 重复声明时，以 `... id [<id>] is declared more than once` 失败并列出相关文件，
+异常类型改为 `IllegalStateException`（以前是 `IllegalArgumentException`）。通过两个位置访问到的同一个文件只会加载一次；
+以前被两个重叠位置匹配到的规则或候选文件会被当作重复而失败。`PolicyTestKit` 和 `AccessAnalyzer.load`（本来就会因位置缺失而失败）
+现在对此抛出 `IllegalStateException` 而不是 `IllegalArgumentException`，并且在两个文件声明相同的策略或应用权限 id 时也会失败。
+本地策略 id 重复的错误信息现在是 `Policy id [<id>] is declared more than once`。
+
 **限流规则的 `key` 在加载时校验。** 不受支持的 `key`（例如把 `request.remoteIp` 写成 `request.ip`）以前可以加载，
 然后在前面的规则已经消耗许可之后，让每个匹配的请求都以 `500` 失败。现在构造或加载这样的规则会直接失败（见[限流](./rate-limiting.md)）。
 

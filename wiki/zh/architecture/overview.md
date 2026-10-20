@@ -99,6 +99,15 @@ sequenceDiagram
 - 全局策略索引是一个 CoCache `SetCache`，通过原子的 `add` / `remove` 更新；
   `GlobalPolicyIndexConcurrencyIntegrationTest` 用两个实例并发写入来验证这一点。读取时只应用索引中内容类型为 `global` 的策略，
   索引中的 id 没有内容时以 `MissingPolicyException` 失败，因此发布之间无论怎样交错都不会放宽访问（`GlobalPolicyConsistencyTest`）。
+- schema 标记守护数据布局。7.0 并不总能在 6.x 存放数据的位置读到它（键前缀以 `:` 结尾、键前缀改变、迁移被回滚），
+  会把数据读成不存在，对全局拒绝和令牌吊销而言这等于放行。因此 starter 在创建任何 CoSec 缓存之前，用
+  [`CoSecSchemaMarker`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecSchemaMarker.kt)
+  检查标记键 `{p}:meta:schema`（`{p}` 即 `cosec.authorization.cache.key-prefix`）：当前键前缀或 6.x 的 `legacy-key-prefix`
+  下存在 CoSec 数据却没有标记，或者标记记录的是另一个 schema 版本时，启动以 `CoSecSchemaException` 失败。没有任何 CoSec 数据的部署会写入标记；
+  [数据迁移](../guide/upgrading.md#migrating-the-data)在最后写入标记。执行迁移的一次性任务需要设置
+  `cosec.authorization.cache.migration.check-schema=false`，否则检查会阻止它启动；对外服务的实例永远不要这样设置。
+- 本地文件（策略、限流规则、影子候选，以及测试工具和分析器的输入）由 `JsonResources` 解析：匹配不到任何文件的配置位置、
+  无法读取的文件和重复声明的 id 都会导致加载失败；只有内置的默认位置允许匹配不到文件。
 
 ## 性能 {#performance}
 

@@ -107,6 +107,20 @@ the id or the location. The default location `classpath:cosec-policy/*-policy.js
 applications without local policies are unaffected. Before upgrading, check that every configured location exists
 and that policy ids are unique across files; the same file reached through two locations is loaded once.
 
+**Rate limit rule and shadow candidate files are loaded as strictly as local policies.** `LocalRateLimitRuleLoader`
+and `LocalShadowPolicyProvider` used to load nothing from a location that does not exist or matches no file, so a
+typo in `cosec.limiter.locations` silently removed every quota it held, and a typo in `cosec.shadow.locations` or
+`cosec.shadow.app-permission-locations` made shadow mode report no difference for a change it never evaluated. Now
+such a location stops startup (`Rate limit rule location [...] matches no file`, `Shadow policy location [...]`,
+`Shadow app permission location [...]`); only the defaults (`classpath:cosec-rate-limit/*-rate-limit.json`,
+`classpath:cosec-shadow/*-policy.json`, `classpath:cosec-shadow/*-app-permission.json`) may match nothing. A rule
+id, shadow policy id or shadow app permission id declared twice fails with `... id [<id>] is declared more than
+once`, naming the files, and is now an `IllegalStateException` (it was an `IllegalArgumentException`). The same file
+reached through two locations is loaded once; before, a rule or candidate file matched by two overlapping locations
+failed as a duplicate. `PolicyTestKit` and `AccessAnalyzer.load` (already strict about missing locations) now throw
+`IllegalStateException` instead of `IllegalArgumentException` for them, and also fail on a policy or app permission
+id declared by two files. The duplicate local policy error now reads `Policy id [<id>] is declared more than once`.
+
 **Rate limit rule keys are checked when the rule loads.** A `key` that is not a supported part (for example
 `request.ip` instead of `request.remoteIp`) used to load and then fail every matching request with `500`, after
 earlier rules had spent their permits. Constructing or loading such a rule now fails

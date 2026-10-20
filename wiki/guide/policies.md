@@ -469,9 +469,14 @@ candidates from somewhere other than files.
 
 Shadow mode never changes a response, and its errors are only logged. It does cost a second evaluation on every
 sampled request, so keep `sample-rate` low on busy services. Candidates run on a separate security context marked
-as a policy evaluation, so custom matchers can skip side effects, and no rate limit is spent. A shadow file that
-cannot be read stops the application from starting, because a candidate left out would report "no difference" for
-a change it never evaluated. Once the diffs look right, move the candidates into the enforced policies.
+as a policy evaluation, so custom matchers can skip side effects, and no rate limit is spent.
+
+Shadow candidates are only observed, but they load as strictly as local policies: a candidate left out would
+report "no difference" for a change it never evaluated, and that report is what you promote on. So a shadow file
+that cannot be read, two files with the same policy id (or app permission id), and a configured location that does
+not exist or matches no file all stop the application from starting. Only the defaults
+`classpath:cosec-shadow/*-policy.json` and `classpath:cosec-shadow/*-app-permission.json` may match nothing. Once the
+diffs look right, move the candidates into the enforced policies.
 
 ### Policy test cases
 

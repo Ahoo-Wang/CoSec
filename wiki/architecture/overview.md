@@ -112,6 +112,19 @@ Redis implementations in `cosec-cocache` are built on [CoCache 6](https://cocach
   `GlobalPolicyIndexConcurrencyIntegrationTest` runs two instances writing concurrently. Readers apply only
   indexed policies whose content is of type `global`, and fail with `MissingPolicyException` on an indexed id
   without content, so no interleaving of publishes widens access (`GlobalPolicyConsistencyTest`).
+- A schema marker guards the data layout. 7.0 does not always read 6.x data where 6.x stored it (a key prefix
+  ending in `:`, a changed prefix, a rolled-back migration), and would read it as missing, which fails open for
+  global denies and revocations. So before any CoSec cache is created, the starter checks the marker key
+  `{p}:meta:schema` (`{p}` is `cosec.authorization.cache.key-prefix`) with
+  [`CoSecSchemaMarker`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecSchemaMarker.kt):
+  CoSec data without the marker, under the current or the 6.x `legacy-key-prefix`, or a marker of another schema
+  version, stops startup with `CoSecSchemaException`. A deployment with no CoSec data gets the marker; the
+  [data migration](../guide/upgrading.md#migrating-the-data) writes it last. The one-off job that runs the migration
+  sets `cosec.authorization.cache.migration.check-schema=false`, since the check would stop it from starting; serving
+  instances never do.
+- Local files (policies, rate limit rules, shadow candidates, and the test kit and analyzer inputs) are resolved by
+  `JsonResources`: a configured location that matches no file, a file that cannot be read and an id declared twice
+  fail loading; only the built-in default locations may match nothing.
 
 ## Performance
 
