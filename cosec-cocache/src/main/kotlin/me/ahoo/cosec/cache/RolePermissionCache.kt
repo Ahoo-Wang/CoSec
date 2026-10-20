@@ -15,10 +15,9 @@ package me.ahoo.cosec.cache
 
 import me.ahoo.cocache.api.Cache
 import me.ahoo.cosec.api.permission.PermissionId
-import me.ahoo.cosec.api.principal.SpacedRoleId
 
 /**
- * Permission ids granted to a role in a space. Redis is the store of record: see [CoSecCacheSpecs.rolePermission]
- * for the declaration.
+ * The permission ids granted to a role in one space of one app ([AppSpacedRoleId]). Redis is the store of record:
+ * see [CoSecCacheSpecs.rolePermission] for the declaration.
  */
-interface RolePermissionCache : Cache<SpacedRoleId, Set<PermissionId>>
+interface RolePermissionCache : Cache<AppSpacedRoleId, Set<PermissionId>>

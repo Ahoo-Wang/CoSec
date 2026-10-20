@@ -17,6 +17,8 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.policy.PathVariableScope
+import me.ahoo.cosec.policy.clearPathVariablesBeforeMatch
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.policy.condition.part.DefaultPartExtractor
 import me.ahoo.cosec.policy.condition.part.PartExtractor
@@ -48,12 +50,19 @@ data class RateLimitRule(
     init {
         require(ID_PATTERN.matches(id)) { "Rate limit rule id [$id] must match ${ID_PATTERN.pattern}." }
         require(key == null || key.isNotBlank()) { "Rate limit rule [$id] key must not be blank." }
+        PathVariableScope.requireScoped(id, action, condition, key)
     }
 
     private val keyExtractor: PartExtractor? = key?.let { DefaultPartExtractor(it) }
 
-    fun matches(request: Request, securityContext: SecurityContext): Boolean =
-        action.match(request, securityContext) && condition.match(request, securityContext)
+    /**
+     * Matches seeing only the path variables this rule's own action captures. [bucketOf] reads the same
+     * variables as long as it runs before the next rule matches, which clears them.
+     */
+    fun matches(request: Request, securityContext: SecurityContext): Boolean {
+        action.clearPathVariablesBeforeMatch(securityContext)
+        return action.match(request, securityContext) && condition.match(request, securityContext)
+    }
 
     /**
      * The bucket of this request. Keyed buckets carry a prefix, so a key value literally named `global` cannot

@@ -26,6 +26,7 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.RequestMatcher
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
+import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.blacklist.BlacklistChecker
@@ -35,7 +36,9 @@ import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.limiter.RateLimitRuleProvider
 import me.ahoo.cosec.pipeline.SecurityDecision
 import me.ahoo.cosec.pipeline.SecurityPipeline
+import me.ahoo.cosec.policy.action.clearPathVariables
 import me.ahoo.cosec.policy.markPolicyEvaluation
+import me.ahoo.cosec.policy.verifyScoped
 import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationException
 import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.toAuthorizeResult
@@ -135,9 +138,10 @@ class AuthorizationExplainer(
     private fun explanation(decision: SecurityDecision, trace: Trace, narrator: Narrator): Explanation {
         val warnings = trace.warnings.toMutableList()
         val decidedBy = decision.verifyContext?.toDecisionRef()
-        // A matcher error aborts real authorization wherever it occurs, which the trace does not model.
-        val matcherFailed = warnings.any { it.code == ExplainWarningCode.MATCHER_ERROR }
-        if (!matcherFailed && decidedBy != trace.decidedBy) {
+        // A matcher error or a missing principal policy aborts real authorization (fail closed), which the trace
+        // does not model: it narrates the policies that were found.
+        val aborted = warnings.any { it.code in ABORTING_WARNINGS }
+        if (!aborted && decidedBy != trace.decidedBy) {
             warnings += ExplainWarning(
                 ExplainWarningCode.TRACE_INCONSISTENT,
                 "Authorization was decided by [$decidedBy], but the trace points at [${trace.decidedBy}].",
@@ -177,28 +181,29 @@ class AuthorizationExplainer(
 
         fun narrate(policies: PolicyRepository, permissions: AppRolePermissionRepository): Mono<Trace> {
             val principal = context.principal
-            if (rootPrincipalMatcher.isRoot(principal)) {
-                val root = DecisionRef(ExplainLayer.ROOT)
-                val layers = listOf(LayerTrace(ExplainLayer.ROOT, LayerState.EVALUATED, VerifyResult.ALLOW, root)) +
-                    notEvaluated(ExplainLayer.BLACKLIST) + POLICY_LAYERS.map { notEvaluated(it) }
-                return Trace(layers, root, emptyList(), warnings).toMono()
-            }
-            val rootLayer = LayerTrace(ExplainLayer.ROOT, LayerState.EVALUATED, VerifyResult.IMPLICIT_DENY)
             return blacklistChecker.check(request, context).flatMap { allowed ->
                 if (!allowed) {
                     val blacklist = DecisionRef(ExplainLayer.BLACKLIST)
                     val blacklistLayer =
                         LayerTrace(ExplainLayer.BLACKLIST, LayerState.EVALUATED, VerifyResult.EXPLICIT_DENY, blacklist)
-                    val layers = listOf(rootLayer, blacklistLayer) + POLICY_LAYERS.map { notEvaluated(it) }
+                    val layers = listOf(blacklistLayer, notEvaluated(ExplainLayer.ROOT)) +
+                        POLICY_LAYERS.map { notEvaluated(it) }
                     return@flatMap Trace(layers, blacklist, emptyList(), warnings).toMono()
                 }
                 val blacklistLayer = LayerTrace(ExplainLayer.BLACKLIST, LayerState.EVALUATED, VerifyResult.ALLOW)
+                if (rootPrincipalMatcher.isRoot(principal)) {
+                    val root = DecisionRef(ExplainLayer.ROOT)
+                    val rootLayer = LayerTrace(ExplainLayer.ROOT, LayerState.EVALUATED, VerifyResult.ALLOW, root)
+                    val layers = listOf(blacklistLayer, rootLayer) + POLICY_LAYERS.map { notEvaluated(it) }
+                    return@flatMap Trace(layers, root, emptyList(), warnings).toMono()
+                }
+                val rootLayer = LayerTrace(ExplainLayer.ROOT, LayerState.EVALUATED, VerifyResult.IMPLICIT_DENY)
                 Mono.zip(
                     policies.getGlobalPolicy().defaultIfEmpty(emptyList()),
                     principalPolicies(policies),
                     appRolePermission(permissions),
                 ).map { sources ->
-                    narrateLayers(listOf(rootLayer, blacklistLayer), sources.t1, sources.t2, sources.t3.orElse(null))
+                    narrateLayers(listOf(blacklistLayer, rootLayer), sources.t1, sources.t2, sources.t3.orElse(null))
                 }
             }
         }
@@ -212,7 +217,8 @@ class AuthorizationExplainer(
                 (policyIds - found.map { it.id }.toSet()).forEach { missing ->
                     warnings += ExplainWarning(
                         ExplainWarningCode.MISSING_POLICY,
-                        "The principal lists policy [$missing], which the repository does not have.",
+                        "The principal lists policy [$missing], which the repository does not have; " +
+                            "authorization fails closed.",
                     )
                 }
                 Optional.of(found)
@@ -220,19 +226,30 @@ class AuthorizationExplainer(
         }
 
         private fun appRolePermission(permissions: AppRolePermissionRepository): Mono<Optional<AppRolePermission>> {
-            val roles = context.principal.roles
-            if (roles.isEmpty()) {
+            val principalRoles = context.principal.roles
+            if (principalRoles.isEmpty()) {
                 return Mono.just(Optional.empty())
             }
-            return permissions.getAppRolePermission(request.appId, request.spaceId, roles)
+            val spaceId = request.spaceId
+            val roles = RoleScope.rolesIn(spaceId, principalRoles)
+            if (roles.isEmpty()) {
+                warnings += ExplainWarning(
+                    ExplainWarningCode.NO_ROLE_IN_SPACE,
+                    "The principal has roles $principalRoles, but none applies in space [$spaceId]: " +
+                        "a role applies in a space only when written role@space, and in the default space " +
+                        "only without a suffix.",
+                )
+                return Mono.just(Optional.empty())
+            }
+            return permissions.getAppRolePermission(request.appId, spaceId, roles)
                 .map { Optional.of(it) }
                 .defaultIfEmpty(Optional.empty())
                 .doOnNext {
                     if (it.isEmpty) {
                         warnings += ExplainWarning(
                             ExplainWarningCode.NO_APP_PERMISSION,
-                            "The principal has roles, but app [${request.appId}] space [${request.spaceId}] " +
-                                "has no app permission.",
+                            "The principal has roles $roles in space [$spaceId], but app [${request.appId}] " +
+                                "has no app permission, so none of its role grants apply.",
                         )
                     }
                 }
@@ -390,7 +407,7 @@ class AuthorizationExplainer(
             @Suppress("TooGenericExceptionCaught")
             return try {
                 val outcome = when {
-                    statement.verify(request, context) != VerifyResult.IMPLICIT_DENY -> StatementOutcome.MATCHED
+                    statement.verifyScoped(request, context) != VerifyResult.IMPLICIT_DENY -> StatementOutcome.MATCHED
                     !statement.action.match(request, context) -> StatementOutcome.ACTION_MISS
                     else -> StatementOutcome.CONDITION_MISS
                 }
@@ -401,9 +418,11 @@ class AuthorizationExplainer(
             }
         }
 
+        /** Matches a policy or app condition, which runs before any action and so sees no path variables. */
         @Suppress("TooGenericExceptionCaught")
         private fun match(condition: ConditionMatcher, where: () -> String): Boolean? =
             try {
+                context.clearPathVariables()
                 condition.match(request, context)
             } catch (cause: Exception) {
                 matcherError(where(), cause)
@@ -435,6 +454,7 @@ class AuthorizationExplainer(
     }
 
     private companion object {
+        val ABORTING_WARNINGS = setOf(ExplainWarningCode.MATCHER_ERROR, ExplainWarningCode.MISSING_POLICY)
         val POLICY_LAYERS = listOf(
             ExplainLayer.GLOBAL_POLICY,
             ExplainLayer.PRINCIPAL_POLICY,

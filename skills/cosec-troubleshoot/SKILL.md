@@ -24,7 +24,7 @@ logging:
 
 `SimpleAuthorization` identifies the matched policy/statement or role/permission. When `AuditingAuthorization` is active, the default sink emits structured deny events at WARN and allow events at DEBUG, including principal, request, decision, and matched rule when available. A custom `Authorization` bean is not wrapped automatically.
 
-When `cosec.explain.enabled=true`, prefer explaining the decision over reading logs: inject `AuthorizationExplainer` (or call `POST /actuator/cosecExplain` with `principal` and `request` objects) to get the real status, the deciding rule (omit `principal` and pass the caller's `Authorization` token or `X-API-Key` in `request.headers` to explain a real credential; rejected credentials add a `TOKEN_INVALID` warning), every statement's and permission's outcome (`MATCHED`, `ACTION_MISS`, `CONDITION_MISS`, `NOT_EVALUATED`, `ERROR`), overridden allows, matching rate limit rules, and warnings such as `MISSING_POLICY` or `NO_APP_PERMISSION`. It spends no rate-limit permits. Treat `TRACE_INCONSISTENT` as a CoSec bug and trust the reported decision.
+When `cosec.explain.enabled=true`, prefer explaining the decision over reading logs: inject `AuthorizationExplainer` (or call `POST /actuator/cosecExplain` with `principal` and `request` objects) to get the real status, the deciding rule (omit `principal` and pass the caller's `Authorization` token or `X-API-Key` in `request.headers` to explain a real credential; rejected credentials add a `TOKEN_INVALID` warning), every statement's and permission's outcome (`MATCHED`, `ACTION_MISS`, `CONDITION_MISS`, `NOT_EVALUATED`, `ERROR`), overridden allows, matching rate limit rules, and warnings such as `MISSING_POLICY`, `NO_APP_PERMISSION` or `NO_ROLE_IN_SPACE` (the principal has roles, but none written for the request's space). It spends no rate-limit permits. Treat `TRACE_INCONSISTENT` as a CoSec bug and trust the reported decision.
 
 ## Interpret the status first
 
@@ -34,7 +34,7 @@ When `cosec.explain.enabled=true`, prefer explaining the decision over reading l
 | 401 | Authorization denied while the parsed principal is anonymous; invalid/expired tokens also fall back to anonymous and preserve the token reason |
 | 403 | An authenticated principal was denied, or a regex matcher timed out and failed closed |
 | 429 | An allowed request exceeded a rate limit rule (`RateLimitingAuthorization`) |
-| 500 | Unexpected authorization error, including Redis being unavailable for policy/permission reads (those caches fail closed); inspect the server exception |
+| 500 | Unexpected authorization error, including Redis being unavailable for policy/permission reads (those caches fail closed) and a principal listing a policy id the repository does not have (`MissingPolicyException`); inspect the server exception |
 
 The authorization result alone does not choose 401 versus 403; the filter maps a denied anonymous principal to 401 and a denied authenticated principal to 403.
 
@@ -42,11 +42,11 @@ The authorization result alone does not choose 401 versus 403; the filter maps a
 
 `SimpleAuthorization` evaluates:
 
-1. Root principal ID (`cosec` by default, overridden by JVM system property `cosec.root`) → allow, unless `cosec.authorization.root-enabled=false` or a custom `RootPrincipalMatcher` bean decides otherwise.
-2. Blacklist → explicit deny.
+1. Blacklist → explicit deny (applies to root too).
+2. Root principal → allow, only when `cosec.authorization.root-enabled=true` (default `false`) and the principal is in the platform tenant (`(platform)`) with the root ID (`cosec` by default, overridden by JVM system property `cosec.root`), unless a custom `RootPrincipalMatcher` bean decides otherwise.
 3. Global policies.
 4. Principal-attached policies.
-5. Role permissions for `request.appId` + `request.spaceId`.
+5. Role permissions: only the principal's roles in `request.spaceId` (`role@space`; unsuffixed roles only in the default space), with their grants in `request.appId`.
 6. No match → implicit deny.
 
 Each policy tier evaluates matched policy-level conditions once, pools all statements, and checks every deny before any allow. Tiers are combined deny-first (CoSec 6+): an explicit deny in any tier wins over an allow from any other tier, so a principal or role deny overrides a global allow. Only if no tier denies does a matched allow grant access.
@@ -68,6 +68,7 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 - Check the action's HTTP method, path, trailing slash, and captured variables.
 - Check condition parts and the actual principal roles/attributes/tenant.
 - Remember that `inTenant.value` is `default`, `user`, or `platform`, not a tenant ID.
+- For role permissions (CoSec 7+): grants are keyed by app, role and space (`<prefix>:app:role:permission:<appId>:<roleId>[@<spaceId>]`) and apply only in their own app. With `CoSec-Space-Id: x`, only token roles written `role@x` count; without it, only unsuffixed roles. A grant under the 6.x key `<prefix>:role:permission:<roleId>` is never read: migrate it to its app with `RolePermissionKeyMigration.migrate(appId)` (see the upgrading guide).
 
 ### Request allowed unexpectedly
 
@@ -79,19 +80,25 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 ### Policy file has no effect
 
 - Confirm `cosec.authorization.local-policy.enabled=true` and the file matches `local-policy.locations`.
-- Inspect startup errors: `LocalPolicyLoader` logs and skips malformed JSON, missing required fields, unknown matcher types, and constructor-time configuration errors rather than failing the application.
+- Inspect startup errors: `LocalPolicyLoader` logs and skips malformed JSON, missing required fields, unknown matcher types, and constructor-time configuration errors rather than failing the application. Exception: a `PathVariableScopeException` fails startup.
 - Deferred matcher errors still load. For example, an unsupported `part` throws during authorization and the transport returns 500; reproduce it with `DefaultPolicyEvaluator` or the failing request.
 - Local policies are deduplicated by ID after location expansion; assert that the expected ID and content loaded.
 - `LocalPolicyLoader` does not serve authorization decisions directly. Enable `init-repository` or prepopulate `PolicyRepository`; use `force-refresh` only when overwriting repository state is intended.
 
 ### Policies or permissions missing after upgrading to 7.0
 
-- CoCache 6 cannot read what CoSec 6.x (CoCache 5) stored in Redis. The keys are unchanged, but every value must be migrated (CoCache's 5.x migrator) before 7.0 starts; see the upgrading guide, "6.1 to 7.0".
+- CoCache 6 cannot read what CoSec 6.x (CoCache 5) stored in Redis. Until the data is migrated, every read of it fails (`CacheReadException` caused by `ForeignFormatException`) and requests get 500. Migrate with `CoSecCoCache5Migration` (policies, global index, app permissions, revoked tokens) and `RolePermissionKeyMigration` (role grants, per app); see the upgrading guide, "6.1 to 7.0".
 - Values written straight to Redis (`SET`, `SADD`) are not read in 7.0: every value carries a binary header. Write app permissions and role grants through the `AppPermissionCache` and `RolePermissionCache` beans, and policies through `PolicyRepository.setPolicy`.
+
+### One principal always gets 500
+
+- `MissingPolicyException` names policy ids the principal lists but `PolicyRepository.getPolicies` did not return. Since 7.0 authorization fails closed on them instead of skipping them (a missing deny must not let a global allow win); explanations show a `MISSING_POLICY` warning.
+- Check whether the policy was deleted, never initialized (`init-repository` off, or skipped at load), or lost from Redis. Fix by writing the policy or removing the id from the principal; do not suggest catching the exception.
 
 ### Matcher mismatch
 
 - Path variables use `{id}` and conditions read `request.path.var.id`; `:id` and `request.pathVariable.id` are invalid.
+- `PathVariableScopeException` at startup or on a policy read/write (7.0+): a policy or app permission condition, or a statement, permission or rate limit rule whose action is not `path`, reads `request.path.var.*` (or an expression mentions `PATH_VARIABLES`). Variables belong only to the statement whose own `path` action captured them; move the reference there. Local policy files with this error stop startup instead of being skipped; Redis-stored ones fail reads with 500.
 - Path SpEL templates use `#{principal.id}`. SpEL condition expressions use root properties such as `context.principal.id`; they are different evaluation roots.
 - Valid part prefixes are singular `request.header.`, `request.attributes.`, `request.path.var.`, and `context.principal.attributes.`. Unsupported parts throw `IllegalArgumentException`.
 - Regex timeouts fail closed as 403. Simplify or bound the pattern instead of increasing exposure to ReDoS.

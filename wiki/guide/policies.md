@@ -80,8 +80,24 @@ The `path` action matcher:
 - `options`: optional; how paths are split and compared. The separator also makes non-HTTP
   "paths" possible, such as `order.read` with `"separator": "."`.
 
-**Path variables.** Variables captured by the matching action are available to the statement's condition
-as `request.path.var.<name>`.
+**Path variables.** A `path` action that matches captures its `{var}`s, and the condition of the same statement
+reads them as `request.path.var.<name>`. They belong to that statement alone: they are cleared before every
+statement, permission and [rate limit rule](./rate-limiting.md#rules) matches its action, so a condition never
+sees what another statement captured, and a variable its own pattern does not declare reads as empty.
+
+Reading path variables anywhere else is a policy error, and the policy fails to load with
+`PathVariableScopeException`:
+
+- in a policy's or an app permission's `condition`, which runs before any action;
+- in the condition of a statement or permission whose action is not a `path` action: `all`, `["*", ...]`, a
+  `composite` with any non-path member, or a custom action type;
+- in the `condition` or `key` of a rate limit rule whose action is not a `path` action.
+
+The check recognizes every `part` and rate limit `key` that starts with `request.path.var.`, and every
+string in the matcher's configuration (OGNL and SpEL expressions, `#{...}` templates) that mentions
+`PATH_VARIABLES`, the context attribute that holds the variables. It cannot recognize an expression that builds
+that name at run time, or a custom matcher that reads the variables in code. Those still read nothing outside
+their own statement, because the variables are cleared.
 
 ## Templates
 
@@ -174,7 +190,7 @@ the request (`403`); it is never treated as a match.
 | `request.header.<name>` | any request header |
 | `request.attributes.<name>` | a [request attribute](./web-integration.md#request-attributes), such as `ipRegion` |
 | `resource.<name>` | an attribute of the target object, set by a check in code; empty in the request filter (see [Object-level rules](#object-level-rules)) |
-| `request.path.var.<name>` | a path variable captured by the matched action |
+| `request.path.var.<name>` | a path variable captured by the same statement's `path` action (see [Actions](#actions)) |
 | `context.tenantId`, `context.principal.id` | tenant and principal id |
 | `context.principal.attributes.<name>` | a principal attribute (a JWT `attributes` claim entry) |
 
@@ -226,9 +242,9 @@ Within each layer, and across all layers, **deny wins**: if any matched statemen
 matched `allow` grants access. If nothing matched, the result is `IMPLICIT_DENY`. The order of policies and
 statements never changes the result, only which matching rule is reported.
 
-Two checks come before the layers: the **root** principal (id `cosec`, configurable, see
-[Configuration](./configuration.md#authorization)) is always allowed, and a request rejected by the
-blacklist is always denied.
+Two checks come before the layers: a request rejected by the blacklist is always denied, and then the
+**root** principal is allowed. Root is off by default; when enabled, it is the platform tenant's principal with id
+`cosec` (configurable, see [Configuration](./configuration.md#authorization)).
 
 A policy's own `condition` is evaluated once, before its statements.
 
@@ -293,20 +309,42 @@ permissions once and grant them to roles.
 
 - A permission is a statement with an `id` (plus optional `name` and `description`).
 - The app's `condition` gates all of its permissions.
-- The request selects the app with the `CoSec-App-Id` header and the space with `CoSec-Space-Id`.
-- A role is granted a **set of permission ids** per space; `*` grants every permission of the app.
+- A role is granted a **set of permission ids** in one app and one space; `*` grants every permission of that
+  app.
+- The request selects the app with the `CoSec-App-Id` header and the space with `CoSec-Space-Id`
+  ([App and space](./web-integration.md#app-and-space)).
+
+### Role grant scope
+
+A grant belongs to an **(app, role, space)** triple and applies nowhere else:
+
+- **App.** A grant made in one app never applies in another, even when both apps define the same permission
+  id or the grant is `*`. Granting a role in two apps takes two grants.
+- **Space.** The principal's roles say which space each role belongs to: `editor` is a role in the default
+  space, `editor@team-a` a role in `team-a` only ([roles in tokens](./authentication.md#tokens)). A request in
+  a space is evaluated with only the principal's roles in that space, so changing `CoSec-Space-Id` cannot pick
+  up another space's grants. A role written with more than one `@`, or with an empty role or space, applies
+  nowhere.
 
 With `cache-support`, CoSec reads these from Redis through two caches (default key prefix `cosec`):
 
-| Data | Cache bean | Key | Value |
+| Data | Cache bean | Redis key | Value |
 |---|---|---|---|
-| App permission | `AppPermissionCache` | the app id | the JSON above, as an `AppPermission` |
-| Role grants | `RolePermissionCache` | `SpacedRoleId(roleId, spaceId)` | a set of permission ids |
+| App permission | `AppPermissionCache` | `cosec:app:permission:<appId>` | the JSON above, as an `AppPermission` |
+| Role grants | `RolePermissionCache` | `cosec:app:role:permission:<appId>:<roleId>` (default space) or `cosec:app:role:permission:<appId>:<roleId>@<spaceId>` | a set of permission ids |
 
-CoSec reads permissions and grants; your administration service owns writing them. Write them through these beans,
-for example `rolePermissionCache.put(SpacedRoleId("admin", "space"), setOf("order.read"))`, so every instance drops its
-local copy. Values in Redis carry a binary header (Redis keys `cosec:app:permission:<appId>` and
-`cosec:role:permission:<roleId>[@<spaceId>]`), so writing them with Redis commands does not work.
+The first `:` after the prefix ends the app id and the first `@` after it ends the role id, so an app id must
+not contain `:` and a role id must not contain `@`. `AppSpacedRoleId` checks both when you write a grant; an app
+whose id contains `:` holds no grants. CoSec reads permissions and grants; your administration service owns
+writing them, through these beans so that every instance drops its local copy:
+
+```kotlin
+rolePermissionCache.put(AppSpacedRoleId(appId = "order-app", roleId = "clerk", spaceId = "team-a"), setOf("order.read"))
+```
+
+Values in Redis carry a binary header (CoCache 6), so writing them with Redis commands does not work. Keys of 6.x
+(`cosec:role:permission:<roleId>[@<spaceId>]`, without the app) are never read; migrate them with
+`RolePermissionKeyMigration` ([Upgrading](./upgrading.md#migrating-role-grants)).
 
 ## Loading and generating policies
 
@@ -325,7 +363,9 @@ local copy. Values in Redis carry a binary header (Redis keys `cosec:app:permiss
 ::: warning Invalid files are skipped
 A local policy file that cannot be parsed (invalid JSON, a missing required field, an unknown condition
 type, a bad matcher configuration) is logged at `ERROR` and skipped; the application still starts. Check
-the startup log, or validate policies in a test as below.
+the startup log, or validate policies in a test as below. The exception is a policy that reads
+[path variables](#actions) outside their scope: it stops the application from starting, because skipping it could
+drop a deny.
 :::
 
 ### Policy history and rollback
@@ -418,7 +458,8 @@ result, optionally with the rule that must decide.
   "name": "orders",
   "policies": ["classpath:cosec-policy/*-policy.json"],
   "appPermissions": ["classpath:cosec-policy/*-app-permission.json"],
-  "roles": { "shipper": ["manage.order.ship"] },
+  "roles": { "shipper": ["manage.order.ship"], "shipper@team-a": ["manage.order.ship"] },
+  "appRoles": { "manage": { "invoicer": ["manage.order.issueInvoice"] } },
   "cases": [
     { "name": "users read orders",
       "principal": { "id": "alice" },
@@ -441,3 +482,9 @@ fun policies() = PolicyTestKit.run("classpath:cosec-policy-test/*.json").assertP
 and `expect.result` is `ALLOW`, `EXPLICIT_DENY` or `IMPLICIT_DENY`. Each case runs through the explainer against
 in-memory repositories, so a failure names the rule that decided instead and any warning, such as a policy id the
 principal lists but no file defines. Policy files that cannot be read fail the run instead of being skipped.
+
+Role grants follow [role grant scope](#role-grant-scope). A role is written as in principals' roles: `shipper` is
+granted in the default space, `shipper@team-a` in `team-a` only, and a case's principal reaches a grant only through
+a role it holds in the request's space. `roles` grants in every app the suite loads; `appRoles` grants in one app
+(app id to role to permission ids), which must be defined by one of `appPermissions`. A malformed role or an
+unknown app in `appRoles` fails the run.

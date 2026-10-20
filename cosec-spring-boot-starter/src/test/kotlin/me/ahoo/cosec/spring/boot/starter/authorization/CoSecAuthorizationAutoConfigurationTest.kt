@@ -196,11 +196,12 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 CoSecRequestParserAutoConfiguration::class.java,
                 CoSecAuthorizationAutoConfiguration::class.java,
             )
+        // Root is off unless enabled explicitly (RFC 0001, D5).
         runner.run { context ->
-            context.getBean(RootPrincipalMatcher::class.java).assert().isSameAs(RootPrincipalMatcher.DEFAULT)
-        }
-        runner.withPropertyValues("${AuthorizationProperties.PREFIX}.root-enabled=false").run { context ->
             context.getBean(RootPrincipalMatcher::class.java).assert().isSameAs(RootPrincipalMatcher.NONE)
+        }
+        runner.withPropertyValues("${AuthorizationProperties.PREFIX}.root-enabled=true").run { context ->
+            context.getBean(RootPrincipalMatcher::class.java).assert().isSameAs(RootPrincipalMatcher.DEFAULT)
         }
     }
 }

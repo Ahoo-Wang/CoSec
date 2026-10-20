@@ -62,7 +62,8 @@ object OpenAPIAppPermissionGenerator {
                 permissions = permissions
             )
         }
-        val appId = openAPI.info?.title ?: APP_ID
+        // Role grants are keyed `<appId>:<roleId>`, so an app id containing ':' could hold none.
+        val appId = (openAPI.info?.title ?: APP_ID).replace(':', '-')
         return AppPermissionData(
             id = appId,
             groups = groups,

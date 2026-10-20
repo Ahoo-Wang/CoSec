@@ -41,7 +41,7 @@ Runtime deserialization and the bundled JSON Schema both require `id`, `name`, `
 
 ## Evaluation semantics
 
-Authorization evaluates in tiers: root bypass, blacklist, global policies, principal-attached policies, then role permissions. The policy and permission tiers are combined deny-first (CoSec 6+): an explicit deny in any tier ends evaluation, and an allow is returned only after every tier has had the chance to deny.
+Authorization evaluates in tiers: blacklist, root bypass (off by default; platform tenant only), global policies, principal-attached policies, then role permissions. The policy and permission tiers are combined deny-first (CoSec 6+): an explicit deny in any tier ends evaluation, and an allow is returned only after every tier has had the chance to deny.
 
 Within a policy tier, CoSec first evaluates every matched policy-level condition, pools their statements, checks all `deny` statements, then all `allow` statements. Therefore:
 
@@ -144,7 +144,7 @@ All `and` entries must match. If `or` is present, at least one entry must match.
 - `context.tenantId`, `context.principal.id`, `context.principal.attributes.{key}`
 - `resource.{key}`: attributes of the target object, passed by `AuthorizationChecker` checks in code (`CheckRequest(resource = ...)`) and empty in the request filter. Write object-level rules as denies guarded by a non-empty check (`eq` with `value: ""` and `negate: true`), e.g. deny unless `resource.ownerId` equals `#{principal.id}`; an allow that needs a resource part would block the route in the filter.
 
-Use singular `request.header`, and use `request.path.var.id` only after the action matcher captures `{id}`. A part absent from the request reads as an empty string; an unsupported part name throws during evaluation (HTTP 500), not at load time. Never base a deny on a header the client can omit or forge.
+Use singular `request.header`. Path variables are scoped to one statement: `request.path.var.id` reads the `{id}` captured by the same statement's (or rate limit rule's) `path` action, and the variables are cleared before every statement. Reading them in a policy or app permission `condition`, or in a statement, permission or rate limit rule whose action is not `path` (`*`, `all`, `["*", ...]`, a `composite` with a non-path member), fails loading with `PathVariableScopeException`; this also covers OGNL/SpEL expressions and `#{...}` templates that mention `PATH_VARIABLES`. A part absent from the request reads as an empty string; an unsupported part name throws during evaluation (HTTP 500), not at load time. Never base a deny on a header the client can omit or forge.
 
 ## Security review
 
@@ -164,7 +164,7 @@ For changes to production policies, suggest shadow mode before enforcing: with `
 
 ## Access review
 
-To answer "who can call X?" or "what can principal Y reach?" across policies, app permissions and role grants, use `AccessAnalyzer.load(policyLocations, appPermissionLocations, roles)` then `whoCan(request)` (allows and denies whose action matches, flagged `conditional` and `templated`) or `grantsOf(principal, appId)`. It matches actions only and errs on the side of listing a rule; use explanations for one concrete principal and request.
+To answer "who can call X?" or "what can principal Y reach?" across policies, app permissions and role grants, use `AccessAnalyzer.load(policyLocations, appPermissionLocations, roles)` (roles: app id → role → permission ids, `role@space` for a non-default space) then `whoCan(request)` (allows and denies whose action matches in the request's app and space, flagged `conditional` and `templated`) or `grantsOf(principal, appId, spaceId)`. It matches actions only and errs on the side of listing a rule; use explanations for one concrete principal and request.
 
 ## History and rollback
 
@@ -182,6 +182,6 @@ require(policies.isNotEmpty())
 policies.forEach(DefaultPolicyEvaluator::evaluate)
 ```
 
-Prefer declarative cases: a JSON suite (`policies`, optional `appPermissions` and `roles`, and `cases` of `principal`, `request`, `expect.result` = `ALLOW` | `EXPLICIT_DENY` | `IMPLICIT_DENY`, optionally `policyId` / `statementName` / `roleId` / `permissionId`) run with `PolicyTestKit.run("classpath:cosec-policy-test/*.json").assertPasses()`. Failures name the rule that decided instead.
+Prefer declarative cases: a JSON suite (`policies`, optional `appPermissions`, `roles` granted in every app and `appRoles` granted in one app, with `role@space` for a non-default space, and `cases` of `principal`, `request`, `expect.result` = `ALLOW` | `EXPLICIT_DENY` | `IMPLICIT_DENY`, optionally `policyId` / `statementName` / `roleId` / `permissionId`) run with `PolicyTestKit.run("classpath:cosec-policy-test/*.json").assertPasses()`. Failures name the rule that decided instead.
 
 `LocalPolicyLoader` logs and skips malformed policies, so assert that the expected policy ID loaded. `DefaultPolicyEvaluator` catches expected regex-timeout signals but surfaces other matcher configuration errors. Add one authorization test for each meaningful allow/deny boundary.

@@ -26,7 +26,7 @@ Rejected requests get a JSON body, `{"authorized": false, "reason": "..."}`, and
 | Denied, authenticated caller | `403` | `Implicit Deny` or `Explicit Deny` |
 | [Rate limit](./rate-limiting.md) exhausted | `429` | `Too Many Requests` |
 | Regex condition over its time budget | `403` | `Implicit Deny` |
-| Any other error (including an unreachable policy store) | `500` | `Implicit Deny` |
+| Any other error (including an unreachable policy store, or a principal policy the store does not have) | `500` | `Implicit Deny` |
 
 When a rate limit rule matched, allowed and rejected responses also carry the `RateLimit-Limit`,
 `RateLimit-Remaining` and `RateLimit-Reset` headers, and `429` responses carry `Retry-After` (see
@@ -98,6 +98,19 @@ Checks decide exactly like the authorization of a real request (same policies, r
 they are queries: they write no audit events, spend no rate limit, and run on their own copy of the security
 context. A check that fails to evaluate answers `false`. A check answers what the policies allow, not what the
 target endpoint will do with the request, so keep enforcing on the real request.
+
+## App and space
+
+`CoSec-App-Id` and `CoSec-Space-Id` (header, or query parameter of the same name) name the app and the space a
+request is evaluated in. The client sets them, so they only **select** among grants; they never widen them:
+
+- Role grants apply only in the app they were made in: a different `CoSec-App-Id` reaches that app's grants,
+  never another app's.
+- With `CoSec-Space-Id`, only the principal's roles written `role@<that space>` apply. Without it (the default
+  space), only roles without a suffix apply. A space the principal holds no role in gets no role grants.
+
+Policies see both values as `request.appId` and `request.spaceId` and can constrain them further. See
+[Role grant scope](./policies.md#role-grant-scope).
 
 ## Client IP behind proxies
 

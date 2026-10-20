@@ -12,14 +12,16 @@
   （`PolicyRepository.setPolicy`、`AppPermissionCache` 和 `RolePermissionCache` bean），不要用 Redis 命令直接写：
   每个值都以一个由 CoCache 校验的二进制头开始。
 - **全局策略索引**的更新是原子的 Redis 操作，不同实例并发写入也不会丢失条目。
+- **发布策略**时，内容和全局索引条目分两步写入，并非原子操作。写入顺序保证失败停在安全的一侧：变为全局的策略在内容写入之后才加入索引，
+  不再是全局的策略先移出索引，再修改内容。发布失败会返回错误，请重试。
 - 策略和权限条目在 Redis 中**永不过期**。本地副本默认最多存活 5 分钟（[`expire-after-write`](./configuration.md#cache)），
   之后重新读取 Redis；这限定了失效消息丢失时副本最多能陈旧多久。本地缓存有上限
   （[`maximum-size`](./configuration.md#cache)，默认每个缓存 10,000 条）。
 
 键为 `<key-prefix>:policy:<id>`、`<key-prefix>:global:policy`、`<key-prefix>:app:permission:<appId>`、
-`<key-prefix>:role:permission:<roleId>[@<spaceId>]` 和 `<key-prefix>:token:revoked:<tokenId>`；每个缓存有自己的失效通道，
-例如 `cocache:inv:<key-prefix>:policy`。Redis 需要 7.0 及以上（或 Valkey 7.2 及以上），并通过 Lettuce 访问。
-最小化的 Redis ACL 必须授予 [CoCache 列出的权限](https://cocache.ahoo.me/operations/#acl)，
+`<key-prefix>:app:role:permission:<appId>:<roleId>[@<spaceId>]` 和 `<key-prefix>:token:revoked:<tokenId>`；
+每个缓存有自己的失效通道，例如 `cocache:inv:<key-prefix>:policy`。Redis 需要 7.0 及以上（或 Valkey 7.2 及以上），
+并通过 Lettuce 访问。最小化的 Redis ACL 必须授予 [CoCache 列出的权限](https://cocache.ahoo.me/operations/#acl)，
 自 CoCache 6.3 起其中包括 `+hkeys +hget`（保留 `+hgetall`）。
 
 **故障模式：**
@@ -82,7 +84,8 @@
 val analyzer = AccessAnalyzer.load(
     policyLocations = listOf("classpath:cosec-policy/*-policy.json"),
     appPermissionLocations = listOf("classpath:cosec-policy/*-app-permission.json"),
-    roles = mapOf("shop" to mapOf("admin" to setOf("*"), "clerk" to setOf("order.read"))),
+    // 应用 id → 角色 → 权限 id；`role@space` 只在该空间授权
+    roles = mapOf("shop" to mapOf("admin" to setOf("*"), "clerk" to setOf("order.read"), "clerk@east" to setOf("*"))),
 )
 
 val paths = analyzer.whoCan(EvaluateRequest(path = "/orders/42", method = "DELETE",
@@ -93,8 +96,13 @@ paths.denies   // 可能拒绝它的每一条规则
 val grants = analyzer.grantsOf(SimplePrincipal("alice", policies = setOf("ops"), roles = setOf("clerk")))
 ```
 
+角色授权遵循[角色授权的作用域](./policies.md#role-grant-scope)：每条授权属于一个应用、一个角色和一个空间，写法与主体的角色相同：
+`clerk` 在默认空间授权，`clerk@east` 只在 `east` 授权。`whoCan` 列出在请求的应用（`CoSec-App-Id`）和空间（`CoSec-Space-Id`）中做出的授权。
+`grantsOf` 只通过主体在某个空间拥有的角色到达该空间的授权，所以上例中的 `clerk` 到达不了 `clerk@east` 的授权；
+传入 `appId` 和 `spaceId` 可以限定到某个应用或空间。格式错误的角色（角色或空间为空，或含有多个 `@`）会让 `AccessAnalyzer` 构造失败。
+
 每条规则都指明来源（`GLOBAL_POLICY` 适用于所有人，`PRINCIPAL_POLICY` 适用于列出该策略的主体，`ROLE_PERMISSION`
-适用于该应用中拥有该角色的成员）、对应的语句或权限、它的动作和条件，以及两个标记：
+适用于在该应用和空间中拥有该角色的成员，由 `roleId` 和 `spaceId` 给出）、对应的语句或权限、它的动作和条件，以及两个标记：
 
 - `conditional`：还必须满足某个条件，因此该规则只适用于部分调用方或请求。
 - `templated`：动作依赖调用者，例如 `/users/#{principal.id}/**`。每个模板都会被放宽为一个路径段，只要某个调用者可能匹配，就会列出该规则。
@@ -122,7 +130,8 @@ Secret 读取 JWT 密钥，请先创建它（`kubectl create secret generic cose
 - 从密钥存储中设置 `cosec.jwt.secret`，并让访问令牌保持较短的有效期。
 - 按你的代理链设置 `cosec.authorization.remote-ip.max-trusted-index`。
 - 只在只能经由校验网关访问的服务上启用 `cosec.inject.enabled`。
-- 如果用户可以自行选择主体 id，请关闭 `cosec.authorization.root-enabled`。
+- 除非需要 root，否则保持 `cosec.authorization.root-enabled` 关闭（默认值）。开启后，root 只认平台租户中的 root id，
+  因此平台租户的令牌必须由用户无法影响的来源签发。
 
 ## 性能 {#performance}
 

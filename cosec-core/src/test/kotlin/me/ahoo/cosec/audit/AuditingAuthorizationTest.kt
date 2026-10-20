@@ -45,6 +45,7 @@ import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationException
 import me.ahoo.cosid.StringIdGenerator
@@ -137,7 +138,9 @@ class AuditingAuthorizationTest {
     @Test
     fun publishRootSource() {
         val events = mutableListOf<AuditEvent>()
-        val rootContext = SimpleSecurityContext(SimplePrincipal(CoSecPrincipal.ROOT_ID))
+        val rootContext = SimpleSecurityContext(
+            SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM),
+        )
         val authorization = AuditingAuthorization(
             SimpleAuthorization(mockk(), mockk()),
             AuditEventSink(events::add),

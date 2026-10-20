@@ -27,13 +27,40 @@ class PolicyTestKitTest {
     }
 
     @Test
+    fun roleGrantsAreScopedToTheirAppAndSpace() {
+        val report = PolicyTestKit.run("classpath:cosec-policy-test/spaces/*-policy-test.json")
+        report.results.size.assert().isEqualTo(5)
+        report.assertPasses()
+    }
+
+    @Test
+    fun malformedRolesAndUnknownAppsFail() {
+        assertThrows(IllegalArgumentException::class.java) {
+            PolicyTestKit.run(PolicyTestSuite(name = "bad", roles = mapOf("admin@a@b" to setOf("*"))))
+        }.message.assert().contains("admin@a@b")
+        assertThrows(IllegalArgumentException::class.java) {
+            PolicyTestKit.run(
+                PolicyTestSuite(
+                    appPermissions = listOf("classpath:cosec-policy/test-app-permission.json"),
+                    appRoles = mapOf("manage" to mapOf("@team-a" to setOf("*"))),
+                ),
+            )
+        }.message.assert().contains("@team-a")
+        assertThrows(IllegalArgumentException::class.java) {
+            PolicyTestKit.run(PolicyTestSuite(appRoles = mapOf("unknown" to mapOf("admin" to setOf("*")))))
+        }.message.assert().contains("[unknown]")
+    }
+
+    @Test
     fun failingSuiteExplainsWhatDecided() {
         val report = PolicyTestKit.run("classpath:cosec-policy-test/failing/*.json")
         val failure = report.failures.single()
         failure.case.assert().isEqualTo("expects a deny that does not exist")
         failure.message.assert()
-            .contains("expected EXPLICIT_DENY, got ALLOW")
-            .contains("GLOBAL_POLICY policy [orders] statement [0] 'read-orders'")
+            // The principal lists a policy that does not exist: authorization fails closed instead of letting the
+            // global allow win.
+            .contains("authorization failed with an error")
+            .contains("expected EXPLICIT_DENY, got IMPLICIT_DENY")
             .contains("[gone]")
         val error = assertThrows(AssertionError::class.java) { report.assertPasses() }
         error.message.assert().startsWith("1 of 2 policy test cases failed").contains("wrong › expects a deny")

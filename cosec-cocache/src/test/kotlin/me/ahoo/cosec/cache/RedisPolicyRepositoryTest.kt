@@ -13,9 +13,14 @@
 
 package me.ahoo.cosec.cache
 
+import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
+import me.ahoo.cosec.policy.PathVariableScopeException
 import me.ahoo.cosec.policy.PolicyData
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -78,6 +83,8 @@ internal class RedisPolicyRepositoryTest {
 
     @Test
     fun getPoliciesKeepsRequestedOrderAndDropsMisses() {
+        // The repository returns the policies it found (PolicyRepository contract, relied on by
+        // LocalPolicyInitializer); SimpleAuthorization fails closed on the missing one (MissingPolicyFailClosedTest).
         val other = policy("otherId", PolicyType.CUSTOM)
         caches.policyCache.put(policyData.id, policyData)
         caches.policyCache.put(other.id, other)
@@ -116,5 +123,30 @@ internal class RedisPolicyRepositoryTest {
         policiesMono.test()
             .expectNextMatches { it.single().name == "changed" }
             .verifyComplete()
+    }
+
+    @Test
+    fun setPolicyRejectsPathVariablesOutsideTheirScope() {
+        // PolicyData rejects this on construction, so a custom Policy has to carry it to setPolicy.
+        val leaking = object : Policy {
+            override val id = "leaking"
+            override val name = "leaking"
+            override val category = ""
+            override val description = ""
+            override val type = PolicyType.GLOBAL
+            override val tenantId = "tenantId"
+            override val condition: ConditionMatcher = CoSecJsonSerializer.readValue(
+                """{ "eq": { "part": "request.path.var.orderId", "value": "1" } }""",
+                ConditionMatcher::class.java,
+            )
+            override val statements: List<Statement> = listOf()
+        }
+        repository.setPolicy(leaking)
+            .test()
+            .expectError(PathVariableScopeException::class.java)
+            .verify()
+
+        caches.policyCache["leaking"].assert().isNull()
+        caches.globalPolicyIndexCache[CACHE_KEY].assert().isEmpty()
     }
 }

@@ -23,7 +23,9 @@ import me.ahoo.cosec.authorization.AuthorizationChecker
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration
+import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
@@ -32,6 +34,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import reactor.core.publisher.Mono
 
 internal class CoSecAuthorizationCheckerAutoConfigurationTest {
+    private val platformRoot = SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM)
+
     private val contextRunner = ApplicationContextRunner()
         .withBean(PolicyRepository::class.java, {
             object : PolicyRepository {
@@ -66,11 +70,21 @@ internal class CoSecAuthorizationCheckerAutoConfigurationTest {
                 SimpleSecurityContext(SimplePrincipal("user")),
                 "/orders"
             ).block().assert().isFalse()
-            // Root is allowed by the shared RootPrincipalMatcher.
+            // Root is disabled by default.
+            checker.check(SimpleSecurityContext(platformRoot), "/orders").block().assert().isFalse()
+        }
+    }
+
+    @Test
+    fun checkerSharesTheRootPrincipalMatcher() {
+        contextRunner.withPropertyValues("cosec.authorization.root-enabled=true").run { context ->
+            val checker = context.getBean(AuthorizationChecker::class.java)
+            checker.check(SimpleSecurityContext(platformRoot), "/orders").block().assert().isTrue()
+            // The root id outside the platform tenant is not root.
             checker.check(
                 SimpleSecurityContext(SimplePrincipal(CoSecPrincipal.ROOT_ID)),
                 "/orders"
-            ).block().assert().isTrue()
+            ).block().assert().isFalse()
         }
     }
 

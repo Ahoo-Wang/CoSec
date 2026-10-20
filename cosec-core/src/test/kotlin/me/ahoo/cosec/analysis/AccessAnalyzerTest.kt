@@ -14,6 +14,7 @@
 package me.ahoo.cosec.analysis
 
 import me.ahoo.cosec.api.context.request.AppIdCapable
+import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.principal.SimplePrincipal
@@ -25,11 +26,21 @@ class AccessAnalyzerTest {
     private val analyzer = AccessAnalyzer.load(
         policyLocations = listOf("classpath:cosec-analysis/*-policy.json"),
         appPermissionLocations = listOf("classpath:cosec-policy/test-app-permission.json"),
-        roles = mapOf("manage" to mapOf("shipper" to setOf("manage.order.ship"), "admin" to setOf("*"))),
+        roles = mapOf(
+            "manage" to mapOf(
+                "shipper" to setOf("manage.order.ship"),
+                "admin" to setOf("*"),
+                "invoicer@team-a" to setOf("manage.order.issueInvoice"),
+            ),
+        ),
     )
 
-    private fun request(path: String, method: String = "GET", appId: String = "") =
-        EvaluateRequest(path = path, method = method, headers = mapOf(AppIdCapable.APP_ID_KEY to appId))
+    private fun request(path: String, method: String = "GET", appId: String = "", spaceId: String = "") =
+        EvaluateRequest(
+            path = path,
+            method = method,
+            headers = mapOf(AppIdCapable.APP_ID_KEY to appId, SpaceIdCapable.SPACE_ID_KEY to spaceId),
+        )
 
     @Test
     fun whoCanReadOrders() {
@@ -74,12 +85,24 @@ class AccessAnalyzerTest {
         allows.first { it.roleId == "shipper" }.apply {
             permissionId.assert().isEqualTo("manage.order.ship")
             appId.assert().isEqualTo("manage")
+            spaceId.assert().isEqualTo("")
             // The app permission has a condition (authenticated, office network, default tenant).
             conditional.assert().isTrue()
         }
         // Roles are taken from the request's app only.
         analyzer.whoCan(request("/order/ship", "POST", appId = "other")).allows
             .none { it.source == AccessSource.ROLE_PERMISSION }.assert().isTrue()
+    }
+
+    @Test
+    fun whoCanTakesRolesFromTheRequestSpace() {
+        fun roleIds(spaceId: String) =
+            analyzer.whoCan(request("/order/issueInvoice", "POST", appId = "manage", spaceId = spaceId)).allows
+                .filter { it.source == AccessSource.ROLE_PERMISSION }.map { it.roleId to it.spaceId }
+        // Default-space grants do not apply in team-a, and team-a grants do not apply elsewhere.
+        roleIds("team-a").assert().containsExactly("invoicer" to "team-a")
+        roleIds("").assert().containsExactly("admin" to "")
+        roleIds("team-b").assert().isEmpty()
     }
 
     @Test
@@ -96,6 +119,30 @@ class AccessAnalyzerTest {
         anyone.map { it.source }.toSet().assert().containsExactly(AccessSource.GLOBAL_POLICY)
         analyzer.grantsOf(SimplePrincipal("dave", roles = setOf("admin")), appId = "manage")
             .count { it.source == AccessSource.ROLE_PERMISSION }.assert().isEqualTo(2)
+    }
+
+    @Test
+    fun grantsOfFollowTheSpaceOfEachRole() {
+        fun rolePermissions(roles: Set<String>, spaceId: String? = null) =
+            analyzer.grantsOf(SimplePrincipal("erin", roles = roles), spaceId = spaceId)
+                .filter { it.source == AccessSource.ROLE_PERMISSION }.map { it.permissionId }
+        // A role in team-a reaches only the grants made in team-a, never the same role's default-space grants.
+        rolePermissions(setOf("shipper@team-a")).assert().isEmpty()
+        rolePermissions(setOf("invoicer")).assert().isEmpty()
+        rolePermissions(setOf("invoicer@team-a")).assert().containsExactly("manage.order.issueInvoice")
+        rolePermissions(setOf("shipper", "invoicer@team-a"), spaceId = "team-a")
+            .assert().containsExactly("manage.order.issueInvoice")
+        rolePermissions(setOf("shipper", "invoicer@team-a"), spaceId = "").assert().containsExactly("manage.order.ship")
+        // Malformed roles apply nowhere.
+        rolePermissions(setOf("invoicer@team-a@x", "@team-a", "shipper@")).assert().isEmpty()
+    }
+
+    @Test
+    fun malformedGrantRolesFail() {
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            AccessAnalyzer(policies = emptyList(), roles = mapOf("manage" to mapOf("admin@a@b" to setOf("*"))))
+        }
+        error.message.assert().contains("admin@a@b").contains("manage")
     }
 
     @Test

@@ -24,7 +24,7 @@ classpath 上有 Spring Cloud Gateway 时，网关过滤器取代 WebFlux 过滤
 | 被拒绝，已认证调用方 | `403` | `Implicit Deny` 或 `Explicit Deny` |
 | [限流](./rate-limiting.md)许可用尽 | `429` | `Too Many Requests` |
 | 正则条件超出时间预算 | `403` | `Implicit Deny` |
-| 其他任何错误（包括策略存储不可达） | `500` | `Implicit Deny` |
+| 其他任何错误（包括策略存储不可达，或主体引用的策略在存储中不存在） | `500` | `Implicit Deny` |
 
 有限流规则匹配时，放行和拒绝的响应都会带上 `RateLimit-Limit`、`RateLimit-Remaining` 和 `RateLimit-Reset` 响应头，
 `429` 响应还会带上 `Retry-After`（见[响应](./rate-limiting.md#responses)）。
@@ -89,6 +89,17 @@ class PermissionController(private val checker: AuthorizationChecker) {
 检查的决策方式与真实请求的授权完全相同（同样的策略、角色、root 和黑名单），但它是查询：不写审计事件、不消耗限流许可，
 并在自己的安全上下文副本上运行。求值失败的检查返回 `false`。检查回答的是策略允许什么，而不是目标端点会如何处理请求，
 因此真实请求上的授权仍然要保留。
+
+## 应用与空间 {#app-and-space}
+
+`CoSec-App-Id` 和 `CoSec-Space-Id`（请求头，或同名查询参数）指定请求在哪个应用、哪个空间中评估。它们由客户端设置，
+所以只能在已有授权之间**选择**，永远不会扩大授权：
+
+- 角色授权只在做出授权的应用中生效：换一个 `CoSec-App-Id` 只会得到那个应用的授权，不会得到别的应用的授权。
+- 带 `CoSec-Space-Id` 时，只有主体写成 `role@<该空间>` 的角色生效；不带时（默认空间），只有不带后缀的角色生效。
+  主体在某个空间中没有角色，就得不到任何角色授权。
+
+策略可以通过 `request.appId` 和 `request.spaceId` 读取这两个值，进一步加以约束。见[角色授权的作用域](./policies.md#role-grant-scope)。
 
 ## 代理之后的客户端 IP {#client-ip-behind-proxies}
 

@@ -49,4 +49,10 @@ class OpenAPIAppPermissionGeneratorTest {
         assertThat(appPermission.id, equalTo("test"))
         assertThat(appPermission.groups, hasSize(2))
     }
+
+    @Test
+    fun generatedAppIdCanOwnRoleGrants() {
+        val openAPI = OpenAPI().apply { info = Info().title("Orders: Admin API") }
+        assertThat(OpenAPIAppPermissionGenerator.generate(openAPI).id, equalTo("Orders- Admin API"))
+    }
 }

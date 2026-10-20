@@ -25,6 +25,8 @@ import java.net.URI
 object DefaultPolicyEvaluator : PolicyEvaluator {
     private val logger = KotlinLogging.logger { }
     override fun evaluate(policy: Policy) {
+        // PolicyData checks this on construction; custom Policy implementations are checked here.
+        PathVariableScope.requireScoped(policy)
         val evaluateRequest = EvaluateRequest()
         val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS).markPolicyEvaluation()
         safeEvaluate {

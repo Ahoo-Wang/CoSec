@@ -15,7 +15,6 @@ package me.ahoo.cosec.cache
 
 import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.RolePermissionData
 import me.ahoo.cosec.policy.PolicyData
@@ -114,7 +113,7 @@ class LocalCacheFastPathTest {
     @Test
     fun getAppRolePermissionStaysOnCallerThreadWhenLocal() {
         caches.appPermissionCache.put("app", AppPermissionData(id = "app"))
-        caches.rolePermissionCache.put(SpacedRoleId(roleId = "admin", spaceId = "space"), setOf("p1"))
+        caches.rolePermissionCache.put(AppSpacedRoleId(appId = "app", roleId = "admin", spaceId = "space"), setOf("p1"))
         val repository = caches.appRolePermissionRepository()
 
         val callerThread = Thread.currentThread().name

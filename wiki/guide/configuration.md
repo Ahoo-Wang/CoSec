@@ -33,7 +33,7 @@ OpenTelemetry tracing has no switch: it is active whenever `opentelemetry-suppor
 | Property | Default | Description |
 |---|---|---|
 | `cosec.authorization.allow-query-token` | `false` | Also accept the access token from the `authorization` query parameter. Off by default because URLs leak into access logs, browser history and `Referer` headers. |
-| `cosec.authorization.root-enabled` | `true` | Whether the root principal bypasses all checks. The root id is `cosec`, or the value of the `-Dcosec.root` system property. Disable it where users can choose their own principal ids, or provide a `RootPrincipalMatcher` bean. |
+| `cosec.authorization.root-enabled` | `false` | Whether the root principal bypasses policy and permission checks. Root is the principal of the platform tenant (`(platform)`) whose id is `cosec`, or the value of the `-Dcosec.root` system property. A principal of any other tenant, or without a tenant, is never root, and the blacklist applies to root too. For a different rule, provide a `RootPrincipalMatcher` bean. |
 | `cosec.authorization.remote-ip.max-trusted-index` | `1` | How many proxy hops to trust in `X-Forwarded-For` when resolving the client IP. `0` ignores the header (the service is exposed directly). `N` takes the entry appended by the N-th closest proxy. |
 | `cosec.authorization.local-policy.enabled` | `false` | Load policies from local JSON files. |
 | `cosec.authorization.local-policy.locations` | `classpath:cosec-policy/*-policy.json` | Resource patterns to load. |
@@ -67,12 +67,15 @@ cached in-process.
 
 | Property | Default | Description |
 |---|---|---|
-| `cosec.authorization.cache.key-prefix` | `cosec` | Prefix for all Redis keys (`cosec:policy:*`, `cosec:global:policy`, `cosec:app:permission:*`, `cosec:role:permission:*`, `cosec:token:revoked:*`). |
+| `cosec.authorization.cache.key-prefix` | `cosec` | Prefix for all Redis keys (`cosec:policy:*`, `cosec:global:policy`, `cosec:app:permission:*`, `cosec:app:role:permission:*`, `cosec:token:revoked:*`). |
 | `cosec.authorization.cache.policy.*` | | Local cache for policies. |
 | `cosec.authorization.cache.role.*` | | Local cache for role grants. |
 | `cosec.authorization.cache.token.*` | `expire-after-write: 30`, `maximum-size: 100000` | Local cache for revocation lookups. |
 | `cosec.authorization.cache.history.enabled` | `false` | Record a [revision](./policies.md#policy-history-and-rollback) of every saved policy (`cosec:policy:history:*`). |
 | `cosec.authorization.cache.history.max-revisions` | `50` | Revisions kept per policy. |
+| `cosec.authorization.cache.migration.legacy-key-prefix` | `key-prefix` | `cosec.authorization.cache.key-prefix` of the 6.x deployment, for the [data migration](./upgrading.md#migrating-the-data). |
+| `cosec.authorization.cache.migration.missing-guard-sentinel` | `_nil_` | `cocache.redis.missing-guard-sentinel` of the 6.x deployment. |
+| `cosec.authorization.cache.migration.backup-prefix` | `cocache5-backup:` | Where the CoCache migration backs up each 6.x value it converts, for a rollback. |
 
 Each local cache (`policy`, `role`, `token`) accepts:
 

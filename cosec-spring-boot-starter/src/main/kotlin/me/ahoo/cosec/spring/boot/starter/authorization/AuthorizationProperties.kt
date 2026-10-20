@@ -35,11 +35,12 @@ class AuthorizationProperties(
     @DefaultValue("false")
     var allowQueryToken: Boolean = false,
     /**
-     * Whether the principal whose id equals the `cosec.root` system property (`cosec` by default) bypasses all
-     * authorization checks. Disable it where principal ids can be chosen by users.
+     * Whether the platform tenant's principal whose id equals the `cosec.root` system property (`cosec` by default)
+     * bypasses policy and permission checks. The blacklist still applies to it. Principals of other tenants are
+     * never root.
      */
-    @DefaultValue("true")
-    var rootEnabled: Boolean = true
+    @DefaultValue("false")
+    var rootEnabled: Boolean = false
 ) : EnabledCapable {
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "authorization"

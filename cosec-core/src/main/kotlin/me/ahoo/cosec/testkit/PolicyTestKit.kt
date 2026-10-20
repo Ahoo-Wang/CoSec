@@ -18,8 +18,10 @@ import me.ahoo.cosec.api.permission.AppRolePermission
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.principal.RoleId
+import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
+import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.explain.AuthorizationExplainer
 import me.ahoo.cosec.explain.DecisionRef
 import me.ahoo.cosec.explain.ExplainOptions
@@ -60,16 +62,24 @@ data class PolicyTestCase(
 /**
  * A set of cases and the policies they run against.
  *
+ * Role grants are written as in principals' roles and Redis keys: a role `role@space` is granted in `space` only, a
+ * role without a suffix in the default space only. As in authorization, a case's principal reaches a grant only
+ * through a role it holds in the request's space. A malformed role (empty role or space, more than one `@`) fails
+ * the run.
+ *
  * @param policies resource patterns of policy files, e.g. `classpath:cosec-policy/` followed by a file pattern
  * @param appPermissions resource patterns of app permission files
- * @param roles role grants applied to every app permission: role id to permission ids (`*` grants all)
+ * @param roles role grants made in every app permission: role to permission ids (`*` grants all)
+ * @param appRoles role grants made in one app: app id to role to permission ids, added to [roles]. Each app must be
+ * defined by one of [appPermissions].
  */
 data class PolicyTestSuite(
     val name: String = "",
     val policies: List<String> = emptyList(),
     val appPermissions: List<String> = emptyList(),
     val roles: Map<String, Set<String>> = emptyMap(),
-    val cases: List<PolicyTestCase> = emptyList()
+    val cases: List<PolicyTestCase> = emptyList(),
+    val appRoles: Map<String, Map<String, Set<String>>> = emptyMap()
 )
 
 data class PolicyTestResult(
@@ -125,7 +135,7 @@ object PolicyTestKit {
         ).associateBy { it.id }
         val explainer = AuthorizationExplainer(
             InMemoryPolicyRepository(policies),
-            InMemoryAppRolePermissionRepository(appPermissions, suite.roles)
+            InMemoryAppRolePermissionRepository(appPermissions, grantsOf(suite, appPermissions.keys))
         )
         return suite.cases.map { case ->
             val explanation = checkNotNull(
@@ -135,6 +145,32 @@ object PolicyTestKit {
             PolicyTestResult(suite.name, case.name, failure == null, failure ?: "passed", explanation)
         }
     }
+
+    /**
+     * The suite's grants per app, keyed by role and space.
+     */
+    private fun grantsOf(suite: PolicyTestSuite, appIds: Set<String>): Map<String, Map<SpacedRoleId, Set<String>>> {
+        suite.appRoles.keys.forEach { appId ->
+            require(appId in appIds) {
+                "Suite [${suite.name}] grants roles in app [$appId], but no app permission file defines it."
+            }
+        }
+        val everyApp = parseRoles(suite, suite.roles)
+        return appIds.associateWith { appId ->
+            val grants = everyApp.toMutableMap()
+            parseRoles(suite, suite.appRoles[appId].orEmpty()).forEach { (role, permissionIds) ->
+                grants.merge(role, permissionIds, Set<String>::plus)
+            }
+            grants
+        }
+    }
+
+    private fun parseRoles(suite: PolicyTestSuite, roles: Map<String, Set<String>>): Map<SpacedRoleId, Set<String>> =
+        roles.mapKeys { (role, _) ->
+            requireNotNull(RoleScope.parse(role)) {
+                "Suite [${suite.name}] grants malformed role [$role]: write `role` or `role@space`."
+            }
+        }
 
     private fun failureOf(expect: PolicyTestExpectation, explanation: Explanation): String? {
         val actual = actualResult(explanation)
@@ -189,9 +225,12 @@ object PolicyTestKit {
         override fun setPolicy(policy: Policy): Mono<Void> = Mono.error(UnsupportedOperationException())
     }
 
+    /**
+     * Returns only the grants made in the requested app and space, as a store keyed by app, role and space does.
+     */
     private class InMemoryAppRolePermissionRepository(
         private val appPermissions: Map<String, AppPermission>,
-        private val roles: Map<String, Set<String>>
+        private val grants: Map<String, Map<SpacedRoleId, Set<String>>>
     ) : AppRolePermissionRepository {
         override fun getAppRolePermission(
             appId: String,
@@ -199,7 +238,10 @@ object PolicyTestKit {
             roleIds: Set<RoleId>
         ): Mono<AppRolePermission> {
             val appPermission = appPermissions[appId] ?: return Mono.empty()
-            val grants = roleIds.mapNotNull { roleId -> roles[roleId]?.let { RolePermissionData(roleId, it) } }
+            val appGrants = grants[appId].orEmpty()
+            val grants = roleIds.mapNotNull { roleId ->
+                appGrants[SpacedRoleId(roleId, spaceId)]?.let { RolePermissionData(roleId, it) }
+            }
             return Mono.just(AppRolePermissionData(appPermission, grants))
         }
     }

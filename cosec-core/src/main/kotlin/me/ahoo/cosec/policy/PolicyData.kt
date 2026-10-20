@@ -44,6 +44,10 @@ class PolicyData(
 ) : Policy, BlockingAware {
     override val requiresBlocking: Boolean = computeRequiresBlocking(condition, statements.map { it.condition })
 
+    init {
+        PathVariableScope.requireScoped(this)
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

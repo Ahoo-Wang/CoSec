@@ -57,7 +57,7 @@ class CoSecExplainAutoConfiguration {
             policyRepository = policyRepository,
             appRolePermissionRepository = appRolePermissionRepository,
             blacklistChecker = blacklistChecker.getIfAvailable { BlacklistChecker.NoOp },
-            rootPrincipalMatcher = rootPrincipalMatcher.getIfAvailable { RootPrincipalMatcher.DEFAULT },
+            rootPrincipalMatcher = rootPrincipalMatcher.getIfAvailable { RootPrincipalMatcher.NONE },
             rateLimitRuleProvider = rateLimitRuleProvider.ifAvailable,
             securityContextParser = securityContextParser.ifAvailable,
         )

@@ -25,7 +25,9 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.blacklist.BlacklistChecker
+import me.ahoo.cosec.policy.action.clearPathVariables
 import me.ahoo.cosec.policy.requiresBlocking
+import me.ahoo.cosec.policy.verifyScoped
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.switchIfEmpty
@@ -35,14 +37,16 @@ import reactor.kotlin.core.publisher.toMono
  * Simple Authorization implementation.
  *
  * This class provides the core authorization logic by evaluating:
- * 1. Root user bypass (root users always get ALLOW)
- * 2. Blacklist checks
+ * 1. Blacklist checks (apply to root as well)
+ * 2. Root user bypass (root users get ALLOW unless blacklisted)
  * 3. Global policies
  * 4. Principal-specific policies
- * 5. Role-based permissions
+ * 5. Role-based permissions: the principal's roles scoped to the request's space ([RoleScope]), granted in the
+ *    request's app
  *
  * Layers 3-5 are combined deny-first: an EXPLICIT_DENY matched in any layer wins over
- * an ALLOW matched in any other layer.
+ * an ALLOW matched in any other layer. A principal policy the repository does not have fails the
+ * authorization with [MissingPolicyException] instead of being skipped.
  *
  * Matchers are evaluated synchronously on the subscribing thread. A layer whose policies or app permission
  * contain a blocking matcher (see [me.ahoo.cosec.policy.BlockingAware], e.g. a Redis rate limiter) is evaluated
@@ -52,7 +56,7 @@ import reactor.kotlin.core.publisher.toMono
  * @param policyRepository Repository for accessing policies
  * @param appRolePermissionRepository Repository for accessing role permissions
  * @param blacklistChecker Optional blacklist checker for blocking requests
- * @param rootPrincipalMatcher Decides which principals are root (bypass all checks)
+ * @param rootPrincipalMatcher Decides which principals are root (bypass every check except the blacklist)
  */
 class SimpleAuthorization(
     private val policyRepository: PolicyRepository,
@@ -81,6 +85,10 @@ class SimpleAuthorization(
      * limiter) runs for every matched policy regardless of which statement decides — denied requests
      * uniformly consume rate-limiter permits.
      *
+     * Path variables are cleared before the policy conditions and before every statement (see [verifyScoped]), so a
+     * condition only sees the variables its own statement's action captured, never those another statement, policy
+     * or layer left.
+     *
      * Plain loops over the source lists keep this hot path allocation-free apart from the matched-policy list.
      */
     private fun verifyPolicies(
@@ -89,6 +97,7 @@ class SimpleAuthorization(
         request: Request,
         securityContext: SecurityContext
     ): VerifyContext? {
+        securityContext.clearPathVariables()
         val matchedPolicies = policies.filter { policy ->
             policy.condition.match(request = request, securityContext = securityContext)
         }
@@ -96,7 +105,7 @@ class SimpleAuthorization(
             val decisive = effect.decisiveResult()
             for (policy in matchedPolicies) {
                 policy.statements.forEachIndexed { index, statement ->
-                    if (statement.effect == effect && statement.verify(request, securityContext) == decisive) {
+                    if (statement.effect == effect && statement.verifyScoped(request, securityContext) == decisive) {
                         log.debug {
                             "Verify [$request] [$securityContext] matched Policy[${policy.id}] Statement[$index][${statement.name}] - [$decisive]."
                         }
@@ -124,6 +133,7 @@ class SimpleAuthorization(
         context: SecurityContext
     ): VerifyContext? {
         val appPermission = appRolePermission.appPermission
+        context.clearPathVariables()
         if (!appPermission.condition.match(request, context)) {
             return null
         }
@@ -132,7 +142,7 @@ class SimpleAuthorization(
             val decisive = effect.decisiveResult()
             for (rolePermission in appRolePermission.rolePermissions) {
                 rolePermission.forEachPermission(permissionIndexer) { permission ->
-                    if (permission.effect == effect && permission.verify(request, context) == decisive) {
+                    if (permission.effect == effect && permission.verifyScoped(request, context) == decisive) {
                         log.debug {
                             "Verify [$request] [$context] matched Role[${rolePermission.id}] Permission[${permission.id}][${permission.name}] - [$decisive]."
                         }
@@ -184,6 +194,19 @@ class SimpleAuthorization(
         return false
     }
 
+    /**
+     * [PolicyRepository.getPolicies] returns only the policies it found. A missing one may be the deny that keeps
+     * the request out, so evaluating the rest could widen access. A nested scan: principals list few policies.
+     */
+    private fun List<Policy>.containsAll(policyIds: Set<String>): Boolean {
+        for (policyId in policyIds) {
+            if (none { it.id == policyId }) {
+                return false
+            }
+        }
+        return true
+    }
+
     private fun verifyRoot(context: SecurityContext): VerifyResult =
         if (rootPrincipalMatcher.isRoot(context.principal)) {
             log.debug {
@@ -213,24 +236,39 @@ class SimpleAuthorization(
         if (context.principal.policies.isEmpty()) {
             return Mono.empty()
         }
+        val policyIds = context.principal.policies
         return policyRepository
-            .getPolicies(context.principal.policies)
+            .getPolicies(policyIds)
+            .defaultIfEmpty(emptyList())
             .flatMap { policies: List<Policy> ->
+                if (!policies.containsAll(policyIds)) {
+                    return@flatMap Mono.error(MissingPolicyException(policyIds - policies.map { it.id }.toSet()))
+                }
                 evaluate(policies.anyRequiresBlocking()) {
                     verifyPolicies(PolicyVerifySource.PRINCIPAL, policies, request, context)
                 }
             }
     }
 
+    /**
+     * Only the principal's roles scoped to the request's space count (see [RoleScope]); the repository keys their
+     * grants by the request's app, so a grant never applies in another app or space.
+     */
     private fun verifyAppRolePermission(
         request: Request,
         context: SecurityContext
     ): Mono<VerifyContext> {
-        if (context.principal.roles.isEmpty()) {
+        val principalRoles = context.principal.roles
+        if (principalRoles.isEmpty()) {
+            return Mono.empty()
+        }
+        val spaceId = request.spaceId
+        val roles = RoleScope.rolesIn(spaceId, principalRoles)
+        if (roles.isEmpty()) {
             return Mono.empty()
         }
         return appRolePermissionRepository
-            .getAppRolePermission(request.appId, request.spaceId, context.principal.roles)
+            .getAppRolePermission(request.appId, spaceId, roles)
             .flatMap { appRolePermission ->
                 evaluate(appRolePermission.appPermission.requiresBlocking) {
                     verifyAppRolePermission(appRolePermission, request, context)
@@ -278,10 +316,6 @@ class SimpleAuthorization(
         request: Request,
         context: SecurityContext
     ): Mono<AuthorizationDecision> = Mono.defer {
-        val verifyResult = verifyRoot(context)
-        if (verifyResult == VerifyResult.ALLOW) {
-            return@defer ROOT_DECISION.toMono()
-        }
         blacklistChecker
             .check(request, context)
             .flatMap { allowed ->
@@ -290,6 +324,9 @@ class SimpleAuthorization(
                         "Request [$request] is blocked by the blacklist."
                     }
                     return@flatMap BLACKLIST_DECISION.toMono()
+                }
+                if (verifyRoot(context) == VerifyResult.ALLOW) {
+                    return@flatMap ROOT_DECISION.toMono()
                 }
                 verify(request, context)
             }

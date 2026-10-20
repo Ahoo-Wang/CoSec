@@ -56,8 +56,17 @@ class RedisPolicyRepository(
     }
 
     /**
-     * Adds or removes [policy] in the global policy index with an atomic, idempotent element update, so
-     * concurrent writers on any instance cannot lose entries.
+     * Publishes [policy] as two Redis writes, its content and its entry in the global policy index, ordered so that
+     * a failure between them leaves every principal under either the old or the new state of the policy, never a mix
+     * that widens access:
+     * - global: content first, then add to the index. A failed index update leaves the new content applying only to
+     *   principals that list the policy, as before; the old content never becomes global.
+     * - not global: remove from the index first, then write the content. A failed content write leaves the old
+     *   content applying only to principals that list the policy; the new content never applies to everyone.
+     *
+     * The two writes are not atomic: CoCache has no transaction across caches, and each cache invalidates its own
+     * client-side copies. A failed publish completes with an error and must be retried; repeating it is idempotent.
+     * Index updates are atomic, idempotent element updates, so concurrent writers on any instance cannot lose entries.
      */
     private fun updateGlobalPolicyIndex(policy: Policy) {
         val policyIds = listOf(policy.id)
@@ -68,14 +77,33 @@ class RedisPolicyRepository(
         }
     }
 
+    /**
+     * Publishes [policy] as two Redis writes, its content and its entry in the global policy index, ordered so that
+     * a failure between them leaves every principal under either the old or the new state of the policy, never a mix
+     * that widens access:
+     * - global: content first, then add to the index. A failed index update leaves the new content applying only to
+     *   principals that list the policy, as before; the old content never becomes global.
+     * - not global: remove from the index first, then write the content. A failed content write leaves the old
+     *   content applying only to principals that list the policy; the new content never applies to everyone.
+     *
+     * The two writes are not atomic: CoCache has no transaction across caches, and each cache invalidates its own
+     * local copies. A failed publish completes with an error and must be retried; repeating it is idempotent.
+     * Index updates are atomic, idempotent element updates, so concurrent writers on any instance cannot lose entries.
+     */
     override fun setPolicy(policy: Policy): Mono<Void> {
         return Mono.fromRunnable<Void> {
             log.info {
                 "setPolicy - policy: [${policy.id}]."
             }
             DefaultPolicyEvaluator.evaluate(policy)
-            policyCache.put(policy.id, policy)
-            updateGlobalPolicyIndex(policy)
+            val policyIds = listOf(policy.id)
+            if (policy.type == PolicyType.GLOBAL) {
+                policyCache.put(policy.id, policy)
+                globalPolicyIndexCache.add(CACHE_KEY, policyIds)
+            } else {
+                globalPolicyIndexCache.remove(CACHE_KEY, policyIds)
+                policyCache.put(policy.id, policy)
+            }
         }.subscribeOn(Schedulers.boundedElastic())
     }
 }

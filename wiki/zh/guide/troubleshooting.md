@@ -53,10 +53,10 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 |---|---|
 | `status`、`authorized`、`reason` | 真实的决策，并按与真实请求完全相同的规则映射为状态码。 |
 | `decidedBy` | 做出决定的规则：所在层、策略 id 和语句下标，或角色和权限 id。什么都没命中时为 `null`。 |
-| `layers` | `ROOT`、`BLACKLIST`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、`ROLE_PERMISSION`，每层的状态为 `EVALUATED`、`NOT_EVALUATED`（之前的显式拒绝已结束求值）、`EMPTY`，或 `EVALUATED_AFTER_DECISION`（设置 `exhaustive: true` 时）。每条语句和权限都有结果：`MATCHED`、`ACTION_MISS`、`CONDITION_MISS`、`NOT_EVALUATED`（所属策略或应用的条件未匹配）或 `ERROR`。 |
+| `layers` | `BLACKLIST`、`ROOT`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、`ROLE_PERMISSION`，每层的状态为 `EVALUATED`、`NOT_EVALUATED`（之前的显式拒绝已结束求值）、`EMPTY`，或 `EVALUATED_AFTER_DECISION`（设置 `exhaustive: true` 时）。每条语句和权限都有结果：`MATCHED`、`ACTION_MISS`、`CONDITION_MISS`、`NOT_EVALUATED`（所属策略或应用的条件未匹配）或 `ERROR`。 |
 | `overriddenAllows` | 被后续层的显式拒绝覆盖掉的放行。 |
 | `rateLimitRules` | 请求被放行时将会消耗许可的[限流规则](./rate-limiting.md)。 |
-| `warnings` | `MISSING_POLICY`（主体列出的策略 id 在仓储中不存在）、`NO_APP_PERMISSION`（有角色，但该应用和空间没有应用权限）、`MATCHER_ERROR`、`TOKEN_INVALID`（请求中的令牌或 API Key 被拒绝），以及 `TRACE_INCONSISTENT`（追踪与真实决策不一致；以决策为准，并请反馈）。 |
+| `warnings` | `MISSING_POLICY`（主体列出的策略 id 在仓储中不存在，因此授权以 `500` 失败）、`NO_APP_PERMISSION`（在该空间中有角色，但该应用没有应用权限）、`NO_ROLE_IN_SPACE`（有角色，但没有一个是为请求所在空间写的，见[角色授权的作用域](./policies.md#role-grant-scope)）、`MATCHER_ERROR`、`TOKEN_INVALID`（请求中的令牌或 API Key 被拒绝），以及 `TRACE_INCONSISTENT`（追踪与真实决策不一致；以决策为准，并请反馈）。 |
 
 要解释某个真实调用方得到的决策，可以不传 `principal`，而是把他的凭证放进请求的 headers，例如
 `"headers": { "Authorization": "Bearer eyJ..." }` 或 `{ "X-API-Key": "..." }`。凭证由应用自己的安全上下文解析器解析，
@@ -103,12 +103,14 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
   - 它的**动作**：方法、末尾斜杠、`*`（一段）与 `**`（任意段）的区别；
   - 它的**条件**以及它看到的主体：角色、属性和租户都来自令牌，变更要在重新登录或刷新后才生效；
   - 对于主体策略，确认策略 id 在令牌的 `policies` 中；
-  - 对于角色权限，确认 `CoSec-App-Id` 和 `CoSec-Space-Id` 请求头，以及该角色在该空间中的授权。
+  - 对于角色权限，确认 `CoSec-App-Id` 和 `CoSec-Space-Id` 请求头，以及该角色在该应用、该空间中的授权。
+    授权只在自己的应用中生效；带 `CoSec-Space-Id: x` 时只有令牌中写成 `role@x` 的角色有效（不带该请求头时只有不带后缀的角色有效）。
+    升级到 7.0 后，没有迁移到某个应用的授权会缺失（见[迁移角色授权](./upgrading.md#migrating-role-grants)）。
 - `inTenant` 接收的是租户*种类*（`default`、`user`、`platform`），而不是租户 id。
 
 ## 请求被意外放行 {#request-allowed-unexpectedly}
 
-- **root 主体**：`cosec.authorization.root-enabled` 为 `true` 时，主体 id `cosec`（或 `cosec.root` 系统属性的值）绕过所有检查。
+- **root 主体**：`cosec.authorization.root-enabled` 为 `true` 时，平台租户中 id 为 `cosec`（或 `cosec.root` 系统属性的值）的主体绕过除黑名单以外的所有检查。
 - **过宽的允许规则**：查找使用 `"*"`、`/**` 或没有条件的全局 `allow`。添加一条 `deny`，或收窄这条允许规则。
 - **没有命中的拒绝规则**：动作和条件必须都匹配。条件取反写错是常见错误。
 
@@ -121,8 +123,8 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
   在启动日志中搜索该文件名。
 - **另一个文件使用了相同的 id。** 同一个 id 只会加载第一个。
 - **策略类型不对。** 只有 `global` 策略对所有人生效；`system` 和 `custom` 策略只对列出它们的主体生效。
-- **升级到 7.0 时没有迁移数据。** 7.0 读不了 6.x 存储在 Redis 中的数据。请在启动 7.0 之前完成迁移
-  （[从 6.1 升级到 7.0](./upgrading.md#_6-1-to-7-0)）。
+- **升级到 7.0 时没有迁移数据。** 7.0 读不了 6.x 存储在 Redis 中的数据：读取以 `ForeignFormatException` 失败，请求返回 `500`。
+  请迁移数据（[迁移数据](./upgrading.md#migrating-the-data)）。
 - **权限是直接写入 Redis 的。** 从 7.0 起，用 `SET` 或 `SADD` 写入的值不会被读取；应用权限和角色授权请通过 `AppPermissionCache` 和
   `RolePermissionCache` bean 写入（[应用权限与角色](./policies.md#app-permissions-and-roles)）。
 
@@ -132,6 +134,22 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 - **条件使用了不支持的 part。** 日志中会出现 `Unsupported part`；可用的 part 见[取值条件](./policies.md#value-conditions)。
   [校验策略](./policies.md#validating-policies)可以在部署前发现这个问题。
 - **自定义匹配器或仓储抛出了异常。** 异常栈会指出是哪一个。
+- **已存储的策略在作用域之外读取路径变量。** 日志中会出现 `PathVariableScopeException`，并指出策略和语句。
+  从 7.0 起，策略级条件、以及没有 `path` 动作的语句的条件，都不能读取 `request.path.var.*`。修正后重新保存该策略
+  （见[路径变量](./policies.md#actions)）。
+
+## 启动失败并报 PathVariableScopeException {#startup-fails-with-pathvariablescopeexception}
+
+某个本地策略文件、应用权限或限流规则在没有自己的 `path` 动作捕获变量的位置读取了 `request.path.var.*`。
+错误信息会指出文件、策略、语句或规则，以及动作类型。把引用移到 `path` 动作声明了该变量的语句（或规则）中，
+或把策略级条件移到各条语句的条件中（见[路径变量](./policies.md#actions)）。7.0 之前，这样的引用读到的是最后一条命中语句的变量。
+
+## 某个主体总是得到 500 {#one-principal-always-gets-500}
+
+日志中出现 `MissingPolicyException` 及相应的策略 id。主体列出的策略在仓储中不存在：它被删除了、从未写入，或从 Redis 中丢失。
+授权会直接失败而不是跳过它，因为缺失的若是一条拒绝策略，更宽泛的放行策略就会让请求通过。重新写入该策略（本地策略见
+[策略没有生效](#policy-has-no-effect)），或从主体的令牌或记录中移除这个 id。[解释决策](#explain-a-decision)会把它报告为
+`MISSING_POLICY` 警告。
 
 ## 限流行为不符合预期 {#rate-limits-behave-unexpectedly}
 

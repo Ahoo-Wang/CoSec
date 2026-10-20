@@ -17,7 +17,6 @@ import me.ahoo.cocache.api.Codec
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.permission.PermissionGroupData
@@ -69,11 +68,11 @@ class CoSecCacheSpecsTest {
     }
 
     @Test
-    fun storageLayoutKeepsTheKeysOfCoSec6() {
+    fun storageLayout() {
         val spec = CoSecCacheSpecs.rolePermission(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer), "tenant-a:")
-        spec.namespace.assert().isEqualTo("tenant-a:role:permission")
+        spec.namespace.assert().isEqualTo("tenant-a:app:role:permission")
         spec.keyPrefix.assert().isEmpty()
-        spec.keyEncoder.encode(SpacedRoleId("admin", "space")).assert().isEqualTo("admin@space")
+        spec.keyEncoder.encode(AppSpacedRoleId("app", "admin", "space")).assert().isEqualTo("app:admin@space")
 
         val index = CoSecCacheSpecs.globalPolicyIndex("cosec")
         index.namespace.assert().isEqualTo("cosec:global")
@@ -82,18 +81,18 @@ class CoSecCacheSpecsTest {
     }
 
     @Test
-    fun storageKeysAreTheKeysOfCoSec6() {
+    fun storageKeys() {
         CoSecTestCaches(keyPrefix = "layout").use { caches ->
             caches.policyCache.put("p1", PolicyData("p1", "c", "n", "", PolicyType.GLOBAL, "t"))
             caches.globalPolicyIndexCache.add(GlobalPolicyIndexCache.CACHE_KEY, listOf("p1"))
             caches.appPermissionCache.put("app", AppPermissionData(id = "app"))
-            caches.rolePermissionCache.put(SpacedRoleId("admin", "space"), setOf("p"))
+            caches.rolePermissionCache.put(AppSpacedRoleId("app", "admin", "space"), setOf("p"))
             caches.revokedTokenCache.put("jti", true)
             mapOf(
                 CoSecCacheSpecs.POLICY_CACHE_NAME to ("p1" to "layout:policy:p1"),
                 CoSecCacheSpecs.GLOBAL_POLICY_INDEX_CACHE_NAME to ("policy" to "layout:global:policy"),
                 CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME to ("app" to "layout:app:permission:app"),
-                CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME to ("admin@space" to "layout:role:permission:admin@space"),
+                CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME to ("app:admin@space" to "layout:app:role:permission:app:admin@space"),
                 CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME to ("jti" to "layout:token:revoked:jti"),
             ).forEach { (cacheName, keys) ->
                 checkNotNull(caches.runtime.admin(cacheName)).inspect(keys.first).storageKey

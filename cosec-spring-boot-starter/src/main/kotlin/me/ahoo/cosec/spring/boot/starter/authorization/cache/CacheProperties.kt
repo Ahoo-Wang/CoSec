@@ -13,6 +13,7 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cocache.redis.migration.CoCache5MigrationOptions
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.policy.history.PolicyRevisions
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
@@ -40,11 +41,19 @@ class CacheProperties(
     var token: CacheConfiguration = CacheConfiguration(expireAfterWrite = 30, maximumSize = 100_000),
     @NestedConfigurationProperty
     var history: PolicyHistoryConfiguration = PolicyHistoryConfiguration(),
+    @NestedConfigurationProperty
+    var migration: MigrationConfiguration = MigrationConfiguration(),
 ) : EnabledCapable {
     companion object {
         const val PREFIX: String = AuthorizationProperties.PREFIX + ".cache"
     }
 
+    /**
+     * Role grants of 6.x, keyed without the app (`<prefix><roleId>[@<spaceId>]`). Authorization never reads them;
+     * only [me.ahoo.cosec.cache.RolePermissionKeyMigration] does.
+     */
+    val legacyRolePermissionKeyPrefix: String
+        get() = "${migration.legacyKeyPrefix ?: keyPrefix}:role:permission:"
     val policyHistoryKeyPrefix: String = "$keyPrefix:policy:history"
 }
 
@@ -56,6 +65,23 @@ data class PolicyHistoryConfiguration(
     /** Revisions kept per policy; older ones are dropped. */
     var maxRevisions: Int = PolicyRevisions.DEFAULT_MAX_REVISIONS,
 )
+
+/**
+ * How CoSec 6.x (CoCache 5) stored its data, for the one-off migrations to 7.0 ([me.ahoo.cosec.cache.CoSecCoCache5Migration]
+ * and [me.ahoo.cosec.cache.RolePermissionKeyMigration]).
+ */
+data class MigrationConfiguration(
+    /** `cosec.authorization.cache.key-prefix` of the 6.x deployment; defaults to the current key prefix. */
+    var legacyKeyPrefix: String? = null,
+    /** `cocache.redis.missing-guard-sentinel` of the 6.x deployment. */
+    var missingGuardSentinel: String = DEFAULT_MISSING_GUARD_SENTINEL,
+    /** Where the CoCache migration backs up each 6.x value it converts, for a rollback. */
+    var backupPrefix: String = CoCache5MigrationOptions.DEFAULT_BACKUP_PREFIX,
+) {
+    companion object {
+        const val DEFAULT_MISSING_GUARD_SENTINEL = CoCache5MigrationOptions.DEFAULT_MISSING_GUARD_SENTINEL
+    }
+}
 
 /**
  * Local (in-process) cache settings. Unset values ([UNSET]) keep CoCache's defaults: 10,000 entries and a local copy

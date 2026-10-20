@@ -17,15 +17,18 @@ also holds revoked token ids. Each instance keeps an in-process copy
   binary header that CoCache checks.
 - **Global policy index** updates are atomic Redis operations, so concurrent writers on different
   instances never lose entries.
+- **Publishing a policy** writes its content and its global index entry separately, not atomically. The order
+  keeps a failure safe: a policy becoming global is indexed only after its content is written, and a policy
+  leaving global leaves the index before its content changes. A failed publish returns an error; retry it.
 - Policy and permission entries **never expire** in Redis. A local copy lives at most 5 minutes by default
   ([`expire-after-write`](./configuration.md#cache)), then is read from Redis again; this bounds how stale a copy
   can get if an invalidation message is lost. Local caches are bounded
   ([`maximum-size`](./configuration.md#cache), default 10,000 entries per cache).
 
 Keys are `<key-prefix>:policy:<id>`, `<key-prefix>:global:policy`, `<key-prefix>:app:permission:<appId>`,
-`<key-prefix>:role:permission:<roleId>[@<spaceId>]` and `<key-prefix>:token:revoked:<tokenId>`; each cache has its own
-invalidation channel, `cocache:inv:<key-prefix>:policy` and so on. Redis must be 7.0 or later (or Valkey 7.2 or
-later), reached through Lettuce. A minimal Redis ACL must grant what
+`<key-prefix>:app:role:permission:<appId>:<roleId>[@<spaceId>]` and `<key-prefix>:token:revoked:<tokenId>`; each
+cache has its own invalidation channel, `cocache:inv:<key-prefix>:policy` and so on. Redis must be 7.0 or later (or
+Valkey 7.2 or later), reached through Lettuce. A minimal Redis ACL must grant what
 [CoCache lists](https://cocache.ahoo.me/operations/#acl), which since CoCache 6.3 includes `+hkeys +hget` (keep
 `+hgetall`).
 
@@ -95,7 +98,8 @@ policy files, app permissions and role grants, typically in a test or a small re
 val analyzer = AccessAnalyzer.load(
     policyLocations = listOf("classpath:cosec-policy/*-policy.json"),
     appPermissionLocations = listOf("classpath:cosec-policy/*-app-permission.json"),
-    roles = mapOf("shop" to mapOf("admin" to setOf("*"), "clerk" to setOf("order.read"))),
+    // app id to role to permission ids; `role@space` grants in that space only
+    roles = mapOf("shop" to mapOf("admin" to setOf("*"), "clerk" to setOf("order.read"), "clerk@east" to setOf("*"))),
 )
 
 val paths = analyzer.whoCan(EvaluateRequest(path = "/orders/42", method = "DELETE",
@@ -106,8 +110,15 @@ paths.denies   // every deny that could stop it
 val grants = analyzer.grantsOf(SimplePrincipal("alice", policies = setOf("ops"), roles = setOf("clerk")))
 ```
 
+Role grants follow [role grant scope](./policies.md#role-grant-scope): each one belongs to an app, a role and a
+space, written as in principals' roles: `clerk` is granted in the default space, `clerk@east` in `east` only.
+`whoCan` lists the grants made in the request's app (`CoSec-App-Id`) and space (`CoSec-Space-Id`). `grantsOf`
+reaches a grant only through a role the principal holds in that space, so `clerk` above does not reach the
+`clerk@east` grant; pass `appId` and `spaceId` to narrow it to one app or space. A malformed role (an empty role
+or space, or more than one `@`) fails `AccessAnalyzer` construction.
+
 Each rule names its source (`GLOBAL_POLICY` applies to everyone, `PRINCIPAL_POLICY` to principals listing the
-policy, `ROLE_PERMISSION` to members of the role in that app), the statement or permission, its action and
+policy, `ROLE_PERMISSION` to members of the role in that app and space, given by `roleId` and `spaceId`), the statement or permission, its action and
 condition, and two flags:
 
 - `conditional`: a condition must also match, so the rule applies only to some callers or requests.
@@ -140,7 +151,8 @@ Checklist for any deployment:
 - Set `cosec.authorization.remote-ip.max-trusted-index` to match your proxy chain.
 - Enable `cosec.inject.enabled` only on services that cannot be reached except through the verifying
   gateway.
-- Disable `cosec.authorization.root-enabled` if users can choose their own principal ids.
+- Keep `cosec.authorization.root-enabled` off (the default) unless you need root. When on, root is the platform
+  tenant's root id only, so issue platform-tenant tokens from a source users cannot influence.
 
 ## Performance
 

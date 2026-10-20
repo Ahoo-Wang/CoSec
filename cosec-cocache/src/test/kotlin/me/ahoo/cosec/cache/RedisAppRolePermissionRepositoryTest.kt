@@ -14,8 +14,6 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cosec.api.policy.Effect
-import me.ahoo.cosec.api.principal.SpacedRoleId
-import me.ahoo.cosec.api.principal.SpacedRoleId.Companion.toSpacedRoleId
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.permission.PermissionGroupData
@@ -68,7 +66,7 @@ class RedisAppRolePermissionRepositoryTest {
             groups = listOf(PermissionGroupData(name = "", permissions = listOf(permission))),
         )
         caches.appPermissionCache.put("appId", appPermission)
-        caches.rolePermissionCache.put("roleId".toSpacedRoleId(), setOf(permission.id))
+        caches.rolePermissionCache.put(AppSpacedRoleId("appId", "roleId"), setOf(permission.id))
 
         permissionRepository.getAppRolePermission("appId", "", setOf("roleId"))
             .test()
@@ -82,13 +80,32 @@ class RedisAppRolePermissionRepositoryTest {
     @Test
     fun getRolePermissionsOfTheRequestedSpaceOnly() {
         caches.appPermissionCache.put("appId", AppPermissionData("appId", groups = listOf()))
-        caches.rolePermissionCache.put(SpacedRoleId("roleId", "space-a"), setOf("a"))
-        caches.rolePermissionCache.put(SpacedRoleId("roleId", "space-b"), setOf("b"))
+        caches.rolePermissionCache.put(AppSpacedRoleId("appId", "roleId", "space-a"), setOf("a"))
+        caches.rolePermissionCache.put(AppSpacedRoleId("appId", "roleId", "space-b"), setOf("b"))
 
         permissionRepository.getAppRolePermission("appId", "space-b", setOf("roleId"))
             .test()
             .consumeNextWith {
                 assertThat(it.rolePermissions.single().permissions, equalTo(setOf("b")))
+            }
+            .verifyComplete()
+    }
+
+    @Test
+    fun appIdThatCannotOwnGrantsGetsNone() {
+        caches.appPermissionCache.put("app:id", AppPermissionData("app:id", groups = listOf()))
+        permissionRepository.getAppRolePermission("app:id", "", setOf("roleId")).test().verifyComplete()
+        permissionRepository.getAppRolePermission("", "", setOf("roleId")).test().verifyComplete()
+    }
+
+    @Test
+    fun spacedRoleIdGrantsNothing() {
+        caches.appPermissionCache.put("appId", AppPermissionData("appId", groups = listOf()))
+        caches.rolePermissionCache.put(AppSpacedRoleId("appId", "roleId", "space"), setOf("*"))
+        permissionRepository.getAppRolePermission("appId", "space", setOf("roleId@space", ""))
+            .test()
+            .consumeNextWith {
+                assertThat(it.rolePermissions, equalTo(emptyList()))
             }
             .verifyComplete()
     }

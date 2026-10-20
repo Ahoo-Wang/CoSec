@@ -18,10 +18,13 @@ import me.ahoo.cosec.api.permission.AppPermissionEvaluator
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.DefaultPolicyEvaluator.safeEvaluate
 import me.ahoo.cosec.policy.EvaluateRequest
+import me.ahoo.cosec.policy.PathVariableScope
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 
 object DefaultAppPermissionEvaluator : AppPermissionEvaluator {
     override fun evaluate(appPermission: AppPermission) {
+        // AppPermissionData checks this on construction; custom AppPermission implementations are checked here.
+        PathVariableScope.requireScoped(appPermission)
         val evaluateRequest = EvaluateRequest()
         val mockContext = SimpleSecurityContext(SimpleTenantPrincipal.ANONYMOUS)
         safeEvaluate {

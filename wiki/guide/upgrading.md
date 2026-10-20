@@ -7,29 +7,93 @@ What changes between versions and what to do about it. Release notes for every v
 
 ### Breaking changes
 
-CoSec 7.0 runs on [CoCache 6.4](https://cocache.ahoo.me/guide/migration-6) and
+**A principal policy that does not exist fails authorization.** When a principal lists a policy id that the
+`PolicyRepository` does not return (deleted, never written, lost from Redis), `SimpleAuthorization` now fails with
+`MissingPolicyException`, which the pipeline maps to `500`. Before, the id was skipped and the remaining policies
+decided: when the missing policy was a deny, such as one that suspends an account, a global allow let the request
+through. `AuthorizationChecker` answers `false` for such a principal, and an explanation reports the `500` with a
+`MISSING_POLICY` warning.
+
+Before upgrading, find principals (tokens, API keys, user records) that list policy ids your repository does not
+have, and either write those policies or remove the ids. `PolicyRepository.getPolicies` itself is unchanged: it
+still returns the policies it found, so custom repositories need no change.
+
+**Root is off by default, limited to the platform tenant, and subject to the blacklist.** Before, any principal
+whose id was `cosec` (or the `-Dcosec.root` system property) bypassed every check, including the blacklist, and
+`cosec.authorization.root-enabled` defaulted to `true`. A user tenant whose identity provider let a user pick the
+id `cosec` handed that user platform-wide access. Now:
+
+- `cosec.authorization.root-enabled` defaults to `false`: no principal is root unless you enable it.
+- When enabled, `RootPrincipalMatcher.DEFAULT` treats a principal as root only if its id is the root id **and** its
+  tenant is the platform tenant (`(platform)`, `Tenant.PLATFORM_TENANT_ID`). The root id in a user tenant, in the
+  default tenant, or on a principal without a tenant is an ordinary principal.
+- The blacklist is checked before root, so a blacklisted request from root is denied. In an explanation the
+  `BLACKLIST` layer now comes before `ROOT`, and `ExplainLayer` lists them in that order.
+
+If you rely on root, set `cosec.authorization.root-enabled=true` and issue the root principal's token with
+`tenantId` `(platform)`. Code that builds `SimpleAuthorization`, `AuthorizationExplainer` or `ShadowAuthorization`
+directly keeps `RootPrincipalMatcher.DEFAULT` as its default, with the new tenant rule. If root must work some
+other way, provide your own `RootPrincipalMatcher` bean.
+
+**Role grants are scoped to an app and a space.** In 6.x a role grant was stored per role and space, without the
+app, and the client chose both the app (`CoSec-App-Id`) and the space (`CoSec-Space-Id`). A grant, `*` included,
+therefore applied in every app that defined the same permission ids, and changing `CoSec-Space-Id` picked up the
+grants of a same-named role in another space. In 7.0:
+
+- Grants are keyed by app, role and space. The Redis key moves from `cosec:role:permission:<roleId>[@<spaceId>]`
+  to `cosec:app:role:permission:<appId>:<roleId>[@<spaceId>]`, and `RolePermissionCache` takes an
+  `AppSpacedRoleId(appId, roleId, spaceId)` instead of a `SpacedRoleId`. App ids must not contain `:` and role
+  ids must not contain `@`; the OpenAPI app permission generator replaces `:` in the title.
+- A request with `CoSec-Space-Id: x` is evaluated with only the principal's roles written `role@x`; without the
+  header, with only the roles without a suffix. Issue `role@space` in tokens and API keys for every space a
+  principal holds a role in, after checking membership ([Tokens](./authentication.md#tokens)).
+- Authorization never reads 6.x keys. Until they are migrated, roles have no grants and role-based requests are
+  denied (fail closed).
+- `AppRolePermissionRepository.getAppRolePermission` keeps its signature. `SimpleAuthorization` now passes the
+  roles that apply in the space, without the `@space` suffix; a custom repository must return only the grants
+  made for that app and space.
+- The explainer adds the `NO_ROLE_IN_SPACE` warning.
+- `AccessAnalyzer` and `PolicyTestKit` scope role grants the same way. A grant role written without a suffix is
+  granted in the default space only; write `role@space` for grants in another space. `whoCan` takes grants from the
+  request's space, `grantsOf` reaches a grant only through a role held in its space and takes an optional
+  `spaceId`, and `AccessRule` adds `spaceId`. Test suites add `appRoles` for grants made in one app; `roles` still
+  grants in every app. Malformed roles now fail instead of never matching.
+
+**Path variables belong to the statement that captured them.** Before, `request.path.var.*` read whatever the
+last matching `path` action of the request had captured, in any statement, policy or layer. A condition could
+therefore depend on another statement: a deny statement that never matched could make an `all`-action allow
+match (adding a deny widened access), a policy condition read the variables of the global layer, and a rate limit
+rule without a `path` action read the variables of a policy. Now:
+
+- the variables are cleared before every statement, permission and rate limit rule matches its action, and before
+  policy and app permission conditions, so a condition only sees what its own `path` action captured;
+- reading them where no `path` action of the same statement or rule captured them is a load error,
+  `PathVariableScopeException`: in a policy or app permission `condition`, in the condition of a statement or
+  permission whose action is not `path`, and in the `condition` or `key` of a rate limit rule whose action is not
+  `path` ([Path variables](./policies.md#actions)).
+
+Parsing such a policy, app permission or rate limit rule fails, and so does constructing `PolicyData`,
+`AppPermissionData` or `RateLimitRule` with one. `RedisPolicyRepository.setPolicy` rejects it. A local policy file
+with one stops the application from starting, instead of being skipped like other invalid files. A policy already
+stored in Redis with one fails its reads, which denies requests with `500`.
+
+Before upgrading, search policies, app permissions and rate limit rules for `request.path.var.` and
+`PATH_VARIABLES`. Move each reference into a statement whose `path` action captures the variable, for example
+replace `"action": "*"` with the pattern that declares it, and move a policy-level condition into the conditions of
+its statements.
+CoSec 7.0 runs on [CoCache 6.5](https://cocache.ahoo.me/guide/migration-6) and
 [CosId 4.0](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md). CoCache 6 changed how values are
-stored in Redis, so this upgrade needs a short stop and a one-off data copy.
+stored in Redis, so this upgrade needs a short stop and a one-off data migration
+([Migrating the data](#migrating-the-data)).
 
 **Switch every instance at once.** CoCache 6 changed the Redis value layout and the invalidation channel, so 6.x
 and 7.0 instances cannot share a cache: neither sees the other's writes. There is no rolling upgrade: stop every
-6.x instance, migrate the data, then start 7.0. The Redis keys stay the same (`cosec:policy:<id>`,
-`cosec:global:policy`, `cosec:app:permission:<appId>`, `cosec:role:permission:<roleId>[@<spaceId>]`,
-`cosec:token:revoked:<tokenId>`, where `cosec` is [`cosec.authorization.cache.key-prefix`](./configuration.md#cache));
-only the values change format. Policy history, API keys and rate limit counters are not CoCache data and keep their
+6.x instance, migrate the data, then start 7.0. The Redis keys of policies (`cosec:policy:<id>`), the global
+policy index (`cosec:global:policy`), app permissions (`cosec:app:permission:<appId>`) and revoked tokens
+(`cosec:token:revoked:<tokenId>`) stay the same, where `cosec` is
+[`cosec.authorization.cache.key-prefix`](./configuration.md#cache); only their values change format. Role grants
+move to app-scoped keys (see above). Policy history, API keys and rate limit counters are not CoCache data and keep their
 keys and formats.
-
-**Migrate the 6.x data before 7.0 starts.** Redis is the only copy of policies, app permissions and role grants,
-and CoCache 6 cannot read CoCache 5 values: every 6.x value has to be converted before a 7.0 instance reads it.
-
-::: warning TODO: data migration
-Run CoCache's 5.x migrator (version TBD, planned for the next CoCache minor release) on the namespaces
-`cosec:policy`, `cosec:global` (a CoCache 5 native set), `cosec:app:permission` and `cosec:token:revoked` before
-starting 7.0 instances. Role grants (`cosec:role:permission`, CoCache 5 native sets) are deliberately not on this
-list: they move to app-scoped keys in 7.0 with a migration of their own (TODO). Do not start 7.0 against unmigrated
-data. This section will describe the exact steps, the
-migrator's report and rollback once that release is available.
-:::
 
 **Write through CoSec, not straight to Redis.** Every CoCache 6 value starts with a binary header, so data written
 with `SET` or `SADD` (for example app permissions and role grants written by an administration service) is not read.
@@ -71,15 +135,100 @@ compiling; code that declares an `IdGenerator` to hold a `CosIdGenerator` must d
 application uses CosId itself, follow CosId's
 [migration guide](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md).
 
+**Unmigrated data fails closed.** A 7.0 instance that reads a value CoSec 6.x wrote fails the read
+(`CacheReadException`, caused by CoCache's `ForeignFormatException`) and leaves the value in Redis, so the request is
+denied with `500`. Policy and permission caches always keep this behavior, even with
+`cocache.defaults.foreign-format=reclaim`: with no loader, a reclaim would delete the only copy.
+
+### Migrating the data
+
+CoCache 6 cannot read the values CoSec 6.x stored with CoCache 5, and Redis is the only copy of policies, app
+permissions and role grants. Two migrations convert them, both classes you call from a 7.0 process (an admin
+application or a one-off job using the starter with `cache-support`), not actuator endpoints.
+
+- `CoSecCoCache5Migration` converts policies, the global policy index, app permissions and revoked tokens in place
+  with CoCache's [`CoCache5Migrator`](https://cocache.ahoo.me/guide/migration-6), backing up every original value
+  first. The policy history (`cosec:policy:history:*`) is not CoCache data and is left alone.
+- `RolePermissionKeyMigration` copies role grants to their new app-scoped keys, one app at a time
+  ([Migrating role grants](#migrating-role-grants)). The 6.x keys stay as they were.
+
+In order:
+
+1. **Stop every writer.** Stop all 6.x instances, and anything else that writes CoSec keys (an administration
+   service writing policies or grants). Nothing may write during the migration: a key changed while it is
+   migrated aborts the run.
+2. **Run the CoCache migration.** First a dry run, which reads and decodes every value and writes nothing, then the
+   migration. Read the report of each: per cache, the keys `read`, `written`, `skipped` (already migrated) and
+   `negatives` (cached misses, migrated as cached misses). A value that cannot be decoded aborts the run with a
+   `CoCache5MigrationException` naming the key; fix it and run again. Migrated keys are skipped, so a run can be
+   repeated.
+
+   ```kotlin
+   @Bean
+   fun migrateCoSecData(migration: CoSecCoCache5Migration) = ApplicationRunner {
+       log.info { "dry run: ${migration.dryRun()}" }
+       log.info { "migrated: ${migration.migrate()}" }
+   }
+   ```
+
+   Set `cosec.authorization.cache.migration.legacy-key-prefix` or `missing-guard-sentinel` when 6.x used a key
+   prefix other than the current one or a non-default `cocache.redis.missing-guard-sentinel`, and `backup-prefix` to
+   move the backups away from `cocache5-backup:`.
+3. **Migrate role grants** with `RolePermissionKeyMigration`, once per app, dry run first
+   ([Migrating role grants](#migrating-role-grants)).
+4. **Verify.** Check the reports, then read a few policies, global policies and grants through a 7.0 process (for
+   example with [explain](./troubleshooting.md#explain-a-decision)). A read that still fails with
+   `ForeignFormatException` names a key that was not migrated.
+5. **Start the 7.0 instances.** Once 7.0 runs well, delete the backups with `CoSecCoCache5Migration.dropBackups()`
+   and the 6.x role grant keys with `RolePermissionKeyMigration.deleteLegacy()`.
+
+**Rollback.** Before the backups are dropped, 6.1 can be restored: stop every 7.0 instance and writer, call
+`CoSecCoCache5Migration.rollback()`, which puts every 6.x value back from its backup (type, content and remaining
+lifetime), and start 6.1. The 6.x role grant keys were never changed. What 7.0 wrote since the migration is lost:
+policies and permissions written through 7.0 must be written again through 6.1.
+
+#### Migrating role grants
+
+This is step 3 of [Migrating the data](#migrating-the-data). 6.x grants do not record the app they were meant for, so CoSec cannot migrate them on its own: you name the
+target app, and nothing is copied to every app. `RolePermissionKeyMigration` (a bean with `cache-support`) does
+the copy. It is a class you call, not an actuator endpoint, because an endpoint that writes authorization data
+would itself have to be secured and would stay exposed long after the one-off migration.
+
+1. Decide which app each 6.x role (and space) belongs to. When roles of several apps share the old key space,
+   split them with the `roleIds` argument.
+2. Issue roles as `role@space` for every non-default space, in tokens and API keys.
+3. Run the migration once per app from a 7.0 process against the same Redis, for example an admin application or
+   a one-off job, while no instance serves traffic. Start with a dry run and read the report:
+
+   ```kotlin
+   @Bean
+   fun migrateRoleGrants(migration: RolePermissionKeyMigration) = ApplicationRunner {
+       val report = migration.migrate(appId = "order-app", dryRun = true) // then dryRun = false
+       log.info { "migrated=${report.migrated} conflicts=${report.conflicts} skipped=${report.skipped}" }
+   }
+   ```
+
+   Writes go through `RolePermissionCache`, so running instances drop their local copies. A run is idempotent:
+   grants already migrated are reported as `unchanged`, and a target that holds different grants is reported as a
+   conflict and kept. Keys holding a cached miss, keys that are not sets, and keys with an ambiguous role or space
+   (more than one `@`, or an empty part) are reported as `skipped`.
+4. Once every instance runs 7.0 and the grants are verified, delete the old keys with `deleteLegacy()` (it also
+   takes `dryRun`). Until then a rollback to 6.1 still finds them; if grants changed through 6.x after a first run,
+   run the migration again with `overwrite = true`.
+
+Until a role's grants are migrated to an app, requests that rely on them are denied in that app.
+
 ### Upgrade checklist
 
 1. Check that Redis is 7.0 or later and that its ACL allows `+hkeys +hget`.
-2. Replace direct Redis writes of app permissions and role grants with writes through CoSec.
-3. Replace 6.x cache component beans with a `CacheSpecCustomizer` or `cocache.caches.<CacheName>.*`, and change
-   `IdGenerator` declarations used for a `CosIdGenerator` to `StringIdGenerator`.
-4. Stop every 6.x instance.
-5. Migrate the data (see the TODO above).
-6. Start the 7.0 instances.
+2. Search policies, app permissions and rate limit rules for `request.path.var.` and fix their scope.
+3. Find principals that list policies the repository does not have; decide the app of every 6.x role; issue
+   `role@space` roles; enable root explicitly if you use it.
+4. Replace direct Redis writes of app permissions and role grants with writes through CoSec, replace 6.x cache
+   component beans with a `CacheSpecCustomizer` or `cocache.caches.<CacheName>.*`, and change `IdGenerator`
+   declarations used for a `CosIdGenerator` to `StringIdGenerator`.
+5. Stop every writer, migrate the data, verify, then start 7.0 ([Migrating the data](#migrating-the-data)).
+
 
 ## 6.0 to 6.1
 

@@ -24,13 +24,16 @@ import me.ahoo.cosec.cache.AppPermissionCache
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.RedisAppRolePermissionRepository
 import me.ahoo.cosec.cache.RolePermissionCache
+import me.ahoo.cosec.cache.RolePermissionKeyMigration
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import org.springframework.data.redis.core.StringRedisTemplate
 import tools.jackson.databind.ObjectMapper
 
 /**
@@ -60,6 +63,23 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
     ): AppRolePermissionRepository {
         return RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
     }
+
+    /**
+     * Does nothing on its own: operators call it once per app to move 6.x role grants to app-scoped keys (see the
+     * upgrading guide).
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean(StringRedisTemplate::class)
+    fun rolePermissionKeyMigration(
+        redisTemplate: StringRedisTemplate,
+        rolePermissionCache: RolePermissionCache,
+    ): RolePermissionKeyMigration = RolePermissionKeyMigration(
+        redisTemplate = redisTemplate,
+        rolePermissionCache = rolePermissionCache,
+        legacyKeyPrefix = cacheProperties.legacyRolePermissionKeyPrefix,
+        missingGuardSentinel = cacheProperties.migration.missingGuardSentinel,
+    )
 
     /**
      * App permissions are encoded with the application's [ObjectMapper], as before. They keep CoCache's default

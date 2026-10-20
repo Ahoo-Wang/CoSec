@@ -62,9 +62,9 @@ sequenceDiagram
 
 [`SimpleAuthorization`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt)：
 
-1. root 主体（由 `RootPrincipalMatcher` 判定）直接放行。
-2. 黑名单中的请求（`BlacklistChecker`）直接拒绝。
-3. 依次求值三层：全局策略、主体的策略，以及请求所在应用和空间的角色权限。每一层内都先检查所有 `deny`，再检查 `allow`。
+1. 黑名单中的请求（`BlacklistChecker`）直接拒绝，无论主体是谁。
+2. root 主体（由 `RootPrincipalMatcher` 判定；默认只认平台租户中的 root id）直接放行。
+3. 依次求值三层：全局策略、主体的策略，以及角色权限（取主体在请求所在空间中的角色 `role@space`，按它们在请求所在应用中的授权求值）。每一层内都先检查所有 `deny`，再检查 `allow`。
    各层之间同样拒绝优先：任一层出现 `EXPLICIT_DENY` 就结束求值；只有每一层都有机会拒绝之后，才会返回 `ALLOW`。
 4. 否则结果为 `IMPLICIT_DENY`。
 
@@ -77,7 +77,7 @@ sequenceDiagram
 | 不变量 | 含义 |
 |---|---|
 | **拒绝优先** | 任何策略或层的组合，都不能让 `ALLOW` 压过已命中的 `DENY`。 |
-| **出错即拒绝** | 错误一律拒绝（`500`，正则超时为 `403`）。仅有的例外是有文档说明的降级模式：未设置 `strictFailure` 的限流规则，以及吊销检查。策略和权限缓存使用严格的 Redis 失败模式。 |
+| **出错即拒绝** | 错误一律拒绝（`500`，正则超时为 `403`）。仅有的例外是有文档说明的降级模式：未设置 `strictFailure` 的限流规则，以及吊销检查。策略和权限缓存使用严格的 Redis 失败模式，读到无法识别的内容（例如未迁移的 CoCache 5 值）时也会失败；主体引用的策略在仓储中不存在时，授权直接失败而不是跳过它。 |
 | **不阻塞事件循环** | 阻塞操作（令牌吊销、Redis 限流计数器）在 `boundedElastic` 上执行。能从本地缓存返回的仓储读取留在调用方线程；其余读取以不阻塞的方式访问 Redis，随后在 `boundedElastic` 上继续。必须阻塞的自定义条件匹配器实现 `BlockingAware`：只有当某一层的策略或应用权限包含这类匹配器时，`SimpleAuthorization` 才会把该层放到 `boundedElastic` 上评估，其他策略不产生线程切换。 |
 | **只有一条决策路径** | 状态码和错误映射只存在于 `SecurityPipeline`，适配器从不自行决策。 |
 | **授权是纯决策** | 内置匹配器只读取请求和安全上下文，不做 I/O、不持有状态（路径匹配器会把路径变量记录到上下文中）。会消耗许可的限流是一个独立的装饰器，只对被放行的请求执行（见[限流](../guide/rate-limiting.md)）。 |

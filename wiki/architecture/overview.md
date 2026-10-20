@@ -67,10 +67,11 @@ sequenceDiagram
 
 [`SimpleAuthorization`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt):
 
-1. A root principal (decided by `RootPrincipalMatcher`) is allowed.
-2. A blacklisted request (`BlacklistChecker`) is denied.
-3. Three layers are evaluated: global policies, the principal's policies, and the role permissions for the
-   request's app and space. In each layer every `deny` is checked before any `allow`. Layers are combined
+1. A blacklisted request (`BlacklistChecker`) is denied, whoever the principal is.
+2. A root principal (decided by `RootPrincipalMatcher`; by default only the platform tenant's root id) is allowed.
+3. Three layers are evaluated: global policies, the principal's policies, and the role permissions of the
+   principal's roles in the request's space (`role@space`), as granted in the request's app. In each layer every
+   `deny` is checked before any `allow`. Layers are combined
    deny-first: an `EXPLICIT_DENY` in any layer ends evaluation, and an `ALLOW` is only returned once every
    layer has had the chance to deny.
 4. Otherwise the result is `IMPLICIT_DENY`.
@@ -85,7 +86,7 @@ Every change must keep these.
 | Invariant | Meaning |
 |---|---|
 | **Deny-first** | No combination of policies or layers lets an `ALLOW` win over a matched `DENY`. |
-| **Fail closed** | Errors deny (`500`, regex timeout `403`). The only exceptions are documented degraded modes: rate limit rules without `strictFailure`, and the revocation check. Policy and permission caches use strict Redis failure. |
+| **Fail closed** | Errors deny (`500`, regex timeout `403`). The only exceptions are documented degraded modes: rate limit rules without `strictFailure`, and the revocation check. Policy and permission caches use strict Redis failure and fail on content they cannot read (such as unmigrated CoCache 5 values), and a principal policy the repository does not have fails authorization rather than being skipped. |
 | **No blocking on the event loop** | Blocking work (token revocation, Redis rate limit counters) runs on `boundedElastic`. Repository reads answered from the local cache stay on the caller's thread; the others read Redis without blocking and continue on `boundedElastic`. A custom condition matcher that must block implements `BlockingAware`: `SimpleAuthorization` evaluates a layer on `boundedElastic` only when its policies or app permission contain one, so other policies pay no thread hop. |
 | **One decision path** | Status codes and error mapping live only in `SecurityPipeline`. Adapters never decide. |
 | **Authorization is a pure decision** | Built-in matchers only read the request and security context, do no I/O and keep no state (path matchers record path variables in the context). Rate limiting, which spends permits, is a separate decorator that runs only for allowed requests (see [Rate Limiting](../guide/rate-limiting.md)). |

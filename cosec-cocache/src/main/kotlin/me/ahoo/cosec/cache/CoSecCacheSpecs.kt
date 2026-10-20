@@ -22,6 +22,7 @@ import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.SetCacheSpec
 import me.ahoo.cocache.core.codec.StringCodec
 import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cocache.core.policy.ForeignFormatMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
 import me.ahoo.cocache.core.proxy.CacheProxies
 import me.ahoo.cosec.api.CoSec
@@ -29,7 +30,6 @@ import me.ahoo.cosec.api.context.request.AppId
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.api.principal.SpacedRoleId
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
 import java.time.Duration
@@ -39,8 +39,9 @@ import java.time.Duration
  *
  * The storage keys are the ones CoSec 6.x used: CoCache stores an entry under `{keyPrefix}{namespace}:{key}`, and
  * each cache sets an empty `keyPrefix` and a namespace of [cacheNamespace] (`cosec:policy`, `cosec:global`,
- * `cosec:app:permission`, `cosec:role:permission`, `cosec:token:revoked`). The values are CoCache 6's binary format,
- * so data written by CoSec 6.x (CoCache 5) must be migrated before 7.0 reads it. Each namespace also names its own
+ * `cosec:app:permission`, `cosec:token:revoked`; role grants moved to the app-scoped `cosec:app:role:permission` in
+ * 7.0). The values are CoCache 6's binary format, so data written by CoSec 6.x (CoCache 5) must be migrated before
+ * 7.0 reads it: see [CoSecCoCache5Migration] and [RolePermissionKeyMigration]. Each namespace also names its own
  * invalidation channel `cocache:inv:{namespace}`, so deployments with different key prefixes stay apart.
  *
  * Policy and permission caches have no loader: Redis is the store of record. [storeOfRecord] must therefore be the
@@ -68,11 +69,11 @@ object CoSecCacheSpecs {
         POLICY_CACHE_NAME to "policy",
         GLOBAL_POLICY_INDEX_CACHE_NAME to "global",
         APP_PERMISSION_CACHE_NAME to "app:permission",
-        ROLE_PERMISSION_CACHE_NAME to "role:permission",
+        ROLE_PERMISSION_CACHE_NAME to "app:role:permission",
         REVOKED_TOKEN_CACHE_NAME to "token:revoked",
     )
 
-    /** The CoCache namespace of [cacheName]: `{keyPrefix}:policy` and so on, as in CoSec 6.x. */
+    /** The CoCache namespace of [cacheName]: `{keyPrefix}:policy` and so on. */
     fun cacheNamespace(keyPrefix: String, cacheName: String): String =
         "${keyPrefix.trimEnd(':')}:${NAMESPACES.getValue(cacheName)}"
 
@@ -80,6 +81,9 @@ object CoSecCacheSpecs {
      * Policy and permission caches are the store of record, so:
      *
      * - entries never expire (`ttl = null`); with an expiry, policies would silently disappear;
+     * - content the cache cannot read, such as an unmigrated CoCache 5 value, fails the read
+     *   ([ForeignFormatMode.FAIL]) and stays in Redis, instead of being reclaimed: with no loader, a reclaim would
+     *   delete the only copy;
      * - a failed Redis read throws ([ReadFailureMode.THROW]) instead of degrading to a miss, which would silently
      *   drop a policy or permission. The security pipeline turns the error into a denied (500) response. (A
      *   `SetCache` such as the global policy index has nothing to degrade to and always rethrows; with CoCache 5 a
@@ -88,6 +92,7 @@ object CoSecCacheSpecs {
     fun CachePolicy.storeOfRecord(): CachePolicy = toBuilder()
         .ttl(null)
         .readFailure(ReadFailureMode.THROW)
+        .foreignFormat(ForeignFormatMode.FAIL)
         .build()
 
     fun policy(
@@ -125,8 +130,8 @@ object CoSecCacheSpecs {
         codec: Codec<Set<PermissionId>>,
         keyPrefix: String = CoSec.COSEC,
         policy: CachePolicy = CachePolicy.DEFAULT
-    ): CacheSpec<SpacedRoleId, Set<PermissionId>> =
-        CacheSpec.builder<SpacedRoleId, Set<PermissionId>>(ROLE_PERMISSION_CACHE_NAME)
+    ): CacheSpec<AppSpacedRoleId, Set<PermissionId>> =
+        CacheSpec.builder<AppSpacedRoleId, Set<PermissionId>>(ROLE_PERMISSION_CACHE_NAME)
             .storageLayout(keyPrefix)
             .codec(codec)
             .policy(policy.storeOfRecord())

@@ -77,7 +77,19 @@
 - `method`：可选；一个或一组 HTTP 方法，不区分大小写。省略表示任意方法。
 - `options`：可选；路径如何切分和比较。借助分隔符也可以匹配非 HTTP 的“路径”，例如 `"separator": "."` 时的 `order.read`。
 
-**路径变量。** 命中的动作捕获的变量，可以在该语句的条件中以 `request.path.var.<name>` 读取。
+**路径变量。** 命中的 `path` 动作会捕获其中的 `{var}`，同一条语句的条件以 `request.path.var.<name>` 读取它们。
+路径变量只属于这条语句：每条语句、权限和[限流规则](./rate-limiting.md#rules)在匹配自己的动作之前都会先清空路径变量，
+因此条件永远读不到别的语句捕获的变量；本语句的模式没有声明的变量读作空字符串。
+
+在其他位置读取路径变量属于策略错误，策略会加载失败，抛出 `PathVariableScopeException`：
+
+- 策略或应用权限的 `condition`，它们在任何动作之前求值；
+- 动作不是 `path` 动作的语句或权限的条件：`all`、`["*", ...]`、含有非 path 成员的 `composite`，或自定义动作类型；
+- 动作不是 `path` 动作的限流规则的 `condition` 或 `key`。
+
+校验会识别所有以 `request.path.var.` 开头的 `part` 和限流 `key`，以及匹配器配置中提到 `PATH_VARIABLES`
+（保存路径变量的上下文属性）的任意字符串，包括 OGNL、SpEL 表达式和 `#{...}` 模板。运行时拼出这个属性名的表达式、
+在代码中读取路径变量的自定义匹配器无法被识别；由于路径变量会被清空，它们在本语句之外同样什么也读不到。
 
 ## 模板 {#templates}
 
@@ -166,7 +178,7 @@
 | `request.header.<name>` | 任意请求头 |
 | `request.attributes.<name>` | [请求属性](./web-integration.md#request-attributes)，例如 `ipRegion` |
 | `resource.<name>` | 目标对象的属性，由代码中的检查设置；在请求过滤器中为空（见[对象级规则](#object-level-rules)） |
-| `request.path.var.<name>` | 命中的动作捕获的路径变量 |
+| `request.path.var.<name>` | 同一条语句的 `path` 动作捕获的路径变量（见[动作](#actions)） |
 | `context.tenantId`、`context.principal.id` | 租户 id 和主体 id |
 | `context.principal.attributes.<name>` | 主体属性（JWT `attributes` 声明中的一项） |
 
@@ -215,8 +227,8 @@
 `EXPLICIT_DENY`，即使另一层允许了该请求。否则只要命中任意 `allow` 就放行。什么都没命中时，结果是
 `IMPLICIT_DENY`。策略和语句的顺序从不改变结果，只影响报告的是哪条命中规则。
 
-在这三层之前还有两项检查：**root** 主体（id 为 `cosec`，可配置，见[配置](./configuration.md#authorization)）
-始终放行；被黑名单拦截的请求始终拒绝。
+在这三层之前还有两项检查：被黑名单拦截的请求始终拒绝，之后 **root** 主体直接放行。root 默认关闭；
+开启后，root 是平台租户中 id 为 `cosec`（可配置，见[配置](./configuration.md#authorization)）的主体。
 
 策略自身的 `condition` 在它的语句之前、每个请求只求值一次。
 
@@ -276,20 +288,37 @@ if (!allowed) throw AccessDeniedException()
 
 - 权限就是带 `id`（以及可选的 `name`、`description`）的语句。
 - 应用的 `condition` 决定它的所有权限是否生效。
-- 请求通过 `CoSec-App-Id` 请求头选择应用，通过 `CoSec-Space-Id` 选择空间。
-- 角色按空间被授予**一组权限 id**；`*` 表示授予该应用的全部权限。
+- 角色在某个应用的某个空间中被授予**一组权限 id**；`*` 表示授予该应用的全部权限。
+- 请求通过 `CoSec-App-Id` 请求头选择应用，通过 `CoSec-Space-Id` 选择空间
+  （见[应用与空间](./web-integration.md#app-and-space)）。
+
+### 角色授权的作用域 {#role-grant-scope}
+
+一条授权属于一个**（应用，角色，空间）**三元组，在其他地方都不生效：
+
+- **应用。** 在一个应用中做出的授权，绝不会在另一个应用中生效，即使两个应用定义了相同的权限 id，或者授权是 `*`。
+  要在两个应用中授权同一个角色，需要两条授权。
+- **空间。** 主体的角色自己说明属于哪个空间：`editor` 是默认空间的角色，`editor@team-a` 只是 `team-a` 中的角色
+  （见[令牌中的角色](./authentication.md#tokens)）。某个空间中的请求只用主体在该空间中的角色来评估，
+  因此修改 `CoSec-Space-Id` 无法拿到其他空间的授权。含有多个 `@`、或者角色或空间为空的写法在任何空间都不生效。
 
 使用 `cache-support` 时，CoSec 通过两个缓存从 Redis 读取这些数据（默认键前缀为 `cosec`）：
 
-| 数据 | 缓存 bean | 键 | 值 |
+| 数据 | 缓存 bean | Redis 键 | 值 |
 |---|---|---|---|
-| 应用权限 | `AppPermissionCache` | 应用 id | 上面的 JSON，即一个 `AppPermission` |
-| 角色授权 | `RolePermissionCache` | `SpacedRoleId(roleId, spaceId)` | 权限 id 的集合 |
+| 应用权限 | `AppPermissionCache` | `cosec:app:permission:<appId>` | 上面的 JSON，即一个 `AppPermission` |
+| 角色授权 | `RolePermissionCache` | `cosec:app:role:permission:<appId>:<roleId>`（默认空间）或 `cosec:app:role:permission:<appId>:<roleId>@<spaceId>` | 权限 id 的集合 |
 
-CoSec 只读取权限和授权，写入由你的管理服务负责。请通过这两个 bean 写入，例如
-`rolePermissionCache.put(SpacedRoleId("admin", "space"), setOf("order.read"))`，这样每个实例都会丢弃本地副本。
-Redis 中的值带有二进制头（Redis 键为 `cosec:app:permission:<appId>` 和 `cosec:role:permission:<roleId>[@<spaceId>]`），
-因此用 Redis 命令直接写入是无效的。
+前缀之后的第一个 `:` 结束应用 id，其后的第一个 `@` 结束角色 id，因此应用 id 不能含有 `:`，角色 id 不能含有 `@`。
+写入授权时 `AppSpacedRoleId` 会检查这两点；id 中含有 `:` 的应用不持有任何授权。CoSec 只读取权限和授权，写入由你的管理服务负责，
+请通过这两个 bean 写入，这样每个实例都会丢弃本地副本：
+
+```kotlin
+rolePermissionCache.put(AppSpacedRoleId(appId = "order-app", roleId = "clerk", spaceId = "team-a"), setOf("order.read"))
+```
+
+Redis 中的值带有二进制头（CoCache 6），因此用 Redis 命令直接写入是无效的。6.x 的键（`cosec:role:permission:<roleId>[@<spaceId>]`，
+不含应用）不会再被读取，请用 `RolePermissionKeyMigration` 迁移（见[升级](./upgrading.md#migrating-role-grants)）。
 
 ## 加载与生成策略 {#loading-and-generating-policies}
 
@@ -303,7 +332,8 @@ Redis 中的值带有二进制头（Redis 键为 `cosec:app:permission:<appId>` 
 
 ::: warning 无效文件会被跳过
 无法解析的本地策略文件（JSON 无效、缺少必填字段、未知的条件类型、匹配器配置错误）会以 `ERROR` 级别记录日志并被跳过，
-应用仍会正常启动。请检查启动日志，或按下文在测试中校验策略。
+应用仍会正常启动。请检查启动日志，或按下文在测试中校验策略。例外是在作用域之外读取[路径变量](#actions)的策略：
+它会阻止应用启动，因为跳过它可能会丢掉一条拒绝规则。
 :::
 
 ### 策略历史与回滚 {#policy-history-and-rollback}
@@ -386,7 +416,8 @@ cosec:
   "name": "orders",
   "policies": ["classpath:cosec-policy/*-policy.json"],
   "appPermissions": ["classpath:cosec-policy/*-app-permission.json"],
-  "roles": { "shipper": ["manage.order.ship"] },
+  "roles": { "shipper": ["manage.order.ship"], "shipper@team-a": ["manage.order.ship"] },
+  "appRoles": { "manage": { "invoicer": ["manage.order.issueInvoice"] } },
   "cases": [
     { "name": "users read orders",
       "principal": { "id": "alice" },
@@ -408,3 +439,7 @@ fun policies() = PolicyTestKit.run("classpath:cosec-policy-test/*.json").assertP
 `principal` 和 `request` 的字段与[解释一次决策](./troubleshooting.md#explain-a-decision)相同，`expect.result` 取值为
 `ALLOW`、`EXPLICIT_DENY` 或 `IMPLICIT_DENY`。每个用例都通过解释器在内存仓储上运行，因此失败时会指出实际做出决定的规则以及所有警告，
 例如主体列出了某个策略 id 却没有文件定义它。无法读取的策略文件会让本次运行失败，而不是被跳过。
+
+角色授权遵循[角色授权的作用域](#role-grant-scope)。角色的写法与主体的角色相同：`shipper` 在默认空间授权，`shipper@team-a` 只在 `team-a` 授权；
+用例的主体只能通过它在请求所在空间拥有的角色到达授权。`roles` 在套件加载的每个应用中授权；`appRoles` 只在一个应用中授权
+（应用 id → 角色 → 权限 id），该应用必须由某个 `appPermissions` 文件定义。格式错误的角色，或 `appRoles` 中未知的应用，都会让本次运行失败。

@@ -42,6 +42,16 @@ fun SecurityContext.setPathVariables(pathVariables: Map<String, String>) {
  */
 fun SecurityContext.getPathVariables(): Map<String, String>? = getAttributeValue(PATH_VARIABLES_KEY)
 
+/**
+ * Clears the path variables, so the next matcher only sees the variables its own path action captures.
+ *
+ * Path matchers overwrite the variables only when they match. Call this before every statement, permission or rate
+ * limit rule matches its action, and before conditions that run before any action (policy and app conditions).
+ */
+fun SecurityContext.clearPathVariables() {
+    setAttributeValue(PATH_VARIABLES_KEY, emptyMap<String, String>())
+}
+
 private const val PARSED_REQUEST_PATH_KEY = "COSEC_PARSED_REQUEST_PATH"
 
 /**

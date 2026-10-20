@@ -44,10 +44,14 @@ flowchart LR
 | `id` | 是 | 配额的名字，只能包含字母、数字、`_`、`.` 和 `-`。计数器归属于 id，因此两条规则不会意外共享配额。id 必须唯一。 |
 | `action` | 是 | 规则作用于哪些请求，写法与语句的[动作](./policies.md#actions)相同。 |
 | `condition` | 否 | 进一步收窄规则，写法与语句的[条件](./policies.md#conditions)相同。默认总是匹配。 |
-| `key` | 否 | 一个请求或上下文[部件](./policies.md#value-conditions)，按其取值把配额拆成多个桶，例如按 IP 或按用户。不设置时，所有匹配的请求共享一个桶。部件取值为空的请求共享同一个桶，因此省略某个请求头无法绕过限流。 |
+| `key` | 否 | 一个请求或上下文[部件](./policies.md#value-conditions)，按其取值把配额拆成多个桶，例如按 IP 或按用户。不设置时，所有匹配的请求共享一个桶。部件取值为空的请求共享同一个桶，因此省略某个请求头无法绕过限流。`request.path.var.<name>` 读取的是本规则自身 `path` 动作捕获的变量，不受同一请求匹配的其他规则影响。 |
 | `permitsPerSecond` | 是 | 允许的速率。一个窗口允许 `permitsPerSecond × windowSeconds` 个请求，且至少一个。 |
 | `windowSeconds` | 否 | 窗口长度，默认 `1`。低速率请用更长的窗口：每秒 `0.1`、窗口 `60` 秒即每分钟 6 个请求。 |
 | `strictFailure` | 否 | 后端故障时的处理：`false`（默认）跳过该规则，`true` 以 `429` 拒绝请求。 |
+
+只有 `action` 是 `path` 动作的规则，才能在 `condition` 或 `key` 中读取 `request.path.var.<name>`，读到的是该动作捕获的变量，
+而不是策略或其他规则捕获的变量。动作不是 `path` 的规则读取路径变量时，会加载失败并抛出 `PathVariableScopeException`
+（见[路径变量](./policies.md#actions)）。
 
 每条匹配的规则按顺序各消耗一个许可。第一条用尽的规则拒绝请求，其后的规则不再消耗。无法读取的规则文件会阻止应用启动，
 因为被悄悄丢弃的限流会在无人察觉的情况下撤掉一道防护。

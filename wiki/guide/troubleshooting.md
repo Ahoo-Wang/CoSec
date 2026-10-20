@@ -58,10 +58,10 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 |---|---|
 | `status`, `authorized`, `reason` | The real decision, mapped to a status exactly as for a real request. |
 | `decidedBy` | The rule that decided: layer, policy id and statement index, or role and permission id. `null` when nothing matched. |
-| `layers` | `ROOT`, `BLACKLIST`, `GLOBAL_POLICY`, `PRINCIPAL_POLICY`, `ROLE_PERMISSION`, each `EVALUATED`, `NOT_EVALUATED` (an earlier explicit deny ended evaluation), `EMPTY`, or `EVALUATED_AFTER_DECISION` (with `exhaustive: true`). Every statement and permission has an outcome: `MATCHED`, `ACTION_MISS`, `CONDITION_MISS`, `NOT_EVALUATED` (its policy's or app's condition did not match) or `ERROR`. |
+| `layers` | `BLACKLIST`, `ROOT`, `GLOBAL_POLICY`, `PRINCIPAL_POLICY`, `ROLE_PERMISSION`, each `EVALUATED`, `NOT_EVALUATED` (an earlier explicit deny ended evaluation), `EMPTY`, or `EVALUATED_AFTER_DECISION` (with `exhaustive: true`). Every statement and permission has an outcome: `MATCHED`, `ACTION_MISS`, `CONDITION_MISS`, `NOT_EVALUATED` (its policy's or app's condition did not match) or `ERROR`. |
 | `overriddenAllows` | Allows that a later layer's explicit deny overrode. |
 | `rateLimitRules` | The [rate limit rules](./rate-limiting.md) the request would spend a permit from, if it is allowed. |
-| `warnings` | `MISSING_POLICY` (the principal lists a policy id the repository lacks), `NO_APP_PERMISSION` (roles but no app permission for the app and space), `MATCHER_ERROR`, `TOKEN_INVALID` (the request's token or API key was rejected), and `TRACE_INCONSISTENT` (the trace disagrees with the real decision; trust the decision and report it). |
+| `warnings` | `MISSING_POLICY` (the principal lists a policy id the repository lacks, so authorization fails with `500`), `NO_APP_PERMISSION` (roles in the space, but no app permission for the app), `NO_ROLE_IN_SPACE` (roles, but none written for the request's space; see [Role grant scope](./policies.md#role-grant-scope)), `MATCHER_ERROR`, `TOKEN_INVALID` (the request's token or API key was rejected), and `TRACE_INCONSISTENT` (the trace disagrees with the real decision; trust the decision and report it). |
 
 To explain what a real caller gets, leave out `principal` and put their credential in the request's headers, for
 example `"headers": { "Authorization": "Bearer eyJ..." }` or `{ "X-API-Key": "..." }`. The credential is parsed by
@@ -111,13 +111,16 @@ The caller is known, but nothing allowed the request, or something denied it.
   - its **condition** and the principal it saw: roles, attributes and tenant come from the token, so
     changes apply only after a new login or refresh;
   - for principal policies, that the policy id is in the token's `policies`;
-  - for role permissions, the `CoSec-App-Id` and `CoSec-Space-Id` headers and the role's grants in that space.
+  - for role permissions, the `CoSec-App-Id` and `CoSec-Space-Id` headers and the role's grants in that app
+    and space. Grants apply only in their own app, and with `CoSec-Space-Id: x` only roles written `role@x` in
+    the token count (without the header, only unsuffixed roles). After upgrading to 7.0, grants that were not
+    migrated to an app are missing ([Migrating role grants](./upgrading.md#migrating-role-grants)).
 - `inTenant` takes a tenant *kind* (`default`, `user`, `platform`), not a tenant id.
 
 ## Request allowed unexpectedly
 
-- **Root principal**: the principal id `cosec` (or the `cosec.root` system property) bypasses all checks
-  while `cosec.authorization.root-enabled` is `true`.
+- **Root principal**: while `cosec.authorization.root-enabled` is `true`, the platform tenant's principal with id
+  `cosec` (or the `cosec.root` system property) bypasses every check except the blacklist.
 - **A broad allow**: look for a global `allow` with `"*"`, `/**` or no condition. Add a `deny`, or narrow the
   allow.
 - **A deny that does not match**: its action and its condition must both match. A negated condition is a
@@ -133,8 +136,8 @@ The caller is known, but nothing allowed the request, or something denied it.
 - **Another file has the same id.** Only the first one with a given id is loaded.
 - **Wrong policy type.** Only `global` policies apply to everyone; `system` and `custom` policies apply only
   to principals that list them.
-- **The data was not migrated when upgrading to 7.0.** 7.0 cannot read what 6.x stored in Redis. Migrate it
-  before starting 7.0 ([Upgrading from 6.1 to 7.0](./upgrading.md#_6-1-to-7-0)).
+- **The data was not migrated when upgrading to 7.0.** 7.0 cannot read what 6.x stored in Redis: reads fail with
+  `ForeignFormatException` and requests get `500`. Migrate it ([Migrating the data](./upgrading.md#migrating-the-data)).
 - **Permissions were written straight to Redis.** Since 7.0, values written with `SET` or `SADD` are not read; write
   app permissions and role grants through the `AppPermissionCache` and `RolePermissionCache` beans
   ([App permissions and roles](./policies.md#app-permissions-and-roles)).
@@ -147,6 +150,26 @@ The caller is known, but nothing allowed the request, or something denied it.
   [parts](./policies.md#value-conditions). [Validating policies](./policies.md#validating-policies) catches
   this before deployment.
 - **A custom matcher or repository throws.** The stack trace names it.
+- **A stored policy reads path variables outside their scope.** The log shows `PathVariableScopeException`
+  naming the policy and statement. Since 7.0, a policy condition, or the condition of a statement without a
+  `path` action, may not read `request.path.var.*`. Fix and re-save the policy
+  ([Path variables](./policies.md#actions)).
+
+## Startup fails with PathVariableScopeException
+
+A local policy file, an app permission or a rate limit rule reads `request.path.var.*` where no `path` action of
+its own captures the variables. The message names the file, the policy, statement or rule, and the action type.
+Move the reference into a statement (or rule) whose `path` action declares the variable, or move a policy
+condition into its statements' conditions ([Path variables](./policies.md#actions)). Before 7.0 such a reference
+read the variables of whichever statement had matched last.
+
+## One principal always gets 500
+
+The log shows `MissingPolicyException` with the policy ids. The principal lists a policy that the repository
+does not have: it was deleted, never written, or lost from Redis. Authorization fails closed rather than skipping
+it, because a missing deny would otherwise let a broader allow through. Write the policy again (for local policies,
+see [Policy has no effect](#policy-has-no-effect)), or remove the id from the principal's token or record.
+An [explanation](#explain-a-decision) reports it as a `MISSING_POLICY` warning.
 
 ## Rate limits behave unexpectedly
 

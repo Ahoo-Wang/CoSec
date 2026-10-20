@@ -23,9 +23,9 @@ import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.cache.AppPermissionCache
+import me.ahoo.cosec.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache
 import me.ahoo.cosec.cache.PolicyCache
@@ -69,6 +69,7 @@ class StrictCacheFailureTest {
                 // an application's defaults must not weaken CoSec's store-of-record caches
                 "cocache.defaults.read-failure=degrade",
                 "cocache.defaults.ttl=60s",
+                "cocache.defaults.foreign-format=reclaim",
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
                 "${JwtProperties.PREFIX}.token-revocation.enabled=true",
             )
@@ -97,7 +98,7 @@ class StrictCacheFailureTest {
                 // a SetCache read has no source to degrade to: it always rethrows the backend's error
                 assertThrows<RuntimeException> { index[GlobalPolicyIndexCache.CACHE_KEY] }
                 assertThrows<CacheReadException> { appPermissionCache["app"] }
-                assertThrows<CacheReadException> { rolePermissionCache[SpacedRoleId("role")] }
+                assertThrows<CacheReadException> { rolePermissionCache[AppSpacedRoleId("app", "role")] }
                 // the revocation check degrades on purpose (documented): a miss means "not revoked"
                 context.getBean(RevokedTokenCache::class.java)["jti"].assert().isNull()
             }

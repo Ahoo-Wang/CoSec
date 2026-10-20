@@ -14,6 +14,7 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cocache.core.policy.ForeignFormatMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
@@ -23,13 +24,14 @@ import java.time.Duration
 
 /**
  * Policy and permission caches are the store of record in Redis (no loader), so they must never expire and a failed
- * Redis read must throw. Guards against CoCache's defaults (`ttl` 1 hour, degraded reads) silently applying to them.
+ * Redis read, or a read of unmigrated content, must throw. Guards against CoCache's defaults (`ttl` 1 hour, degraded reads) silently applying to them.
  */
 class CacheTtlPolicyTest {
     /** A policy that expires and degrades, as CoCache's defaults or a `cocache.defaults.*` property would. */
     private val weakened = CachePolicy.builder()
         .ttl(Duration.ofMinutes(1))
         .readFailure(ReadFailureMode.DEGRADE)
+        .foreignFormat(ForeignFormatMode.RECLAIM)
         .build()
 
     private val storeOfRecordPolicies: Map<String, CachePolicy> = mapOf(
@@ -47,6 +49,7 @@ class CacheTtlPolicyTest {
         storeOfRecordPolicies.values.forEach { policy ->
             policy.ttl.assert().isNull()
             policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+            policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
         }
     }
 
@@ -55,6 +58,7 @@ class CacheTtlPolicyTest {
         val policy = weakened.storeOfRecord()
         policy.ttl.assert().isNull()
         policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+        policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
     }
 
     @Test

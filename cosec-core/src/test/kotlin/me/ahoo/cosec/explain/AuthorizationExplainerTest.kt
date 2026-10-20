@@ -49,6 +49,8 @@ import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.policy.isPolicyEvaluation
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -228,12 +230,36 @@ class AuthorizationExplainerTest {
         explainer().explainOf("/private").status.assert().isEqualTo(SecurityStatus.FORBIDDEN)
     }
 
+    private val platformRoot = SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM)
+
     @Test
     fun root() {
-        val explanation = explainer().explainOf("/anything", SimplePrincipal(CoSecPrincipal.ROOT_ID))
+        val explanation = explainer().explainOf("/anything", platformRoot)
         explanation.authorized.assert().isTrue()
         explanation.decidedBy.assert().isEqualTo(DecisionRef(ExplainLayer.ROOT))
+        explanation.layers.map { it.layer }.assert().startsWith(ExplainLayer.BLACKLIST, ExplainLayer.ROOT)
+        explanation.layer(ExplainLayer.BLACKLIST).result.assert().isEqualTo(VerifyResult.ALLOW)
         explanation.layer(ExplainLayer.GLOBAL_POLICY).state.assert().isEqualTo(LayerState.NOT_EVALUATED)
+        explanation.warnings.assert().isEmpty()
+    }
+
+    @Test
+    fun rootIdOutsideThePlatformTenantIsNotRoot() {
+        val explanation = explainer().explainOf("/anything", SimplePrincipal(CoSecPrincipal.ROOT_ID))
+        explanation.authorized.assert().isFalse()
+        explanation.layer(ExplainLayer.ROOT).result.assert().isEqualTo(VerifyResult.IMPLICIT_DENY)
+        explanation.warnings.assert().isEmpty()
+    }
+
+    @Test
+    fun blacklistAppliesToRoot() {
+        val blocked = object : BlacklistChecker {
+            override fun check(request: Request, context: SecurityContext): Mono<Boolean> = Mono.just(false)
+        }
+        val explanation = explainer(blacklistChecker = blocked).explainOf("/anything", platformRoot)
+        explanation.authorized.assert().isFalse()
+        explanation.decidedBy.assert().isEqualTo(DecisionRef(ExplainLayer.BLACKLIST))
+        explanation.layer(ExplainLayer.ROOT).state.assert().isEqualTo(LayerState.NOT_EVALUATED)
         explanation.warnings.assert().isEmpty()
     }
 
@@ -258,6 +284,32 @@ class AuthorizationExplainerTest {
             ExplainWarningCode.MISSING_POLICY,
             ExplainWarningCode.NO_APP_PERMISSION,
         )
+        explanation.layer(ExplainLayer.ROLE_PERMISSION).state.assert().isEqualTo(LayerState.EMPTY)
+        // Authorization fails closed on the missing policy.
+        explanation.status.assert().isEqualTo(SecurityStatus.ERROR)
+        explanation.authorized.assert().isFalse()
+    }
+
+    @Test
+    fun missingPolicyOverridesGlobalAllowWithoutInconsistency() {
+        globalPolicies += policy("public", allow("/**"))
+        val explanation = explainer().explainOf("/orders", SimplePrincipal("user", policies = setOf("gone")))
+        explanation.status.assert().isEqualTo(SecurityStatus.ERROR)
+        explanation.authorized.assert().isFalse()
+        // The trace narrates the found policies (the global allow); real authorization aborted before deciding.
+        explanation.warnings.map { it.code }.assert().containsExactly(ExplainWarningCode.MISSING_POLICY)
+    }
+
+    @Test
+    fun warnsWhenNoRoleAppliesInTheSpace() {
+        appRolePermission = AppRolePermissionData(
+            AppPermissionData("app", groups = listOf(PermissionGroupData("all", permissions = listOf()))),
+            listOf(RolePermissionData("admin", setOf("*"))),
+        )
+        // A team-a role, explained for a request in the default space.
+        val explanation = explainer().explainOf("/orders", SimplePrincipal("user", roles = setOf("admin@team-a")))
+        explanation.authorized.assert().isFalse()
+        explanation.warnings.map { it.code }.assert().containsExactly(ExplainWarningCode.NO_ROLE_IN_SPACE)
         explanation.layer(ExplainLayer.ROLE_PERMISSION).state.assert().isEqualTo(LayerState.EMPTY)
     }
 

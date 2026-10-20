@@ -32,7 +32,7 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 | 属性 | 默认值 | 说明 |
 |---|---|---|
 | `cosec.authorization.allow-query-token` | `false` | 是否同时接受 `authorization` 查询参数中的访问令牌。默认关闭，因为 URL 会泄露到访问日志、浏览器历史和 `Referer` 头中。 |
-| `cosec.authorization.root-enabled` | `true` | root 主体是否绕过所有检查。root id 为 `cosec`，或 `-Dcosec.root` 系统属性的值。如果用户可以自行选择主体 id，请关闭它，或提供一个 `RootPrincipalMatcher` bean。 |
+| `cosec.authorization.root-enabled` | `false` | root 主体是否绕过策略和权限检查。root 是平台租户（`(platform)`）中 id 为 `cosec`（或 `-Dcosec.root` 系统属性的值）的主体。其他租户中的主体、以及不带租户的主体都不是 root；黑名单对 root 同样生效。如需其他判定规则，请提供一个 `RootPrincipalMatcher` bean。 |
 | `cosec.authorization.remote-ip.max-trusted-index` | `1` | 解析客户端 IP 时，信任 `X-Forwarded-For` 中的几层代理。`0` 表示忽略该请求头（服务直接对外暴露）；`N` 表示取第 N 个最近的代理追加的那一项。 |
 | `cosec.authorization.local-policy.enabled` | `false` | 从本地 JSON 文件加载策略。 |
 | `cosec.authorization.local-policy.locations` | `classpath:cosec-policy/*-policy.json` | 要加载的资源路径模式。 |
@@ -65,12 +65,15 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 
 | 属性 | 默认值 | 说明 |
 |---|---|---|
-| `cosec.authorization.cache.key-prefix` | `cosec` | 所有 Redis 键的前缀（`cosec:policy:*`、`cosec:global:policy`、`cosec:app:permission:*`、`cosec:role:permission:*`、`cosec:token:revoked:*`）。 |
+| `cosec.authorization.cache.key-prefix` | `cosec` | 所有 Redis 键的前缀（`cosec:policy:*`、`cosec:global:policy`、`cosec:app:permission:*`、`cosec:app:role:permission:*`、`cosec:token:revoked:*`）。 |
 | `cosec.authorization.cache.policy.*` | | 策略的本地缓存。 |
 | `cosec.authorization.cache.role.*` | | 角色授权的本地缓存。 |
 | `cosec.authorization.cache.token.*` | `expire-after-write: 30`、`maximum-size: 100000` | 吊销查询的本地缓存。 |
 | `cosec.authorization.cache.history.enabled` | `false` | 为每次保存的策略记录一个[修订版本](./policies.md#policy-history-and-rollback)（`cosec:policy:history:*`）。 |
 | `cosec.authorization.cache.history.max-revisions` | `50` | 每条策略保留的修订版本数。 |
+| `cosec.authorization.cache.migration.legacy-key-prefix` | `key-prefix` | 6.x 部署的 `cosec.authorization.cache.key-prefix`，用于[数据迁移](./upgrading.md#migrating-the-data)。 |
+| `cosec.authorization.cache.migration.missing-guard-sentinel` | `_nil_` | 6.x 部署的 `cocache.redis.missing-guard-sentinel`。 |
+| `cosec.authorization.cache.migration.backup-prefix` | `cocache5-backup:` | CoCache 迁移在转换每个 6.x 值之前把它备份到哪里，用于回滚。 |
 
 每个本地缓存（`policy`、`role`、`token`）支持：
 
