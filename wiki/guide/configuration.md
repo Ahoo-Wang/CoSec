@@ -73,7 +73,7 @@ cached in-process.
 | `cosec.authorization.cache.token.*` | `expire-after-write: 30`, `maximum-size: 100000` | Local cache for revocation lookups. |
 | `cosec.authorization.cache.history.enabled` | `false` | Record a [revision](./policies.md#policy-history-and-rollback) of every saved policy (`cosec:policy:history:*`). |
 | `cosec.authorization.cache.history.max-revisions` | `50` | Revisions kept per policy. |
-| `cosec.authorization.cache.migration.legacy-key-prefix` | `key-prefix` | `cosec.authorization.cache.key-prefix` of the 6.x deployment, for the [data migration](./upgrading.md#migrating-the-data). |
+| `cosec.authorization.cache.migration.legacy-key-prefix` | same as `cosec.authorization.cache.key-prefix` | `cosec.authorization.cache.key-prefix` of the 6.x deployment, exactly as it was configured (a trailing `:` is kept), for the [data migration](./upgrading.md#migrating-the-data). |
 | `cosec.authorization.cache.migration.missing-guard-sentinel` | `_nil_` | `cocache.redis.missing-guard-sentinel` of the 6.x deployment. |
 | `cosec.authorization.cache.migration.backup-prefix` | `cocache5-backup:` | Where the CoCache migration backs up each 6.x value it converts, for a rollback. |
 

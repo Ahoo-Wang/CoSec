@@ -49,11 +49,18 @@ class CacheProperties(
     }
 
     /**
+     * The key prefix of the 6.x deployment, as configured: 6.x appended `:policy:` and the like without trimming a
+     * trailing `:` (`myapp:` stored policies under `myapp::policy:`), so the migrations do not trim it either.
+     */
+    val legacyKeyPrefix: String
+        get() = migration.legacyKeyPrefix ?: keyPrefix
+
+    /**
      * Role grants of 6.x, keyed without the app (`<prefix><roleId>[@<spaceId>]`). Authorization never reads them;
      * only [me.ahoo.cosec.cache.RolePermissionKeyMigration] does.
      */
     val legacyRolePermissionKeyPrefix: String
-        get() = "${migration.legacyKeyPrefix ?: keyPrefix}:role:permission:"
+        get() = "$legacyKeyPrefix:role:permission:"
     val policyHistoryKeyPrefix: String = "$keyPrefix:policy:history"
 }
 
@@ -71,7 +78,10 @@ data class PolicyHistoryConfiguration(
  * and [me.ahoo.cosec.cache.RolePermissionKeyMigration]).
  */
 data class MigrationConfiguration(
-    /** `cosec.authorization.cache.key-prefix` of the 6.x deployment; defaults to the current key prefix. */
+    /**
+     * `cosec.authorization.cache.key-prefix` of the 6.x deployment, as it was configured (not trimmed); defaults to
+     * the current key prefix.
+     */
     var legacyKeyPrefix: String? = null,
     /** `cocache.redis.missing-guard-sentinel` of the 6.x deployment. */
     var missingGuardSentinel: String = DEFAULT_MISSING_GUARD_SENTINEL,

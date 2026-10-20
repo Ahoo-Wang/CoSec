@@ -17,10 +17,7 @@ import me.ahoo.cocache.redis.migration.CoCache5MigrationOptions
 import me.ahoo.cocache.redis.migration.CoCache5Migrator
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.CoSecCoCache5Migration
-import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
-import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -41,7 +38,6 @@ import tools.jackson.databind.ObjectMapper
     after = [
         CoSecPolicyCacheAutoConfiguration::class,
         CoSecPermissionCacheAutoConfiguration::class,
-        CoSecTokenRevocationCacheAutoConfiguration::class,
     ]
 )
 @ConditionalOnCoSecEnabled
@@ -62,7 +58,6 @@ class CoSecCacheMigrationAutoConfiguration {
         redisTemplate: StringRedisTemplate,
         redisConnectionFactory: RedisConnectionFactory,
         objectMapper: ObjectMapper,
-        revokedTokenCache: ObjectProvider<RevokedTokenCache>,
     ): CoSecCoCache5Migration {
         val keyPrefix = cacheProperties.keyPrefix
         val options = CoCache5MigrationOptions(
@@ -84,10 +79,10 @@ class CoSecCacheMigrationAutoConfiguration {
             policySpec = CoSecCacheSpecs.policy(CoSecCacheSpecs.jacksonCodec(objectMapper), keyPrefix),
             globalPolicyIndexSpec = CoSecCacheSpecs.globalPolicyIndex(keyPrefix),
             appPermissionSpec = CoSecCacheSpecs.appPermission(CoSecCacheSpecs.jacksonCodec(objectMapper), keyPrefix),
-            revokedTokenSpec = revokedTokenCache.ifAvailable?.let {
-                CoSecCacheSpecs.revokedToken(CoSecCacheSpecs.jacksonCodec(objectMapper), keyPrefix)
-            },
-            legacyKeyPrefix = cacheProperties.migration.legacyKeyPrefix ?: keyPrefix,
+            // Always: revoked tokens left in the 6.x format make their checks fail (500 instead of 401), and the
+            // migration job need not enable token revocation for them to be migrated.
+            revokedTokenSpec = CoSecCacheSpecs.revokedToken(CoSecCacheSpecs.jacksonCodec(objectMapper), keyPrefix),
+            legacyKeyPrefix = cacheProperties.legacyKeyPrefix,
         )
     }
 }
