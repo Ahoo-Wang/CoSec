@@ -61,4 +61,19 @@ class RoleScopeTest {
     fun roleIdIn(spaceId: String, role: String, expected: String?) {
         RoleScope.roleIdIn(spaceId, role).assert().isEqualTo(expected)
     }
+
+    @ParameterizedTest
+    @CsvSource(
+        "admin, admin, ''",
+        "admin@team-a, admin, team-a",
+        "'', , ",
+        "admin@, , ",
+        "@team-a, , ",
+        "admin@team-a@x, , ",
+    )
+    fun parse(role: String, roleId: String?, spaceId: String?) {
+        val parsed = RoleScope.parse(role)
+        parsed?.roleId.assert().isEqualTo(roleId)
+        parsed?.spaceId.assert().isEqualTo(spaceId)
+    }
 }

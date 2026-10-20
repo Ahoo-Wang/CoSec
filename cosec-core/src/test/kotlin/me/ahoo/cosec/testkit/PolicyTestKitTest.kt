@@ -27,6 +27,31 @@ class PolicyTestKitTest {
     }
 
     @Test
+    fun roleGrantsAreScopedToTheirAppAndSpace() {
+        val report = PolicyTestKit.run("classpath:cosec-policy-test/spaces/*-policy-test.json")
+        report.results.size.assert().isEqualTo(5)
+        report.assertPasses()
+    }
+
+    @Test
+    fun malformedRolesAndUnknownAppsFail() {
+        assertThrows(IllegalArgumentException::class.java) {
+            PolicyTestKit.run(PolicyTestSuite(name = "bad", roles = mapOf("admin@a@b" to setOf("*"))))
+        }.message.assert().contains("admin@a@b")
+        assertThrows(IllegalArgumentException::class.java) {
+            PolicyTestKit.run(
+                PolicyTestSuite(
+                    appPermissions = listOf("classpath:cosec-policy/test-app-permission.json"),
+                    appRoles = mapOf("manage" to mapOf("@team-a" to setOf("*"))),
+                ),
+            )
+        }.message.assert().contains("@team-a")
+        assertThrows(IllegalArgumentException::class.java) {
+            PolicyTestKit.run(PolicyTestSuite(appRoles = mapOf("unknown" to mapOf("admin" to setOf("*")))))
+        }.message.assert().contains("[unknown]")
+    }
+
+    @Test
     fun failingSuiteExplainsWhatDecided() {
         val report = PolicyTestKit.run("classpath:cosec-policy-test/failing/*.json")
         val failure = report.failures.single()

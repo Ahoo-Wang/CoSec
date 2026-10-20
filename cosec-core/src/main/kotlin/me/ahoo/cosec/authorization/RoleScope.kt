@@ -64,4 +64,18 @@ object RoleScope {
         }
         return role.substring(0, separator)
     }
+
+    /**
+     * Parses [role] (`role` or `role@space`) into its role and space, or `null` when it is malformed and so applies
+     * nowhere. Tools that take role grants as text use the same syntax, so a grant keyed `role@space` matches exactly
+     * the principals [rolesIn] gives that role in that space.
+     */
+    fun parse(role: String): SpacedRoleId? {
+        val separator = role.indexOf(SEPARATOR)
+        if (separator < 0) {
+            return role.takeIf { it.isNotEmpty() }?.let { SpacedRoleId(it) }
+        }
+        val spaceId = role.substring(separator + 1)
+        return roleIdIn(spaceId, role)?.let { SpacedRoleId(it, spaceId) }
+    }
 }
