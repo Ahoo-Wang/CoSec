@@ -130,6 +130,15 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 - **条件使用了不支持的 part。** 日志中会出现 `Unsupported part`；可用的 part 见[取值条件](./policies.md#value-conditions)。
   [校验策略](./policies.md#validating-policies)可以在部署前发现这个问题。
 - **自定义匹配器或仓储抛出了异常。** 异常栈会指出是哪一个。
+- **已存储的策略在作用域之外读取路径变量。** 日志中会出现 `PathVariableScopeException`，并指出策略和语句。
+  从 7.0 起，策略级条件、以及没有 `path` 动作的语句的条件，都不能读取 `request.path.var.*`。修正后重新保存该策略
+  （见[路径变量](./policies.md#actions)）。
+
+## 启动失败并报 PathVariableScopeException {#startup-fails-with-pathvariablescopeexception}
+
+某个本地策略文件、应用权限或限流规则在没有自己的 `path` 动作捕获变量的位置读取了 `request.path.var.*`。
+错误信息会指出文件、策略、语句或规则，以及动作类型。把引用移到 `path` 动作声明了该变量的语句（或规则）中，
+或把策略级条件移到各条语句的条件中（见[路径变量](./policies.md#actions)）。7.0 之前，这样的引用读到的是最后一条命中语句的变量。
 
 ## 某个主体总是得到 500 {#one-principal-always-gets-500}
 

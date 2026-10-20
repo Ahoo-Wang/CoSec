@@ -145,6 +145,18 @@ The caller is known, but nothing allowed the request, or something denied it.
   [parts](./policies.md#value-conditions). [Validating policies](./policies.md#validating-policies) catches
   this before deployment.
 - **A custom matcher or repository throws.** The stack trace names it.
+- **A stored policy reads path variables outside their scope.** The log shows `PathVariableScopeException`
+  naming the policy and statement. Since 7.0, a policy condition, or the condition of a statement without a
+  `path` action, may not read `request.path.var.*`. Fix and re-save the policy
+  ([Path variables](./policies.md#actions)).
+
+## Startup fails with PathVariableScopeException
+
+A local policy file, an app permission or a rate limit rule reads `request.path.var.*` where no `path` action of
+its own captures the variables. The message names the file, the policy, statement or rule, and the action type.
+Move the reference into a statement (or rule) whose `path` action declares the variable, or move a policy
+condition into its statements' conditions ([Path variables](./policies.md#actions)). Before 7.0 such a reference
+read the variables of whichever statement had matched last.
 
 ## One principal always gets 500
 

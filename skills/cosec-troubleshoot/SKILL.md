@@ -80,7 +80,7 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 ### Policy file has no effect
 
 - Confirm `cosec.authorization.local-policy.enabled=true` and the file matches `local-policy.locations`.
-- Inspect startup errors: `LocalPolicyLoader` logs and skips malformed JSON, missing required fields, unknown matcher types, and constructor-time configuration errors rather than failing the application.
+- Inspect startup errors: `LocalPolicyLoader` logs and skips malformed JSON, missing required fields, unknown matcher types, and constructor-time configuration errors rather than failing the application. Exception: a `PathVariableScopeException` fails startup.
 - Deferred matcher errors still load. For example, an unsupported `part` throws during authorization and the transport returns 500; reproduce it with `DefaultPolicyEvaluator` or the failing request.
 - Local policies are deduplicated by ID after location expansion; assert that the expected ID and content loaded.
 - `LocalPolicyLoader` does not serve authorization decisions directly. Enable `init-repository` or prepopulate `PolicyRepository`; use `force-refresh` only when overwriting repository state is intended.
@@ -93,6 +93,7 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 ### Matcher mismatch
 
 - Path variables use `{id}` and conditions read `request.path.var.id`; `:id` and `request.pathVariable.id` are invalid.
+- `PathVariableScopeException` at startup or on a policy read/write (7.0+): a policy or app permission condition, or a statement, permission or rate limit rule whose action is not `path`, reads `request.path.var.*` (or an expression mentions `PATH_VARIABLES`). Variables belong only to the statement whose own `path` action captured them; move the reference there. Local policy files with this error stop startup instead of being skipped; Redis-stored ones fail reads with 500.
 - Path SpEL templates use `#{principal.id}`. SpEL condition expressions use root properties such as `context.principal.id`; they are different evaluation roots.
 - Valid part prefixes are singular `request.header.`, `request.attributes.`, `request.path.var.`, and `context.principal.attributes.`. Unsupported parts throw `IllegalArgumentException`.
 - Regex timeouts fail closed as 403. Simplify or bound the pattern instead of increasing exposure to ReDoS.

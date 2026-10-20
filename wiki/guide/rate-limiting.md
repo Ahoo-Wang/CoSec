@@ -51,6 +51,11 @@ Rules are JSON files, by default every `classpath:cosec-rate-limit/*-rate-limit.
 | `windowSeconds` | no | Window length, default `1`. Use a longer window for low rates: `0.1` per second over `60` seconds is 6 requests a minute. |
 | `strictFailure` | no | What a backend failure means: `false` (default) skips the rule, `true` rejects the request with `429`. |
 
+A rule may read `request.path.var.<name>`, in its `condition` or its `key`, only when its `action` is a `path`
+action. It then reads the variables that action captured, never those of a policy or another rule. A rule with
+any other action that reads path variables fails to load with `PathVariableScopeException`
+([Path variables](./policies.md#actions)).
+
 Every matching rule spends one permit, in order. The first exhausted rule rejects the request, and the rules
 after it spend nothing. A rule file that cannot be read stops the application from starting, because a
 rate limit that is silently dropped removes a protection without anyone noticing.

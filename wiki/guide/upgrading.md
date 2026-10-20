@@ -86,6 +86,29 @@ would itself have to be secured and would stay exposed long after the one-off mi
 
 Until a role's grants are migrated to an app, requests that rely on them are denied in that app.
 
+**Path variables belong to the statement that captured them.** Before, `request.path.var.*` read whatever the
+last matching `path` action of the request had captured, in any statement, policy or layer. A condition could
+therefore depend on another statement: a deny statement that never matched could make an `all`-action allow
+match (adding a deny widened access), a policy condition read the variables of the global layer, and a rate limit
+rule without a `path` action read the variables of a policy. Now:
+
+- the variables are cleared before every statement, permission and rate limit rule matches its action, and before
+  policy and app permission conditions, so a condition only sees what its own `path` action captured;
+- reading them where no `path` action of the same statement or rule captured them is a load error,
+  `PathVariableScopeException`: in a policy or app permission `condition`, in the condition of a statement or
+  permission whose action is not `path`, and in the `condition` or `key` of a rate limit rule whose action is not
+  `path` ([Path variables](./policies.md#actions)).
+
+Parsing such a policy, app permission or rate limit rule fails, and so does constructing `PolicyData`,
+`AppPermissionData` or `RateLimitRule` with one. `RedisPolicyRepository.setPolicy` rejects it. A local policy file
+with one stops the application from starting, instead of being skipped like other invalid files. A policy already
+stored in Redis with one fails its reads, which denies requests with `500`.
+
+Before upgrading, search policies, app permissions and rate limit rules for `request.path.var.` and
+`PATH_VARIABLES`. Move each reference into a statement whose `path` action captures the variable, for example
+replace `"action": "*"` with the pattern that declares it, and move a policy-level condition into the conditions of
+its statements.
+
 ## 6.0 to 6.1
 
 ### Breaking changes {#breaking-changes-1}

@@ -16,9 +16,14 @@ package me.ahoo.cosec.cache
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
+import me.ahoo.cosec.policy.PathVariableScopeException
 import me.ahoo.cosec.policy.PolicyData
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
 
@@ -119,6 +124,35 @@ internal class RedisPolicyRepositoryTest {
             globalPolicyIndexCache.removeElements(CACHE_KEY, listOf(systemPolicy.id))
         }
         verify(exactly = 0) {
+            globalPolicyIndexCache.addElements(any(), any())
+        }
+    }
+
+    @Test
+    fun setPolicyRejectsPathVariablesOutsideTheirScope() {
+        // PolicyData rejects this on construction, so a custom Policy has to carry it to setPolicy.
+        val leaking = object : Policy {
+            override val id = "leaking"
+            override val name = "leaking"
+            override val category = ""
+            override val description = ""
+            override val type = PolicyType.GLOBAL
+            override val tenantId = "tenantId"
+            override val condition: ConditionMatcher = CoSecJsonSerializer.readValue(
+                """{ "eq": { "part": "request.path.var.orderId", "value": "1" } }""",
+                ConditionMatcher::class.java,
+            )
+            override val statements: List<Statement> = listOf()
+        }
+        val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>(relaxed = true)
+        val policyCache = mockk<PolicyCache>(relaxed = true)
+        RedisPolicyRepository(globalPolicyIndexCache, policyCache).setPolicy(leaking)
+            .test()
+            .expectError(PathVariableScopeException::class.java)
+            .verify()
+
+        verify(exactly = 0) {
+            policyCache.set(any(), any())
             globalPolicyIndexCache.addElements(any(), any())
         }
     }

@@ -77,7 +77,19 @@
 - `method`：可选；一个或一组 HTTP 方法，不区分大小写。省略表示任意方法。
 - `options`：可选；路径如何切分和比较。借助分隔符也可以匹配非 HTTP 的“路径”，例如 `"separator": "."` 时的 `order.read`。
 
-**路径变量。** 命中的动作捕获的变量，可以在该语句的条件中以 `request.path.var.<name>` 读取。
+**路径变量。** 命中的 `path` 动作会捕获其中的 `{var}`，同一条语句的条件以 `request.path.var.<name>` 读取它们。
+路径变量只属于这条语句：每条语句、权限和[限流规则](./rate-limiting.md#rules)在匹配自己的动作之前都会先清空路径变量，
+因此条件永远读不到别的语句捕获的变量；本语句的模式没有声明的变量读作空字符串。
+
+在其他位置读取路径变量属于策略错误，策略会加载失败，抛出 `PathVariableScopeException`：
+
+- 策略或应用权限的 `condition`，它们在任何动作之前求值；
+- 动作不是 `path` 动作的语句或权限的条件：`all`、`["*", ...]`、含有非 path 成员的 `composite`，或自定义动作类型；
+- 动作不是 `path` 动作的限流规则的 `condition` 或 `key`。
+
+校验会识别所有以 `request.path.var.` 开头的 `part` 和限流 `key`，以及匹配器配置中提到 `PATH_VARIABLES`
+（保存路径变量的上下文属性）的任意字符串，包括 OGNL、SpEL 表达式和 `#{...}` 模板。运行时拼出这个属性名的表达式、
+在代码中读取路径变量的自定义匹配器无法被识别；由于路径变量会被清空，它们在本语句之外同样什么也读不到。
 
 ## 模板 {#templates}
 
@@ -166,7 +178,7 @@
 | `request.header.<name>` | 任意请求头 |
 | `request.attributes.<name>` | [请求属性](./web-integration.md#request-attributes)，例如 `ipRegion` |
 | `resource.<name>` | 目标对象的属性，由代码中的检查设置；在请求过滤器中为空（见[对象级规则](#object-level-rules)） |
-| `request.path.var.<name>` | 命中的动作捕获的路径变量 |
+| `request.path.var.<name>` | 同一条语句的 `path` 动作捕获的路径变量（见[动作](#actions)） |
 | `context.tenantId`、`context.principal.id` | 租户 id 和主体 id |
 | `context.principal.attributes.<name>` | 主体属性（JWT `attributes` 声明中的一项） |
 
@@ -321,7 +333,8 @@ rolePermissionCache[AppSpacedRoleId(appId = "order-app", roleId = "clerk", space
 
 ::: warning 无效文件会被跳过
 无法解析的本地策略文件（JSON 无效、缺少必填字段、未知的条件类型、匹配器配置错误）会以 `ERROR` 级别记录日志并被跳过，
-应用仍会正常启动。请检查启动日志，或按下文在测试中校验策略。
+应用仍会正常启动。请检查启动日志，或按下文在测试中校验策略。例外是在作用域之外读取[路径变量](#actions)的策略：
+它会阻止应用启动，因为跳过它可能会丢掉一条拒绝规则。
 :::
 
 ### 策略历史与回滚 {#policy-history-and-rollback}

@@ -19,6 +19,7 @@ import me.ahoo.cosec.api.permission.PermissionGroup
 import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.BlockingAware
+import me.ahoo.cosec.policy.PathVariableScope
 import me.ahoo.cosec.policy.computeRequiresBlocking
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 
@@ -29,6 +30,10 @@ data class AppPermissionData(
 ) : AppPermission, BlockingAware {
     override val requiresBlocking: Boolean =
         computeRequiresBlocking(condition, groups.flatMap { group -> group.permissions.map { it.condition } })
+
+    init {
+        PathVariableScope.requireScoped(this)
+    }
 
     @delegate:Transient
     override val permissionIndexer: Map<PermissionId, Permission> by lazy(this) {

@@ -26,6 +26,7 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.blacklist.BlacklistChecker
+import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.permission.AppPermissionData
@@ -365,6 +366,7 @@ internal class SimpleAuthorizationTest {
     fun authorizeWhenRoleAppConditionNotMatched() {
         val permissionId = UUID.randomUUID().toString()
         val neverMatchCondition = mockk<ConditionMatcher> {
+            every { configuration } returns JsonConfiguration.NULL
             every { match(any<Request>(), any<SecurityContext>()) } returns false
         }
         val appRolePermission = AppRolePermissionData(
