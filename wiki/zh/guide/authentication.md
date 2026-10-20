@@ -13,12 +13,17 @@ CoSec 在每个请求上校验 JWT，并把它转换成供策略求值的主体�
 |---|---|
 | `jti` | 令牌 id（用于吊销） |
 | `sub` | 主体 id |
-| `roles` | 角色 id |
+| `roles` | 角色 id：`role` 表示默认空间的角色，`role@spaceId` 表示仅属于该空间的角色 |
 | `policies` | 附加给主体的策略 id |
 | `attributes` | 任意主体属性，可在条件中以 `context.principal.attributes.<name>` 使用 |
 | `tenantId` | 主体所在的租户（主体属于某个租户时） |
 
 由于角色和策略随令牌传递，对它们的修改要到下一次登录或刷新时才生效。
+
+**角色属于某个空间。** 主体在某个空间中拥有的角色写成 `role@spaceId`；不带后缀的角色属于默认空间。
+带 `CoSec-Space-Id: team-a` 的请求只用 `…@team-a` 的角色评估，不带该请求头的请求只用不带后缀的角色评估，
+因此在两个空间都是 `admin` 的主体要携带 `admin@team-a` 和 `admin@team-b`。除此之外，角色 id 不能含有 `@`。
+令牌是主体属于哪些空间的唯一凭据：确认成员关系之后再签发 `role@space`。见[角色授权的作用域](./policies.md#role-grant-scope)。
 
 **发送令牌。** 客户端通过 `Authorization` 请求头（`Bearer` 前缀可选）或 `authorization` Cookie 发送访问令牌。
 只有设置 `cosec.authorization.allow-query-token=true` 时，才接受 `authorization` 查询参数。使用 `openapi-support` 时，

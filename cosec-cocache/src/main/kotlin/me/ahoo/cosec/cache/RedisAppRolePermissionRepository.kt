@@ -17,13 +17,17 @@ import me.ahoo.cosec.api.context.request.AppId
 import me.ahoo.cosec.api.context.request.SpaceId
 import me.ahoo.cosec.api.permission.AppRolePermission
 import me.ahoo.cosec.api.principal.RoleId
-import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.permission.AppRolePermissionData
 import me.ahoo.cosec.permission.RolePermissionData
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 
+/**
+ * Reads grants from [RolePermissionCache], keyed by [AppSpacedRoleId]: only the grants made for the request's app
+ * and space. An app id that cannot own grants (empty, or containing `:`) gets none, nor does a role id containing
+ * `@` (an unscoped role reaching here is a caller bug; it grants nothing rather than a guessed space's grants).
+ */
 class RedisAppRolePermissionRepository(
     private val appPermissionCache: AppPermissionCache,
     private val rolePermissionCache: RolePermissionCache
@@ -34,6 +38,9 @@ class RedisAppRolePermissionRepository(
      */
     override fun getAppRolePermission(appId: AppId, spaceId: SpaceId, roleIds: Set<RoleId>): Mono<AppRolePermission> =
         Mono.defer {
+            if (!AppSpacedRoleId.isValidAppId(appId)) {
+                return@defer Mono.empty()
+            }
             when (val local = lookupLocal(appId, spaceId, roleIds)) {
                 is LocalLookup.Hit -> Mono.justOrEmpty<AppRolePermission>(local.value)
                 LocalLookup.Miss -> Mono.fromCallable<AppRolePermission> { load(appId, spaceId, roleIds) }
@@ -44,7 +51,10 @@ class RedisAppRolePermissionRepository(
     private fun load(appId: AppId, spaceId: SpaceId, roleIds: Set<RoleId>): AppRolePermission? {
         val appPermission = appPermissionCache[appId] ?: return null
         val rolePermissions = roleIds.mapNotNull {
-            val permissions = rolePermissionCache[SpacedRoleId(roleId = it, spaceId = spaceId)] ?: return@mapNotNull null
+            if (!AppSpacedRoleId.isValidRoleId(it)) {
+                return@mapNotNull null
+            }
+            val permissions = rolePermissionCache[AppSpacedRoleId(appId, it, spaceId)] ?: return@mapNotNull null
             RolePermissionData(id = it, permissions = permissions)
         }
         return AppRolePermissionData(appPermission, rolePermissions)
@@ -57,7 +67,10 @@ class RedisAppRolePermissionRepository(
         }
         val rolePermissions = ArrayList<RolePermissionData>(roleIds.size)
         for (roleId in roleIds) {
-            when (val lookup = rolePermissionCache.lookupLocal(SpacedRoleId(roleId = roleId, spaceId = spaceId))) {
+            if (!AppSpacedRoleId.isValidRoleId(roleId)) {
+                continue
+            }
+            when (val lookup = rolePermissionCache.lookupLocal(AppSpacedRoleId(appId, roleId, spaceId))) {
                 is LocalLookup.Hit -> lookup.value?.let {
                     rolePermissions.add(
                         RolePermissionData(id = roleId, permissions = it)

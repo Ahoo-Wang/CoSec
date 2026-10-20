@@ -56,7 +56,7 @@ class BusinessHoursConditionMatcher(configuration: Configuration) :
 |---|---|
 | `BlacklistChecker` | 在求值任何策略之前拒绝请求（`check(request, context): Mono<Boolean>`；`false` 表示拦截）。 |
 | `RootPrincipalMatcher` | 决定哪些主体绕过授权，例如依据签名声明而不是 id。 |
-| `PolicyRepository`、`AppRolePermissionRepository` | 把策略和角色授权存放在 Redis 之外。返回 `Mono`，阻塞 I/O 不要放在调用方线程上。 |
+| `PolicyRepository`、`AppRolePermissionRepository` | 把策略和角色授权存放在 Redis 之外。返回 `Mono`，阻塞 I/O 不要放在调用方线程上。只返回为给定应用和空间做出的授权：传入的角色 id 已经是主体在该空间中的角色。 |
 | `ShadowPolicyProvider`、`ShadowEventSink` | 从文件以外的地方提供[影子模式](../guide/policies.md#trying-changes-in-shadow-mode)的候选策略，并把差异发送到日志以外的地方。 |
 | `RateLimitRuleProvider` | 从 JSON 文件以外的地方加载[限流规则](../guide/rate-limiting.md#rules)。每个被放行的请求都会调用它：请从内存中返回。 |
 | `CoSecAuthorizationCustomizer` | 包装 starter 的授权（在限流之外、审计和链路追踪之内），指标就是这样接入的。 |

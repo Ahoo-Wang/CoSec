@@ -301,6 +301,19 @@ class AuthorizationExplainerTest {
     }
 
     @Test
+    fun warnsWhenNoRoleAppliesInTheSpace() {
+        appRolePermission = AppRolePermissionData(
+            AppPermissionData("app", groups = listOf(PermissionGroupData("all", permissions = listOf()))),
+            listOf(RolePermissionData("admin", setOf("*"))),
+        )
+        // A team-a role, explained for a request in the default space.
+        val explanation = explainer().explainOf("/orders", SimplePrincipal("user", roles = setOf("admin@team-a")))
+        explanation.authorized.assert().isFalse()
+        explanation.warnings.map { it.code }.assert().containsExactly(ExplainWarningCode.NO_ROLE_IN_SPACE)
+        explanation.layer(ExplainLayer.ROLE_PERMISSION).state.assert().isEqualTo(LayerState.EMPTY)
+    }
+
+    @Test
     fun detailControlsConfiguration() {
         globalPolicies += policy("public", allow("/public/**"))
         val summary = explainer().explainOf("/public/a")

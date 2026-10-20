@@ -276,17 +276,38 @@ if (!allowed) throw AccessDeniedException()
 
 - 权限就是带 `id`（以及可选的 `name`、`description`）的语句。
 - 应用的 `condition` 决定它的所有权限是否生效。
-- 请求通过 `CoSec-App-Id` 请求头选择应用，通过 `CoSec-Space-Id` 选择空间。
-- 角色按空间被授予**一组权限 id**；`*` 表示授予该应用的全部权限。
+- 角色在某个应用的某个空间中被授予**一组权限 id**；`*` 表示授予该应用的全部权限。
+- 请求通过 `CoSec-App-Id` 请求头选择应用，通过 `CoSec-Space-Id` 选择空间
+  （见[应用与空间](./web-integration.md#app-and-space)）。
+
+### 角色授权的作用域 {#role-grant-scope}
+
+一条授权属于一个**（应用，角色，空间）**三元组，在其他地方都不生效：
+
+- **应用。** 在一个应用中做出的授权，绝不会在另一个应用中生效，即使两个应用定义了相同的权限 id，或者授权是 `*`。
+  要在两个应用中授权同一个角色，需要两条授权。
+- **空间。** 主体的角色自己说明属于哪个空间：`editor` 是默认空间的角色，`editor@team-a` 只是 `team-a` 中的角色
+  （见[令牌中的角色](./authentication.md#tokens)）。某个空间中的请求只用主体在该空间中的角色来评估，
+  因此修改 `CoSec-Space-Id` 无法拿到其他空间的授权。含有多个 `@`、或者角色或空间为空的写法在任何空间都不生效。
 
 使用 `cache-support` 时，CoSec 从 Redis 读取这些数据（默认键前缀为 `cosec`）：
 
 | 数据 | Redis 键 | 值 |
 |---|---|---|
 | 应用权限 | `cosec:app:permission:<appId>` | 上面的 JSON |
-| 角色授权 | `cosec:role:permission:<roleId>`（默认空间）或 `cosec:role:permission:<roleId>@<spaceId>` | 权限 id 的集合 |
+| 角色授权 | `cosec:app:role:permission:<appId>:<roleId>`（默认空间）或 `cosec:app:role:permission:<appId>:<roleId>@<spaceId>` | 权限 id 的集合 |
 
-CoSec 只读取权限和授权，写入由你的管理服务负责。
+前缀之后的第一个 `:` 结束应用 id，其后的第一个 `@` 结束角色 id，因此应用 id 不能含有 `:`，角色 id 不能含有 `@`。
+写入授权时 `AppSpacedRoleId` 会检查这两点；id 中含有 `:` 的应用不持有任何授权。CoSec 只读取权限和授权，写入由你的管理服务负责，
+请通过 `RolePermissionCache` 写入，这样每个实例都会丢弃本地副本：
+
+```kotlin
+rolePermissionCache[AppSpacedRoleId(appId = "order-app", roleId = "clerk", spaceId = "team-a")] =
+    setOf("order.read")
+```
+
+6.x 的键（`cosec:role:permission:<roleId>[@<spaceId>]`，不含应用）不会再被读取，请用 `RolePermissionKeyMigration`
+迁移（见[升级](./upgrading.md#migrating-role-grants)）。
 
 ## 加载与生成策略 {#loading-and-generating-policies}
 

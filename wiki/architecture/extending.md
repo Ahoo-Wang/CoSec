@@ -61,7 +61,7 @@ class BusinessHoursConditionMatcher(configuration: Configuration) :
 |---|---|
 | `BlacklistChecker` | Deny requests before any policy is evaluated (`check(request, context): Mono<Boolean>`; `false` = blocked). |
 | `RootPrincipalMatcher` | Decide which principals bypass authorization, for example by a signed claim instead of an id. |
-| `PolicyRepository`, `AppRolePermissionRepository` | Keep policies and role grants somewhere other than Redis. Return `Mono`s and keep blocking I/O off the caller's thread. |
+| `PolicyRepository`, `AppRolePermissionRepository` | Keep policies and role grants somewhere other than Redis. Return `Mono`s and keep blocking I/O off the caller's thread. Return only the grants made for the given app and space: the role ids passed in are already the principal's roles in that space. |
 | `ShadowPolicyProvider`, `ShadowEventSink` | Supply [shadow](../guide/policies.md#trying-changes-in-shadow-mode) candidate policies from somewhere other than files, and send the diffs somewhere other than the log. |
 | `RateLimitRuleProvider` | Load [rate limit rules](../guide/rate-limiting.md#rules) from somewhere other than JSON files. Called on every allowed request: answer from memory. |
 | `CoSecAuthorizationCustomizer` | Wrap the starter's authorization (outside rate limiting, inside auditing and tracing), as the metrics do. |

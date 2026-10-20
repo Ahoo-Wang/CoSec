@@ -31,10 +31,14 @@ interface AppRolePermissionRepository {
     /**
      * Gets the app role permission for the given roles.
      *
+     * Grants are scoped to both the app and the space: return only the grants made for [roleIds] in [appId] and
+     * [spaceId], never grants made in another app or space. The caller has already narrowed [roleIds] to the
+     * principal's roles that apply in [spaceId] (see [RoleScope]) and stripped their `@space` suffix.
+     *
      * @param appId The application ID
-     * @param spaceId The space/tenant ID
-     * @param roleIds Set of role IDs
-     * @return [Mono] emitting the app role permission
+     * @param spaceId The space ID
+     * @param roleIds Bare role IDs that apply in [spaceId]
+     * @return [Mono] emitting the app role permission, or empty when the app has no app permission
      */
     fun getAppRolePermission(
         appId: AppId,

@@ -15,12 +15,19 @@ The access token carries the principal:
 |---|---|
 | `jti` | token id (used for revocation) |
 | `sub` | principal id |
-| `roles` | role ids |
+| `roles` | role ids: `role` in the default space, `role@spaceId` in that space only |
 | `policies` | ids of the policies attached to the principal |
 | `attributes` | free-form principal attributes, usable in conditions as `context.principal.attributes.<name>` |
 | `tenantId` | the tenant, when the principal is tenant-scoped |
 
 Because roles and policies travel in the token, changes to them apply from the next login or refresh.
+
+**Roles are scoped to a space.** Write a role the principal holds in a space as `role@spaceId`; a role without
+a suffix is a role in the default space. A request with `CoSec-Space-Id: team-a` is evaluated with only the
+`…@team-a` roles, and a request without the header with only the unsuffixed ones, so a principal that is `admin`
+in two spaces carries `admin@team-a` and `admin@team-b`. Role ids must not contain `@` otherwise. The token is the
+only proof of which spaces a principal belongs to: issue `role@space` only after checking membership. See
+[Role grant scope](./policies.md#role-grant-scope).
 
 **Sending the token.** Clients send the access token in the `Authorization` header (`Bearer` prefix
 optional) or an `authorization` cookie. The `authorization` query parameter is accepted only with

@@ -56,7 +56,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 | `layers` | `BLACKLIST`、`ROOT`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、`ROLE_PERMISSION`，每层的状态为 `EVALUATED`、`NOT_EVALUATED`（之前的显式拒绝已结束求值）、`EMPTY`，或 `EVALUATED_AFTER_DECISION`（设置 `exhaustive: true` 时）。每条语句和权限都有结果：`MATCHED`、`ACTION_MISS`、`CONDITION_MISS`、`NOT_EVALUATED`（所属策略或应用的条件未匹配）或 `ERROR`。 |
 | `overriddenAllows` | 被后续层的显式拒绝覆盖掉的放行。 |
 | `rateLimitRules` | 请求被放行时将会消耗许可的[限流规则](./rate-limiting.md)。 |
-| `warnings` | `MISSING_POLICY`（主体列出的策略 id 在仓储中不存在，因此授权以 `500` 失败）、`NO_APP_PERMISSION`（有角色，但该应用和空间没有应用权限）、`MATCHER_ERROR`、`TOKEN_INVALID`（请求中的令牌或 API Key 被拒绝），以及 `TRACE_INCONSISTENT`（追踪与真实决策不一致；以决策为准，并请反馈）。 |
+| `warnings` | `MISSING_POLICY`（主体列出的策略 id 在仓储中不存在，因此授权以 `500` 失败）、`NO_APP_PERMISSION`（在该空间中有角色，但该应用没有应用权限）、`NO_ROLE_IN_SPACE`（有角色，但没有一个是为请求所在空间写的，见[角色授权的作用域](./policies.md#role-grant-scope)）、`MATCHER_ERROR`、`TOKEN_INVALID`（请求中的令牌或 API Key 被拒绝），以及 `TRACE_INCONSISTENT`（追踪与真实决策不一致；以决策为准，并请反馈）。 |
 
 要解释某个真实调用方得到的决策，可以不传 `principal`，而是把他的凭证放进请求的 headers，例如
 `"headers": { "Authorization": "Bearer eyJ..." }` 或 `{ "X-API-Key": "..." }`。凭证由应用自己的安全上下文解析器解析，
@@ -103,7 +103,9 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
   - 它的**动作**：方法、末尾斜杠、`*`（一段）与 `**`（任意段）的区别；
   - 它的**条件**以及它看到的主体：角色、属性和租户都来自令牌，变更要在重新登录或刷新后才生效；
   - 对于主体策略，确认策略 id 在令牌的 `policies` 中；
-  - 对于角色权限，确认 `CoSec-App-Id` 和 `CoSec-Space-Id` 请求头，以及该角色在该空间中的授权。
+  - 对于角色权限，确认 `CoSec-App-Id` 和 `CoSec-Space-Id` 请求头，以及该角色在该应用、该空间中的授权。
+    授权只在自己的应用中生效；带 `CoSec-Space-Id: x` 时只有令牌中写成 `role@x` 的角色有效（不带该请求头时只有不带后缀的角色有效）。
+    升级到 7.0 后，没有迁移到某个应用的授权会缺失（见[迁移角色授权](./upgrading.md#migrating-role-grants)）。
 - `inTenant` 接收的是租户*种类*（`default`、`user`、`platform`），而不是租户 id。
 
 ## 请求被意外放行 {#request-allowed-unexpectedly}
