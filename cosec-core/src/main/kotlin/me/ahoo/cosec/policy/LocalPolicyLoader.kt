@@ -24,7 +24,8 @@ import java.io.FileNotFoundException
  * Loads policies from local file system locations.
  *
  * This loader reads policy definitions from JSON files in specified
- * locations using Spring's resource pattern resolution.
+ * locations using Spring's resource pattern resolution. A file that cannot be read or built fails loading: skipping
+ * it could drop a deny and widen access.
  *
  * @param locations Set of resource patterns to load policies from
  * @see Policy
@@ -48,26 +49,25 @@ class LocalPolicyLoader(
                     "Load Location [$it]."
                 }
                 try {
-                    resourceResolver.getResources(it).toList()
+                    resourceResolver.getResources(it).filter { resource ->
+                        resource.exists().also { exists ->
+                            if (!exists) log.warn { "Policy location [$resource] does not exist." }
+                        }
+                    }
                 } catch (e: FileNotFoundException) {
                     log.error(e) {
                         e.message
                     }
                     listOf()
                 }
-            }.mapNotNull {
+            }.map {
                 log.info {
                     "Load Policy [$it]."
                 }
                 try {
-                    return@mapNotNull CoSecJsonSerializer.readValue(it.contentAsByteArray, Policy::class.java)
-                } catch (e: Throwable) {
-                    // Skipping such a policy could drop a deny and widen access, so it fails loading instead.
-                    e.findPathVariableScopeException()?.let { cause ->
-                        throw IllegalStateException("Failed to load policy [$it]: ${cause.message}", e)
-                    }
-                    log.error(e) { e.message }
-                    null
+                    CoSecJsonSerializer.readValue(it.contentAsByteArray, Policy::class.java)
+                } catch (e: Exception) {
+                    throw IllegalStateException("Failed to load policy [$it]: ${e.reason()}", e)
                 }
             }.distinctBy {
                 it.id
@@ -75,5 +75,5 @@ class LocalPolicyLoader(
     }
 }
 
-private fun Throwable.findPathVariableScopeException(): PathVariableScopeException? =
-    generateSequence(this) { it.cause }.filterIsInstance<PathVariableScopeException>().firstOrNull()
+private fun Throwable.reason(): String? =
+    generateSequence(this) { it.cause }.filterIsInstance<PathVariableScopeException>().firstOrNull()?.message ?: message

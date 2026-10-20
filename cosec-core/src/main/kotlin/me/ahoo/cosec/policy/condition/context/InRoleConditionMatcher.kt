@@ -17,15 +17,35 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.api.principal.SpacedRoleId
+import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.policy.condition.AbstractConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 
+/**
+ * Matches when the principal holds the role [value].
+ *
+ * A value written `role@space` is compared literally with the principal's roles. A bare value matches the role held
+ * without a suffix (in any space, as in 6.x) and the role held as `role@space` for the request's space, so a deny on
+ * `inRole: suspended` keeps matching once tokens carry `suspended@team-a`. The bare role deliberately matches outside
+ * the default space too: the space header is client-chosen, and narrowing it would let a client step out of a deny
+ * by naming another space.
+ */
 class InRoleConditionMatcher(configuration: Configuration) :
     AbstractConditionMatcher(InRoleConditionMatcherFactory.TYPE, configuration) {
     private val value: String = configuration.getRequired(InRoleConditionMatcher::value.name).asString()
+    private val spaced: Boolean = value.contains(SpacedRoleId.SPACE_ID_SEPARATOR)
 
     override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        return securityContext.principal.roles.contains(value)
+        val roles = securityContext.principal.roles
+        if (roles.contains(value)) {
+            return true
+        }
+        if (spaced || value.isEmpty()) {
+            return false
+        }
+        val spaceId = request.spaceId
+        return roles.any { RoleScope.roleIdIn(spaceId, it) == value }
     }
 }
 

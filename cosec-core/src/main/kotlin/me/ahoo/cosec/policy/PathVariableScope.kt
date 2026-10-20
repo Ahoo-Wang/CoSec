@@ -64,6 +64,10 @@ class PathVariableScopeException(message: String) : IllegalArgumentException(mes
  * [PATH_VARIABLES_KEY] (the context attribute an OGNL or SpEL expression would read). Expressions that build
  * the attribute name at run time cannot be recognized here; they read nothing, because the variables are cleared
  * before each statement matches its action (see `SimpleAuthorization`).
+ *
+ * An action never reads path variables: a `path` template (`#{...}`) is evaluated before the action matches, when
+ * the variables are either cleared or, since a `path` action skips the clearing, still another statement's. So an
+ * action whose configuration mentions [RequestParts.PATH_VAR_PREFIX] or [PATH_VARIABLES_KEY] anywhere is rejected.
  */
 object PathVariableScope {
     private const val FIX_HINT = "Use a statement whose action is a path pattern that captures the variable."
@@ -84,10 +88,15 @@ object PathVariableScope {
     fun readsPathVariables(part: String): Boolean =
         part.startsWith(RequestParts.PATH_VAR_PREFIX) || part.contains(PATH_VARIABLES_KEY)
 
-    private fun Configuration.readsPathVariables(): Boolean = when {
-        isString -> readsPathVariables(asString())
-        isArray -> asList().any { it.readsPathVariables() }
-        isObject -> asMap().values.any { it.readsPathVariables() }
+    fun readsPathVariables(action: ActionMatcher): Boolean =
+        action.configuration.anyString { it.contains(RequestParts.PATH_VAR_PREFIX) || it.contains(PATH_VARIABLES_KEY) }
+
+    private fun Configuration.readsPathVariables(): Boolean = anyString { readsPathVariables(it) }
+
+    private fun Configuration.anyString(predicate: (String) -> Boolean): Boolean = when {
+        isString -> predicate(asString())
+        isArray -> asList().any { it.anyString(predicate) }
+        isObject -> asMap().values.any { it.anyString(predicate) }
         else -> false
     }
 
@@ -112,6 +121,7 @@ object PathVariableScope {
      * condition or its key.
      */
     fun requireScoped(ruleId: String, action: ActionMatcher, condition: ConditionMatcher, key: String?) {
+        requireActionScoped(action) { "Rate limit rule [$ruleId] action" }
         if (capturesPathVariables(action)) {
             return
         }
@@ -124,8 +134,18 @@ object PathVariableScope {
     }
 
     private inline fun requireScoped(statement: Statement, where: () -> String) {
+        requireActionScoped(statement.action) { "${where()} action" }
         if (!capturesPathVariables(statement.action) && readsPathVariables(statement.condition)) {
             throw PathVariableScopeException(notCapturedMessage("${where()} condition", statement.action))
+        }
+    }
+
+    private inline fun requireActionScoped(action: ActionMatcher, where: () -> String) {
+        if (readsPathVariables(action)) {
+            throw PathVariableScopeException(
+                "${where()} reads path variables (request.path.var.*), but an action is evaluated before it " +
+                    "captures any: a path template cannot use them. Read them in the statement's condition instead.",
+            )
         }
     }
 

@@ -23,7 +23,7 @@
 - 黑名单在 root 之前检查，因此 root 发出的、被黑名单拦截的请求会被拒绝。解释结果中 `BLACKLIST` 层现在排在 `ROOT` 之前，`ExplainLayer` 也按这个顺序列出。
 
 如果依赖 root，请设置 `cosec.authorization.root-enabled=true`，并为 root 主体签发 `tenantId` 为 `(platform)` 的令牌。
-直接构造 `SimpleAuthorization`、`AuthorizationExplainer` 或 `ShadowAuthorization` 的代码，默认仍使用 `RootPrincipalMatcher.DEFAULT`，但采用新的租户规则。
+直接构造 `SimpleAuthorization`、`AuthorizationExplainer` 或 `ShadowAuthorization` 的代码，默认仍使用 `RootPrincipalMatcher.DEFAULT`，但采用新的租户规则。`PolicyTestKit` 则与 starter 一致：除非向 `run` 传入 `RootPrincipalMatcher`，否则没有任何主体是 root。
 如果 root 需要按其他方式判定，请提供自己的 `RootPrincipalMatcher` bean。
 
 **角色授权的作用域限定在应用和空间之内。** 6.x 按角色和空间保存角色授权，不含应用，而应用（`CoSec-App-Id`）和空间（`CoSec-Space-Id`）
@@ -49,15 +49,35 @@
 - 每条语句、权限和限流规则在匹配自己的动作之前，以及策略和应用权限的条件求值之前，都会清空路径变量，
   因此条件只能读到本语句 `path` 动作捕获的变量；
 - 在本语句或本规则没有 `path` 动作捕获变量的位置读取路径变量，属于加载错误 `PathVariableScopeException`：
-  策略或应用权限的 `condition`、动作不是 `path` 的语句或权限的条件、动作不是 `path` 的限流规则的 `condition` 或 `key`
+  策略或应用权限的 `condition`、动作不是 `path` 的语句或权限的条件、动作不是 `path` 的限流规则的 `condition` 或 `key`，
+  以及任何动作的配置，例如 `path` 模板 `/orders/#{...PATH_VARIABLES...}`：模板在动作匹配之前求值，那时的变量不属于它自己
   （见[路径变量](./policies.md#actions)）。
 
 解析这样的策略、应用权限或限流规则会失败，用它们构造 `PolicyData`、`AppPermissionData` 或 `RateLimitRule` 也会失败；
-`RedisPolicyRepository.setPolicy` 会拒绝写入。含有这类引用的本地策略文件会阻止应用启动，而不是像其他无效文件那样被跳过。
+`RedisPolicyRepository.setPolicy` 会拒绝写入。含有这类引用的本地策略文件会阻止应用启动。
 已经存储在 Redis 中的此类策略读取失败，请求会以 `500` 被拒绝。
 
 升级前，请在策略、应用权限和限流规则中搜索 `request.path.var.` 和 `PATH_VARIABLES`，把每处引用移到 `path`
 动作捕获了该变量的语句中，例如把 `"action": "*"` 换成声明该变量的模式；把策略级条件移到各条语句的条件中。
+
+**`inRole` 跟随角色进入其空间。** 角色以 `role@space` 形式签发后，不带后缀的 `inRole` 值现在也匹配主体的
+`role@<请求所在空间>`，因此令牌从 `suspended` 换成 `suspended@team-a` 后，`inRole: suspended` 这样的拒绝仍然匹配。
+不带后缀持有的角色仍在每个空间都匹配。写成 `role@space` 的值与以前一样，与主体的角色逐字比较。以其他方式读取
+`context.principal.roles` 的条件（`in`、`spel`、`ognl`）看到的仍是原始字符串（包括 `suspended@team-a`），
+令牌改为携带 `role@space` 后，它们不再匹配不带后缀的角色名（见[上下文条件](./policies.md#context-conditions)）。
+
+**任何无效的本地策略文件都会阻止启动。** `LocalPolicyLoader` 以前遇到无法解析或构建的策略文件（JSON 格式错误、未知的匹配器类型、
+无效的选项）时只记录日志并跳过，这可能悄悄丢掉一条拒绝。现在任何这样的文件都会导致加载失败（限流规则文件早已如此），
+错误中会给出文件名。不存在的位置仍然只记录警告并跳过（见[故障排查](./troubleshooting.md#startup-fails-loading-a-policy-file)）。
+
+**限流规则的 `key` 在加载时校验。** 不受支持的 `key`（例如把 `request.remoteIp` 写成 `request.ip`）以前可以加载，
+然后在前面的规则已经消耗许可之后，让每个匹配的请求都以 `500` 失败。现在构造或加载这样的规则会直接失败（见[限流](./rate-limiting.md)）。
+
+**OpenAPI 生成的应用 id 把 `:` 替换为 `-`。** `OpenAPIAppPermissionGenerator` 由 OpenAPI 标题生成应用 id，而应用 id 不能再含有 `:`。
+标题含有 `:` 的应用（例如 `orders:api`）的 id 变为 `orders-api`；客户端必须在 `CoSec-App-Id` 中发送新的 id，角色授权也要为新 id 写入。
+
+### CoCache 6 与 CosId 4 {#cocache-6-and-cosid-4}
+
 CoSec 7.0 基于 [CoCache 6.5](https://cocache.ahoo.me/guide/migration-6) 和
 [CosId 4.0](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md)。CoCache 6 改变了值在 Redis 中的存储方式，
 因此这次升级需要短暂停机，并做一次性的数据迁移（[迁移数据](#migrating-the-data)）。
@@ -172,8 +192,11 @@ CoCache 6 读不了 CoSec 6.x 用 CoCache 5 写入的值，而 Redis 是策略�
 ### 升级检查清单 {#upgrade-checklist}
 
 1. 确认 Redis 为 7.0 及以上，且 ACL 允许 `+hkeys +hget`。
-2. 在策略、应用权限和限流规则中搜索 `request.path.var.`，修正它们的作用域。
+2. 在策略、应用权限和限流规则中搜索 `request.path.var.` 和 `PATH_VARIABLES`，修正它们的作用域；确认每个本地策略文件都能加载，
+   每条限流规则的 `key` 都是受支持的部分。
 3. 找出引用了仓储中不存在的策略的主体；确定每个 6.x 角色所属的应用；签发 `role@space` 形式的角色；如果使用 root，显式启用它。
+   审查读取 `context.principal.roles` 的 `in`、`spel` 和 `ognl` 条件，它们看到的是原始的 `role@space` 字符串；
+   如果某个 OpenAPI 标题含有 `:`，让客户端改用新的 `CoSec-App-Id`。
 4. 把直接写入 Redis 的应用权限和角色授权改为通过 CoSec 写入，用 `CacheSpecCustomizer` 或 `cocache.caches.<CacheName>.*`
    替换 6.x 的缓存组件 bean，并把用于 `CosIdGenerator` 的 `IdGenerator` 声明改为 `StringIdGenerator`。
 5. 停止所有写入方，迁移数据，核对，然后启动 7.0（[迁移数据](#migrating-the-data)）。

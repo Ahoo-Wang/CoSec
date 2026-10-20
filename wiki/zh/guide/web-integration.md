@@ -93,11 +93,18 @@ class PermissionController(private val checker: AuthorizationChecker) {
 ## 应用与空间 {#app-and-space}
 
 `CoSec-App-Id` 和 `CoSec-Space-Id`（请求头，或同名查询参数）指定请求在哪个应用、哪个空间中评估。它们由客户端设置，
-所以只能在已有授权之间**选择**，永远不会扩大授权：
+CoSec 据此限定角色授权的作用域：
 
 - 角色授权只在做出授权的应用中生效：换一个 `CoSec-App-Id` 只会得到那个应用的授权，不会得到别的应用的授权。
 - 带 `CoSec-Space-Id` 时，只有主体写成 `role@<该空间>` 的角色生效；不带时（默认空间），只有不带后缀的角色生效。
   主体在某个空间中没有角色，就得不到任何角色授权。
+
+空间与主体的凭证绑定：指定其他空间永远不会得到令牌中没有声明的角色。应用 id 则不然：CoSec 原样采用客户端给出的值。
+在两个应用中都持有角色的主体，可以发送其中一个应用的 `CoSec-App-Id`，却访问另一个应用的路径；如果两个应用的权限都匹配
+该路径（共享路径命名空间的应用，例如 `/api/**`），请求就会按客户端指定的那个应用的授权被放行。当多个应用共享网关或路径
+命名空间时，请在边缘绑定应用 id：让网关路由按路由设置或覆盖 `CoSec-App-Id`，或者为某个路径前缀添加一条全局拒绝，
+用条件检查 `request.appId` 是否为拥有该前缀的应用。在授权之前解析并校验应用与空间才是长期方案，即 [RFC 0001](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0001-target-architecture.md) 中提出的
+`ScopeResolver`。
 
 策略可以通过 `request.appId` 和 `request.spaceId` 读取这两个值，进一步加以约束。见[角色授权的作用域](./policies.md#role-grant-scope)。
 

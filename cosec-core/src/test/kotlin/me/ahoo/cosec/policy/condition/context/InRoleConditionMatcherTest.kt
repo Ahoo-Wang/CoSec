@@ -40,4 +40,21 @@ class InRoleConditionMatcherTest {
         assertThat(conditionMatcher.configuration, notNullValue())
         assertThat(conditionMatcher.match(request, context), `is`(true))
     }
+
+    @Test
+    fun matchSpacedRoles() {
+        fun match(value: String, roles: Set<String>, space: String): Boolean {
+            val request: Request = mockk { every { spaceId } returns space }
+            val context: SecurityContext = mockk { every { principal.roles } returns roles }
+            return InRoleConditionMatcherFactory().create(mapOf("value" to value).asConfiguration())
+                .match(request, context)
+        }
+        assertThat(match("admin", setOf("admin@a"), "a"), `is`(true))
+        assertThat(match("admin", setOf("admin@a"), "b"), `is`(false))
+        assertThat(match("admin", setOf("admin@a@b", "@a"), "a"), `is`(false))
+        assertThat(match("admin", setOf("admin"), "b"), `is`(true))
+        assertThat(match("admin@a", setOf("admin@a"), "b"), `is`(true))
+        assertThat(match("admin@a", setOf("admin"), "a"), `is`(false))
+        assertThat(match("", setOf("@a"), "a"), `is`(false))
+    }
 }

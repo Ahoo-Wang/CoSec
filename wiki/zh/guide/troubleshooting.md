@@ -13,7 +13,7 @@ logging:
     me.ahoo.cosec.audit: DEBUG                               # audit events (denials are logged at WARN)
 ```
 
-每条审计事件都记录了主体、请求、结果及其**来源**：`ROOT`、`BLACKLIST`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、
+每条审计事件都记录了主体、请求、结果及其**来源**：`BLACKLIST`、`ROOT`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、
 `ROLE_PERMISSION`，什么都没命中时为 `NONE`（见[审计](./operations.md#auditing)）。通过 `CoSec-Request-Id`
 响应头把响应和它的审计事件对应起来。使用 `opentelemetry-support` 时，`cosec.authorize` span 上也有同样的信息。
 
@@ -143,6 +143,14 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 某个本地策略文件、应用权限或限流规则在没有自己的 `path` 动作捕获变量的位置读取了 `request.path.var.*`。
 错误信息会指出文件、策略、语句或规则，以及动作类型。把引用移到 `path` 动作声明了该变量的语句（或规则）中，
 或把策略级条件移到各条语句的条件中（见[路径变量](./policies.md#actions)）。7.0 之前，这样的引用读到的是最后一条命中语句的变量。
+动作自身的配置（例如提到 `PATH_VARIABLES` 的 `path` 模板）完全不能读取路径变量：请改在语句的条件中读取。
+
+## 启动时加载策略文件失败 {#startup-fails-loading-a-policy-file}
+
+启动时出现 `Failed to load policy [<file>]`，说明某个本地策略文件（`cosec.authorization.local-policy.locations`）
+无法解析或构建：JSON 格式错误、未知的动作或条件类型，或无效的选项。消息下方的 cause 会指出具体原因。
+从 7.0 起，任何这样的文件都会阻止启动；以前它只会被记录日志并跳过，这可能悄悄丢掉一条拒绝。请修正或删除该文件。
+不存在的位置只会记录一条警告。
 
 ## 某个主体总是得到 500 {#one-principal-always-gets-500}
 

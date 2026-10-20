@@ -54,6 +54,11 @@ class BusinessHoursConditionMatcher(configuration: Configuration) :
   condition once against a mock request, and [explaining a decision](../guide/troubleshooting.md#explain-a-decision)
   runs every condition too. A custom matcher with an unavoidable external side effect must check `securityContext.isPolicyEvaluation` (`me.ahoo.cosec.policy`) and return
   without the side effect when it is `true`. The marker can't be forged from policy or request data.
+- **Path variables are scoped to their statement.** A matcher that reads path variables in code
+  (`securityContext.getPathVariables()`) is not caught by the load-time check, which only inspects configuration
+  ([Path variables](../guide/policies.md#actions)). The variables are cleared before every statement matches its
+  action, so such a matcher sees only those captured by its own statement's `path` action, and an empty map in a
+  policy or app permission condition, under any other action, or inside an action matcher itself.
 
 ## Authorization hooks
 

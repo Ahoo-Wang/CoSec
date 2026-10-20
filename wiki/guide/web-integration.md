@@ -102,12 +102,21 @@ target endpoint will do with the request, so keep enforcing on the real request.
 ## App and space
 
 `CoSec-App-Id` and `CoSec-Space-Id` (header, or query parameter of the same name) name the app and the space a
-request is evaluated in. The client sets them, so they only **select** among grants; they never widen them:
+request is evaluated in. The client sets them, and CoSec scopes role grants by them:
 
 - Role grants apply only in the app they were made in: a different `CoSec-App-Id` reaches that app's grants,
   never another app's.
 - With `CoSec-Space-Id`, only the principal's roles written `role@<that space>` apply. Without it (the default
   space), only roles without a suffix apply. A space the principal holds no role in gets no role grants.
+
+The space is bound to the principal's credential: naming another space never picks up roles the token does not
+state. The app id is not: CoSec takes it from the client as is. A principal holding a role in two apps can send
+`CoSec-App-Id` of one app with a path of the other, and if both apps' permissions match that path (apps that share
+path namespaces, such as `/api/**`), the request is authorized by the grants of the app the client named. When
+several apps share a gateway or path namespace, bind the app id at the edge: have the gateway route set or
+overwrite `CoSec-App-Id` per route, or add a global deny for a path prefix whose condition checks that
+`request.appId` names the app that owns it. Resolving and verifying the app and space before authorization is the long-term fix,
+proposed as `ScopeResolver` in [RFC 0001](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0001-target-architecture.md).
 
 Policies see both values as `request.appId` and `request.spaceId` and can constrain them further. See
 [Role grant scope](./policies.md#role-grant-scope).

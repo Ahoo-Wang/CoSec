@@ -91,7 +91,9 @@ Reading path variables anywhere else is a policy error, and the policy fails to 
 - in a policy's or an app permission's `condition`, which runs before any action;
 - in the condition of a statement or permission whose action is not a `path` action: `all`, `["*", ...]`, a
   `composite` with any non-path member, or a custom action type;
-- in the `condition` or `key` of a rate limit rule whose action is not a `path` action.
+- in the `condition` or `key` of a rate limit rule whose action is not a `path` action;
+- in any action's own configuration, such as a `path` template `/orders/#{attributes['PATH_VARIABLES']...}`: the
+  template is evaluated before the action matches, when the variables are not its own.
 
 The check recognizes every `part` and rate limit `key` that starts with `request.path.var.`, and every
 string in the matcher's configuration (OGNL and SpEL expressions, `#{...}` templates) that mentions
@@ -132,11 +134,17 @@ Every condition accepts `"negate": true` to invert its result.
 |---|---|---|
 | `all` | `{}` | always |
 | `authenticated` | `{}` | the principal is not anonymous |
-| `inRole` | `{ "value": "admin" }` | the principal has the role |
+| `inRole` | `{ "value": "admin" }` | the principal has the role. A bare value matches the role held without a suffix (in any space) or held as `admin@<space>` for the request's space; a value written `admin@team-a` must equal one of the principal's roles exactly |
 | `inTenant` | `{ "value": "default" \| "user" \| "platform" }` | the tenant is the default tenant `(0)`, a user tenant, or the platform tenant `(platform)` |
 
 `inTenant` checks the *kind* of tenant. To check a specific tenant id, use
 `{ "eq": { "part": "context.tenantId", "value": "..." } }`.
+
+`inRole` follows [roles scoped to spaces](./web-integration.md#app-and-space): a deny on `inRole: suspended` keeps
+matching a principal whose token carries `suspended@team-a` when the request names space `team-a`. A role held
+without a suffix matches in every space, so naming another space in `CoSec-Space-Id` cannot step out of such a deny.
+Other conditions over `context.principal.roles` (`in`, `spel`, `ognl`) see the raw strings, `suspended@team-a`
+included.
 
 ### Time conditions
 

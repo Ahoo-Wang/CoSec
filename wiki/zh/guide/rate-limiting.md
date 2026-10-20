@@ -44,7 +44,7 @@ flowchart LR
 | `id` | 是 | 配额的名字，只能包含字母、数字、`_`、`.` 和 `-`。计数器归属于 id，因此两条规则不会意外共享配额。id 必须唯一。 |
 | `action` | 是 | 规则作用于哪些请求，写法与语句的[动作](./policies.md#actions)相同。 |
 | `condition` | 否 | 进一步收窄规则，写法与语句的[条件](./policies.md#conditions)相同。默认总是匹配。 |
-| `key` | 否 | 一个请求或上下文[部件](./policies.md#value-conditions)，按其取值把配额拆成多个桶，例如按 IP 或按用户。不设置时，所有匹配的请求共享一个桶。部件取值为空的请求共享同一个桶，因此省略某个请求头无法绕过限流。`request.path.var.<name>` 读取的是本规则自身 `path` 动作捕获的变量，不受同一请求匹配的其他规则影响。 |
+| `key` | 否 | 一个请求或上下文[部件](./policies.md#value-conditions)，按其取值把配额拆成多个桶，例如按 IP 或按用户。不设置时，所有匹配的请求共享一个桶。部件取值为空的请求共享同一个桶，因此省略某个请求头无法绕过限流。`request.path.var.<name>` 读取的是本规则自身 `path` 动作捕获的变量，不受同一请求匹配的其他规则影响。不受支持的部件会在规则加载时直接失败。 |
 | `permitsPerSecond` | 是 | 允许的速率。一个窗口允许 `permitsPerSecond × windowSeconds` 个请求，且至少一个。 |
 | `windowSeconds` | 否 | 窗口长度，默认 `1`。低速率请用更长的窗口：每秒 `0.1`、窗口 `60` 秒即每分钟 6 个请求。 |
 | `strictFailure` | 否 | 后端故障时的处理：`false`（默认）跳过该规则，`true` 以 `429` 拒绝请求。 |

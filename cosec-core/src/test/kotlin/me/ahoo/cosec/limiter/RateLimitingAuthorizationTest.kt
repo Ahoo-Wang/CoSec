@@ -15,16 +15,20 @@ package me.ahoo.cosec.limiter
 
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.authorization.AuthorizationDecision
 import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.authorization.RootVerifyContext
+import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.action.PathActionMatcherFactory
+import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -55,11 +59,13 @@ class RateLimitingAuthorizationTest {
         permitsPerSecond: Double = 2.0,
         path: String? = null,
         key: String? = null,
-        strictFailure: Boolean = false
+        strictFailure: Boolean = false,
+        condition: ConditionMatcher = AllConditionMatcher.INSTANCE
     ) = RateLimitRule(
         id = id,
         action = path?.let { PathActionMatcherFactory().create(it.asConfiguration()) } ?: AllActionMatcher.INSTANCE,
         rateLimit = RateLimit(permitsPerSecond = permitsPerSecond),
+        condition = condition,
         key = key,
         strictFailure = strictFailure,
     )
@@ -157,7 +163,7 @@ class RateLimitingAuthorizationTest {
 
     @Test
     fun ruleErrorFailsClosed() {
-        authorization(rule("a", key = "unsupported.part"))
+        authorization(rule("a", condition = ThrowingCondition))
             .decide(request, context)
             .test()
             .expectError(IllegalArgumentException::class.java)
@@ -168,9 +174,14 @@ class RateLimitingAuthorizationTest {
     fun ruleErrorIsRaisedWhenItsRuleIsReached() {
         val authorization = authorization(
             rule("tight", permitsPerSecond = 1.0),
-            rule("broken", key = "unsupported.part")
+            rule("broken", key = "context.principal.attributes.tier")
         )
-        authorization.decide(request, context)
+        // A supported key whose value fails to render: the bucket error is deferred until its rule is reached.
+        val unrenderable = object {
+            override fun toString(): String = throw IllegalArgumentException("broken")
+        }
+        val brokenContext = SimpleSecurityContext(SimplePrincipal("user", attributes = mapOf("tier" to unrenderable)))
+        authorization.decide(request, brokenContext)
             .test()
             .expectError(IllegalArgumentException::class.java)
             .verify()
@@ -186,5 +197,13 @@ class RateLimitingAuthorizationTest {
             .test()
             .expectNext(AuthorizeResult.ALLOW)
             .verifyComplete()
+    }
+
+    /** A condition that fails at request time; unsupported keys are rejected when the rule is built. */
+    private object ThrowingCondition : ConditionMatcher {
+        override val type: String = "throwing"
+        override val configuration: Configuration = JsonConfiguration.newPojoConfiguration()
+        override fun match(request: Request, securityContext: SecurityContext): Boolean =
+            throw IllegalArgumentException("broken")
     }
 }

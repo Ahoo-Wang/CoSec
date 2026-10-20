@@ -23,11 +23,13 @@ import me.ahoo.cosec.social.justauth.RedisAuthStateCache
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnAuthenticationEnabled
 import me.ahoo.cosid.StringIdGenerator
+import me.ahoo.cosid.jvm.UuidGenerator
 import me.zhyd.oauth.cache.AuthStateCache
 import me.zhyd.oauth.config.AuthConfig
 import me.zhyd.oauth.request.AuthDefaultRequest
 import me.zhyd.oauth.request.AuthRequest
 import org.springframework.beans.BeanUtils
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -60,7 +62,11 @@ class CoSecSocialAuthenticationAutoConfiguration(
 
     @Bean
     @ConditionalOnMissingBean
-    fun socialProviderManager(authStateCache: AuthStateCache, idGenerator: StringIdGenerator): SocialProviderManager {
+    fun socialProviderManager(
+        authStateCache: AuthStateCache,
+        idGeneratorProvider: ObjectProvider<StringIdGenerator>
+    ): SocialProviderManager {
+        val idGenerator = idGeneratorProvider.getIfAvailable { UuidGenerator.INSTANCE }
         for ((key, provider) in socialAuthenticationProperties.registration) {
             val authRequestClass: Class<out AuthDefaultRequest> = provider.type.targetClass
             val authRequestCtor: Constructor<out AuthDefaultRequest> = authRequestClass.getConstructor(

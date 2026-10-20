@@ -43,7 +43,7 @@
 - **谁**：主体 id、角色、策略、是否已认证、租户；
 - **什么**：请求 id、应用与空间 id、方法、路径、客户端 IP、设备 id 和 User-Agent、网关路由 id；
 - **决策**：`ALLOW`、`EXPLICIT_DENY`、`IMPLICIT_DENY`、`TOO_MANY_REQUESTS` 或 `ERROR`，以及原因代码（例如 `TOKEN_EXPIRED`、`REGEX_TIMEOUT`）和求值耗时；
-- **为什么**：来源（`ROOT`、`BLACKLIST`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、`ROLE_PERMISSION` 或 `NONE`），以及命中的策略和语句，或角色和权限；
+- **为什么**：来源（`BLACKLIST`、`ROOT`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、`ROLE_PERMISSION` 或 `NONE`），以及命中的策略和语句，或角色和权限；
 - **链路**：启用链路追踪时的 trace id 和 span id。
 
 默认写入日志。使用 `kafka-support` 且存在 `KafkaTemplate` bean 时，事件发布到 Kafka
