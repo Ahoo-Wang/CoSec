@@ -137,12 +137,25 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 - **已存储的策略在作用域之外读取路径变量。** 日志中会出现 `PathVariableScopeException`，并指出策略和语句。
   从 7.0 起，策略级条件、以及没有 `path` 动作的语句的条件，都不能读取 `request.path.var.*`。修正后重新保存该策略
   （见[路径变量](./policies.md#actions)）。
+- **全局策略索引中的策略没有内容。** 日志中会出现 `MissingPolicyException` 和
+  `the global policy index lists policies [...] that have no content`。该策略的内容丢失了，或者没有从 6.x 迁移
+  （6.x 缓存的未命中迁移后仍是未命中）。从 7.0 起，这会使每个请求失败而不是跳过该策略，因为它可能是一条全局拒绝策略。
+  用 `PolicyRepository.setPolicy` 重新写入该策略；如果要去掉它，以 `global` 以外的类型保存它，这会把它从索引中移除。
 
 ## 启动失败并报 PathVariableScopeException {#startup-fails-with-pathvariablescopeexception}
 
 某个本地策略文件、应用权限或限流规则在没有自己的 `path` 动作捕获变量的位置读取了 `request.path.var.*`。
 错误信息会指出文件、策略、语句或规则，以及动作类型。把引用移到 `path` 动作声明了该变量的语句（或规则）中，
 或把策略级条件移到各条语句的条件中（见[路径变量](./policies.md#actions)）。7.0 之前，这样的引用读到的是最后一条命中语句的变量。
+
+## 启动时读取已存储的策略失败 {#startup-fails-reading-a-stored-policy}
+
+启用 `cosec.authorization.local-policy.init-repository` 且 `force-refresh=false`（默认）时，启动会先从仓储读取每个本地策略的 id，
+只有不存在时才写入文件中的策略。如果已存储的副本读不出来，即使本地文件是正确的，启动也会因这个读取错误而失败：
+
+- `CacheReadException`，原因是 `ForeignFormatException`：这个副本是没有迁移的 6.x 数据。执行[数据迁移](./upgrading.md#migrating-the-data)。
+- `PathVariableScopeException`：已存储的副本（通常是从 6.x 迁移来的）在作用域之外读取 `request.path.var.*`，7.0 拒绝这样的策略。
+  修正已存储的策略，或者以 `force-refresh=true` 启动一次，让本地文件直接覆盖已存储的副本而不读取它们。
 
 ## 某个主体总是得到 500 {#one-principal-always-gets-500}
 

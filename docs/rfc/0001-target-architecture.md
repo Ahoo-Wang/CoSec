@@ -438,7 +438,7 @@ API 时再提高基线。
 
 ### 3.10 关键依赖：CoCache 6.4、CosId 4.0
 
-**决定**：目标架构以 **CoCache 6.4**（当前 5.1.0）和 **CosId 4.0**（当前 3.2.1）为准，并随它们的后续版本更新。
+**决定**：目标架构以 **CoCache 6.4** 和 **CosId 4.0** 为准，并随它们的后续版本更新。main 已升级到 CoCache 6.5.0 和 CosId 4.0.2（7.0）。
 两者的基线都是 JDK 17 与 Spring Boot 4，与 3.9 一致。
 
 **CoCache 6.x 对目标架构的影响**
@@ -464,7 +464,7 @@ CoSec 只用 CosId 生成标识：请求 id、审计事件 id、token id（`jti`
 
 **升级到现有代码时的注意事项**（可以放进 7.0 这一批破坏性变更）：
 - CoCache 5.x 到 6.0 **不支持滚动升级**：Redis 值的布局和失效通道都变了，所有实例必须同时切换。最小化的 Redis ACL 需要加上
-  `+hkeys +hget`。缓存声明和 `KeyConverter` 要按 6.0 的接口风格重写，`LocalCacheLookup` 这类依赖 5.x 内部结构的代码要删除。
+  `+hkeys +hget`。缓存声明和 `KeyConverter` 要按 6.0 的接口风格重写，`LocalCacheLookup` 这类依赖 5.x 内部结构的代码要删除（7.0 已完成：缓存由 `CoSecCacheSpecs` 声明，`LocalCacheLookup` 已删除，本地命中改用 CoCache 的异步 API）。
 - CosId 4.0 要求重新编译：`UuidGenerator` 不再实现 `IdGenerator`，CoSec 中注入 `IdGenerator` 的地方要改成 `StringIdGenerator`。
   CoSec 只用 UUID 生成器，不涉及机器号租约，所以 CosId 自身的迁移步骤（JDBC 加列、代理 token）对 CoSec 用户没有影响，
   除非应用自己也在用 CosId 的其他后端。
@@ -523,7 +523,7 @@ CoSec 只用 CosId 生成标识：请求 id、审计事件 id、token id（`jti`
    **切换门槛**：新引擎上线前，用现有的影子模式同时运行旧实现和新实现，先在离线请求语料上、再在生产流量采样上
    逐条比对决策。差异为零（或者每一条差异都已被确认为旧实现的缺陷并登记在案）才能切换。之后每个改变语义的阶段
    都沿用这道门槛。
-3. **快照分发**：`SnapshotSource` 基于 CoCache 6.4 实现（按需加载，陈旧时间有上界），删除 `LocalCacheLookup`、`BlockingAware`；热路径上的策略读取都命中内存。
+3. **快照分发**：`SnapshotSource` 基于 CoCache 6.4 实现（按需加载，陈旧时间有上界），删除 `BlockingAware`（`LocalCacheLookup` 已在 7.0 删除）；热路径上的策略读取都命中内存。
 4. **统一模型**：`Binding` 取代 `principal.policies` / `RolePermission` / `GLOBAL`；成员关系改为按作用域写的
    token 声明或 `MembershipProvider`；平台层与租户层分开；黑名单拆成规则加名单两部分；
    提供一次性的数据转换工具；用条件 AST 取代 OGNL/SpEL 和各个 part 匹配器。
