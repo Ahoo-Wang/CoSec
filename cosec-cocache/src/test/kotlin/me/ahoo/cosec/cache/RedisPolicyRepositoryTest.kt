@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.authorization.MissingPolicyException
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import me.ahoo.cosec.policy.PathVariableScopeException
 import me.ahoo.cosec.policy.PolicyData
@@ -65,11 +66,26 @@ internal class RedisPolicyRepositoryTest {
     }
 
     @Test
-    fun getGlobalPolicySkipsIndexedIdWithoutPolicy() {
+    fun getGlobalPolicyFailsClosedOnIndexedIdWithoutPolicy() {
+        // setPolicy writes the content before the index entry, so a listed id without content is lost data, possibly
+        // a global DENY: skipping it would widen access.
+        repository.setPolicy(policyData).block()
         caches.globalPolicyIndexCache.add(CACHE_KEY, listOf("orphan"))
         repository.getGlobalPolicy()
             .test()
-            .expectNext(listOf())
+            .expectErrorMatches { it is MissingPolicyException && it.policyIds == setOf("orphan") }
+            .verify()
+    }
+
+    @Test
+    fun getGlobalPolicySkipsIndexedNonGlobalContent() {
+        val custom = policy("customId", PolicyType.CUSTOM)
+        repository.setPolicy(policyData).block()
+        caches.policyCache.put(custom.id, custom)
+        caches.globalPolicyIndexCache.add(CACHE_KEY, listOf(custom.id))
+        repository.getGlobalPolicy()
+            .test()
+            .expectNext(listOf(policyData))
             .verifyComplete()
     }
 

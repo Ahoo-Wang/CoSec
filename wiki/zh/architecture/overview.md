@@ -97,7 +97,8 @@ sequenceDiagram
 - 读取通过 CoCache 的异步视图进行。本地命中返回一个已完成的 future，因此仓储在调用方线程上直接返回；
   未命中时以不阻塞的方式读取 Redis，请求随后在 `boundedElastic` 上继续（`LocalCacheFastPathTest`）。
 - 全局策略索引是一个 CoCache `SetCache`，通过原子的 `add` / `remove` 更新；
-  `GlobalPolicyIndexConcurrencyIntegrationTest` 用两个实例并发写入来验证这一点。
+  `GlobalPolicyIndexConcurrencyIntegrationTest` 用两个实例并发写入来验证这一点。读取时只应用索引中内容类型为 `global` 的策略，
+  索引中的 id 没有内容时以 `MissingPolicyException` 失败，因此发布之间无论怎样交错都不会放宽访问（`GlobalPolicyConsistencyTest`）。
 
 ## 性能 {#performance}
 
