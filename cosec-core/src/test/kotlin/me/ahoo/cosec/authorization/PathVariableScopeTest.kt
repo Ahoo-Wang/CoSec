@@ -79,14 +79,21 @@ class PathVariableScopeTest {
         },
     )
 
-    private fun policyRepository(global: List<Policy>, principal: List<Policy>) = mockk<PolicyRepository> {
-        every { getGlobalPolicy() } returns Mono.just(global)
-        every { getPolicies(any()) } returns Mono.just(principal)
+    // The principal lists exactly the policies the repository returns: a listed policy the repository lacks fails
+    // authorization (MissingPolicyException), which is not what these tests are about.
+    private var principalPolicyIds: Set<String> = emptySet()
+
+    private fun policyRepository(global: List<Policy>, principal: List<Policy>): PolicyRepository {
+        principalPolicyIds = principal.map { it.id }.toSet()
+        return mockk {
+            every { getGlobalPolicy() } returns Mono.just(global)
+            every { getPolicies(any()) } returns Mono.just(principal)
+        }
     }
 
     private val principal = SimplePrincipal("user", policies = setOf("p"))
 
-    private fun context() = SimpleSecurityContext(principal)
+    private fun context() = SimpleSecurityContext(SimplePrincipal("user", policies = principalPolicyIds))
 
     private fun path(pattern: String) = PathActionMatcherFactory.INSTANCE.create(pattern.asConfiguration())
 
