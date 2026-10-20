@@ -54,7 +54,7 @@ class AuthorizationDecisionTest {
 
     @Test
     fun simpleAuthorizationReportsRootVerifyContext() {
-        val authorization = SimpleAuthorization(mockk(), mockk())
+        val authorization = SimpleAuthorization(mockk(), mockk(), rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT)
         val securityContext = SimpleSecurityContext(
             SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM),
         )

@@ -37,7 +37,7 @@ deny-first for every request.
 flowchart LR
     R([Request + JWT]) --> BL{Blacklisted?}
     BL -->|yes| DENY([EXPLICIT_DENY])
-    BL -->|no| ROOT{Root principal?}
+    BL -->|no| ROOT{"Root principal?<br>(only if root is enabled)"}
     ROOT -->|yes| ALLOW([ALLOW])
     ROOT -->|no| L["Global policies<br>Principal policies<br>Role permissions"]
     L --> D{Any DENY matched?}

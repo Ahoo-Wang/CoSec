@@ -131,9 +131,11 @@ The caller is known, but nothing allowed the request, or something denied it.
 - **Local files are loaded but not used.** Authorization reads the `PolicyRepository`. Set
   `cosec.authorization.local-policy.init-repository=true`, or write the policy to the repository yourself.
 - **The policy already exists.** On startup, an existing id is kept unless `force-refresh=true`.
-- **The file was skipped.** Invalid files are logged at `ERROR` and skipped
-  ([Loading policies](./policies.md#loading-and-generating-policies)). Search the startup log for the file name.
-- **Another file has the same id.** Only the first one with a given id is loaded.
+- **The file is not in a configured location.** Since 7.0 an invalid file, a duplicate policy id and a configured
+  location that matches no file all stop startup ([Startup fails loading a policy file](#startup-fails-loading-a-policy-file)),
+  so a file that has no effect after a clean start is usually outside `cosec.authorization.local-policy.locations`:
+  the default `classpath:cosec-policy/*-policy.json` only matches names ending in `-policy.json`. Search the startup
+  log for `Load Policy [` followed by the file name.
 - **Wrong policy type.** Only `global` policies apply to everyone; `system` and `custom` policies apply only
   to principals that list them.
 - **The data was not migrated when upgrading to 7.0.** 7.0 cannot read what 6.x stored in Redis: reads fail with
@@ -174,7 +176,15 @@ template that mentions `PATH_VARIABLES`, may not read them at all: read them in 
 `Failed to load policy [<file>]` at startup means a local policy file (`cosec.authorization.local-policy.locations`)
 could not be parsed or built: malformed JSON, an unknown action or condition type, or an invalid option. The cause
 below the message says which. Since 7.0 any such file stops startup; before, it was logged and skipped, which could
-silently drop a deny. Fix or remove the file. A location that does not exist is only logged as a warning.
+silently drop a deny. Fix or remove the file.
+
+Two other errors stop startup for the same reason:
+
+- `Policy id [<id>] is declared by more than one file`: before 7.0 only one of them was loaded, silently. Give each
+  policy its own id, or remove the copy.
+- `Policy location [<location>] matches no file`: a location in `cosec.authorization.local-policy.locations` that does
+  not exist or whose pattern matches nothing, usually a typo in the path. Before 7.0 it was only logged as a warning.
+  Only the default location `classpath:cosec-policy/*-policy.json` may match nothing.
 
 ## Startup fails reading a stored policy
 

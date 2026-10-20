@@ -55,7 +55,11 @@ internal class SimpleAuthorizationTest {
     fun authorizeWhenPrincipalIsRoot() {
         val policyRepository = mockk<PolicyRepository>()
         val permissionRepository = mockk<AppRolePermissionRepository>()
-        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
+        val authorization = SimpleAuthorization(
+            policyRepository,
+            permissionRepository,
+            rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT,
+        )
         val request = mockk<Request>()
         // Root is the root id in the platform tenant; the id alone is not enough (RFC 0001, D5).
         val securityContext = SimpleSecurityContext(
@@ -68,11 +72,29 @@ internal class SimpleAuthorizationTest {
     }
 
     @Test
+    fun rootIsOffByDefault() {
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.just(emptyList())
+        }
+        val securityContext = SimpleSecurityContext(
+            SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM),
+        )
+        SimpleAuthorization(policyRepository, mockk()).authorize(EvaluateRequest(), securityContext)
+            .test()
+            .expectNext(AuthorizeResult.IMPLICIT_DENY)
+            .verifyComplete()
+    }
+
+    @Test
     fun authorizeWhenRootIdIsOutsideThePlatformTenant() {
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.just(emptyList())
         }
-        val authorization = SimpleAuthorization(policyRepository, mockk())
+        val authorization = SimpleAuthorization(
+            policyRepository,
+            mockk(),
+            rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT,
+        )
         val principals = listOf(
             SimplePrincipal(CoSecPrincipal.ROOT_ID),
             SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.DEFAULT),

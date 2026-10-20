@@ -38,7 +38,7 @@ import reactor.kotlin.core.publisher.toMono
  *
  * This class provides the core authorization logic by evaluating:
  * 1. Blacklist checks (apply to root as well)
- * 2. Root user bypass (root users get ALLOW unless blacklisted)
+ * 2. Root user bypass, only if enabled through [rootPrincipalMatcher] (root users get ALLOW unless blacklisted)
  * 3. Global policies
  * 4. Principal-specific policies
  * 5. Role-based permissions: the principal's roles scoped to the request's space ([RoleScope]), granted in the
@@ -56,13 +56,14 @@ import reactor.kotlin.core.publisher.toMono
  * @param policyRepository Repository for accessing policies
  * @param appRolePermissionRepository Repository for accessing role permissions
  * @param blacklistChecker Optional blacklist checker for blocking requests
- * @param rootPrincipalMatcher Decides which principals are root (bypass every check except the blacklist)
+ * @param rootPrincipalMatcher Decides which principals are root (bypass every check except the blacklist). Defaults
+ *        to [RootPrincipalMatcher.NONE], like the starter's `cosec.authorization.root-enabled=false`.
  */
 class SimpleAuthorization(
     private val policyRepository: PolicyRepository,
     private val appRolePermissionRepository: AppRolePermissionRepository,
     private val blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp,
-    private val rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.DEFAULT
+    private val rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE
 ) : DecisionAuthorization {
     companion object {
         private val log = KotlinLogging.logger {}

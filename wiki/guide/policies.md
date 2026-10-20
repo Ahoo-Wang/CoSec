@@ -146,6 +146,23 @@ without a suffix matches in every space, so naming another space in `CoSec-Space
 Other conditions over `context.principal.roles` (`in`, `spel`, `ognl`) see the raw strings, `suspended@team-a`
 included.
 
+Neither form limits an **allow** to the request's space; the allow side behaves as in 6.x. An allow on
+`inRole: admin@team-a` also matches when the request names space `team-b`, or no space at all, and an allow on a
+bare `inRole: admin` matches a principal holding `admin` without a suffix in every space. The matching is this wide
+so that a deny cannot be escaped by changing `CoSec-Space-Id`. To grant only inside the request's space, add a
+`request.spaceId` condition to the statement:
+
+```json
+{ "name": "team-a-admins",
+  "action": "/team-a/**",
+  "condition": { "bool": { "and": [
+    { "inRole": { "value": "admin@team-a" } },
+    { "eq": { "part": "request.spaceId", "value": "team-a" } } ] } } }
+```
+
+Role grants in app permissions need no such condition: they are already scoped to the request's space
+([Role grant scope](#role-grant-scope)).
+
 ### Time conditions
 
 `time` matches inside a validity period and, optionally, a recurring daily window. It reads the server clock,
@@ -368,12 +385,13 @@ Values in Redis carry a binary header (CoCache 6), so writing them with Redis co
   placeholder id and metadata. Use them as starting points: set the ids, narrow the rules, and review
   before deploying.
 
-::: warning Invalid files are skipped
-A local policy file that cannot be parsed (invalid JSON, a missing required field, an unknown condition
-type, a bad matcher configuration) is logged at `ERROR` and skipped; the application still starts. Check
-the startup log, or validate policies in a test as below. The exception is a policy that reads
-[path variables](#actions) outside their scope: it stops the application from starting, because skipping it could
-drop a deny.
+::: warning Invalid files stop startup
+A local policy file that cannot be parsed or built (invalid JSON, a missing required field, an unknown action or
+condition type, a bad matcher configuration, [path variables](#actions) read outside their scope) fails loading and
+the application does not start, because skipping it could drop a deny. The error names the file. Two files that
+declare the same policy id, and a configured location that matches no file, stop startup too; only the default
+location `classpath:cosec-policy/*-policy.json` may match nothing. Validate policies in a test as below to catch
+these before deploying ([Troubleshooting](./troubleshooting.md#startup-fails-loading-a-policy-file)).
 :::
 
 ### Policy history and rollback
@@ -404,7 +422,7 @@ Validate policies in a unit test with the runtime parser, not only the JSON Sche
 
 ```kotlin
 val policies = LocalPolicyLoader(setOf("classpath:cosec-policy/*-policy.json")).policies
-check(policies.any { it.id == "order-service" })   // the file was not skipped
+check(policies.any { it.id == "order-service" })   // the location includes the file
 policies.forEach(DefaultPolicyEvaluator::evaluate)  // matchers run against a sample request
 ```
 

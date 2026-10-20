@@ -22,9 +22,11 @@ import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
+import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
@@ -37,6 +39,8 @@ import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.policy.isPolicyEvaluation
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
@@ -113,6 +117,27 @@ class ShadowAuthorizationTest {
         diff.enforced.authorized.assert().isFalse()
         diff.candidate.decidedBy?.layer.assert().isEqualTo(ExplainLayer.GLOBAL_POLICY)
         diff.candidate.decidedBy?.policyId.assert().isEqualTo("orders")
+    }
+
+    @Test
+    fun rootIsOffByDefault() {
+        val root = SimpleSecurityContext(
+            SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM),
+        )
+        val authorization = ShadowAuthorization(
+            delegate = SimpleAuthorization(
+                policyRepository,
+                appRolePermissionRepository,
+                rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT,
+            ),
+            policyRepository = policyRepository,
+            appRolePermissionRepository = appRolePermissionRepository,
+            policyProvider = ShadowPolicyProvider { listOf(policy("other", Effect.ALLOW, "/other/**")) },
+            sink = ShadowEventSink(diffs::add),
+        )
+        authorization.authorize(EvaluateRequest(path = "/orders/1"), root).block()
+            .assert().isEqualTo(AuthorizeResult.ALLOW)
+        diffs.single().kind.assert().isEqualTo(ShadowDiffKind.NARROWED)
     }
 
     @Test

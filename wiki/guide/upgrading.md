@@ -29,12 +29,14 @@ id `cosec` handed that user platform-wide access. Now:
   default tenant, or on a principal without a tenant is an ordinary principal.
 - The blacklist is checked before root, so a blacklisted request from root is denied. In an explanation the
   `BLACKLIST` layer now comes before `ROOT`, and `ExplainLayer` lists them in that order.
+- Code that builds `SimpleAuthorization`, `AuthorizationExplainer` or `ShadowAuthorization` directly defaults to
+  `RootPrincipalMatcher.NONE` too, like the starter and `PolicyTestKit`: without a `rootPrincipalMatcher` argument,
+  no principal is root.
 
 If you rely on root, set `cosec.authorization.root-enabled=true` and issue the root principal's token with
-`tenantId` `(platform)`. Code that builds `SimpleAuthorization`, `AuthorizationExplainer` or `ShadowAuthorization`
-directly keeps `RootPrincipalMatcher.DEFAULT` as its default, with the new tenant rule. `PolicyTestKit` follows
-the starter instead: no principal is root unless you pass a `RootPrincipalMatcher` to `run`. If root must work some
-other way, provide your own `RootPrincipalMatcher` bean.
+`tenantId` `(platform)`. Code that builds these classes directly passes
+`rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT`, and `PolicyTestKit` takes it as the matcher argument of
+`run`. If root must work some other way, provide your own `RootPrincipalMatcher` bean.
 
 **Role grants are scoped to an app and a space.** In 6.x a role grant was stored per role and space, without the
 app, and the client chose both the app (`CoSec-App-Id`) and the space (`CoSec-Space-Id`). A grant, `*` included,
@@ -94,8 +96,16 @@ included, and stop matching a bare role name once tokens carry `role@space`
 
 **Any invalid local policy file stops startup.** `LocalPolicyLoader` used to log and skip a policy file it could
 not parse or build (malformed JSON, an unknown matcher type, an invalid option), which could silently drop a deny.
-Now any such file fails loading, as rate limit rule files already did, and the error names the file. A location
-that does not exist is still skipped with a warning ([Troubleshooting](./troubleshooting.md#startup-fails-loading-a-policy-file)).
+Now any such file fails loading, as rate limit rule files already did, and the error names the file
+([Troubleshooting](./troubleshooting.md#startup-fails-loading-a-policy-file)).
+
+**Duplicate local policy ids and missing local policy locations stop startup.** `LocalPolicyLoader` used to keep
+one of two files that declare the same policy id and silently drop the other, and only logged a warning for a
+location in `cosec.authorization.local-policy.locations` that does not exist or matches no file. Either could drop a
+deny without notice, for example after a typo in a location that only holds denies. Now both fail loading, naming
+the id or the location. The default location `classpath:cosec-policy/*-policy.json` may still match nothing, so
+applications without local policies are unaffected. Before upgrading, check that every configured location exists
+and that policy ids are unique across files; the same file reached through two locations is loaded once.
 
 **Rate limit rule keys are checked when the rule loads.** A `key` that is not a supported part (for example
 `request.ip` instead of `request.remoteIp`) used to load and then fail every matching request with `500`, after
@@ -307,7 +317,8 @@ Until a role's grants are migrated to an app, requests that rely on them are den
 
 **Rate limits are rules, not policy conditions.** The `rateLimiter`, `groupedRateLimiter`, `redisRateLimiter` and
 `redisGroupedRateLimiter` conditions are removed, together with `TooManyRequestsException`. A policy that still uses
-one no longer parses. Local policy files that use them are skipped with an `ERROR` log, and policies stored in
+one no longer parses. Local policy files that use them are skipped with an `ERROR` log (since 7.0 they stop
+startup), and policies stored in
 Redis that use them fail their reads, which denies requests. Before upgrading, move each limit into a
 [rate limit rule](./rate-limiting.md#rules) following the
 [migration table](./rate-limiting.md#migrating-from-rate-limit-conditions). Three behaviors change with it:

@@ -35,6 +35,7 @@ import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.authorization.PolicyVerifySource
+import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.blacklist.BlacklistChecker
@@ -142,7 +143,7 @@ class AuditingAuthorizationTest {
             SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM),
         )
         val authorization = AuditingAuthorization(
-            SimpleAuthorization(mockk(), mockk()),
+            SimpleAuthorization(mockk(), mockk(), rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT),
             AuditEventSink(events::add),
         )
 

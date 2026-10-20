@@ -17,7 +17,9 @@ import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import java.io.File
+import java.net.URLClassLoader
 
 class LocalPolicyLoaderTest {
 
@@ -25,7 +27,6 @@ class LocalPolicyLoaderTest {
     fun getPolicies() {
         val loader = LocalPolicyLoader(
             setOf(
-                "classpath:cosec-policy-not-found",
                 "classpath:cosec-policy/*-policy.json",
                 "classpath:cosec-policy/test-policy.json"
             )
@@ -56,5 +57,39 @@ class LocalPolicyLoaderTest {
         assertThrownBy<IllegalStateException> {
             LocalPolicyLoader(setOf("file:${dir.absolutePath}/*.json")).policies
         }.hasMessageContaining("unknown-policy.json")
+    }
+
+    @Test
+    fun explicitLocationThatDoesNotExistFailsLoading() {
+        assertThrownBy<IllegalStateException> {
+            LocalPolicyLoader(setOf("classpath:cosec-policy-not-found")).policies
+        }.hasMessageContaining("cosec-policy-not-found")
+    }
+
+    @Test
+    fun explicitPatternMatchingNoFileFailsLoading(@TempDir dir: File) {
+        assertThrownBy<IllegalStateException> {
+            LocalPolicyLoader(setOf("file:${dir.absolutePath}/missing/*.json")).policies
+        }.hasMessageContaining("matches no file")
+        assertThrownBy<IllegalStateException> {
+            LocalPolicyLoader(setOf("classpath:cosec-policy-not-found/*-policy.json")).policies
+        }.hasMessageContaining("matches no file")
+    }
+
+    @Test
+    fun defaultLocationMayMatchNoFile() {
+        // This module's test classpath has cosec-policy/test-policy.json, so resolve against an empty class loader.
+        val emptyClasspath = PathMatchingResourcePatternResolver(URLClassLoader(arrayOf(), null))
+        LocalPolicyLoader(setOf(LocalPolicyLoader.DEFAULT_LOCATION), emptyClasspath).policies.assert().isEmpty()
+    }
+
+    @Test
+    fun duplicatePolicyIdAcrossFilesFailsLoading(@TempDir dir: File) {
+        val policy = File(javaClass.getResource("/cosec-policy/test-policy.json")!!.toURI()).readText()
+        dir.resolve("a-policy.json").writeText(policy)
+        dir.resolve("b-policy.json").writeText(policy)
+        assertThrownBy<IllegalStateException> {
+            LocalPolicyLoader(setOf("file:${dir.absolutePath}/*.json")).policies
+        }.hasMessageContaining("[id]")
     }
 }

@@ -30,6 +30,9 @@ import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
  * `inRole: suspended` keeps matching once tokens carry `suspended@team-a`. The bare role deliberately matches outside
  * the default space too: the space header is client-chosen, and narrowing it would let a client step out of a deny
  * by naming another space.
+ *
+ * Neither form limits an allow to the request's space: a statement that should grant only there adds a
+ * `request.spaceId` condition. Role grants in app permissions are scoped by [RoleScope] instead.
  */
 class InRoleConditionMatcher(configuration: Configuration) :
     AbstractConditionMatcher(InRoleConditionMatcherFactory.TYPE, configuration) {

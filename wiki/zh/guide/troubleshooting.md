@@ -119,9 +119,10 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 - **本地文件已加载但没被使用。** 授权读取的是 `PolicyRepository`。请设置
   `cosec.authorization.local-policy.init-repository=true`，或自行把策略写入仓储。
 - **策略已经存在。** 启动时，已存在的 id 会被保留，除非设置了 `force-refresh=true`。
-- **文件被跳过了。** 无效文件会以 `ERROR` 级别记录日志并被跳过（[加载策略](./policies.md#loading-and-generating-policies)）。
-  在启动日志中搜索该文件名。
-- **另一个文件使用了相同的 id。** 同一个 id 只会加载第一个。
+- **文件不在配置的位置中。** 从 7.0 起，无效文件、重复的策略 id、匹配不到任何文件的显式位置都会阻止启动
+  （见[启动时加载策略文件失败](#startup-fails-loading-a-policy-file)），因此正常启动后仍不生效的文件，通常不在
+  `cosec.authorization.local-policy.locations` 中：默认的 `classpath:cosec-policy/*-policy.json` 只匹配以 `-policy.json`
+  结尾的文件名。在启动日志中搜索 `Load Policy [` 加上该文件名。
 - **策略类型不对。** 只有 `global` 策略对所有人生效；`system` 和 `custom` 策略只对列出它们的主体生效。
 - **升级到 7.0 时没有迁移数据。** 7.0 读不了 6.x 存储在 Redis 中的数据：读取以 `ForeignFormatException` 失败，请求返回 `500`。
   请迁移数据（[迁移数据](./upgrading.md#migrating-the-data)）。
@@ -154,7 +155,12 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 启动时出现 `Failed to load policy [<file>]`，说明某个本地策略文件（`cosec.authorization.local-policy.locations`）
 无法解析或构建：JSON 格式错误、未知的动作或条件类型，或无效的选项。消息下方的 cause 会指出具体原因。
 从 7.0 起，任何这样的文件都会阻止启动；以前它只会被记录日志并跳过，这可能悄悄丢掉一条拒绝。请修正或删除该文件。
-不存在的位置只会记录一条警告。
+
+出于同样的原因，另外两种错误也会阻止启动：
+
+- `Policy id [<id>] is declared by more than one file`：7.0 之前只会悄悄加载其中一个。请给每条策略单独的 id，或删除重复的文件。
+- `Policy location [<location>] matches no file`：`cosec.authorization.local-policy.locations` 中的某个位置不存在，或其模式匹配不到任何文件，
+  通常是路径写错了。7.0 之前只会记录一条警告。只有默认位置 `classpath:cosec-policy/*-policy.json` 允许匹配不到文件。
 
 ## 启动时读取已存储的策略失败 {#startup-fails-reading-a-stored-policy}
 

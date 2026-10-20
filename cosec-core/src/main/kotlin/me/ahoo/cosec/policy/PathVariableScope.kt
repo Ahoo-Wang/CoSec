@@ -39,7 +39,8 @@ fun Statement.verifyScoped(request: Request, securityContext: SecurityContext): 
 /**
  * Clears the path variables before [this] action matches, unless it is a `path` action: one either fails to match,
  * so the condition never runs, or overwrites the variables. Skipping the write keeps the hot path free of a context
- * update per statement.
+ * update per statement. A `path` action with a `#{...}` template reads the context before it matches, so it clears
+ * the variables itself before evaluating the template (see [me.ahoo.cosec.policy.action.ReplaceablePathActionMatcher]).
  */
 fun ActionMatcher.clearPathVariablesBeforeMatch(securityContext: SecurityContext) {
     if (type != PathActionMatcherFactory.TYPE) {
@@ -62,12 +63,15 @@ class PathVariableScopeException(message: String) : IllegalArgumentException(mes
  * A condition or key *reads path variables* when its configuration, at any depth, holds a string that starts with
  * [RequestParts.PATH_VAR_PREFIX] (the `part` of every value condition, or a rate limit `key`) or mentions
  * [PATH_VARIABLES_KEY] (the context attribute an OGNL or SpEL expression would read). Expressions that build
- * the attribute name at run time cannot be recognized here; they read nothing, because the variables are cleared
- * before each statement matches its action (see `SimpleAuthorization`).
+ * the attribute name at run time cannot be recognized here. In a condition of a statement whose action captures no
+ * variables they read nothing, because the variables are cleared before that statement matches its action (see
+ * [clearPathVariablesBeforeMatch]). In a condition of a statement with a `path` action they read that action's own
+ * variables.
  *
- * An action never reads path variables: a `path` template (`#{...}`) is evaluated before the action matches, when
- * the variables are either cleared or, since a `path` action skips the clearing, still another statement's. So an
- * action whose configuration mentions [RequestParts.PATH_VAR_PREFIX] or [PATH_VARIABLES_KEY] anywhere is rejected.
+ * An action never reads path variables: a `path` template (`#{...}`) is evaluated before the action matches and
+ * captures anything, so an action whose configuration mentions [RequestParts.PATH_VAR_PREFIX] or
+ * [PATH_VARIABLES_KEY] anywhere is rejected. A template that builds the name at run time escapes this check, so the
+ * template matcher clears the variables before it evaluates: it reads nothing either, never another statement's.
  */
 object PathVariableScope {
     private const val FIX_HINT = "Use a statement whose action is a path pattern that captures the variable."

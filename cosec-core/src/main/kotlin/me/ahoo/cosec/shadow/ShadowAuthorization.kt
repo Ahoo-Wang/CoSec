@@ -55,7 +55,7 @@ class ShadowAuthorization(
     private val policyProvider: ShadowPolicyProvider,
     private val sink: ShadowEventSink = LoggingShadowEventSink(),
     private val blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp,
-    private val rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.DEFAULT,
+    private val rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE,
     private val sampleRate: Double = 1.0,
     private val reportRuleChanges: Boolean = false,
     private val random: Random = Random.Default

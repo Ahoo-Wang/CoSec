@@ -86,7 +86,7 @@ flowchart LR
 ## 从限流条件迁移 {#migrating-from-rate-limit-conditions}
 
 在 6.0 及之前，限流是策略中的条件（`rateLimiter`、`groupedRateLimiter`、`redisRateLimiter`、
-`redisGroupedRateLimiter`）。它们已在 6.1.0 中移除。仍在使用它们的策略将无法解析：本地策略文件会被跳过并记录 `ERROR` 日志，
+`redisGroupedRateLimiter`）。它们已在 6.1.0 中移除。仍在使用它们的策略将无法解析：使用它们的本地策略文件会阻止启动（从 7.0 起；6.1 会跳过它并记录 `ERROR` 日志），
 存储在 Redis 中的策略读取失败，请求被拒绝。升级前请把它们逐一改写为规则：
 
 | 原写法 | 新写法 |

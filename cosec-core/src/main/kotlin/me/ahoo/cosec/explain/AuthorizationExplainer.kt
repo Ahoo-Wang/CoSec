@@ -63,7 +63,7 @@ class AuthorizationExplainer(
     private val policyRepository: PolicyRepository,
     private val appRolePermissionRepository: AppRolePermissionRepository,
     private val blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp,
-    private val rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.DEFAULT,
+    private val rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE,
     private val rateLimitRuleProvider: RateLimitRuleProvider? = null,
     private val securityContextParser: SecurityContextParser? = null
 ) {

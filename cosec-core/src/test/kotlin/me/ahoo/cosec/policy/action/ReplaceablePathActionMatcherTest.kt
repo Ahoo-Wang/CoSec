@@ -71,4 +71,19 @@ internal class ReplaceablePathActionMatcherTest {
         }
         assertThat(actionMatcher.match(unmatchedRequest, securityContext), equalTo(false))
     }
+
+    @Test
+    fun templateDoesNotSeeAnotherStatementsPathVariables() {
+        val securityContext = SimpleSecurityContext(principal = mockk())
+        // Left behind by the previous statement's path action.
+        securityContext.setPathVariables(mapOf("id" to "1"))
+        // Built at run time, so the load-time check cannot reject it.
+        val actionMatcher =
+            PathActionMatcherFactory().create("/o/#{attributes['PATH_' + 'VARIABLES']['id']}".asConfiguration())
+        assertThat(actionMatcher, instanceOf(ReplaceablePathActionMatcher::class.java))
+        val request = mockk<Request> {
+            every { path } returns "/o/1"
+        }
+        assertThat(actionMatcher.match(request, securityContext), equalTo(false))
+    }
 }

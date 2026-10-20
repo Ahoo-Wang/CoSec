@@ -244,6 +244,14 @@ class AuthorizationExplainerTest {
     }
 
     @Test
+    fun rootIsOffByDefault() {
+        val explanation = AuthorizationExplainer(policyRepository, appRolePermissionRepository)
+            .explainOf("/anything", platformRoot)
+        explanation.authorized.assert().isFalse()
+        explanation.layer(ExplainLayer.ROOT).result.assert().isEqualTo(VerifyResult.IMPLICIT_DENY)
+    }
+
+    @Test
     fun rootIdOutsideThePlatformTenantIsNotRoot() {
         val explanation = explainer().explainOf("/anything", SimplePrincipal(CoSecPrincipal.ROOT_ID))
         explanation.authorized.assert().isFalse()
