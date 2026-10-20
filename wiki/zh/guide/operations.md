@@ -20,8 +20,11 @@
   （[`maximum-size`](./configuration.md#cache)，默认每个缓存 10,000 条）。
 
 键为 `<key-prefix>:policy:<id>`、`<key-prefix>:global:policy`、`<key-prefix>:app:permission:<appId>`、
-`<key-prefix>:app:role:permission:<appId>:<roleId>[@<spaceId>]` 和 `<key-prefix>:token:revoked:<tokenId>`；
-每个缓存有自己的失效通道，例如 `cocache:inv:<key-prefix>:policy`。Redis 需要 7.0 及以上（或 Valkey 7.2 及以上），
+`<key-prefix>:app:role:permission:<appId>:<roleId>[@<spaceId>]` 和 `<key-prefix>:token:revoked:<tokenId>`，
+其中 key 前缀末尾的 `:` 会被去掉。启用[历史](./policies.md#policy-history-and-rollback)时，每条策略还有修订列表
+`<key-prefix>:policy:history:<id>` 及其计数器 `<key-prefix>:policy:history:<id>:seq`（key 前缀按配置原样使用，不去掉末尾的 `:`）。
+`<key-prefix>:meta:schema` 记录数据已是 7.0 的布局：存在 CoSec 数据却没有这个 key 时启动失败
+（见[迁移数据](./upgrading.md#migrating-the-data)）。每个缓存有自己的失效通道，例如 `cocache:inv:<key-prefix>:policy`。Redis 需要 7.0 及以上（或 Valkey 7.2 及以上），
 并通过 Lettuce 访问。最小化的 Redis ACL 必须授予 [CoCache 列出的权限](https://cocache.ahoo.me/operations/#acl)，
 自 CoCache 6.3 起其中包括 `+hkeys +hget`（保留 `+hgetall`）。
 

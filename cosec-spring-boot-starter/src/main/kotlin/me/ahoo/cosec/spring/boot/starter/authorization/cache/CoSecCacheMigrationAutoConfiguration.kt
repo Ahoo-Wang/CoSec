@@ -83,6 +83,7 @@ class CoSecCacheMigrationAutoConfiguration {
             // migration job need not enable token revocation for them to be migrated.
             revokedTokenSpec = CoSecCacheSpecs.revokedToken(CoSecCacheSpecs.jacksonCodec(objectMapper), keyPrefix),
             legacyKeyPrefix = cacheProperties.legacyKeyPrefix,
+            keyPrefix = keyPrefix,
         )
     }
 }

@@ -171,6 +171,20 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 - `PathVariableScopeException`：已存储的副本（通常是从 6.x 迁移来的）在作用域之外读取 `request.path.var.*`，7.0 拒绝这样的策略。
   修正已存储的策略，或者以 `force-refresh=true` 启动一次，让本地文件直接覆盖已存储的副本而不读取它们。
 
+::: warning `force-refresh=true` 会覆盖数据
+它用文件覆盖**每一条**本地策略的已存储副本，包括管理员之后通过仓储做的修改；它也不能解决未迁移的数据：迁移之前每次发布都会失败
+（见[下文](#publishing-a-policy-fails-before-the-migration)）。只在迁移完成后使用一次，然后关掉。
+:::
+
+## 启动时报 CoSecSchemaException {#startup-fails-with-cosecschemaexception}
+
+`CoSecSchemaException` 会指明 schema 标记（`<key-prefix>:meta:schema`）以及一个在没有标记时找到的 CoSec 键：6.x 键前缀
+（`cosec.authorization.cache.migration.legacy-key-prefix`）或当前键前缀下的数据是 6.x 写入的，或者被回滚到了 6.x，
+而 7.0 会把它读成不存在，通常是因为键前缀以 `:` 结尾或被改过。停止所有写入方并执行[数据迁移](./upgrading.md#migrating-the-data)，
+迁移会写入标记；只有执行迁移的任务才设置 `cosec.authorization.cache.migration.check-schema=false`。由 7.0 自己写入的数据
+（例如在标记出现之前就运行过 7.0 的测试环境）也用同样的方法解决：`migrate()` 会跳过已迁移的数据并写入标记。
+在可能存在 6.x 数据时不要手动写入标记。标记中是其他 schema 版本时，说明数据是更新版本的 CoSec 写入的。
+
 ## 迁移前发布策略失败 {#publishing-a-policy-fails-before-the-migration}
 
 `setPolicy`（管理接口，或启动时 `force-refresh=true` 的本地策略）失败，抛出 `CacheWriteException`，原因是

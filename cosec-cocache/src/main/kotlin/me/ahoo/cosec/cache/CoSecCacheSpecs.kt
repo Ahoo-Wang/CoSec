@@ -37,15 +37,17 @@ import java.time.Duration
 /**
  * CoSec's CoCache declarations.
  *
- * The storage keys are the ones CoSec 6.x used: CoCache stores an entry under `{keyPrefix}{namespace}:{key}`, and
- * each cache sets an empty `keyPrefix` and a namespace of [cacheNamespace] (`cosec:policy`, `cosec:global`,
- * `cosec:app:permission`, `cosec:token:revoked`; role grants moved to the app-scoped `cosec:app:role:permission` in
- * 7.0). The values are CoCache 6's binary format, so data written by CoSec 6.x (CoCache 5) must be migrated before
- * 7.0 reads it: see [CoSecCoCache5Migration] and [RolePermissionKeyMigration]. Each namespace also names its own
- * invalidation channel `cocache:inv:{namespace}`, so deployments with different key prefixes stay apart.
+ * CoCache stores an entry under `{keyPrefix}{namespace}:{key}`; each cache sets an empty `keyPrefix` and a namespace
+ * of [cacheNamespace] (`cosec:policy`, `cosec:global`, `cosec:app:permission`, `cosec:app:role:permission`,
+ * `cosec:token:revoked`). Policies, the global policy index, app permissions and revoked tokens keep the keys of
+ * CoSec 6.x, unless the key prefix ends with `:`, which 6.x did not trim; role grants moved to the app-scoped
+ * `cosec:app:role:permission` in 7.0. The values are CoCache 6's binary format, so data written by CoSec 6.x
+ * (CoCache 5) must be migrated before 7.0 reads it: see [CoSecCoCache5Migration], [RolePermissionKeyMigration] and
+ * [CoSecSchemaMarker]. Each namespace also names its own invalidation channel `cocache:inv:{namespace}`, so
+ * deployments with different key prefixes stay apart.
  *
- * Policy and permission caches have no loader: Redis is the store of record. [storeOfRecord] must therefore be the
- * last change to their policy, after any customizer or configuration property.
+ * Policy and permission caches have no loader: Redis is the store of record. [pinnedPolicy] must therefore be the
+ * last change to every cache's policy, after any customizer or configuration property.
  */
 object CoSecCacheSpecs {
     const val POLICY_CACHE_NAME = "PolicyCache"
@@ -95,6 +97,25 @@ object CoSecCacheSpecs {
         .foreignFormat(ForeignFormatMode.FAIL)
         .build()
 
+    /**
+     * Revoked tokens are not the store of record (they expire with their tokens, and a failed read degrades on
+     * purpose), but a 6.x revocation must not be reclaimed either: deleting it would accept the token again. Content
+     * the cache cannot read therefore fails the read ([ForeignFormatMode.FAIL]), whatever `cocache.*` says.
+     */
+    fun CachePolicy.failOnForeignFormat(): CachePolicy = toBuilder()
+        .foreignFormat(ForeignFormatMode.FAIL)
+        .build()
+
+    /**
+     * What CoSec fixes in the policy of [cacheName], applied after any customizer or property:
+     * [storeOfRecord] for policies and permissions, [failOnForeignFormat] for revoked tokens.
+     */
+    fun pinnedPolicy(cacheName: String, policy: CachePolicy): CachePolicy = when (cacheName) {
+        in STORE_OF_RECORD_CACHE_NAMES -> policy.storeOfRecord()
+        REVOKED_TOKEN_CACHE_NAME -> policy.failOnForeignFormat()
+        else -> policy
+    }
+
     fun policy(
         codec: Codec<Policy>,
         keyPrefix: String = CoSec.COSEC,
@@ -140,7 +161,7 @@ object CoSecCacheSpecs {
     /**
      * Revocations are always written with an explicit lifetime. The cache keeps CoCache's degraded read mode on
      * purpose: tokens are still signature-verified and expire on their own, and failing closed would reject every
-     * authenticated request during a Redis outage.
+     * authenticated request during a Redis outage. An unreadable revocation still fails ([failOnForeignFormat]).
      */
     fun revokedToken(
         codec: Codec<Boolean>,
@@ -149,7 +170,12 @@ object CoSecCacheSpecs {
     ): CacheSpec<String, Boolean> = CacheSpec.builder<String, Boolean>(REVOKED_TOKEN_CACHE_NAME)
         .storageLayout(keyPrefix)
         .codec(codec)
-        .policy(policy.toBuilder().absentTtl(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS)).build())
+        .policy(
+            policy.toBuilder()
+                .absentTtl(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
+                .build()
+                .failOnForeignFormat()
+        )
         .build()
 
     inline fun <reified V : Any> jacksonCodec(mapper: ObjectMapper): Codec<V> =

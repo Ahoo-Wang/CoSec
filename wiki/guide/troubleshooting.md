@@ -198,6 +198,24 @@ stored copy cannot be read, startup fails with that read error, even if the loca
   scope, which 7.0 rejects. Fix the stored policy, or start once with `force-refresh=true` so the local files
   overwrite the stored copies without reading them.
 
+::: warning `force-refresh=true` overwrites
+It replaces the stored copy of **every** local policy with its file, including changes administrators made through
+the repository since, and it is no fix for unmigrated data: before the migration every publish fails
+([below](#publishing-a-policy-fails-before-the-migration)). Use it only after the migration, once, and turn it off
+again.
+:::
+
+## Startup fails with CoSecSchemaException
+
+`CoSecSchemaException` names the schema marker (`<key-prefix>:meta:schema`) and a CoSec key found without it: the
+data under the 6.x key prefix (`cosec.authorization.cache.migration.legacy-key-prefix`) or the current one was
+written by 6.x, or rolled back to it, and 7.0 would read it as missing, typically because the key prefix ends with
+`:` or changed. Stop every writer and run the [data migration](./upgrading.md#migrating-the-data), which writes the
+marker; only the job that runs it sets `cosec.authorization.cache.migration.check-schema=false`. Data that 7.0
+itself wrote, for example in a test environment that ran 7.0 before the marker existed, is fixed the same way:
+`migrate()` skips what is already migrated and writes the marker. Do not write the marker by hand while 6.x data
+may exist. A marker holding another schema version means a newer CoSec wrote the data.
+
 ## Publishing a policy fails before the migration
 
 `setPolicy` (an administration API, or local policies with `force-refresh=true` at startup) fails with

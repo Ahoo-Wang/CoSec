@@ -93,9 +93,11 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
     @ConditionalOnMissingBean
     fun globalPolicyIndexCache(
         runtime: CacheRuntime,
+        schemaCheck: ObjectProvider<CoSecSchemaCheck>,
         customizers: ObjectProvider<CacheSpecCustomizer>,
         cocacheProperties: ObjectProvider<CoCacheProperties>,
     ): GlobalPolicyIndexCache {
+        schemaCheck.awaitSchemaCheck()
         val spec = CoSecCacheSpecs.globalPolicyIndex(cacheProperties.keyPrefix)
         return cosecCacheAssembler(runtime, customizers, cocacheProperties).createGlobalPolicyIndex(spec)
     }
@@ -107,10 +109,12 @@ class CoSecPolicyCacheAutoConfiguration(private val cacheProperties: CacheProper
     @ConditionalOnMissingBean
     fun policyCache(
         runtime: CacheRuntime,
+        schemaCheck: ObjectProvider<CoSecSchemaCheck>,
         objectMapper: ObjectMapper,
         customizers: ObjectProvider<CacheSpecCustomizer>,
         cocacheProperties: ObjectProvider<CoCacheProperties>,
     ): PolicyCache {
+        schemaCheck.awaitSchemaCheck()
         val spec = CoSecCacheSpecs.policy(
             CoSecCacheSpecs.jacksonCodec<Policy>(objectMapper),
             cacheProperties.keyPrefix,

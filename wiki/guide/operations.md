@@ -28,7 +28,11 @@ also holds revoked token ids. Each instance keeps an in-process copy
   ([`maximum-size`](./configuration.md#cache), default 10,000 entries per cache).
 
 Keys are `<key-prefix>:policy:<id>`, `<key-prefix>:global:policy`, `<key-prefix>:app:permission:<appId>`,
-`<key-prefix>:app:role:permission:<appId>:<roleId>[@<spaceId>]` and `<key-prefix>:token:revoked:<tokenId>`; each
+`<key-prefix>:app:role:permission:<appId>:<roleId>[@<spaceId>]` and `<key-prefix>:token:revoked:<tokenId>`, with a
+trailing `:` of the key prefix removed. With [history](./policies.md#policy-history-and-rollback) enabled, each policy
+also has a revision list `<key-prefix>:policy:history:<id>` and its counter `<key-prefix>:policy:history:<id>:seq`
+(the key prefix as configured, not trimmed). `<key-prefix>:meta:schema` records that the data is in the 7.0 layout:
+startup fails while CoSec data exists without it ([Migrating the data](./upgrading.md#migrating-the-data)). Each
 cache has its own invalidation channel, `cocache:inv:<key-prefix>:policy` and so on. Redis must be 7.0 or later (or
 Valkey 7.2 or later), reached through Lettuce. A minimal Redis ACL must grant what
 [CoCache lists](https://cocache.ahoo.me/operations/#acl), which since CoCache 6.3 includes `+hkeys +hget` (keep

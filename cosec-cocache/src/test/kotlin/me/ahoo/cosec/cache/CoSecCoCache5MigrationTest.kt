@@ -23,6 +23,7 @@ import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.springframework.data.redis.connection.DataType
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
@@ -220,7 +221,18 @@ class CoSecCoCache5MigrationTest {
         running.setPolicy(changed).block()
         running.setPolicy(created).block()
 
-        migration().rollback()
+        val revoked = instance().revokedTokenCache
+        CoCacheTokenStore(revoked).revoke("revoked-by-70", Duration.ofMinutes(10))
+
+        // 7.0 created keys 6.x would read as missing: rollback refuses and changes nothing
+        val unbacked = listOf("$keyPrefix:policy:created-after", "$keyPrefix:token:revoked:revoked-by-70")
+        migration().keysWithoutBackup().assert().isEqualTo(unbacked)
+        assertThrows<KeysWithoutBackupException> { migration().rollback() }.keys.assert().isEqualTo(unbacked)
+        redis.hasKey("$backupPrefix$keyPrefix:policy:custom-allow").assert().isTrue()
+        migration().schemaMarker.isMarked().assert().isTrue()
+
+        migration().rollback(allowKeysWithoutBackup = true)
+        migration().schemaMarker.isMarked().assert().isFalse()
 
         // migrated keys are restored from their backups: 7.0's change is lost
         redis.opsForValue().get("$keyPrefix:policy:custom-allow")

@@ -67,7 +67,7 @@ cached in-process.
 
 | Property | Default | Description |
 |---|---|---|
-| `cosec.authorization.cache.key-prefix` | `cosec` | Prefix for all Redis keys (`cosec:policy:*`, `cosec:global:policy`, `cosec:app:permission:*`, `cosec:app:role:permission:*`, `cosec:token:revoked:*`). |
+| `cosec.authorization.cache.key-prefix` | `cosec` | Prefix for all Redis keys (`cosec:policy:*`, `cosec:global:policy`, `cosec:app:permission:*`, `cosec:app:role:permission:*`, `cosec:token:revoked:*`, `cosec:meta:schema`; a trailing `:` is removed), and, as configured, for the policy history (`cosec:policy:history:<id>` and `cosec:policy:history:<id>:seq`). |
 | `cosec.authorization.cache.policy.*` | | Local cache for policies. |
 | `cosec.authorization.cache.role.*` | | Local cache for role grants. |
 | `cosec.authorization.cache.token.*` | `expire-after-write: 30`, `maximum-size: 100000` | Local cache for revocation lookups. |
@@ -76,6 +76,7 @@ cached in-process.
 | `cosec.authorization.cache.migration.legacy-key-prefix` | same as `cosec.authorization.cache.key-prefix` | `cosec.authorization.cache.key-prefix` of the 6.x deployment, exactly as it was configured (a trailing `:` is kept), for the [data migration](./upgrading.md#migrating-the-data). |
 | `cosec.authorization.cache.migration.missing-guard-sentinel` | `_nil_` | `cocache.redis.missing-guard-sentinel` of the 6.x deployment. |
 | `cosec.authorization.cache.migration.backup-prefix` | `cocache5-backup:` | Where the CoCache migration backs up each 6.x value it converts, for a rollback. |
+| `cosec.authorization.cache.migration.check-schema` | `true` | Refuse to start while CoSec data exists in Redis without the 7.0 schema marker (`cosec:meta:schema`). Set it to `false` only in the one-off job that runs the [data migration](./upgrading.md#migrating-the-data). |
 
 Each local cache (`policy`, `role`, `token`) accepts:
 
@@ -95,7 +96,12 @@ See [Operations](./operations.md#redis-and-caching).
 CoSec creates these caches on CoCache's runtime under the names `PolicyCache`, `GlobalPolicyIndexCache`,
 `AppPermissionCache`, `RolePermissionCache` and `RevokedTokenCache`. CoCache's `cocache.defaults.*` and
 `cocache.caches.<name>.*` and `CacheSpecCustomizer` beans apply to them, except for the key layout, which stays
-CoSec's, and for policies and permissions, which always keep "never expire, and fail when Redis cannot be read".
+CoSec's, for policies and permissions, which always keep "never expire, and fail when Redis cannot be read", and for
+every CoSec cache, which always fails a read of a value it cannot decode instead of deleting it
+(`foreign-format: fail`). The policy settings are applied in this order: `cosec.authorization.cache.policy`, `role`
+or `token`, then customizers, then `cocache.defaults.*` and `cocache.caches.<name>.*`, so a `cocache.*` property wins
+over the `cosec.*` one. `AppPermissionCache` and `GlobalPolicyIndexCache` have no `cosec.*` settings: tune them with
+`cocache.caches.AppPermissionCache.*` and `cocache.caches.GlobalPolicyIndexCache.*`.
 
 ## Rate limiting
 
