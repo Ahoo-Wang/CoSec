@@ -13,6 +13,11 @@
 
 package me.ahoo.cosec.testkit
 
+import me.ahoo.cosec.api.principal.CoSecPrincipal.Companion.ROOT_ID
+import me.ahoo.cosec.api.tenant.Tenant
+import me.ahoo.cosec.authorization.RootPrincipalMatcher
+import me.ahoo.cosec.explain.ExplainPrincipal
+import me.ahoo.cosec.explain.ExplainRequest
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -64,6 +69,23 @@ class PolicyTestKitTest {
             .contains("[gone]")
         val error = assertThrows(AssertionError::class.java) { report.assertPasses() }
         error.message.assert().startsWith("1 of 2 policy test cases failed").contains("wrong › expects a deny")
+    }
+
+    @Test
+    fun rootIsOffByDefaultAsInTheStarter() {
+        val suite = PolicyTestSuite(
+            name = "root",
+            cases = listOf(
+                PolicyTestCase(
+                    name = "root id without policies",
+                    principal = ExplainPrincipal(id = ROOT_ID, tenantId = Tenant.PLATFORM_TENANT_ID),
+                    request = ExplainRequest(path = "/orders"),
+                    expect = PolicyTestExpectation(ExpectedResult.IMPLICIT_DENY),
+                ),
+            ),
+        )
+        PolicyTestKit.run(suite).single().passed.assert().isTrue()
+        PolicyTestKit.run(suite, RootPrincipalMatcher.DEFAULT).single().explanation.authorized.assert().isTrue()
     }
 
     @Test

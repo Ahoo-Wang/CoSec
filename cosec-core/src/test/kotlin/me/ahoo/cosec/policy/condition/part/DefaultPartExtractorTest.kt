@@ -19,6 +19,7 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.DeviceIdCapable
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.policy.action.getPathVariables
 import me.ahoo.test.asserts.assert
@@ -27,6 +28,28 @@ import org.junit.jupiter.api.Test
 import java.net.URI
 
 class DefaultPartExtractorTest {
+
+    @Test
+    fun isSupportedAgreesWithExtract() {
+        val supported = listOf(
+            RequestParts.PATH, RequestParts.METHOD, RequestParts.APP_ID, RequestParts.SPACE_ID,
+            RequestParts.DEVICE_ID, RequestParts.REMOTE_IP, RequestParts.ORIGIN, RequestParts.ORIGIN_HOST,
+            RequestParts.REFERER, RequestParts.REFERER_HOST, SecurityContextParts.TENANT_ID,
+            SecurityContextParts.PRINCIPAL_ID, RequestParts.HEADER_PREFIX + "x", RequestParts.ATTRIBUTES_PREFIX + "x",
+            ResourceParts.PREFIX + "x", SecurityContextParts.PRINCIPAL_ATTRIBUTES_PREFIX + "x",
+            RequestParts.PATH_VAR_PREFIX + "x",
+        )
+        supported.forEach { part ->
+            DefaultPartExtractor.isSupported(part).assert().describedAs(part).isTrue()
+            DefaultPartExtractor(part).extract(EvaluateRequest(), SimpleSecurityContext.anonymous())
+        }
+        listOf("request.ip", "request.header.", "context.principal.roles", "").forEach { part ->
+            DefaultPartExtractor.isSupported(part).assert().describedAs(part).isFalse()
+        }
+        assertThrownBy<IllegalArgumentException> {
+            DefaultPartExtractor("request.ip").extract(EvaluateRequest(), SimpleSecurityContext.anonymous())
+        }
+    }
 
     @Test
     fun extractRequestPath() {

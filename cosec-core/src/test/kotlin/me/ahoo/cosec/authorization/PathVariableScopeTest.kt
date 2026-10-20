@@ -342,6 +342,37 @@ class PathVariableScopeTest {
     }
 
     @Test
+    fun actionTemplatesReadingPathVariablesFailToLoad() {
+        // A template is evaluated before its action matches, so it could only see cleared or stale variables.
+        listOf(
+            "\"/orders/#{attributes['PATH_VARIABLES']['orderId']}\"",
+            "[\"/a\", \"/orders/#{attributes['PATH_VARIABLES']['orderId']}\"]",
+            "{ \"path\": { \"pattern\": \"/orders/#{getAttributeValue('PATH_VARIABLES')}\" } }",
+            "{ \"composite\": [ \"/a\", \"/orders/request.path.var.orderId\" ] }",
+        ).forEach { action ->
+            assertThrownBy<PathVariableScopeException> {
+                policy(policyJson("g", "global", """{ "name": "s", "action": $action }"""))
+            }.hasMessageContaining("Policy [g] statement [0][s] action")
+        }
+        assertThrownBy<PathVariableScopeException> {
+            CoSecJsonSerializer.readValue(
+                """{ "id": "app", "groups": [ { "name": "g", "description": "", "permissions": [
+                     { "id": "read", "name": "read", "action": "/o/#{attributes['PATH_VARIABLES']['id']}" } ] } ] }""",
+                AppPermission::class.java,
+            )
+        }.hasMessageContaining("App permission [app] permission [read] action")
+        assertThrownBy<PathVariableScopeException> {
+            RateLimitRule(
+                id = "r",
+                action = path("/o/#{attributes['PATH_VARIABLES']['id']}"),
+                rateLimit = RateLimit(permitsPerSecond = 1.0),
+            )
+        }.hasMessageContaining("Rate limit rule [r] action")
+        // Templates over the principal or tenant still load.
+        policy(policyJson("g", "global", """{ "action": "/users/#{principal.id}/*" }"""))
+    }
+
+    @Test
     fun appPermissionsAreChecked() {
         assertThrownBy<PathVariableScopeException> {
             CoSecJsonSerializer.readValue(

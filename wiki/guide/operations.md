@@ -55,7 +55,7 @@ Every authorization decision produces an audit event (`cosec.audit.enabled`, def
 - **what**: request id, app and space ids, method, path, remote IP, device id and user agent, gateway route id;
 - **decision**: `ALLOW`, `EXPLICIT_DENY`, `IMPLICIT_DENY`, `TOO_MANY_REQUESTS` or `ERROR`, with a reason
   code (for example `TOKEN_EXPIRED` or `REGEX_TIMEOUT`) and the evaluation time;
-- **why**: the source (`ROOT`, `BLACKLIST`, `GLOBAL_POLICY`, `PRINCIPAL_POLICY`, `ROLE_PERMISSION` or
+- **why**: the source (`BLACKLIST`, `ROOT`, `GLOBAL_POLICY`, `PRINCIPAL_POLICY`, `ROLE_PERMISSION` or
   `NONE`) and the matched policy and statement, or role and permission;
 - **trace**: trace and span ids when tracing is active.
 

@@ -49,6 +49,9 @@ class BusinessHoursConditionMatcher(configuration: Configuration) :
   包装其他匹配器的组合匹配器应在任一子匹配器需要阻塞时返回 `true`，`bool` 就是这样做的。
 - **校验和解释时跳过副作用。** 保存策略时会用模拟请求把每个条件执行一次来校验策略，[解释决策](../guide/troubleshooting.md#explain-a-decision)时也会执行每个条件。带有无法避免的外部副作用的自定义匹配器
   必须检查 `securityContext.isPolicyEvaluation`（`me.ahoo.cosec.policy`），为 `true` 时直接返回、不产生副作用。策略数据或请求数据无法伪造这个标记。
+- **路径变量的作用域限于所在语句。** 在代码中读取路径变量（`securityContext.getPathVariables()`）的匹配器不会被加载时检查发现，
+  该检查只检查配置（见[路径变量](../guide/policies.md#actions)）。每条语句匹配动作之前都会清空路径变量，因此这样的匹配器只能看到
+  本语句 `path` 动作捕获的变量；在策略或应用权限的条件中、在其他动作之下，或在动作匹配器内部，看到的都是空映射。
 
 ## 授权扩展点 {#authorization-hooks}
 

@@ -14,6 +14,7 @@ Add a matcher only after confirming that the built-ins cannot express the rule. 
 - A factory's `type` is the object key used in policy JSON. It must not collide with another factory; later registration replaces the existing entry.
 - Do not change the SPI interfaces to add a matcher. Implement them and register the factory.
 - Keep matching synchronous and side-effect free. Authorization is a pure decision: matchers run for denied requests too, so a stateful control such as a quota belongs in `RateLimitingAuthorization`, not in a matcher.
+- Path variables are scoped to their statement. A matcher that reads them in code (`securityContext.getPathVariables()`) is not caught by the load-time `PathVariableScope` check, which only scans configuration strings; at run time it sees only the variables captured by its own statement's `path` action, and an empty map in policy/app permission conditions, under any other action, or inside an action matcher.
 - If a custom matcher has an unavoidable external side effect, skip it when `securityContext.isPolicyEvaluation` (`me.ahoo.cosec.policy`) is `true`: saving a policy validates it by running each condition once against a mock request.
 
 Before editing, inspect the target CoSec version's interfaces and the nearest built-in matcher. In a CoSec checkout, the authoritative files are:

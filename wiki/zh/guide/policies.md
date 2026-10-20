@@ -85,7 +85,8 @@
 
 - 策略或应用权限的 `condition`，它们在任何动作之前求值；
 - 动作不是 `path` 动作的语句或权限的条件：`all`、`["*", ...]`、含有非 path 成员的 `composite`，或自定义动作类型；
-- 动作不是 `path` 动作的限流规则的 `condition` 或 `key`。
+- 动作不是 `path` 动作的限流规则的 `condition` 或 `key`；
+- 任何动作自身的配置，例如 `path` 模板 `/orders/#{attributes['PATH_VARIABLES']...}`：模板在动作匹配之前求值，那时的变量不属于它自己。
 
 校验会识别所有以 `request.path.var.` 开头的 `part` 和限流 `key`，以及匹配器配置中提到 `PATH_VARIABLES`
 （保存路径变量的上下文属性）的任意字符串，包括 OGNL、SpEL 表达式和 `#{...}` 模板。运行时拼出这个属性名的表达式、
@@ -123,11 +124,16 @@
 |---|---|---|
 | `all` | `{}` | 始终 |
 | `authenticated` | `{}` | 主体不是匿名的 |
-| `inRole` | `{ "value": "admin" }` | 主体拥有该角色 |
+| `inRole` | `{ "value": "admin" }` | 主体拥有该角色。不带后缀的值匹配不带后缀持有的角色（在任何空间），或以 `admin@<space>` 形式在请求所在空间持有的角色；写成 `admin@team-a` 的值必须与主体的某个角色完全相同 |
 | `inTenant` | `{ "value": "default" \| "user" \| "platform" }` | 租户是默认租户 `(0)`、用户租户或平台租户 `(platform)` |
 
 `inTenant` 判断的是租户的*种类*。要判断具体的租户 id，请使用
 `{ "eq": { "part": "context.tenantId", "value": "..." } }`。
+
+`inRole` 遵循[按空间划分的角色](./web-integration.md#app-and-space)：当请求指定空间 `team-a` 时，基于
+`inRole: suspended` 的拒绝仍会匹配令牌中携带 `suspended@team-a` 的主体。不带后缀持有的角色在每个空间都匹配，因此在
+`CoSec-Space-Id` 中指定其他空间无法绕过这样的拒绝。其他读取 `context.principal.roles` 的条件（`in`、`spel`、`ognl`）
+看到的是原始字符串，包括 `suspended@team-a`。
 
 ### 时间条件 {#time-conditions}
 

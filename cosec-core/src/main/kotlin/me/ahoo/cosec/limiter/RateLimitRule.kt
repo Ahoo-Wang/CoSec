@@ -50,6 +50,10 @@ data class RateLimitRule(
     init {
         require(ID_PATTERN.matches(id)) { "Rate limit rule id [$id] must match ${ID_PATTERN.pattern}." }
         require(key == null || key.isNotBlank()) { "Rate limit rule [$id] key must not be blank." }
+        // An unsupported key would fail every matching request with 500, after earlier rules spent their permits.
+        require(key == null || DefaultPartExtractor.isSupported(key)) {
+            "Rate limit rule [$id] key [$key] is not a supported part (e.g. request.remoteIp, context.principal.id)."
+        }
         PathVariableScope.requireScoped(id, action, condition, key)
     }
 

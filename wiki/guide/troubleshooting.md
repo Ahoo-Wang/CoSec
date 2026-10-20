@@ -13,7 +13,7 @@ logging:
     me.ahoo.cosec.audit: DEBUG                               # audit events (denials are logged at WARN)
 ```
 
-Each audit event records the principal, the request, the result and its **source**: `ROOT`, `BLACKLIST`,
+Each audit event records the principal, the request, the result and its **source**: `BLACKLIST`, `ROOT`,
 `GLOBAL_POLICY`, `PRINCIPAL_POLICY`, `ROLE_PERMISSION`, or `NONE` when nothing matched (see
 [Auditing](./operations.md#auditing)). Correlate a response with its event through the `CoSec-Request-Id`
 header. With `opentelemetry-support` the same information is on the `cosec.authorize` span.
@@ -166,7 +166,15 @@ A local policy file, an app permission or a rate limit rule reads `request.path.
 its own captures the variables. The message names the file, the policy, statement or rule, and the action type.
 Move the reference into a statement (or rule) whose `path` action declares the variable, or move a policy
 condition into its statements' conditions ([Path variables](./policies.md#actions)). Before 7.0 such a reference
-read the variables of whichever statement had matched last.
+read the variables of whichever statement had matched last. An action's own configuration, such as a `path`
+template that mentions `PATH_VARIABLES`, may not read them at all: read them in the statement's condition instead.
+
+## Startup fails loading a policy file
+
+`Failed to load policy [<file>]` at startup means a local policy file (`cosec.authorization.local-policy.locations`)
+could not be parsed or built: malformed JSON, an unknown action or condition type, or an invalid option. The cause
+below the message says which. Since 7.0 any such file stops startup; before, it was logged and skipped, which could
+silently drop a deny. Fix or remove the file. A location that does not exist is only logged as a warning.
 
 ## Startup fails reading a stored policy
 

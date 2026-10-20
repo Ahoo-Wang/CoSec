@@ -49,7 +49,7 @@ import reactor.kotlin.core.publisher.toMono
  * authorization with [MissingPolicyException] instead of being skipped.
  *
  * Matchers are evaluated synchronously on the subscribing thread. A layer whose policies or app permission
- * contain a blocking matcher (see [me.ahoo.cosec.policy.BlockingAware], e.g. a Redis rate limiter) is evaluated
+ * contain a blocking matcher (see [me.ahoo.cosec.policy.BlockingAware], e.g. a custom matcher that calls a remote service) is evaluated
  * on [Schedulers.boundedElastic] instead, so it never blocks an event loop even when the repositories answer
  * from the local cache. Layers without one are evaluated in place.
  *
@@ -81,9 +81,9 @@ class SimpleAuthorization(
      * Deny-first evaluation of policy statements: every DENY statement of every matched policy is verified
      * before any ALLOW statement; first match wins.
      *
-     * Policy conditions are evaluated exactly once, up front, so a policy-level condition (e.g. a rate
-     * limiter) runs for every matched policy regardless of which statement decides — denied requests
-     * uniformly consume rate-limiter permits.
+     * Policy conditions are evaluated exactly once, up front, for every policy, regardless of which statement
+     * decides. Built-in conditions are pure: rate limiting is not a condition but
+     * [me.ahoo.cosec.limiter.RateLimitingAuthorization], which spends permits only for allowed requests.
      *
      * Path variables are cleared before the policy conditions and before every statement (see [verifyScoped]), so a
      * condition only sees the variables its own statement's action captured, never those another statement, policy

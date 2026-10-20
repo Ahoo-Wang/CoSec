@@ -41,6 +41,16 @@ class RateLimitRuleTest {
     }
 
     @Test
+    fun initWhenKeyUnsupported() {
+        // Rejected when the rule loads, not with a 500 on every matching request.
+        listOf("request.ip", "request.header.", "principal.id").forEach { key ->
+            assertThrows(IllegalArgumentException::class.java) {
+                RateLimitRule(id = "a", action = AllActionMatcher.INSTANCE, rateLimit = rateLimit, key = key)
+            }.message.assert().contains("key [$key]")
+        }
+    }
+
+    @Test
     fun sharedBucket() {
         val rule = RateLimitRule(id = "a", action = AllActionMatcher.INSTANCE, rateLimit = rateLimit)
         rule.bucketOf(EvaluateRequest(), SimpleSecurityContext.anonymous()).assert().isEqualTo("global")

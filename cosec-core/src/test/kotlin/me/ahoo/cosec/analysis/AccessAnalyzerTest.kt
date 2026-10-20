@@ -151,7 +151,7 @@ class AccessAnalyzerTest {
             AccessAnalyzer.load(listOf("classpath:not-exists/*.json"))
         }
         assertThrows(IllegalStateException::class.java) {
-            AccessAnalyzer.load(listOf("classpath:cosec-policy/error-policy.json"))
+            AccessAnalyzer.load(listOf("classpath:cosec-policy-invalid/error-policy.json"))
         }
     }
 }

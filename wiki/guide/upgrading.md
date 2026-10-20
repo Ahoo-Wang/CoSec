@@ -32,7 +32,8 @@ id `cosec` handed that user platform-wide access. Now:
 
 If you rely on root, set `cosec.authorization.root-enabled=true` and issue the root principal's token with
 `tenantId` `(platform)`. Code that builds `SimpleAuthorization`, `AuthorizationExplainer` or `ShadowAuthorization`
-directly keeps `RootPrincipalMatcher.DEFAULT` as its default, with the new tenant rule. If root must work some
+directly keeps `RootPrincipalMatcher.DEFAULT` as its default, with the new tenant rule. `PolicyTestKit` follows
+the starter instead: no principal is root unless you pass a `RootPrincipalMatcher` to `run`. If root must work some
 other way, provide your own `RootPrincipalMatcher` bean.
 
 **Role grants are scoped to an app and a space.** In 6.x a role grant was stored per role and space, without the
@@ -69,18 +70,44 @@ rule without a `path` action read the variables of a policy. Now:
   policy and app permission conditions, so a condition only sees what its own `path` action captured;
 - reading them where no `path` action of the same statement or rule captured them is a load error,
   `PathVariableScopeException`: in a policy or app permission `condition`, in the condition of a statement or
-  permission whose action is not `path`, and in the `condition` or `key` of a rate limit rule whose action is not
-  `path` ([Path variables](./policies.md#actions)).
+  permission whose action is not `path`, in the `condition` or `key` of a rate limit rule whose action is not
+  `path`, and in any action's configuration, such as a `path` template `/orders/#{...PATH_VARIABLES...}`: a template
+  is evaluated before its action matches, when the variables are not its own ([Path variables](./policies.md#actions)).
 
 Parsing such a policy, app permission or rate limit rule fails, and so does constructing `PolicyData`,
 `AppPermissionData` or `RateLimitRule` with one. `RedisPolicyRepository.setPolicy` rejects it. A local policy file
-with one stops the application from starting, instead of being skipped like other invalid files. A policy already
-stored in Redis with one fails its reads, which denies requests with `500`.
+with one stops the application from starting. A policy already stored in Redis with one fails its reads, which
+denies requests with `500`.
 
 Before upgrading, search policies, app permissions and rate limit rules for `request.path.var.` and
 `PATH_VARIABLES`. Move each reference into a statement whose `path` action captures the variable, for example
 replace `"action": "*"` with the pattern that declares it, and move a policy-level condition into the conditions of
 its statements.
+
+**`inRole` follows roles into their space.** With roles issued as `role@space`, a bare `inRole` value now also
+matches the principal's `role@<request space>`, so a deny such as `inRole: suspended` keeps matching after tokens
+switch from `suspended` to `suspended@team-a`. A role held without a suffix still matches in every space. A value
+written `role@space` is compared literally with the principal's roles, as before. Conditions that read
+`context.principal.roles` some other way (`in`, `spel`, `ognl`) still see the raw strings, `suspended@team-a`
+included, and stop matching a bare role name once tokens carry `role@space`
+([Context conditions](./policies.md#context-conditions)).
+
+**Any invalid local policy file stops startup.** `LocalPolicyLoader` used to log and skip a policy file it could
+not parse or build (malformed JSON, an unknown matcher type, an invalid option), which could silently drop a deny.
+Now any such file fails loading, as rate limit rule files already did, and the error names the file. A location
+that does not exist is still skipped with a warning ([Troubleshooting](./troubleshooting.md#startup-fails-loading-a-policy-file)).
+
+**Rate limit rule keys are checked when the rule loads.** A `key` that is not a supported part (for example
+`request.ip` instead of `request.remoteIp`) used to load and then fail every matching request with `500`, after
+earlier rules had spent their permits. Constructing or loading such a rule now fails
+([Rate limiting](./rate-limiting.md)).
+
+**OpenAPI-generated app ids replace `:` with `-`.** `OpenAPIAppPermissionGenerator` derives the app id from the
+OpenAPI title, and app ids may no longer contain `:`. An app whose title contains `:` (for example `orders:api`)
+gets the id `orders-api`; clients must send the new id in `CoSec-App-Id`, and its role grants must be written for it.
+
+### CoCache 6 and CosId 4
+
 CoSec 7.0 runs on [CoCache 6.5](https://cocache.ahoo.me/guide/migration-6) and
 [CosId 4.0](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md). CoCache 6 changed how values are
 stored in Redis, so this upgrade needs a short stop and a one-off data migration
@@ -249,9 +276,12 @@ Until a role's grants are migrated to an app, requests that rely on them are den
 ### Upgrade checklist
 
 1. Check that Redis is 7.0 or later and that its ACL allows `+hkeys +hget`.
-2. Search policies, app permissions and rate limit rules for `request.path.var.` and fix their scope.
+2. Search policies, app permissions and rate limit rules for `request.path.var.` and `PATH_VARIABLES` and fix
+   their scope; check that every local policy file loads and every rate limit `key` is a supported part.
 3. Find principals that list policies the repository does not have; decide the app of every 6.x role; issue
-   `role@space` roles; enable root explicitly if you use it.
+   `role@space` roles; enable root explicitly if you use it. Audit `in`, `spel` and `ognl` conditions over
+   `context.principal.roles`, which see raw `role@space` strings; and if an OpenAPI title contains `:`, switch
+   clients to the new `CoSec-App-Id`.
 4. Replace direct Redis writes of app permissions and role grants with writes through CoSec, replace 6.x cache
    component beans with a `CacheSpecCustomizer` or `cocache.caches.<CacheName>.*`, and change `IdGenerator`
    declarations used for a `CosIdGenerator` to `StringIdGenerator`.

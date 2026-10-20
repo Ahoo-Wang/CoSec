@@ -72,15 +72,15 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 
 ### Request allowed unexpectedly
 
-- Check root bypass first.
+- Follow the decision order: the blacklist runs first (had it matched, the request would be denied), then root. Check whether `cosec.authorization.root-enabled=true` and the principal is the platform tenant's root id; root is off by default.
 - Find which tier matched an allow (the debug log and audit event name the policy statement or role permission). If you expected a deny, check that the deny's action and condition both match: a matched deny in any tier would have won.
 - Verify the deny action and condition both match; array order cannot make an allow beat a same-tier deny.
-- Confirm the intended policy was loaded rather than skipped or shadowed by a duplicate ID.
+- Confirm the intended policy was loaded rather than shadowed by a duplicate ID (local files no longer get skipped in 7.0; Redis-stored policies are what authorization reads).
 
 ### Policy file has no effect
 
 - Confirm `cosec.authorization.local-policy.enabled=true` and the file matches `local-policy.locations`.
-- Inspect startup errors: `LocalPolicyLoader` logs and skips malformed JSON, missing required fields, unknown matcher types, and constructor-time configuration errors rather than failing the application. Exception: a `PathVariableScopeException` fails startup.
+- Since 7.0, `LocalPolicyLoader` fails startup with `Failed to load policy [<file>]` on any malformed JSON, missing required field, unknown matcher type, or constructor-time configuration error (before 7.0 it logged and skipped the file, which could drop a deny). A non-existent location is only logged as a warning.
 - Deferred matcher errors still load. For example, an unsupported `part` throws during authorization and the transport returns 500; reproduce it with `DefaultPolicyEvaluator` or the failing request.
 - Local policies are deduplicated by ID after location expansion; assert that the expected ID and content loaded.
 - `LocalPolicyLoader` does not serve authorization decisions directly. Enable `init-repository` or prepopulate `PolicyRepository`; use `force-refresh` only when overwriting repository state is intended.
