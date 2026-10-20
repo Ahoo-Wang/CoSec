@@ -2,9 +2,21 @@
 
 各版本之间有哪些变化，以及你需要做什么。每个版本的发布说明见 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
-## 从 6.0 升级到 6.1 {#_6-0-to-6-1}
+## 从 6.1 升级到 7.0 {#_6-1-to-7-0}
 
 ### 破坏性变更 {#breaking-changes}
+
+**主体引用的策略不存在时，授权失败。** 主体列出的策略 id 在 `PolicyRepository` 中查不到时（已删除、从未写入、从 Redis 中丢失），
+`SimpleAuthorization` 现在会以 `MissingPolicyException` 失败，管道将其映射为 `500`。以前，这个 id 会被跳过，由其余策略做决定：
+如果缺失的是一条拒绝策略（例如封禁账号的策略），全局放行策略就会让请求通过。对这样的主体，`AuthorizationChecker` 返回 `false`；
+解释结果会给出 `500` 并带有 `MISSING_POLICY` 警告。
+
+升级前，请找出引用了仓储中不存在的策略 id 的主体（令牌、API Key、用户记录），补写这些策略或移除这些 id。
+`PolicyRepository.getPolicies` 本身没有变化：它仍然只返回找到的策略，因此自定义仓储无需修改。
+
+## 从 6.0 升级到 6.1 {#_6-0-to-6-1}
+
+### 破坏性变更 {#breaking-changes-1}
 
 **限流改为规则，不再是策略条件。** `rateLimiter`、`groupedRateLimiter`、`redisRateLimiter` 和 `redisGroupedRateLimiter`
 条件已被移除，`TooManyRequestsException` 也一并移除。仍在使用它们的策略将无法解析：使用它们的本地策略文件会被跳过并记录 `ERROR` 日志，
