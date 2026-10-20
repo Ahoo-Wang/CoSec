@@ -22,6 +22,7 @@ import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.RoleScope
+import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.explain.AuthorizationExplainer
 import me.ahoo.cosec.explain.DecisionRef
 import me.ahoo.cosec.explain.ExplainOptions
@@ -116,18 +117,30 @@ class PolicyTestReport(val results: List<PolicyTestResult>) {
  * @Test
  * fun policies() = PolicyTestKit.run("classpath:cosec-policy-test/orders-policy-test.json").assertPasses()
  * ```
+ *
+ * No principal is root unless a [RootPrincipalMatcher] is passed, as in the starter
+ * (`cosec.authorization.root-enabled` is off by default), so a case for the root id runs through the policies like
+ * any other principal.
  */
 object PolicyTestKit {
     fun load(vararg locations: String): List<PolicyTestSuite> =
         JsonResources.readAll(locations.toList(), PolicyTestSuite::class.java)
 
-    fun run(vararg locations: String): PolicyTestReport {
-        val suites = load(*locations)
-        require(suites.isNotEmpty()) { "No policy test suites found at ${locations.toList()}." }
-        return PolicyTestReport(suites.flatMap(::run))
+    fun run(vararg locations: String): PolicyTestReport = run(locations.toList())
+
+    fun run(
+        locations: List<String>,
+        rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE
+    ): PolicyTestReport {
+        val suites = load(*locations.toTypedArray())
+        require(suites.isNotEmpty()) { "No policy test suites found at $locations." }
+        return PolicyTestReport(suites.flatMap { run(it, rootPrincipalMatcher) })
     }
 
-    fun run(suite: PolicyTestSuite): List<PolicyTestResult> {
+    fun run(
+        suite: PolicyTestSuite,
+        rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE
+    ): List<PolicyTestResult> {
         val policies = JsonResources.readAll(suite.policies, Policy::class.java)
         val appPermissions = JsonResources.readAll(
             suite.appPermissions,
@@ -135,7 +148,8 @@ object PolicyTestKit {
         ).associateBy { it.id }
         val explainer = AuthorizationExplainer(
             InMemoryPolicyRepository(policies),
-            InMemoryAppRolePermissionRepository(appPermissions, grantsOf(suite, appPermissions.keys))
+            InMemoryAppRolePermissionRepository(appPermissions, grantsOf(suite, appPermissions.keys)),
+            rootPrincipalMatcher = rootPrincipalMatcher
         )
         return suite.cases.map { case ->
             val explanation = checkNotNull(
