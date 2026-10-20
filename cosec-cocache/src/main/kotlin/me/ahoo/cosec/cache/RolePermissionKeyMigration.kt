@@ -65,8 +65,10 @@ class RolePermissionKeyMigration(
      * @param roleIds when set, only these (bare) role ids are migrated, so grants of several apps that share the
      * legacy key space can be split between apps
      * @param dryRun report what would change without writing
-     * @param overwrite replace targets that already hold different grants (e.g. to re-sync grants changed by 6.x
-     * instances during a rolling upgrade)
+     * @param overwrite replace targets that already hold different grants with the legacy grants, for example to
+     * redo the migration after 6.x changed grants during a rollback. It only rewrites targets whose legacy key still
+     * holds grants: a grant 6.x removed (its legacy key deleted or holding a cached miss) stays in the 7.0 target, so
+     * remove it through [rolePermissionCache]. There is no rolling upgrade: 6.x and 7.0 never run side by side.
      */
     fun migrate(
         appId: AppId,

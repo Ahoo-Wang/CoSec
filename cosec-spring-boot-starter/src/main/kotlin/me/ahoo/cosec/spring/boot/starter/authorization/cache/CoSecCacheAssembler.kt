@@ -21,7 +21,6 @@ import me.ahoo.cocache.core.proxy.CacheProxies
 import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
 import me.ahoo.cocache.spring.boot.CoCacheProperties
 import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache
 import me.ahoo.cosec.cache.createGlobalPolicyIndex
 import org.springframework.beans.factory.ObjectProvider
@@ -32,8 +31,9 @@ import org.springframework.beans.factory.ObjectProvider
  * Like caches declared through CoCache, a CoSec cache takes the application's [CacheSpecCustomizer]s first and the
  * `cocache.defaults.*` / `cocache.caches.[name].*` policy properties last. Two things differ:
  *
- * - [CoSecCacheSpecs.storeOfRecord] is applied after both, so neither can make a policy or permission cache expire
- *   or degrade a failed Redis read into a miss;
+ * - [CoSecCacheSpecs.pinnedPolicy] is applied after both, so neither can make a policy or permission cache expire
+ *   or degrade a failed Redis read into a miss, nor make any CoSec cache reclaim (delete) a value it cannot read,
+ *   such as an unmigrated 6.x revocation;
  * - the storage layout stays CoSec's (`cosec.authorization.cache.key-prefix`): the `key-prefix` property, namespace
  *   and key encoder of a customizer are ignored.
  *
@@ -53,10 +53,10 @@ class CoSecCacheAssembler(
     fun <K : Any, V : Any> assemble(spec: CacheSpec<K, V>): CacheSpec<K, V> {
         val builder = spec.toBuilder()
         customizers.filter { it.supports(spec.name) }.forEach { it.customize(builder) }
-        var policy = properties?.policyFor(spec.name, builder.policy) ?: builder.policy
-        if (spec.name in CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES) {
-            policy = policy.storeOfRecord()
-        }
+        val policy = CoSecCacheSpecs.pinnedPolicy(
+            spec.name,
+            properties?.policyFor(spec.name, builder.policy) ?: builder.policy
+        )
         return builder.namespace(spec.namespace)
             .keyPrefix(spec.keyPrefix)
             .keyEncoder(spec.keyEncoder)
@@ -67,10 +67,10 @@ class CoSecCacheAssembler(
     fun <K : Any, E : Any> assemble(spec: SetCacheSpec<K, E>): SetCacheSpec<K, E> {
         val builder = spec.toBuilder()
         customizers.filter { it.supports(spec.name) }.forEach { it.customize(builder) }
-        var policy = properties?.setPolicyFor(spec.name, builder.policy) ?: builder.policy
-        if (spec.name in CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES) {
-            policy = policy.storeOfRecord()
-        }
+        val policy = CoSecCacheSpecs.pinnedPolicy(
+            spec.name,
+            properties?.setPolicyFor(spec.name, builder.policy) ?: builder.policy
+        )
         return builder.namespace(spec.namespace)
             .keyPrefix(spec.keyPrefix)
             .keyEncoder(spec.keyEncoder)

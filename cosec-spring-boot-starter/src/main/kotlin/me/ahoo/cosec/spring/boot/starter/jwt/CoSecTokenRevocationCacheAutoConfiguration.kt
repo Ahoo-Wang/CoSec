@@ -22,6 +22,8 @@ import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
+import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecSchemaCheck
+import me.ahoo.cosec.spring.boot.starter.authorization.cache.awaitSchemaCheck
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
 import me.ahoo.cosec.token.TokenStore
 import org.springframework.beans.factory.ObjectProvider
@@ -68,10 +70,12 @@ class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: Ca
     @ConditionalOnMissingBean
     fun revokedTokenCache(
         runtime: CacheRuntime,
+        schemaCheck: ObjectProvider<CoSecSchemaCheck>,
         objectMapper: ObjectMapper,
         customizers: ObjectProvider<CacheSpecCustomizer>,
         cocacheProperties: ObjectProvider<CoCacheProperties>,
     ): RevokedTokenCache {
+        schemaCheck.awaitSchemaCheck()
         val spec = CoSecCacheSpecs.revokedToken(
             CoSecCacheSpecs.jacksonCodec<Boolean>(objectMapper),
             cacheProperties.keyPrefix,

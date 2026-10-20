@@ -32,6 +32,7 @@ import me.ahoo.cosec.cache.GlobalPolicyIndexCache
 import me.ahoo.cosec.cache.PolicyCache
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
@@ -42,8 +43,9 @@ import java.time.Duration
 
 /**
  * Neither an application's [CacheSpecCustomizer] nor `cocache.caches.[name].*` can weaken the store-of-record policy
- * of the policy cache and the global policy index: they never expire, a failed read throws, and unreadable content
- * fails instead of being reclaimed (which, with no loader, would delete the only copy).
+ * of the policy, global policy index, app permission and role permission caches: they never expire, a failed read
+ * throws, and unreadable content fails instead of being reclaimed (which, with no loader, would delete the only copy).
+ * The revoked token cache keeps its expiry and degraded reads, but never reclaims a revocation either.
  */
 class StoreOfRecordOverrideTest {
     /** Weakens every cache it is applied to. */
@@ -63,10 +65,9 @@ class StoreOfRecordOverrideTest {
             .build()
     }
 
-    private val weakeningProperties = listOf(
-        CoSecCacheSpecs.POLICY_CACHE_NAME,
-        CoSecCacheSpecs.GLOBAL_POLICY_INDEX_CACHE_NAME,
-    ).flatMap { name ->
+    private val weakeningProperties = (
+        CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES + CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
+        ).flatMap { name ->
         listOf(
             "cocache.caches.$name.ttl=60s",
             "cocache.caches.$name.read-failure=degrade",
@@ -80,18 +81,56 @@ class StoreOfRecordOverrideTest {
         policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
     }
 
+    /** The policy of the engine the runtime actually created, not of a separately assembled spec. */
+    private fun CacheRuntime.createdPolicy(cacheName: String): CachePolicy {
+        val engine = checkNotNull(admin(cacheName)) { "Cache [$cacheName] was not created." }
+        val field = generateSequence<Class<*>>(engine.javaClass) { it.superclass }
+            .flatMap { it.declaredFields.asSequence() }
+            .first { it.name == "policy" && it.type == CachePolicy::class.java }
+        field.isAccessible = true
+        return field.get(engine) as CachePolicy
+    }
+
+    private val backend = HookedBackend(InMemoryBackend())
+    private val contextRunner = ApplicationContextRunner()
+        .withPropertyValues(
+            *(
+                listOf(
+                    "cocache.backend=memory",
+                    "cocache.defaults.foreign-format=reclaim",
+                    "cosec.jwt.enabled=true",
+                    "cosec.jwt.token-revocation.enabled=true",
+                ) + weakeningProperties
+                ).toTypedArray()
+        )
+        .withBean(CoherenceBackend::class.java, { backend })
+        .withBean(CacheSpecCustomizer::class.java, { weakening })
+        .withUserConfiguration(
+            JacksonAutoConfiguration::class.java,
+            CoCacheAutoConfiguration::class.java,
+            CoSecPolicyCacheAutoConfiguration::class.java,
+            CoSecPermissionCacheAutoConfiguration::class.java,
+            CoSecTokenRevocationCacheAutoConfiguration::class.java,
+        )
+
+    @Test
+    fun createdCachesKeepThePinnedPolicy() {
+        contextRunner.run { context ->
+            assertThat(context).hasNotFailed()
+            val runtime = context.getBean(CacheRuntime::class.java)
+            runtime.cacheNames.assert().containsAll(CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES)
+            CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES.forEach { assertStoreOfRecord(runtime.createdPolicy(it)) }
+            // revoked tokens keep their expiry and degraded reads, but never reclaim a revocation
+            val revokedToken = runtime.createdPolicy(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME)
+            revokedToken.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
+            revokedToken.ttl.assert().isEqualTo(Duration.ofMinutes(1))
+            revokedToken.readFailure.assert().isEqualTo(ReadFailureMode.DEGRADE)
+        }
+    }
+
     @Test
     fun customizersAndPerCachePropertiesCannotOverrideStoreOfRecord() {
-        val backend = HookedBackend(InMemoryBackend())
-        ApplicationContextRunner()
-            .withPropertyValues(*(listOf("cocache.backend=memory") + weakeningProperties).toTypedArray())
-            .withBean(CoherenceBackend::class.java, { backend })
-            .withBean(CacheSpecCustomizer::class.java, { weakening })
-            .withUserConfiguration(
-                JacksonAutoConfiguration::class.java,
-                CoCacheAutoConfiguration::class.java,
-                CoSecPolicyCacheAutoConfiguration::class.java,
-            )
+        contextRunner
             .run { context ->
                 assertThat(context).hasNotFailed()
                 // the properties and the customizer do weaken the policy they are given...

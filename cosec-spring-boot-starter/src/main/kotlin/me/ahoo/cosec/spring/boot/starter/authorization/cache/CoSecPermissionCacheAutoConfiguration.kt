@@ -89,10 +89,12 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
     @ConditionalOnMissingBean
     fun appPermissionCache(
         runtime: CacheRuntime,
+        schemaCheck: ObjectProvider<CoSecSchemaCheck>,
         objectMapper: ObjectMapper,
         customizers: ObjectProvider<CacheSpecCustomizer>,
         cocacheProperties: ObjectProvider<CoCacheProperties>,
     ): AppPermissionCache {
+        schemaCheck.awaitSchemaCheck()
         val spec = CoSecCacheSpecs.appPermission(
             CoSecCacheSpecs.jacksonCodec<AppPermission>(objectMapper),
             cacheProperties.keyPrefix,
@@ -104,10 +106,12 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
     @ConditionalOnMissingBean
     fun rolePermissionCache(
         runtime: CacheRuntime,
+        schemaCheck: ObjectProvider<CoSecSchemaCheck>,
         objectMapper: ObjectMapper,
         customizers: ObjectProvider<CacheSpecCustomizer>,
         cocacheProperties: ObjectProvider<CoCacheProperties>,
     ): RolePermissionCache {
+        schemaCheck.awaitSchemaCheck()
         val spec = CoSecCacheSpecs.rolePermission(
             CoSecCacheSpecs.jacksonCodec<Set<PermissionId>>(objectMapper),
             cacheProperties.keyPrefix,

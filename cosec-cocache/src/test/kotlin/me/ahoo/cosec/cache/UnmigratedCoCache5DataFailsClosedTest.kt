@@ -15,6 +15,8 @@ package me.ahoo.cosec.cache
 
 import me.ahoo.cocache.api.CacheReadException
 import me.ahoo.cocache.core.ForeignFormatException
+import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cocache.core.policy.ForeignFormatMode
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.authorization.SimpleAuthorization
@@ -25,6 +27,7 @@ import me.ahoo.cosec.pipeline.SecurityPipeline
 import me.ahoo.cosec.pipeline.SecurityStatus
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -72,6 +75,19 @@ class UnmigratedCoCache5DataFailsClosedTest {
         // nothing was reclaimed: the only copy is still there for the migration
         redis.opsForSet().members("$keyPrefix:global:policy").assert().isEqualTo(setOf("global-deny"))
         redis.opsForValue().get("$keyPrefix:policy:custom-allow").assert().isNotNull()
+    }
+
+    @Test
+    fun revokedTokenIsNeverReclaimed() {
+        // as with cocache.defaults.foreign-format=reclaim: a reclaim would delete the 6.x revocation
+        val reclaiming = CachePolicy.DEFAULT.toBuilder().foreignFormat(ForeignFormatMode.RECLAIM).build()
+        val revokedTokenCache: RevokedTokenCache = caches.runtime.createCache(
+            CoSecCacheSpecs.revokedToken(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer), keyPrefix, reclaiming)
+        )
+
+        assertForeign { revokedTokenCache["jti"] }
+        assertThrows<CacheReadException> { CoCacheTokenStore(revokedTokenCache).isRevoked("jti") }
+        redis.opsForValue().get("$keyPrefix:token:revoked:jti").assert().isEqualTo("true")
     }
 
     @Test

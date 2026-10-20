@@ -72,7 +72,10 @@ Then call `TokenRevoker.revoke(accessToken)` from your logout endpoint. The toke
 for the refresh-token lifetime. Every instance then treats the token as invalid, and refreshing it fails.
 
 With revocation enabled, every request checks the store. The check is answered from a local cache when
-possible, otherwise it reads Redis on a worker thread rather than the event loop. If Redis is unreachable,
+possible, otherwise it reads Redis on a worker thread rather than the event loop. A "not revoked" answer is cached
+locally for 30 seconds: a revocation through `TokenRevoker` reaches every instance at once, but if that invalidation
+message is lost, or the revocation is written some other way, an instance may accept the token for up to 30 seconds
+more. If Redis is unreachable,
 the check **allows** the token rather than rejecting every authenticated request. Signature and expiry are
 still enforced, so keep access tokens short-lived.
 

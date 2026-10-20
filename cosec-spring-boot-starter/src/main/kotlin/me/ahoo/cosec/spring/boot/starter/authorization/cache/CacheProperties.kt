@@ -87,9 +87,15 @@ data class MigrationConfiguration(
     var missingGuardSentinel: String = DEFAULT_MISSING_GUARD_SENTINEL,
     /** Where the CoCache migration backs up each 6.x value it converts, for a rollback. */
     var backupPrefix: String = CoCache5MigrationOptions.DEFAULT_BACKUP_PREFIX,
+    /**
+     * Refuse to start while CoSec data exists without the 7.0 schema marker ([me.ahoo.cosec.cache.CoSecSchemaMarker]).
+     * Turn it off only in the one-off job that runs the migration, which serves no traffic.
+     */
+    var checkSchema: Boolean = true,
 ) {
     companion object {
         const val DEFAULT_MISSING_GUARD_SENTINEL = CoCache5MigrationOptions.DEFAULT_MISSING_GUARD_SENTINEL
+        const val CHECK_SCHEMA_KEY = CacheProperties.PREFIX + ".migration.check-schema"
     }
 }
 

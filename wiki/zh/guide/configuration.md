@@ -65,7 +65,7 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 
 | 属性 | 默认值 | 说明 |
 |---|---|---|
-| `cosec.authorization.cache.key-prefix` | `cosec` | 所有 Redis 键的前缀（`cosec:policy:*`、`cosec:global:policy`、`cosec:app:permission:*`、`cosec:app:role:permission:*`、`cosec:token:revoked:*`）。 |
+| `cosec.authorization.cache.key-prefix` | `cosec` | 所有 Redis 键的前缀（`cosec:policy:*`、`cosec:global:policy`、`cosec:app:permission:*`、`cosec:app:role:permission:*`、`cosec:token:revoked:*`、`cosec:meta:schema`；末尾的 `:` 会被去掉）；策略历史按配置原样使用它（`cosec:policy:history:<id>` 和 `cosec:policy:history:<id>:seq`）。 |
 | `cosec.authorization.cache.policy.*` | | 策略的本地缓存。 |
 | `cosec.authorization.cache.role.*` | | 角色授权的本地缓存。 |
 | `cosec.authorization.cache.token.*` | `expire-after-write: 30`、`maximum-size: 100000` | 吊销查询的本地缓存。 |
@@ -74,6 +74,7 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 | `cosec.authorization.cache.migration.legacy-key-prefix` | 与 `cosec.authorization.cache.key-prefix` 相同 | 6.x 部署的 `cosec.authorization.cache.key-prefix`，按原样填写（保留末尾的 `:`），用于[数据迁移](./upgrading.md#migrating-the-data)。 |
 | `cosec.authorization.cache.migration.missing-guard-sentinel` | `_nil_` | 6.x 部署的 `cocache.redis.missing-guard-sentinel`。 |
 | `cosec.authorization.cache.migration.backup-prefix` | `cocache5-backup:` | CoCache 迁移在转换每个 6.x 值之前把它备份到哪里，用于回滚。 |
+| `cosec.authorization.cache.migration.check-schema` | `true` | Redis 中存在 CoSec 数据但没有 7.0 的 schema 标记（`cosec:meta:schema`）时拒绝启动。只在运行[数据迁移](./upgrading.md#migrating-the-data)的一次性任务中设为 `false`。 |
 
 每个本地缓存（`policy`、`role`、`token`）支持：
 
@@ -91,7 +92,11 @@ Redis 出错，请求会被拒绝。详见[运维](./operations.md#redis-and-cac
 
 CoSec 在 CoCache 的运行时上创建这些缓存，缓存名为 `PolicyCache`、`GlobalPolicyIndexCache`、`AppPermissionCache`、
 `RolePermissionCache` 和 `RevokedTokenCache`。CoCache 的 `cocache.defaults.*`、`cocache.caches.<name>.*` 和
-`CacheSpecCustomizer` bean 对它们生效，但键的布局始终由 CoSec 决定，策略和权限缓存也始终保持“永不过期、读不到 Redis 时失败”。
+`CacheSpecCustomizer` bean 对它们生效，但键的布局始终由 CoSec 决定，策略和权限缓存也始终保持“永不过期、读不到 Redis 时失败”，
+所有 CoSec 缓存读到解码不了的值时都会失败而不是删除它（`foreign-format: fail`）。策略设置按以下顺序生效：先是
+`cosec.authorization.cache.policy`、`role` 或 `token`，然后是 customizer，最后是 `cocache.defaults.*` 和 `cocache.caches.<name>.*`，
+所以 `cocache.*` 属性优先于 `cosec.*` 属性。`AppPermissionCache` 和 `GlobalPolicyIndexCache` 没有 `cosec.*` 设置，
+请用 `cocache.caches.AppPermissionCache.*` 和 `cocache.caches.GlobalPolicyIndexCache.*` 调整它们。
 
 ## 限流 {#rate-limiting}
 
