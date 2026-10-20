@@ -133,7 +133,8 @@ Checklist for any deployment:
 - Set `cosec.authorization.remote-ip.max-trusted-index` to match your proxy chain.
 - Enable `cosec.inject.enabled` only on services that cannot be reached except through the verifying
   gateway.
-- Disable `cosec.authorization.root-enabled` if users can choose their own principal ids.
+- Keep `cosec.authorization.root-enabled` off (the default) unless you need root. When on, root is the platform
+  tenant's root id only, so issue platform-tenant tokens from a source users cannot influence.
 
 ## Performance
 

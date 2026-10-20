@@ -42,8 +42,8 @@ The authorization result alone does not choose 401 versus 403; the filter maps a
 
 `SimpleAuthorization` evaluates:
 
-1. Root principal ID (`cosec` by default, overridden by JVM system property `cosec.root`) → allow, unless `cosec.authorization.root-enabled=false` or a custom `RootPrincipalMatcher` bean decides otherwise.
-2. Blacklist → explicit deny.
+1. Blacklist → explicit deny (applies to root too).
+2. Root principal → allow, only when `cosec.authorization.root-enabled=true` (default `false`) and the principal is in the platform tenant (`(platform)`) with the root ID (`cosec` by default, overridden by JVM system property `cosec.root`), unless a custom `RootPrincipalMatcher` bean decides otherwise.
 3. Global policies.
 4. Principal-attached policies.
 5. Role permissions for `request.appId` + `request.spaceId`.

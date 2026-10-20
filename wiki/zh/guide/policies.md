@@ -215,8 +215,8 @@
 `EXPLICIT_DENY`，即使另一层允许了该请求。否则只要命中任意 `allow` 就放行。什么都没命中时，结果是
 `IMPLICIT_DENY`。策略和语句的顺序从不改变结果，只影响报告的是哪条命中规则。
 
-在这三层之前还有两项检查：**root** 主体（id 为 `cosec`，可配置，见[配置](./configuration.md#authorization)）
-始终放行；被黑名单拦截的请求始终拒绝。
+在这三层之前还有两项检查：被黑名单拦截的请求始终拒绝，之后 **root** 主体直接放行。root 默认关闭；
+开启后，root 是平台租户中 id 为 `cosec`（可配置，见[配置](./configuration.md#authorization)）的主体。
 
 策略自身的 `condition` 在它的语句之前、每个请求只求值一次。
 
