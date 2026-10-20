@@ -10,34 +10,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import me.ahoo.cache.api.client.ClientSideCache
-import me.ahoo.cache.api.converter.KeyConverter
-import me.ahoo.cache.api.distributed.DistributedCache
-import me.ahoo.cache.converter.ToStringKeyConverter
-import me.ahoo.cache.spring.EnableCoCache
-import me.ahoo.cache.spring.boot.starter.CoCacheProperties
-import me.ahoo.cache.spring.client.SpringClientSideCacheFactory.Companion.CLIENT_SIDE_CACHE_SUFFIX
-import me.ahoo.cache.spring.converter.SpringKeyConverterFactory.Companion.KEY_CONVERTER_SUFFIX
-import me.ahoo.cache.spring.redis.RedisDistributedCache
-import me.ahoo.cache.spring.redis.RedisDistributedCacheFactory.Companion.DISTRIBUTED_CACHE_SUFFIX
-import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
-import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
+import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
+import me.ahoo.cocache.spring.boot.CoCacheProperties
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.PermissionId
-import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.cache.AppPermissionCache
+import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.RedisAppRolePermissionRepository
 import me.ahoo.cosec.cache.RolePermissionCache
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
-import org.springframework.data.redis.core.StringRedisTemplate
 import tools.jackson.databind.ObjectMapper
 
 /**
@@ -45,29 +38,18 @@ import tools.jackson.databind.ObjectMapper
  *
  * @author ahoo wang
  */
-@AutoConfiguration
+@AutoConfiguration(afterName = [COCACHE_AUTO_CONFIGURATION])
 @ConditionalOnCoSecEnabled
 @ConditionalOnCacheEnabled
 @ConditionalOnClass(name = ["me.ahoo.cosec.cache.AppPermissionCache"])
 @EnableConfigurationProperties(
     CacheProperties::class,
 )
-@EnableCoCache(caches = [AppPermissionCache::class, RolePermissionCache::class])
 class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CacheProperties) {
 
     companion object {
-        const val APP_PERMISSION_CACHE_BEAN_NAME = "AppPermissionCache"
-        const val APP_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME =
-            "${APP_PERMISSION_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
-        const val APP_PERMISSION_CACHE_DISTRIBUTED_CACHE_BEAN_NAME =
-            "${APP_PERMISSION_CACHE_BEAN_NAME}$DISTRIBUTED_CACHE_SUFFIX"
-        const val ROLE_PERMISSION_CACHE_BEAN_NAME = "RolePermissionCache"
-        const val ROLE_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME =
-            "${ROLE_PERMISSION_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
-        const val ROLE_PERMISSION_CACHE_CLIENT_BEAN_NAME =
-            "${ROLE_PERMISSION_CACHE_BEAN_NAME}$CLIENT_SIDE_CACHE_SUFFIX"
-        const val ROLE_PERMISSION_CACHE_DISTRIBUTED_CACHE_BEAN_NAME =
-            "${ROLE_PERMISSION_CACHE_BEAN_NAME}$DISTRIBUTED_CACHE_SUFFIX"
+        const val APP_PERMISSION_CACHE_BEAN_NAME = CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME
+        const val ROLE_PERMISSION_CACHE_BEAN_NAME = CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME
     }
 
     @Bean
@@ -79,51 +61,42 @@ class CoSecPermissionCacheAutoConfiguration(private val cacheProperties: CachePr
         return RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
     }
 
-    @Bean(APP_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [APP_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME])
-    fun appPermissionCacheKeyConverter(): KeyConverter<String> {
-        return ToStringKeyConverter(cacheProperties.appPermissionKeyPrefix)
-    }
-
-    @Bean(ROLE_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [ROLE_PERMISSION_CACHE_KEY_CONVERTER_BEAN_NAME])
-    fun rolePermissionCacheKeyConverter(): KeyConverter<SpacedRoleId> {
-        return ToStringKeyConverter(cacheProperties.rolePermissionKeyPrefix)
-    }
-
-    @Bean(ROLE_PERMISSION_CACHE_CLIENT_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [ROLE_PERMISSION_CACHE_CLIENT_BEAN_NAME])
-    fun rolePermissionCacheClientSideCache(): ClientSideCache<Set<PermissionId>> {
-        return cacheProperties.role.toClientSideCache()
-    }
-
-    @Bean(ROLE_PERMISSION_CACHE_DISTRIBUTED_CACHE_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [ROLE_PERMISSION_CACHE_DISTRIBUTED_CACHE_BEAN_NAME])
-    fun rolePermissionCacheDistributedCache(
-        redisTemplate: StringRedisTemplate,
-        cocacheProperties: CoCacheProperties
-    ): DistributedCache<Set<String>> {
-        val codecExecutor = SetToSetCodecExecutor(redisTemplate, cocacheProperties.redis.missingGuardSentinel)
-        return RedisDistributedCache(redisTemplate, codecExecutor, STRICT_CACHE_FAILURE)
-    }
-
     /**
-     * Same codec as CoCache's default distributed cache (application ObjectMapper, configured sentinel),
-     * declared explicitly to opt into [STRICT_CACHE_FAILURE].
+     * App permissions are encoded with the application's [ObjectMapper], as before. They keep CoCache's default
+     * local cache settings; `cocache.caches.AppPermissionCache.*` tunes them.
      */
-    @Bean(APP_PERMISSION_CACHE_DISTRIBUTED_CACHE_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [APP_PERMISSION_CACHE_DISTRIBUTED_CACHE_BEAN_NAME])
-    fun appPermissionCacheDistributedCache(
-        redisTemplate: StringRedisTemplate,
+    @Bean(APP_PERMISSION_CACHE_BEAN_NAME)
+    @ConditionalOnMissingBean
+    fun appPermissionCache(
+        runtime: CacheRuntime,
         objectMapper: ObjectMapper,
-        cocacheProperties: CoCacheProperties
-    ): DistributedCache<AppPermission> {
-        val codecExecutor = ObjectToJsonCodecExecutor<AppPermission>(
-            AppPermission::class.java,
-            redisTemplate,
-            objectMapper,
-            cocacheProperties.redis.missingGuardSentinel,
+        customizers: ObjectProvider<CacheSpecCustomizer>,
+        cocacheProperties: ObjectProvider<CoCacheProperties>,
+    ): AppPermissionCache {
+        val spec = CoSecCacheSpecs.appPermission(
+            CoSecCacheSpecs.jacksonCodec<AppPermission>(objectMapper),
+            cacheProperties.keyPrefix,
         )
-        return RedisDistributedCache(redisTemplate, codecExecutor, STRICT_CACHE_FAILURE)
+        return cosecCacheAssembler(runtime, customizers, cocacheProperties).create(AppPermissionCache::class.java, spec)
+    }
+
+    @Bean(ROLE_PERMISSION_CACHE_BEAN_NAME)
+    @ConditionalOnMissingBean
+    fun rolePermissionCache(
+        runtime: CacheRuntime,
+        objectMapper: ObjectMapper,
+        customizers: ObjectProvider<CacheSpecCustomizer>,
+        cocacheProperties: ObjectProvider<CoCacheProperties>,
+    ): RolePermissionCache {
+        val spec = CoSecCacheSpecs.rolePermission(
+            CoSecCacheSpecs.jacksonCodec<Set<PermissionId>>(objectMapper),
+            cacheProperties.keyPrefix,
+            cacheProperties.role.toCachePolicy(CachePolicy.DEFAULT),
+        )
+        return cosecCacheAssembler(
+            runtime,
+            customizers,
+            cocacheProperties
+        ).create(RolePermissionCache::class.java, spec)
     }
 }

@@ -19,7 +19,7 @@ import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.context.request.RequestAttributesAppender
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.context.request.RequestPaths
-import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.jvm.UuidGenerator
 import org.springframework.http.HttpHeaders
 import java.net.URI
@@ -32,7 +32,7 @@ import java.net.URI
 class ServletRequestParser(
     private val remoteIPResolver: RemoteIpResolver<HttpServletRequest>,
     private val requestAttributesAppends: List<RequestAttributesAppender> = listOf(),
-    private val idGenerator: IdGenerator = UuidGenerator.INSTANCE
+    private val idGenerator: StringIdGenerator = UuidGenerator.INSTANCE
 ) : RequestParser<HttpServletRequest> {
     override fun parse(request: HttpServletRequest): Request {
         RequestPaths.requireSafe(request.servletPath)

@@ -25,7 +25,7 @@ import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.authorization.decide
 import me.ahoo.cosec.token.TokenVerificationContexts.getTokenVerificationException
 import me.ahoo.cosec.token.toAuthorizeResult
-import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.jvm.UuidGenerator
 import reactor.core.publisher.Mono
 
@@ -37,7 +37,7 @@ import reactor.core.publisher.Mono
 class AuditingAuthorization @JvmOverloads constructor(
     override val delegate: Authorization,
     private val auditEventSink: AuditEventSink,
-    private val idGenerator: IdGenerator = UuidGenerator.INSTANCE,
+    private val idGenerator: StringIdGenerator = UuidGenerator.INSTANCE,
 ) : DecisionAuthorization,
     Delegated<Authorization> {
 

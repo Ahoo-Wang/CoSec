@@ -47,7 +47,7 @@ import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationException
-import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
@@ -114,7 +114,7 @@ class AuditingAuthorizationTest {
         val delegate = mockk<Authorization> {
             every { authorize(request, context) } returns AuthorizeResult.ALLOW.toMono()
         }
-        val idGenerator = mockk<IdGenerator> {
+        val idGenerator = mockk<StringIdGenerator> {
             every { generateAsString() } returns "event-1"
         }
         val authorization = AuditingAuthorization(delegate, AuditEventSink(events::add), idGenerator)

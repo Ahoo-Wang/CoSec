@@ -13,69 +13,43 @@
 
 package me.ahoo.cosec.cache
 
-import io.mockk.mockk
-import me.ahoo.cache.TtlPolicy
-import me.ahoo.cache.api.SetElementsCache
-import me.ahoo.cache.api.TtlAt
-import me.ahoo.cache.api.source.CacheSource
-import me.ahoo.cache.client.CaffeineClientSideCache
-import me.ahoo.cache.consistency.CoherentCache
-import me.ahoo.cache.consistency.CoherentCacheConfiguration
-import me.ahoo.cache.consistency.DefaultCoherentCache
-import me.ahoo.cache.consistency.NoOpCacheEvictedEventBus
-import me.ahoo.cache.converter.ToStringKeyConverter
-import me.ahoo.cache.distributed.InMemoryDistributedCache
-import me.ahoo.cosec.api.permission.AppPermission
-import me.ahoo.cosec.api.permission.PermissionId
-import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.RolePermissionData
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
 
 /**
- * The repositories skip the boundedElastic hop when everything they need is in the local cache.
- * Uses real CoCache coherent caches (in-memory distributed layer) rather than mocks.
+ * The repositories skip the boundedElastic hop when everything they need is in the local cache, and continue on
+ * boundedElastic after a Redis read. Uses real CoCache engines on real Redis rather than mocks: the in-memory backend
+ * answers synchronously, so it cannot show the miss path. Redis reads are slowed down a little, so a read is still in
+ * flight when the repository checks for a local answer, as it is under real network latency.
  */
 class LocalCacheFastPathTest {
-    private class TestPolicyCache(cache: CoherentCache<String, Policy>) :
-        PolicyCache,
-        CoherentCache<String, Policy> by cache
-
-    private class TestGlobalPolicyIndexCache(cache: CoherentCache<String, Set<String>>) :
-        GlobalPolicyIndexCache,
-        CoherentCache<String, Set<String>> by cache,
-        @Suppress("UNCHECKED_CAST")
-        SetElementsCache<String, String> by (cache as SetElementsCache<String, String>)
-
-    private fun <V> coherentCache(name: String): CoherentCache<String, V> = coherentCacheOf(name)
-
+    private val redis = CoSecTestCaches.redisBackend()
+    private val backend = HookedBackend(redis).apply {
+        afterRead = { _, read -> read.also { Thread.sleep(SLOW_READ_MS) } }
+        afterReadAll = { reads -> reads.also { Thread.sleep(SLOW_READ_MS) } }
+    }
+    private val caches = CoSecTestCaches(backend)
     private val policy = PolicyData("policy", "category", "name", "", PolicyType.GLOBAL, "tenant")
 
-    @Test
-    fun lookupLocal() {
-        val cache = coherentCache<Policy>("PolicyCache")
-        cache.lookupLocal("policy").assert().isEqualTo(LocalLookup.Miss)
-        cache["policy"] = policy
-        cache.lookupLocal("policy").assert().isEqualTo(LocalLookup.Hit(policy))
-    }
-
-    @Test
-    fun lookupLocalWhenNotCoherentCache() {
-        mockk<PolicyCache>().lookupLocal("policy").assert().isEqualTo(LocalLookup.Miss)
+    @AfterEach
+    fun destroy() {
+        caches.close()
+        redis.close()
     }
 
     @Test
     fun getGlobalPolicyStaysOnCallerThreadWhenLocal() {
-        val policyCache = TestPolicyCache(coherentCache("PolicyCache"))
-        val indexCache = TestGlobalPolicyIndexCache(coherentCache("GlobalPolicyIndexCache"))
-        val repository = RedisPolicyRepository(indexCache, policyCache)
+        val repository = caches.policyRepository()
         repository.setPolicy(policy).block()
-        // the atomic index update evicts the local copy, so the first read after a write reloads it from L1
+        // writes evict the local copies, so the first read after a write fills them from the backend
         repository.getGlobalPolicy().block()
 
         val callerThread = Thread.currentThread().name
@@ -89,16 +63,12 @@ class LocalCacheFastPathTest {
     }
 
     @Test
-    fun getPoliciesFallsBackToBlockingLookupOnLocalMiss() {
-        val coherentPolicyCache = coherentCache<Policy>("PolicyCache")
-        val policyCache = TestPolicyCache(coherentPolicyCache)
-        val repository = RedisPolicyRepository(
-            TestGlobalPolicyIndexCache(coherentCache("GlobalPolicyIndexCache")),
-            policyCache
-        )
-        policyCache["policy"] = policy
-        // drop the local copy only; the distributed layer still holds the value
-        coherentPolicyCache.configuration.clientSideCache.clear()
+    fun getPoliciesContinuesOnBoundedElasticOnLocalMiss() {
+        val repository = caches.policyRepository()
+        caches.policyCache.put("policy", policy)
+        caches.policyCache["policy"]
+        // drop the local copy only; the backend still holds the value
+        caches.clearLocal(CoSecCacheSpecs.POLICY_CACHE_NAME)
 
         var emittedOn: String? = null
         repository.getPolicies(setOf("policy"))
@@ -109,74 +79,12 @@ class LocalCacheFastPathTest {
         emittedOn.assert().startsWith("boundedElastic")
     }
 
-    private class TestAppPermissionCache(cache: CoherentCache<String, AppPermission>) :
-        AppPermissionCache,
-        CoherentCache<String, AppPermission> by cache
-
-    private class TestRolePermissionCache(cache: CoherentCache<SpacedRoleId, Set<PermissionId>>) :
-        RolePermissionCache,
-        CoherentCache<SpacedRoleId, Set<PermissionId>> by cache
-
-    private fun <K, V> coherentCacheOf(name: String): CoherentCache<K, V> = DefaultCoherentCache(
-        CoherentCacheConfiguration(
-            cacheName = name,
-            clientId = "LocalCacheFastPathTest",
-            keyConverter = ToStringKeyConverter("test:$name:"),
-            distributedCache = InMemoryDistributedCache(),
-            clientSideCache = CaffeineClientSideCache.build(),
-            cacheSource = CacheSource.noOp(),
-            ttlPolicy = TtlPolicy(ttl = TtlAt.FOREVER),
-        ),
-        NoOpCacheEvictedEventBus,
-    )
-
     @Test
-    fun getAppRolePermissionStaysOnCallerThreadWhenLocal() {
-        val appPermissionCache = TestAppPermissionCache(coherentCacheOf("AppPermissionCache"))
-        val rolePermissionCache = TestRolePermissionCache(coherentCacheOf("RolePermissionCache"))
-        appPermissionCache["app"] = AppPermissionData(id = "app")
-        rolePermissionCache[SpacedRoleId(roleId = "admin", spaceId = "space")] = setOf("p1")
-        val repository = RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
-
-        val callerThread = Thread.currentThread().name
-        var emittedOn: String? = null
-        repository.getAppRolePermission("app", "space", setOf("admin", "unknown"))
-            .doOnNext { emittedOn = Thread.currentThread().name }
-            .test()
-            .consumeNextWith {
-                it.appPermission.id.assert().isEqualTo("app")
-                it.rolePermissions.assert().isEqualTo(
-                    listOf(RolePermissionData(id = "admin", permissions = setOf("p1")))
-                )
-            }.verifyComplete()
-        // "unknown" has no local entry, so this must have been served by the blocking path
-        emittedOn.assert().startsWith("boundedElastic")
-
-        // once the miss for "unknown" is cached as a missing value, the whole lookup is local
-        repository.getAppRolePermission("app", "space", setOf("admin", "unknown"))
-            .doOnNext { emittedOn = Thread.currentThread().name }
-            .test()
-            .expectNextCount(1)
-            .verifyComplete()
-        emittedOn.assert().isEqualTo(callerThread)
-    }
-
-    @Test
-    fun lookupLocalTreatsExpiredEntryAsMiss() {
-        val cache = coherentCache<Policy>("PolicyCache")
-        cache.set("policy", TtlAt.currentTime() - 1, policy)
-        cache.lookupLocal("policy").assert().isEqualTo(LocalLookup.Miss)
-    }
-
-    @Test
-    fun getGlobalPolicyFallsBackWhenIndexLocalButPolicyNot() {
-        val coherentPolicyCache = coherentCache<Policy>("PolicyCache")
-        val repository = RedisPolicyRepository(
-            TestGlobalPolicyIndexCache(coherentCache("GlobalPolicyIndexCache")),
-            TestPolicyCache(coherentPolicyCache),
-        )
+    fun getGlobalPolicyContinuesOnBoundedElasticWhenIndexLocalButPolicyNot() {
+        val repository = caches.policyRepository()
         repository.setPolicy(policy).block()
-        coherentPolicyCache.configuration.clientSideCache.clear()
+        repository.getGlobalPolicy().block()
+        caches.clearLocal(CoSecCacheSpecs.POLICY_CACHE_NAME)
 
         var emittedOn: String? = null
         repository.getGlobalPolicy()
@@ -189,11 +97,8 @@ class LocalCacheFastPathTest {
 
     @Test
     fun cachedMissingPolicyIsResolvedLocally() {
-        val repository = RedisPolicyRepository(
-            TestGlobalPolicyIndexCache(coherentCache("GlobalPolicyIndexCache")),
-            TestPolicyCache(coherentCache("PolicyCache")),
-        )
-        // first lookup goes to the blocking path and caches the miss
+        val repository = caches.policyRepository()
+        // the first lookup reads the backend and caches the miss locally
         repository.getPolicies(setOf("unknown")).test().expectNext(emptyList()).verifyComplete()
 
         val callerThread = Thread.currentThread().name
@@ -207,12 +112,37 @@ class LocalCacheFastPathTest {
     }
 
     @Test
+    fun getAppRolePermissionStaysOnCallerThreadWhenLocal() {
+        caches.appPermissionCache.put("app", AppPermissionData(id = "app"))
+        caches.rolePermissionCache.put(SpacedRoleId(roleId = "admin", spaceId = "space"), setOf("p1"))
+        val repository = caches.appRolePermissionRepository()
+
+        val callerThread = Thread.currentThread().name
+        var emittedOn: String? = null
+        repository.getAppRolePermission("app", "space", setOf("admin", "unknown"))
+            .doOnNext { emittedOn = Thread.currentThread().name }
+            .test()
+            .consumeNextWith {
+                it.appPermission.id.assert().isEqualTo("app")
+                it.rolePermissions.assert().isEqualTo(
+                    listOf(RolePermissionData(id = "admin", permissions = setOf("p1")))
+                )
+            }.verifyComplete()
+        // nothing was local yet (writes do not fill the local cache), so this was read from the backend
+        emittedOn.assert().startsWith("boundedElastic")
+
+        // now every entry, including the miss for "unknown", is local
+        repository.getAppRolePermission("app", "space", setOf("admin", "unknown"))
+            .doOnNext { emittedOn = Thread.currentThread().name }
+            .test()
+            .expectNextCount(1)
+            .verifyComplete()
+        emittedOn.assert().isEqualTo(callerThread)
+    }
+
+    @Test
     fun getAppRolePermissionEmptyWhenAppPermissionCachedMissing() {
-        val repository = RedisAppRolePermissionRepository(
-            TestAppPermissionCache(coherentCacheOf("AppPermissionCache")),
-            TestRolePermissionCache(coherentCacheOf("RolePermissionCache")),
-        )
-        // first lookup goes to the blocking path and caches the missing app permission
+        val repository = caches.appRolePermissionRepository()
         var firstCompletedOn: String? = null
         repository.getAppRolePermission("unknown", "space", setOf("admin"))
             .doOnSuccess { firstCompletedOn = Thread.currentThread().name }
@@ -226,5 +156,9 @@ class LocalCacheFastPathTest {
             .test()
             .verifyComplete()
         completedOn.assert().isEqualTo(Thread.currentThread().name)
+    }
+
+    companion object {
+        private const val SLOW_READ_MS = 50L
     }
 }

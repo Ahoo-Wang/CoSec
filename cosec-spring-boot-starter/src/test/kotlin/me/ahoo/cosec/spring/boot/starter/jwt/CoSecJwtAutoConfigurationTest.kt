@@ -22,7 +22,7 @@ import me.ahoo.cosec.token.TokenConverter
 import me.ahoo.cosec.token.TokenRevoker
 import me.ahoo.cosec.token.TokenStore
 import me.ahoo.cosec.token.TokenVerifier
-import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes
@@ -41,7 +41,7 @@ class CoSecJwtAutoConfigurationTest {
             .withPropertyValues(
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
-            .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
+            .withBean(StringIdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecJwtAutoConfiguration::class.java,

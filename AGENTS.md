@@ -48,8 +48,9 @@ adapters or caching. The parts that take several files to see:
   rule turns the decision into `TOO_MANY_REQUESTS`, which the pipeline maps to `429`.
 - **Policies are data.** Policies and permissions are JSON. Action/condition matchers are built by factories
   looked up by `type`, registered through `META-INF/services` in `cosec-core` or as Spring beans.
-- **Caching.** Redis repositories in `cosec-cocache` are built on CoCache. Redis is the store of record; the
-  client-side cache answers first (`LocalCacheLookup`), and any miss goes to Redis on `boundedElastic`.
+- **Caching.** Redis repositories in `cosec-cocache` are built on CoCache 6 (`CoSecCacheSpecs`). Redis is the store
+  of record; reads use CoCache's async view, so a local hit answers on the caller's thread and a miss reads Redis
+  without blocking, then continues on `boundedElastic`.
 
 ## Invariants
 
@@ -60,9 +61,9 @@ Each one exists for a reason, and most have a test guarding it. Never weaken the
 | **Deny-first**: no `ALLOW` wins over a matched `DENY`, within or across layers | Otherwise adding a policy can widen access | `SimpleAuthorizationTest` |
 | **Fail closed**: errors deny. Only exceptions: rate limit rules without `strictFailure` and the token revocation check (documented) | An outage must not open the gate | `SecurityPipelineTest` |
 | **One decision path**: status codes and error mapping live only in `SecurityPipeline` | Three adapters must answer identically | `WebAdapterParityTest` |
-| **No blocking on the event loop**: Redis and other blocking calls run on `boundedElastic` unless answered from the local cache. Blocking custom condition matchers implement `BlockingAware`; only layers containing one hop threads | Blocking a Netty thread stalls every request on it | `RedisRateLimitingOffEventLoopTest` |
+| **No blocking on the event loop**: blocking calls run on `boundedElastic`; cache reads not answered locally read Redis without blocking and continue on `boundedElastic`. Blocking custom condition matchers implement `BlockingAware`; only layers containing one hop threads | Blocking a Netty thread stalls every request on it | `RedisRateLimitingOffEventLoopTest`, `LocalCacheFastPathTest` |
 | **Authorization is a pure decision**: built-in matchers do no I/O and keep no state; rate limiting is a separate decorator that spends permits only for allowed requests | Keeps evaluation fast, predictable and explainable; denied requests never use up quotas | review, `RateLimitingAuthorizationTest` |
-| **Policy/permission caches keep `ttl = FOREVER`, `strictFailure = true`** | Redis is the store of record; expiry or a swallowed error would silently drop policies | `CacheTtlPolicyTest` |
+| **Policy/permission caches never expire (`ttl = null`) and throw on failed reads (`ReadFailureMode.THROW`)**, applied after any CoCache customizer or property | Redis is the store of record; expiry or a swallowed error would silently drop policies | `CacheTtlPolicyTest`, `StrictCacheFailureTest` |
 | **Hot-path changes come with a JMH before/after** | Authorization runs on every request | `SimpleAuthorizationBenchmark` |
 
 ## Where a change has to land
@@ -94,7 +95,7 @@ Docs: link to files, never line numbers; verify claims against code, not other d
 - Kotlin with `-Xjsr305=strict`; reactive APIs return `Mono<T>`.
 - Comments explain *why*, only where it isn't obvious.
 - Tests: JUnit 5, MockK, FluentAssert (`me.ahoo.test.asserts.assert`), Reactor Test. For caching and
-  concurrency, use real implementations (in-memory CoCache, real Redis) rather than mocks; mocks hide the
+  concurrency, use real implementations (CoCache's in-memory backend, real Redis) rather than mocks; mocks hide the
   races these tests exist to catch.
 - Dependency versions live only in `gradle/libs.versions.toml`.
 - PR titles follow Conventional Commits (CI-enforced; they drive labels, release notes and the version).

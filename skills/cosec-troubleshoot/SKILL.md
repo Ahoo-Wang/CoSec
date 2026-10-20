@@ -84,6 +84,11 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 - Local policies are deduplicated by ID after location expansion; assert that the expected ID and content loaded.
 - `LocalPolicyLoader` does not serve authorization decisions directly. Enable `init-repository` or prepopulate `PolicyRepository`; use `force-refresh` only when overwriting repository state is intended.
 
+### Policies or permissions missing after upgrading to 7.0
+
+- CoCache 6 cannot read what CoSec 6.x (CoCache 5) stored in Redis. The keys are unchanged, but every value must be migrated (CoCache's 5.x migrator) before 7.0 starts; see the upgrading guide, "6.1 to 7.0".
+- Values written straight to Redis (`SET`, `SADD`) are not read in 7.0: every value carries a binary header. Write app permissions and role grants through the `AppPermissionCache` and `RolePermissionCache` beans, and policies through `PolicyRepository.setPolicy`.
+
 ### Matcher mismatch
 
 - Path variables use `{id}` and conditions read `request.path.var.id`; `:id` and `request.pathVariable.id` are invalid.

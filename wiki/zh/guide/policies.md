@@ -279,14 +279,17 @@ if (!allowed) throw AccessDeniedException()
 - 请求通过 `CoSec-App-Id` 请求头选择应用，通过 `CoSec-Space-Id` 选择空间。
 - 角色按空间被授予**一组权限 id**；`*` 表示授予该应用的全部权限。
 
-使用 `cache-support` 时，CoSec 从 Redis 读取这些数据（默认键前缀为 `cosec`）：
+使用 `cache-support` 时，CoSec 通过两个缓存从 Redis 读取这些数据（默认键前缀为 `cosec`）：
 
-| 数据 | Redis 键 | 值 |
-|---|---|---|
-| 应用权限 | `cosec:app:permission:<appId>` | 上面的 JSON |
-| 角色授权 | `cosec:role:permission:<roleId>`（默认空间）或 `cosec:role:permission:<roleId>@<spaceId>` | 权限 id 的集合 |
+| 数据 | 缓存 bean | 键 | 值 |
+|---|---|---|---|
+| 应用权限 | `AppPermissionCache` | 应用 id | 上面的 JSON，即一个 `AppPermission` |
+| 角色授权 | `RolePermissionCache` | `SpacedRoleId(roleId, spaceId)` | 权限 id 的集合 |
 
-CoSec 只读取权限和授权，写入由你的管理服务负责。
+CoSec 只读取权限和授权，写入由你的管理服务负责。请通过这两个 bean 写入，例如
+`rolePermissionCache.put(SpacedRoleId("admin", "space"), setOf("order.read"))`，这样每个实例都会丢弃本地副本。
+Redis 中的值带有二进制头（Redis 键为 `cosec:app:permission:<appId>` 和 `cosec:role:permission:<roleId>[@<spaceId>]`），
+因此用 Redis 命令直接写入是无效的。
 
 ## 加载与生成策略 {#loading-and-generating-policies}
 

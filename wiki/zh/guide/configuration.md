@@ -78,12 +78,17 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 |---|---|---|
 | `maximum-size` | `10000` | 本地缓存的最大条目数。 |
 | `initial-capacity` | — | 初始容量。 |
-| `expire-after-write` / `expire-after-access` | — | 本地过期时间，单位为 `expire-unit`。 |
+| `expire-after-write` | `300`（5 分钟） | 本地副本最长存活时间（CoCache 的 `localMaxAge`），单位为 `expire-unit`。 |
+| `expire-after-access` | — | 本地副本超过这段时间未被读取即丢弃，单位为 `expire-unit`。 |
 | `expire-unit` | `SECONDS` | 过期时间的单位。 |
 | `concurrency-level` | — | 已弃用并忽略（Caffeine 没有并发级别）。 |
 
 本地过期只用于限制失效消息丢失时陈旧副本能存活多久；变更本身会立即推送到所有实例。读取策略和权限时
 Redis 出错，请求会被拒绝。详见[运维](./operations.md#redis-and-caching)。
+
+CoSec 在 CoCache 的运行时上创建这些缓存，缓存名为 `PolicyCache`、`GlobalPolicyIndexCache`、`AppPermissionCache`、
+`RolePermissionCache` 和 `RevokedTokenCache`。CoCache 的 `cocache.defaults.*`、`cocache.caches.<name>.*` 和
+`CacheSpecCustomizer` bean 对它们生效，但键的布局始终由 CoSec 决定，策略和权限缓存也始终保持“永不过期、读不到 Redis 时失败”。
 
 ## 限流 {#rate-limiting}
 

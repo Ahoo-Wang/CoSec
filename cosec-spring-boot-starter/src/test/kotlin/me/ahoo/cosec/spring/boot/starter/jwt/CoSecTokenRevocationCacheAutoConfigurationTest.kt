@@ -13,7 +13,7 @@
 package me.ahoo.cosec.spring.boot.starter.jwt
 
 import io.mockk.mockk
-import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
+import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.cache.CoCacheTokenStore
 import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.token.TokenStore
@@ -65,7 +65,7 @@ class CoSecTokenRevocationCacheAutoConfigurationTest {
                 AssertionsForInterfaceTypes.assertThat(context)
                     .hasSingleBean(RevokedTokenCache::class.java)
                     .hasSingleBean(TokenStore::class.java)
-                    .hasBean(CoSecTokenRevocationCacheAutoConfiguration.REVOKED_TOKEN_CACHE_KEY_CONVERTER_BEAN_NAME)
+                    .hasBean(CoSecTokenRevocationCacheAutoConfiguration.REVOKED_TOKEN_CACHE_BEAN_NAME)
                 context.getBean(TokenStore::class.java)
                     .assert()
                     .isInstanceOf(CoCacheTokenStore::class.java)

@@ -80,13 +80,19 @@ Each local cache (`policy`, `role`, `token`) accepts:
 |---|---|---|
 | `maximum-size` | `10000` | Maximum entries in the local cache. |
 | `initial-capacity` | — | Initial capacity. |
-| `expire-after-write` / `expire-after-access` | — | Local expiry, in `expire-unit`. |
+| `expire-after-write` | `300` (5 minutes) | How long a local copy lives at most (CoCache's `localMaxAge`), in `expire-unit`. |
+| `expire-after-access` | — | Drop a local copy not read for this long, in `expire-unit`. |
 | `expire-unit` | `SECONDS` | Time unit for the expiry settings. |
 | `concurrency-level` | — | Deprecated and ignored (Caffeine has no concurrency level). |
 
 Local expiry only bounds how long a stale copy can survive if an invalidation message is lost; changes
 are pushed to every instance immediately. Redis failures on policy and permission reads deny the request.
 See [Operations](./operations.md#redis-and-caching).
+
+CoSec creates these caches on CoCache's runtime under the names `PolicyCache`, `GlobalPolicyIndexCache`,
+`AppPermissionCache`, `RolePermissionCache` and `RevokedTokenCache`. CoCache's `cocache.defaults.*` and
+`cocache.caches.<name>.*` and `CacheSpecCustomizer` beans apply to them, except for the key layout, which stays
+CoSec's, and for policies and permissions, which always keep "never expire, and fail when Redis cannot be read".
 
 ## Rate limiting
 

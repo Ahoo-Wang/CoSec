@@ -10,117 +10,68 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package me.ahoo.cosec.cache
 
-import me.ahoo.cache.TtlPolicy
-import me.ahoo.cache.api.Cache
-import me.ahoo.cache.api.source.CacheSource
-import me.ahoo.cache.client.CaffeineClientSideCache
-import me.ahoo.cache.consistency.CoherentCache
-import me.ahoo.cache.consistency.CoherentCacheConfiguration
-import me.ahoo.cache.consistency.DefaultCoherentCache
-import me.ahoo.cache.consistency.NoOpCacheEvictedEventBus
-import me.ahoo.cache.converter.ToStringKeyConverter
-import me.ahoo.cache.spring.redis.RedisDistributedCache
-import me.ahoo.cache.spring.redis.codec.ObjectToJsonCodecExecutor
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.springframework.data.redis.connection.RedisStandaloneConfiguration
-import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
-import org.springframework.data.redis.core.StringRedisTemplate
 import java.time.Duration
 
 /**
- * CoCacheTokenStore Integration Test against a real Redis-backed two-level CoCache.
+ * CoCacheTokenStore against real Redis, with two instances sharing it.
  */
 internal class CoCacheTokenStoreIntegrationTest {
-    lateinit var stringRedisTemplate: StringRedisTemplate
-    lateinit var lettuceConnectionFactory: LettuceConnectionFactory
-    lateinit var coherentCache: CoherentCache<String, Boolean>
-    lateinit var tokenStore: CoCacheTokenStore
-
-    @BeforeEach
-    fun setup() {
-        val redisStandaloneConfiguration = RedisStandaloneConfiguration()
-        lettuceConnectionFactory = LettuceConnectionFactory(redisStandaloneConfiguration)
-        lettuceConnectionFactory.afterPropertiesSet()
-        stringRedisTemplate = StringRedisTemplate(lettuceConnectionFactory)
-        val codecExecutor = ObjectToJsonCodecExecutor<Boolean>(
-            Boolean::class.javaObjectType,
-            stringRedisTemplate,
-            CoSecJsonSerializer,
-        )
-        val distributedCache = RedisDistributedCache<Boolean>(
-            stringRedisTemplate,
-            codecExecutor,
-            strictFailure = false,
-        )
-        val cacheConfiguration = CoherentCacheConfiguration<String, Boolean>(
-            cacheName = "RevokedTokenCache",
-            clientId = "CoCacheTokenStoreIntegrationTest",
-            keyConverter = ToStringKeyConverter(KEY_PREFIX),
-            distributedCache = distributedCache,
-            clientSideCache = CaffeineClientSideCache.build(1_000),
-            cacheSource = CacheSource.noOp(),
-            ttlPolicy = TtlPolicy(
-                ttl = DISTRIBUTED_TTL,
-                ttlAmplitude = DISTRIBUTED_TTL_AMPLITUDE,
-                missingTtl = MISSING_GUARD_TTL.toSeconds(),
-            ),
-        )
-        coherentCache = DefaultCoherentCache(cacheConfiguration, NoOpCacheEvictedEventBus)
-        tokenStore = CoCacheTokenStore(IntegrationRevokedTokenCache(coherentCache))
-    }
+    private val backend = CoSecTestCaches.redisBackend()
+    private val keyPrefix = CoSecTestCaches.newKeyPrefix()
+    private val instanceA = CoSecTestCaches(backend, keyPrefix)
+    private val instanceB = CoSecTestCaches(backend, keyPrefix)
+    private val tokenStoreA = CoCacheTokenStore(instanceA.revokedTokenCache)
+    private val tokenStoreB = CoCacheTokenStore(instanceB.revokedTokenCache)
 
     @AfterEach
     fun destroy() {
-        coherentCache.close()
-        lettuceConnectionFactory.destroy()
+        instanceA.close()
+        instanceB.close()
+        backend.close()
     }
 
     @Test
     fun revokeThenIsRevokedUntilTtlExpires() {
         val tokenId = MockIdGenerator.INSTANCE.generateAsString()
-        tokenStore.isRevoked(tokenId).assert().isFalse()
-        tokenStore.revoke(tokenId, REVOCATION_TTL)
-        tokenStore.isRevoked(tokenId).assert().isTrue()
-        // CoCacheTokenStore rounds the ttl up by one second, so wait for the ttl plus a margin.
-        Thread.sleep((REVOCATION_TTL.toMillis() + MARGIN_MS))
-        tokenStore.isRevoked(tokenId).assert().isFalse()
+        tokenStoreA.isRevoked(tokenId).assert().isFalse()
+        tokenStoreA.revoke(tokenId, REVOCATION_TTL)
+        tokenStoreA.isRevoked(tokenId).assert().isTrue()
+        // the entry lives for the ttl plus one second
+        Thread.sleep(REVOCATION_TTL.toMillis() + MARGIN_MS)
+        tokenStoreA.isRevoked(tokenId).assert().isFalse()
     }
 
     @Test
     fun isRevokedWhenUnknownTokenId() {
-        tokenStore.isRevoked(MockIdGenerator.INSTANCE.generateAsString()).assert().isFalse()
+        tokenStoreA.isRevoked(MockIdGenerator.INSTANCE.generateAsString()).assert().isFalse()
     }
 
     @Test
-    fun missingGuardExpiresAfterTtl() {
+    fun revocationOnOneInstanceReplacesCachedNotRevokedOnAnother() {
         val tokenId = MockIdGenerator.INSTANCE.generateAsString()
-        tokenStore.isRevoked(tokenId).assert().isFalse()
+        // instance B caches "not revoked" locally
+        tokenStoreB.isRevoked(tokenId).assert().isFalse()
 
-        val guardKey = KEY_PREFIX + tokenId
-        stringRedisTemplate.hasKey(guardKey).assert().isTrue()
-        stringRedisTemplate.getExpire(guardKey).assert().isGreaterThan(0)
+        tokenStoreA.revoke(tokenId, Duration.ofMinutes(1))
 
-        Thread.sleep(MISSING_GUARD_TTL.toMillis() + MARGIN_MS)
-        stringRedisTemplate.hasKey(guardKey).assert().isFalse()
+        // the write's invalidation reaches B well before the local "not revoked" answer would expire
+        val deadline = System.nanoTime() + Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS / 2).toNanos()
+        while (!tokenStoreB.isRevoked(tokenId) && System.nanoTime() < deadline) {
+            Thread.sleep(POLL_MS)
+        }
+        tokenStoreB.isRevoked(tokenId).assert().isTrue()
     }
 
-    private class IntegrationRevokedTokenCache(cache: CoherentCache<String, Boolean>) :
-        RevokedTokenCache,
-        Cache<String, Boolean> by cache
-
     companion object {
-        private const val KEY_PREFIX = "test:revoked:"
-        private const val DISTRIBUTED_TTL = 30L
-        private const val DISTRIBUTED_TTL_AMPLITUDE = 10L
         private val REVOCATION_TTL = Duration.ofSeconds(1)
-        private val MISSING_GUARD_TTL = Duration.ofSeconds(2)
         private const val MARGIN_MS = 2_000L
+        private const val POLL_MS = 50L
     }
 }

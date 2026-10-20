@@ -10,31 +10,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package me.ahoo.cosec.spring.boot.starter.jwt
 
-import me.ahoo.cache.api.client.ClientSideCache
-import me.ahoo.cache.api.converter.KeyConverter
-import me.ahoo.cache.converter.ToStringKeyConverter
-import me.ahoo.cache.spring.EnableCoCache
-import me.ahoo.cache.spring.client.SpringClientSideCacheFactory.Companion.CLIENT_SIDE_CACHE_SUFFIX
-import me.ahoo.cache.spring.converter.SpringKeyConverterFactory.Companion.KEY_CONVERTER_SUFFIX
+import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
+import me.ahoo.cocache.spring.boot.CoCacheProperties
 import me.ahoo.cosec.cache.CoCacheTokenStore
+import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
+import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
 import me.ahoo.cosec.token.TokenStore
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import tools.jackson.databind.ObjectMapper
 
 /**
  * CoSec Token Revocation Cache AutoConfiguration.
  *
  * @author ahoo wang
  */
-@AutoConfiguration(before = [CoSecJwtAutoConfiguration::class])
+@AutoConfiguration(
+    before = [CoSecJwtAutoConfiguration::class],
+    afterName = ["me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration"]
+)
 @ConditionalOnCoSecEnabled
 @ConditionalOnJwtEnabled
 @ConditionalOnTokenRevocationEnabled
@@ -42,15 +48,10 @@ import org.springframework.context.annotation.Bean
 @EnableConfigurationProperties(
     CacheProperties::class,
 )
-@EnableCoCache(caches = [RevokedTokenCache::class])
 class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: CacheProperties) {
 
     companion object {
-        const val REVOKED_TOKEN_CACHE_BEAN_NAME = "RevokedTokenCache"
-        const val REVOKED_TOKEN_CACHE_KEY_CONVERTER_BEAN_NAME =
-            "${REVOKED_TOKEN_CACHE_BEAN_NAME}$KEY_CONVERTER_SUFFIX"
-        const val REVOKED_TOKEN_CACHE_CLIENT_BEAN_NAME =
-            "${REVOKED_TOKEN_CACHE_BEAN_NAME}$CLIENT_SIDE_CACHE_SUFFIX"
+        const val REVOKED_TOKEN_CACHE_BEAN_NAME = CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
     }
 
     @Bean
@@ -59,16 +60,23 @@ class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: Ca
         return CoCacheTokenStore(revokedTokenCache)
     }
 
-    @Bean(REVOKED_TOKEN_CACHE_KEY_CONVERTER_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [REVOKED_TOKEN_CACHE_KEY_CONVERTER_BEAN_NAME])
-    fun revokedTokenCacheKeyConverter(): KeyConverter<String> {
-        return ToStringKeyConverter(cacheProperties.revokedTokenKeyPrefix)
-    }
-
-    @Bean(REVOKED_TOKEN_CACHE_CLIENT_BEAN_NAME)
-    @ConditionalOnMissingBean(name = [REVOKED_TOKEN_CACHE_CLIENT_BEAN_NAME])
-    fun revokedTokenCacheClientSideCache(): ClientSideCache<Boolean> {
-        // "not revoked" lookups are cached as missing values for RevokedTokenCache.MISSING_TTL_SECONDS
-        return cacheProperties.token.toClientSideCache()
+    /**
+     * The local tier comes from `cosec.authorization.cache.token.*`; "not revoked" lookups are cached locally for
+     * [RevokedTokenCache.MISSING_TTL_SECONDS].
+     */
+    @Bean(REVOKED_TOKEN_CACHE_BEAN_NAME)
+    @ConditionalOnMissingBean
+    fun revokedTokenCache(
+        runtime: CacheRuntime,
+        objectMapper: ObjectMapper,
+        customizers: ObjectProvider<CacheSpecCustomizer>,
+        cocacheProperties: ObjectProvider<CoCacheProperties>,
+    ): RevokedTokenCache {
+        val spec = CoSecCacheSpecs.revokedToken(
+            CoSecCacheSpecs.jacksonCodec<Boolean>(objectMapper),
+            cacheProperties.keyPrefix,
+            cacheProperties.token.toCachePolicy(CachePolicy.DEFAULT),
+        )
+        return cosecCacheAssembler(runtime, customizers, cocacheProperties).create(RevokedTokenCache::class.java, spec)
     }
 }

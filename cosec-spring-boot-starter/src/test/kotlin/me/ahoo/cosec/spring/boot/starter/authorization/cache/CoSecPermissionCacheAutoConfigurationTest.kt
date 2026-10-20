@@ -13,11 +13,11 @@
 
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
+import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.cache.AppPermissionCache
 import me.ahoo.cosec.cache.RolePermissionCache
-import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
@@ -32,7 +32,7 @@ internal class CoSecPermissionCacheAutoConfigurationTest {
     @Test
     fun contextLoads() {
         contextRunner
-            .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
+            .withBean(StringIdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
                 JacksonAutoConfiguration::class.java,
                 DataRedisAutoConfiguration::class.java,

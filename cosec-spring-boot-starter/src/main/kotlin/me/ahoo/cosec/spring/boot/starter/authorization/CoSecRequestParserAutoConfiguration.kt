@@ -21,7 +21,7 @@ import me.ahoo.cosec.servlet.ServletXForwardedRemoteIpResolver
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.webflux.ReactiveRequestParser
 import me.ahoo.cosec.webflux.ReactiveXForwardedRemoteIpResolver
-import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.jvm.UuidGenerator
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -66,7 +66,7 @@ class CoSecRequestParserAutoConfiguration(
         fun servletRequestParser(
             servletRemoteIpResolver: RemoteIpResolver<HttpServletRequest>,
             requestAttributesAppenderObjectProvider: ObjectProvider<RequestAttributesAppender>,
-            idGeneratorObjectProvider: ObjectProvider<IdGenerator>
+            idGeneratorObjectProvider: ObjectProvider<StringIdGenerator>
         ): RequestParser<HttpServletRequest> {
             val idGenerator = idGeneratorObjectProvider.getIfAvailable { UuidGenerator.INSTANCE }
             return ServletRequestParser(
@@ -92,7 +92,7 @@ class CoSecRequestParserAutoConfiguration(
         fun reactiveRequestParser(
             reactiveRemoteIpResolver: RemoteIpResolver<ServerWebExchange>,
             requestAttributesAppenderObjectProvider: ObjectProvider<RequestAttributesAppender>,
-            idGeneratorObjectProvider: ObjectProvider<IdGenerator>
+            idGeneratorObjectProvider: ObjectProvider<StringIdGenerator>
         ): RequestParser<ServerWebExchange> {
             val idGenerator = idGeneratorObjectProvider.getIfAvailable { UuidGenerator.INSTANCE }
             return ReactiveRequestParser(

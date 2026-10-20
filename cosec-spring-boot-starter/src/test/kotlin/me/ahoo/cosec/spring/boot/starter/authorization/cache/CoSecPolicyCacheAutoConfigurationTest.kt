@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
+import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache
@@ -23,7 +23,7 @@ import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.history.PolicyHistory
 import me.ahoo.cosec.policy.history.PolicyRevisions
 import me.ahoo.cosec.policy.history.VersionedPolicyRepository
-import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
@@ -39,7 +39,7 @@ internal class CoSecPolicyCacheAutoConfigurationTest {
     @Test
     fun contextLoads() {
         contextRunner
-            .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
+            .withBean(StringIdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
                 JacksonAutoConfiguration::class.java,
                 DataRedisAutoConfiguration::class.java,
@@ -61,7 +61,7 @@ internal class CoSecPolicyCacheAutoConfigurationTest {
     fun recordsPolicyHistoryWhenEnabled() {
         val policyId = "history-${java.util.UUID.randomUUID()}"
         contextRunner
-            .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
+            .withBean(StringIdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withPropertyValues(
                 "${CoSecPolicyCacheAutoConfiguration.POLICY_HISTORY_ENABLED_KEY}=true",
                 "cosec.authorization.cache.history.max-revisions=5",
@@ -89,7 +89,7 @@ internal class CoSecPolicyCacheAutoConfigurationTest {
     @Test
     fun noHistoryByDefault() {
         contextRunner
-            .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
+            .withBean(StringIdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
                 JacksonAutoConfiguration::class.java,
                 DataRedisAutoConfiguration::class.java,

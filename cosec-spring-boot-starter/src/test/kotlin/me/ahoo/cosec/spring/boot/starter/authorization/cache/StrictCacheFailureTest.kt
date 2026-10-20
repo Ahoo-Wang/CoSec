@@ -13,31 +13,28 @@
 
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import io.mockk.mockk
-import me.ahoo.cache.TtlPolicy
-import me.ahoo.cache.api.SetElementsCache
-import me.ahoo.cache.api.TtlAt
-import me.ahoo.cache.api.distributed.DistributedCache
-import me.ahoo.cache.api.source.CacheSource
-import me.ahoo.cache.client.CaffeineClientSideCache
-import me.ahoo.cache.consistency.CoherentCache
-import me.ahoo.cache.consistency.CoherentCacheConfiguration
-import me.ahoo.cache.consistency.DefaultCoherentCache
-import me.ahoo.cache.consistency.NoOpCacheEvictedEventBus
-import me.ahoo.cache.converter.ToStringKeyConverter
-import me.ahoo.cache.spring.boot.starter.CoCacheProperties
-import me.ahoo.cache.spring.redis.RedisDistributedCache
-import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
+import me.ahoo.cocache.api.CacheReadException
+import me.ahoo.cocache.api.spi.CoherenceBackend
+import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.memory.InMemoryBackend
+import me.ahoo.cocache.core.policy.ReadFailureMode
+import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
+import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
-import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.authorization.SimpleAuthorization
+import me.ahoo.cosec.cache.AppPermissionCache
+import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache
-import me.ahoo.cosec.cache.GlobalPolicyIndexKeyConverter
 import me.ahoo.cosec.cache.PolicyCache
 import me.ahoo.cosec.cache.RedisAppRolePermissionRepository
 import me.ahoo.cosec.cache.RedisPolicyRepository
+import me.ahoo.cosec.cache.RevokedTokenCache
+import me.ahoo.cosec.cache.RolePermissionCache
+import me.ahoo.cosec.cache.createCache
+import me.ahoo.cosec.cache.createGlobalPolicyIndex
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
@@ -48,62 +45,73 @@ import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.test.asserts.assert
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
+import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import org.springframework.dao.DataAccessException
-import org.springframework.data.redis.connection.RedisStandaloneConfiguration
-import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration
-import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
-import org.springframework.data.redis.core.StringRedisTemplate
-import tools.jackson.databind.json.JsonMapper
-import java.time.Duration
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
+import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
 /**
- * Policy and permission caches fail closed when Redis is unavailable.
+ * Policy and permission caches fail closed when Redis is unavailable, whatever the CoCache properties say.
  */
 class StrictCacheFailureTest {
-    private lateinit var connectionFactory: LettuceConnectionFactory
-    private lateinit var unreachableRedis: StringRedisTemplate
 
-    @BeforeEach
-    fun setup() {
-        val clientConfiguration = LettuceClientConfiguration.builder().commandTimeout(Duration.ofMillis(500)).build()
-        connectionFactory = LettuceConnectionFactory(RedisStandaloneConfiguration("localhost", UNREACHABLE_PORT), clientConfiguration)
-        connectionFactory.afterPropertiesSet()
-        unreachableRedis = StringRedisTemplate(connectionFactory)
-    }
+    @Test
+    fun cosecStoreOfRecordCachesRethrowRemoteFailuresDespiteDegradeDefaults() {
+        val backend = HookedBackend(InMemoryBackend())
+        ApplicationContextRunner()
+            .withPropertyValues(
+                "cocache.backend=memory",
+                // an application's defaults must not weaken CoSec's store-of-record caches
+                "cocache.defaults.read-failure=degrade",
+                "cocache.defaults.ttl=60s",
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+                "${JwtProperties.PREFIX}.token-revocation.enabled=true",
+            )
+            .withBean(CoherenceBackend::class.java, { backend })
+            .withUserConfiguration(
+                JacksonAutoConfiguration::class.java,
+                CoCacheAutoConfiguration::class.java,
+                CoSecPolicyCacheAutoConfiguration::class.java,
+                CoSecPermissionCacheAutoConfiguration::class.java,
+                CoSecTokenRevocationCacheAutoConfiguration::class.java,
+            )
+            .run { context ->
+                assertThat(context).hasNotFailed()
+                val policyCache = context.getBean(PolicyCache::class.java)
+                val index = context.getBean(GlobalPolicyIndexCache::class.java)
+                val appPermissionCache = context.getBean(AppPermissionCache::class.java)
+                val rolePermissionCache = context.getBean(RolePermissionCache::class.java)
 
-    @AfterEach
-    fun destroy() {
-        connectionFactory.destroy()
+                val runtime = context.getBean(CacheRuntime::class.java)
+                policyCache.put("p", PolicyData("p", "c", "n", "", PolicyType.GLOBAL, "t"))
+                // never expires in Redis, despite cocache.defaults.ttl
+                checkNotNull(runtime.admin(CoSecCacheSpecs.POLICY_CACHE_NAME)).inspect("p").remote.ttl.assert().isNull()
+
+                backend.failAll = true
+                assertThrows<CacheReadException> { policyCache["p"] }
+                // a SetCache read has no source to degrade to: it always rethrows the backend's error
+                assertThrows<RuntimeException> { index[GlobalPolicyIndexCache.CACHE_KEY] }
+                assertThrows<CacheReadException> { appPermissionCache["app"] }
+                assertThrows<CacheReadException> { rolePermissionCache[SpacedRoleId("role")] }
+                // the revocation check degrades on purpose (documented): a miss means "not revoked"
+                context.getBean(RevokedTokenCache::class.java)["jti"].assert().isNull()
+            }
     }
 
     @Test
-    fun cosecDistributedCachesRethrowRedisFailures() {
-        val objectMapper = JsonMapper.builder().build()
-        val cocacheProperties = CoCacheProperties()
-        val policyConfiguration = CoSecPolicyCacheAutoConfiguration(CacheProperties())
-        val permissionConfiguration = CoSecPermissionCacheAutoConfiguration(CacheProperties())
-        val distributedCaches: List<DistributedCache<*>> = listOf(
-            policyConfiguration.policyCacheDistributedCache(unreachableRedis, objectMapper, cocacheProperties),
-            policyConfiguration.globalPolicyIndexCacheDistributedCache(unreachableRedis, cocacheProperties),
-            permissionConfiguration.appPermissionCacheDistributedCache(
-                unreachableRedis,
-                objectMapper,
-                cocacheProperties
-            ),
-            permissionConfiguration.rolePermissionCacheDistributedCache(unreachableRedis, cocacheProperties),
-        )
-        distributedCaches.forEach { distributedCache ->
-            assertThrows<DataAccessException> { distributedCache.getCache("key") }
-        }
+    fun unreadableGlobalIndexDeniesEvenWithDegradedReads() {
+        // Redis is unavailable. With CoCache 5, a degraded read saw the global index as empty, so any global DENY was
+        // skipped and the principal ALLOW decided. A CoCache 6 SetCache never degrades a read: the pipeline denies.
+        evaluate(strict = false).assert().isEqualTo(SecurityStatus.ERROR)
+        evaluate(strict = true).assert().isEqualTo(SecurityStatus.ERROR)
     }
 
-    @Test
-    fun degradedIndexSkipsGlobalDenyButStrictIndexDenies() {
+    private fun evaluate(strict: Boolean): SecurityStatus {
         val principalAllow = PolicyData(
             "principal-allow",
             "category",
@@ -113,71 +121,42 @@ class StrictCacheFailureTest {
             "tenant",
             statements = listOf(StatementData(effect = Effect.ALLOW, action = AllActionMatcher.INSTANCE)),
         )
-        // Redis is unreachable: degraded mode reads the global index as empty, so any global DENY is skipped
-        // and the principal ALLOW decides; strict mode surfaces the failure and the pipeline denies.
-        evaluate(strictFailure = false, principalAllow).assert().isEqualTo(SecurityStatus.ALLOWED)
-        evaluate(strictFailure = true, principalAllow).assert().isEqualTo(SecurityStatus.ERROR)
-    }
-
-    private fun evaluate(strictFailure: Boolean, principalPolicy: Policy): SecurityStatus {
-        val index = DefaultCoherentCache(
-            CoherentCacheConfiguration<String, Set<String>>(
-                cacheName = "GlobalPolicyIndexCache",
-                clientId = "StrictCacheFailureTest",
-                keyConverter = GlobalPolicyIndexKeyConverter("test:global:policy"),
-                distributedCache = RedisDistributedCache(
-                    unreachableRedis,
-                    SetToSetCodecExecutor(unreachableRedis),
-                    strictFailure
-                ),
-                clientSideCache = CaffeineClientSideCache.build(),
-                cacheSource = CacheSource.noOp(),
-                ttlPolicy = TtlPolicy(ttl = TtlAt.FOREVER),
-            ),
-            NoOpCacheEvictedEventBus,
-        )
-        val policies = DefaultCoherentCache(
-            CoherentCacheConfiguration<String, Policy>(
-                cacheName = "PolicyCache",
-                clientId = "StrictCacheFailureTest",
-                keyConverter = ToStringKeyConverter("test:policy:"),
-                distributedCache = me.ahoo.cache.distributed.InMemoryDistributedCache(),
-                clientSideCache = CaffeineClientSideCache.build(),
-                cacheSource = CacheSource.noOp(),
-                ttlPolicy = TtlPolicy(ttl = TtlAt.FOREVER),
-            ),
-            NoOpCacheEvictedEventBus,
-        )
-        policies[principalPolicy.id] = principalPolicy
-        val repository = RedisPolicyRepository(TestIndexCache(index), TestPolicyCache(policies))
-        val authorization = SimpleAuthorization(repository, RedisAppRolePermissionRepository(mockk(), mockk()))
-        val principal = SimplePrincipal("user", policies = setOf(principalPolicy.id))
-        val pipeline = SecurityPipeline(
-            object : RequestParser<String> {
-                override fun parse(request: String): Request = EvaluateRequest(path = request)
-            },
-            SecurityContextParser { SimpleSecurityContext(principal) },
-            authorization,
-        )
+        val failing = HookedBackend(InMemoryBackend()).apply { failAll = true }
+        val indexRuntime = CacheRuntime.builder().backend(failing).build()
+        val policyRuntime = CacheRuntime.builder().backend(InMemoryBackend()).build()
         try {
+            var indexSpec = CoSecCacheSpecs.globalPolicyIndex()
+            if (!strict) {
+                indexSpec = indexSpec.toBuilder().updatePolicy { it.readFailure(ReadFailureMode.DEGRADE) }.build()
+            }
+            val index = indexRuntime.createGlobalPolicyIndex(indexSpec)
+            val policies: PolicyCache = policyRuntime.createCache(
+                CoSecCacheSpecs.policy(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer))
+            )
+            policies.put(principalAllow.id, principalAllow)
+            val authorization = SimpleAuthorization(
+                RedisPolicyRepository(index, policies),
+                RedisAppRolePermissionRepository(
+                    policyRuntime.createCache(
+                        CoSecCacheSpecs.appPermission(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer))
+                    ),
+                    policyRuntime.createCache(
+                        CoSecCacheSpecs.rolePermission(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer))
+                    ),
+                ),
+            )
+            val principal = SimplePrincipal("user", policies = setOf(principalAllow.id))
+            val pipeline = SecurityPipeline(
+                object : RequestParser<String> {
+                    override fun parse(request: String): Request = EvaluateRequest(path = request)
+                },
+                SecurityContextParser { SimpleSecurityContext(principal) },
+                authorization,
+            )
             return pipeline.evaluate("/orders/1").block()!!.status
         } finally {
-            index.close()
-            policies.close()
+            indexRuntime.close()
+            policyRuntime.close()
         }
-    }
-
-    private class TestIndexCache(cache: CoherentCache<String, Set<String>>) :
-        GlobalPolicyIndexCache,
-        CoherentCache<String, Set<String>> by cache,
-        @Suppress("UNCHECKED_CAST")
-        SetElementsCache<String, String> by (cache as SetElementsCache<String, String>)
-
-    private class TestPolicyCache(cache: CoherentCache<String, Policy>) :
-        PolicyCache,
-        CoherentCache<String, Policy> by cache
-
-    companion object {
-        private const val UNREACHABLE_PORT = 1
     }
 }

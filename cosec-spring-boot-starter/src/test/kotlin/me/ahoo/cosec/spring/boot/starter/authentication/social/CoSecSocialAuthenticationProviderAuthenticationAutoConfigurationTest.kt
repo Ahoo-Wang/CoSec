@@ -21,7 +21,7 @@ import me.ahoo.cosec.social.SocialProviderManager
 import me.ahoo.cosec.social.SocialUserPrincipalConverter
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnAuthenticationEnabled
-import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import me.zhyd.oauth.cache.AuthStateCache
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
@@ -46,7 +46,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
                 "${SocialAuthenticationProperties.PREFIX}.registration.github.client-secret=client-secret",
                 "${SocialAuthenticationProperties.PREFIX}.registration.github.redirect-uri=https://github.com/Ahoo-Wang/CoCache/oauth-client/callback/github",
             )
-            .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
+            .withBean(StringIdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
                 DataRedisAutoConfiguration::class.java,
                 CoSecAuthenticationAutoConfiguration::class.java,

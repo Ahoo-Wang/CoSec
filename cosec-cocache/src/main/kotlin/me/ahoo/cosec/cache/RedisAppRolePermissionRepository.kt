@@ -22,7 +22,7 @@ import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.permission.AppRolePermissionData
 import me.ahoo.cosec.permission.RolePermissionData
 import reactor.core.publisher.Mono
-import reactor.core.scheduler.Schedulers
+import java.util.concurrent.CompletableFuture
 
 class RedisAppRolePermissionRepository(
     private val appPermissionCache: AppPermissionCache,
@@ -30,42 +30,31 @@ class RedisAppRolePermissionRepository(
 ) : AppRolePermissionRepository {
     /**
      * Served without a scheduler hop when the app permission and every role's permissions are already in the
-     * local cache; otherwise falls back to a blocking (Redis) lookup on [Schedulers.boundedElastic].
+     * local cache; otherwise read from Redis without blocking, see [toLocalFirstMono].
      */
     override fun getAppRolePermission(appId: AppId, spaceId: SpaceId, roleIds: Set<RoleId>): Mono<AppRolePermission> =
         Mono.defer {
-            when (val local = lookupLocal(appId, spaceId, roleIds)) {
-                is LocalLookup.Hit -> Mono.justOrEmpty<AppRolePermission>(local.value)
-                LocalLookup.Miss -> Mono.fromCallable<AppRolePermission> { load(appId, spaceId, roleIds) }
-                    .subscribeOn(Schedulers.boundedElastic())
-            }
+            appPermissionCache.async().get(appId)
+                .thenCompose { appPermission ->
+                    if (appPermission == null) {
+                        CompletableFuture.completedFuture<AppRolePermission?>(null)
+                    } else {
+                        rolePermissionsOf(spaceId, roleIds).thenApply<AppRolePermission?> {
+                            AppRolePermissionData(appPermission, it)
+                        }
+                    }
+                }.toLocalFirstMono()
         }
 
-    private fun load(appId: AppId, spaceId: SpaceId, roleIds: Set<RoleId>): AppRolePermission? {
-        val appPermission = appPermissionCache[appId] ?: return null
-        val rolePermissions = roleIds.mapNotNull {
-            val permissions = rolePermissionCache[SpacedRoleId(roleId = it, spaceId = spaceId)] ?: return@mapNotNull null
-            RolePermissionData(id = it, permissions = permissions)
-        }
-        return AppRolePermissionData(appPermission, rolePermissions)
-    }
-
-    private fun lookupLocal(appId: AppId, spaceId: SpaceId, roleIds: Set<RoleId>): LocalLookup<AppRolePermission> {
-        val appPermission = when (val lookup = appPermissionCache.lookupLocal(appId)) {
-            is LocalLookup.Hit -> lookup.value ?: return LocalLookup.Hit(null)
-            LocalLookup.Miss -> return LocalLookup.Miss
-        }
-        val rolePermissions = ArrayList<RolePermissionData>(roleIds.size)
-        for (roleId in roleIds) {
-            when (val lookup = rolePermissionCache.lookupLocal(SpacedRoleId(roleId = roleId, spaceId = spaceId))) {
-                is LocalLookup.Hit -> lookup.value?.let {
-                    rolePermissions.add(
-                        RolePermissionData(id = roleId, permissions = it)
-                    )
-                }
-                LocalLookup.Miss -> return LocalLookup.Miss
+    /**
+     * Permissions of [roleIds] in the order given; roles without permissions are skipped.
+     */
+    private fun rolePermissionsOf(spaceId: SpaceId, roleIds: Set<RoleId>): CompletableFuture<List<RolePermissionData>> {
+        val keys = roleIds.associateWith { SpacedRoleId(roleId = it, spaceId = spaceId) }
+        return rolePermissionCache.async().getAll(keys.values).thenApply { permissions ->
+            keys.mapNotNull { (roleId, key) ->
+                permissions[key]?.let { RolePermissionData(id = roleId, permissions = it) }
             }
         }
-        return LocalLookup.Hit(AppRolePermissionData(appPermission, rolePermissions))
     }
 }

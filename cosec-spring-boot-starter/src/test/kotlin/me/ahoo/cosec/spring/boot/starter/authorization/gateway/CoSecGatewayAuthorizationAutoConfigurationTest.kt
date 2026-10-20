@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.authorization.gateway
 
-import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
+import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.gateway.AuthorizationGatewayFilter
 import me.ahoo.cosec.gateway.GatewayRouteRequestAttributesAppender
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
@@ -22,7 +22,7 @@ import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPermissionCach
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecPolicyCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
-import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
@@ -40,7 +40,7 @@ internal class CoSecGatewayAuthorizationAutoConfigurationTest {
             .withPropertyValues(
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
-            .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
+            .withBean(StringIdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
                 JacksonAutoConfiguration::class.java,
                 DataRedisAutoConfiguration::class.java,

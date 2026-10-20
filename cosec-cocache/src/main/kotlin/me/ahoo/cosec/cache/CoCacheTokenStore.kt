@@ -14,7 +14,6 @@ package me.ahoo.cosec.cache
 
 import me.ahoo.cosec.token.TokenStore
 import java.time.Duration
-import java.time.Instant
 
 /**
  * [TokenStore] backed by a CoCache two-level cache (local + Redis),
@@ -29,16 +28,15 @@ import java.time.Instant
 class CoCacheTokenStore(private val cache: RevokedTokenCache) : TokenStore {
 
     /**
-     * Writes the revocation with an explicit absolute expiry, overwriting any
-     * missing-guard the lookup tier may have cached for this token id.
+     * Writes the revocation with an explicit lifetime; the write invalidates any
+     * "not revoked" answer other instances cached locally for this token id.
      *
      * @param tokenId the token id (jti) to revoke
      * @param ttl how long to keep the entry
      */
     override fun revoke(tokenId: String, ttl: Duration) {
-        // CacheValue.ttlAt is epoch SECONDS; the +1 rounds up so the entry
-        // never expires before the token's natural expiry
-        cache.set(tokenId, Instant.now().epochSecond + ttl.toSeconds() + 1, true)
+        // the extra second keeps the entry past the token's natural expiry (CoCache needs a positive lifetime)
+        cache.put(tokenId, true, ttl.coerceAtLeast(Duration.ZERO).plusSeconds(1))
     }
 
     /**

@@ -10,18 +10,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package me.ahoo.cosec.cache
 
-import me.ahoo.cache.api.Cache
-import me.ahoo.cache.api.TtlAt
-import me.ahoo.cache.api.annotation.CoCache
+import me.ahoo.cocache.api.Cache
 import me.ahoo.cosec.api.policy.Policy
 
 /**
- * Policy Cache .
+ * Policies by id. Redis is the store of record: see [CoSecCacheSpecs.policy] for the declaration.
  *
  * @author ahoo wang
  */
-// Redis is the store of record (no CacheSource), so entries must never expire; CoCache 5 defaults ttl to 3600s.
-@CoCache(ttl = TtlAt.FOREVER)
 interface PolicyCache : Cache<String, Policy>

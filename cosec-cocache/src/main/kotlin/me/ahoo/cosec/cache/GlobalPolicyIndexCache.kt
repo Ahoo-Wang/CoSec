@@ -10,23 +10,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package me.ahoo.cosec.cache
 
-import me.ahoo.cache.api.Cache
-import me.ahoo.cache.api.SetElementsCache
-import me.ahoo.cache.api.TtlAt
-import me.ahoo.cache.api.annotation.CoCache
+import me.ahoo.cocache.api.SetCache
 
 /**
- * Global Policy Index Cache .
+ * Ids of the global policies, a single set under [CACHE_KEY]. Element updates are atomic, so concurrent writers on
+ * any instance cannot lose entries. See [CoSecCacheSpecs.globalPolicyIndex] for the declaration.
  *
  * @author ahoo wang
  */
-// Redis is the store of record (no CacheSource), so entries must never expire; CoCache 5 defaults ttl to 3600s.
-@CoCache(ttl = TtlAt.FOREVER)
-interface GlobalPolicyIndexCache :
-    Cache<String, Set<String>>,
-    SetElementsCache<String, String> {
+interface GlobalPolicyIndexCache : SetCache<String, String> {
     companion object {
         const val CACHE_KEY = ""
     }

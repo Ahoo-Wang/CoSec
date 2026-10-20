@@ -5,12 +5,22 @@
 ## Redis 与缓存 {#redis-and-caching}
 
 使用 `cache-support` 时，Redis 是策略、应用权限和角色授权的**唯一数据存储**，也保存已吊销的令牌 id。
-每个实例在进程内保留一份副本（[CoCache](https://github.com/Ahoo-Wang/CoCache)）：
+每个实例在进程内保留一份副本（[CoCache 6](https://cocache.ahoo.me)）：
 
-- **读取**：数据在本地时直接从本地缓存返回，不切换线程；否则在工作线程上访问 Redis。
-- **写入**：写到 Redis，并通过失效消息让每个实例丢弃本地副本，因此变更立即在全集群生效。
-- **全局策略索引**的更新是原子的 Redis 集合操作，不同实例并发写入也不会丢失条目。
-- 策略和权限条目**永不过期**。本地缓存有上限（[`maximum-size`](./configuration.md#cache)，默认每个缓存 10,000 条），未命中时从 Redis 重新加载。
+- **读取**：数据在本地时直接从本地缓存返回，不切换线程；否则以不阻塞线程的方式读取 Redis，请求随后在工作线程上继续。
+- **写入**：写到 Redis，并通过失效消息让每个实例丢弃本地副本，因此变更立即在全集群生效。请通过 CoSec 写入
+  （`PolicyRepository.setPolicy`、`AppPermissionCache` 和 `RolePermissionCache` bean），不要用 Redis 命令直接写：
+  每个值都以一个由 CoCache 校验的二进制头开始。
+- **全局策略索引**的更新是原子的 Redis 操作，不同实例并发写入也不会丢失条目。
+- 策略和权限条目在 Redis 中**永不过期**。本地副本默认最多存活 5 分钟（[`expire-after-write`](./configuration.md#cache)），
+  之后重新读取 Redis；这限定了失效消息丢失时副本最多能陈旧多久。本地缓存有上限
+  （[`maximum-size`](./configuration.md#cache)，默认每个缓存 10,000 条）。
+
+键为 `<key-prefix>:policy:<id>`、`<key-prefix>:global:policy`、`<key-prefix>:app:permission:<appId>`、
+`<key-prefix>:role:permission:<roleId>[@<spaceId>]` 和 `<key-prefix>:token:revoked:<tokenId>`；每个缓存有自己的失效通道，
+例如 `cocache:inv:<key-prefix>:policy`。Redis 需要 7.0 及以上（或 Valkey 7.2 及以上），并通过 Lettuce 访问。
+最小化的 Redis ACL 必须授予 [CoCache 列出的权限](https://cocache.ahoo.me/operations/#acl)，
+自 CoCache 6.3 起其中包括 `+hkeys +hget`（保留 `+hgetall`）。
 
 **故障模式：**
 
@@ -20,8 +30,9 @@
 | 已吊销的令牌 | 检查会**放行**令牌，避免一次故障就拒绝所有已认证的请求。 |
 | 限流计数器 | 放行，除非规则设置了 `strictFailure: true`（此时返回 `429`）。 |
 
-滚动升级：CoSec 6 沿用 5.x 的 Redis 键和数据格式，升级期间 5.x 与 6.x 实例可以共用同一个 Redis。
-例外是限流计数器：6.1 按规则 id 组织计数器键，因此升级期间新旧实例分别计数（见[从限流条件迁移](./rate-limiting.md#migrating-from-rate-limit-conditions)）。
+升级：7.0 不能与 6.x 共用 Redis，因此所有实例必须同时切换，并在 7.0 启动之前迁移 6.x 的数据
+（见[从 6.1 升级到 7.0](./upgrading.md#_6-1-to-7-0)）。限流计数器从 6.1 起按规则 id 组织
+（见[从限流条件迁移](./rate-limiting.md#migrating-from-rate-limit-conditions)）。
 
 ## 审计 {#auditing}
 

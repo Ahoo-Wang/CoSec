@@ -296,14 +296,17 @@ permissions once and grant them to roles.
 - The request selects the app with the `CoSec-App-Id` header and the space with `CoSec-Space-Id`.
 - A role is granted a **set of permission ids** per space; `*` grants every permission of the app.
 
-With `cache-support`, CoSec reads these from Redis (default key prefix `cosec`):
+With `cache-support`, CoSec reads these from Redis through two caches (default key prefix `cosec`):
 
-| Data | Redis key | Value |
-|---|---|---|
-| App permission | `cosec:app:permission:<appId>` | the JSON above |
-| Role grants | `cosec:role:permission:<roleId>` (default space) or `cosec:role:permission:<roleId>@<spaceId>` | a set of permission ids |
+| Data | Cache bean | Key | Value |
+|---|---|---|---|
+| App permission | `AppPermissionCache` | the app id | the JSON above, as an `AppPermission` |
+| Role grants | `RolePermissionCache` | `SpacedRoleId(roleId, spaceId)` | a set of permission ids |
 
-CoSec reads permissions and grants; your administration service owns writing them.
+CoSec reads permissions and grants; your administration service owns writing them. Write them through these beans,
+for example `rolePermissionCache.put(SpacedRoleId("admin", "space"), setOf("order.read"))`, so every instance drops its
+local copy. Values in Redis carry a binary header (Redis keys `cosec:app:permission:<appId>` and
+`cosec:role:permission:<roleId>[@<spaceId>]`), so writing them with Redis commands does not work.
 
 ## Loading and generating policies
 

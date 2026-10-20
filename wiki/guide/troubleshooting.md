@@ -133,6 +133,11 @@ The caller is known, but nothing allowed the request, or something denied it.
 - **Another file has the same id.** Only the first one with a given id is loaded.
 - **Wrong policy type.** Only `global` policies apply to everyone; `system` and `custom` policies apply only
   to principals that list them.
+- **The data was not migrated when upgrading to 7.0.** 7.0 cannot read what 6.x stored in Redis. Migrate it
+  before starting 7.0 ([Upgrading from 6.1 to 7.0](./upgrading.md#_6-1-to-7-0)).
+- **Permissions were written straight to Redis.** Since 7.0, values written with `SET` or `SADD` are not read; write
+  app permissions and role grants through the `AppPermissionCache` and `RolePermissionCache` beans
+  ([App permissions and roles](./policies.md#app-permissions-and-roles)).
 
 ## Every request fails with 500
 

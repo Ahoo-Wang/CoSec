@@ -12,10 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import com.github.benmanes.caffeine.cache.Caffeine
-import me.ahoo.cache.api.annotation.CaffeineCache
-import me.ahoo.cache.api.client.ClientSideCache
-import me.ahoo.cache.client.CaffeineClientSideCache
+import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.policy.history.PolicyRevisions
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
@@ -23,6 +20,7 @@ import me.ahoo.cosec.spring.boot.starter.authorization.AuthorizationProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.NestedConfigurationProperty
 import org.springframework.boot.context.properties.bind.DefaultValue
+import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 /**
@@ -47,11 +45,6 @@ class CacheProperties(
         const val PREFIX: String = AuthorizationProperties.PREFIX + ".cache"
     }
 
-    val globalPolicyIndexKey: String = "$keyPrefix:global:policy"
-    val policyKeyPrefix: String = "$keyPrefix:policy:"
-    val appPermissionKeyPrefix: String = "$keyPrefix:app:permission:"
-    val rolePermissionKeyPrefix: String = "$keyPrefix:role:permission:"
-    val revokedTokenKeyPrefix: String = "$keyPrefix:token:revoked:"
     val policyHistoryKeyPrefix: String = "$keyPrefix:policy:history"
 }
 
@@ -65,8 +58,8 @@ data class PolicyHistoryConfiguration(
 )
 
 /**
- * Local (client-side) cache settings. Unset values ([UNSET]) fall back to Caffeine defaults, except
- * [maximumSize], which falls back to CoCache's bounded default ([CaffeineCache.DEFAULT_MAXIMUM_SIZE]).
+ * Local (in-process) cache settings. Unset values ([UNSET]) keep CoCache's defaults: 10,000 entries and a local copy
+ * that lives at most 5 minutes (`localMaxAge`).
  */
 data class CacheConfiguration(
     var initialCapacity: Int = UNSET.toInt(),
@@ -81,18 +74,28 @@ data class CacheConfiguration(
         const val UNSET = -1L
     }
 
-    fun <V> toClientSideCache(): ClientSideCache<V> {
-        val builder = Caffeine.newBuilder()
-            .maximumSize(maximumSize.takeIf { it != UNSET } ?: CaffeineCache.DEFAULT_MAXIMUM_SIZE)
-        if (initialCapacity != UNSET.toInt()) {
-            builder.initialCapacity(initialCapacity)
+    /**
+     * [expireAfterWrite] bounds how long a local copy lives (CoCache's `localMaxAge`, which has no unlimited setting);
+     * the other values size the local cache.
+     */
+    fun toCachePolicy(base: CachePolicy): CachePolicy {
+        val local = base.local
+        return base.toBuilder()
+            .local(
+                local.copy(
+                    maximumSize = maximumSize.takeIf { it != UNSET } ?: local.maximumSize,
+                    initialCapacity = initialCapacity.takeIf { it != UNSET.toInt() } ?: local.initialCapacity,
+                    expireAfterAccess = expireAfterAccess.toDuration() ?: local.expireAfterAccess,
+                )
+            )
+            .localMaxAge(expireAfterWrite.toDuration() ?: base.localMaxAge)
+            .build()
+    }
+
+    private fun Long.toDuration(): Duration? {
+        if (this == UNSET) {
+            return null
         }
-        if (expireAfterWrite != UNSET) {
-            builder.expireAfterWrite(expireAfterWrite, expireUnit)
-        }
-        if (expireAfterAccess != UNSET) {
-            builder.expireAfterAccess(expireAfterAccess, expireUnit)
-        }
-        return CaffeineClientSideCache(builder.build())
+        return Duration.of(this, expireUnit.toChronoUnit())
     }
 }

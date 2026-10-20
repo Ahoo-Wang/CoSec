@@ -78,7 +78,7 @@ sequenceDiagram
 |---|---|
 | **拒绝优先** | 任何策略或层的组合，都不能让 `ALLOW` 压过已命中的 `DENY`。 |
 | **出错即拒绝** | 错误一律拒绝（`500`，正则超时为 `403`）。仅有的例外是有文档说明的降级模式：未设置 `strictFailure` 的限流规则，以及吊销检查。策略和权限缓存使用严格的 Redis 失败模式。 |
-| **不阻塞事件循环** | 阻塞操作（从 Redis 读取仓储、令牌吊销、Redis 限流计数器）在 `boundedElastic` 上执行；能从本地缓存返回的读取留在调用方线程。必须阻塞的自定义条件匹配器实现 `BlockingAware`：只有当某一层的策略或应用权限包含这类匹配器时，`SimpleAuthorization` 才会把该层放到 `boundedElastic` 上评估，其他策略不产生线程切换。 |
+| **不阻塞事件循环** | 阻塞操作（令牌吊销、Redis 限流计数器）在 `boundedElastic` 上执行。能从本地缓存返回的仓储读取留在调用方线程；其余读取以不阻塞的方式访问 Redis，随后在 `boundedElastic` 上继续。必须阻塞的自定义条件匹配器实现 `BlockingAware`：只有当某一层的策略或应用权限包含这类匹配器时，`SimpleAuthorization` 才会把该层放到 `boundedElastic` 上评估，其他策略不产生线程切换。 |
 | **只有一条决策路径** | 状态码和错误映射只存在于 `SecurityPipeline`，适配器从不自行决策。 |
 | **授权是纯决策** | 内置匹配器只读取请求和安全上下文，不做 I/O、不持有状态（路径匹配器会把路径变量记录到上下文中）。会消耗许可的限流是一个独立的装饰器，只对被放行的请求执行（见[限流](../guide/rate-limiting.md)）。 |
 | **策略即数据** | 策略和权限都是 JSON。匹配器通过按类型注册的工厂创建（`ServiceLoader` 或 Spring bean）。 |
@@ -89,13 +89,14 @@ sequenceDiagram
 ## 数据与缓存 {#data-and-caching}
 
 仓储（`PolicyRepository`、`AppRolePermissionRepository`）是 `cosec-core` 中的接口。`cosec-cocache` 中的 Redis 实现基于
-[CoCache](https://github.com/Ahoo-Wang/CoCache)：
+[CoCache 6](https://cocache.ahoo.me)：
 
-- Redis 是唯一的数据存储，因此每个缓存都固定为 `ttl = FOREVER`，由 `CacheTtlPolicyTest` 守护。
-- 读取先查客户端缓存
-  （[`LocalCacheLookup`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/LocalCacheLookup.kt)，
-  与 CoCache 自身的本地命中语义一致），只要有一项未命中，就整体回退到 Redis。
-- 全局策略索引通过 `SetElementsCache.addElements` / `removeElements` 更新，也就是原子的 Redis 集合操作；
+- [`CoSecCacheSpecs`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt)
+  声明这些缓存。Redis 是唯一的数据存储，因此策略和权限缓存永不过期，读取 Redis 失败时抛出异常；starter 在应用任何 CoCache
+  定制器和属性之后再施加这两条。由 `CacheTtlPolicyTest` 和 `StrictCacheFailureTest` 守护。
+- 读取通过 CoCache 的异步视图进行。本地命中返回一个已完成的 future，因此仓储在调用方线程上直接返回；
+  未命中时以不阻塞的方式读取 Redis，请求随后在 `boundedElastic` 上继续（`LocalCacheFastPathTest`）。
+- 全局策略索引是一个 CoCache `SetCache`，通过原子的 `add` / `remove` 更新；
   `GlobalPolicyIndexConcurrencyIntegrationTest` 用两个实例并发写入来验证这一点。
 
 ## 性能 {#performance}
