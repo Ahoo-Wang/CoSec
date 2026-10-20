@@ -15,7 +15,6 @@ package me.ahoo.cosec.cache
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cache.converter.ToStringKeyConverter
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.api.permission.AppRolePermission
@@ -56,12 +55,11 @@ class RolePermissionKeyMigrationTest {
     @BeforeEach
     fun setup() {
         fixture = RedisRolePermissionFixture()
-        fixture.appPermissionCache["blog"] = app("blog")
-        fixture.appPermissionCache["billing"] = app("billing")
+        fixture.appPermissionCache.put("blog", app("blog"))
+        fixture.appPermissionCache.put("billing", app("billing"))
         migration = RolePermissionKeyMigration(
             fixture.redisTemplate,
             fixture.rolePermissionCache("migration"),
-            ToStringKeyConverter(fixture.rolePermissionKeyPrefix),
             fixture.legacyRolePermissionKeyPrefix,
         )
         val policyRepository = mockk<PolicyRepository> {
@@ -109,7 +107,7 @@ class RolePermissionKeyMigrationTest {
         // Only the named app gets the grants, wildcard included.
         authorized("editor", "billing").assert().isFalse()
         authorized("admin@team-a", "billing", "team-a").assert().isFalse()
-        fixture.redisTemplate.opsForSet().members("${fixture.rolePermissionKeyPrefix}blog:admin@team-a")
+        fixture.grants(AppSpacedRoleId("blog", "admin", "team-a"))
             .assert().containsExactly("blog.manage")
         // Legacy keys are kept until deleted explicitly.
         fixture.redisTemplate.hasKey(fixture.legacyRolePermissionKeyPrefix + "editor").assert().isTrue()
@@ -168,11 +166,11 @@ class RolePermissionKeyMigrationTest {
         val conflicting = migration.migrate("blog")
         conflicting.conflicts.single().permissions.assert()
             .containsExactlyInAnyOrder("blog.manage", AppRolePermission.ALL_PERMISSION_ID)
-        fixture.redisTemplate.opsForSet().members("${fixture.rolePermissionKeyPrefix}blog:editor")
+        fixture.grants(AppSpacedRoleId("blog", "editor"))
             .assert().containsExactly("blog.manage")
 
         migration.migrate("blog", overwrite = true).migrated.size.assert().isEqualTo(1)
-        fixture.redisTemplate.opsForSet().members("${fixture.rolePermissionKeyPrefix}blog:editor")
+        fixture.grants(AppSpacedRoleId("blog", "editor"))
             .assert().containsExactlyInAnyOrder("blog.manage", AppRolePermission.ALL_PERMISSION_ID)
     }
 

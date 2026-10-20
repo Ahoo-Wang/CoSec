@@ -71,8 +71,8 @@ class RolePermissionScopeTest {
     @BeforeEach
     fun setup() {
         fixture = RedisRolePermissionFixture()
-        fixture.appPermissionCache["blog"] = blogAdmin
-        fixture.appPermissionCache["billing"] = billingAdmin
+        fixture.appPermissionCache.put("blog", blogAdmin)
+        fixture.appPermissionCache.put("billing", billingAdmin)
         rolePermissionCache = fixture.rolePermissionCache()
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.just(emptyList())
@@ -100,7 +100,7 @@ class RolePermissionScopeTest {
     @Test
     fun wildcardGrantForOneAppDoesNotApplyToAnother() {
         // The blog team grants its editors every blog permission.
-        rolePermissionCache[AppSpacedRoleId("blog", "editor")] = setOf(AppRolePermission.ALL_PERMISSION_ID)
+        rolePermissionCache.put(AppSpacedRoleId("blog", "editor"), setOf(AppRolePermission.ALL_PERMISSION_ID))
         fixture.redisTemplate.hasKey("${fixture.rolePermissionKeyPrefix}blog:editor").assert().isTrue()
 
         // Control: allowed in the blog app.
@@ -111,9 +111,9 @@ class RolePermissionScopeTest {
 
     @Test
     fun sameRoleNameIsGrantedPerApp() {
-        rolePermissionCache[AppSpacedRoleId("blog", "editor")] = setOf("posts.manage")
+        rolePermissionCache.put(AppSpacedRoleId("blog", "editor"), setOf("posts.manage"))
         // "posts.manage" is not a billing permission id, but a billing grant of the same role must not leak either.
-        rolePermissionCache[AppSpacedRoleId("billing", "editor")] = setOf("posts.manage")
+        rolePermissionCache.put(AppSpacedRoleId("billing", "editor"), setOf("posts.manage"))
 
         authorized(setOf("editor"), "blog").assert().isTrue()
         authorized(setOf("editor"), "billing").assert().isFalse()
@@ -122,7 +122,7 @@ class RolePermissionScopeTest {
     @Test
     fun principalCannotPickUpGrantsOfAnotherSpace() {
         // "admin" means full access in team-a; alice is admin of team-b only, where admin grants nothing in blog.
-        rolePermissionCache[AppSpacedRoleId("blog", "admin", "team-a")] = setOf(AppRolePermission.ALL_PERMISSION_ID)
+        rolePermissionCache.put(AppSpacedRoleId("blog", "admin", "team-a"), setOf(AppRolePermission.ALL_PERMISSION_ID))
         fixture.redisTemplate.hasKey("${fixture.rolePermissionKeyPrefix}blog:admin@team-a").assert().isTrue()
 
         authorized(setOf("admin@team-b"), "blog", "team-b").assert().isFalse()
@@ -134,8 +134,8 @@ class RolePermissionScopeTest {
 
     @Test
     fun unsuffixedRoleOnlyAppliesInDefaultSpace() {
-        rolePermissionCache[AppSpacedRoleId("blog", "admin")] = setOf(AppRolePermission.ALL_PERMISSION_ID)
-        rolePermissionCache[AppSpacedRoleId("blog", "admin", "team-a")] = setOf(AppRolePermission.ALL_PERMISSION_ID)
+        rolePermissionCache.put(AppSpacedRoleId("blog", "admin"), setOf(AppRolePermission.ALL_PERMISSION_ID))
+        rolePermissionCache.put(AppSpacedRoleId("blog", "admin", "team-a"), setOf(AppRolePermission.ALL_PERMISSION_ID))
 
         authorized(setOf("admin"), "blog").assert().isTrue()
         // An unsuffixed role is a default-space role: naming another space does not carry it there.
@@ -146,7 +146,7 @@ class RolePermissionScopeTest {
 
     @Test
     fun malformedSpacedRoleAppliesNowhere() {
-        rolePermissionCache[AppSpacedRoleId("blog", "admin", "team-a")] = setOf(AppRolePermission.ALL_PERMISSION_ID)
+        rolePermissionCache.put(AppSpacedRoleId("blog", "admin", "team-a"), setOf(AppRolePermission.ALL_PERMISSION_ID))
 
         authorized(setOf("admin@team-a@x"), "blog", "team-a").assert().isFalse()
         authorized(setOf("@team-a"), "blog", "team-a").assert().isFalse()

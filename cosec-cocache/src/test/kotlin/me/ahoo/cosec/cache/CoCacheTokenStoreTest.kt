@@ -14,16 +14,10 @@ package me.ahoo.cosec.cache
 
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import io.mockk.verify
 import me.ahoo.test.asserts.assert
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.allOf
-import org.hamcrest.Matchers.greaterThanOrEqualTo
-import org.hamcrest.Matchers.lessThanOrEqualTo
 import org.junit.jupiter.api.Test
 import java.time.Duration
-import java.time.Instant
 
 class CoCacheTokenStoreTest {
 
@@ -32,20 +26,15 @@ class CoCacheTokenStoreTest {
 
     @Test
     fun revoke() {
-        val before = Instant.now().epochSecond
         tokenStore.revoke("tokenId", Duration.ofMinutes(10))
-        val after = Instant.now().epochSecond
+        // one extra second, so the entry never expires before the token does
+        verify(exactly = 1) { cache.put("tokenId", true, Duration.ofSeconds(601)) }
+    }
 
-        val ttlAtSlot = slot<Long>()
-        verify(exactly = 1) { cache.set("tokenId", capture(ttlAtSlot), true) }
-        // ttlAt 单位是秒；+1 是向上取整余量，保证条目不早于 token 自然过期
-        assertThat(
-            ttlAtSlot.captured,
-            allOf(
-                greaterThanOrEqualTo(before + 600),
-                lessThanOrEqualTo(after + 601)
-            )
-        )
+    @Test
+    fun revokeExpiredToken() {
+        tokenStore.revoke("tokenId", Duration.ofSeconds(-5))
+        verify(exactly = 1) { cache.put("tokenId", true, Duration.ofSeconds(1)) }
     }
 
     @Test

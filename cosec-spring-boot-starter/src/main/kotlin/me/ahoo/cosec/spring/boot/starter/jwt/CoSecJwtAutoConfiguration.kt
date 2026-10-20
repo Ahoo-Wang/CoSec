@@ -26,7 +26,7 @@ import me.ahoo.cosec.token.TokenConverter
 import me.ahoo.cosec.token.TokenRevoker
 import me.ahoo.cosec.token.TokenStore
 import me.ahoo.cosec.token.TokenVerifier
-import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.jvm.UuidGenerator
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -80,7 +80,7 @@ class CoSecJwtAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecTokenConverter(
-        idGeneratorProvider: ObjectProvider<IdGenerator>,
+        idGeneratorProvider: ObjectProvider<StringIdGenerator>,
         algorithm: Algorithm,
         jwtProperties: JwtProperties
     ): TokenConverter {

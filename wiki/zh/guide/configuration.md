@@ -71,6 +71,9 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 | `cosec.authorization.cache.token.*` | `expire-after-write: 30`、`maximum-size: 100000` | 吊销查询的本地缓存。 |
 | `cosec.authorization.cache.history.enabled` | `false` | 为每次保存的策略记录一个[修订版本](./policies.md#policy-history-and-rollback)（`cosec:policy:history:*`）。 |
 | `cosec.authorization.cache.history.max-revisions` | `50` | 每条策略保留的修订版本数。 |
+| `cosec.authorization.cache.migration.legacy-key-prefix` | `key-prefix` | 6.x 部署的 `cosec.authorization.cache.key-prefix`，用于[数据迁移](./upgrading.md#migrating-the-data)。 |
+| `cosec.authorization.cache.migration.missing-guard-sentinel` | `_nil_` | 6.x 部署的 `cocache.redis.missing-guard-sentinel`。 |
+| `cosec.authorization.cache.migration.backup-prefix` | `cocache5-backup:` | CoCache 迁移在转换每个 6.x 值之前把它备份到哪里，用于回滚。 |
 
 每个本地缓存（`policy`、`role`、`token`）支持：
 
@@ -78,12 +81,17 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 |---|---|---|
 | `maximum-size` | `10000` | 本地缓存的最大条目数。 |
 | `initial-capacity` | — | 初始容量。 |
-| `expire-after-write` / `expire-after-access` | — | 本地过期时间，单位为 `expire-unit`。 |
+| `expire-after-write` | `300`（5 分钟） | 本地副本最长存活时间（CoCache 的 `localMaxAge`），单位为 `expire-unit`。 |
+| `expire-after-access` | — | 本地副本超过这段时间未被读取即丢弃，单位为 `expire-unit`。 |
 | `expire-unit` | `SECONDS` | 过期时间的单位。 |
 | `concurrency-level` | — | 已弃用并忽略（Caffeine 没有并发级别）。 |
 
 本地过期只用于限制失效消息丢失时陈旧副本能存活多久；变更本身会立即推送到所有实例。读取策略和权限时
 Redis 出错，请求会被拒绝。详见[运维](./operations.md#redis-and-caching)。
+
+CoSec 在 CoCache 的运行时上创建这些缓存，缓存名为 `PolicyCache`、`GlobalPolicyIndexCache`、`AppPermissionCache`、
+`RolePermissionCache` 和 `RevokedTokenCache`。CoCache 的 `cocache.defaults.*`、`cocache.caches.<name>.*` 和
+`CacheSpecCustomizer` bean 对它们生效，但键的布局始终由 CoSec 决定，策略和权限缓存也始终保持“永不过期、读不到 Redis 时失败”。
 
 ## 限流 {#rate-limiting}
 

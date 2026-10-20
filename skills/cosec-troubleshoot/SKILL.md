@@ -85,6 +85,11 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 - Local policies are deduplicated by ID after location expansion; assert that the expected ID and content loaded.
 - `LocalPolicyLoader` does not serve authorization decisions directly. Enable `init-repository` or prepopulate `PolicyRepository`; use `force-refresh` only when overwriting repository state is intended.
 
+### Policies or permissions missing after upgrading to 7.0
+
+- CoCache 6 cannot read what CoSec 6.x (CoCache 5) stored in Redis. Until the data is migrated, every read of it fails (`CacheReadException` caused by `ForeignFormatException`) and requests get 500. Migrate with `CoSecCoCache5Migration` (policies, global index, app permissions, revoked tokens) and `RolePermissionKeyMigration` (role grants, per app); see the upgrading guide, "6.1 to 7.0".
+- Values written straight to Redis (`SET`, `SADD`) are not read in 7.0: every value carries a binary header. Write app permissions and role grants through the `AppPermissionCache` and `RolePermissionCache` beans, and policies through `PolicyRepository.setPolicy`.
+
 ### One principal always gets 500
 
 - `MissingPolicyException` names policy ids the principal lists but `PolicyRepository.getPolicies` did not return. Since 7.0 authorization fails closed on them instead of skipping them (a missing deny must not let a global allow win); explanations show a `MISSING_POLICY` warning.

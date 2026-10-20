@@ -22,7 +22,7 @@ import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import me.ahoo.cosec.policy.DefaultPolicyEvaluator
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
-import reactor.kotlin.core.publisher.toMono
+import java.util.concurrent.CompletableFuture
 
 class RedisPolicyRepository(
     private val globalPolicyIndexCache: GlobalPolicyIndexCache,
@@ -34,38 +34,25 @@ class RedisPolicyRepository(
 
     /**
      * Served without a scheduler hop when the index and every policy are already in the local cache;
-     * otherwise falls back to a blocking (Redis) lookup on [Schedulers.boundedElastic].
+     * otherwise read from Redis without blocking, see [toLocalFirstMono].
      */
     override fun getGlobalPolicy(): Mono<List<Policy>> = Mono.defer {
-        val index = globalPolicyIndexCache.lookupLocal(CACHE_KEY)
-        if (index is LocalLookup.Hit) {
-            localPolicies(index.value.orEmpty())?.let { return@defer it.toMono() }
-        }
-        Mono.fromCallable {
-            val globalPolicyIds = globalPolicyIndexCache[CACHE_KEY].orEmpty()
-            globalPolicyIds.mapNotNull { policyCache[it] }
-        }.subscribeOn(Schedulers.boundedElastic())
+        globalPolicyIndexCache.async().get(CACHE_KEY)
+            .thenCompose { globalPolicyIds -> policiesOf(globalPolicyIds.orEmpty()) }
+            .toLocalFirstMono()
     }
 
     override fun getPolicies(policyIds: Set<PolicyId>): Mono<List<Policy>> = Mono.defer {
-        localPolicies(policyIds)?.let { return@defer it.toMono() }
-        Mono.fromCallable {
-            policyIds.mapNotNull { policyCache[it] }
-        }.subscribeOn(Schedulers.boundedElastic())
+        policiesOf(policyIds).toLocalFirstMono()
     }
 
     /**
-     * Resolves [policyIds] from the local cache only; null when any of them needs a Redis lookup.
+     * Policies in the order of [policyIds]; ids without a policy are skipped.
      */
-    private fun localPolicies(policyIds: Collection<PolicyId>): List<Policy>? {
-        val policies = ArrayList<Policy>(policyIds.size)
-        for (policyId in policyIds) {
-            when (val lookup = policyCache.lookupLocal(policyId)) {
-                is LocalLookup.Hit -> lookup.value?.let { policies.add(it) }
-                LocalLookup.Miss -> return null
-            }
+    private fun policiesOf(policyIds: Collection<PolicyId>): CompletableFuture<List<Policy>> {
+        return policyCache.async().getAll(policyIds).thenApply { policies ->
+            policyIds.mapNotNull { policies[it] }
         }
-        return policies
     }
 
     /**
@@ -81,6 +68,28 @@ class RedisPolicyRepository(
      * client-side copies. A failed publish completes with an error and must be retried; repeating it is idempotent.
      * Index updates are atomic, idempotent element updates, so concurrent writers on any instance cannot lose entries.
      */
+    private fun updateGlobalPolicyIndex(policy: Policy) {
+        val policyIds = listOf(policy.id)
+        if (policy.type == PolicyType.GLOBAL) {
+            globalPolicyIndexCache.add(CACHE_KEY, policyIds)
+        } else {
+            globalPolicyIndexCache.remove(CACHE_KEY, policyIds)
+        }
+    }
+
+    /**
+     * Publishes [policy] as two Redis writes, its content and its entry in the global policy index, ordered so that
+     * a failure between them leaves every principal under either the old or the new state of the policy, never a mix
+     * that widens access:
+     * - global: content first, then add to the index. A failed index update leaves the new content applying only to
+     *   principals that list the policy, as before; the old content never becomes global.
+     * - not global: remove from the index first, then write the content. A failed content write leaves the old
+     *   content applying only to principals that list the policy; the new content never applies to everyone.
+     *
+     * The two writes are not atomic: CoCache has no transaction across caches, and each cache invalidates its own
+     * local copies. A failed publish completes with an error and must be retried; repeating it is idempotent.
+     * Index updates are atomic, idempotent element updates, so concurrent writers on any instance cannot lose entries.
+     */
     override fun setPolicy(policy: Policy): Mono<Void> {
         return Mono.fromRunnable<Void> {
             log.info {
@@ -89,11 +98,11 @@ class RedisPolicyRepository(
             DefaultPolicyEvaluator.evaluate(policy)
             val policyIds = listOf(policy.id)
             if (policy.type == PolicyType.GLOBAL) {
-                policyCache[policy.id] = policy
-                globalPolicyIndexCache.addElements(CACHE_KEY, policyIds)
+                policyCache.put(policy.id, policy)
+                globalPolicyIndexCache.add(CACHE_KEY, policyIds)
             } else {
-                globalPolicyIndexCache.removeElements(CACHE_KEY, policyIds)
-                policyCache[policy.id] = policy
+                globalPolicyIndexCache.remove(CACHE_KEY, policyIds)
+                policyCache.put(policy.id, policy)
             }
         }.subscribeOn(Schedulers.boundedElastic())
     }

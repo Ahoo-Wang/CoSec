@@ -13,31 +13,39 @@
 
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
-import me.ahoo.cache.api.CacheValue
+import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 class CacheConfigurationTest {
 
     @Test
-    fun toClientSideCacheWithDefaults() {
-        val cache = CacheConfiguration().toClientSideCache<String>()
-        cache.setCache("key", CacheValue.forever("value"))
-        cache.getCache("key")?.value.assert().isEqualTo("value")
+    fun toCachePolicyWithDefaultsKeepsCoCacheDefaults() {
+        CacheConfiguration().toCachePolicy(CachePolicy.DEFAULT).toString()
+            .assert().isEqualTo(CachePolicy.DEFAULT.toString())
     }
 
     @Test
-    fun toClientSideCacheWithAllOptions() {
-        val cache = CacheConfiguration(
+    fun toCachePolicyWithAllOptions() {
+        val policy = CacheConfiguration(
             initialCapacity = 16,
             maximumSize = 100,
             expireUnit = TimeUnit.MINUTES,
             expireAfterWrite = 10,
             expireAfterAccess = 5,
-        ).toClientSideCache<String>()
-        cache.setCache("key", CacheValue.forever("value"))
-        cache.getCache("key")?.value.assert().isEqualTo("value")
-        cache.size.assert().isEqualTo(1L)
+        ).toCachePolicy(CachePolicy.DEFAULT)
+        policy.local.initialCapacity.assert().isEqualTo(16)
+        policy.local.maximumSize.assert().isEqualTo(100L)
+        policy.local.expireAfterAccess.assert().isEqualTo(Duration.ofMinutes(5))
+        policy.localMaxAge.assert().isEqualTo(Duration.ofMinutes(10))
+    }
+
+    @Test
+    fun tokenDefaults() {
+        val policy = CacheProperties().token.toCachePolicy(CachePolicy.DEFAULT)
+        policy.localMaxAge.assert().isEqualTo(Duration.ofSeconds(30))
+        policy.local.maximumSize.assert().isEqualTo(100_000L)
     }
 }

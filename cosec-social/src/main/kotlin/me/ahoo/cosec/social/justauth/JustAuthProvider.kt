@@ -18,7 +18,7 @@ import me.ahoo.cosec.social.SocialAuthenticationProvider
 import me.ahoo.cosec.social.SocialCredentials
 import me.ahoo.cosec.social.SocialUser
 import me.ahoo.cosec.social.justauth.SocialUserConverter.toSocialUser
-import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.StringIdGenerator
 import me.zhyd.oauth.model.AuthResponse
 import me.zhyd.oauth.model.AuthUser
 import me.zhyd.oauth.request.AuthRequest
@@ -33,7 +33,7 @@ import reactor.kotlin.core.publisher.toMono
 class JustAuthProvider(
     override val name: String,
     private val authRequest: AuthRequest,
-    private val idGenerator: IdGenerator
+    private val idGenerator: StringIdGenerator
 ) : SocialAuthenticationProvider {
     override fun authorizeUrl(): String {
         return authRequest.authorize(idGenerator.generateAsString())

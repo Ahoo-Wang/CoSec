@@ -16,7 +16,7 @@ package me.ahoo.cosec.spring.boot.starter.authorization
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
+import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
@@ -42,7 +42,7 @@ import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.cosec.spring.boot.starter.policy.LocalPolicyInitializerLifecycle
 import me.ahoo.cosec.spring.boot.starter.policy.MatcherFactoryRegister
 import me.ahoo.cosec.token.TokenVerifier
-import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
@@ -80,7 +80,7 @@ internal class CoSecAuthorizationAutoConfigurationTest {
                 "${AuthorizationProperties.LOCAL_POLICY_PREFIX}.locations=" +
                     "classpath:cosec-policy/missing-policy.json",
             )
-            .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
+            .withBean(StringIdGenerator::class.java, { MockIdGenerator.INSTANCE })
             .withUserConfiguration(
                 JacksonAutoConfiguration::class.java,
                 DataRedisAutoConfiguration::class.java,

@@ -86,8 +86,8 @@ Every change must keep these.
 | Invariant | Meaning |
 |---|---|
 | **Deny-first** | No combination of policies or layers lets an `ALLOW` win over a matched `DENY`. |
-| **Fail closed** | Errors deny (`500`, regex timeout `403`). The only exceptions are documented degraded modes: rate limit rules without `strictFailure`, and the revocation check. Policy and permission caches use strict Redis failure, and a principal policy the repository does not have fails authorization rather than being skipped. |
-| **No blocking on the event loop** | Blocking work (repository reads from Redis, token revocation, Redis rate limit counters) runs on `boundedElastic`. Reads answered from the local cache stay on the caller's thread. A custom condition matcher that must block implements `BlockingAware`: `SimpleAuthorization` evaluates a layer on `boundedElastic` only when its policies or app permission contain one, so other policies pay no thread hop. |
+| **Fail closed** | Errors deny (`500`, regex timeout `403`). The only exceptions are documented degraded modes: rate limit rules without `strictFailure`, and the revocation check. Policy and permission caches use strict Redis failure and fail on content they cannot read (such as unmigrated CoCache 5 values), and a principal policy the repository does not have fails authorization rather than being skipped. |
+| **No blocking on the event loop** | Blocking work (token revocation, Redis rate limit counters) runs on `boundedElastic`. Repository reads answered from the local cache stay on the caller's thread; the others read Redis without blocking and continue on `boundedElastic`. A custom condition matcher that must block implements `BlockingAware`: `SimpleAuthorization` evaluates a layer on `boundedElastic` only when its policies or app permission contain one, so other policies pay no thread hop. |
 | **One decision path** | Status codes and error mapping live only in `SecurityPipeline`. Adapters never decide. |
 | **Authorization is a pure decision** | Built-in matchers only read the request and security context, do no I/O and keep no state (path matchers record path variables in the context). Rate limiting, which spends permits, is a separate decorator that runs only for allowed requests (see [Rate Limiting](../guide/rate-limiting.md)). |
 | **Policies are data** | Policies and permissions are JSON. Matchers are created through factories registered by type (`ServiceLoader` or Spring beans). |
@@ -98,15 +98,17 @@ decorator chain, so checks are neither audited nor rate limited.
 ## Data and caching
 
 The repositories (`PolicyRepository`, `AppRolePermissionRepository`) are interfaces in `cosec-core`. The
-Redis implementations in `cosec-cocache` are built on [CoCache](https://github.com/Ahoo-Wang/CoCache):
+Redis implementations in `cosec-cocache` are built on [CoCache 6](https://cocache.ahoo.me):
 
-- Each cache is pinned to `ttl = FOREVER`, because Redis is the store of record. `CacheTtlPolicyTest`
-  guards this.
-- Reads try the client-side cache first
-  ([`LocalCacheLookup`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/LocalCacheLookup.kt)),
-  mirroring CoCache's own local-hit semantics. They fall back to Redis as a whole on any miss.
-- The global policy index is updated with `SetElementsCache.addElements` / `removeElements`, atomic Redis
-  set operations. `GlobalPolicyIndexConcurrencyIntegrationTest` runs two instances writing concurrently.
+- [`CoSecCacheSpecs`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt)
+  declares the caches. Redis is the store of record, so policy and permission caches never expire and a failed
+  Redis read throws; the starter applies this after any CoCache customizer or property. `CacheTtlPolicyTest` and
+  `StrictCacheFailureTest` guard this.
+- Reads go through CoCache's async view. A local hit is an already completed future, so the repository answers
+  on the caller's thread; a miss reads Redis without blocking and the request continues on `boundedElastic`
+  (`LocalCacheFastPathTest`).
+- The global policy index is a CoCache `SetCache`, updated with atomic `add` / `remove`.
+  `GlobalPolicyIndexConcurrencyIntegrationTest` runs two instances writing concurrently.
 
 ## Performance
 

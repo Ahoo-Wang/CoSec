@@ -302,24 +302,23 @@ if (!allowed) throw AccessDeniedException()
   （见[令牌中的角色](./authentication.md#tokens)）。某个空间中的请求只用主体在该空间中的角色来评估，
   因此修改 `CoSec-Space-Id` 无法拿到其他空间的授权。含有多个 `@`、或者角色或空间为空的写法在任何空间都不生效。
 
-使用 `cache-support` 时，CoSec 从 Redis 读取这些数据（默认键前缀为 `cosec`）：
+使用 `cache-support` 时，CoSec 通过两个缓存从 Redis 读取这些数据（默认键前缀为 `cosec`）：
 
-| 数据 | Redis 键 | 值 |
-|---|---|---|
-| 应用权限 | `cosec:app:permission:<appId>` | 上面的 JSON |
-| 角色授权 | `cosec:app:role:permission:<appId>:<roleId>`（默认空间）或 `cosec:app:role:permission:<appId>:<roleId>@<spaceId>` | 权限 id 的集合 |
+| 数据 | 缓存 bean | Redis 键 | 值 |
+|---|---|---|---|
+| 应用权限 | `AppPermissionCache` | `cosec:app:permission:<appId>` | 上面的 JSON，即一个 `AppPermission` |
+| 角色授权 | `RolePermissionCache` | `cosec:app:role:permission:<appId>:<roleId>`（默认空间）或 `cosec:app:role:permission:<appId>:<roleId>@<spaceId>` | 权限 id 的集合 |
 
 前缀之后的第一个 `:` 结束应用 id，其后的第一个 `@` 结束角色 id，因此应用 id 不能含有 `:`，角色 id 不能含有 `@`。
 写入授权时 `AppSpacedRoleId` 会检查这两点；id 中含有 `:` 的应用不持有任何授权。CoSec 只读取权限和授权，写入由你的管理服务负责，
-请通过 `RolePermissionCache` 写入，这样每个实例都会丢弃本地副本：
+请通过这两个 bean 写入，这样每个实例都会丢弃本地副本：
 
 ```kotlin
-rolePermissionCache[AppSpacedRoleId(appId = "order-app", roleId = "clerk", spaceId = "team-a")] =
-    setOf("order.read")
+rolePermissionCache.put(AppSpacedRoleId(appId = "order-app", roleId = "clerk", spaceId = "team-a"), setOf("order.read"))
 ```
 
-6.x 的键（`cosec:role:permission:<roleId>[@<spaceId>]`，不含应用）不会再被读取，请用 `RolePermissionKeyMigration`
-迁移（见[升级](./upgrading.md#migrating-role-grants)）。
+Redis 中的值带有二进制头（CoCache 6），因此用 Redis 命令直接写入是无效的。6.x 的键（`cosec:role:permission:<roleId>[@<spaceId>]`，
+不含应用）不会再被读取，请用 `RolePermissionKeyMigration` 迁移（见[升级](./upgrading.md#migrating-role-grants)）。
 
 ## 加载与生成策略 {#loading-and-generating-policies}
 

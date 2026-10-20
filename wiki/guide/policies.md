@@ -326,24 +326,24 @@ A grant belongs to an **(app, role, space)** triple and applies nowhere else:
   up another space's grants. A role written with more than one `@`, or with an empty role or space, applies
   nowhere.
 
-With `cache-support`, CoSec reads these from Redis (default key prefix `cosec`):
+With `cache-support`, CoSec reads these from Redis through two caches (default key prefix `cosec`):
 
-| Data | Redis key | Value |
-|---|---|---|
-| App permission | `cosec:app:permission:<appId>` | the JSON above |
-| Role grants | `cosec:app:role:permission:<appId>:<roleId>` (default space) or `cosec:app:role:permission:<appId>:<roleId>@<spaceId>` | a set of permission ids |
+| Data | Cache bean | Redis key | Value |
+|---|---|---|---|
+| App permission | `AppPermissionCache` | `cosec:app:permission:<appId>` | the JSON above, as an `AppPermission` |
+| Role grants | `RolePermissionCache` | `cosec:app:role:permission:<appId>:<roleId>` (default space) or `cosec:app:role:permission:<appId>:<roleId>@<spaceId>` | a set of permission ids |
 
 The first `:` after the prefix ends the app id and the first `@` after it ends the role id, so an app id must
 not contain `:` and a role id must not contain `@`. `AppSpacedRoleId` checks both when you write a grant; an app
 whose id contains `:` holds no grants. CoSec reads permissions and grants; your administration service owns
-writing them, through `RolePermissionCache` so that every instance drops its local copy:
+writing them, through these beans so that every instance drops its local copy:
 
 ```kotlin
-rolePermissionCache[AppSpacedRoleId(appId = "order-app", roleId = "clerk", spaceId = "team-a")] =
-    setOf("order.read")
+rolePermissionCache.put(AppSpacedRoleId(appId = "order-app", roleId = "clerk", spaceId = "team-a"), setOf("order.read"))
 ```
 
-Keys of 6.x (`cosec:role:permission:<roleId>[@<spaceId>]`, without the app) are never read; migrate them with
+Values in Redis carry a binary header (CoCache 6), so writing them with Redis commands does not work. Keys of 6.x
+(`cosec:role:permission:<roleId>[@<spaceId>]`, without the app) are never read; migrate them with
 `RolePermissionKeyMigration` ([Upgrading](./upgrading.md#migrating-role-grants)).
 
 ## Loading and generating policies

@@ -22,7 +22,7 @@ import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.token.SimpleCompositeToken
 import me.ahoo.cosec.token.TokenConverter
-import me.ahoo.cosid.IdGenerator
+import me.ahoo.cosid.StringIdGenerator
 import java.time.Duration
 import java.util.*
 
@@ -40,7 +40,7 @@ import java.util.*
  * @see JwtTokenVerifier
  */
 class JwtTokenConverter(
-    private val idGenerator: IdGenerator,
+    private val idGenerator: StringIdGenerator,
     private val algorithm: Algorithm,
     private val accessTokenValidity: Duration = Duration.ofMinutes(10),
     private val refreshTokenValidity: Duration = Duration.ofDays(7)

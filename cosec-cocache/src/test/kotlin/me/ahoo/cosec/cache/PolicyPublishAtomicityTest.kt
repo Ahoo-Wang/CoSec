@@ -64,7 +64,7 @@ class PolicyPublishAtomicityTest {
     fun failedIndexUpdateLeavesNoPartialWrite() {
         val policyCache = mockk<PolicyCache>(relaxed = true)
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache> {
-            every { removeElements(CACHE_KEY, any()) } throws IllegalStateException("Redis unavailable")
+            every { remove(CACHE_KEY, any()) } throws IllegalStateException("Redis unavailable")
         }
 
         RedisPolicyRepository(globalPolicyIndexCache, policyCache).setPolicy(demoted)
@@ -73,7 +73,7 @@ class PolicyPublishAtomicityTest {
             .verify()
 
         // The index removal comes first and failed: the stored policy is unchanged.
-        verify(exactly = 0) { policyCache.set(demoted.id, any()) }
+        verify(exactly = 0) { policyCache.put(demoted.id, any()) }
     }
 
     @Test
@@ -81,7 +81,7 @@ class PolicyPublishAtomicityTest {
         // The content write fails after the index removal: the old content stays, applying only to principals that
         // list the policy, and the new content is never global.
         val policyCache = mockk<PolicyCache> {
-            every { set(demoted.id, any()) } throws IllegalStateException("Redis unavailable")
+            every { put(demoted.id, any()) } throws IllegalStateException("Redis unavailable")
         }
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>(relaxed = true)
 
@@ -91,8 +91,8 @@ class PolicyPublishAtomicityTest {
             .verify()
 
         verifyOrder {
-            globalPolicyIndexCache.removeElements(CACHE_KEY, listOf(demoted.id))
-            policyCache.set(demoted.id, demoted)
+            globalPolicyIndexCache.remove(CACHE_KEY, listOf(demoted.id))
+            policyCache.put(demoted.id, demoted)
         }
     }
 
@@ -102,7 +102,7 @@ class PolicyPublishAtomicityTest {
         // principals that list the policy. The index never points at content that was not written.
         val policyCache = mockk<PolicyCache>(relaxed = true)
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache> {
-            every { addElements(CACHE_KEY, any()) } throws IllegalStateException("Redis unavailable")
+            every { add(CACHE_KEY, any()) } throws IllegalStateException("Redis unavailable")
         }
 
         RedisPolicyRepository(globalPolicyIndexCache, policyCache).setPolicy(promoted)
@@ -111,15 +111,15 @@ class PolicyPublishAtomicityTest {
             .verify()
 
         verifyOrder {
-            policyCache.set(promoted.id, promoted)
-            globalPolicyIndexCache.addElements(CACHE_KEY, listOf(promoted.id))
+            policyCache.put(promoted.id, promoted)
+            globalPolicyIndexCache.add(CACHE_KEY, listOf(promoted.id))
         }
     }
 
     @Test
     fun failedContentWriteNeverIndexesThePolicy() {
         val policyCache = mockk<PolicyCache> {
-            every { set(promoted.id, any()) } throws IllegalStateException("Redis unavailable")
+            every { put(promoted.id, any()) } throws IllegalStateException("Redis unavailable")
         }
         val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>(relaxed = true)
 
@@ -128,6 +128,6 @@ class PolicyPublishAtomicityTest {
             .expectError(IllegalStateException::class.java)
             .verify()
 
-        verify(exactly = 0) { globalPolicyIndexCache.addElements(any(), any()) }
+        verify(exactly = 0) { globalPolicyIndexCache.add(any(), any()) }
     }
 }

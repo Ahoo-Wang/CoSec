@@ -84,4 +84,5 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-data-redis")
     testImplementation("me.ahoo.cosid:cosid-test")
     testImplementation("me.ahoo.cocache:cocache-spring-boot-starter")
+    testImplementation("me.ahoo.cocache:cocache-test")
 }

@@ -10,29 +10,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package me.ahoo.cosec.cache
 
-import me.ahoo.cache.api.Cache
-import me.ahoo.cache.api.annotation.CoCache
+import me.ahoo.cocache.api.Cache
 
 /**
  * Revoked Token Cache .
  *
  * Key is the token id (jti); value is `true` when the token has been revoked.
- * Entries carry their own absolute expiry (`CacheValue.ttlAt`, epoch seconds),
- * matching the remaining lifetime of the revoked token's bound refresh token.
+ * Entries are written with their own lifetime, the remaining lifetime of the revoked token's bound refresh token.
  *
  * The local tier is configured via `cosec.authorization.cache.token.*`
- * (default: 30s expire-after-write, 100k entries); the distributed tier is Redis.
+ * (default: 30s local max age, 100k entries); the distributed tier is Redis.
+ * See [CoSecCacheSpecs.revokedToken] for the declaration.
  *
  * @author ahoo wang
  * @see CoCacheTokenStore
  */
-// Revoked entries are always written with an explicit ttlAt (the token's remaining lifetime).
-// missingTtl bounds how long a "not revoked" lookup is cached locally if an eviction message is lost.
-@CoCache(missingTtl = RevokedTokenCache.MISSING_TTL_SECONDS)
 interface RevokedTokenCache : Cache<String, Boolean> {
     companion object {
+        /** Bounds how long a "not revoked" lookup is cached locally if an invalidation message is lost. */
         const val MISSING_TTL_SECONDS = 30L
     }
 }

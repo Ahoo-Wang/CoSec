@@ -14,7 +14,6 @@
 package me.ahoo.cosec.cache
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cache.api.converter.KeyConverter
 import me.ahoo.cosec.api.context.request.AppId
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.api.permission.PermissionId
@@ -25,7 +24,7 @@ import org.springframework.data.redis.core.ScanOptions
 import org.springframework.data.redis.core.StringRedisTemplate
 
 /**
- * One-off migration of 6.x role grants (`<legacy prefix><roleId>[@<spaceId>]`, no app) to the app-scoped keys of
+ * One-off migration of 6.x (CoCache 5) role grants (`<legacy prefix><roleId>[@<spaceId>]`, no app) to the app-scoped keys of
  * [RolePermissionCache] ([AppSpacedRoleId]).
  *
  * Legacy grants do not say which app they were meant for, so the operator names the target app on every run;
@@ -34,17 +33,19 @@ import org.springframework.data.redis.core.StringRedisTemplate
  *
  * Writes go through [rolePermissionCache], so other instances drop their local copies. A run is idempotent: a target
  * that already holds the same grants is left alone, and one that holds different grants is reported as a conflict
- * and kept unless [migrate] is told to overwrite. Legacy keys stay until [deleteLegacy] removes them.
+ * and kept unless [migrate] is told to overwrite. Legacy keys stay until [deleteLegacy] removes them, so a rollback to
+ * 6.x finds them unchanged.
  *
- * @param keyConverter the Redis key of a [RolePermissionCache] entry; targets are checked in Redis directly, since a
- * cache read of a missing key would store a missing guard (a write, even on a dry run)
+ * Legacy grants are CoCache 5 native Redis sets and are read directly; targets are CoCache 6 values and are read and
+ * written through [rolePermissionCache] (a miss on a cache without a loader writes nothing to Redis). This is the only
+ * migration of role grants: CoCache's 5.x migrator must not be pointed at the legacy prefix.
+ *
  * @param legacyKeyPrefix the 6.x key prefix, `<cosec.authorization.cache.key-prefix>:role:permission:` by default
  * @param missingGuardSentinel the value CoCache stores for a cached miss; such keys hold no grant
  */
 class RolePermissionKeyMigration(
     private val redisTemplate: StringRedisTemplate,
     private val rolePermissionCache: RolePermissionCache,
-    private val keyConverter: KeyConverter<AppSpacedRoleId>,
     private val legacyKeyPrefix: String,
     private val missingGuardSentinel: String = DEFAULT_MISSING_GUARD_SENTINEL
 ) {
@@ -97,13 +98,13 @@ class RolePermissionKeyMigration(
                 return@forEachLegacyKey
             }
             val migration = RolePermissionMigration(legacyKey, target, permissions)
-            val existing = readGrants(keyConverter.toStringKey(target))
+            val existing = rolePermissionCache[target]
             when {
                 existing == permissions -> unchanged += migration
                 existing != null && !overwrite -> conflicts += migration
                 else -> {
                     if (!dryRun) {
-                        rolePermissionCache[target] = permissions
+                        rolePermissionCache.put(target, permissions)
                     }
                     migrated += migration
                 }

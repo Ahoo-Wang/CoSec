@@ -7,20 +7,30 @@ performance.
 
 With `cache-support`, Redis is the **store of record** for policies, app permissions and role grants, and
 also holds revoked token ids. Each instance keeps an in-process copy
-([CoCache](https://github.com/Ahoo-Wang/CoCache)):
+([CoCache 6](https://cocache.ahoo.me)):
 
-- **Reads** are answered from the local cache without a thread switch when the data is local; otherwise
-  they go to Redis on a worker thread.
+- **Reads** are answered from the local cache without a thread switch when the data is local. Otherwise they
+  read Redis without blocking a thread, and the request continues on a worker thread.
 - **Writes** go to Redis, and every instance drops its local copy through an invalidation message, so
-  changes apply cluster-wide immediately.
-- **Global policy index** updates are atomic Redis set operations, so concurrent writers on different
+  changes apply cluster-wide immediately. Write through CoSec (`PolicyRepository.setPolicy`, the
+  `AppPermissionCache` and `RolePermissionCache` beans), never with Redis commands: every value starts with a
+  binary header that CoCache checks.
+- **Global policy index** updates are atomic Redis operations, so concurrent writers on different
   instances never lose entries.
 - **Publishing a policy** writes its content and its global index entry separately, not atomically. The order
   keeps a failure safe: a policy becoming global is indexed only after its content is written, and a policy
   leaving global leaves the index before its content changes. A failed publish returns an error; retry it.
-- Policy and permission entries **never expire**. Local caches are bounded
-  ([`maximum-size`](./configuration.md#cache), default 10,000 entries per cache) and reload from Redis on
-  a miss.
+- Policy and permission entries **never expire** in Redis. A local copy lives at most 5 minutes by default
+  ([`expire-after-write`](./configuration.md#cache)), then is read from Redis again; this bounds how stale a copy
+  can get if an invalidation message is lost. Local caches are bounded
+  ([`maximum-size`](./configuration.md#cache), default 10,000 entries per cache).
+
+Keys are `<key-prefix>:policy:<id>`, `<key-prefix>:global:policy`, `<key-prefix>:app:permission:<appId>`,
+`<key-prefix>:app:role:permission:<appId>:<roleId>[@<spaceId>]` and `<key-prefix>:token:revoked:<tokenId>`; each
+cache has its own invalidation channel, `cocache:inv:<key-prefix>:policy` and so on. Redis must be 7.0 or later (or
+Valkey 7.2 or later), reached through Lettuce. A minimal Redis ACL must grant what
+[CoCache lists](https://cocache.ahoo.me/operations/#acl), which since CoCache 6.3 includes `+hkeys +hget` (keep
+`+hgetall`).
 
 **Failure modes:**
 
@@ -30,9 +40,9 @@ also holds revoked token ids. Each instance keeps an in-process copy
 | Revoked tokens | The check **allows** the token, so an outage doesn't reject every authenticated request. |
 | Rate limit counters | Allow, unless the rule sets `strictFailure: true` (then `429`). |
 
-Rolling upgrades: CoSec 6 keeps the Redis keys and formats of 5.x, so 5.x and 6.x instances can share one
-Redis during an upgrade. The exception is rate limit counters: 6.1 keys them by rule id, so during an upgrade
-old and new instances count separately (see
+Upgrades: 7.0 cannot share Redis with 6.x, so every instance switches at once, and the 6.x data is migrated
+before 7.0 starts (see [Upgrading from 6.1 to 7.0](./upgrading.md#_6-1-to-7-0)). Rate limit
+counters are keyed by rule id since 6.1 (see
 [Migrating from rate-limit conditions](./rate-limiting.md#migrating-from-rate-limit-conditions)).
 
 ## Auditing

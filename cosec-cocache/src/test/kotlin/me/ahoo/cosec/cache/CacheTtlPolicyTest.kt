@@ -13,36 +13,58 @@
 
 package me.ahoo.cosec.cache
 
-import me.ahoo.cache.annotation.toCoCacheMetadata
-import me.ahoo.cache.api.Cache
-import me.ahoo.cache.api.TtlAt
+import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cocache.core.policy.ForeignFormatMode
+import me.ahoo.cocache.core.policy.ReadFailureMode
+import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
-import kotlin.reflect.KClass
+import org.junit.jupiter.api.Test
+import java.time.Duration
 
 /**
- * Policy and permission caches are the store of record in Redis (no CacheSource), so they must never expire.
- * Guards against CoCache's default TTL (3600s since 5.0) silently applying to them.
+ * Policy and permission caches are the store of record in Redis (no loader), so they must never expire and a failed
+ * Redis read, or a read of unmigrated content, must throw. Guards against CoCache's defaults (`ttl` 1 hour, degraded reads) silently applying to them.
  */
 class CacheTtlPolicyTest {
+    /** A policy that expires and degrades, as CoCache's defaults or a `cocache.defaults.*` property would. */
+    private val weakened = CachePolicy.builder()
+        .ttl(Duration.ofMinutes(1))
+        .readFailure(ReadFailureMode.DEGRADE)
+        .foreignFormat(ForeignFormatMode.RECLAIM)
+        .build()
 
-    @ParameterizedTest
-    @ValueSource(
-        classes = [PolicyCache::class, GlobalPolicyIndexCache::class, AppPermissionCache::class, RolePermissionCache::class]
+    private val storeOfRecordPolicies: Map<String, CachePolicy> = mapOf(
+        CoSecCacheSpecs.POLICY_CACHE_NAME to CoSecCacheSpecs.policy(codec(), policy = weakened).policy,
+        CoSecCacheSpecs.GLOBAL_POLICY_INDEX_CACHE_NAME to CoSecCacheSpecs.globalPolicyIndex(policy = weakened).policy,
+        CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME to CoSecCacheSpecs.appPermission(codec(), policy = weakened).policy,
+        CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME to CoSecCacheSpecs.rolePermission(codec(), policy = weakened).policy,
     )
-    fun storeOfRecordCachesNeverExpire(cacheType: Class<*>) {
-        @Suppress("UNCHECKED_CAST")
-        val metadata = (cacheType.kotlin as KClass<out Cache<*, *>>).toCoCacheMetadata()
-        metadata.ttlPolicy.ttl.assert().isEqualTo(TtlAt.FOREVER)
-        metadata.cacheName.assert().isEqualTo(cacheType.simpleName)
+
+    private inline fun <reified V : Any> codec() = CoSecCacheSpecs.jacksonCodec<V>(CoSecJsonSerializer)
+
+    @Test
+    fun storeOfRecordCachesNeverExpireAndFailClosed() {
+        storeOfRecordPolicies.keys.assert().isEqualTo(CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES)
+        storeOfRecordPolicies.values.forEach { policy ->
+            policy.ttl.assert().isNull()
+            policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+            policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
+        }
     }
 
-    @ParameterizedTest
-    @ValueSource(classes = [RevokedTokenCache::class])
-    fun revokedTokenCacheBoundsMissingTtl(cacheType: Class<*>) {
-        @Suppress("UNCHECKED_CAST")
-        val metadata = (cacheType.kotlin as KClass<out Cache<*, *>>).toCoCacheMetadata()
-        metadata.ttlPolicy.missingTtl.assert().isEqualTo(RevokedTokenCache.MISSING_TTL_SECONDS)
+    @Test
+    fun storeOfRecordOverridesWhateverCameBefore() {
+        val policy = weakened.storeOfRecord()
+        policy.ttl.assert().isNull()
+        policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+        policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
+    }
+
+    @Test
+    fun revokedTokenCacheBoundsMissingTtlAndKeepsDegradedReads() {
+        val policy = CoSecCacheSpecs.revokedToken(codec()).policy
+        policy.absentTtl.assert().isEqualTo(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
+        policy.readFailure.assert().isEqualTo(ReadFailureMode.DEGRADE)
     }
 }

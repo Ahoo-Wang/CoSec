@@ -41,7 +41,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Proves that the Redis rate limiter never runs on a non-blocking thread, even when authorization answers
- * synchronously on it (the `LocalCacheLookup` hit path), and that its failure modes hold.
+ * synchronously on it (the local cache hit path), and that its failure modes hold.
  *
  * `Schedulers.newParallel` threads implement `NonBlocking`, like the Netty event loop, so they stand in for it.
  */

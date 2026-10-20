@@ -13,89 +13,49 @@
 
 package me.ahoo.cosec.cache
 
-import me.ahoo.cache.TtlPolicy
-import me.ahoo.cache.api.TtlAt
-import me.ahoo.cache.api.distributed.DistributedCache
-import me.ahoo.cache.api.source.CacheSource
-import me.ahoo.cache.client.CaffeineClientSideCache
-import me.ahoo.cache.consistency.CoherentCache
-import me.ahoo.cache.consistency.CoherentCacheConfiguration
-import me.ahoo.cache.consistency.DefaultCoherentCache
-import me.ahoo.cache.consistency.LocalCacheEvictedEventBus
-import me.ahoo.cache.converter.ToStringKeyConverter
-import me.ahoo.cache.distributed.InMemoryDistributedCache
-import me.ahoo.cache.spring.redis.RedisDistributedCache
-import me.ahoo.cache.spring.redis.codec.SetToSetCodecExecutor
-import me.ahoo.cosec.api.permission.AppPermission
+import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cosec.api.permission.PermissionId
-import me.ahoo.cosid.test.MockIdGenerator
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
 import org.springframework.data.redis.core.StringRedisTemplate
 
 /**
  * Role grants in a real Redis (`localhost:6379`) under a random key prefix, read through real CoCache caches the way
- * the starter wires them: [RolePermissionCache] keys are `<prefix>:app:role:permission:<appId>:<roleId>[@<spaceId>]`.
- * Every cache shares one eviction bus, so caches made by [rolePermissionCache] behave like separate instances.
+ * the starter declares them: [RolePermissionCache] keys are `<prefix>:app:role:permission:<appId>:<roleId>[@<spaceId>]`.
+ * Every cache made by [rolePermissionCache] runs on its own [CacheRuntime], so it behaves like a separate instance.
  */
 class RedisRolePermissionFixture : AutoCloseable {
-    private class TestAppPermissionCache(cache: CoherentCache<String, AppPermission>) :
-        AppPermissionCache,
-        CoherentCache<String, AppPermission> by cache
-
-    private class TestRolePermissionCache(cache: CoherentCache<AppSpacedRoleId, Set<PermissionId>>) :
-        RolePermissionCache,
-        CoherentCache<AppSpacedRoleId, Set<PermissionId>> by cache
-
     private val lettuceConnectionFactory =
         LettuceConnectionFactory(RedisStandaloneConfiguration()).apply { afterPropertiesSet() }
     val redisTemplate = StringRedisTemplate(lettuceConnectionFactory)
-    val keyPrefix = "test:" + MockIdGenerator.INSTANCE.generateAsString()
+    val keyPrefix = CoSecTestCaches.newKeyPrefix()
     val rolePermissionKeyPrefix = "$keyPrefix:app:role:permission:"
     val legacyRolePermissionKeyPrefix = "$keyPrefix:role:permission:"
-    private val eventBus = LocalCacheEvictedEventBus()
-    private val caches = mutableListOf<CoherentCache<*, *>>()
+    private val backend = CoSecTestCaches.redisBackend()
+    private val runtimes = mutableListOf<CacheRuntime>()
 
-    val appPermissionCache: AppPermissionCache = TestAppPermissionCache(
-        coherentCache("AppPermissionCache", "instance", ToStringKeyConverter(""), InMemoryDistributedCache()),
+    val appPermissionCache: AppPermissionCache = runtime().createCache(
+        CoSecCacheSpecs.appPermission(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer), keyPrefix)
     )
 
     /** A new instance's view of the role grants: its own local cache over the shared Redis. */
-    fun rolePermissionCache(clientId: String = "instance"): RolePermissionCache = TestRolePermissionCache(
-        coherentCache(
-            "RolePermissionCache",
-            clientId,
-            ToStringKeyConverter(rolePermissionKeyPrefix),
-            RedisDistributedCache(redisTemplate, SetToSetCodecExecutor(redisTemplate)),
-        ),
+    @Suppress("UnusedParameter")
+    fun rolePermissionCache(clientId: String = "instance"): RolePermissionCache = runtime().createCache(
+        CoSecCacheSpecs.rolePermission(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer), keyPrefix)
     )
+
+    /** The grants Redis holds for [key], read by a fresh instance. */
+    fun grants(key: AppSpacedRoleId): Set<PermissionId>? = rolePermissionCache("reader")[key]
 
     fun repository(rolePermissionCache: RolePermissionCache = rolePermissionCache()) =
         RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
 
-    private fun <K, V> coherentCache(
-        name: String,
-        clientId: String,
-        keyConverter: ToStringKeyConverter<K>,
-        distributedCache: DistributedCache<V>
-    ): CoherentCache<K, V> = DefaultCoherentCache(
-        CoherentCacheConfiguration(
-            cacheName = name,
-            clientId = clientId,
-            keyConverter = keyConverter,
-            distributedCache = distributedCache,
-            clientSideCache = CaffeineClientSideCache.build(),
-            cacheSource = CacheSource.noOp(),
-            ttlPolicy = TtlPolicy(ttl = TtlAt.FOREVER),
-        ),
-        eventBus,
-    ).also {
-        eventBus.register(it)
-        caches.add(it)
-    }
+    private fun runtime(): CacheRuntime = CacheRuntime.builder().backend(backend).build().also { runtimes.add(it) }
 
     override fun close() {
-        caches.forEach { it.close() }
+        runtimes.forEach { it.close() }
+        backend.close()
         redisTemplate.keys("$keyPrefix:*").takeIf { it.isNotEmpty() }?.let { redisTemplate.delete(it) }
         lettuceConnectionFactory.destroy()
     }

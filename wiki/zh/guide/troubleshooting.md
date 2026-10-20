@@ -123,6 +123,10 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
   在启动日志中搜索该文件名。
 - **另一个文件使用了相同的 id。** 同一个 id 只会加载第一个。
 - **策略类型不对。** 只有 `global` 策略对所有人生效；`system` 和 `custom` 策略只对列出它们的主体生效。
+- **升级到 7.0 时没有迁移数据。** 7.0 读不了 6.x 存储在 Redis 中的数据：读取以 `ForeignFormatException` 失败，请求返回 `500`。
+  请迁移数据（[迁移数据](./upgrading.md#migrating-the-data)）。
+- **权限是直接写入 Redis 的。** 从 7.0 起，用 `SET` 或 `SADD` 写入的值不会被读取；应用权限和角色授权请通过 `AppPermissionCache` 和
+  `RolePermissionCache` bean 写入（[应用权限与角色](./policies.md#app-permissions-and-roles)）。
 
 ## 所有请求都返回 500 {#every-request-fails-with-500}
 
