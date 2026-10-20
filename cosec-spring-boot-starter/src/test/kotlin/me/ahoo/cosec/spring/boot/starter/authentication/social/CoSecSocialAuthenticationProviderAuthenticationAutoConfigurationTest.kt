@@ -78,6 +78,30 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
     }
 
     @Test
+    fun contextLoadsWithoutStringIdGenerator() {
+        // Without a StringIdGenerator bean the providers fall back to UuidGenerator instead of failing startup.
+        contextRunner
+            .withPropertyValues(
+                "${SocialAuthenticationProperties.PREFIX}.registration.gitee.type=gitee",
+                "${SocialAuthenticationProperties.PREFIX}.registration.gitee.client-id=client-id",
+                "${SocialAuthenticationProperties.PREFIX}.registration.gitee.client-secret=client-secret",
+                "${SocialAuthenticationProperties.PREFIX}.registration.gitee.redirect-uri=https://example.com/callback",
+            )
+            .withUserConfiguration(
+                DataRedisAutoConfiguration::class.java,
+                CoSecAuthenticationAutoConfiguration::class.java,
+                CoSecSocialAuthenticationAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                assertThat(context)
+                    .hasNotFailed()
+                    .doesNotHaveBean(StringIdGenerator::class.java)
+                    .getBean(SocialProviderManager::class.java)
+                    .extracting { it!!.getRequired("gitee") }
+            }
+    }
+
+    @Test
     fun contextLoadsDisable() {
         contextRunner
             .withPropertyValues("${ConditionalOnAuthenticationEnabled.ENABLED_KEY}=false")
