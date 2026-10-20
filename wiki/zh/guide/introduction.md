@@ -22,11 +22,11 @@ CoSec 是面向 Spring Boot 应用和网关的响应式、多租户安全框架�
 
 ```mermaid
 flowchart TD
-    R([请求 + 安全上下文]) --> ROOT{是 root 主体?}
-    ROOT -->|是| ALLOW([ALLOW])
-    ROOT -->|否| BL{在黑名单中?}
+    R([请求 + 安全上下文]) --> BL{在黑名单中?}
     BL -->|是| DENY([EXPLICIT_DENY])
-    BL -->|否| G[全局策略]
+    BL -->|否| ROOT{是 root 主体?}
+    ROOT -->|是| ALLOW([ALLOW])
+    ROOT -->|否| G[全局策略]
     G --> P[主体的策略]
     P --> RP[appId / spaceId 下的角色权限]
     RP --> D{任一层命中 DENY?}

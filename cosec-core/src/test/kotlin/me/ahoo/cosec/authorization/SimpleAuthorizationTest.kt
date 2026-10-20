@@ -39,6 +39,8 @@ import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
@@ -53,13 +55,33 @@ internal class SimpleAuthorizationTest {
         val permissionRepository = mockk<AppRolePermissionRepository>()
         val authorization = SimpleAuthorization(policyRepository, permissionRepository)
         val request = mockk<Request>()
-        val securityContext = mockk<SecurityContext> {
-            every { principal.id } returns CoSecPrincipal.ROOT_ID
-        }
+        // Root is the root id in the platform tenant; the id alone is not enough (RFC 0001, D5).
+        val securityContext = SimpleSecurityContext(
+            SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM),
+        )
         authorization.authorize(request, securityContext)
             .test()
             .expectNext(AuthorizeResult.ALLOW)
             .verifyComplete()
+    }
+
+    @Test
+    fun authorizeWhenRootIdIsOutsideThePlatformTenant() {
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.just(emptyList())
+        }
+        val authorization = SimpleAuthorization(policyRepository, mockk())
+        val principals = listOf(
+            SimplePrincipal(CoSecPrincipal.ROOT_ID),
+            SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.DEFAULT),
+            SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant("acme")),
+        )
+        principals.forEach { principal ->
+            authorization.authorize(EvaluateRequest(), SimpleSecurityContext(principal))
+                .test()
+                .expectNext(AuthorizeResult.IMPLICIT_DENY)
+                .verifyComplete()
+        }
     }
 
     @Test

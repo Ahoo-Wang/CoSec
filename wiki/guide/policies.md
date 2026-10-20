@@ -242,9 +242,9 @@ Within each layer, and across all layers, **deny wins**: if any matched statemen
 matched `allow` grants access. If nothing matched, the result is `IMPLICIT_DENY`. The order of policies and
 statements never changes the result, only which matching rule is reported.
 
-Two checks come before the layers: the **root** principal (id `cosec`, configurable, see
-[Configuration](./configuration.md#authorization)) is always allowed, and a request rejected by the
-blacklist is always denied.
+Two checks come before the layers: a request rejected by the blacklist is always denied, and then the
+**root** principal is allowed. Root is off by default; when enabled, it is the platform tenant's principal with id
+`cosec` (configurable, see [Configuration](./configuration.md#authorization)).
 
 A policy's own `condition` is evaluated once, before its statements.
 

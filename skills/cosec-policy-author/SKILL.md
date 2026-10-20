@@ -41,7 +41,7 @@ Runtime deserialization and the bundled JSON Schema both require `id`, `name`, `
 
 ## Evaluation semantics
 
-Authorization evaluates in tiers: root bypass, blacklist, global policies, principal-attached policies, then role permissions. The policy and permission tiers are combined deny-first (CoSec 6+): an explicit deny in any tier ends evaluation, and an allow is returned only after every tier has had the chance to deny.
+Authorization evaluates in tiers: blacklist, root bypass (off by default; platform tenant only), global policies, principal-attached policies, then role permissions. The policy and permission tiers are combined deny-first (CoSec 6+): an explicit deny in any tier ends evaluation, and an allow is returned only after every tier has had the chance to deny.
 
 Within a policy tier, CoSec first evaluates every matched policy-level condition, pools their statements, checks all `deny` statements, then all `allow` statements. Therefore:
 

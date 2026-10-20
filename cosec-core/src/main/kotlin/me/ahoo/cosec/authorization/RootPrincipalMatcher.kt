@@ -15,20 +15,25 @@ package me.ahoo.cosec.authorization
 
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.CoSecPrincipal.Companion.isRoot
+import me.ahoo.cosec.api.tenant.TenantCapable
 
 /**
- * Decides which principals are root. Root principals bypass every authorization check.
+ * Decides which principals are root. Root principals bypass every policy and permission check, but not the
+ * blacklist, which [SimpleAuthorization] checks first.
  *
- * [DEFAULT] treats the principal whose id equals [CoSecPrincipal.ROOT_ID] (the `cosec.root` system property,
- * `cosec` by default) as root. Deployments where principal ids can be chosen by users should use [NONE] or a
- * matcher bound to a stronger signal.
+ * [DEFAULT] treats the principal of the platform tenant whose id equals [CoSecPrincipal.ROOT_ID] (the
+ * `cosec.root` system property, `cosec` by default) as root. Principal ids are only unique within a tenant: a user
+ * tenant's identity provider may issue that id too, so a principal outside the platform tenant, or one that
+ * carries no tenant, is never root. Deployments that want a stronger signal than the id provide their own matcher.
  */
 fun interface RootPrincipalMatcher {
     fun isRoot(principal: CoSecPrincipal): Boolean
 
     companion object {
         @JvmField
-        val DEFAULT: RootPrincipalMatcher = RootPrincipalMatcher { it.isRoot }
+        val DEFAULT: RootPrincipalMatcher = RootPrincipalMatcher {
+            it.isRoot && it is TenantCapable && it.tenant.isPlatformTenant
+        }
 
         /** No principal is root. */
         @JvmField

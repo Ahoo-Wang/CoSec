@@ -14,6 +14,18 @@
 升级前，请找出引用了仓储中不存在的策略 id 的主体（令牌、API Key、用户记录），补写这些策略或移除这些 id。
 `PolicyRepository.getPolicies` 本身没有变化：它仍然只返回找到的策略，因此自定义仓储无需修改。
 
+**root 默认关闭，只在平台租户中生效，并且受黑名单约束。** 以前，任何 id 为 `cosec`（或 `-Dcosec.root` 系统属性的值）的主体都会绕过所有检查，
+包括黑名单；`cosec.authorization.root-enabled` 默认为 `true`。如果某个用户租户的身份源允许用户自选 id `cosec`，这个用户就拿到了整个平台的权限。现在：
+
+- `cosec.authorization.root-enabled` 默认为 `false`：不开启时，没有任何主体是 root。
+- 开启后，`RootPrincipalMatcher.DEFAULT` 只把 id 等于 root id **并且**租户为平台租户（`(platform)`，即 `Tenant.PLATFORM_TENANT_ID`）的主体视为 root。
+  用户租户、默认租户中的 root id，以及不带租户的主体，都只是普通主体。
+- 黑名单在 root 之前检查，因此 root 发出的、被黑名单拦截的请求会被拒绝。解释结果中 `BLACKLIST` 层现在排在 `ROOT` 之前，`ExplainLayer` 也按这个顺序列出。
+
+如果依赖 root，请设置 `cosec.authorization.root-enabled=true`，并为 root 主体签发 `tenantId` 为 `(platform)` 的令牌。
+直接构造 `SimpleAuthorization`、`AuthorizationExplainer` 或 `ShadowAuthorization` 的代码，默认仍使用 `RootPrincipalMatcher.DEFAULT`，但采用新的租户规则。
+如果 root 需要按其他方式判定，请提供自己的 `RootPrincipalMatcher` bean。
+
 **路径变量只属于捕获它的语句。** 以前，`request.path.var.*` 读到的是本次请求中最后一个命中的 `path` 动作捕获的变量，
 不论它属于哪条语句、哪个策略、哪一层。因此条件可能依赖别的语句：一条从未命中的拒绝语句可以让一条 `all` 动作的允许语句命中
 （加一条 deny 反而放宽了访问），策略级条件会读到 global 层的变量，没有 `path` 动作的限流规则会读到策略的变量。现在：

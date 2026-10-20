@@ -67,8 +67,8 @@ sequenceDiagram
 
 [`SimpleAuthorization`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/authorization/SimpleAuthorization.kt):
 
-1. A root principal (decided by `RootPrincipalMatcher`) is allowed.
-2. A blacklisted request (`BlacklistChecker`) is denied.
+1. A blacklisted request (`BlacklistChecker`) is denied, whoever the principal is.
+2. A root principal (decided by `RootPrincipalMatcher`; by default only the platform tenant's root id) is allowed.
 3. Three layers are evaluated: global policies, the principal's policies, and the role permissions for the
    request's app and space. In each layer every `deny` is checked before any `allow`. Layers are combined
    deny-first: an `EXPLICIT_DENY` in any layer ends evaluation, and an `ALLOW` is only returned once every

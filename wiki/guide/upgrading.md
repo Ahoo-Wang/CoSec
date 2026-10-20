@@ -18,6 +18,23 @@ Before upgrading, find principals (tokens, API keys, user records) that list pol
 have, and either write those policies or remove the ids. `PolicyRepository.getPolicies` itself is unchanged: it
 still returns the policies it found, so custom repositories need no change.
 
+**Root is off by default, limited to the platform tenant, and subject to the blacklist.** Before, any principal
+whose id was `cosec` (or the `-Dcosec.root` system property) bypassed every check, including the blacklist, and
+`cosec.authorization.root-enabled` defaulted to `true`. A user tenant whose identity provider let a user pick the
+id `cosec` handed that user platform-wide access. Now:
+
+- `cosec.authorization.root-enabled` defaults to `false`: no principal is root unless you enable it.
+- When enabled, `RootPrincipalMatcher.DEFAULT` treats a principal as root only if its id is the root id **and** its
+  tenant is the platform tenant (`(platform)`, `Tenant.PLATFORM_TENANT_ID`). The root id in a user tenant, in the
+  default tenant, or on a principal without a tenant is an ordinary principal.
+- The blacklist is checked before root, so a blacklisted request from root is denied. In an explanation the
+  `BLACKLIST` layer now comes before `ROOT`, and `ExplainLayer` lists them in that order.
+
+If you rely on root, set `cosec.authorization.root-enabled=true` and issue the root principal's token with
+`tenantId` `(platform)`. Code that builds `SimpleAuthorization`, `AuthorizationExplainer` or `ShadowAuthorization`
+directly keeps `RootPrincipalMatcher.DEFAULT` as its default, with the new tenant rule. If root must work some
+other way, provide your own `RootPrincipalMatcher` bean.
+
 **Path variables belong to the statement that captured them.** Before, `request.path.var.*` read whatever the
 last matching `path` action of the request had captured, in any statement, policy or layer. A condition could
 therefore depend on another statement: a deny statement that never matched could make an `all`-action allow
