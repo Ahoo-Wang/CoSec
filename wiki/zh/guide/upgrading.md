@@ -2,9 +2,26 @@
 
 各版本之间有哪些变化，以及你需要做什么。每个版本的发布说明见 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
-## 从 6.0 升级到 6.1 {#_6-0-to-6-1}
+## 从 6.1 升级到 7.0 {#_6-1-to-7-0}
 
 ### 破坏性变更 {#breaking-changes}
+
+**角色授权的作用域限定在应用和空间之内。** 6.x 按角色和空间保存角色授权，不含应用，而应用（`CoSec-App-Id`）和空间（`CoSec-Space-Id`）
+都由客户端决定。因此一条授权（包括 `*`）会在所有定义了相同权限 id 的应用中生效，修改 `CoSec-Space-Id` 还能拿到其他空间中同名角色的授权。7.0 中：
+
+- 授权按应用、角色和空间保存。Redis 键从 `cosec:role:permission:<roleId>[@<spaceId>]` 改为
+  `cosec:app:role:permission:<appId>:<roleId>[@<spaceId>]`，`RolePermissionCache` 的键从 `SpacedRoleId` 改为
+  `AppSpacedRoleId(appId, roleId, spaceId)`。应用 id 不能含有 `:`，角色 id 不能含有 `@`；OpenAPI 应用权限生成器会替换标题中的 `:`。
+- 带 `CoSec-Space-Id: x` 的请求只用主体写成 `role@x` 的角色评估；不带该请求头时，只用不带后缀的角色评估。
+  主体在哪些空间拥有角色，就在令牌和 API Key 中为这些空间签发 `role@space`，签发前先确认成员关系（见[令牌](./authentication.md#tokens)）。
+- 授权不再读取 6.x 的键。迁移之前，角色没有任何授权，依赖角色的请求会被拒绝（失败即拒绝）。
+- `AppRolePermissionRepository.getAppRolePermission` 的签名不变。`SimpleAuthorization` 现在传入在该空间生效、
+  且去掉了 `@space` 后缀的角色；自定义仓储只能返回为该应用和该空间做出的授权。
+- 解释器新增 `NO_ROLE_IN_SPACE` 警告。
+
+## 从 6.0 升级到 6.1 {#_6-0-to-6-1}
+
+### 破坏性变更 {#breaking-changes-1}
 
 **限流改为规则，不再是策略条件。** `rateLimiter`、`groupedRateLimiter`、`redisRateLimiter` 和 `redisGroupedRateLimiter`
 条件已被移除，`TooManyRequestsException` 也一并移除。仍在使用它们的策略将无法解析：使用它们的本地策略文件会被跳过并记录 `ERROR` 日志，

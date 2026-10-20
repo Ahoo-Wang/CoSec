@@ -61,7 +61,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 | `layers` | `ROOT`, `BLACKLIST`, `GLOBAL_POLICY`, `PRINCIPAL_POLICY`, `ROLE_PERMISSION`, each `EVALUATED`, `NOT_EVALUATED` (an earlier explicit deny ended evaluation), `EMPTY`, or `EVALUATED_AFTER_DECISION` (with `exhaustive: true`). Every statement and permission has an outcome: `MATCHED`, `ACTION_MISS`, `CONDITION_MISS`, `NOT_EVALUATED` (its policy's or app's condition did not match) or `ERROR`. |
 | `overriddenAllows` | Allows that a later layer's explicit deny overrode. |
 | `rateLimitRules` | The [rate limit rules](./rate-limiting.md) the request would spend a permit from, if it is allowed. |
-| `warnings` | `MISSING_POLICY` (the principal lists a policy id the repository lacks), `NO_APP_PERMISSION` (roles but no app permission for the app and space), `MATCHER_ERROR`, `TOKEN_INVALID` (the request's token or API key was rejected), and `TRACE_INCONSISTENT` (the trace disagrees with the real decision; trust the decision and report it). |
+| `warnings` | `MISSING_POLICY` (the principal lists a policy id the repository lacks), `NO_APP_PERMISSION` (roles in the space, but no app permission for the app), `NO_ROLE_IN_SPACE` (roles, but none written for the request's space; see [Role grant scope](./policies.md#role-grant-scope)), `MATCHER_ERROR`, `TOKEN_INVALID` (the request's token or API key was rejected), and `TRACE_INCONSISTENT` (the trace disagrees with the real decision; trust the decision and report it). |
 
 To explain what a real caller gets, leave out `principal` and put their credential in the request's headers, for
 example `"headers": { "Authorization": "Bearer eyJ..." }` or `{ "X-API-Key": "..." }`. The credential is parsed by
@@ -111,7 +111,10 @@ The caller is known, but nothing allowed the request, or something denied it.
   - its **condition** and the principal it saw: roles, attributes and tenant come from the token, so
     changes apply only after a new login or refresh;
   - for principal policies, that the policy id is in the token's `policies`;
-  - for role permissions, the `CoSec-App-Id` and `CoSec-Space-Id` headers and the role's grants in that space.
+  - for role permissions, the `CoSec-App-Id` and `CoSec-Space-Id` headers and the role's grants in that app
+    and space. Grants apply only in their own app, and with `CoSec-Space-Id: x` only roles written `role@x` in
+    the token count (without the header, only unsuffixed roles). After upgrading to 7.0, grants that were not
+    migrated to an app are missing ([Upgrading](./upgrading.md#_6-1-to-7-0)).
 - `inTenant` takes a tenant *kind* (`default`, `user`, `platform`), not a tenant id.
 
 ## Request allowed unexpectedly

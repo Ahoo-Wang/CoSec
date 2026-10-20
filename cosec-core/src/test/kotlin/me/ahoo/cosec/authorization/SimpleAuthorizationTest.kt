@@ -17,7 +17,9 @@ import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
@@ -260,7 +262,7 @@ internal class SimpleAuthorizationTest {
             every { principal.authenticated } returns false
             every { principal.id } returns ""
             every { principal.policies } returns emptySet()
-            every { principal.roles } returns setOf("rolePolicy")
+            every { principal.roles } returns setOf("rolePolicy@spaceId")
             every { setAttributeValue(any(), any()) } returns this
         }
         val policyRepository = mockk<PolicyRepository> {
@@ -313,7 +315,7 @@ internal class SimpleAuthorizationTest {
             every { principal.authenticated } returns false
             every { principal.id } returns ""
             every { principal.policies } returns emptySet()
-            every { principal.roles } returns setOf("rolePolicy")
+            every { principal.roles } returns setOf("rolePolicy@spaceId")
             every { setAttributeValue(any(), any()) } returns this
         }
         val policyRepository = mockk<PolicyRepository> {
@@ -371,7 +373,7 @@ internal class SimpleAuthorizationTest {
             every { principal.authenticated } returns false
             every { principal.id } returns ""
             every { principal.policies } returns emptySet()
-            every { principal.roles } returns setOf("rolePolicy")
+            every { principal.roles } returns setOf("rolePolicy@spaceId")
             every { setAttributeValue(any(), any()) } returns this
         }
         val policyRepository = mockk<PolicyRepository> {
@@ -464,7 +466,7 @@ internal class SimpleAuthorizationTest {
         val securityContext = mockk<SecurityContext> {
             every { principal.id } returns "userId"
             every { principal.policies } returns setOf("principalPolicy")
-            every { principal.roles } returns setOf("roleId")
+            every { principal.roles } returns setOf("roleId@spaceId")
             every { setAttributeValue(any(), any()) } returns this
         }
         val policyRepository = mockk<PolicyRepository> {
@@ -525,7 +527,7 @@ internal class SimpleAuthorizationTest {
         val securityContext = mockk<SecurityContext> {
             every { principal.id } returns "userId"
             every { principal.policies } returns setOf("principalPolicy")
-            every { principal.roles } returns setOf("roleId")
+            every { principal.roles } returns setOf("roleId@spaceId")
             every { setAttributeValue(any(), any()) } returns this
         }
         SimpleAuthorization(policyRepository, permissionRepository).authorize(mockk(), securityContext)
@@ -568,5 +570,32 @@ internal class SimpleAuthorizationTest {
             .test()
             .expectNext(AuthorizeResult.IMPLICIT_DENY)
             .verifyComplete()
+    }
+
+    @Test
+    fun roleLayerOnlySeesRolesScopedToTheRequestSpace() {
+        val requested = mutableListOf<Set<String>>()
+        val permissionRepository = mockk<AppRolePermissionRepository> {
+            every { getAppRolePermission("appId", any(), capture(requested)) } returns Mono.empty()
+        }
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.empty()
+        }
+        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
+        val principal = SimplePrincipal("user", roles = setOf("admin", "admin@team-a", "viewer@team-b"))
+        fun request(spaceId: String) = EvaluateRequest(
+            headers = mapOf(AppIdCapable.APP_ID_KEY to "appId", SpaceIdCapable.SPACE_ID_KEY to spaceId)
+                .filterValues { it.isNotEmpty() },
+        )
+
+        authorization.authorize(request("team-a"), SimpleSecurityContext(principal)).test()
+            .expectNext(AuthorizeResult.IMPLICIT_DENY).verifyComplete()
+        authorization.authorize(request(""), SimpleSecurityContext(principal)).test()
+            .expectNext(AuthorizeResult.IMPLICIT_DENY).verifyComplete()
+        // No role of the principal is in team-c, so the repository is not asked at all.
+        authorization.authorize(request("team-c"), SimpleSecurityContext(principal)).test()
+            .expectNext(AuthorizeResult.IMPLICIT_DENY).verifyComplete()
+
+        requested.assert().containsExactly(setOf("admin"), setOf("admin"))
     }
 }

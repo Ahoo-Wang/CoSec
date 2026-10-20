@@ -16,7 +16,6 @@ package me.ahoo.cosec.cache
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.policy.Effect
-import me.ahoo.cosec.api.principal.SpacedRoleId.Companion.toSpacedRoleId
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.permission.PermissionGroupData
@@ -46,7 +45,7 @@ class RedisAppRolePermissionRepositoryTest {
         every { appPermissionCache.get("appId") } returns appPermission
 
         val rolePermissionCache = mockk<RolePermissionCache>()
-        every { rolePermissionCache.get("roleId".toSpacedRoleId()) } returns null
+        every { rolePermissionCache.get(AppSpacedRoleId("appId", "roleId")) } returns null
 
         val permissionRepository = RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
         permissionRepository.getAppRolePermission("appId", "", setOf("roleId"))
@@ -73,7 +72,7 @@ class RedisAppRolePermissionRepositoryTest {
         every { appPermissionCache.get("appId") } returns appPermission
 
         val rolePermissionCache = mockk<RolePermissionCache>()
-        every { rolePermissionCache.get("roleId".toSpacedRoleId()) } returns setOf(permission.id)
+        every { rolePermissionCache.get(AppSpacedRoleId("appId", "roleId")) } returns setOf(permission.id)
 
         val permissionRepository = RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
         permissionRepository.getAppRolePermission("appId", "", setOf("roleId"))
@@ -81,6 +80,30 @@ class RedisAppRolePermissionRepositoryTest {
             .consumeNextWith {
                 assertThat(it.appPermission, equalTo(appPermission))
                 assertThat(it.rolePermissions.first().permissions.first(), equalTo(permission.id))
+            }
+            .verifyComplete()
+    }
+
+    @Test
+    fun appIdThatCannotOwnGrantsGetsNone() {
+        val appPermissionCache = mockk<AppPermissionCache>()
+        every { appPermissionCache.get(any()) } returns AppPermissionData("app:id", groups = listOf())
+        val permissionRepository = RedisAppRolePermissionRepository(appPermissionCache, mockk())
+        permissionRepository.getAppRolePermission("app:id", "", setOf("roleId")).test().verifyComplete()
+        permissionRepository.getAppRolePermission("", "", setOf("roleId")).test().verifyComplete()
+    }
+
+    @Test
+    fun spacedRoleIdGrantsNothing() {
+        val appPermissionCache = mockk<AppPermissionCache>()
+        every { appPermissionCache.get("appId") } returns AppPermissionData("appId", groups = listOf())
+        val rolePermissionCache = mockk<RolePermissionCache>()
+        every { rolePermissionCache.get(any<AppSpacedRoleId>()) } returns setOf("*")
+        val permissionRepository = RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
+        permissionRepository.getAppRolePermission("appId", "space", setOf("roleId@space", ""))
+            .test()
+            .consumeNextWith {
+                assertThat(it.rolePermissions, equalTo(emptyList()))
             }
             .verifyComplete()
     }

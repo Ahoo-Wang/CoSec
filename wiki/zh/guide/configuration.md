@@ -65,7 +65,7 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 
 | 属性 | 默认值 | 说明 |
 |---|---|---|
-| `cosec.authorization.cache.key-prefix` | `cosec` | 所有 Redis 键的前缀（`cosec:policy:*`、`cosec:global:policy`、`cosec:app:permission:*`、`cosec:role:permission:*`、`cosec:token:revoked:*`）。 |
+| `cosec.authorization.cache.key-prefix` | `cosec` | 所有 Redis 键的前缀（`cosec:policy:*`、`cosec:global:policy`、`cosec:app:permission:*`、`cosec:app:role:permission:*`、`cosec:token:revoked:*`）。 |
 | `cosec.authorization.cache.policy.*` | | 策略的本地缓存。 |
 | `cosec.authorization.cache.role.*` | | 角色授权的本地缓存。 |
 | `cosec.authorization.cache.token.*` | `expire-after-write: 30`、`maximum-size: 100000` | 吊销查询的本地缓存。 |

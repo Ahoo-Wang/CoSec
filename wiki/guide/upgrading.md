@@ -3,9 +3,32 @@
 What changes between versions and what to do about it. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
-## 6.0 to 6.1
+## 6.1 to 7.0
 
 ### Breaking changes
+
+**Role grants are scoped to an app and a space.** In 6.x a role grant was stored per role and space, without the
+app, and the client chose both the app (`CoSec-App-Id`) and the space (`CoSec-Space-Id`). A grant, `*` included,
+therefore applied in every app that defined the same permission ids, and changing `CoSec-Space-Id` picked up the
+grants of a same-named role in another space. In 7.0:
+
+- Grants are keyed by app, role and space. The Redis key moves from `cosec:role:permission:<roleId>[@<spaceId>]`
+  to `cosec:app:role:permission:<appId>:<roleId>[@<spaceId>]`, and `RolePermissionCache` takes an
+  `AppSpacedRoleId(appId, roleId, spaceId)` instead of a `SpacedRoleId`. App ids must not contain `:` and role
+  ids must not contain `@`; the OpenAPI app permission generator replaces `:` in the title.
+- A request with `CoSec-Space-Id: x` is evaluated with only the principal's roles written `role@x`; without the
+  header, with only the roles without a suffix. Issue `role@space` in tokens and API keys for every space a
+  principal holds a role in, after checking membership ([Tokens](./authentication.md#tokens)).
+- Authorization never reads 6.x keys. Until they are migrated, roles have no grants and role-based requests are
+  denied (fail closed).
+- `AppRolePermissionRepository.getAppRolePermission` keeps its signature. `SimpleAuthorization` now passes the
+  roles that apply in the space, without the `@space` suffix; a custom repository must return only the grants
+  made for that app and space.
+- The explainer adds the `NO_ROLE_IN_SPACE` warning.
+
+## 6.0 to 6.1
+
+### Breaking changes {#breaking-changes-1}
 
 **Rate limits are rules, not policy conditions.** The `rateLimiter`, `groupedRateLimiter`, `redisRateLimiter` and
 `redisGroupedRateLimiter` conditions are removed, together with `TooManyRequestsException`. A policy that still uses

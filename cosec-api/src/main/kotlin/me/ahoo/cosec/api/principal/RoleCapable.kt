@@ -87,14 +87,14 @@ data class SpacedRoleId(
  */
 interface RoleCapable {
     /**
-     * The set of role IDs assigned to this principal.
+     * The roles assigned to this principal, each scoped to a space.
      *
-     * Contract: role IDs are globally unique and never contain '@'.
-     * Role permissions are stored per space under (roleId, spaceId); the request's
-     * spaceId selects the evaluation context—it chooses among defined scopes,
-     * it does not expand grants.
+     * Contract: `roleId` is a role in the default space; `roleId@spaceId` is a role in `spaceId` only (see
+     * [SpacedRoleId]). A bare role id never contains '@'. A request in a space (`CoSec-Space-Id`) is evaluated
+     * with only the roles scoped to that space, and their grants are those made in the request's app: the request
+     * chooses among the scopes the principal states, it never expands them.
      *
-     * @return Set of role identifiers
+     * @return Set of role identifiers, optionally suffixed with `@spaceId`
      */
     val roles: Set<RoleId>
 

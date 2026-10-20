@@ -29,7 +29,6 @@ import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.RolePermissionData
 import me.ahoo.cosec.policy.PolicyData
@@ -113,9 +112,9 @@ class LocalCacheFastPathTest {
         AppPermissionCache,
         CoherentCache<String, AppPermission> by cache
 
-    private class TestRolePermissionCache(cache: CoherentCache<SpacedRoleId, Set<PermissionId>>) :
+    private class TestRolePermissionCache(cache: CoherentCache<AppSpacedRoleId, Set<PermissionId>>) :
         RolePermissionCache,
-        CoherentCache<SpacedRoleId, Set<PermissionId>> by cache
+        CoherentCache<AppSpacedRoleId, Set<PermissionId>> by cache
 
     private fun <K, V> coherentCacheOf(name: String): CoherentCache<K, V> = DefaultCoherentCache(
         CoherentCacheConfiguration(
@@ -135,7 +134,7 @@ class LocalCacheFastPathTest {
         val appPermissionCache = TestAppPermissionCache(coherentCacheOf("AppPermissionCache"))
         val rolePermissionCache = TestRolePermissionCache(coherentCacheOf("RolePermissionCache"))
         appPermissionCache["app"] = AppPermissionData(id = "app")
-        rolePermissionCache[SpacedRoleId(roleId = "admin", spaceId = "space")] = setOf("p1")
+        rolePermissionCache[AppSpacedRoleId(appId = "app", roleId = "admin", spaceId = "space")] = setOf("p1")
         val repository = RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
 
         val callerThread = Thread.currentThread().name

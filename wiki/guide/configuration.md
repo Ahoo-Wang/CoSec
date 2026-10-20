@@ -67,7 +67,7 @@ cached in-process.
 
 | Property | Default | Description |
 |---|---|---|
-| `cosec.authorization.cache.key-prefix` | `cosec` | Prefix for all Redis keys (`cosec:policy:*`, `cosec:global:policy`, `cosec:app:permission:*`, `cosec:role:permission:*`, `cosec:token:revoked:*`). |
+| `cosec.authorization.cache.key-prefix` | `cosec` | Prefix for all Redis keys (`cosec:policy:*`, `cosec:global:policy`, `cosec:app:permission:*`, `cosec:app:role:permission:*`, `cosec:token:revoked:*`). |
 | `cosec.authorization.cache.policy.*` | | Local cache for policies. |
 | `cosec.authorization.cache.role.*` | | Local cache for role grants. |
 | `cosec.authorization.cache.token.*` | `expire-after-write: 30`, `maximum-size: 100000` | Local cache for revocation lookups. |

@@ -69,8 +69,8 @@ sequenceDiagram
 
 1. A root principal (decided by `RootPrincipalMatcher`) is allowed.
 2. A blacklisted request (`BlacklistChecker`) is denied.
-3. Three layers are evaluated: global policies, the principal's policies, and the role permissions for the
-   request's app and space. In each layer every `deny` is checked before any `allow`. Layers are combined
+3. Three layers are evaluated: global policies, the principal's policies, and the role permissions of the
+   principal's roles in the request's space (`role@space`), as granted in the request's app. In each layer every `deny` is checked before any `allow`. Layers are combined
    deny-first: an `EXPLICIT_DENY` in any layer ends evaluation, and an `ALLOW` is only returned once every
    layer has had the chance to deny.
 4. Otherwise the result is `IMPLICIT_DENY`.

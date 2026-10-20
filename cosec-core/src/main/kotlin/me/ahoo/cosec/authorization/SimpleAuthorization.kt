@@ -39,7 +39,8 @@ import reactor.kotlin.core.publisher.toMono
  * 2. Blacklist checks
  * 3. Global policies
  * 4. Principal-specific policies
- * 5. Role-based permissions
+ * 5. Role-based permissions: the principal's roles scoped to the request's space ([RoleScope]), granted in the
+ *    request's app
  *
  * Layers 3-5 are combined deny-first: an EXPLICIT_DENY matched in any layer wins over
  * an ALLOW matched in any other layer.
@@ -222,15 +223,25 @@ class SimpleAuthorization(
             }
     }
 
+    /**
+     * Only the principal's roles scoped to the request's space count (see [RoleScope]); the repository keys their
+     * grants by the request's app, so a grant never applies in another app or space.
+     */
     private fun verifyAppRolePermission(
         request: Request,
         context: SecurityContext
     ): Mono<VerifyContext> {
-        if (context.principal.roles.isEmpty()) {
+        val principalRoles = context.principal.roles
+        if (principalRoles.isEmpty()) {
+            return Mono.empty()
+        }
+        val spaceId = request.spaceId
+        val roles = RoleScope.rolesIn(spaceId, principalRoles)
+        if (roles.isEmpty()) {
             return Mono.empty()
         }
         return appRolePermissionRepository
-            .getAppRolePermission(request.appId, request.spaceId, context.principal.roles)
+            .getAppRolePermission(request.appId, spaceId, roles)
             .flatMap { appRolePermission ->
                 evaluate(appRolePermission.appPermission.requiresBlocking) {
                     verifyAppRolePermission(appRolePermission, request, context)

@@ -50,7 +50,12 @@ class CacheProperties(
     val globalPolicyIndexKey: String = "$keyPrefix:global:policy"
     val policyKeyPrefix: String = "$keyPrefix:policy:"
     val appPermissionKeyPrefix: String = "$keyPrefix:app:permission:"
-    val rolePermissionKeyPrefix: String = "$keyPrefix:role:permission:"
+
+    /**
+     * Role grants per app, role and space: `<prefix><appId>:<roleId>[@<spaceId>]`. Its own prefix keeps a 6.x key
+     * (`<keyPrefix>:role:permission:<roleId>`, whose role id may contain `:`) from ever reading as an app-scoped one.
+     */
+    val rolePermissionKeyPrefix: String = "$keyPrefix:app:role:permission:"
     val revokedTokenKeyPrefix: String = "$keyPrefix:token:revoked:"
     val policyHistoryKeyPrefix: String = "$keyPrefix:policy:history"
 }
