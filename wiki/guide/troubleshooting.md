@@ -154,6 +154,11 @@ The caller is known, but nothing allowed the request, or something denied it.
   naming the policy and statement. Since 7.0, a policy condition, or the condition of a statement without a
   `path` action, may not read `request.path.var.*`. Fix and re-save the policy
   ([Path variables](./policies.md#actions)).
+- **A global policy is listed without content.** The log shows `MissingPolicyException` and
+  `the global policy index lists policies [...] that have no content`. The policy's content was lost, or not
+  migrated from 6.x (a 6.x cached miss migrates as a miss). Since 7.0 this fails every request rather than skipping
+  the policy, because it may be a global deny. Write the policy again with `PolicyRepository.setPolicy`; to drop it
+  instead, save it with a type other than `global`, which removes it from the index.
 
 ## Startup fails with PathVariableScopeException
 
@@ -170,6 +175,29 @@ template that mentions `PATH_VARIABLES`, may not read them at all: read them in 
 could not be parsed or built: malformed JSON, an unknown action or condition type, or an invalid option. The cause
 below the message says which. Since 7.0 any such file stops startup; before, it was logged and skipped, which could
 silently drop a deny. Fix or remove the file. A location that does not exist is only logged as a warning.
+
+## Startup fails reading a stored policy
+
+With `cosec.authorization.local-policy.init-repository` enabled and `force-refresh=false` (the default), startup
+first reads each local policy's id from the repository and writes the file only when the id is missing. When the
+stored copy cannot be read, startup fails with that read error, even if the local file is valid:
+
+- `CacheReadException` caused by `ForeignFormatException`: the copy is 6.x data that was not migrated. Run the
+  [data migration](./upgrading.md#migrating-the-data).
+- `PathVariableScopeException`: the stored copy (often migrated from 6.x) reads `request.path.var.*` outside its
+  scope, which 7.0 rejects. Fix the stored policy, or start once with `force-refresh=true` so the local files
+  overwrite the stored copies without reading them.
+
+## Publishing a policy fails before the migration
+
+`setPolicy` (an administration API, or local policies with `force-refresh=true` at startup) fails with
+`CacheWriteException` caused by `ForeignFormatException`, naming the global policy index key
+(`cosec:global:policy`) and `format[0]`. The index is still the native SET CoSec 6.x wrote, and CoCache 6 does not
+overwrite it: the index is left unchanged, and requests keep failing with `500` until the data is migrated. Run the
+[data migration](./upgrading.md#migrating-the-data), then repeat the publish. Do not delete the key or set
+`foreign-format=reclaim` on it: it is the only copy of the global policy ids. A global policy's content was already
+written in the 7.0 format before the index update failed, so the migration skips it and a rollback keeps it in the
+7.0 format.
 
 ## One principal always gets 500
 

@@ -34,7 +34,7 @@ When `cosec.explain.enabled=true`, prefer explaining the decision over reading l
 | 401 | Authorization denied while the parsed principal is anonymous; invalid/expired tokens also fall back to anonymous and preserve the token reason |
 | 403 | An authenticated principal was denied, or a regex matcher timed out and failed closed |
 | 429 | An allowed request exceeded a rate limit rule (`RateLimitingAuthorization`) |
-| 500 | Unexpected authorization error, including Redis being unavailable for policy/permission reads (those caches fail closed) and a principal listing a policy id the repository does not have (`MissingPolicyException`); inspect the server exception |
+| 500 | Unexpected authorization error, including Redis being unavailable for policy/permission reads (those caches fail closed) a principal listing a policy id the repository does not have, and a global policy index entry without content (both `MissingPolicyException`); inspect the server exception |
 
 The authorization result alone does not choose 401 versus 403; the filter maps a denied anonymous principal to 401 and a denied authenticated principal to 403.
 
@@ -88,6 +88,9 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 ### Policies or permissions missing after upgrading to 7.0
 
 - CoCache 6 cannot read what CoSec 6.x (CoCache 5) stored in Redis. Until the data is migrated, every read of it fails (`CacheReadException` caused by `ForeignFormatException`) and requests get 500. Migrate with `CoSecCoCache5Migration` (policies, global index, app permissions, revoked tokens) and `RolePermissionKeyMigration` (role grants, per app); see the upgrading guide, "6.1 to 7.0".
+- Startup fails while initializing local policies (`init-repository` with `force-refresh=false`, the default): the initializer reads each id's stored copy first, so an unmigrated copy (`ForeignFormatException`) or a migrated one that now violates path variable scope (`PathVariableScopeException`) stops startup even when the local file is valid. Migrate or fix the stored policy; after the migration, starting once with `force-refresh=true` overwrites the stored copies without reading them.
+- Publishing a policy before the migration (`setPolicy`, or local policies with `force-refresh=true`) fails with `CacheWriteException` caused by `ForeignFormatException` on the global policy index key (`{prefix}:global:policy`): CoCache 6 does not overwrite the 6.x native SET. The index is untouched and still migrates; run the migration, then repeat the publish. Do not delete the key or set `foreign-format=reclaim`: it is the only copy of the global policy ids. Puts of app permissions are not checked and replace the 6.x value without a backup (role grants go to new keys and show up as `conflicts` in `RolePermissionKeyMigration`), so stop every writer until the migration has finished.
+- A global policy id in the index without content fails every request with `MissingPolicyException` (500) since 7.0, instead of being skipped; rewrite the policy, or save it with a non-`global` type to drop it from the index. Indexed ids whose content is not `global` are ignored.
 - Values written straight to Redis (`SET`, `SADD`) are not read in 7.0: every value carries a binary header. Write app permissions and role grants through the `AppPermissionCache` and `RolePermissionCache` beans, and policies through `PolicyRepository.setPolicy`.
 
 ### One principal always gets 500

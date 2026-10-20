@@ -41,14 +41,19 @@ import org.springframework.data.redis.core.StringRedisTemplate
  * | App permissions | `{p}:app:permission:{appId}` | JSON string |
  * | Revoked tokens | `{p}:token:revoked:{tokenId}` | JSON `true`, with the token's remaining lifetime |
  *
- * `{p}` is [legacyKeyPrefix]. Cached misses (the `_nil_` sentinel) become CoCache 6 cached misses. Role grants are not
- * part of this migration: they move to app-scoped keys with [RolePermissionKeyMigration]. Policy history
- * (`{p}:policy:history:*`) is not CoCache data and is left alone, which is why policies are listed rather than scanned.
+ * `{p}` is [legacyKeyPrefix] as configured, exactly as 6.x used it: 6.x did not trim a trailing `:`, so a key prefix
+ * of `myapp:` stored policies under `myapp::policy:`. Cached misses (the `_nil_` sentinel) become CoCache 6 cached
+ * misses. Role grants are not part of this migration: they move to app-scoped keys with [RolePermissionKeyMigration].
+ * Policy history (`{p}:policy:history:*`) is not CoCache data and is left alone, which is why policies are listed
+ * rather than scanned; a policy whose id merely starts with `history`, such as `history-viewer`, is migrated.
  *
- * The 7.0 keys equal the 6.x keys (with the same key prefix), so the migration is in place: every original value is
- * first backed up, and [rollback] restores them. Stop every writer (6.x and 7.0 instances) first: run [dryRun], then
- * [migrate], verify, start 7.0, and [dropBackups] once 7.0 runs well. Every operation can be repeated: migrated keys are
- * skipped. The global index is migrated last.
+ * With a key prefix without a trailing `:`, the 7.0 keys equal the 6.x keys, so the migration is in place: every
+ * original value is first backed up, and [rollback] restores them. 7.0 trims a trailing `:`
+ * ([CoSecCacheSpecs.cacheNamespace]: `myapp:policy:`), so with such a prefix the values are copied to the new keys
+ * instead, and the 6.x keys stay unchanged.
+ *
+ * Stop every writer (6.x and 7.0 instances) first: run [dryRun], then [migrate], verify, start 7.0, and [dropBackups]
+ * once 7.0 runs well. Every operation can be repeated: migrated keys are skipped. The global index is migrated last.
  *
  * @param migrator opens a migrator for one operation; it is closed afterwards
  */
@@ -59,15 +64,16 @@ class CoSecCoCache5Migration(
     private val globalPolicyIndexSpec: SetCacheSpec<String, String>,
     private val appPermissionSpec: CacheSpec<AppId, AppPermission>,
     private val revokedTokenSpec: CacheSpec<String, Boolean>? = null,
-    legacyKeyPrefix: String = CoSec.COSEC,
+    /** Not trimmed: 6.x appended `:policy:` and the like to the configured prefix as it was. */
+    private val legacyKeyPrefix: String = CoSec.COSEC,
 ) {
     companion object {
         private const val SCAN_COUNT = 1000L
+        private val GLOB_SPECIAL = Regex("""[*?\[\]\\]""")
     }
 
-    private val legacyKeyPrefix = legacyKeyPrefix.trimEnd(':')
-    private val policyKeyPrefix = "${this.legacyKeyPrefix}:policy:"
-    private val policyHistoryKeyPrefix = "${this.legacyKeyPrefix}:policy:history"
+    private val policyKeyPrefix = "$legacyKeyPrefix:policy:"
+    private val policyHistoryKeyPrefix = "$legacyKeyPrefix:policy:history:"
 
     /** Reads and decodes every 6.x value without writing anything: run it before stopping writers. */
     fun dryRun(): CoCache5MigrationReport = withMigrator { it.dryRun(migrations()) }
@@ -78,7 +84,18 @@ class CoSecCoCache5Migration(
      */
     fun migrate(): CoCache5MigrationReport = withMigrator { it.migrate(migrations()) }
 
-    /** Restores the 6.x values from their backups. What 7.0 wrote since the migration is lost. */
+    /**
+     * Restores the 6.x values from their backups, with every writer stopped. It restores the snapshot taken by
+     * [migrate], so what 7.0 wrote since is lost or left unreadable for 6.x:
+     *
+     * - changes 7.0 made to migrated keys (policies, app permissions, the global index) are overwritten by the backup;
+     * - keys 7.0 created after the migration, such as new policies, app permissions or revocations, have no backup
+     *   and stay in the CoCache 6 format, which 6.x cannot read: re-create them with 6.x, or delete them first;
+     * - a policy 7.0 added to the global index is dropped from it when the index is restored.
+     *
+     * When the 6.x key prefix ended with `:`, the migration wrote to new keys: those are deleted and the 6.x keys,
+     * never changed, are used again.
+     */
     fun rollback(): CoCache5MigrationReport = withMigrator { it.rollback(migrations()) }
 
     /** Deletes the backups once 7.0 runs well; [rollback] is no longer possible afterwards. */
@@ -119,7 +136,7 @@ class CoSecCoCache5Migration(
 
     private fun policyKeys(): List<String> {
         val options = ScanOptions.scanOptions()
-            .match("$policyKeyPrefix*")
+            .match(glob(policyKeyPrefix) + "*")
             .type(DataType.STRING)
             .count(SCAN_COUNT)
             .build()
@@ -127,6 +144,8 @@ class CoSecCoCache5Migration(
             cursor.asSequence().filterNot { it.startsWith(policyHistoryKeyPrefix) }.distinct().sorted().toList()
         }
     }
+
+    private fun glob(prefix: String): String = prefix.replace(GLOB_SPECIAL) { "\\" + it.value }
 
     private fun <T> withMigrator(block: (CoCache5Migrator) -> T): T = migrator().use(block)
 }

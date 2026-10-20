@@ -108,7 +108,7 @@ gets the id `orders-api`; clients must send the new id in `CoSec-App-Id`, and it
 
 ### CoCache 6 and CosId 4
 
-CoSec 7.0 runs on [CoCache 6.5](https://cocache.ahoo.me/guide/migration-6) and
+CoSec 7.0 runs on [CoCache 6.6](https://cocache.ahoo.me/guide/migration-6) and
 [CosId 4.0](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md). CoCache 6 changed how values are
 stored in Redis, so this upgrade needs a short stop and a one-off data migration
 ([Migrating the data](#migrating-the-data)).
@@ -167,6 +167,23 @@ application uses CosId itself, follow CosId's
 denied with `500`. Policy and permission caches always keep this behavior, even with
 `cocache.defaults.foreign-format=reclaim`: with no loader, a reclaim would delete the only copy.
 
+**Writes before the migration.** Every `setPolicy` updates the global policy index, which CoCache 6 does not
+overwrite while it still holds the 6.x native SET: the publish fails with `CacheWriteException`, caused by
+`ForeignFormatException` naming the index key (`cosec:global:policy`), the index is left as it was, and the
+migration still converts it. `setPolicy` completes with this error (a local policy
+with `force-refresh=true` stops startup, see [troubleshooting](./troubleshooting.md#publishing-a-policy-fails-before-the-migration)),
+and requests are still denied with `500`. Other writes are not checked: a global policy's content (written before
+the index) and app permissions replace the 6.x value of their key in the 7.0 format. The migration then skips that
+key and keeps no backup of it, so a rollback cannot restore its 6.x value. Role grants go to new keys, and one
+written before its migration is reported there as a conflict. This is why nothing may write before the migration
+has finished.
+
+**The global policy index is checked against the policies.** The index and the policy contents are separate Redis
+keys. In 6.x an indexed id without content was skipped, so a lost global `DENY` silently stopped applying; 7.0
+fails the read with `MissingPolicyException` and the request is denied with `500`
+([troubleshooting](./troubleshooting.md#every-request-fails-with-500)). An indexed id whose content is not of type
+`global` (a concurrent or half-finished republish) is ignored instead of applying to everyone.
+
 ### Migrating the data
 
 CoCache 6 cannot read the values CoSec 6.x stored with CoCache 5, and Redis is the only copy of policies, app
@@ -175,15 +192,17 @@ application or a one-off job using the starter with `cache-support`), not actuat
 
 - `CoSecCoCache5Migration` converts policies, the global policy index, app permissions and revoked tokens in place
   with CoCache's [`CoCache5Migrator`](https://cocache.ahoo.me/guide/migration-6), backing up every original value
-  first. The policy history (`cosec:policy:history:*`) is not CoCache data and is left alone.
+  first. The policy history (`cosec:policy:history:*`) is not CoCache data and is left alone. Revoked tokens are
+  migrated whether or not the migrating process enables token revocation.
 - `RolePermissionKeyMigration` copies role grants to their new app-scoped keys, one app at a time
   ([Migrating role grants](#migrating-role-grants)). The 6.x keys stay as they were.
 
 In order:
 
 1. **Stop every writer.** Stop all 6.x instances, and anything else that writes CoSec keys (an administration
-   service writing policies or grants). Nothing may write during the migration: a key changed while it is
-   migrated aborts the run.
+   service writing policies or grants), and start no 7.0 instance that writes. Nothing may write during the
+   migration: a key changed while it is migrated aborts the run, and a key 7.0 wrote first is skipped without a
+   backup ([Writes before the migration](#cocache-6-and-cosid-4)).
 2. **Run the CoCache migration.** First a dry run, which reads and decodes every value and writes nothing, then the
    migration. Read the report of each: per cache, the keys `read`, `written`, `skipped` (already migrated) and
    `negatives` (cached misses, migrated as cached misses). A value that cannot be decoded aborts the run with a
@@ -200,19 +219,36 @@ In order:
 
    Set `cosec.authorization.cache.migration.legacy-key-prefix` or `missing-guard-sentinel` when 6.x used a key
    prefix other than the current one or a non-default `cocache.redis.missing-guard-sentinel`, and `backup-prefix` to
-   move the backups away from `cocache5-backup:`.
+   move the backups away from `cocache5-backup:`. Give the 6.x key prefix exactly as it was configured. 6.x did not
+   trim a trailing `:` (`myapp:` stored policies under `myapp::policy:`), but 7.0 does (`myapp:policy:`). With such
+   a prefix the migration copies each value to its 7.0 key instead of converting it in place, and leaves the 6.x keys
+   unchanged; delete them yourself once 7.0 runs well, except `myapp::policy:history:*`, which 7.0 still uses.
 3. **Migrate role grants** with `RolePermissionKeyMigration`, once per app, dry run first
    ([Migrating role grants](#migrating-role-grants)).
 4. **Verify.** Check the reports, then read a few policies, global policies and grants through a 7.0 process (for
    example with [explain](./troubleshooting.md#explain-a-decision)). A read that still fails with
    `ForeignFormatException` names a key that was not migrated.
-5. **Start the 7.0 instances.** Once 7.0 runs well, delete the backups with `CoSecCoCache5Migration.dropBackups()`
-   and the 6.x role grant keys with `RolePermissionKeyMigration.deleteLegacy()`.
+5. **Start the 7.0 instances.** Local policy files are written to Redis on startup only when their id is not there
+   yet (`force-refresh=false`), so startup first reads the stored copy. If that copy cannot be read, because it was
+   not migrated or no longer passes 7.0's [path variable](./policies.md#actions) checks, startup fails
+   ([troubleshooting](./troubleshooting.md#startup-fails-reading-a-stored-policy)).
+6. **Clean up.** Once 7.0 runs well, delete the backups with `CoSecCoCache5Migration.dropBackups()`. Delete the 6.x
+   role grant keys with `RolePermissionKeyMigration.deleteLegacy()` only after `migrate` has run for **every** app:
+   it deletes the legacy grants of all apps, not only the last one migrated. Review each report's `skipped` and
+   `conflicts` first, then compare the keys `deleteLegacy(dryRun = true)` lists with the ones the reports migrated.
 
 **Rollback.** Before the backups are dropped, 6.1 can be restored: stop every 7.0 instance and writer, call
-`CoSecCoCache5Migration.rollback()`, which puts every 6.x value back from its backup (type, content and remaining
-lifetime), and start 6.1. The 6.x role grant keys were never changed. What 7.0 wrote since the migration is lost:
-policies and permissions written through 7.0 must be written again through 6.1.
+`CoSecCoCache5Migration.rollback()`, and start 6.1. Rollback restores the snapshot taken by the migration:
+
+- every migrated key (policies, app permissions, revoked tokens, the global policy index) gets its 6.x value back
+  from its backup (type, content and remaining lifetime), so changes 7.0 made to it are lost, and a policy 7.0 made
+  global leaves the index;
+- keys 7.0 created after the migration, such as new policies or app permissions, have no backup and stay in the 7.0
+  format, which 6.1 cannot read (requests that need them get `500`): write them again through 6.1, which overwrites
+  them;
+- with a 6.x key prefix ending in `:`, the copies 7.0 used are deleted and 6.1 reads its own keys, which were never
+  changed;
+- the 6.x role grant keys were never changed, unless `deleteLegacy()` ran.
 
 #### Migrating role grants
 
@@ -239,9 +275,13 @@ would itself have to be secured and would stay exposed long after the one-off mi
    grants already migrated are reported as `unchanged`, and a target that holds different grants is reported as a
    conflict and kept. Keys holding a cached miss, keys that are not sets, and keys with an ambiguous role or space
    (more than one `@`, or an empty part) are reported as `skipped`.
-4. Once every instance runs 7.0 and the grants are verified, delete the old keys with `deleteLegacy()` (it also
-   takes `dryRun`). Until then a rollback to 6.1 still finds them; if grants changed through 6.x after a first run,
-   run the migration again with `overwrite = true`.
+4. Once every instance runs 7.0 and the grants of **every** app are migrated and verified, delete the old keys
+   with `deleteLegacy()`. It deletes every legacy key, whichever app it was meant for, so run it last: review the
+   `skipped` and `conflicts` of each report, then run `deleteLegacy(dryRun = true)` and compare the keys it lists
+   with the ones the reports migrated. Until then a rollback to 6.1 still finds them; if grants changed through 6.x
+   after a first run, run the migration again with `overwrite = true`. Reading a role that has no 7.0 grants yet
+   leaves a short-lived lease marker (about 10 seconds) on its new key, even on a dry run; it holds no grant and
+   expires on its own.
 
 Until a role's grants are migrated to an app, requests that rely on them are denied in that app.
 
@@ -258,6 +298,7 @@ Until a role's grants are migrated to an app, requests that rely on them are den
    component beans with a `CacheSpecCustomizer` or `cocache.caches.<CacheName>.*`, and change `IdGenerator`
    declarations used for a `CosIdGenerator` to `StringIdGenerator`.
 5. Stop every writer, migrate the data, verify, then start 7.0 ([Migrating the data](#migrating-the-data)).
+   Delete legacy role grants only after every app is migrated.
 
 
 ## 6.0 to 6.1

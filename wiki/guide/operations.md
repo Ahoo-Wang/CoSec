@@ -20,6 +20,8 @@ also holds revoked token ids. Each instance keeps an in-process copy
 - **Publishing a policy** writes its content and its global index entry separately, not atomically. The order
   keeps a failure safe: a policy becoming global is indexed only after its content is written, and a policy
   leaving global leaves the index before its content changes. A failed publish returns an error; retry it.
+  Readers ignore an indexed policy whose content is no longer `global`, and deny (`500`) when an indexed policy
+  has no content.
 - Policy and permission entries **never expire** in Redis. A local copy lives at most 5 minutes by default
   ([`expire-after-write`](./configuration.md#cache)), then is read from Redis again; this bounds how stale a copy
   can get if an invalidation message is lost. Local caches are bounded

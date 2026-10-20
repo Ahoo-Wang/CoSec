@@ -108,7 +108,9 @@ Redis implementations in `cosec-cocache` are built on [CoCache 6](https://cocach
   on the caller's thread; a miss reads Redis without blocking and the request continues on `boundedElastic`
   (`LocalCacheFastPathTest`).
 - The global policy index is a CoCache `SetCache`, updated with atomic `add` / `remove`.
-  `GlobalPolicyIndexConcurrencyIntegrationTest` runs two instances writing concurrently.
+  `GlobalPolicyIndexConcurrencyIntegrationTest` runs two instances writing concurrently. Readers apply only
+  indexed policies whose content is of type `global`, and fail with `MissingPolicyException` on an indexed id
+  without content, so no interleaving of publishes widens access (`GlobalPolicyConsistencyTest`).
 
 ## Performance
 

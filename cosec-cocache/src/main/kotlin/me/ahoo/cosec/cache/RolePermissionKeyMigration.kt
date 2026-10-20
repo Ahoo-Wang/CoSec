@@ -24,8 +24,8 @@ import org.springframework.data.redis.core.ScanOptions
 import org.springframework.data.redis.core.StringRedisTemplate
 
 /**
- * One-off migration of 6.x (CoCache 5) role grants (`<legacy prefix><roleId>[@<spaceId>]`, no app) to the app-scoped keys of
- * [RolePermissionCache] ([AppSpacedRoleId]).
+ * One-off migration of 6.x (CoCache 5) role grants (`<legacy prefix><roleId>[@<spaceId>]`, no app) to the app-scoped
+ * keys of [RolePermissionCache] ([AppSpacedRoleId]).
  *
  * Legacy grants do not say which app they were meant for, so the operator names the target app on every run;
  * nothing is guessed and nothing is copied to every app. Authorization never reads legacy keys: a role's grants are
@@ -37,8 +37,10 @@ import org.springframework.data.redis.core.StringRedisTemplate
  * 6.x finds them unchanged.
  *
  * Legacy grants are CoCache 5 native Redis sets and are read directly; targets are CoCache 6 values and are read and
- * written through [rolePermissionCache] (a miss on a cache without a loader writes nothing to Redis). This is the only
- * migration of role grants: CoCache's 5.x migrator must not be pointed at the legacy prefix.
+ * written through [rolePermissionCache]. Reading a missing target, even on a dry run, leaves a short-lived lease
+ * marker on its key (CoCache's `lease.ttl`, 10 seconds by default) and no value; it expires on its own and a
+ * migration write replaces it. This is the only migration of role grants: CoCache's 5.x migrator must not be pointed
+ * at the legacy prefix.
  *
  * @param legacyKeyPrefix the 6.x key prefix, `<cosec.authorization.cache.key-prefix>:role:permission:` by default
  * @param missingGuardSentinel the value CoCache stores for a cached miss; such keys hold no grant
@@ -119,8 +121,10 @@ class RolePermissionKeyMigration(
     }
 
     /**
-     * Deletes every legacy key. Run it once every app's grants are migrated and verified; until then the legacy keys
-     * are harmless, since authorization never reads them.
+     * Deletes every legacy key, the grants of **all** apps sharing the legacy key space, not only the app of the last
+     * [migrate]. Run it only after [migrate] has run for every app, its `skipped` and `conflicts` were reviewed, and
+     * the keys listed by `deleteLegacy(dryRun = true)` were compared with the migrated ones; until then the legacy
+     * keys are harmless, since authorization never reads them. Afterwards a rollback to 6.x has no role grants.
      *
      * @return the deleted (or, with [dryRun], the matching) keys
      */

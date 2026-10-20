@@ -78,7 +78,7 @@
 
 ### CoCache 6 与 CosId 4 {#cocache-6-and-cosid-4}
 
-CoSec 7.0 基于 [CoCache 6.5](https://cocache.ahoo.me/guide/migration-6) 和
+CoSec 7.0 基于 [CoCache 6.6](https://cocache.ahoo.me/guide/migration-6) 和
 [CosId 4.0](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md)。CoCache 6 改变了值在 Redis 中的存储方式，
 因此这次升级需要短暂停机，并做一次性的数据迁移（[迁移数据](#migrating-the-data)）。
 
@@ -125,6 +125,17 @@ CoSec 7.0 基于 [CoCache 6.5](https://cocache.ahoo.me/guide/migration-6) 和
 `ForeignFormatException`），该值原样保留在 Redis 中，请求以 `500` 被拒绝。即使设置了 `cocache.defaults.foreign-format=reclaim`，
 策略和权限缓存也始终保持这一行为：它们没有数据源，回收（reclaim）会删除唯一的副本。
 
+**迁移完成前的写入。** 每次 `setPolicy` 都会更新全局策略索引，而索引仍是 6.x 的原生 SET 时，CoCache 6 不会覆盖它：
+发布失败，抛出 `CacheWriteException`，原因是指明索引键（`cosec:global:policy`）的 `ForeignFormatException`；索引保持原样，
+之后的迁移仍能正常转换它。`setPolicy` 以这个错误结束（`force-refresh=true` 的本地策略会使启动失败，
+见[故障排查](./troubleshooting.md#publishing-a-policy-fails-before-the-migration)），请求仍以 `500` 被拒绝。
+其他写入不受这项检查：全局策略的内容（在索引之前写入）和应用权限会以 7.0 格式替换该键上的 6.x 值，
+迁移随后跳过这个键且不为它备份，回滚也就无法恢复它的 6.x 值。角色授权写入新的键，迁移前写入的授权会在角色授权迁移中报告为冲突。因此迁移完成前不能有任何写入。
+
+**全局策略索引会与策略内容核对。** 索引和策略内容是 Redis 中不同的键。6.x 会跳过索引中没有内容的 id，丢失的全局 `DENY`
+因此悄悄失效；7.0 会以 `MissingPolicyException` 使读取失败，请求以 `500` 被拒绝（见[故障排查](./troubleshooting.md#every-request-fails-with-500)）。
+索引中 id 对应的内容类型不是 `global` 时（并发或未完成的重新发布），该策略被忽略，而不会作用于所有人。
+
 ### 迁移数据 {#migrating-the-data}
 
 CoCache 6 读不了 CoSec 6.x 用 CoCache 5 写入的值，而 Redis 是策略、应用权限和角色授权的唯一副本。两个迁移负责转换它们，
@@ -132,12 +143,14 @@ CoCache 6 读不了 CoSec 6.x 用 CoCache 5 写入的值，而 Redis 是策略�
 
 - `CoSecCoCache5Migration` 使用 CoCache 的 [`CoCache5Migrator`](https://cocache.ahoo.me/guide/migration-6) 原地转换策略、
   全局策略索引、应用权限和已吊销令牌，转换前先备份每个原值。策略历史（`cosec:policy:history:*`）不是 CoCache 数据，保持不变。
+  无论执行迁移的进程是否启用令牌吊销，已吊销令牌都会被迁移。
 - `RolePermissionKeyMigration` 把角色授权按应用逐个复制到新的按应用划分的键（[迁移角色授权](#migrating-role-grants)），6.x 的键保持不变。
 
 按以下顺序执行：
 
-1. **停止所有写入方。** 停止所有 6.x 实例，以及其他写入 CoSec 键的程序（例如写入策略或授权的管理服务）。迁移期间不能有任何写入：
-   迁移某个键时它被修改，会使本次执行中止。
+1. **停止所有写入方。** 停止所有 6.x 实例，以及其他写入 CoSec 键的程序（例如写入策略或授权的管理服务），也不要启动会写入的
+   7.0 实例。迁移期间不能有任何写入：迁移某个键时它被修改，会使本次执行中止；已被 7.0 先写入的键会被跳过且没有备份
+   （见[迁移完成前的写入](#cocache-6-and-cosid-4)）。
 2. **执行 CoCache 迁移。** 先演练（dry run），它读取并解码每个值但不写入，然后正式迁移。查看每次的报告：按缓存列出 `read`（读取）、
    `written`（写入）、`skipped`（已迁移而跳过）和 `negatives`（缓存的未命中，迁移为缓存的未命中）。无法解码的值会使执行中止，
    抛出指明该键的 `CoCache5MigrationException`；修正后重新执行。已迁移的键会被跳过，因此可以重复执行。
@@ -152,16 +165,28 @@ CoCache 6 读不了 CoSec 6.x 用 CoCache 5 写入的值，而 Redis 是策略�
 
    如果 6.x 使用的键前缀与当前不同，或者使用了非默认的 `cocache.redis.missing-guard-sentinel`，请设置
    `cosec.authorization.cache.migration.legacy-key-prefix` 或 `missing-guard-sentinel`；`backup-prefix` 可以把备份从
-   `cocache5-backup:` 移到别处。
+   `cocache5-backup:` 移到别处。6.x 的键前缀要按原样填写。6.x 不会去掉末尾的 `:`（`myapp:` 把策略存在 `myapp::policy:` 下），
+   而 7.0 会去掉（`myapp:policy:`）。使用这样的前缀时，迁移把每个值复制到 7.0 的键，而不是原地转换，6.x 的键保持不变；
+   7.0 运行稳定后请自行删除它们，但 `myapp::policy:history:*` 除外，7.0 仍在使用它。
 3. **迁移角色授权**：用 `RolePermissionKeyMigration` 为每个应用执行一次，先演练（[迁移角色授权](#migrating-role-grants)）。
 4. **核对。** 检查报告，然后通过一个 7.0 进程读取一些策略、全局策略和授权（例如用[解释决策](./troubleshooting.md#explain-a-decision)）。
    仍以 `ForeignFormatException` 失败的读取会指明一个没有迁移的键。
-5. **启动 7.0 实例。** 7.0 运行稳定后，用 `CoSecCoCache5Migration.dropBackups()` 删除备份，用
-   `RolePermissionKeyMigration.deleteLegacy()` 删除 6.x 的角色授权键。
+5. **启动 7.0 实例。** 本地策略文件只在 Redis 中还没有该 id 时才会在启动时写入（`force-refresh=false`），所以启动时会先读取已存储的副本。
+   如果这个副本读不出来（没有迁移，或者不再满足 7.0 对[路径变量](./policies.md#actions)的检查），启动会失败
+   （见[故障排查](./troubleshooting.md#startup-fails-reading-a-stored-policy)）。
+6. **清理。** 7.0 运行稳定后，用 `CoSecCoCache5Migration.dropBackups()` 删除备份。只有在**每个**应用都执行过 `migrate` 之后，
+   才能用 `RolePermissionKeyMigration.deleteLegacy()` 删除 6.x 的角色授权键：它删除的是所有应用的旧授权，而不只是最后迁移的那个应用。
+   先查看每份报告的 `skipped` 和 `conflicts`，再把 `deleteLegacy(dryRun = true)` 列出的键与报告中迁移过的键对比。
 
-**回滚。** 在删除备份之前可以恢复到 6.1：停止所有 7.0 实例和写入方，调用 `CoSecCoCache5Migration.rollback()`，
-它从备份恢复每个 6.x 值（类型、内容和剩余寿命），然后启动 6.1。6.x 的角色授权键从未被修改。迁移之后通过 7.0 写入的内容会丢失：
-通过 7.0 写入的策略和权限需要在 6.1 中重新写入。
+**回滚。** 在删除备份之前可以恢复到 6.1：停止所有 7.0 实例和写入方，调用 `CoSecCoCache5Migration.rollback()`，然后启动 6.1。
+回滚恢复的是迁移时的快照：
+
+- 每个迁移过的键（策略、应用权限、已吊销令牌、全局策略索引）从备份恢复 6.x 的值（类型、内容和剩余寿命），7.0 对它的修改会丢失，
+  7.0 设为全局的策略会离开索引；
+- 迁移之后由 7.0 新建的键（例如新的策略或应用权限）没有备份，保持 7.0 格式，6.1 读不了（依赖它们的请求得到 `500`）：
+  请通过 6.1 重新写入，覆盖它们；
+- 6.x 键前缀以 `:` 结尾时，7.0 使用的副本会被删除，6.1 读取自己从未被修改的键；
+- 6.x 的角色授权键从未被修改，除非执行过 `deleteLegacy()`。
 
 #### 迁移角色授权 {#migrating-role-grants}
 
@@ -184,8 +209,10 @@ CoCache 6 读不了 CoSec 6.x 用 CoCache 5 写入的值，而 Redis 是策略�
    写入经过 `RolePermissionCache`，因此运行中的实例会丢弃本地副本。迁移可以重复执行：已经迁移过的授权报告为 `unchanged`，
    目标键中已有不同授权时报告为冲突并保留原值。保存了缓存未命中标记的键、不是集合的键，以及角色或空间有歧义的键
    （多于一个 `@`，或某一部分为空）报告为 `skipped`。
-4. 所有实例都运行 7.0、并核对过授权之后，用 `deleteLegacy()` 删除旧键（它同样支持 `dryRun`）。在此之前回滚到 6.1 仍能读到旧键；
-   如果第一次执行之后又通过 6.x 修改了授权，用 `overwrite = true` 再执行一次迁移。
+4. 所有实例都运行 7.0、并且**每个**应用的授权都已迁移并核对之后，用 `deleteLegacy()` 删除旧键。它会删除所有旧键，不论它们属于哪个应用，
+   所以放在最后执行：先查看每份报告的 `skipped` 和 `conflicts`，再执行 `deleteLegacy(dryRun = true)`，把它列出的键与报告中迁移过的键对比。
+   在此之前回滚到 6.1 仍能读到旧键；如果第一次执行之后又通过 6.x 修改了授权，用 `overwrite = true` 再执行一次迁移。
+   读取一个在 7.0 中还没有授权的角色时，即使是演练，也会在它的新键上留下一个短暂的 lease 标记（约 10 秒）；它不包含授权，会自行过期。
 
 某个角色的授权迁移到某个应用之前，依赖这些授权的请求在该应用中会被拒绝。
 
@@ -199,7 +226,7 @@ CoCache 6 读不了 CoSec 6.x 用 CoCache 5 写入的值，而 Redis 是策略�
    如果某个 OpenAPI 标题含有 `:`，让客户端改用新的 `CoSec-App-Id`。
 4. 把直接写入 Redis 的应用权限和角色授权改为通过 CoSec 写入，用 `CacheSpecCustomizer` 或 `cocache.caches.<CacheName>.*`
    替换 6.x 的缓存组件 bean，并把用于 `CosIdGenerator` 的 `IdGenerator` 声明改为 `StringIdGenerator`。
-5. 停止所有写入方，迁移数据，核对，然后启动 7.0（[迁移数据](#migrating-the-data)）。
+5. 停止所有写入方，迁移数据，核对，然后启动 7.0（[迁移数据](#migrating-the-data)）。只有在每个应用都迁移完之后才删除旧的角色授权。
 
 
 ## 从 6.0 升级到 6.1 {#_6-0-to-6-1}

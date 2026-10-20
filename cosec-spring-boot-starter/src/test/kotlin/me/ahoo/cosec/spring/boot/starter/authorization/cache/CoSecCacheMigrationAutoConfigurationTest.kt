@@ -18,6 +18,7 @@ import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.CoSecCoCache5Migration
+import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosid.test.MockIdGenerator
@@ -28,6 +29,7 @@ import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfigurat
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.data.redis.core.StringRedisTemplate
+import java.time.Duration
 
 class CoSecCacheMigrationAutoConfigurationTest {
     private val keyPrefix = "test:" + MockIdGenerator.INSTANCE.generateAsString()
@@ -62,6 +64,32 @@ class CoSecCacheMigrationAutoConfigurationTest {
                 redis.delete(redis.keys("$keyPrefix*"))
             }
         }
+    }
+
+    @Test
+    fun migratesRevokedTokensWithoutTokenRevocationEnabled() {
+        // The migration job does not configure cosec.jwt: revoked tokens are migrated all the same, otherwise their
+        // checks would fail (500) instead of answering 401 until they expire.
+        contextRunner.run { context ->
+            assertThat(context).hasNotFailed().doesNotHaveBean(RevokedTokenCache::class.java)
+            val redis = context.getBean(StringRedisTemplate::class.java)
+            try {
+                redis.opsForValue().set("$keyPrefix:token:revoked:jti", "true", Duration.ofMinutes(10))
+                val migration = context.getBean(CoSecCoCache5Migration::class.java)
+                migration.migrate().cache(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME)!!.written.assert().isEqualTo(1L)
+            } finally {
+                redis.delete(redis.keys("$keyPrefix*"))
+            }
+        }
+    }
+
+    @Test
+    fun legacyPrefixesKeepTheTrailingColon6xUsed() {
+        val properties = CacheProperties(keyPrefix = "myapp:")
+        properties.legacyKeyPrefix.assert().isEqualTo("myapp:")
+        properties.legacyRolePermissionKeyPrefix.assert().isEqualTo("myapp::role:permission:")
+        properties.migration.legacyKeyPrefix = "legacy"
+        properties.legacyRolePermissionKeyPrefix.assert().isEqualTo("legacy:role:permission:")
     }
 
     @Test

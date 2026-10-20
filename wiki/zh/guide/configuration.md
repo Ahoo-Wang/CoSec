@@ -71,7 +71,7 @@ OpenTelemetry 链路追踪没有开关：只要 classpath 上有 `opentelemetry-
 | `cosec.authorization.cache.token.*` | `expire-after-write: 30`、`maximum-size: 100000` | 吊销查询的本地缓存。 |
 | `cosec.authorization.cache.history.enabled` | `false` | 为每次保存的策略记录一个[修订版本](./policies.md#policy-history-and-rollback)（`cosec:policy:history:*`）。 |
 | `cosec.authorization.cache.history.max-revisions` | `50` | 每条策略保留的修订版本数。 |
-| `cosec.authorization.cache.migration.legacy-key-prefix` | `key-prefix` | 6.x 部署的 `cosec.authorization.cache.key-prefix`，用于[数据迁移](./upgrading.md#migrating-the-data)。 |
+| `cosec.authorization.cache.migration.legacy-key-prefix` | 与 `cosec.authorization.cache.key-prefix` 相同 | 6.x 部署的 `cosec.authorization.cache.key-prefix`，按原样填写（保留末尾的 `:`），用于[数据迁移](./upgrading.md#migrating-the-data)。 |
 | `cosec.authorization.cache.migration.missing-guard-sentinel` | `_nil_` | 6.x 部署的 `cocache.redis.missing-guard-sentinel`。 |
 | `cosec.authorization.cache.migration.backup-prefix` | `cocache5-backup:` | CoCache 迁移在转换每个 6.x 值之前把它备份到哪里，用于回滚。 |
 
