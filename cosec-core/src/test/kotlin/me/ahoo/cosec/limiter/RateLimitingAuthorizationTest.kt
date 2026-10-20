@@ -165,6 +165,21 @@ class RateLimitingAuthorizationTest {
     }
 
     @Test
+    fun ruleErrorIsRaisedWhenItsRuleIsReached() {
+        val authorization = authorization(
+            rule("tight", permitsPerSecond = 1.0),
+            rule("broken", key = "unsupported.part")
+        )
+        authorization.decide(request, context)
+            .test()
+            .expectError(IllegalArgumentException::class.java)
+            .verify()
+        // Rules before the broken one spend their permits first, and an exhausted one answers before it.
+        acquired.assert().containsExactly("tight/global")
+        authorization.decideOnce().result.assert().isEqualTo(AuthorizeResult.TOO_MANY_REQUESTS)
+    }
+
+    @Test
     fun authorize() {
         authorization(rule("a"))
             .authorize(request, context)

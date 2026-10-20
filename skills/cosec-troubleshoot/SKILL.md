@@ -34,7 +34,7 @@ When `cosec.explain.enabled=true`, prefer explaining the decision over reading l
 | 401 | Authorization denied while the parsed principal is anonymous; invalid/expired tokens also fall back to anonymous and preserve the token reason |
 | 403 | An authenticated principal was denied, or a regex matcher timed out and failed closed |
 | 429 | An allowed request exceeded a rate limit rule (`RateLimitingAuthorization`) |
-| 500 | Unexpected authorization error, including Redis being unavailable for policy/permission reads (those caches fail closed); inspect the server exception |
+| 500 | Unexpected authorization error, including Redis being unavailable for policy/permission reads (those caches fail closed) and a principal listing a policy id the repository does not have (`MissingPolicyException`); inspect the server exception |
 
 The authorization result alone does not choose 401 versus 403; the filter maps a denied anonymous principal to 401 and a denied authenticated principal to 403.
 
@@ -84,6 +84,11 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 - Deferred matcher errors still load. For example, an unsupported `part` throws during authorization and the transport returns 500; reproduce it with `DefaultPolicyEvaluator` or the failing request.
 - Local policies are deduplicated by ID after location expansion; assert that the expected ID and content loaded.
 - `LocalPolicyLoader` does not serve authorization decisions directly. Enable `init-repository` or prepopulate `PolicyRepository`; use `force-refresh` only when overwriting repository state is intended.
+
+### One principal always gets 500
+
+- `MissingPolicyException` names policy ids the principal lists but `PolicyRepository.getPolicies` did not return. Since 7.0 authorization fails closed on them instead of skipping them (a missing deny must not let a global allow win); explanations show a `MISSING_POLICY` warning.
+- Check whether the policy was deleted, never initialized (`init-repository` off, or skipped at load), or lost from Redis. Fix by writing the policy or removing the id from the principal; do not suggest catching the exception.
 
 ### Matcher mismatch
 

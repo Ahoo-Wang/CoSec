@@ -151,7 +151,7 @@ data class MatcherRef(
 )
 
 enum class ExplainWarningCode {
-    /** The principal lists a policy id the repository does not have. */
+    /** The principal lists a policy id the repository does not have; authorization fails closed on it (`500`). */
     MISSING_POLICY,
 
     /** The principal has roles in the request's space, but the request's app has no app permission. */
