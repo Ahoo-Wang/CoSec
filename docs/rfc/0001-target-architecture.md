@@ -1,6 +1,6 @@
 # RFC 0001：CoSec 目标架构（不考虑兼容性的重构设计）
 
-> 状态：草案（第 2 版：已按自审结论修订）· 基线：`main` @ 6.1.0（`153e2b0c`）· 范围：全部模块
+> 状态：草案（第 3 版：§7.1 的决定已确认）· 基线：`main` @ 6.1.0（`153e2b0c`）· 范围：全部模块
 
 ## 0. 结论先行
 
@@ -81,7 +81,7 @@ decide(Subject, Action, Resource, Environment, PolicySnapshot) -> Decision
 | **P7 快照一致性** | 每次评估只读一个版本号确定的快照；发布是原子换引用 | D4 |
 | **P8 判断与执行分离** | 授权只给 Permit/Deny + 义务（obligations）；限流、审计等是 Pipeline 阶段或监听器 | 装饰器链 |
 | **P9 控制面 / 数据面分离** | 写、修订、校验、仿真在控制面；数据面只订阅快照 | `setPolicy` 在读 SPI 中 |
-| **P10 受限表达式** | 一种非图灵完备、可静态类型检查、成本有界的表达式语言（CEL） | D6 |
+| **P10 受限表达式** | 一种非图灵完备、有类型、成本有界、可以抽取索引键并做包含分析的条件 AST（见 7.1） | D6 |
 | **P11 数据按基数分层** | 低基数、变化慢的数据（策略、角色定义、限流规则）进快照；高基数、变化快的数据（主体的角色和成员关系、黑名单）不进快照，在评估前预取 | 快照无法容纳用户级数据 |
 | **P12 控制面同样受授权** | 写策略、写绑定本身就是需要授权的操作，并且不能授出超过授权者自身的权限 | 控制面是权限最高的入口 |
 
@@ -160,7 +160,7 @@ sealed interface Decision {
 D3 在模型层面消失：一个绑定不写 `app` 就不会匹配到别的应用。
 
 **数据分层（P11）**：`Binding` 描述的是"角色 → 策略"，属于低基数数据，放进快照。"主体 → 角色 / 空间"属于
-**成员关系**，是用户级的高基数数据，**不进快照**，有两个来源可选，由部署方决定：
+**成员关系**，是用户级的高基数数据，**不进快照**，有两个来源可选，默认用 token 声明（见 7.1）：
 
 | 来源 | 适用场景 | 撤销延迟 |
 |---|---|---|
@@ -192,8 +192,8 @@ data class Evaluation(val decision: Decision, val trace: Trace?)   // trace 关�
 
 - 动作 / 资源模式编译进按 `(tenant, action namespace)` 分区的**路由前缀树**，一次查找得到候选语句集，
   不再对全部全局策略做线性扫描。
-- 条件编译为 CEL 程序（预检查类型、限定成本）。内置运算符（`eq`、`in`、`startsWith`、`cidr`、`time` 等）
-  直接作为 CEL 函数提供，不再各自写一个 `ConditionMatcherFactory`。
+- 条件编译为有类型的条件 AST，运算符集合固定（`eq`、`in`、`prefix`、`cidr`、`time`、`exists`、`and`、`or`、`not`），
+  编译时检查类型、限定成本，并抽取等值约束供索引使用。不再为每种匹配器写一个 `ConditionMatcherFactory`。
 - 引用完整性在编译期检查：`Binding` 指向不存在的策略，编译就失败，快照不会发布（D2 在发布前被拦住；
   运行时仍然缺失则返回 `Indeterminate`）。
 - **索引不得漏掉任何语句**：索引给出的候选集必须包含暴力匹配会命中的全部语句，否则一条被漏掉的 DENY 就会悄悄
@@ -439,7 +439,7 @@ API 时再提高基线。
 | 新模块 | 依赖 | 内容 | 来自 |
 |---|---|---|---|
 | `cosec-model` | 仅 `kotlinx-serialization-core`（注解与接口） | 值类型、策略 AST、`Decision`、JSON 编解码 | `cosec-api` 大部分 + `serialization` |
-| `cosec-engine` | model, CEL | 编译器、索引、评估、trace | `SimpleAuthorization`、matchers、`explain`、`analysis` |
+| `cosec-engine` | model | 编译器、索引、评估、trace | `SimpleAuthorization`、matchers、`explain`、`analysis` |
 | `cosec-runtime` | engine, kotlinx-coroutines | Pipeline、路径规范化、内置 `ScopeResolver`、SPI（`SnapshotSource`、`Authenticator`、`MembershipProvider`、`AttributeProvider`、`RateLimiter`、`DecisionListener`） | `pipeline`、`limiter`、`audit`、`shadow` |
 | `cosec-authn-jwt` / `cosec-authn-apikey` / `cosec-authn-social` | runtime | 认证器 | `cosec-jwt`、`apikey`、`cosec-social` |
 | `cosec-store-redis` | runtime | 快照存储 + 变更广播 + 版本对账 + 限流计数 + 吊销表 + 黑名单集合 + 成员关系缓存 | `cosec-cocache` |
@@ -489,7 +489,7 @@ API 时再提高基线。
 3. **快照分发**：`SnapshotSource` + Redis 实现（按需加载、版本对账），删除 `LocalCacheLookup`、`BlockingAware`；热路径上的策略读取都命中内存。
 4. **统一模型**：`Binding` 取代 `principal.policies` / `RolePermission` / `GLOBAL`；成员关系改为按作用域写的
    token 声明或 `MembershipProvider`；平台层与租户层分开；黑名单拆成规则加名单两部分；
-   提供一次性的数据转换工具；用 CEL 取代 OGNL/SpEL 和各个 part 匹配器。
+   提供一次性的数据转换工具；用条件 AST 取代 OGNL/SpEL 和各个 part 匹配器。
 5. **Pipeline 重组**：协程化，挂起的 `Authenticator`、`ScopeResolver`、`AttributeProvider`、义务、监听器；删除装饰器链。
 6. **控制面**：`cosec-control`，发布流程强制校验 + 编译 + 影子窗口；控制面的写操作经过授权，加上不能越权授权检查和平台边界；从模型生成 schema。
 
@@ -497,14 +497,21 @@ API 时再提高基线。
 
 ---
 
-## 7. 待决问题
+## 7. 决定与待决问题
 
-- **D3 的真实影响**：上游（token 签发方 / 网关）是否已经约束了 `appId`/`spaceId`？这决定阶段 1 的修复是否属于安全公告。
-- **快照规模上限**：需要用真实租户数据测一下编译耗时和内存，决定是否需要按应用分片，以及每个实例能常驻多少个活跃租户。
-- **成员关系的默认来源**：默认用 token 声明（零 I/O，撤销慢），还是默认用 `MembershipProvider`（撤销快，多一次预取）？
-  以及撤销延迟上限的默认值。
-- **不能越权授权的静态判断能力**：带条件的语句之间的包含关系一般不可判定。需要确定能精确判断的子集（纯动作和资源
-  模式），以及判断不了时的审批流程。
-- **快照最大落后时长的默认值**，以及默认行为应该是告警还是 503。
-- **CEL 的引入**：需要评估 `cel-java` 的依赖体积和性能；替代方案是自研一个只包含内置运算符的小型表达式 AST。
-- **Action 词汇**：是否在服务内部推广 `service:verb` 形式的 action，还是继续只支持 HTTP 路径？这影响 OpenAPI 模块的定位。
+### 7.1 已确认的决定（2026-10-20）
+
+| 问题 | 决定 | 理由 |
+|---|---|---|
+| **成员关系的默认来源** | 默认用签名 token 里按作用域写的声明，access token 寿命不超过 15 分钟；紧急撤销靠吊销该主体的全部 token，迫使它刷新时重新读取成员关系。声明超过阈值（例如 4 KB）时改用 `MembershipProvider` | 常规路径零额外 I/O；撤销延迟有明确上限，紧急情况可以立即生效；选择依据是 token 体积，而不是偏好 |
+| **快照落后的默认行为** | 默认只告警（60 秒告警，5 分钟升级）；`fail-closed` 按租户可选开启，上限设得宽一些（例如 30 分钟） | 旧快照仍然一致，不属于"无法确定"；默认 503 会把 Redis 或控制面故障放大成全面停服；紧急拒绝走 token 吊销和黑名单名单，都不依赖快照 |
+| **不能越权授权的判断范围** | 被授出的动作和资源模式包含于授权者的权限时允许；条件是"授权者的条件 AND 额外条件"时允许（只收窄，按语法判定）；DENY 在授权者有写权限的作用域内一律允许；其余拒绝并进入平台管理员审批 | 可判定，而且不会误放行 |
+| **条件表达式** | 自研有类型、可分析的条件 AST，运算符集合固定：`eq`、`in`、`prefix`、`cidr`、`time`、`exists`、`and`、`or`、`not`。不引入 CEL；将来确实需要时，CEL 只作为可选条件类型，一律视为"不可分析"（只能由平台管理员发布，放进索引的"总是候选"桶） | 只有固定运算符的 AST 才能同时做到成本有界、抽取索引键、做包含分析 |
+| **Action 词汇** | 规范模型是 `service:verb` 加带类型的资源；HTTP 是一层映射。内置 `http` 命名空间（`http:GET` + 规范化路径）供 Gateway 使用；服务内部的路由到 action 映射由 `cosec-openapi` 根据 OpenAPI 生成 | URL 重构不影响授权语义；按 action 键精确查找，索引快且不会漏；越权检查和代码内检查都更容易 |
+| **当前代码中的 D3、D5、D7** | 在现有架构内立即修复，与 D2 一起放进 7.0 的破坏性变更，每项都经过影子比对并写入 `upgrading.md` 的 6.1 → 7.0 一节。<br>D5：`root-enabled` 默认 `false`；开启时只对平台租户生效，并且仍受黑名单约束。<br>D7：每条语句匹配动作前清空路径变量，条件只能读本语句动作捕获的变量；策略级 condition 或动作不是 `path` 的语句引用 `request.path.var.*` 时加载失败。<br>D3：角色授权的 key 加上 `appId`（`app:role@space`），并提供数据迁移；请求带 `CoSec-Space-Id` 时，只有 token 里显式写成 `role@space` 的角色在该空间生效，不带后缀的角色只在默认空间生效 | 新架构要分阶段落地，安全缺陷不应等待 |
+
+### 7.2 仍待确认
+
+- **D3 的真实影响**：上游（token 签发方 / 网关）是否已经约束了 `appId`/`spaceId`？这决定 D3 的修复是否需要发安全公告。
+- **快照规模上限**：需要用真实租户数据测编译耗时和内存，决定是否需要按应用分片，以及每个实例能常驻多少个活跃租户。
+- **各项默认值的最终数字**（token 寿命、声明大小阈值、快照落后上限）：上表给的是建议值，落地时用真实部署数据校准。
