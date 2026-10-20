@@ -26,6 +26,7 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.RequestMatcher
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
+import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.blacklist.BlacklistChecker
@@ -225,19 +226,30 @@ class AuthorizationExplainer(
         }
 
         private fun appRolePermission(permissions: AppRolePermissionRepository): Mono<Optional<AppRolePermission>> {
-            val roles = context.principal.roles
-            if (roles.isEmpty()) {
+            val principalRoles = context.principal.roles
+            if (principalRoles.isEmpty()) {
                 return Mono.just(Optional.empty())
             }
-            return permissions.getAppRolePermission(request.appId, request.spaceId, roles)
+            val spaceId = request.spaceId
+            val roles = RoleScope.rolesIn(spaceId, principalRoles)
+            if (roles.isEmpty()) {
+                warnings += ExplainWarning(
+                    ExplainWarningCode.NO_ROLE_IN_SPACE,
+                    "The principal has roles $principalRoles, but none applies in space [$spaceId]: " +
+                        "a role applies in a space only when written role@space, and in the default space " +
+                        "only without a suffix.",
+                )
+                return Mono.just(Optional.empty())
+            }
+            return permissions.getAppRolePermission(request.appId, spaceId, roles)
                 .map { Optional.of(it) }
                 .defaultIfEmpty(Optional.empty())
                 .doOnNext {
                     if (it.isEmpty) {
                         warnings += ExplainWarning(
                             ExplainWarningCode.NO_APP_PERMISSION,
-                            "The principal has roles, but app [${request.appId}] space [${request.spaceId}] " +
-                                "has no app permission.",
+                            "The principal has roles $roles in space [$spaceId], but app [${request.appId}] " +
+                                "has no app permission, so none of its role grants apply.",
                         )
                     }
                 }

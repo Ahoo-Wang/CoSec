@@ -16,7 +16,9 @@ package me.ahoo.cosec.spring.boot.starter.authorization.cache
 import me.ahoo.cache.spring.boot.starter.CoCacheAutoConfiguration
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.cache.AppPermissionCache
+import me.ahoo.cosec.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.RolePermissionCache
+import me.ahoo.cosec.cache.RolePermissionKeyMigration
 import me.ahoo.cosid.IdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
@@ -25,6 +27,7 @@ import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfigurat
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import org.springframework.data.redis.core.StringRedisTemplate
 
 internal class CoSecPermissionCacheAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
@@ -48,6 +51,31 @@ internal class CoSecPermissionCacheAutoConfigurationTest {
                     .hasBean(CoSecPermissionCacheAutoConfiguration.ROLE_PERMISSION_CACHE_BEAN_NAME)
                     .hasSingleBean(RolePermissionCache::class.java)
                     .hasSingleBean(AppRolePermissionRepository::class.java)
+                    .hasSingleBean(RolePermissionKeyMigration::class.java)
+            }
+    }
+
+    @Test
+    fun roleGrantsAreStoredPerAppRoleAndSpace() {
+        val appId = "app-" + MockIdGenerator.INSTANCE.generateAsString()
+        contextRunner
+            .withBean(IdGenerator::class.java, { MockIdGenerator.INSTANCE })
+            .withUserConfiguration(
+                JacksonAutoConfiguration::class.java,
+                DataRedisAutoConfiguration::class.java,
+                CoCacheAutoConfiguration::class.java,
+                CoSecPermissionCacheAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                val rolePermissionCache = context.getBean(RolePermissionCache::class.java)
+                val redisTemplate = context.getBean(StringRedisTemplate::class.java)
+                val key = "cosec:app:role:permission:$appId:admin@team-a"
+                try {
+                    rolePermissionCache[AppSpacedRoleId(appId, "admin", "team-a")] = setOf("*")
+                    assertThat(redisTemplate.opsForSet().members(key)).containsExactly("*")
+                } finally {
+                    redisTemplate.delete(key)
+                }
             }
     }
 }

@@ -309,17 +309,42 @@ permissions once and grant them to roles.
 
 - A permission is a statement with an `id` (plus optional `name` and `description`).
 - The app's `condition` gates all of its permissions.
-- The request selects the app with the `CoSec-App-Id` header and the space with `CoSec-Space-Id`.
-- A role is granted a **set of permission ids** per space; `*` grants every permission of the app.
+- A role is granted a **set of permission ids** in one app and one space; `*` grants every permission of that
+  app.
+- The request selects the app with the `CoSec-App-Id` header and the space with `CoSec-Space-Id`
+  ([App and space](./web-integration.md#app-and-space)).
+
+### Role grant scope
+
+A grant belongs to an **(app, role, space)** triple and applies nowhere else:
+
+- **App.** A grant made in one app never applies in another, even when both apps define the same permission
+  id or the grant is `*`. Granting a role in two apps takes two grants.
+- **Space.** The principal's roles say which space each role belongs to: `editor` is a role in the default
+  space, `editor@team-a` a role in `team-a` only ([roles in tokens](./authentication.md#tokens)). A request in
+  a space is evaluated with only the principal's roles in that space, so changing `CoSec-Space-Id` cannot pick
+  up another space's grants. A role written with more than one `@`, or with an empty role or space, applies
+  nowhere.
 
 With `cache-support`, CoSec reads these from Redis (default key prefix `cosec`):
 
 | Data | Redis key | Value |
 |---|---|---|
 | App permission | `cosec:app:permission:<appId>` | the JSON above |
-| Role grants | `cosec:role:permission:<roleId>` (default space) or `cosec:role:permission:<roleId>@<spaceId>` | a set of permission ids |
+| Role grants | `cosec:app:role:permission:<appId>:<roleId>` (default space) or `cosec:app:role:permission:<appId>:<roleId>@<spaceId>` | a set of permission ids |
 
-CoSec reads permissions and grants; your administration service owns writing them.
+The first `:` after the prefix ends the app id and the first `@` after it ends the role id, so an app id must
+not contain `:` and a role id must not contain `@`. `AppSpacedRoleId` checks both when you write a grant; an app
+whose id contains `:` holds no grants. CoSec reads permissions and grants; your administration service owns
+writing them, through `RolePermissionCache` so that every instance drops its local copy:
+
+```kotlin
+rolePermissionCache[AppSpacedRoleId(appId = "order-app", roleId = "clerk", spaceId = "team-a")] =
+    setOf("order.read")
+```
+
+Keys of 6.x (`cosec:role:permission:<roleId>[@<spaceId>]`, without the app) are never read; migrate them with
+`RolePermissionKeyMigration` ([Upgrading](./upgrading.md#migrating-role-grants)).
 
 ## Loading and generating policies
 

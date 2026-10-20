@@ -99,6 +99,19 @@ they are queries: they write no audit events, spend no rate limit, and run on th
 context. A check that fails to evaluate answers `false`. A check answers what the policies allow, not what the
 target endpoint will do with the request, so keep enforcing on the real request.
 
+## App and space
+
+`CoSec-App-Id` and `CoSec-Space-Id` (header, or query parameter of the same name) name the app and the space a
+request is evaluated in. The client sets them, so they only **select** among grants; they never widen them:
+
+- Role grants apply only in the app they were made in: a different `CoSec-App-Id` reaches that app's grants,
+  never another app's.
+- With `CoSec-Space-Id`, only the principal's roles written `role@<that space>` apply. Without it (the default
+  space), only roles without a suffix apply. A space the principal holds no role in gets no role grants.
+
+Policies see both values as `request.appId` and `request.spaceId` and can constrain them further. See
+[Role grant scope](./policies.md#role-grant-scope).
+
 ## Client IP behind proxies
 
 Policies and audit events use the client IP (`request.remoteIp`). Behind proxies, set

@@ -154,8 +154,14 @@ enum class ExplainWarningCode {
     /** The principal lists a policy id the repository does not have; authorization fails closed on it (`500`). */
     MISSING_POLICY,
 
-    /** The principal has roles, but the request's app and space have no app permission. */
+    /** The principal has roles in the request's space, but the request's app has no app permission. */
     NO_APP_PERMISSION,
+
+    /**
+     * The principal has roles, but none applies in the request's space (`role@space` applies only in `space`, a role
+     * without a suffix only in the default space), so no role grant is evaluated.
+     */
+    NO_ROLE_IN_SPACE,
 
     /** A matcher threw; authorization fails closed on it. */
     MATCHER_ERROR,
