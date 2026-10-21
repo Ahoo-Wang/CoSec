@@ -86,13 +86,11 @@ internal object Decisions {
         facts: LegacyFacts,
     ): PolicyVerifyContext {
         val layer = policies.layers.firstOrNull { it.kind == ref.layer } as? LayerInput.Loaded
-        val groups = layer?.groups as? PolicyGroupList
-        val rule = groups?.let {
-            facts.firstMatched { rule ->
-                val policy = rule.policy
-                policy != null && rule.index == ref.index && rule.name == ref.name && policy.id == ref.policyId &&
-                    groups.policies.any { it === policy }
-            }
+        val groups = layer?.groups.orEmpty()
+        val rule = facts.firstMatched { rule ->
+            val policy = rule.policy
+            policy != null && rule.index == ref.index && rule.name == ref.name && policy.id == ref.policyId &&
+                groups.any { it is PolicyGroup && it.policy === policy }
         }
         checkNotNull(rule) { "The engine decided by $ref, which the evaluation did not match." }
         return PolicyVerifyContext(

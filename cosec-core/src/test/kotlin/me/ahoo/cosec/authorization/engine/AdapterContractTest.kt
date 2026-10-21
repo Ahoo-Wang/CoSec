@@ -61,6 +61,7 @@ import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
@@ -302,7 +303,7 @@ class AdapterContractTest {
     fun theRepositoryListIsWrappedNeverChanged() {
         val policies: List<Policy> = Collections.unmodifiableList(listOf(policy("g1", Effect.ALLOW), policy("g2")))
         val global = repositories(global = Mono.just(policies)).layers(authzRequest())[0] as LayerInput.Loaded
-        val groups = global.groups as PolicyGroupList
+        val groups = assertInstanceOf(PolicyGroupList::class.java, global.groups)
         groups.policies.assert().isSameAs(policies)
         groups.map { it.id }.assert().containsExactly("g1", "g2")
         // PolicyData adapts once, whatever the request.
