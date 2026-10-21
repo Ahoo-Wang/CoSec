@@ -9,6 +9,28 @@ For teams moving an existing CoSec deployment to a newer version. Each section l
 and a checklist; this page is the single home of migration steps. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
+## 7.x to 8.0
+
+### Spring MVC reads query parameters from the query string only {#spring-mvc-reads-query-parameters-from-the-query-string-only}
+
+On Spring MVC, CoSec read a query parameter with `HttpServletRequest.getParameter`, which also returns the fields of
+an `application/x-www-form-urlencoded` body. So for a form POST, the container parsed and consumed the body inside
+CoSec's authorization filter, and a body field counted as a query parameter. It now reads the URL query string only,
+decoded as WebFlux and Gateway decode it, and never touches the body
+([Form POST body is empty after CoSec on Spring MVC](./troubleshooting.md#form-post-body-is-empty-after-cosec-on-spring-mvc)).
+
+What a form field no longer sets on Spring MVC:
+
+- `CoSec-App-Id`, `CoSec-Space-Id` and `CoSec-Device-Id`, and so `request.appId`, `request.spaceId` and
+  `request.deviceId` in conditions and the app and space that role permissions use
+  ([App and space](../integration/web.md#app-and-space));
+- the `authorization` token read with `cosec.authorization.allow-query-token=true`;
+- `getQuery(...)` in an `ognl` condition, a custom condition matcher or a `RequestAttributesAppender`.
+
+Clients that send these as form fields must send them as headers or in the query string. A condition that matched a
+form field this way no longer matches: an allow stops allowing, and a deny stops denying. Move such checks into the
+application, after it has read the body; an authorization filter must not read request bodies.
+
 ## 7.0.0 to 7.0.1
 
 The Redis `RateLimiter` bean is now named `cosecRedisRateLimiter` instead of `redisRateLimiter`, the name Spring Cloud

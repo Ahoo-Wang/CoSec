@@ -97,6 +97,18 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
 7. **升级到 7.0 之后**，没有迁移的数据读取时以 `ForeignFormatException` 失败，请求得到 `500`
    （[迁移数据](./upgrading.md#migrating-the-data)）。
 
+## Spring MVC 上经过 CoSec 后表单 POST 请求体为空 {#form-post-body-is-empty-after-cosec-on-spring-mvc}
+
+已在 8.0 修复。8.0 之前，WebMvc 适配器用 `HttpServletRequest.getParameter` 读取查询参数。对
+`application/x-www-form-urlencoded` 的 POST，这会让 Servlet 容器在 CoSec 的过滤器中解析请求体，于是：
+
+- 应用中的 `@RequestBody` 或 `request.getInputStream()` 读到的请求体为空；
+- 有些容器在解析时让请求失败；
+- 名为 `CoSec-App-Id` 或 `CoSec-Space-Id` 的表单字段会设置应用或空间，就像它在查询字符串中一样。
+
+升级到只读取 URL 查询字符串的 8.0，并通过请求头或查询参数发送应用和空间 id
+（[7.x 到 8.0](./upgrading.md#spring-mvc-reads-query-parameters-from-the-query-string-only)）。
+
 ## 所有请求都返回 500 {#every-request-fails-with-500}
 
 在应用日志中找到异常：CoSec 会记录 `Unexpected error during authorization of request [<path>] [<method>].` 或

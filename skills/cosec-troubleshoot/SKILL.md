@@ -77,6 +77,11 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 - Verify the deny action and condition both match; array order cannot make an allow beat a same-tier deny.
 - Confirm the intended policy was loaded (local files no longer get skipped, and duplicate IDs fail startup, in 7.0; Redis-stored policies are what authorization reads).
 
+### Form POST body empty after CoSec on Spring MVC
+
+- Before 8.0, the WebMvc adapter read query parameters (`CoSec-App-Id`, `CoSec-Space-Id`, `CoSec-Device-Id` fallbacks, the `authorization` query token, `getQuery` in OGNL or custom matchers) with `HttpServletRequest.getParameter`. For an `application/x-www-form-urlencoded` POST the container then parsed and consumed the body inside CoSec's filter: the application read an empty body, some containers failed the request, and a form field could set the app or space id.
+- Since 8.0 every adapter reads the URL query string only, never the body. After upgrading, a client that sent those values as form fields must send them as headers or in the query string; a condition that matched a form field no longer matches (an allow stops allowing, a deny stops denying). Move such checks into the application.
+
 ### Policy file has no effect
 
 - Confirm `cosec.authorization.local-policy.enabled=true` and the file matches `local-policy.locations`.
