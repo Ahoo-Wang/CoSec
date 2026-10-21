@@ -81,7 +81,10 @@ internal class PolicySetLoader(
         adapt = { policies -> LayerInput.Loaded(LayerKind.GLOBAL, groupsOf(policies)) },
     )
 
-    /** The principal's policies, read where 7.0 reads them: a read that throws fails the layer, when it is reached. */
+    /**
+     * The principal's policies, read under 7.0's conditions, before evaluation (RFC 0002 X1): a read that throws fails
+     * the layer, when it is reached.
+     */
     @Suppress("TooGenericExceptionCaught")
     private fun principal(facts: LegacyFacts): Any {
         val policyIds = try {
@@ -128,9 +131,9 @@ internal class PolicySetLoader(
      * Only the principal's roles scoped to the request's space count (see [RoleScope]); the repository keys their
      * grants by the request's app, so a grant never applies in another app or space.
      *
-     * The roles, the space and the app are read where 7.0 reads them, in this order, and only when the one before
-     * leaves something to read. A read that throws (a request whose query cannot be read) fails the layer, when it
-     * is reached.
+     * The roles, the space and the app are read in 7.0's order and under its conditions (each only when the one
+     * before leaves something to read), before evaluation (RFC 0002 X1). A read that throws (a request whose query
+     * cannot be read) fails the layer, when it is reached.
      */
     @Suppress("TooGenericExceptionCaught", "ReturnCount")
     private fun role(facts: LegacyFacts): Any {

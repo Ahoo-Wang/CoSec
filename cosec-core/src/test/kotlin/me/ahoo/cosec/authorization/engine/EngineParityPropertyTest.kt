@@ -18,7 +18,9 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
+import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.AppRolePermission
+import me.ahoo.cosec.api.permission.PermissionGroup
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
@@ -148,8 +150,13 @@ class EngineParityPropertyTest {
         },
     )
 
-    private fun Random.appRolePermission(): AppRolePermission {
-        val permissions = List(nextInt(6)) { index ->
+    /**
+     * [long]: a catalog of more than 64 permissions, which `r1` and `r2` each grant more than 64 of, in their own
+     * orders, so grant positions beyond the shared rule cache differ per role. Sometimes the app permission is not
+     * the data class, so its rules are rebuilt per request.
+     */
+    private fun Random.appRolePermission(long: Boolean): AppRolePermission {
+        val permissions = List(if (long) 66 + nextInt(14) else nextInt(6)) { index ->
             val (action, condition) = statement()
             PermissionData(
                 id = "perm$index",
@@ -160,17 +167,32 @@ class EngineParityPropertyTest {
             )
         }
         val ids = permissions.map { it.id } + "ghost"
+        val data = AppPermissionData(
+            "app",
+            if (nextInt(4) == 0) guard() else guards[0],
+            listOf(PermissionGroupData("g", permissions = permissions)),
+        )
+        val appPermission: AppPermission = if (nextInt(4) == 0) {
+            object : AppPermission {
+                override val id: String = data.id
+                override val condition: ConditionMatcher = data.condition
+                override val groups: List<PermissionGroup> = data.groups
+            }
+        } else {
+            data
+        }
         return AppRolePermissionData(
-            AppPermissionData(
-                "app",
-                if (nextInt(4) == 0) guard() else guards[0],
-                listOf(PermissionGroupData("g", permissions = permissions)),
-            ),
+            appPermission,
             listOf("r1", "r2", "r3").map { role ->
-                val granted = when (nextInt(6)) {
-                    0 -> listOf("*")
-                    1 -> listOf("perm0", "*")
-                    else -> ids.shuffled(this).filter { nextInt(8) != 0 || it != "ghost" }.filter { nextBoolean() }
+                val granted = when {
+                    long && role != "r3" -> permissions.map { it.id }.shuffled(
+                        this
+                    ).take(65 + nextInt(permissions.size - 64))
+                    else -> when (nextInt(6)) {
+                        0 -> listOf("*")
+                        1 -> listOf("perm0", "*")
+                        else -> ids.shuffled(this).filter { nextInt(8) != 0 || it != "ghost" }.filter { nextBoolean() }
+                    }
                 }
                 RolePermissionData(role, granted.toCollection(LinkedHashSet()))
             },
@@ -227,7 +249,8 @@ class EngineParityPropertyTest {
             val globalRead = random.read(globalPolicies)
             val principalRead = random.nextInt(20)
             val principalAsync = random.nextBoolean()
-            val roleRead = random.read(random.appRolePermission())
+            val long = random.nextInt(8) == 0
+            val roleRead = random.read(random.appRolePermission(long))
             val policyRepository = object : PolicyRepository {
                 override fun getGlobalPolicy(): Mono<List<Policy>> = globalRead
                 override fun getPolicies(policyIds: Set<String>): Mono<List<Policy>> = when (principalRead) {
@@ -252,14 +275,15 @@ class EngineParityPropertyTest {
             val principal = SimplePrincipal(
                 id = if (random.nextInt(6) == 0) CoSecPrincipal.ANONYMOUS_ID else "user",
                 policies = policyIds,
-                roles = roles.filter { random.nextInt(3) == 0 }.toSet(),
+                roles = roles.filter { random.nextInt(3) == 0 }.toSet() + if (long) setOf("r1", "r2") else emptySet(),
             )
             val request = EvaluateRequest(
                 path = paths.random(random),
                 method = if (random.nextBoolean()) "GET" else "POST",
                 headers = mapOf(
                     AppIdCapable.APP_ID_KEY to "app",
-                    SpaceIdCapable.SPACE_ID_KEY to spaces.random(random),
+                    // The long grants are bare roles, which apply in the default space only.
+                    SpaceIdCapable.SPACE_ID_KEY to if (long) "" else spaces.random(random),
                 ).filterValues { it.isNotEmpty() },
             )
             val blocked = random.nextInt(25) == 0

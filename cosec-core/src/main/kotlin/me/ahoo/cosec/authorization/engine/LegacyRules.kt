@@ -119,7 +119,14 @@ internal class PolicyGroup(val policy: Policy) : RuleGroup {
  * The rules of an app's permission catalog, by grant. [AppPermissionData] caches its own, so the role layer adapts
  * nothing per request but its one [AppPermissionGroup]; any other app permission is adapted once per request.
  */
-internal class AppPermissionRules(val appPermission: AppPermission) {
+internal class AppPermissionRules(
+    val appPermission: AppPermission,
+    /**
+     * Whether these rules are cached on the app permission and so shared by every request. Shared rules keep one
+     * rule per grant position in [PermissionRules]; rules rebuilt for one request leave that to its group's memo.
+     */
+    val shared: Boolean = false,
+) {
     val guard: Guard = ConditionGuard(appPermission.condition)
     val requiresBlocking: Boolean = appPermission.requiresBlocking
     private val permissionIndexer: Map<PermissionId, Permission> = appPermission.permissionIndexer
@@ -189,6 +196,8 @@ internal class PermissionRules(private val permission: Permission) {
  * The role layer's one group: the app's condition, then the principal's role grants in [rolePermissions] order, as
  * 7.0's `forEachPermission` visits them. A wildcard grant visits the whole catalog; any other visits each granted id
  * and, for an id the app does not define, an [UnresolvedGrant] where the grant is (S10a).
+ *
+ * One per request, used by one evaluation at a time: its memos are not synchronized.
  */
 internal class AppPermissionGroup(
     private val rules: AppPermissionRules,
@@ -201,7 +210,10 @@ internal class AppPermissionGroup(
     /** Built at most once per grant, so both passes and the trace see the same entry and exception. */
     private var unresolved: ArrayList<Unresolved>? = null
 
-    /** Rules for grant positions beyond the shared cache, built once per request for the same reason. */
+    /**
+     * Rules for grant positions beyond the shared cache, or for every position when the rules are not shared, built
+     * once per request for the same reason.
+     */
     private var tail: HashMap<Long, StatementRule>? = null
 
     override fun forEachRule(visitor: RuleVisitor): Boolean {
@@ -231,9 +243,10 @@ internal class AppPermissionGroup(
 
     private fun granted(role: Int, permissionId: PermissionId, position: Int): StatementRule? {
         val permissionRules = rules.rulesOf(permissionId) ?: return null
-        if (position < PermissionRules.CACHED_POSITIONS) {
+        if (rules.shared && position < PermissionRules.CACHED_POSITIONS) {
             return permissionRules.at(position)
         }
+        // A grant position is one permission of one role: the role is part of the key.
         val tail = tail ?: HashMap<Long, StatementRule>().also { tail = it }
         return tail.getOrPut((role.toLong() shl Int.SIZE_BITS) or position.toLong()) {
             permissionRules.uncached(position)

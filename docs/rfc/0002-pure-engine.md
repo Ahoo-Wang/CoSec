@@ -391,7 +391,7 @@ enum class RuleOutcome { MATCHED, ACTION_MISS, CONDITION_MISS, NOT_EVALUATED, ER
 
 | 现有 | 引擎侧 | 适配规则（`cosec-core`，包 `me.ahoo.cosec.authorization.engine`） |
 |---|---|---|
-| `Request` + `SecurityContext` | `AuthzRequest` | `subject` ← `context.principal`（`id`、`authenticated`、`roles`、`policies`、`attributes` 直接引用，不复制）、`tenantId` ← principal 的 tenant；`subject.root` ← `RootPrincipalMatcher.isRoot(principal)`；`scope` ← `Scope.declared(context.tenant.tenantId, request.appId, request.spaceId)`；`action` ← `("http", request.method)`；`resource` ← `("http", request.path, request.attributes 中 resource.* 的项)`；`environment.blocked` ← `BlacklistChecker.check` 的结果取反；`host` ← `LegacyFacts(request, context)` |
+| `Request` + `SecurityContext` | `AuthzRequest` | 第 2 阶段只设置引擎读取的两个事实：`environment.blocked` ← `BlacklistChecker.check` 的结果取反，`subject.root` ← `RootPrincipalMatcher.isRoot(principal)`；`subject`、`scope`、`action`、`resource` 与 `environment` 的其余字段是共享的空常量，不从请求读取（PR-3 第一轮审查）。主体的 `policies`、`roles` 与请求的 `spaceId`、`appId` 由各层在 7.0 读取它们的位置、按 7.0 的顺序和条件读取（评估之前，见 X1）；`host` ← `LegacyFacts(request, context)`，适配后的匹配器经它读取原请求与语句作用域上下文。第 4 阶段条件进入引擎时再填入这些字段 |
 | `PolicyRepository.getGlobalPolicy()` | GLOBAL 层 | 空 `Mono` → `Absent(NO_POLICIES)`；错误 → `Unavailable`；列表 → `Loaded`，每个 `Policy` 一个 `PolicyGroup` |
 | `principal.policies` + `getPolicies(ids)` | PRINCIPAL 层 | `ids` 为空 → `Absent(NO_POLICIES)`，不读仓库；空 `Mono` 视为空列表；结果缺少某些 id → `Loaded(missing = MissingPolicies(缺失的 id, MissingPolicyException(...)))`；错误 → `Unavailable` |
 | `principal.roles` + `RoleScope.rolesIn` + `getAppRolePermission(appId, spaceId, roles)` | ROLE 层 | 角色为空 → `Absent(NO_ROLES)`；`rolesIn` 为空 → `Absent(NO_ROLE_IN_SPACE)`；空 `Mono` → `Absent(NO_APP_PERMISSION)`；错误 → `Unavailable`；否则 `Loaded`，一个 `AppPermissionGroup` |
@@ -548,7 +548,7 @@ RFC 0001 §3.3 的算法是"先对**整个**候选集检查所有 DENY，再检�
 
 | # | 差异 | 谁能观察到 | 处理 |
 |---|---|---|---|
-| X1 | **I/O 形态**：现在逐层惰性读取（全局层显式拒绝时不读主体策略和角色权限）；本阶段在 `requiresPolicies` 为真时三层**并行预取**。读取错误被收进 `Unavailable`，只有评估到达该层时才生效，所以决策和错误信号不变 | Redis 读次数（本地缓存未命中时）、延迟（并行后通常更低） | 接受。理由：引擎必须在调用前拿到全部输入，否则就要按层多次调用引擎，等于把组合逻辑又写回适配层；第 3 阶段换成快照后这个问题消失。JMH 对比中单独报告"全局层拒绝"场景（§7） |
+| X1 | **I/O 形态与读取时机**：现在逐层惰性读取（全局层显式拒绝时不读主体策略和角色权限）；本阶段在 `requiresPolicies` 为真时三层**并行预取**，并在评估之前读取各层需要的主体属性（`policies`、`roles`）和请求属性（`spaceId`、`appId`），顺序和条件与 7.0 相同。读取错误（仓库失败，或读取这些属性时抛错）被收进 `Unavailable`，只有评估到达该层时才生效，所以决策和错误信号不变 | Redis 读次数（本地缓存未命中时）、延迟（并行后通常更低） | 接受。理由：引擎必须在调用前拿到全部输入，否则就要按层多次调用引擎，等于把组合逻辑又写回适配层；第 3 阶段换成快照后这个问题消失。JMH 对比中单独报告"全局层拒绝"场景（§7） |
 | X2 | **线程**：含 `BlockingAware` 匹配器时，整次评估切到 `boundedElastic`，而不是只切那一层 | 依赖线程身份的自定义匹配器 | 接受，写进 `upgrading.md` |
 | X3 | **调用方上下文不再留下路径变量**：现在授权结束后，调用方 `SecurityContext` 的 `PATH_VARIABLES` 里是最后一条匹配上的 `path` 语句写下的变量；本阶段它们只写进语句作用域上下文，调用方上下文里没有 | 授权之后自己读 `getPathVariables()` 的应用代码 | 接受（这正是 D1/D7 要消除的共享状态），写进 `upgrading.md` 的破坏性变更 |
 | X4 | **自定义条件匹配器在前置条件里写路径变量**：现在同一层的前置条件之间共享一次清空后的变量；本阶段每个前置条件前都重置 | 在策略 / 应用条件里调用 `setPathVariables` 的自定义匹配器（加载检查只看配置字符串，看不到代码） | 接受。内置匹配器都不这么做，`skills/cosec-custom-matcher` 已经要求"路径变量只属于本语句" |
