@@ -327,6 +327,11 @@ class UnresolvedGrant(val permissionId: String, val error: Throwable) : RuleEntr
 
 - `Guard.matches` / `Rule.match` 抛出的 `Exception` 由引擎捕获，变成 `Indeterminate(MatcherFailed)`；`Error`（如
   `NotImplementedError`、`StackOverflowError`）不捕获，照常向外传播，由调用方的 Reactor 变成错误信号，最终仍是 500，与现在一致。
+  例外只有一处：`FULL`/`EXHAUSTIVE` 下**只为 trace 而评估**的前置条件或规则（`afterDecision`）抛出的 `Throwable`，除
+  `VirtualMachineError`、`LinkageError` 之外都记为 `ERROR`，不向外传播。`OFF` 根本不会调用它们，解释不应在执法不失败的地方失败。
+- 违反适配契约的输入（`forEachRule` 在访问者没有要求停止时返回 true，或无 trace 时忽略访问者的停止；ROLE 层条目缺少
+  `grantedVia` 或权限 id；其他层条目带 `grantedVia` 或是 `UnresolvedGrant`）一律抛出 `IllegalStateException`，失败即拒绝，
+  不作决策。两种评估器都在访问每个条目时检查，所以在决策之前的条目上，各 trace 级别的失败方式相同；决策之后的条目只有 trace 会访问到。
 - `UnresolvedGrant` 留在它在授予序列中的位置，语义见 §4.1 与 §4.2 S10a。它是数据错误而不是匹配器错误，所以得到
   `MissingPermissions` 而不是 `MatcherFailed`，trace 里记为 `UNRESOLVED`，基于 trace 的解释（PR-5）因此能如实说明原因。
 - `forEachRule` 用访问者而不是 `List<Rule>`：ROLE 层的规则是"角色 × 授予的权限"，按列表物化就是每请求 O(授予数) 的分配，
@@ -537,7 +542,7 @@ RFC 0001 §3.3 的算法是"先对**整个**候选集检查所有 DENY，再检�
 | X5 | **自定义 `Statement` 覆写 `verify`**：现在 `SimpleAuthorization` 经 `verifyScoped` 调用的是可覆写的 `Statement.verify` | 覆写了 `verify` 的 `Statement`/`Permission` 实现 | PR-3 中适配层对 `StatementData`/`PermissionData` 之外的实现改调 `verify`（trace 里只能区分命中 / 未命中，未命中记为 `CONDITION_MISS` 并注明），保证等价；PR-6 删除 `Statement.verify` 后这类覆写**编译失败**，写进 `upgrading.md` |
 | X6 | **解释输出**：出错时，现在的 trace 不模拟中止，照常叙述后面的层；本阶段标为 `NOT_EVALUATED`（`EXHAUSTIVE` 时为 `EVALUATED_AFTER_DECISION`）。`TRACE_INCONSISTENT` 不可能再出现，删除；`ACTION_MISS` 不再靠第二次调用 `action.match` 判断 | `CoSecExplainEndpoint` 的使用者、`PolicyTestKit` 的失败消息 | 接受，写进 `upgrading.md`（`ExplainWarningCode` 删除一个值属于公共 API 变更） |
 | X7 | **DEBUG 日志**：`SimpleAuthorization` 原来在每个命中点打一条，改为适配层在决策后打一条 | 日志 | 接受 |
-| X8 | **捕获范围**：引擎只捕获 `Exception`；`Error` 照常向外传播 | 抛 `Error` 的自定义匹配器 | 最终映射不变（Reactor 仍把它变成错误信号 → 500），无需处理 |
+| X8 | **捕获范围**：引擎只捕获 `Exception`；`Error` 照常向外传播。trace 中只为解释而评估（决策之后）的匹配器抛出的 `Throwable`（`VirtualMachineError`、`LinkageError` 除外）记为 `ERROR`，不传播（§3.2） | 抛 `Error` 的自定义匹配器 | 执法的最终映射不变（Reactor 仍把它变成错误信号 → 500），无需处理；解释不再因决策之后的 `Error` 而失败 |
 | X9 | （已撤销）原稿中"角色授予不存在的权限 id 时静默跳过"的现有行为，已由 7.0 发布前的修复改为失败即拒绝，见 S10a 与 §10 Q11 | — | 不再是差异：引擎侧按 S10a 保持 7.0 的行为，门槛按它比较 |
 
 ---
