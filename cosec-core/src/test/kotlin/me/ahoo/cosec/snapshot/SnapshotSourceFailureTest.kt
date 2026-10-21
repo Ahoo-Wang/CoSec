@@ -208,7 +208,7 @@ class SnapshotSourceFailureTest {
         testSource(store, options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 1)).use { source ->
             source.load("app-a").join()
             source.load("app-b").join()
-            await { source.peek("app-a") == null }
+            await { !source.holds(APP_A) }
 
             store.remove(APP_A)
 

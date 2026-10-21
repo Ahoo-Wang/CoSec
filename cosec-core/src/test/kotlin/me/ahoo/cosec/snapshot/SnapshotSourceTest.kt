@@ -185,7 +185,7 @@ class SnapshotSourceTest {
 
             source.load("app-c").join()
 
-            await { source.peek("app-b") == null }
+            await { !source.holds(APP_B) }
             source.peek("app-a").assert().isNotNull()
             source.peek("app-c").assert().isNotNull()
             source.peek().assert().isNotNull()

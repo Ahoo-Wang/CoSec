@@ -48,7 +48,7 @@ class SnapshotReviewFixesTest {
         testSource(store, options = options, metrics = metrics).use { source ->
             source.load("app-a").join()
             source.load("app-b").join()
-            await { source.peek("app-a") == null }
+            await { !source.holds(APP_A) }
             store.localCopies[APP_A] = document(6, "a6")
 
             val reloaded = source.load("app-a").join()

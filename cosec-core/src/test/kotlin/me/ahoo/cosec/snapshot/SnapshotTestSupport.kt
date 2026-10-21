@@ -292,6 +292,9 @@ fun testSource(
         scheduler
     ) { ticker.incrementAndGet() }
 
+/** Whether [key] is installed. Unlike [SnapshotSource.peek], it does not count as an access, so waiting on it cannot change the LRU order. */
+fun SnapshotSource<*, *>.holds(key: SnapshotKey): Boolean = entries().any { it.key == key }
+
 val Snapshot<Compiled, Compiled>.policiesCompiled: Compiled
     get() = (policies as DocumentState.Present).compiled
 
