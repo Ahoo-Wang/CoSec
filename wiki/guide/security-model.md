@@ -171,9 +171,9 @@ To keep the app id from widening access when several apps share a gateway or a p
 
 Two more boundaries:
 
-- **Trusting an upstream gateway.** With `cosec.inject.enabled: true`, a service reads the principal from the
-  token without verifying its signature (expiry is still checked), assuming the gateway in front of it already
-  verified it. Enable it only on services that clients cannot reach except through that gateway. See
+- **Trusting an upstream gateway.** With `cosec.inject.enabled: true` and `cosec.authorization.enabled: false`, a
+  service reads the principal from the token without verifying its signature or revocation (expiry is still
+  checked), assuming the gateway in front of it already verified it. Enable it only on services that clients cannot reach except through that gateway. See
   [Behind a gateway](../integration/authentication.md#behind-a-gateway).
 - **Client IP.** Behind proxies, set `cosec.authorization.remote-ip.max-trusted-index` to the number of proxy
   hops you trust; entries beyond that are written by the client. See
@@ -196,32 +196,21 @@ The tenant itself comes from the credential, so a client cannot switch tenants w
 
 ## Role scope and inRole
 
-A principal's roles are strings in its credential, each with an optional space:
+A principal's roles are strings in its credential, each with an optional space: `clerk` applies in the default
+space (requests without `CoSec-Space-Id`), `clerk@team-a` in `team-a` only. Role permissions and the `inRole`
+condition use these scopes differently, and the difference matters:
 
-- `clerk` is the role `clerk` in the default space, the space of requests without `CoSec-Space-Id`;
-- `clerk@team-a` is the role `clerk` in the space `team-a` only;
-- a malformed role (empty role or space, more than one `@`) applies nowhere.
-
-Role permissions and the `inRole` condition use these scopes differently, and the difference matters.
-
-**Role permissions** use the scope strictly. A request is evaluated with only the roles that apply in its space,
-and with only the grants made in its app. `clerk@team-a` gets the grants of `clerk` in `team-a`, never those of
-`clerk` in another space or in the default space. See
-[Role grant scope](../policies/role-permissions.md#role-grant-scope).
-
-**The `inRole` condition** matches more broadly:
-
-| Condition | Matches a principal holding |
-|---|---|
-| `"inRole": { "value": "suspended" }` | `suspended`, whatever the request's space; or `suspended@<the request's space>` |
-| `"inRole": { "value": "suspended@team-a" }` | exactly `suspended@team-a`, whatever the request's space |
+- **Role permissions** use the scope strictly. A request is evaluated with only the roles that apply in its space,
+  and with only the grants made in its app ([Role grant scope](../policies/role-permissions.md#role-grant-scope)).
+- **The `inRole` condition** matches more broadly: a bare value matches in every space. The exact rules are in
+  [Matching roles](../policies/language.md#matching-roles).
 
 **Why a bare value matches in every space.** `inRole` is mostly used in denies. The space header is chosen by
 the client: if a bare `inRole: suspended` matched only in the default space, a suspended principal could step
 out of the deny by naming any other space. Matching `suspended@<space>` as well keeps such a deny working when
 tokens start carrying spaced roles.
 
-**What this means for allows.** Neither form limits a grant to the request's space. In particular, a deny written
+**What this means for allows.** No form of `inRole` limits a grant to the request's space. In particular, a deny written
 as "deny unless `inRole: admin`" (`"negate": true`) is lifted for a principal holding `admin@team-a` whenever the
 client sends `CoSec-Space-Id: team-a`, for every path the deny covers, not only team-a's. To grant something only
 within a space, add a condition on `request.spaceId`, or grant it through role permissions, which are scoped for
@@ -230,15 +219,10 @@ you.
 ## Path variable scope
 
 A `path` action such as `/orders/{orderId}` captures path variables, which conditions read as
-`request.path.var.orderId`. The variables belong to the statement whose action captured them:
-
-- They are cleared at the start of each layer, before any policy condition runs, and before every statement is
-  matched. A condition sees only what its own statement's `path` action captured, never what another statement,
-  policy or layer left behind.
-- Reading path variables where nothing of one's own captured them is rejected when the policy loads: in a
-  policy-level condition, in an app permission's condition, in the condition of a statement whose action is not
-  a `path` action, and in any action (an action is evaluated before it captures anything). Rate limit rules
-  follow the same rule for their conditions and keys.
+`request.path.var.orderId`. The variables belong to the statement whose action captured them: a condition sees
+only what its own statement's `path` action captured, never what another statement, policy or layer left behind,
+and a policy, app permission or rate limit rule that reads them anywhere else is rejected when it loads. Where
+exactly they may be read is in [Path variables](../policies/language.md#path-variables).
 
 **Why.** If variables leaked across statements, whether a condition matched would depend on which statements
 happened to run before it. A deny comparing `request.path.var.ownerId` with the principal could then be satisfied,
@@ -264,8 +248,11 @@ Before production:
 - Load `cosec.jwt.secret` from a secret store, and keep access tokens short-lived.
 - Set `cosec.authorization.remote-ip.max-trusted-index` to match your proxy chain.
 - When apps share a gateway or path namespace, bind `CoSec-App-Id` per route at the gateway.
-- Enable `cosec.inject.enabled` only on services that cannot be reached except through the verifying gateway.
+- Turn on inject mode (`cosec.inject.enabled` with `cosec.authorization.enabled: false`) only on services that
+  cannot be reached except through the verifying gateway.
 - Keep `cosec.authorization.root-enabled` off unless you need root. When it is on, issue platform-tenant tokens
   only from a source users cannot influence.
 - Put denies that must always apply in policies without a condition.
 - Give rate limit rules that protect against abuse `"strictFailure": true` if a Redis outage must not lift them.
+
+**Next:** how the code keeps these guarantees, in [Architecture overview](../architecture/overview.md); or, to start using CoSec, [Quick start](./quick-start.md).

@@ -103,20 +103,9 @@ fun policies() = PolicyTestKit.run("classpath:cosec-policy-test/*.json").assertP
 explain 针对仓库快照为一个请求运行真正的授权，然后报告哪条语句或权限做出了决策、哪些在动作上未命中、哪些在条件上未命中。不会消耗或改变任何东西。
 端点、字段和警告在[解释决策](../integration/checks.md#explaining-a-decision)中说明；这里介绍编写策略时如何使用它。
 
-1. 在调试的环境中开启它；在公开实例上，必须有只允许管理员访问的策略：
+1. 按[解释决策](../integration/checks.md#explaining-a-decision)中的方式，在调试的环境中开启它；在公开实例上，必须有只允许管理员访问的策略。
 
-   ```yaml
-   cosec:
-     explain:
-       enabled: true
-   management:
-     endpoints:
-       web:
-         exposure:
-           include: cosecExplain
-   ```
-
-2. 对一个你描述的主体提问，在任何 Token 携带某个角色或属性之前先试一试：
+2. 对一个你描述的主体提问，在任何令牌携带某个角色或属性之前先试一试：
 
    ```json
    {
@@ -125,7 +114,7 @@ explain 针对仓库快照为一个请求运行真正的授权，然后报告哪
    }
    ```
 
-3. 或者，要看真实调用方实际得到什么，省略 `principal`，传入调用方的凭证（Token 模式）。凭证由应用自己的安全上下文解析器解析，包括吊销检查和 API Key；
+3. 或者，要看真实调用方实际得到什么，省略 `principal`，传入调用方的凭证（令牌模式）。凭证由应用自己的安全上下文解析器解析，包括吊销检查和 API key；
    被拒绝的凭证会按它实际变成的匿名请求来解释，并带有 `TOKEN_INVALID` 警告：
 
    ```json
@@ -237,3 +226,5 @@ class PolicyGateTest {
     }
 }
 ```
+
+**下一步：** 把测试过的策略发布到存储中，见[发布变更](../operations/storage.md#publishing-changes)。

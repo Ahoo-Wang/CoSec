@@ -4,7 +4,7 @@
 //   (Chinese headings declare explicit `{#english-slug}` anchors);
 // - the en and zh sidebars in config/{en,zh}.ts list the same pages in the same order, every link
 //   points to an existing page, and every page except the home pages is in the sidebar.
-// _legacy/ (pre-rewrite pages kept for reference, excluded from the build) and AGENTS.md are skipped.
+// AGENTS.md is skipped.
 // Usage: node .vitepress/check-docs.mjs   (from the wiki directory or via its path)
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
 import { join, dirname, normalize, relative } from 'path'
@@ -14,7 +14,7 @@ const wikiDir = new URL('..', import.meta.url).pathname.replace(/\/$/, '')
 function walk(dir) {
   return readdirSync(dir).flatMap((entry) => {
     const full = join(dir, entry)
-    if (entry === 'node_modules' || entry === '_legacy' || entry.startsWith('.')) return []
+    if (entry === 'node_modules' || entry.startsWith('.')) return []
     if (statSync(full).isDirectory()) return walk(full)
     return entry.endsWith('.md') && entry !== 'AGENTS.md' ? [full] : []
   })

@@ -445,3 +445,5 @@ Reference one from a file with `$schema`, which the parser ignores:
 
 The schemas describe the shape only. They do not check parts, path variable scope, duplicate ids or matcher
 semantics, so also load your policies with the real parser ([Testing](./testing.md#validating-policies)).
+
+**Next:** grant permissions by role instead of per principal, in [Role permissions](./role-permissions.md).

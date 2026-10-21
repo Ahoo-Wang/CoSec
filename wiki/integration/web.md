@@ -119,7 +119,7 @@ Every status comes from `SecurityPipeline`; the adapters only copy it to the res
 | `400` | The path has a `.` or `..` segment (also percent-encoded), or a malformed percent-escape (`InvalidRequestPathException`). | no body |
 | `401` | Denied, and the caller is anonymous: no credential, or one that was rejected. | `Token Expired` or `Token Invalid` when the credential was rejected; otherwise `Implicit Deny` or `Explicit Deny` |
 | `403` | Denied, and the caller is authenticated. | `Implicit Deny` or `Explicit Deny` |
-| `403` | A regex condition ran over its time budget (`RegexTimeoutException`). An expected deny, not a server error. | `Implicit Deny` |
+| `403` | A regex condition ran over its time budget (`RegexTimeoutException`), for every caller, anonymous included. An expected deny, not a server error. | `Implicit Deny` |
 | `429` | The request was allowed, but a matching [rate limit rule](../policies/rate-limiting.md) has no permit left. | `Too Many Requests` |
 | `500` | Any other error. CoSec fails closed instead of guessing. | `Implicit Deny` |
 
@@ -147,17 +147,9 @@ A rejected request has a JSON body with the content type `application/json`:
 
 **Response headers.** Every request that gets past the path check carries `CoSec-Request-Id`: the caller's own
 value if it sent one, otherwise a generated id. The gateway also forwards it downstream. When a rate limit rule
-matched the request, the response, allowed or rejected, also carries:
-
-| Header | Value |
-|---|---|
-| `RateLimit-Limit` | The rule's limit. |
-| `RateLimit-Remaining` | Permits left in the current window. |
-| `RateLimit-Reset` | Seconds until the window resets, at least `1`. |
-| `Retry-After` | Only on `429`: the same number of seconds. |
-
-When several rules match, an allowed response describes the tightest of them and a `429` the rule that ran out;
-see [Responses and headers](../policies/rate-limiting.md#responses-and-headers).
+matched the request, the response, allowed or rejected, also carries `RateLimit-Limit`, `RateLimit-Remaining` and
+`RateLimit-Reset`, and a `429` also `Retry-After`. Their values are defined in
+[Responses and headers](../policies/rate-limiting.md#responses-and-headers).
 
 ## Accessing the security context
 
@@ -279,3 +271,5 @@ secret from a Secret named `cosec-jwt-secret`; create it first, and set the imag
 ```bash
 kubectl create secret generic cosec-jwt-secret --from-literal=secret=<random value>
 ```
+
+**Next:** issue, refresh and revoke the tokens the adapter reads, in [Authentication](./authentication.md).

@@ -109,7 +109,14 @@ Without Spring Boot, use `cosec-core` directly: build a `SimpleAuthorization` fr
 
 ## Where to go next
 
-- Run it: [Quick start](./quick-start.md).
-- Learn the vocabulary: [Concepts](./concepts.md).
-- Understand the guarantees before production: [Security model](./security-model.md).
-- Write rules: [Policy language](../policies/language.md) and [Role permissions](../policies/role-permissions.md).
+Pick the path that matches what you are doing. Every page on it ends with a link to the next one.
+
+| You are | Read, in order |
+|---|---|
+| Evaluating CoSec | this page → [Concepts](./concepts.md) → [Security model](./security-model.md) → [Architecture overview](../architecture/overview.md) |
+| A developer integrating it | [Quick start](./quick-start.md) → [Web integration](../integration/web.md) → [Authentication](../integration/authentication.md) → [Checks in code](../integration/checks.md) → [Configuration](../operations/configuration.md) |
+| A policy author | [Concepts](./concepts.md) → [Policy language](../policies/language.md) → [Role permissions](../policies/role-permissions.md) → [Rate limiting](../policies/rate-limiting.md) → [Testing policies](../policies/testing.md) |
+| Running it in production | [Configuration](../operations/configuration.md) → [Storage and caching](../operations/storage.md) → [Observability](../operations/observability.md) → [Troubleshooting](../operations/troubleshooting.md) → [Upgrading](../operations/upgrading.md) |
+| Contributing to CoSec | [Architecture overview](../architecture/overview.md) → [Extending CoSec](../architecture/extending.md) → [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md) |
+
+Everyone should read the [Security model](./security-model.md) before going to production.

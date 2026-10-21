@@ -342,7 +342,7 @@ the same permission ids, and changing `CoSec-Space-Id` picked up the grants of a
   must not contain `@`; the OpenAPI app permission generator replaces `:` in the title.
 - A request with `CoSec-Space-Id: x` is evaluated with only the principal's roles written `role@x`; without the
   header, with only the roles without a suffix. Issue `role@space` in tokens and API keys for every space a principal
-  holds a role in, after checking membership ([Tokens](../integration/authentication.md#tokens)).
+  holds a role in, after checking membership ([Roles and spaces](../integration/authentication.md#roles-and-spaces)).
 - Authorization never reads 6.x keys. Until they are migrated, roles have no grants and role-based requests are
   denied (fail closed) ([Migrating role grants](#migrating-role-grants)).
 - `AppRolePermissionRepository.getAppRolePermission` keeps its signature. `SimpleAuthorization` now passes the roles
@@ -371,7 +371,7 @@ of the global layer, and a rate limit rule without a `path` action read the vari
   permission whose action is not `path`, in the `condition` or `key` of a rate limit rule whose action is not `path`,
   and in any action's configuration, such as a `path` template `/orders/#{...PATH_VARIABLES...}`: a template is
   evaluated before its action matches, when the variables are not its own
-  ([Path variables](../policies/language.md#actions)).
+  ([Path variables](../policies/language.md#path-variables)).
 
 Parsing such a policy, app permission or rate limit rule fails, and so does constructing `PolicyData`,
 `AppPermissionData` or `RateLimitRule` with one. `RedisPolicyRepository.setPolicy` rejects it. A local policy file
@@ -390,7 +390,7 @@ a deny such as `inRole: suspended` keeps matching after tokens switch from `susp
 held without a suffix still matches in every space. A value written `role@space` is compared literally with the
 principal's roles, as before. Conditions that read `context.principal.roles` some other way (`in`, `spel`, `ognl`)
 still see the raw strings, `suspended@team-a` included, and stop matching a bare role name once tokens carry
-`role@space` ([Matching roles](../policies/language.md#conditions)).
+`role@space` ([Matching roles](../policies/language.md#matching-roles)).
 
 #### Invalid local policy files stop startup
 
@@ -586,7 +586,7 @@ Everything below is additive. Features that change what a request experiences ar
 | Shadow mode: try candidate policies and app permissions on real traffic | off (`cosec.shadow.enabled`) | [Shadow mode](../policies/testing.md#trying-changes-in-shadow-mode) |
 | `AuthorizationChecker`: check permissions in code, one action or many | always available | [Checking a permission](../integration/checks.md#checking-a-permission) |
 | Object-level rules with `resource.<name>` parts | opt in per policy | [Object-level rules](../integration/checks.md#object-level-rules) |
-| `time` condition: validity periods and daily windows, self-expiring grants | opt in per policy | [Time conditions](../policies/language.md#conditions) |
+| `time` condition: validity periods and daily windows, self-expiring grants | opt in per policy | [Time conditions](../policies/language.md#time-conditions) |
 | Policy history and rollback | off (`cosec.authorization.cache.history.enabled`) | [Policy history](./storage.md#policy-history-and-rollback) |
 | Declarative policy test cases (`PolicyTestKit`) | library | [Policy test cases](../policies/testing.md#policy-test-cases) |
 | Access reviews (`AccessAnalyzer`): who can do what | library | [Access reviews](../policies/testing.md#access-reviews) |

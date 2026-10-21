@@ -74,7 +74,7 @@ A grant belongs to an **(app, role, space)** triple, `AppSpacedRoleId`, and appl
 - **App.** A grant in one app never applies in another, even when both define the same permission id or the grant
   is `*`. Granting a role in two apps takes two grants.
 - **Space.** The principal's roles say which space each role belongs to: `editor` is a role in the default space,
-  `editor@team-a` a role in `team-a` only ([roles in tokens](../integration/authentication.md)). A request in a space
+  `editor@team-a` a role in `team-a` only ([roles in tokens](../integration/authentication.md#roles-and-spaces)). A request in a space
   is evaluated with only the principal's roles in that space (`RoleScope`), with the suffix removed, and only the
   grants made in that space are read:
 
@@ -120,7 +120,7 @@ rolePermissionCache.put(AppSpacedRoleId(appId = "order-app", roleId = "clerk", s
 `AppSpacedRoleId` rejects an app id containing `:` and a role id containing `@`, so no write can produce a key that
 reads back as another app's or space's grant. Values carry CoCache's binary header, so writing them with plain Redis
 commands does not work. The key layout, and migrating 6.x grants that were not scoped to an app, are in
-[Storage](../operations/storage.md#redis) and [Upgrading](../operations/upgrading.md).
+[Storage](../operations/storage.md#redis) and [Upgrading](../operations/upgrading.md#migrating-role-grants).
 
 To check grants before they reach Redis, write them into a [policy test suite](./testing.md#policy-test-cases).
 To see why a role grant did or did not apply to a request, [explain the decision](./testing.md#debugging-a-decision-with-explain);
@@ -141,3 +141,5 @@ OpenAPI description into a catalog draft:
 
 Every permission is an `allow`. Give every operation an `operationId` and a tag before generating, review the
 result, then store it as above.
+
+**Next:** limit how often allowed requests may run, in [Rate limiting](./rate-limiting.md).

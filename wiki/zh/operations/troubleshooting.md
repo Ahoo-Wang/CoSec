@@ -27,7 +27,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
 |---|---|---|
 | `400` | — | 路径包含 `.` 或 `..` 段，或百分号转义格式错误。修正客户端。 |
 | `401` | `Token Expired`、`Token Invalid` | [意外的 401](#unexpected-401) |
-| `401` | `Implicit Deny` | 没有找到凭据，且没有规则允许匿名访问：[意外的 401](#unexpected-401) |
+| `401` | `Implicit Deny` | 没有找到凭证，且没有规则允许匿名访问：[意外的 401](#unexpected-401) |
 | `401`、`403` | `Explicit Deny` | 匹配到一条拒绝：[意外的 403](#unexpected-403) |
 | `403` | `Implicit Deny` | 没有规则允许该请求，或 `regular` 条件超时：[意外的 403](#unexpected-403) |
 | `429` | `Too Many Requests` | [限流表现异常](#rate-limits-behave-unexpectedly) |
@@ -37,7 +37,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
 
 ## 意外的 401 {#unexpected-401}
 
-调用方被当作匿名：凭据缺失，或被拒绝。
+调用方被当作匿名：凭证缺失，或被拒绝。
 
 1. **令牌是否放在 CoSec 读取的位置？** `Authorization` 头或 `authorization` cookie；只有在
    `cosec.authorization.allow-query-token=true` 时才读查询参数（[令牌](../integration/authentication.md#tokens)）。
@@ -48,11 +48,11 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
    （[API key](../integration/authentication.md#api-keys)）。携带 `X-API-Key` 的请求会忽略其中的 JWT。
 5. **已登出的令牌在另一个实例上仍然可用。** 吊销通过失效消息到达每个实例；如果消息丢失，缓存的"未吊销"结果最多存活 30 秒
    （[存储](./storage.md#the-caches)）。
-6. **完全没有凭据，`Implicit Deny`**：没有规则允许匿名访问这个路径。发送凭据，或有意为匿名调用方放行该路径。
+6. **完全没有凭证，`Implicit Deny`**：没有规则允许匿名访问这个路径。发送凭证，或有意为匿名调用方放行该路径。
 
 ## 意外的 403 {#unexpected-403}
 
-调用方已知，但没有规则允许该请求，或有规则拒绝了它。匿名调用方遇到同样的原因会得到 `401`。
+调用方已知，但没有规则允许该请求，或有规则拒绝了它。匿名调用方遇到同样的原因会得到 `401`，只有 `regular` 条件超时例外：它对所有调用方都返回 `403`。
 
 1. **读出做决定的规则**：在审计事件或解释结果中。`Explicit Deny` 会给出胜出的那条拒绝。拒绝在所有层之间都优先，所以全局
    允许无法覆盖它（[拒绝优先](../guide/security-model.md#deny-first)）。
@@ -71,12 +71,12 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
 
 1. **读出做决定的规则**：在审计事件或解释结果中；`overriddenAllows` 和 `layers` 显示还有什么匹配了。
 2. **Root。** 当 `cosec.authorization.root-enabled` 为 `true` 时，平台租户中 id 为 `cosec`（或系统属性 `cosec.root` 的值）的
-   主体会绕过除黑名单以外的所有检查（[Root 主体](../guide/security-model.md#root-principal)）。
+   主体会绕过除黑名单以外的所有检查（[根主体](../guide/security-model.md#root-principal)）。
 3. **过宽的允许。** 找带 `"*"`、`/**` 或没有条件的全局 `allow`。增加一条拒绝，或收窄这条允许。
 4. **没有匹配上的拒绝。** 它的动作和条件必须都匹配；取反的条件是常见错误。解释这个请求，看这条拒绝的 `outcome`：
    `ACTION_MISS` 还是 `CONDITION_MISS`。
 5. **用 `in`、`spel` 或 `ognl` 写的角色条件。** 它们看到的是原始的角色字符串，所以令牌改用 `role@space` 后，裸角色名就不再
-   匹配；请用 `inRole`（[匹配角色](../policies/language.md#conditions)）。
+   匹配；请用 `inRole`（[匹配角色](../policies/language.md#matching-roles)）。
 
 ## 策略不生效 {#policy-has-no-effect}
 
@@ -102,19 +102,19 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
 
 | 异常或消息 | 原因 | 修复 |
 |---|---|---|
-| Redis 连接错误 | Redis 不可达，且本地副本中没有该值。策略和权限读取有意 fail closed（[存储](./storage.md#when-redis-is-unavailable)）。 | 恢复 Redis。 |
+| Redis 连接错误 | Redis 不可达，且本地副本中没有该值。策略和权限读取失败时有意拒绝（[存储](./storage.md#when-redis-is-unavailable)）。 | 恢复 Redis。 |
 | `CacheReadException`，原因为 `ForeignFormatException` | 该值由 CoSec 6.x 写入且未迁移，或用原生 Redis 命令写入。 | [迁移数据](./upgrading.md#migrating-the-data)，或通过 CoSec 重新写入。 |
-| `MissingPolicyException`，并有 `the global policy index lists policies [...] that have no content.` | 某个全局策略的内容丢失，或没有从 6.x 迁移（6.x 的缓存未命中会迁移成未命中）。它可能是一条全局拒绝，所以 CoSec 宁可失败也不跳过（[全局策略索引](./storage.md#the-global-policy-index)）。 | 用 `PolicyRepository.setPolicy` 重新写入该策略；若要删除它，把它保存为 `global` 以外的类型，它就会离开索引。 |
-| `Unsupported part: <part>` | 条件引用了不存在的部分（[部分](../policies/language.md#conditions)）。 | 修正策略；部署前 [校验策略](../policies/testing.md#validating-policies)。 |
-| 指向某个策略和语句的 `PathVariableScopeException` | 存储的策略在作用域之外读取 `request.path.var.*`，7.0 拒绝这种写法（[路径变量](../policies/language.md#actions)）。 | 修正并重新保存该策略。 |
+| `MissingPolicyException`，之前有错误日志 `the global policy index lists policies [...] that have no content.` | 某个全局策略的内容丢失，或没有从 6.x 迁移（6.x 的缓存未命中会迁移成未命中）。它可能是一条全局拒绝，所以 CoSec 宁可失败也不跳过（[全局策略索引](./storage.md#the-global-policy-index)）。 | 用 `PolicyRepository.setPolicy` 重新写入该策略；若要删除它，把它保存为 `global` 以外的类型，它就会离开索引。 |
+| `Unsupported part: <part>` | 条件引用了不存在的部分（[Part](../policies/language.md#parts)）。 | 修正策略；部署前 [校验策略](../policies/testing.md#validating-policies)。 |
+| 指向某个策略和语句的 `PathVariableScopeException` | 存储的策略在作用域之外读取 `request.path.var.*`，7.0 拒绝这种写法（[路径变量](../policies/language.md#path-variables)）。 | 修正并重新保存该策略。 |
 | 来自你代码的异常 | 自定义匹配器、仓库或 `ApiKeyStore` 抛出了异常。 | 堆栈会指出是哪个。 |
 
 使用 Redis API key 存储时，key 查询期间的 Redis 故障也会返回 `500`。
 
 ## 某个主体总是得到 500 {#one-principal-always-gets-500}
 
-日志显示 `MissingPolicyException`：`The principal lists policies [...], which the policy repository does not have.`
-该主体列出的策略已被删除、从未写入，或从 Redis 中丢失。授权宁可 fail closed 也不跳过它，否则缺失的拒绝会让更宽的允许放行。
+日志显示 `MissingPolicyException`：`The principal lists policies [...], which the policy repository does not have.`（如果它前面一行日志是 `the global policy index lists policies [...]`，缺失的是全局策略，所有请求都会失败，见[所有请求都返回 500](#every-request-fails-with-500)。）
+该主体列出的策略已被删除、从未写入，或从 Redis 中丢失。授权宁可报错拒绝，也不跳过它，否则缺失的拒绝会让更宽的允许放行。
 重新写入该策略（本地策略见 [策略不生效](#policy-has-no-effect)），或从主体的令牌或记录中移除这个 id。解释结果会把它报告为
 `MISSING_POLICY` 警告。
 
@@ -132,7 +132,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
 | `Rate limit rule [<id>] key [<key>] is not a supported part (e.g. request.remoteIp, context.principal.id).` | 限流规则的 `key` 引用了不支持的部分。 |
 
 这些错误都有意让启动失败：跳过文件可能会悄悄丢掉一条拒绝或一个配额。修正或删除该文件
-（[加载策略文件](../policies/language.md)、[加载规则](../policies/rate-limiting.md#rules)）。默认位置
+（[加载策略文件](../policies/language.md#loading-policy-files)、[加载规则](../policies/rate-limiting.md#loading-rules)）。默认位置
 `classpath:cosec-policy/*-policy.json`、`classpath:cosec-rate-limit/*-rate-limit.json`、`classpath:cosec-shadow/*-policy.json`
 和 `classpath:cosec-shadow/*-app-permission.json` 可以匹配不到文件。
 
@@ -141,7 +141,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
 某个本地策略文件、应用权限或限流规则在没有自己的 `path` 动作捕获变量的地方读取了 `request.path.var.*`。消息会指出策略、语句
 或规则，并以 `Use a statement whose action is a path pattern that captures the variable.` 结尾。把引用移到其 `path` 动作声明了
 该变量的语句（或规则）中，或把策略级条件移到它各语句的条件中。动作自身的配置（如 `path` 模板）完全不能读取它们；此时消息为
-`a path template cannot use them. Read them in the statement's condition instead.`（[路径变量](../policies/language.md#actions)）。
+`a path template cannot use them. Read them in the statement's condition instead.`（[路径变量](../policies/language.md#path-variables)）。
 
 ### 读取已存储的策略时启动失败 {#startup-fails-reading-a-stored-policy}
 
@@ -210,3 +210,5 @@ CoCache 6 删除或重命名了若干 5.x 配置项，例如 `cocache.redis.stri
 3. 使用 Kafka 时，查找 `Dropping audit events because the Kafka audit queue is full or shutting down.` 或
    `Failed to publish audit event to Kafka topic [<topic>].`（[Sink](./observability.md#sinks)）。
 4. 自定义 sink 抛出异常时会记录为 `Failed to publish audit event.`
+
+**下一步：** 把已有部署升级到新版本，见[升级](./upgrading.md)。

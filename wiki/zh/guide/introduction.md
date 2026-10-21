@@ -17,7 +17,7 @@ decide(principal, action, resource, environment) -> decision
 
 | 输入 | 在 CoSec 中 | 来自 |
 |---|---|---|
-| principal（主体） | 谁在调用：id、租户、角色、关联策略 | 经过校验的令牌或 API Key |
+| principal（主体） | 谁在调用：id、租户、角色、关联策略 | 经过校验的令牌或 API key |
 | action 与 resource（动作与资源） | 请求的方法和路径，位于某个应用和空间中 | 请求 |
 | environment（环境） | 客户端 IP、请求头、时间等请求属性 | 请求与时钟 |
 | decision（决策） | `ALLOW`、`EXPLICIT_DENY`、`IMPLICIT_DENY`、`TOO_MANY_REQUESTS`，或错误 | |
@@ -27,7 +27,7 @@ decide(principal, action, resource, environment) -> decision
 - **访问规则即数据。** 策略和权限是存放在存储（Redis，或你自己的仓库）中的 JSON 文档。修改谁能做什么只是一次数据变更，无需重新部署。
 - **租户、应用与空间。** 主体属于租户，角色按应用、按空间（团队、项目）授予，同一个用户可以在一个空间是管理员、在另一个空间只是只读成员。
 - **安全的默认行为。** 没有规则放行就不允许，拒绝永远胜过放行，出错即拒绝。
-- **令牌。** JWT 的签发与校验、刷新、登出与吊销，以及面向机器客户端的 API Key。
+- **令牌。** JWT 的签发与校验、刷新、登出与吊销，以及面向机器客户端的 API key。
 - **运维。** 限流、审计事件、指标、链路追踪、在真实流量上试验策略变更的影子模式，以及对任一请求为何得到某个决策的解释。
 
 术语定义见[核心概念](./concepts.md)，这个函数遵循的规则见[安全模型](./security-model.md)。
@@ -87,7 +87,14 @@ starter 始终引入 `cosec-api`（公共契约）、`cosec-core`（决策引擎
 
 ## 下一步 {#where-to-go-next}
 
-- 跑起来：[快速开始](./quick-start.md)。
-- 熟悉术语：[核心概念](./concepts.md)。
-- 上线前了解安全保证：[安全模型](./security-model.md)。
-- 编写规则：[策略语言](../policies/language.md)和[角色权限](../policies/role-permissions.md)。
+按你正在做的事选一条路径。路径上的每一页末尾都链接到下一页。
+
+| 你是 | 按顺序阅读 |
+|---|---|
+| 评估 CoSec 的人 | 本页 → [核心概念](./concepts.md) → [安全模型](./security-model.md) → [架构概览](../architecture/overview.md) |
+| 接入 CoSec 的开发者 | [快速开始](./quick-start.md) → [Web 集成](../integration/web.md) → [认证](../integration/authentication.md) → [代码中的权限检查](../integration/checks.md) → [配置](../operations/configuration.md) |
+| 策略作者 | [核心概念](./concepts.md) → [策略语言](../policies/language.md) → [角色权限](../policies/role-permissions.md) → [限流](../policies/rate-limiting.md) → [测试策略](../policies/testing.md) |
+| 在生产环境运行 CoSec 的人 | [配置](../operations/configuration.md) → [存储与缓存](../operations/storage.md) → [可观测性](../operations/observability.md) → [故障排查](../operations/troubleshooting.md) → [升级](../operations/upgrading.md) |
+| CoSec 的贡献者 | [架构概览](../architecture/overview.md) → [扩展 CoSec](../architecture/extending.md) → [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md) |
+
+上线之前，每个人都应该读一遍[安全模型](./security-model.md)。

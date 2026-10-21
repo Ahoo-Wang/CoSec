@@ -21,7 +21,7 @@ description: "添加自定义条件、动作、仓库、限流后端和钩子。
 | `ShadowPolicyProvider`、`ShadowEventSink` | `cosec-core` | 从别处提供影子候选；把影子差异发送到日志以外的地方。 |
 | `CoSecAuthorizationCustomizer`、`Authorization` | starter、`cosec-api` | 包裹或替换决策。 |
 | `RequestAttributesAppender` | `cosec-core` | 添加条件可以读取的请求属性。 |
-| `SecurityContextParser`、`TokenStore`、`ApiKeyStore` | `cosec-core` | 以其他方式解析主体；把吊销记录或 API 密钥存放在别处。 |
+| `SecurityContextParser`、`TokenStore`、`ApiKeyStore` | `cosec-core` | 以其他方式解析主体；把吊销记录或 API key存放在别处。 |
 | `Authentication`、`AbstractSwitchTenantAuthentication`、`SocialUserPrincipalConverter` | `cosec-api`、`cosec-core`、`cosec-social` | 新增登录方式、切换租户、映射社交登录用户。 |
 | `AuditEventSink` | `cosec-api` | 把审计事件发送到你自己的系统。 |
 
@@ -88,7 +88,7 @@ class BusinessHoursConditionMatcher(configuration: Configuration) :
 | 扩展点 | 约定 |
 |---|---|
 | `BlacklistChecker` | `check(request, context): Mono<Boolean>`，`false` 表示被拦截。最先运行，对包括 root 在内的所有主体生效。 |
-| `RootPrincipalMatcher` | `isRoot(principal): Boolean`。root 主体绕过所有策略和权限，但不绕过黑名单。starter 默认使用 `RootPrincipalMatcher.NONE`，只有 `cosec.authorization.root-enabled=true` 时才使用 `DEFAULT`，后者只接受平台租户的 root id。需要更强的信号（如签名声明）时，请提供自己的实现。 |
+| `RootPrincipalMatcher` | `isRoot(principal): Boolean`。根主体绕过所有策略和权限，但不绕过黑名单。starter 默认使用 `RootPrincipalMatcher.NONE`，只有 `cosec.authorization.root-enabled=true` 时才使用 `DEFAULT`（[根主体](../guide/security-model.md#root-principal)）。需要更强的信号（如签名声明）时，请提供自己的实现。 |
 | `CoSecAuthorizationCustomizer` | `customize(authorization): Authorization`。在限流之外、审计和追踪之内包裹 starter 的授权；定制器按 `@Order` 顺序应用。指标就是这样加入的。 |
 | `Authorization` | 替换整条链。替换后的实现不会获得审计、限流或影子模式（追踪仍会包裹它）；需要时自行组合 `AuditingAuthorization`、`RateLimitingAuthorization` 和 `ShadowAuthorization`。 |
 
@@ -144,7 +144,7 @@ interface AppRolePermissionRepository {
 | 扩展点 | 约定 |
 |---|---|
 | `RequestAttributesAppender` | `append(request): Request`。为每个请求补充属性，条件以 `request.attributes.<name>` 读取；用 `request.mergeAttributes(...)` 返回新请求。 |
-| `SecurityContextParser` | `parse(request): SecurityContext`。凭证无效时抛出 `TokenVerificationException`：调用方被视为匿名，拒绝结果会报告令牌失败。其他异常应答 `500`。`parse` 是同步的，除非开启了令牌吊销或阻塞的 API 密钥存储，否则在调用方线程上运行，所以做 I/O 的解析器在其他情况下不能运行在事件循环上。 |
+| `SecurityContextParser` | `parse(request): SecurityContext`。凭证无效时抛出 `TokenVerificationException`：调用方被视为匿名，拒绝结果会报告令牌失败。其他异常应答 `500`。`parse` 是同步的，除非开启了令牌吊销或阻塞的 API key存储，否则在调用方线程上运行，所以做 I/O 的解析器在其他情况下不能运行在事件循环上。 |
 | `TokenStore` | `revoke(tokenId, ttl)` 和 `isRevoked(tokenId)`。开启吊销后每个已认证请求都会查询它：查询要足够便宜。记录的存活时间必须长于与该令牌 id 绑定的刷新令牌。 |
 | `ApiKeyStore` | `findByHash(hash): ApiKey?`。在解析安全上下文时调用；需要 I/O 的存储要设置 `cosec.api-key.store-blocking=true`。 |
 
@@ -161,3 +161,5 @@ interface AppRolePermissionRepository {
 ## 审计 {#auditing}
 
 实现 `AuditEventSink`（`publish(event)`，位于 `cosec-api`）把审计事件发送到你自己的系统。你的 bean 会同时替换日志 sink 和 Kafka sink。发布在请求路径上运行，所以请异步转交事件，不要阻塞。sink 抛出的异常会被记录，永远不会改变决策。事件字段见[可观测性](../operations/observability.md#audit-events)。
+
+**下一步：** 如何提出并合入变更，见 [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md)；修改 CoSec 时的构建规则和不变式，见 [`AGENTS.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/AGENTS.md)。

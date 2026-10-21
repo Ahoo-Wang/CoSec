@@ -114,14 +114,17 @@ flowchart LR
     S --> Z[SimpleAuthorization<br>cosec-core]
 ```
 
-| Decorator | Present when | Does |
-|---|---|---|
-| `TracingAuthorization` | `opentelemetry-support` | Opens a span per decision. |
-| `AuditingAuthorization` | audit enabled (default) | Publishes an `AuditEvent` to the `AuditEventSink`. |
-| `MeteredAuthorization` | `micrometer-support` | Records decision metrics. It is a `CoSecAuthorizationCustomizer`, the same hook applications use. |
-| `RateLimitingAuthorization` | rules and a `RateLimiter` available | Spends one permit per matching rule, for allowed requests only; an exhausted rule turns the decision into `TOO_MANY_REQUESTS`. |
-| `ShadowAuthorization` | shadow mode configured | Re-evaluates sampled requests against candidate policies and reports the difference. The enforced decision is unchanged. |
-| `SimpleAuthorization` | always | The decision itself. Its evaluation order is described in the [security model](../guide/security-model.md#evaluation-order). |
+| Decorator | Does |
+|---|---|
+| `TracingAuthorization` | Opens a span per decision. |
+| `AuditingAuthorization` | Publishes an `AuditEvent` to the `AuditEventSink`. |
+| `MeteredAuthorization` | Records decision metrics. It is a `CoSecAuthorizationCustomizer`, the same hook applications use. |
+| `RateLimitingAuthorization` | Spends one permit per matching rule, for allowed requests only; an exhausted rule turns the decision into `TOO_MANY_REQUESTS`. |
+| `ShadowAuthorization` | Re-evaluates sampled requests against candidate policies and reports the difference. The enforced decision is unchanged. |
+| `SimpleAuthorization` | The decision itself. Its evaluation order is described in the [security model](../guide/security-model.md#evaluation-order). |
+
+Which decorators are present, and the properties that turn them on, are listed in
+[The decision chain](../operations/observability.md#the-decision-chain).
 
 Why this order:
 
@@ -196,18 +199,11 @@ policy, global `DENY` and revocation as *missing*, which fails open, and no read
 
 So before any CoSec cache is created, the starter runs
 [`CoSecSchemaMarker`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecSchemaMarker.kt)
-against the marker key `{p}:meta:schema` (`{p}` is the key prefix without a trailing `:`):
-
-| Redis state | Result |
-|---|---|
-| Marker present with this schema version | Start. |
-| Marker present with another schema version | Stop with `CoSecSchemaException`. |
-| No marker, CoSec data under the current or the 6.x prefix | Stop with `CoSecSchemaException` until the migration has run. |
-| No marker, no CoSec data | New deployment: write the marker and start. |
-
-The migration writes the marker last, so a half-finished migration still stops startup. The check is guarded by
-`CoSecSchemaMarkerTest` and `CoSecCacheSchemaAutoConfigurationTest`. Running the migration and the properties that
-control the check are in [Upgrading](../operations/upgrading.md).
+against the marker key `<p>:meta:schema`: while CoSec data exists in Redis without the 7.0 marker, startup stops
+with `CoSecSchemaException`. The migration writes the marker last, so a half-finished migration still stops startup.
+Each state and its outcome is in [Schema marker](../operations/storage.md#schema-marker), and running the migration
+in [Migrating the data](../operations/upgrading.md#migrating-the-data). The check is guarded by
+`CoSecSchemaMarkerTest` and `CoSecCacheSchemaAutoConfigurationTest`.
 
 ## Performance
 
@@ -251,3 +247,5 @@ or repositories should come with a before/after comparison.
 [RFC 0001: target architecture](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0001-target-architecture.md)
 (Chinese) describes the planned redesign: a pure model and synchronous engine, snapshot-based distribution,
 listeners instead of decorators, and the migration path from the structure described here.
+
+**Next:** add your own conditions, repositories and hooks, in [Extending CoSec](./extending.md).

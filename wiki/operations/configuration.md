@@ -25,7 +25,7 @@ Durations take Spring's format (`10m`, `7d`); sets and lists take a comma-separa
 | `cosec.authorization.cache.enabled` | boolean | `true` | the Redis policy and permission repositories (`cache-support`) |
 | `cosec.jwt.enabled` | boolean | `true` | issuing and verifying JWTs |
 | `cosec.api-key.enabled` | boolean | `false` | [API keys](../integration/authentication.md#api-keys) for machine clients |
-| `cosec.inject.enabled` | boolean | `false` | trusting a token already verified upstream: its signature is not checked again, its time claims are ([Behind a gateway](../integration/authentication.md#behind-a-gateway)) |
+| `cosec.inject.enabled` | boolean | `false` | trusting a token already verified upstream: its signature is not checked again, its time claims are. Takes effect only with `cosec.authorization.enabled=false`; otherwise the service keeps verifying and authorizing every request ([Behind a gateway](../integration/authentication.md#behind-a-gateway)) |
 | `cosec.audit.enabled` | boolean | `true` | an audit event for every decision |
 | `cosec.audit.kafka.enabled` | boolean | `true` | sending audit events to Kafka (`kafka-support`, a `KafkaTemplate` bean, and no other `AuditEventSink` bean) |
 | `cosec.metrics.enabled` | boolean | `true` | the `cosec.authorization` timer (`micrometer-support` and a `MeterRegistry`) |
@@ -43,10 +43,10 @@ OpenTelemetry tracing has no switch: it is on whenever `opentelemetry-support` i
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `cosec.authorization.allow-query-token` | boolean | `false` | Also read the access token from the `authorization` query parameter. Off because URLs leak into access logs, browser history and `Referer` headers. |
-| `cosec.authorization.root-enabled` | boolean | `false` | Let the root principal bypass policy and permission checks. Root is the principal of the platform tenant (`(platform)`) whose id is the `cosec.root` system property (`cosec` by default); a principal of any other tenant, or without one, is never root, and the blacklist applies to root too. For another rule, provide a `RootPrincipalMatcher` bean ([Root principal](../guide/security-model.md#root-principal)). |
+| `cosec.authorization.root-enabled` | boolean | `false` | Let the root principal bypass policy and permission checks. Who counts as root, and what it bypasses: [Root principal](../guide/security-model.md#root-principal). For another rule, provide a `RootPrincipalMatcher` bean. |
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | How many proxy hops to trust in `X-Forwarded-For` when resolving the client IP. `0` ignores the header (the service is exposed directly); `N` takes the entry appended by the N-th closest proxy. |
 | `cosec.authorization.local-policy.enabled` | boolean | `false` | Load policies from local JSON files. |
-| `cosec.authorization.local-policy.locations` | set of resource patterns | `classpath:cosec-policy/*-policy.json` | Where the files are. A location that matches no file, other than the default, stops startup, and so do two files with the same policy id ([Loading policy files](../policies/language.md)). |
+| `cosec.authorization.local-policy.locations` | set of resource patterns | `classpath:cosec-policy/*-policy.json` | Where the files are. A location that matches no file, other than the default, stops startup, and so do two files with the same policy id ([Loading policy files](../policies/language.md#loading-policy-files)). |
 | `cosec.authorization.local-policy.init-repository` | boolean | `false` | Write the loaded policies into the `PolicyRepository` at startup. Authorization reads only the repository. |
 | `cosec.authorization.local-policy.force-refresh` | boolean | `false` | Overwrite policies that already exist in the repository. Without it, an existing id is read and kept. |
 
@@ -212,3 +212,5 @@ The fixed settings of step 4 are:
 | `PolicyCache`, `GlobalPolicyIndexCache`, `AppPermissionCache`, `RolePermissionCache` | `ttl` none, `read-failure: throw`, `foreign-format: fail` | They are the store of record ([Storage](./storage.md#redis-is-the-store-of-record)): an expiry, a degraded read or a reclaim would silently drop a policy or a grant. |
 | `RevokedTokenCache` | `foreign-format: fail` | Reclaiming an unreadable revocation would make its token valid again. |
 | every CoSec cache | key prefix, namespace and key encoder | The storage layout is set by `cosec.authorization.cache.key-prefix`. A `key-prefix` from a customizer or `cocache.*` is ignored. |
+
+**Next:** where policies and permissions live and how they are cached, in [Storage and caching](./storage.md).

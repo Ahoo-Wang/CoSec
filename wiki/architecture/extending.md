@@ -119,7 +119,7 @@ registration, also deserialize one policy using the new type, so a missing servi
 | Extension point | Contract |
 |---|---|
 | `BlacklistChecker` | `check(request, context): Mono<Boolean>`, `false` = blocked. Runs first, for every principal including root. |
-| `RootPrincipalMatcher` | `isRoot(principal): Boolean`. A root principal bypasses every policy and permission, but not the blacklist. The starter uses `RootPrincipalMatcher.NONE` unless `cosec.authorization.root-enabled=true`, then `DEFAULT`, which accepts only the platform tenant's root id. Provide your own to require a stronger signal, such as a signed claim. |
+| `RootPrincipalMatcher` | `isRoot(principal): Boolean`. A root principal bypasses every policy and permission, but not the blacklist. The starter uses `RootPrincipalMatcher.NONE` unless `cosec.authorization.root-enabled=true`, then `DEFAULT` ([Root principal](../guide/security-model.md#root-principal)). Provide your own to require a stronger signal, such as a signed claim. |
 | `CoSecAuthorizationCustomizer` | `customize(authorization): Authorization`. Wraps the starter's authorization outside rate limiting and inside auditing and tracing; customizers apply in `@Order` order. Metrics are added this way. |
 | `Authorization` | Replaces the whole chain. A replacement gets no auditing, rate limiting or shadow mode (tracing still wraps it); compose `AuditingAuthorization`, `RateLimitingAuthorization` and `ShadowAuthorization` yourself. |
 
@@ -212,3 +212,5 @@ Implement `AuditEventSink` (`publish(event)`, in `cosec-api`) to send audit even
 replaces both the logging sink and the Kafka sink. Publishing runs on the request path, so hand events off
 asynchronously instead of blocking. An exception from the sink is logged and never changes the decision. The event
 fields are described in [Observability](../operations/observability.md#audit-events).
+
+**Next:** how to propose and land a change, in [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md), and the build rules and invariants for changing CoSec, in [`AGENTS.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/AGENTS.md).

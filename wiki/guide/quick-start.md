@@ -163,7 +163,8 @@ curl -i -H "Authorization: Bearer $TOKEN" localhost:8080/admin
 
 `403` with `Implicit Deny`: no statement mentions `/admin`.
 
-All outcomes and their statuses are listed in [Decisions](./concepts.md#decisions).
+All outcomes are listed in [Decisions](./concepts.md#decisions), and the status each one gets in
+[Responses and status codes](../integration/web.md#responses-and-status-codes).
 
 ## Next steps
 

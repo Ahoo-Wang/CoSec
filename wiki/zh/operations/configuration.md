@@ -24,7 +24,7 @@ description: "每个 cosec.* 配置项、它的默认值以及它改变什么。
 | `cosec.authorization.cache.enabled` | boolean | `true` | 基于 Redis 的策略与权限仓库（`cache-support`） |
 | `cosec.jwt.enabled` | boolean | `true` | 签发和校验 JWT |
 | `cosec.api-key.enabled` | boolean | `false` | 面向机器客户端的 [API key](../integration/authentication.md#api-keys) |
-| `cosec.inject.enabled` | boolean | `false` | 信任上游已校验过的令牌：不再校验签名，但校验时间声明（[网关之后](../integration/authentication.md#behind-a-gateway)） |
+| `cosec.inject.enabled` | boolean | `false` | 信任上游已校验过的令牌：不再校验签名，但校验时间声明。只有同时设置 `cosec.authorization.enabled=false` 才生效，否则服务仍会自己校验并授权每个请求（[网关之后](../integration/authentication.md#behind-a-gateway)） |
 | `cosec.audit.enabled` | boolean | `true` | 为每个决策生成审计事件 |
 | `cosec.audit.kafka.enabled` | boolean | `true` | 把审计事件发送到 Kafka（需要 `kafka-support`、一个 `KafkaTemplate` bean，且没有其他 `AuditEventSink` bean） |
 | `cosec.metrics.enabled` | boolean | `true` | `cosec.authorization` 计时器（需要 `micrometer-support` 和 `MeterRegistry`） |
@@ -41,10 +41,10 @@ OpenTelemetry 追踪没有开关：只要 classpath 上有 `opentelemetry-suppor
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
 | `cosec.authorization.allow-query-token` | boolean | `false` | 也从查询参数 `authorization` 读取访问令牌。默认关闭，因为 URL 会进入访问日志、浏览器历史和 `Referer` 头。 |
-| `cosec.authorization.root-enabled` | boolean | `false` | 让 root 主体绕过策略和权限检查。root 是平台租户（`(platform)`）中 id 等于系统属性 `cosec.root`（默认 `cosec`）的主体；其他租户的主体或没有租户的主体永远不是 root，黑名单对 root 同样生效。需要别的规则时，提供一个 `RootPrincipalMatcher` bean（[Root 主体](../guide/security-model.md#root-principal)）。 |
+| `cosec.authorization.root-enabled` | boolean | `false` | 让根主体绕过策略和权限检查。谁算根主体、它会绕过什么，见[根主体](../guide/security-model.md#root-principal)。需要别的规则时，提供一个 `RootPrincipalMatcher` bean。 |
 | `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | 解析客户端 IP 时信任 `X-Forwarded-For` 中的几跳代理。`0` 忽略该头（服务直接对外暴露）；`N` 取第 N 个最近代理追加的那一项。 |
 | `cosec.authorization.local-policy.enabled` | boolean | `false` | 从本地 JSON 文件加载策略。 |
-| `cosec.authorization.local-policy.locations` | 资源模式集合 | `classpath:cosec-policy/*-policy.json` | 文件所在位置。默认位置以外的位置匹配不到任何文件会导致启动失败，两个文件声明同一个策略 id 也会（[加载策略文件](../policies/language.md)）。 |
+| `cosec.authorization.local-policy.locations` | 资源模式集合 | `classpath:cosec-policy/*-policy.json` | 文件所在位置。默认位置以外的位置匹配不到任何文件会导致启动失败，两个文件声明同一个策略 id 也会（[加载策略文件](../policies/language.md#loading-policy-files)）。 |
 | `cosec.authorization.local-policy.init-repository` | boolean | `false` | 启动时把加载的策略写入 `PolicyRepository`。授权只读仓库。 |
 | `cosec.authorization.local-policy.force-refresh` | boolean | `false` | 覆盖仓库中已存在的策略。不开启时，已存在的 id 会被读取并保留。 |
 
@@ -209,3 +209,5 @@ CoCache 6 重命名或删除了若干 5.x 配置项，例如 `cocache.redis.stri
 | `PolicyCache`、`GlobalPolicyIndexCache`、`AppPermissionCache`、`RolePermissionCache` | `ttl` 为无、`read-failure: throw`、`foreign-format: fail` | 它们是权威存储（[存储](./storage.md#redis-is-the-store-of-record)）：过期、降级读取或回收都会悄悄丢掉一条策略或授权。 |
 | `RevokedTokenCache` | `foreign-format: fail` | 回收一条读不懂的吊销记录，会让对应令牌重新有效。 |
 | 所有 CoSec 缓存 | key 前缀、namespace 和 key 编码器 | 存储布局由 `cosec.authorization.cache.key-prefix` 决定。定制器或 `cocache.*` 中的 `key-prefix` 被忽略。 |
+
+**下一步：** 策略和权限存在哪里、如何缓存，见[存储与缓存](./storage.md)。

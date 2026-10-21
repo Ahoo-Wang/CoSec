@@ -88,8 +88,8 @@ sequenceDiagram
 2. 把传输层的请求交给管道。
 3. 管道把它转换成 CoSec 的 `Request`。路径含遍历片段时到此为止，返回 `400`。否则取调用方的 `CoSec-Request-Id`
    或生成一个，解析[客户端 IP](#client-ip-behind-proxies)，并运行每个[请求属性](#request-attributes) appender。
-4. 安全上下文解析器读取凭证：配置了 API Key 且请求带了 API Key 时用它，否则用令牌（[认证](./authentication.md#tokens)）。
-   启用令牌吊销或阻塞式 API Key 存储时，响应式适配器在 `boundedElastic` 上执行这一步，不占用事件循环。
+4. 安全上下文解析器读取凭证：配置了 API key 且请求带了 API key 时用它，否则用令牌（[认证](./authentication.md#tokens)）。
+   启用令牌吊销或阻塞式 API key 存储时，响应式适配器在 `boundedElastic` 上执行这一步，不占用事件循环。
 5. 凭证缺失或被拒绝不算错误：请求以匿名身份继续，拒绝原因会保留下来，用于解释之后的 `401`。解析器的其他错误一律得到
    `500`。
 6. 授权链按[安全模型](../guide/security-model.md#evaluation-order)中的顺序做出决定。
@@ -110,7 +110,7 @@ sequenceDiagram
 | `400` | 路径含 `.` 或 `..` 片段（包括百分号编码的形式），或百分号转义格式错误（`InvalidRequestPathException`）。 | 无响应体 |
 | `401` | 被拒绝，且调用方是匿名的：没有凭证，或凭证被拒绝。 | 凭证被拒绝时为 `Token Expired` 或 `Token Invalid`；否则为 `Implicit Deny` 或 `Explicit Deny` |
 | `403` | 被拒绝，且调用方已认证。 | `Implicit Deny` 或 `Explicit Deny` |
-| `403` | 正则条件超出了时间预算（`RegexTimeoutException`）。这是预期内的拒绝，不是服务端错误。 | `Implicit Deny` |
+| `403` | 正则条件超出了时间预算（`RegexTimeoutException`），对所有调用方都是如此，匿名调用方也一样。这是预期内的拒绝，不是服务端错误。 | `Implicit Deny` |
 | `429` | 请求本已允许，但匹配的[限流规则](../policies/rate-limiting.md)没有剩余许可。 | `Too Many Requests` |
 | `500` | 其他任何错误。CoSec 失败即拒绝，而不是去猜。 | `Implicit Deny` |
 
@@ -122,7 +122,7 @@ sequenceDiagram
   见 [Redis 不可用时](../operations/storage.md#when-redis-is-unavailable)。
 - `PathVariableScopeException`：存储的策略或权限在作用域之外读取 `request.path.var.*`，读取时被拒绝
   （[路径变量](../policies/language.md#path-variables)）。
-- 抛出异常的自定义匹配器、仓库或 API Key 存储（包括连不上 Redis 的 Redis API Key 存储）。
+- 抛出异常的自定义匹配器、仓库或 API key 存储（包括连不上 Redis 的 Redis API key 存储）。
 
 为什么出错就拒绝，见[失败即拒绝](../guide/security-model.md#fail-closed)；两个有意为之的例外，见[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)。每个状态码的常见原因见
 [故障排查](../operations/troubleshooting.md#by-status-code)。
@@ -134,17 +134,8 @@ sequenceDiagram
 ```
 
 **响应头。** 通过路径检查的请求都带有 `CoSec-Request-Id`：调用方自己传了就用它的值，否则用生成的 ID。网关还会把它
-转发给下游。如果有限流规则匹配了这个请求，响应（无论允许还是拒绝）还会带上：
-
-| 响应头 | 值 |
-|---|---|
-| `RateLimit-Limit` | 规则的限额。 |
-| `RateLimit-Remaining` | 当前窗口剩余的许可数。 |
-| `RateLimit-Reset` | 距离窗口重置的秒数，最小为 `1`。 |
-| `Retry-After` | 仅在 `429` 时出现：同样的秒数。 |
-
-多条规则同时匹配时，允许的响应描述其中最紧的一条，`429` 描述耗尽的那一条；见
-[响应与响应头](../policies/rate-limiting.md#responses-and-headers)。
+转发给下游。如果有限流规则匹配了这个请求，响应（无论允许还是拒绝）还会带上 `RateLimit-Limit`、`RateLimit-Remaining`
+和 `RateLimit-Reset`，`429` 还会带上 `Retry-After`。它们的取值见[响应与响应头](../policies/rate-limiting.md#responses-and-headers)。
 
 ## 访问安全上下文 {#accessing-the-security-context}
 
@@ -257,3 +248,5 @@ Kubernetes 清单示例在 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main
 ```bash
 kubectl create secret generic cosec-jwt-secret --from-literal=secret=<random value>
 ```
+
+**下一步：** 签发、刷新和吊销适配器读取的令牌，见[认证](./authentication.md)。

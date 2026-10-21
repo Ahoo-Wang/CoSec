@@ -113,3 +113,5 @@ CoSec 本身不隔离租户，见[租户隔离](./security-model.md#tenant-isola
 | 错误 | CoSec 无法做出决策：策略读取失败、条件出错等。此时拒绝。 |
 
 这些结果按什么顺序得出，见[求值顺序](./security-model.md#evaluation-order)。每种结果如何变成 HTTP 响应（匿名调用方 `401`、已登录调用方 `403` 等），见[响应与状态码](../integration/web.md#responses-and-status-codes)。
+
+**下一步：** 每次决策都遵守的保证，见[安全模型](./security-model.md)；要编写规则，见[策略语言](../policies/language.md)。

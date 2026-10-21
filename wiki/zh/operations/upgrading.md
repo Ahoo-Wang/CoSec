@@ -40,7 +40,7 @@ description: "CoSec 各版本之间有哪些破坏性变更，以及如何迁移
 | [CoSec 自己创建缓存](#cosec-creates-its-caches-itself) | 6.x 的缓存组件 bean 和 `CacheProperties` 的五个 key 前缀已删除；通过 CoCache 调整缓存。 |
 | [id 生成器是 `StringIdGenerator`](#id-generators-are-stringidgenerators) | CosId 4 的生成器只实现 `StringIdGenerator`，CoSec 现在接收的就是它。 |
 | [未迁移的数据会让启动失败](#unmigrated-data-stops-startup) | 没有 schema 标记 `cosec:meta:schema` 时，Redis 中的 CoSec 数据会让启动以 `CoSecSchemaException` 失败。 |
-| [未迁移的数据 fail closed](#unmigrated-data-fails-closed) | 6.x 的值读取时以 `500` 失败，且绝不会被删除，无论 `foreign-format` 怎么设。 |
+| [未迁移的数据失败即拒绝](#unmigrated-data-fails-closed) | 6.x 的值读取时以 `500` 失败，且绝不会被删除，无论 `foreign-format` 怎么设。 |
 | [全局策略索引会对照策略检查](#the-global-policy-index-is-checked-against-the-policies) | 索引中有 id 但没有内容时以 `500` 失败；索引中不是 `global` 的内容被忽略。 |
 
 ### 升级检查清单 {#upgrade-checklist}
@@ -236,7 +236,7 @@ fun migrateCoSecData(migration: CoSecCoCache5Migration) = ApplicationRunner {
 **升级后基于角色的请求被拒绝。** 它们的授权没有迁移到请求的应用，或令牌中的角色没有为请求的空间书写（[迁移角色授权](#migrating-role-grants)）。
 
 **能否设置 `cocache.defaults.foreign-format=reclaim` 来清掉旧值？** 它对 CoSec 的缓存不起作用，也不应该起作用：没有加载器时，
-回收会删掉唯一的副本（[未迁移的数据 fail closed](#unmigrated-data-fails-closed)）。
+回收会删掉唯一的副本（[未迁移的数据失败即拒绝](#unmigrated-data-fails-closed)）。
 
 **能否手工写入 schema 标记？** 可能还有 6.x 数据时不能。标记告诉 7.0 每个值都是 7.0 布局；位于 7.0 不读的 6.x key 下的数据会被
 读成不存在。
@@ -274,7 +274,7 @@ fun migrateCoSecData(migration: CoSecCoCache5Migration) = ApplicationRunner {
 - 直接构造 `SimpleAuthorization`、`AuthorizationExplainer` 或 `ShadowAuthorization` 的代码也默认使用 `RootPrincipalMatcher.NONE`，
   与 starter 和 `PolicyTestKit` 一样：不传 `rootPrincipalMatcher` 参数时，没有主体是 root。
 
-如果依赖 root，设置 `cosec.authorization.root-enabled=true`，并以 `tenantId` `(platform)` 签发 root 主体的令牌。直接构造这些类的
+如果依赖 root，设置 `cosec.authorization.root-enabled=true`，并以 `tenantId` `(platform)` 签发根主体的令牌。直接构造这些类的
 代码传入 `rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT`，`PolicyTestKit` 则把它作为 `run` 的 matcher 参数。如果 root 必须
 以别的方式工作，提供你自己的 `RootPrincipalMatcher` bean。
 
@@ -287,8 +287,8 @@ fun migrateCoSecData(migration: CoSecCoCache5Migration) = ApplicationRunner {
   `cosec:app:role:permission:<appId>:<roleId>[@<spaceId>]`，`RolePermissionCache` 接收 `AppSpacedRoleId(appId, roleId, spaceId)`
   而不是 `SpacedRoleId`。应用 id 不能包含 `:`，角色 id 不能包含 `@`；OpenAPI 应用权限生成器会替换标题中的 `:`。
 - 带 `CoSec-Space-Id: x` 的请求只用主体中写作 `role@x` 的角色评估；不带该头时，只用没有后缀的角色。检查成员关系之后，在令牌和
-  API key 中为主体拥有角色的每个空间签发 `role@space`（[令牌](../integration/authentication.md#tokens)）。
-- 授权从不读取 6.x 的 key。在它们被迁移之前，角色没有授权，基于角色的请求被拒绝（fail closed）（[迁移角色授权](#migrating-role-grants)）。
+  API key 中为主体拥有角色的每个空间签发 `role@space`（[角色与空间](../integration/authentication.md#roles-and-spaces)）。
+- 授权从不读取 6.x 的 key。在它们被迁移之前，角色没有授权，基于角色的请求被拒绝（失败即拒绝）（[迁移角色授权](#migrating-role-grants)）。
 - `AppRolePermissionRepository.getAppRolePermission` 的签名不变。`SimpleAuthorization` 现在传入在该空间生效的角色，且不带
   `@space` 后缀；自定义仓库只能返回为该应用和空间做的授权。
 - 解释器增加了 `NO_ROLE_IN_SPACE` 警告。
@@ -310,7 +310,7 @@ fun migrateCoSecData(migration: CoSecCoCache5Migration) = ApplicationRunner {
 - 在没有同一语句或规则的 `path` 动作捕获变量的地方读取它们，是一个加载错误 `PathVariableScopeException`：在策略或应用权限的
   `condition` 中，在动作不是 `path` 的语句或权限的条件中，在动作不是 `path` 的限流规则的 `condition` 或 `key` 中，以及在任何
   动作的配置中，例如 `path` 模板 `/orders/#{...PATH_VARIABLES...}`：模板在其动作匹配之前求值，此时变量还不是它自己的
-  （[路径变量](../policies/language.md#actions)）。
+  （[路径变量](../policies/language.md#path-variables)）。
 
 解析这样的策略、应用权限或限流规则会失败，用它构造 `PolicyData`、`AppPermissionData` 或 `RateLimitRule` 也会失败。
 `RedisPolicyRepository.setPolicy` 会拒绝它。包含这种写法的本地策略文件会让应用无法启动。已存储在 Redis 中的这类策略读取时失败，
@@ -324,7 +324,7 @@ fun migrateCoSecData(migration: CoSecCoCache5Migration) = ApplicationRunner {
 当角色以 `role@space` 签发时，裸的 `inRole` 值现在也匹配主体的 `role@<请求空间>`，所以像 `inRole: suspended` 这样的拒绝在令牌
 从 `suspended` 改为 `suspended@team-a` 后仍然匹配。没有后缀的角色仍在每个空间中匹配。写成 `role@space` 的值与主体的角色按字面
 比较，与以前相同。以其他方式读取 `context.principal.roles` 的条件（`in`、`spel`、`ognl`）仍看到原始字符串，包括
-`suspended@team-a`，一旦令牌带上 `role@space`，它们就不再匹配裸角色名（[匹配角色](../policies/language.md#conditions)）。
+`suspended@team-a`，一旦令牌带上 `role@space`，它们就不再匹配裸角色名（[匹配角色](../policies/language.md#matching-roles)）。
 
 #### 无效的本地策略文件会让启动失败 {#invalid-local-policy-files-stop-startup}
 
@@ -436,7 +436,7 @@ CoSec 数据会让启动以 `CoSecSchemaException` 失败；迁移在结束时�
 被写入。检查找不到它不知道的前缀下的 6.x 数据：key 前缀改变时，设置 `cosec.authorization.cache.migration.legacy-key-prefix`
 （[Schema 标记](./storage.md#schema-marker)）。
 
-#### 未迁移的数据 fail closed {#unmigrated-data-fails-closed}
+#### 未迁移的数据失败即拒绝 {#unmigrated-data-fails-closed}
 
 7.0 实例读取 CoSec 6.x 写入的值时，读取会失败（`CacheReadException`，原因为 CoCache 的 `ForeignFormatException`），并把该值留在
 Redis 中，所以请求以 `500` 被拒绝。每个 CoSec 缓存都保持这种行为，即使设置了 `cocache.defaults.foreign-format=reclaim`：没有加载器
@@ -495,7 +495,7 @@ Kotlin 代码必须重新编译。
 | 影子模式：在真实流量上试验候选策略和应用权限 | 关闭（`cosec.shadow.enabled`） | [影子模式](../policies/testing.md#trying-changes-in-shadow-mode) |
 | `AuthorizationChecker`：在代码中检查权限，一个或多个动作 | 始终可用 | [检查权限](../integration/checks.md#checking-a-permission) |
 | 使用 `resource.<name>` 部分的对象级规则 | 按策略选用 | [对象级规则](../integration/checks.md#object-level-rules) |
-| `time` 条件：有效期、每日时间窗、自动过期的授权 | 按策略选用 | [时间条件](../policies/language.md#conditions) |
+| `time` 条件：有效期、每日时间窗、自动过期的授权 | 按策略选用 | [时间条件](../policies/language.md#time-conditions) |
 | 策略历史与回滚 | 关闭（`cosec.authorization.cache.history.enabled`） | [策略历史](./storage.md#policy-history-and-rollback) |
 | 声明式策略测试用例（`PolicyTestKit`） | 库 | [策略测试用例](../policies/testing.md#policy-test-cases) |
 | 访问审查（`AccessAnalyzer`）：谁能做什么 | 库 | [访问审查](../policies/testing.md#access-reviews) |

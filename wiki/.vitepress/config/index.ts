@@ -21,8 +21,8 @@ export default defineConfig({
   description: en.description,
   // Fail the build on broken internal links.
   ignoreDeadLinks: false,
-  // _legacy/ holds the pre-rewrite pages for reference while the new ones are written; AGENTS.md is for contributors.
-  srcExclude: ['_legacy/**', 'AGENTS.md'],
+  // AGENTS.md is for contributors, not a page of the site.
+  srcExclude: ['AGENTS.md'],
   sitemap: {
     hostname: 'https://cosec.ahoo.me',
   },

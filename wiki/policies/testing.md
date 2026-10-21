@@ -116,18 +116,8 @@ changed. The endpoint, its fields and its warnings are described in
 [Explaining a decision](../integration/checks.md#explaining-a-decision); this is how to use it while working on
 policies.
 
-1. Turn it on where you debug, never on a public instance without an administrator-only policy:
-
-   ```yaml
-   cosec:
-     explain:
-       enabled: true
-   management:
-     endpoints:
-       web:
-         exposure:
-           include: cosecExplain
-   ```
+1. Turn it on where you debug, as shown in [Explaining a decision](../integration/checks.md#explaining-a-decision),
+   never on a public instance without an administrator-only policy.
 
 2. Ask for a principal you describe, to try a role or attribute before any token carries it:
 
@@ -274,3 +264,5 @@ class PolicyGateTest {
     }
 }
 ```
+
+**Next:** publish tested policies to the store, in [Publishing changes](../operations/storage.md#publishing-changes).

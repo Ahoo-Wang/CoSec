@@ -58,7 +58,7 @@ The caller was treated as anonymous: the credential was missing, or rejected.
 ## Unexpected 403
 
 The caller is known, and nothing allowed the request, or something denied it. An anonymous caller gets `401` for the
-same causes.
+same causes, except a `regular` condition that timed out, which answers `403` for every caller.
 
 1. **Read the deciding rule** in the audit event or the explanation. `Explicit Deny` names the deny that won. A deny
    wins across all layers, so a global allow cannot override it ([Deny first](../guide/security-model.md#deny-first)).
@@ -88,7 +88,7 @@ same causes.
 4. **A deny that does not match.** Its action and its condition must both match; a negated condition is a common
    mistake. Explain the request and read the deny's `outcome`: `ACTION_MISS` or `CONDITION_MISS`.
 5. **A role condition written with `in`, `spel` or `ognl`.** These see raw role strings, so a bare role name stops
-   matching once tokens carry `role@space`; use `inRole` ([Matching roles](../policies/language.md#conditions)).
+   matching once tokens carry `role@space`; use `inRole` ([Matching roles](../policies/language.md#matching-roles)).
 
 ## Policy has no effect
 
@@ -121,9 +121,9 @@ Find the exception in the application log: CoSec logs
 |---|---|---|
 | Redis connection errors | Redis is unreachable and the value is not in the local copy. Policy and permission reads fail closed on purpose ([Storage](./storage.md#when-redis-is-unavailable)). | Restore Redis. |
 | `CacheReadException` caused by `ForeignFormatException` | The value was written by CoSec 6.x and not migrated, or written with plain Redis commands. | [Migrate the data](./upgrading.md#migrating-the-data), or write it again through CoSec. |
-| `MissingPolicyException` with `the global policy index lists policies [...] that have no content.` | A global policy's content was lost, or not migrated from 6.x (a 6.x cached miss migrates as a miss). It may be a global deny, so CoSec fails rather than skips it ([Global policy index](./storage.md#the-global-policy-index)). | Write the policy again with `PolicyRepository.setPolicy`; to drop it instead, save it with a type other than `global`, which removes it from the index. |
-| `Unsupported part: <part>` | A condition names a part that does not exist ([Parts](../policies/language.md#conditions)). | Fix the policy; [validate policies](../policies/testing.md#validating-policies) before deploying. |
-| `PathVariableScopeException` naming a policy and statement | A stored policy reads `request.path.var.*` outside its scope, which 7.0 rejects ([Path variables](../policies/language.md#actions)). | Fix and save the policy again. |
+| `MissingPolicyException`, after the error log `the global policy index lists policies [...] that have no content.` | A global policy's content was lost, or not migrated from 6.x (a 6.x cached miss migrates as a miss). It may be a global deny, so CoSec fails rather than skips it ([Global policy index](./storage.md#the-global-policy-index)). | Write the policy again with `PolicyRepository.setPolicy`; to drop it instead, save it with a type other than `global`, which removes it from the index. |
+| `Unsupported part: <part>` | A condition names a part that does not exist ([Parts](../policies/language.md#parts)). | Fix the policy; [validate policies](../policies/testing.md#validating-policies) before deploying. |
+| `PathVariableScopeException` naming a policy and statement | A stored policy reads `request.path.var.*` outside its scope, which 7.0 rejects ([Path variables](../policies/language.md#path-variables)). | Fix and save the policy again. |
 | an exception from your code | A custom matcher, repository or `ApiKeyStore` threw. | The stack trace names it. |
 
 With the Redis API key store, a Redis failure during the key lookup also answers `500`.
@@ -131,7 +131,9 @@ With the Redis API key store, a Redis failure during the key lookup also answers
 ## One principal always gets 500
 
 The log shows `MissingPolicyException`:
-`The principal lists policies [...], which the policy repository does not have.` The principal lists a policy that
+`The principal lists policies [...], which the policy repository does not have.` (When the log line before it says
+`the global policy index lists policies [...]`, the missing policy is a global one and every request fails: see
+[Every request fails with 500](#every-request-fails-with-500).) The principal lists a policy that
 was deleted, never written, or lost from Redis. Authorization fails closed rather than skipping it, because a missing
 deny would otherwise let a broader allow through. Write the policy again (for local policies, see
 [Policy has no effect](#policy-has-no-effect)), or remove the id from the principal's token or record. An
@@ -151,8 +153,8 @@ explanation reports it as a `MISSING_POLICY` warning.
 | `Rate limit rule [<id>] key [<key>] is not a supported part (e.g. request.remoteIp, context.principal.id).` | A rate limit `key` names an unsupported part. |
 
 Any of these stops startup on purpose: skipping the file could silently drop a deny or a quota. Fix or remove the
-file ([Loading policy files](../policies/language.md),
-[Loading rules](../policies/rate-limiting.md#rules)). The defaults `classpath:cosec-policy/*-policy.json`, `classpath:cosec-rate-limit/*-rate-limit.json`,
+file ([Loading policy files](../policies/language.md#loading-policy-files),
+[Loading rules](../policies/rate-limiting.md#loading-rules)). The defaults `classpath:cosec-policy/*-policy.json`, `classpath:cosec-rate-limit/*-rate-limit.json`,
 `classpath:cosec-shadow/*-policy.json` and `classpath:cosec-shadow/*-app-permission.json` may match nothing.
 
 ### Startup fails with PathVariableScopeException
@@ -163,7 +165,7 @@ own captures the variables. The message names the policy, statement or rule and 
 rule) whose `path` action declares the variable, or move a policy condition into its statements' conditions. An
 action's own configuration, such as a `path` template, may not read them at all; the message then says
 `a path template cannot use them. Read them in the statement's condition instead.`
-([Path variables](../policies/language.md#actions)).
+([Path variables](../policies/language.md#path-variables)).
 
 ### Startup fails reading a stored policy
 
@@ -247,3 +249,5 @@ a rollback keeps it in the 7.0 format ([Writes before the migration](./upgrading
 3. With Kafka, look for `Dropping audit events because the Kafka audit queue is full or shutting down.` or
    `Failed to publish audit event to Kafka topic [<topic>].` ([Sinks](./observability.md#sinks)).
 4. A custom sink that throws is logged as `Failed to publish audit event.`
+
+**Next:** move an existing deployment to a newer version, in [Upgrading](./upgrading.md).

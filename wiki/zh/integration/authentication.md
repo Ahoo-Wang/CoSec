@@ -1,6 +1,6 @@
 ---
 title: "认证"
-description: "签发、刷新和吊销令牌，接受 API Key，以及通过社交账号登录。"
+description: "签发、刷新和吊销令牌，接受 API key，以及通过社交账号登录。"
 ---
 
 # 认证 {#authentication}
@@ -57,7 +57,7 @@ description: "签发、刷新和吊销令牌，接受 API Key，以及通过社�
   具体规则及原因见[角色作用域与 inRole](../guide/security-model.md#role-scope-and-inrole)；条件本身见
   [角色匹配](../policies/language.md#matching-roles)。
 
-客户端用请求头选择空间，但只能在令牌声明的空间中选择。因此令牌是成员身份的唯一凭据：只有确认用户属于某个空间之后，才签发
+客户端用请求头选择空间，但只能在令牌声明的空间中选择。因此令牌是成员身份的唯一凭证：只有确认用户属于某个空间之后，才签发
 `role@space`。
 
 角色和策略随令牌传递，所以用户角色的变更要等用户下次登录才生效；[刷新](#refreshing-tokens)会沿用旧的声明。
@@ -145,11 +145,11 @@ JWT 是无状态的：不做额外处理的话，令牌在过期之前一直有�
   仍然会检查，而在 Redis 故障期间拒绝所有已认证请求的后果更糟。保持访问令牌短期有效，让这个窗口尽量小。Redis 返回了但
   CoSec 无法解码的吊销记录仍然会让请求失败（[Redis 不可用时](../operations/storage.md#when-redis-is-unavailable)）。
 
-## API Key {#api-keys}
+## API key {#api-keys}
 
-机器客户端（定时任务、合作方集成、内部服务）往往无法登录。给它们一个 API Key：在 `X-API-Key` 请求头中发送它的调用方，就以
-这个 Key 的主体身份、带着它的角色、策略和租户行事，并像其他人一样接受授权。API Key 默认关闭
-（[API Key 配置](../operations/configuration.md#api-keys)）。
+机器客户端（定时任务、合作方集成、内部服务）往往无法登录。给它们一个 API key：在 `X-API-Key` 请求头中发送它的调用方，就以
+这个 Key 的主体身份、带着它的角色、策略和租户行事，并像其他人一样接受授权。API key 默认关闭
+（[API key 配置](../operations/configuration.md#api-keys)）。
 
 带有 Key 的请求只按 Key 判定，即使它同时发送了令牌。未知、已禁用或已过期的 Key 让请求成为匿名请求，原因是 `Token Invalid`，
 所以被拒绝时返回 `401`。主体会得到属性 `apiKeyId`，值为所用 Key 的 ID。CoSec 从不存储或记录 Key 本身，只保存它的 SHA-256
@@ -181,7 +181,7 @@ cosec:
 | `save(hash, apiKey)` | 替换该哈希对应的 Key，例如设置 `enabled = false` 或修改角色。 |
 | `revoke(hash)` | 删除这个 Key。下一个请求起失效。 |
 
-此后每个带 Key 的请求都会在事件循环之外读取 Redis。读不到 Redis 时，请求以 `500` 失败：和令牌吊销不同，API Key 查询是失败即拒绝的。
+此后每个带 Key 的请求都会在事件循环之外读取 Redis。读不到 Redis 时，请求以 `500` 失败：和令牌吊销不同，API key 查询是失败即拒绝的。
 
 **其他存储**：声明自己的 `ApiKeyStore` Bean，按哈希查找 Key。如果查找会阻塞（例如数据库调用），设置
 `cosec.api-key.store-blocking=true`，让响应式适配器在事件循环之外调用它。
@@ -196,10 +196,8 @@ cosec:
 要让用户切换租户，继承 `AbstractSwitchTenantAuthentication`，实现 `switchTenant(targetTenantId, previousPrincipal)`
 （检查用户是否属于目标租户），并为它返回的主体签发新令牌。
 
-**平台租户 `(platform)` 拥有特权。** 根主体（通过 `cosec.authorization.root-enabled` 启用时）只在这个租户中被识别：只有租户为
-`(platform)` 且 ID 等于系统属性 `cosec.root`（默认为 `cosec`）的主体才是根主体。某个用户租户的身份提供方即使签发了 ID 为
-`cosec` 的主体，它也没有根权限。只从用户无法影响的来源签发 `(platform)` 的令牌。原因以及根主体会绕过什么，见
-[根主体](../guide/security-model.md#root-principal)。
+**平台租户 `(platform)` 拥有特权**：开启 root 后，只有这个租户的主体才可能是根主体。只从用户无法影响的来源签发
+`(platform)` 的令牌。谁算根主体、根主体会绕过什么，见[根主体](../guide/security-model.md#root-principal)。
 
 ## 社交登录 {#social-login}
 
@@ -236,3 +234,5 @@ cosec:
 不校验签名时，任何能直接访问这个服务的人都可以伪造任意主体。只对只能经由校验令牌的网关访问的服务启用它；见
 [信任边界](../guide/security-model.md#trust-boundaries)。
 :::
+
+**下一步：** 在自己的代码中请求决策，见[代码中的权限检查](./checks.md)。

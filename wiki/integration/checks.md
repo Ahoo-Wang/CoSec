@@ -175,3 +175,5 @@ anonymous request it becomes, with its real `401` reason and a `TOKEN_INVALID` w
 Without Actuator, inject the `AuthorizationExplainer` bean and call `explain(request, principal)` (or
 `explain(request)` to use the request's own credential), for example in a test that pins down who may do what.
 For test cases over policy files, see [Testing Policies](../policies/testing.md).
+
+**Next:** every property and its default, in [Configuration](../operations/configuration.md); or, to write the rules themselves, [Policy language](../policies/language.md).
