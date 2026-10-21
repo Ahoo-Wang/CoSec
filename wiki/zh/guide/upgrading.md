@@ -2,6 +2,32 @@
 
 各版本之间有哪些变化，以及你需要做什么。每个版本的发布说明见 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
+## 从 6.1.0 升级到 6.1.1 {#_6-1-0-to-6-1-1}
+
+6.1.1 是安全修复版本。请升级所有 6.x 部署；策略、配置属性和 API 都没有变化。
+
+### 安全修复 {#security-fixes}
+
+**Spring MVC 按完整的应用内路径授权。** 6.1.0 只按 `servletPath` 授权。`DispatcherServlet` 映射在前缀下时（`spring.mvc.servlet.path=/api`，
+或 Servlet 注册为 `/api/*`），每个请求的 `servletPath` 都是 `/api`，因此 `/api/admin/**` 上的拒绝规则永远匹配不上，而 `/api/**` 上的允许规则会放行所有请求。
+现在的路径是 `servletPath` 加上 `pathInfo`。默认的 `/` 映射下 `pathInfo` 为空，行为不变。
+
+**`..;` 不再能隐藏路径穿越。** 在 WebFlux 和 Gateway 上，`/public/..;/admin` 能通过路径穿越检查（`..;` 段不等于 `..`），
+可能被 `/public/**` 上的规则放行，而网关后面的 Servlet 容器会去掉 `;` 参数并返回 `/admin`。现在所有适配器都会从授权路径中去掉 `;` 路径参数，
+参数前面是 `.` 或 `..` 的段返回 `400`。
+
+**跳过签名校验的解析器只在关闭授权时使用。** 设置 `cosec.inject.enabled=true` 且授权开启时，过滤器拿到哪个 `SecurityContextParser`
+取决于两个自动配置的注册顺序；顺序反过来时，授权使用的是不校验令牌签名的解析器。现在它只在 `cosec.authorization.enabled=false` 时存在。
+
+### 兼容性 {#compatibility}
+
+- **前缀映射下的 Spring MVC**：`request.path` 现在包含 `pathInfo`，例如是 `/api/admin/users` 而不是 `/api`。`/api/**` 上的规则仍然匹配；
+  只写 `/api` 的规则在 6.1.0 中匹配前缀下的所有请求，现在只匹配 `/api` 本身，需要改为 `/api/**`。路径仍和 6.1.0 一样是百分号解码后的形式；7.0 改为未解码的请求 URI。
+- **`;` 路径参数**：`request.path` 不再包含它们（`/orders;jsessionid=1/42` 视为 `/orders/42`），含 `..;` 或 `.;` 段的路径返回 `400`。
+  默认的 Spring MVC 映射下，容器本来就已去掉这些参数。
+- **注入模式**：开启 `cosec.inject.enabled`、`cosec.authorization.enabled` 保持默认 `true`、又排除了 `CoSecAuthorizationAutoConfiguration` 的应用，
+  不再有 `SecurityContextParser`，启动会失败。请设置 `cosec.authorization.enabled=false`，这正是注入模式需要的配置。
+
 ## 从 6.0 升级到 6.1 {#_6-0-to-6-1}
 
 ### 破坏性变更 {#breaking-changes}

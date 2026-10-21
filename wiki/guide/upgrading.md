@@ -3,6 +3,41 @@
 What changes between versions and what to do about it. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
+## 6.1.0 to 6.1.1
+
+6.1.1 is a security release. Upgrade every 6.x deployment; there is no change to policies, properties or APIs.
+
+### Security fixes
+
+**Spring MVC authorizes the full path within the application.** 6.1.0 authorized only `servletPath`. With the
+`DispatcherServlet` under a prefix (`spring.mvc.servlet.path=/api`, or a servlet registered as `/api/*`),
+`servletPath` is `/api` for every request, so a deny on `/api/admin/**` never matched while an allow on `/api/**`
+let every request through. The path is now `servletPath` followed by `pathInfo`. Under the default `/` mapping
+`pathInfo` is empty, so nothing changes there.
+
+**`..;` no longer hides a path traversal.** On WebFlux and Gateway, `/public/..;/admin` passed the traversal check
+(the segment `..;` is not `..`) and could be authorized by a rule on `/public/**`, while a servlet container behind
+the gateway drops the `;` parameter and serves `/admin`. `;` path parameters are now removed from the authorized path
+on every adapter, and a `.` or `..` segment behind one answers `400`.
+
+**The parser that skips signature checks is used only without authorization.** With `cosec.inject.enabled=true` and
+authorization on, which `SecurityContextParser` the filters got depended on the order the two auto-configurations
+were registered in; registered the other way round, the parser that does not verify token signatures was used for
+authorization. It now exists only with `cosec.authorization.enabled=false`.
+
+### Compatibility
+
+- **Spring MVC under a prefix mapping**: `request.path` now includes `pathInfo`, for example `/api/admin/users`
+  instead of `/api`. Rules on `/api/**` keep matching; a rule on the bare `/api`, which in 6.1.0 matched every
+  request under the prefix, now matches only `/api` itself and must become `/api/**`. The path stays percent-decoded as in 6.1.0; 7.0 switches to the
+  undecoded request URI.
+- **`;` path parameters**: `request.path` no longer contains them (`/orders;jsessionid=1/42` is `/orders/42`), and
+  paths with a `..;` or `.;` segment answer `400`. Under the default Spring MVC mapping the container had already
+  removed them.
+- **Inject mode**: an application that enables `cosec.inject.enabled`, leaves `cosec.authorization.enabled` at its
+  default `true` and excludes `CoSecAuthorizationAutoConfiguration` no longer gets a `SecurityContextParser` and
+  fails at startup. Set `cosec.authorization.enabled=false`, which is what inject mode needs.
+
 ## 6.0 to 6.1
 
 ### Breaking changes
