@@ -221,6 +221,27 @@ under the 6.x key prefix (`cosec.authorization.cache.migration.legacy-key-prefix
 `Property [cosec.jwt.secret] must not be blank when JWT is enabled.` Set `cosec.jwt.secret` to a long random value
 from a secret store, or turn JWT off with `cosec.jwt.enabled=false` ([Configuration](./configuration.md#jwt)).
 
+### Startup fails with a redisRateLimiter bean conflict
+
+```text
+The bean 'redisRateLimiter', defined in class path resource [.../CoSecRedisRateLimiterAutoConfiguration.class], could
+not be registered. A bean with that name has already been defined in class path resource
+[org/springframework/cloud/gateway/config/GatewayRedisAutoConfiguration.class] and overriding is disabled.
+```
+
+A Spring Cloud Gateway application with CoSec's cache capability does not start on 6.1.0 to 7.0.0: Spring Cloud
+Gateway's Redis rate limiter and CoSec's Redis `RateLimiter` used the same bean name. 7.0.1 names CoSec's bean
+`cosecRedisRateLimiter`; upgrade. Do not set `spring.main.allow-bean-definition-overriding=true`: one bean then
+replaces the other, and Spring Cloud Gateway fails on the missing one instead.
+
+On an older version, declare the CoSec `RateLimiter` yourself; the auto-configured one, and its name, then step aside:
+
+```kotlin
+@Bean
+fun cosecRateLimiter(redisTemplate: StringRedisTemplate, properties: LimiterProperties): RateLimiter =
+    RedisRateLimiter(redisTemplate, properties.keyPrefix)
+```
+
 ### Startup fails on a cocache property
 
 CoCache 6 removed or renamed several 5.x properties, such as `cocache.redis.strict-failure`; the error names the

@@ -184,6 +184,26 @@ id，只在 id 不存在时写入文件。已存储的副本读不了时，即�
 `Property [cosec.jwt.secret] must not be blank when JWT is enabled.` 把 `cosec.jwt.secret` 设为来自密钥存储的足够长的随机值，
 或用 `cosec.jwt.enabled=false` 关闭 JWT（[配置](./configuration.md#jwt)）。
 
+### 启动时出现 redisRateLimiter bean 冲突 {#startup-fails-with-a-redisratelimiter-bean-conflict}
+
+```text
+The bean 'redisRateLimiter', defined in class path resource [.../CoSecRedisRateLimiterAutoConfiguration.class], could
+not be registered. A bean with that name has already been defined in class path resource
+[org/springframework/cloud/gateway/config/GatewayRedisAutoConfiguration.class] and overriding is disabled.
+```
+
+在 6.1.0 到 7.0.0 上，启用了 CoSec 缓存能力的 Spring Cloud Gateway 应用无法启动：Spring Cloud Gateway 的 Redis 限流器和
+CoSec 的 Redis `RateLimiter` 使用了同一个 bean 名称。7.0.1 把 CoSec 的 bean 命名为 `cosecRedisRateLimiter`，请升级。不要设置
+`spring.main.allow-bean-definition-overriding=true`：那样一个 bean 会替换另一个，Spring Cloud Gateway 会因缺少它自己的 bean 而失败。
+
+在旧版本上，自己声明 CoSec 的 `RateLimiter`，自动配置的那个 bean 及其名称就不会再注册：
+
+```kotlin
+@Bean
+fun cosecRateLimiter(redisTemplate: StringRedisTemplate, properties: LimiterProperties): RateLimiter =
+    RedisRateLimiter(redisTemplate, properties.keyPrefix)
+```
+
 ### cocache 配置项导致启动失败 {#startup-fails-on-a-cocache-property}
 
 CoCache 6 删除或重命名了若干 5.x 配置项，例如 `cocache.redis.strict-failure`；错误信息会给出替代项
