@@ -8,6 +8,13 @@ description: "CoSec 各版本之间有哪些破坏性变更，以及如何迁移
 面向把现有 CoSec 部署升级到新版本的团队。每一节列出破坏了什么、要改什么，以及一份检查清单；本页是迁移步骤的唯一出处。每个
 版本的发布说明见 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
+## 7.0.0 到 7.0.1 {#_7-0-0-to-7-0-1}
+
+Redis `RateLimiter` bean 的名称由 `redisRateLimiter` 改为 `cosecRedisRateLimiter`；旧名称与 Spring Cloud Gateway 使用的名称相同
+（[由此导致的启动失败](./troubleshooting.md#startup-fails-with-a-redisratelimiter-bean-conflict)）。它的类型和条件不变，所以按类型注入
+`RateLimiter` 或用自己的 bean 替换它都和以前一样。只有按名称 `redisRateLimiter` 引用 CoSec 这个 bean 的代码（`@Qualifier`、
+`getBean("redisRateLimiter")`、`@ConditionalOnBean(name = …)`）需要改用 `cosecRedisRateLimiter`。
+
 ## 6.1 到 7.0 {#_6-1-to-7-0}
 
 7.0 在多处收紧了授权：在这些地方，6.x 可能会误放行请求。它还迁移到了 [CoCache 6.6](https://cocache.ahoo.me/guide/migration-6)

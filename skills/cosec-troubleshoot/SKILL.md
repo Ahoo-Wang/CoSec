@@ -116,6 +116,7 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 - Counter-store outages skip a rule by default. Set the rule's `strictFailure: true` only when availability loss should return 429.
 - Denied requests (401/403) never spend permits. A rule that never applies usually has a non-matching `action`/`condition`, or its file is outside `cosec.limiter.locations`.
 - A rule without `key` shares one bucket among all matching requests; requests whose `key` part is empty also share one bucket. Quotas belong to the rule `id`.
+- On 6.1.0 to 7.0.0, a Spring Cloud Gateway application with the cache capability fails to start with `The bean 'redisRateLimiter' ... could not be registered ... GatewayRedisAutoConfiguration`: both register a bean named `redisRateLimiter`. Fixed in 7.0.1 (CoSec's bean is `cosecRedisRateLimiter`). Before that, declare your own CoSec `RateLimiter` bean (`RedisRateLimiter(stringRedisTemplate, limiterProperties.keyPrefix)`); never enable bean overriding, which makes Spring Cloud Gateway fail instead.
 - After upgrading to 6.1, policies using `rateLimiter`, `groupedRateLimiter`, `redisRateLimiter`, or `redisGroupedRateLimiter` fail to parse: migrate them to rate limit rules.
 
 ## Reproduce narrowly
