@@ -1,6 +1,6 @@
 # RFC 0003：策略快照分发（RFC 0001 迁移第 3 阶段）
 
-> 状态：提议（第 1 版，§12 的问题待维护者确认）· 上位文档：[RFC 0001](0001-target-architecture.md) §3.4、§6 第 3 阶段 ·
+> 状态：已确认（第 2 版，§12 的决定已于 2026-10-21 由维护者确认）· 上位文档：[RFC 0001](0001-target-architecture.md) §3.4、§6 第 3 阶段 ·
 > 前置：[RFC 0002](0002-pure-engine.md)（第 2 阶段，PR-1、PR-2 已合入，PR-3 进行中）·
 > 基线：`main` @ `a130eb90` · 交付：全部合入 `main`（8.0 线）；8.0 在 RFC 0001 第 2–6 阶段全部完成、各做完两轮审查之前不发布任何版本 ·
 > 范围：`cosec-core`、`cosec-cocache`、`cosec-spring-boot-starter`；`engine/`、`model/` 不改
@@ -25,15 +25,17 @@
 - **存储**（§4）：新增一个 CoCache 缓存 `PolicySnapshotCache: Cache<SnapshotKey, SnapshotDocument>`，`ttl = null`、
   `ReadFailureMode.THROW`、`ForeignFormatMode.FAIL`。一次发布只写一个 key，D4 在读写两侧都消失。编译后的快照由 CoSec 自己持有，
   **不依赖 CoCache L2 常驻**：`ttl = null` 时 CoCache 不做提前刷新，L2 每过 `localMaxAge` 必然冷读一次（§2 I4）。
-- **陈旧度有上界，并且可以观测**（§4.5）。落后时长定义为"距上次成功确认版本的时间"。默认 60 秒告警、5 分钟升级，可以按租户开启
+- **陈旧度有上界，并且可以观测**（§4.5）。落后时长定义为"距上次经条件读向 Redis 确认版本的时间"；条件读在摘要未变时不传正文，
+  带宽由变更决定（Q5）。默认 60 秒告警、5 分钟升级，可以按租户开启
   `fail-closed`（RFC 0001 §7.1）。本阶段 `fail-closed` 映射为 500：503 留到第 5 阶段（§2 I7）。
 - **热路径**（§5）：快照已加载时，策略数据零 I/O、零调度器切换。`CacheFutures.toLocalFirstMono` 删除。冷未命中在 CoSec 自己的
   有界编译线程上编译，请求在 `boundedElastic` 上继续；失败即拒绝。**`BlockingAware` 不在本阶段删除**：它管的是阻塞的自定义匹配器，
   不是策略数据，它的替代品 `AttributeProvider` 在第 5 阶段（§2 I2）。
 - **不改变任何决策**（§8）。门槛沿用 RFC 0002 的比较口径和离线回放，比较"第 2 阶段结束时的实现"与"读快照的实现"。另加一条更强的
   性质测试：同一份数据经快照和经仓库产生的 `PolicySet` **结构相同**。
-- **需要维护者先决定的三件事**：CoCache 增加条件写入（§4.6，Q5），RFC 0002 PR-6 保留比较器和回放工具（§8.1，Q12），以及用快照文档
-  SPI 取代 `PolicyRepository`/`AppRolePermissionRepository` 这两个 SPI（§4.2，Q3）。完整列表见 §12。
+- **三项前置决定已确认**（2026-10-21）：CoCache 6.7 增加条件写入和**必需的**条件读（§4.5、§4.6，Q5；CoCache 6.7 的发布本身仍待维护者确认），
+  RFC 0002 PR-6 保留比较器和回放工具（§8.1，Q12，本 PR 同时修订 RFC 0002），以及用快照文档 SPI 取代
+  `PolicyRepository`/`AppRolePermissionRepository` 这两个 SPI（§4.2，Q3）。完整列表见 §12。
 - 拆成 6 个 PR（§11）。前 4 个只做加法，可以在 RFC 0002 PR-6 之前开工；切换（PR-5）和删除（PR-6）必须等 RFC 0002 PR-6 和本阶段的门槛。
 
 ---
@@ -81,13 +83,13 @@ RFC 0001 是目标架构，对第 3 阶段的描述有几处彼此矛盾，或�
 | I1 | §3.4：快照按租户分区，`Cache<TenantId, SnapshotDocument>`，版本 `(platform, tenant)` | 现有数据没有租户维度（§3.1）：`PolicyCache` 按策略 id 存放，`GlobalPolicyIndexCache` 只有一个 key，`AppPermissionCache` 按 `appId` 存放。`Policy` 虽然实现了 `Tenant`，但 `SimpleAuthorization` 从不读 `tenantId`，全局策略对所有租户生效，主体可以引用任何租户的策略。按租户分区就是改变语义 | 按数据实际的形状分区（§3.2），形状与第 4 阶段同构（§3.7）。Q1 |
 | I2 | §6 第 3 阶段："删除 `BlockingAware`" | `BlockingAware` 声明的是**匹配器**是否阻塞（`cosec-core/.../policy/BlockingAware.kt`），与策略数据从哪里来无关。快照只能消除"读数据"的切换，消除不了"执行阻塞匹配器"的切换。取代阻塞匹配器的 `AttributeProvider` 在 §6 第 5 阶段才有。本阶段删除它，含阻塞匹配器的策略就会在 Netty 事件循环上执行 | 本阶段只删除策略数据的切换（`toLocalFirstMono`）；`BlockingAware` 留到第 5 阶段。Q9 |
 | I3 | §3.4：`suspend fun snapshot(tenant)`、`fun updates(): Flow<SnapshotChange>` | 协程是第 5 阶段（§6），第 3 阶段的 `SimpleAuthorization` 和 `SecurityPipeline` 仍是 Reactor | 本阶段的接口返回 `CompletableFuture`，变更通知用监听器；第 5 阶段加上挂起包装。Q10 |
-| I4 | §3.4："CoSec 把 `localMaxAge` 设为快照最大落后时长"；§3.11：严格读失败模式；§7.1："默认只告警" | 如果编译后的快照常驻在 CoCache L2 里，`localMaxAge` 到期后 L2 就丢掉副本，下一次读取去 Redis。Redis 不可用时严格读抛错，每个请求都是 500，也就是默认 fail-closed，与 §7.1 矛盾。另外，`ttl = null` 时 CoCache 不做提前刷新：`AbstractEngine.localEntry` 只在 L1 有寿命时才计算 `refreshAt`，所以每个文档每过 `localMaxAge` 必有一个请求冷读 Redis | 编译后的快照由 `SnapshotSource` 持有，只会被更新的版本替换或被 LRU 淘汰，不随 L2 到期；`localMaxAge` 只约束"确认版本"的读取（§4.5）。Q7 |
+| I4 | §3.4："CoSec 把 `localMaxAge` 设为快照最大落后时长"；§3.11：严格读失败模式；§7.1："默认只告警" | 如果编译后的快照常驻在 CoCache L2 里，`localMaxAge` 到期后 L2 就丢掉副本，下一次读取去 Redis。Redis 不可用时严格读抛错，每个请求都是 500，也就是默认 fail-closed，与 §7.1 矛盾。另外，`ttl = null` 时 CoCache 不做提前刷新：`AbstractEngine.localEntry` 只在 L1 有寿命时才计算 `refreshAt`，所以每个文档每过 `localMaxAge` 必有一个请求冷读 Redis | 编译后的快照由 `SnapshotSource` 持有，只会被更新的版本替换或被 LRU 淘汰，不随 L2 到期；版本由对 L1 的条件读确认（§4.5），`localMaxAge` 只约束冷加载和写入方经过的 L2。Q5、Q7 |
 | I5 | §3.4："编译失败就保留旧版本并告警" | 本阶段不改变决策。7.0 读到无法解码的策略时，请求得到 500；保留旧版本意味着这些请求改为按旧内容决策，可能放行新内容本要拒绝的请求 | 本阶段保持 7.0 的行为（§4.4 F4、F5）；"保留旧版本"在第 6 阶段控制面发布前强制编译之后再引入。Q8 |
 | I6 | P11、§3.5：限流规则"也是快照的一部分" | 本阶段的任务把限流排除在外；限流规则现在由 `RateLimitRuleProvider` 提供（静态列表），执行它们的义务在第 5 阶段 | 规则和计数器都不进本阶段的快照（§3.6）。Q17 |
 | I7 | §3.4：超过上限时 fail-closed "该租户的请求返回 503" | 503 在第 5 阶段引入（RFC 0002 §3.5、Q3）。现在引入要连同 `SecurityStatus`、`WebAdapterParityTest`、`web.md` 一起改，属于状态码变更 | 本阶段映射为 500（`SecurityStatus.ERROR`），第 5 阶段统一改为 503。Q16 |
 | I8 | §3.4：`SnapshotSource` 是"数据面唯一的策略存储 SPI"，未加载时"异步加载并编译" | 把编译放进 SPI，每个存储实现都要重复编译、版本比较、单飞和失效处理，而这些正是容易出错、需要统一测试的部分 | 拆成两层：SPI `SnapshotDocumentStore` 只读写文档、通知变更；`SnapshotSource` 是 `cosec-core` 的类，负责编译与持有（§4.2）。Q3 |
-| I9 | §3.7：`PolicyStore` "乐观并发（CAS on version）"；§3.11："一次发布只写一个 key" | CoCache 6.6 没有条件写入（`Cache`/`AsyncCache` 只有无条件的 `put`，`RemoteStore.reclaim` 比较摘要但只转为 lease）。一个文档包含多条策略后，"读—改—写"会丢失并发更新，例如多个实例启动时 `LocalPolicyInitializer` 同时写入本地策略 | 发布需要条件写入，建议在 CoCache 中增加（§4.6）。Q5 |
-| I10 | §6：第 2 阶段的门槛"之后每个改变语义的阶段都沿用" | RFC 0002 PR-6 删除比较器 `EngineParity`、回放工具和 `PolicyTestKit.parity`。第 3 阶段要证明等价，第 4 阶段要做影子门槛，都需要它们 | 建议修订 RFC 0002 PR-6：把它们改名为通用的比较器和回放工具保留下来，而不是删除（§8.1）。Q12 |
+| I9 | §3.7：`PolicyStore` "乐观并发（CAS on version）"；§3.11："一次发布只写一个 key" | CoCache 6.6 没有条件写入（`Cache`/`AsyncCache` 只有无条件的 `put`，`RemoteStore.reclaim` 比较摘要但只转为 lease）。一个文档包含多条策略后，"读—改—写"会丢失并发更新，例如多个实例启动时 `LocalPolicyInitializer` 同时写入本地策略 | 在 CoCache 6.7 中增加条件写入与条件读（§4.5、§4.6）。Q5 |
+| I10 | §6：第 2 阶段的门槛"之后每个改变语义的阶段都沿用" | RFC 0002 PR-6 删除比较器 `EngineParity`、回放工具和 `PolicyTestKit.parity`。第 3 阶段要证明等价，第 4 阶段要做影子门槛，都需要它们 | RFC 0002 PR-6 已随本 RFC 修订：把它们改名为通用的比较器和回放工具保留下来，而不是删除（§8.1）。Q12 |
 
 另外，RFC 0001 §1.1 的 D4 一行写"读侧的混合版本要靠 3.4 节的快照解决"。本阶段兑现这一条：全局策略的内容与"哪些策略是全局的"放在
 同一份文档里，一次读取得到的是同一个版本（§3.2）。
@@ -316,7 +318,7 @@ CacheSpec.builder<SnapshotKey, SnapshotDocument>("PolicySnapshotCache")
   这个缓存（§6）。
 - 直接用 `CacheRuntime.create(spec)` 得到 `Cache<SnapshotKey, SnapshotDocument>`，**不**经 `CacheProxies.create` 包一层接口代理（现在的四个缓存都是
   JDK 动态代理），所以不需要代理 hint（§10）。
-- `localMaxAge` 默认 30 秒（§4.5、Q7），比现在四个缓存的 5 分钟短：L2 在这里只是"确认版本"的读缓存，不是常驻副本。
+- `localMaxAge` 默认 30 秒（§4.5、Q7），比现在四个缓存的 5 分钟短：L2 在这里只服务于冷加载和写入方，不是常驻副本；已安装的快照由条件读直接向 L1 确认。
 - `AppSpacedRoleId` 的约束（`appId` 不含 `:`、角色 id 不含 `@`）沿用：`App` 的 key 只接受有效的 `appId`，发布者拒绝无效的角色 id。
 
 ### 4.2 两层接口
@@ -401,7 +403,7 @@ sequenceDiagram
 |---|---|---|
 | 变更通知 | `SnapshotChangeListener.onChanged`；Redis 实现在 `<p>:snapshot` 命名空间上订阅 CoCache 的失效通道（Q6） | 标记脏，调度重新加载 |
 | 通知可能丢失 | `onReset`（CoCache 在订阅重新建立后回调） | 所有已安装的 key 标记脏，按有界并发逐个重新加载 |
-| 周期性重新校验 | 每 `revalidate-interval`（默认 10 秒）一次 | 对每个已安装的 key 调 `read`，通常命中 L2，几乎没有 Redis 开销；L2 过期后（≤ `localMaxAge`）才读 Redis |
+| 周期性重新校验 | 每 `revalidate-interval`（默认 10 秒）一次 | 对每个已安装的 key 发一次**条件读**（§4.5）：带上已安装修订的摘要直接问 L1，摘要未变时 Redis 只回"未变"，不传正文；变了才返回整份文档 |
 | 冷未命中 | §4.3 | 加载 |
 
 **有序安装**：每个 key 同一时间至多一个在途加载；加载期间收到通知就标记脏，这次加载完成后立即再加载一次。所以同一个 key 的安装严格按开始顺序
@@ -410,8 +412,8 @@ sequenceDiagram
 **修订号只是元数据，不做门卫**：Redis 是权威存储。读到的修订号比已安装的小（例如 Redis 主从切换丢了最近一次写），照样安装并告警
 （`cosec.snapshot.regressions` 计数），否则这个实例会永远与 Redis、与刚冷加载的其他实例不一致。修订号相同则只刷新 `confirmedAt`，不重新编译。
 
-**只解析头部**：`SnapshotDocumentCodec` 解码时只读 `schema`、`revision`、`publishedAt`，正文保留为字节，编译时才完整解析。重新校验时 L2 过期
-导致的整份读取因此只花一次 Redis 传输，不花 JSON 解析和编译。
+**只解析头部**：`SnapshotDocumentCodec` 解码时只读 `schema`、`revision`、`publishedAt`，正文保留为字节，编译时才完整解析。条件读返回正文时
+（文档确实变了），解析和编译只发生一次。
 
 **监听器的顺序**：CoCache 的 Redis 和内存后端都按订阅顺序在同一线程上回调同一命名空间的监听器（`RedisInvalidationChannel` 的
 `CopyOnWriteArrayList`）。缓存创建时 CoCache 引擎先订阅，CoSec 的监听器后订阅，所以 CoSec 收到通知时，引擎已经淘汰了 L2，随后的 `read`
@@ -433,16 +435,22 @@ F5 与 F6 的区别是有意的：F6 是"不知道有没有新版本"，旧快�
 
 ### 4.5 陈旧时间有上界
 
-**定义**：一个已安装文档的**落后时长** `lag = now - confirmedAt`，`confirmedAt` 是最近一次 `read` 成功返回、并且修订号等于已安装修订（或者安装了新修订）的时间。
+**定义**：一个已安装文档的**落后时长** `lag = now - confirmedAt`，`confirmedAt` 是最近一次对 L1 的条件读成功返回"未变"（或者返回了新修订并安装成功）的时间。
 一次评估的落后时长取它用到的文档中最大的一个。
 
-**上界**：Redis 可达时，`lag` ≤ `revalidate-interval` + 一次读取的耗时。CoCache 的 L2 本身相对 Redis 的陈旧度，按 CoCache RFC 0003 G1，事件送达时
-≤ 事件延迟，事件丢失时 ≤ `min(localMaxAge, 心跳超时 + 重连时长)`。所以一个文档相对 Redis 的真实陈旧度 ≤ `lag + localMaxAge`。默认参数下，
-Redis 可达时 ≤ 40 秒；通知正常送达时通常是毫秒级（通知直接触发重新加载）。
+**条件读（必需，Q5）**：CoCache 6.7 提供一个按摘要比较的读取，例如 `AsyncCache.lookupIfChanged(key, digest)`：总是读 L1（绕过 L2），在同一个
+Lua 脚本里比较当前值的摘要，未变时只返回"未变"（不传正文），变了才返回整份值，不存在时返回 `Absent`。两处使用：
 
-**为什么 `localMaxAge` 要短**：`lag` 只能观测到"CoSec 对 L2 的确认"，L2 对 Redis 的落后看不到。`localMaxAge` 必须不大于告警阈值，60 秒告警才有意义；
-默认取 30 秒（Q7）。代价是每个实例每个已加载文档每 30 秒读一次 Redis，带宽 = 文档大小 × 实例数 ÷ 30 秒，用真实数据测量（§4.8）。
-如果太贵，CoCache 增加"摘要未变则不返回正文"的条件读（Q5 的同一个改动），带宽就与文档大小无关。
+- `SnapshotSource` 的周期性重新校验和 `onReset` 后的重新校验（§4.4）；
+- CoCache 自己在 L2 副本到达 `localMaxAge` 时的重新确认：用条件读确认 L1 未变就续期 L2 副本，而不是重新传输和解码整份值。
+
+**上界**：因为重新校验直接问 L1，`lag` 就是文档相对 Redis 的陈旧度上界，不再需要叠加 L2 的 `localMaxAge`。Redis 可达时，`lag` ≤ `revalidate-interval`
++ 一次条件读的耗时，默认参数下约 10 秒；通知正常送达时通常是毫秒级（通知直接触发重新加载）。L2 只服务于冷加载和写入方，它的陈旧度仍按 CoCache RFC 0003 G1
+（事件送达时 ≤ 事件延迟，事件丢失时 ≤ `min(localMaxAge, 心跳超时 + 重连时长)`），但已安装的快照不经过 L2 确认。
+
+**带宽由变更决定，而不是由实例数决定**：没有条件读时，每个实例每个已加载文档每 `localMaxAge` 要重新传输整份文档，带宽 = 文档大小 × 实例数 × 文档数 ÷ `localMaxAge`，
+大文档、多实例时不可接受。有了条件读，常量部分只是每个实例每个文档每 `revalidate-interval` 一次几十字节的往返；传输正文的次数 = 发生变更的文档数 × 实例数，
+与文档大小和 `localMaxAge` 无关。`localMaxAge` 因此可以保持 30 秒（Q7），不再受带宽约束。
 
 **超过阈值时**（RFC 0001 §7.1 的决定，参数化为属性）：
 
@@ -479,11 +487,12 @@ N 个实例同时启动就是 N 个并发写入方。而 CoCache 6.6 只有无�
 
 | 方案 | 做法 | 评价 |
 |---|---|---|
-| **A. 在 CoCache 中增加条件写入（推荐）** | 例如 `Cache.replace(key, expected: Digest?, value)`：在 L1 的同一个 Lua 脚本里比较当前值的摘要再写入并广播；`expected = null` 表示"仅当不存在"。CoCache 已经有 `Digest`（`RemoteStore.reclaim` 用它做条件回收），缺的只是"比较后写入"。读取用一次绕过 L2 的读取（或者同一改动里的 `lookup` 变体），保证比较的是 L1 的当前值 | 正确性由一个原子脚本保证，CoSec 侧只是"冲突则重读重试"。CoCache 是同一维护者的项目，可以随 6.7 发布 |
-| B. CoSec 侧加锁 | 每个文档一把 Redis 锁（`SET NX PX` + 比较后删除），锁内先 `CacheAdmin.clearLocal()` 清掉本节点 L2 再读 | 锁过期与慢写入之间仍有窗口，需要 fencing token；`clearLocal` 清的是整个缓存的 L2；属于事后难以审查正确性的代码 |
+| **A. 在 CoCache 6.7 中增加条件写入（已决定）** | 例如 `Cache.replace(key, expected: Digest?, value)`：在 L1 的同一个 Lua 脚本里比较当前值的摘要再写入并广播；`expected = null` 表示"仅当不存在"。CoCache 已经有 `Digest`（`RemoteStore.reclaim` 用它做条件回收），缺的只是"比较后写入"。读取用 §4.5 的条件读（绕过 L2），保证比较的是 L1 的当前值 | 正确性由一个原子脚本保证，CoSec 侧只是"冲突则重读重试"。CoCache 是同一维护者的项目，可以随 6.7 发布 |
+| B. CoSec 侧加锁（只在 CoCache 6.7 未获准发布时作为计划） | 每个文档一把 Redis 锁（`SET NX PX` + 比较后删除），锁内先 `CacheAdmin.clearLocal()` 清掉本节点 L2 再读 | 锁过期与慢写入之间仍有窗口，需要 fencing token；`clearLocal` 清的是整个缓存的 L2；属于事后难以审查正确性的代码 |
 | C. 不处理 | — | 会丢更新，不可接受 |
 
-推荐 A。PR-3（§11）以 CoCache 提供条件写入为前提；如果维护者决定不改 CoCache，PR-3 改用 B，并在 PR 中附上锁过期窗口的分析和测试。
+已决定 A（Q5）。PR-3（§11）依赖 CoCache 6.7 同时提供条件写入和条件读（§4.5）。**CoCache 6.7 的发布本身仍需维护者确认**；只有在它未获准发布时，
+PR-3 才改用 B，并在 PR 中附上锁过期窗口的分析和测试；那时条件读也没有替代品，重新校验退回到读整份文档，`localMaxAge` 要按 §4.8 的带宽测量重新确定。
 
 **写入后的可见性**：条件写入成功即 L1 已更新、失效已广播；本节点的 `SnapshotSource` 立即标记该 key 为脏（不依赖广播回到自己）。
 `SnapshotPublisher` 的 `Mono` 完成时，本节点后续的请求看到新版本（读己之写）；其他节点在通知送达后看到，最迟 `lag` 上界。
@@ -528,12 +537,12 @@ Redis，或者在维护窗口内对生产 Redis 只读运行读取器。另用 R
 
 | 测量项 | 方法 | 用来决定 |
 |---|---|---|
-| 文档大小（JSON 字节数，以及 CoCache 编码后的字节数） | 读取器输出 | 是否分片（下表）；`localMaxAge` 的带宽 |
+| 文档大小（JSON 字节数，以及 CoCache 编码后的字节数） | 读取器输出 | 是否分片（下表）；变更时的传输量 |
 | 条目数：策略数、全局策略数、语句数；每个应用的权限数、授予的 `(role, space)` 数、空间数 | 读取器输出 | 规模假设（RFC 0001 §3.4 "万级语句以内"）是否成立 |
 | 编译耗时：p50、p99、最大 | 每个文档在 JDK 25 上编译 30 次，丢弃前 10 次 | 编译线程数；`cold-load-timeout` |
 | 编译结果的常驻内存 | 编译前后 `System.gc()` + `MemoryMXBean` 堆差值，另用 JOL 的 `GraphLayout.totalSize` 交叉验证 | LRU 上限；每实例能常驻多少个应用 |
 | CoCache 往返：`put`、冷 `get`（L1）、L2 命中 `get`，以及另一个实例收到失效通知的延迟 | 对本地 Redis 各测 100 次，报告 p50/p99 | CoCache 是否适合存放最大的文档 |
-| 重新校验带宽 | 文档大小 × 部署实例数 ÷ `localMaxAge` | `localMaxAge` 的默认值；是否需要条件读（Q5） |
+| 重新校验开销 | 条件读的往返耗时（p50/p99）× 文档数 × 部署实例数 ÷ `revalidate-interval`；变更时的正文传输 = 文档大小 × 实例数 | `revalidate-interval` 的默认值；CoCache 6.7 未发布时的回退方案 |
 | 活跃应用数 | `requests.jsonl` 中按 5 分钟、1 小时窗口统计的不同 `appId` 数（部署级，是每实例的上界） | LRU 上限的默认值 |
 
 **输出与数据处理**：控制台摘要和 `snapshot-measure.json`，只含计数、大小、耗时分布和输入的 SHA-256，不含任何策略内容、id 或主体数据；
@@ -641,7 +650,7 @@ PR-5 起成为唯一的行为，用户在 8.0.0 GA 中第一次看到：
 | # | 差异 | 谁能观察到 | 处理 |
 |---|---|---|---|
 | X1 | **Redis 不可用时的行为**：7.0 在 L2 副本到期（默认 5 分钟）后，读到该数据的请求开始 500；本阶段已安装的快照继续使用（F6），落后时长增长并告警，只有开启 `fail-closed` 的租户在上限后 500 | 运维、依赖"Redis 故障即拒绝"的部署 | 接受：这是 RFC 0001 §7.1 已确认的决定。需要旧行为的部署对全部租户开启 `fail-closed`，并把上限设为 5 分钟。写进 `upgrading.md` 和 `storage.md` |
-| X2 | **I/O 形态**：7.0 每个请求在 L2 未命中时读 Redis；本阶段每个实例每个已加载文档每 `localMaxAge` 读一次整份文档，外加通知触发的重新加载 | Redis 带宽、Redis 读次数 | 用 §4.8 测量；必要时条件读（Q5） |
+| X2 | **I/O 形态**：7.0 每个请求在 L2 未命中时读 Redis，L2 每 `localMaxAge` 重新传输整份值；本阶段每个实例每个已加载文档每 `revalidate-interval` 一次条件读（未变时不传正文），只有文档变更时才传输整份文档 | Redis 读次数（更多但更小）、Redis 带宽（由变更决定） | 接受；往返开销用 §4.8 测量 |
 | X3 | **全局策略的顺序**：7.0 全局层按 `GlobalPolicyIndexCache` 返回的集合顺序（Redis 集合的迭代顺序，没有约定）；本阶段按文档顺序，即按 `policyId` 排序 | 多条全局语句同时命中、效果相同时，**哪一条**被记为做出决策的语句（`VerifyContext`、审计的 `source`），决策本身不变 | 接受：7.0 的顺序本来就没有定义，可能因实例而异。门槛中两边读同一份导出数据，按同一顺序装载（§8.2），不受影响。写进 `upgrading.md` |
 | X4 | **错误的异常类型**：读取失败时，7.0 由仓库抛出 `CacheReadException` 等；本阶段抛出 `SnapshotUnavailableException`（原异常作为 `cause`） | 按异常类型判断的自定义错误处理、日志告警规则 | 接受，状态码不变（500）。写进 `upgrading.md` 和 `troubleshooting.md` |
 | X5 | **D4 的情形不再出现**：7.0 中"索引里有 id 却没有内容"让每个请求 500（`MissingPolicyException`，`source = GLOBAL_POLICY_INDEX`）；文档里没有单独的索引，这种状态不可能存在 | 依赖这个异常的告警 | 接受；转换时拒绝这种数据（§4.7） |
@@ -659,13 +668,12 @@ PR-5 起成为唯一的行为，用户在 8.0.0 GA 中第一次看到：
 （引擎 + 快照加载器，下称**候选**）给出相同的结果。
 
 比较器沿用 RFC 0002 §8.1 的 `EngineParity` 和 §8.3 的元组（状态、`AuthorizeResult.reason`、做出决策的规则、出错时的异常类名）。问题是 RFC 0002 PR-6
-会删除 `EngineParity`、回放工具和 `PolicyTestKit.parity`（§2 I10）。建议（Q12）修订 RFC 0002 PR-6：
+原计划删除 `EngineParity`、回放工具和 `PolicyTestKit.parity`（§2 I10）。已决定（Q12）修订 RFC 0002 PR-6，修订随本 PR 写进
+[RFC 0002](0002-pure-engine.md) 的 §8.1、§9.2 和 §10 Q14：
 
 - `EngineParity` 改名为 `DecisionParity`，比较"任意两个 `DecisionAuthorization`"，留在 `cosec-core` 的测试夹具中（`testFixtures`，不进发布的 jar）；
 - 回放任务 `engineReplay` 改名为 `decisionReplay`，用参数选择两边的实现；
 - `PolicyTestKit.parity` 照常删除（它是公共 API）。
-
-如果维护者选择让 PR-6 照原计划删除，本阶段的 PR-4 就从 RFC 0002 PR-4 的代码重新引入它们。
 
 异常类名一项对本阶段有一个已知的固定差异（X4）：比较器对"两边都出错"的样本比较 `cause` 链中最内层的异常类名。
 
@@ -768,11 +776,11 @@ B/op 不随它变化（GLOBAL 层复用预构造的 `LayerInput`）。
 |---|---|---|---|---|---|
 | PR-1 | `feat(core): add the snapshot source with on-demand loading and bounded staleness` | `SnapshotKey`、`SnapshotDocument`、`SnapshotVersion`、`SnapshotDocumentStore`/`SnapshotChangeListener` SPI、内存 `SnapshotDocumentStore`、`SnapshotSource`（对编译函数泛化：单飞、有序安装、重新校验、LRU、落后时长、fail-closed 判定、预热、指标接口）；F1–F11、F14、F15 的测试和 P6（用一个假的编译函数） | 本 RFC 获批 | **能**：不依赖引擎适配层 | `:cosec-core:check` 通过，变更行覆盖率 ≥ 80% |
 | PR-2 | `feat(core): compile policy snapshots and load the PolicySet from them` | `SnapshotCompiler`（JSON → `PolicyData`/`AppPermissionData` → PR-3 的规则组，含 `Broken`）、`CompiledPolicies`/`CompiledApp`、`PolicySnapshot`、`SnapshotPolicySetLoader`；P5、P7；`SimpleAuthorizationBenchmark` 的 `source` 参数（`snapshot` 来源在 PR-5 之前经测试用的装配运行）；`SnapshotCompileBenchmark`；`cosec-cocache` 的 `jmh` 源码集 | PR-1；RFC 0002 PR-3（`PolicySetLoader`、`PolicyGroup`、`AppPermissionRules`） | **能**：RFC 0002 PR-3 合入即可 | `:cosec-core:check` 及依赖它的模块通过；P5 固定种子 2,000 例零差异 |
-| PR-3 | `feat(cocache): store snapshot documents in CoCache` | `PolicySnapshotCache` 声明（`storeOfRecord`，显式 key 编码）、`SnapshotDocumentCodec`、`RedisSnapshotDocumentStore`（含失效通道订阅）、`RedisSnapshotPublisher`（条件写入）、`CoSec7xReader` 与 `snapshotConvert` 任务、`RuntimeHintsRegistrar`；F3、F9、F12 在真实 Redis 上的测试；`CacheTtlPolicyTest`、`StrictCacheFailureTest` 增加针对新缓存的用例 | PR-1；CoCache 条件写入（Q5，或者改用方案 B） | **能** | `:cosec-cocache:check` 通过（需要 Redis）；一个人为制造的并发写入测试证明不丢更新 |
-| PR-4 | `test: add snapshot parity, replay and sizing tools` | `DecisionParity` 对快照来源的装配；回放工具增加候选为快照的模式；百万例任务；`snapshotMeasure` 任务（§4.8）；§8.2 第一行的参数化测试 | PR-2、PR-3；RFC 0002 PR-4（比较器、回放工具） | **能**：基于 RFC 0002 PR-4 的代码；Q12 决定它们在 RFC 0002 PR-6 之后的去留 | 用仓库内的合成数据跑通回放和测量；一个人为制造的差异出现在报告中；百万例跑通 |
+| PR-3 | `feat(cocache): store snapshot documents in CoCache` | `PolicySnapshotCache` 声明（`storeOfRecord`，显式 key 编码）、`SnapshotDocumentCodec`、`RedisSnapshotDocumentStore`（含失效通道订阅）、`RedisSnapshotPublisher`（条件写入）、`CoSec7xReader` 与 `snapshotConvert` 任务、`RuntimeHintsRegistrar`；F3、F9、F12 在真实 Redis 上的测试；`CacheTtlPolicyTest`、`StrictCacheFailureTest` 增加针对新缓存的用例 | PR-1；CoCache 6.7 的条件写入与条件读（Q5；6.7 的发布待维护者确认，未获准时才按 §4.6 方案 B） | **能** | `:cosec-cocache:check` 通过（需要 Redis）；一个人为制造的并发写入测试证明不丢更新 |
+| PR-4 | `test: add snapshot parity, replay and sizing tools` | `DecisionParity` 对快照来源的装配；回放工具增加候选为快照的模式；百万例任务；`snapshotMeasure` 任务（§4.8）；§8.2 第一行的参数化测试 | PR-2、PR-3；RFC 0002 PR-4（比较器、回放工具） | **能**：基于 RFC 0002 PR-4 的代码；RFC 0002 PR-6 之后改用改名后的 `DecisionParity`、`decisionReplay`（Q12） | 用仓库内的合成数据跑通回放和测量；一个人为制造的差异出现在报告中；百万例跑通 |
 | — | **门槛** | 维护者在本地：对 RFC 0002 的同一批导出数据跑回放（§8.3）；对完整数据跑 `snapshotMeasure`（§4.8），据此确认 Q7、Q14、Q19 的数字 | PR-4 | — | 回放零差异；测量摘要贴在 issue 或 PR-5 中 |
 | PR-5 | `refactor!: authorize from the policy snapshot` | `SimpleAuthorization` 改为 §5.1 的流程；starter 装配 `SnapshotSource`、`RedisSnapshotDocumentStore`、`SnapshotPublisher`、健康指标、actuator 端点、`cosec.authorization.snapshot.*` 属性；`LocalPolicyInitializer`、`PolicyHistory`、解释、`AuthorizationChecker`、`PolicyTestKit` 改为读快照或经发布者写入；影子改为快照叠加，删除 `Overlay*Repository`；`CoSecSchemaMarker` 升为 `"8"`；`WebAdapterParityTest` 的新用例；文档（§11.3）；JMH 对比 | RFC 0002 PR-6；PR-4；门槛 | **不能** | 全部模块 `check` 通过；门槛证据（计数与哈希）附在 PR 上；§9 的目标满足 |
-| PR-6 | `refactor(cocache)!: remove the per-request policy repositories` | 删除 `PolicyRepository`、`AppRolePermissionRepository`、两个 Redis 仓库、四个缓存及其 bean 和属性（`cosec.authorization.cache.policy.*`、`.role.*`）、`CacheFutures.kt`、`LocalCacheFastPathTest`；参数化测试去掉仓库来源；若 Q12 选择删除，删除比较器和回放工具；文档中仓库的描述 | PR-5 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
+| PR-6 | `refactor(cocache)!: remove the per-request policy repositories` | 删除 `PolicyRepository`、`AppRolePermissionRepository`、两个 Redis 仓库、四个缓存及其 bean 和属性（`cosec.authorization.cache.policy.*`、`.role.*`）、`CacheFutures.kt`、`LocalCacheFastPathTest`；参数化测试去掉仓库来源（`DecisionParity`、`decisionReplay` 保留，Q12）；文档中仓库的描述 | PR-5 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
 
 PR-1 和 PR-3 互不依赖对方的实现（PR-3 只用 PR-1 的 SPI 类型），可以在 PR-1 的类型合入后并行；PR-2 等 RFC 0002 PR-3。
 
@@ -801,30 +809,31 @@ PR-1 到 PR-4 不改 `wiki/`：它们不改变任何行为，新的类型在 PR-
 
 ## 12. 决定
 
-以下问题需要维护者确认。每一项给出推荐和理由；标注"测量后确认"的，PR 可以先按推荐值实现，门槛的测量结果出来后再定数字。
+以下各项已于 **2026-10-21** 由维护者确认，全部按本文的推荐决定；Q5 另加一条：条件读是必需的，不是可选的。标注"测量后确认"的（Q7、Q14、Q18、Q19），
+PR 按这里的值实现，数字由门槛的测量结果（§4.8）校准。
 
-| # | 问题 | 推荐 | 理由 |
+| # | 问题 | 决定 | 理由 |
 |---|---|---|---|
-| Q1 | **快照怎么分区**（§3.2，§2 I1） | 一份共享的 `Policies` 文档 + 每个应用一份 `App` 文档；不按租户 | 现有数据没有租户维度，按租户分区就是改变语义；两种文档之间没有引用，分别带版本读取不会混合；形状与第 4 阶段的"平台 + 租户"同构 |
-| Q2 | **引擎签名**（§3.5） | 本阶段不改，仍是 `evaluate(request, PolicySet)`；`evaluate(request, snapshot)` 在第 4 阶段编译执行时引入 | 本阶段的规则仍是 PR-3 的适配对象，引擎没有理由知道快照的形状；不改引擎才能直接沿用第 2 阶段的门槛 |
-| Q3 | **SPI**（§4.2，§2 I8；AGENTS.md 要求先问） | 用 `SnapshotDocumentStore` 取代 `PolicyRepository`/`AppRolePermissionRepository` 的读侧；编译和持有放在 `cosec-core` 的 `SnapshotSource`，不进 SPI | 快照要求"整份文档"，按 id 或按角色查询的仓库无法提供；把编译放进 SPI 会让每个实现重复最容易出错的部分 |
-| Q4 | **写 API**（§4.6） | `SnapshotPublisher` 只覆盖 7.0 已有的写操作（策略、应用权限、角色授予）；第 6 阶段由控制面取代 | 读写分离（P9）在本阶段先落到接口层面；不提前设计第 6 阶段的修订、回滚和审批 |
-| Q5 | **条件写入**（§4.6，§2 I9） | 在 CoCache 6.7 中增加按摘要比较的条件写入，以及配套的绕过 L2 的读取；同一改动可以提供"摘要未变则不返回正文"的条件读（§4.5） | 一个文档包含多条策略后，"读—改—写"必须原子，CoCache 6.6 没有这个原语；在 CoCache 的 Lua 脚本里做，比 CoSec 自己加锁容易证明正确 |
-| Q6 | **变更通知的来源**（§4.4） | 在快照命名空间上订阅 CoCache 的 `InvalidationChannel`（`CacheRuntime.backend.channel.subscribe`，公开的 SPI），周期性重新校验兜底 | 通知到达即重新加载，陈旧度通常是毫秒级；用的是 CoCache 的 SPI 而非内部类，Redis 与内存后端都支持同一命名空间的多个监听器。备选：请 CoCache 提供面向用户的变更回调，或只靠周期性重新校验 |
-| Q7 | **陈旧度参数**（§4.5，§2 I4）（测量后确认） | `localMaxAge` 30 秒、`revalidate-interval` 10 秒、告警 60 秒、升级 5 分钟、`fail-closed` 按租户可选、默认上限 30 分钟 | 沿用 RFC 0001 §7.1；`localMaxAge` 不大于告警阈值，落后时长才能如实观测；带宽用 §4.8 校准 |
-| Q8 | **编译或解码失败**（§4.4，§2 I5） | 本阶段保持 7.0 的语义：失败的文档或条目让到达它的层 500，不保留旧版本（F4、F5）；读取暂时失败时保留已安装的版本（F6）。RFC 0001 的"保留旧版本"推迟到第 6 阶段控制面在发布前编译之后 | 本阶段承诺不改变决策；保留旧版本会让本该拒绝的请求按旧内容放行 |
-| Q9 | **`BlockingAware`**（§5.2，§2 I2） | 本阶段保留，只删除策略数据的调度器切换；第 5 阶段 `AttributeProvider` 落地后删除 | 它针对阻塞匹配器，删除它会让这些匹配器在事件循环上执行，违反"不阻塞事件循环" |
-| Q10 | **`SnapshotSource` 的编程模型**（§4.2，§2 I3） | 本阶段返回 `CompletableFuture`，变更通知用监听器；第 5 阶段加挂起包装 | 协程在第 5 阶段才进入运行时；`CompletableFuture` 与 CoCache 的异步 API 直接对应 |
-| Q11 | **7.0 数据的迁移**（§4.7） | 本阶段只提供读取器和 `snapshotConvert`（测试源码集），用于门槛、测量和开发环境；面向用户的 7.x → 8.0 迁移在第 4 阶段一次性提供；schema 标记升为 `"8"` | 8.0 在第 6 阶段之前不发布，用户只迁移一次；第 3 阶段的文档布局是内部的中间状态 |
-| Q12 | **比较器与回放工具**（§8.1，§2 I10） | 修订 RFC 0002 PR-6：`EngineParity`、`engineReplay` 改名为通用的 `DecisionParity`、`decisionReplay` 留在测试夹具中，不删除；`PolicyTestKit.parity` 照常删除 | 第 3 阶段证明等价、第 4 阶段的影子门槛都需要它们；先删再加只是重复劳动 |
-| Q13 | **全局策略的顺序**（§7 X3） | 按 `policyId` 排序 | 7.0 的顺序是 Redis 集合的迭代顺序，没有定义；确定的顺序让解释和审计在实例之间一致；决策不变 |
-| Q14 | **规模上限与分片**（§4.8）（测量后确认） | 文档 ≤ 8 MB、编译 p99 ≤ 200 ms；超限时按 §4.8 的方案分片 | 给测量一个明确的判定标准；分片只影响 `SnapshotKey` 和加载器，接口不变 |
-| Q15 | **预热与就绪**（§4.3） | 启动时预热 `Policies` 和 `prewarm-apps`；完成前 readiness 不就绪；预热失败不阻止启动，按退避重试 | 避免实例在快照未就绪时接流量；不阻止启动，与 7.0 "启动时不读策略" 的可用性一致 |
-| Q16 | **快照不可用或陈旧超限时的状态码**（§2 I7） | 本阶段 500；第 5 阶段统一改为 503 | 503 属于状态码变更，RFC 0002 Q3 已决定放在第 5 阶段 |
-| Q17 | **限流规则**（§3.6，§2 I6） | 本阶段不进快照；第 5 阶段随义务一起进入 | 规则现在是静态配置，没有分发问题；义务的形状在第 5 阶段才确定 |
-| Q18 | **冷加载的请求侧等待上限**（§4.3）（测量后确认） | 2 秒 | CoCache 的 `asyncTimeout` 默认 30 秒，对请求太长；用 §4.8 的编译耗时校准 |
-| Q19 | **应用文档的 LRU 上限**（§4.3）（测量后确认） | 1024 个 | 用 §4.8 的活跃应用数和每个应用文档的常驻内存校准 |
-| Q20 | **快照版本的可见性**（§1.2） | 本阶段经 DEBUG 日志和 `cosecsnapshot` 端点暴露，不改 `AuditEvent`；第 5 阶段写进 `DecisionEvent` | 改 `AuditEvent` 是可观测性契约的变更，第 5 阶段 `DecisionEvent` 本来就要重新定义它 |
+| Q1 | **快照怎么分区**（§3.2，§2 I1） | **已决定**：一份共享的 `Policies` 文档 + 每个应用一份 `App` 文档；不按租户 | 现有数据没有租户维度，按租户分区就是改变语义；两种文档之间没有引用，分别带版本读取不会混合；形状与第 4 阶段的"平台 + 租户"同构 |
+| Q2 | **引擎签名**（§3.5） | **已决定**：本阶段不改，仍是 `evaluate(request, PolicySet)`；`evaluate(request, snapshot)` 在第 4 阶段编译执行时引入 | 本阶段的规则仍是 PR-3 的适配对象，引擎没有理由知道快照的形状；不改引擎才能直接沿用第 2 阶段的门槛 |
+| Q3 | **SPI**（§4.2，§2 I8；AGENTS.md 要求先问） | **已决定**：用 `SnapshotDocumentStore` 取代 `PolicyRepository`/`AppRolePermissionRepository` 的读侧；编译和持有放在 `cosec-core` 的 `SnapshotSource`，不进 SPI | 快照要求"整份文档"，按 id 或按角色查询的仓库无法提供；把编译放进 SPI 会让每个实现重复最容易出错的部分 |
+| Q4 | **写 API**（§4.6） | **已决定**：`SnapshotPublisher` 只覆盖 7.0 已有的写操作（策略、应用权限、角色授予）；第 6 阶段由控制面取代 | 读写分离（P9）在本阶段先落到接口层面；不提前设计第 6 阶段的修订、回滚和审批 |
+| Q5 | **条件写入与条件读**（§4.5、§4.6，§2 I9） | **已决定**：在 CoCache 6.7 中增加按摘要比较的条件写入，以及按摘要比较的条件读（总是读 L1，摘要未变时不返回正文）。条件读是**必需的**：`SnapshotSource` 的重新校验和 CoCache 在 `localMaxAge` 到期时的重新确认都用它。PR-3 依赖两者。CoCache 6.7 的发布本身仍需维护者确认；未获准时才按 §4.6 方案 B | 一个文档包含多条策略后，"读—改—写"必须原子，CoCache 6.6 没有这个原语；在 CoCache 的 Lua 脚本里做，比 CoSec 自己加锁容易证明正确。条件读让重新校验直接确认 L1，`lag` 成为真实陈旧度的上界，带宽由变更而不是实例数和文档数决定 |
+| Q6 | **变更通知的来源**（§4.4） | **已决定**：在快照命名空间上订阅 CoCache 的 `InvalidationChannel`（`CacheRuntime.backend.channel.subscribe`，公开的 SPI），周期性重新校验兜底 | 通知到达即重新加载，陈旧度通常是毫秒级；用的是 CoCache 的 SPI 而非内部类，Redis 与内存后端都支持同一命名空间的多个监听器。备选：请 CoCache 提供面向用户的变更回调，或只靠周期性重新校验 |
+| Q7 | **陈旧度参数**（§4.5，§2 I4）（测量后确认） | **已决定**：`localMaxAge` 30 秒、`revalidate-interval` 10 秒、告警 60 秒、升级 5 分钟、`fail-closed` 按租户可选、默认上限 30 分钟 | 沿用 RFC 0001 §7.1；条件读直接向 L1 确认，落后时长就是真实陈旧度的上界；条件读的往返开销用 §4.8 校准 |
+| Q8 | **编译或解码失败**（§4.4，§2 I5） | **已决定**：本阶段保持 7.0 的语义：失败的文档或条目让到达它的层 500，不保留旧版本（F4、F5）；读取暂时失败时保留已安装的版本（F6）。RFC 0001 的"保留旧版本"推迟到第 6 阶段控制面在发布前编译之后 | 本阶段承诺不改变决策；保留旧版本会让本该拒绝的请求按旧内容放行 |
+| Q9 | **`BlockingAware`**（§5.2，§2 I2） | **已决定**：本阶段保留，只删除策略数据的调度器切换；第 5 阶段 `AttributeProvider` 落地后删除 | 它针对阻塞匹配器，删除它会让这些匹配器在事件循环上执行，违反"不阻塞事件循环" |
+| Q10 | **`SnapshotSource` 的编程模型**（§4.2，§2 I3） | **已决定**：本阶段返回 `CompletableFuture`，变更通知用监听器；第 5 阶段加挂起包装 | 协程在第 5 阶段才进入运行时；`CompletableFuture` 与 CoCache 的异步 API 直接对应 |
+| Q11 | **7.0 数据的迁移**（§4.7） | **已决定**：本阶段只提供读取器和 `snapshotConvert`（测试源码集），用于门槛、测量和开发环境；面向用户的 7.x → 8.0 迁移在第 4 阶段一次性提供；schema 标记升为 `"8"` | 8.0 在第 6 阶段之前不发布，用户只迁移一次；第 3 阶段的文档布局是内部的中间状态 |
+| Q12 | **比较器与回放工具**（§8.1，§2 I10） | **已决定**：修订 RFC 0002 PR-6：`EngineParity`、`engineReplay` 改名为通用的 `DecisionParity`、`decisionReplay` 留在测试夹具中，不删除；`PolicyTestKit.parity` 照常删除 | 第 3 阶段证明等价、第 4 阶段的影子门槛都需要它们；先删再加只是重复劳动 |
+| Q13 | **全局策略的顺序**（§7 X3） | **已决定**：按 `policyId` 排序 | 7.0 的顺序是 Redis 集合的迭代顺序，没有定义；确定的顺序让解释和审计在实例之间一致；决策不变 |
+| Q14 | **规模上限与分片**（§4.8）（测量后确认） | **已决定**：文档 ≤ 8 MB、编译 p99 ≤ 200 ms；超限时按 §4.8 的方案分片 | 给测量一个明确的判定标准；分片只影响 `SnapshotKey` 和加载器，接口不变 |
+| Q15 | **预热与就绪**（§4.3） | **已决定**：启动时预热 `Policies` 和 `prewarm-apps`；完成前 readiness 不就绪；预热失败不阻止启动，按退避重试 | 避免实例在快照未就绪时接流量；不阻止启动，与 7.0 "启动时不读策略" 的可用性一致 |
+| Q16 | **快照不可用或陈旧超限时的状态码**（§2 I7） | **已决定**：本阶段 500；第 5 阶段统一改为 503 | 503 属于状态码变更，RFC 0002 Q3 已决定放在第 5 阶段 |
+| Q17 | **限流规则**（§3.6，§2 I6） | **已决定**：本阶段不进快照；第 5 阶段随义务一起进入 | 规则现在是静态配置，没有分发问题；义务的形状在第 5 阶段才确定 |
+| Q18 | **冷加载的请求侧等待上限**（§4.3）（测量后确认） | **已决定**：2 秒 | CoCache 的 `asyncTimeout` 默认 30 秒，对请求太长；用 §4.8 的编译耗时校准 |
+| Q19 | **应用文档的 LRU 上限**（§4.3）（测量后确认） | **已决定**：1024 个 | 用 §4.8 的活跃应用数和每个应用文档的常驻内存校准 |
+| Q20 | **快照版本的可见性**（§1.2） | **已决定**：本阶段经 DEBUG 日志和 `cosecsnapshot` 端点暴露，不改 `AuditEvent`；第 5 阶段写进 `DecisionEvent` | 改 `AuditEvent` 是可观测性契约的变更，第 5 阶段 `DecisionEvent` 本来就要重新定义它 |
 
 ---
 
