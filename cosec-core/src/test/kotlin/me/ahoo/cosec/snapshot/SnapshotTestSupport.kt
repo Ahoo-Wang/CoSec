@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -244,6 +245,7 @@ fun testSource(
     metrics: SnapshotMetrics = SnapshotMetrics.NOOP,
     compileExecutor: Executor? = directExecutor,
     ticker: AtomicLong = AtomicLong(),
+    scheduler: ScheduledExecutorService? = null,
 ): SnapshotSource<Compiled, Compiled> =
     SnapshotSource(
         store,
@@ -253,7 +255,7 @@ fun testSource(
         clock,
         metrics,
         compileExecutor,
-        null
+        scheduler
     ) { ticker.incrementAndGet() }
 
 val Snapshot<Compiled, Compiled>.policiesCompiled: Compiled

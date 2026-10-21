@@ -32,6 +32,7 @@ import java.util.concurrent.ThreadFactory
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.LongSupplier
 
@@ -382,31 +383,45 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 return CompletableFuture.completedFuture(it)
             }
             val shared = load()
-            val own = CompletableFuture<SnapshotEntry<T>>()
+            val own = RequestView()
             val timeout = if (shared.isDone) null else scheduleTimeout(own)
             shared.whenComplete { entry, error ->
                 val result = entry ?: transientFailure(clock.instant(), unwrap(error))
-                if (own.complete(result)) {
+                val outcome = if (result.state is DocumentState.Failed) LoadOutcome.FAILED else LoadOutcome.COLD
+                if (own.answer(result, outcome)) {
                     timeout?.cancel(false)
-                    val outcome = if (result.state is DocumentState.Failed) LoadOutcome.FAILED else LoadOutcome.COLD
-                    metrics.onLoad(key.kind, outcome)
                 }
             }
             return own
         }
 
-        private fun scheduleTimeout(own: CompletableFuture<SnapshotEntry<T>>): ScheduledFuture<*>? {
+        /**
+         * One request's future. Whoever answers first (the shared load or the timeout) records the outcome before
+         * completing it, so a caller that sees the result also sees the metric.
+         */
+        private inner class RequestView : CompletableFuture<SnapshotEntry<T>>() {
+            private val answered = AtomicBoolean()
+
+            fun answer(entry: SnapshotEntry<T>, outcome: LoadOutcome): Boolean {
+                if (!answered.compareAndSet(false, true)) {
+                    return false
+                }
+                metrics.onLoad(key.kind, outcome)
+                complete(entry)
+                return true
+            }
+        }
+
+        private fun scheduleTimeout(own: RequestView): ScheduledFuture<*>? {
             val timeout = options.coldLoadTimeout
             val onTimeout = Runnable {
                 val error = SnapshotUnavailableException(key, "not loaded within $timeout", TimeoutException())
-                if (own.complete(failedEntry(error, clock.instant()))) {
-                    metrics.onLoad(key.kind, LoadOutcome.TIMEOUT)
-                }
+                own.answer(failedEntry(error, clock.instant()), LoadOutcome.TIMEOUT)
             }
             return try {
                 scheduler.schedule(onTimeout, timeout.toNanos(), TimeUnit.NANOSECONDS)
             } catch (rejected: RejectedExecutionException) {
-                own.complete(transientFailure(clock.instant(), rejected))
+                own.answer(transientFailure(clock.instant(), rejected), LoadOutcome.FAILED)
                 null
             }
         }
