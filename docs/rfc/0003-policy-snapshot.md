@@ -691,7 +691,7 @@ PR-5 起成为唯一的行为，用户在 8.0.0 GA 中第一次看到：
 原计划删除 `EngineParity`、回放工具和 `PolicyTestKit.parity`（§2 I10）。已决定（Q12）修订 RFC 0002 PR-6，修订随本 PR 写进
 [RFC 0002](0002-pure-engine.md) 的 §8.1、§9.2 和 §10 Q14：
 
-- `EngineParity` 改名为 `DecisionParity`，比较"任意两个 `DecisionAuthorization`"，留在 `cosec-core` 的测试夹具中（`testFixtures`，不进发布的 jar）；
+- 比较"任意两个 `DecisionAuthorization`"的 `DecisionParity` 留在 `cosec-core` 的测试夹具中（`testFixtures`，不进发布的 jar）；RFC 0002 PR-4 已直接以这个名字和形状引入它，不再经过 `EngineParity`；
 - 回放任务 `engineReplay` 改名为 `decisionReplay`，用参数选择两边的实现；
 - `PolicyTestKit.parity` 照常删除（它是公共 API）。
 

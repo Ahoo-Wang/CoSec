@@ -32,16 +32,18 @@ import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.AuthorizationImpl
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
-import me.ahoo.cosec.authorization.VerifyContext.Companion.getVerifyContext
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.configuration.JsonConfiguration
-import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.explain.toDecisionRef
+import me.ahoo.cosec.parity.DecisionParity
+import me.ahoo.cosec.parity.ParityResult
+import me.ahoo.cosec.parity.ParityVerdict
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.AppRolePermissionData
 import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.permission.PermissionGroupData
 import me.ahoo.cosec.permission.RolePermissionData
+import me.ahoo.cosec.pipeline.SecurityStatus
 import me.ahoo.cosec.policy.BlockingAware
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.policy.PolicyData
@@ -56,12 +58,10 @@ import kotlin.random.Random
 
 /**
  * P3 (RFC 0002 §8.4): over random policies, grants, repositories and requests, [AuthorizationImpl.LEGACY] and
- * [AuthorizationImpl.ENGINE] give the same outcome, compared as in §8.3: the result, the deciding rule, the rule set on
- * the caller's context, and on failure the exception's class and message.
+ * [AuthorizationImpl.ENGINE] give the same outcome: the same §8.3 tuple through [DecisionParity], the same rule set on
+ * the context, and on failure the same message.
  */
 class EngineParityPropertyTest {
-    private class Outcome(val value: List<Any?>, val failed: Boolean, val authorized: Boolean)
-
     /** Always throws [error]: a matcher that fails, as a regex timeout or a bug would. */
     private class ThrowingCondition(private val error: RuntimeException) : ConditionMatcher {
         override val type: String = "throwing"
@@ -209,33 +209,32 @@ class EngineParityPropertyTest {
         else -> Mono.just(value)
     }.let { if (nextBoolean()) it.hide() else it }
 
-    private fun outcome(
-        impl: AuthorizationImpl,
+    private fun compare(
         repositories: Pair<PolicyRepository, AppRolePermissionRepository>,
         blocked: Boolean,
         root: Boolean,
         request: Request,
         principal: CoSecPrincipal
-    ): Outcome {
-        val authorization = impl.create(
-            repositories.first,
-            repositories.second,
-            object : BlacklistChecker {
-                override fun check(request: Request, context: SecurityContext): Mono<Boolean> = Mono.just(!blocked)
-            },
-            RootPrincipalMatcher { root },
-        )
-        val context = SimpleSecurityContext(principal)
-        return authorization.decide(request, context)
-            .map {
-                Outcome(
-                    listOf(it.result, it.verifyContext?.toDecisionRef(), context.getVerifyContext()?.toDecisionRef()),
-                    failed = false,
-                    authorized = it.result.authorized,
-                )
-            }
-            .onErrorResume { Mono.just(Outcome(listOf(it.javaClass, it.message), failed = true, authorized = false)) }
-            .block()!!
+    ): ParityResult {
+        val blacklistChecker = object : BlacklistChecker {
+            override fun check(request: Request, context: SecurityContext): Mono<Boolean> = Mono.just(!blocked)
+        }
+        val rootPrincipalMatcher = RootPrincipalMatcher { root }
+        val (policyRepository, appRolePermissionRepository) = repositories
+        return DecisionParity(
+            AuthorizationImpl.LEGACY.create(
+                policyRepository,
+                appRolePermissionRepository,
+                blacklistChecker,
+                rootPrincipalMatcher
+            ),
+            AuthorizationImpl.ENGINE.create(
+                policyRepository,
+                appRolePermissionRepository,
+                blacklistChecker,
+                rootPrincipalMatcher
+            ),
+        ).compare(request, principal)
     }
 
     @Test
@@ -288,12 +287,18 @@ class EngineParityPropertyTest {
             )
             val blocked = random.nextInt(25) == 0
             val root = random.nextInt(25) == 0
-            val repositories = policyRepository to appRolePermissionRepository
-            val legacy = outcome(AuthorizationImpl.LEGACY, repositories, blocked, root, request, principal)
-            val engine = outcome(AuthorizationImpl.ENGINE, repositories, blocked, root, request, principal)
-            engine.value.assert().describedAs("iteration $iteration").isEqualTo(legacy.value)
-            if (legacy.failed) failures++
-            if (legacy.authorized) allowed++
+            val result = compare(policyRepository to appRolePermissionRepository, blocked, root, request, principal)
+            val legacy = result.baseline
+            val engine = result.candidate
+            result.verdict.assert().describedAs(
+                "iteration $iteration: $legacy vs $engine"
+            ).isEqualTo(ParityVerdict.SAME)
+            // Beyond the §8.3 tuple: the rule each side set on its context, and the failure's message.
+            engine.verifyContext?.toDecisionRef().assert().describedAs("iteration $iteration")
+                .isEqualTo(legacy.verifyContext?.toDecisionRef())
+            engine.failure?.message.assert().describedAs("iteration $iteration").isEqualTo(legacy.failure?.message)
+            if (legacy.failure != null) failures++
+            if (legacy.tuple.status == SecurityStatus.ALLOWED) allowed++
         }
         // Every kind of outcome must occur for the comparison to mean anything.
         failures.assert().isBetween(ITERATIONS / 50, ITERATIONS / 2)
@@ -302,6 +307,8 @@ class EngineParityPropertyTest {
 
     companion object {
         private const val SEED = 20261021
-        private const val ITERATIONS = 2_000
+
+        /** `./gradlew :cosec-core:engineParity -PparityIterations=1000000` runs more (RFC 0002 §8.2). */
+        private val ITERATIONS = System.getProperty("cosec.parity.iterations")?.toInt() ?: 2_000
     }
 }

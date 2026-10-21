@@ -162,6 +162,20 @@ object PolicyTestKit {
     }
 
     /**
+     * The suite's policies and grants as the repositories [run] reads, for `PolicyTestKit.parity` in the test fixtures
+     * (RFC 0002 §5.5). Deleted with it in RFC 0002 PR-6.
+     */
+    internal fun repositoriesOf(suite: PolicyTestSuite): Pair<PolicyRepository, AppRolePermissionRepository> {
+        val policies = JsonResources.readAll(suite.policies, Policy::class.java) { it.id }
+        val appPermissions = JsonResources.readAll(
+            suite.appPermissions,
+            AppPermission::class.java
+        ) { it.id }.associateBy { it.id }
+        return InMemoryPolicyRepository(policies) to
+            InMemoryAppRolePermissionRepository(appPermissions, grantsOf(suite, appPermissions))
+    }
+
+    /**
      * The suite's grants per app, keyed by role and space.
      */
     private fun grantsOf(
