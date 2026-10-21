@@ -50,11 +50,11 @@ jobs:
         working-directory: wiki
 
       - name: Validate Mermaid diagrams
-        run: node .vitepress/validate-mermaid.mjs
+        run: pnpm run check:mermaid
         working-directory: wiki
 
       - name: Check links, anchors and en/zh parity
-        run: node .vitepress/check-docs.mjs
+        run: pnpm run check:docs
         working-directory: wiki
 
       - name: Build with VitePress

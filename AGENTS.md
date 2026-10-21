@@ -21,8 +21,8 @@ a change that fails to compile. When unsure, deny, and ask.
   (`docker run -d -p 6379:6379 redis:7`). Without it they fail; that is not your change breaking them.
 - Detekt runs with `autoCorrect = true`: `check` and `detekt` **rewrite source files**. Review and commit them.
 - Codecov requires ≥ 80 % coverage on changed lines.
-- Docs (`wiki/`, VitePress, en + zh), run from `wiki/`: `pnpm install`, then
-  `node .vitepress/validate-mermaid.mjs`, `node .vitepress/check-docs.mjs`, `pnpm build` (fails on dead links).
+- Docs (`wiki/`, VitePress, en + zh), run from `wiki/`: `pnpm install`, then `pnpm check:mermaid`
+  (needs Chrome), `pnpm check:docs`, `pnpm build` (fails on dead links). Writing rules: [`wiki/AGENTS.md`](wiki/AGENTS.md).
 
 A change is done when `check` passes for every module it touches and for its dependents (e.g. a
 `cosec-core` pipeline change also runs `:cosec-spring-boot-starter:check`), and the docs below are updated.
@@ -73,21 +73,26 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 
 | Change | Also update |
 |---|---|
-| New action/condition type or option | factory in `cosec-core` + its `META-INF/services` entry, `schema/*.schema.json` (no test checks it), `wiki/guide/policies.md`, `skills/cosec-policy-author` |
-| `cosec.*` property or default | `wiki/guide/configuration.md` |
-| Status codes, adapters, security-context access, request attributes | `wiki/guide/web-integration.md` |
-| Rate limit rules, backends, headers | `wiki/guide/rate-limiting.md`, `schema/rate-limit-rule.schema.json` |
-| Shadow mode (candidates, diffs) | `wiki/guide/policies.md#trying-changes-in-shadow-mode` |
-| Decision order or combination in `SimpleAuthorization` | the narration in `AuthorizationExplainer` (`ExplainerConsistencyTest` fails until they agree) |
-| New failure symptom | `wiki/guide/troubleshooting.md`, `skills/cosec-troubleshoot` |
-| Tokens, login, revocation | `wiki/guide/authentication.md` |
+| New action/condition type or option | factory in `cosec-core` + its `META-INF/services` entry, `schema/*.schema.json` (no test checks it), `wiki/policies/language.md`, `skills/cosec-policy-author` |
+| App permissions, roles, role grant scope | `wiki/policies/role-permissions.md` |
+| `cosec.*` property or default | `wiki/operations/configuration.md` |
+| Status codes, adapters, security-context access, request attributes | `wiki/integration/web.md` |
+| Checking permissions in code, explaining decisions | `wiki/integration/checks.md` |
+| Rate limit rules, backends, headers | `wiki/policies/rate-limiting.md`, `schema/rate-limit-rule.schema.json` |
+| Shadow mode (candidates, diffs), policy validation, access reviews | `wiki/policies/testing.md` |
+| Decision order or combination in `SimpleAuthorization` | the narration in `AuthorizationExplainer` (`ExplainerConsistencyTest` fails until they agree), `wiki/guide/security-model.md` |
+| Policy storage, Redis, publishing and rollback | `wiki/operations/storage.md` |
+| Audit events, spans, metrics | `wiki/operations/observability.md` |
+| New failure symptom | `wiki/operations/troubleshooting.md`, `skills/cosec-troubleshoot` |
+| Tokens, login, revocation | `wiki/integration/authentication.md` |
 | Architecture, invariants, performance numbers | `wiki/architecture/overview.md` |
 | Extension points | `wiki/architecture/extending.md`, `skills/cosec-custom-matcher` |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
-| Breaking change (public API, `cosec.*` property, authorization semantics) | `wiki/guide/upgrading.md`: what breaks and how to migrate |
+| Breaking change (public API, `cosec.*` property, authorization semantics) | `wiki/operations/upgrading.md`: what breaks and how to migrate |
 
 Docs: link to files, never line numbers; verify claims against code, not other docs. Mermaid labels use
-`<br>` (not `<br/>`); sequence diagrams use `autonumber`.
+`<br>` (not `<br/>`); sequence diagrams use `autonumber`. The full writing rules (page types, where each fact
+lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
 
 ## Conventions
 

@@ -3,15 +3,20 @@
   "version": "1.0.0",
   "private": true,
   "description": "CoSec Security Framework Documentation",
+  "type": "module",
   "packageManager": "pnpm@11.28.5",
   "scripts": {
     "dev": "vitepress dev",
     "build": "vitepress build",
-    "preview": "vitepress preview"
+    "preview": "vitepress preview",
+    "fix:mermaid": "node scripts/fix-mermaid.mjs",
+    "check:mermaid": "node scripts/check-mermaid.mjs",
+    "check:docs": "node .vitepress/check-docs.mjs"
   },
   "devDependencies": {
-    "medium-zoom": "^1.1.0",
+    "mermaid": "^12.2.0",
+    "svg-pan-zoom": "^3.6.2",
     "vitepress": "^1.6.4",
-    "vitepress-mermaid-renderer": "^1.2.2"
+    "vitepress-plugin-mermaid": "^2.0.17"
   }
 }
