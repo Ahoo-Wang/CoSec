@@ -124,6 +124,11 @@ id 请用 `appRoles`）。`AppRolePermission.rolePermissionIndexer` 的默认实
 匿名调用方返回 `401`（令牌校验失败时原因为 `Token Expired` 或 `Token Invalid`），已认证调用方返回 `403`。
 把 `401` 当作"需要重新登录"的客户端，对这类请求也会收到 `401`。
 
+**策略 id 不能以 `history:` 开头。** 策略历史把策略 `<id>` 的修订记录存放在 `<prefix>:policy:history:<id>`（以及 `<id>:seq`）下，
+与策略本身在同一个命名空间中，因此 id 为 `history:<id>` 的策略会与策略 `<id>` 的历史记录共用一个 key。
+`RedisPolicyRepository.setPolicy` 现在会拒绝这样的 id，报 `Policy id [...] must not start with [history:]`；启动时把这样的本地策略写入 Redis 也会失败。
+`history`、`history-viewer` 这类 id 不受影响。升级前请重命名 id 以 `history:` 开头的策略；6.x 迁移会把这类 key 当作策略历史跳过。
+
 **OpenAPI 生成的应用 id 把 `:` 替换为 `-`。** `OpenAPIAppPermissionGenerator` 由 OpenAPI 标题生成应用 id，而应用 id 不能再含有 `:`。
 标题含有 `:` 的应用（例如 `orders:api`）的 id 变为 `orders-api`；客户端必须在 `CoSec-App-Id` 中发送新的 id，角色授权也要为新 id 写入。
 

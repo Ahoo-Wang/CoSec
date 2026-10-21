@@ -169,6 +169,13 @@ for `"part"` and check each value against the [supported parts](./policies.md#va
 or `Token Invalid` when its token failed verification), `403` for an authenticated one. Clients that treat `401` as
 "sign in again" now get it for these requests too.
 
+**Policy ids may not start with `history:`.** The policy history stores the revisions of policy `<id>` under
+`<prefix>:policy:history:<id>` (and `<id>:seq`), inside the namespace of the policies themselves, so a policy with the
+id `history:<id>` would share a key with the history of policy `<id>`. `RedisPolicyRepository.setPolicy` now rejects
+such ids with `Policy id [...] must not start with [history:]`, and so does startup when a local policy with one is
+written to Redis. Ids such as `history` or `history-viewer` are unaffected. Rename any policy whose id starts with
+`history:` before upgrading; the 6.x migration skips such keys as policy history.
+
 **OpenAPI-generated app ids replace `:` with `-`.** `OpenAPIAppPermissionGenerator` derives the app id from the
 OpenAPI title, and app ids may no longer contain `:`. An app whose title contains `:` (for example `orders:api`)
 gets the id `orders-api`; clients must send the new id in `CoSec-App-Id`, and its role grants must be written for it.

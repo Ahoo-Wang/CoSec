@@ -192,6 +192,11 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 （例如在标记出现之前就运行过 7.0 的测试环境）也用同样的方法解决：`migrate()` 会跳过已迁移的数据并写入标记。
 在可能存在 6.x 数据时不要手动写入标记。标记中是其他 schema 版本时，说明数据是更新版本的 CoSec 写入的。
 
+## 发布策略时 id 被保留 {#publishing-a-policy-fails-with-a-reserved-id}
+
+`Policy id [history:...] must not start with [history:], which holds the policy history`：策略历史把策略 `<id>` 的修订记录存放在
+`<prefix>:policy:history:<id>` 下，所以从 7.0 起以 `history:` 开头的 id 被保留。请重命名该策略（例如 `policy-history-...`），并更新引用它的主体。
+
 ## 迁移前发布策略失败 {#publishing-a-policy-fails-before-the-migration}
 
 `setPolicy`（管理接口，或启动时 `force-refresh=true` 的本地策略）失败，抛出 `CacheWriteException`，原因是

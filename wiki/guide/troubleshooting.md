@@ -225,6 +225,12 @@ itself wrote, for example in a test environment that ran 7.0 before the marker e
 `migrate()` skips what is already migrated and writes the marker. Do not write the marker by hand while 6.x data
 may exist. A marker holding another schema version means a newer CoSec wrote the data.
 
+## Publishing a policy fails with a reserved id
+
+`Policy id [history:...] must not start with [history:], which holds the policy history`: the policy history keeps
+the revisions of policy `<id>` under `<prefix>:policy:history:<id>`, so ids starting with `history:` are reserved since
+7.0. Rename the policy (for example `policy-history-...`) and update the principals that list it.
+
 ## Publishing a policy fails before the migration
 
 `setPolicy` (an administration API, or local policies with `force-refresh=true` at startup) fails with

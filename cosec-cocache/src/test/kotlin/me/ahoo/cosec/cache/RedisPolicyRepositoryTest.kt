@@ -165,4 +165,25 @@ internal class RedisPolicyRepositoryTest {
         caches.policyCache["leaking"].assert().isNull()
         caches.globalPolicyIndexCache[CACHE_KEY].assert().isEmpty()
     }
+
+    @Test
+    fun setPolicyRejectsIdsInThePolicyHistoryNamespace() {
+        // `<p>:policy:history:<id>` holds the revisions of policy <id>: a policy `history:<id>` would share its key.
+        listOf("history:orders", "history:orders:seq", "history:").forEach { id ->
+            repository.setPolicy(policy(id, PolicyType.GLOBAL))
+                .test()
+                .expectErrorMatches { it is IllegalArgumentException && it.message.orEmpty().contains("[$id]") }
+                .verify()
+            caches.policyCache[id].assert().isNull()
+        }
+        caches.globalPolicyIndexCache[CACHE_KEY].assert().isEmpty()
+    }
+
+    @Test
+    fun setPolicyAcceptsIdsThatOnlyStartWithHistory() {
+        listOf("history", "history-viewer", "History:orders").forEach { id ->
+            repository.setPolicy(policy(id, PolicyType.CUSTOM)).block()
+            caches.policyCache[id].assert().isNotNull()
+        }
+    }
 }
