@@ -39,13 +39,17 @@ import kotlin.random.Random
  * changing a response: the [delegate]'s decision is always the one returned.
  *
  * The candidates come from [policyProvider], policies laid over the enforced ones by id and app permissions by app id, and are evaluated by a second
- * [SimpleAuthorization] on a fresh security context marked as a policy evaluation, so custom matchers can skip
+ * [SimpleAuthorization] (see [candidateFactory]) on a fresh security context marked as a policy evaluation, so custom matchers can skip
  * side effects. The candidate run happens inline, while the request is still alive, because transport requests
  * (servlet requests in particular) must not be read after they complete. It costs a second evaluation on every
  * sampled request, so bound it with [sampleRate]. Its failures and the [sink]'s are logged and dropped.
  *
  * @param sampleRate the share of allowed and denied requests to shadow, from 0 to 1
  * @param reportRuleChanges also report [ShadowDiffKind.RULE_CHANGED] when the result is the same
+ * @param candidateFactory builds the authorization that evaluates the candidates, from the overlay repositories,
+ *        [blacklistChecker] and [rootPrincipalMatcher]. It has to be the implementation that enforces, which the
+ *        default [SimpleAuthorization] is; tests pass [me.ahoo.cosec.authorization.EngineAuthorization] to run both
+ *        implementations (RFC 0002 §5.3). Removed with the legacy implementation.
  */
 @Suppress("LongParameterList")
 class ShadowAuthorization(
@@ -58,7 +62,13 @@ class ShadowAuthorization(
     private val rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE,
     private val sampleRate: Double = 1.0,
     private val reportRuleChanges: Boolean = false,
-    private val random: Random = Random.Default
+    private val random: Random = Random.Default,
+    private val candidateFactory: (
+        PolicyRepository,
+        AppRolePermissionRepository,
+        BlacklistChecker,
+        RootPrincipalMatcher
+    ) -> Authorization = ::SimpleAuthorization
 ) : DecisionAuthorization,
     Delegated<Authorization> {
     companion object {
@@ -123,7 +133,7 @@ class ShadowAuthorization(
         }
         candidate?.takeIf { it.policies === policies && it.appPermissions === appPermissions }
             ?.let { return it.authorization }
-        val authorization = SimpleAuthorization(
+        val authorization = candidateFactory(
             OverlayPolicyRepository(policyRepository, policies),
             OverlayAppRolePermissionRepository(appRolePermissionRepository, appPermissions),
             blacklistChecker,

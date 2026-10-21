@@ -23,13 +23,17 @@ import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 
 /**
  * The object-level pattern from the policies guide: the route is allowed in the request filter, where the resource
  * is not known yet, and the check in code, made with the loaded resource, denies whoever does not own it.
  */
-class ResourceCheckTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class ResourceCheckTest(private val impl: AuthorizationImpl) {
     private val policy = CoSecJsonSerializer.readValue(
         """
         {
@@ -54,7 +58,7 @@ class ResourceCheckTest {
         Policy::class.java,
     )
 
-    private val authorization = SimpleAuthorization(
+    private val authorization = impl.create(
         object : PolicyRepository {
             override fun getGlobalPolicy(): Mono<List<Policy>> = Mono.just(listOf(policy))
             override fun getPolicies(policyIds: Set<String>): Mono<List<Policy>> = Mono.just(emptyList())

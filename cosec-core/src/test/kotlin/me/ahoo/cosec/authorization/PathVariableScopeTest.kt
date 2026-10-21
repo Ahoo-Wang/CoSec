@@ -55,6 +55,8 @@ import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
@@ -67,12 +69,14 @@ import java.util.concurrent.CopyOnWriteArrayList
  * recognize (a custom condition matcher reading the variables in code), the variables are cleared before each
  * statement, so they read nothing.
  */
-class PathVariableScopeTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class PathVariableScopeTest(private val impl: AuthorizationImpl) {
     private val request = EvaluateRequest(path = "/orders/1", method = "GET")
 
     private fun policy(json: String): Policy = CoSecJsonSerializer.readValue(json, Policy::class.java)
 
-    private fun authorization(global: List<Policy>, principal: List<Policy> = listOf()) = SimpleAuthorization(
+    private fun authorization(global: List<Policy>, principal: List<Policy> = listOf()) = impl.create(
         policyRepository(global, principal),
         mockk<AppRolePermissionRepository> {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
@@ -148,7 +152,7 @@ class PathVariableScopeTest {
           ${condition?.let { "\"condition\": $it," } ?: ""} "statements": [ $statements ] }
     """
 
-    private fun authorize(authorization: SimpleAuthorization) = authorization.authorize(request, context()).block()
+    private fun authorize(authorization: DecisionAuthorization) = authorization.authorize(request, context()).block()
 
     // Scenario 1: a statement only sees the variables of its own action.
 

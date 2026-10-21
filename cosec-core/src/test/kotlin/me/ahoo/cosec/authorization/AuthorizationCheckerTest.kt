@@ -13,24 +13,32 @@
 
 package me.ahoo.cosec.authorization
 
+import io.mockk.mockk
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.context.RequestSecurityContexts.setRequest
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.EvaluateRequest
+import me.ahoo.cosec.policy.action.getPathVariables
 import me.ahoo.cosec.policy.isPolicyEvaluation
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 import reactor.kotlin.test.test
 import java.util.concurrent.CopyOnWriteArrayList
 
-class AuthorizationCheckerTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class AuthorizationCheckerTest(private val impl: AuthorizationImpl) {
     private val seen = CopyOnWriteArrayList<Pair<Request, SecurityContext>>()
 
     /** Allows GET under /orders and anything for app "admin"; records what it was asked. */
@@ -99,5 +107,32 @@ class AuthorizationCheckerTest {
         throwing.check(context, "/orders/1").test().expectNext(false).verifyComplete()
         val empty = AuthorizationChecker(Authorization { _, _ -> Mono.empty() })
         empty.check(context, "/orders/1").test().expectNext(false).verifyComplete()
+    }
+
+    @Test
+    fun checksWithTheImplementationWithoutLeakingPathVariables() {
+        val policy = CoSecJsonSerializer.readValue(
+            """
+            {
+              "id": "own-orders", "name": "own-orders", "type": "global", "tenantId": "(platform)",
+              "statements": [
+                {
+                  "name": "own", "action": "/users/{userId}/orders/**",
+                  "condition": { "eq": { "part": "request.path.var.userId", "value": "#{principal.id}" } }
+                }
+              ]
+            }
+            """.trimIndent(),
+            Policy::class.java,
+        )
+        val policyRepository = object : PolicyRepository {
+            override fun getGlobalPolicy(): Mono<List<Policy>> = Mono.just(listOf(policy))
+            override fun getPolicies(policyIds: Set<String>): Mono<List<Policy>> = Mono.just(emptyList())
+            override fun setPolicy(policy: Policy): Mono<Void> = Mono.empty()
+        }
+        val implementation = AuthorizationChecker(impl.create(policyRepository, mockk()))
+        implementation.check(context, "/users/user/orders/1").test().expectNext(true).verifyComplete()
+        implementation.check(context, "/users/other/orders/1").test().expectNext(false).verifyComplete()
+        context.getPathVariables().assert().isNull()
     }
 }

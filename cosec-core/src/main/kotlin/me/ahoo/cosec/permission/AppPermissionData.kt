@@ -18,6 +18,7 @@ import me.ahoo.cosec.api.permission.Permission
 import me.ahoo.cosec.api.permission.PermissionGroup
 import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.authorization.engine.AppPermissionRules
 import me.ahoo.cosec.policy.BlockingAware
 import me.ahoo.cosec.policy.PathVariableScope
 import me.ahoo.cosec.policy.computeRequiresBlocking
@@ -34,6 +35,14 @@ data class AppPermissionData(
     init {
         PathVariableScope.requireScoped(this)
     }
+
+    /** This app's permissions as engine input, adapted once (RFC 0002 §3.3). */
+    @Transient
+    @Volatile
+    private var engineRules: AppPermissionRules? = null
+
+    internal fun engineRules(): AppPermissionRules =
+        engineRules ?: AppPermissionRules(this).also { engineRules = it }
 
     @delegate:Transient
     override val permissionIndexer: Map<PermissionId, Permission> by lazy(this) {

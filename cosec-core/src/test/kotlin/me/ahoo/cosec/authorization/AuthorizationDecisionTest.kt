@@ -25,11 +25,15 @@ import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 import reactor.kotlin.test.test
 
-class AuthorizationDecisionTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class AuthorizationDecisionTest(private val impl: AuthorizationImpl) {
 
     @Test
     fun decideFallsBackToAuthorize() {
@@ -54,7 +58,7 @@ class AuthorizationDecisionTest {
 
     @Test
     fun simpleAuthorizationReportsRootVerifyContext() {
-        val authorization = SimpleAuthorization(mockk(), mockk(), rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT)
+        val authorization = impl.create(mockk(), mockk(), rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT)
         val securityContext = SimpleSecurityContext(
             SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM),
         )
@@ -69,7 +73,7 @@ class AuthorizationDecisionTest {
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
         }
-        val authorization = SimpleAuthorization(policyRepository, mockk())
+        val authorization = impl.create(policyRepository, mockk())
         authorization.decide(EvaluateRequest(), SimpleSecurityContext.anonymous())
             .test()
             .expectNext(AuthorizationDecision(AuthorizeResult.IMPLICIT_DENY, NoMatchVerifyContext))
@@ -81,7 +85,7 @@ class AuthorizationDecisionTest {
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
         }
-        val authorization = SimpleAuthorization(
+        val authorization = impl.create(
             policyRepository,
             mockk(),
             rootPrincipalMatcher = RootPrincipalMatcher.NONE,

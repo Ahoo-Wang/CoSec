@@ -45,17 +45,39 @@ import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 import reactor.kotlin.test.test
 import java.util.*
 
-internal class SimpleAuthorizationTest {
+// The decision corpus of RFC 0002 §8.2: its cases stay together until the legacy implementation is removed.
+@Suppress("LargeClass")
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
+    /**
+     * A request stubbing exactly the fields [EngineAuthorization] reads up front (RFC 0002 §3.3), with realistic
+     * values, so both implementations run on the same strict fixture; the legacy path reads only what its matchers
+     * need.
+     */
+    private fun engineReadRequest(appId: String = "", spaceId: String = ""): Request = mockk {
+        every { path } returns "/orders/1"
+        every { method } returns "GET"
+        every { this@mockk.appId } returns appId
+        every { this@mockk.spaceId } returns spaceId
+        every { remoteIp } returns "10.0.0.1"
+        every { requestId } returns "request-1"
+        every { deviceId } returns "device-1"
+        every { attributes } returns emptyMap()
+    }
+
     @Test
     fun authorizeWhenPrincipalIsRoot() {
         val policyRepository = mockk<PolicyRepository>()
         val permissionRepository = mockk<AppRolePermissionRepository>()
-        val authorization = SimpleAuthorization(
+        val authorization = impl.create(
             policyRepository,
             permissionRepository,
             rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT,
@@ -79,7 +101,7 @@ internal class SimpleAuthorizationTest {
         val securityContext = SimpleSecurityContext(
             SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM),
         )
-        SimpleAuthorization(policyRepository, mockk()).authorize(EvaluateRequest(), securityContext)
+        impl.create(policyRepository, mockk()).authorize(EvaluateRequest(), securityContext)
             .test()
             .expectNext(AuthorizeResult.IMPLICIT_DENY)
             .verifyComplete()
@@ -90,7 +112,7 @@ internal class SimpleAuthorizationTest {
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.just(emptyList())
         }
-        val authorization = SimpleAuthorization(
+        val authorization = impl.create(
             policyRepository,
             mockk(),
             rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT,
@@ -115,7 +137,7 @@ internal class SimpleAuthorizationTest {
         val blacklistChecker = mockk<BlacklistChecker> {
             every { check(any(), any()) } returns Mono.just(false)
         }
-        val authorization = SimpleAuthorization(
+        val authorization = impl.create(
             policyRepository = policyRepository,
             appRolePermissionRepository = permissionRepository,
             blacklistChecker = blacklistChecker
@@ -139,9 +161,8 @@ internal class SimpleAuthorizationTest {
         val permissionRepository = mockk<AppRolePermissionRepository> {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
-        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
-        val request = mockk<Request> {
-        }
+        val authorization = impl.create(policyRepository, permissionRepository)
+        val request = engineReadRequest()
 
         authorization.authorize(request, SimpleSecurityContext.anonymous())
             .test()
@@ -168,9 +189,8 @@ internal class SimpleAuthorizationTest {
         val permissionRepository = mockk<AppRolePermissionRepository> {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
-        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
-        val request = mockk<Request> {
-        }
+        val authorization = impl.create(policyRepository, permissionRepository)
+        val request = engineReadRequest()
 
         authorization.authorize(request, SimpleSecurityContext.anonymous())
             .test()
@@ -197,8 +217,8 @@ internal class SimpleAuthorizationTest {
         val permissionRepository = mockk<AppRolePermissionRepository> {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
-        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
-        val request = mockk<Request>()
+        val authorization = impl.create(policyRepository, permissionRepository)
+        val request = engineReadRequest()
 
         authorization.authorize(request, SimpleSecurityContext.anonymous())
             .test()
@@ -224,6 +244,8 @@ internal class SimpleAuthorizationTest {
             every { principal.policies } returns setOf("policyId")
             every { principal.roles } returns emptySet()
             every { setAttributeValue(any(), any()) } returns this
+            every { principal.attributes } returns emptyMap()
+            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -232,9 +254,8 @@ internal class SimpleAuthorizationTest {
         val permissionRepository = mockk<AppRolePermissionRepository> {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
-        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
-        val request = mockk<Request> {
-        }
+        val authorization = impl.create(policyRepository, permissionRepository)
+        val request = engineReadRequest()
 
         authorization.authorize(request, securityContext)
             .test()
@@ -259,6 +280,9 @@ internal class SimpleAuthorizationTest {
             every { principal.id } returns ""
             every { principal.policies } returns setOf("policyId")
             every { setAttributeValue(any(), any()) } returns this
+            every { principal.roles } returns emptySet()
+            every { principal.attributes } returns emptyMap()
+            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -267,9 +291,8 @@ internal class SimpleAuthorizationTest {
         val permissionRepository = mockk<AppRolePermissionRepository> {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
-        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
-        val request = mockk<Request> {
-        }
+        val authorization = impl.create(policyRepository, permissionRepository)
+        val request = engineReadRequest()
 
         authorization.authorize(request, securityContext)
             .test()
@@ -311,6 +334,8 @@ internal class SimpleAuthorizationTest {
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy@spaceId")
             every { setAttributeValue(any(), any()) } returns this
+            every { principal.attributes } returns emptyMap()
+            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -319,11 +344,8 @@ internal class SimpleAuthorizationTest {
         val permissionRepository = mockk<AppRolePermissionRepository> {
             every { getAppRolePermission(any(), any(), any()) } returns appRolePermission.toMono()
         }
-        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
-        val request = mockk<Request> {
-            every { appId } returns "appId"
-            every { spaceId } returns "spaceId"
-        }
+        val authorization = impl.create(policyRepository, permissionRepository)
+        val request = engineReadRequest(appId = "appId", spaceId = "spaceId")
 
         authorization.authorize(request, securityContext)
             .test()
@@ -364,6 +386,8 @@ internal class SimpleAuthorizationTest {
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy@spaceId")
             every { setAttributeValue(any(), any()) } returns this
+            every { principal.attributes } returns emptyMap()
+            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -372,11 +396,8 @@ internal class SimpleAuthorizationTest {
         val permissionRepository = mockk<AppRolePermissionRepository> {
             every { getAppRolePermission(any(), any(), any()) } returns appRolePermission.toMono()
         }
-        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
-        val request = mockk<Request> {
-            every { appId } returns "appId"
-            every { spaceId } returns "spaceId"
-        }
+        val authorization = impl.create(policyRepository, permissionRepository)
+        val request = engineReadRequest(appId = "appId", spaceId = "spaceId")
 
         authorization.authorize(request, securityContext)
             .test()
@@ -423,6 +444,8 @@ internal class SimpleAuthorizationTest {
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy@spaceId")
             every { setAttributeValue(any(), any()) } returns this
+            every { principal.attributes } returns emptyMap()
+            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -431,11 +454,8 @@ internal class SimpleAuthorizationTest {
         val permissionRepository = mockk<AppRolePermissionRepository> {
             every { getAppRolePermission(any(), any(), any()) } returns appRolePermission.toMono()
         }
-        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
-        val request = mockk<Request> {
-            every { appId } returns "appId"
-            every { spaceId } returns "spaceId"
-        }
+        val authorization = impl.create(policyRepository, permissionRepository)
+        val request = engineReadRequest(appId = "appId", spaceId = "spaceId")
 
         authorization.authorize(request, securityContext)
             .test()
@@ -469,8 +489,8 @@ internal class SimpleAuthorizationTest {
         val permissionRepository = mockk<AppRolePermissionRepository> {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
-        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
-        val request = mockk<Request>()
+        val authorization = impl.create(policyRepository, permissionRepository)
+        val request = engineReadRequest()
 
         authorization.authorize(request, SimpleSecurityContext.anonymous())
             .test()
@@ -516,6 +536,9 @@ internal class SimpleAuthorizationTest {
             every { principal.policies } returns setOfNotNull(principalPolicy?.id)
             every { principal.roles } returns setOf("roleId@spaceId")
             every { setAttributeValue(any(), any()) } returns this
+            every { principal.authenticated } returns true
+            every { principal.attributes } returns emptyMap()
+            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.justOrEmpty(globalPolicy).map { listOf(it) }
@@ -524,11 +547,8 @@ internal class SimpleAuthorizationTest {
         val permissionRepository = mockk<AppRolePermissionRepository> {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.justOrEmpty(rolePermission)
         }
-        val request = mockk<Request> {
-            every { appId } returns "appId"
-            every { spaceId } returns "spaceId"
-        }
-        return SimpleAuthorization(policyRepository, permissionRepository).authorize(request, securityContext)
+        val request = engineReadRequest(appId = "appId", spaceId = "spaceId")
+        return impl.create(policyRepository, permissionRepository).authorize(request, securityContext)
     }
 
     @Test
@@ -577,8 +597,11 @@ internal class SimpleAuthorizationTest {
             every { principal.policies } returns setOf("principalPolicy")
             every { principal.roles } returns setOf("roleId@spaceId")
             every { setAttributeValue(any(), any()) } returns this
+            every { principal.authenticated } returns true
+            every { principal.attributes } returns emptyMap()
+            every { tenant } returns SimpleTenant.DEFAULT
         }
-        SimpleAuthorization(policyRepository, permissionRepository).authorize(mockk(), securityContext)
+        impl.create(policyRepository, permissionRepository).authorize(engineReadRequest(), securityContext)
             .test()
             .expectNext(AuthorizeResult.EXPLICIT_DENY)
             .verifyComplete()
@@ -613,7 +636,7 @@ internal class SimpleAuthorizationTest {
             every { getAppRolePermission(any(), any(), any()) } returns appRolePermission.toMono()
         }
         val securityContext = SimpleSecurityContext(SimplePrincipal("user", roles = setOf("admin")))
-        SimpleAuthorization(policyRepository, permissionRepository)
+        impl.create(policyRepository, permissionRepository)
             .authorize(EvaluateRequest(path = "/orders/1"), securityContext)
             .test()
             .expectNext(AuthorizeResult.IMPLICIT_DENY)
@@ -629,7 +652,7 @@ internal class SimpleAuthorizationTest {
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
         }
-        val authorization = SimpleAuthorization(policyRepository, permissionRepository)
+        val authorization = impl.create(policyRepository, permissionRepository)
         val principal = SimplePrincipal("user", roles = setOf("admin", "admin@team-a", "viewer@team-b"))
         fun request(spaceId: String) = EvaluateRequest(
             headers = mapOf(AppIdCapable.APP_ID_KEY to "appId", SpaceIdCapable.SPACE_ID_KEY to spaceId)
@@ -657,7 +680,7 @@ internal class SimpleAuthorizationTest {
         statements = listOf(StatementData(effect = Effect.ALLOW, action = AllActionMatcher.INSTANCE)),
     )
 
-    private fun missingPolicyAuthorization(principalPolicies: Mono<List<Policy>>) = SimpleAuthorization(
+    private fun missingPolicyAuthorization(principalPolicies: Mono<List<Policy>>) = impl.create(
         mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.just(listOf(allowAll))
             every { getPolicies(any()) } returns principalPolicies
