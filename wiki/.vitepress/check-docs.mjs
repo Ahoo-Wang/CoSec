@@ -1,7 +1,10 @@
 // Checks what the VitePress build does not:
 // - every internal link's #anchor exists on the target page;
 // - every English page has a Chinese twin under zh/ with the same set of heading anchors
-//   (Chinese headings declare explicit `{#english-slug}` anchors).
+//   (Chinese headings declare explicit `{#english-slug}` anchors);
+// - the en and zh sidebars in config/{en,zh}.ts list the same pages in the same order, every link
+//   points to an existing page, and every page except the home pages is in the sidebar.
+// _legacy/ (pre-rewrite pages kept for reference, excluded from the build) and AGENTS.md are skipped.
 // Usage: node .vitepress/check-docs.mjs   (from the wiki directory or via its path)
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
 import { join, dirname, normalize, relative } from 'path'
@@ -11,9 +14,9 @@ const wikiDir = new URL('..', import.meta.url).pathname.replace(/\/$/, '')
 function walk(dir) {
   return readdirSync(dir).flatMap((entry) => {
     const full = join(dir, entry)
-    if (entry === 'node_modules' || entry === '.vitepress') return []
+    if (entry === 'node_modules' || entry === '_legacy' || entry.startsWith('.')) return []
     if (statSync(full).isDirectory()) return walk(full)
-    return entry.endsWith('.md') ? [full] : []
+    return entry.endsWith('.md') && entry !== 'AGENTS.md' ? [full] : []
   })
 }
 
@@ -99,6 +102,25 @@ for (const page of pages) {
       problems.push(`${rel(page)}: missing anchor #${fragment} in ${rel(file)}`)
     }
   }
+}
+
+const sidebarLinks = (locale) =>
+  [...readFileSync(join(wikiDir, '.vitepress/config', `${locale}.ts`), 'utf-8').matchAll(/link:\s*'(\/[^']*)'/g)]
+    .map((m) => m[1])
+    .filter((link) => !link.endsWith('/') || link === '/')
+const enLinks = sidebarLinks('en')
+const zhLinks = sidebarLinks('zh')
+if (enLinks.map((l) => `/zh${l}`).join() !== zhLinks.join()) {
+  problems.push(`config: en and zh nav/sidebar links differ (en: ${enLinks.join(' ')}; zh: ${zhLinks.join(' ')})`)
+}
+for (const link of [...enLinks, ...zhLinks]) {
+  if (!existsSync(resolveTarget(wikiDir, link.split('#')[0]))) problems.push(`config: link ${link} has no page`)
+}
+const listed = new Set([...enLinks, ...zhLinks].map((l) => l.split('#')[0]))
+for (const page of pages) {
+  if (page.endsWith('index.md')) continue
+  const link = `/${rel(page).replace(/\.md$/, '')}`
+  if (!listed.has(link)) problems.push(`${rel(page)}: not in the sidebar`)
 }
 
 console.log(`${pages.length} pages, ${checked} internal links checked`)

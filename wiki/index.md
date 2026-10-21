@@ -18,11 +18,11 @@ features:
   - icon: 🛡️
     title: Policies as data
     details: JSON policies with path actions, composable conditions and rate limits. Deny wins across every layer, and anything unmatched is denied.
-    link: /guide/policies
+    link: /policies/language
   - icon: 🏢
     title: Multi-tenant, role-based
     details: Tenant-aware principals, plus per-application permission catalogs granted to roles per space.
-    link: /guide/policies#app-permissions-and-roles
+    link: /policies/role-permissions
   - icon: ⚡
     title: Reactive and fast
     details: Built on Project Reactor. About 2 µs per decision, with no event-loop blocking.
@@ -30,13 +30,13 @@ features:
   - icon: 🔌
     title: WebFlux, MVC and Gateway
     details: One security pipeline behind three adapters that respond identically.
-    link: /guide/web-integration
+    link: /integration/web
   - icon: 🔑
     title: JWT and social login
     details: Token issuing, refresh and immediate revocation, plus OAuth login through JustAuth.
-    link: /guide/authentication
+    link: /integration/authentication
   - icon: 📊
     title: Auditable
     details: An audit event and an OpenTelemetry span for every decision, naming the policy or permission that decided it.
-    link: /guide/operations#auditing
+    link: /operations/observability#audit-events
 ---
