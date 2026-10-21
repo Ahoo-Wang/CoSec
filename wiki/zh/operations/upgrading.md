@@ -17,6 +17,8 @@ description: "CoSec 各版本之间有哪些破坏性变更，以及如何迁移
 开始之前先读完整节。然后依次完成 [检查清单](#upgrade-checklist)、[迁移](#migrating-the-data)，并在备份被删除之前随时准备好
 [回滚](#rollback)。
 
+更严格的授权让 `SimpleAuthorization` 的吞吐比 6.1.0 低 6% 到 9%，每次决策约多 0.2 µs；升级时无需为此做任何修改（[7.0 修复的代价](../architecture/overview.md#what-the-7-0-fixes-cost)）。
+
 ### 破坏性变更 {#breaking-changes}
 
 每一行是一项变更；链接指向它的含义和要做的事。
