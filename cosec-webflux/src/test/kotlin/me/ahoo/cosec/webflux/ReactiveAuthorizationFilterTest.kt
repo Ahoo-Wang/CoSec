@@ -378,6 +378,30 @@ internal class ReactiveAuthorizationFilterTest {
     }
 
     @Test
+    fun filterWhenTraversalBehindPathParameter() {
+        // Stands in for a policy allowing `/public/**`: `/public/..;/admin` must not be authorized as a public path,
+        // because a servlet container behind the gateway drops `;` and resolves it to `/admin`.
+        val authorization = mockk<Authorization> {
+            every { authorize(any(), any()) } returns AuthorizeResult.ALLOW.toMono()
+        }
+        val filter = ReactiveAuthorizationFilter(
+            InjectSecurityContextParser,
+            ReactiveRequestParser(ReactiveRemoteIpResolver),
+            authorization,
+        )
+        val serverRequest = MockServerHttpRequest.get("/public/..;/admin").build()
+        val exchange = MockServerWebExchange.builder(serverRequest).build()
+        val filterChain = mockk<WebFilterChain> {
+            every { filter(any()) } returns Mono.empty()
+        }
+        filter.filter(exchange, filterChain).block()
+
+        exchange.response.statusCode.assert().isEqualTo(HttpStatus.BAD_REQUEST)
+        verify(exactly = 0) { authorization.authorize(any(), any()) }
+        verify(exactly = 0) { filterChain.filter(any()) }
+    }
+
+    @Test
     fun filterParsesSecurityContextOnScheduler() {
         val authorization = mockk<Authorization> {
             every { authorize(any(), any()) } returns AuthorizeResult.ALLOW.toMono()

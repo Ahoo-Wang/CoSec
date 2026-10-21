@@ -72,7 +72,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 
 | 状态码 | 原因 | 排查方向 |
 |---|---|---|
-| `400` | — | 路径包含 `.` / `..` 段或格式错误的百分号转义。请修复客户端。 |
+| `400` | — | 路径包含 `.` / `..` 段（包括带路径参数的形式，如 `..;`）或格式错误的百分号转义。请修复客户端。 |
 | `401` | `Token Expired` / `Token Invalid` | 问题在令牌而不在策略：见[意外的 401](#unexpected-401)。 |
 | `401` | `Implicit Deny` | 没有找到令牌，且没有规则允许匿名访问该路径。 |
 | `401` / `403` | `Explicit Deny` | 命中了一条 `deny` 语句或权限。调试日志会指出是哪一条。 |

@@ -78,7 +78,7 @@ The status codes and their reasons are defined in [Web Integration](./web-integr
 
 | Status | Reason | Look at |
 |---|---|---|
-| `400` | — | The path contains `.` / `..` segments or a malformed percent-escape. Fix the client. |
+| `400` | — | The path contains `.` / `..` segments (also behind a path parameter, such as `..;`) or a malformed percent-escape. Fix the client. |
 | `401` | `Token Expired` / `Token Invalid` | The token, not the policy: see [Unexpected 401](#unexpected-401). |
 | `401` | `Implicit Deny` | No token was found, and no rule allows anonymous access to this path. |
 | `401` / `403` | `Explicit Deny` | A `deny` statement or permission matched. The debug log names it. |

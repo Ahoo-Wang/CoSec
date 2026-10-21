@@ -64,4 +64,27 @@ class RequestPathsTest {
         RequestPaths.isTraversal("/public/%2e%2e/admin").assert().isTrue()
         RequestPaths.isTraversal("/public").assert().isFalse()
     }
+
+    @ParameterizedTest
+    @ValueSource(
+        strings = [
+            "/admin;jsessionid=1|/admin",
+            "/a;x/b;y=1,2|/a/b",
+            "/a/b|/a/b",
+            "/a%3Bb|/a%3Bb",
+            "/|/",
+            "|",
+        ],
+    )
+    fun normalizeRemovesPathParameters(pathAndExpected: String) {
+        val (path, expected) = pathAndExpected.split('|')
+        RequestPaths.normalize(path).assert().isEqualTo(expected)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["/public/..;/admin", "/public/..;x=1/admin", "/public/.;/admin", "/public/../admin"])
+    fun normalizeWhenTraversalBehindPathParameter(path: String) {
+        // Servlet containers drop path parameters before resolving `..`, so `..;` must count as `..`.
+        assertThrows<InvalidRequestPathException> { RequestPaths.normalize(path) }
+    }
 }
