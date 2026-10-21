@@ -18,6 +18,10 @@ image builds and uses the cache is in [`wiki/operations/deployment.md`](../../..
 | Change | −23.8 % | | −22.5 % | | +66 MiB | |
 
 - The two ranges do not overlap, so the gain is larger than the noise even on this loaded machine.
+- **How full the cache is.** Counted with `-Xlog:class+load` from launch until the JVM was stopped one second after
+  `Started`: with the cache, 13,127 of 15,884 loaded classes (83 %) came from it; without it, 1,459 of 15,866 came from
+  the JDK's default CDS archive. The rest are classes the training run never loaded, mostly from the first requests
+  and Redis connection paths, plus generated proxies and lambdas that the cache cannot hold.
 - RSS grows because it counts the mapped, file-backed pages of the 104 MiB cache; heap use does not change.
 - These are startup numbers only. The cache does not change peak JIT throughput, and nothing here measures
   steady-state request handling.

@@ -142,6 +142,7 @@ average of 3.2 to 3.8:
 | Without the cache | 2.41 s | 2.40 – 2.45 s | 453 MiB |
 | With the cache | 1.84 s | 1.80 – 1.88 s | 519 MiB |
 
-That is 24 % faster to `Started`, and 22 % less total process time (2.71 s to 2.10 s). Raw results, the commands
+That is 24 % faster to `Started`, and 22 % less total process time (2.71 s to 2.10 s). With the cache, 83 % of
+the classes the gateway loads come from it (13,127 of 15,884). Raw results, the commands
 and the machine are in
 [`docs/perf/gateway-aot-cache`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/gateway-aot-cache).

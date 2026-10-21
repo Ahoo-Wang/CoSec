@@ -115,5 +115,5 @@ java -XX:AOTCache=app.aot -cp "$CLASSPATH" com.example.App
 | 无缓存 | 2.41 s | 2.40 – 2.45 s | 453 MiB |
 | 有缓存 | 1.84 s | 1.80 – 1.88 s | 519 MiB |
 
-到 `Started` 快了 24 %，进程总耗时少了 22 %（从 2.71 s 到 2.10 s）。原始结果、命令和机器信息见
+到 `Started` 快了 24 %，进程总耗时少了 22 %（从 2.71 s 到 2.10 s）。有缓存时，网关加载的类中有 83 % 来自缓存（15,884 个中的 13,127 个）。原始结果、命令和机器信息见
 [`docs/perf/gateway-aot-cache`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/gateway-aot-cache)。
