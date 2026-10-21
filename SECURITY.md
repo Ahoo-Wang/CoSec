@@ -4,12 +4,15 @@ CoSec is a security framework, so we treat vulnerability reports with priority.
 
 ## Supported versions
 
-Security fixes are released for the latest minor version of the latest major release line.
+Security fixes land on `main` first and are backported to the maintenance branches (see the branching model in
+[CONTRIBUTING.md](CONTRIBUTING.md#2-branching-model)).
 
-| Version | Supported |
-|---|---|
-| 6.x | ✅ |
-| < 6.0 | ❌ |
+| Version | Branch | Supported |
+|---|---|---|
+| 8.0 (in development) | `main` | ✅ |
+| 7.x | `7.x` | ✅ security and critical fixes, until 6 months after 8.0.0 GA |
+| 6.1.x | `release/6.1.x` | ✅ security fixes only |
+| < 6.1 | — | ❌ |
 
 ## Reporting a vulnerability
 

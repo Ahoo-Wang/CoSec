@@ -3,6 +3,8 @@
 CoSec is a multi-tenant, reactive authorization framework: Kotlin 2.x on Java 17, Spring Boot 4, Project
 Reactor, built with Gradle (Kotlin DSL). This file is for agents and contributors **changing** CoSec. To
 **use** CoSec, see `skills/` and https://cosec.ahoo.me. Branching, reviews and releases: `CONTRIBUTING.md`.
+`main` is the 8.0 line; `7.x` and `release/6.1.x` take only backported security (and, on `7.x`, critical) fixes, which
+land on `main` first.
 
 CoSec makes security decisions. A plausible change that lets one request through by mistake is worse than
 a change that fails to compile. When unsure, deny, and ask.

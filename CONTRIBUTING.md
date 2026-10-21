@@ -17,13 +17,21 @@ Small fixes (typos, docs) may go straight to a pull request.
 
 ## 2. Branching model
 
-CoSec uses trunk-based development:
+CoSec uses trunk-based development, with maintenance branches for earlier major versions:
 
-- `main` is the only long-lived branch and is always releasable.
+| Branch | Line | Takes |
+|---|---|---|
+| `main` | The next major version (8.0) | All changes; always releasable |
+| `7.x` | 7.x, cut at `v7.0.0` | Security and critical fixes only, until 6 months after 8.0.0 GA |
+| `release/6.1.x` | 6.1.x | Security fixes only |
+
 - Work happens on short-lived topic branches named after the change type, e.g. `feat/tenant-scoped-cache`
   or `fix/remote-ip-resolution`.
-- Changes reach `main` only through pull requests, never by direct push.
+- Changes reach every branch only through pull requests, never by direct push.
 - Keep a branch current by merging `main` into it. Do not rewrite history that others have reviewed.
+- **A fix needed on more than one line goes to `main` first.** After it merges, backport it with a cherry-pick pull
+  request into each maintenance branch that needs it (`7.x`, `release/6.1.x`), titled like the original. Do not
+  open the fix against a maintenance branch first.
 
 ## 3. Commits and pull request titles
 
@@ -94,8 +102,9 @@ CoSec follows [Semantic Versioning](https://semver.org/):
 - **MINOR**: backwards-compatible features.
 - **PATCH**: backwards-compatible fixes.
 
-To release, bump `version` in [gradle.properties](gradle.properties) via a pull request, then publish a
-GitHub release tagged `vX.Y.Z`. Publishing the release triggers the
+To release, bump `version` in [gradle.properties](gradle.properties) via a pull request on the branch of that
+line (`main` for 8.0, `7.x` for 7.x patches), then publish a GitHub release tagged `vX.Y.Z` from that branch.
+Release candidates (`vX.Y.Z-RCn`) are released the same way, and only with the maintainer's confirmation. Publishing the release triggers the
 [Packages Deploy](.github/workflows/package-deploy.yml) workflow (Maven Central and GitHub Packages).
 Release notes are generated from pull request labels ([.github/release.yml](.github/release.yml)).
 
