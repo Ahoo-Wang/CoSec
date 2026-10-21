@@ -59,7 +59,10 @@ the engine run):
 
 `deferred` answers through `Mono.defer`, as the Redis repositories do, so the engine's loader subscribes to all three
 layers through `Mono.zip`. With `just`, which models an in-memory repository, it reads them synchronously. The
-`deferred` allocation is the cost of that zip.
+`deferred` allocation is the cost of that zip. **Production takes the `deferred` path:** `RedisPolicyRepository` and
+`RedisAppRolePermissionRepository` wrap every read in `Mono.defer`, even when the local cache answers. So the gate's
+`just` figures show the engine and adapter's own cost, while the `deferred` rows are closer to a Redis-backed
+deployment.
 
 `trace=mixed` makes every eighth `engine` call a `TraceLevel.FULL` evaluation. Its figures include the traced calls'
 own work, so they are not comparable to `off` as a regression:

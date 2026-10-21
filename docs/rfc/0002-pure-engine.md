@@ -701,6 +701,9 @@ internal class StatementScopedContext(private val base: SecurityContext) : Secur
    `wiki/architecture/overview.md` 的性能一节，中英文都改。
 6. **基线（PR-1）**：已按上面的命令录在 [`docs/perf/rfc-0002-baseline`](../perf/rfc-0002-baseline/README.md)（JDK 25.0.4.1，
    含 `global-deny`）。录制时机器负载为 1.6–2.9，高于第 3 步的门槛，只作参考；PR-3 的门槛以第 4 步的交替测量为准。
+7. **PR-3 的结果（#993）**：按第 4 步交替测量（[`docs/perf/rfc-0002-pr-3`](../perf/rfc-0002-pr-3/README.md)），`role` 场景吞吐为基线的
+   93.5 %，三轮都低于 95 %，**未达到 §7.1 的门槛**；分配、`global` 与 `none` 的均值达标。为合入 PR-3 已豁免此项，但它是 PR-6 的硬性前提：
+   PR-6 合入前，`role` 必须按第 4 步重新测量并达到 §7.1。
 
 ---
 

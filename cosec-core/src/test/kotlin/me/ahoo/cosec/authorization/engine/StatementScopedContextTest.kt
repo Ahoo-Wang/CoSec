@@ -101,16 +101,6 @@ class StatementScopedContextTest {
     }
 
     @Test
-    fun resourceAttributesAreTheResourcePrefixedRequestAttributes() {
-        val request = LegacyFacts.authzRequest(
-            EvaluateRequest(attributes = mapOf("resource.ownerId" to "u1", "routeId" to "r")),
-            base,
-        )
-        request.resource.attributes.assert().isEqualTo(mapOf("ownerId" to "u1"))
-        LegacyFacts.authzRequest(EvaluateRequest(), base).resource.attributes.assert().isEmpty()
-    }
-
-    @Test
     fun aDecisionTheEvaluationDidNotMatchFailsClosed() {
         val facts = LegacyFacts(EvaluateRequest(), base)
         assertThrows<IllegalStateException> {

@@ -21,7 +21,6 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.policy.PolicyData
@@ -32,6 +31,8 @@ import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.kotlin.test.test
 
 /**
@@ -39,7 +40,9 @@ import reactor.kotlin.test.test
  * Whatever the writer and a fresh instance read afterwards, the policy never becomes global unless it was published
  * as global and its content was written (see [PolicyPublishAtomicityTest] for why this is not full atomicity).
  */
-class PolicyPublishFailureIntegrationTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class PolicyPublishFailureIntegrationTest(private val impl: AuthorizationImpl) {
     private val redis: RedisBackend = CoSecTestCaches.redisBackend()
     private val keyPrefix = CoSecTestCaches.newKeyPrefix()
 
@@ -88,7 +91,7 @@ class PolicyPublishFailureIntegrationTest {
     /** What an unrelated principal, who does not list the policy, may do. */
     private fun anyoneElse(repository: RedisPolicyRepository): AuthorizeResult? =
         // bob has no roles, so app permissions are never read
-        SimpleAuthorization(repository, mockk())
+        impl.create(repository, mockk())
             .authorize(
                 EvaluateRequest(path = "/orders/1", method = "DELETE"),
                 SimpleSecurityContext(SimplePrincipal("bob"))

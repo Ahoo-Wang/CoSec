@@ -26,6 +26,7 @@ import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Cause
 import me.ahoo.cosec.model.LayerKind
 import me.ahoo.cosec.permission.AppPermissionData
+import me.ahoo.cosec.policy.PolicyData
 import reactor.core.Exceptions
 import reactor.core.Fuseable
 import reactor.core.publisher.Mono
@@ -44,14 +45,16 @@ internal class PolicySetLoader(
 ) {
     /**
      * The request's layers. A repository that answers with a scalar [Mono] (`just`, `empty`, `error`, as in-memory
-     * repositories and local cache hits do) is read synchronously, without subscribing; only the others are
-     * subscribed, all at once. Either way a layer is adapted, and a failed read becomes [LayerInput.Unavailable], the
-     * same way.
+     * repositories do) is read synchronously, without subscribing; only the others are subscribed, all at once
+     * through `Mono.zip`. The Redis repositories always answer through `Mono.defer`, even on a local cache hit, so
+     * production takes the subscribed path. Either way a layer is adapted, and a failed read becomes
+     * [LayerInput.Unavailable], the same way.
      */
     fun load(request: AuthzRequest): Mono<PolicySet> {
+        val facts = request.host as LegacyFacts
         val global = global()
-        val principal = principal(request.subject.policies)
-        val role = role(request)
+        val principal = principal(facts)
+        val role = role(facts)
         if (global is LayerInput && principal is LayerInput) {
             if (role is LayerInput) {
                 return Mono.just(PolicySet(listOf(global, principal, role)))
@@ -75,10 +78,17 @@ internal class PolicySetLoader(
         LayerKind.GLOBAL,
         read = { policyRepository.getGlobalPolicy() },
         empty = { NO_GLOBAL_POLICIES },
-        adapt = { policies -> LayerInput.Loaded(LayerKind.GLOBAL, PolicyGroupList(policies)) },
+        adapt = { policies -> LayerInput.Loaded(LayerKind.GLOBAL, groupsOf(policies)) },
     )
 
-    private fun principal(policyIds: Set<String>): Any {
+    /** The principal's policies, read where 7.0 reads them: a read that throws fails the layer, when it is reached. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun principal(facts: LegacyFacts): Any {
+        val policyIds = try {
+            facts.base.principal.policies
+        } catch (error: Throwable) {
+            return unavailable(LayerKind.PRINCIPAL, error)
+        }
         if (policyIds.isEmpty()) {
             return NO_PRINCIPAL_POLICIES
         }
@@ -103,26 +113,47 @@ internal class PolicySetLoader(
                 return LayerInput.Loaded(LayerKind.PRINCIPAL, emptyList(), cause)
             }
         }
-        return LayerInput.Loaded(LayerKind.PRINCIPAL, PolicyGroupList(policies))
+        return LayerInput.Loaded(LayerKind.PRINCIPAL, groupsOf(policies))
+    }
+
+    /**
+     * The layer's groups, adapted from a snapshot of [policies] taken now, as 7.0's `filter` took one: a repository
+     * list changed later can never pair one policy's guard with another's rules.
+     */
+    private fun groupsOf(policies: List<Policy>): List<PolicyGroup> = policies.map { policy ->
+        if (policy is PolicyData) policy.engineGroup() else PolicyGroup(policy)
     }
 
     /**
      * Only the principal's roles scoped to the request's space count (see [RoleScope]); the repository keys their
      * grants by the request's app, so a grant never applies in another app or space.
+     *
+     * The roles, the space and the app are read where 7.0 reads them, in this order, and only when the one before
+     * leaves something to read. A read that throws (a request whose query cannot be read) fails the layer, when it
+     * is reached.
      */
-    private fun role(request: AuthzRequest): Any {
-        val roles = request.subject.roles
-        if (roles.isEmpty()) {
-            return NO_ROLES
-        }
-        val scope = request.scope
-        val scopedRoles = RoleScope.rolesIn(scope.spaceId, roles)
-        if (scopedRoles.isEmpty()) {
-            return NO_ROLE_IN_SPACE
+    @Suppress("TooGenericExceptionCaught", "ReturnCount")
+    private fun role(facts: LegacyFacts): Any {
+        val spaceId: String
+        val scopedRoles: Set<String>
+        val appId: String
+        try {
+            val roles = facts.base.principal.roles
+            if (roles.isEmpty()) {
+                return NO_ROLES
+            }
+            spaceId = facts.request.spaceId
+            scopedRoles = RoleScope.rolesIn(spaceId, roles)
+            if (scopedRoles.isEmpty()) {
+                return NO_ROLE_IN_SPACE
+            }
+            appId = facts.request.appId
+        } catch (error: Throwable) {
+            return unavailable(LayerKind.ROLE, error)
         }
         return layer(
             LayerKind.ROLE,
-            read = { appRolePermissionRepository.getAppRolePermission(scope.appId, scope.spaceId, scopedRoles) },
+            read = { appRolePermissionRepository.getAppRolePermission(appId, spaceId, scopedRoles) },
             empty = { NO_APP_PERMISSION },
             adapt = { appRolePermission ->
                 val group =
@@ -184,15 +215,13 @@ internal class PolicySetLoader(
                 if (layer !is LayerInput.Loaded || layer.missing != null) {
                     continue
                 }
-                val groups = layer.groups
-                if (groups is PolicyGroupList) {
-                    if (groups.requiresBlocking) {
-                        return true
+                for (group in layer.groups) {
+                    val blocks = when (group) {
+                        is PolicyGroup -> group.requiresBlocking
+                        is AppPermissionGroup -> group.requiresBlocking
+                        else -> true
                     }
-                    continue
-                }
-                for (group in groups) {
-                    if ((group as AppPermissionGroup).requiresBlocking) {
+                    if (blocks) {
                         return true
                     }
                 }

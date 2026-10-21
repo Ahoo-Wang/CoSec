@@ -20,6 +20,7 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
+import me.ahoo.cosec.api.permission.AppRolePermission
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
@@ -46,7 +47,9 @@ import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.ValueSource
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 import reactor.kotlin.test.test
@@ -57,22 +60,6 @@ import java.util.*
 @ParameterizedClass
 @EnumSource(AuthorizationImpl::class)
 internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
-    /**
-     * A request stubbing exactly the fields [EngineAuthorization] reads up front (RFC 0002 §3.3), with realistic
-     * values, so both implementations run on the same strict fixture; the legacy path reads only what its matchers
-     * need.
-     */
-    private fun engineReadRequest(appId: String = "", spaceId: String = ""): Request = mockk {
-        every { path } returns "/orders/1"
-        every { method } returns "GET"
-        every { this@mockk.appId } returns appId
-        every { this@mockk.spaceId } returns spaceId
-        every { remoteIp } returns "10.0.0.1"
-        every { requestId } returns "request-1"
-        every { deviceId } returns "device-1"
-        every { attributes } returns emptyMap()
-    }
-
     @Test
     fun authorizeWhenPrincipalIsRoot() {
         val policyRepository = mockk<PolicyRepository>()
@@ -162,7 +149,8 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
         val authorization = impl.create(policyRepository, permissionRepository)
-        val request = engineReadRequest()
+        val request = mockk<Request> {
+        }
 
         authorization.authorize(request, SimpleSecurityContext.anonymous())
             .test()
@@ -190,7 +178,8 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
         val authorization = impl.create(policyRepository, permissionRepository)
-        val request = engineReadRequest()
+        val request = mockk<Request> {
+        }
 
         authorization.authorize(request, SimpleSecurityContext.anonymous())
             .test()
@@ -218,7 +207,7 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
         val authorization = impl.create(policyRepository, permissionRepository)
-        val request = engineReadRequest()
+        val request = mockk<Request>()
 
         authorization.authorize(request, SimpleSecurityContext.anonymous())
             .test()
@@ -244,8 +233,6 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.policies } returns setOf("policyId")
             every { principal.roles } returns emptySet()
             every { setAttributeValue(any(), any()) } returns this
-            every { principal.attributes } returns emptyMap()
-            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -255,7 +242,8 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
         val authorization = impl.create(policyRepository, permissionRepository)
-        val request = engineReadRequest()
+        val request = mockk<Request> {
+        }
 
         authorization.authorize(request, securityContext)
             .test()
@@ -280,9 +268,6 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.id } returns ""
             every { principal.policies } returns setOf("policyId")
             every { setAttributeValue(any(), any()) } returns this
-            every { principal.roles } returns emptySet()
-            every { principal.attributes } returns emptyMap()
-            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -292,7 +277,8 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
         val authorization = impl.create(policyRepository, permissionRepository)
-        val request = engineReadRequest()
+        val request = mockk<Request> {
+        }
 
         authorization.authorize(request, securityContext)
             .test()
@@ -334,8 +320,6 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy@spaceId")
             every { setAttributeValue(any(), any()) } returns this
-            every { principal.attributes } returns emptyMap()
-            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -345,7 +329,10 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { getAppRolePermission(any(), any(), any()) } returns appRolePermission.toMono()
         }
         val authorization = impl.create(policyRepository, permissionRepository)
-        val request = engineReadRequest(appId = "appId", spaceId = "spaceId")
+        val request = mockk<Request> {
+            every { appId } returns "appId"
+            every { spaceId } returns "spaceId"
+        }
 
         authorization.authorize(request, securityContext)
             .test()
@@ -386,8 +373,6 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy@spaceId")
             every { setAttributeValue(any(), any()) } returns this
-            every { principal.attributes } returns emptyMap()
-            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -397,7 +382,10 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { getAppRolePermission(any(), any(), any()) } returns appRolePermission.toMono()
         }
         val authorization = impl.create(policyRepository, permissionRepository)
-        val request = engineReadRequest(appId = "appId", spaceId = "spaceId")
+        val request = mockk<Request> {
+            every { appId } returns "appId"
+            every { spaceId } returns "spaceId"
+        }
 
         authorization.authorize(request, securityContext)
             .test()
@@ -444,8 +432,6 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy@spaceId")
             every { setAttributeValue(any(), any()) } returns this
-            every { principal.attributes } returns emptyMap()
-            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -455,7 +441,10 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { getAppRolePermission(any(), any(), any()) } returns appRolePermission.toMono()
         }
         val authorization = impl.create(policyRepository, permissionRepository)
-        val request = engineReadRequest(appId = "appId", spaceId = "spaceId")
+        val request = mockk<Request> {
+            every { appId } returns "appId"
+            every { spaceId } returns "spaceId"
+        }
 
         authorization.authorize(request, securityContext)
             .test()
@@ -490,7 +479,7 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
         }
         val authorization = impl.create(policyRepository, permissionRepository)
-        val request = engineReadRequest()
+        val request = mockk<Request>()
 
         authorization.authorize(request, SimpleSecurityContext.anonymous())
             .test()
@@ -536,9 +525,6 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.policies } returns setOfNotNull(principalPolicy?.id)
             every { principal.roles } returns setOf("roleId@spaceId")
             every { setAttributeValue(any(), any()) } returns this
-            every { principal.authenticated } returns true
-            every { principal.attributes } returns emptyMap()
-            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.justOrEmpty(globalPolicy).map { listOf(it) }
@@ -547,7 +533,10 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
         val permissionRepository = mockk<AppRolePermissionRepository> {
             every { getAppRolePermission(any(), any(), any()) } returns Mono.justOrEmpty(rolePermission)
         }
-        val request = engineReadRequest(appId = "appId", spaceId = "spaceId")
+        val request = mockk<Request> {
+            every { appId } returns "appId"
+            every { spaceId } returns "spaceId"
+        }
         return impl.create(policyRepository, permissionRepository).authorize(request, securityContext)
     }
 
@@ -597,11 +586,8 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.policies } returns setOf("principalPolicy")
             every { principal.roles } returns setOf("roleId@spaceId")
             every { setAttributeValue(any(), any()) } returns this
-            every { principal.authenticated } returns true
-            every { principal.attributes } returns emptyMap()
-            every { tenant } returns SimpleTenant.DEFAULT
         }
-        impl.create(policyRepository, permissionRepository).authorize(engineReadRequest(), securityContext)
+        impl.create(policyRepository, permissionRepository).authorize(mockk(), securityContext)
             .test()
             .expectNext(AuthorizeResult.EXPLICIT_DENY)
             .verifyComplete()
@@ -712,5 +698,83 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             .test()
             .expectError(MissingPolicyException::class.java)
             .verify()
+    }
+
+    private fun allPolicyData(id: String, effect: Effect) = PolicyData(
+        id = id,
+        category = "",
+        name = id,
+        description = "",
+        type = PolicyType.GLOBAL,
+        tenantId = "",
+        statements = listOf(StatementData(effect = effect, action = AllActionMatcher.INSTANCE)),
+    )
+
+    /** A layer read: ready (a scalar Mono, as a local cache hit is) or only on subscription (as a Redis read is). */
+    private fun <T : Any> read(value: Mono<T>, deferred: Boolean): Mono<T> = if (deferred) value.hide() else value
+
+    /**
+     * A failed read only fails the request when its layer is reached, and only that layer's: a deny in an earlier
+     * layer still decides (403), an allow does not hide a later layer's failure (500).
+     */
+    private fun failedRead(
+        deferred: Boolean,
+        global: Effect?,
+        principal: Effect?,
+        roleFails: Boolean,
+        principalFails: Boolean
+    ): Mono<AuthorizeResult> {
+        val down = IllegalStateException("store down")
+        val policyRepository = object : PolicyRepository {
+            override fun getGlobalPolicy(): Mono<List<Policy>> =
+                read(Mono.justOrEmpty(global).map { listOf(allPolicyData("global", it)) }, deferred)
+
+            override fun getPolicies(policyIds: Set<String>): Mono<List<Policy>> = read(
+                if (principalFails) {
+                    Mono.error(
+                        down
+                    )
+                } else {
+                    Mono.just(listOfNotNull(principal?.let { allPolicyData("principal", it) }))
+                },
+                deferred,
+            )
+
+            override fun setPolicy(policy: Policy): Mono<Void> = Mono.empty()
+        }
+        val permissionRepository = object : AppRolePermissionRepository {
+            override fun getAppRolePermission(
+                appId: String,
+                spaceId: String,
+                roleIds: Set<String>
+            ): Mono<AppRolePermission> =
+                read(if (roleFails) Mono.error(down) else Mono.empty(), deferred)
+        }
+        val principalPolicies = if (principal != null || principalFails) setOf("principal") else emptySet()
+        val context = SimpleSecurityContext(
+            SimplePrincipal("user", policies = principalPolicies, roles = setOf("role"))
+        )
+        return impl.create(policyRepository, permissionRepository).authorize(EvaluateRequest(), context)
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    fun globalDenyDecidesBeforeAFailedPrincipalRead(deferred: Boolean) {
+        failedRead(deferred, global = Effect.DENY, principal = null, roleFails = false, principalFails = true)
+            .test().expectNext(AuthorizeResult.EXPLICIT_DENY).verifyComplete()
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    fun principalDenyDecidesBeforeAFailedRoleRead(deferred: Boolean) {
+        failedRead(deferred, global = null, principal = Effect.DENY, roleFails = true, principalFails = false)
+            .test().expectNext(AuthorizeResult.EXPLICIT_DENY).verifyComplete()
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    fun globalAllowDoesNotHideAFailedRoleRead(deferred: Boolean) {
+        failedRead(deferred, global = Effect.ALLOW, principal = null, roleFails = true, principalFails = false)
+            .test().expectErrorMessage("store down").verify()
     }
 }

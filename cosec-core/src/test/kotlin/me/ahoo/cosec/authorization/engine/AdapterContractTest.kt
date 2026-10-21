@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.authorization.engine
 
+import io.mockk.every
+import io.mockk.mockk
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
@@ -38,15 +40,19 @@ import me.ahoo.cosec.authorization.MissingPolicyException
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.configuration.JsonConfiguration
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.engine.AbsentReason
+import me.ahoo.cosec.engine.CoSecEngine
 import me.ahoo.cosec.engine.LayerInput
 import me.ahoo.cosec.engine.PolicySet
 import me.ahoo.cosec.engine.Rule
 import me.ahoo.cosec.engine.RuleEntry
 import me.ahoo.cosec.engine.RuleGroup
+import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.UnresolvedGrant
 import me.ahoo.cosec.model.AuthzRequest
+import me.ahoo.cosec.model.Decision
 import me.ahoo.cosec.model.LayerKind
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.AppRolePermissionData
@@ -58,10 +64,10 @@ import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcher
+import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
-import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
@@ -93,6 +99,8 @@ class AdapterContractTest {
         is Rule -> "$grantedVia:${entry.id}:${entry.index}:${entry.name}:${entry.effect}"
         is UnresolvedGrant -> "$grantedVia:unresolved:${entry.permissionId}"
     }
+
+    private fun path(pattern: String) = PathActionMatcherFactory.INSTANCE.create(pattern.asConfiguration())
 
     private fun permission(id: String, effect: Effect = Effect.ALLOW) =
         PermissionData(id = id, name = "name-$id", effect = effect, action = AllActionMatcher.INSTANCE)
@@ -203,8 +211,11 @@ class AdapterContractTest {
         val permissions = (0 until 70).map { permission("p$it") }
         val app = AppPermissionData("big", groups = listOf(PermissionGroupData("g", permissions = permissions)))
         val ids = permissions.map { it.id }.toCollection(LinkedHashSet())
-        val (entries, _) = roleGroup("r" to ids, appPermission = app).entries()
+        val group = roleGroup("r" to ids, appPermission = app)
+        val (entries, _) = group.entries()
         entries.map { (it.entry as Rule).index }.assert().containsExactlyElementsOf(0 until 70)
+        // The trace aligns the two passes by identity: the second sees the very same rules.
+        group.entries().first.map { it.entry }.zip(entries.map { it.entry }).assert().allMatch { (a, b) -> a === b }
     }
 
     private fun policy(id: String, vararg effects: Effect): Policy = PolicyData(
@@ -300,14 +311,16 @@ class AdapterContractTest {
     }
 
     @Test
-    fun theRepositoryListIsWrappedNeverChanged() {
-        val policies: List<Policy> = Collections.unmodifiableList(listOf(policy("g1", Effect.ALLOW), policy("g2")))
+    fun aLayerIsASnapshotOfTheRepositoryList() {
+        val g1 = policy("g1", Effect.ALLOW) as PolicyData
+        val policies = mutableListOf(g1, policy("g2"))
         val global = repositories(global = Mono.just(policies)).layers(authzRequest())[0] as LayerInput.Loaded
-        val groups = assertInstanceOf(PolicyGroupList::class.java, global.groups)
-        groups.policies.assert().isSameAs(policies)
-        groups.map { it.id }.assert().containsExactly("g1", "g2")
+        // A list the repository changes later can never pair one policy's guard with another's rules.
+        policies.add(0, policy("g0", Effect.DENY))
+        policies.removeAt(2)
+        global.groups.map { it.id }.assert().containsExactly("g1", "g2")
         // PolicyData adapts once, whatever the request.
-        groups[0].assert().isSameAs((policies[0] as PolicyData).engineGroup())
+        global.groups[0].assert().isSameAs(g1.engineGroup())
     }
 
     @Test
@@ -479,16 +492,19 @@ class AdapterContractTest {
     }
 
     /**
-     * The engine's request is built up front, so `appId`, `spaceId` and `deviceId` are read for every request that is
-     * neither blocked nor root, falling back to the query when their header is missing. The built-in requests answer
-     * the query from the URL alone, so it never throws; a request whose query cannot be read still fails closed.
+     * The app and space are read where 7.0 reads them: in the role layer, after the principal's roles. A request whose
+     * query cannot be read (its header is missing, so the read falls back to the query) is never read for a
+     * principal without roles, fails closed when the role layer is reached, and does not fail when an earlier layer
+     * already denied, as in 7.0.
      */
-    @Test
-    fun aRequestWhoseQueryCannotBeReadFailsClosed() {
+    @ParameterizedTest
+    @EnumSource(AuthorizationImpl::class)
+    fun aRequestWhoseQueryCannotBeReadFailsClosed(impl: AuthorizationImpl) {
         val queries = mutableListOf<String>()
+
         // The interface's own appId, spaceId and deviceId: header first, then the query.
-        val request = object : Request {
-            override val path: String = "/public"
+        fun request(path: String) = object : Request {
+            override val path: String = path
             override val method: String = "POST"
             override val remoteIp: String = "10.0.0.1"
             override val origin: URI = URI.create("http://origin")
@@ -499,21 +515,24 @@ class AdapterContractTest {
             override fun getCookieValue(name: String): String = ""
             override fun getQuery(key: String): String {
                 queries += key
-                throw IllegalStateException("form body unreadable")
+                throw IllegalStateException("query unreadable")
             }
         }
-        val allowAll = PolicyData(
-            "allow",
+        val global = PolicyData(
+            "global",
             "",
-            "allow",
+            "global",
             "",
             PolicyType.GLOBAL,
             "",
-            statements = listOf(StatementData(action = AllActionMatcher.INSTANCE)),
+            statements = listOf(
+                StatementData(name = "deny", effect = Effect.DENY, action = path("/denied/**")),
+                StatementData(name = "allow", action = AllActionMatcher.INSTANCE),
+            ),
         )
-        val authorization = EngineAuthorization(
+        val authorization = impl.create(
             object : PolicyRepository {
-                override fun getGlobalPolicy(): Mono<List<Policy>> = Mono.just(listOf(allowAll))
+                override fun getGlobalPolicy(): Mono<List<Policy>> = Mono.just(listOf(global))
                 override fun getPolicies(policyIds: Set<String>): Mono<List<Policy>> = Mono.empty()
                 override fun setPolicy(policy: Policy): Mono<Void> = Mono.empty()
             },
@@ -522,10 +541,92 @@ class AdapterContractTest {
                     Mono.empty<AppRolePermission>()
             },
         )
-        authorization.authorize(request, SimpleSecurityContext(SimplePrincipal("user")))
-            .test()
-            .expectError(IllegalStateException::class.java)
-            .verify()
+        val withoutRoles = SimpleSecurityContext(SimplePrincipal("user"))
+        val withRoles = SimpleSecurityContext(SimplePrincipal("user", roles = setOf("r")))
+
+        authorization.authorize(request("/public"), withoutRoles).test()
+            .expectNext(AuthorizeResult.ALLOW).verifyComplete()
+        queries.assert().isEmpty()
+        authorization.authorize(request("/public"), withRoles).test()
+            .expectError(IllegalStateException::class.java).verify()
         queries.assert().isNotEmpty()
+        authorization.authorize(request("/denied/x"), withRoles).test()
+            .expectNext(AuthorizeResult.EXPLICIT_DENY).verifyComplete()
+    }
+
+    /** RFC 0002 §3.3: the engine's request is not read from the request at all in phase 2. */
+    @Test
+    fun theEnginesRequestReadsNothingFromTheRequest() {
+        val request = mockk<Request>()
+        val context = mockk<SecurityContext>()
+        val authzRequest = LegacyFacts.authzRequest(request, context)
+        authzRequest.environment.blocked.assert().isFalse()
+        authzRequest.subject.root.assert().isFalse()
+        (authzRequest.host as LegacyFacts).request.assert().isSameAs(request)
+    }
+
+    @Test
+    fun grantPositionsKeepTheirRuleAcrossPassesAndRequests() {
+        val permissions = (0 until 70).map { permission("p$it") }
+        val app = AppPermissionData("big", groups = listOf(PermissionGroupData("g", permissions = permissions)))
+        val ids = permissions.map { it.id }.toCollection(LinkedHashSet())
+        val group = roleGroup("r" to ids, appPermission = app)
+        val first = group.entries().first.map { it.entry }
+        // Both passes of one evaluation see the same objects, beyond the shared cache too.
+        group.entries().first.map { it.entry }.zip(first).assert().allMatch { (a, b) -> a === b }
+        // Another request shares the cached positions and builds its own tail.
+        val other = roleGroup("r" to ids, appPermission = app).entries().first.map { it.entry }
+        (0 until PermissionRules.CACHED_POSITIONS).assert().allMatch { other[it] === first[it] }
+        (PermissionRules.CACHED_POSITIONS until 70).assert().allMatch { other[it] !== first[it] }
+    }
+
+    @Test
+    fun aFullTraceOverLongGrantListsFindsNoContractBreach() {
+        val permissions = (0 until 70).map { permission("p$it", if (it == 69) Effect.DENY else Effect.ALLOW) }
+        val app = AppRolePermissionData(
+            AppPermissionData("app", groups = listOf(PermissionGroupData("g", permissions = permissions))),
+            listOf(RolePermissionData("r", permissions.map { it.id }.toCollection(LinkedHashSet()))),
+        )
+        val request = authzRequest(roles = setOf("r"))
+        val policies = repositories(role = Mono.just(app)).load(request).block()!!
+        for (level in listOf(TraceLevel.FULL, TraceLevel.EXHAUSTIVE)) {
+            val evaluation = CoSecEngine.evaluate(request, policies, level)
+            (evaluation.decision as Decision.Deny).by.assert().isNotNull()
+            val groups = checkNotNull(evaluation.trace).layers.flatMap { it.groups }
+            groups.assert().isNotEmpty()
+            groups.map { it.contractError }.assert().allMatch { it == null }
+            groups.single().rules.assert().hasSize(70)
+        }
+    }
+
+    /** M25: a permission granted at different positions reports each grant's own position. */
+    @Test
+    fun aPermissionGrantedAtSeveralPositionsReportsEachIndex() {
+        val group =
+            roleGroup("r1" to linkedSetOf("b", "a"), "r2" to linkedSetOf("c", "b", "a"), "r3" to linkedSetOf("a"))
+        group.entries().first.map { it.describe() }.assert().containsExactly(
+            "r1:b:0:name-b:DENY",
+            "r1:a:1:name-a:ALLOW",
+            "r2:c:0:name-c:ALLOW",
+            "r2:b:1:name-b:DENY",
+            "r2:a:2:name-a:ALLOW",
+            "r3:a:0:name-a:ALLOW",
+        )
+    }
+
+    /** The principal's policies and roles are read where 7.0 reads them: a read that throws fails only its layer. */
+    @Test
+    fun aPrincipalWhosePoliciesCannotBeReadFailsOnlyThatLayer() {
+        val down = IllegalStateException("principal unreadable")
+        val context = mockk<SecurityContext> {
+            every { principal.policies } throws down
+            every { principal.roles } throws down
+        }
+        val layers = repositories().load(LegacyFacts.authzRequest(EvaluateRequest(), context)).block()!!.layers
+        layers.assert().containsExactly(
+            LayerInput.Absent(LayerKind.GLOBAL, AbsentReason.NO_POLICIES),
+            LayerInput.Unavailable(LayerKind.PRINCIPAL, down),
+            LayerInput.Unavailable(LayerKind.ROLE, down),
+        )
     }
 }

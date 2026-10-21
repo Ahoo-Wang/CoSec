@@ -31,12 +31,12 @@ import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.AuthorizationDecision
+import me.ahoo.cosec.authorization.AuthorizationImpl
 import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.authorization.PolicyVerifySource
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
-import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.context.SimpleSecurityContext
@@ -52,6 +52,8 @@ import me.ahoo.cosec.token.TokenVerificationContexts.setTokenVerificationExcepti
 import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import reactor.kotlin.core.publisher.toMono
@@ -63,7 +65,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-class AuditingAuthorizationTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class AuditingAuthorizationTest(private val impl: AuthorizationImpl) {
     private val attributeMap = mutableMapOf<String, Any>()
     private val request = mockk<Request> {
         every { appId } returns "app"
@@ -143,7 +147,7 @@ class AuditingAuthorizationTest {
             SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM),
         )
         val authorization = AuditingAuthorization(
-            SimpleAuthorization(mockk(), mockk(), rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT),
+            impl.create(mockk(), mockk(), rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT),
             AuditEventSink(events::add),
         )
 
@@ -159,7 +163,7 @@ class AuditingAuthorizationTest {
             every { check(request, context) } returns Mono.just(false)
         }
         val authorization = AuditingAuthorization(
-            SimpleAuthorization(mockk(), mockk(), blacklistChecker),
+            impl.create(mockk(), mockk(), blacklistChecker),
             AuditEventSink(events::add),
         )
 
@@ -175,7 +179,7 @@ class AuditingAuthorizationTest {
             every { getGlobalPolicy() } returns Mono.just(emptyList())
         }
         val authorization = AuditingAuthorization(
-            SimpleAuthorization(policyRepository, mockk()),
+            impl.create(policyRepository, mockk()),
             AuditEventSink(events::add),
         )
 
@@ -236,7 +240,7 @@ class AuditingAuthorizationTest {
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returnsMany listOf(listOf(firstPolicy).toMono(), listOf(secondPolicy).toMono())
         }
-        val delegate = SimpleAuthorization(policyRepository, mockk<AppRolePermissionRepository>())
+        val delegate = impl.create(policyRepository, mockk<AppRolePermissionRepository>())
         val events = CopyOnWriteArrayList<AuditEvent>()
         val authorization = AuditingAuthorization(delegate, AuditEventSink(events::add))
         val firstStored = CountDownLatch(1)

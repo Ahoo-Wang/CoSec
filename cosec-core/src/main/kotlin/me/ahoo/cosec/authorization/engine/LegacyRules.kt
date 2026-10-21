@@ -36,6 +36,8 @@ import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.requiresBlocking
+import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicReferenceArray
 import me.ahoo.cosec.api.policy.Effect as PolicyEffect
 
 /*
@@ -98,6 +100,7 @@ internal class StatementRule(
 internal class PolicyGroup(val policy: Policy) : RuleGroup {
     override val id: String = policy.id
     override val guard: Guard = ConditionGuard(policy.condition)
+    val requiresBlocking: Boolean = policy.requiresBlocking
     private val rules: Array<StatementRule> = policy.statements.let { statements ->
         Array(statements.size) { index -> StatementRule(statements[index], policy, index, null) }
     }
@@ -110,35 +113,6 @@ internal class PolicyGroup(val policy: Policy) : RuleGroup {
         }
         return false
     }
-}
-
-/**
- * The groups of a policy layer, as a view over the repository's list: adapting is per policy, not per request, for
- * [PolicyData], and once per request for any other policy.
- */
-internal class PolicyGroupList(val policies: List<Policy>) : AbstractList<RuleGroup>(), RandomAccess {
-    private var adapted: Array<PolicyGroup?>? = null
-
-    override val size: Int get() = policies.size
-
-    override fun get(index: Int): RuleGroup {
-        val policy = policies[index]
-        if (policy is PolicyData) {
-            return policy.engineGroup()
-        }
-        val adapted = adapted ?: arrayOfNulls<PolicyGroup>(policies.size).also { adapted = it }
-        return adapted[index] ?: PolicyGroup(policy).also { adapted[index] = it }
-    }
-
-    val requiresBlocking: Boolean
-        get() {
-            for (i in policies.indices) {
-                if (policies[i].requiresBlocking) {
-                    return true
-                }
-            }
-            return false
-        }
 }
 
 /**
@@ -171,8 +145,8 @@ internal class AppPermissionRules(val appPermission: AppPermission) {
         return false
     }
 
-    /** The rule for [permissionId] granted at [position] of its role's grant list, or null when the app has none. */
-    fun granted(permissionId: PermissionId, position: Int): StatementRule? = byId[permissionId]?.at(position)
+    /** The rules of [permissionId] by grant position, or null when the app does not define it. */
+    fun rulesOf(permissionId: PermissionId): PermissionRules? = byId[permissionId]
 
     /** The exception 7.0 throws when the deny pass reaches an id [rolePermission] grants and the app does not define. */
     fun missingPermission(rolePermission: RolePermission): MissingPermissionException = MissingPermissionException(
@@ -183,36 +157,30 @@ internal class AppPermissionRules(val appPermission: AppPermission) {
 }
 
 /**
- * One permission's rules by grant position, created when first granted there. The rule carries its position in the
- * grant list ([Rule.index]), so a permission granted at different positions has a rule for each.
+ * One permission's rules by grant position. The rule carries its position in the grant list ([Rule.index]), so a
+ * permission granted at different positions has a rule for each.
+ *
+ * Shared by every request, so it is race-free: each position below [CACHED_POSITIONS] gets exactly one rule, ever,
+ * which both passes of an evaluation (and the trace, which aligns them by identity) see. A position beyond it is
+ * memoized per request by its [AppPermissionGroup] instead.
  */
 internal class PermissionRules(private val permission: Permission) {
-    /**
-     * Not volatile, read on every grant: a racing reader may see an older array or a missing element, and then only
-     * builds the rule again. A rule it does see is safely published, since all its fields are final.
-     */
-    private var byPosition: Array<StatementRule?> = NONE
+    private val byPosition = AtomicReference<AtomicReferenceArray<StatementRule>?>()
 
     fun at(position: Int): StatementRule {
-        if (position >= CACHED_POSITIONS) {
-            return StatementRule(permission, null, position, permission.id)
+        require(position < CACHED_POSITIONS) { "Position $position is not cached." }
+        val rules = byPosition.get() ?: AtomicReferenceArray<StatementRule>(CACHED_POSITIONS).let { created ->
+            if (byPosition.compareAndSet(null, created)) created else checkNotNull(byPosition.get())
         }
-        val cached = byPosition
-        if (position < cached.size) {
-            cached[position]?.let { return it }
-        }
-        // Copy on write: a lost race only builds the same rule twice.
-        val rule = StatementRule(permission, null, position, permission.id)
-        val grown = cached.copyOf(maxOf(cached.size, position + 1))
-        grown[position] = rule
-        byPosition = grown
-        return rule
+        rules.get(position)?.let { return it }
+        val rule = uncached(position)
+        return if (rules.compareAndSet(position, null, rule)) rule else checkNotNull(rules.get(position))
     }
 
-    private companion object {
-        val NONE = arrayOfNulls<StatementRule>(0)
+    fun uncached(position: Int): StatementRule = StatementRule(permission, null, position, permission.id)
 
-        /** Grant lists longer than this adapt their tail per request rather than cache a rule per position. */
+    companion object {
+        /** Grant positions with a shared rule; longer grant lists build their tail once per request. */
         const val CACHED_POSITIONS = 64
     }
 }
@@ -233,8 +201,13 @@ internal class AppPermissionGroup(
     /** Built at most once per grant, so both passes and the trace see the same entry and exception. */
     private var unresolved: ArrayList<Unresolved>? = null
 
+    /** Rules for grant positions beyond the shared cache, built once per request for the same reason. */
+    private var tail: HashMap<Long, StatementRule>? = null
+
     override fun forEachRule(visitor: RuleVisitor): Boolean {
+        var roleIndex = 0
         for (rolePermission in rolePermissions) {
+            val role = roleIndex++
             val roleId = rolePermission.id
             val permissions = rolePermission.permissions
             if (permissions.contains(AppRolePermission.ALL_PERMISSION_ID)) {
@@ -246,7 +219,7 @@ internal class AppPermissionGroup(
             }
             var position = 0
             for (permissionId in permissions) {
-                val entry = rules.granted(permissionId, position) ?: unresolved(rolePermission, permissionId)
+                val entry = granted(role, permissionId, position) ?: unresolved(rolePermission, permissionId)
                 if (visitor.visit(entry, roleId)) {
                     return true
                 }
@@ -254,6 +227,17 @@ internal class AppPermissionGroup(
             }
         }
         return false
+    }
+
+    private fun granted(role: Int, permissionId: PermissionId, position: Int): StatementRule? {
+        val permissionRules = rules.rulesOf(permissionId) ?: return null
+        if (position < PermissionRules.CACHED_POSITIONS) {
+            return permissionRules.at(position)
+        }
+        val tail = tail ?: HashMap<Long, StatementRule>().also { tail = it }
+        return tail.getOrPut((role.toLong() shl Int.SIZE_BITS) or position.toLong()) {
+            permissionRules.uncached(position)
+        }
     }
 
     private fun unresolved(rolePermission: RolePermission, permissionId: PermissionId): UnresolvedGrant {
