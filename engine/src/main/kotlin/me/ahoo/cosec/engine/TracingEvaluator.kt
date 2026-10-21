@@ -75,6 +75,7 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
 
     @Suppress("TooGenericExceptionCaught")
     override fun visit(entry: RuleEntry, grantedVia: String?): Boolean {
+        checkEntry(entry, grantedVia)
         val trace = checkNotNull(groupTrace)
         val position = position++
         val evaluated = !listing && when (entry) {
@@ -97,16 +98,14 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
                 val match = try {
                     entry.match(request)
                 } catch (error: Exception) {
-                    trace.set(
-                        position,
-                        RuleTrace(
-                            failed(entry, grantedVia, error),
-                            entry.effect,
-                            RuleOutcome.ERROR,
-                            error,
-                            afterDecision
-                        )
-                    )
+                    trace.set(position, failure(entry, grantedVia, error, afterDecision))
+                    return false
+                } catch (error: Throwable) {
+                    // Propagates as untraced, unless it comes from a rule evaluated only for the trace.
+                    if (!(afterDecision && recordable(error))) {
+                        throw error
+                    }
+                    trace.set(position, failure(entry, grantedVia, error, afterDecision))
                     return false
                 }
                 val ref = if (match == RuleMatch.MATCHED) matched(entry, grantedVia) else ref(entry, grantedVia)
@@ -120,6 +119,20 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
         // Never stops: the rest of the layer is visited for the trace.
         return false
     }
+
+    private fun failure(rule: Rule, grantedVia: String?, error: Throwable, afterDecision: Boolean): RuleTrace =
+        RuleTrace(failed(rule, grantedVia, error), rule.effect, RuleOutcome.ERROR, error, afterDecision)
+
+    override fun recordsAfterDecision(error: Throwable): Boolean =
+        (afterDecisionLayer || result != null) && recordable(error)
+
+    /**
+     * Whether an error thrown only because the trace evaluated something after the decision is recorded instead of
+     * failing the evaluation: the untraced evaluation would never have called it, so explaining a decision must not
+     * fail where enforcing it does not (a `NotImplementedError` in a matcher). The JVM's own
+     * failures still propagate.
+     */
+    private fun recordable(error: Throwable): Boolean = error !is VirtualMachineError && error !is LinkageError
 
     private fun noteMatched(ref: StatementRef) {
         if (pass == Effect.DENY) {

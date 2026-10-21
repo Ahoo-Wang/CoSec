@@ -13,6 +13,10 @@
 
 package me.ahoo.cosec.engine
 
+import com.tngtech.archunit.core.domain.JavaCall.Predicates.target
+import com.tngtech.archunit.core.domain.JavaClass.Predicates.type
+import com.tngtech.archunit.core.domain.properties.HasName.Predicates.name
+import com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner
 import com.tngtech.archunit.core.importer.ImportOption.DoNotIncludeTests
 import com.tngtech.archunit.junit.AnalyzeClasses
 import com.tngtech.archunit.junit.ArchTest
@@ -45,15 +49,32 @@ class EnginePurityTest {
         "org.jetbrains.annotations..",
     )
 
-    /** `java.lang` and `java.util` still hold impure classes: threads, clocks, processes, reflection, concurrency. */
+    /**
+     * `java.lang` and `java.util` still hold impure classes: threads, clocks, processes, randomness, class loading,
+     * service lookup, stack inspection, reflection, concurrency.
+     */
     @ArchTest
     val noImpureJdk: ArchRule = noClasses().should().dependOnClassesThat().belongToAnyOf(
         Thread::class.java,
         System::class.java,
         Runtime::class.java,
         ProcessBuilder::class.java,
+        ProcessHandle::class.java,
         ThreadLocal::class.java,
+        StackWalker::class.java,
+        ClassLoader::class.java,
         java.util.Timer::class.java,
         java.util.Random::class.java,
+        java.util.SplittableRandom::class.java,
+        java.util.UUID::class.java,
+        java.util.Date::class.java,
+        java.util.Calendar::class.java,
+        java.util.ServiceLoader::class.java,
     ).orShould().dependOnClassesThat().resideInAnyPackage("java.lang.reflect..", "java.util.concurrent..")
+
+    /** Loading a class by name is reflection without `java.lang.reflect`. Plain class literals stay allowed. */
+    @ArchTest
+    val noClassForName: ArchRule = noClasses().should().callMethodWhere(
+        target(name("forName")).and(target(owner(type(Class::class.java)))),
+    )
 }

@@ -113,22 +113,16 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
             val matched = try {
                 group.guard.matches(request)
             } catch (error: Exception) {
-                if (result == null) {
-                    result = Decision.Indeterminate(Cause.MatcherFailed(kind, group.id, null, error))
-                }
-                if (!tracing) {
+                if (guardFailed(i, group, error)) {
                     return result
                 }
-                guardEvaluated(i, group, GuardOutcome.ERROR, error)
+                continue
+            } catch (error: Throwable) {
+                guardErred(i, group, error)
                 continue
             }
             if (matched) {
-                if (matchedWords == null) {
-                    matchedBits = matchedBits or (1L shl i)
-                } else {
-                    val word = i ushr WORD_SHIFT
-                    matchedWords[word] = matchedWords[word] or (1L shl i)
-                }
+                matchedBits = mark(matchedBits, matchedWords, i)
             }
             if (tracing) guardEvaluated(i, group, if (matched) GuardOutcome.MATCHED else GuardOutcome.MISSED, null)
         }
@@ -138,6 +132,36 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
         }
         if (tracing) endLayer(groups)
         return result
+    }
+
+    /** Sets group [index]'s bit: in [words] when there are more than 64 groups, else in the returned bits. */
+    private fun mark(bits: Long, words: LongArray?, index: Int): Long {
+        if (words == null) {
+            return bits or (1L shl index)
+        }
+        val word = index ushr WORD_SHIFT
+        words[word] = words[word] or (1L shl index)
+        return bits
+    }
+
+    /** Group [index]'s guard threw [error], not an Exception: it propagates, unless the trace runs the guard only after the decision. */
+    private fun guardErred(index: Int, group: RuleGroup, error: Throwable) {
+        if (!recordsAfterDecision(error)) {
+            throw error
+        }
+        guardFailed(index, group, error)
+    }
+
+    /** Group [index]'s guard threw [error]. Returns true when that ends the layer, which it does untraced. */
+    private fun guardFailed(index: Int, group: RuleGroup, error: Throwable): Boolean {
+        if (result == null) {
+            result = Decision.Indeterminate(Cause.MatcherFailed(kind, group.id, null, error))
+        }
+        if (!tracing) {
+            return true
+        }
+        guardEvaluated(index, group, GuardOutcome.ERROR, error)
+        return false
     }
 
     /** Visits the rules of [effect] in every group whose guard matched. Returns true when a visit stopped. */
@@ -155,8 +179,15 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
             }
             val group = groups[i]
             groupId = group.id
+            val tracing = tracing
             if (tracing) beginGroup(i)
-            if (group.forEachRule(this)) {
+            val stopped = group.forEachRule(this)
+            // A group must stop exactly when its visitor asks to: untraced, that is when the layer got its result
+            // (it had none on entry); traced, never. Trusting a group that claims otherwise would skip later DENYs.
+            if (if (tracing) stopped else stopped != (result != null)) {
+                brokenContract("Group $groupId returned $stopped from forEachRule, but its visitor did not ask to stop")
+            }
+            if (stopped) {
                 return true
             }
         }
@@ -166,6 +197,7 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
     /** Evaluates [entry] when it belongs to the current pass, and stops at the layer's first result. */
     @Suppress("TooGenericExceptionCaught")
     override fun visit(entry: RuleEntry, grantedVia: String?): Boolean {
+        checkEntry(entry, grantedVia)
         val rule = when (entry) {
             is Rule -> entry
             is UnresolvedGrant -> {
@@ -204,7 +236,7 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
     }
 
     /** [rule]'s matcher threw [error]. */
-    protected fun failed(rule: Rule, grantedVia: String?, error: Exception): StatementRef {
+    protected fun failed(rule: Rule, grantedVia: String?, error: Throwable): StatementRef {
         val ref = ref(rule, grantedVia)
         if (result == null) {
             result = Decision.Indeterminate(Cause.MatcherFailed(kind, groupId, ref, error))
@@ -224,28 +256,54 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
         return ref
     }
 
+    /**
+     * Fails on an entry its group should never have visited: in the role layer, without the granting role or a
+     * permission id; elsewhere, with a granting role or as an unresolved grant. Both evaluators check every entry they
+     * visit, so a broken adapter fails the same way at every [TraceLevel] up to the decision. Untraced, entries after
+     * the decision are not visited, so only the trace can find a broken one there.
+     */
+    protected fun checkEntry(entry: RuleEntry, grantedVia: String?) {
+        val valid = if (kind == LayerKind.ROLE) {
+            grantedVia != null && (entry !is Rule || entry.id != null)
+        } else {
+            grantedVia == null && entry is Rule
+        }
+        if (!valid) {
+            brokenEntry(entry, grantedVia)
+        }
+    }
+
+    private fun brokenEntry(entry: RuleEntry, grantedVia: String?): Nothing =
+        brokenContract(
+            when {
+                kind != LayerKind.ROLE && entry is UnresolvedGrant -> "Only the role layer has unresolved grants"
+                kind != LayerKind.ROLE -> "A $kind-layer rule must be visited without a granting role, got $grantedVia"
+                grantedVia == null -> "A role-layer entry must be visited with the role that grants it"
+                else -> "A role-layer rule must have a permission id"
+            } + " (group $groupId).",
+        )
+
+    /** A group or entry broke the adapter contract of [RuleGroup]: no decision can be trusted, so the evaluation fails. */
+    private fun brokenContract(message: String): Nothing = throw IllegalStateException(message)
+
+    /** The entry's reference; [checkEntry] has accepted it. */
     protected fun ref(entry: RuleEntry, grantedVia: String?): StatementRef =
         when (entry) {
             is Rule -> if (kind == LayerKind.ROLE) {
-                StatementRef.RolePermission(
-                    appId = groupId,
-                    roleId = roleOf(grantedVia),
-                    permissionId = checkNotNull(entry.id) { "A role-layer rule must have a permission id." },
-                    name = entry.name,
-                )
+                StatementRef.RolePermission(groupId, grantedVia!!, entry.id!!, entry.name)
             } else {
                 StatementRef.PolicyStatement(kind, groupId, entry.index, entry.name)
             }
 
-            is UnresolvedGrant -> {
-                check(kind == LayerKind.ROLE) { "Only the role layer has unresolved grants." }
-                // An undefined permission has no name.
-                StatementRef.RolePermission(groupId, roleOf(grantedVia), entry.permissionId, "")
-            }
+            // An undefined permission has no name.
+            is UnresolvedGrant -> StatementRef.RolePermission(groupId, grantedVia!!, entry.permissionId, "")
         }
 
-    private fun roleOf(grantedVia: String?): String =
-        checkNotNull(grantedVia) { "A role-layer entry must be visited with the role that grants it." }
+    /**
+     * Whether a traced evaluation records [error], thrown by a guard or rule it evaluates only for the trace, instead of
+     * letting it propagate. Untraced, nothing is evaluated after the decision, so this is never asked.
+     */
+    protected open fun recordsAfterDecision(error: Throwable): Boolean = false
 
     // Hooks for the trace, called only when tracing.
 
