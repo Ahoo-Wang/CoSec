@@ -46,6 +46,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
     text: '运维',
     items: [
       { text: '配置', link: '/zh/operations/configuration' },
+      { text: '部署', link: '/zh/operations/deployment' },
       { text: '存储与缓存', link: '/zh/operations/storage' },
       { text: '升级', link: '/zh/operations/upgrading' },
       { text: '可观测性', link: '/zh/operations/observability' },

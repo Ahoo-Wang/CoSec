@@ -47,6 +47,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
     text: 'Operations',
     items: [
       { text: 'Configuration', link: '/operations/configuration' },
+      { text: 'Deployment', link: '/operations/deployment' },
       { text: 'Storage and Caching', link: '/operations/storage' },
       { text: 'Upgrading', link: '/operations/upgrading' },
       { text: 'Observability', link: '/operations/observability' },
