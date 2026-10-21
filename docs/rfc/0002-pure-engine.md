@@ -1,7 +1,7 @@
 # RFC 0002：纯函数决策引擎（8.0 第一步 / RFC 0001 迁移第 2 阶段）
 
-> 状态：已确认（第 3 版，§10 的决定已于 2026-10-20 确认，Q6、Q8、Q9 于 2026-10-21 修订为直接在 8.0 交付）· 上位文档：[RFC 0001](0001-target-architecture.md) §3.3、§6 第 2 阶段 ·
-> 基线：`main` @ 7.0 候选（`0436acb4`，另加 7.0 发布前对角色授予缺失权限 id 的失败即拒绝修复，见 §4.2 S10a）· 交付：全部合入 `main`（8.0 线），PR-5 之后发布 `8.0.0-RC1`，门槛在 RC 上通过后合入 PR-6，随后发布 8.0.0 GA ·
+> 状态：已确认（第 4 版，§10 的决定已于 2026-10-20 确认，Q6、Q8、Q9 于 2026-10-21 修订为直接在 8.0 交付；同日 Q6、Q7、Q8、Q10 再次修订：门槛改为离线回放真实数据，不再有开关，8.0 在目标架构全部达成之前不发布任何版本）· 上位文档：[RFC 0001](0001-target-architecture.md) §3.3、§6 第 2 阶段 ·
+> 基线：`main` @ 7.0 候选（`0436acb4`，另加 7.0 发布前对角色授予缺失权限 id 的失败即拒绝修复，见 §4.2 S10a）· 交付：全部合入 `main`（8.0 线），门槛（含离线回放）通过后合入 PR-6，第 2 阶段到此结束；8.0.0 GA 要等第 6 阶段完成之后（RFC 0001 §6），本阶段不发布任何版本 ·
 > 范围：新增 `cosec-model`、`cosec-engine`，改动 `cosec-core`、`cosec-spring-boot-starter`
 
 ## 0. 结论先行
@@ -15,8 +15,8 @@ Engine.evaluate(AuthzRequest, PolicySet, TraceLevel) -> Evaluation(Decision, Tra
 - 新增两个模块：`cosec-model`（请求、决策、语句引用等纯数据类型）和 `cosec-engine`（组合算法与 trace）。两者只依赖
   Kotlin 标准库，用 ArchUnit 和一个 Gradle 依赖检查强制（§2）。
 - 新增 `EngineAuthorization`：构造参数与 `SimpleAuthorization` 相同，流程是"取数据 → 适配成 `PolicySet` → 调用 `Engine.evaluate` →
-  映射回 `AuthorizationDecision`"。PR-6 之前（包括各 RC）它与旧的 `SimpleAuthorization` 并存，只作陪跑，由开关
-  `cosec.authorization.engine`（`legacy`/`parity`，默认 `legacy`）决定是否陪跑，执法的始终是旧实现；PR-6 删除旧实现，`SimpleAuthorization` 这个类名改由引擎实现。现有的仓库、匹配器、装饰器链、`SecurityPipeline`
+  映射回 `AuthorizationDecision`"。PR-6 之前它与旧的 `SimpleAuthorization` 并存，只在测试、`PolicyTestKit.parity` 和离线回放中
+  与旧实现比较，starter 不装配它，也没有任何开关（2026-10-21 修订）；PR-6 删除旧实现，`SimpleAuthorization` 这个类名改由引擎实现。现有的仓库、匹配器、装饰器链、`SecurityPipeline`
   一律不动（§3.4）。
 - 组合算法在本阶段**按层的顺序**执行（黑名单 → root → 全局 → 主体 → 角色，每层先 DENY 后 ALLOW），与当前
   `SimpleAuthorization` 在包括出错路径在内的所有情况下逐条等价（§4）。RFC 0001 §3.3 的"扁平"顺序只在出错路径上与之不同，
@@ -25,10 +25,10 @@ Engine.evaluate(AuthzRequest, PolicySet, TraceLevel) -> Evaluation(Decision, Tra
   `SecurityContext` 都不再看到别的语句写下的变量（§6，已确认）。
 - 8.0 删除 `AuthorizationExplainer` 的叙述逻辑、`ExplainerConsistencyTest`、`Policy.verify`/`Statement.verify` 默认方法；解释、
   影子、校验都读同一次评估产生的 trace（§5）。PR-6 之前基于 trace 的解释器只在测试中验证，生产中不可选。
-- 切换门槛：用影子模式让旧实现执法、新实现陪跑，先过离线语料，再在 8.0 的 RC 版本上过生产采样，**差异为零**才能合入删除旧实现的
-  PR-6（§8）。
-- 拆成 6 个 PR，全部直接 squash 合入 `main`（8.0 线），不开长期分支。PR-1 到 PR-5 只做加法、藏在默认关闭的开关后面；PR-5 之后发布
-  `8.0.0-RC1`；PR-6 删除旧实现和开关，之后发布 8.0.0 GA（§9）。`7.x` 是维护分支，只接收安全和关键修复。
+- 切换门槛：新旧实现在离线语料、百万随机用例，以及从维护者指定的真实部署导出的策略、角色权限和请求（离线回放）上逐条比较，
+  **差异为零**才能合入删除旧实现的 PR-6（§8）。门槛不需要发布任何版本，也不在生产中运行引擎（2026-10-21 修订，取代 RC 上的生产采样）。
+- 拆成 6 个 PR，全部直接 squash 合入 `main`（8.0 线），不开长期分支。PR-1 到 PR-5 只做加法，starter 不装配任何新代码；PR-6 删除旧实现，
+  第 2 阶段到此结束（§9）。8.0 在 RFC 0001 第 2–6 阶段全部完成之前不发布任何版本（没有里程碑版，也没有 RC）。`7.x` 是维护分支，只接收安全和关键修复。
 
 ---
 
@@ -40,11 +40,11 @@ Engine.evaluate(AuthzRequest, PolicySet, TraceLevel) -> Evaluation(Decision, Tra
 2. 实现唯一的组合算法（§4），带三级 trace（§5.1）。
 3. 在 `cosec-core` 中写适配层：现有 `Request`/`SecurityContext`/`Policy`/`AppRolePermission` → 引擎输入；引擎输出 → 现有
    `AuthorizationDecision`/异常。
-4. 新增 `EngineAuthorization` 和基于 trace 的解释（PR-6 之前只用于陪跑和测试）；PR-6 起 `SimpleAuthorization`、`AuthorizationExplainer`、
+4. 新增 `EngineAuthorization` 和基于 trace 的解释（PR-6 之前只用于比较、回放和测试）；PR-6 起 `SimpleAuthorization`、`AuthorizationExplainer`、
    `DefaultPolicyEvaluator`、`DefaultAppPermissionEvaluator` 只调用引擎，`ShadowAuthorization`、`AuthorizationChecker`、`PolicyTestKit`
    通过它们间接使用引擎。
 5. PR-6 删除第二、第三份算法：`Policy.verify`、`Statement.verify`（`cosec-api`）、`AuthorizationExplainer.Narrator`，以及旧实现。
-6. 引擎陪跑（parity）影子、离线语料、性质测试、JMH 前后对比。
+6. 新旧实现的比较器（parity）、离线语料、真实数据的离线回放工具、性质测试、JMH 前后对比。
 
 ### 1.2 非目标（留给后续阶段）
 
@@ -391,8 +391,8 @@ decide(request, context):
 ```
 
 `EngineAuthorization` 与 `SimpleAuthorization` 的构造参数相同、都实现 `DecisionAuthorization`，所以装饰器链（追踪 → 审计 → 指标 →
-限流 → 影子）、`SecurityPipeline`、三个 Web 适配器都不需要改；`parity` 时 starter 在链里放进 `EngineParityAuthorization`，由它在旧实现
-旁边调用 `EngineAuthorization`（§8.1）。PR-6 之前直接 `new SimpleAuthorization(...)` 的程序化用户不受任何影响。PR-6 把 `EngineAuthorization` 的实现移进
+限流 → 影子）、`SecurityPipeline`、三个 Web 适配器都不需要改；PR-6 之前只有比较器 `EngineParity` 在旧实现旁边调用
+`EngineAuthorization`（§8.1），它不进装饰器链。PR-6 之前直接 `new SimpleAuthorization(...)` 的程序化用户不受任何影响。PR-6 把 `EngineAuthorization` 的实现移进
 `SimpleAuthorization`（类名、构造参数仍不变）并删除 `EngineAuthorization`。
 
 ### 3.5 引擎结果到现有结果的映射，以及 `Indeterminate` 的状态码
@@ -511,8 +511,8 @@ RFC 0001 §3.3 的算法是"先对**整个**候选集检查所有 DENY，再检�
 
 ### 4.4 已知差异及处理
 
-逐条对照（§4.2）没有发现**决策**上的差异。下面是决策之外、可观察到的差异。PR-6 之前它们在生产中不会出现（`parity` 下陪跑
-在隔离的上下文中进行，执法和调用方上下文仍是旧实现），PR-6（8.0）起成为默认行为：
+逐条对照（§4.2）没有发现**决策**上的差异。下面是决策之外、可观察到的差异。PR-6 之前它们在生产中不会出现（引擎只在测试和离线回放中
+运行，且在隔离的上下文中），PR-6 起成为唯一的行为，用户在 8.0.0 GA 中第一次看到。离线回放只比较决策，覆盖不到其中的运行时行为（§8.2）：
 
 | # | 差异 | 谁能观察到 | 处理 |
 |---|---|---|---|
@@ -564,19 +564,19 @@ RFC 0001 §3.3 的算法是"先对**整个**候选集检查所有 DENY，再检�
 构造候选实现的工厂参数（默认仍是 `SimpleAuthorization`），参数化测试用它让影子候选也跑 `EngineAuthorization`；starter 始终用默认值，
 保证候选与执法用的是同一个实现。PR-6 删除这个参数。`Overlay*Repository` 保留到第 3 阶段（RFC 0001 §3.6 用快照叠加取代它们）。
 
-切换门槛需要的"新旧实现陪跑"是另一种影子，见 §8.1。
+切换门槛需要的新旧实现比较不经过影子，见 §8.1。
 
 ### 5.4 `AuthorizationChecker`
 
-不需要改代码：它调用的是 starter 注入的实现，随开关切换。它仍为每次检查复制一个隔离的上下文，因为
+不需要改代码：它调用的是 starter 注入的实现，PR-6 之前是旧实现，PR-6 起是引擎。它仍为每次检查复制一个隔离的上下文，因为
 `setVerifyContext` 和自定义匹配器写的其他属性仍会写进上下文；路径变量这一项在引擎侧已经隔离，PR-6 把它 KDoc 里
 "so path variables never leak into the caller's context"改为说明真正的原因。
 
 ### 5.5 `PolicyTestKit`
 
 API 不变，经解释器间接使用引擎。门槛期间（PR-4 到 PR-6）增加一个临时入口 `PolicyTestKit.parity(locations)`：对每个用例分别用
-`SimpleAuthorization`（旧实现）和 `EngineAuthorization` 评估，比较 §8.3 的结果元组。应用可以拿自己的测试套件跑一遍，作为离线语料的一部分；
-PR-6 删除。
+`SimpleAuthorization`（旧实现）和 `EngineAuthorization` 评估，经比较器 `EngineParity`（§8.1）比较 §8.3 的结果元组。它从未进入任何发布版本，
+所以维护者指定的部署只能用 `main` 的本地构建拿自己的测试套件跑一遍，作为离线语料的一部分；PR-6 删除。
 
 ### 5.6 `AccessAnalyzer`
 
@@ -641,7 +641,7 @@ internal class StatementScopedContext(private val base: SecurityContext) : Secur
 | 每操作分配（`gc.alloc.rate.norm`，B/op） | 每个场景不高于基线 |
 | 分配与策略规模无关 | 新增 `EngineBenchmark`，直接调用 `CoSecEngine.evaluate`（`TraceLevel.OFF`），参数 `statements` ∈ {10, 100, 1000}（固定 10 个组），以及 `groups` ∈ {10, 64, 65, 640}（每组 10 条语句）：同一场景下 B/op 不随 `statements` 变化；随 `groups` 的增长不超过 §4.1 的位图（每 64 个组 8 字节，64 个组以内为 0） |
 | trace 关闭无成本 | `EngineBenchmark` 中 `OFF` 的 B/op 与"不含 trace 代码的对照实现"相同；`FULL` 只作参考，不设目标 |
-| 全局拒绝场景（X1） | 新增场景 `global-deny`：全局层 DENY 命中，主体层和角色层的仓库仍有数据。报告前后对比，只记录，不设门槛（本地内存仓库测不出 Redis 读放大，需要在 §8.2 的生产采样中观察 Redis 读次数） |
+| 全局拒绝场景（X1） | 新增场景 `global-deny`：全局层 DENY 命中，主体层和角色层的仓库仍有数据。报告前后对比，只记录，不设门槛（本地内存仓库测不出 Redis 读放大，离线回放也测不出；Redis 读次数在目标达成后的 RC / 预发验证中观察，见 §8.2） |
 
 "分配不随策略数增长"指引擎和适配层本身。被调用的匹配器自己的分配（例如 `PathPattern.matchAndExtract` 命中时创建的
 `PathMatchInfo`）随**命中**次数变化，不在目标之内。
@@ -674,55 +674,107 @@ internal class StatementScopedContext(private val base: SecurityContext) : Secur
 
 ## 8. 切换门槛
 
-"切换"指 PR-6（8.0）：删除旧实现，`SimpleAuthorization` 只剩引擎实现。在此之前（`main` 上 PR-1 到 PR-5，以及各 RC），旧实现就是原样不动的
-`SimpleAuthorization`，新实现是 `EngineAuthorization`。**PR-6 只有在门槛已经在某个 8.0 RC 版本上通过之后才能合入。**
+"切换"指 PR-6：删除旧实现，`SimpleAuthorization` 只剩引擎实现，第 2 阶段到此结束。在此之前（`main` 上 PR-1 到 PR-5），旧实现就是原样不动的
+`SimpleAuthorization`，新实现是 `EngineAuthorization`。**PR-6 只有在 §8.3 的门槛全部通过之后才能合入。** 门槛全部离线完成，不依赖任何发布版本，
+也不在生产中运行引擎（2026-10-21 修订：原稿要求在 8.0 RC 上用开关做生产采样，已取消，见 §10 Q6、Q8）。
 
-### 8.1 陪跑影子
+### 8.1 比较器
 
-PR-4 新增 `EngineParityAuthorization : DecisionAuthorization`（临时，PR-6 删除），由 starter 的临时属性
-`cosec.authorization.engine` 选择：
+PR-4 新增 `EngineParity`（`cosec-core` 内部，临时，PR-6 删除），取代原稿的 `EngineParityAuthorization`：它不进装饰器链，所以不实现
+`DecisionAuthorization`，也没有 starter 装配和 `cosec.*` 属性。它对同一个 `(Request, SecurityContext)` 分别调用旧实现和 `EngineAuthorization`，
+返回两边的 §8.3 元组和判定 `SAME`/`MISMATCH`/`CANDIDATE_ERROR`。使用者只有三个：§8.2 的参数化测试与随机用例、`PolicyTestKit.parity`（§5.5）、
+离线回放工具（§8.2.1）。
 
-| 取值 | 执法的实现 | 陪跑的实现 |
-|---|---|---|
-| `legacy`（默认值） | `SimpleAuthorization`（旧实现） | 无 |
-| `parity` | `SimpleAuthorization`（旧实现） | `EngineAuthorization`，按 `cosec.authorization.engine-parity.sample-rate` 采样 |
-
-没有让引擎执法的取值：PR-6 之前引擎只陪跑、计数差异，PR-6 之后只有引擎。
-
-- 它在装饰器链中占据 `SimpleAuthorization` 的位置（限流、审计等都在它外面），所以只比较纯决策，陪跑不扣限流配额。
-- 与 `ShadowAuthorization` 不同：它在旧实现**出错时也比较**（错误路径的等价同样是门槛的一部分），并且比较 §8.3 的完整元组，
+- 只比较纯决策：限流、审计等装饰器都不参与。
+- 与 `ShadowAuthorization` 不同：旧实现**出错时也比较**（错误路径的等价同样是门槛的一部分），并且比较 §8.3 的完整元组，
   而不只是 `authorized`。
-- 陪跑使用新的 `SimpleSecurityContext(principal, tenant)`，标记为 policy evaluation（与 `ShadowAuthorization` 一致，避免自定义匹配器
-  的副作用执行两次）。代价：在 `isPolicyEvaluation` 下行为不同的自定义匹配器会产生差异，这类差异按"已确认、非引擎缺陷"登记。
-- 差异经现有的 `ShadowEventSink` 发布，新增 `ShadowDiffKind.ENGINE_MISMATCH`；另有 Micrometer 计数器
-  `cosec.authorization.engine.parity{result=same|mismatch|candidate_error}`，用于统计采样量和差异率。
+- 两边各用一个新的 `SimpleSecurityContext(principal, tenant)`，标记为 policy evaluation（与 `ShadowAuthorization` 一致），互相看不到对方写下的属性。
+  代价：在 `isPolicyEvaluation` 下行为不同的自定义匹配器可能产生差异，这类差异按"已确认、非引擎缺陷"登记。
+- §8.3 第 1 项的状态由 `SecurityPipeline` 自己的映射推出：PR-4 把 `SecurityPipeline` 中现为 `private` 的 `toDecision`/`toErrorDecision`
+  改为 `internal` 供比较器调用，不复制状态码规则（"一条决策路径"不变量）。
+- 原稿的 `ShadowDiffKind.ENGINE_MISMATCH` 和 Micrometer 计数器 `cosec.authorization.engine.parity` 不再需要：没有生产中的陪跑，调用方直接拿到差异，
+  不经 `ShadowEventSink` 发布。`ShadowDiffKind` 因此不变。
 
 ### 8.2 语料
 
 | 来源 | 内容 | 何时跑 |
 |---|---|---|
 | 现有测试 | `SimpleAuthorizationTest`、`InRoleSpaceTest`、`PathVariableScopeTest`、`ResourceCheckTest`、`RootPrincipalIdentityTest`、`AuthorizationCheckerTest`、`ShadowAuthorizationTest`、`ShadowAppPermissionTest`、`AuthorizationDecisionTest` 改为 JUnit 参数化测试，对 `SimpleAuthorization` 和 `EngineAuthorization` 各跑一遍；`cosec-cocache` 的 `MissingPolicyFailClosedTest`、`RolePermissionScopeTest` 和 starter 的 `StrictCacheFailureTest`、`WebAdapterParityTest` 分别用旧实现和（由测试配置换入的）`EngineAuthorization` 各跑一遍 | 每次 `check` |
-| `PolicyTestKit` 套件 | 仓库内 `cosec-core/src/test/resources/cosec-policy-test/` 下的套件（`orders`、`spaces`，以及预期失败的 `broken`、`failing`），经 `PolicyTestKit.parity`；邀请下游应用用同一入口跑自己的套件 | 每次 `check`；下游自愿 |
+| `PolicyTestKit` 套件 | 仓库内 `cosec-core/src/test/resources/cosec-policy-test/` 下的套件（`orders`、`spaces`，以及预期失败的 `broken`、`failing`），经 `PolicyTestKit.parity`；维护者指定的部署可以用 `main` 的本地构建经同一入口跑自己的套件 | 每次 `check`；下游自愿 |
 | 随机生成 | 扩展 `ExplainerConsistencyTest` 的生成器（删除前把它挪到 `EngineParityPropertyTest`）：动作覆盖 `path`（含 `{var}`、`#{...}` 模板）、`all`、`composite`；条件覆盖 `all`、`bool`、`eq`/`in`/`startsWith`（含 `request.path.var.*`）、`inRole`（带与不带 `@space`）、`authenticated`、`negate`、一个按概率抛异常的测试匹配器、一个 `BlockingAware` 测试匹配器；数据覆盖缺失的主体策略、按层抛错的仓库、空 `Mono`、`*` 授予、授予不存在的权限 id（S10a）、带后缀的角色和非默认空间、黑名单、root | `check` 跑固定种子 2,000 例；`-PparityIterations=1000000` 手动跑百万例，PR-6 前必须跑过一次并附结果 |
-| 生产流量采样 | 在维护者指定的部署上，用 8.0 的 RC 版本，设置 `cosec.authorization.engine=parity`（§10 Q7） | `8.0.0-RC1` 发布之后 |
+| 真实数据离线回放 | 从维护者指定的真实部署（§10 Q7）导出的策略、角色权限和请求样本，用回放工具在本地比较（§8.2.1） | PR-4 合入之后、PR-6 合入之前；发现差异并修复后重跑 |
+
+#### 8.2.1 离线回放（2026-10-21 新增）
+
+**导出的数据**：每个选定部署导出三样，都在维护者本地：
+
+1. 策略：全局策略，以及请求样本中主体引用到的全部策略，格式同 [`schema/cosec-policy.schema.json`](../../schema/cosec-policy.schema.json)；
+2. 应用的角色权限：请求样本涉及的每个应用的应用权限（[`schema/cosec-app-permission.schema.json`](../../schema/cosec-app-permission.schema.json)）
+   和各角色的授予，即 `AppRolePermissionRepository` 读到的内容；
+3. 请求样本：覆盖至少连续 7 天的流量，至少 100 万条（流量不够时延长时间窗口，直到满足）。
+
+策略和角色权限在导出时取一次快照，而请求样本跨越 7 天，期间策略可能变过。这不影响门槛，因为两个实现读的是同一份快照；回放报告另列
+"与样本中记录的决策一致的比例"，只作参考，不是门槛。
+
+**请求样本的来源**：审计事件（[`AuditEvent`](../../cosec-api/src/main/kotlin/me/ahoo/cosec/api/audit/AuditEvent.kt)，由
+[`AuditEventExtractor`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/audit/AuditEventExtractor.kt) 构造，经 Kafka 或日志 sink 收集）在 `main` 上
+已经带有回放所需的大部分字段：`tenantId`；主体的 `id`、`authenticated`、`roles`（原样，含 `@space` 后缀）、`policies`；请求的 `id`、`appId`、
+`spaceId`（空值记为 `null`，回放还原为空串）、`remoteIp`、`method`、`path`、`device.id`、`routeId`；`timestamp`；授权结果的 `decision`、
+`reasonCode` 和 `source`（含 `BLACKLIST`、`ROOT` 以及做出决策的策略语句或角色权限）。
+
+决策可能读到、而审计事件**没有**的输入（以 [`PartExtractor`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/part/PartExtractor.kt)
+和各条件匹配器为准）：
+
+| 输入 | 谁会读 | 回放时 |
+|---|---|---|
+| 主体属性 `principal.attributes` | `context.principal.attributes.*`、OGNL/SpEL 条件 | 导出时能从 token 或用户数据补上就补上，否则为空 |
+| 请求头（含 `Origin`、`Referer`） | `request.header.*`、`request.origin`、`request.origin.host`、`request.referer`、`request.referer.host`、OGNL/SpEL 条件 | 能从网关访问日志补上就补上，否则为空 |
+| 请求属性 `request.attributes` | `request.attributes.*`、`resource.*`、OGNL/SpEL 条件 | 能补上就补上，否则为空（`routeId` 已在审计事件中） |
+| 评估时刻 | `time` 条件 | 用事件的 `timestamp`：`TimeConditionMatcher` 已有接受 `Clock` 的 `internal` 构造器，回放工具给工厂传入一个按请求设置的时钟 |
+| 黑名单判定 | `BlacklistChecker` | 由记录的 `source.type == BLACKLIST` 还原 |
+| root 判定 | `RootPrincipalMatcher` | 按该部署的 root 配置构造同一个匹配器（默认 `NONE`） |
+
+补不上的输入对两个实现都是同样的空值，所以比较仍然成立，只是读取它们的条件只走到"值为空"的一支。回放报告逐个列出读取了未记录输入的策略和
+应用权限（按条件配置中的 part 判断，OGNL/SpEL 条件一律列入），维护者在 PR-6 时判断是否需要补充导出。审计事件不为此增加字段。
+
+**回放工具**（PR-4）：
+
+- 输入：一个本地目录，含 `policies.json`（策略数组）、`app-role-permissions.json`（应用权限与角色授予）、`requests.jsonl`（每行一条请求：
+  上面列出的审计事件字段，另加可选的 `principal.attributes`、`request.headers`、`request.attributes`），以及可选的 `replay.json`（该部署的 root 配置）。
+- 运行：`./gradlew :cosec-core:engineReplay -PreplayDir=<目录>`。这是一个 `JavaExec` 任务，主类在 `cosec-core` 的测试源码集中，不进发布的 jar，
+  不挂到 `check`。策略和角色权限装进内存仓库，两个实现读同一份；每条请求构造 `Request` 和 `SecurityContext`，交给 `EngineParity`。
+- 输出：控制台摘要和 `<目录>/replay-report.json`：样本数、时间跨度、`same`/`mismatch`/`candidate_error` 计数、两边同样出错的计数、
+  与记录决策一致的比例、读取了未记录输入的策略清单、三个输入文件的 SHA-256。每条差异的明细（请求和两边的元组）写进同一目录的
+  `replay-mismatches.jsonl`。
+
+**数据处理**：导出的数据可能含个人数据（主体 id、IP、设备 id、请求路径）和真实的策略内容，只保存在维护者本地，回放也在维护者本地执行；
+不提交进仓库，不附到 PR，不上传到 CI。PR-6 的门槛证据只记录计数和哈希（报告中的计数、时间跨度、输入文件的 SHA-256），不含任何明细。
+某条差异需要和别人讨论时，先脱敏成最小复现用例，作为普通测试提交。
+
+**回放覆盖不到的**：回放只比较决策。下面这些运行时行为不在其中，留到目标架构全部达成、维护者决定发布 RC 之后，在预发环境验证（RFC 0001 §6）：
+
+- 线程：含 `BlockingAware` 匹配器时整次评估切到 `boundedElastic`（X2），以及事件循环上不阻塞；
+- 缓存与 I/O：CoCache 本地命中与未命中的时序、三层并行预取带来的 Redis 读次数和延迟（X1）、仓库读取失败的真实形态（回放用内存仓库；
+  `SourceUnavailable` 由 §8.2 第一行的 `StrictCacheFailureTest` 等测试覆盖）；
+- 完整的装饰器链和 Web 适配器（由 §8.2 第一行的 `WebAdapterParityTest` 等测试覆盖）。
 
 ### 8.3 "差异为零"的判定口径
 
 每个样本比较一个元组，**全部字段相等**才算相同：
 
-1. `SecurityPipeline` 会给出的状态（`ALLOWED`/`UNAUTHORIZED`/`FORBIDDEN`/`ERROR`）——离线语料实际经过 Pipeline；影子中由
-   `AuthorizationDecision` 或错误按 Pipeline 的规则推出；
+1. `SecurityPipeline` 会给出的状态（`ALLOWED`/`UNAUTHORIZED`/`FORBIDDEN`/`ERROR`）——经过 Pipeline 的离线语料直接取；比较器（包括回放）中由
+   `SecurityPipeline` 的映射从 `AuthorizationDecision` 或错误推出（§8.1）；
 2. `AuthorizeResult.reason`（区分 `Explicit Deny` 与 `Implicit Deny`）；
 3. 做出决策的规则：`VerifyContext.toDecisionRef()`（层、策略 id、语句下标、语句名、角色 id、权限 id）；
 4. 出错时异常的类名（`MissingPolicyException`、`RegexTimeoutException`、仓库异常类）。
 
 判定：
 
-- **离线**：所有语料零差异；任何差异要么修引擎，要么证明是旧实现的缺陷，登记在本文附录的"已确认差异"表里，并由用户确认
+- **离线语料与随机用例**：所有语料零差异；任何差异要么修引擎，要么证明是旧实现的缺陷，登记在本文附录的"已确认差异"表里，并由用户确认
   （RFC 0001 §6 第 2 阶段的门槛原文允许这一种例外）。
-- **生产**：在 8.0 的 RC 版本上，每个选定部署连续至少 7 天、累计至少 100 万个采样决策（流量不够时把采样率调到 1.0，延长时间直到满足），
-  `mismatch` 计数为 0；`candidate_error` 必须为 0，或者每一条都能对应到旧实现同样出错的样本。§4.4 的 X1–X8 不属于决策差异，不在比较之内。
-- **采样中发现差异**：修复（引擎缺陷修引擎；旧实现缺陷按离线的规则登记并由用户确认），发布下一个 RC，所有部署的采样从零重新计算。
+- **离线回放**：每个选定部署至少 100 万条决策、覆盖至少 7 天流量，`mismatch` 为 0；`candidate_error` 必须为 0，或者每一条都能对应到旧实现
+  同样出错的样本。§4.4 的 X1–X8 不属于决策差异，不在比较之内。
+- **回放中发现差异**：修复（引擎缺陷修引擎；旧实现缺陷按上一条的规则登记并由用户确认），然后对所有部署的导出数据从零重跑。
 
 ### 8.4 性质测试
 
@@ -746,12 +798,13 @@ PR-4 新增 `EngineParityAuthorization : DecisionAuthorization`（临时，PR-6 
 
 - **`main` 是 8.0 线，不开长期分支。** 6 个 PR 都以 `main` 为 base，与其他 PR 一样 squash 合并，因此也不存在"把 main 同步到集成分支"的问题。
   `7.x` 是从 `v7.0.0` 切出的维护分支，只接收安全和关键修复。
-- **PR-1 到 PR-5 只做加法**：新模块、新类（`EngineAuthorization`、`EngineParityAuthorization`、基于 trace 的解释路径）、新属性
-  `cosec.authorization.engine`（`legacy`/`parity`，默认 `legacy`）。默认配置下的行为、公共 API 和 `cosec.*` 属性的既有含义都不变，
-  标题都不带 `!`。PR-5 合入之后发布 `8.0.0-RC1`，在 RC 上做生产采样（§8）。
-- **每个 RC 的发布都要维护者确认。** 采样中发现差异时，修复后发布下一个 RC，采样重新开始（§8.3）。
-- **PR-6 是唯一的破坏性变更**：删除旧实现和开关，`SimpleAuthorization` 改由引擎实现，删除 `cosec-api` 的旧算法方法。
-  它只能在 §8 的门槛已经在某个 **8.0 RC 版本**上通过之后合入；之后发布 8.0.0 GA。
+- **PR-1 到 PR-5 只做加法**：新模块、新类（`EngineAuthorization`、比较器 `EngineParity`、回放工具、基于 trace 的解释路径）。
+  starter 不装配其中任何一个，不新增 `cosec.*` 属性；行为、公共 API 和 `cosec.*` 属性的既有含义都不变，标题都不带 `!`。
+- **不发布任何版本（2026-10-21 修订，取代"PR-5 之后发布 `8.0.0-RC1`、在 RC 上做生产采样"）。** 门槛全部离线完成（§8）。
+  8.0.0 GA 包含 RFC 0001 的第 2–6 阶段，每个阶段都实现完毕并做完两轮审查；在此之前没有里程碑版，也没有 RC。目标架构全部达成后，
+  由维护者决定发布 RC 还是直接发布 GA；发布 RC 时，可以在预发环境上验证回放覆盖不到的运行时行为（§8.2.1）。
+- **PR-6 是第 2 阶段唯一的破坏性变更**：删除旧实现，`SimpleAuthorization` 改由引擎实现，删除 `cosec-api` 的旧算法方法。
+  它只能在 §8 的门槛（包括离线回放）全部通过之后合入。PR-6 结束第 2 阶段，不触发任何发布；8.0.0 GA 在第 6 阶段完成之后。
 - **两条线的修复**：需要同时进 `main` 和 `7.x` 的修复，先合入 `main`，再用 cherry-pick PR 回移到 `7.x`（见 `CONTRIBUTING.md`）。
   在 `main` 上，PR-3 到 PR-6 之间两个实现并存，§8.2 的参数化测试对两者都跑，所以触及决策语义的修复要同时改旧实现和引擎适配层，
   否则测试失败。
@@ -763,9 +816,9 @@ PR-4 新增 `EngineParityAuthorization : DecisionAuthorization`（临时，PR-6 
 | PR-1 | `build: add cosec-model and cosec-engine modules` | 8.0 线（已合入，#974） | 两个空模块与 BOM；§2.2 的依赖排除和 `verifyPureClasspath`；ArchUnit 依赖与 §2.3 的规则；§7.2 的 JMH 属性；在 JDK 25 上录 `SimpleAuthorizationBenchmark` 基线 | — | 两个模块 `check` 通过；临时加一个引用 `java.io.File` 的类能让 ArchUnit 失败（在 PR 描述里给出输出，不提交）；基线 JSON 附在 PR 上 |
 | PR-2 | `feat(engine): add the decision model and the single combining algorithm` | 8.0 线 | §3.1、§3.2 的全部类型；§4.1 的算法与三级 trace；用测试替身（不依赖 `cosec-core`）写的单元测试、P1、P2、P4；`EngineBenchmark` | PR-1 | 两个模块 `check` 通过，变更行覆盖率 ≥ 80%；`EngineBenchmark` 满足 §7.1 的分配目标 |
 | PR-3 | `feat(core): add EngineAuthorization backed by the engine` | 8.0 线 | §3.3、§3.4、§3.5 的适配层；§6.2 的语句作用域上下文；`EngineAuthorization`；`ShadowAuthorization` 的候选实现工厂参数（§5.3）；`SimpleAuthorizationBenchmark` 的 `impl` 参数；§8.2 第一行的参数化测试；P3（固定种子）。`SimpleAuthorization` 不改 | PR-2，以及 7.0 中 S10a 的修复 | `:cosec-core:check`、`:cosec-cocache:check`、`:cosec-spring-boot-starter:check` 及其他依赖 `cosec-core` 的模块通过；两个实现在全部参数化测试上结果相同；JMH 对比满足 §7.1 |
-| PR-4 | `feat(core): add the engine switch and parity shadow` | 8.0 线 | `cosec.authorization.engine`（`legacy`/`parity`，默认 `legacy`）与采样率属性，写进 `configuration.md` 并标明"8.0 删除"；`EngineParityAuthorization`、`ShadowDiffKind.ENGINE_MISMATCH`、计数器；`PolicyTestKit.parity`；百万例的手动任务 | PR-3 | starter 测试覆盖两种取值，`legacy` 下装配出的对象与现在完全相同；一个人为制造差异的测试能产生 `ENGINE_MISMATCH`；百万例跑通 |
-| PR-5 | `feat(core): explain decisions from the engine trace` | 8.0 线；合入后发布 `8.0.0-RC1` | §5.2 的基于 trace 的解释路径，只在测试中装配，starter 不使用；`Explanation` 结构不变；旧叙述、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT` 保留 | PR-3（可与 PR-4 并行） | `AuthorizationExplainerTest`、`PolicyTestKitTest`、`CoSecExplainAutoConfigurationTest` 不改即通过；用 trace 解释路径（测试中装配）再跑一遍时，除 X6 涉及的断言外通过，X6 涉及的断言逐条在 PR 描述中说明 |
-| PR-6 | `refactor!: remove the legacy authorization path` | **8.0.0 GA** | 门槛在 8.0 RC 上通过后：`SimpleAuthorization` 改由引擎实现并删除 `EngineAuthorization`；删除 `EngineParityAuthorization`、`cosec.authorization.engine`、`PolicyTestKit.parity`、`ENGINE_MISMATCH`、`ShadowAuthorization` 的工厂参数；删除旧解释叙述、`Snapshot*Repository`、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT`；`DefaultPolicyEvaluator`/`DefaultAppPermissionEvaluator` 改为调用引擎；删除 `Policy.verify`、`Statement.verify`、`PermissionVerifier`、`verifyScoped`（`clearPathVariablesBeforeMatch` 保留给限流规则）；文档（下表）；最终 JMH 数字 | PR-4、PR-5、§8 的门槛 | 全部模块 `check` 通过；门槛证据（离线与生产的计数、百万例结果、所用的 RC 版本号）附在 PR 上；文档全部更新 |
+| PR-4 | `feat(core): add the engine parity comparator and offline replay` | 8.0 线 | 比较器 `EngineParity`（§8.1，含把 `SecurityPipeline` 的 `toDecision`/`toErrorDecision` 改为 `internal`）；`PolicyTestKit.parity`；百万例的手动任务；离线回放工具（§8.2.1：输入格式、`engineReplay` Gradle 任务、报告）。不新增 `cosec.*` 属性，不改 starter，不新增 `ShadowDiffKind` 取值（2026-10-21 修订，取代原来的开关与陪跑影子） | PR-3 | starter 的装配与现在完全相同；一个人为制造差异的测试能让比较器报告 `MISMATCH`，同样的差异经回放工具出现在报告和明细中；用仓库内的合成数据（不含真实数据）跑通回放工具；百万例跑通 |
+| PR-5 | `feat(core): explain decisions from the engine trace` | 8.0 线 | §5.2 的基于 trace 的解释路径，只在测试中装配，starter 不使用；`Explanation` 结构不变；旧叙述、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT` 保留 | PR-3（可与 PR-4 并行） | `AuthorizationExplainerTest`、`PolicyTestKitTest`、`CoSecExplainAutoConfigurationTest` 不改即通过；用 trace 解释路径（测试中装配）再跑一遍时，除 X6 涉及的断言外通过，X6 涉及的断言逐条在 PR 描述中说明 |
+| PR-6 | `refactor!: remove the legacy authorization path` | 8.0 线（结束第 2 阶段；8.0.0 GA 在第 6 阶段之后） | 门槛（含离线回放）通过后：`SimpleAuthorization` 改由引擎实现并删除 `EngineAuthorization`；删除 `EngineParity`、回放工具、`PolicyTestKit.parity`、`ShadowAuthorization` 的工厂参数；删除旧解释叙述、`Snapshot*Repository`、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT`；`DefaultPolicyEvaluator`/`DefaultAppPermissionEvaluator` 改为调用引擎；删除 `Policy.verify`、`Statement.verify`、`PermissionVerifier`、`verifyScoped`（`clearPathVariablesBeforeMatch` 保留给限流规则）；文档（下表）；最终 JMH 数字 | PR-4、PR-5、§8 的门槛 | 全部模块 `check` 通过；门槛证据附在 PR 上：百万例结果，以及每个回放部署的报告摘要（样本数、时间跨度、各项计数、输入文件的 SHA-256），只有计数和哈希，不含导出数据或差异明细；文档全部更新 |
 
 每个 PR 合入后照例做两轮审查（与第 1 阶段相同），审查修复以 `fix(engine|core): round-N review fixes ...` 的 PR 合入 `main`。
 
@@ -775,18 +828,20 @@ PR-4 新增 `EngineParityAuthorization : DecisionAuthorization`（临时，PR-6 
 
 | 文件 | PR | 内容 |
 |---|---|---|
-| `wiki/operations/configuration.md` | PR-4 | `cosec.authorization.engine` 与采样率属性；两种取值；"8.0.0 GA 删除" |
-| `wiki/policies/testing.md`（影子一节） | PR-4 | 陪跑影子与普通影子的区别、`ENGINE_MISMATCH` |
 | `wiki/architecture/overview.md` | PR-6 | 新模块与依赖规则、决策流程图（`SimpleAuthorization` → 引擎）、"一份算法"、路径变量的语句作用域、JMH 数字 |
 | `wiki/architecture/extending.md`、`skills/cosec-custom-matcher` | PR-6 | 匹配器在语句作用域上下文中执行；X2、X3、X4、X5 对自定义代码的影响 |
-| `wiki/operations/upgrading.md` | PR-6 | 7.x → 8.0：X2、X3、X5、X6 与 `cosec-api` 的删除项（`Policy.verify`、`Statement.verify`、`PermissionVerifier`、`ExplainWarningCode.TRACE_INCONSISTENT`）、开关的删除 |
+| `wiki/operations/upgrading.md` | PR-6 | 7.x → 8.0：X2、X3、X5、X6 与 `cosec-api` 的删除项（`Policy.verify`、`Statement.verify`、`PermissionVerifier`、`ExplainWarningCode.TRACE_INCONSISTENT`） |
 | `wiki/operations/troubleshooting.md`、`skills/cosec-troubleshoot` | PR-6 | 删除 `TRACE_INCONSISTENT` 的条目（若有） |
+
+PR-4 不改 `wiki/`（2026-10-21 修订，原来要在 `configuration.md` 写开关、在 `testing.md` 写陪跑影子）：比较器、`PolicyTestKit.parity` 和回放工具
+都在 PR-6 删除，不会进入任何发布版本。回放工具的输入格式和用法写在它自己的 KDoc 里，以本文 §8.2.1 为准。
 
 ---
 
 ## 10. 决定
 
-以下各项已于 **2026-10-20** 由用户确认；Q6、Q8、Q9 于 **2026-10-21** 由维护者修订（引擎直接在 8.0 交付），Q7 的部署在 `8.0.0-RC1` 就绪时指定。
+以下各项已于 **2026-10-20** 由用户确认；Q6、Q8、Q9 于 **2026-10-21** 由维护者修订（引擎直接在 8.0 交付）；同日 Q6、Q7、Q8、Q10 再次修订
+（8.0 在目标架构全部达成之前不发布任何版本，门槛改为离线回放真实数据）。Q7 的部署由维护者在 PR-4 合入后指定。
 
 | # | 问题 | 决定 | 理由 |
 |---|---|---|---|
@@ -795,12 +850,12 @@ PR-4 新增 `EngineParityAuthorization : DecisionAuthorization`（临时，PR-6 
 | Q3 | **`Indeterminate` 的状态码** | **已决定**：本阶段原样抛出原异常，状态码不变（500，`RegexTimeoutException` 为 403）；503 在第 5 阶段引入 | 本阶段没有 503 的来源；改状态码不属于"只抽引擎" |
 | Q4 | **新增测试依赖 ArchUnit**（`com.tngtech.archunit:archunit-junit5`） | **已决定**：引入，版本取 PR-1 时最新的 1.x，只用于测试 | 白名单式的类级依赖规则只有它能低成本做到 |
 | Q5 | **`cosec-api` 的删除项** | **已决定**：PR-6（8.0）删除 `Policy.verify`、`Statement.verify`、`PermissionVerifier`；`VerifyResult` 保留到第 5 阶段 | 留着它们就留着第二份算法；覆写 `verify` 的实现编译失败比静默改变行为好 |
-| Q6 | **开关属性 `cosec.authorization.engine`** | **已决定（2026-10-21 修订）**：PR-4 引入，只有 `legacy`/`parity` 两个取值，默认 `legacy`；没有让引擎执法的 `engine` 取值，PR-5 的 trace 解释路径只在测试中验证；PR-6 删除 | 让陪跑可以不改代码地打开、关闭和回退；PR-6 之前执法的始终是旧实现 |
-| Q7 | **生产采样的口径** | **已决定**：在维护者指定的真实部署上（`8.0.0-RC1` 就绪时指定）（最好包括一个网关部署和一个服务内嵌部署），每个部署 ≥ 7 天且 ≥ 100 万采样决策，差异为 0 | 两种宿主覆盖 WebFlux/Gateway 与 WebMvc 两条适配路径 |
-| Q8 | **用什么版本做生产采样** | **已决定（2026-10-21 修订，取代原决定"随 7.x 次版本发布"）**：PR-5 之后发布 `8.0.0-RC1`，生产采样在 RC 上用 `cosec.authorization.engine=parity` 进行（旧实现执法，引擎陪跑计数）；门槛不变（§8.3），采样中发现差异则修复、发布下一个 RC、重新采样；每个 RC 的发布都要维护者确认；PR-6 只能在门槛已在某个 RC 上通过之后合入，随后发布 8.0.0 GA | 引擎直接在 8.0 交付；RC 是可部署的构件，默认 `legacy` 下与 7.0 行为相同 |
-| Q9 | **集成方式** | **已决定（2026-10-21 修订）**：`main` 是 8.0 线，不开长期分支 `next/8.0`；`7.x` 是维护分支，只接收安全和关键修复，两条线都需要的修复先进 `main` 再 cherry-pick 回移。PR-1 到 PR-5 只做加法、藏在默认 `legacy` 的开关后面，各自 squash 合入 `main`；PR-6 是唯一的破坏性变更（§9.1） | 与其他 PR 的合并方式一致，也不需要把 main 同步到长期分支 |
-| Q10 | **解释输出的变化**（X6） | **已决定**：PR-6 起按新输出（之前只在测试中验证）；PR-6（8.0）删除 `ExplainWarningCode.TRACE_INCONSISTENT`，出错时后面的层标为 `NOT_EVALUATED`，写进 `upgrading.md` | 解释与决策已是同一次评估 |
-| Q11 | **角色授予了不存在的权限 id** | **已决定**：在 7.0 发布前于 `main` 修复为失败即拒绝（500），与 D2 相同（由另一个会话实现）。本 RFC 以此为 7.0 的行为（§4.2 S10a）：第 2 阶段保持它，陪跑门槛也以它为比较基准 | 原来的静默跳过会让授予给角色的 DENY 权限失效；在 7.0 修掉，引擎就不必复制一个已知缺陷 |
+| Q6 | **开关属性 `cosec.authorization.engine`** | **已决定（2026-10-21 再次修订，取代同日的"`legacy`/`parity` 两个取值"）**：不引入。PR-4 不新增任何 `cosec.*` 属性，不改 starter 的装配；新旧实现只经比较器 `EngineParity` 在测试、`PolicyTestKit.parity` 和离线回放中比较（§8.1）；PR-5 的 trace 解释路径只在测试中验证；PR-6 之前执法的始终是旧实现 | 门槛不再需要生产中的陪跑；PR-6 之前没有任何发布版本，开关也就没有使用者 |
+| Q7 | **真实数据的口径** | **已决定（2026-10-21 修订，取代"生产采样的口径"）**：从维护者指定的真实部署（最好包括一个网关部署和一个服务内嵌部署，PR-4 合入后指定）导出策略、角色权限和覆盖至少 7 天流量的请求样本，离线回放；每个部署 ≥ 100 万条决策，`mismatch` 为 0，`candidate_error` 按 §8.3 的规则（§8.2.1）。导出数据只保存在维护者本地，不提交；PR-6 的证据只记录计数和哈希 | 两种宿主的策略和请求形态不同，一起覆盖网关与服务内嵌两类部署 |
+| Q8 | **门槛需要什么版本** | **已决定（2026-10-21 再次修订，取代"随 7.x 次版本发布"和同日的"PR-5 之后发布 `8.0.0-RC1`，在 RC 上做生产采样"）**：不需要任何版本。门槛全部离线完成（§8），PR-6 在门槛通过后合入并结束第 2 阶段。8.0 在 RFC 0001 第 2–6 阶段全部实现并各做完两轮审查之前不发布任何版本，没有里程碑版，也没有 RC；8.0.0 GA 包含第 2–6 阶段。目标达成后由维护者决定发布 RC 还是 GA；发布 RC 时，在预发环境验证回放覆盖不到的运行时行为（§8.2.1） | 维护者决定目标架构全部达成之前不发布；离线回放用真实数据检验决策等价，不需要可部署的构件 |
+| Q9 | **集成方式** | **已决定（2026-10-21 修订）**：`main` 是 8.0 线，不开长期分支 `next/8.0`；`7.x` 是维护分支，只接收安全和关键修复，两条线都需要的修复先进 `main` 再 cherry-pick 回移。PR-1 到 PR-5 只做加法、starter 不装配，各自 squash 合入 `main`；PR-6 是本阶段唯一的破坏性变更（§9.1） | 与其他 PR 的合并方式一致，也不需要把 main 同步到长期分支 |
+| Q10 | **解释输出的变化**（X6） | **已决定（2026-10-21 补充：PR-6 之前没有发布版本，用户在 8.0.0 GA 中第一次看到新输出）**：PR-6 起按新输出（之前只在测试中验证）；PR-6（8.0）删除 `ExplainWarningCode.TRACE_INCONSISTENT`，出错时后面的层标为 `NOT_EVALUATED`，写进 `upgrading.md` | 解释与决策已是同一次评估 |
+| Q11 | **角色授予了不存在的权限 id** | **已决定**：在 7.0 发布前于 `main` 修复为失败即拒绝（500），与 D2 相同（由另一个会话实现）。本 RFC 以此为 7.0 的行为（§4.2 S10a）：第 2 阶段保持它，门槛也以它为比较基准 | 原来的静默跳过会让授予给角色的 DENY 权限失效；在 7.0 修掉，引擎就不必复制一个已知缺陷 |
 | Q12 | **`inRole` 的已知行为**（第二轮审查 M1/M2） | **已决定**：本阶段原样保留；第 4 阶段改为按 `Scope` 和成员关系判定时一并解决 | 匹配器不动是方案 B 的前提；它们的修复是语义变化 |
 | Q13 | **三层并行预取**（X1） | **已决定**：同意 | 引擎需要完整输入；决策和错误信号不变；第 3 阶段快照化后自然消失 |
 
