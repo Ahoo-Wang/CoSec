@@ -38,6 +38,10 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
     /** Set while visiting a group only to list its entries. */
     private var listing = false
 
+    /** The entries `forEachRule` visited in the current pass of the current group, with their granting roles. */
+    private val visited = ArrayList<RuleEntry>()
+    private val visitedVia = ArrayList<String?>()
+
     private val layerTraces = ArrayList<LayerTrace>(LayerKind.entries.size)
     private var afterDecisionLayer = false
 
@@ -77,9 +81,12 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
     override fun beginGroup(index: Int) {
         groupTrace = groupTraces[index]
         position = 0
+        visited.clear()
+        visitedVia.clear()
     }
 
     override fun endGroup() {
+        recordVisited()
         // The allow pass must visit exactly what the deny pass did. Only the trace remembers the deny pass, so a
         // mismatch is recorded rather than thrown: the untraced evaluation cannot see it and decides regardless.
         val trace = checkNotNull(groupTrace)
@@ -90,8 +97,31 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
 
     override fun evaluatingForTraceOnly(): Boolean = listing || afterDecisionLayer || result != null
 
-    @Suppress("TooGenericExceptionCaught")
+    /**
+     * Only collects the pass's entries; [endGroup] evaluates them, in the same order, as soon as `forEachRule` returns.
+     *
+     * Why not evaluate here: a group's `forEachRule` is compiled once for both evaluators, and whatever this visit
+     * inlines into it makes it too big for the JIT to inline into the untraced evaluator, which then runs at half its
+     * speed for as long as any decision is ever traced (EngineBenchmark `off-mixed`, round 2). A visit that only adds to
+     * a list cannot grow it.
+     */
     override fun visit(entry: RuleEntry, grantedVia: String?): Boolean {
+        visited.add(entry)
+        visitedVia.add(grantedVia)
+        // Never stops: the rest of the layer is visited for the trace.
+        return false
+    }
+
+    private fun recordVisited() {
+        for (i in visited.indices) {
+            record(visited[i], visitedVia[i])
+        }
+        visited.clear()
+        visitedVia.clear()
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun record(entry: RuleEntry, grantedVia: String?) {
         val trace = checkNotNull(groupTrace)
         val position = position++
         if (!evaluatingForTraceOnly()) {
@@ -106,8 +136,6 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
                 trace.breach(error)
             }
         }
-        // Never stops: the rest of the layer is visited for the trace.
-        return false
     }
 
     /** One entry, checked and evaluated as the untraced evaluator would, then recorded at [position]. */
@@ -213,6 +241,8 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
                 groupId = groups[i].id
                 groupTrace = builder
                 position = 0
+                visited.clear()
+                visitedVia.clear()
                 listing = true
                 try {
                     if (groups[i].forEachRule(this)) {
@@ -225,6 +255,10 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
                         throw error
                     }
                     builder.breach(error)
+                }
+                // Lists what was visited, even when forEachRule threw part-way.
+                try {
+                    recordVisited()
                 } finally {
                     listing = false
                 }

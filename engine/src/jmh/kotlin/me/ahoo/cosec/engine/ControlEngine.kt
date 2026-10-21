@@ -25,8 +25,8 @@ import me.ahoo.cosec.model.StatementRef
  * must (the evaluation, its decision and reference, the visitor, the bitmap beyond 64 groups). [CoSecEngine] at
  * [TraceLevel.OFF] must allocate no more than this.
  *
- * It makes the same adapter-contract checks as the engine (each entry's shape, a null match, a group's stop), so
- * throughput compares what tracing costs and nothing else.
+ * It has none of the engine's adapter-contract checks. A copy with them ran at a third to a half of the engine's own
+ * throughput, from how the JIT compiled it rather than from the checks, so it was no fairer a baseline (round 2).
  */
 object ControlEngine {
     private val IMPLICIT_DENY = Evaluation(Decision.Deny(null), null)
@@ -82,22 +82,13 @@ object ControlEngine {
                     val word = words?.get(i ushr 6) ?: bits
                     if ((word ushr i) and 1L == 0L) continue
                     groupId = groups[i].id
-                    val stopped = groups[i].forEachRule(this)
-                    if (stopped != (result != null)) broken()
-                    if (stopped) return result
+                    if (groups[i].forEachRule(this)) return result
                 }
             }
             return null
         }
 
         override fun visit(entry: RuleEntry, grantedVia: String?): Boolean {
-            val valid = (entry !is Rule || (entry.effect as Effect?) != null) &&
-                if (kind == LayerKind.ROLE) {
-                    grantedVia != null && (entry !is Rule || entry.id != null)
-                } else {
-                    grantedVia == null && entry is Rule
-                }
-            if (!valid) broken()
             val rule = when (entry) {
                 is Rule -> entry
                 is UnresolvedGrant -> {
@@ -108,23 +99,17 @@ object ControlEngine {
                 }
             }
             if (rule.effect != pass) return false
-            val match: RuleMatch? = try {
+            val match = try {
                 rule.match(request)
             } catch (e: Exception) {
                 result = Decision.Indeterminate(Cause.MatcherFailed(kind, groupId, ref(rule, grantedVia), e))
                 return true
             }
-            when (match ?: broken()) {
-                RuleMatch.MATCHED -> Unit
-                RuleMatch.ACTION_MISS, RuleMatch.CONDITION_MISS -> return false
-            }
+            if (match != RuleMatch.MATCHED) return false
             val ref = ref(rule, grantedVia)
             result = if (pass == Effect.DENY) Decision.Deny(ref) else Decision.Permit(ref)
             return true
         }
-
-        /** Out of line, as the engine's failures are, so both compile to the same shape. */
-        private fun broken(): Nothing = throw IllegalStateException("Group $groupId broke the adapter contract")
 
         private fun ref(rule: Rule, grantedVia: String?): StatementRef =
             if (kind == LayerKind.ROLE) {
