@@ -18,13 +18,16 @@ import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.jwt.InjectSecurityContextParser
 import me.ahoo.cosec.servlet.InjectSecurityContextFilter
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.REACTIVE_REQUEST_PARSER_BEAN_NAME
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration.Companion.SERVLET_REQUEST_PARSER_BEAN_NAME
+import me.ahoo.cosec.spring.boot.starter.authorization.ConditionalOnAuthorizationEnabled
 import me.ahoo.cosec.webflux.ReactiveInjectSecurityContextWebFilter
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -35,15 +38,23 @@ import org.springframework.web.server.ServerWebExchange
  *
  * @author ahoo wang
  */
-@AutoConfiguration
+@AutoConfiguration(after = [CoSecAuthorizationAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
 @ConditionalOnInjectSecurityEnabled
 @EnableConfigurationProperties(
     InjectSecurityContextProperties::class,
 )
 class InjectSecurityContextAutoConfiguration {
+    /**
+     * Skips signature checks, so it exists only while authorization is off. With authorization on, the inject
+     * filters use the verifying parser from [CoSecAuthorizationAutoConfiguration] whatever the registration order.
+     */
     @Bean
     @ConditionalOnMissingBean
+    @ConditionalOnProperty(
+        value = [ConditionalOnAuthorizationEnabled.ENABLED_KEY],
+        havingValue = "false",
+    )
     fun injectSecurityContextParser(): SecurityContextParser {
         return InjectSecurityContextParser
     }

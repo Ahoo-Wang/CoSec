@@ -32,7 +32,7 @@ The same statement format is used by [app permissions](./role-permissions.md#per
 
 | Field | Required | Meaning |
 |---|---|---|
-| `id` | yes | Policy id. Principals list non-global policies by this id. Unique within a set of policy files. |
+| `id` | yes | Policy id. Principals list non-global policies by this id. Unique within a set of policy files. Must not start with `history:`, which the Redis repository reserves for the policy history ([Redis keys](../operations/storage.md#redis-keys)). |
 | `name` | yes | Display name. |
 | `type` | yes | `global`, `system` or `custom`, see below. Case-insensitive. |
 | `tenantId` | yes | The owning tenant, e.g. `(platform)` or `(0)`. Metadata only: authorization never compares it with the request's tenant. |
@@ -258,7 +258,8 @@ These read one [part](#parts) of the request or security context and compare it 
 | `path` | `part`, `pattern`, `options` | matches the path pattern; `options` as for the [`path` action](#path) |
 
 `ignoreCase` defaults to `false`. `regular` runs under its `timeout` as a guard against catastrophic backtracking;
-a match that exceeds it denies the request with `403` and is never treated as a match.
+a match that exceeds it is never treated as a match and denies the request: `401` for an anonymous caller, `403`
+for an authenticated one ([Responses](../integration/web.md#responses-and-status-codes)).
 
 ```json
 { "in": { "part": "request.remoteIp", "value": ["10.0.0.1", "10.0.0.2"] } }
@@ -292,9 +293,9 @@ The complete list, as `DefaultPartExtractor` reads them. A part that is absent r
 | `context.principal.id` | principal id |
 | `context.principal.attributes.<name>` | a principal attribute, as a string |
 
-A prefixed part needs a name after the prefix. A part outside this list is not detected when the policy loads:
-every request that evaluates the condition fails with `500`. [Validate policies](./testing.md#validating-policies)
-to catch it.
+A prefixed part needs a name after the prefix. A value condition whose part is outside this list fails when the
+policy loads, with `Condition [<type>] part [<part>] is not a supported part`. A copy stored by a version before 7.0
+fails every read of that policy with `500` until it is fixed and saved again.
 
 Headers, `request.remoteIp` and request attributes are only as trustworthy as their source. Do not base an allow on
 a header the client can set unless a trusted proxy overwrites it.
@@ -400,15 +401,16 @@ policies are read from files (local policies, [shadow candidates](./testing.md#t
 is strict, because a file that is silently skipped could drop a deny:
 
 - A file that cannot be read or built fails: invalid JSON, a missing required field, an unknown action or
-  condition type, an invalid matcher configuration (for example a `time` condition without any bound), or a
-  [path variable](#path-variables) read outside its scope. The error names the file.
+  condition type, an invalid matcher configuration (for example a `time` condition without any bound, or a value
+  condition with an unsupported [part](#parts)), or a [path variable](#path-variables) read outside its scope. The
+  error names the file.
 - Two files that declare the same policy id fail, naming both files.
 - A configured location that does not exist or matches no file fails. Only the default location,
   `classpath:cosec-policy/*-policy.json`, may match nothing.
 - A file matched by two locations is read once.
 
-In the application these failures stop startup. A [part](#parts) outside the list and errors that depend on the
-request are not detected here; [validate policies](./testing.md#validating-policies) for them.
+In the application these failures stop startup. Errors that depend on the request are not detected here;
+[validate policies](./testing.md#validating-policies) for them.
 
 ## Generating policies from OpenAPI
 

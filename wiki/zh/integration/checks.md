@@ -151,7 +151,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 | `layers` | `BLACKLIST`、`ROOT`、`GLOBAL_POLICY`、`PRINCIPAL_POLICY`、`ROLE_PERMISSION`，每层的状态为 `EVALUATED`、`NOT_EVALUATED`（之前的显式拒绝结束了求值）、`EMPTY` 或 `EVALUATED_AFTER_DECISION`（`exhaustive: true` 时）。每条语句和权限都有一个结果：`MATCHED`、`ACTION_MISS`、`CONDITION_MISS`、`NOT_EVALUATED`（它所在策略或应用的条件不匹配）或 `ERROR`。 |
 | `overriddenAllows` | 被之后的显式拒绝推翻的允许。 |
 | `rateLimitRules` | 如果请求被允许，它会消耗许可的[限流规则](../policies/rate-limiting.md)。 |
-| `warnings` | `MISSING_POLICY`（主体列出了仓库中没有的策略，真实请求会得到 `500`）、`NO_APP_PERMISSION`（空间中有角色，但应用没有应用权限）、`NO_ROLE_IN_SPACE`（有角色，但没有写给请求所在空间的角色；见[角色与空间](./authentication.md#roles-and-spaces)）、`MATCHER_ERROR`、`TOKEN_INVALID`（凭证被拒绝），以及 `TRACE_INCONSISTENT`（遍历结果与决策不一致：以决策为准，并作为缺陷报告）。 |
+| `warnings` | `MISSING_POLICY`（主体列出了仓库中没有的策略，真实请求会得到 `500`）、`MISSING_PERMISSION`（角色被授予了其应用没有定义的权限 id，真实请求会得到 `500`）、`NO_APP_PERMISSION`（空间中有角色，但应用没有应用权限）、`NO_ROLE_IN_SPACE`（有角色，但没有写给请求所在空间的角色；见[角色与空间](./authentication.md#roles-and-spaces)）、`MATCHER_ERROR`、`TOKEN_INVALID`（凭证被拒绝），以及 `TRACE_INCONSISTENT`（遍历结果与决策不一致：以决策为准，并作为缺陷报告）。 |
 
 没有 Actuator 时，注入 `AuthorizationExplainer` Bean，调用 `explain(request, principal)`（或用 `explain(request)` 使用请求自带的
 凭证），例如在一个固定"谁能做什么"的测试中。针对策略文件的测试用例，见[测试策略](../policies/testing.md)。

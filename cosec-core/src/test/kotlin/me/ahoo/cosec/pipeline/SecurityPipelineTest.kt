@@ -101,12 +101,27 @@ class SecurityPipelineTest {
                 SecurityStatus.FORBIDDEN,
                 AuthorizeResult.IMPLICIT_DENY
             ),
+            // A ReDoS-guard trip is a deny like any other: 401 for anonymous callers, 403 for authenticated ones.
             case(
-                "regex timeout",
+                "regex timeout, anonymous",
                 anonymousParser,
+                failing(RegexTimeoutException("timeout")),
+                SecurityStatus.UNAUTHORIZED,
+                AuthorizeResult.IMPLICIT_DENY
+            ),
+            case(
+                "regex timeout, authenticated",
+                authenticatedParser,
                 failing(RegexTimeoutException("timeout")),
                 SecurityStatus.FORBIDDEN,
                 AuthorizeResult.IMPLICIT_DENY
+            ),
+            case(
+                "regex timeout, expired token",
+                expiredTokenParser,
+                failing(RegexTimeoutException("timeout")),
+                SecurityStatus.UNAUTHORIZED,
+                AuthorizeResult.TOKEN_EXPIRED
             ),
             case(
                 "unexpected error",
@@ -119,7 +134,7 @@ class SecurityPipelineTest {
                 "synchronous throw",
                 anonymousParser,
                 throwing(RegexTimeoutException("timeout")),
-                SecurityStatus.FORBIDDEN,
+                SecurityStatus.UNAUTHORIZED,
                 AuthorizeResult.IMPLICIT_DENY
             ),
             case("context parse error", brokenParser, allow, SecurityStatus.ERROR, AuthorizeResult.IMPLICIT_DENY),

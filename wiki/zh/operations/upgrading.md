@@ -24,6 +24,7 @@ description: "CoSec 各版本之间有哪些破坏性变更，以及如何迁移
 | 变更 | 一句话说明 |
 |---|---|
 | [缺失的主体策略会失败](#missing-principal-policies-fail) | 主体列出、但仓库中没有的策略 id，现在会让授权以 `500` 失败，而不是被跳过。 |
+| [缺失的角色权限会失败](#missing-role-permissions-fail) | 授予角色、但其应用的权限目录中没有的权限 id，现在会让授权以 `500` 失败，而不是被跳过。 |
 | [Root 默认关闭、只限平台租户、受黑名单约束](#root-is-off-platform-only-and-blacklisted) | `root-enabled` 默认 `false`，root 必须属于平台租户，黑名单先于 root 检查。 |
 | [角色授权属于一个应用和一个空间](#role-grants-belong-to-an-app-and-a-space) | 授权移到 `cosec:app:role:permission:<appId>:<roleId>[@<spaceId>]`，请求只看到为其空间写的角色。 |
 | [路径变量属于捕获它的语句](#path-variables-belong-to-their-statement) | 条件只能读取它自己的 `path` 动作捕获的变量；其他读取都是加载错误。 |
@@ -32,7 +33,13 @@ description: "CoSec 各版本之间有哪些破坏性变更，以及如何迁移
 | [重复的 id 和不存在的位置会让启动失败](#duplicate-ids-and-missing-locations-stop-startup) | 两个文件声明同一个策略 id，或配置的位置匹配不到文件，都会让加载失败。 |
 | [限流规则和影子候选同样严格加载](#rate-limit-rules-and-shadow-candidates-load-strictly) | 同样的严格规则适用于 `cosec.limiter.locations` 和 `cosec.shadow.*`，错误类型变为 `IllegalStateException`。 |
 | [限流 key 在加载时检查](#rate-limit-keys-are-checked-at-load) | 不支持的 `key` 部分在规则加载时就失败，而不是在每个请求上失败。 |
+| [条件的 part 在加载时检查](#condition-parts-are-checked-at-load) | 不支持的条件 `part` 在策略加载时就失败；含有它的已存储副本在读取时失败。 |
+| [策略 id 不能以 `history:` 开头](#policy-ids-may-not-start-with-history) | `setPolicy` 会拒绝它们，因为它们会与策略历史共用一个 key。 |
 | [OpenAPI 应用 id 替换 `:`](#openapi-app-ids-replace) | 像 `orders:api` 这样的 OpenAPI 标题得到应用 id `orders-api`。 |
+| [Spring MVC 按请求 URI 授权](#spring-mvc-authorizes-the-request-uri) | 不再按 `servletPath`：策略能看到 `DispatcherServlet` 的前缀，路径也不再做百分号解码。 |
+| [去掉路径参数，并拒绝 `..;`](#path-parameters-are-removed) | 在所有适配器上，`/admin;x` 都按 `/admin` 授权，`/public/..;/admin` 得到 `400`。 |
+| [正则超时对匿名调用方返回 `401`](#a-regex-timeout-answers-401-to-anonymous-callers) | 它与其他拒绝一样映射，不再对所有调用方都返回 `403`。 |
+| [不匹配的刷新令牌按无效令牌处理](#a-mismatched-refresh-token-is-an-invalid-token) | `refresh` 抛出 `RefreshTokenMismatchException`（一种 `TokenVerificationException`），而不是 `IllegalArgumentException`。 |
 | [不支持滚动升级](#no-rolling-upgrade) | 6.x 和 7.0 无法共用缓存：停掉所有 6.x 实例，迁移，再启动 7.0。 |
 | [通过 CoSec 写入，而不是直接写 Redis](#write-through-cosec-not-redis) | 用 `SET` 或 `SADD` 写入的值不会被读取；缓存 API 改为 CoCache 6 的 API。 |
 | [Redis 7、Lettuce 和更宽的 ACL](#redis-7-lettuce-and-a-wider-acl) | Redis 7.0+（或 Valkey 7.2+），不支持 Jedis 和静态主从，ACL 中需要 `+hkeys +hget`。 |
@@ -51,20 +58,26 @@ description: "CoSec 各版本之间有哪些破坏性变更，以及如何迁移
    `+hgetall`）（[详情](#redis-7-lettuce-and-a-wider-acl)）。
 2. **策略、应用权限和限流规则。** 在其中（包括存储在 Redis 中的）搜索 `request.path.var.` 和 `PATH_VARIABLES`，修正其作用域
    （[详情](#path-variables-belong-to-their-statement)）。确认每个本地策略文件都能加载、策略 id 在文件之间唯一、每个配置的位置都
-   存在（[详情](#duplicate-ids-and-missing-locations-stop-startup)），以及每个限流 `key` 都是支持的部分
-   （[详情](#rate-limit-keys-are-checked-at-load)）。
+   存在（[详情](#duplicate-ids-and-missing-locations-stop-startup)），每个限流 `key` 和每个条件 `part` 都是支持的部分
+   （[详情](#rate-limit-keys-are-checked-at-load)、[详情](#condition-parts-are-checked-at-load)），以及没有以 `history:` 开头的策略 id
+   （[详情](#policy-ids-may-not-start-with-history)）。
 3. **主体。** 找出列出了仓库中不存在的策略 id 的主体（令牌、API key、用户记录），写入那些策略或移除这些 id
    （[详情](#missing-principal-policies-fail)）。
 4. **角色。** 决定每个 6.x 角色（和空间）属于哪个应用，并在令牌和 API key 中为每个非默认空间签发 `role@space` 角色
    （[详情](#role-grants-belong-to-an-app-and-a-space)）。审查基于 `context.principal.roles` 的 `in`、`spel` 和 `ognl` 条件，
-   它们看到的是原始的 `role@space` 字符串（[详情](#inrole-follows-roles-into-their-space)）。
+   它们看到的是原始的 `role@space` 字符串（[详情](#inrole-follows-roles-into-their-space)）。确认授予角色的每个权限 id（`*` 除外）
+   都在其应用的权限目录中有定义（[详情](#missing-role-permissions-fail)）。
 5. **Root。** 如果依赖 root，显式开启它，并在平台租户中签发它的令牌（[详情](#root-is-off-platform-only-and-blacklisted)）。
 6. **OpenAPI。** 如果某个 OpenAPI 标题包含 `:`，让客户端改用新的 `CoSec-App-Id`（[详情](#openapi-app-ids-replace)）。
-7. **代码。** 把直接写 Redis 的应用权限和角色授权改为通过 CoSec 写入（[详情](#write-through-cosec-not-redis)），用
+7. **路径和客户端。** 在设置了 `spring.mvc.servlet.path` 的 Spring MVC 应用中，给策略、应用权限和限流规则的路径加上这个前缀
+   （[详情](#spring-mvc-authorizes-the-request-uri)）。检查把 `request.path` 当字符串比较的条件（[详情](#path-parameters-are-removed)），
+   以及把 `401` 当作"需要重新登录"的客户端（[详情](#a-regex-timeout-answers-401-to-anonymous-callers)）。
+8. **代码。** 把直接写 Redis 的应用权限和角色授权改为通过 CoSec 写入（[详情](#write-through-cosec-not-redis)），用
    `CacheSpecCustomizer` 或 `cocache.caches.<CacheName>.*` 替换 6.x 的缓存组件 bean（[详情](#cosec-creates-its-caches-itself)），
-   并把持有 `CosIdGenerator` 的 `IdGenerator` 声明改为 `StringIdGenerator`（[详情](#id-generators-are-stringidgenerators)）。
-8. **规划停机。** 准备一个一次性的迁移任务（见下文），并规划一个窗口，期间没有任何 6.x 实例、7.0 实例或其他写入方触碰 CoSec 的 key。
-9. **然后：** 停止所有写入方，迁移数据，核对，再启动 7.0（[迁移数据](#migrating-the-data)）。只有在每个应用都迁移完之后，才删除旧的角色授权。
+   把持有 `CosIdGenerator` 的 `IdGenerator` 声明改为 `StringIdGenerator`（[详情](#id-generators-are-stringidgenerators)），
+   并在刷新调用外捕获 `TokenVerificationException`（[详情](#a-mismatched-refresh-token-is-an-invalid-token)）。
+9. **规划停机。** 准备一个一次性的迁移任务（见下文），并规划一个窗口，期间没有任何 6.x 实例、7.0 实例或其他写入方触碰 CoSec 的 key。
+10. **然后：** 停止所有写入方，迁移数据，核对，再启动 7.0（[迁移数据](#migrating-the-data)）。只有在每个应用都迁移完之后，才删除旧的角色授权。
 
 ### 迁移数据 {#migrating-the-data}
 
@@ -260,6 +273,19 @@ fun migrateCoSecData(migration: CoSecCoCache5Migration) = ApplicationRunner {
 升级之前，找出列出了仓库中不存在的策略 id 的主体（令牌、API key、用户记录），写入这些策略或移除这些 id。
 `PolicyRepository.getPolicies` 本身没有变化：它仍返回找到的策略，所以自定义仓库无需修改。
 
+#### 缺失的角色权限会失败 {#missing-role-permissions-fail}
+
+授予角色的权限 id 在其应用的权限目录中没有定义时（已从目录中删除，或 id 写错），`SimpleAuthorization` 现在会以
+`MissingPermissionException` 失败，管道将其映射为 `500`。以前，这个 id 会被跳过：如果它指向一条拒绝权限，全局或主体策略中的允许就会放行请求。
+对在该应用和空间中持有这个角色的主体，只要角色层被评估、且在此之前没有拒绝匹配，请求就会失败：应用的条件不匹配时，这一层不适用；
+已被某条拒绝（前面某一层的，或角色层中更靠前的）匹配的请求仍然被拒绝。`*` 仍然表示授予全部权限。`AuthorizationChecker` 返回 `false`；
+解释结果会给出 `500` 并带有 `MISSING_PERMISSION` 警告；影子模式中去掉了某个已授予 id 的候选应用权限会报告 `CANDIDATE_ERROR`。
+`AccessAnalyzer` 和 `PolicyTestKit` 在构建或运行时拒绝这样的授权；测试套件的 `roles` 在每个应用中都会授予，因此每个应用都必须定义这些权限
+（只属于一个应用的 id 请用 `appRoles`）。`AppRolePermission.rolePermissionIndexer` 的默认实现也会抛出同一个异常。
+
+升级之前，对照每个应用的权限目录检查其角色授权，补上缺失的权限，或从授权中移除这个 id
+（[把权限授予角色](../policies/role-permissions.md#granting-permissions-to-roles)）。
+
 #### Root 默认关闭、只限平台租户、受黑名单约束 {#root-is-off-platform-only-and-blacklisted}
 
 以前，任何 id 为 `cosec`（或系统属性 `-Dcosec.root` 的值）的主体都会绕过所有检查，包括黑名单，且
@@ -361,10 +387,55 @@ fun migrateCoSecData(migration: CoSecCoCache5Migration) = ApplicationRunner {
 不是支持部分的 `key`（例如用 `request.ip` 代替 `request.remoteIp`）以前能加载，然后在每个匹配的请求上以 `500` 失败，而此时更早的
 规则已经消耗了许可。现在构造或加载这样的规则会失败（[Key](../policies/rate-limiting.md#keys)）。
 
+#### 条件的 part 在加载时检查 {#condition-parts-are-checked-at-load}
+
+`part` 不受支持的取值条件（`eq`、`in`、`contains`、`startsWith`、`endsWith`、`regular`、`path`），例如把 `request.remoteIp` 写成
+`request.ip`，或把 `request.header.x` 写成 `request.headers.x`，以前能加载，然后让每个匹配的请求都以 `500` 失败。现在构建这样的匹配器会失败，
+报 `Condition [<type>] part [<part>] is not a supported part`，与限流 key 的做法一致：含有它的本地策略文件会让启动失败，`setPolicy` 会拒绝它，
+已存储在 Redis 中的这类策略在读取时失败，所有读取该策略的请求都会以 `500` 被拒绝，而不仅是其语句匹配到的请求。升级之前，在策略、应用权限和
+限流规则的条件中搜索 `"part"`，逐个对照[支持的 part](../policies/language.md#parts)。
+
+#### 策略 id 不能以 `history:` 开头 {#policy-ids-may-not-start-with-history}
+
+策略历史把策略 `<id>` 的修订记录存放在 `<prefix>:policy:history:<id>`（以及 `<id>:seq`）下，与策略本身在同一个命名空间中，因此 id 为
+`history:<id>` 的策略会与策略 `<id>` 的历史记录共用一个 key（[Redis key](./storage.md#redis-keys)）。`RedisPolicyRepository.setPolicy`
+现在会拒绝这样的 id，报 `Policy id [...] must not start with [history:]`；启动时把这样的本地策略写入 Redis 也会失败。`history`、
+`history-viewer` 这类 id 不受影响。升级之前请重命名 id 以 `history:` 开头的策略；6.x 迁移会把这类 key 当作策略历史跳过。
+
 #### OpenAPI 应用 id 替换 `:` {#openapi-app-ids-replace}
 
 `OpenAPIAppPermissionGenerator` 从 OpenAPI 标题推导应用 id，而应用 id 不能再包含 `:`。标题包含 `:` 的应用（例如 `orders:api`）得到
 id `orders-api`；客户端必须在 `CoSec-App-Id` 中发送新的 id，它的角色授权也必须为新 id 写入。
+
+### 请求与令牌的变更 {#request-and-token-changes}
+
+[表格](#breaking-changes)中每一行请求与令牌变更的含义，以及要做的事。
+
+#### Spring MVC 按请求 URI 授权 {#spring-mvc-authorizes-the-request-uri}
+
+WebMvc 适配器原来使用 `HttpServletRequest.servletPath`，它不含 `pathInfo`。`DispatcherServlet` 映射在前缀下（`spring.mvc.servlet.path=/api`）时，
+每个请求都按 `/api` 授权：`/api/admin/**` 上的拒绝永远不会匹配，而 `/api/**` 上的允许会放行所有请求。现在使用去掉上下文路径之后的请求 URI，
+与 Spring MVC 的路由和 WebFlux 看到的路径一致（[请求路径](../integration/web.md#the-request-path)）。使用默认的 `/` 映射时，匹配的路径与以前相同，
+只是不再做百分号解码：`path` 动作仍像以前一样逐段解码，但把 `request.path` 当字符串比较的条件（`eq`、`regular` 等）现在看到的是 `/a%20b`
+而不是 `/a b`。升级配置了 Servlet 路径的应用之前，给它的策略、应用权限和限流规则加上这个前缀。
+
+#### 去掉路径参数，并拒绝 `..;` {#path-parameters-are-removed}
+
+在所有适配器上，`/admin;jsessionid=1` 都按 `/admin` 授权，与 Spring 的路由一致；以前 WebFlux 和 Gateway 原样传递，`request.path` 条件可能匹配不到。
+后面跟着路径参数的 `.` 或 `..` 段（`/public/..;/admin`）会被 Servlet 容器当作 `..` 处理，现在像其他路径穿越一样返回 `400`。
+
+#### 正则超时对匿名调用方返回 `401` {#a-regex-timeout-answers-401-to-anonymous-callers}
+
+`regular` 条件超出时间预算时，以前不论调用方是谁都返回 `403`。现在它与其他拒绝一样映射：匿名调用方返回 `401`（令牌校验失败时原因为
+`Token Expired` 或 `Token Invalid`），已认证调用方返回 `403`（[响应与状态码](../integration/web.md#responses-and-status-codes)）。
+把 `401` 当作"需要重新登录"的客户端，对这类请求也会收到 `401`。
+
+#### 不匹配的刷新令牌按无效令牌处理 {#a-mismatched-refresh-token-is-an-invalid-token}
+
+刷新令牌不是和访问令牌一起签发时，`JwtTokenVerifier.refresh` 以前抛出 `IllegalArgumentException`（`Illegal refreshToken.`），这种不匹配会
+表现为意外错误。现在它抛出 `RefreshTokenMismatchException`，与其他令牌失败一样是 `TokenVerificationException`
+（[刷新令牌](../integration/authentication.md#refreshing-tokens)）。在刷新调用外捕获 `IllegalArgumentException` 的代码，请改为捕获
+`TokenVerificationException`。
 
 ### CoCache 6 与 CosId 4 {#cocache-6-and-cosid-4}
 

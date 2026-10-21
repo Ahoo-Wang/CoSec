@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.AppRolePermission
+import me.ahoo.cosec.api.permission.MissingPermissionException
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
@@ -89,9 +90,23 @@ class ShadowAppPermissionTest {
         authorize(EvaluateRequest(path = path, headers = mapOf(AppIdCapable.APP_ID_KEY to appId)), clerk).block()
 
     @Test
-    fun removingAPermissionNarrows() {
-        // The candidate catalog drops "cancel"; the clerk's grant now names a permission that no longer exists.
+    fun removingAGrantedPermissionIsACandidateError() {
+        // The candidate catalog drops "cancel" while the clerk is still granted it: enforced, every request of the
+        // role would fail closed, so the candidate run fails on every request, whatever its path.
         val authorization = shadow(listOf(app(ship)))
+        authorization.authorize("/orders/1/cancel").assert().isEqualTo(AuthorizeResult.ALLOW)
+        authorization.authorize("/orders/1/ship").assert().isEqualTo(AuthorizeResult.ALLOW)
+        diffs.assert().hasSize(2)
+        diffs.forEach { diff ->
+            diff.kind.assert().isEqualTo(ShadowDiffKind.CANDIDATE_ERROR)
+            diff.candidate.error.assert().contains(MissingPermissionException::class.java.name, "[order.cancel]")
+        }
+    }
+
+    @Test
+    fun narrowingAPermissionNarrows() {
+        // The candidate keeps "cancel" but no longer matches the cancel path.
+        val authorization = shadow(listOf(app(ship, cancel.copy(action = path("/orders/*/cancel/confirmed")))))
         authorization.authorize("/orders/1/cancel").assert().isEqualTo(AuthorizeResult.ALLOW)
         diffs.single().apply {
             kind.assert().isEqualTo(ShadowDiffKind.NARROWED)
@@ -99,7 +114,7 @@ class ShadowAppPermissionTest {
             candidate.decidedBy.assert().isNull()
         }
         authorization.authorize("/orders/1/ship")
-        diffs.size.assert().isEqualTo(1)
+        diffs.assert().hasSize(1)
     }
 
     @Test

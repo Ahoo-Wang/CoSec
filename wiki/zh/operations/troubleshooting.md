@@ -25,13 +25,13 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
 
 | 状态 | 原因 | 去看 |
 |---|---|---|
-| `400` | — | 路径包含 `.` 或 `..` 段，或百分号转义格式错误。修正客户端。 |
+| `400` | — | 路径包含 `.` 或 `..` 段（包括后面跟着 `;` 路径参数的形式，如 `..;`），或百分号转义格式错误（[请求路径](../integration/web.md#the-request-path)）。修正客户端。 |
 | `401` | `Token Expired`、`Token Invalid` | [意外的 401](#unexpected-401) |
-| `401` | `Implicit Deny` | 没有找到凭证，且没有规则允许匿名访问：[意外的 401](#unexpected-401) |
+| `401` | `Implicit Deny` | 没有找到凭证，且没有规则允许匿名访问；或 `regular` 条件超时：[意外的 401](#unexpected-401) |
 | `401`、`403` | `Explicit Deny` | 匹配到一条拒绝：[意外的 403](#unexpected-403) |
 | `403` | `Implicit Deny` | 没有规则允许该请求，或 `regular` 条件超时：[意外的 403](#unexpected-403) |
 | `429` | `Too Many Requests` | [限流表现异常](#rate-limits-behave-unexpectedly) |
-| `500` | `Implicit Deny` | 授权过程中出错：[所有请求都返回 500](#every-request-fails-with-500)、[某个主体总是得到 500](#one-principal-always-gets-500) |
+| `500` | `Implicit Deny` | 授权过程中出错：[所有请求都返回 500](#every-request-fails-with-500)、[某个主体总是得到 500](#one-principal-always-gets-500)、[某个角色的所有请求都返回 500](#every-request-of-one-role-fails-with-500) |
 
 决策如何映射为状态码和响应体，对所有适配器统一定义在 [响应与状态码](../integration/web.md#responses-and-status-codes)。
 
@@ -43,16 +43,18 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
    `cosec.authorization.allow-query-token=true` 时才读查询参数（[令牌](../integration/authentication.md#tokens)）。
 2. **`Token Invalid`**：签发方和本服务必须使用相同的 `cosec.jwt.secret` 和 `cosec.jwt.algorithm`。已吊销的令牌也报告为 invalid。
 3. **`Token Expired`**：刷新令牌（[刷新令牌](../integration/authentication.md#refreshing-tokens)），或检查时钟和
-   `cosec.jwt.token-validity.access`。
+   `cosec.jwt.token-validity.access`。刷新失败并报 `RefreshTokenMismatchException` 时，发来的刷新令牌是和另一个访问令牌一起签发的：
+   请发送同一次签发的那一对令牌。
 4. **使用 API key 时 `Token Invalid`**：没有配置该 key 的 SHA-256，或 key 已禁用或过期
    （[API key](../integration/authentication.md#api-keys)）。携带 `X-API-Key` 的请求会忽略其中的 JWT。
 5. **已登出的令牌在另一个实例上仍然可用。** 吊销通过失效消息到达每个实例；如果消息丢失，缓存的"未吊销"结果最多存活 30 秒
    （[存储](./storage.md#the-caches)）。
 6. **完全没有凭证，`Implicit Deny`**：没有规则允许匿名访问这个路径。发送凭证，或有意为匿名调用方放行该路径。
+   如果本应有一条允许匹配，检查它的 `regular` 条件：超时的条件和其他拒绝一样拒绝请求（见[意外的 403](#unexpected-403)）。
 
 ## 意外的 403 {#unexpected-403}
 
-调用方已知，但没有规则允许该请求，或有规则拒绝了它。匿名调用方遇到同样的原因会得到 `401`，只有 `regular` 条件超时例外：它对所有调用方都返回 `403`。
+调用方已知，但没有规则允许该请求，或有规则拒绝了它。匿名调用方遇到同样的原因会得到 `401`。
 
 1. **读出做决定的规则**：在审计事件或解释结果中。`Explicit Deny` 会给出胜出的那条拒绝。拒绝在所有层之间都优先，所以全局
    允许无法覆盖它（[拒绝优先](../guide/security-model.md#deny-first)）。
@@ -64,7 +66,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
      带 `CoSec-Space-Id: x` 时只有写作 `role@x` 的角色才算，不带该头时只有没有后缀的角色才算。解释结果会给出
      `NO_ROLE_IN_SPACE` 或 `NO_APP_PERMISSION` 警告（[角色授权范围](../policies/role-permissions.md#role-grant-scope)）；
    - `inTenant` 接收的是租户 *类型*（`default`、`user`、`platform`），不是租户 id。
-3. **`regular` 条件超时** 会以 `403` 拒绝，审计事件中的原因码为 `REGEX_TIMEOUT`。简化该模式。
+3. **`regular` 条件超时** 会拒绝请求（匿名调用方得到 `401`），审计事件中的原因码为 `REGEX_TIMEOUT`。简化该模式。
 4. **升级到 7.0 之后**，没有迁移到某个应用的角色授权在该应用中不存在（[迁移角色授权](./upgrading.md#migrating-role-grants)）。
 
 ## 请求被意外放行 {#request-allowed-unexpectedly}
@@ -104,8 +106,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
 |---|---|---|
 | Redis 连接错误 | Redis 不可达，且本地副本中没有该值。策略和权限读取失败时有意拒绝（[存储](./storage.md#when-redis-is-unavailable)）。 | 恢复 Redis。 |
 | `CacheReadException`，原因为 `ForeignFormatException` | 该值由 CoSec 6.x 写入且未迁移，或用原生 Redis 命令写入。 | [迁移数据](./upgrading.md#migrating-the-data)，或通过 CoSec 重新写入。 |
-| `MissingPolicyException`，之前有错误日志 `the global policy index lists policies [...] that have no content.` | 某个全局策略的内容丢失，或没有从 6.x 迁移（6.x 的缓存未命中会迁移成未命中）。它可能是一条全局拒绝，所以 CoSec 宁可失败也不跳过（[全局策略索引](./storage.md#the-global-policy-index)）。 | 用 `PolicyRepository.setPolicy` 重新写入该策略；若要删除它，把它保存为 `global` 以外的类型，它就会离开索引。 |
-| `Unsupported part: <part>` | 条件引用了不存在的部分（[Part](../policies/language.md#parts)）。 | 修正策略；部署前 [校验策略](../policies/testing.md#validating-policies)。 |
+| `MissingPolicyException: The global policy index lists policies [...] that have no content.`（`source` 为 `GLOBAL_POLICY_INDEX`） | 某个全局策略的内容丢失，或没有从 6.x 迁移（6.x 的缓存未命中会迁移成未命中）。它可能是一条全局拒绝，所以 CoSec 宁可失败也不跳过（[全局策略索引](./storage.md#the-global-policy-index)）。 | 用 `PolicyRepository.setPolicy` 重新写入该策略；若要删除它，把它保存为 `global` 以外的类型，它就会离开索引。 |
+| 读取策略时出现 `Condition [<type>] part [<part>] is not a supported part` | 7.0 之前的版本存储的策略引用了不存在的 part（[Part](../policies/language.md#parts)）。从 7.0 起，这样的条件在策略加载时就会失败：本地文件会阻止启动，`setPolicy` 也会拒绝它。 | 修正后重新保存该策略；部署前 [校验策略](../policies/testing.md#validating-policies)。 |
 | 指向某个策略和语句的 `PathVariableScopeException` | 存储的策略在作用域之外读取 `request.path.var.*`，7.0 拒绝这种写法（[路径变量](../policies/language.md#path-variables)）。 | 修正并重新保存该策略。 |
 | 来自你代码的异常 | 自定义匹配器、仓库或 `ApiKeyStore` 抛出了异常。 | 堆栈会指出是哪个。 |
 
@@ -113,10 +115,18 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
 
 ## 某个主体总是得到 500 {#one-principal-always-gets-500}
 
-日志显示 `MissingPolicyException`：`The principal lists policies [...], which the policy repository does not have.`（如果它前面一行日志是 `the global policy index lists policies [...]`，缺失的是全局策略，所有请求都会失败，见[所有请求都返回 500](#every-request-fails-with-500)。）
+日志显示 `MissingPolicyException`：`The principal lists policies [...], which the policy repository does not have.`，它的 `source` 为 `PRINCIPAL`。（如果信息是 `The global policy index lists policies [...] that have no content.`，缺失的是全局策略，所有请求都会失败，见[所有请求都返回 500](#every-request-fails-with-500)。）
 该主体列出的策略已被删除、从未写入，或从 Redis 中丢失。授权宁可报错拒绝，也不跳过它，否则缺失的拒绝会让更宽的允许放行。
 重新写入该策略（本地策略见 [策略不生效](#policy-has-no-effect)），或从主体的令牌或记录中移除这个 id。解释结果会把它报告为
 `MISSING_POLICY` 警告。
+
+## 某个角色的所有请求都返回 500 {#every-request-of-one-role-fails-with-500}
+
+日志显示 `MissingPermissionException`：`Role [<role>] is granted permissions [...], which app [<app>] does not define.`
+该角色在这个应用中的授权引用了应用权限目录里没有的权限 id：它已从目录中删除，或 id 写错了。对持有该角色的主体，只要角色层被评估、
+且在此之前没有拒绝匹配，请求就会失败，而不是跳过这个 id，因为缺失的若是一条拒绝，更宽的允许就会放行请求。不满足应用条件或已被拒绝的请求不受影响
+（[把权限授予角色](../policies/role-permissions.md#granting-permissions-to-roles)）。在应用的权限目录中补上该权限，或从角色授权中移除这个 id。
+解释结果会把它报告为 `MISSING_PERMISSION` 警告。
 
 ## 启动失败 {#startup-failures}
 
@@ -124,7 +134,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
 
 | 消息 | 原因 |
 |---|---|
-| `Failed to load policy [<file>]: <reason>` | 某个本地策略文件无法解析或构建：JSON 格式错误、未知的动作或条件类型，或无效的选项。下面的 cause 会说明是哪一种。 |
+| `Failed to load policy [<file>]: <reason>` | 某个本地策略文件无法解析或构建：JSON 格式错误、未知的动作或条件类型、无效的选项，或不支持的条件 part（`Condition [<type>] part [<part>] is not a supported part`）。下面的 cause 会说明是哪一种。 |
 | `Policy id [<id>] is declared more than once: [<files>].` | 两个本地策略文件声明了同一个 id。给每个策略单独的 id，或删除副本。 |
 | `Policy location [<location>] matches no file.` | `cosec.authorization.local-policy.locations` 中的某个位置不存在，或其模式匹配不到任何文件，通常是拼写错误。只有默认位置可以匹配不到文件。 |
 | `Rate limit rule location [<location>] matches no file.`、`Rate limit rule id [<id>] is declared more than once: [...]` | 同上，针对 `cosec.limiter.locations`。 |
@@ -178,6 +188,12 @@ id，只在 id 不存在时写入文件。已存储的副本读不了时，即�
 
 CoCache 6 删除或重命名了若干 5.x 配置项，例如 `cocache.redis.strict-failure`；错误信息会给出替代项
 （[配置](./configuration.md#cocache-properties-that-affect-cosec)）。
+
+## 发布策略时 id 被保留 {#publishing-a-policy-fails-with-a-reserved-id}
+
+`Policy id [history:...] must not start with [history:], which holds the policy history.`：策略历史把策略 `<id>` 的修订记录存放在
+`<prefix>:policy:history:<id>` 下（[Redis key](./storage.md#redis-keys)），所以以 `history:` 开头的 id 被保留。请重命名该策略
+（例如 `policy-history-...`），并更新引用它的主体。
 
 ## 迁移前发布策略失败 {#publishing-a-policy-fails-before-the-migration}
 

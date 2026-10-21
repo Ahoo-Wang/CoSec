@@ -47,10 +47,8 @@ cosec:
 ```
 
 **Spring MVC**: the same, with `webmvc-support` instead of `webflux-support`. The servlet filter blocks its request
-thread until the decision is made, which is the normal servlet model. CoSec matches the request's
-`HttpServletRequest.servletPath`, which leaves out the context path (`server.servlet.context-path`): write policy
-paths relative to it. Keep the `DispatcherServlet` mapped to `/` (the default). With
-`spring.mvc.servlet.path` set, the servlet path is only that prefix and every request looks the same to CoSec.
+thread until the decision is made, which is the normal servlet model. Policies see the request URI without the
+context path, `DispatcherServlet` prefix included ([The request path](#the-request-path)).
 
 **Spring Cloud Gateway**: the same, with `gateway-support`. When the gateway's `GlobalFilter` is on the classpath,
 the starter registers `AuthorizationGatewayFilter` and no `ReactiveAuthorizationFilter`. Turning the gateway
@@ -92,7 +90,8 @@ sequenceDiagram
 
 1. The adapter receives the request.
 2. It hands the transport request to the pipeline.
-3. The pipeline turns it into a CoSec `Request`. A path with traversal segments stops here with `400`. Otherwise it
+3. The pipeline turns it into a CoSec `Request` ([The request path](#the-request-path)). A path with traversal
+   segments stops here with `400`. Otherwise it
    takes the caller's `CoSec-Request-Id` or generates one, resolves the [client IP](#client-ip-behind-proxies), and
    runs every [request attributes](#request-attributes) appender.
 4. The security context parser reads the credential: an API key if one is configured and sent, otherwise the
@@ -109,6 +108,25 @@ sequenceDiagram
 10. The request continues to your handler, or to the route's downstream service.
 11. A denied or failed request gets the status and a JSON body, and never reaches your handler.
 
+## The request path
+
+The path that `path` actions and the `request.path` part see is the same on every adapter, apart from where it
+starts:
+
+| Adapter | Path |
+|---|---|
+| Spring MVC | The request URI without the servlet context path (`server.servlet.context-path`). It keeps the `DispatcherServlet` mapping prefix: with `spring.mvc.servlet.path=/api`, `/api/admin/users` is matched as `/api/admin/users`. |
+| WebFlux, Gateway | The full request path. |
+
+On every adapter the path is:
+
+- **not decoded.** `path` actions decode each segment before they match, but a condition that compares
+  `request.path` as a string (`eq`, `regular`, …) sees `/a%20b`, not `/a b`.
+- **without `;` path parameters**, as Spring routes it: `/orders;jsessionid=1/42` is matched as `/orders/42`.
+- **rejected with `400`** when, after the path parameters are removed, it has a `.` or `..` segment (also
+  percent-encoded), or a malformed percent-escape. So `/public/..;/admin`, which a servlet container resolves to
+  `/admin`, is rejected too.
+
 ## Responses and status codes
 
 Every status comes from `SecurityPipeline`; the adapters only copy it to the response.
@@ -116,10 +134,10 @@ Every status comes from `SecurityPipeline`; the adapters only copy it to the res
 | Status | When | Body `reason` |
 |---|---|---|
 | `200` (request passes) | The authorization decision allows it. | none, the handler answers |
-| `400` | The path has a `.` or `..` segment (also percent-encoded), or a malformed percent-escape (`InvalidRequestPathException`). | no body |
+| `400` | The path has a `.` or `..` segment (also percent-encoded, or followed by a path parameter such as `..;`), or a malformed percent-escape (`InvalidRequestPathException`, see [The request path](#the-request-path)). | no body |
 | `401` | Denied, and the caller is anonymous: no credential, or one that was rejected. | `Token Expired` or `Token Invalid` when the credential was rejected; otherwise `Implicit Deny` or `Explicit Deny` |
 | `403` | Denied, and the caller is authenticated. | `Implicit Deny` or `Explicit Deny` |
-| `403` | A regex condition ran over its time budget (`RegexTimeoutException`), for every caller, anonymous included. An expected deny, not a server error. | `Implicit Deny` |
+| `401`, `403` | A regex condition ran over its time budget (`RegexTimeoutException`). An implicit deny, mapped like the two rows above, not a server error. | as the two rows above |
 | `429` | The request was allowed, but a matching [rate limit rule](../policies/rate-limiting.md) has no permit left. | `Too Many Requests` |
 | `500` | Any other error. CoSec fails closed instead of guessing. | `Implicit Deny` |
 
@@ -127,11 +145,14 @@ Every status comes from `SecurityPipeline`; the adapters only copy it to the res
 
 - `MissingPolicyException`: the principal (or the global policy index) lists a policy the repository does not
   have. It may be the deny that keeps the request out, so CoSec does not evaluate without it.
+- `MissingPermissionException`: a role of the principal is granted a permission id its app does not define
+  ([Granting permissions to roles](../policies/role-permissions.md#granting-permissions-to-roles)).
 - `CacheReadException`: a policy or permission is not in the local cache and Redis cannot be read, or the stored
   value cannot be decoded (for example 6.x data that was not migrated). See
   [When Redis is unavailable](../operations/storage.md#when-redis-is-unavailable).
-- `PathVariableScopeException`: a stored policy or permission reads `request.path.var.*` outside its scope, so it
-  is rejected when it is read ([Path variables](../policies/language.md#path-variables)).
+- `PathVariableScopeException`, or an unsupported condition part: a policy or permission stored by an earlier
+  version breaks a rule 7.0 checks at load, so it is rejected when it is read
+  ([Path variables](../policies/language.md#path-variables), [Parts](../policies/language.md#parts)).
 - A custom matcher, repository or API key store that throws (a Redis-backed API key store that cannot reach Redis
   included).
 

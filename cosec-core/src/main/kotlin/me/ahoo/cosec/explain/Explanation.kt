@@ -154,6 +154,12 @@ enum class ExplainWarningCode {
     /** The principal lists a policy id the repository does not have; authorization fails closed on it (`500`). */
     MISSING_POLICY,
 
+    /**
+     * A role in the request's space is granted a permission id the request's app does not define; authorization fails
+     * closed on it (`500`).
+     */
+    MISSING_PERMISSION,
+
     /** The principal has roles in the request's space, but the request's app has no app permission. */
     NO_APP_PERMISSION,
 

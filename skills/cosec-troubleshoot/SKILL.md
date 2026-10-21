@@ -31,8 +31,8 @@ When `cosec.explain.enabled=true`, prefer explaining the decision over reading l
 | HTTP status | CoSec meaning |
 |---|---|
 | 400 | Invalid normalized request path |
-| 401 | Authorization denied while the parsed principal is anonymous; invalid/expired tokens also fall back to anonymous and preserve the token reason |
-| 403 | An authenticated principal was denied, or a regex matcher timed out and failed closed |
+| 401 | Authorization denied (or a regex matcher timed out) while the parsed principal is anonymous; invalid/expired tokens also fall back to anonymous and preserve the token reason |
+| 403 | An authenticated principal was denied, or a regex matcher timed out for one and failed closed |
 | 429 | An allowed request exceeded a rate limit rule (`RateLimitingAuthorization`) |
 | 500 | Unexpected authorization error, including Redis being unavailable for policy/permission reads (those caches fail closed) a principal listing a policy id the repository does not have, and a global policy index entry without content (both `MissingPolicyException`); inspect the server exception |
 
@@ -92,13 +92,14 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 - Startup fails while initializing local policies (`init-repository` with `force-refresh=false`, the default): the initializer reads each id's stored copy first, so an unmigrated copy (`ForeignFormatException`) or a migrated one that now violates path variable scope (`PathVariableScopeException`) stops startup even when the local file is valid. Migrate or fix the stored policy; after the migration, starting once with `force-refresh=true` overwrites the stored copies without reading them. Warn that `force-refresh=true` also overwrites every change administrators made to those policies through the repository, and that it fails before the migration (every publish does); turn it off again afterwards.
 - Startup fails with `CoSecSchemaException` naming `<prefix>:meta:schema`: CoSec data exists (under the 6.x `legacy-key-prefix` or the current prefix) without the 7.0 schema marker, so it is 6.x data or data rolled back to 6.x that 7.0 would read as missing (typically a key prefix ending in `:` or a changed prefix). Stop every writer and run `CoSecCoCache5Migration.migrate()`, which writes the marker, from a job with `cosec.authorization.cache.migration.check-schema=false`; never set that on serving instances, and never write the marker by hand while 6.x data may exist.
 - `CoSecCoCache5Migration.rollback()` fails with `KeysWithoutBackupException`: 7.0 created those keys (policies, app permissions, revocations) and 6.x would overwrite them with a cached miss on first read, silently dropping denies and un-revoking tokens. Review the keys, call `rollback(allowKeysWithoutBackup = true)`, and write those policies and revoke those tokens again through 6.x before it serves traffic.
+- `Policy id [history:...] must not start with [history:]` on `setPolicy` (7.0+): ids starting with `history:` would share a key with the policy history (`{prefix}:policy:history:<id>`). Rename the policy.
 - Publishing a policy before the migration (`setPolicy`, or local policies with `force-refresh=true`) fails with `CacheWriteException` caused by `ForeignFormatException` on the global policy index key (`{prefix}:global:policy`): CoCache 6 does not overwrite the 6.x native SET. The index is untouched and still migrates; run the migration, then repeat the publish. Do not delete the key or set `foreign-format=reclaim`: it is the only copy of the global policy ids. Puts of app permissions are not checked and replace the 6.x value without a backup (role grants go to new keys and show up as `conflicts` in `RolePermissionKeyMigration`), so stop every writer until the migration has finished.
 - A global policy id in the index without content fails every request with `MissingPolicyException` (500) since 7.0, instead of being skipped; rewrite the policy, or save it with a non-`global` type to drop it from the index. Indexed ids whose content is not `global` are ignored.
 - Values written straight to Redis (`SET`, `SADD`) are not read in 7.0: every value carries a binary header. Write app permissions and role grants through the `AppPermissionCache` and `RolePermissionCache` beans, and policies through `PolicyRepository.setPolicy`.
 
 ### One principal always gets 500
 
-- `MissingPolicyException` names policy ids the principal lists but `PolicyRepository.getPolicies` did not return. Since 7.0 authorization fails closed on them instead of skipping them (a missing deny must not let a global allow win); explanations show a `MISSING_POLICY` warning.
+- `MissingPolicyException` (`source = PRINCIPAL`, "The principal lists policies ...") names policy ids the principal lists but `PolicyRepository.getPolicies` did not return. With `source = GLOBAL_POLICY_INDEX` ("The global policy index lists policies ... that have no content") every request fails instead: the Redis global index lists a policy whose content is gone; write the policy again. Since 7.0 authorization fails closed on them instead of skipping them (a missing deny must not let a global allow win); explanations show a `MISSING_POLICY` warning.
 - Check whether the policy was deleted, never initialized (`init-repository` off, or skipped at load), or lost from Redis. Fix by writing the policy or removing the id from the principal; do not suggest catching the exception.
 
 ### Matcher mismatch
@@ -106,8 +107,8 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 - Path variables use `{id}` and conditions read `request.path.var.id`; `:id` and `request.pathVariable.id` are invalid.
 - `PathVariableScopeException` at startup or on a policy read/write (7.0+): a policy or app permission condition, or a statement, permission or rate limit rule whose action is not `path`, reads `request.path.var.*` (or an expression mentions `PATH_VARIABLES`). Variables belong only to the statement whose own `path` action captured them; move the reference there. Local policy files with this error stop startup instead of being skipped; Redis-stored ones fail reads with 500.
 - Path SpEL templates use `#{principal.id}`. SpEL condition expressions use root properties such as `context.principal.id`; they are different evaluation roots.
-- Valid part prefixes are singular `request.header.`, `request.attributes.`, `request.path.var.`, and `context.principal.attributes.`. Unsupported parts throw `IllegalArgumentException`.
-- Regex timeouts fail closed as 403. Simplify or bound the pattern instead of increasing exposure to ReDoS.
+- Valid part prefixes are singular `request.header.`, `request.attributes.`, `request.path.var.`, and `context.principal.attributes.`. Unsupported parts fail loading with `Condition [<type>] part [<part>] is not a supported part` (7.0+); a policy stored by an earlier version fails its reads with 500.
+- Regex timeouts fail closed as a deny: 401 for anonymous callers, 403 for authenticated ones (7.0+; always 403 before). Simplify or bound the pattern instead of increasing exposure to ReDoS.
 
 ### Rate limiting differs across instances
 

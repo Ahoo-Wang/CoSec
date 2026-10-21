@@ -64,7 +64,8 @@ internal class AuthorizationFilterTest {
             ServletRequestParser(ServletRemoteIpResolver),
         )
         val servletRequest = mockk<HttpServletRequest> {
-            every { servletPath } returns "/path"
+            every { requestURI } returns "/path"
+            every { contextPath } returns ""
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -102,7 +103,8 @@ internal class AuthorizationFilterTest {
             ServletRequestParser(ServletRemoteIpResolver),
         )
         val servletRequest = mockk<HttpServletRequest> {
-            every { servletPath } returns "/path"
+            every { requestURI } returns "/path"
+            every { contextPath } returns ""
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -147,7 +149,8 @@ internal class AuthorizationFilterTest {
             ServletRequestParser(ServletRemoteIpResolver),
         )
         val servletRequest = mockk<HttpServletRequest> {
-            every { servletPath } returns "/path"
+            every { requestURI } returns "/path"
+            every { contextPath } returns ""
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -187,7 +190,8 @@ internal class AuthorizationFilterTest {
             ServletRequestParser(ServletRemoteIpResolver),
         )
         val servletRequest = mockk<HttpServletRequest> {
-            every { servletPath } returns "/path"
+            every { requestURI } returns "/path"
+            every { contextPath } returns ""
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -232,7 +236,8 @@ internal class AuthorizationFilterTest {
             ServletRequestParser(ServletRemoteIpResolver),
         )
         val servletRequest = mockk<HttpServletRequest> {
-            every { servletPath } returns "/path"
+            every { requestURI } returns "/path"
+            every { contextPath } returns ""
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -246,7 +251,7 @@ internal class AuthorizationFilterTest {
         val servletResponse = mockk<HttpServletResponse> {
             every { setHeader(RequestIdCapable.REQUEST_ID_KEY, any()) } just runs
             every { contentType = MediaType.APPLICATION_JSON_VALUE } just runs
-            every { status = HttpStatus.FORBIDDEN.value() } returns Unit
+            every { status = HttpStatus.UNAUTHORIZED.value() } returns Unit
             every { outputStream.write(any() as ByteArray) } returns Unit
             every { outputStream.flush() } returns Unit
         }
@@ -257,11 +262,11 @@ internal class AuthorizationFilterTest {
 
         verify {
             servletResponse.contentType = MediaType.APPLICATION_JSON_VALUE
-            servletResponse.status = HttpStatus.FORBIDDEN.value()
+            servletResponse.status = HttpStatus.UNAUTHORIZED.value()
             servletResponse.outputStream.write(any() as ByteArray)
             servletResponse.outputStream.flush()
         }
-        // A ReDoS-guard trip is an expected deny, not a server error, and must clean up the context.
+        // A ReDoS-guard trip is an expected deny (401 for an anonymous caller), not a server error, and must clean up the context.
         assertThat(SecurityContextHolder.context, nullValue())
         // The request was denied by the ReDoS guard, so it must not reach the filter chain.
         verify(exactly = 0) { filterChain.doFilter(any(), any()) }
@@ -278,7 +283,8 @@ internal class AuthorizationFilterTest {
             ServletRequestParser(ServletRemoteIpResolver),
         )
         val servletRequest = mockk<HttpServletRequest> {
-            every { servletPath } returns "/path"
+            every { requestURI } returns "/path"
+            every { contextPath } returns ""
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -319,7 +325,8 @@ internal class AuthorizationFilterTest {
             ServletRequestParser(ServletRemoteIpResolver),
         )
         val servletRequest = mockk<HttpServletRequest> {
-            every { servletPath } returns "/path"
+            every { requestURI } returns "/path"
+            every { contextPath } returns ""
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -357,7 +364,8 @@ internal class AuthorizationFilterTest {
             ServletRequestParser(ServletRemoteIpResolver),
         )
         val servletRequest = mockk<HttpServletRequest> {
-            every { servletPath } returns "/public/../admin"
+            every { requestURI } returns "/public/../admin"
+            every { contextPath } returns ""
         }
         val servletResponse = mockk<HttpServletResponse> {
             every { status = HttpStatus.BAD_REQUEST.value() } returns Unit

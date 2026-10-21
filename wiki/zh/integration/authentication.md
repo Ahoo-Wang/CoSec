@@ -105,6 +105,7 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 - 刷新令牌属于这个访问令牌（它的 `sub` 是访问令牌的 `jti`）；
 - 启用吊销时，访问令牌没有被吊销。
 
+检查失败时抛出 `TokenVerificationException`；刷新令牌是和另一个访问令牌一起签发的时候，抛出它的子类 `RefreshTokenMismatchException`。
 它返回旧访问令牌中的主体；用 `TokenConverter.toToken` 为它签发新令牌。starter 不注册刷新接口。
 `SimpleRefreshTokenAuthentication` 以 `Authentication` 的形式完成上面的检查，所以把它声明为 Bean 之后，刷新就是一次用实现了
 `RefreshTokenCredentials` 的凭证进行的登录：
@@ -228,7 +229,8 @@ cosec:
 
 此时服务注册 `InjectSecurityContextFilter`（Spring MVC）或 `ReactiveInjectSecurityContextWebFilter`（WebFlux），它们照常绑定
 [安全上下文](./web.md#accessing-the-security-context)。它们检查令牌的 `exp` 和 `nbf`，但**不检查签名，也不检查吊销**。
-无法读取的令牌让调用方成为匿名用户，含遍历片段的路径得到 `400`。两个设置缺一不可：授权仍然启用时，服务会继续自己校验并授权每个请求。
+无法读取的令牌让调用方成为匿名用户，含遍历片段的路径得到 `400`。两个设置缺一不可：跳过签名校验的解析器只在 `cosec.authorization.enabled=false`
+时注册。只要授权开启，注入过滤器就使用会校验签名的解析器，与自动配置的顺序无关，服务也会继续自己校验并授权每个请求。
 
 ::: danger 信任边界
 不校验签名时，任何能直接访问这个服务的人都可以伪造任意主体。只对只能经由校验令牌的网关访问的服务启用它；见

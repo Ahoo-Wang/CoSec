@@ -31,7 +31,7 @@ description: "CoSec 策略的每个字段：语句、动作、路径变量、模
 
 | 字段 | 必填 | 含义 |
 |---|---|---|
-| `id` | 是 | 策略 id。主体通过这个 id 列出非全局策略。在一组策略文件中唯一。 |
+| `id` | 是 | 策略 id。主体通过这个 id 列出非全局策略。在一组策略文件中唯一。不能以 `history:` 开头，Redis 仓储把这个前缀留给策略历史（[Redis key](../operations/storage.md#redis-keys)）。 |
 | `name` | 是 | 显示名称。 |
 | `type` | 是 | `global`、`system` 或 `custom`，见下表。不区分大小写。 |
 | `tenantId` | 是 | 所属租户，例如 `(platform)` 或 `(0)`。只是元数据：授权从不拿它和请求的租户比较。 |
@@ -240,7 +240,8 @@ description: "CoSec 策略的每个字段：语句、动作、路径变量、模
 | `regular` | `part`、`pattern`、`timeout`（毫秒，默认 `1000`） | 整体匹配正则表达式，不区分大小写 |
 | `path` | `part`、`pattern`、`options` | 匹配路径模式；`options` 同 [`path` 动作](#path) |
 
-`ignoreCase` 默认为 `false`。`regular` 在 `timeout` 时限内运行，防止灾难性回溯；超时的匹配以 `403` 拒绝请求，永远不会被当作匹配。
+`ignoreCase` 默认为 `false`。`regular` 在 `timeout` 时限内运行，防止灾难性回溯；超时的匹配永远不会被当作匹配，并拒绝请求：匿名调用方得到 `401`，已认证调用方得到 `403`
+（[响应](../integration/web.md#responses-and-status-codes)）。
 
 ```json
 { "in": { "part": "request.remoteIp", "value": ["10.0.0.1", "10.0.0.2"] } }
@@ -274,8 +275,8 @@ description: "CoSec 策略的每个字段：语句、动作、路径变量、模
 | `context.principal.id` | 主体 id |
 | `context.principal.attributes.<name>` | 主体属性，转为字符串 |
 
-带前缀的 part 在前缀后面必须有名字。不在列表中的 part 在加载策略时发现不了：每个执行到该条件的请求都会以 `500` 失败。
-用[校验策略](./testing.md#validating-policies)来发现它。
+带前缀的 part 在前缀后面必须有名字。取值条件的 part 不在这个列表中时，策略在加载时就会失败，报 `Condition [<type>] part [<part>] is not a supported part`。
+7.0 之前的版本存储的副本，在修正并重新保存之前，每次读取该策略都会以 `500` 失败。
 
 请求头、`request.remoteIp` 和请求属性的可信度取决于它们的来源。除非可信代理会覆盖某个请求头，否则不要基于客户端可以设置的请求头做允许决定。
 
@@ -372,13 +373,13 @@ description: "CoSec 策略的每个字段：语句、动作、路径变量、模
 凡是从文件读取策略的地方（本地策略、[影子候选](./testing.md#trying-changes-in-shadow-mode)、[`PolicyTestKit`](./testing.md#policy-test-cases)、
 [`AccessAnalyzer`](./testing.md#access-reviews)），加载都是严格的，因为被悄悄跳过的文件可能丢掉一条拒绝：
 
-- 无法读取或构建的文件会失败：无效 JSON、缺少必填字段、未知的动作或条件类型、无效的匹配器配置（例如没有任何边界的 `time` 条件），
-  或在作用域之外读取[路径变量](#path-variables)。错误信息会给出文件名。
+- 无法读取或构建的文件会失败：无效 JSON、缺少必填字段、未知的动作或条件类型、无效的匹配器配置（例如没有任何边界的 `time` 条件，
+  或使用了不支持的 [part](#parts) 的取值条件），或在作用域之外读取[路径变量](#path-variables)。错误信息会给出文件名。
 - 两个文件声明同一个策略 id 会失败，并给出两个文件名。
 - 配置的位置不存在或匹配不到任何文件会失败。只有默认位置 `classpath:cosec-policy/*-policy.json` 允许什么都匹配不到。
 - 被两个位置同时匹配的文件只读一次。
 
-在应用中，这些失败会让启动失败。列表之外的 [part](#parts) 以及取决于请求的错误在这里发现不了，需要[校验策略](./testing.md#validating-policies)。
+在应用中，这些失败会让启动失败。取决于请求的错误在这里发现不了，需要[校验策略](./testing.md#validating-policies)。
 
 ## 从 OpenAPI 生成策略 {#generating-policies-from-openapi}
 
