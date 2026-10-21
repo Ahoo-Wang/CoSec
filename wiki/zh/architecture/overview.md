@@ -35,12 +35,15 @@ flowchart BT
     starter[cosec-spring-boot-starter] --> jwt
     starter -. feature variants .-> webflux & webmvc & gateway & cocache & social & otel & micrometer & openapi & ip2r & kafka
     server[cosec-gateway-server] --> starter
+    model[cosec-model]
+    engine[cosec-engine] --> model
 ```
 
 箭头指向模块所依赖的模块。图背后的规则：
 
 - **`cosec-api`** 只放公共契约（`CoSecPrincipal`、`Policy`、`Statement`、`ActionMatcher`、`ConditionMatcher`、`Authorization`、`Request`、`SecurityContext`、`AuditEventSink`），只依赖 Reactor。下游代码基于它编译，所以修改它就是破坏性变更。
 - **`cosec-core`** 放所有算法（策略引擎及其匹配器、`SimpleAuthorization`、`SecurityPipeline`、审计/限流/影子模式的授权装饰器、令牌抽象、本地加载、JSON 序列化），以及供其他模块和应用实现的 SPI（见[扩展 CoSec](./extending.md)）。
+- **`cosec-model` 和 `cosec-engine`** 将容纳 8.0 计划中的纯函数决策引擎（[RFC 0002](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0002-pure-engine.md)）。它们只依赖 Kotlin 标准库：`EnginePurityTest`（ArchUnit）在代码引用 Reactor、Spring、日志、I/O、线程或时钟时失败，`check` 中的 `verifyPureClasspath` 任务在出现任何其他依赖时失败。目前还没有模块使用它们。
 - **其余每个库模块只适配一种技术**：JWT、基于 CoCache 的 Redis、OAuth、OpenTelemetry、Micrometer、OpenAPI、ip2region、Kafka，或一种 Web 技术栈。适配模块里不做任何决策。
 - **`cosec-spring-boot-starter`** 负责装配。每个集成都是 [`cosec-spring-boot-starter/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts) 中声明的一个 Gradle feature variant：适配模块只是该 variant 的依赖，其自动配置由 `@ConditionalOnClass` 保护，所以只有应用请求了该能力才会生效。新增集成意味着新增一个模块和一个 variant，而不是给 starter 增加硬依赖。能力及其对应的模块列在[简介](../guide/introduction.md#modules)中。
 - **`cosec-gateway-server`** 是基于 starter 的开箱即用应用，永不发布。
@@ -198,6 +201,13 @@ java -jar cosec-core/build/libs/cosec-core-*-jmh.jar 'SimpleAuthorizationBenchma
 ```
 
 **自己运行 jar 时，必须加上 `-jvmArgsAppend -Dlogback.configurationFile=…`。** jar 里带有 Logback 但没有配置文件，不加这个参数，每个 fork 出来的 JVM 都会按 DEBUG 级别输出日志，包括每次决策的 `log.debug`，结果测到的既有授权也有日志。`./gradlew :cosec-core:jmh` 已经传了这个文件，但只跑一个 fork、一次预热迭代和一次测量迭代（根目录 `build.gradle.kts` 中的默认值）：足以确认基准能跑，不足以比较版本。
+
+以下 Gradle 属性可以覆盖这些默认值：`-PjmhWarmupIterations`、`-PjmhIterations`、`-PjmhFork`、`-PjmhProfilers`（逗号分隔，例如 `gc`），以及 `-PjmhJavaVersion`，即基准 JVM 运行所用的 JDK 工具链（代码仍按 17 编译）。RFC 0002 用下面的命令比较引擎与现在的 `SimpleAuthorization`，其中增加了 `global-deny` 场景（被全局策略拒绝，其他层仍有数据）；基线在 [`docs/perf/rfc-0002-baseline`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/rfc-0002-baseline)：
+
+```bash
+./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark -PjmhJavaVersion=25 \
+  -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
+```
 
 这些数字的可信程度：
 

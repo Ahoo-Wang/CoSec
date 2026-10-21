@@ -20,6 +20,7 @@ fluent-assert = "1.2.1"
 hamcrest = "3.0"
 mockk = "1.14.11"
 jmh = "1.37"
+archunit = "1.5.1"
 # plugins
 detekt = "1.23.8"
 dokka = "2.2.0"
@@ -48,6 +49,7 @@ mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detekt" }
 jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
 jmh-generator-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 [plugins]
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }

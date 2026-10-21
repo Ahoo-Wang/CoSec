@@ -12,6 +12,8 @@
  */
 import io.gitlab.arturbosch.detekt.DetektPlugin
 import io.gitlab.arturbosch.detekt.extensions.DetektExtension
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.dokka.gradle.DokkaPlugin
 import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
@@ -36,6 +38,12 @@ val serverProjects = setOf(
 val codeCoverageReportProject = project(":code-coverage-report")
 val publishProjects = subprojects - serverProjects - codeCoverageReportProject
 val libraryProjects = publishProjects - bomProjects
+
+// Modules of the decision engine (RFC 0002 §2): they depend on the Kotlin standard library only.
+val pureProjects = setOf(
+    project(":cosec-model"),
+    project(":cosec-engine"),
+)
 
 ext.set("libraryProjects", libraryProjects)
 
@@ -97,6 +105,11 @@ configure(libraryProjects) {
         val jmhExcludesKey = "jmhExcludes"
         val jmhThreadsKey = "jmhThreads"
         val jmhModeKey = "jmhMode"
+        val jmhWarmupIterationsKey = "jmhWarmupIterations"
+        val jmhIterationsKey = "jmhIterations"
+        val jmhForkKey = "jmhFork"
+        val jmhProfilersKey = "jmhProfilers"
+        val jmhJavaVersionKey = "jmhJavaVersion"
 
         if (project.hasProperty(jmhIncludesKey)) {
             val jmhIncludes = project.properties[jmhIncludesKey].toString().split(delimiter)
@@ -107,8 +120,18 @@ configure(libraryProjects) {
             excludes.set(jmhExcludes)
         }
 
-        warmupIterations.set(1)
-        iterations.set(1)
+        warmupIterations.set(project.findProperty(jmhWarmupIterationsKey)?.toString()?.toInt() ?: 1)
+        iterations.set(project.findProperty(jmhIterationsKey)?.toString()?.toInt() ?: 1)
+        if (project.hasProperty(jmhProfilersKey)) {
+            profilers.set(project.properties[jmhProfilersKey].toString().split(delimiter))
+        }
+        // Benchmarks are compiled for 17 like everything else; this only picks the JDK the forked benchmark JVMs run on.
+        if (project.hasProperty(jmhJavaVersionKey)) {
+            val launcher = project.the<JavaToolchainService>().launcherFor {
+                languageVersion.set(JavaLanguageVersion.of(project.properties[jmhJavaVersionKey].toString()))
+            }
+            jvm.set(launcher.map { it.executablePath.asFile.absolutePath })
+        }
         resultFormat.set("json")
 
         var jmhMode = listOf(
@@ -123,7 +146,7 @@ configure(libraryProjects) {
             jmhThreads = Integer.valueOf(project.properties[jmhThreadsKey].toString())
         }
         threads.set(jmhThreads)
-        fork.set(1)
+        fork.set(project.findProperty(jmhForkKey)?.toString()?.toInt() ?: 1)
         jvmArgs.set(listOf("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-jmh.xml"))
     }
     tasks.withType<Test> {
@@ -136,11 +159,16 @@ configure(libraryProjects) {
     }
 
     dependencies {
-        api(platform(dependenciesProject))
+        if (this@configure in pureProjects) {
+            // Keeps the platform out of the published POM; tests and benchmarks still take versions from it.
+            testImplementation(platform(dependenciesProject))
+        } else {
+            api(platform(dependenciesProject))
+            implementation("com.google.guava:guava")
+            implementation("org.slf4j:slf4j-api")
+        }
         testImplementation(platform(rootProject.libs.junit.bom))
         jmh(platform(dependenciesProject))
-        implementation("com.google.guava:guava")
-        implementation("org.slf4j:slf4j-api")
         testImplementation("ch.qos.logback:logback-classic")
         testImplementation("me.ahoo.test:fluent-assert-core")
         testImplementation("org.hamcrest:hamcrest")
@@ -153,6 +181,40 @@ configure(libraryProjects) {
         testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
         jmh("org.openjdk.jmh:jmh-core")
         jmh("org.openjdk.jmh:jmh-generator-annprocess")
+    }
+}
+
+configure(pureProjects) {
+    // ArchUnit (EnginePurityTest) checks what the code references; this catches a dependency added to the build
+    // before any code uses it.
+    val allowedModules = setOf("org.jetbrains.kotlin:kotlin-stdlib", "org.jetbrains:annotations")
+    val allowedProjects = pureProjects.map { it.path }.toSet()
+    val projectPath = path
+    val verifyPureClasspath = tasks.register("verifyPureClasspath") {
+        group = "verification"
+        description = "Fails if a classpath holds anything but the Kotlin standard library and the pure modules."
+        val classpaths = listOf("compileClasspath", "runtimeClasspath").associateWith { name ->
+            configurations.named(name).flatMap { it.incoming.artifacts.resolvedArtifacts }
+        }
+        doLast {
+            val violations = classpaths.flatMap { (name, artifacts) ->
+                artifacts.get().mapNotNull { artifact ->
+                    val allowed = when (val id = artifact.id.componentIdentifier) {
+                        is ProjectComponentIdentifier -> id.projectPath in allowedProjects
+                        is ModuleComponentIdentifier -> "${id.group}:${id.module}" in allowedModules
+                        else -> false
+                    }
+                    if (allowed) null else "$name: ${artifact.id.componentIdentifier.displayName}"
+                }
+            }
+            check(violations.isEmpty()) {
+                "Pure module $projectPath must depend on the Kotlin standard library only, found:\n" +
+                    violations.joinToString("\n")
+            }
+        }
+    }
+    tasks.named("check") {
+        dependsOn(verifyPureClasspath)
     }
 }
 

@@ -16,6 +16,8 @@ rootProject.name = "CoSec"
 include(":cosec-bom")
 include(":cosec-dependencies")
 include(":cosec-api")
+include(":cosec-model")
+include(":cosec-engine")
 include(":cosec-core")
 include(":cosec-jwt")
 include(":cosec-cocache")
