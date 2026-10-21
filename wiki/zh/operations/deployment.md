@@ -38,7 +38,7 @@ JVM 启动时直接映射这个文件，不再重复这些工作。不需要改�
 - **启动，以及启动后的最初几秒。** 到 `Started GatewayServerKt` 的时间减少约四分之一，见[启动实测](#measured-startup)。
   方法 profile 让 JIT 更早编译热点方法，预热时间随之缩短。
 - **不改变峰值吞吐。** JIT 编译完热点路径后，有缓存和没有缓存的 JVM 运行的是同样的代码。授权性能见[架构概览](../architecture/overview.md#performance)。
-- **内存。** 启动后的常驻内存（RSS）更大，因为它计入了已映射的那部分缓存（104 MiB 的文件中约 66 MiB）。这些页由文件支撑，不是堆。
+- **内存。** 启动后的常驻内存（RSS）更大，因为它计入了 104 MiB 缓存中已映射的部分：[实测](#measured-startup)中容器内多 26 MiB，原生多 66 MiB。这些页由文件支撑，不是堆。
 - **镜像大小。** 缓存让镜像增加约 104 MiB。
 
 ### 镜像如何使用它 {#how-the-image-uses-it}
@@ -56,7 +56,8 @@ JVM 启动时直接映射这个文件，不再重复这些工作。不需要改�
 它们按常规方式加载，所以第一个经过授权的请求和没有缓存时开销相同。
 
 容器通过 `JDK_JAVA_OPTIONS` 而不是 `JAVA_OPTS` 传入 `-XX:AOTCache=…`，所以设置 `JAVA_OPTS` 不会丢掉缓存。
-每次启动都会在 stderr 打印 `NOTE: Picked up JDK_JAVA_OPTIONS: …`。
+每次启动都会在 stderr 打印 `NOTE: Picked up JDK_JAVA_OPTIONS: …`。容器里的其他 `java` 命令也会带上这个参数：不带网关参数的命令（例如 `java -version`）
+无法使用缓存，会打印[下文](#when-the-cache-is-not-used)所述的 `[aot]` 错误，这些错误无害。
 
 缓存没有用 Spring Boot 推荐的 `-Dspring.context.exit=onRefresh` 训练。网关启用了 Spring Cloud bootstrap 上下文，
 它最先刷新，于是 JVM 在应用上下文创建之前就退出了。这次运行返回 0、什么都不打印，得到的缓存几乎不包含应用本身。
@@ -107,13 +108,23 @@ java -XX:AOTCache=app.aot -cp "$CLASSPATH" com.example.App
 
 ### 启动实测 {#measured-startup}
 
-到 Spring Boot 日志中 `Started GatewayServerKt` 的时间，以及启动一秒后 JVM 的常驻内存。每次运行都是新的 JVM。两种情况各 7 次、交替进行，
-机器是 Apple M4（10 核），直接运行在 macOS 上而不是容器中，使用 OpenJDK 25.0.5、镜像的 JVM 参数和 `cocache.backend=memory`，1 分钟负载为 3.2 到 3.8：
+到 Spring Boot 日志中 `Started GatewayServerKt` 的时间，以及启动一秒后 JVM 的常驻内存。每次运行都是新的 JVM，两种情况交替进行。全部在 Apple M4（10 核）上运行。
+
+**容器中：** 镜像（Dragonwell 25.0.4，`linux/arm64`）连接一个 Redis 7 容器，两种情况各 15 次。机器较忙（1 分钟负载 4.4 到 6.7），所以离散度较大：
+
+| | 中位数 | 最快 | 四分位距 | RSS（中位数） |
+|---|---|---|---|---|
+| 无缓存 | 3.45 s | 2.46 s | 2.60 – 3.70 s | 524 MiB |
+| 有缓存 | 2.53 s | 1.83 s | 2.37 – 2.77 s | 550 MiB |
+
+**直接在 macOS 上：** OpenJDK 25.0.5、镜像的 JVM 参数和 `cocache.backend=memory`，两种情况各 7 次，负载 3.2 到 3.8。macOS 上 Redis 后端无法启动
+（Lettuce 需要 epoll 或 io_uring 传输），所以这些运行使用内存后端。离散度小得多：
 
 | | 中位数 | 范围 | RSS（中位数） |
 |---|---|---|---|
 | 无缓存 | 2.41 s | 2.40 – 2.45 s | 453 MiB |
 | 有缓存 | 1.84 s | 1.80 – 1.88 s | 519 MiB |
 
-到 `Started` 快了 24 %，进程总耗时少了 22 %（从 2.71 s 到 2.10 s）。有缓存时，网关加载的类中有 83 % 来自缓存（15,884 个中的 13,127 个）。原始结果、命令和机器信息见
+两种环境下，有缓存时启动都快了约四分之一：容器中位数快 27 %，最快一次快 26 %，原生快 24 %。有缓存时，网关加载的类中有 83 % 来自缓存
+（15,884 个中的 13,127 个）。原始结果、命令和机器信息见
 [`docs/perf/gateway-aot-cache`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/gateway-aot-cache)。

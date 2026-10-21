@@ -46,8 +46,8 @@ work again. No code changes and no Spring AOT are involved.
   warm-up.
 - **Not peak throughput.** Once the JIT has compiled the hot paths, a JVM with the cache runs the same code as one
   without it. Authorization performance is in [Architecture overview](../architecture/overview.md#performance).
-- **Memory.** The resident set size after startup is larger, because it counts the mapped part of the cache (about
-  66 MiB of a 104 MiB file). Those pages are file-backed, not heap.
+- **Memory.** The resident set size after startup is larger, because it counts the mapped part of the 104 MiB cache:
+  26 MiB in the container and 66 MiB natively in [the measurements](#measured-startup). Those pages are file-backed, not heap.
 - **Image size.** The cache adds about 104 MiB to the image.
 
 ### How the image uses it
@@ -69,7 +69,9 @@ and the whole application starts without a Redis server. The trade-off: classes 
 the cache. They load the normal way, so the first authorized request costs what it would cost without a cache.
 
 The container passes `-XX:AOTCache=…` through `JDK_JAVA_OPTIONS`, not `JAVA_OPTS`, so setting `JAVA_OPTS` keeps the
-cache. Each start prints `NOTE: Picked up JDK_JAVA_OPTIONS: …` on stderr.
+cache. Each start prints `NOTE: Picked up JDK_JAVA_OPTIONS: …` on stderr. Every other `java` command in the
+container picks the option up too: one without the gateway's options, such as `java -version`, cannot use the
+cache and prints the `[aot]` errors described [below](#when-the-cache-is-not-used), which are harmless.
 
 The cache is not trained with `-Dspring.context.exit=onRefresh`, the mode Spring Boot suggests. The gateway enables
 the Spring Cloud bootstrap context, and that context refreshes first, so the JVM exits before the application
@@ -135,16 +137,26 @@ java -XX:AOTCache=app.aot -cp "$CLASSPATH" com.example.App
 ### Measured startup
 
 Time to `Started GatewayServerKt`, as Spring Boot logs it, and the JVM's resident set size one second after
-startup. Each run is a new JVM. 7 runs of each, alternating, on an Apple M4 (10 cores), natively on macOS rather
-than in the container, with OpenJDK 25.0.5, the image's JVM options, `cocache.backend=memory`, and a 1-minute load
-average of 3.2 to 3.8:
+startup. Each run is a new JVM, and the two modes alternate. Everything ran on an Apple M4 (10 cores).
+
+**In the container:** the image (Dragonwell 25.0.4, `linux/arm64`) against a Redis 7 container, 15 runs of each. The
+machine was busy (1-minute load average 4.4 to 6.7), so the spread is wide:
+
+| | Median | Fastest | Interquartile range | RSS (median) |
+|---|---|---|---|---|
+| Without the cache | 3.45 s | 2.46 s | 2.60 – 3.70 s | 524 MiB |
+| With the cache | 2.53 s | 1.83 s | 2.37 – 2.77 s | 550 MiB |
+
+**Natively on macOS:** OpenJDK 25.0.5, the image's JVM options and `cocache.backend=memory`, 7 runs of each, load
+3.2 to 3.8. Here the Redis backend cannot start, because Lettuce needs the epoll or io_uring transport, so these
+runs use the in-memory backend. The spread is much tighter:
 
 | | Median | Range | RSS (median) |
 |---|---|---|---|
 | Without the cache | 2.41 s | 2.40 – 2.45 s | 453 MiB |
 | With the cache | 1.84 s | 1.80 – 1.88 s | 519 MiB |
 
-That is 24 % faster to `Started`, and 22 % less total process time (2.71 s to 2.10 s). With the cache, 83 % of
-the classes the gateway loads come from it (13,127 of 15,884). Raw results, the commands
-and the machine are in
+Both setups start about a quarter faster with the cache: 27 % on the container median, 26 % on its fastest run,
+and 24 % natively. With the cache, 83 % of the classes the gateway loads come from it (13,127 of 15,884). Raw
+results, the commands and the machine are in
 [`docs/perf/gateway-aot-cache`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/gateway-aot-cache).
