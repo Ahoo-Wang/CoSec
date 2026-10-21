@@ -48,7 +48,8 @@ import reactor.kotlin.core.publisher.toMono
  * - authorized → [SecurityStatus.ALLOWED]
  * - denied, anonymous principal → [SecurityStatus.UNAUTHORIZED]; authenticated → [SecurityStatus.FORBIDDEN].
  *   A token verification failure replaces the result reason (e.g. Token Expired).
- * - [RegexTimeoutException] (ReDoS guard) → [SecurityStatus.FORBIDDEN], an expected deny rather than a 5xx
+ * - [RegexTimeoutException] (ReDoS guard) → an implicit deny, mapped like any other deny (401 anonymous, 403
+ *   authenticated) rather than a 5xx
  * - any other error → [SecurityStatus.ERROR]
  *
  * @param S the transport-specific request type
@@ -153,15 +154,12 @@ class SecurityPipeline<S : Any>(
         securityContext: SecurityContext,
         cause: Throwable
     ): SecurityDecision {
-        val (status, result) = when (cause) {
-            is RegexTimeoutException -> SecurityStatus.FORBIDDEN to AuthorizeResult.IMPLICIT_DENY
-            else -> {
-                log.error(cause) {
-                    "Unexpected error during authorization of request [${request.path}] [${request.method}]."
-                }
-                SecurityStatus.ERROR to AuthorizeResult.IMPLICIT_DENY
-            }
+        if (cause is RegexTimeoutException) {
+            return toDecision(request, securityContext, AuthorizationDecision(AuthorizeResult.IMPLICIT_DENY))
         }
-        return SecurityDecision(status, result, request, securityContext)
+        log.error(cause) {
+            "Unexpected error during authorization of request [${request.path}] [${request.method}]."
+        }
+        return SecurityDecision(SecurityStatus.ERROR, AuthorizeResult.IMPLICIT_DENY, request, securityContext)
     }
 }

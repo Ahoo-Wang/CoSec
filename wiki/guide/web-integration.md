@@ -30,7 +30,7 @@ Rejected requests get a JSON body, `{"authorized": false, "reason": "..."}`, and
 | Denied, anonymous caller | `401` | `Implicit Deny`, `Explicit Deny`, `Token Expired` or `Token Invalid` |
 | Denied, authenticated caller | `403` | `Implicit Deny` or `Explicit Deny` |
 | [Rate limit](./rate-limiting.md) exhausted | `429` | `Too Many Requests` |
-| Regex condition over its time budget | `403` | `Implicit Deny` |
+| Regex condition over its time budget | `401` anonymous, `403` authenticated | `Implicit Deny` |
 | Any other error (including an unreachable policy store, or a principal policy the store does not have) | `500` | `Implicit Deny` |
 
 When a rate limit rule matched, allowed and rejected responses also carry the `RateLimit-Limit`,

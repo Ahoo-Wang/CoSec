@@ -164,6 +164,11 @@ policy stored in Redis with one fails its reads, which denies every request that
 only those its statement matches. Before upgrading, search policies, app permissions and rate limit rule conditions
 for `"part"` and check each value against the [supported parts](./policies.md#value-conditions).
 
+**A regex timeout answers `401` to anonymous callers.** A `regular` condition over its time budget used to answer
+`403` whatever the caller. It is now mapped like every other deny: `401` for an anonymous caller (with `Token Expired`
+or `Token Invalid` when its token failed verification), `403` for an authenticated one. Clients that treat `401` as
+"sign in again" now get it for these requests too.
+
 **OpenAPI-generated app ids replace `:` with `-`.** `OpenAPIAppPermissionGenerator` derives the app id from the
 OpenAPI title, and app ids may no longer contain `:`. An app whose title contains `:` (for example `orders:api`)
 gets the id `orders-api`; clients must send the new id in `CoSec-App-Id`, and its role grants must be written for it.

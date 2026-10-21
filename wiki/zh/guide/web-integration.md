@@ -28,7 +28,7 @@ classpath 上有 Spring Cloud Gateway 时，网关过滤器取代 WebFlux 过滤
 | 被拒绝，匿名调用方 | `401` | `Implicit Deny`、`Explicit Deny`、`Token Expired` 或 `Token Invalid` |
 | 被拒绝，已认证调用方 | `403` | `Implicit Deny` 或 `Explicit Deny` |
 | [限流](./rate-limiting.md)许可用尽 | `429` | `Too Many Requests` |
-| 正则条件超出时间预算 | `403` | `Implicit Deny` |
+| 正则条件超出时间预算 | 匿名 `401`，已认证 `403` | `Implicit Deny` |
 | 其他任何错误（包括策略存储不可达，或主体引用的策略在存储中不存在） | `500` | `Implicit Deny` |
 
 有限流规则匹配时，放行和拒绝的响应都会带上 `RateLimit-Limit`、`RateLimit-Remaining` 和 `RateLimit-Reset` 响应头，

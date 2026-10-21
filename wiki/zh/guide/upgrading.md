@@ -120,6 +120,10 @@ id 请用 `appRoles`）。`AppRolePermission.rolePermissionIndexer` 的默认实
 `setPolicy` 会拒绝它，已存储在 Redis 中的这类策略在读取时失败，所有读取该策略的请求都会以 `500` 被拒绝，而不仅是其语句匹配到的请求。
 升级前，在策略、应用权限和限流规则的条件中搜索 `"part"`，逐个对照[支持的 part](./policies.md#value-conditions)。
 
+**正则超时对匿名调用方返回 `401`。** `regular` 条件超出时间预算时，以前不论调用方是谁都返回 `403`。现在它与其他拒绝一样映射：
+匿名调用方返回 `401`（令牌校验失败时原因为 `Token Expired` 或 `Token Invalid`），已认证调用方返回 `403`。
+把 `401` 当作"需要重新登录"的客户端，对这类请求也会收到 `401`。
+
 **OpenAPI 生成的应用 id 把 `:` 替换为 `-`。** `OpenAPIAppPermissionGenerator` 由 OpenAPI 标题生成应用 id，而应用 id 不能再含有 `:`。
 标题含有 `:` 的应用（例如 `orders:api`）的 id 变为 `orders-api`；客户端必须在 `CoSec-App-Id` 中发送新的 id，角色授权也要为新 id 写入。
 

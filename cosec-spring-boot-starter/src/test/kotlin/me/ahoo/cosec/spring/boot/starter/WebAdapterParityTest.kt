@@ -115,6 +115,12 @@ class WebAdapterParityTest {
                 rateLimited(AuthorizeResult.ALLOW, allowed = true)
             ),
             Arguments.of("regex timeout", "/path", anonymous, failing(RegexTimeoutException("timeout"))),
+            Arguments.of(
+                "regex timeout, authenticated",
+                "/path",
+                authenticated,
+                failing(RegexTimeoutException("timeout"))
+            ),
             Arguments.of("unexpected error", "/path", anonymous, failing(IllegalStateException())),
             Arguments.of("context parse error", "/path", brokenParser, returning(AuthorizeResult.ALLOW)),
             Arguments.of("invalid path", "/public/../admin", anonymous, returning(AuthorizeResult.ALLOW)),
@@ -140,6 +146,12 @@ class WebAdapterParityTest {
         val reactive = reactiveOutcome(path, securityContextParser, authorization)
         val servlet = servletOutcome(path, securityContextParser, authorization)
         servlet.assert().isEqualTo(reactive)
+    }
+
+    @Test
+    fun regexTimeoutDistinguishesAnonymousCallers() {
+        servletOutcome("/path", anonymous, failing(RegexTimeoutException("timeout"))).status.assert().isEqualTo(401)
+        servletOutcome("/path", authenticated, failing(RegexTimeoutException("timeout"))).status.assert().isEqualTo(403)
     }
 
     @Test
