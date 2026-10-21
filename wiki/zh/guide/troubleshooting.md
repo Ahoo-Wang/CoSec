@@ -132,8 +132,9 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 ## 所有请求都返回 500 {#every-request-fails-with-500}
 
 - **Redis 不可达**，且策略或权限不在本地缓存中。这是有意为之：读取策略出错即拒绝（[Redis 与缓存](./operations.md#redis-and-caching)）。
-- **条件使用了不支持的 part。** 日志中会出现 `Unsupported part`；可用的 part 见[取值条件](./policies.md#value-conditions)。
-  [校验策略](./policies.md#validating-policies)可以在部署前发现这个问题。
+- **已存储策略的条件使用了不支持的 part。** 读取策略时日志中会出现 `Condition [<type>] part [<part>] is not a supported part`；
+  可用的 part 见[取值条件](./policies.md#value-conditions)。从 7.0 起，这样的条件在策略加载时就会失败：本地文件会阻止启动，`setPolicy` 也会拒绝它，
+  但旧版本存储的副本会让该策略的每次读取都失败。修正后重新保存该策略。[校验策略](./policies.md#validating-policies)可以在部署前发现这个问题。
 - **自定义匹配器或仓储抛出了异常。** 异常栈会指出是哪一个。
 - **已存储的策略在作用域之外读取路径变量。** 日志中会出现 `PathVariableScopeException`，并指出策略和语句。
   从 7.0 起，策略级条件、以及没有 `path` 动作的语句的条件，都不能读取 `request.path.var.*`。修正后重新保存该策略

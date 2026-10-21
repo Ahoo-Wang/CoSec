@@ -114,6 +114,12 @@ id 请用 `appRoles`）。`AppRolePermission.rolePermissionIndexer` 的默认实
 以前 WebFlux 和 Gateway 原样传递，`request.path` 条件可能匹配不到。后面跟着路径参数的 `.` 或 `..` 段（`/public/..;/admin`）
 会被 Servlet 容器当作 `..` 处理，现在像其他路径穿越一样返回 `400`。
 
+**条件的 part 在策略加载时校验。** `part` 不受支持的取值条件（`eq`、`in`、`contains`、`startsWith`、`endsWith`、`regular`、`path`），
+例如把 `request.remoteIp` 写成 `request.ip`，或把 `request.header.x` 写成 `request.headers.x`，以前可以加载，然后让每个匹配的请求都以 `500` 失败。
+现在构建这样的匹配器会失败，报 `Condition [<type>] part [<part>] is not a supported part`，与限流 key 的做法一致：含有它的本地策略文件会阻止启动，
+`setPolicy` 会拒绝它，已存储在 Redis 中的这类策略在读取时失败，所有读取该策略的请求都会以 `500` 被拒绝，而不仅是其语句匹配到的请求。
+升级前，在策略、应用权限和限流规则的条件中搜索 `"part"`，逐个对照[支持的 part](./policies.md#value-conditions)。
+
 **OpenAPI 生成的应用 id 把 `:` 替换为 `-`。** `OpenAPIAppPermissionGenerator` 由 OpenAPI 标题生成应用 id，而应用 id 不能再含有 `:`。
 标题含有 `:` 的应用（例如 `orders:api`）的 id 变为 `orders-api`；客户端必须在 `CoSec-App-Id` 中发送新的 id，角色授权也要为新 id 写入。
 

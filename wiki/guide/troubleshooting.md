@@ -148,9 +148,11 @@ The caller is known, but nothing allowed the request, or something denied it.
 
 - **Redis is unreachable** and the policy or permission is not in the local cache. This is deliberate: policy
   reads fail closed ([Redis and caching](./operations.md#redis-and-caching)).
-- **A condition names an unsupported part.** The log shows `Unsupported part`; see the list of
-  [parts](./policies.md#value-conditions). [Validating policies](./policies.md#validating-policies) catches
-  this before deployment.
+- **A stored policy's condition names an unsupported part.** The log shows `Condition [<type>] part [<part>] is not
+  a supported part` while reading the policy; see the list of [parts](./policies.md#value-conditions). Since 7.0 such
+  a condition fails when the policy loads, so a local file stops startup and `setPolicy` rejects it, but a copy
+  stored by an earlier version fails every read of that policy. Fix and re-save the policy.
+  [Validating policies](./policies.md#validating-policies) catches this before deployment.
 - **A custom matcher or repository throws.** The stack trace names it.
 - **A stored policy reads path variables outside their scope.** The log shows `PathVariableScopeException`
   naming the policy and statement. Since 7.0, a policy condition, or the condition of a statement without a

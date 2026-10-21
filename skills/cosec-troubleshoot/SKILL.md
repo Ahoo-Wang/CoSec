@@ -106,7 +106,7 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 - Path variables use `{id}` and conditions read `request.path.var.id`; `:id` and `request.pathVariable.id` are invalid.
 - `PathVariableScopeException` at startup or on a policy read/write (7.0+): a policy or app permission condition, or a statement, permission or rate limit rule whose action is not `path`, reads `request.path.var.*` (or an expression mentions `PATH_VARIABLES`). Variables belong only to the statement whose own `path` action captured them; move the reference there. Local policy files with this error stop startup instead of being skipped; Redis-stored ones fail reads with 500.
 - Path SpEL templates use `#{principal.id}`. SpEL condition expressions use root properties such as `context.principal.id`; they are different evaluation roots.
-- Valid part prefixes are singular `request.header.`, `request.attributes.`, `request.path.var.`, and `context.principal.attributes.`. Unsupported parts throw `IllegalArgumentException`.
+- Valid part prefixes are singular `request.header.`, `request.attributes.`, `request.path.var.`, and `context.principal.attributes.`. Unsupported parts fail loading with `Condition [<type>] part [<part>] is not a supported part` (7.0+); a policy stored by an earlier version fails its reads with 500.
 - Regex timeouts fail closed as 403. Simplify or bound the pattern instead of increasing exposure to ReDoS.
 
 ### Rate limiting differs across instances

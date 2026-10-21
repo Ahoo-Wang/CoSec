@@ -155,6 +155,15 @@ upgrading an application with a servlet path, add the prefix to its policies, ap
 so a `request.path` condition could miss it. A `.` or `..` segment followed by a path parameter (`/public/..;/admin`),
 which servlet containers resolve as `..`, now answers `400` like any other traversal.
 
+**Condition parts are checked when the policy loads.** A value condition (`eq`, `in`, `contains`, `startsWith`,
+`endsWith`, `regular`, `path`) whose `part` is not a supported part (for example `request.ip` instead of
+`request.remoteIp`, or `request.headers.x` instead of `request.header.x`) used to load and then fail every matching
+request with `500`. Building such a matcher now fails with `Condition [<type>] part [<part>] is not a supported
+part`, as rate limit keys already did: a local policy file with one stops startup, `setPolicy` rejects it, and a
+policy stored in Redis with one fails its reads, which denies every request that reads the policy with `500`, not
+only those its statement matches. Before upgrading, search policies, app permissions and rate limit rule conditions
+for `"part"` and check each value against the [supported parts](./policies.md#value-conditions).
+
 **OpenAPI-generated app ids replace `:` with `-`.** `OpenAPIAppPermissionGenerator` derives the app id from the
 OpenAPI title, and app ids may no longer contain `:`. An app whose title contains `:` (for example `orders:api`)
 gets the id `orders-api`; clients must send the new id in `CoSec-App-Id`, and its role grants must be written for it.
