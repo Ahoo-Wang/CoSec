@@ -66,6 +66,7 @@ val securityContext = httpServletRequest.getSecurityContext()
 
 **不做授权时。** 位于校验网关之后的服务可以启用
 [`cosec.inject.enabled`](./authentication.md#behind-a-gateway)，只填充安全上下文而不执行授权。
+跳过签名校验的解析器只在 `cosec.authorization.enabled=false` 时使用；只要授权开启，inject 过滤器就使用会校验签名的解析器，与自动配置的顺序无关。
 
 ## 在代码中检查权限 {#checking-permissions-in-code}
 

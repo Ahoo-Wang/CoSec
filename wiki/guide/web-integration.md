@@ -71,7 +71,8 @@ The holder is cleared when the request completes.
 
 **Without authorization.** A service behind a verifying gateway can enable
 [`cosec.inject.enabled`](./authentication.md#behind-a-gateway) to populate the security context without
-running authorization.
+running authorization. The parser that skips signature checks is used only with `cosec.authorization.enabled=false`;
+while authorization is on, the inject filter uses the verifying parser, whatever the auto-configuration order.
 
 ## Checking permissions in code
 
