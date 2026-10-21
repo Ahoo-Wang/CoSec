@@ -33,6 +33,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
+import java.time.Duration
 
 /**
  * Migrates 6.x role grants in a real Redis (`localhost:6379`) and checks authorization before and after.
@@ -86,6 +87,18 @@ class RolePermissionKeyMigrationTest {
         return checkNotNull(authorization.decide(request, context).block()).result.authorized
     }
 
+    /**
+     * [authorized], once the migration's write has reached this instance. The migration runs as another instance, so
+     * the local miss cached before it is dropped by an invalidation message that arrives asynchronously.
+     */
+    private fun authorizedOnceInvalidated(role: String, appId: String, spaceId: String = ""): Boolean {
+        val deadline = System.nanoTime() + INVALIDATION_TIMEOUT.toNanos()
+        while (!authorized(role, appId, spaceId) && System.nanoTime() < deadline) {
+            Thread.sleep(POLL_MS)
+        }
+        return authorized(role, appId, spaceId)
+    }
+
     @Test
     fun legacyGrantsAreNotReadUntilMigratedToTheNamedApp() {
         legacy("editor", AppRolePermission.ALL_PERMISSION_ID)
@@ -101,9 +114,10 @@ class RolePermissionKeyMigrationTest {
             AppSpacedRoleId("blog", "editor"),
             AppSpacedRoleId("blog", "admin", "team-a"),
         )
-        // The local cache that saw the miss before the migration is evicted by the migration's write.
-        authorized("editor", "blog").assert().isTrue()
-        authorized("admin@team-a", "blog", "team-a").assert().isTrue()
+        // The local cache that saw the miss before the migration is evicted by the migration's write, well before
+        // the local copy would expire on its own (localMaxAge, 5 minutes).
+        authorizedOnceInvalidated("editor", "blog").assert().isTrue()
+        authorizedOnceInvalidated("admin@team-a", "blog", "team-a").assert().isTrue()
         // Only the named app gets the grants, wildcard included.
         authorized("editor", "billing").assert().isFalse()
         authorized("admin@team-a", "billing", "team-a").assert().isFalse()
@@ -207,5 +221,10 @@ class RolePermissionKeyMigrationTest {
         fixture.redisTemplate.keys(fixture.legacyRolePermissionKeyPrefix + "*").assert().isEmpty()
         authorized("editor", "blog").assert().isTrue()
         authorized("admin@team-a", "blog", "team-a").assert().isTrue()
+    }
+
+    companion object {
+        private val INVALIDATION_TIMEOUT = Duration.ofSeconds(5)
+        private const val POLL_MS = 50L
     }
 }
