@@ -84,6 +84,15 @@ class SnapshotRoundTwoTest {
     }
 
     @Test
+    fun virtualMachineErrorFromOnDocumentLostStillFailsTheLostDocument() {
+        testSource(store, metrics = ErrorMetrics({ StackOverflowError("meter") }, "onDocumentLost")).use { source ->
+            source.load().join()
+            store.remove(SnapshotKey.Policies)
+            source.peek()!!.policies.assert().isInstanceOf(DocumentState.Failed::class.java)
+        }
+    }
+
+    @Test
     fun virtualMachineErrorFromOnInstallLeavesTheKeyLoading() {
         testSource(store, metrics = ErrorMetrics({ StackOverflowError("meter") }, "onInstall")).use { source ->
             source.load().join().policies.assert().isInstanceOf(DocumentState.Present::class.java)
@@ -191,6 +200,20 @@ class SnapshotRoundTwoTest {
             reject.set(false)
             await { source.policiesRevision() == 2L }
         }
+    }
+
+    @Test
+    fun reloadFutureCompletesWhenNoLoadCanFollow() {
+        val source = testSource(store)
+        source.load().join()
+        store.hold = true
+        source.revalidate()
+        val reloaded = source.reload(SnapshotKey.Policies)
+
+        source.close()
+        store.releaseAll()
+
+        reloaded.get(5, TimeUnit.SECONDS).revision.assert().isEqualTo(1)
     }
 
     @Test
