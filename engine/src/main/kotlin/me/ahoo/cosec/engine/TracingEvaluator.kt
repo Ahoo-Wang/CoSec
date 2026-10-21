@@ -24,10 +24,14 @@ import me.ahoo.cosec.model.StatementRef
  * An [Evaluator] that records the trace (RFC 0002 §5.1).
  *
  * Within a layer that has a result it keeps going: it runs the remaining guards, visits the remaining rules and marks
- * the rules it evaluates there as after the decision. [TraceLevel.FULL] then stops where the untraced evaluation stops;
+ * the rules it evaluates there as after the decision. Its [visit] evaluates exactly the entries the untraced one does,
+ * in the same order, and gives the layer its result through the same [matched], [failed] and [unresolved]. [TraceLevel.FULL] then stops where the untraced evaluation stops;
  * [TraceLevel.EXHAUSTIVE] also evaluates the layers after the decision.
  */
 internal class TracingEvaluator(request: AuthzRequest, private val level: TraceLevel) : Evaluator(request) {
+    /** Set while visiting a group only to list its entries. */
+    private var listing = false
+
     private val layerTraces = ArrayList<LayerTrace>(LayerKind.entries.size)
     private var afterDecisionLayer = false
 
@@ -37,8 +41,6 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
     private var position = 0
     private var firstDeny: StatementRef? = null
     private var firstAllow: StatementRef? = null
-
-    override fun stopsAtResult(): Boolean = false
 
     override fun finish(decision: Decision, layers: List<LayerInput>, next: Int): Evaluation {
         afterDecisionLayer = true
@@ -71,36 +73,60 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
         position = 0
     }
 
-    override fun ruleSkipped(entry: RuleEntry, grantedVia: String?) {
-        // The DENY pass visits every entry, so each one gets its slot in source order.
+    @Suppress("TooGenericExceptionCaught")
+    override fun visit(entry: RuleEntry, grantedVia: String?): Boolean {
         val trace = checkNotNull(groupTrace)
-        trace.reserve(
-            position++
-        ) { RuleTrace(ref(entry, grantedVia), (entry as? Rule)?.effect, RuleOutcome.NOT_EVALUATED) }
-    }
+        val position = position++
+        val evaluated = !listing && when (entry) {
+            is Rule -> entry.effect == pass
+            is UnresolvedGrant -> pass == Effect.DENY
+        }
+        if (!evaluated) {
+            // The DENY pass visits every entry, so each one gets its slot in source order.
+            trace.reserve(
+                position
+            ) { RuleTrace(ref(entry, grantedVia), (entry as? Rule)?.effect, RuleOutcome.NOT_EVALUATED) }
+            return false
+        }
+        val afterDecision = afterDecisionLayer || result != null
+        val ruleTrace = when (entry) {
+            is UnresolvedGrant ->
+                RuleTrace(unresolved(entry, grantedVia), null, RuleOutcome.UNRESOLVED, entry.error, afterDecision)
 
-    override fun ruleEvaluated(rule: Rule, grantedVia: String?, match: RuleMatch, afterResult: Boolean) {
-        val ref = ref(rule, grantedVia)
-        record(RuleTrace(ref, rule.effect, match.toOutcome(), null, afterDecisionLayer || afterResult))
-        if (match == RuleMatch.MATCHED) {
-            if (rule.effect == Effect.DENY) {
-                if (firstDeny == null) firstDeny = ref
-            } else if (firstAllow == null) {
-                firstAllow = ref
+            is Rule -> {
+                val match = try {
+                    entry.match(request)
+                } catch (error: Exception) {
+                    trace.set(
+                        position,
+                        RuleTrace(
+                            failed(entry, grantedVia, error),
+                            entry.effect,
+                            RuleOutcome.ERROR,
+                            error,
+                            afterDecision
+                        )
+                    )
+                    return false
+                }
+                val ref = if (match == RuleMatch.MATCHED) matched(entry, grantedVia) else ref(entry, grantedVia)
+                if (match == RuleMatch.MATCHED) {
+                    noteMatched(ref)
+                }
+                RuleTrace(ref, entry.effect, match.toOutcome(), null, afterDecision)
             }
         }
+        trace.set(position, ruleTrace)
+        // Never stops: the rest of the layer is visited for the trace.
+        return false
     }
 
-    override fun ruleFailed(ref: StatementRef, effect: Effect, error: Throwable, afterResult: Boolean) {
-        record(RuleTrace(ref, effect, RuleOutcome.ERROR, error, afterDecisionLayer || afterResult))
-    }
-
-    override fun grantUnresolved(ref: StatementRef, error: Throwable, afterResult: Boolean) {
-        record(RuleTrace(ref, null, RuleOutcome.UNRESOLVED, error, afterDecisionLayer || afterResult))
-    }
-
-    private fun record(trace: RuleTrace) {
-        checkNotNull(groupTrace).set(position++, trace)
+    private fun noteMatched(ref: StatementRef) {
+        if (pass == Effect.DENY) {
+            if (firstDeny == null) firstDeny = ref
+        } else if (firstAllow == null) {
+            firstAllow = ref
+        }
     }
 
     override fun endLayer(groups: List<RuleGroup>) {
@@ -109,10 +135,13 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
             val builder = checkNotNull(groupTraces[i])
             if (builder.guard != GuardOutcome.MATCHED) {
                 // The rules of a group whose guard missed or threw are listed, never evaluated.
+                // Listed with this evaluator rather than another visitor, so forEachRule sees one visit method.
                 groupId = groups[i].id
                 groupTrace = builder
                 position = 0
-                groups[i].forEachRule(notEvaluated)
+                listing = true
+                groups[i].forEachRule(this)
+                listing = false
             }
             traces.add(builder.build())
         }
@@ -131,11 +160,6 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
                 groups = traces,
             ),
         )
-    }
-
-    private val notEvaluated = RuleVisitor { entry, grantedVia ->
-        ruleSkipped(entry, grantedVia)
-        false
     }
 
     private class GroupTraceBuilder(val id: String, val guard: GuardOutcome, val guardError: Throwable?) {
