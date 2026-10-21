@@ -273,7 +273,7 @@ internal class ReactiveAuthorizationFilterTest {
             every { request.path.value() } returns "/path"
             every { request.method.name() } returns "GET"
             every { request.remoteAddress?.hostString } returns "hostName"
-            every { response.setStatusCode(HttpStatus.FORBIDDEN) } returns true
+            every { response.setStatusCode(HttpStatus.UNAUTHORIZED) } returns true
             every { response.headers.contentType = MediaType.APPLICATION_JSON } returns Unit
             every { response.bufferFactory().wrap(any() as ByteArray) } returns mockk()
             every { response.writeWith(any()) } returns Mono.empty()
@@ -288,7 +288,7 @@ internal class ReactiveAuthorizationFilterTest {
         filter.filter(exchange, mockk()).block()
         verify {
             authorization.authorize(any(), any())
-            exchange.response.statusCode = HttpStatus.FORBIDDEN
+            exchange.response.statusCode = HttpStatus.UNAUTHORIZED
             exchange.response.bufferFactory().wrap(any() as ByteArray)
             exchange.response.writeWith(any())
         }

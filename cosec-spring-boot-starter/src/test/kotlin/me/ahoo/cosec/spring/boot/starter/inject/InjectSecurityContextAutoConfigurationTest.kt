@@ -13,11 +13,21 @@
 
 package me.ahoo.cosec.spring.boot.starter.inject
 
+import io.mockk.mockk
+import me.ahoo.cosec.authorization.AppRolePermissionRepository
+import me.ahoo.cosec.authorization.PolicyRepository
+import me.ahoo.cosec.context.DefaultSecurityContextParser
+import me.ahoo.cosec.context.SecurityContextParser
+import me.ahoo.cosec.jwt.InjectSecurityContextParser
 import me.ahoo.cosec.servlet.InjectSecurityContextFilter
+import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.authorization.ConditionalOnAuthorizationEnabled
+import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosec.webflux.ReactiveInjectSecurityContextWebFilter
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
+import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
@@ -41,7 +51,10 @@ internal class InjectSecurityContextAutoConfigurationTest {
     @Test
     fun contextLoadsWhenEnabled() {
         contextRunner
-            .withPropertyValues("${ConditionalOnInjectSecurityEnabled.ENABLED_KEY}=true")
+            .withPropertyValues(
+                "${ConditionalOnInjectSecurityEnabled.ENABLED_KEY}=true",
+                "${ConditionalOnAuthorizationEnabled.ENABLED_KEY}=false",
+            )
             .withUserConfiguration(
                 CoSecRequestParserAutoConfiguration::class.java,
                 InjectSecurityContextAutoConfiguration::class.java
@@ -53,5 +66,75 @@ internal class InjectSecurityContextAutoConfigurationTest {
                     .hasSingleBean(InjectSecurityContextFilter::class.java)
                     .hasSingleBean(ReactiveInjectSecurityContextWebFilter::class.java)
             }
+    }
+
+    @Test
+    fun contextLoadsWhenEnabledUsesUnverifiedParserOnlyWithoutAuthorization() {
+        contextRunner
+            .withPropertyValues(
+                "${ConditionalOnInjectSecurityEnabled.ENABLED_KEY}=true",
+                "${ConditionalOnAuthorizationEnabled.ENABLED_KEY}=false",
+            )
+            .withUserConfiguration(
+                CoSecRequestParserAutoConfiguration::class.java,
+                InjectSecurityContextAutoConfiguration::class.java
+            )
+            .run { context: AssertableApplicationContext ->
+                AssertionsForInterfaceTypes.assertThat(context.getBean(SecurityContextParser::class.java))
+                    .isSameAs(InjectSecurityContextParser)
+            }
+    }
+
+    /**
+     * With authorization and inject both on, the parser must verify signatures. User configurations are
+     * registered in the given order without sorting, so both orders prove the result does not rest on
+     * class names or registration order.
+     */
+    @Test
+    fun verifyingParserWinsWhenAuthorizationIsEnabledInAnyOrder() {
+        val authorizationFirst = arrayOf(
+            CoSecRequestParserAutoConfiguration::class.java,
+            CoSecAuthorizationAutoConfiguration::class.java,
+            InjectSecurityContextAutoConfiguration::class.java,
+        )
+        val injectFirst = arrayOf(
+            CoSecRequestParserAutoConfiguration::class.java,
+            InjectSecurityContextAutoConfiguration::class.java,
+            CoSecAuthorizationAutoConfiguration::class.java,
+        )
+        listOf(authorizationFirst, injectFirst).forEach { configurations ->
+            authorizationAndInjectRunner()
+                .withUserConfiguration(*configurations)
+                .run(::assertVerifyingParser)
+        }
+    }
+
+    @Test
+    fun verifyingParserWinsWhenAuthorizationIsEnabledAsAutoConfigurations() {
+        authorizationAndInjectRunner()
+            .withConfiguration(
+                AutoConfigurations.of(
+                    InjectSecurityContextAutoConfiguration::class.java,
+                    CoSecRequestParserAutoConfiguration::class.java,
+                    CoSecAuthorizationAutoConfiguration::class.java,
+                )
+            )
+            .run(::assertVerifyingParser)
+    }
+
+    private fun authorizationAndInjectRunner(): ApplicationContextRunner = contextRunner
+        .withPropertyValues("${ConditionalOnInjectSecurityEnabled.ENABLED_KEY}=true")
+        .withBean(TokenVerifier::class.java, { mockk<TokenVerifier>() })
+        .withBean(PolicyRepository::class.java, { mockk<PolicyRepository>() })
+        .withBean(AppRolePermissionRepository::class.java, { mockk<AppRolePermissionRepository>() })
+
+    private fun assertVerifyingParser(context: AssertableApplicationContext) {
+        AssertionsForInterfaceTypes.assertThat(context)
+            .hasNotFailed()
+            .hasSingleBean(SecurityContextParser::class.java)
+            .hasSingleBean(InjectSecurityContextFilter::class.java)
+        AssertionsForInterfaceTypes.assertThat(context.getBean(SecurityContextParser::class.java))
+            .isNotSameAs(InjectSecurityContextParser)
+            .isExactlyInstanceOf(DefaultSecurityContextParser::class.java)
     }
 }

@@ -15,6 +15,7 @@ package me.ahoo.cosec.servlet
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.context.request.RequestIdCapable
+import me.ahoo.cosec.context.request.InvalidRequestPathException
 import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.context.request.RequestAttributesAppender
 import me.ahoo.cosec.context.request.RequestParser
@@ -35,10 +36,10 @@ class ServletRequestParser(
     private val idGenerator: StringIdGenerator = UuidGenerator.INSTANCE
 ) : RequestParser<HttpServletRequest> {
     override fun parse(request: HttpServletRequest): Request {
-        RequestPaths.requireSafe(request.servletPath)
+        val path = RequestPaths.normalize(request.pathWithinApplication())
         var cosecRequest: Request = CoSecServletRequest(
             delegate = request,
-            path = request.servletPath,
+            path = path,
             method = request.method,
             remoteIp = remoteIPResolver.resolve(request),
             origin = URI.create(request.getHeader(HttpHeaders.ORIGIN).orEmpty()),
@@ -52,4 +53,19 @@ class ServletRequestParser(
         }
         return cosecRequest
     }
+}
+
+/**
+ * The undecoded request URI without the context path, as Spring MVC's `PathPattern` routing and the WebFlux adapter
+ * see it. `servletPath` alone drops `pathInfo`: under a prefix mapping such as `/api` it is `/api` for every request,
+ * so a deny on `/api/admin/` paths never matched while an allow on every `/api/` path matched everything.
+ */
+internal fun HttpServletRequest.pathWithinApplication(): String {
+    val uri = requestURI
+    val contextPath = contextPath.orEmpty()
+    if (!uri.startsWith(contextPath)) {
+        // fail-closed: a URI outside its own context cannot be matched reliably.
+        throw InvalidRequestPathException()
+    }
+    return uri.substring(contextPath.length)
 }

@@ -25,6 +25,10 @@ abstract class PartConditionMatcher(
     private val partExtractor: PartExtractor = configuration
         .getRequired(CONDITION_MATCHER_PART_KEY).asString()
         .let {
+            // An unsupported part would fail every matching request with 500; reject it when the policy loads.
+            require(DefaultPartExtractor.isSupported(it)) {
+                "Condition [$type] part [$it] is not a supported part (e.g. request.remoteIp, context.principal.id)."
+            }
             DefaultPartExtractor(it)
         }
 
