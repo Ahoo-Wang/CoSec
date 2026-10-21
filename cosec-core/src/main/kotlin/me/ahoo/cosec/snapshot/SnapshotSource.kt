@@ -122,6 +122,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     @Volatile
     private var prewarmed = false
 
+    /** Tests only: runs between finding an app slot and using it, to force an eviction into that gap. */
+    @Volatile
+    internal var afterSlotLookup: ((SnapshotKey.App) -> Unit)? = null
+
     private val subscription: AutoCloseable = store.subscribe(ChangeListener())
     private val periodic: ScheduledFuture<*>? = schedulePeriodic()
 
@@ -146,6 +150,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
         val slot = apps[appId] ?: return null
         val appEntry = slot.installed ?: return null
+        if (slot.removed) {
+            return null
+        }
         slot.touch()
         metrics.onLoad(SnapshotKind.POLICIES, LoadOutcome.HIT)
         metrics.onLoad(SnapshotKind.APP, LoadOutcome.HIT)
@@ -319,6 +326,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private inline fun <R : Any> withAppSlot(key: SnapshotKey.App, action: (Slot<A>) -> R?): R {
         while (true) {
             val slot = apps.computeIfAbsent(key.appId) { Slot(key, appCompiler) }
+            afterSlotLookup?.invoke(key)
             action(slot)?.let { return it }
             apps.remove(key.appId, slot)
         }
@@ -401,6 +409,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
     }
 
+    /** Tests only: evicts the slot of [key] now, as [evictApps] would, if it is idle. */
+    internal fun evict(key: SnapshotKey.App): Boolean = apps[key.appId]?.removeIfIdle(onlyIfEmpty = false) ?: false
+
     private fun evictApps() {
         if (apps.size <= options.maxApps) {
             return
@@ -447,7 +458,15 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         private var dirty = false
         private var forceNext = false
         private var next: CompletableFuture<SnapshotEntry<T>>? = null
-        private var removed = false
+
+        /**
+         * Set, under this slot's lock and together with dropping the slot from the map, when the slot is evicted or
+         * forgotten. Volatile because readers that found the slot before that check it without the lock: a removed
+         * slot gets no notifications and no revalidation, so its entry must never be served again.
+         */
+        @Volatile
+        var removed = false
+            private set
 
         /** The delay before the next retry of a reload the compile queue rejected; doubles while it keeps rejecting. */
         @Volatile
@@ -498,13 +517,16 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                     return false
                 }
                 removed = true
+                apps.computeIfPresent(appKey.appId) { _, current -> current.takeUnless { it === this } }
             }
-            apps.computeIfPresent(appKey.appId) { _, current -> current.takeUnless { it === this } }
             return true
         }
 
         /** The installed entry if it is usable, otherwise a load; null when this slot was removed. */
         fun usable(): CompletableFuture<SnapshotEntry<T>>? {
+            if (removed) {
+                return null
+            }
             val entry = installed
             if (entry != null && entry.state !is DocumentState.Failed) {
                 return CompletableFuture.completedFuture(entry)
@@ -517,6 +539,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
          * Null when this slot was removed.
          */
         fun forRequest(): CompletableFuture<SnapshotEntry<T>>? {
+            if (removed) {
+                return null
+            }
             installed?.let {
                 touch()
                 metrics.onLoad(key.kind, LoadOutcome.HIT)

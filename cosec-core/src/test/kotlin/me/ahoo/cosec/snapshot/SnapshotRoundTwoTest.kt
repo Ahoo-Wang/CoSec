@@ -167,6 +167,37 @@ class SnapshotRoundTwoTest {
     }
 
     @Test
+    fun slotEvictedBetweenLookupAndUseIsNeverServed() {
+        testSource(store).use { source ->
+            source.load("app-a").join()
+            // A change the evicted slot will never hear about: a removed slot gets no notifications or revalidation.
+            store.dropNotifications = true
+            store.put(APP_A, document(2, "a2"))
+            source.afterSlotLookup = { key ->
+                source.afterSlotLookup = null
+                source.evict(key).assert().isTrue()
+            }
+
+            val snapshot = source.load("app-a").join()
+
+            snapshot.appCompiled.revision.assert().isEqualTo(2)
+            source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(2)
+        }
+    }
+
+    @Test
+    fun evictedSlotIsNotRevalidatedNorPeeked() {
+        testSource(store).use { source ->
+            source.load("app-a").join()
+            source.evict(APP_A).assert().isTrue()
+            source.evict(APP_A).assert().isFalse()
+
+            source.peek("app-a").assert().isNull()
+            source.entries().map { it.key }.assert().doesNotContain(APP_A)
+        }
+    }
+
+    @Test
     fun revalidationOfManyAppsDoesNotGrowTheStack() {
         val inMemory = InMemorySnapshotDocumentStore()
         inMemory.put(SnapshotKey.Policies, document(1))
