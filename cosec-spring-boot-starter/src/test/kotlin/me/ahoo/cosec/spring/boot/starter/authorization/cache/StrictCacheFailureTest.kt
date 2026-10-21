@@ -23,7 +23,6 @@ import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.cache.AppPermissionCache
 import me.ahoo.cosec.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.CoSecCacheSpecs
@@ -46,12 +45,15 @@ import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.spring.boot.starter.AuthorizationImpl
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
@@ -104,15 +106,16 @@ class StrictCacheFailureTest {
             }
     }
 
-    @Test
-    fun unreadableGlobalIndexDeniesEvenWithDegradedReads() {
+    @ParameterizedTest
+    @EnumSource(AuthorizationImpl::class)
+    fun unreadableGlobalIndexDeniesEvenWithDegradedReads(impl: AuthorizationImpl) {
         // Redis is unavailable. With CoCache 5, a degraded read saw the global index as empty, so any global DENY was
         // skipped and the principal ALLOW decided. A CoCache 6 SetCache never degrades a read: the pipeline denies.
-        evaluate(strict = false).assert().isEqualTo(SecurityStatus.ERROR)
-        evaluate(strict = true).assert().isEqualTo(SecurityStatus.ERROR)
+        evaluate(impl, strict = false).assert().isEqualTo(SecurityStatus.ERROR)
+        evaluate(impl, strict = true).assert().isEqualTo(SecurityStatus.ERROR)
     }
 
-    private fun evaluate(strict: Boolean): SecurityStatus {
+    private fun evaluate(impl: AuthorizationImpl, strict: Boolean): SecurityStatus {
         val principalAllow = PolicyData(
             "principal-allow",
             "category",
@@ -135,7 +138,7 @@ class StrictCacheFailureTest {
                 CoSecCacheSpecs.policy(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer))
             )
             policies.put(principalAllow.id, principalAllow)
-            val authorization = SimpleAuthorization(
+            val authorization = impl.create(
                 RedisPolicyRepository(index, policies),
                 RedisAppRolePermissionRepository(
                     policyRuntime.createCache(

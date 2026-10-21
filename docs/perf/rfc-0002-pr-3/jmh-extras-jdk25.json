@@ -1,0 +1,599 @@
+[
+ {
+  "benchmark": "me.ahoo.cosec.authorization.SimpleAuthorizationBenchmark.authorize",
+  "params": {
+   "impl": "legacy",
+   "repository": "just",
+   "scenario": "role-heavy",
+   "trace": "off"
+  },
+  "round": 1,
+  "loadBefore": "1.82 1.99 1.98",
+  "loadAfter": "1.85 1.89 1.93",
+  "peakLoad1": 1.98,
+  "primaryMetric": {
+   "score": 102841.30896731294,
+   "scoreError": 1596.90573150548,
+   "scoreConfidence": [
+    101244.40323580746,
+    104438.21469881842
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     101975.8789783678,
+     101790.47629708995,
+     101957.49601172174,
+     102022.41114354214,
+     101541.32568377285
+    ],
+    [
+     104151.52869167375,
+     103841.91990605285,
+     103696.94050359417,
+     103891.54182331842,
+     103543.57063399567
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 1936.0068441824903,
+   "scoreError": 0.00010769360451853907,
+   "scoreUnit": "B/op"
+  }
+ },
+ {
+  "benchmark": "me.ahoo.cosec.authorization.SimpleAuthorizationBenchmark.authorize",
+  "params": {
+   "impl": "engine",
+   "repository": "just",
+   "scenario": "role-heavy",
+   "trace": "off"
+  },
+  "round": 1,
+  "loadBefore": "1.85 1.89 1.93",
+  "loadAfter": "1.73 1.84 1.90",
+  "peakLoad1": 1.99,
+  "primaryMetric": {
+   "score": 84459.1695071647,
+   "scoreError": 565.5832429816105,
+   "scoreConfidence": [
+    83893.58626418309,
+    85024.7527501463
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     84798.74653398569,
+     84792.29208764316,
+     84853.78488224559,
+     84781.72128042427,
+     84833.56829204739
+    ],
+    [
+     84040.35924764532,
+     84082.00851208548,
+     84126.04201344997,
+     84102.96996227819,
+     84180.20225984199
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 1912.0083322515416,
+   "scoreError": 5.314834420980098e-05,
+   "scoreUnit": "B/op"
+  }
+ },
+ {
+  "benchmark": "me.ahoo.cosec.authorization.SimpleAuthorizationBenchmark.authorize",
+  "params": {
+   "impl": "legacy",
+   "repository": "just",
+   "scenario": "guard-miss",
+   "trace": "off"
+  },
+  "round": 1,
+  "loadBefore": "1.73 1.84 1.90",
+  "loadAfter": "1.82 1.86 1.90",
+  "peakLoad1": 2.12,
+  "primaryMetric": {
+   "score": 4483297.108122082,
+   "scoreError": 13039.316229020367,
+   "scoreConfidence": [
+    4470257.791893062,
+    4496336.424351103
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     4493691.886229531,
+     4493223.416037868,
+     4483594.385202695,
+     4491815.319348248,
+     4492166.613454779
+    ],
+    [
+     4474248.783688071,
+     4478605.287044199,
+     4473431.16548276,
+     4477922.984779625,
+     4474271.239953056
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 1480.0001565139773,
+   "scoreError": 6.836935611225326e-07,
+   "scoreUnit": "B/op"
+  }
+ },
+ {
+  "benchmark": "me.ahoo.cosec.authorization.SimpleAuthorizationBenchmark.authorize",
+  "params": {
+   "impl": "engine",
+   "repository": "just",
+   "scenario": "guard-miss",
+   "trace": "off"
+  },
+  "round": 1,
+  "loadBefore": "1.82 1.86 1.90",
+  "loadAfter": "2.10 2.07 1.98",
+  "peakLoad1": 2.81,
+  "primaryMetric": {
+   "score": 4067365.43122149,
+   "scoreError": 109776.2526483591,
+   "scoreConfidence": [
+    3957589.1785731306,
+    4177141.683869849
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     4134888.2295198278,
+     4128676.8772706613,
+     4134281.4413138623,
+     4139058.1573933125,
+     4141943.5193066886
+    ],
+    [
+     4017107.682017401,
+     3992695.6129211737,
+     3988696.7992158243,
+     4004530.747844372,
+     3991775.2454117658
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 1552.0001725923325,
+   "scoreError": 4.693688020998733e-06,
+   "scoreUnit": "B/op"
+  }
+ },
+ {
+  "benchmark": "me.ahoo.cosec.authorization.SimpleAuthorizationBenchmark.authorize",
+  "params": {
+   "impl": "legacy",
+   "repository": "deferred",
+   "scenario": "global",
+   "trace": "off"
+  },
+  "round": 1,
+  "loadBefore": "1.77 1.99 1.96",
+  "loadAfter": "1.70 1.89 1.92",
+  "peakLoad1": 2.12,
+  "primaryMetric": {
+   "score": 487334.18211863405,
+   "scoreError": 3644.7660750118016,
+   "scoreConfidence": [
+    483689.41604362224,
+    490978.94819364586
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     490511.9577017466,
+     486310.6448491753,
+     484803.07085888064,
+     483646.57800396817,
+     485495.5178037332
+    ],
+    [
+     487624.7815618823,
+     490256.2529585924,
+     487151.05374681746,
+     490350.579828997,
+     487191.38387254684
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 6200.001440363567,
+   "scoreError": 1.0937989316909033e-05,
+   "scoreUnit": "B/op"
+  }
+ },
+ {
+  "benchmark": "me.ahoo.cosec.authorization.SimpleAuthorizationBenchmark.authorize",
+  "params": {
+   "impl": "engine",
+   "repository": "deferred",
+   "scenario": "global",
+   "trace": "off"
+  },
+  "round": 1,
+  "loadBefore": "1.70 1.89 1.92",
+  "loadAfter": "1.99 1.92 1.92",
+  "peakLoad1": 2.13,
+  "primaryMetric": {
+   "score": 502132.47798965423,
+   "scoreError": 2087.7083877468085,
+   "scoreConfidence": [
+    500044.7696019074,
+    504220.18637740106
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     503514.52665481216,
+     503934.9594476184,
+     502998.8113445393,
+     503230.33090550714,
+     503256.7210279934
+    ],
+    [
+     501173.5544754501,
+     500076.3160330754,
+     500872.0522679549,
+     500972.4052126099,
+     501295.10252698156
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 6568.0013980046115,
+   "scoreError": 6.192925039344981e-06,
+   "scoreUnit": "B/op"
+  }
+ },
+ {
+  "benchmark": "me.ahoo.cosec.authorization.SimpleAuthorizationBenchmark.authorize",
+  "params": {
+   "impl": "legacy",
+   "repository": "deferred",
+   "scenario": "role",
+   "trace": "off"
+  },
+  "round": 1,
+  "loadBefore": "1.99 1.92 1.92",
+  "loadAfter": "1.88 1.85 1.88",
+  "peakLoad1": 1.99,
+  "primaryMetric": {
+   "score": 443822.12918712076,
+   "scoreError": 1642.6336825920973,
+   "scoreConfidence": [
+    442179.4955045287,
+    445464.76286971284
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     445559.73035113513,
+     443414.0011061066,
+     445349.21928205364,
+     444438.1286046878,
+     444708.60263886634
+    ],
+    [
+     442897.16144313937,
+     442692.5779814849,
+     442930.725423163,
+     443024.10661638645,
+     443207.0384241842
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 6680.001581529674,
+   "scoreError": 38.24729601215967,
+   "scoreUnit": "B/op"
+  }
+ },
+ {
+  "benchmark": "me.ahoo.cosec.authorization.SimpleAuthorizationBenchmark.authorize",
+  "params": {
+   "impl": "engine",
+   "repository": "deferred",
+   "scenario": "role",
+   "trace": "off"
+  },
+  "round": 1,
+  "loadBefore": "1.88 1.85 1.88",
+  "loadAfter": "1.89 1.83 1.86",
+  "peakLoad1": 2.05,
+  "primaryMetric": {
+   "score": 392934.83895030356,
+   "scoreError": 2916.4113899472645,
+   "scoreConfidence": [
+    390018.4275603563,
+    395851.25034025084
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     390907.64085853304,
+     391802.9188714025,
+     391865.1335056442,
+     391996.10561225325,
+     389784.5498274767
+    ],
+    [
+     393494.1973950731,
+     394549.84858129243,
+     395124.52030073595,
+     395467.4230878027,
+     394356.05146282166
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 7372.001786549507,
+   "scoreError": 19.12366188321866,
+   "scoreUnit": "B/op"
+  }
+ },
+ {
+  "benchmark": "me.ahoo.cosec.authorization.SimpleAuthorizationBenchmark.authorize",
+  "params": {
+   "impl": "legacy",
+   "repository": "deferred",
+   "scenario": "none",
+   "trace": "off"
+  },
+  "round": 1,
+  "loadBefore": "1.89 1.83 1.86",
+  "loadAfter": "2.04 1.90 1.87",
+  "peakLoad1": 2.37,
+  "primaryMetric": {
+   "score": 515994.6050459344,
+   "scoreError": 19942.957561304436,
+   "scoreConfidence": [
+    496051.64748462994,
+    535937.5626072388
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     527873.702024259,
+     528699.0118655843,
+     528277.6220355713,
+     528827.5337806207,
+     528541.5609360033
+    ],
+    [
+     500302.4607369913,
+     504841.7782038012,
+     502999.6755506828,
+     504859.9626419358,
+     504722.7426838927
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 1856.0013612007733,
+   "scoreError": 5.226649620225861e-05,
+   "scoreUnit": "B/op"
+  }
+ },
+ {
+  "benchmark": "me.ahoo.cosec.authorization.SimpleAuthorizationBenchmark.authorize",
+  "params": {
+   "impl": "engine",
+   "repository": "deferred",
+   "scenario": "none",
+   "trace": "off"
+  },
+  "round": 1,
+  "loadBefore": "2.04 1.90 1.87",
+  "loadAfter": "1.78 1.88 1.87",
+  "peakLoad1": 2.15,
+  "primaryMetric": {
+   "score": 488640.8573660686,
+   "scoreError": 14041.606856315917,
+   "scoreConfidence": [
+    474599.25050975266,
+    502682.4642223845
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     497376.0900061761,
+     497198.5359407207,
+     497486.32994331606,
+     497779.7258619945,
+     497387.28434916015
+    ],
+    [
+     479098.3259569947,
+     480064.3917000664,
+     479889.6445359722,
+     480399.5205993558,
+     479728.72476692934
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 2480.001436856321,
+   "scoreError": 25.498242072155843,
+   "scoreUnit": "B/op"
+  }
+ },
+ {
+  "benchmark": "me.ahoo.cosec.authorization.SimpleAuthorizationBenchmark.authorize",
+  "params": {
+   "impl": "engine",
+   "repository": "just",
+   "scenario": "global",
+   "trace": "mixed"
+  },
+  "round": 1,
+  "loadBefore": "1.78 1.88 1.87",
+  "loadAfter": "2.12 1.92 1.88",
+  "peakLoad1": 2.33,
+  "primaryMetric": {
+   "score": 458139.82974460936,
+   "scoreError": 3863.054574273314,
+   "scoreConfidence": [
+    454276.77517033607,
+    462002.88431888266
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     460222.61240837834,
+     460587.1580763028,
+     460344.77397658804,
+     460769.5572821839,
+     460845.4639293414
+    ],
+    [
+     455863.9320362654,
+     455586.0705613438,
+     455880.67748708115,
+     455895.6362103014,
+     455402.4154783077
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 7947.501332552526,
+   "scoreError": 29.481801489188307,
+   "scoreUnit": "B/op"
+  }
+ },
+ {
+  "benchmark": "me.ahoo.cosec.authorization.SimpleAuthorizationBenchmark.authorize",
+  "params": {
+   "impl": "engine",
+   "repository": "just",
+   "scenario": "role",
+   "trace": "mixed"
+  },
+  "round": 1,
+  "loadBefore": "1.74 1.85 1.85",
+  "loadAfter": "1.89 1.91 1.88",
+  "peakLoad1": 2.43,
+  "primaryMetric": {
+   "score": 388358.6455940859,
+   "scoreError": 3054.0676749916865,
+   "scoreConfidence": [
+    385304.57791909424,
+    391412.7132690776
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     390162.62601570983,
+     390456.37719286315,
+     390184.4156130304,
+     390007.3546144961,
+     390379.27219795156
+    ],
+    [
+     386155.7668067426,
+     385761.75484483514,
+     386667.85888210876,
+     386546.00049488235,
+     387265.0292782392
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 8656.00169647128,
+   "scoreError": 0.002767252954451313,
+   "scoreUnit": "B/op"
+  }
+ },
+ {
+  "benchmark": "me.ahoo.cosec.authorization.SimpleAuthorizationBenchmark.authorize",
+  "params": {
+   "impl": "engine",
+   "repository": "just",
+   "scenario": "none",
+   "trace": "mixed"
+  },
+  "round": 1,
+  "loadBefore": "1.89 1.91 1.88",
+  "loadAfter": "2.16 2.03 1.93",
+  "peakLoad1": 2.33,
+  "primaryMetric": {
+   "score": 474039.6963456493,
+   "scoreError": 1378.1901644705931,
+   "scoreConfidence": [
+    472661.50618117873,
+    475417.8865101199
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     473213.0880699656,
+     473357.48860783066,
+     473118.25469325884,
+     473087.1827929624,
+     473183.0618140702
+    ],
+    [
+     475096.6124021782,
+     474460.19406290783,
+     475005.3029937357,
+     474949.95035699295,
+     474925.8276625901
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 3759.001807220623,
+   "scoreError": 0.0024828528174183403,
+   "scoreUnit": "B/op"
+  }
+ },
+ {
+  "benchmark": "me.ahoo.cosec.authorization.EngineAdapterBenchmark.adapt",
+  "params": {},
+  "round": 1,
+  "loadBefore": "1.88 1.97 1.91",
+  "loadAfter": "1.81 1.92 1.90",
+  "peakLoad1": 2.13,
+  "primaryMetric": {
+   "score": 13542294.344598318,
+   "scoreError": 195255.88381014374,
+   "scoreConfidence": [
+    13347038.460788174,
+    13737550.228408461
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     13651763.692214224,
+     13672484.523196792,
+     13654745.873676674,
+     13658695.57564994,
+     13684231.874124754
+    ],
+    [
+     13407303.67973887,
+     13432236.7379658,
+     13419696.850108337,
+     13421471.914455522,
+     13420312.724852249
+    ]
+   ]
+  },
+  "gcAllocRateNorm": {
+   "score": 712.0000518305966,
+   "scoreError": 8.448442339977464e-07,
+   "scoreUnit": "B/op"
+  }
+ }
+]

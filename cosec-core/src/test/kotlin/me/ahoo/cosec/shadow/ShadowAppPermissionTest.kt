@@ -21,8 +21,8 @@ import me.ahoo.cosec.api.permission.MissingPermissionException
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
+import me.ahoo.cosec.authorization.AuthorizationImpl
 import me.ahoo.cosec.authorization.PolicyRepository
-import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.permission.AppPermissionData
@@ -35,10 +35,14 @@ import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 import java.util.concurrent.CopyOnWriteArrayList
 
-class ShadowAppPermissionTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class ShadowAppPermissionTest(private val impl: AuthorizationImpl) {
     private val diffs = CopyOnWriteArrayList<ShadowDiff>()
 
     private fun path(pattern: String) = PathActionMatcherFactory.INSTANCE.create(pattern.asConfiguration())
@@ -74,7 +78,8 @@ class ShadowAppPermissionTest {
     }
 
     private fun shadow(candidates: List<AppPermission>) = ShadowAuthorization(
-        delegate = SimpleAuthorization(policyRepository, appRolePermissionRepository),
+        candidateFactory = impl.factory,
+        delegate = impl.create(policyRepository, appRolePermissionRepository),
         policyRepository = policyRepository,
         appRolePermissionRepository = appRolePermissionRepository,
         policyProvider = object : ShadowPolicyProvider {

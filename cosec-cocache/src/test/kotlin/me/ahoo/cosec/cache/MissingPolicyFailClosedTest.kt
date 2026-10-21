@@ -17,7 +17,6 @@ import io.mockk.mockk
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.authorization.MissingPolicyException
-import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.EvaluateRequest
@@ -28,6 +27,8 @@ import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 import reactor.kotlin.test.test
 
@@ -36,7 +37,9 @@ import reactor.kotlin.test.test
  * replicated, lost from Redis). [RedisPolicyRepository.getPolicies] drops the id, so the deny disappears and a
  * broader global ALLOW wins: a suspended account regains access. Deny-first says missing data must not widen access.
  */
-class MissingPolicyFailClosedTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class MissingPolicyFailClosedTest(private val impl: AuthorizationImpl) {
     private val allowAll = PolicyData(
         id = "allow-all",
         category = "",
@@ -63,7 +66,7 @@ class MissingPolicyFailClosedTest {
         it.policyCache.put(allowAll.id, allowAll)
     }
 
-    private fun authorization() = SimpleAuthorization(caches.policyRepository(), mockk())
+    private fun authorization() = impl.create(caches.policyRepository(), mockk())
 
     @AfterEach
     fun destroy() {

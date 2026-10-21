@@ -13,6 +13,7 @@
 
 dependencies {
     api(project(":cosec-api"))
+    api(project(":cosec-engine"))
     api("me.ahoo.cosid:cosid-core")
     compileOnly("ognl:ognl")
     compileOnly("org.springframework:spring-web")

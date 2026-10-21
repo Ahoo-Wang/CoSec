@@ -24,12 +24,16 @@ import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 
 /**
  * `inRole` follows the principal's roles across spaces, so a deny keeps holding once tokens carry `role@space`.
  */
-class InRoleSpaceTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class InRoleSpaceTest(private val impl: AuthorizationImpl) {
     private fun globalPolicy(value: String): Policy = CoSecJsonSerializer.readValue(
         """
         {
@@ -53,7 +57,7 @@ class InRoleSpaceTest {
         }
         val request = ExplainRequest(path = "/orders", spaceId = spaceId).toRequest()
         val principal = SimplePrincipal("user", roles = roles)
-        val result = SimpleAuthorization(policyRepository, permissions)
+        val result = impl.create(policyRepository, permissions)
             .authorize(request, SimpleSecurityContext(principal)).block()!!
         // The explainer evaluates the same matchers and must reach the same decision.
         val explanation = AuthorizationExplainer(policyRepository, permissions).explain(request, principal).block()!!

@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.authorization.engine.PolicyGroup
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 
 /**
@@ -47,6 +48,13 @@ class PolicyData(
     init {
         PathVariableScope.requireScoped(this)
     }
+
+    /** This policy as engine input, adapted once (RFC 0002 §3.3). */
+    @Transient
+    @Volatile
+    private var engineGroup: PolicyGroup? = null
+
+    internal fun engineGroup(): PolicyGroup = engineGroup ?: PolicyGroup(this).also { engineGroup = it }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

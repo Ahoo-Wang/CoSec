@@ -122,6 +122,26 @@ class WebAdapterParityTest {
             SecurityDecision.RETRY_AFTER_HEADER,
         )
 
+        private val viewer =
+            SecurityContextParser { SimpleSecurityContext(SimplePrincipal("user", roles = setOf("viewer"))) }
+        private val missingPolicy = SecurityContextParser {
+            SimpleSecurityContext(SimplePrincipal("user", policies = setOf("missing")))
+        }
+
+        @JvmStatic
+        fun implementationScenarios(): List<Arguments> = listOf(
+            Arguments.of("global allow", "/public/page", anonymous, 200),
+            Arguments.of("global deny, anonymous", "/admin/page", anonymous, 401),
+            Arguments.of("global deny, authenticated", "/admin/page", authenticated, 403),
+            Arguments.of("implicit deny", "/other", authenticated, 403),
+            Arguments.of("role allow", "/orders/1", viewer, 200),
+            Arguments.of("role deny wins over global allow", "/public/internal", viewer, 403),
+            Arguments.of("regex timeout in a condition", "/slow/page", authenticated, 403),
+            Arguments.of("matcher error", "/broken/page", authenticated, 500),
+            Arguments.of("missing principal policy", "/public/page", missingPolicy, 500),
+            Arguments.of("traversal", "/public/../admin/page", anonymous, 400),
+        )
+
         @JvmStatic
         fun scenarios(): List<Arguments> = listOf(
             Arguments.of("allowed", "/path", anonymous, returning(AuthorizeResult.ALLOW)),
@@ -188,6 +208,29 @@ class WebAdapterParityTest {
         val servlet = servletQuery("POST", query, form = true)
         servlet.assert().isEqualTo(reactiveQuery("POST", query, form = true))
         servlet.assert().isEqualTo(servletQuery("POST", query, form = false))
+    }
+
+    /**
+     * The real implementations behind both adapters: each scenario must give the same outcome on every adapter and
+     * for both implementations (RFC 0002 §8.2), including the error paths the pipeline maps.
+     */
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("implementationScenarios")
+    fun implementationsRespondIdentically(
+        @Suppress("UNUSED_PARAMETER") name: String,
+        path: String,
+        securityContextParser: SecurityContextParser,
+        status: Int
+    ) {
+        val outcomes = AuthorizationImpl.entries.flatMap { impl ->
+            val authorization = RealPolicies.authorization(impl)
+            listOf(
+                reactiveOutcome(path, securityContextParser, authorization),
+                servletOutcome(path, securityContextParser, authorization),
+            )
+        }
+        outcomes.distinct().assert().hasSize(1)
+        outcomes.first().status.assert().isEqualTo(status)
     }
 
     @Test

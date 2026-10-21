@@ -25,9 +25,9 @@ import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
+import me.ahoo.cosec.authorization.AuthorizationImpl
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
-import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.context.SimpleSecurityContext
@@ -43,12 +43,16 @@ import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 import reactor.kotlin.test.test
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.random.Random
 
-class ShadowAuthorizationTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class ShadowAuthorizationTest(private val impl: AuthorizationImpl) {
     private val enforcedGlobal = mutableListOf<Policy>()
     private val diffs = CopyOnWriteArrayList<ShadowDiff>()
     private val context = SimpleSecurityContext(SimplePrincipal("user"))
@@ -92,7 +96,8 @@ class ShadowAuthorizationTest {
         reportRuleChanges: Boolean = false,
         random: Random = Random.Default
     ) = ShadowAuthorization(
-        delegate = SimpleAuthorization(policyRepository, appRolePermissionRepository),
+        candidateFactory = impl.factory,
+        delegate = impl.create(policyRepository, appRolePermissionRepository),
         policyRepository = policyRepository,
         appRolePermissionRepository = appRolePermissionRepository,
         policyProvider = ShadowPolicyProvider { candidates },
@@ -125,7 +130,8 @@ class ShadowAuthorizationTest {
             SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM),
         )
         val authorization = ShadowAuthorization(
-            delegate = SimpleAuthorization(
+            candidateFactory = impl.factory,
+            delegate = impl.create(
                 policyRepository,
                 appRolePermissionRepository,
                 rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT,

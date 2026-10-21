@@ -19,8 +19,8 @@ import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.api.permission.AppRolePermission
 import me.ahoo.cosec.api.permission.MissingPermissionException
+import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.authorization.PolicyRepository
-import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.PermissionData
@@ -32,6 +32,8 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 import reactor.kotlin.test.test
 
@@ -42,7 +44,9 @@ import reactor.kotlin.test.test
  *
  * Runs against a real Redis (`localhost:6379`), so the stored key format is exercised end to end.
  */
-class RolePermissionScopeTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class RolePermissionScopeTest(private val impl: AuthorizationImpl) {
     private val blogAdmin = AppPermissionData(
         id = "blog",
         groups = listOf(
@@ -68,7 +72,7 @@ class RolePermissionScopeTest {
 
     private lateinit var fixture: RedisRolePermissionFixture
     private lateinit var rolePermissionCache: RolePermissionCache
-    private lateinit var authorization: SimpleAuthorization
+    private lateinit var authorization: DecisionAuthorization
 
     @BeforeEach
     fun setup() {
@@ -79,7 +83,7 @@ class RolePermissionScopeTest {
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.just(emptyList())
         }
-        authorization = SimpleAuthorization(policyRepository, fixture.repository(rolePermissionCache))
+        authorization = impl.create(policyRepository, fixture.repository(rolePermissionCache))
     }
 
     @AfterEach

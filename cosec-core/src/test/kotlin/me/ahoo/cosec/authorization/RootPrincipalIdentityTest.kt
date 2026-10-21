@@ -27,6 +27,8 @@ import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
@@ -38,12 +40,14 @@ import reactor.kotlin.core.publisher.toMono
  * platform tenant's principal with the root id is root, and the blacklist still applies to it. The tests pass
  * [RootPrincipalMatcher.DEFAULT] explicitly: it is what `root-enabled=true` installs.
  */
-class RootPrincipalIdentityTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class RootPrincipalIdentityTest(private val impl: AuthorizationImpl) {
     private val blockEverything = object : BlacklistChecker {
         override fun check(request: Request, context: SecurityContext): Mono<Boolean> = false.toMono()
     }
 
-    private fun authorization(blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp) = SimpleAuthorization(
+    private fun authorization(blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp) = impl.create(
         policyRepository = mockk {
             every { getGlobalPolicy() } returns Mono.just(emptyList())
         },
