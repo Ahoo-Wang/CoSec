@@ -18,7 +18,6 @@ import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.authorization.AuthorizationChecker
 import me.ahoo.cosec.authorization.MissingPolicyException
-import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
@@ -34,6 +33,8 @@ import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.kotlin.test.test
 
 /**
@@ -42,7 +43,9 @@ import reactor.kotlin.test.test
  * global policy whose content is missing denies instead of being skipped. Real CoCache caches, two instances sharing
  * one backend.
  */
-class GlobalPolicyConsistencyTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class GlobalPolicyConsistencyTest(private val impl: AuthorizationImpl) {
     private val writer = CoSecTestCaches()
     private val reader = CoSecTestCaches(writer.runtime.backend, writer.keyPrefix)
 
@@ -66,7 +69,7 @@ class GlobalPolicyConsistencyTest {
     }
 
     private fun authorization() =
-        SimpleAuthorization(reader.policyRepository(), reader.appRolePermissionRepository())
+        impl.create(reader.policyRepository(), reader.appRolePermissionRepository())
 
     private fun status(): SecurityStatus {
         val pipeline = SecurityPipeline(

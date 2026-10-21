@@ -44,6 +44,8 @@ import me.ahoo.cosec.policy.condition.CONDITION_MATCHER_NEGATE_KEY
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 import reactor.kotlin.test.test
 
@@ -51,7 +53,9 @@ import reactor.kotlin.test.test
  * A role grants `deny-delete`, but the app permission catalog no longer defines it (deleted, or the id is mistyped).
  * Skipping the id drops the deny, and a broader global ALLOW lets the request through.
  */
-class MissingPermissionFailClosedTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class MissingPermissionFailClosedTest(private val impl: AuthorizationImpl) {
     private val allowAll = PolicyData(
         id = "allow-all",
         category = "",
@@ -89,7 +93,7 @@ class MissingPermissionFailClosedTest {
     }
 
     private fun authorization(vararg permissions: PermissionData) =
-        SimpleAuthorization(policyRepository, permissions(catalog(*permissions)))
+        impl.create(policyRepository, permissions(catalog(*permissions)))
 
     private val request = ExplainRequest(path = "/orders/1", method = "DELETE", appId = "app").toRequest()
     private fun context() = SimpleSecurityContext(SimplePrincipal("user", roles = setOf("restricted")))
@@ -130,7 +134,7 @@ class MissingPermissionFailClosedTest {
         val never = AllConditionMatcher(mapOf(CONDITION_MATCHER_NEGATE_KEY to true).asConfiguration())
         val appRolePermissions = permissions(catalog(read).copy(condition = never))
         val decision =
-            checkNotNull(SimpleAuthorization(policyRepository, appRolePermissions).decide(request, context()).block())
+            checkNotNull(impl.create(policyRepository, appRolePermissions).decide(request, context()).block())
         decision.result.assert().isEqualTo(AuthorizeResult.ALLOW)
         explain(appRolePermissions).warnings.assert().isEmpty()
     }
@@ -140,7 +144,7 @@ class MissingPermissionFailClosedTest {
         // The deny pass stops at the matched deny; the request is denied either way.
         val appRolePermissions = permissions(catalog(denyDelete, read), granted = linkedSetOf("deny-delete", "typo"))
         val decision =
-            checkNotNull(SimpleAuthorization(policyRepository, appRolePermissions).decide(request, context()).block())
+            checkNotNull(impl.create(policyRepository, appRolePermissions).decide(request, context()).block())
         decision.result.assert().isEqualTo(AuthorizeResult.EXPLICIT_DENY)
         explain(appRolePermissions).apply {
             status.assert().isEqualTo(SecurityStatus.FORBIDDEN)
@@ -151,7 +155,7 @@ class MissingPermissionFailClosedTest {
     @Test
     fun missingPermissionBeforeTheDenyFails() {
         val appRolePermissions = permissions(catalog(denyDelete, read), granted = linkedSetOf("typo", "deny-delete"))
-        SimpleAuthorization(policyRepository, appRolePermissions).decide(request, context())
+        impl.create(policyRepository, appRolePermissions).decide(request, context())
             .test()
             .expectErrorMatches { it is MissingPermissionException && it.permissionIds == setOf("typo") }
             .verify()
@@ -185,7 +189,7 @@ class MissingPermissionFailClosedTest {
 
     @Test
     fun wildcardStillGrantsEveryPermission() {
-        val authorization = SimpleAuthorization(
+        val authorization = impl.create(
             policyRepository,
             permissions(catalog(denyDelete, read), granted = setOf(AppRolePermission.ALL_PERMISSION_ID, "typo")),
         )

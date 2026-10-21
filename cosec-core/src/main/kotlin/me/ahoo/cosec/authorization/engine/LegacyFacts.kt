@@ -15,7 +15,6 @@ package me.ahoo.cosec.authorization.engine
 
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.context.tenant
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
@@ -23,7 +22,6 @@ import me.ahoo.cosec.model.HostFacts
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Scope
 import me.ahoo.cosec.model.Subject
-import me.ahoo.cosec.policy.condition.part.ResourceParts
 
 /**
  * What the adapted legacy matchers need and the engine never reads: the original [request] and the
@@ -34,7 +32,7 @@ import me.ahoo.cosec.policy.condition.part.ResourceParts
  * objects the audit and tracing decorators read. An untraced evaluation stops each layer at its first match, so it
  * records at most one rule per layer.
  */
-internal class LegacyFacts(val request: Request, base: SecurityContext) : HostFacts {
+internal class LegacyFacts(val request: Request, val base: SecurityContext) : HostFacts {
     val context = StatementScopedContext(base)
 
     private var matched0: StatementRule? = null
@@ -68,71 +66,48 @@ internal class LegacyFacts(val request: Request, base: SecurityContext) : HostFa
     companion object {
         const val HTTP = "http"
 
-        /**
-         * The engine's view of [request] (RFC 0002 §3.3). Read only for a request that is neither blocked nor root,
-         * as 7.0 reads it only then.
+        /*
+         * Phase 2 (RFC 0002 §3.3): the engine reads only `environment.blocked` and `subject.root`, so the rest of
+         * the engine's request is left empty rather than read from the request. Reading it would differ from 7.0,
+         * which reads the app, the space and the principal's policies and roles only when a layer needs them, and
+         * the device, remote address and request id never; the layers read them from [request] and [context]
+         * instead, at the same points (PolicySetLoader). Phase 4 fills these in when conditions move into the engine.
          */
-        fun authzRequest(request: Request, context: SecurityContext): AuthzRequest {
-            val principal = context.principal
-            val subject = Subject(
-                id = principal.id,
-                tenantId = principal.tenant.tenantId,
-                authenticated = principal.authenticated,
-                roles = principal.roles,
-                policies = principal.policies,
-                attributes = principal.attributes,
-                root = false,
-            )
-            return AuthzRequest(
-                subject = subject,
-                scope = Scope.declared(context.tenant.tenantId, request.appId, request.spaceId),
-                action = Action(HTTP, request.method),
-                resource = Resource(HTTP, request.path, ResourceAttributes.of(request.attributes)),
-                environment = Environment(request.remoteIp, request.requestId, request.deviceId, blocked = false),
-                host = LegacyFacts(request, context),
-            )
-        }
+        private val UNREAD_SUBJECT = Subject("", "", false, emptySet(), emptySet(), emptyMap(), root = false)
+        private val UNREAD_SCOPE = Scope.declared("", "", "")
+        private val UNREAD_ACTION = Action(HTTP, "")
+        private val UNREAD_RESOURCE = Resource(HTTP, "", emptyMap())
+        private val NOT_BLOCKED = Environment("", "", "", blocked = false)
 
-        private val NOBODY = Subject("", "", false, emptySet(), emptySet(), emptyMap(), root = false)
-        private val NOWHERE = Scope.declared("", "", "")
-        private val NO_ACTION = Action(HTTP, "")
-        private val NO_RESOURCE = Resource(HTTP, "", emptyMap())
+        /** The engine's view of a request that is neither blocked nor root: nothing is read from [request] here. */
+        fun authzRequest(request: Request, context: SecurityContext): AuthzRequest = AuthzRequest(
+            subject = UNREAD_SUBJECT,
+            scope = UNREAD_SCOPE,
+            action = UNREAD_ACTION,
+            resource = UNREAD_RESOURCE,
+            environment = NOT_BLOCKED,
+            host = LegacyFacts(request, context),
+        )
 
         /**
          * A blocked request. The engine decides it before reading anything else ([me.ahoo.cosec.engine.Engine.requiresPolicies]
-         * is false), so the request is not read at all, as 7.0 does not read it.
+         * is false).
          */
-        val BLOCKED = AuthzRequest(NOBODY, NOWHERE, NO_ACTION, NO_RESOURCE, Environment("", "", "", blocked = true))
+        val BLOCKED = AuthzRequest(
+            UNREAD_SUBJECT,
+            UNREAD_SCOPE,
+            UNREAD_ACTION,
+            UNREAD_RESOURCE,
+            Environment("", "", "", blocked = true),
+        )
 
         /** A root principal's request that is not blocked; like [BLOCKED], decided before anything else is read. */
         val ROOT = AuthzRequest(
             Subject("", "", false, emptySet(), emptySet(), emptyMap(), root = true),
-            NOWHERE,
-            NO_ACTION,
-            NO_RESOURCE,
-            Environment("", "", "", blocked = false),
+            UNREAD_SCOPE,
+            UNREAD_ACTION,
+            UNREAD_RESOURCE,
+            NOT_BLOCKED,
         )
-    }
-}
-
-/** The request attributes named `resource.<name>`, by name, filtered when first read. */
-internal class ResourceAttributes private constructor(private val requestAttributes: Map<String, String>) :
-    AbstractMap<String, String>() {
-    private var filtered: Map<String, String>? = null
-
-    override val entries: Set<Map.Entry<String, String>>
-        get() = (filtered ?: filter().also { filtered = it }).entries
-
-    private fun filter(): Map<String, String> = buildMap {
-        for ((key, value) in requestAttributes) {
-            if (key.startsWith(ResourceParts.PREFIX)) {
-                put(key.substring(ResourceParts.PREFIX.length), value)
-            }
-        }
-    }
-
-    companion object {
-        fun of(requestAttributes: Map<String, String>): Map<String, String> =
-            if (requestAttributes.isEmpty()) emptyMap() else ResourceAttributes(requestAttributes)
     }
 }

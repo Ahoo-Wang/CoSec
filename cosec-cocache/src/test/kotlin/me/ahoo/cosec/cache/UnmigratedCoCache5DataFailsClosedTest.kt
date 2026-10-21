@@ -19,7 +19,6 @@ import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ForeignFormatMode
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
@@ -32,6 +31,8 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
 import org.springframework.data.redis.core.StringRedisTemplate
@@ -41,7 +42,9 @@ import org.springframework.data.redis.core.StringRedisTemplate
  * content fails (`ForeignFormatMode.FAIL`), leaves Redis as it was, and the pipeline denies with `500`: the global
  * deny can never be skipped, and no request is ever allowed.
  */
-class UnmigratedCoCache5DataFailsClosedTest {
+@ParameterizedClass
+@EnumSource(AuthorizationImpl::class)
+class UnmigratedCoCache5DataFailsClosedTest(private val impl: AuthorizationImpl) {
     private val connectionFactory =
         LettuceConnectionFactory(RedisStandaloneConfiguration()).apply { afterPropertiesSet() }
     private val redis = StringRedisTemplate(connectionFactory)
@@ -100,7 +103,7 @@ class UnmigratedCoCache5DataFailsClosedTest {
                     EvaluateRequest(path = request, headers = mapOf("CoSec-App-Id" to "app"))
             },
             SecurityContextParser { SimpleSecurityContext(principal) },
-            SimpleAuthorization(caches.policyRepository(), caches.appRolePermissionRepository()),
+            impl.create(caches.policyRepository(), caches.appRolePermissionRepository()),
         )
         repeat(2) {
             pipeline.evaluate("/orders/1").block()!!.status.assert().isEqualTo(SecurityStatus.ERROR)
