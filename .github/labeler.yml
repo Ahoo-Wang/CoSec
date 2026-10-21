@@ -44,7 +44,7 @@
       - any-glob-to-any-file: 'cosec-kafka/**'
 'module: engine':
   - changed-files:
-      - any-glob-to-any-file: ['cosec-model/**', 'cosec-engine/**']
+      - any-glob-to-any-file: ['model/**', 'engine/**']
 'module: spring-boot-starter':
   - changed-files:
       - any-glob-to-any-file: 'cosec-spring-boot-starter/**'

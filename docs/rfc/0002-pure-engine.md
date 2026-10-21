@@ -106,7 +106,7 @@ flowchart LR
 
 ### 2.3 ArchUnit 规则
 
-放在 `cosec-engine/src/test`（它的测试类路径同时包含两个模块），白名单优先：
+放在 `engine/src/test`（它的测试类路径同时包含两个模块），白名单优先：
 
 ```kotlin
 @AnalyzeClasses(packages = ["me.ahoo.cosec.model", "me.ahoo.cosec.engine"], importOptions = [DoNotIncludeTests::class])
