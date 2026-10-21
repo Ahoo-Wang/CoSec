@@ -65,6 +65,7 @@ internal class AuthorizationFilterTest {
         )
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
+            every { pathInfo } returns null
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -103,6 +104,7 @@ internal class AuthorizationFilterTest {
         )
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
+            every { pathInfo } returns null
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -148,6 +150,7 @@ internal class AuthorizationFilterTest {
         )
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
+            every { pathInfo } returns null
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -188,6 +191,7 @@ internal class AuthorizationFilterTest {
         )
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
+            every { pathInfo } returns null
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -233,6 +237,7 @@ internal class AuthorizationFilterTest {
         )
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
+            every { pathInfo } returns null
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -279,6 +284,7 @@ internal class AuthorizationFilterTest {
         )
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
+            every { pathInfo } returns null
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -320,6 +326,7 @@ internal class AuthorizationFilterTest {
         )
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
+            every { pathInfo } returns null
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -358,6 +365,7 @@ internal class AuthorizationFilterTest {
         )
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/public/../admin"
+            every { pathInfo } returns null
         }
         val servletResponse = mockk<HttpServletResponse> {
             every { status = HttpStatus.BAD_REQUEST.value() } returns Unit

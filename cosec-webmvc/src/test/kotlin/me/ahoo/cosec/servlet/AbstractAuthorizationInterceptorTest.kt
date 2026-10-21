@@ -49,6 +49,7 @@ class AbstractAuthorizationInterceptorTest {
     fun legacyConstructorAuthorizes() {
         val servletRequest = mockk<HttpServletRequest> {
             every { servletPath } returns "/path"
+            every { pathInfo } returns null
             every { method } returns "GET"
             every { remoteAddr } returns "127.0.0.1"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns "requestId"

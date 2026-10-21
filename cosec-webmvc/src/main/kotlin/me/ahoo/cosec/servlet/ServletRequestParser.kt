@@ -35,10 +35,10 @@ class ServletRequestParser(
     private val idGenerator: IdGenerator = UuidGenerator.INSTANCE
 ) : RequestParser<HttpServletRequest> {
     override fun parse(request: HttpServletRequest): Request {
-        RequestPaths.requireSafe(request.servletPath)
+        val path = RequestPaths.normalize(request.pathWithinApplication())
         var cosecRequest: Request = CoSecServletRequest(
             delegate = request,
-            path = request.servletPath,
+            path = path,
             method = request.method,
             remoteIp = remoteIPResolver.resolve(request),
             origin = URI.create(request.getHeader(HttpHeaders.ORIGIN).orEmpty()),
@@ -53,3 +53,11 @@ class ServletRequestParser(
         return cosecRequest
     }
 }
+
+/**
+ * The decoded path within the application, as the container mapped it: `servletPath` + `pathInfo`.
+ * `servletPath` alone drops `pathInfo`: under a prefix mapping such as `/api` it is `/api` for every request, so a
+ * deny on `/api/admin/` paths never matched while an allow on every `/api/` path matched everything.
+ * Under the default `/` mapping `pathInfo` is null, so the path is `servletPath` as before.
+ */
+internal fun HttpServletRequest.pathWithinApplication(): String = servletPath.orEmpty() + pathInfo.orEmpty()
