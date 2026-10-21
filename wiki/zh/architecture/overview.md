@@ -132,7 +132,7 @@ flowchart LR
 
 - **Redis 是权威存储，本地缓存只是它的视图。** [`CoSecCacheSpecs`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt) 声明所有缓存。策略和权限缓存永不过期，Redis 读取失败时抛出异常。starter 在所有 CoCache 定制器或属性之后应用这一点，配置无法放宽它。
 - **本地命中不切换线程。** 仓库通过 CoCache 的异步视图读取。本地命中是一个已完成的 future，仓库在调用方线程上直接应答；未命中时以非阻塞方式读 Redis，请求在 `boundedElastic` 上继续。
-- **缺失的数据会失败，而不是被跳过。** 仓库没有返回的主体策略会让授权以 `MissingPolicyException` 失败（管道应答 `500`）。全局策略索引同样如此：有索引而无内容的 id 会失败，因为缺失的可能正是一条全局 `DENY`。
+- **缺失的数据会失败，而不是被跳过。** 仓库没有返回的主体策略会让授权以 `MissingPolicyException` 失败（管道应答 `500`）。全局策略索引同样如此：有索引而无内容的 id 会失败，因为缺失的可能正是一条全局 `DENY`。角色授权引用了其应用没有定义的权限 id 时同样会失败，抛出 `MissingPermissionException`。
 - **并发发布不会扩大访问范围。** 全局策略索引是一个 CoCache `SetCache`，通过原子的 `add` / `remove` 更新，并且先写内容、后写索引项。读取方只应用内容类型为 `global` 的已索引策略（`GlobalPolicyConsistencyTest`、`GlobalPolicyIndexConcurrencyIntegrationTest`）。
 - **本地文件严格加载。** 策略、限流规则、影子候选和测试输入都由 `JsonResources` 解析：配置的位置匹配不到文件、文件无法读取、同一 id 声明两次，都会导致加载失败。只有内置的默认位置允许匹配不到任何文件。
 

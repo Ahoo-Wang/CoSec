@@ -57,6 +57,35 @@ class PolicyTestKitTest {
     }
 
     @Test
+    fun grantsOfUndefinedPermissionsFail() {
+        val appPermissions = listOf(
+            "classpath:cosec-policy/test-app-permission.json",
+            "classpath:cosec-policy-test/spaces/billing-app-permission.json",
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            PolicyTestKit.run(
+                PolicyTestSuite(
+                    name = "typo",
+                    appPermissions = appPermissions,
+                    appRoles = mapOf("manage" to mapOf("shipper@team-a" to setOf("manage.order.typo"))),
+                ),
+            )
+        }.message.assert().contains("[typo]", "[shipper@team-a]", "[manage.order.typo]", "[manage]")
+        // A grant in every app must be defined by every app.
+        assertThrows(IllegalArgumentException::class.java) {
+            PolicyTestKit.run(
+                PolicyTestSuite(
+                    appPermissions = appPermissions,
+                    roles = mapOf("shipper" to setOf("manage.order.ship"))
+                ),
+            )
+        }.message.assert().contains("[manage.order.ship]", "[billing]")
+        // `*` still grants every permission of each app.
+        val wildcard = PolicyTestSuite(appPermissions = appPermissions, roles = mapOf("admin" to setOf("*", "typo")))
+        PolicyTestKit.run(wildcard).assert().isEmpty()
+    }
+
+    @Test
     fun failingSuiteExplainsWhatDecided() {
         val report = PolicyTestKit.run("classpath:cosec-policy-test/failing/*.json")
         val failure = report.failures.single()

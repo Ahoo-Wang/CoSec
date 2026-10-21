@@ -63,7 +63,13 @@ A grant gives one role a set of permission ids, in one app and one space:
 | `clerk` → `["order.read"]` in `order-app` | members of `clerk` may read orders in `order-app` |
 | `manager` → `["*"]` in `order-app` | `*` grants every permission the catalog of `order-app` defines, now and after it changes |
 
-Ids the catalog does not define grant nothing. The request selects the app with `CoSec-App-Id` and the space with
+Every id a grant names, other than `*`, must be defined by the app's catalog. An id it does not define (removed
+from the catalog, or mistyped) is not skipped, because it may be a deny: a request of a principal holding the role
+fails with `MissingPermissionException`, mapped to `500`, whenever the role layer is evaluated and no deny matched
+first. A request outside the app's `condition`, or already denied, is not affected. `AccessAnalyzer` and
+`PolicyTestKit` reject such grants when built or run ([Troubleshooting](../operations/troubleshooting.md#every-request-of-one-role-fails-with-500)).
+
+The request selects the app with `CoSec-App-Id` and the space with
 `CoSec-Space-Id` ([App and space](../integration/web.md#app-and-space)); a request without an app id, or for an app
 without a catalog, gets nothing from role grants.
 

@@ -60,7 +60,12 @@ description: "定义应用的权限目录，并按应用和空间把权限授予
 | 在 `order-app` 中 `clerk` → `["order.read"]` | `clerk` 的成员可以在 `order-app` 中读取订单 |
 | 在 `order-app` 中 `manager` → `["*"]` | `*` 授予 `order-app` 目录中定义的所有权限，目录以后变化时也随之变化 |
 
-目录中没有定义的 id 什么也不授予。请求用 `CoSec-App-Id` 选择应用、用 `CoSec-Space-Id` 选择空间（[应用与空间](../integration/web.md#app-and-space)）；
+授权中除 `*` 以外的每个 id 都必须在应用的权限目录中有定义。目录中没有定义的 id（已从目录中删除，或写错）不会被跳过，因为它可能是一条拒绝：
+对持有该角色的主体，只要角色层被评估、且在此之前没有拒绝匹配，请求就会以 `MissingPermissionException` 失败，映射为 `500`。
+不满足应用 `condition` 或已被拒绝的请求不受影响。`AccessAnalyzer` 和 `PolicyTestKit` 在构建或运行时拒绝这样的授权
+（[故障排查](../operations/troubleshooting.md#every-request-of-one-role-fails-with-500)）。
+
+请求用 `CoSec-App-Id` 选择应用、用 `CoSec-Space-Id` 选择空间（[应用与空间](../integration/web.md#app-and-space)）；
 没有应用 id 的请求，或应用没有目录的请求，从角色授权中什么也得不到。
 
 ## 角色授权范围 {#role-grant-scope}

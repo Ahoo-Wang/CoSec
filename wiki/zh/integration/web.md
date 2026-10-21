@@ -44,9 +44,7 @@ cosec:
 ```
 
 **Spring MVC**：同上，把 `webflux-support` 换成 `webmvc-support`。Servlet 过滤器会阻塞请求线程直到得出决策，这是
-Servlet 的常规模型。CoSec 匹配的是 `HttpServletRequest.servletPath`，它不包含上下文路径
-（`server.servlet.context-path`）：策略里的路径要相对于上下文路径来写。`DispatcherServlet` 保持映射到 `/`（默认值）。
-如果设置了 `spring.mvc.servlet.path`，servlet path 就只剩这个前缀，CoSec 看到的所有请求都一样。
+Servlet 的常规模型。策略看到的是去掉上下文路径之后的请求 URI，包含 `DispatcherServlet` 的映射前缀（[请求路径](#the-request-path)）。
 
 **Spring Cloud Gateway**：同上，换成 `gateway-support`。只要网关的 `GlobalFilter` 在类路径上，starter 就注册
 `AuthorizationGatewayFilter`，不再注册 `ReactiveAuthorizationFilter`。因此关闭网关过滤器
@@ -86,7 +84,7 @@ sequenceDiagram
 
 1. 适配器收到请求。
 2. 把传输层的请求交给管道。
-3. 管道把它转换成 CoSec 的 `Request`。路径含遍历片段时到此为止，返回 `400`。否则取调用方的 `CoSec-Request-Id`
+3. 管道把它转换成 CoSec 的 `Request`（[请求路径](#the-request-path)）。路径含遍历片段时到此为止，返回 `400`。否则取调用方的 `CoSec-Request-Id`
    或生成一个，解析[客户端 IP](#client-ip-behind-proxies)，并运行每个[请求属性](#request-attributes) appender。
 4. 安全上下文解析器读取凭证：配置了 API key 且请求带了 API key 时用它，否则用令牌（[认证](./authentication.md#tokens)）。
    启用令牌吊销或阻塞式 API key 存储时，响应式适配器在 `boundedElastic` 上执行这一步，不占用事件循环。
@@ -100,6 +98,23 @@ sequenceDiagram
 10. 请求继续到你的处理器，或者路由的下游服务。
 11. 被拒绝或失败的请求得到状态码和 JSON 响应体，不会到达你的处理器。
 
+## 请求路径 {#the-request-path}
+
+`path` 动作和 `request.path` 这个 part 看到的路径，在每个适配器上都一样，只是起点不同：
+
+| 适配器 | 路径 |
+|---|---|
+| Spring MVC | 去掉 Servlet 上下文路径（`server.servlet.context-path`）之后的请求 URI。它保留 `DispatcherServlet` 的映射前缀：设置 `spring.mvc.servlet.path=/api` 时，`/api/admin/users` 按 `/api/admin/users` 匹配。 |
+| WebFlux、Gateway | 完整的请求路径。 |
+
+在所有适配器上，这个路径：
+
+- **不做解码。** `path` 动作在匹配前逐段解码，但把 `request.path` 当字符串比较的条件（`eq`、`regular` 等）看到的是 `/a%20b`，
+  而不是 `/a b`。
+- **去掉 `;` 路径参数**，与 Spring 的路由一致：`/orders;jsessionid=1/42` 按 `/orders/42` 匹配。
+- **返回 `400`**：去掉路径参数之后，如果含有 `.` 或 `..` 段（包括百分号编码的形式），或百分号转义格式错误。因此 Servlet 容器会解析为
+  `/admin` 的 `/public/..;/admin` 同样被拒绝。
+
 ## 响应与状态码 {#responses-and-status-codes}
 
 所有状态码都来自 `SecurityPipeline`，适配器只是把它写到响应上。
@@ -107,10 +122,10 @@ sequenceDiagram
 | 状态码 | 何时出现 | 响应体中的 `reason` |
 |---|---|---|
 | `200`（请求放行） | 授权决策允许。 | 无，由处理器响应 |
-| `400` | 路径含 `.` 或 `..` 片段（包括百分号编码的形式），或百分号转义格式错误（`InvalidRequestPathException`）。 | 无响应体 |
+| `400` | 路径含 `.` 或 `..` 片段（包括百分号编码的形式，或后面跟着路径参数的形式如 `..;`），或百分号转义格式错误（`InvalidRequestPathException`，见[请求路径](#the-request-path)）。 | 无响应体 |
 | `401` | 被拒绝，且调用方是匿名的：没有凭证，或凭证被拒绝。 | 凭证被拒绝时为 `Token Expired` 或 `Token Invalid`；否则为 `Implicit Deny` 或 `Explicit Deny` |
 | `403` | 被拒绝，且调用方已认证。 | `Implicit Deny` 或 `Explicit Deny` |
-| `403` | 正则条件超出了时间预算（`RegexTimeoutException`），对所有调用方都是如此，匿名调用方也一样。这是预期内的拒绝，不是服务端错误。 | `Implicit Deny` |
+| `401`、`403` | 正则条件超出了时间预算（`RegexTimeoutException`）。这是隐式拒绝，与上面两行的映射相同，不是服务端错误。 | 同上面两行 |
 | `429` | 请求本已允许，但匹配的[限流规则](../policies/rate-limiting.md)没有剩余许可。 | `Too Many Requests` |
 | `500` | 其他任何错误。CoSec 失败即拒绝，而不是去猜。 | `Implicit Deny` |
 
@@ -118,10 +133,12 @@ sequenceDiagram
 
 - `MissingPolicyException`：主体（或全局策略索引）列出了仓库里没有的策略。它可能正是挡住这个请求的拒绝策略，所以
   CoSec 不会在缺少它的情况下求值。
+- `MissingPermissionException`：主体的某个角色被授予了其应用没有定义的权限 id
+  （[把权限授予角色](../policies/role-permissions.md#granting-permissions-to-roles)）。
 - `CacheReadException`：策略或权限不在本地缓存里且读不到 Redis，或者存储的值无法解码（例如没有迁移的 6.x 数据）。
   见 [Redis 不可用时](../operations/storage.md#when-redis-is-unavailable)。
-- `PathVariableScopeException`：存储的策略或权限在作用域之外读取 `request.path.var.*`，读取时被拒绝
-  （[路径变量](../policies/language.md#path-variables)）。
+- `PathVariableScopeException`，或不支持的条件 part：旧版本存储的策略或权限违反了 7.0 在加载时检查的规则，因此读取时被拒绝
+  （[路径变量](../policies/language.md#path-variables)、[part](../policies/language.md#parts)）。
 - 抛出异常的自定义匹配器、仓库或 API key 存储（包括连不上 Redis 的 Redis API key 存储）。
 
 为什么出错就拒绝，见[失败即拒绝](../guide/security-model.md#fail-closed)；两个有意为之的例外，见[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)。每个状态码的常见原因见

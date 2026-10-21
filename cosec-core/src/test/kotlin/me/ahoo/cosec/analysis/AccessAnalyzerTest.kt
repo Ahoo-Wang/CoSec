@@ -15,6 +15,7 @@ package me.ahoo.cosec.analysis
 
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
+import me.ahoo.cosec.api.permission.MissingPermissionException
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.principal.SimplePrincipal
@@ -146,6 +147,21 @@ class AccessAnalyzerTest {
             AccessAnalyzer(policies = emptyList(), roles = mapOf("manage" to mapOf("admin@a@b" to setOf("*"))))
         }
         error.message.assert().contains("admin@a@b").contains("manage")
+    }
+
+    @Test
+    fun grantOfAnUndefinedPermissionFails() {
+        // Authorization fails closed on such a grant, so the review must not quietly leave it out.
+        val error = assertThrows(MissingPermissionException::class.java) {
+            AccessAnalyzer.load(
+                policyLocations = listOf("classpath:cosec-analysis/*-policy.json"),
+                appPermissionLocations = listOf("classpath:cosec-policy/test-app-permission.json"),
+                roles = mapOf("manage" to mapOf("shipper@team-a" to setOf("manage.order.ship", "manage.order.typo"))),
+            )
+        }
+        error.appId.assert().isEqualTo("manage")
+        error.roleId.assert().isEqualTo("shipper@team-a")
+        error.permissionIds.assert().containsExactly("manage.order.typo")
     }
 
     @Test

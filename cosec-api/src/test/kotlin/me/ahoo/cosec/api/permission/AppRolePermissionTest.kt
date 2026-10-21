@@ -18,6 +18,7 @@ import io.mockk.mockk
 import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 class AppRolePermissionTest {
 
@@ -68,7 +69,7 @@ class AppRolePermissionTest {
             override val appPermission: AppPermission = appPermission
             override val rolePermissions: List<RolePermission> = listOf(
                 rolePermissionOf("reader", "permission:read"),
-                rolePermissionOf("writer", "permission:write", "permission:unknown"),
+                rolePermissionOf("writer", "permission:write"),
             )
         }
 
@@ -76,5 +77,42 @@ class AppRolePermissionTest {
 
         indexer.getValue("reader").assert().containsExactly(readPermission)
         indexer.getValue("writer").assert().containsExactly(writePermission)
+    }
+
+    @Test
+    fun undefinedPermissionIdFailsTheIndex() {
+        // Skipping the id could drop a deny the role is meant to carry.
+        val appPermission = mockk<AppPermission> {
+            every { id } returns "app"
+            every { permissionIndexer } returns mapOf("permission:write" to mockk<Permission>())
+        }
+        val appRolePermission = object : AppRolePermission {
+            override val appPermission: AppPermission = appPermission
+            override val rolePermissions: List<RolePermission> = listOf(
+                rolePermissionOf("writer", "permission:write", "permission:unknown"),
+            )
+        }
+
+        val error = assertThrows<MissingPermissionException> { appRolePermission.rolePermissionIndexer }
+
+        error.appId.assert().isEqualTo("app")
+        error.roleId.assert().isEqualTo("writer")
+        error.permissionIds.assert().containsExactly("permission:unknown")
+    }
+
+    @Test
+    fun wildcardIgnoresOtherIds() {
+        val writePermission = mockk<Permission>()
+        val appPermission = mockk<AppPermission> {
+            every { permissionIndexer } returns mapOf("permission:write" to writePermission)
+        }
+        val appRolePermission = object : AppRolePermission {
+            override val appPermission: AppPermission = appPermission
+            override val rolePermissions: List<RolePermission> = listOf(
+                rolePermissionOf("admin", AppRolePermission.ALL_PERMISSION_ID, "permission:unknown"),
+            )
+        }
+
+        appRolePermission.rolePermissionIndexer.getValue("admin").assert().containsExactly(writePermission)
     }
 }

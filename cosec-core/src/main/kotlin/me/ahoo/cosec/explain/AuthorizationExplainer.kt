@@ -138,8 +138,8 @@ class AuthorizationExplainer(
     private fun explanation(decision: SecurityDecision, trace: Trace, narrator: Narrator): Explanation {
         val warnings = trace.warnings.toMutableList()
         val decidedBy = decision.verifyContext?.toDecisionRef()
-        // A matcher error or a missing principal policy aborts real authorization (fail closed), which the trace
-        // does not model: it narrates the policies that were found.
+        // A matcher error, a missing principal policy or a missing granted permission aborts real authorization
+        // (fail closed), which the trace does not model: it narrates the policies and permissions that were found.
         val aborted = warnings.any { it.code in ABORTING_WARNINGS }
         if (!aborted && decidedBy != trace.decidedBy) {
             warnings += ExplainWarning(
@@ -349,6 +349,9 @@ class AuthorizationExplainer(
                     },
                 )
             }
+            if (state == LayerState.EVALUATED && conditionMatched == true) {
+                warnMissingPermission(appRolePermission, roles)
+            }
             val matched = if (conditionMatched == true) {
                 firstDecisive(roles) { role ->
                     role.permissions.map { permission ->
@@ -371,6 +374,35 @@ class AuthorizationExplainer(
                 conditionMatched = conditionMatched,
                 roles = roles,
             )
+        }
+
+        /**
+         * Real authorization looks the granted ids up in its deny pass, in grant order, and fails on the first one the
+         * catalog does not define, unless a deny matched before it. [roles] narrate the defined ids in that order.
+         */
+        private fun warnMissingPermission(appRolePermission: AppRolePermission, roles: List<RoleTrace>) {
+            val appPermission = appRolePermission.appPermission
+            val permissionIndexer = appPermission.permissionIndexer
+            appRolePermission.rolePermissions.zip(roles).forEach { (rolePermission, role) ->
+                val traces = role.permissions.iterator()
+                val grantsAll = rolePermission.permissions.contains(AppRolePermission.ALL_PERMISSION_ID)
+                val permissionIds = if (grantsAll) permissionIndexer.keys else rolePermission.permissions
+                for (permissionId in permissionIds) {
+                    if (!permissionIndexer.containsKey(permissionId)) {
+                        val missing = rolePermission.permissions.filterNot { permissionIndexer.containsKey(it) }
+                        warnings += ExplainWarning(
+                            ExplainWarningCode.MISSING_PERMISSION,
+                            "Role [${rolePermission.id}] is granted permissions $missing, which app " +
+                                "[${appPermission.id}] does not define; authorization fails closed.",
+                        )
+                        return
+                    }
+                    val trace = traces.next()
+                    if (trace.effect == Effect.DENY && trace.outcome == StatementOutcome.MATCHED) {
+                        return
+                    }
+                }
+            }
         }
 
         /** Deny-first: the first matched deny in source order, otherwise the first matched allow. */
@@ -454,7 +486,11 @@ class AuthorizationExplainer(
     }
 
     private companion object {
-        val ABORTING_WARNINGS = setOf(ExplainWarningCode.MATCHER_ERROR, ExplainWarningCode.MISSING_POLICY)
+        val ABORTING_WARNINGS = setOf(
+            ExplainWarningCode.MATCHER_ERROR,
+            ExplainWarningCode.MISSING_POLICY,
+            ExplainWarningCode.MISSING_PERMISSION,
+        )
         val POLICY_LAYERS = listOf(
             ExplainLayer.GLOBAL_POLICY,
             ExplainLayer.PRINCIPAL_POLICY,

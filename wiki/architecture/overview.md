@@ -180,7 +180,8 @@ implementations in `cosec-cocache` are built on [CoCache 6](https://cocache.ahoo
   request continues on `boundedElastic`.
 - **Missing data fails, it is not skipped.** A principal policy the repository does not return fails authorization
   with `MissingPolicyException` (the pipeline answers `500`). The global policy index is read the same way: an
-  indexed id without content fails, because the missing policy might be a global `DENY`.
+  indexed id without content fails, because the missing policy might be a global `DENY`. A role grant naming a
+  permission id its app does not define fails the same way, with `MissingPermissionException`.
 - **Concurrent publishes cannot widen access.** The global policy index is a CoCache `SetCache` updated with atomic
   `add` / `remove`, and the content is written before the index entry. Readers apply only indexed policies whose
   content is of type `global` (`GlobalPolicyConsistencyTest`, `GlobalPolicyIndexConcurrencyIntegrationTest`).

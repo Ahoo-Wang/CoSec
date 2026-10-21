@@ -143,7 +143,7 @@ cosec:
 | 候选文件（默认位置） | 效果 |
 |---|---|
 | 策略，`classpath:cosec-shadow/*-policy.json` | 替换 `id` 相同的正在执行的策略。新 `id` 会被加入：类型是 `global` 时作为全局策略，否则作用于列出它的主体。要试验删除一个策略，给它的候选不写任何语句。 |
-| 应用权限，`classpath:cosec-shadow/*-app-permission.json` | 替换应用 `id` 相同的正在执行的目录和条件。角色授权保持不变，所以授予了被候选删除的权限的授权什么也不授予。角色授权本身无法做影子试验。 |
+| 应用权限，`classpath:cosec-shadow/*-app-permission.json` | 替换应用 `id` 相同的正在执行的目录和条件。角色授权保持不变，所以引用了被候选删除的权限的授权会让候选以 `CANDIDATE_ERROR` 失败，与执行时会失败一样（[把权限授予角色](./role-permissions.md#granting-permissions-to-roles)）。角色授权本身无法做影子试验。 |
 
 每个文件一个策略或一个应用权限，格式与正在执行的相同。
 

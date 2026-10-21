@@ -27,13 +27,13 @@ Every decision names the rule that made it. Before anything else:
 
 | Status | Reason | Go to |
 |---|---|---|
-| `400` | — | The path has `.` or `..` segments or a malformed percent-escape. Fix the client. |
+| `400` | — | The path has `.` or `..` segments (also before a `;` path parameter, as in `..;`) or a malformed percent-escape ([The request path](../integration/web.md#the-request-path)). Fix the client. |
 | `401` | `Token Expired`, `Token Invalid` | [Unexpected 401](#unexpected-401) |
-| `401` | `Implicit Deny` | No credential was found, and no rule allows anonymous access: [Unexpected 401](#unexpected-401) |
+| `401` | `Implicit Deny` | No credential was found, and no rule allows anonymous access, or a `regular` condition timed out: [Unexpected 401](#unexpected-401) |
 | `401`, `403` | `Explicit Deny` | A deny matched: [Unexpected 403](#unexpected-403) |
 | `403` | `Implicit Deny` | Nothing allowed the request, or a `regular` condition timed out: [Unexpected 403](#unexpected-403) |
 | `429` | `Too Many Requests` | [Rate limits behave unexpectedly](#rate-limits-behave-unexpectedly) |
-| `500` | `Implicit Deny` | An error during authorization: [Every request fails with 500](#every-request-fails-with-500), [One principal always gets 500](#one-principal-always-gets-500) |
+| `500` | `Implicit Deny` | An error during authorization: [Every request fails with 500](#every-request-fails-with-500), [One principal always gets 500](#one-principal-always-gets-500), [Every request of one role fails with 500](#every-request-of-one-role-fails-with-500) |
 
 How decisions map to statuses and response bodies is defined once, for every adapter, in
 [Responses and status codes](../integration/web.md#responses-and-status-codes).
@@ -47,18 +47,21 @@ The caller was treated as anonymous: the credential was missing, or rejected.
 2. **`Token Invalid`**: the issuer and this service must share `cosec.jwt.secret` and `cosec.jwt.algorithm`. A
    revoked token is also reported as invalid.
 3. **`Token Expired`**: refresh it ([Refreshing tokens](../integration/authentication.md#refreshing-tokens)), or check the clocks and `cosec.jwt.token-validity.access`.
+   A refresh that fails with `RefreshTokenMismatchException` was sent a refresh token issued with another access
+   token: send the pair that was issued together.
 4. **`Token Invalid` with an API key**: the key's SHA-256 is not configured, or the key is disabled or expired
    ([API keys](../integration/authentication.md#api-keys)). A request carrying `X-API-Key` ignores its JWT.
 5. **A logged-out token still works on another instance.** A revocation reaches every instance through an
    invalidation message; if that message is lost, a cached "not revoked" answer lives at most 30 seconds
    ([Storage](./storage.md#the-caches)).
 6. **No credential at all, `Implicit Deny`**: no rule allows anonymous access to this path. Send a credential, or
-   allow the path for anonymous callers on purpose.
+   allow the path for anonymous callers on purpose. If an allow should have matched, check its `regular`
+   conditions: one that timed out denies like any other deny (see [Unexpected 403](#unexpected-403)).
 
 ## Unexpected 403
 
 The caller is known, and nothing allowed the request, or something denied it. An anonymous caller gets `401` for the
-same causes, except a `regular` condition that timed out, which answers `403` for every caller.
+same causes.
 
 1. **Read the deciding rule** in the audit event or the explanation. `Explicit Deny` names the deny that won. A deny
    wins across all layers, so a global allow cannot override it ([Deny first](../guide/security-model.md#deny-first)).
@@ -72,8 +75,8 @@ same causes, except a `regular` condition that timed out, which answers `403` fo
      without the header, only roles without a suffix. The explanation warns `NO_ROLE_IN_SPACE` or
      `NO_APP_PERMISSION` ([Role grant scope](../policies/role-permissions.md#role-grant-scope));
    - `inTenant` takes a tenant *kind* (`default`, `user`, `platform`), not a tenant id.
-3. **A `regular` condition that timed out** denies with `403` and the reason code `REGEX_TIMEOUT` in the audit event.
-   Simplify the pattern.
+3. **A `regular` condition that timed out** denies (`401` for an anonymous caller) with the reason code
+   `REGEX_TIMEOUT` in the audit event. Simplify the pattern.
 4. **After upgrading to 7.0**, role grants that were not migrated to an app are missing there
    ([Migrating role grants](./upgrading.md#migrating-role-grants)).
 
@@ -121,8 +124,8 @@ Find the exception in the application log: CoSec logs
 |---|---|---|
 | Redis connection errors | Redis is unreachable and the value is not in the local copy. Policy and permission reads fail closed on purpose ([Storage](./storage.md#when-redis-is-unavailable)). | Restore Redis. |
 | `CacheReadException` caused by `ForeignFormatException` | The value was written by CoSec 6.x and not migrated, or written with plain Redis commands. | [Migrate the data](./upgrading.md#migrating-the-data), or write it again through CoSec. |
-| `MissingPolicyException`, after the error log `the global policy index lists policies [...] that have no content.` | A global policy's content was lost, or not migrated from 6.x (a 6.x cached miss migrates as a miss). It may be a global deny, so CoSec fails rather than skips it ([Global policy index](./storage.md#the-global-policy-index)). | Write the policy again with `PolicyRepository.setPolicy`; to drop it instead, save it with a type other than `global`, which removes it from the index. |
-| `Unsupported part: <part>` | A condition names a part that does not exist ([Parts](../policies/language.md#parts)). | Fix the policy; [validate policies](../policies/testing.md#validating-policies) before deploying. |
+| `MissingPolicyException: The global policy index lists policies [...] that have no content.` (`source` is `GLOBAL_POLICY_INDEX`) | A global policy's content was lost, or not migrated from 6.x (a 6.x cached miss migrates as a miss). It may be a global deny, so CoSec fails rather than skips it ([Global policy index](./storage.md#the-global-policy-index)). | Write the policy again with `PolicyRepository.setPolicy`; to drop it instead, save it with a type other than `global`, which removes it from the index. |
+| `Condition [<type>] part [<part>] is not a supported part` while reading a policy | A policy stored by a version before 7.0 names a part that does not exist ([Parts](../policies/language.md#parts)). Since 7.0 such a condition fails when the policy loads, so a local file stops startup and `setPolicy` rejects it. | Fix and save the policy again; [validate policies](../policies/testing.md#validating-policies) before deploying. |
 | `PathVariableScopeException` naming a policy and statement | A stored policy reads `request.path.var.*` outside its scope, which 7.0 rejects ([Path variables](../policies/language.md#path-variables)). | Fix and save the policy again. |
 | an exception from your code | A custom matcher, repository or `ApiKeyStore` threw. | The stack trace names it. |
 
@@ -131,13 +134,25 @@ With the Redis API key store, a Redis failure during the key lookup also answers
 ## One principal always gets 500
 
 The log shows `MissingPolicyException`:
-`The principal lists policies [...], which the policy repository does not have.` (When the log line before it says
-`the global policy index lists policies [...]`, the missing policy is a global one and every request fails: see
-[Every request fails with 500](#every-request-fails-with-500).) The principal lists a policy that
+`The principal lists policies [...], which the policy repository does not have.`, and its `source` is `PRINCIPAL`.
+(When it reads `The global policy index lists policies [...] that have no content.` instead, the missing policy is a
+global one and every request fails: see [Every request fails with 500](#every-request-fails-with-500).) The principal
+lists a policy that
 was deleted, never written, or lost from Redis. Authorization fails closed rather than skipping it, because a missing
 deny would otherwise let a broader allow through. Write the policy again (for local policies, see
 [Policy has no effect](#policy-has-no-effect)), or remove the id from the principal's token or record. An
 explanation reports it as a `MISSING_POLICY` warning.
+
+## Every request of one role fails with 500
+
+The log shows `MissingPermissionException`:
+`Role [<role>] is granted permissions [...], which app [<app>] does not define.` The role's grant in that app names a
+permission id that the app's catalog does not have: it was removed from the catalog, or the id is mistyped. A request
+of a principal holding the role fails whenever the role layer is evaluated and no deny matched first, rather than
+skipping the id, because a missing deny would otherwise let a broader allow through. A request outside the app's
+condition, or already denied, is not affected
+([Granting permissions to roles](../policies/role-permissions.md#granting-permissions-to-roles)). Add the permission to
+the app's catalog, or remove the id from the role's grant. An explanation reports it as a `MISSING_PERMISSION` warning.
 
 ## Startup failures
 
@@ -145,7 +160,7 @@ explanation reports it as a `MISSING_POLICY` warning.
 
 | Message | Cause |
 |---|---|
-| `Failed to load policy [<file>]: <reason>` | A local policy file cannot be parsed or built: malformed JSON, an unknown action or condition type, or an invalid option. The cause below says which. |
+| `Failed to load policy [<file>]: <reason>` | A local policy file cannot be parsed or built: malformed JSON, an unknown action or condition type, an invalid option, or an unsupported condition part (`Condition [<type>] part [<part>] is not a supported part`). The cause below says which. |
 | `Policy id [<id>] is declared more than once: [<files>].` | Two local policy files declare the same id. Give each its own id, or remove the copy. |
 | `Policy location [<location>] matches no file.` | A location in `cosec.authorization.local-policy.locations` does not exist or its pattern matches nothing, usually a typo. Only the default may match nothing. |
 | `Rate limit rule location [<location>] matches no file.`, `Rate limit rule id [<id>] is declared more than once: [...]` | The same for `cosec.limiter.locations`. |
@@ -210,6 +225,13 @@ from a secret store, or turn JWT off with `cosec.jwt.enabled=false` ([Configurat
 
 CoCache 6 removed or renamed several 5.x properties, such as `cocache.redis.strict-failure`; the error names the
 replacement ([Configuration](./configuration.md#cocache-properties-that-affect-cosec)).
+
+## Publishing a policy fails with a reserved id
+
+`Policy id [history:...] must not start with [history:], which holds the policy history.`: the policy history keeps
+the revisions of policy `<id>` under `<prefix>:policy:history:<id>` ([Redis keys](./storage.md#redis-keys)), so ids
+starting with `history:` are reserved. Rename the policy (for example `policy-history-...`) and update the principals
+that list it.
 
 ## Publishing a policy fails before the migration
 

@@ -4,8 +4,9 @@
     "classpath:cosec-policy/test-app-permission.json",
     "classpath:cosec-policy-test/spaces/billing-app-permission.json"
   ],
-  "roles": { "shipper@team-a": ["manage.order.ship"] },
-  "appRoles": { "manage": { "invoicer": ["manage.order.issueInvoice"] } },
+  "appRoles": {
+    "manage": { "shipper@team-a": ["manage.order.ship"], "invoicer": ["manage.order.issueInvoice"] }
+  },
   "cases": [
     {
       "name": "a role in team-a ships in team-a",

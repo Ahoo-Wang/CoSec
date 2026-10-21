@@ -27,6 +27,7 @@ Each row is one change; the link leads to what it means and what to do.
 | Change | In one sentence |
 |---|---|
 | [Missing principal policies fail](#missing-principal-policies-fail) | A policy id a principal lists but the repository lacks now fails authorization with `500` instead of being skipped. |
+| [Missing role permissions fail](#missing-role-permissions-fail) | A permission id a role is granted but its app's catalog lacks now fails authorization with `500` instead of being skipped. |
 | [Root is off, platform-only, and blacklisted](#root-is-off-platform-only-and-blacklisted) | `root-enabled` defaults to `false`, root must belong to the platform tenant, and the blacklist is checked before root. |
 | [Role grants belong to an app and a space](#role-grants-belong-to-an-app-and-a-space) | Grants move to `cosec:app:role:permission:<appId>:<roleId>[@<spaceId>]`, and a request sees only the roles written for its space. |
 | [Path variables belong to their statement](#path-variables-belong-to-their-statement) | A condition reads only the variables its own `path` action captured; anything else is a load error. |
@@ -35,7 +36,13 @@ Each row is one change; the link leads to what it means and what to do.
 | [Duplicate ids and missing locations stop startup](#duplicate-ids-and-missing-locations-stop-startup) | Two files with one policy id, or a configured location that matches no file, fail loading. |
 | [Rate limit rules and shadow candidates load strictly](#rate-limit-rules-and-shadow-candidates-load-strictly) | The same strictness applies to `cosec.limiter.locations` and `cosec.shadow.*`, and the errors become `IllegalStateException`. |
 | [Rate limit keys are checked at load](#rate-limit-keys-are-checked-at-load) | An unsupported `key` part fails when the rule loads, not on every request. |
+| [Condition parts are checked at load](#condition-parts-are-checked-at-load) | An unsupported condition `part` fails when the policy loads; a stored copy with one fails its reads. |
+| [Policy ids may not start with `history:`](#policy-ids-may-not-start-with-history) | `setPolicy` rejects them, because they would share a key with the policy history. |
 | [OpenAPI app ids replace `:`](#openapi-app-ids-replace) | An OpenAPI title such as `orders:api` gives the app id `orders-api`. |
+| [Spring MVC authorizes the request URI](#spring-mvc-authorizes-the-request-uri) | Not `servletPath`: policies see the `DispatcherServlet` prefix, and the path is no longer percent-decoded. |
+| [Path parameters are removed, and `..;` is rejected](#path-parameters-are-removed) | `/admin;x` is authorized as `/admin` on every adapter, and `/public/..;/admin` gets `400`. |
+| [A regex timeout answers `401` to anonymous callers](#a-regex-timeout-answers-401-to-anonymous-callers) | It is mapped like every other deny, no longer `403` for every caller. |
+| [A mismatched refresh token is an invalid token](#a-mismatched-refresh-token-is-an-invalid-token) | `refresh` throws `RefreshTokenMismatchException`, a `TokenVerificationException`, instead of `IllegalArgumentException`. |
 | [No rolling upgrade](#no-rolling-upgrade) | 6.x and 7.0 cannot share a cache: stop every 6.x instance, migrate, then start 7.0. |
 | [Write through CoSec, not Redis](#write-through-cosec-not-redis) | Values written with `SET` or `SADD` are not read; the cache API is CoCache 6's. |
 | [Redis 7, Lettuce, and a wider ACL](#redis-7-lettuce-and-a-wider-acl) | Redis 7.0+ (or Valkey 7.2+), no Jedis, no static master-replica, and `+hkeys +hget` in the ACL. |
@@ -56,26 +63,34 @@ Do all of this while 6.x still runs.
 2. **Policies, app permissions and rate limit rules.** Search them, including those stored in Redis, for
    `request.path.var.` and `PATH_VARIABLES`, and fix their scope ([details](#path-variables-belong-to-their-statement)).
    Check that every local policy file loads, that policy ids are unique across files, that every configured location
-   exists ([details](#duplicate-ids-and-missing-locations-stop-startup)), and that every rate limit `key` is a
-   supported part ([details](#rate-limit-keys-are-checked-at-load)).
+   exists ([details](#duplicate-ids-and-missing-locations-stop-startup)), that every rate limit `key` and every
+   condition `part` is a supported part ([details](#rate-limit-keys-are-checked-at-load),
+   [details](#condition-parts-are-checked-at-load)), and that no policy id starts with `history:`
+   ([details](#policy-ids-may-not-start-with-history)).
 3. **Principals.** Find principals (tokens, API keys, user records) that list policy ids your repository does not
    have, and write those policies or remove the ids ([details](#missing-principal-policies-fail)).
 4. **Roles.** Decide which app every 6.x role (and space) belongs to, and issue `role@space` roles in tokens and API
    keys for every non-default space ([details](#role-grants-belong-to-an-app-and-a-space)). Audit `in`, `spel` and
    `ognl` conditions over `context.principal.roles`, which see raw `role@space` strings
-   ([details](#inrole-follows-roles-into-their-space)).
+   ([details](#inrole-follows-roles-into-their-space)). Check that every permission id granted to a role (other than
+   `*`) is defined by its app's permission catalog ([details](#missing-role-permissions-fail)).
 5. **Root.** If you rely on root, enable it explicitly and issue its token in the platform tenant
    ([details](#root-is-off-platform-only-and-blacklisted)).
 6. **OpenAPI.** If an OpenAPI title contains `:`, switch clients to the new `CoSec-App-Id`
    ([details](#openapi-app-ids-replace)).
-7. **Code.** Replace direct Redis writes of app permissions and role grants with writes through CoSec
+7. **Paths and clients.** On Spring MVC with `spring.mvc.servlet.path` set, add the prefix to the paths of policies,
+   app permissions and rate limit rules ([details](#spring-mvc-authorizes-the-request-uri)). Check conditions that
+   compare `request.path` as a string ([details](#path-parameters-are-removed)), and clients that treat `401` as
+   "sign in again" ([details](#a-regex-timeout-answers-401-to-anonymous-callers)).
+8. **Code.** Replace direct Redis writes of app permissions and role grants with writes through CoSec
    ([details](#write-through-cosec-not-redis)), replace 6.x cache component beans with a `CacheSpecCustomizer` or
-   `cocache.caches.<CacheName>.*` ([details](#cosec-creates-its-caches-itself)), and change `IdGenerator`
+   `cocache.caches.<CacheName>.*` ([details](#cosec-creates-its-caches-itself)), change `IdGenerator`
    declarations that hold a `CosIdGenerator` to `StringIdGenerator`
-   ([details](#id-generators-are-stringidgenerators)).
-8. **Plan the stop.** Prepare a one-off migration job (below), and plan a window in which no 6.x instance, no 7.0
+   ([details](#id-generators-are-stringidgenerators)), and catch `TokenVerificationException` around a refresh
+   ([details](#a-mismatched-refresh-token-is-an-invalid-token)).
+9. **Plan the stop.** Prepare a one-off migration job (below), and plan a window in which no 6.x instance, no 7.0
    instance and no other writer touches CoSec's keys.
-9. **Then:** stop every writer, migrate the data, verify, then start 7.0
+10. **Then:** stop every writer, migrate the data, verify, then start 7.0
    ([Migrating the data](#migrating-the-data)). Delete legacy role grants only after every app is migrated.
 
 ### Migrating the data
@@ -308,6 +323,23 @@ Before upgrading, find principals (tokens, API keys, user records) that list pol
 have, and either write those policies or remove the ids. `PolicyRepository.getPolicies` itself is unchanged: it
 still returns the policies it found, so custom repositories need no change.
 
+#### Missing role permissions fail
+
+When a role is granted a permission id that its app's permission catalog does not define (removed from the
+catalog, or mistyped), `SimpleAuthorization` now fails with `MissingPermissionException`, which the pipeline maps to
+`500`. Before, the id was skipped: when it named a deny, a global or principal allow let the request through. A
+request of a principal holding that role in that app and space fails whenever the role layer is evaluated and no
+deny matched first: when the app's condition does not match, the layer does not apply, and a request that a deny (in
+an earlier layer, or earlier in the role layer) already matches stays denied. `*` still grants every permission.
+`AuthorizationChecker` answers `false`, an explanation reports the `500` with a `MISSING_PERMISSION` warning, and a
+shadow candidate app permission that drops a granted id reports `CANDIDATE_ERROR`. `AccessAnalyzer` and
+`PolicyTestKit` reject such grants when built or run; a test suite's `roles` are granted in every app, so each app
+must define them (use `appRoles` for ids of one app). The default `AppRolePermission.rolePermissionIndexer` throws
+the same exception.
+
+Before upgrading, compare each role grant with its app's permission catalog, and either add the missing permission
+or remove the id from the grant ([Granting permissions to roles](../policies/role-permissions.md#granting-permissions-to-roles)).
+
 #### Root is off, platform-only, and blacklisted
 
 Before, any principal whose id was `cosec` (or the `-Dcosec.root` system property) bypassed every check, including
@@ -435,11 +467,67 @@ A `key` that is not a supported part (for example `request.ip` instead of `reque
 fail every matching request with `500`, after earlier rules had spent their permits. Constructing or loading such a
 rule now fails ([Keys](../policies/rate-limiting.md#keys)).
 
+#### Condition parts are checked at load
+
+A value condition (`eq`, `in`, `contains`, `startsWith`, `endsWith`, `regular`, `path`) whose `part` is not a
+supported part (for example `request.ip` instead of `request.remoteIp`, or `request.headers.x` instead of
+`request.header.x`) used to load and then fail every matching request with `500`. Building such a matcher now fails
+with `Condition [<type>] part [<part>] is not a supported part`, as rate limit keys already did: a local policy file
+with one stops startup, `setPolicy` rejects it, and a policy stored in Redis with one fails its reads, which denies
+every request that reads the policy with `500`, not only those its statement matches. Before upgrading, search
+policies, app permissions and rate limit rule conditions for `"part"` and check each value against the
+[supported parts](../policies/language.md#parts).
+
+#### Policy ids may not start with `history:` {#policy-ids-may-not-start-with-history}
+
+The policy history stores the revisions of policy `<id>` under `<prefix>:policy:history:<id>` (and `<id>:seq`),
+inside the namespace of the policies themselves, so a policy with the id `history:<id>` would share a key with the
+history of policy `<id>` ([Redis keys](./storage.md#redis-keys)). `RedisPolicyRepository.setPolicy` now rejects such
+ids with `Policy id [...] must not start with [history:]`, and so does startup when a local policy with one is written
+to Redis. Ids such as `history` or `history-viewer` are unaffected. Rename any policy whose id starts with `history:`
+before upgrading; the 6.x migration skips such keys as policy history.
+
 #### OpenAPI app ids replace `:` {#openapi-app-ids-replace}
 
 `OpenAPIAppPermissionGenerator` derives the app id from the OpenAPI title, and app ids may no longer contain `:`. An
 app whose title contains `:` (for example `orders:api`) gets the id `orders-api`; clients must send the new id in
 `CoSec-App-Id`, and its role grants must be written for it.
+
+### Request and token changes
+
+What each request and token row of the [table](#breaking-changes) means, and what to do.
+
+#### Spring MVC authorizes the request URI
+
+The WebMvc adapter used `HttpServletRequest.servletPath`, which drops `pathInfo`. With the `DispatcherServlet` mapped
+under a prefix (`spring.mvc.servlet.path=/api`), every request was authorized as `/api`: a deny on `/api/admin/**`
+never matched, and an allow on `/api/**` let every request through. The path is now the request URI without the
+context path, as Spring MVC routes it and as WebFlux sees it ([The request path](../integration/web.md#the-request-path)).
+With the default `/` mapping the matched path is the same as before, except that it is no longer percent-decoded:
+`path` actions decode segments as before, but a condition that compares `request.path` as a string (`eq`, `regular`,
+…) now sees `/a%20b`, not `/a b`. Before upgrading an application with a servlet path, add the prefix to its
+policies, app permissions and rate limit rules.
+
+#### Path parameters are removed, and `..;` is rejected {#path-parameters-are-removed}
+
+On every adapter, `/admin;jsessionid=1` is authorized as `/admin`, as Spring routes it; before, WebFlux and Gateway
+passed it through, so a `request.path` condition could miss it. A `.` or `..` segment followed by a path parameter
+(`/public/..;/admin`), which servlet containers resolve as `..`, now answers `400` like any other traversal.
+
+#### A regex timeout answers `401` to anonymous callers {#a-regex-timeout-answers-401-to-anonymous-callers}
+
+A `regular` condition over its time budget used to answer `403` whatever the caller. It is now mapped like every
+other deny: `401` for an anonymous caller (with `Token Expired` or `Token Invalid` when its token failed
+verification), `403` for an authenticated one ([Responses and status codes](../integration/web.md#responses-and-status-codes)).
+Clients that treat `401` as "sign in again" now get it for these requests too.
+
+#### A mismatched refresh token is an invalid token
+
+`JwtTokenVerifier.refresh` threw `IllegalArgumentException` (`Illegal refreshToken.`) when the refresh token was not
+issued with the access token, so the mismatch surfaced as an unexpected error. It now throws
+`RefreshTokenMismatchException`, a `TokenVerificationException`, like every other token failure
+([Refreshing tokens](../integration/authentication.md#refreshing-tokens)). Code that caught
+`IllegalArgumentException` around a refresh catches `TokenVerificationException`.
 
 ### CoCache 6 and CosId 4
 

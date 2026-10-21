@@ -18,6 +18,7 @@ import io.mockk.mockk
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.api.permission.AppRolePermission
+import me.ahoo.cosec.api.permission.MissingPermissionException
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.context.SimpleSecurityContext
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
+import reactor.kotlin.test.test
 
 /**
  * RFC 0001, D3: role grants used to be stored per (role, space) without the app, and the client chose both app and
@@ -112,11 +114,16 @@ class RolePermissionScopeTest {
     @Test
     fun sameRoleNameIsGrantedPerApp() {
         rolePermissionCache.put(AppSpacedRoleId("blog", "editor"), setOf("posts.manage"))
-        // "posts.manage" is not a billing permission id, but a billing grant of the same role must not leak either.
+        // "posts.manage" is not a billing permission id: the billing grant does not reach the blog permission, and
+        // since billing does not define it, every billing request of the role fails closed.
         rolePermissionCache.put(AppSpacedRoleId("billing", "editor"), setOf("posts.manage"))
 
         authorized(setOf("editor"), "blog").assert().isTrue()
-        authorized(setOf("editor"), "billing").assert().isFalse()
+        val editor = SimpleSecurityContext(SimplePrincipal("alice", roles = setOf("editor")))
+        authorization.decide(request("billing"), editor)
+            .test()
+            .expectErrorMatches { it is MissingPermissionException && it.appId == "billing" && it.roleId == "editor" }
+            .verify()
     }
 
     @Test

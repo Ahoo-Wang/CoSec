@@ -116,7 +116,9 @@ A client whose access token expired sends both tokens back. `TokenVerifier.refre
 - the refresh token belongs to that access token (its `sub` is the access token's `jti`);
 - with revocation enabled, the access token was not revoked.
 
-It returns the principal from the old access token; issue new tokens for it with `TokenConverter.toToken`. The
+A failed check throws a `TokenVerificationException`; a refresh token that was issued with another access token
+throws its subclass `RefreshTokenMismatchException`. It returns the principal from the old access token; issue new
+tokens for it with `TokenConverter.toToken`. The
 starter registers no refresh endpoint. `SimpleRefreshTokenAuthentication` does the check above as an
 `Authentication`, so with it declared as a bean, a refresh is a login with credentials that implement
 `RefreshTokenCredentials`:
@@ -257,8 +259,10 @@ cosec:
 The service then registers `InjectSecurityContextFilter` (Spring MVC) or `ReactiveInjectSecurityContextWebFilter`
 (WebFlux), which bind the [security context](./web.md#accessing-the-security-context) as usual. They check the
 token's `exp` and `nbf`, but **not its signature and not revocation**. A token that cannot be read makes the
-caller anonymous, and a path with traversal segments gets `400`. Both settings are needed: with authorization still
-enabled, the service keeps verifying and authorizing every request itself.
+caller anonymous, and a path with traversal segments gets `400`. Both settings are needed: the parser that skips the
+signature check is registered only with `cosec.authorization.enabled=false`. While authorization is on, the inject
+filter uses the verifying parser, whatever the auto-configuration order, and the service keeps verifying and
+authorizing every request itself.
 
 ::: danger Trust boundary
 Without signature verification, anyone who can reach the service directly can forge any principal. Enable this

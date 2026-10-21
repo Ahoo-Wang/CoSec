@@ -162,7 +162,7 @@ All properties are in [Configuration](../operations/configuration.md#shadow-mode
 | Candidate file (default location) | Effect |
 |---|---|
 | a policy, `classpath:cosec-shadow/*-policy.json` | Replaces the enforced policy with the same `id`. A new `id` is added: as a global policy if its type is `global`, otherwise for principals that list it. To try removing a policy, give its candidate no statements. |
-| an app permission, `classpath:cosec-shadow/*-app-permission.json` | Replaces the enforced catalog and condition with the same app `id`. Role grants stay as enforced, so a grant naming a permission the candidate removed grants nothing. Role grants themselves cannot be shadowed. |
+| an app permission, `classpath:cosec-shadow/*-app-permission.json` | Replaces the enforced catalog and condition with the same app `id`. Role grants stay as enforced, so a grant naming a permission the candidate removed makes the candidate fail with `CANDIDATE_ERROR`, as it would fail enforced ([Granting permissions to roles](./role-permissions.md#granting-permissions-to-roles)). Role grants themselves cannot be shadowed. |
 
 One policy or app permission per file, in the same format as the enforced ones.
 
