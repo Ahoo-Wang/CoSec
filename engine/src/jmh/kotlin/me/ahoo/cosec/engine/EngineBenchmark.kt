@@ -39,7 +39,9 @@ import org.openjdk.jmh.annotations.State
  * - `none`: nothing matches, an implicit deny
  *
  * `impl`: `off` is [CoSecEngine] at [TraceLevel.OFF]; `control` is [ControlEngine], the same algorithm without trace
- * code; `full` is [CoSecEngine] at [TraceLevel.FULL], for reference only.
+ * code; `full` is [CoSecEngine] at [TraceLevel.FULL], for reference only; `off-mixed` makes every 100th call a FULL
+ * one, as an application that explains some decisions would, so the JIT sees both evaluators on the same call sites.
+ * Its expected cost is 0.99 × `off` + 0.01 × `full`; more than that means tracing slows the untraced path down.
  *
  * Expected allocation for `off`: independent of `statements`, and growing with `groups` by no more than the guard
  * bitmap (none up to 64 groups, a `LongArray` beyond).
@@ -52,12 +54,13 @@ open class EngineBenchmark {
     @Param("10x10", "10x100", "10x1000", "64x10", "65x10", "640x10")
     lateinit var shape: String
 
-    @Param("off", "control", "full")
+    @Param("off", "control", "full", "off-mixed")
     lateinit var impl: String
 
     private lateinit var request: AuthzRequest
     private lateinit var policies: PolicySet
     private lateinit var engine: (AuthzRequest, PolicySet) -> Evaluation
+    private var calls = 0
 
     @Setup
     fun setup() {
@@ -93,6 +96,10 @@ open class EngineBenchmark {
             "off" -> { request, policies -> CoSecEngine.evaluate(request, policies, TraceLevel.OFF) }
             "control" -> { request, policies -> ControlEngine.evaluate(request, policies) }
             "full" -> { request, policies -> CoSecEngine.evaluate(request, policies, TraceLevel.FULL) }
+            "off-mixed" -> { request, policies ->
+                val level = if (++calls % MIXED_FULL_EVERY == 0) TraceLevel.FULL else TraceLevel.OFF
+                CoSecEngine.evaluate(request, policies, level)
+            }
             else -> error("Unknown impl $impl")
         }
         // Also loads the tracing evaluator, as an application that explains decisions would, so its hooks are not
@@ -102,6 +109,10 @@ open class EngineBenchmark {
 
     @Benchmark
     fun evaluate(): Evaluation = engine(request, policies)
+
+    private companion object {
+        const val MIXED_FULL_EVERY = 100
+    }
 
     private fun effectOf(statement: Int) = if (statement % 2 == 0) Effect.DENY else Effect.ALLOW
 

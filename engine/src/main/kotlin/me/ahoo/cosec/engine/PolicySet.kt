@@ -27,6 +27,9 @@ import me.ahoo.cosec.model.LayerKind
 /**
  * The layers to evaluate, in the order [LayerKind] declares: global, principal, role.
  * A set may leave layers out, for example to evaluate a single policy, but never reorders or repeats them.
+ *
+ * [layers] is used as given, not copied: a copy would allocate on every request. The caller must not change it, or any
+ * [LayerInput.Loaded.groups], while the set may still be evaluated.
  */
 class PolicySet(val layers: List<LayerInput>) {
     init {
@@ -59,6 +62,8 @@ sealed interface LayerInput {
      * When [missing] is set, an evaluation that reaches this layer is [me.ahoo.cosec.model.Decision.Indeterminate]
      * before any guard runs: a missing policy may be the deny that keeps the request out (D2). A role granting a
      * permission its app does not define is an [UnresolvedGrant] among the rules instead, where the grant is.
+     *
+     * [groups] is used as given, not copied; the caller must not change it while the layer may still be evaluated.
      */
     class Loaded(
         override val kind: LayerKind,
