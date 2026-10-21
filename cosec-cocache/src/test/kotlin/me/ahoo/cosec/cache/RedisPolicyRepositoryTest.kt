@@ -73,7 +73,13 @@ internal class RedisPolicyRepositoryTest {
         caches.globalPolicyIndexCache.add(CACHE_KEY, listOf("orphan"))
         repository.getGlobalPolicy()
             .test()
-            .expectErrorMatches { it is MissingPolicyException && it.policyIds == setOf("orphan") }
+            .expectErrorSatisfies {
+                it.assert().isInstanceOf(MissingPolicyException::class.java)
+                (it as MissingPolicyException).policyIds.assert().containsExactly("orphan")
+                // Not the principal's doing: the message must point at the global policy index.
+                it.source.assert().isEqualTo(MissingPolicyException.Source.GLOBAL_POLICY_INDEX)
+                it.message.assert().startsWith("The global policy index lists policies [orphan]")
+            }
             .verify()
     }
 
@@ -164,5 +170,26 @@ internal class RedisPolicyRepositoryTest {
 
         caches.policyCache["leaking"].assert().isNull()
         caches.globalPolicyIndexCache[CACHE_KEY].assert().isEmpty()
+    }
+
+    @Test
+    fun setPolicyRejectsIdsInThePolicyHistoryNamespace() {
+        // `<p>:policy:history:<id>` holds the revisions of policy <id>: a policy `history:<id>` would share its key.
+        listOf("history:orders", "history:orders:seq", "history:").forEach { id ->
+            repository.setPolicy(policy(id, PolicyType.GLOBAL))
+                .test()
+                .expectErrorMatches { it is IllegalArgumentException && it.message.orEmpty().contains("[$id]") }
+                .verify()
+            caches.policyCache[id].assert().isNull()
+        }
+        caches.globalPolicyIndexCache[CACHE_KEY].assert().isEmpty()
+    }
+
+    @Test
+    fun setPolicyAcceptsIdsThatOnlyStartWithHistory() {
+        listOf("history", "history-viewer", "History:orders").forEach { id ->
+            repository.setPolicy(policy(id, PolicyType.CUSTOM)).block()
+            caches.policyCache[id].assert().isNotNull()
+        }
     }
 }

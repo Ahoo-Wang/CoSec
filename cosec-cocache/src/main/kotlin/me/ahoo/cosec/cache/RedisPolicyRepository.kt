@@ -31,6 +31,12 @@ class RedisPolicyRepository(
 ) : PolicyRepository {
     companion object {
         private val log = KotlinLogging.logger {}
+
+        /**
+         * Policy ids may not start with this: the policy history keeps the revisions of policy `<id>` under
+         * `<keyPrefix>:policy:history:<id>`, inside the policy namespace, so policy `history:<id>` would share its key.
+         */
+        const val RESERVED_POLICY_ID_PREFIX = "history:"
     }
 
     /**
@@ -64,7 +70,7 @@ class RedisPolicyRepository(
         if (policies.size != policyIds.size) {
             val missing = policyIds.toSet() - policies.map { it.id }.toSet()
             log.error { "getGlobalPolicy - the global policy index lists policies $missing that have no content." }
-            throw MissingPolicyException(missing)
+            throw MissingPolicyException(missing, MissingPolicyException.Source.GLOBAL_POLICY_INDEX)
         }
         return policies.filter { it.type == PolicyType.GLOBAL }
     }
@@ -95,6 +101,9 @@ class RedisPolicyRepository(
         return Mono.fromRunnable<Void> {
             log.info {
                 "setPolicy - policy: [${policy.id}]."
+            }
+            require(!policy.id.startsWith(RESERVED_POLICY_ID_PREFIX)) {
+                "Policy id [${policy.id}] must not start with [$RESERVED_POLICY_ID_PREFIX], which holds the policy history."
             }
             DefaultPolicyEvaluator.evaluate(policy)
             val policyIds = listOf(policy.id)

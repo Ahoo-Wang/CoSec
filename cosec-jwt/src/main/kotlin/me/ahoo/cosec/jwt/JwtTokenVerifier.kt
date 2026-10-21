@@ -22,6 +22,7 @@ import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.jwt.Jwts.removeBearerPrefix
+import me.ahoo.cosec.token.RefreshTokenMismatchException
 import me.ahoo.cosec.token.TokenVerifier
 
 /**
@@ -64,7 +65,9 @@ class JwtTokenVerifier(
         val decodedRefreshToken: DecodedJWT = verify(token.refreshToken)
         val decodedAccessToken = Jwts.decode(token.accessToken)
         verifyAccessTokenSignature(decodedAccessToken)
-        require(decodedRefreshToken.subject == decodedAccessToken.id) { "Illegal refreshToken." }
+        if (decodedRefreshToken.subject != decodedAccessToken.id) {
+            throw RefreshTokenMismatchException()
+        }
         return Jwts.toPrincipal(decodedAccessToken)
     }
 

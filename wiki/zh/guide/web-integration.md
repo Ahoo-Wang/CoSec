@@ -11,6 +11,11 @@ CoSec 接入 Spring WebFlux、Spring MVC 和 Spring Cloud Gateway。三者运行
 
 classpath 上有 Spring Cloud Gateway 时，网关过滤器取代 WebFlux 过滤器。
 
+**策略看到的路径**（`request.path` 和 `path` 动作）是请求发来时的路径，保持百分号编码，并去掉 `;` 路径参数
+（`/orders;jsessionid=1/42` 视为 `/orders/42`）。在 Spring MVC 上，它是去掉 Servlet context path 之后的请求 URI，
+因此保留 `DispatcherServlet` 的映射前缀：设置 `spring.mvc.servlet.path=/api` 时，`/api/admin/users` 按 `/api/admin/users` 匹配。
+在 WebFlux 和 Gateway 上，它是完整的请求路径。
+
 ## 响应 {#responses}
 
 通过路径校验的每个请求都会带上 `CoSec-Request-Id` 响应头：调用方传了就沿用，否则生成一个。网关还会把它转发给下游服务。
@@ -19,11 +24,11 @@ classpath 上有 Spring Cloud Gateway 时，网关过滤器取代 WebFlux 过滤
 
 | 情形 | 状态码 | 原因 |
 |---|---|---|
-| 路径含 `.` 或 `..` 段（包括百分号编码形式），或百分号转义格式错误 | `400` | —（无响应体） |
+| 路径含 `.` 或 `..` 段（包括百分号编码形式，或带路径参数的形式如 `..;`），或百分号转义格式错误 | `400` | —（无响应体） |
 | 被拒绝，匿名调用方 | `401` | `Implicit Deny`、`Explicit Deny`、`Token Expired` 或 `Token Invalid` |
 | 被拒绝，已认证调用方 | `403` | `Implicit Deny` 或 `Explicit Deny` |
 | [限流](./rate-limiting.md)许可用尽 | `429` | `Too Many Requests` |
-| 正则条件超出时间预算 | `403` | `Implicit Deny` |
+| 正则条件超出时间预算 | 匿名 `401`，已认证 `403` | `Implicit Deny` |
 | 其他任何错误（包括策略存储不可达，或主体引用的策略在存储中不存在） | `500` | `Implicit Deny` |
 
 有限流规则匹配时，放行和拒绝的响应都会带上 `RateLimit-Limit`、`RateLimit-Remaining` 和 `RateLimit-Reset` 响应头，
@@ -66,6 +71,7 @@ val securityContext = httpServletRequest.getSecurityContext()
 
 **不做授权时。** 位于校验网关之后的服务可以启用
 [`cosec.inject.enabled`](./authentication.md#behind-a-gateway)，只填充安全上下文而不执行授权。
+跳过签名校验的解析器只在 `cosec.authorization.enabled=false` 时使用；只要授权开启，inject 过滤器就使用会校验签名的解析器，与自动配置的顺序无关。
 
 ## 在代码中检查权限 {#checking-permissions-in-code}
 

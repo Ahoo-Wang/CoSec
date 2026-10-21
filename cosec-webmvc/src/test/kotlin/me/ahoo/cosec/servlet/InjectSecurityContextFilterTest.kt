@@ -39,7 +39,8 @@ internal class InjectSecurityContextFilterTest {
         val filter =
             InjectSecurityContextFilter(ServletRequestParser(ServletRemoteIpResolver), InjectSecurityContextParser)
         val request = mockk<HttpServletRequest> {
-            every { servletPath } returns "/path"
+            every { requestURI } returns "/path"
+            every { contextPath } returns ""
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -66,7 +67,8 @@ internal class InjectSecurityContextFilterTest {
         val filter =
             InjectSecurityContextFilter(ServletRequestParser(ServletRemoteIpResolver), InjectSecurityContextParser)
         val request = mockk<HttpServletRequest> {
-            every { servletPath } returns "/path"
+            every { requestURI } returns "/path"
+            every { contextPath } returns ""
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
@@ -86,7 +88,8 @@ internal class InjectSecurityContextFilterTest {
         val filter =
             InjectSecurityContextFilter(ServletRequestParser(ServletRemoteIpResolver), InjectSecurityContextParser)
         val request = mockk<HttpServletRequest> {
-            every { servletPath } returns "/public/../admin"
+            every { requestURI } returns "/public/../admin"
+            every { contextPath } returns ""
         }
         val response = mockk<HttpServletResponse> {
             every { status = HttpStatus.BAD_REQUEST.value() } returns Unit

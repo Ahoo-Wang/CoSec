@@ -20,10 +20,12 @@ import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.token.RefreshTokenMismatchException
 import me.ahoo.cosec.token.SimpleAccessToken
 import me.ahoo.cosec.token.SimpleCompositeToken
 import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.token.TokenVerificationException
+import me.ahoo.cosec.token.toAuthorizeResult
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -75,6 +77,19 @@ class JwtTokenVerifierTest {
         val oldToken: CompositeToken = converter.toToken(SimpleTenantPrincipal.ANONYMOUS)
         TimeUnit.SECONDS.sleep(1)
         assertThrows(TokenExpiredException::class.java) { jwtTokenVerifier.refresh<TokenPrincipal>(oldToken) }
+    }
+
+    @Test
+    fun refreshWhenRefreshTokenBelongsToAnotherAccessToken() {
+        // A valid refresh token paired with another valid access token is an invalid token (401), not a bad argument.
+        val first: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
+        val second: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
+        val mismatched = SimpleCompositeToken(accessToken = second.accessToken, refreshToken = first.refreshToken)
+
+        val thrown: TokenVerificationException = assertThrows(RefreshTokenMismatchException::class.java) {
+            jwtTokenVerifier.refresh<TokenPrincipal>(mismatched)
+        }
+        thrown.toAuthorizeResult().reason.assert().isEqualTo("Token Invalid")
     }
 
     @Test

@@ -21,6 +21,7 @@ import me.ahoo.cosec.authorization.AuthorizationDecision
 import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.context.request.RequestAttributesAppender
 import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.pipeline.SecurityDecision
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
@@ -37,20 +38,35 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
+import org.springframework.http.HttpMethod
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.MockFilterChain
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.mock.web.server.MockServerWebExchange
+import org.springframework.web.util.UriUtils
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
+import java.net.URI
 import java.time.Duration
 
 /**
  * Drives the WebFlux and WebMvc adapters with the same scenarios and asserts they respond identically.
  */
 class WebAdapterParityTest {
-    data class Outcome(val status: Int, val body: String, val proceeded: Boolean, val headers: Map<String, String?>)
+    data class Outcome(
+        val status: Int,
+        val body: String,
+        val proceeded: Boolean,
+        val headers: Map<String, String?>,
+        val authorizedPath: String?
+    )
+
+    /** Records the path the policies see, after the adapter normalized it. */
+    private class PathRecorder : RequestAttributesAppender {
+        var path: String? = null
+        override fun append(request: Request): Request = request.also { path = it.path }
+    }
 
     companion object {
         private val anonymous = SecurityContextParser { SimpleSecurityContext.anonymous() }
@@ -99,9 +115,23 @@ class WebAdapterParityTest {
                 rateLimited(AuthorizeResult.ALLOW, allowed = true)
             ),
             Arguments.of("regex timeout", "/path", anonymous, failing(RegexTimeoutException("timeout"))),
+            Arguments.of(
+                "regex timeout, authenticated",
+                "/path",
+                authenticated,
+                failing(RegexTimeoutException("timeout"))
+            ),
             Arguments.of("unexpected error", "/path", anonymous, failing(IllegalStateException())),
             Arguments.of("context parse error", "/path", brokenParser, returning(AuthorizeResult.ALLOW)),
             Arguments.of("invalid path", "/public/../admin", anonymous, returning(AuthorizeResult.ALLOW)),
+            Arguments.of("path parameters", "/admin;jsessionid=1/users", anonymous, returning(AuthorizeResult.ALLOW)),
+            Arguments.of(
+                "traversal behind a path parameter",
+                "/public/..;/admin",
+                anonymous,
+                returning(AuthorizeResult.ALLOW)
+            ),
+            Arguments.of("encoded path", "/orders/a%20b", anonymous, returning(AuthorizeResult.ALLOW)),
         )
     }
 
@@ -116,6 +146,18 @@ class WebAdapterParityTest {
         val reactive = reactiveOutcome(path, securityContextParser, authorization)
         val servlet = servletOutcome(path, securityContextParser, authorization)
         servlet.assert().isEqualTo(reactive)
+    }
+
+    @Test
+    fun regexTimeoutDistinguishesAnonymousCallers() {
+        servletOutcome("/path", anonymous, failing(RegexTimeoutException("timeout"))).status.assert().isEqualTo(401)
+        servletOutcome("/path", authenticated, failing(RegexTimeoutException("timeout"))).status.assert().isEqualTo(403)
+    }
+
+    @Test
+    fun pathParametersAreRemovedBeforeAuthorization() {
+        servletOutcome("/admin;jsessionid=1/users", anonymous, returning(AuthorizeResult.ALLOW))
+            .authorizedPath.assert().isEqualTo("/admin/users")
     }
 
     @Test
@@ -138,12 +180,14 @@ class WebAdapterParityTest {
         securityContextParser: SecurityContextParser,
         authorization: Authorization
     ): Outcome {
+        val recorder = PathRecorder()
         val filter = ReactiveAuthorizationFilter(
             securityContextParser,
-            ReactiveRequestParser(ReactiveRemoteIpResolver),
+            ReactiveRequestParser(ReactiveRemoteIpResolver, listOf(recorder)),
             authorization,
         )
-        val exchange = MockServerWebExchange.from(MockServerHttpRequest.get(path))
+        // URI.create keeps the path as sent; a URI template would encode `%` again.
+        val exchange = MockServerWebExchange.from(MockServerHttpRequest.method(HttpMethod.GET, URI.create(path)))
         var proceeded = false
         filter.filter(exchange) {
             proceeded = true
@@ -155,6 +199,7 @@ class WebAdapterParityTest {
             body = response.bodyAsString.block().orEmpty(),
             proceeded = proceeded,
             headers = headerNames.associateWith { response.headers.getFirst(it) },
+            authorizedPath = recorder.path,
         )
     }
 
@@ -163,12 +208,14 @@ class WebAdapterParityTest {
         securityContextParser: SecurityContextParser,
         authorization: Authorization
     ): Outcome {
+        val recorder = PathRecorder()
         val filter = AuthorizationFilter(
             securityContextParser,
             authorization,
-            ServletRequestParser(ServletRemoteIpResolver),
+            ServletRequestParser(ServletRemoteIpResolver, listOf(recorder)),
         )
-        val request = MockHttpServletRequest("GET", path).apply { servletPath = path }
+        // Mapped under `/` like the default DispatcherServlet: the container puts the decoded path in servletPath.
+        val request = MockHttpServletRequest("GET", path).apply { servletPath = UriUtils.decode(path, Charsets.UTF_8) }
         val response = MockHttpServletResponse()
         val chain = MockFilterChain()
         filter.doFilter(request, response, chain)
@@ -177,6 +224,7 @@ class WebAdapterParityTest {
             body = response.contentAsString,
             proceeded = chain.request != null,
             headers = headerNames.associateWith { response.getHeader(it) },
+            authorizedPath = recorder.path,
         )
     }
 }

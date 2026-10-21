@@ -103,6 +103,36 @@ id 请用 `appRoles`）。`AppRolePermission.rolePermissionIndexer` 的默认实
 **限流规则的 `key` 在加载时校验。** 不受支持的 `key`（例如把 `request.remoteIp` 写成 `request.ip`）以前可以加载，
 然后在前面的规则已经消耗许可之后，让每个匹配的请求都以 `500` 失败。现在构造或加载这样的规则会直接失败（见[限流](./rate-limiting.md)）。
 
+**Spring MVC 按请求 URI 授权，不再按 `servletPath`。** WebMvc 适配器原来使用 `HttpServletRequest.servletPath`，它不含 `pathInfo`。
+`DispatcherServlet` 映射在前缀下（`spring.mvc.servlet.path=/api`）时，每个请求都按 `/api` 授权：`/api/admin/**` 上的拒绝永远不会匹配，
+而 `/api/**` 上的允许会放行所有请求。现在使用去掉 context path 之后的请求 URI，与 Spring MVC 的路由和 WebFlux 看到的路径一致
+（见 [Web 集成](./web-integration.md)）。使用默认的 `/` 映射时，匹配的路径与以前相同，只是不再做百分号解码：
+`path` 动作仍像以前一样逐段解码，但把 `request.path` 当字符串比较的条件（`eq`、`regex` 等）现在看到的是 `/a%20b` 而不是 `/a b`。
+升级配置了 Servlet 路径的应用之前，给它的策略、应用权限和限流规则加上这个前缀。
+
+**授权路径去掉 `;` 路径参数，并拒绝 `..;`。** 在所有适配器上，`/admin;jsessionid=1` 都按 `/admin` 授权，与 Spring 的路由一致；
+以前 WebFlux 和 Gateway 原样传递，`request.path` 条件可能匹配不到。后面跟着路径参数的 `.` 或 `..` 段（`/public/..;/admin`）
+会被 Servlet 容器当作 `..` 处理，现在像其他路径穿越一样返回 `400`。
+
+**条件的 part 在策略加载时校验。** `part` 不受支持的取值条件（`eq`、`in`、`contains`、`startsWith`、`endsWith`、`regular`、`path`），
+例如把 `request.remoteIp` 写成 `request.ip`，或把 `request.header.x` 写成 `request.headers.x`，以前可以加载，然后让每个匹配的请求都以 `500` 失败。
+现在构建这样的匹配器会失败，报 `Condition [<type>] part [<part>] is not a supported part`，与限流 key 的做法一致：含有它的本地策略文件会阻止启动，
+`setPolicy` 会拒绝它，已存储在 Redis 中的这类策略在读取时失败，所有读取该策略的请求都会以 `500` 被拒绝，而不仅是其语句匹配到的请求。
+升级前，在策略、应用权限和限流规则的条件中搜索 `"part"`，逐个对照[支持的 part](./policies.md#value-conditions)。
+
+**正则超时对匿名调用方返回 `401`。** `regular` 条件超出时间预算时，以前不论调用方是谁都返回 `403`。现在它与其他拒绝一样映射：
+匿名调用方返回 `401`（令牌校验失败时原因为 `Token Expired` 或 `Token Invalid`），已认证调用方返回 `403`。
+把 `401` 当作"需要重新登录"的客户端，对这类请求也会收到 `401`。
+
+**策略 id 不能以 `history:` 开头。** 策略历史把策略 `<id>` 的修订记录存放在 `<prefix>:policy:history:<id>`（以及 `<id>:seq`）下，
+与策略本身在同一个命名空间中，因此 id 为 `history:<id>` 的策略会与策略 `<id>` 的历史记录共用一个 key。
+`RedisPolicyRepository.setPolicy` 现在会拒绝这样的 id，报 `Policy id [...] must not start with [history:]`；启动时把这样的本地策略写入 Redis 也会失败。
+`history`、`history-viewer` 这类 id 不受影响。升级前请重命名 id 以 `history:` 开头的策略；6.x 迁移会把这类 key 当作策略历史跳过。
+
+**不匹配的刷新令牌按无效令牌处理。** 刷新令牌不是和访问令牌一起签发时，`JwtTokenVerifier.refresh` 以前抛出 `IllegalArgumentException`
+（`Illegal refreshToken.`），这种不匹配会表现为意外错误。现在它抛出 `RefreshTokenMismatchException`，与其他令牌失败一样是
+`TokenVerificationException`。在刷新调用外捕获 `IllegalArgumentException` 的代码，请改为捕获 `TokenVerificationException`。
+
 **OpenAPI 生成的应用 id 把 `:` 替换为 `-`。** `OpenAPIAppPermissionGenerator` 由 OpenAPI 标题生成应用 id，而应用 id 不能再含有 `:`。
 标题含有 `:` 的应用（例如 `orders:api`）的 id 变为 `orders-api`；客户端必须在 `CoSec-App-Id` 中发送新的 id，角色授权也要为新 id 写入。
 

@@ -80,7 +80,7 @@ The status codes and their reasons are defined in [Web Integration](./web-integr
 |---|---|---|
 | `400` | — | The path contains `.` / `..` segments or a malformed percent-escape. Fix the client. |
 | `401` | `Token Expired` / `Token Invalid` | The token, not the policy: see [Unexpected 401](#unexpected-401). |
-| `401` | `Implicit Deny` | No token was found, and no rule allows anonymous access to this path. |
+| `401` | `Implicit Deny` | No token was found, and no rule allows anonymous access to this path, or a `regular` condition timed out. |
 | `401` / `403` | `Explicit Deny` | A `deny` statement or permission matched. The debug log names it. |
 | `403` | `Implicit Deny` | The caller is authenticated but no rule allowed the request, or a `regular` condition timed out. |
 | `429` | `Too Many Requests` | A [rate limit rule](./rate-limiting.md): see [Rate limits behave unexpectedly](#rate-limits-behave-unexpectedly). |
@@ -97,6 +97,8 @@ The caller was treated as anonymous.
   A revoked token is also reported as invalid.
 - **`Token Expired`**: refresh it ([Refreshing](./authentication.md#refreshing)), or check the clocks and
   `cosec.jwt.token-validity.access`.
+- **A refresh fails with `RefreshTokenMismatchException`**: the refresh token was issued with another access token.
+  Send the pair that was issued together.
 - **`Token Invalid` with an API key**: the key's SHA-256 is not configured, or the key is disabled or expired
   ([API keys](./authentication.md#api-keys)). A request carrying `X-API-Key` ignores its JWT.
 
@@ -148,16 +150,19 @@ The caller is known, but nothing allowed the request, or something denied it.
 
 - **Redis is unreachable** and the policy or permission is not in the local cache. This is deliberate: policy
   reads fail closed ([Redis and caching](./operations.md#redis-and-caching)).
-- **A condition names an unsupported part.** The log shows `Unsupported part`; see the list of
-  [parts](./policies.md#value-conditions). [Validating policies](./policies.md#validating-policies) catches
-  this before deployment.
+- **A stored policy's condition names an unsupported part.** The log shows `Condition [<type>] part [<part>] is not
+  a supported part` while reading the policy; see the list of [parts](./policies.md#value-conditions). Since 7.0 such
+  a condition fails when the policy loads, so a local file stops startup and `setPolicy` rejects it, but a copy
+  stored by an earlier version fails every read of that policy. Fix and re-save the policy.
+  [Validating policies](./policies.md#validating-policies) catches this before deployment.
 - **A custom matcher or repository throws.** The stack trace names it.
 - **A stored policy reads path variables outside their scope.** The log shows `PathVariableScopeException`
   naming the policy and statement. Since 7.0, a policy condition, or the condition of a statement without a
   `path` action, may not read `request.path.var.*`. Fix and re-save the policy
   ([Path variables](./policies.md#actions)).
-- **A global policy is listed without content.** The log shows `MissingPolicyException` and
-  `the global policy index lists policies [...] that have no content`. The policy's content was lost, or not
+- **A global policy is listed without content.** The log shows `MissingPolicyException: The global policy index
+  lists policies [...] that have no content` (a principal's missing policies read `The principal lists policies`
+  instead; see [One principal always gets 500](#one-principal-always-gets-500)). The policy's content was lost, or not
   migrated from 6.x (a 6.x cached miss migrates as a miss). Since 7.0 this fails every request rather than skipping
   the policy, because it may be a global deny. Write the policy again with `PolicyRepository.setPolicy`; to drop it
   instead, save it with a type other than `global`, which removes it from the index.
@@ -222,6 +227,12 @@ marker; only the job that runs it sets `cosec.authorization.cache.migration.chec
 itself wrote, for example in a test environment that ran 7.0 before the marker existed, is fixed the same way:
 `migrate()` skips what is already migrated and writes the marker. Do not write the marker by hand while 6.x data
 may exist. A marker holding another schema version means a newer CoSec wrote the data.
+
+## Publishing a policy fails with a reserved id
+
+`Policy id [history:...] must not start with [history:], which holds the policy history`: the policy history keeps
+the revisions of policy `<id>` under `<prefix>:policy:history:<id>`, so ids starting with `history:` are reserved since
+7.0. Rename the policy (for example `policy-history-...`) and update the principals that list it.
 
 ## Publishing a policy fails before the migration
 

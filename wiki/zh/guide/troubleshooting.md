@@ -74,7 +74,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 |---|---|---|
 | `400` | — | 路径包含 `.` / `..` 段或格式错误的百分号转义。请修复客户端。 |
 | `401` | `Token Expired` / `Token Invalid` | 问题在令牌而不在策略：见[意外的 401](#unexpected-401)。 |
-| `401` | `Implicit Deny` | 没有找到令牌，且没有规则允许匿名访问该路径。 |
+| `401` | `Implicit Deny` | 没有找到令牌，且没有规则允许匿名访问该路径；或者 `regular` 条件超时。 |
 | `401` / `403` | `Explicit Deny` | 命中了一条 `deny` 语句或权限。调试日志会指出是哪一条。 |
 | `403` | `Implicit Deny` | 调用方已认证，但没有规则允许该请求；或者 `regular` 条件超时。 |
 | `429` | `Too Many Requests` | [限流规则](./rate-limiting.md)：见[限流行为不符合预期](#rate-limits-behave-unexpectedly)。 |
@@ -90,6 +90,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
   已吊销的令牌也报告为无效。
 - **`Token Expired`**：刷新令牌（[刷新](./authentication.md#refreshing)），或检查时钟和
   `cosec.jwt.token-validity.access`。
+- **刷新失败并报 `RefreshTokenMismatchException`**：刷新令牌是和另一个访问令牌一起签发的。请发送同一次签发的那一对令牌。
 - **使用 API Key 时出现 `Token Invalid`**：没有配置该 key 的 SHA-256，或者 key 已禁用、已过期
   （[API Key](./authentication.md#api-keys)）。携带了 `X-API-Key` 的请求会忽略其中的 JWT。
 
@@ -132,14 +133,15 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 ## 所有请求都返回 500 {#every-request-fails-with-500}
 
 - **Redis 不可达**，且策略或权限不在本地缓存中。这是有意为之：读取策略出错即拒绝（[Redis 与缓存](./operations.md#redis-and-caching)）。
-- **条件使用了不支持的 part。** 日志中会出现 `Unsupported part`；可用的 part 见[取值条件](./policies.md#value-conditions)。
-  [校验策略](./policies.md#validating-policies)可以在部署前发现这个问题。
+- **已存储策略的条件使用了不支持的 part。** 读取策略时日志中会出现 `Condition [<type>] part [<part>] is not a supported part`；
+  可用的 part 见[取值条件](./policies.md#value-conditions)。从 7.0 起，这样的条件在策略加载时就会失败：本地文件会阻止启动，`setPolicy` 也会拒绝它，
+  但旧版本存储的副本会让该策略的每次读取都失败。修正后重新保存该策略。[校验策略](./policies.md#validating-policies)可以在部署前发现这个问题。
 - **自定义匹配器或仓储抛出了异常。** 异常栈会指出是哪一个。
 - **已存储的策略在作用域之外读取路径变量。** 日志中会出现 `PathVariableScopeException`，并指出策略和语句。
   从 7.0 起，策略级条件、以及没有 `path` 动作的语句的条件，都不能读取 `request.path.var.*`。修正后重新保存该策略
   （见[路径变量](./policies.md#actions)）。
-- **全局策略索引中的策略没有内容。** 日志中会出现 `MissingPolicyException` 和
-  `the global policy index lists policies [...] that have no content`。该策略的内容丢失了，或者没有从 6.x 迁移
+- **全局策略索引中的策略没有内容。** 日志中会出现 `MissingPolicyException: The global policy index lists policies [...] that have no content`
+  （主体引用的策略缺失时，信息是 `The principal lists policies`，见[某个主体总是得到 500](#one-principal-always-gets-500)）。该策略的内容丢失了，或者没有从 6.x 迁移
   （6.x 缓存的未命中迁移后仍是未命中）。从 7.0 起，这会使每个请求失败而不是跳过该策略，因为它可能是一条全局拒绝策略。
   用 `PolicyRepository.setPolicy` 重新写入该策略；如果要去掉它，以 `global` 以外的类型保存它，这会把它从索引中移除。
 
@@ -190,6 +192,11 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 迁移会写入标记；只有执行迁移的任务才设置 `cosec.authorization.cache.migration.check-schema=false`。由 7.0 自己写入的数据
 （例如在标记出现之前就运行过 7.0 的测试环境）也用同样的方法解决：`migrate()` 会跳过已迁移的数据并写入标记。
 在可能存在 6.x 数据时不要手动写入标记。标记中是其他 schema 版本时，说明数据是更新版本的 CoSec 写入的。
+
+## 发布策略时 id 被保留 {#publishing-a-policy-fails-with-a-reserved-id}
+
+`Policy id [history:...] must not start with [history:], which holds the policy history`：策略历史把策略 `<id>` 的修订记录存放在
+`<prefix>:policy:history:<id>` 下，所以从 7.0 起以 `history:` 开头的 id 被保留。请重命名该策略（例如 `policy-history-...`），并更新引用它的主体。
 
 ## 迁移前发布策略失败 {#publishing-a-policy-fails-before-the-migration}
 

@@ -30,7 +30,8 @@ internal class ServletRequestParserTest {
     fun parse() {
         val servletRequestParser = ServletRequestParser(ServletRemoteIpResolver)
         val servletRequest = mockk<HttpServletRequest> {
-            every { servletPath } returns "/path"
+            every { requestURI } returns "/path"
+            every { contextPath } returns ""
             every { method } returns "GET"
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(HttpHeaders.ORIGIN) } returns "ORIGIN"
@@ -46,7 +47,8 @@ internal class ServletRequestParserTest {
     @Test
     fun parseWhenTraversalPath() {
         val servletRequest = mockk<HttpServletRequest> {
-            every { servletPath } returns "/public/../admin"
+            every { requestURI } returns "/public/../admin"
+            every { contextPath } returns ""
         }
         val parser = ServletRequestParser(ServletRemoteIpResolver)
         assertThrows<InvalidRequestPathException> { parser.parse(servletRequest) }

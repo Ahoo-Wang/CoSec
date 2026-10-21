@@ -141,6 +141,46 @@ id declared by two files. The duplicate local policy error now reads `Policy id 
 earlier rules had spent their permits. Constructing or loading such a rule now fails
 ([Rate limiting](./rate-limiting.md)).
 
+**Spring MVC authorizes the request URI, not `servletPath`.** The WebMvc adapter used `HttpServletRequest.servletPath`,
+which drops `pathInfo`. With the `DispatcherServlet` mapped under a prefix (`spring.mvc.servlet.path=/api`), every
+request was authorized as `/api`: a deny on `/api/admin/**` never matched, and an allow on `/api/**` let every
+request through. The path is now the request URI without the context path, as Spring MVC routes it and as WebFlux
+sees it ([Web Integration](./web-integration.md)). With the default `/` mapping the matched path is
+the same as before, except that it is no longer percent-decoded: `path` actions decode segments as before, but a
+condition that compares `request.path` as a string (`eq`, `regex`, …) now sees `/a%20b`, not `/a b`. Before
+upgrading an application with a servlet path, add the prefix to its policies, app permissions and rate limit rules.
+
+**`;` path parameters are removed from the authorized path, and `..;` is rejected.** On every adapter,
+`/admin;jsessionid=1` is authorized as `/admin`, as Spring routes it; before, WebFlux and Gateway passed it through,
+so a `request.path` condition could miss it. A `.` or `..` segment followed by a path parameter (`/public/..;/admin`),
+which servlet containers resolve as `..`, now answers `400` like any other traversal.
+
+**Condition parts are checked when the policy loads.** A value condition (`eq`, `in`, `contains`, `startsWith`,
+`endsWith`, `regular`, `path`) whose `part` is not a supported part (for example `request.ip` instead of
+`request.remoteIp`, or `request.headers.x` instead of `request.header.x`) used to load and then fail every matching
+request with `500`. Building such a matcher now fails with `Condition [<type>] part [<part>] is not a supported
+part`, as rate limit keys already did: a local policy file with one stops startup, `setPolicy` rejects it, and a
+policy stored in Redis with one fails its reads, which denies every request that reads the policy with `500`, not
+only those its statement matches. Before upgrading, search policies, app permissions and rate limit rule conditions
+for `"part"` and check each value against the [supported parts](./policies.md#value-conditions).
+
+**A regex timeout answers `401` to anonymous callers.** A `regular` condition over its time budget used to answer
+`403` whatever the caller. It is now mapped like every other deny: `401` for an anonymous caller (with `Token Expired`
+or `Token Invalid` when its token failed verification), `403` for an authenticated one. Clients that treat `401` as
+"sign in again" now get it for these requests too.
+
+**Policy ids may not start with `history:`.** The policy history stores the revisions of policy `<id>` under
+`<prefix>:policy:history:<id>` (and `<id>:seq`), inside the namespace of the policies themselves, so a policy with the
+id `history:<id>` would share a key with the history of policy `<id>`. `RedisPolicyRepository.setPolicy` now rejects
+such ids with `Policy id [...] must not start with [history:]`, and so does startup when a local policy with one is
+written to Redis. Ids such as `history` or `history-viewer` are unaffected. Rename any policy whose id starts with
+`history:` before upgrading; the 6.x migration skips such keys as policy history.
+
+**A mismatched refresh token is an invalid token.** `JwtTokenVerifier.refresh` threw `IllegalArgumentException`
+(`Illegal refreshToken.`) when the refresh token was not issued with the access token, so the mismatch surfaced as an
+unexpected error. It now throws `RefreshTokenMismatchException`, a `TokenVerificationException`, like every other
+token failure. Code that caught `IllegalArgumentException` around a refresh catches `TokenVerificationException`.
+
 **OpenAPI-generated app ids replace `:` with `-`.** `OpenAPIAppPermissionGenerator` derives the app id from the
 OpenAPI title, and app ids may no longer contain `:`. An app whose title contains `:` (for example `orders:api`)
 gets the id `orders-api`; clients must send the new id in `CoSec-App-Id`, and its role grants must be written for it.

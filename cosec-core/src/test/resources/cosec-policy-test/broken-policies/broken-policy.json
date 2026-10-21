@@ -4,6 +4,6 @@
   "type": "global",
   "tenantId": "(platform)",
   "statements": [
-    { "name": "bad-part", "action": "/broken/**", "condition": { "eq": { "part": "no.such.part", "value": "x" } } }
+    { "name": "bad-expression", "action": "/broken/**", "condition": { "spel": { "expression": "1 / 0 == 1" } } }
   ]
 }
