@@ -176,6 +176,11 @@ such ids with `Policy id [...] must not start with [history:]`, and so does star
 written to Redis. Ids such as `history` or `history-viewer` are unaffected. Rename any policy whose id starts with
 `history:` before upgrading; the 6.x migration skips such keys as policy history.
 
+**A mismatched refresh token is an invalid token.** `JwtTokenVerifier.refresh` threw `IllegalArgumentException`
+(`Illegal refreshToken.`) when the refresh token was not issued with the access token, so the mismatch surfaced as an
+unexpected error. It now throws `RefreshTokenMismatchException`, a `TokenVerificationException`, like every other
+token failure. Code that caught `IllegalArgumentException` around a refresh catches `TokenVerificationException`.
+
 **OpenAPI-generated app ids replace `:` with `-`.** `OpenAPIAppPermissionGenerator` derives the app id from the
 OpenAPI title, and app ids may no longer contain `:`. An app whose title contains `:` (for example `orders:api`)
 gets the id `orders-api`; clients must send the new id in `CoSec-App-Id`, and its role grants must be written for it.

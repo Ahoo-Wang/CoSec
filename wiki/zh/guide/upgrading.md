@@ -129,6 +129,10 @@ id 请用 `appRoles`）。`AppRolePermission.rolePermissionIndexer` 的默认实
 `RedisPolicyRepository.setPolicy` 现在会拒绝这样的 id，报 `Policy id [...] must not start with [history:]`；启动时把这样的本地策略写入 Redis 也会失败。
 `history`、`history-viewer` 这类 id 不受影响。升级前请重命名 id 以 `history:` 开头的策略；6.x 迁移会把这类 key 当作策略历史跳过。
 
+**不匹配的刷新令牌按无效令牌处理。** 刷新令牌不是和访问令牌一起签发时，`JwtTokenVerifier.refresh` 以前抛出 `IllegalArgumentException`
+（`Illegal refreshToken.`），这种不匹配会表现为意外错误。现在它抛出 `RefreshTokenMismatchException`，与其他令牌失败一样是
+`TokenVerificationException`。在刷新调用外捕获 `IllegalArgumentException` 的代码，请改为捕获 `TokenVerificationException`。
+
 **OpenAPI 生成的应用 id 把 `:` 替换为 `-`。** `OpenAPIAppPermissionGenerator` 由 OpenAPI 标题生成应用 id，而应用 id 不能再含有 `:`。
 标题含有 `:` 的应用（例如 `orders:api`）的 id 变为 `orders-api`；客户端必须在 `CoSec-App-Id` 中发送新的 id，角色授权也要为新 id 写入。
 

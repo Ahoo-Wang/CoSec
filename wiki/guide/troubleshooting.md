@@ -97,6 +97,8 @@ The caller was treated as anonymous.
   A revoked token is also reported as invalid.
 - **`Token Expired`**: refresh it ([Refreshing](./authentication.md#refreshing)), or check the clocks and
   `cosec.jwt.token-validity.access`.
+- **A refresh fails with `RefreshTokenMismatchException`**: the refresh token was issued with another access token.
+  Send the pair that was issued together.
 - **`Token Invalid` with an API key**: the key's SHA-256 is not configured, or the key is disabled or expired
   ([API keys](./authentication.md#api-keys)). A request carrying `X-API-Key` ignores its JWT.
 

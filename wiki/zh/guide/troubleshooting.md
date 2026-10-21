@@ -90,6 +90,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
   已吊销的令牌也报告为无效。
 - **`Token Expired`**：刷新令牌（[刷新](./authentication.md#refreshing)），或检查时钟和
   `cosec.jwt.token-validity.access`。
+- **刷新失败并报 `RefreshTokenMismatchException`**：刷新令牌是和另一个访问令牌一起签发的。请发送同一次签发的那一对令牌。
 - **使用 API Key 时出现 `Token Invalid`**：没有配置该 key 的 SHA-256，或者 key 已禁用、已过期
   （[API Key](./authentication.md#api-keys)）。携带了 `X-API-Key` 的请求会忽略其中的 JWT。
 
