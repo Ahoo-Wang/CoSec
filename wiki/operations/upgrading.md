@@ -20,6 +20,9 @@ upgrade.
 Read the whole section before you start. Then work through the [checklist](#upgrade-checklist), the
 [migration](#migrating-the-data), and keep the [rollback](#rollback) at hand until the backups are dropped.
 
+The stricter authorization costs 6 to 9 % of `SimpleAuthorization` throughput compared with 6.1.0, about 0.2 µs
+per decision; nothing needs to change for it ([what the 7.0 fixes cost](../architecture/overview.md#what-the-7-0-fixes-cost)).
+
 ### Breaking changes
 
 Each row is one change; the link leads to what it means and what to do.

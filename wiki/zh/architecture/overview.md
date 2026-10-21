@@ -148,29 +148,61 @@ CoSec 7.0 以 CoCache 6 的布局存储 Redis 数据。未迁移的 6.x 数据�
 
 ## 性能 {#performance}
 
-`SimpleAuthorizationBenchmark`（`cosec-core/src/jmh`）使用内存仓库测量热路径：3 条全局策略（共 25 条语句）、2 条主体策略（共 20 条语句），以及一个含 51 条权限的应用权限。时间是每次决策的平均耗时，分配是每次决策分配的字节数。
+`SimpleAuthorizationBenchmark`（`cosec-core/src/jmh`）使用内存仓库测量热路径：3 条全局策略（共 25 条语句）、2 条主体策略（共 20 条语句），以及一个含 51 条权限的应用权限。吞吐是单线程每秒的决策数，时间是它的倒数，分配是每次决策分配的字节数（`gc.alloc.rate.norm`）。
 
-| 场景 | 时间 | 分配 |
-|---|---|---|
-| 被全局允许策略匹配（`global`） | 1.9 µs | 6.1 KB |
-| 被角色权限匹配（`role`） | 2.2 µs | 6.6 KB |
-| 无匹配（`none`） | 1.8 µs | 1.8 KB |
+| 场景 | 吞吐 | 时间 | 分配 |
+|---|---|---|---|
+| 被全局允许策略匹配（`global`） | 474,816 ± 7,769 ops/s | 2.1 µs | 5,997 B |
+| 被角色权限匹配（`role`） | 438,331 ± 5,376 ops/s | 2.3 µs | 6,488 B |
+| 无匹配（`none`） | 508,364 ± 4,057 ops/s | 2.0 µs | 1,640 B |
 
-`RateLimitingAuthorizationBenchmark` 测量限流在一个始终允许的授权（17 ns）之上增加的开销：没有规则时约 20 ns，没有规则匹配时约 40 ns，一条在内存中计数的按 IP 规则匹配时约 250 ns。用 Redis 计数的规则会增加一次 Redis 往返。影子模式会让每个被抽样的请求多做一次 `SimpleAuthorization` 求值。
-
-这些数字的测量条件，以及可信程度：
-
-- 单线程、一个 fork、一次预热迭代和一次测量迭代（根目录 `build.gradle.kts` 中的默认值）。`SimpleAuthorizationBenchmark` 在 JDK 17 上运行，`RateLimitingAuthorizationBenchmark` 在 JDK 21 上运行。
-- 它们记录于 2026 年 10 月，早于 7.0 对路径变量作用域和角色作用域的修复，这些修复改动了热路径。引用之前请重新运行。
-- **在繁忙机器上测得的数字不可靠。** 其他进程（构建、IDE、其他基准测试）会抢占 CPU，改变 JIT 和 GC 的时序，而单次迭代无法把这些平均掉。请在同一台空闲机器上比较修改前后，并且每一侧都多跑几次。
-
-复现方式：
-
-```bash
-./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark -PjmhMode=avgt
-```
+`RateLimitingAuthorizationBenchmark` 测量限流在一个始终允许的授权（16 ns，`plain`）之上增加的开销：没有规则时约 20 ns（`noRules`），没有规则匹配时约 45 ns（`unmatched`），一条在内存中计数的按 IP 规则匹配时约 240 ns（`local`）。用 Redis 计数的规则会增加一次 Redis 往返。影子模式会让每个被抽样的请求多做一次 `SimpleAuthorization` 求值。
 
 热路径的性能主要取决于两个设计：每个请求只解析一次路径，并在所有路径匹配器之间共享；拒绝优先的求值直接遍历源列表，不为每个元素创建包装对象。任何涉及授权、匹配器或仓库的修改都应附上前后对比。
+
+### 7.0 修复的代价 {#what-the-7-0-fixes-cost}
+
+在 `SimpleAuthorizationBenchmark` 中，7.0 比 6.1.0 慢 6% 到 9%；被全局允许策略匹配的一次决策从约 1.9 µs 涨到 2.1 µs。每次决策的分配增加了 34 到 56 字节。限流的变化在噪声范围内。
+
+| 基准 | 场景 | 6.1.0（ops/s） | 7.0（ops/s） | 变化 | B/op 6.1.0 → 7.0 |
+|---|---|---|---|---|---|
+| `SimpleAuthorizationBenchmark` | `global` | 522,486 ± 6,807 | 474,816 ± 7,769 | −9.1% | 5,963 → 5,997 |
+| `SimpleAuthorizationBenchmark` | `none` | 541,901 ± 8,984 | 508,364 ± 4,057 | −6.2% | 1,584 → 1,640 |
+| `SimpleAuthorizationBenchmark` | `role` | 466,934 ± 3,601 | 438,331 ± 5,376 | −6.1% | 6,432 → 6,488 |
+| `RateLimitingAuthorizationBenchmark` | `local` | 3,857,082 ± 34,161 | 3,928,012 ± 15,368 | +1.8% | 1,168 → 1,208 |
+| `RateLimitingAuthorizationBenchmark` | `noRules` | 28,791,080 ± 224,392 | 27,880,383 ± 127,124 | −3.2% | 352 → 352 |
+| `RateLimitingAuthorizationBenchmark` | `plain` | 62,553,549 ± 618,196 | 61,807,452 ± 727,007 | −1.2% | 152 → 152 |
+| `RateLimitingAuthorizationBenchmark` | `unmatched` | 16,863,776 ± 459,156 | 16,466,577 ± 99,516 | −2.4% | 376 → 376 |
+
+这些代价来自决策路径上的五项安全修复，叠加起来造成了 6% 到 9% 的退化（[每一项改了什么](../operations/upgrading.md#authorization-and-loading-changes)）：
+
+- **先查黑名单**，再判断根主体，所以被列入黑名单的根主体会被拒绝。
+- **缺失的主体策略会失败**：仓库返回的策略要与主体列出的每个 id 逐一核对，缺失的拒绝策略不会被跳过。
+- **角色授权限定在空间内**：读取授权之前，先按请求的空间筛选主体的角色。
+- **清空路径变量**：在每条策略的条件之前、每条语句之前都清空路径变量，条件只能看到自己所在语句捕获的变量。
+- **缺失的角色权限会失败**：角色被授予的每个权限 id 都要在应用的权限目录中核对。
+
+7.0 接受了这一代价。8.0 计划中的纯函数决策引擎（[RFC 0002](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0002-pure-engine.md)）的目标是：在 `SimpleAuthorizationBenchmark` 的每个场景中，吞吐不低于现有 `SimpleAuthorization` 的 95%，分配不多于它。两个版本精简后的 JMH 结果放在 [`docs/perf/7.0-vs-6.1.0`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/7.0-vs-6.1.0)，供以后的修改对照。
+
+### 测量方法 {#measuring}
+
+以上数字测于 2026 年 10 月，机器是一台 Apple M4（10 核，macOS 27），JDK 17.0.20.1：3 个 fork，5 次预热迭代和 10 次测量迭代，每次 2 秒，单线程，`-prof gc`，使用 WARN 级别的 `config/logback-jmh.xml`。两个版本在同一台机器上先后连续运行，平均负载 2.3 到 3.3（有一个 Docker 虚拟机在运行）。6.1.0 是 `v6.1.0` 标签，7.0 是 `main` 的 `580809a2`。
+
+构建基准 jar，并用同样的参数运行：
+
+```bash
+./gradlew :cosec-core:jmhJar
+java -jar cosec-core/build/libs/cosec-core-*-jmh.jar 'SimpleAuthorizationBenchmark|RateLimitingAuthorizationBenchmark' \
+  -f 3 -wi 5 -i 10 -w 2s -r 2s -prof gc -rf json -rff jmh.json \
+  -jvmArgsAppend "-Dlogback.configurationFile=$PWD/config/logback-jmh.xml"
+```
+
+**自己运行 jar 时，必须加上 `-jvmArgsAppend -Dlogback.configurationFile=…`。** jar 里带有 Logback 但没有配置文件，不加这个参数，每个 fork 出来的 JVM 都会按 DEBUG 级别输出日志，包括每次决策的 `log.debug`，结果测到的既有授权也有日志。`./gradlew :cosec-core:jmh` 已经传了这个文件，但只跑一个 fork、一次预热迭代和一次测量迭代（根目录 `build.gradle.kts` 中的默认值）：足以确认基准能跑，不足以比较版本。
+
+这些数字的可信程度：
+
+- **在繁忙机器上测得的数字不可靠。** 其他进程（构建、IDE、Docker、其他基准测试）会抢占 CPU，改变 JIT 和 GC 的时序。请在同一台机器上先后紧接着比较修改前后，比误差列更小的差异视为噪声。7.0 的这次对比是在有负载时测的，空闲机器上的绝对数字可能更高；这次对比说明的是相对变化。
+- 比较吞吐时两侧用同一个 JDK：换 JDK 对 JIT 决策的影响比大多数代码修改都大。
 
 ## 架构的演进方向 {#where-the-architecture-is-going}
 

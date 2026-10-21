@@ -210,38 +210,89 @@ in [Migrating the data](../operations/upgrading.md#migrating-the-data). The chec
 
 `SimpleAuthorizationBenchmark` (`cosec-core/src/jmh`) measures the hot path with in-memory repositories: three
 global policies (25 statements), two principal policies (20 statements) and an app permission with 51 permissions.
-Time is the average per decision; allocation is bytes allocated per decision.
+Throughput is decisions per second on one thread; time is its inverse; allocation is bytes allocated per decision
+(`gc.alloc.rate.norm`).
 
-| Scenario | Time | Allocated |
-|---|---|---|
-| Matched by a global allow (`global`) | 1.9 µs | 6.1 KB |
-| Matched by a role permission (`role`) | 2.2 µs | 6.6 KB |
-| No match (`none`) | 1.8 µs | 1.8 KB |
+| Scenario | Throughput | Time | Allocated |
+|---|---|---|---|
+| Matched by a global allow (`global`) | 474,816 ± 7,769 ops/s | 2.1 µs | 5,997 B |
+| Matched by a role permission (`role`) | 438,331 ± 5,376 ops/s | 2.3 µs | 6,488 B |
+| No match (`none`) | 508,364 ± 4,057 ops/s | 2.0 µs | 1,640 B |
 
 `RateLimitingAuthorizationBenchmark` measures what rate limiting adds on top of an authorization that always allows
-(17 ns): about 20 ns with no rules, 40 ns when no rule matches, and 250 ns for one matching per-IP rule counted in
-memory. A Redis-counted rule adds a Redis round trip. Shadow mode adds one more `SimpleAuthorization` evaluation to
-each sampled request.
-
-How these numbers were measured, and how much to trust them:
-
-- Single thread, one fork, one warm-up and one measurement iteration (the defaults in the root
-  `build.gradle.kts`). `SimpleAuthorizationBenchmark` ran on JDK 17, `RateLimitingAuthorizationBenchmark` on JDK 21.
-- They were recorded in October 2026, before the 7.0 fixes to path variable scope and role scope changed the
-  hot path. Re-run them before quoting them.
-- **Numbers taken on a busy machine are not reliable.** Other processes (builds, IDEs, other benchmarks) steal CPU
-  and change JIT and GC timing, and a single iteration cannot average that out. Compare before and after on the
-  same idle machine, and run each side more than once.
-
-Reproduce them with:
-
-```bash
-./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark -PjmhMode=avgt
-```
+(16 ns, `plain`): about 20 ns with no rules (`noRules`), 45 ns when no rule matches (`unmatched`), and 240 ns for one
+matching per-IP rule counted in memory (`local`). A Redis-counted rule adds a Redis round trip. Shadow mode adds one
+more `SimpleAuthorization` evaluation to each sampled request.
 
 Two decisions dominate the hot path: each request parses its path once and shares it across all path matchers, and
 deny-first evaluation loops over the source lists without per-item wrappers. Any change to authorization, matchers
 or repositories should come with a before/after comparison.
+
+### What the 7.0 fixes cost
+
+7.0 is 6 to 9 % slower than 6.1.0 in `SimpleAuthorizationBenchmark`; a decision matched by a global allow went from
+about 1.9 µs to 2.1 µs. Allocation grew by 34 to 56 bytes per decision. Rate limiting did not change beyond noise.
+
+| Benchmark | Scenario | 6.1.0 (ops/s) | 7.0 (ops/s) | Change | B/op 6.1.0 → 7.0 |
+|---|---|---|---|---|---|
+| `SimpleAuthorizationBenchmark` | `global` | 522,486 ± 6,807 | 474,816 ± 7,769 | −9.1 % | 5,963 → 5,997 |
+| `SimpleAuthorizationBenchmark` | `none` | 541,901 ± 8,984 | 508,364 ± 4,057 | −6.2 % | 1,584 → 1,640 |
+| `SimpleAuthorizationBenchmark` | `role` | 466,934 ± 3,601 | 438,331 ± 5,376 | −6.1 % | 6,432 → 6,488 |
+| `RateLimitingAuthorizationBenchmark` | `local` | 3,857,082 ± 34,161 | 3,928,012 ± 15,368 | +1.8 % | 1,168 → 1,208 |
+| `RateLimitingAuthorizationBenchmark` | `noRules` | 28,791,080 ± 224,392 | 27,880,383 ± 127,124 | −3.2 % | 352 → 352 |
+| `RateLimitingAuthorizationBenchmark` | `plain` | 62,553,549 ± 618,196 | 61,807,452 ± 727,007 | −1.2 % | 152 → 152 |
+| `RateLimitingAuthorizationBenchmark` | `unmatched` | 16,863,776 ± 459,156 | 16,466,577 ± 99,516 | −2.4 % | 376 → 376 |
+
+The cost comes from five security fixes on the decision path, which together account for the 6 to 9 %
+([what each one changes](../operations/upgrading.md#authorization-and-loading-changes)):
+
+- **The blacklist is checked first**, before root, so a blacklisted root principal is denied.
+- **Missing principal policies fail**: the policies the repository returns are checked against every id the
+  principal lists, so a missing deny cannot be skipped.
+- **Role grants are scoped to a space**: the principal's roles are filtered to the request's space before the grants
+  are read.
+- **Path variables are cleared** before each policy's conditions and before every statement, so a condition sees
+  only the variables its own statement captured.
+- **Missing role permissions fail**: every permission id a role is granted is checked against the app's catalog.
+
+The project accepted this cost for 7.0. The pure decision engine planned for 8.0
+([RFC 0002](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0002-pure-engine.md), Chinese) targets at least
+95 % of the current `SimpleAuthorization`'s throughput in every `SimpleAuthorizationBenchmark` scenario, with no
+more allocation. The
+trimmed JMH results for both versions are in
+[`docs/perf/7.0-vs-6.1.0`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/7.0-vs-6.1.0), for later changes to
+compare against.
+
+### Measuring
+
+The numbers above were taken in October 2026 on one Apple M4 (10 cores, macOS 27) with JDK 17.0.20.1: 3 forks,
+5 warm-up and 10 measurement iterations of 2 s each, one thread, `-prof gc`, and the WARN-level
+`config/logback-jmh.xml`. Both versions ran one after the other on the same machine, with a load average of 2.3 to
+3.3 (a Docker VM was running). 6.1.0 is the `v6.1.0` tag; 7.0 is `main` at `580809a2`.
+
+Build the benchmark jar and run it with the same settings:
+
+```bash
+./gradlew :cosec-core:jmhJar
+java -jar cosec-core/build/libs/cosec-core-*-jmh.jar 'SimpleAuthorizationBenchmark|RateLimitingAuthorizationBenchmark' \
+  -f 3 -wi 5 -i 10 -w 2s -r 2s -prof gc -rf json -rff jmh.json \
+  -jvmArgsAppend "-Dlogback.configurationFile=$PWD/config/logback-jmh.xml"
+```
+
+**Pass `-jvmArgsAppend -Dlogback.configurationFile=…` when you run the jar yourself.** The jar contains Logback but no
+configuration, so without it every forked JVM logs at DEBUG, including the per-decision `log.debug` lines, and the
+results measure logging as much as authorization. `./gradlew :cosec-core:jmh` passes the file already, but runs one
+fork with one warm-up and one measurement iteration (the defaults in the root `build.gradle.kts`): enough to see that
+a benchmark runs, not to compare versions.
+
+How much to trust the numbers:
+
+- **Numbers taken on a busy machine are not reliable.** Other processes (builds, IDEs, Docker, other benchmarks)
+  steal CPU and change JIT and GC timing. Compare before and after on the same machine, one right after the other,
+  and treat differences smaller than the error columns as noise. The 7.0 comparison was taken under load, so an idle
+  machine may give higher absolute numbers; what the comparison shows is the relative change.
+- Compare throughput with the same JDK on both sides: a different JDK changes JIT decisions more than most code
+  changes do.
 
 ## Where the architecture is going
 
