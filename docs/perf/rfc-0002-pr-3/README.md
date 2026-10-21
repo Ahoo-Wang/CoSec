@@ -4,6 +4,10 @@ The before/after measurement for RFC 0002 PR-3 ([§7](../../rfc/0002-pure-engine
 with its new `impl` parameter. `legacy` is the unchanged `SimpleAuthorization` and `engine` is `EngineAuthorization`.
 Both ran alternately on one machine (§7.2 step 4), from the same jar, at `d2ccbf98`.
 
+**Measured at `d2ccbf98`, before the round-1 review fixes (#994)**, which changed the adapter: the engine's request
+no longer reads the request, and rules beyond grant position 64 are memoized per request. The PR-2 author's
+performance PR re-measures on top of #994, and PR-6 measures again before it merges (RFC 0002 §7.2 item 7).
+
 | File | Contents |
 |---|---|
 | `jmh-gate-jdk25.json` | The §7.2 gate: 4 scenarios × 2 implementations × 3 rounds, with the §7.2 settings |

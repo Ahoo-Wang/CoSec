@@ -71,7 +71,8 @@ internal class LegacyFacts(val request: Request, val base: SecurityContext) : Ho
          * the engine's request is left empty rather than read from the request. Reading it would differ from 7.0,
          * which reads the app, the space and the principal's policies and roles only when a layer needs them, and
          * the device, remote address and request id never; the layers read them from [request] and [context]
-         * instead, at the same points (PolicySetLoader). Phase 4 fills these in when conditions move into the engine.
+         * instead (PolicySetLoader), in 7.0's order and under its conditions, before evaluation (RFC 0002 X1).
+         * Phase 4 fills these in when conditions move into the engine.
          */
         private val UNREAD_SUBJECT = Subject("", "", false, emptySet(), emptySet(), emptyMap(), root = false)
         private val UNREAD_SCOPE = Scope.declared("", "", "")

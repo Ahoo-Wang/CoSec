@@ -42,7 +42,7 @@ data class AppPermissionData(
     private var engineRules: AppPermissionRules? = null
 
     internal fun engineRules(): AppPermissionRules =
-        engineRules ?: AppPermissionRules(this).also { engineRules = it }
+        engineRules ?: AppPermissionRules(this, shared = true).also { engineRules = it }
 
     @delegate:Transient
     override val permissionIndexer: Map<PermissionId, Permission> by lazy(this) {

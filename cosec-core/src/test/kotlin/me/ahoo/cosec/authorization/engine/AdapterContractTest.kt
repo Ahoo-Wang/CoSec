@@ -39,6 +39,7 @@ import me.ahoo.cosec.authorization.EngineAuthorization
 import me.ahoo.cosec.authorization.MissingPolicyException
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.PolicyVerifyContext
+import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.context.SimpleSecurityContext
@@ -77,6 +78,8 @@ import reactor.core.scheduler.Schedulers
 import reactor.kotlin.test.test
 import java.net.URI
 import java.util.Collections
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
 
 /**
  * The adapter guards the engine cannot check itself (RFC 0002 PR-3, review round 2): every layer is present,
@@ -628,5 +631,123 @@ class AdapterContractTest {
             LayerInput.Unavailable(LayerKind.PRINCIPAL, down),
             LayerInput.Unavailable(LayerKind.ROLE, down),
         )
+    }
+
+    private fun authorization(
+        impl: AuthorizationImpl,
+        global: Mono<List<Policy>> = Mono.empty(),
+        principal: Mono<List<Policy>> = Mono.empty(),
+        role: Mono<AppRolePermission> = Mono.empty()
+    ) = impl.create(
+        object : PolicyRepository {
+            override fun getGlobalPolicy(): Mono<List<Policy>> = global
+            override fun getPolicies(policyIds: Set<String>): Mono<List<Policy>> = principal
+            override fun setPolicy(policy: Policy): Mono<Void> = Mono.empty()
+        },
+        object : AppRolePermissionRepository {
+            override fun getAppRolePermission(appId: String, spaceId: String, roleIds: Set<RoleId>) = role
+        },
+    )
+
+    /**
+     * M-1: two roles both granting more than 64 permissions. Position 64 is a different permission in each role,
+     * so a memo keyed by position alone would visit `ra`'s allow where `rb` grants its deny.
+     */
+    @ParameterizedTest
+    @EnumSource(AuthorizationImpl::class)
+    fun longGrantListsOfDifferentRolesKeepTheirOwnRules(impl: AuthorizationImpl) {
+        val shared = (0 until 64).map { permission("f$it") }
+        val permissions = shared + permission("a64") + permission("b64", Effect.DENY)
+        val catalog = AppPermissionData("app", groups = listOf(PermissionGroupData("g", permissions = permissions)))
+        val custom = object : AppPermission {
+            override val id: String = "app"
+            override val condition: ConditionMatcher = catalog.condition
+            override val groups: List<PermissionGroup> = catalog.groups
+        }
+        for (appPermission in listOf<AppPermission>(catalog, custom)) {
+            val grants = listOf(
+                RolePermissionData("ra", (shared.map { it.id } + "a64").toCollection(LinkedHashSet())),
+                RolePermissionData("rb", (shared.map { it.id } + "b64").toCollection(LinkedHashSet())),
+            )
+            val decision = authorization(impl, role = Mono.just(AppRolePermissionData(appPermission, grants)))
+                .decide(EvaluateRequest(), SimpleSecurityContext(SimplePrincipal("user", roles = setOf("ra", "rb"))))
+                .block()!!
+            decision.result.assert().describedAs(
+                appPermission.javaClass.simpleName
+            ).isEqualTo(AuthorizeResult.EXPLICIT_DENY)
+            (decision.verifyContext as RoleVerifyContext).permission.id.assert().isEqualTo("b64")
+        }
+    }
+
+    /** m-1: concurrent first requests for the same grant positions all get the one shared rule per position. */
+    @Test
+    fun concurrentRequestsShareOneRulePerPosition() {
+        val threads = 8
+        val positions = PermissionRules.CACHED_POSITIONS
+        val pool = Executors.newFixedThreadPool(threads)
+        try {
+            repeat(300) {
+                val rules = PermissionRules(permission("p"))
+                val start = CyclicBarrier(threads)
+                val seen = (0 until threads).map { thread ->
+                    pool.submit<List<StatementRule>> {
+                        start.await()
+                        // Every thread races for every position, in its own order.
+                        val order = (0 until positions).map { (it * (2 * thread + 1)) % positions }
+                        order.map { position -> position to rules.at(position) }.sortedBy { it.first }.map { it.second }
+                    }
+                }.map { it.get() }
+                for (position in 0 until positions) {
+                    val first = seen[0][position]
+                    seen.assert().allMatch { it[position] === first }
+                    rules.at(position).assert().isSameAs(first)
+                }
+            }
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
+    /** n-2: a repository's ready error is the layer's error itself, not Reactor's wrapper, for an Error too. */
+    @ParameterizedTest
+    @EnumSource(AuthorizationImpl::class)
+    fun aReadyErrorFromARepositoryIsRethrownUnchanged(impl: AuthorizationImpl) {
+        val error = AssertionError("store invariant broken")
+        val failed = Mono.error<List<Policy>>(error)
+        repositories(global = failed).layers(authzRequest())[0].assert()
+            .isEqualTo(LayerInput.Unavailable(LayerKind.GLOBAL, error))
+        authorization(impl, global = failed)
+            .decide(EvaluateRequest(), SimpleSecurityContext(SimplePrincipal("user")))
+            .test()
+            .expectErrorSatisfies { it.assert().isSameAs(error) }
+            .verify()
+    }
+
+    /**
+     * n-3: a global and a principal policy that are different objects with the same id, statement index and name.
+     * The principal's deny decides, and the verify context must name its objects, not the global's.
+     */
+    @ParameterizedTest
+    @EnumSource(AuthorizationImpl::class)
+    fun theDecidedPolicyIsFoundByIdentityNotById(impl: AuthorizationImpl) {
+        fun policy(effect: Effect) = PolicyData(
+            "p",
+            "",
+            "p",
+            "",
+            PolicyType.GLOBAL,
+            "",
+            statements = listOf(StatementData(name = "s", effect = effect, action = AllActionMatcher.INSTANCE)),
+        )
+        val global = policy(Effect.ALLOW)
+        val principal = policy(Effect.DENY)
+        val decision = authorization(impl, global = Mono.just(listOf(global)), principal = Mono.just(listOf(principal)))
+            .decide(EvaluateRequest(), SimpleSecurityContext(SimplePrincipal("user", policies = setOf("p"))))
+            .block()!!
+        decision.result.assert().isEqualTo(AuthorizeResult.EXPLICIT_DENY)
+        val verifyContext = decision.verifyContext as PolicyVerifyContext
+        verifyContext.source.assert().isEqualTo(me.ahoo.cosec.authorization.PolicyVerifySource.PRINCIPAL)
+        verifyContext.policy.assert().isSameAs(principal)
+        verifyContext.statement.assert().isSameAs(principal.statements[0])
     }
 }
