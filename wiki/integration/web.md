@@ -5,36 +5,277 @@ description: "Wire CoSec into Spring WebFlux, Spring MVC or Spring Cloud Gateway
 
 # Web Integration
 
-For developers wiring CoSec into a web application or gateway. This page covers choosing an adapter, the responses CoSec writes, the headers and request attributes it reads, and how to reach the security context from your handlers.
+For developers wiring CoSec into a web application or gateway. This page covers choosing an adapter, what happens
+to a request on its way through CoSec, the responses CoSec writes, the headers and request attributes it reads, and
+how to reach the security context from your handlers.
 
 ## Choosing an adapter
 
-<!-- Planned (guide). WebFlux, MVC, Gateway: which capability, what each one intercepts. -->
+Pick the adapter for your stack by requesting its capability of `cosec-spring-boot-starter`. All three run the same
+`SecurityPipeline`, so they answer every request identically; only the plumbing differs.
+
+| Stack | Capability | Component the starter registers | Order |
+|---|---|---|---|
+| Spring WebFlux | `webflux-support` | `ReactiveAuthorizationFilter` (`WebFilter`) | `1000` |
+| Spring MVC | `webmvc-support` | `AuthorizationFilter` (servlet `Filter`, every URL) | Spring Boot's default filter order |
+| Spring Cloud Gateway | `gateway-support` | `AuthorizationGatewayFilter` (`GlobalFilter`) | `HIGHEST_PRECEDENCE + 10` |
+
+Every adapter needs the same three things: the capability, a `PolicyRepository` and an
+`AppRolePermissionRepository` (from `cache-support`, or your own beans; see
+[Choosing a store](../operations/storage.md#choosing-a-store)), and a JWT secret. The snippets below show only what
+differs per adapter. The full walk-through, with a first policy and a login endpoint, is the
+[Quick Start](../guide/quick-start.md).
+
+**Spring WebFlux**
+
+```kotlin
+dependencies {
+    implementation(platform("me.ahoo.cosec:cosec-bom:<version>"))
+    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+        capabilities { requireCapability("me.ahoo.cosec:webflux-support") }
+    }
+    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+        capabilities { requireCapability("me.ahoo.cosec:cache-support") }
+    }
+}
+```
+
+```yaml
+cosec:
+  jwt:
+    secret: ${COSEC_JWT_SECRET}
+```
+
+**Spring MVC**: the same, with `webmvc-support` instead of `webflux-support`. The servlet filter blocks its request
+thread until the decision is made, which is the normal servlet model. CoSec matches the request's
+`HttpServletRequest.servletPath`, which leaves out the context path (`server.servlet.context-path`): write policy
+paths relative to it. Keep the `DispatcherServlet` mapped to `/` (the default). With
+`spring.mvc.servlet.path` set, the servlet path is only that prefix and every request looks the same to CoSec.
+
+**Spring Cloud Gateway**: the same, with `gateway-support`. When the gateway's `GlobalFilter` is on the classpath,
+the starter registers `AuthorizationGatewayFilter` and no `ReactiveAuthorizationFilter`. Turning the gateway
+filter off ([feature switches](../operations/configuration.md#feature-switches)) therefore leaves the gateway with no
+authorization at all. See [Gateway](#gateway) for what the gateway adds.
+
+With Maven, which has no feature variants, add `cosec-spring-boot-starter` plus the adapter module itself
+(`cosec-webflux`, `cosec-webmvc` or `cosec-gateway`). The [module list](../guide/introduction.md#modules) names the
+module behind every capability.
+
+## How a request is handled
+
+Every adapter hands the request to `SecurityPipeline`, which always ends in a `SecurityDecision`, errors included.
+The adapter only writes that decision out; it never decides anything itself.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant A as Adapter<br>(WebFlux, MVC, Gateway)
+    participant P as SecurityPipeline
+    participant S as SecurityContextParser
+    participant Z as Authorization
+    C->>A: HTTP request
+    A->>P: evaluate(request)
+    P->>P: parse request<br>(path check, request id, attributes)
+    P->>S: parse security context
+    S-->>P: principal from token or API key<br>(anonymous if missing or rejected)
+    P->>Z: decide(request, security context)
+    Z-->>P: AuthorizationDecision
+    P-->>A: SecurityDecision (status, result, headers)
+    alt allowed
+        A->>A: bind security context and principal
+        A->>C: continue to the handler or route
+    else denied or failed
+        A->>C: status code and JSON body
+    end
+```
+
+1. The adapter receives the request.
+2. It hands the transport request to the pipeline.
+3. The pipeline turns it into a CoSec `Request`. A path with traversal segments stops here with `400`. Otherwise it
+   takes the caller's `CoSec-Request-Id` or generates one, resolves the [client IP](#client-ip-behind-proxies), and
+   runs every [request attributes](#request-attributes) appender.
+4. The security context parser reads the credential: an API key if one is configured and sent, otherwise the
+   token ([Authentication](./authentication.md#tokens)). When token revocation or a blocking API key store is
+   enabled, the reactive adapters run this step on `boundedElastic`, off the event loop.
+5. A missing or rejected credential is not an error: the request goes on as anonymous, and the rejection is kept
+   to explain a later `401`. Any other parser error ends in `500`.
+6. The authorization chain decides, in the order described in the
+   [security model](../guide/security-model.md#evaluation-order).
+7. It returns the decision, together with any rate limit result.
+8. The pipeline maps the decision to a status, as in the [table below](#responses-and-status-codes).
+9. For an allowed request the adapter binds the security context (and, in WebFlux and the gateway, the exchange
+   principal) where your code can read it ([Accessing the security context](#accessing-the-security-context)).
+10. The request continues to your handler, or to the route's downstream service.
+11. A denied or failed request gets the status and a JSON body, and never reaches your handler.
 
 ## Responses and status codes
 
-<!-- Planned (guide). Single home of decision to status mapping (401/403/429/500) and the error body. -->
+Every status comes from `SecurityPipeline`; the adapters only copy it to the response.
+
+| Status | When | Body `reason` |
+|---|---|---|
+| `200` (request passes) | The authorization decision allows it. | none, the handler answers |
+| `400` | The path has a `.` or `..` segment (also percent-encoded), or a malformed percent-escape (`InvalidRequestPathException`). | no body |
+| `401` | Denied, and the caller is anonymous: no credential, or one that was rejected. | `Token Expired` or `Token Invalid` when the credential was rejected; otherwise `Implicit Deny` or `Explicit Deny` |
+| `403` | Denied, and the caller is authenticated. | `Implicit Deny` or `Explicit Deny` |
+| `403` | A regex condition ran over its time budget (`RegexTimeoutException`). An expected deny, not a server error. | `Implicit Deny` |
+| `429` | The request was allowed, but a matching [rate limit rule](../policies/rate-limiting.md) has no permit left. | `Too Many Requests` |
+| `500` | Any other error. CoSec fails closed instead of guessing. | `Implicit Deny` |
+
+`500` covers, among others:
+
+- `MissingPolicyException`: the principal (or the global policy index) lists a policy the repository does not
+  have. It may be the deny that keeps the request out, so CoSec does not evaluate without it.
+- `CacheReadException`: a policy or permission is not in the local cache and Redis cannot be read, or the stored
+  value cannot be decoded (for example 6.x data that was not migrated). See
+  [When Redis is unavailable](../operations/storage.md#when-redis-is-unavailable).
+- `PathVariableScopeException`: a stored policy or permission reads `request.path.var.*` outside its scope, so it
+  is rejected when it is read ([Actions](../policies/language.md#actions)).
+- A custom matcher, repository or API key store that throws (a Redis-backed API key store that cannot reach Redis
+  included).
+
+Why errors deny, and the two deliberate exceptions, are in
+[Fail closed](../guide/security-model.md#fail-closed). For each status, the
+[troubleshooting guide](../operations/troubleshooting.md#by-status-code) lists the usual causes.
+
+A rejected request has a JSON body with the content type `application/json`:
+
+```json
+{ "authorized": false, "reason": "Implicit Deny" }
+```
+
+**Response headers.** Every request that gets past the path check carries `CoSec-Request-Id`: the caller's own
+value if it sent one, otherwise a generated id. The gateway also forwards it downstream. When a rate limit rule
+matched the request, the response, allowed or rejected, also carries:
+
+| Header | Value |
+|---|---|
+| `RateLimit-Limit` | The rule's limit. |
+| `RateLimit-Remaining` | Permits left in the current window. |
+| `RateLimit-Reset` | Seconds until the window resets, at least `1`. |
+| `Retry-After` | Only on `429`: the same number of seconds. |
+
+When several rules match, an allowed response describes the tightest of them and a `429` the rule that ran out;
+see [Responses and headers](../policies/rate-limiting.md#responses-and-headers).
 
 ## Accessing the security context
 
-<!-- Planned (guide). Reactive and servlet access to SecurityContext and principal. -->
+The security context holds the principal, its tenant and the parsed request. For an allowed request your
+handler can read it as shown below; a denied request never reaches the handler.
+
+**WebFlux and the gateway**: from the Reactor context of the request, or from the exchange attributes. The exchange
+principal is also set, so `exchange.getPrincipal()` returns the CoSec principal.
+
+```kotlin
+import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+
+fun currentUser(): Mono<String> =
+    Mono.deferContextual { context -> Mono.just(context.getSecurityContext().principal.id) }
+
+// with an exchange at hand; null if the request never reached CoSec
+val securityContext = exchange.getSecurityContext()
+```
+
+**Spring MVC**: from the thread-bound holder, or from the servlet request. The filter clears the holder when the
+request completes, so read it on the request thread, not on a thread you started yourself.
+
+```kotlin
+import me.ahoo.cosec.context.SecurityContextHolder
+import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
+
+val securityContext = SecurityContextHolder.requiredContext
+// or
+val securityContext = httpServletRequest.getSecurityContext()
+```
+
+To ask from code whether the current principal may do something else, see [Checks in Code](./checks.md).
 
 ## App and space
 
-<!-- Planned (guide). CoSec-App-Id, CoSec-Space-Id, CoSec-Device-Id headers and how they are resolved. -->
+Three request headers name where a request runs. Each one can also be sent as a query parameter of the same name;
+the header wins.
+
+| Header | Meaning | Read by |
+|---|---|---|
+| `CoSec-App-Id` | The app the request is for. Role grants apply only in the app they were made in. | role permissions, `request.appId` in conditions |
+| `CoSec-Space-Id` | The space within the app. Only the principal's roles written `role@<that space>` apply; without the header, only roles without a suffix apply. | role permissions, `inRole`, `request.spaceId` in conditions |
+| `CoSec-Device-Id` | The caller's device. Informational: CoSec makes no decision from it unless a policy does. | `request.deviceId` in conditions, audit events, traces |
+
+How roles, spaces and grants combine is in [Role grant scope](../policies/role-permissions.md#role-grant-scope),
+and how a token carries `role@space` in [Roles and spaces](./authentication.md#roles-and-spaces).
+
+The client sets all three. The space only selects among the roles the credential states, but CoSec takes the app id
+as sent; what that means when apps share paths, and how to bind it at the gateway, is in
+[What CoSec does not protect against](../guide/security-model.md#what-cosec-does-not-protect-against).
 
 ## Client IP behind proxies
 
-<!-- Planned (guide). max-trusted-index and X-Forwarded-For. -->
+Policies and audit events see the client IP as `request.remoteIp`. Set
+`cosec.authorization.remote-ip.max-trusted-index` ([Authorization properties](../operations/configuration.md#authorization))
+to the number of proxies in front of the application. CoSec then counts that many entries from the right of
+`X-Forwarded-For` (the entries your own proxies appended) and takes that one, so a value the client put at the
+left of the header is never used. `0` ignores `X-Forwarded-For` and uses the socket address. A request with no
+`X-Forwarded-For`, or with more than one such header, also uses the socket address. The IP is never resolved
+through reverse DNS.
 
 ## Request attributes
 
-<!-- Planned (guide). Attributes available to conditions (ip2region etc.). -->
+Request attributes are string values attached to the request before authorization. Conditions read them as
+`request.attributes.<name>`, and audit events include them. The client cannot set them: they come only from
+`RequestAttributesAppender` beans.
+
+| Attribute | Added by | Value |
+|---|---|---|
+| `ipRegion` | `ip2region-support` | The client IP's location (country, region, city, ISP) from an embedded [ip2region](https://github.com/lionsoul2014/ip2region) database. Absent if the lookup fails. |
+| `cosec.audit.routeId` | `gateway-support`, with auditing on | The id of the matched gateway route. |
+
+```json
+{ "contains": { "part": "request.attributes.ipRegion", "value": "中国" } }
+```
+
+To add your own, declare a `RequestAttributesAppender` bean; every one is applied in turn
+([Request and security context](../architecture/extending.md#request-and-security-context)).
 
 ## CORS
 
-<!-- Planned (guide). Preflight handling. -->
+Browsers send CORS preflight requests without credentials, so authorization would answer them `401`. With
+WebFlux, register `OrderedCorsWebFilter`; it runs at order `999`, just before the authorization filter, and answers
+preflights itself:
+
+```kotlin
+@Bean
+fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source)
+```
+
+With Spring MVC, register a CORS filter that runs before `AuthorizationFilter`.
 
 ## Gateway
 
-<!-- Planned (guide). Gateway notes, context injection to downstream services, and the ready-to-run cosec-gateway-server image and k8s manifests (from _legacy/guide/operations.md#deployment). -->
+On Spring Cloud Gateway, CoSec authorizes the request before any route filter runs. In addition to what every
+adapter does, `AuthorizationGatewayFilter`:
+
+- forwards `CoSec-Request-Id` to the downstream service, so its logs share the gateway's request id;
+- adds the matched route id as the [request attribute](#request-attributes) `cosec.audit.routeId`.
+
+Services behind the gateway do not need to authorize again: they can read the principal from the forwarded token
+without verifying its signature. [Behind a gateway](./authentication.md#behind-a-gateway) shows the configuration
+and when it is safe.
+
+**Ready-to-run gateway.** `cosec-gateway-server` is a Spring Cloud Gateway application with CoSec authorization,
+Redis-backed policies and local policy initialization, published as a container image:
+
+```bash
+docker run -p 8080:8080 -e COSEC_JWT_SECRET=... ahoowang/cosec-gateway:<version>
+```
+
+The image is also published as `ghcr.io/ahoo-wang/cosec-gateway`. Configure routes and CoSec through standard Spring
+configuration; the defaults are in its
+[`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/src/main/resources/application.yaml).
+Example Kubernetes manifests are in [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s). They read the JWT
+secret from a Secret named `cosec-jwt-secret`; create it first, and set the image tag to the version you deploy:
+
+```bash
+kubectl create secret generic cosec-jwt-secret --from-literal=secret=<random value>
+```
