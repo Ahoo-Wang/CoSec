@@ -131,12 +131,12 @@ Every status comes from `SecurityPipeline`; the adapters only copy it to the res
   value cannot be decoded (for example 6.x data that was not migrated). See
   [When Redis is unavailable](../operations/storage.md#when-redis-is-unavailable).
 - `PathVariableScopeException`: a stored policy or permission reads `request.path.var.*` outside its scope, so it
-  is rejected when it is read ([Actions](../policies/language.md#actions)).
+  is rejected when it is read ([Path variables](../policies/language.md#path-variables)).
 - A custom matcher, repository or API key store that throws (a Redis-backed API key store that cannot reach Redis
   included).
 
-Why errors deny, and the two deliberate exceptions, are in
-[Fail closed](../guide/security-model.md#fail-closed). For each status, the
+Why errors deny is in [Fail closed](../guide/security-model.md#fail-closed), and the two deliberate exceptions in
+[The two documented exceptions](../guide/security-model.md#the-two-documented-exceptions). For each status, the
 [troubleshooting guide](../operations/troubleshooting.md#by-status-code) lists the usual causes.
 
 A rejected request has a JSON body with the content type `application/json`:
@@ -208,7 +208,7 @@ and how a token carries `role@space` in [Roles and spaces](./authentication.md#r
 
 The client sets all three. The space only selects among the roles the credential states, but CoSec takes the app id
 as sent; what that means when apps share paths, and how to bind it at the gateway, is in
-[What CoSec does not protect against](../guide/security-model.md#what-cosec-does-not-protect-against).
+[Trust boundaries](../guide/security-model.md#trust-boundaries).
 
 ## Client IP behind proxies
 

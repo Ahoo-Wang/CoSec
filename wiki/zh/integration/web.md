@@ -121,10 +121,10 @@ sequenceDiagram
 - `CacheReadException`：策略或权限不在本地缓存里且读不到 Redis，或者存储的值无法解码（例如没有迁移的 6.x 数据）。
   见 [Redis 不可用时](../operations/storage.md#when-redis-is-unavailable)。
 - `PathVariableScopeException`：存储的策略或权限在作用域之外读取 `request.path.var.*`，读取时被拒绝
-  （[动作](../policies/language.md#actions)）。
+  （[路径变量](../policies/language.md#path-variables)）。
 - 抛出异常的自定义匹配器、仓库或 API Key 存储（包括连不上 Redis 的 Redis API Key 存储）。
 
-为什么出错就拒绝，以及两个有意为之的例外，见[失败即拒绝](../guide/security-model.md#fail-closed)。每个状态码的常见原因见
+为什么出错就拒绝，见[失败即拒绝](../guide/security-model.md#fail-closed)；两个有意为之的例外，见[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)。每个状态码的常见原因见
 [故障排查](../operations/troubleshooting.md#by-status-code)。
 
 被拒绝的请求带有 JSON 响应体，内容类型为 `application/json`：
@@ -192,7 +192,7 @@ val securityContext = httpServletRequest.getSecurityContext()
 `role@space`，见[角色与空间](./authentication.md#roles-and-spaces)。
 
 这三个值都由客户端设置。空间只能在凭证声明的角色中做选择，但应用 ID 是 CoSec 原样接受的；多个应用共享路径时这意味着
-什么、如何在网关上绑定它，见 [CoSec 不防护的范围](../guide/security-model.md#what-cosec-does-not-protect-against)。
+什么、如何在网关上绑定它，见[信任边界](../guide/security-model.md#trust-boundaries)。
 
 ## 代理后的客户端 IP {#client-ip-behind-proxies}
 

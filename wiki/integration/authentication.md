@@ -53,18 +53,18 @@ A principal can hold different roles in different spaces of an app. Write each r
 - `role@space`: the role in `space` only. A principal that is `admin` in two spaces carries `admin@team-a` and
   `admin@team-b`.
 
-A role id must not otherwise contain `@`. A malformed role (empty role or space, more than one `@`) applies
-nowhere. How the two forms are matched:
+A role id must not otherwise contain `@`; a malformed role (empty role or space, more than one `@`) applies
+nowhere.
 
-| Where | `role` in the token | `role@space` in the token |
-|---|---|---|
-| Role permissions (grants) | Apply only to requests without `CoSec-Space-Id`. | Apply only to requests with `CoSec-Space-Id: space`. |
-| `inRole` with a bare value, `{"inRole": {"value": "role"}}` | Matches, whatever the request's space. | Matches when the request is in `space`. |
-| `inRole` with `{"inRole": {"value": "role@space"}}` | Does not match. | Matches, whatever the request's space. |
+What the suffix changes:
 
-So a deny on a bare `inRole` keeps matching after you move tokens to `role@space`, but neither form limits an allow
-to the request's space; add a `request.spaceId` condition for that. Grants are scoped for you, as described in
-[Role grant scope](../policies/role-permissions.md#role-grant-scope) and [Spaces](../policies/role-permissions.md#spaces).
+- **Role permissions** follow it strictly: a request with `CoSec-Space-Id: space` gets only the grants of the
+  `…@space` roles, a request without the header only those of the unsuffixed roles
+  ([Role grant scope](../policies/role-permissions.md#role-grant-scope), [Spaces](../policies/role-permissions.md#spaces)).
+- **`inRole`** matches more broadly, so a deny on a bare `inRole` keeps working after tokens move to `role@space`,
+  but no form of it limits an allow to the request's space. The exact rules and why are in
+  [Role scope and inRole](../guide/security-model.md#role-scope-and-inrole); the condition itself is in
+  [Matching roles](../policies/language.md#matching-roles).
 
 The client chooses the space with a header, but only among the spaces the token states. The token is therefore
 the only proof of membership: issue `role@space` only after checking that the user belongs to that space.
@@ -158,8 +158,8 @@ the event loop. Two properties of the check matter:
 - **"Not revoked" is cached locally for 30 seconds.** A revocation through `TokenRevoker` invalidates that answer on
   every instance at once. If the invalidation message is lost, or the revocation is written to Redis some other
   way, an instance may accept the token for up to 30 seconds more.
-- **It allows the token when Redis is unreachable.** This is one of the two deliberate exceptions to
-  [fail closed](../guide/security-model.md#fail-closed): the signature and expiry are still checked, and rejecting
+- **It allows the token when Redis is unreachable.** This is one of
+  [the two documented exceptions](../guide/security-model.md#the-two-documented-exceptions) to fail closed: the signature and expiry are still checked, and rejecting
   every authenticated request during a Redis outage would be worse. Keep access tokens short-lived so this
   window stays small. A revocation entry that Redis returns but CoSec cannot decode still fails the request
   ([When Redis is unavailable](../operations/storage.md#when-redis-is-unavailable)).
@@ -265,5 +265,5 @@ enabled, the service keeps verifying and authorizing every request itself.
 ::: danger Trust boundary
 Without signature verification, anyone who can reach the service directly can forge any principal. Enable this
 only for services that are reachable exclusively through the verifying gateway; see
-[What CoSec does not protect against](../guide/security-model.md#what-cosec-does-not-protect-against).
+[Trust boundaries](../guide/security-model.md#trust-boundaries).
 :::

@@ -47,17 +47,15 @@ description: "签发、刷新和吊销令牌，接受 API Key，以及通过社�
 - `role`：默认空间中的角色（不带 `CoSec-Space-Id` 的请求）；
 - `role@space`：只在 `space` 中有效的角色。在两个空间中都是 `admin` 的主体携带 `admin@team-a` 和 `admin@team-b`。
 
-除此之外，角色 ID 不能包含 `@`。格式错误的角色（角色或空间为空、包含多个 `@`）在任何地方都不生效。两种写法的匹配方式：
+除此之外，角色 ID 不能包含 `@`；格式错误的角色（角色或空间为空、包含多个 `@`）在任何地方都不生效。
 
-| 用在哪里 | 令牌中的 `role` | 令牌中的 `role@space` |
-|---|---|---|
-| 角色权限（授权） | 只对不带 `CoSec-Space-Id` 的请求生效。 | 只对带 `CoSec-Space-Id: space` 的请求生效。 |
-| 不带空间的 `inRole`，`{"inRole": {"value": "role"}}` | 匹配，不论请求在哪个空间。 | 请求在 `space` 中时匹配。 |
-| `{"inRole": {"value": "role@space"}}` | 不匹配。 | 匹配，不论请求在哪个空间。 |
+后缀带来的变化：
 
-因此，把令牌改成 `role@space` 之后，基于不带空间的 `inRole` 的拒绝仍然有效；但两种写法都不会把允许限制在请求所在的空间内，
-需要时请加一个 `request.spaceId` 条件。授权会自动按作用域生效，见[角色授权的作用域](../policies/role-permissions.md#role-grant-scope)
-和[空间](../policies/role-permissions.md#spaces)。
+- **角色权限**严格遵循它：带 `CoSec-Space-Id: space` 的请求只获得 `…@space` 角色的授权，不带这个头的请求只获得不带后缀的角色的授权
+  （[角色授权的作用域](../policies/role-permissions.md#role-grant-scope)、[空间](../policies/role-permissions.md#spaces)）。
+- **`inRole`** 的匹配更宽：令牌改成 `role@space` 之后，基于不带空间的 `inRole` 的拒绝仍然有效，但它的任何写法都不会把允许限制在请求所在的空间内。
+  具体规则及原因见[角色作用域与 inRole](../guide/security-model.md#role-scope-and-inrole)；条件本身见
+  [角色匹配](../policies/language.md#matching-roles)。
 
 客户端用请求头选择空间，但只能在令牌声明的空间中选择。因此令牌是成员身份的唯一凭据：只有确认用户属于某个空间之后，才签发
 `role@space`。
@@ -143,7 +141,7 @@ JWT 是无状态的：不做额外处理的话，令牌在过期之前一直有�
 
 - **"未吊销"的结果在本地缓存 30 秒。** 通过 `TokenRevoker` 吊销时，这个结果会在所有实例上立即失效。如果失效消息丢失，或者
   吊销是以其他方式写入 Redis 的，某个实例可能在最多 30 秒内继续接受这个令牌。
-- **Redis 不可达时放行令牌。** 这是[失败即拒绝](../guide/security-model.md#fail-closed)的两个有意例外之一：签名和过期时间
+- **Redis 不可达时放行令牌。** 这是失败即拒绝的[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)之一：签名和过期时间
   仍然会检查，而在 Redis 故障期间拒绝所有已认证请求的后果更糟。保持访问令牌短期有效，让这个窗口尽量小。Redis 返回了但
   CoSec 无法解码的吊销记录仍然会让请求失败（[Redis 不可用时](../operations/storage.md#when-redis-is-unavailable)）。
 
@@ -236,5 +234,5 @@ cosec:
 
 ::: danger 信任边界
 不校验签名时，任何能直接访问这个服务的人都可以伪造任意主体。只对只能经由校验令牌的网关访问的服务启用它；见
-[CoSec 不防护的范围](../guide/security-model.md#what-cosec-does-not-protect-against)。
+[信任边界](../guide/security-model.md#trust-boundaries)。
 :::
