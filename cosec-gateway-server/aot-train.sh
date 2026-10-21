@@ -32,7 +32,6 @@ APP_HOME=$1
 CACHE=$2
 CONF="$CACHE.conf"
 LOG="$CACHE.train.log"
-PORT=${SERVER_PORT:-8080}
 # Seconds to wait for startup; multi-platform builds train under QEMU, which is several times slower.
 TIMEOUT=${AOT_TRAIN_TIMEOUT:-300}
 
@@ -45,15 +44,23 @@ mkdir -p logs data "$(dirname "$CACHE")"
 unset JDK_JAVA_OPTIONS
 export COSEC_JWT_SECRET=aot-training-only-not-a-secret-0123456789
 export SPRING_DATA_REDIS_URL=redis://127.0.0.1:1
-TRAIN_OPTS="-Dcocache.backend=memory"
+# Ephemeral HTTP and JMX ports: a multi-platform build trains every platform at once, and the training JVMs can
+# share one network namespace. On fixed ports the faster platform's JVM answers the slower one's health check.
+EPHEMERAL_PORTS="-Dserver.port=0 -Dcom.sun.management.jmxremote.port=0"
+TRAIN_OPTS="-Dcocache.backend=memory $EPHEMERAL_PORTS"
 
 JAVA_OPTS="-XX:AOTMode=record -XX:AOTConfiguration=$CONF $TRAIN_OPTS" bin/cosec-gateway-server >"$LOG" 2>&1 &
 PID=$!
 
+# The port comes from this JVM's own log, so the health check below can only reach this JVM.
 started=false
+PORT=
 i=0
 while [ "$i" -lt "$TIMEOUT" ]; do
-  if curl -fs -o /dev/null "http://localhost:$PORT/actuator/health/liveness"; then
+  if [ -z "$PORT" ]; then
+    PORT=$(sed -n 's/.*Netty started on port \([0-9][0-9]*\).*/\1/p' "$LOG" | head -n 1)
+  fi
+  if [ -n "$PORT" ] && curl -fs -o /dev/null "http://localhost:$PORT/actuator/health/liveness"; then
     started=true
     break
   fi
@@ -93,7 +100,7 @@ JAVA_OPTS="-XX:AOTMode=create -XX:AOTConfiguration=$CONF -XX:AOTCache=$CACHE" bi
 
 # Prove the production flags can map the cache. AOTMode=on fails instead of falling back; it is used here
 # only. spring.context.exit stops the JVM after the first (bootstrap) context refresh, so this takes a second.
-JAVA_OPTS="-XX:AOTMode=on -XX:AOTCache=$CACHE -Dspring.context.exit=onRefresh" bin/cosec-gateway-server >>"$LOG" 2>&1 || {
+JAVA_OPTS="-XX:AOTMode=on -XX:AOTCache=$CACHE -Dspring.context.exit=onRefresh $EPHEMERAL_PORTS" bin/cosec-gateway-server >>"$LOG" 2>&1 || {
   echo "AOT training: the cache cannot be mapped with the runtime options" >&2
   cat "$LOG" >&2
   exit 1

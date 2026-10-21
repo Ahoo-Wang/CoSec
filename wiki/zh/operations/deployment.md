@@ -47,7 +47,7 @@ JVM 启动时直接映射这个文件，不再重复这些工作。不需要改�
 训练缓存，所用的 jar 和路径与容器运行时完全一致，结果写入 `/opt/cosec-gateway-server/aot/cosec-gateway-server.aot`。
 
 1. **记录。** 脚本用 `-XX:AOTMode=record` 和与生产相同的 JVM 参数启动网关，等到 `/actuator/health/liveness` 有响应后发送几个请求，
-   再用 `SIGTERM` 停止它。
+   再用 `SIGTERM` 停止它。它使用临时的 HTTP 和 JMX 端口，因为多平台构建会同时训练所有平台，这些 JVM 可能共享同一个网络。
 2. **创建。** 第二次运行使用 `-XX:AOTMode=create`，把记录下的配置生成缓存。
 3. **检查。** 第三次运行使用 `-XX:AOTMode=on`；如果生产参数无法映射缓存，构建失败。
 

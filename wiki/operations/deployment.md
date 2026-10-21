@@ -57,7 +57,9 @@ The `Dockerfile` trains the cache in its final stage with
 jars and path the container runs, and writes it to `/opt/cosec-gateway-server/aot/cosec-gateway-server.aot`.
 
 1. **Record.** The script starts the gateway with `-XX:AOTMode=record` and the same JVM options as production,
-   waits until `/actuator/health/liveness` answers, sends a few requests, and stops it with `SIGTERM`.
+   waits until `/actuator/health/liveness` answers, sends a few requests, and stops it with `SIGTERM`. It uses
+   ephemeral HTTP and JMX ports, because a multi-platform build trains all platforms at once and their JVMs can
+   share one network.
 2. **Create.** A second run with `-XX:AOTMode=create` turns the recorded configuration into the cache.
 3. **Check.** A third run with `-XX:AOTMode=on` fails the build if the production options cannot map the cache.
 
