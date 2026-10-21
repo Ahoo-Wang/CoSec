@@ -50,8 +50,7 @@ class SnapshotEntry<out T : Any> internal constructor(
     val revision: Long,
     internal val digest: SnapshotDigest?,
     confirmedAt: Instant,
-    /** Whether the store held no document when this entry was made: plain absence, or a document that was lost. */
-    internal val storedAbsent: Boolean = false,
+    internal val origin: EntryOrigin,
 ) {
     @Volatile
     var confirmedAt: Instant = confirmedAt
@@ -69,6 +68,31 @@ class SnapshotEntry<out T : Any> internal constructor(
     fun lagAt(now: Instant): Duration = Duration.between(confirmedAt, now).coerceAtLeast(Duration.ZERO)
 
     override fun toString(): String = "SnapshotEntry(key=$key, state=$state, revision=$revision, confirmedAt=$confirmedAt)"
+}
+
+/** What the store answered when an entry was made; decides how the entry is revalidated. */
+internal enum class EntryOrigin {
+    /** A decoded, compiled document. */
+    DOCUMENT,
+
+    /** A decoded document that failed to compile: revalidated with a full read so that it is compiled again. */
+    UNCOMPILABLE,
+
+    /** A stored value that cannot be decoded. */
+    UNDECODABLE,
+
+    /** No document, and none seen before. */
+    ABSENT,
+
+    /** No document, although one was seen: the store lost data. */
+    LOST,
+
+    /** The store could not be read; never installed. */
+    TRANSIENT,
+    ;
+
+    /** Whether the store held no document. */
+    val storedAbsent: Boolean get() = this == ABSENT || this == LOST
 }
 
 /**

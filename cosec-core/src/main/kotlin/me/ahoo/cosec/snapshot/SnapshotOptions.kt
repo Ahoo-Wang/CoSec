@@ -40,8 +40,12 @@ data class SnapshotOptions(
     val reloadConcurrency: Int = 4,
     val prewarmInitialBackoff: Duration = Duration.ofSeconds(1),
     val prewarmMaxBackoff: Duration = Duration.ofSeconds(30),
-    /** The least time between two lag log lines for the same document. */
+    /** The least time between two lag reports (log line and metric) for the same document. */
     val lagLogInterval: Duration = Duration.ofMinutes(1),
+    /** How long a store read may take before the load treats it as failed; bounds stores whose futures never complete. */
+    val storeReadTimeout: Duration = Duration.ofSeconds(30),
+    /** How long a reload waits before it retries after the compile queue was full. */
+    val rejectedReloadRetry: Duration = Duration.ofMillis(200),
 ) {
     init {
         require(!revalidateInterval.isNegative) { "revalidateInterval must not be negative." }
@@ -52,6 +56,10 @@ data class SnapshotOptions(
         require(compileThreads > 0) { "compileThreads must be positive." }
         require(compileQueueCapacity > 0) { "compileQueueCapacity must be positive." }
         require(reloadConcurrency > 0) { "reloadConcurrency must be positive." }
+        require(!storeReadTimeout.isNegative && !storeReadTimeout.isZero) { "storeReadTimeout must be positive." }
+        require(
+            !rejectedReloadRetry.isNegative && !rejectedReloadRetry.isZero
+        ) { "rejectedReloadRetry must be positive." }
         require(
             !prewarmInitialBackoff.isNegative && !prewarmInitialBackoff.isZero && prewarmInitialBackoff <= prewarmMaxBackoff
         ) {

@@ -28,11 +28,17 @@ import java.util.concurrent.TimeUnit
  * closed.
  */
 class SnapshotLoadOutcomeTest {
-    /** Keeps scheduled timeouts instead of running them, so the test decides when they fire. */
+    /**
+     * Keeps cold-load timeouts instead of running them, so the test decides when they fire. Everything else (store read
+     * timeouts, housekeeping) is scheduled as usual.
+     */
     private class ManualScheduler : ScheduledThreadPoolExecutor(1) {
         val timeouts: MutableList<Runnable> = CopyOnWriteArrayList()
 
         override fun schedule(command: Runnable, delay: Long, unit: TimeUnit): ScheduledFuture<*> {
+            if (unit.toNanos(delay) != SnapshotOptions().coldLoadTimeout.toNanos()) {
+                return super.schedule(command, delay, unit)
+            }
             timeouts.add(command)
             return super.schedule({}, 1, TimeUnit.DAYS)
         }

@@ -17,6 +17,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
 
 /**
@@ -47,7 +48,7 @@ class SnapshotInstallOrderPropertyTest {
         }
     }
 
-    private val keys = listOf(SnapshotKey.Policies, APP_A)
+    private val keys = listOf(SnapshotKey.Policies, APP_A, APP_B)
 
     @Test
     fun installsFollowLoadOrderAndConverge() {
@@ -62,16 +63,19 @@ class SnapshotInstallOrderPropertyTest {
         val clock = ManualClock()
         val metrics = RecordingMetrics()
         val revisions = mutableMapOf<SnapshotKey, Long>()
+        val ticks = AtomicLong()
         val source = SnapshotSource(
             store,
             FakeCompiler(),
             FakeCompiler(),
-            SnapshotOptions(revalidateInterval = Duration.ZERO),
+            // One app at most, so loading the other evicts it: eviction runs concurrently on the scheduler.
+            SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 1),
             clock,
             metrics,
             executor,
             null,
-        ) { 0 }
+            ticks::incrementAndGet,
+        )
 
         fun publish(key: SnapshotKey) {
             val revision = (revisions[key] ?: 0) + 1
@@ -88,19 +92,22 @@ class SnapshotInstallOrderPropertyTest {
         }
 
         fun step(keys: List<SnapshotKey>) {
-            when (random.nextInt(8)) {
+            when (random.nextInt(10)) {
                 0, 1 -> publish(keys.random(random))
                 2 -> releaseOne()
                 3 -> executor.runOne(random)
                 4 -> source.revalidate()
                 5 -> if (random.nextInt(4) == 0) store.reset()
                 6 -> source.load("app-a")
+                7 -> source.load("app-b")
+                8 -> store.failure = if (random.nextInt(3) == 0) IllegalStateException("redis down") else null
                 else -> clock.advance(Duration.ofSeconds(1))
             }
         }
 
-        fun settle() {
-            source.load("app-a")
+        fun settle(appId: String) {
+            store.failure = null
+            source.load(appId)
             repeat(3) {
                 while (store.pending.isNotEmpty() || executor.tasks.isNotEmpty()) {
                     store.releaseAll()
@@ -118,18 +125,28 @@ class SnapshotInstallOrderPropertyTest {
                 run.step(keys)
                 keys.forEach { key -> run.store.pending.count { it.key == key }.assert().isLessThanOrEqualTo(1) }
             }
-            run.settle()
+            listOf(APP_A, APP_B).forEach { app ->
+                run.settle(app.appId)
+                // Eviction runs concurrently, so read through load(): a hit, or a cold load of a seen key from the store.
+                run.store.hold = false
+                val loading = source.load(app.appId)
+                while (!loading.isDone) {
+                    run.executor.runAll()
+                    run.store.releaseAll()
+                }
+                run.store.hold = true
+                val snapshot = loading.join()
+                snapshot.policiesEntry.revision.assert().describedAs(
+                    "seed $seed"
+                ).isEqualTo(run.revisions[SnapshotKey.Policies] ?: 0)
+                snapshot.appEntry!!.revision.assert().describedAs("seed $seed, $app").isEqualTo(run.revisions[app] ?: 0)
+            }
 
             keys.forEach { key ->
                 val installed = run.metrics.installs.filter { it.key == key }.map { it.revision }
                 installed.assert().describedAs("seed $seed, key $key: $installed").isSorted()
             }
             run.metrics.regressions.assert().isEmpty()
-            val snapshot = source.peek("app-a")!!
-            snapshot.policiesEntry.revision.assert().describedAs(
-                "seed $seed"
-            ).isEqualTo(run.revisions[SnapshotKey.Policies] ?: 0)
-            snapshot.appEntry!!.revision.assert().describedAs("seed $seed").isEqualTo(run.revisions[APP_A] ?: 0)
         }
     }
 }

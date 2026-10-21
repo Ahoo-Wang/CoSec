@@ -99,12 +99,13 @@ class SnapshotSourceTest {
     fun changeNotificationInstallsTheNewRevision() {
         testSource(store).use { source ->
             source.load("app-a").join()
+            val conditionalReads = store.conditionalReads.get()
             store.put(SnapshotKey.Policies, document(2))
             store.put(APP_A, document(2, "a2"))
             val snapshot = source.peek("app-a")!!
             snapshot.version.assert().isEqualTo(SnapshotVersion(2, 2))
             snapshot.appCompiled.entries.assert().containsExactly("a2")
-            store.conditionalReads.get().assert().isEqualTo(2)
+            store.conditionalReads.get().assert().isEqualTo(conditionalReads + 2)
         }
     }
 
@@ -113,9 +114,10 @@ class SnapshotSourceTest {
         testSource(store).use { source ->
             source.load().join()
             val reads = store.reads.get()
+            val conditionalReads = store.conditionalReads.get()
             store.put(APP_B, document(1, "b1"))
             store.reads.get().assert().isEqualTo(reads)
-            store.conditionalReads.get().assert().isZero()
+            store.conditionalReads.get().assert().isEqualTo(conditionalReads)
             source.peek("app-b").assert().isNull()
         }
     }
@@ -126,13 +128,14 @@ class SnapshotSourceTest {
         testSource(store, clock = clock).use { source ->
             source.load("app-a").join()
             val loadedAt = clock.now
+            val conditionalReads = store.conditionalReads.get()
             clock.advance(Duration.ofSeconds(30))
             source.peek("app-a")!!.lagAt(clock.now).assert().isEqualTo(Duration.ofSeconds(30))
 
             source.revalidate().join()
 
             store.reads.get().assert().isEqualTo(2)
-            store.conditionalReads.get().assert().isEqualTo(2)
+            store.conditionalReads.get().assert().isEqualTo(conditionalReads + 2)
             source.entries().forEach { it.confirmedAt.assert().isEqualTo(loadedAt.plusSeconds(30)) }
             source.peek("app-a")!!.lagAt(clock.now).assert().isEqualTo(Duration.ZERO)
         }
@@ -182,7 +185,7 @@ class SnapshotSourceTest {
 
             source.load("app-c").join()
 
-            source.peek("app-b").assert().isNull()
+            await { !source.holds(APP_B) }
             source.peek("app-a").assert().isNotNull()
             source.peek("app-c").assert().isNotNull()
             source.peek().assert().isNotNull()
@@ -199,6 +202,8 @@ class SnapshotSourceTest {
             store.failure = IllegalStateException("down")
             source.load("app-z").join().app.assert().isInstanceOf(DocumentState.Failed::class.java)
             source.entries().map { it.key }.assert().containsExactly(SnapshotKey.Policies)
+            store.failure = null
+            source.load("app-z").join().app.assert().isEqualTo(DocumentState.Absent)
         }
     }
 
@@ -271,7 +276,8 @@ class SnapshotSourceTest {
         val options = SnapshotOptions(revalidateInterval = Duration.ofMillis(20))
         SnapshotSource(store, FakeCompiler(), FakeCompiler(), options).use { source ->
             source.load().join()
-            await { store.conditionalReads.get() >= 2 }
+            val afterLoad = store.conditionalReads.get()
+            await { store.conditionalReads.get() >= afterLoad + 2 }
         }
     }
 
@@ -291,13 +297,14 @@ class SnapshotSourceTest {
             clock.advance(Duration.ofMinutes(5))
             source.reportLag()
 
-            metrics.lagExceeded.map { it.third }.assert().containsExactly(false, false, true)
+            // The second report within lagLogInterval is throttled; the escalation comes after it.
+            metrics.lagExceeded.map { it.third }.assert().containsExactly(false, true)
             metrics.lagExceeded.last().second.assert().isEqualTo(Duration.ofSeconds(361))
 
             store.failure = null
             source.revalidate().join()
             source.reportLag()
-            metrics.lagExceeded.assert().hasSize(3)
+            metrics.lagExceeded.assert().hasSize(2)
         }
     }
 

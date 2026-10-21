@@ -55,10 +55,15 @@ class FakeCompiler : SnapshotCompiler<Compiled> {
     @Volatile
     var gate: CountDownLatch? = null
 
+    /** When set, every compilation throws it, whatever the body. */
+    @Volatile
+    var failure: Throwable? = null
+
     override fun compile(key: SnapshotKey, document: SnapshotDocument): Compiled {
         threads.add(Thread.currentThread())
         gate?.await(10, TimeUnit.SECONDS)
         compiled.add(key to document.revision)
+        failure?.let { throw it }
         val body = document.bodyBytes().decodeToString()
         require(body != "THROW") { "unknown matcher type" }
         val entries = if (body.isEmpty()) emptyList() else body.split(',')
@@ -144,8 +149,20 @@ class ControllableStore : SnapshotDocumentStore {
 
     val listenerCount: Int get() = listeners.size
 
+    /**
+     * A stale local copy (a CoCache L2) per key: [read] answers from it when present, while [readIfChanged] always
+     * reads the store of record.
+     */
+    val localCopies: MutableMap<SnapshotKey, SnapshotDocument> = ConcurrentHashMap()
+
     override fun read(key: SnapshotKey): CompletableFuture<SnapshotRead> {
         reads.incrementAndGet()
+        val local = localCopies[key]
+        if (local != null) {
+            return CompletableFuture.completedFuture(
+                SnapshotRead.Present(local, InMemorySnapshotDocumentStore.digestOf(local))
+            )
+        }
         return answer(key) { it }
     }
 
@@ -197,6 +214,23 @@ class ControllableStore : SnapshotDocumentStore {
         listeners.add(listener)
         return AutoCloseable { listeners.remove(listener) }
     }
+}
+
+/** Throws from every callback, to prove that a failing meter changes nothing. */
+class ThrowingMetrics : SnapshotMetrics {
+    private fun fail(): Nothing = throw IllegalStateException("meter down")
+
+    override fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) = fail()
+
+    override fun onCompile(kind: SnapshotKind, duration: Duration, succeeded: Boolean) = fail()
+
+    override fun onInstall(entry: SnapshotEntry<*>) = fail()
+
+    override fun onRegression(key: SnapshotKey, installedRevision: Long, loadedRevision: Long) = fail()
+
+    override fun onDocumentLost(key: SnapshotKey, lastRevision: Long) = fail()
+
+    override fun onLagExceeded(key: SnapshotKey, lag: Duration, escalated: Boolean) = fail()
 }
 
 /** Records every [SnapshotMetrics] event. */
@@ -257,6 +291,9 @@ fun testSource(
         compileExecutor,
         scheduler
     ) { ticker.incrementAndGet() }
+
+/** Whether [key] is installed. Unlike [SnapshotSource.peek], it does not count as an access, so waiting on it cannot change the LRU order. */
+fun SnapshotSource<*, *>.holds(key: SnapshotKey): Boolean = entries().any { it.key == key }
 
 val Snapshot<Compiled, Compiled>.policiesCompiled: Compiled
     get() = (policies as DocumentState.Present).compiled
