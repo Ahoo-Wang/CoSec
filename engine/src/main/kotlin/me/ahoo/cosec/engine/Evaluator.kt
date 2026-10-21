@@ -107,18 +107,15 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
         if (tracing) beginLayer(size)
         // Every guard of the layer runs before any rule (S4), so which ones matched has to be kept.
         var matchedBits = 0L
-        val matchedWords = if (size > Long.SIZE_BITS) LongArray(size / Long.SIZE_BITS + 1) else null
+        val matchedWords = if (size > Long.SIZE_BITS) LongArray((size + Long.SIZE_BITS - 1) / Long.SIZE_BITS) else null
         for (i in 0 until size) {
             val group = groups[i]
             val matched = try {
                 group.guard.matches(request)
-            } catch (error: Exception) {
-                if (guardFailed(i, group, error)) {
+            } catch (error: Throwable) {
+                if (guardThrew(i, group, error)) {
                     return result
                 }
-                continue
-            } catch (error: Throwable) {
-                guardErred(i, group, error)
                 continue
             }
             if (matched) {
@@ -144,12 +141,21 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
         return bits
     }
 
-    /** Group [index]'s guard threw [error], not an Exception: it propagates, unless the trace runs the guard only after the decision. */
-    private fun guardErred(index: Int, group: RuleGroup, error: Throwable) {
-        if (!recordsAfterDecision(error)) {
+    /**
+     * Group [index]'s guard threw [error]. An Exception fails the layer; any other Throwable propagates, unless the
+     * trace runs the guard only after the decision. An interruption is never recorded: the caller asked the thread to
+     * stop. Returns true when the layer ends here, which it does untraced.
+     */
+    private fun guardThrew(index: Int, group: RuleGroup, error: Throwable): Boolean {
+        val propagates = if (error is Exception) {
+            error is InterruptedException && evaluatingForTraceOnly()
+        } else {
+            !recordsAfterDecision(error)
+        }
+        if (propagates) {
             throw error
         }
-        guardFailed(index, group, error)
+        return guardFailed(index, group, error)
     }
 
     /** Group [index]'s guard threw [error]. Returns true when that ends the layer, which it does untraced. */
@@ -182,6 +188,7 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
             val tracing = tracing
             if (tracing) beginGroup(i)
             val stopped = group.forEachRule(this)
+            if (tracing) endGroup()
             // A group must stop exactly when its visitor asks to: untraced, that is when the layer got its result
             // (it had none on entry); traced, never. Trusting a group that claims otherwise would skip later DENYs.
             if (if (tracing) stopped else stopped != (result != null)) {
@@ -208,21 +215,31 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
                 return true
             }
         }
-        if (rule.effect != pass) {
+        val effect: Effect? = rule.effect
+        if (effect !== pass) {
+            // A null effect from a Java adapter would otherwise belong to no pass and be skipped silently.
+            if (effect == null) {
+                brokenEntry(entry, grantedVia)
+            }
             return false
         }
-        val match = try {
+        val match: RuleMatch? = try {
             rule.match(request)
         } catch (error: Exception) {
             failed(rule, grantedVia, error)
             return true
         }
-        if (match != RuleMatch.MATCHED) {
+        // Compared rather than switched on: a `when` over the enum costs a table lookup per rule on the hot path.
+        if (checkMatch(match) !== RuleMatch.MATCHED) {
             return false
         }
         matched(rule, grantedVia)
         return true
     }
+
+    /** A null from a Java matcher is a broken contract, never a miss. */
+    protected fun checkMatch(match: RuleMatch?): RuleMatch =
+        match ?: brokenContract("A rule of group $groupId returned no match result.")
 
     // The only places a rule gives its layer a result. Each keeps the layer's first result and returns the entry's ref.
 
@@ -263,7 +280,7 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
      * the decision are not visited, so only the trace can find a broken one there.
      */
     protected fun checkEntry(entry: RuleEntry, grantedVia: String?) {
-        val valid = if (kind == LayerKind.ROLE) {
+        val valid = if (kind === LayerKind.ROLE) {
             grantedVia != null && (entry !is Rule || entry.id != null)
         } else {
             grantedVia == null && entry is Rule
@@ -273,9 +290,18 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
         }
     }
 
-    private fun brokenEntry(entry: RuleEntry, grantedVia: String?): Nothing =
+    /** [checkEntry], and also that a rule has an effect, which the untraced [visit] checks where it reads it. */
+    protected fun checkEntryAndEffect(entry: RuleEntry, grantedVia: String?) {
+        checkEntry(entry, grantedVia)
+        if (entry is Rule && (entry.effect as Effect?) == null) {
+            brokenEntry(entry, grantedVia)
+        }
+    }
+
+    protected fun brokenEntry(entry: RuleEntry, grantedVia: String?): Nothing =
         brokenContract(
             when {
+                entry is Rule && (entry.effect as Effect?) == null -> "A rule must have an effect"
                 kind != LayerKind.ROLE && entry is UnresolvedGrant -> "Only the role layer has unresolved grants"
                 kind != LayerKind.ROLE -> "A $kind-layer rule must be visited without a granting role, got $grantedVia"
                 grantedVia == null -> "A role-layer entry must be visited with the role that grants it"
@@ -305,6 +331,9 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
      */
     protected open fun recordsAfterDecision(error: Throwable): Boolean = false
 
+    /** Whether what is evaluated now is evaluated only for the trace. Never untraced. */
+    protected open fun evaluatingForTraceOnly(): Boolean = false
+
     // Hooks for the trace, called only when tracing.
 
     /** The evaluation reached [decision]; the layers from [next] on have not been evaluated. */
@@ -319,6 +348,9 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
     protected open fun guardEvaluated(index: Int, group: RuleGroup, outcome: GuardOutcome, error: Throwable?) = Unit
 
     protected open fun beginGroup(index: Int) = Unit
+
+    /** The group begun last has been visited for the current pass. */
+    protected open fun endGroup() = Unit
 
     protected open fun endLayer(groups: List<RuleGroup>) = Unit
 

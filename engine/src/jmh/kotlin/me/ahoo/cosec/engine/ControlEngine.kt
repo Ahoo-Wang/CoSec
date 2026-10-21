@@ -24,6 +24,9 @@ import me.ahoo.cosec.model.StatementRef
  * The control of RFC 0002 §7.1: the §4.1 algorithm with no trace code at all, allocating what any implementation
  * must (the evaluation, its decision and reference, the visitor, the bitmap beyond 64 groups). [CoSecEngine] at
  * [TraceLevel.OFF] must allocate no more than this.
+ *
+ * It makes the same adapter-contract checks as the engine (each entry's shape, a null match, a group's stop), so
+ * throughput compares what tracing costs and nothing else.
  */
 object ControlEngine {
     private val IMPLICIT_DENY = Evaluation(Decision.Deny(null), null)
@@ -62,7 +65,7 @@ object ControlEngine {
             result = null
             val groups = layer.groups
             var bits = 0L
-            val words = if (groups.size > 64) LongArray(groups.size / 64 + 1) else null
+            val words = if (groups.size > 64) LongArray((groups.size + 63) / 64) else null
             for (i in groups.indices) {
                 val matched = try {
                     groups[i].guard.matches(request)
@@ -79,13 +82,22 @@ object ControlEngine {
                     val word = words?.get(i ushr 6) ?: bits
                     if ((word ushr i) and 1L == 0L) continue
                     groupId = groups[i].id
-                    if (groups[i].forEachRule(this)) return result
+                    val stopped = groups[i].forEachRule(this)
+                    if (stopped != (result != null)) broken()
+                    if (stopped) return result
                 }
             }
             return null
         }
 
         override fun visit(entry: RuleEntry, grantedVia: String?): Boolean {
+            val valid = (entry !is Rule || (entry.effect as Effect?) != null) &&
+                if (kind == LayerKind.ROLE) {
+                    grantedVia != null && (entry !is Rule || entry.id != null)
+                } else {
+                    grantedVia == null && entry is Rule
+                }
+            if (!valid) broken()
             val rule = when (entry) {
                 is Rule -> entry
                 is UnresolvedGrant -> {
@@ -96,17 +108,23 @@ object ControlEngine {
                 }
             }
             if (rule.effect != pass) return false
-            val match = try {
+            val match: RuleMatch? = try {
                 rule.match(request)
             } catch (e: Exception) {
                 result = Decision.Indeterminate(Cause.MatcherFailed(kind, groupId, ref(rule, grantedVia), e))
                 return true
             }
-            if (match != RuleMatch.MATCHED) return false
+            when (match ?: broken()) {
+                RuleMatch.MATCHED -> Unit
+                RuleMatch.ACTION_MISS, RuleMatch.CONDITION_MISS -> return false
+            }
             val ref = ref(rule, grantedVia)
             result = if (pass == Effect.DENY) Decision.Deny(ref) else Decision.Permit(ref)
             return true
         }
+
+        /** Out of line, as the engine's failures are, so both compile to the same shape. */
+        private fun broken(): Nothing = throw IllegalStateException("Group $groupId broke the adapter contract")
 
         private fun ref(rule: Rule, grantedVia: String?): StatementRef =
             if (kind == LayerKind.ROLE) {

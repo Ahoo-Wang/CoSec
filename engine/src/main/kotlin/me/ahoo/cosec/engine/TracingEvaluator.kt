@@ -25,8 +25,14 @@ import me.ahoo.cosec.model.StatementRef
  *
  * Within a layer that has a result it keeps going: it runs the remaining guards, visits the remaining rules and marks
  * the rules it evaluates there as after the decision. Its [visit] evaluates exactly the entries the untraced one does,
- * in the same order, and gives the layer its result through the same [matched], [failed] and [unresolved]. [TraceLevel.FULL] then stops where the untraced evaluation stops;
- * [TraceLevel.EXHAUSTIVE] also evaluates the layers after the decision.
+ * in the same order, and gives the layer its result through the same [matched], [failed] and [unresolved].
+ * [TraceLevel.FULL] then stops where the untraced evaluation stops; [TraceLevel.EXHAUSTIVE] also evaluates the layers
+ * after the decision.
+ *
+ * The decision never depends on the trace level (property P2). So whatever it does only for the trace (listing the
+ * entries of a group whose guard did not match, and everything after the decision) records failures instead of
+ * throwing: a broken entry, a throwing `forEachRule` or matcher, a null match. Only the JVM's own errors and an
+ * interruption propagate. Before the decision it fails exactly where the untraced evaluation does.
  */
 internal class TracingEvaluator(request: AuthzRequest, private val level: TraceLevel) : Evaluator(request) {
     /** Set while visiting a group only to list its entries. */
@@ -73,11 +79,49 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
         position = 0
     }
 
+    override fun endGroup() {
+        // The allow pass must visit exactly what the deny pass did. Only the trace remembers the deny pass, so a
+        // mismatch is recorded rather than thrown: the untraced evaluation cannot see it and decides regardless.
+        val trace = checkNotNull(groupTrace)
+        if (pass == Effect.ALLOW && position != trace.entryCount) {
+            trace.breach(misaligned(trace.entryCount, position))
+        }
+    }
+
+    override fun evaluatingForTraceOnly(): Boolean = listing || afterDecisionLayer || result != null
+
     @Suppress("TooGenericExceptionCaught")
     override fun visit(entry: RuleEntry, grantedVia: String?): Boolean {
-        checkEntry(entry, grantedVia)
         val trace = checkNotNull(groupTrace)
         val position = position++
+        if (!evaluatingForTraceOnly()) {
+            step(trace, position, entry, grantedVia, afterDecision = false)
+        } else {
+            try {
+                step(trace, position, entry, grantedVia, afterDecision = true)
+            } catch (error: Throwable) {
+                if (!recordable(error)) {
+                    throw error
+                }
+                trace.breach(error)
+            }
+        }
+        // Never stops: the rest of the layer is visited for the trace.
+        return false
+    }
+
+    /** One entry, checked and evaluated as the untraced evaluator would, then recorded at [position]. */
+    private fun step(
+        trace: GroupTraceBuilder,
+        position: Int,
+        entry: RuleEntry,
+        grantedVia: String?,
+        afterDecision: Boolean
+    ) {
+        checkEntryAndEffect(entry, grantedVia)
+        if (!listing && !trace.align(position, entry, pass)) {
+            trace.breach(misaligned(trace.entryCount, position + 1))
+        }
         val evaluated = !listing && when (entry) {
             is Rule -> entry.effect == pass
             is UnresolvedGrant -> pass == Effect.DENY
@@ -87,52 +131,68 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
             trace.reserve(
                 position
             ) { RuleTrace(ref(entry, grantedVia), (entry as? Rule)?.effect, RuleOutcome.NOT_EVALUATED) }
-            return false
+            return
         }
-        val afterDecision = afterDecisionLayer || result != null
-        val ruleTrace = when (entry) {
-            is UnresolvedGrant ->
-                RuleTrace(unresolved(entry, grantedVia), null, RuleOutcome.UNRESOLVED, entry.error, afterDecision)
+        trace.set(
+            position,
+            when (entry) {
+                is UnresolvedGrant ->
+                    RuleTrace(unresolved(entry, grantedVia), null, RuleOutcome.UNRESOLVED, entry.error, afterDecision)
 
-            is Rule -> {
-                val match = try {
-                    entry.match(request)
-                } catch (error: Exception) {
-                    trace.set(position, failure(entry, grantedVia, error, afterDecision))
-                    return false
-                } catch (error: Throwable) {
-                    // Propagates as untraced, unless it comes from a rule evaluated only for the trace.
-                    if (!(afterDecision && recordable(error))) {
-                        throw error
-                    }
-                    trace.set(position, failure(entry, grantedVia, error, afterDecision))
-                    return false
-                }
-                val ref = if (match == RuleMatch.MATCHED) matched(entry, grantedVia) else ref(entry, grantedVia)
-                if (match == RuleMatch.MATCHED) {
-                    noteMatched(ref)
-                }
-                RuleTrace(ref, entry.effect, match.toOutcome(), null, afterDecision)
+                is Rule -> evaluate(entry, grantedVia, afterDecision)
+            },
+        )
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun evaluate(rule: Rule, grantedVia: String?, afterDecision: Boolean): RuleTrace {
+        val match: RuleMatch? = try {
+            rule.match(request)
+        } catch (error: InterruptedException) {
+            // Fails the layer as untraced; after the decision it propagates rather than being recorded.
+            if (afterDecision) {
+                throw error
             }
+            return failure(rule, grantedVia, error, afterDecision)
+        } catch (error: Exception) {
+            // As untraced, an Exception fails the layer; after the decision it is only recorded.
+            return failure(rule, grantedVia, error, afterDecision)
+        } catch (error: Throwable) {
+            // Propagates as untraced, unless it comes from a rule evaluated only for the trace.
+            if (!(afterDecision && recordable(error))) {
+                throw error
+            }
+            return failure(rule, grantedVia, error, afterDecision)
         }
-        trace.set(position, ruleTrace)
-        // Never stops: the rest of the layer is visited for the trace.
-        return false
+        val outcome = when (checkMatch(match)) {
+            RuleMatch.MATCHED -> RuleOutcome.MATCHED
+            RuleMatch.ACTION_MISS -> RuleOutcome.ACTION_MISS
+            RuleMatch.CONDITION_MISS -> RuleOutcome.CONDITION_MISS
+        }
+        val ref = if (outcome == RuleOutcome.MATCHED) matched(rule, grantedVia) else ref(rule, grantedVia)
+        if (outcome == RuleOutcome.MATCHED) {
+            noteMatched(ref)
+        }
+        return RuleTrace(ref, rule.effect, outcome, null, afterDecision)
     }
 
     private fun failure(rule: Rule, grantedVia: String?, error: Throwable, afterDecision: Boolean): RuleTrace =
         RuleTrace(failed(rule, grantedVia, error), rule.effect, RuleOutcome.ERROR, error, afterDecision)
 
+    private fun misaligned(denyPass: Int, allowPass: Int) = IllegalStateException(
+        "Group $groupId visited $allowPass entries in its allow pass, not the $denyPass of its deny pass, or not in the same order.",
+    )
+
     override fun recordsAfterDecision(error: Throwable): Boolean =
         (afterDecisionLayer || result != null) && recordable(error)
 
     /**
-     * Whether an error thrown only because the trace evaluated something after the decision is recorded instead of
-     * failing the evaluation: the untraced evaluation would never have called it, so explaining a decision must not
-     * fail where enforcing it does not (a `NotImplementedError` in a matcher). The JVM's own
-     * failures still propagate.
+     * Whether a failure of something evaluated only for the trace is recorded instead of failing the evaluation: the
+     * untraced evaluation never calls it, so explaining a decision must not fail where enforcing it does not. The JVM's
+     * own failures propagate, and so does an interruption: the engine may not touch the thread's interrupt flag.
      */
-    private fun recordable(error: Throwable): Boolean = error !is VirtualMachineError && error !is LinkageError
+    private fun recordable(error: Throwable): Boolean =
+        error !is VirtualMachineError && error !is LinkageError && error !is InterruptedException
 
     private fun noteMatched(ref: StatementRef) {
         if (pass == Effect.DENY) {
@@ -142,19 +202,32 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     override fun endLayer(groups: List<RuleGroup>) {
         val traces = ArrayList<GroupTrace>(groups.size)
         for (i in groups.indices) {
             val builder = checkNotNull(groupTraces[i])
             if (builder.guard != GuardOutcome.MATCHED) {
-                // The rules of a group whose guard missed or threw are listed, never evaluated.
+                // The rules of a group whose guard missed or threw are listed, never evaluated, and only for the trace.
                 // Listed with this evaluator rather than another visitor, so forEachRule sees one visit method.
                 groupId = groups[i].id
                 groupTrace = builder
                 position = 0
                 listing = true
-                groups[i].forEachRule(this)
-                listing = false
+                try {
+                    if (groups[i].forEachRule(this)) {
+                        builder.breach(
+                            IllegalStateException("Group $groupId returned true from forEachRule while listed")
+                        )
+                    }
+                } catch (error: Throwable) {
+                    if (!recordable(error)) {
+                        throw error
+                    }
+                    builder.breach(error)
+                } finally {
+                    listing = false
+                }
             }
             traces.add(builder.build())
         }
@@ -176,31 +249,47 @@ internal class TracingEvaluator(request: AuthzRequest, private val level: TraceL
     }
 
     private class GroupTraceBuilder(val id: String, val guard: GuardOutcome, val guardError: Throwable?) {
-        private val rules = ArrayList<RuleTrace>()
+        /** By position; a slot stays empty where an entry could not be recorded. */
+        private val rules = ArrayList<RuleTrace?>()
+
+        /** The entries the deny pass visited, by position. */
+        private val entries = ArrayList<RuleEntry>()
+        private var contractError: Throwable? = null
+
+        val entryCount: Int get() = entries.size
+
+        /** Remembers the deny pass's entries; in the allow pass, whether [entry] is the one the deny pass saw here. */
+        fun align(position: Int, entry: RuleEntry, pass: Effect): Boolean {
+            if (pass == Effect.DENY) {
+                entries.add(entry)
+                return true
+            }
+            return position < entries.size && entries[position] === entry
+        }
+
+        /** The group broke the adapter contract while traced; the first breach is kept. */
+        fun breach(error: Throwable) {
+            if (contractError == null) {
+                contractError = error
+            }
+        }
 
         fun reserve(position: Int, trace: () -> RuleTrace) {
-            if (position >= rules.size) {
-                rules.add(trace())
+            while (rules.size <= position) {
+                rules.add(null)
+            }
+            if (rules[position] == null) {
+                rules[position] = trace()
             }
         }
 
         fun set(position: Int, trace: RuleTrace) {
-            if (position < rules.size) {
-                rules[position] = trace
-            } else {
-                rules.add(trace)
+            while (rules.size <= position) {
+                rules.add(null)
             }
+            rules[position] = trace
         }
 
-        fun build(): GroupTrace = GroupTrace(id, guard, guardError, rules)
-    }
-
-    private companion object {
-        fun RuleMatch.toOutcome(): RuleOutcome =
-            when (this) {
-                RuleMatch.MATCHED -> RuleOutcome.MATCHED
-                RuleMatch.ACTION_MISS -> RuleOutcome.ACTION_MISS
-                RuleMatch.CONDITION_MISS -> RuleOutcome.CONDITION_MISS
-            }
+        fun build(): GroupTrace = GroupTrace(id, guard, guardError, rules.filterNotNull(), contractError)
     }
 }
