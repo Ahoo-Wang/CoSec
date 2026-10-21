@@ -53,4 +53,14 @@ internal class ServletRequestParserTest {
         val parser = ServletRequestParser(ServletRemoteIpResolver)
         assertThrows<InvalidRequestPathException> { parser.parse(servletRequest) }
     }
+
+    @Test
+    fun pathWithinApplicationWhenContextPathIsNull() {
+        // Some containers and test doubles return null instead of "" for the root context.
+        val servletRequest = mockk<HttpServletRequest> {
+            every { requestURI } returns "/api/admin/users"
+            every { contextPath } returns null
+        }
+        assertThat(servletRequest.pathWithinApplication(), equalTo("/api/admin/users"))
+    }
 }
