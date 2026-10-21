@@ -86,7 +86,7 @@ cosec:
 ```
 
 Continue with the [Quick Start](https://cosec.ahoo.me/guide/quick-start) to issue tokens, then the
-[policy reference](https://cosec.ahoo.me/guide/policies).
+[policy language](https://cosec.ahoo.me/policies/language).
 
 ## Modules
 
@@ -97,12 +97,16 @@ published as the container image `ahoowang/cosec-gateway`.
 
 ## Documentation
 
-- **Guide**: [Introduction](https://cosec.ahoo.me/guide/introduction) ·
-  [Quick Start](https://cosec.ahoo.me/guide/quick-start) · [Policies](https://cosec.ahoo.me/guide/policies) ·
-  [Configuration](https://cosec.ahoo.me/guide/configuration) · [Authentication](https://cosec.ahoo.me/guide/authentication) ·
-  [Web Integration](https://cosec.ahoo.me/guide/web-integration) · [Operations](https://cosec.ahoo.me/guide/operations) ·
-  [Troubleshooting](https://cosec.ahoo.me/guide/troubleshooting)
-- **Architecture**: [Overview](https://cosec.ahoo.me/architecture/overview) · [Extending](https://cosec.ahoo.me/architecture/extending)
+- **Getting started**: [Introduction](https://cosec.ahoo.me/guide/introduction) · [Quick Start](https://cosec.ahoo.me/guide/quick-start) ·
+  [Concepts](https://cosec.ahoo.me/guide/concepts) · [Security Model](https://cosec.ahoo.me/guide/security-model)
+- **Integration**: [Web Integration](https://cosec.ahoo.me/integration/web) · [Authentication](https://cosec.ahoo.me/integration/authentication) ·
+  [Checks in Code](https://cosec.ahoo.me/integration/checks)
+- **Policies**: [Policy Language](https://cosec.ahoo.me/policies/language) · [Role Permissions](https://cosec.ahoo.me/policies/role-permissions) ·
+  [Rate Limiting](https://cosec.ahoo.me/policies/rate-limiting) · [Testing Policies](https://cosec.ahoo.me/policies/testing)
+- **Operations**: [Configuration](https://cosec.ahoo.me/operations/configuration) · [Storage and Caching](https://cosec.ahoo.me/operations/storage) ·
+  [Upgrading](https://cosec.ahoo.me/operations/upgrading) · [Observability](https://cosec.ahoo.me/operations/observability) ·
+  [Troubleshooting](https://cosec.ahoo.me/operations/troubleshooting)
+- **Architecture**: [Overview](https://cosec.ahoo.me/architecture/overview) · [Extending CoSec](https://cosec.ahoo.me/architecture/extending)
 - **Releases**: [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)
 
 ## Contributing

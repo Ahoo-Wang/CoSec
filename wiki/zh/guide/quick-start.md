@@ -1,41 +1,38 @@
+---
+title: "快速开始"
+description: "用 CoSec 保护一个 Spring Boot 服务：从添加依赖到看到第一个被拒绝的请求。"
+---
+
 # 快速开始 {#quick-start}
 
-本指南为一个 Spring WebFlux 服务加上 JWT 认证，并用存放在 Redis 中的 JSON 策略做授权。
-使用 Spring MVC 或 Spring Cloud Gateway 时，只需替换第 1 步中的能力（capability），其余步骤相同。
+面向第一次把 CoSec 接入 Spring Boot 服务的开发者。按顺序完成这些步骤，最后会得到一个能签发令牌、放行策略允许的请求、拒绝其余请求的服务。
 
-**前置条件：** JDK 17+、Spring Boot 4，以及一个 Redis 服务。
+## 前提条件 {#prerequisites}
 
-## 1. 添加依赖 {#_1-add-the-dependency}
+- JDK 17 或更高版本，以及一个用 Gradle 构建的 Spring Boot 4 项目。
+- 一个位于 `localhost:6379`、不含旧版本 CoSec 数据的 Redis，例如 `docker run -d -p 6379:6379 redis:7`。
 
-starter 以 Gradle *feature variant* 的形式提供各项集成，按需声明：
+## 添加依赖 {#add-the-dependency}
 
 ```kotlin
 dependencies {
     implementation(platform("me.ahoo.cosec:cosec-bom:<version>"))
+    implementation("org.springframework.boot:spring-boot-starter-webflux")
+    implementation("me.ahoo.cosec:cosec-spring-boot-starter")
     implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities {
-            requireCapability("me.ahoo.cosec:webflux-support") // 或 webmvc-support / gateway-support
-        }
+        capabilities { requireCapability("me.ahoo.cosec:webflux-support") } // 或 webmvc-support、gateway-support
     }
     implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities {
-            requireCapability("me.ahoo.cosec:cache-support") // 基于 Redis 的策略与权限存储
-        }
+        capabilities { requireCapability("me.ahoo.cosec:cache-support") }   // 策略存放在 Redis 中
     }
 }
 ```
 
-所有能力及其引入的模块见[模块](./introduction.md#modules)。
+starter 要声明三次：一次单独声明，把 CoSec 的 API 放到编译类路径上；每个 capability 各声明一次。capability 只添加它自己的模块；在同一个声明块里要求两个 capability 无法解析。各 capability 添加了什么，见[模块](./introduction.md#modules)。
 
-使用 Maven（不支持 feature variant）时，直接添加 starter 和对应的模块，例如 `cosec-webflux` 和 `cosec-cocache`，
-以及这些模块所需的第三方依赖（`cosec-cocache` 需要 Spring Data Redis 和 `me.ahoo.cocache:cocache-spring-boot-starter`）。
+## 配置 {#configure}
 
-::: tip 为什么需要 Redis？
-授权通过 `PolicyRepository` 读取策略，通过 `AppRolePermissionRepository` 读取角色权限。
-`cache-support` 提供了基于 Redis 并带进程内缓存的实现。如果想把策略存在别处，自行提供这两个类型的 bean 即可。
-:::
-
-## 2. 配置 {#_2-configure}
+`src/main/resources/application.yaml`：
 
 ```yaml
 spring:
@@ -44,91 +41,121 @@ spring:
       host: localhost
 cosec:
   jwt:
-    secret: ${COSEC_JWT_SECRET} # 用于签发和校验令牌的 HMAC 密钥
+    secret: ${COSEC_JWT_SECRET}   # 用于签名和校验令牌的 HMAC 密钥
   authorization:
     local-policy:
-      enabled: true           # 从 classpath:cosec-policy/*-policy.json 加载策略
-      init-repository: true   # 启动时写入 PolicyRepository（Redis）
+      enabled: true               # 读取 classpath:cosec-policy/*-policy.json
+      init-repository: true       # 启动时把这些策略写入 Redis
+      force-refresh: true         # 每次启动都覆盖，使修改生效（仅用于开发）
 ```
 
-其他配置都有可用的默认值，见[配置](./configuration.md)。
+不设置 `force-refresh` 时，Redis 中已存在的策略不会被改动，之后对文件的修改都会被忽略。文件中的策略如何进入存储，见[本地策略文件](../operations/storage.md#local-policy-files)。其余配置都有可用的默认值，完整列表见[配置](../operations/configuration.md)。
 
-## 3. 编写策略 {#_3-write-a-policy}
+## 编写第一条策略 {#write-a-first-policy}
 
-创建 `src/main/resources/cosec-policy/app-policy.json`：
+`src/main/resources/cosec-policy/app-policy.json`：
 
 ```json
 {
   "id": "app",
   "name": "App",
   "category": "app",
-  "description": "Public endpoints and authenticated access",
+  "description": "Who may call what",
   "type": "global",
   "tenantId": "(platform)",
   "statements": [
     {
       "name": "public",
-      "action": ["/auth/login", "/actuator/health"]
+      "action": ["/hello", "/token"]
     },
     {
-      "name": "authenticated",
-      "action": "/api/**",
+      "name": "signed-in",
+      "action": "/orders/**",
       "condition": { "authenticated": {} }
     },
     {
-      "name": "admins-only",
+      "name": "no-delete",
       "effect": "deny",
-      "action": "/api/admin/**",
-      "condition": { "inRole": { "value": "admin", "negate": true } }
+      "action": { "path": { "pattern": "/orders/**", "method": "DELETE" } }
     }
   ]
 }
 ```
 
-语句默认是允许；`"effect": "deny"` 表示拒绝。由于拒绝优先，即使第二条语句允许了 `/api/**`，
-第三条语句仍会对所有没有 `admin` 角色的调用方阻止 `/api/admin/**`。未列出的路径（例如 `/internal/**`）默认被拒绝。
+`global` 策略对所有请求生效。它的三条语句的含义是：
 
-## 4. 签发令牌 {#_4-issue-tokens}
+- 任何人都可以调用 `/hello` 和 `/token`；
+- 已登录的调用方可以调用 `/orders` 下的任何接口；
+- 任何人都不能对 `/orders` 下的接口执行 `DELETE`。这条语句胜过第二条，因为拒绝永远胜过放行。
 
-CoSec 在每个请求上校验令牌，签发令牌则由你的登录接口负责。为你的凭证类型实现一个 `Authentication`，
-starter 会自动注册它：
+其他请求（例如 `/admin`）什么都匹配不到，因此被拒绝。语句语法见[策略语言](../policies/language.md)。
+
+## 签发令牌 {#issue-a-token}
+
+添加一个控制器，包含策略中提到的接口，以及一个签发令牌的演示接口：
 
 ```kotlin
-data class PasswordCredentials(val username: String, val password: String) : Credentials
-
-@Component
-class PasswordAuthentication(private val users: UserService) :
-    Authentication<PasswordCredentials, CoSecPrincipal> {
-    override val supportCredentials = PasswordCredentials::class.java
-
-    override fun authenticate(credentials: PasswordCredentials): Mono<CoSecPrincipal> =
-        users.verify(credentials.username, credentials.password)
-            .map { user -> SimplePrincipal(id = user.id, roles = user.roles) }
-}
-
 @RestController
-class LoginController(private val authentication: TokenCompositeAuthentication) {
-    @PostMapping("/auth/login")
-    fun login(@RequestBody credentials: PasswordCredentials): Mono<out CompositeToken> =
-        authentication.authenticateAsToken(credentials)
+class DemoController(private val tokenConverter: TokenConverter) {
+    @GetMapping("/hello")
+    fun hello() = "hello"
+
+    @GetMapping("/orders")
+    fun orders() = listOf("order-1")
+
+    @DeleteMapping("/orders/{id}")
+    fun delete(@PathVariable id: String) = "deleted $id"
+
+    // 仅用于演示：不校验密码，为任意用户 id 签发令牌。
+    @GetMapping("/token")
+    fun token(@RequestParam user: String): CompositeToken =
+        tokenConverter.toToken(SimplePrincipal(id = user))
 }
 ```
 
-响应中包含 `accessToken` 和 `refreshToken`。客户端通过 `Authorization` 请求头（`Bearer <token>`）或
-`authorization` Cookie 发送访问令牌。
+starter 根据 `cosec.jwt` 配置好 `TokenConverter`（`me.ahoo.cosec.token`）。`SimplePrincipal` 位于 `me.ahoo.cosec.principal`，`CompositeToken` 位于 `me.ahoo.cosec.api.token`；响应中包含 `accessToken` 和 `refreshToken`。真正的登录接口要先校验凭证再签发令牌，见[登录](../integration/authentication.md#logging-in)。
 
-## 5. 试一试 {#_5-try-it}
+## 发送请求 {#send-requests}
+
+带上密钥启动应用，例如 `COSEC_JWT_SECRET=$(openssl rand -hex 32)`，然后：
 
 ```bash
-curl -i localhost:8080/api/orders                            # 401：匿名，隐式拒绝
-curl -i -H "Authorization: Bearer $TOKEN" localhost:8080/api/orders   # 200
+curl -i localhost:8080/hello
 ```
 
-被拒绝的请求会返回说明原因的 JSON，例如 `{"authorized":false,"reason":"Implicit Deny"}`。
+`200 hello`：`public` 语句放行了它，即使没有令牌。
+
+```bash
+curl -i localhost:8080/orders
+```
+
+`401`，响应体为 `{"authorized":false,"reason":"Implicit Deny"}`：`signed-in` 要求已登录的主体，而没有其他规则放行匿名调用方。
+
+```bash
+TOKEN=$(curl -s 'localhost:8080/token?user=alice' | sed -E 's/.*"accessToken":"([^"]+)".*/\1/')
+curl -i -H "Authorization: Bearer $TOKEN" localhost:8080/orders
+```
+
+`200 ["order-1"]`：第一个被放行的请求。
+
+```bash
+curl -i -X DELETE -H "Authorization: Bearer $TOKEN" localhost:8080/orders/1
+```
+
+`403`，响应体为 `{"authorized":false,"reason":"Explicit Deny"}`：第一个被拒绝的请求。alice 已登录，所以状态码是 `403` 而不是 `401`；原因是 `Explicit Deny`，因为命中了 `no-delete` 语句。
+
+```bash
+curl -i -H "Authorization: Bearer $TOKEN" localhost:8080/admin
+```
+
+`403`，原因为 `Implicit Deny`：没有任何语句提到 `/admin`。
+
+所有结果见[决策](./concepts.md#decisions)，每种结果对应的状态码见[响应与状态码](../integration/web.md#responses-and-status-codes)。
 
 ## 下一步 {#next-steps}
 
-- [策略](./policies.md)：动作、条件、角色与权限。
-- [限流](./rate-limiting.md)：按 IP、按用户和共享配额。
-- [认证](./authentication.md)：刷新、登出与吊销、社交登录、多租户。
-- [Web 集成](./web-integration.md)：状态码、获取安全上下文、网关。
+- 按角色授权，而不是对所有人按路径授权：[角色权限](../policies/role-permissions.md)。
+- 用真正的登录、刷新和登出替换演示用的 `/token` 接口：[认证](../integration/authentication.md)。
+- 在处理器中读取用户和租户，以及完整的状态码映射：[Web 集成](../integration/web.md)。
+- 弄清一个请求为什么被放行或拒绝：[排查问题](../operations/troubleshooting.md#find-out-what-decided)。
+- 上线之前，请阅读[安全模型](./security-model.md)。

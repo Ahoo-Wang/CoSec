@@ -768,12 +768,12 @@ PR-4 新增 `EngineParityAuthorization : DecisionAuthorization`（临时，PR-6 
 
 | 文件 | PR | 内容 |
 |---|---|---|
-| `wiki/guide/configuration.md` | PR-4 | `cosec.authorization.engine` 与采样率属性；三种取值；`engine` 取值下的 X2、X3、X5、X6；"8.0 删除" |
-| `wiki/guide/policies.md`（影子一节） | PR-4 | 陪跑影子与普通影子的区别、`ENGINE_MISMATCH` |
+| `wiki/operations/configuration.md` | PR-4 | `cosec.authorization.engine` 与采样率属性；三种取值；`engine` 取值下的 X2、X3、X5、X6；"8.0 删除" |
+| `wiki/policies/testing.md`（影子一节） | PR-4 | 陪跑影子与普通影子的区别、`ENGINE_MISMATCH` |
 | `wiki/architecture/overview.md` | PR-6 | 新模块与依赖规则、决策流程图（`SimpleAuthorization` → 引擎）、"一份算法"、路径变量的语句作用域、JMH 数字 |
 | `wiki/architecture/extending.md`、`skills/cosec-custom-matcher` | PR-6 | 匹配器在语句作用域上下文中执行；X2、X3、X4、X5 对自定义代码的影响 |
-| `wiki/guide/upgrading.md` | PR-6 | 7.x → 8.0：X2、X3、X5、X6 与 `cosec-api` 的删除项（`Policy.verify`、`Statement.verify`、`PermissionVerifier`、`ExplainWarningCode.TRACE_INCONSISTENT`）、开关的删除 |
-| `wiki/guide/troubleshooting.md`、`skills/cosec-troubleshoot` | PR-6 | 删除 `TRACE_INCONSISTENT` 的条目（若有） |
+| `wiki/operations/upgrading.md` | PR-6 | 7.x → 8.0：X2、X3、X5、X6 与 `cosec-api` 的删除项（`Policy.verify`、`Statement.verify`、`PermissionVerifier`、`ExplainWarningCode.TRACE_INCONSISTENT`）、开关的删除 |
+| `wiki/operations/troubleshooting.md`、`skills/cosec-troubleshoot` | PR-6 | 删除 `TRACE_INCONSISTENT` 的条目（若有） |
 
 ---
 

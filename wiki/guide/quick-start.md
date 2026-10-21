@@ -1,43 +1,41 @@
+---
+title: "Quick Start"
+description: "Protect a Spring Boot service with CoSec, from dependency to first denied request."
+---
+
 # Quick Start
 
-This guide secures a Spring WebFlux service with JWT authentication and JSON policies stored in Redis.
-For Spring MVC or Spring Cloud Gateway, swap the capability in step 1; everything else is the same.
+For developers adding CoSec to a Spring Boot service for the first time. Follow the steps in order and you end with a running service that issues tokens, allows what a policy grants and denies everything else.
 
-**Prerequisites:** JDK 17+, Spring Boot 4, and a Redis server.
+## Prerequisites
 
-## 1. Add the dependency
+- JDK 17 or later, and a Spring Boot 4 project built with Gradle.
+- A Redis server on `localhost:6379` that holds no data of an older CoSec version, for example
+  `docker run -d -p 6379:6379 redis:7`.
 
-The starter exposes each integration as a Gradle *feature variant*. Request the ones you need:
+## Add the dependency
 
 ```kotlin
 dependencies {
     implementation(platform("me.ahoo.cosec:cosec-bom:<version>"))
+    implementation("org.springframework.boot:spring-boot-starter-webflux")
+    implementation("me.ahoo.cosec:cosec-spring-boot-starter")
     implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities {
-            requireCapability("me.ahoo.cosec:webflux-support") // or webmvc-support / gateway-support
-        }
+        capabilities { requireCapability("me.ahoo.cosec:webflux-support") } // or webmvc-support, gateway-support
     }
     implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities {
-            requireCapability("me.ahoo.cosec:cache-support") // Redis-backed policy and permission storage
-        }
+        capabilities { requireCapability("me.ahoo.cosec:cache-support") }   // policies stored in Redis
     }
 }
 ```
 
-Every capability and the module it adds is listed under [Modules](./introduction.md#modules).
+Declare the starter three times: once on its own, which brings the CoSec API onto your compile classpath, and
+once per capability. A capability adds only its own module; a single block that requires two capabilities does
+not resolve. Which capability adds what is listed in [Modules](./introduction.md#modules).
 
-With Maven (no feature variants), add the starter plus the matching modules directly, for example
-`cosec-webflux` and `cosec-cocache`, together with the third-party dependencies those modules need (for
-`cosec-cocache`: Spring Data Redis and `me.ahoo.cocache:cocache-spring-boot-starter`).
+## Configure
 
-::: tip Why Redis?
-Authorization reads policies through a `PolicyRepository` and role permissions through an
-`AppRolePermissionRepository`. `cache-support` provides Redis-backed implementations with an
-in-process cache. To keep policies elsewhere, provide your own beans of those two types instead.
-:::
-
-## 2. Configure
+`src/main/resources/application.yaml`:
 
 ```yaml
 spring:
@@ -46,93 +44,132 @@ spring:
       host: localhost
 cosec:
   jwt:
-    secret: ${COSEC_JWT_SECRET} # HMAC secret used to sign and verify tokens
+    secret: ${COSEC_JWT_SECRET}   # HMAC key that signs and verifies tokens
   authorization:
     local-policy:
-      enabled: true           # load policies from classpath:cosec-policy/*-policy.json
-      init-repository: true   # write them into the PolicyRepository (Redis) on startup
+      enabled: true               # read classpath:cosec-policy/*-policy.json
+      init-repository: true       # write those policies into Redis at startup
+      force-refresh: true         # overwrite them on every start, so edits take effect (development only)
 ```
 
-Every other setting has a working default. See [Configuration](./configuration.md).
+Without `force-refresh`, a policy that is already in Redis is left alone, and later edits to the file are
+ignored. See [Local policy files](../operations/storage.md#local-policy-files) for how file policies reach the
+store. Every other setting has a working default; all of them are listed in
+[Configuration](../operations/configuration.md).
 
-## 3. Write a policy
+## Write a first policy
 
-Create `src/main/resources/cosec-policy/app-policy.json`:
+`src/main/resources/cosec-policy/app-policy.json`:
 
 ```json
 {
   "id": "app",
   "name": "App",
   "category": "app",
-  "description": "Public endpoints and authenticated access",
+  "description": "Who may call what",
   "type": "global",
   "tenantId": "(platform)",
   "statements": [
     {
       "name": "public",
-      "action": ["/auth/login", "/actuator/health"]
+      "action": ["/hello", "/token"]
     },
     {
-      "name": "authenticated",
-      "action": "/api/**",
+      "name": "signed-in",
+      "action": "/orders/**",
       "condition": { "authenticated": {} }
     },
     {
-      "name": "admins-only",
+      "name": "no-delete",
       "effect": "deny",
-      "action": "/api/admin/**",
-      "condition": { "inRole": { "value": "admin", "negate": true } }
+      "action": { "path": { "pattern": "/orders/**", "method": "DELETE" } }
     }
   ]
 }
 ```
 
-A statement allows by default; `"effect": "deny"` makes it a deny. Because deny wins, the third
-statement blocks `/api/admin/**` for everyone without the `admin` role, even though the second statement
-allows `/api/**`. Anything not listed, such as `/internal/**`, is denied by default.
+A `global` policy applies to every request. Its three statements say:
 
-## 4. Issue tokens
+- anyone may call `/hello` and `/token`;
+- signed-in callers may call anything under `/orders`;
+- nobody may `DELETE` under `/orders`. This statement wins over the second one, because a deny always beats an
+  allow.
 
-CoSec verifies tokens on every request; issuing them is your login endpoint's job. Implement an
-`Authentication` for your credentials and the starter registers it automatically:
+Everything else, such as `/admin`, matches nothing and is denied. The statement syntax is in
+[Policy language](../policies/language.md).
+
+## Issue a token
+
+Add a controller with the endpoints the policy mentions, and a demo endpoint that issues tokens:
 
 ```kotlin
-data class PasswordCredentials(val username: String, val password: String) : Credentials
-
-@Component
-class PasswordAuthentication(private val users: UserService) :
-    Authentication<PasswordCredentials, CoSecPrincipal> {
-    override val supportCredentials = PasswordCredentials::class.java
-
-    override fun authenticate(credentials: PasswordCredentials): Mono<CoSecPrincipal> =
-        users.verify(credentials.username, credentials.password)
-            .map { user -> SimplePrincipal(id = user.id, roles = user.roles) }
-}
-
 @RestController
-class LoginController(private val authentication: TokenCompositeAuthentication) {
-    @PostMapping("/auth/login")
-    fun login(@RequestBody credentials: PasswordCredentials): Mono<out CompositeToken> =
-        authentication.authenticateAsToken(credentials)
+class DemoController(private val tokenConverter: TokenConverter) {
+    @GetMapping("/hello")
+    fun hello() = "hello"
+
+    @GetMapping("/orders")
+    fun orders() = listOf("order-1")
+
+    @DeleteMapping("/orders/{id}")
+    fun delete(@PathVariable id: String) = "deleted $id"
+
+    // Demo only: issues a token for any user id, without checking a password.
+    @GetMapping("/token")
+    fun token(@RequestParam user: String): CompositeToken =
+        tokenConverter.toToken(SimplePrincipal(id = user))
 }
 ```
 
-The response carries an `accessToken` and a `refreshToken`. Clients send the access token in the
-`Authorization` header (`Bearer <token>`) or an `authorization` cookie.
+The starter configures `TokenConverter` (`me.ahoo.cosec.token`) from `cosec.jwt`. `SimplePrincipal` is in
+`me.ahoo.cosec.principal`, `CompositeToken` in `me.ahoo.cosec.api.token`; the response carries an
+`accessToken` and a `refreshToken`. A real login endpoint checks credentials before it issues a token; see
+[Logging in](../integration/authentication.md#logging-in).
 
-## 5. Try it
+## Send requests
+
+Start the application with a secret, for example `COSEC_JWT_SECRET=$(openssl rand -hex 32)`, then:
 
 ```bash
-curl -i localhost:8080/api/orders                            # 401: anonymous, implicit deny
-curl -i -H "Authorization: Bearer $TOKEN" localhost:8080/api/orders   # 200
+curl -i localhost:8080/hello
 ```
 
-Rejected requests get a JSON body explaining why, for example
-`{"authorized":false,"reason":"Implicit Deny"}`.
+`200 hello`: the `public` statement allows it, even without a token.
+
+```bash
+curl -i localhost:8080/orders
+```
+
+`401` with `{"authorized":false,"reason":"Implicit Deny"}`: `signed-in` requires a principal, and nothing else
+allows the anonymous caller.
+
+```bash
+TOKEN=$(curl -s 'localhost:8080/token?user=alice' | sed -E 's/.*"accessToken":"([^"]+)".*/\1/')
+curl -i -H "Authorization: Bearer $TOKEN" localhost:8080/orders
+```
+
+`200 ["order-1"]`: your first allowed request.
+
+```bash
+curl -i -X DELETE -H "Authorization: Bearer $TOKEN" localhost:8080/orders/1
+```
+
+`403` with `{"authorized":false,"reason":"Explicit Deny"}`: your first denied request. Alice is signed in, so
+the status is `403`, not `401`, and the reason is `Explicit Deny` because the `no-delete` statement matched.
+
+```bash
+curl -i -H "Authorization: Bearer $TOKEN" localhost:8080/admin
+```
+
+`403` with `Implicit Deny`: no statement mentions `/admin`.
+
+All outcomes are listed in [Decisions](./concepts.md#decisions), and the status each one gets in
+[Responses and status codes](../integration/web.md#responses-and-status-codes).
 
 ## Next steps
 
-- [Policies](./policies.md): actions, conditions, roles and permissions.
-- [Rate Limiting](./rate-limiting.md): per-IP, per-user and shared quotas.
-- [Authentication](./authentication.md): refresh, logout and revocation, social login, multi-tenancy.
-- [Web Integration](./web-integration.md): status codes, accessing the security context, gateways.
+- Grant access by role instead of by path for everyone: [Role permissions](../policies/role-permissions.md).
+- Replace the demo `/token` endpoint with a real login, refresh and logout: [Authentication](../integration/authentication.md).
+- Read the user and tenant in your handlers, and the full status mapping: [Web integration](../integration/web.md).
+- Find out why a request was allowed or denied: [Troubleshooting](../operations/troubleshooting.md#find-out-what-decided).
+- Before production, read [Security model](./security-model.md).
