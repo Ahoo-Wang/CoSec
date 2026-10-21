@@ -65,15 +65,18 @@ enum class LoadOutcome {
 }
 
 /**
- * Calls [delegate] and swallows what it throws: a failing meter must never fail a load, lose a reload or break
- * single-flight.
+ * Calls [delegate] and swallows what it throws, errors included: a failing meter must never fail a load, lose a reload
+ * or break single-flight. Only a [VirtualMachineError] passes through; [SnapshotSource] lets it out only after the load
+ * it interrupted has finished.
  */
 @Suppress("TooGenericExceptionCaught")
 internal class GuardedSnapshotMetrics(private val delegate: SnapshotMetrics) : SnapshotMetrics {
     private inline fun guard(event: String, call: () -> Unit) {
         try {
             call()
-        } catch (error: Exception) {
+        } catch (error: VirtualMachineError) {
+            throw error
+        } catch (error: Throwable) {
             log.warn { "SnapshotMetrics.$event failed: $error" }
         }
     }

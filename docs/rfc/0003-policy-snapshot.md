@@ -395,7 +395,8 @@ sequenceDiagram
 - **请求侧的等待上限**：`cold-load-timeout` 默认 2 秒。超时后这个请求失败（500），加载在后台继续，下一个请求可能命中。CoCache 的
   `LoadPolicy.asyncTimeout` 默认 30 秒，对请求来说太长，只作为后台加载的上限。
 - **冷加载读哪一层**：本实例从未见过的 key 用 `read`（可以经 L2），装上之后立即补一次条件读，确认或替换它；本实例见过的 key（包括被 LRU
-  淘汰过的）冷加载直接用条件读（L1），所以一份更旧的 L2 副本不会替换本实例已经用过的修订，也不会触发虚假的回退告警。`confirmedAt` 取读取开始的时间。
+  淘汰过的）冷加载直接用条件读（L1），所以一份更旧的 L2 副本不会替换本实例已经用过的修订，也不会触发虚假的回退告警。`confirmedAt` 取读取开始的时间；
+  来自 L2 的安装按存储声明的 `localCopyMaxAge`（CoCache 的 `localMaxAge`）往前回拨，只有条件读成功才能让它显得新鲜。
 - **存储读取的上界**：存储返回的 future 超过 `store-read-timeout`（默认 30 秒）未完成即视为读取失败（F1/F6），这个 key 不会被一个永不完成的读取卡住。
 - **LRU**：`App` 文档按访问淘汰，默认最多 1024 个（Q19，用测量校准）。`Policies` 文档常驻，不被淘汰。被淘汰的文档下次是冷加载。
 - **预热**：启动时加载 `Policies` 和 `cosec.authorization.snapshot.prewarm-apps` 列出的应用。全部成功之前，starter 的 `cosecSnapshot`
