@@ -42,7 +42,7 @@ adapters or caching. The parts that take several files to see:
   `ConditionMatcherFactory`, `RootPrincipalMatcher`, `RateLimiter`, `RateLimitRuleProvider`). Every other module adapts exactly one technology.
   `cosec-spring-boot-starter` wires them through Gradle feature variants (`webfluxSupport`, `cacheSupport`, …),
   so an application pulls in only what it asks for.
-  `cosec-model` and `cosec-engine` (RFC 0002, not used yet) depend on the Kotlin standard library only:
+  `cosec-model` and `cosec-engine` (directories `model/`, `engine/`; RFC 0002, not used yet) depend on the Kotlin standard library only:
   `EnginePurityTest` and `verifyPureClasspath` fail otherwise, and the root build leaves out the Guava/SLF4J defaults.
 - **Request path.** Adapter (WebFlux / WebMvc / Gateway) → `SecurityPipeline` (parse request, resolve
   principal from token, authorize, map to status) → `SecurityDecision` → adapter writes it. Adapters translate;

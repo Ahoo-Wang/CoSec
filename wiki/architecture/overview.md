@@ -55,7 +55,7 @@ Arrows point at what a module depends on. The rules behind the picture:
   `SecurityPipeline`, the authorization decorators for auditing, rate limiting and shadow mode, token
   abstractions, local loading, JSON serialization) and the SPIs that other modules and applications implement
   (see [Extending CoSec](./extending.md)).
-- **`cosec-model` and `cosec-engine`** will hold the pure decision engine planned for 8.0
+- **`cosec-model` and `cosec-engine`** (directories `model/` and `engine/`) will hold the pure decision engine new in 8.0
   ([RFC 0002](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0002-pure-engine.md), Chinese). They depend on the Kotlin standard library only: `EnginePurityTest` (ArchUnit) fails on
   any reference to Reactor, Spring, logging, I/O, threads or clocks, and the `verifyPureClasspath` task, part of
   `check`, fails on any other dependency. Nothing uses them yet.
