@@ -755,7 +755,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             )
             finish(load, entryOf(load, DocumentState.Failed(error), EntryOrigin.LOST), install = true)
             // After the install: a throwing meter must not keep the lost document in service.
-            offRequestThread { log.error(error) { "Snapshot document [$key] disappeared from the store; failing closed." } }
+            offRequestThread {
+                log.error(error) { "Snapshot document [$key] disappeared from the store; failing closed." }
+            }
             metrics.onDocumentLost(key, lastSeen.revision)
         }
 
@@ -812,7 +814,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         private fun onTransientFailure(load: Load, cause: Throwable) {
             val known = load.known
             if (known != null) {
-                offRequestThread { log.warn(cause) { "Reloading snapshot document [$key] failed; keeping revision ${known.revision}." } }
+                offRequestThread {
+                    log.warn(cause) { "Reloading snapshot document [$key] failed; keeping revision ${known.revision}." }
+                }
                 finish(load, known, install = false)
                 return
             }
@@ -866,16 +870,31 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 empty = installed == null
             }
             try {
-                if (nextLoad != null) {
-                    read(nextLoad)
-                } else {
-                    unanswered?.complete(entry)
-                }
+                startOrAnswer(nextLoad, unanswered, entry)
             } finally {
-                if (empty || install) {
-                    offRequestThread { if (empty) removeIfIdle(onlyIfEmpty = true) else evictApps() }
-                }
+                housekeep(empty, install)
                 load.result.complete(entry)
+            }
+        }
+
+        /** Starts [nextLoad], or answers a pending [reload] future with [entry] when no load could follow. */
+        private fun startOrAnswer(
+            nextLoad: Load?,
+            unanswered: CompletableFuture<SnapshotEntry<T>>?,
+            entry: SnapshotEntry<T>,
+        ) {
+            if (nextLoad != null) {
+                read(nextLoad)
+            } else {
+                unanswered?.complete(entry)
+            }
+        }
+
+        private fun housekeep(empty: Boolean, install: Boolean) {
+            if (empty) {
+                offRequestThread { removeIfIdle(onlyIfEmpty = true) }
+            } else if (install) {
+                offRequestThread { evictApps() }
             }
         }
 
@@ -966,7 +985,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             return current
         }
 
-        fun Throwable.isFormatFailure(): Boolean = generateSequence(this) { it.cause }.take(16).any { it is SnapshotFormatException }
+        fun Throwable.isFormatFailure(): Boolean =
+            generateSequence(this) { it.cause }.take(16).any { it is SnapshotFormatException }
 
         fun newCompileExecutor(options: SnapshotOptions): ThreadPoolExecutor = ThreadPoolExecutor(
             options.compileThreads,

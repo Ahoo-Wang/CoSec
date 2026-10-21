@@ -18,8 +18,8 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Duration
-import java.util.concurrent.Executor
 import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executor
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -34,14 +34,18 @@ class SnapshotRoundTwoTest {
     }
 
     /** Throws [error] from the callbacks named in [failing], and only from those. */
-    private class ErrorMetrics(private val error: () -> Throwable, private vararg val failing: String) : SnapshotMetrics {
+    private class ErrorMetrics(
+        private val error: () -> Throwable,
+        private vararg val failing: String
+    ) : SnapshotMetrics {
         private fun maybeFail(event: String) {
             if (event in failing) throw error()
         }
 
         override fun onInstall(entry: SnapshotEntry<*>) = maybeFail("onInstall")
 
-        override fun onRegression(key: SnapshotKey, installedRevision: Long, loadedRevision: Long) = maybeFail("onRegression")
+        override fun onRegression(key: SnapshotKey, installedRevision: Long, loadedRevision: Long) =
+            maybeFail("onRegression")
 
         override fun onDocumentLost(key: SnapshotKey, lastRevision: Long) = maybeFail("onDocumentLost")
     }
