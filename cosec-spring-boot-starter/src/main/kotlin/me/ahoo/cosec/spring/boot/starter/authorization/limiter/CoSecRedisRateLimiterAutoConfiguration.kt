@@ -43,7 +43,7 @@ class CoSecRedisRateLimiterAutoConfiguration(private val limiterProperties: Limi
 
     @Bean
     @ConditionalOnMissingBean(RateLimiter::class)
-    fun redisRateLimiter(stringRedisTemplate: StringRedisTemplate): RateLimiter {
+    fun cosecRedisRateLimiter(stringRedisTemplate: StringRedisTemplate): RateLimiter {
         return RedisRateLimiter(stringRedisTemplate, limiterProperties.keyPrefix)
     }
 }

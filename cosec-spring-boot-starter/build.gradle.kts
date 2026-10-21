@@ -85,4 +85,5 @@ dependencies {
     testImplementation("me.ahoo.cosid:cosid-test")
     testImplementation("me.ahoo.cocache:cocache-spring-boot-starter")
     testImplementation("me.ahoo.cocache:cocache-test")
+    testImplementation("org.springframework.cloud:spring-cloud-gateway-server-webflux")
 }

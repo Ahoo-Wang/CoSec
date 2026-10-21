@@ -9,6 +9,14 @@ For teams moving an existing CoSec deployment to a newer version. Each section l
 and a checklist; this page is the single home of migration steps. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
+## 7.0.0 to 7.0.1
+
+The Redis `RateLimiter` bean is now named `cosecRedisRateLimiter` instead of `redisRateLimiter`, the name Spring Cloud
+Gateway also uses ([the startup failure it caused](./troubleshooting.md#startup-fails-with-a-redisratelimiter-bean-conflict)).
+Its type and conditions are unchanged, so injecting `RateLimiter` by type or replacing it with your own bean works as
+before. Only code that refers to CoSec's bean by the name `redisRateLimiter` (`@Qualifier`, `getBean("redisRateLimiter")`,
+`@ConditionalOnBean(name = …)`) must use `cosecRedisRateLimiter`.
+
 ## 6.1 to 7.0
 
 7.0 tightens authorization in several places where 6.x could let a request through by mistake, and moves to
