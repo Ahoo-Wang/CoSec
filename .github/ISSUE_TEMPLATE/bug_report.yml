@@ -21,6 +21,8 @@ body:
       multiple: true
       options:
         - cosec-api
+        - cosec-model
+        - cosec-engine
         - cosec-core
         - cosec-jwt
         - cosec-cocache

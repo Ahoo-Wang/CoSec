@@ -47,10 +47,11 @@ import reactor.core.publisher.Mono
  * - `global`: matched by a global ALLOW (all layers still evaluated for explicit denies)
  * - `role`: matched by a role permission near the end of the app's permission list
  * - `none`: nothing matches, full traversal ending in an implicit deny
+ * - `global-deny`: denied by a global DENY while the principal and role layers still have data (RFC 0002 X1)
  */
 @State(Scope.Benchmark)
 open class SimpleAuthorizationBenchmark {
-    @Param("global", "role", "none")
+    @Param("global", "role", "none", "global-deny")
     lateinit var scenario: String
 
     private lateinit var authorization: SimpleAuthorization
@@ -118,6 +119,7 @@ open class SimpleAuthorizationBenchmark {
             path = when (scenario) {
                 "global" -> "/public/resource3/page"
                 "role" -> "/orders/op49/detail"
+                "global-deny" -> "/public/admin/settings"
                 else -> "/unknown/path"
             },
         )

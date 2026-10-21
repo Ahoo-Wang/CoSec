@@ -667,6 +667,8 @@ internal class StatementScopedContext(private val base: SecurityContext) : Secur
    JMH 的 JSON 结果作为 PR 附件。
 5. **记录位置**：每个热路径 PR 的描述里附前后对比（AGENTS.md 要求）；阶段结束时（PR-6）把最终数字写进
    `wiki/architecture/overview.md` 的性能一节，中英文都改。
+6. **基线（PR-1）**：已按上面的命令录在 [`docs/perf/rfc-0002-baseline`](../perf/rfc-0002-baseline/README.md)（JDK 25.0.4.1，
+   含 `global-deny`）。录制时机器负载为 1.6–2.9，高于第 3 步的门槛，只作参考；PR-3 的门槛以第 4 步的交替测量为准。
 
 ---
 

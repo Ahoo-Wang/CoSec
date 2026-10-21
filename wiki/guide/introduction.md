@@ -100,6 +100,8 @@ Applications depend on `cosec-spring-boot-starter` and add integrations as Gradl
 
 The starter always brings `cosec-api` (the public contracts), `cosec-core` (the decision engine, policy
 loading, auditing, rate limiting) and `cosec-jwt` (JWT tokens). `cosec-bom` aligns the versions.
+`cosec-model` and `cosec-engine` are published for the decision engine planned for 8.0; nothing depends on them yet,
+so applications do not need them.
 `cosec-gateway-server` is a ready-to-run gateway built from these modules: deploy it, do not depend on it (see
 [Gateway](../integration/web.md#gateway)).
 

@@ -31,6 +31,7 @@ dependencies {
         api(libs.jmh.generator.annprocess)
         api(libs.hamcrest)
         api(libs.mockk)
+        api(libs.archunit.junit5)
         api(libs.detekt.formatting)
     }
 }

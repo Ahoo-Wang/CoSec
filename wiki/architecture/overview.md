@@ -42,6 +42,8 @@ flowchart BT
     starter[cosec-spring-boot-starter] --> jwt
     starter -. feature variants .-> webflux & webmvc & gateway & cocache & social & otel & micrometer & openapi & ip2r & kafka
     server[cosec-gateway-server] --> starter
+    model[cosec-model]
+    engine[cosec-engine] --> model
 ```
 
 Arrows point at what a module depends on. The rules behind the picture:
@@ -53,6 +55,10 @@ Arrows point at what a module depends on. The rules behind the picture:
   `SecurityPipeline`, the authorization decorators for auditing, rate limiting and shadow mode, token
   abstractions, local loading, JSON serialization) and the SPIs that other modules and applications implement
   (see [Extending CoSec](./extending.md)).
+- **`cosec-model` and `cosec-engine`** will hold the pure decision engine planned for 8.0
+  ([RFC 0002](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0002-pure-engine.md), Chinese). They depend on the Kotlin standard library only: `EnginePurityTest` (ArchUnit) fails on
+  any reference to Reactor, Spring, logging, I/O, threads or clocks, and the `verifyPureClasspath` task, part of
+  `check`, fails on any other dependency. Nothing uses them yet.
 - **Every other library module adapts exactly one technology**: JWT, Redis through CoCache, OAuth, OpenTelemetry,
   Micrometer, OpenAPI, ip2region, Kafka, or one web stack. An adapter module never contains a decision.
 - **`cosec-spring-boot-starter`** wires everything. Each integration is a Gradle feature variant declared in
@@ -284,6 +290,17 @@ configuration, so without it every forked JVM logs at DEBUG, including the per-d
 results measure logging as much as authorization. `./gradlew :cosec-core:jmh` passes the file already, but runs one
 fork with one warm-up and one measurement iteration (the defaults in the root `build.gradle.kts`): enough to see that
 a benchmark runs, not to compare versions.
+
+Gradle properties override those defaults: `-PjmhWarmupIterations`, `-PjmhIterations`, `-PjmhFork`, `-PjmhProfilers`
+(comma-separated, such as `gc`) and `-PjmhJavaVersion`, the JDK toolchain the benchmark JVMs run on (the code is still
+compiled for 17). RFC 0002 compares the engine with the current `SimpleAuthorization` using this command, which adds
+the `global-deny` scenario (denied by a global policy while the other layers have data); the baseline is in
+[`docs/perf/rfc-0002-baseline`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/rfc-0002-baseline):
+
+```bash
+./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark -PjmhJavaVersion=25 \
+  -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
+```
 
 How much to trust the numbers:
 

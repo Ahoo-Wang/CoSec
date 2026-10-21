@@ -19,9 +19,10 @@ a change that fails to compile. When unsure, deny, and ask.
 
 - `cosec-cocache` and `cosec-spring-boot-starter` tests need Redis on `localhost:6379`
   (`docker run -d -p 6379:6379 redis:7`). Without it they fail; that is not your change breaking them.
-- `:cosec-core:jmh` runs 1 fork × 1 iteration: a smoke run. To compare versions, run the jar from `:cosec-core:jmhJar`
-  with the command in [`wiki/architecture/overview.md#measuring`](wiki/architecture/overview.md#measuring), and always
-  pass `-jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml`: without it the forked JVMs log at
+- `:cosec-core:jmh` runs 1 fork × 1 iteration: a smoke run. To compare versions, pass `-PjmhFork`, `-PjmhIterations`,
+  `-PjmhWarmupIterations`, `-PjmhProfilers` and `-PjmhJavaVersion`, or run the jar from `:cosec-core:jmhJar`, as in
+  [`wiki/architecture/overview.md#measuring`](wiki/architecture/overview.md#measuring). Run the jar yourself only with
+  `-jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml`: without it the forked JVMs log at
   DEBUG and the numbers are skewed. Reference results: `docs/perf/`.
 - Detekt runs with `autoCorrect = true`: `check` and `detekt` **rewrite source files**. Review and commit them.
 - Codecov requires ≥ 80 % coverage on changed lines.
@@ -41,6 +42,8 @@ adapters or caching. The parts that take several files to see:
   `ConditionMatcherFactory`, `RootPrincipalMatcher`, `RateLimiter`, `RateLimitRuleProvider`). Every other module adapts exactly one technology.
   `cosec-spring-boot-starter` wires them through Gradle feature variants (`webfluxSupport`, `cacheSupport`, …),
   so an application pulls in only what it asks for.
+  `cosec-model` and `cosec-engine` (RFC 0002, not used yet) depend on the Kotlin standard library only:
+  `EnginePurityTest` and `verifyPureClasspath` fail otherwise, and the root build leaves out the Guava/SLF4J defaults.
 - **Request path.** Adapter (WebFlux / WebMvc / Gateway) → `SecurityPipeline` (parse request, resolve
   principal from token, authorize, map to status) → `SecurityDecision` → adapter writes it. Adapters translate;
   they never decide.

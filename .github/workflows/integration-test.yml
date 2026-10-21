@@ -22,6 +22,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  cosec-engine-test:
+    name: CoSec Engine Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Test CoSec-Model and CoSec-Engine
+        run: ./gradlew cosec-model:clean cosec-engine:clean cosec-model:check cosec-engine:check
+
   cosec-core-test:
     name: CoSec Core Test
     runs-on: ubuntu-latest
