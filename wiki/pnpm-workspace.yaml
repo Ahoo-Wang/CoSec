@@ -5,7 +5,7 @@ allowBuilds:
 # Dependabot cannot bump transitive dependencies, so force the patched versions.
 overrides:
   vite: ^6.4.4
-  vue: ^3.5.43
-  '@vue/server-renderer': ^3.5.43
+  vue: ^3.5.44
+  '@vue/server-renderer': ^3.5.44
   katex: ^0.19.0
   source-map-js: ^1.2.2
