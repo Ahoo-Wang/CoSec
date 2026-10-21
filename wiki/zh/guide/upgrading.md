@@ -14,6 +14,16 @@
 升级前，请找出引用了仓储中不存在的策略 id 的主体（令牌、API Key、用户记录），补写这些策略或移除这些 id。
 `PolicyRepository.getPolicies` 本身没有变化：它仍然只返回找到的策略，因此自定义仓储无需修改。
 
+**角色授权引用了未定义的权限时，授权失败。** 授予角色的权限 id 在其应用的权限目录中没有定义时（已从目录中删除，或 id 写错），
+`SimpleAuthorization` 现在会以 `MissingPermissionException` 失败，管道将其映射为 `500`。以前，这个 id 会被跳过：如果它指向一条拒绝权限，
+全局或主体策略中的放行就会让请求通过。对在该应用和空间中持有这个角色的主体，只要角色层被评估、且在此之前没有拒绝匹配，请求就会失败：
+应用的条件不匹配时，这一层不适用；已被某条拒绝（前面某一层的，或角色层中更靠前的）匹配的请求仍然被拒绝。`*` 仍然表示授予全部权限。`AuthorizationChecker` 返回 `false`；解释结果会给出 `500`
+并带有 `MISSING_PERMISSION` 警告；影子模式中去掉了某个已授予 id 的候选应用权限会报告 `CANDIDATE_ERROR`。`AccessAnalyzer` 和
+`PolicyTestKit` 在构建或运行时拒绝这样的授权；测试套件的 `roles` 在每个应用中都会授予，因此每个应用都必须定义这些权限（只属于一个应用的
+id 请用 `appRoles`）。`AppRolePermission.rolePermissionIndexer` 的默认实现也会抛出同一个异常。
+
+升级前，请对照每个应用的权限目录检查其角色授权，补上缺失的权限，或从授权中移除这个 id。
+
 **root 默认关闭，只在平台租户中生效，并且受黑名单约束。** 以前，任何 id 为 `cosec`（或 `-Dcosec.root` 系统属性的值）的主体都会绕过所有检查，
 包括黑名单；`cosec.authorization.root-enabled` 默认为 `true`。如果某个用户租户的身份源允许用户自选 id `cosec`，这个用户就拿到了整个平台的权限。现在：
 
@@ -270,9 +280,10 @@ CoCache 6 读不了 CoSec 6.x 用 CoCache 5 写入的值，而 Redis 是策略�
 3. 找出引用了仓储中不存在的策略的主体；确定每个 6.x 角色所属的应用；签发 `role@space` 形式的角色；如果使用 root，显式启用它。
    审查读取 `context.principal.roles` 的 `in`、`spel` 和 `ognl` 条件，它们看到的是原始的 `role@space` 字符串；
    如果某个 OpenAPI 标题含有 `:`，让客户端改用新的 `CoSec-App-Id`。
-4. 把直接写入 Redis 的应用权限和角色授权改为通过 CoSec 写入，用 `CacheSpecCustomizer` 或 `cocache.caches.<CacheName>.*`
+4. 确认授予角色的每个权限 id（`*` 除外）都在其应用的权限目录中有定义。
+5. 把直接写入 Redis 的应用权限和角色授权改为通过 CoSec 写入，用 `CacheSpecCustomizer` 或 `cocache.caches.<CacheName>.*`
    替换 6.x 的缓存组件 bean，并把用于 `CosIdGenerator` 的 `IdGenerator` 声明改为 `StringIdGenerator`。
-5. 停止所有写入方，迁移数据，核对，然后启动 7.0（[迁移数据](#migrating-the-data)）。只有在每个应用都迁移完之后才删除旧的角色授权。
+6. 停止所有写入方，迁移数据，核对，然后启动 7.0（[迁移数据](#migrating-the-data)）。只有在每个应用都迁移完之后才删除旧的角色授权。
 
 
 ## 从 6.0 升级到 6.1 {#_6-0-to-6-1}

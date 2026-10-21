@@ -16,7 +16,9 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.AppRolePermission
+import me.ahoo.cosec.api.permission.MissingPermissionException
 import me.ahoo.cosec.api.permission.Permission
 import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.permission.RolePermission
@@ -46,7 +48,8 @@ import reactor.kotlin.core.publisher.toMono
  *
  * Layers 3-5 are combined deny-first: an EXPLICIT_DENY matched in any layer wins over
  * an ALLOW matched in any other layer. A principal policy the repository does not have fails the
- * authorization with [MissingPolicyException] instead of being skipped.
+ * authorization with [MissingPolicyException], and a role grant naming a permission id the app does not define with
+ * [MissingPermissionException], instead of being skipped.
  *
  * Matchers are evaluated synchronously on the subscribing thread. A layer whose policies or app permission
  * contain a blocking matcher (see [me.ahoo.cosec.policy.BlockingAware], e.g. a custom matcher that calls a remote service) is evaluated
@@ -127,6 +130,10 @@ class SimpleAuthorization(
     /**
      * Deny-first evaluation of the principal's role permissions, iterating the role → permission-id
      * assignments directly instead of materializing [AppRolePermission.rolePermissionIndexer] per request.
+     *
+     * A granted id the catalog does not define fails the layer with [MissingPermissionException] when the deny pass
+     * reaches it, so it fails closed without a separate check: when the app's condition does not match the layer does
+     * not apply, and when a deny matched before it the request is denied anyway.
      */
     private fun verifyAppRolePermission(
         appRolePermission: AppRolePermission,
@@ -142,7 +149,7 @@ class SimpleAuthorization(
         for (effect in DENY_FIRST) {
             val decisive = effect.decisiveResult()
             for (rolePermission in appRolePermission.rolePermissions) {
-                rolePermission.forEachPermission(permissionIndexer) { permission ->
+                rolePermission.forEachPermission(appPermission, permissionIndexer) { permission ->
                     if (permission.effect == effect && permission.verifyScoped(request, context) == decisive) {
                         log.debug {
                             "Verify [$request] [$context] matched Role[${rolePermission.id}] Permission[${permission.id}][${permission.name}] - [$decisive]."
@@ -160,6 +167,7 @@ class SimpleAuthorization(
     }
 
     private inline fun RolePermission.forEachPermission(
+        appPermission: AppPermission,
         permissionIndexer: Map<PermissionId, Permission>,
         action: (Permission) -> Unit
     ) {
@@ -168,9 +176,18 @@ class SimpleAuthorization(
             return
         }
         permissions.forEach { permissionId ->
-            permissionIndexer[permissionId]?.let(action)
+            action(permissionIndexer[permissionId] ?: throw missingPermission(appPermission, permissionIndexer))
         }
     }
+
+    private fun RolePermission.missingPermission(
+        appPermission: AppPermission,
+        permissionIndexer: Map<PermissionId, Permission>
+    ) = MissingPermissionException(
+        appPermission.id,
+        id,
+        permissions.filterNotTo(LinkedHashSet()) { permissionIndexer.containsKey(it) },
+    )
 
     /**
      * Runs [verifier] in place, or on [Schedulers.boundedElastic] when it may block.

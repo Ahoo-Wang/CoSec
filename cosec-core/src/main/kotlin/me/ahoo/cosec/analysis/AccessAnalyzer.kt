@@ -16,6 +16,7 @@ package me.ahoo.cosec.analysis
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.AppRolePermission
+import me.ahoo.cosec.api.permission.MissingPermissionException
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
@@ -28,6 +29,7 @@ import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.explain.MatcherRef
+import me.ahoo.cosec.permission.RolePermissionData
 import me.ahoo.cosec.policy.condition.AllConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.CONDITION_MATCHER_NEGATE_KEY
 import me.ahoo.cosec.policy.markPolicyEvaluation
@@ -95,7 +97,8 @@ data class AccessPaths(
  *
  * @param roles role grants per app: app id to role to permission ids (`*` grants all). A role written `role@space`
  * is granted in `space` only, a role without a suffix in the default space only, as in principals' roles and Redis
- * keys. A malformed role (empty role or space, more than one `@`) fails construction.
+ * keys. A malformed role (empty role or space, more than one `@`) fails construction, and so does a grant naming a
+ * permission id its app does not define ([MissingPermissionException]): authorization fails on such a grant too.
  */
 class AccessAnalyzer(
     private val policies: List<Policy>,
@@ -126,6 +129,19 @@ class AccessAnalyzer(
         appRoles.mapKeys { (role, _) ->
             requireNotNull(RoleScope.parse(role)) {
                 "Role [$role] of app [$appId] is malformed: write `role` or `role@space`."
+            }
+        }
+    }
+
+    init {
+        appPermissions.forEach { appPermission ->
+            val permissionIndexer = appPermission.permissionIndexer
+            roles[appPermission.id].orEmpty().forEach { (role, permissionIds) ->
+                MissingPermissionException.requireDefined(
+                    appPermission,
+                    permissionIndexer,
+                    RolePermissionData(role, permissionIds),
+                )
             }
         }
     }
@@ -188,7 +204,7 @@ class AccessAnalyzer(
                 val granted = if (AppRolePermission.ALL_PERMISSION_ID in permissionIds) {
                     indexer.values.toList()
                 } else {
-                    permissionIds.mapNotNull { indexer[it] }
+                    permissionIds.map { indexer.getValue(it) }
                 }
                 granted.map { permission ->
                     permission to AccessRule(
