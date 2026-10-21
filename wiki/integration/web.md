@@ -207,8 +207,9 @@ To ask from code whether the current principal may do something else, see [Check
 
 ## App and space
 
-Three request headers name where a request runs. Each one can also be sent as a query parameter of the same name;
-the header wins.
+Three request headers name where a request runs. Each one can also be sent as a parameter of the same name in the
+URL query string; the header wins. A form field in the request body is never read: an authorization filter does not
+read request bodies, on any adapter.
 
 | Header | Meaning | Read by |
 |---|---|---|

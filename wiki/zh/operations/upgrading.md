@@ -8,6 +8,25 @@ description: "CoSec 各版本之间有哪些破坏性变更，以及如何迁移
 面向把现有 CoSec 部署升级到新版本的团队。每一节列出破坏了什么、要改什么，以及一份检查清单；本页是迁移步骤的唯一出处。每个
 版本的发布说明见 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
+## 7.x 到 8.0 {#_7-x-to-8-0}
+
+### Spring MVC 只从查询字符串读取查询参数 {#spring-mvc-reads-query-parameters-from-the-query-string-only}
+
+在 Spring MVC 上，CoSec 用 `HttpServletRequest.getParameter` 读取查询参数，而它也会返回 `application/x-www-form-urlencoded`
+请求体中的字段。所以对表单 POST，容器会在 CoSec 的授权过滤器中解析并消费请求体，请求体字段也被当作查询参数。现在只读取
+URL 查询字符串，解码方式与 WebFlux 和 Gateway 相同，并且永远不碰请求体
+（[Spring MVC 上经过 CoSec 后表单 POST 请求体为空](./troubleshooting.md#form-post-body-is-empty-after-cosec-on-spring-mvc)）。
+
+在 Spring MVC 上，表单字段不再设置：
+
+- `CoSec-App-Id`、`CoSec-Space-Id` 和 `CoSec-Device-Id`，因此也不再设置条件中的 `request.appId`、`request.spaceId`、
+  `request.deviceId`，以及角色权限使用的应用和空间（[应用与空间](../integration/web.md#app-and-space)）；
+- 在 `cosec.authorization.allow-query-token=true` 时读取的 `authorization` 令牌；
+- `ognl` 条件、自定义条件匹配器或 `RequestAttributesAppender` 中的 `getQuery(...)`。
+
+把这些作为表单字段发送的客户端，必须改为通过请求头或查询字符串发送。以这种方式匹配表单字段的条件不再匹配：allow 不再放行，
+deny 也不再拒绝。把这类检查移到应用中、在应用读取请求体之后进行；授权过滤器不能读取请求体。
+
 ## 7.0.0 到 7.0.1 {#_7-0-0-to-7-0-1}
 
 Redis `RateLimiter` bean 的名称由 `redisRateLimiter` 改为 `cosecRedisRateLimiter`；旧名称与 Spring Cloud Gateway 使用的名称相同

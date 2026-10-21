@@ -39,6 +39,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import org.springframework.http.HttpMethod
+import org.springframework.http.MediaType
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.MockFilterChain
 import org.springframework.mock.web.MockHttpServletRequest
@@ -68,7 +69,33 @@ class WebAdapterParityTest {
         override fun append(request: Request): Request = request.also { path = it.path }
     }
 
+    /** Records what the policies see for a few query keys, the app and space id fallbacks included. */
+    private class QueryRecorder : RequestAttributesAppender {
+        var seen: Map<String, String>? = null
+        override fun append(request: Request): Request = request.also {
+            seen = QUERY_KEYS.associateWith { key -> request.getQuery(key) } +
+                mapOf("appId" to request.appId, "spaceId" to request.spaceId)
+        }
+    }
+
     companion object {
+        private val QUERY_KEYS = listOf("a", "b", "a[0]", "CoSec-App-Id", "CoSec-Space-Id")
+        private const val FORM_BODY = "CoSec-App-Id=fromBody&a=fromBody"
+
+        @JvmStatic
+        fun queries(): List<String> = listOf(
+            "",
+            "a=1",
+            "a=1&a=2",
+            "a=&a=2",
+            "a&a=2",
+            "a=x%20y+z&b=%E4%BD%A0",
+            "a%5B0%5D=v",
+            "a=b=c",
+            "a=%2B&&b=2",
+            "CoSec-App-Id=app&CoSec-Space-Id=space",
+        )
+
         private val anonymous = SecurityContextParser { SimpleSecurityContext.anonymous() }
         private val authenticated = SecurityContextParser { SimpleSecurityContext(SimplePrincipal("user")) }
         private val expiredToken = SecurityContextParser { throw TokenExpiredException() }
@@ -146,6 +173,21 @@ class WebAdapterParityTest {
         val reactive = reactiveOutcome(path, securityContextParser, authorization)
         val servlet = servletOutcome(path, securityContextParser, authorization)
         servlet.assert().isEqualTo(reactive)
+    }
+
+    @ParameterizedTest(name = "?{0}")
+    @MethodSource("queries")
+    fun adaptersReadQueriesIdentically(query: String) {
+        val servlet = servletQuery("GET", query, form = false)
+        servlet.assert().isEqualTo(reactiveQuery("GET", query, form = false))
+    }
+
+    @ParameterizedTest(name = "?{0}")
+    @MethodSource("queries")
+    fun formBodyIsNeverAQuery(query: String) {
+        val servlet = servletQuery("POST", query, form = true)
+        servlet.assert().isEqualTo(reactiveQuery("POST", query, form = true))
+        servlet.assert().isEqualTo(servletQuery("POST", query, form = false))
     }
 
     @Test
@@ -226,5 +268,45 @@ class WebAdapterParityTest {
             headers = headerNames.associateWith { response.getHeader(it) },
             authorizedPath = recorder.path,
         )
+    }
+
+    private fun reactiveQuery(method: String, query: String, form: Boolean): Map<String, String>? {
+        val recorder = QueryRecorder()
+        val filter = ReactiveAuthorizationFilter(
+            anonymous,
+            ReactiveRequestParser(ReactiveRemoteIpResolver, listOf(recorder)),
+            returning(AuthorizeResult.ALLOW),
+        )
+        val uri = URI.create(if (query.isEmpty()) "/path" else "/path?$query")
+        val builder = MockServerHttpRequest.method(HttpMethod.valueOf(method), uri)
+        val request = if (form) {
+            builder.contentType(MediaType.APPLICATION_FORM_URLENCODED).body(FORM_BODY)
+        } else {
+            builder.build()
+        }
+        filter.filter(MockServerWebExchange.from(request)) { Mono.empty() }.block()
+        return recorder.seen
+    }
+
+    private fun servletQuery(method: String, query: String, form: Boolean): Map<String, String>? {
+        val recorder = QueryRecorder()
+        val filter = AuthorizationFilter(
+            anonymous,
+            returning(AuthorizeResult.ALLOW),
+            ServletRequestParser(ServletRemoteIpResolver, listOf(recorder)),
+        )
+        val request = MockHttpServletRequest(method, "/path").apply {
+            servletPath = "/path"
+            queryString = query.ifEmpty { null }
+            if (form) {
+                contentType = MediaType.APPLICATION_FORM_URLENCODED_VALUE
+                setContent(FORM_BODY.toByteArray())
+                // What a container's getParameter returns once it parsed the body.
+                addParameter("CoSec-App-Id", "fromBody")
+                addParameter("a", "fromBody")
+            }
+        }
+        filter.doFilter(request, MockHttpServletResponse(), MockFilterChain())
+        return recorder.seen
     }
 }

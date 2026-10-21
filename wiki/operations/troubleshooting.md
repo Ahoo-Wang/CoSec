@@ -114,6 +114,18 @@ same causes.
 7. **After upgrading to 7.0**, data that was not migrated fails its reads with `ForeignFormatException` and
    requests get `500` ([Migrating the data](./upgrading.md#migrating-the-data)).
 
+## Form POST body is empty after CoSec on Spring MVC
+
+Fixed in 8.0. Before 8.0, the WebMvc adapter read query parameters with `HttpServletRequest.getParameter`. For an
+`application/x-www-form-urlencoded` POST that makes the servlet container parse the body inside CoSec's filter, so:
+
+- `@RequestBody` or `request.getInputStream()` in the application finds the body empty;
+- some containers fail the request while parsing it;
+- a form field named `CoSec-App-Id` or `CoSec-Space-Id` sets the app or space, as if it were in the query string.
+
+Upgrade to 8.0, which reads only the URL query string, and send the app and space ids as headers or query parameters
+([7.x to 8.0](./upgrading.md#spring-mvc-reads-query-parameters-from-the-query-string-only)).
+
 ## Every request fails with 500
 
 Find the exception in the application log: CoSec logs

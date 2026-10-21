@@ -70,7 +70,6 @@ internal class AuthorizationFilterTest {
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
-            every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
             every { cookies } returns arrayOf()
             every { getHeader(HttpHeaders.ORIGIN) } returns null
             every { getHeader(HttpHeaders.REFERER) } returns null
@@ -109,7 +108,6 @@ internal class AuthorizationFilterTest {
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
-            every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
             every { cookies } returns arrayOf()
             every { getHeader(HttpHeaders.ORIGIN) } returns "ORIGIN"
             every { getHeader(HttpHeaders.REFERER) } returns "REFERER"
@@ -196,7 +194,6 @@ internal class AuthorizationFilterTest {
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
-            every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
             every { cookies } returns arrayOf()
             every { getHeader(HttpHeaders.ORIGIN) } returns null
             every { getHeader(HttpHeaders.REFERER) } returns null
@@ -242,7 +239,6 @@ internal class AuthorizationFilterTest {
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
-            every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
             every { cookies } returns arrayOf()
             every { getHeader(HttpHeaders.ORIGIN) } returns null
             every { getHeader(HttpHeaders.REFERER) } returns null
@@ -289,7 +285,6 @@ internal class AuthorizationFilterTest {
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
-            every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
             every { cookies } returns arrayOf()
             every { getHeader(HttpHeaders.ORIGIN) } returns null
             every { getHeader(HttpHeaders.REFERER) } returns null
@@ -331,7 +326,6 @@ internal class AuthorizationFilterTest {
             every { remoteAddr } returns "remoteAddr"
             every { getHeader(RequestIdCapable.REQUEST_ID_KEY) } returns null
             every { getHeader(AUTHORIZATION_HEADER_KEY) } returns null
-            every { getParameter(AUTHORIZATION_HEADER_KEY) } returns null
             every { cookies } returns arrayOf()
             every { getHeader(HttpHeaders.ORIGIN) } returns null
             every { getHeader(HttpHeaders.REFERER) } returns null
