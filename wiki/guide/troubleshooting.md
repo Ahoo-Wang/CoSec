@@ -246,9 +246,9 @@ An [explanation](#explain-a-decision) reports it as a `MISSING_POLICY` warning.
 
 The log shows `MissingPermissionException`: `Role [<role>] is granted permissions [...], which app [<app>] does not
 define`. The role's grant in that app names a permission id that the app's permission catalog does not have: it was
-removed from the catalog, or the id is mistyped. Since 7.0 every request that reaches the role layer fails for
-principals holding the role, rather than skipping the id, because a missing deny would otherwise let a broader allow
-through. Add the permission to the app's catalog, or remove the id from the role's grant. An
+removed from the catalog, or the id is mistyped. Since 7.0 a request of a principal holding the role fails whenever the
+role layer is evaluated and no deny matched first (a request outside the app's condition, or already denied, is not
+affected), rather than skipping the id, because a missing deny would otherwise let a broader allow through. Add the permission to the app's catalog, or remove the id from the role's grant. An
 [explanation](#explain-a-decision) reports it as a `MISSING_PERMISSION` warning.
 
 ## Rate limits behave unexpectedly

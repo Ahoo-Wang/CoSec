@@ -16,6 +16,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.AppRolePermission
 import me.ahoo.cosec.api.permission.MissingPermissionException
 import me.ahoo.cosec.api.permission.Permission
@@ -130,8 +131,9 @@ class SimpleAuthorization(
      * Deny-first evaluation of the principal's role permissions, iterating the role → permission-id
      * assignments directly instead of materializing [AppRolePermission.rolePermissionIndexer] per request.
      *
-     * Every grant is checked against the catalog first, whether or not the app's condition matches, so a missing
-     * permission (possibly a deny) fails every request of the role the same way.
+     * A granted id the catalog does not define fails the layer with [MissingPermissionException] when the deny pass
+     * reaches it, so it fails closed without a separate check: when the app's condition does not match the layer does
+     * not apply, and when a deny matched before it the request is denied anyway.
      */
     private fun verifyAppRolePermission(
         appRolePermission: AppRolePermission,
@@ -139,18 +141,15 @@ class SimpleAuthorization(
         context: SecurityContext
     ): VerifyContext? {
         val appPermission = appRolePermission.appPermission
-        val permissionIndexer = appPermission.permissionIndexer
-        for (rolePermission in appRolePermission.rolePermissions) {
-            MissingPermissionException.requireDefined(appPermission, permissionIndexer, rolePermission)
-        }
         context.clearPathVariables()
         if (!appPermission.condition.match(request, context)) {
             return null
         }
+        val permissionIndexer = appPermission.permissionIndexer
         for (effect in DENY_FIRST) {
             val decisive = effect.decisiveResult()
             for (rolePermission in appRolePermission.rolePermissions) {
-                rolePermission.forEachPermission(permissionIndexer) { permission ->
+                rolePermission.forEachPermission(appPermission, permissionIndexer) { permission ->
                     if (permission.effect == effect && permission.verifyScoped(request, context) == decisive) {
                         log.debug {
                             "Verify [$request] [$context] matched Role[${rolePermission.id}] Permission[${permission.id}][${permission.name}] - [$decisive]."
@@ -168,6 +167,7 @@ class SimpleAuthorization(
     }
 
     private inline fun RolePermission.forEachPermission(
+        appPermission: AppPermission,
         permissionIndexer: Map<PermissionId, Permission>,
         action: (Permission) -> Unit
     ) {
@@ -176,9 +176,18 @@ class SimpleAuthorization(
             return
         }
         permissions.forEach { permissionId ->
-            action(permissionIndexer.getValue(permissionId))
+            action(permissionIndexer[permissionId] ?: throw missingPermission(appPermission, permissionIndexer))
         }
     }
+
+    private fun RolePermission.missingPermission(
+        appPermission: AppPermission,
+        permissionIndexer: Map<PermissionId, Permission>
+    ) = MissingPermissionException(
+        appPermission.id,
+        id,
+        permissions.filterNotTo(LinkedHashSet()) { permissionIndexer.containsKey(it) },
+    )
 
     /**
      * Runs [verifier] in place, or on [Schedulers.boundedElastic] when it may block.

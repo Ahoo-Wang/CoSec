@@ -26,6 +26,7 @@ import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.explain.AuthorizationExplainer
 import me.ahoo.cosec.explain.ExplainLayer
+import me.ahoo.cosec.explain.ExplainOptions
 import me.ahoo.cosec.explain.ExplainRequest
 import me.ahoo.cosec.explain.ExplainWarningCode
 import me.ahoo.cosec.permission.AppPermissionData
@@ -119,16 +120,67 @@ class MissingPermissionFailClosedTest {
             }.verify()
     }
 
+    private fun explain(appRolePermissions: AppRolePermissionRepository) = checkNotNull(
+        AuthorizationExplainer(policyRepository, appRolePermissions).explain(request, context().principal).block(),
+    )
+
     @Test
-    fun missingPermissionFailsEvenWhenTheAppConditionDoesNotMatch() {
-        // Every request of the role fails the same way, so the broken grant cannot hide behind a condition.
-        val appPermission = catalog(
-            read
-        ).copy(condition = AllConditionMatcher(mapOf(CONDITION_MATCHER_NEGATE_KEY to true).asConfiguration()))
-        SimpleAuthorization(policyRepository, permissions(appPermission)).decide(request, context())
+    fun missingPermissionDoesNotMatterWhenTheAppConditionDoesNotMatch() {
+        // The layer does not apply, so even a present deny would not: the global allow decides either way.
+        val never = AllConditionMatcher(mapOf(CONDITION_MATCHER_NEGATE_KEY to true).asConfiguration())
+        val appRolePermissions = permissions(catalog(read).copy(condition = never))
+        val decision =
+            checkNotNull(SimpleAuthorization(policyRepository, appRolePermissions).decide(request, context()).block())
+        decision.result.assert().isEqualTo(AuthorizeResult.ALLOW)
+        explain(appRolePermissions).warnings.assert().isEmpty()
+    }
+
+    @Test
+    fun denyMatchedBeforeTheMissingPermissionStillDenies() {
+        // The deny pass stops at the matched deny; the request is denied either way.
+        val appRolePermissions = permissions(catalog(denyDelete, read), granted = linkedSetOf("deny-delete", "typo"))
+        val decision =
+            checkNotNull(SimpleAuthorization(policyRepository, appRolePermissions).decide(request, context()).block())
+        decision.result.assert().isEqualTo(AuthorizeResult.EXPLICIT_DENY)
+        explain(appRolePermissions).apply {
+            status.assert().isEqualTo(SecurityStatus.FORBIDDEN)
+            warnings.assert().isEmpty()
+        }
+    }
+
+    @Test
+    fun missingPermissionBeforeTheDenyFails() {
+        val appRolePermissions = permissions(catalog(denyDelete, read), granted = linkedSetOf("typo", "deny-delete"))
+        SimpleAuthorization(policyRepository, appRolePermissions).decide(request, context())
             .test()
-            .expectError(MissingPermissionException::class.java)
+            .expectErrorMatches { it is MissingPermissionException && it.permissionIds == setOf("typo") }
             .verify()
+        explain(
+            appRolePermissions
+        ).warnings.map { it.code }.assert().containsExactly(ExplainWarningCode.MISSING_PERMISSION)
+    }
+
+    @Test
+    fun earlierLayerDenyIsNotReportedAsMissingPermission() {
+        // An exhaustive explanation narrates the role layer after a global deny, which real authorization never reaches.
+        val denyAll = PolicyData(
+            id = "deny-all",
+            category = "",
+            name = "deny-all",
+            description = "",
+            type = PolicyType.GLOBAL,
+            tenantId = "",
+            statements = listOf(StatementData(effect = Effect.DENY, action = AllActionMatcher.INSTANCE)),
+        )
+        val policies = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.just(listOf(denyAll))
+        }
+        val explanation = checkNotNull(
+            AuthorizationExplainer(policies, permissions(catalog(read)))
+                .explain(request, context().principal, ExplainOptions(exhaustive = true)).block(),
+        )
+        explanation.status.assert().isEqualTo(SecurityStatus.FORBIDDEN)
+        explanation.warnings.assert().isEmpty()
     }
 
     @Test

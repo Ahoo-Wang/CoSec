@@ -21,9 +21,10 @@ still returns the policies it found, so custom repositories need no change.
 **A role grant that names an undefined permission fails authorization.** When a role is granted a permission id
 that its app's permission catalog does not define (removed from the catalog, or mistyped), `SimpleAuthorization` now
 fails with `MissingPermissionException`, which the pipeline maps to `500`. Before, the id was skipped: when it named
-a deny, a global or principal allow let the request through. The check does not depend on the app's condition, so
-every request that reaches the role layer fails for a principal holding that role in that app and space; a request
-an earlier layer explicitly denies is still denied. `*` still grants every permission. `AuthorizationChecker`
+a deny, a global or principal allow let the request through. A request of a principal holding that role in that app
+and space fails whenever the role layer is evaluated and no deny matched first: when the app's condition does not
+match, the layer does not apply, and a request that a deny (in an earlier layer, or earlier in the role layer)
+already matches stays denied. `*` still grants every permission. `AuthorizationChecker`
 answers `false`, an explanation reports the `500` with a `MISSING_PERMISSION` warning, and a shadow candidate app
 permission that drops a granted id reports `CANDIDATE_ERROR`. `AccessAnalyzer` and `PolicyTestKit` reject such
 grants when built or run; a test suite's `roles` are granted in every app, so each app must define them (use
