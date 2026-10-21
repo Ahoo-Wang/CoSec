@@ -675,6 +675,8 @@ internal class SimpleAuthorizationTest {
             .expectErrorSatisfies {
                 it.assert().isInstanceOf(MissingPolicyException::class.java)
                 (it as MissingPolicyException).policyIds.assert().containsExactly("suspended")
+                it.source.assert().isEqualTo(MissingPolicyException.Source.PRINCIPAL)
+                it.message.assert().startsWith("The principal lists policies [suspended]")
             }
             .verify()
     }

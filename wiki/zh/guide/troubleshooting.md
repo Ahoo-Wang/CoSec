@@ -139,8 +139,8 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 - **已存储的策略在作用域之外读取路径变量。** 日志中会出现 `PathVariableScopeException`，并指出策略和语句。
   从 7.0 起，策略级条件、以及没有 `path` 动作的语句的条件，都不能读取 `request.path.var.*`。修正后重新保存该策略
   （见[路径变量](./policies.md#actions)）。
-- **全局策略索引中的策略没有内容。** 日志中会出现 `MissingPolicyException` 和
-  `the global policy index lists policies [...] that have no content`。该策略的内容丢失了，或者没有从 6.x 迁移
+- **全局策略索引中的策略没有内容。** 日志中会出现 `MissingPolicyException: The global policy index lists policies [...] that have no content`
+  （主体引用的策略缺失时，信息是 `The principal lists policies`，见[某个主体总是得到 500](#one-principal-always-gets-500)）。该策略的内容丢失了，或者没有从 6.x 迁移
   （6.x 缓存的未命中迁移后仍是未命中）。从 7.0 起，这会使每个请求失败而不是跳过该策略，因为它可能是一条全局拒绝策略。
   用 `PolicyRepository.setPolicy` 重新写入该策略；如果要去掉它，以 `global` 以外的类型保存它，这会把它从索引中移除。
 

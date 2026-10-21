@@ -99,7 +99,7 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 
 ### One principal always gets 500
 
-- `MissingPolicyException` names policy ids the principal lists but `PolicyRepository.getPolicies` did not return. Since 7.0 authorization fails closed on them instead of skipping them (a missing deny must not let a global allow win); explanations show a `MISSING_POLICY` warning.
+- `MissingPolicyException` (`source = PRINCIPAL`, "The principal lists policies ...") names policy ids the principal lists but `PolicyRepository.getPolicies` did not return. With `source = GLOBAL_POLICY_INDEX` ("The global policy index lists policies ... that have no content") every request fails instead: the Redis global index lists a policy whose content is gone; write the policy again. Since 7.0 authorization fails closed on them instead of skipping them (a missing deny must not let a global allow win); explanations show a `MISSING_POLICY` warning.
 - Check whether the policy was deleted, never initialized (`init-repository` off, or skipped at load), or lost from Redis. Fix by writing the policy or removing the id from the principal; do not suggest catching the exception.
 
 ### Matcher mismatch

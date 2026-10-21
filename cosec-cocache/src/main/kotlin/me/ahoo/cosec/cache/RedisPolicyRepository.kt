@@ -70,7 +70,7 @@ class RedisPolicyRepository(
         if (policies.size != policyIds.size) {
             val missing = policyIds.toSet() - policies.map { it.id }.toSet()
             log.error { "getGlobalPolicy - the global policy index lists policies $missing that have no content." }
-            throw MissingPolicyException(missing)
+            throw MissingPolicyException(missing, MissingPolicyException.Source.GLOBAL_POLICY_INDEX)
         }
         return policies.filter { it.type == PolicyType.GLOBAL }
     }

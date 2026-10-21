@@ -158,8 +158,9 @@ The caller is known, but nothing allowed the request, or something denied it.
   naming the policy and statement. Since 7.0, a policy condition, or the condition of a statement without a
   `path` action, may not read `request.path.var.*`. Fix and re-save the policy
   ([Path variables](./policies.md#actions)).
-- **A global policy is listed without content.** The log shows `MissingPolicyException` and
-  `the global policy index lists policies [...] that have no content`. The policy's content was lost, or not
+- **A global policy is listed without content.** The log shows `MissingPolicyException: The global policy index
+  lists policies [...] that have no content` (a principal's missing policies read `The principal lists policies`
+  instead; see [One principal always gets 500](#one-principal-always-gets-500)). The policy's content was lost, or not
   migrated from 6.x (a 6.x cached miss migrates as a miss). Since 7.0 this fails every request rather than skipping
   the policy, because it may be a global deny. Write the policy again with `PolicyRepository.setPolicy`; to drop it
   instead, save it with a type other than `global`, which removes it from the index.
