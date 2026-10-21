@@ -326,8 +326,12 @@ CacheSpec.builder<SnapshotKey, SnapshotDocument>("PolicySnapshotCache")
 ```kotlin
 /** SPI：只读写文档、通知变更。不编译，不缓存编译结果。替代 PolicyRepository / AppRolePermissionRepository 的读侧。 */
 interface SnapshotDocumentStore {
-    /** 不阻塞，不同步抛出。不存在时以 null 完成；读取失败时异常完成。 */
-    fun read(key: SnapshotKey): CompletableFuture<SnapshotDocument?>
+    /** 冷加载用，可以经 L2。不阻塞，不同步抛出。以 Present(文档, 摘要) 或 Absent 完成；读取失败时异常完成，
+     *  文档存在但无法解码时异常的 cause 链中带 SnapshotFormatException（据此区分 F1/F6 与 F3/F5）。 */
+    fun read(key: SnapshotKey): CompletableFuture<SnapshotRead>
+
+    /** 条件读（必需，Q5）：总是读 L1；摘要等于 known 时以 Unchanged 完成，不传正文。重新校验与 onReset 后的重新加载都用它。 */
+    fun readIfChanged(key: SnapshotKey, known: SnapshotDigest?): CompletableFuture<SnapshotRead>
 
     /** 文档可能已变化时回调 onChanged；变更通知可能已丢失时回调 onReset。返回值关闭即取消订阅。 */
     fun subscribe(listener: SnapshotChangeListener): AutoCloseable
@@ -409,8 +413,14 @@ sequenceDiagram
 **有序安装**：每个 key 同一时间至多一个在途加载；加载期间收到通知就标记脏，这次加载完成后立即再加载一次。所以同一个 key 的安装严格按开始顺序
 发生，晚开始的读取不会被早开始的读取覆盖。
 
-**修订号只是元数据，不做门卫**：Redis 是权威存储。读到的修订号比已安装的小（例如 Redis 主从切换丢了最近一次写），照样安装并告警
-（`cosec.snapshot.regressions` 计数），否则这个实例会永远与 Redis、与刚冷加载的其他实例不一致。修订号相同则只刷新 `confirmedAt`，不重新编译。
+**修订号只是元数据，不做门卫**：Redis 是权威存储。读到的修订号比已安装的小（Redis 主从异步复制：主节点确认写入后、副本收到之前发生切换，
+被提升的副本就丢了这次已确认的写），照样安装并告警（`SnapshotMetrics.onRegression`，即 `cosec.snapshot.regressions` 计数），否则这个实例会永远与 Redis、
+与刚冷加载的其他实例不一致。"未变"由摘要判定而不是修订号：摘要相同只刷新 `confirmedAt`，不重新编译；修订号相同而摘要不同（丢写之后修订号被重用）
+同样安装并按回退告警。比较的基准是该 key 上次安装的修订，LRU 淘汰后仍保留。
+
+**见过的文档不会变成"没有策略"**：没有任何操作删除快照文档，所以一个 key 一旦装过（或读到过）文档，之后读到 `Absent` 就是存储丢了数据：
+安装 `Failed`（失败即拒绝，`SnapshotMetrics.onDocumentLost` 告警），直到文档重新出现；这条记忆在 LRU 淘汰后仍保留，随实例生命周期。
+从未见过的 key 读到 `Absent` 才是 F2。
 
 **只解析头部**：`SnapshotDocumentCodec` 解码时只读 `schema`、`revision`、`publishedAt`，正文保留为字节，编译时才完整解析。条件读返回正文时
 （文档确实变了），解析和编译只发生一次。
@@ -424,7 +434,8 @@ sequenceDiagram
 | 情形 | 安装的状态 | 评估时 | 与 7.0 的对应 |
 |---|---|---|---|
 | F1 冷加载读取失败（Redis 不可用、严格读失败） | `Failed(error)`，不缓存，下次请求重试 | 它供给的层为 `Unavailable` → 500 | 7.0 该层读取失败 → 500 |
-| F2 文档不存在 | `Absent` | 见 §3.5 | 7.0 读到空 |
+| F2 文档不存在（本实例从未见过这个 key 的文档） | `Absent` | 见 §3.5 | 7.0 读到空 |
+| F2a 见过的文档变为不存在 | `Failed`，告警 | 同 F1 | 7.0 读到空（7.0 无法区分，本阶段失败即拒绝） |
 | F3 文档无法解码（外来格式、JSON 损坏、`schema` 不认识） | `Failed(CacheReadException / SnapshotFormatException)` | 同 F1 | 7.0 解码失败 → `ForeignFormatMode.FAIL` → 500 |
 | F4 文档可解码，但某条策略或应用权限编译失败 | 文档 `Present`，该条为 `Broken` | 到达读它的层 → `Unavailable` → 500；其余策略照常 | 7.0 只有读到这条的请求失败 |
 | F5 已安装修订 r，重新加载得到的 r+1 解码失败 | 安装 `Failed`，**不保留 r** | 同 F1 | 7.0 每个实例收到失效后重读、失败 → 500 |
