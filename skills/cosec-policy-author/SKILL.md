@@ -173,7 +173,7 @@ With `cosec.authorization.cache.history.enabled=true`, every policy save records
 
 ## Validation
 
-The human-facing reference is https://cosec.ahoo.me/guide/policies.
+The human-facing reference is https://cosec.ahoo.me/policies/language.
 
 Validate with CoSec's runtime parser, not JSON syntax alone. In a CoSec-based test:
 
