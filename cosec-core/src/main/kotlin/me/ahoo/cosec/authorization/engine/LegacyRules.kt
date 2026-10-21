@@ -187,7 +187,10 @@ internal class AppPermissionRules(val appPermission: AppPermission) {
  * grant list ([Rule.index]), so a permission granted at different positions has a rule for each.
  */
 internal class PermissionRules(private val permission: Permission) {
-    @Volatile
+    /**
+     * Not volatile, read on every grant: a racing reader may see an older array or a missing element, and then only
+     * builds the rule again. A rule it does see is safely published, since all its fields are final.
+     */
     private var byPosition: Array<StatementRule?> = NONE
 
     fun at(position: Int): StatementRule {
