@@ -18,6 +18,20 @@ Before upgrading, find principals (tokens, API keys, user records) that list pol
 have, and either write those policies or remove the ids. `PolicyRepository.getPolicies` itself is unchanged: it
 still returns the policies it found, so custom repositories need no change.
 
+**A role grant that names an undefined permission fails authorization.** When a role is granted a permission id
+that its app's permission catalog does not define (removed from the catalog, or mistyped), `SimpleAuthorization` now
+fails with `MissingPermissionException`, which the pipeline maps to `500`. Before, the id was skipped: when it named
+a deny, a global or principal allow let the request through. The check does not depend on the app's condition, so
+every request that reaches the role layer fails for a principal holding that role in that app and space; a request
+an earlier layer explicitly denies is still denied. `*` still grants every permission. `AuthorizationChecker`
+answers `false`, an explanation reports the `500` with a `MISSING_PERMISSION` warning, and a shadow candidate app
+permission that drops a granted id reports `CANDIDATE_ERROR`. `AccessAnalyzer` and `PolicyTestKit` reject such
+grants when built or run; a test suite's `roles` are granted in every app, so each app must define them (use
+`appRoles` for ids of one app). The default `AppRolePermission.rolePermissionIndexer` throws the same exception.
+
+Before upgrading, compare each role grant with its app's permission catalog, and either add the missing permission
+or remove the id from the grant.
+
 **Root is off by default, limited to the platform tenant, and subject to the blacklist.** Before, any principal
 whose id was `cosec` (or the `-Dcosec.root` system property) bypassed every check, including the blacklist, and
 `cosec.authorization.root-enabled` defaulted to `true`. A user tenant whose identity provider let a user pick the
@@ -352,10 +366,11 @@ Until a role's grants are migrated to an app, requests that rely on them are den
    `role@space` roles; enable root explicitly if you use it. Audit `in`, `spel` and `ognl` conditions over
    `context.principal.roles`, which see raw `role@space` strings; and if an OpenAPI title contains `:`, switch
    clients to the new `CoSec-App-Id`.
-4. Replace direct Redis writes of app permissions and role grants with writes through CoSec, replace 6.x cache
+4. Check that every permission id granted to a role (other than `*`) is defined by its app's permission catalog.
+5. Replace direct Redis writes of app permissions and role grants with writes through CoSec, replace 6.x cache
    component beans with a `CacheSpecCustomizer` or `cocache.caches.<CacheName>.*`, and change `IdGenerator`
    declarations used for a `CosIdGenerator` to `StringIdGenerator`.
-5. Stop every writer, migrate the data, verify, then start 7.0 ([Migrating the data](#migrating-the-data)).
+6. Stop every writer, migrate the data, verify, then start 7.0 ([Migrating the data](#migrating-the-data)).
    Delete legacy role grants only after every app is migrated.
 
 

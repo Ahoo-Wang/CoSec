@@ -138,8 +138,8 @@ class AuthorizationExplainer(
     private fun explanation(decision: SecurityDecision, trace: Trace, narrator: Narrator): Explanation {
         val warnings = trace.warnings.toMutableList()
         val decidedBy = decision.verifyContext?.toDecisionRef()
-        // A matcher error or a missing principal policy aborts real authorization (fail closed), which the trace
-        // does not model: it narrates the policies that were found.
+        // A matcher error, a missing principal policy or a missing granted permission aborts real authorization
+        // (fail closed), which the trace does not model: it narrates the policies and permissions that were found.
         val aborted = warnings.any { it.code in ABORTING_WARNINGS }
         if (!aborted && decidedBy != trace.decidedBy) {
             warnings += ExplainWarning(
@@ -338,6 +338,14 @@ class AuthorizationExplainer(
                 val granted: List<Permission> = if (grantsAll) {
                     permissionIndexer.values.toList()
                 } else {
+                    val missing = rolePermission.permissions.filterNot { permissionIndexer.containsKey(it) }
+                    if (missing.isNotEmpty()) {
+                        warnings += ExplainWarning(
+                            ExplainWarningCode.MISSING_PERMISSION,
+                            "Role [${rolePermission.id}] is granted permissions $missing, which app " +
+                                "[${appPermission.id}] does not define; authorization fails closed.",
+                        )
+                    }
                     rolePermission.permissions.mapNotNull { permissionIndexer[it] }
                 }
                 RoleTrace(
@@ -454,7 +462,11 @@ class AuthorizationExplainer(
     }
 
     private companion object {
-        val ABORTING_WARNINGS = setOf(ExplainWarningCode.MATCHER_ERROR, ExplainWarningCode.MISSING_POLICY)
+        val ABORTING_WARNINGS = setOf(
+            ExplainWarningCode.MATCHER_ERROR,
+            ExplainWarningCode.MISSING_POLICY,
+            ExplainWarningCode.MISSING_PERMISSION,
+        )
         val POLICY_LAYERS = listOf(
             ExplainLayer.GLOBAL_POLICY,
             ExplainLayer.PRINCIPAL_POLICY,

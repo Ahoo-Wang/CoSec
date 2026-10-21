@@ -242,6 +242,15 @@ it, because a missing deny would otherwise let a broader allow through. Write th
 see [Policy has no effect](#policy-has-no-effect)), or remove the id from the principal's token or record.
 An [explanation](#explain-a-decision) reports it as a `MISSING_POLICY` warning.
 
+## Every request of one role fails with 500
+
+The log shows `MissingPermissionException`: `Role [<role>] is granted permissions [...], which app [<app>] does not
+define`. The role's grant in that app names a permission id that the app's permission catalog does not have: it was
+removed from the catalog, or the id is mistyped. Since 7.0 every request that reaches the role layer fails for
+principals holding the role, rather than skipping the id, because a missing deny would otherwise let a broader allow
+through. Add the permission to the app's catalog, or remove the id from the role's grant. An
+[explanation](#explain-a-decision) reports it as a `MISSING_PERMISSION` warning.
+
 ## Rate limits behave unexpectedly
 
 - **The limit is N times higher than configured.** Without `cache-support` and a `StringRedisTemplate`,

@@ -24,7 +24,9 @@ import reactor.core.publisher.Mono
  * The enforced app role permissions with candidate app permissions laid over them by app id: a candidate replaces
  * the app's permission catalog and condition, while the role grants stay as enforced. Grants are scoped to an app,
  * so a candidate only ever sees the grants made in its own app (and the request's space), never another app's. A
- * grant naming a permission id the candidate no longer has simply grants nothing.
+ * grant naming a permission id the candidate no longer has fails the candidate run with
+ * [me.ahoo.cosec.api.permission.MissingPermissionException], as it would once enforced, and shows up as a
+ * [ShadowDiffKind.CANDIDATE_ERROR].
  */
 internal class OverlayAppRolePermissionRepository(
     private val delegate: AppRolePermissionRepository,

@@ -206,6 +206,13 @@ CoCache 6 不会覆盖它：索引保持不变，在数据迁移之前请求仍�
 [策略没有生效](#policy-has-no-effect)），或从主体的令牌或记录中移除这个 id。[解释决策](#explain-a-decision)会把它报告为
 `MISSING_POLICY` 警告。
 
+## 某个角色的所有请求都返回 500 {#every-request-of-one-role-fails-with-500}
+
+日志中出现 `MissingPermissionException`：`Role [<role>] is granted permissions [...], which app [<app>] does not define`。
+该角色在这个应用中的授权引用了应用权限目录里没有的权限 id：它已从目录中删除，或 id 写错了。从 7.0 起，对持有该角色的主体，
+每个进入角色层的请求都会失败，而不是跳过这个 id，因为缺失的若是一条拒绝权限，更宽泛的放行就会让请求通过。在应用的权限目录中补上该权限，
+或从角色授权中移除这个 id。[解释决策](#explain-a-decision)会把它报告为 `MISSING_PERMISSION` 警告。
+
 ## 限流行为不符合预期 {#rate-limits-behave-unexpectedly}
 
 - **实际限额是配置的 N 倍。** 没有 `cache-support` 和 `StringRedisTemplate` 时，`LocalRateLimiter` 按实例计数。

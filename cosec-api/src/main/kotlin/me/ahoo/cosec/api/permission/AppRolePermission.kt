@@ -39,19 +39,12 @@ interface AppRolePermission {
      * If a role has ALL_PERMISSION_ID ("*"), that role gets all permissions
      * from the application.
      *
+     * @throws MissingPermissionException if a role is granted a permission id the application does not define
      * @return Map of RoleId to list of Permissions
      */
     val rolePermissionIndexer: Map<RoleId, List<Permission>>
         get() = rolePermissions.associate { rolePermission ->
-            val permissions =
-                if (rolePermission.permissions.contains(ALL_PERMISSION_ID)) {
-                    appPermission.permissionIndexer.values.toList()
-                } else {
-                    rolePermission.permissions.mapNotNull { permissionId ->
-                        appPermission.permissionIndexer[permissionId]
-                    }
-                }
-            rolePermission.id to permissions
+            rolePermission.id to MissingPermissionException.grantedPermissions(appPermission, rolePermission)
         }
 
     companion object {

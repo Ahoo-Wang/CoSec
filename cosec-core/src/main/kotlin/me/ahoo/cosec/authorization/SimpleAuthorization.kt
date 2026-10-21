@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.permission.AppRolePermission
+import me.ahoo.cosec.api.permission.MissingPermissionException
 import me.ahoo.cosec.api.permission.Permission
 import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.permission.RolePermission
@@ -46,7 +47,8 @@ import reactor.kotlin.core.publisher.toMono
  *
  * Layers 3-5 are combined deny-first: an EXPLICIT_DENY matched in any layer wins over
  * an ALLOW matched in any other layer. A principal policy the repository does not have fails the
- * authorization with [MissingPolicyException] instead of being skipped.
+ * authorization with [MissingPolicyException], and a role grant naming a permission id the app does not define with
+ * [MissingPermissionException], instead of being skipped.
  *
  * Matchers are evaluated synchronously on the subscribing thread. A layer whose policies or app permission
  * contain a blocking matcher (see [me.ahoo.cosec.policy.BlockingAware], e.g. a custom matcher that calls a remote service) is evaluated
@@ -127,6 +129,9 @@ class SimpleAuthorization(
     /**
      * Deny-first evaluation of the principal's role permissions, iterating the role → permission-id
      * assignments directly instead of materializing [AppRolePermission.rolePermissionIndexer] per request.
+     *
+     * Every grant is checked against the catalog first, whether or not the app's condition matches, so a missing
+     * permission (possibly a deny) fails every request of the role the same way.
      */
     private fun verifyAppRolePermission(
         appRolePermission: AppRolePermission,
@@ -134,11 +139,14 @@ class SimpleAuthorization(
         context: SecurityContext
     ): VerifyContext? {
         val appPermission = appRolePermission.appPermission
+        val permissionIndexer = appPermission.permissionIndexer
+        for (rolePermission in appRolePermission.rolePermissions) {
+            MissingPermissionException.requireDefined(appPermission, permissionIndexer, rolePermission)
+        }
         context.clearPathVariables()
         if (!appPermission.condition.match(request, context)) {
             return null
         }
-        val permissionIndexer = appPermission.permissionIndexer
         for (effect in DENY_FIRST) {
             val decisive = effect.decisiveResult()
             for (rolePermission in appRolePermission.rolePermissions) {
@@ -168,7 +176,7 @@ class SimpleAuthorization(
             return
         }
         permissions.forEach { permissionId ->
-            permissionIndexer[permissionId]?.let(action)
+            action(permissionIndexer.getValue(permissionId))
         }
     }
 

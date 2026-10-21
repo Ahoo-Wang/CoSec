@@ -66,7 +66,8 @@ data class PolicyTestCase(
  * Role grants are written as in principals' roles and Redis keys: a role `role@space` is granted in `space` only, a
  * role without a suffix in the default space only. As in authorization, a case's principal reaches a grant only
  * through a role it holds in the request's space. A malformed role (empty role or space, more than one `@`) fails
- * the run.
+ * the run, and so does a grant naming a permission id its app does not define, since authorization fails closed on
+ * it. Grants in [roles] are made in every app, so each app must define them; grant app-specific ids in [appRoles].
  *
  * @param policies resource patterns of policy files, e.g. `classpath:cosec-policy/` followed by a file pattern
  * @param appPermissions resource patterns of app permission files
@@ -148,7 +149,7 @@ object PolicyTestKit {
         ) { it.id }.associateBy { it.id }
         val explainer = AuthorizationExplainer(
             InMemoryPolicyRepository(policies),
-            InMemoryAppRolePermissionRepository(appPermissions, grantsOf(suite, appPermissions.keys)),
+            InMemoryAppRolePermissionRepository(appPermissions, grantsOf(suite, appPermissions)),
             rootPrincipalMatcher = rootPrincipalMatcher
         )
         return suite.cases.map { case ->
@@ -163,7 +164,11 @@ object PolicyTestKit {
     /**
      * The suite's grants per app, keyed by role and space.
      */
-    private fun grantsOf(suite: PolicyTestSuite, appIds: Set<String>): Map<String, Map<SpacedRoleId, Set<String>>> {
+    private fun grantsOf(
+        suite: PolicyTestSuite,
+        appPermissions: Map<String, AppPermission>
+    ): Map<String, Map<SpacedRoleId, Set<String>>> {
+        val appIds = appPermissions.keys
         suite.appRoles.keys.forEach { appId ->
             require(appId in appIds) {
                 "Suite [${suite.name}] grants roles in app [$appId], but no app permission file defines it."
@@ -175,7 +180,26 @@ object PolicyTestKit {
             parseRoles(suite, suite.appRoles[appId].orEmpty()).forEach { (role, permissionIds) ->
                 grants.merge(role, permissionIds, Set<String>::plus)
             }
+            requireDefined(suite, appPermissions.getValue(appId), grants)
             grants
+        }
+    }
+
+    private fun requireDefined(
+        suite: PolicyTestSuite,
+        appPermission: AppPermission,
+        grants: Map<SpacedRoleId, Set<String>>
+    ) {
+        val permissionIndexer = appPermission.permissionIndexer
+        grants.forEach { (role, permissionIds) ->
+            if (AppRolePermission.ALL_PERMISSION_ID in permissionIds) {
+                return@forEach
+            }
+            val missing = permissionIds.filterNot { permissionIndexer.containsKey(it) }
+            require(missing.isEmpty()) {
+                "Suite [${suite.name}] grants role [$role] permissions $missing, which app [${appPermission.id}] " +
+                    "does not define."
+            }
         }
     }
 
