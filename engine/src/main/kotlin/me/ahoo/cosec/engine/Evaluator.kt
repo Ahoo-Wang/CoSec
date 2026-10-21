@@ -192,7 +192,9 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
             // A group must stop exactly when its visitor asks to: untraced, that is when the layer got its result
             // (it had none on entry); traced, never. Trusting a group that claims otherwise would skip later DENYs.
             if (if (tracing) stopped else stopped != (result != null)) {
-                brokenContract("Group $groupId returned $stopped from forEachRule, but its visitor did not ask to stop")
+                throw brokenContract(
+                    "Group $groupId returned $stopped from forEachRule, but its visitor did not ask to stop"
+                )
             }
             if (stopped) {
                 return true
@@ -219,7 +221,7 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
         if (effect !== pass) {
             // A null effect from a Java adapter would otherwise belong to no pass and be skipped silently.
             if (effect == null) {
-                brokenEntry(entry, grantedVia)
+                throw brokenEntry(entry, grantedVia)
             }
             return false
         }
@@ -239,7 +241,7 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
 
     /** A null from a Java matcher is a broken contract, never a miss. */
     protected fun checkMatch(match: RuleMatch?): RuleMatch =
-        match ?: brokenContract("A rule of group $groupId returned no match result.")
+        match ?: throw brokenContract("A rule of group $groupId returned no match result.")
 
     // The only places a rule gives its layer a result. Each keeps the layer's first result and returns the entry's ref.
 
@@ -286,7 +288,7 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
             grantedVia == null && entry is Rule
         }
         if (!valid) {
-            brokenEntry(entry, grantedVia)
+            throw brokenEntry(entry, grantedVia)
         }
     }
 
@@ -294,11 +296,11 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
     protected fun checkEntryAndEffect(entry: RuleEntry, grantedVia: String?) {
         checkEntry(entry, grantedVia)
         if (entry is Rule && (entry.effect as Effect?) == null) {
-            brokenEntry(entry, grantedVia)
+            throw brokenEntry(entry, grantedVia)
         }
     }
 
-    protected fun brokenEntry(entry: RuleEntry, grantedVia: String?): Nothing =
+    protected fun brokenEntry(entry: RuleEntry, grantedVia: String?): IllegalStateException =
         brokenContract(
             when {
                 entry is Rule && (entry.effect as Effect?) == null -> "A rule must have an effect"
@@ -309,8 +311,11 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
             } + " (group $groupId).",
         )
 
-    /** A group or entry broke the adapter contract of [RuleGroup]: no decision can be trusted, so the evaluation fails. */
-    private fun brokenContract(message: String): Nothing = throw IllegalStateException(message)
+    /**
+     * A group or entry broke the adapter contract of [RuleGroup]: no decision can be trusted, so the evaluation fails.
+     * Returned rather than thrown, so each caller says `throw` and coverage tools record the line as run.
+     */
+    private fun brokenContract(message: String): IllegalStateException = IllegalStateException(message)
 
     /** The entry's reference; [checkEntry] has accepted it. */
     protected fun ref(entry: RuleEntry, grantedVia: String?): StatementRef =

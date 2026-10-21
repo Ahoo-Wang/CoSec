@@ -371,4 +371,26 @@ class AdapterContractTest {
         checkNotNull(evaluate(allows, TraceLevel.FULL).trace).layers.single().matched
             .assert().isEqualTo(StatementRef.PolicyStatement(GLOBAL, "a", 0, "a.0"))
     }
+
+    @Test
+    fun `a listed group that claims its visitor stopped is recorded, not thrown`() {
+        val missed = LyingGroup("app2", fixture.guard("app2", G.MISS))
+        val policies =
+            PolicySet(listOf(loaded(GLOBAL, fixture.policy("g", ALLOW to R.MATCH)), loaded(PRINCIPAL, missed)))
+        decisions(policies).assert().containsOnly(permitted)
+        contractErrors(policies, TraceLevel.FULL).single().assert().isInstanceOf(IllegalStateException::class.java)
+    }
+
+    @Test
+    fun `a JVM error while listing a group propagates`() {
+        val missed = object : RuleGroup {
+            override val id = "app2"
+            override val guard: Guard = fixture.guard("app2", G.MISS)
+            override fun forEachRule(visitor: RuleVisitor): Boolean = throw StackOverflowError()
+        }
+        val policies =
+            PolicySet(listOf(loaded(GLOBAL, fixture.policy("g", ALLOW to R.MATCH)), loaded(PRINCIPAL, missed)))
+        evaluate(policies, TraceLevel.OFF).decision.assert().isEqualTo(permitted)
+        assertThrownBy<StackOverflowError> { evaluate(policies, TraceLevel.FULL) }
+    }
 }
