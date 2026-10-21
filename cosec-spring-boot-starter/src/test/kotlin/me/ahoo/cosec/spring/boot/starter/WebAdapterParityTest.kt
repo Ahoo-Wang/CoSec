@@ -102,6 +102,13 @@ class WebAdapterParityTest {
             Arguments.of("unexpected error", "/path", anonymous, failing(IllegalStateException())),
             Arguments.of("context parse error", "/path", brokenParser, returning(AuthorizeResult.ALLOW)),
             Arguments.of("invalid path", "/public/../admin", anonymous, returning(AuthorizeResult.ALLOW)),
+            Arguments.of("path parameters", "/admin;jsessionid=1/users", anonymous, returning(AuthorizeResult.ALLOW)),
+            Arguments.of(
+                "traversal behind a path parameter",
+                "/public/..;/admin",
+                anonymous,
+                returning(AuthorizeResult.ALLOW)
+            ),
         )
     }
 
@@ -116,6 +123,13 @@ class WebAdapterParityTest {
         val reactive = reactiveOutcome(path, securityContextParser, authorization)
         val servlet = servletOutcome(path, securityContextParser, authorization)
         servlet.assert().isEqualTo(reactive)
+    }
+
+    @Test
+    fun traversalBehindPathParameterIsRejected() {
+        // The authorization allows everything, as a `/public/**` allow would for this path; the adapters must answer 400.
+        reactiveOutcome("/public/..;/admin", anonymous, returning(AuthorizeResult.ALLOW)).status.assert().isEqualTo(400)
+        servletOutcome("/public/..;/admin", anonymous, returning(AuthorizeResult.ALLOW)).status.assert().isEqualTo(400)
     }
 
     @Test

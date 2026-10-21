@@ -127,6 +127,8 @@ skip verification and just read the principal from it:
 
 ```yaml
 cosec:
+  authorization:
+    enabled: false
   inject:
     enabled: true
 ```
@@ -135,6 +137,9 @@ cosec:
 In this mode the token's **signature is not verified**, only its expiry. Enable it only for services that
 are reachable exclusively through the verifying gateway. Otherwise anyone can forge a principal.
 :::
+
+The parser that skips signature checks is used only with `cosec.authorization.enabled=false`; while authorization
+is on, the inject filter uses the verifying parser, whatever the auto-configuration order.
 
 Injected services can read the current security context in the same way; see
 [Web Integration](./web-integration.md#accessing-the-security-context).

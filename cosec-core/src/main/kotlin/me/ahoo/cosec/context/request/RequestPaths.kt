@@ -25,6 +25,26 @@ import org.springframework.web.util.UriUtils
  */
 object RequestPaths {
 
+    /**
+     * The path every web adapter authorizes: [path] without `;` path parameters, rejected if it traverses.
+     *
+     * Spring's `PathPattern` routing and servlet containers ignore path parameters, so `/admin;x` reaches `/admin`
+     * and `/public/..;/admin` resolves to `/admin`. Removing them first keeps conditions on `request.path` and the
+     * traversal check in line with the route that serves the request.
+     */
+    fun normalize(path: String): String {
+        val normalized = withoutPathParameters(path)
+        requireSafe(normalized)
+        return normalized
+    }
+
+    private fun withoutPathParameters(path: String): String {
+        if (';' !in path) {
+            return path
+        }
+        return path.split('/').joinToString("/") { it.substringBefore(';') }
+    }
+
     fun requireSafe(path: String) {
         if (isTraversal(path)) {
             throw InvalidRequestPathException()

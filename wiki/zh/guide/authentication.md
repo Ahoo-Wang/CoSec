@@ -110,6 +110,8 @@ cosec:
 
 ```yaml
 cosec:
+  authorization:
+    enabled: false
   inject:
     enabled: true
 ```
@@ -117,5 +119,7 @@ cosec:
 ::: danger 信任边界
 该模式下**不校验令牌签名**，只校验过期时间。只能在只能经由该校验网关访问的服务上启用，否则任何人都可以伪造主体。
 :::
+
+跳过签名校验的解析器只在 `cosec.authorization.enabled=false` 时使用；只要授权开启，inject 过滤器就使用会校验签名的解析器，与自动配置的顺序无关。
 
 注入模式的服务同样可以获取当前安全上下文，见 [Web 集成](./web-integration.md#accessing-the-security-context)。

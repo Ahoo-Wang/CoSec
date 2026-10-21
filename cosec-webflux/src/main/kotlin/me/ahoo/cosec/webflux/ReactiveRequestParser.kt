@@ -32,8 +32,7 @@ class ReactiveRequestParser(
 ) :
     RequestParser<ServerWebExchange> {
     override fun parse(request: ServerWebExchange): Request {
-        val path = request.request.path.value()
-        RequestPaths.requireSafe(path)
+        val path = RequestPaths.normalize(request.request.path.value())
         var cosecRequest: Request = ReactiveRequest(
             delegate = request,
             path = path,
