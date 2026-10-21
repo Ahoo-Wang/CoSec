@@ -23,7 +23,6 @@
  * It also enforces the wiki's Mermaid conventions, which parse fine but break or read badly on
  * the site: `<br/>` in labels (Vue's compiler chokes on it, use `<br>`) and sequence diagrams
  * without `autonumber`. `pnpm fix:mermaid` rewrites both.
- * Pages under `_legacy/` are reference material excluded from the build, so they are skipped.
  *
  * Chrome: $CHROME_BIN, else google-chrome / chromium on PATH, else the macOS app.
  */
@@ -40,7 +39,7 @@ const mermaidBundle = join(wikiRoot, 'node_modules/mermaid/dist/mermaid.min.js')
 
 function markdownFiles(dir) {
   return readdirSync(dir).flatMap((name) => {
-    if (name === 'node_modules' || name === '_legacy' || name.startsWith('.')) return []
+    if (name === 'node_modules' || name.startsWith('.')) return []
     const path = join(dir, name)
     if (statSync(path).isDirectory()) return markdownFiles(path)
     return name.endsWith('.md') ? [path] : []

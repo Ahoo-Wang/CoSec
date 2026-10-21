@@ -69,7 +69,7 @@ description: "定义应用的权限目录，并按应用和空间把权限授予
 
 - **应用。** 在一个应用中的授权永远不会在另一个应用中生效，即使两个应用定义了同一个权限 id，或者授权是 `*`。要在两个应用中授权一个角色，需要两条授权。
 - **空间。** 主体的角色说明了每个角色属于哪个空间：`editor` 是默认空间中的角色，`editor@team-a` 只是 `team-a` 中的角色
-  （[Token 中的角色](../integration/authentication.md)）。某个空间中的请求只用主体在该空间中的角色求值（`RoleScope`），并去掉后缀，
+  （[令牌中的角色](../integration/authentication.md#roles-and-spaces)）。某个空间中的请求只用主体在该空间中的角色求值（`RoleScope`），并去掉后缀，
   也只读取在该空间中做出的授权：
 
 | 主体的角色 | 请求的 `CoSec-Space-Id` | 参与求值的角色 | 读取的授权 |
@@ -88,7 +88,7 @@ description: "定义应用的权限目录，并按应用和空间把权限授予
 
 空间是应用内部的分区，例如团队、工作区或项目，同一个角色在不同空间可以带有不同的权限。当一个用户在一个工作区是 `editor`、在另一个工作区是 `viewer` 时，使用空间：
 
-1. 签发的 Token 中角色带上空间：`editor@ws-1`、`viewer@ws-2`。
+1. 签发的令牌中角色带上空间：`editor@ws-1`、`viewer@ws-2`。
 2. 按空间授权：在 `ws-1` 中授权 `editor`，在 `ws-2` 中授权 `viewer`。
 3. 客户端把工作区作为 `CoSec-Space-Id` 发送。
 
@@ -107,7 +107,7 @@ rolePermissionCache.put(AppSpacedRoleId(appId = "order-app", roleId = "clerk", s
 ```
 
 `AppSpacedRoleId` 拒绝含 `:` 的应用 id 和含 `@` 的角色 id，所以任何写入都不会产生一个读回来像是另一个应用或空间授权的键。
-值带有 CoCache 的二进制头，直接用 Redis 命令写入是不行的。键的布局，以及如何迁移 6.x 中没有按应用区分的授权，见[存储](../operations/storage.md#redis)和[升级](../operations/upgrading.md)。
+值带有 CoCache 的二进制头，直接用 Redis 命令写入是不行的。键的布局，以及如何迁移 6.x 中没有按应用区分的授权，见[存储](../operations/storage.md#redis)和[升级](../operations/upgrading.md#migrating-role-grants)。
 
 要在授权写入 Redis 之前检查它们，把它们写进[策略测试套件](./testing.md#policy-test-cases)。要弄清某条角色授权为什么对某个请求生效或不生效，
 [解释这个决策](./testing.md#debugging-a-decision-with-explain)；它的 `NO_APP_PERMISSION` 和 `NO_ROLE_IN_SPACE` 警告指出了最常见的两种原因。
@@ -125,3 +125,5 @@ rolePermissionCache.put(AppSpacedRoleId(appId = "order-app", roleId = "clerk", s
 | 权限 `action` | 包含该操作路径和方法的 `path` 动作 |
 
 所有权限都是 `allow`。生成之前给每个操作加上 `operationId` 和标签，评审结果，然后按上文的方式存储。
+
+**下一步：** 限制已允许的请求能以多高的频率执行，见[限流](./rate-limiting.md)。

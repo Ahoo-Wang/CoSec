@@ -32,7 +32,7 @@ starter 只提供 Redis 仓库：没有 `cache-support` 时，应用需要自己
 | `cosec.authorization.local-policy.force-refresh=true` | 覆盖仓库中已存在的策略。不开启时，启动会先从仓库读取每个 id，只有 id 不存在时才写入文件。 |
 
 加载是严格的：读不了或构建不了的文件、两个声明同一策略 id 的文件、匹配不到任何文件的配置位置，都会导致启动失败
-（[加载策略文件](../policies/language.md)）。
+（[加载策略文件](../policies/language.md#loading-policy-files)）。
 
 ::: warning `force-refresh=true` 会覆盖
 它会用文件替换 **每一个** 本地策略的存储副本，包括管理员此后通过仓库所做的修改。只在有意为之时用一次，然后关掉
@@ -59,7 +59,7 @@ CoCache 6.6 保留一份进程内副本。
 
 ### CoCache 的保证 {#what-cocache-guarantees}
 
-- **遇到外来格式时 fail closed。** 读取遇到另一种格式的值（CoSec 6.x 写的 CoCache 5 值，或任何用原生 Redis 命令写入的值）
+- **遇到外来格式时失败即拒绝。** 读取遇到另一种格式的值（CoSec 6.x 写的 CoCache 5 值，或任何用原生 Redis 命令写入的值）
   时，以 `CacheReadException`（原因为 `ForeignFormatException`）失败，并把该值留在 Redis 中。所有 CoSec 缓存（包括已吊销
   令牌）都使用这种模式（`foreign-format: fail`），即使设置了 `cocache.defaults.foreign-format=reclaim` 也一样。集合（如全局
   策略索引）也不会被覆盖：在外来值上做更新会以 `CacheWriteException`（原因为 `ForeignFormatException`）失败，并保持原样。
@@ -172,7 +172,7 @@ CoSec 数据指 `<prefix>:policy:`、`<prefix>:global:policy`、`<prefix>:app:pe
 | Redis 中的 API key（`cosec.api-key.store=redis`） | 查询失败，请求以 `500` **被拒绝**。 |
 | 限流计数器 | 跳过该规则，请求继续；规则设置了 `strictFailure: true` 时返回 `429`（[失败时的行为](../policies/rate-limiting.md#failure-behavior)）。 |
 
-吊销检查和未设置 `strictFailure` 的限流规则，是 fail closed 的两个有文档说明的例外（[Fail closed](../guide/security-model.md#fail-closed)）。
+吊销检查和未设置 `strictFailure` 的限流规则，是失败即拒绝的两个已写明的例外（[失败即拒绝](../guide/security-model.md#fail-closed)）。
 
 ## 发布变更 {#publishing-changes}
 
@@ -183,7 +183,7 @@ CoSec 数据指 `<prefix>:policy:`、`<prefix>:global:policy`、`<prefix>:app:pe
 
 - 策略用 `PolicyRepository.setPolicy`，它在存储前会校验策略；
 - 应用权限和角色授权通过 `AppPermissionCache` 和 `RolePermissionCache` bean
-  （[存储权限目录与授权](../policies/role-permissions.md#granting-permissions-to-roles)）。
+  （[存储权限目录与授权](../policies/role-permissions.md#storing-catalogs-and-grants)）。
 
 每次写入都会通过失效消息立即到达其他实例。
 
@@ -194,7 +194,7 @@ CoSec 数据指 `<prefix>:policy:`、`<prefix>:global:policy`、`<prefix>:app:pe
 **读取方只采用类型为 `global` 的策略。** 读取方从索引取出 id，读取它们的内容，只保留类型为 `global` 的内容。在一次重新发布
 的两次写入之间，某个 id 可能还在索引里，而它的内容已经是别的类型；这样的内容会被忽略，而不是对所有人生效。
 
-**索引中有 id 但没有内容时 fail closed。** 如果索引列出的 id 没有内容（丢失了，或者 6.x 的缓存未命中被迁移成了未命中），
+**索引中有 id 但没有内容时失败即拒绝。** 如果索引列出的 id 没有内容（丢失了，或者 6.x 的缓存未命中被迁移成了未命中），
 读取会以 `MissingPolicyException` 失败，每个请求都以 `500` 被拒绝。日志会写
 `the global policy index lists policies [...] that have no content.`。跳过它会悄悄丢掉一条可能是全局拒绝的策略。重新写入该
 策略，或把它保存为 `global` 以外的类型，使它离开索引（[故障排查](./troubleshooting.md#every-request-fails-with-500)）。
@@ -243,3 +243,5 @@ policyHistory.rollback("orders", revision = 3, author = "bob")
 - 没有作者的保存记为 `unknown`。
 - 先写策略再写修订，所以历史中不会出现没有生效过的版本。
 - 修订号由 Redis 计数器分配，任何实例上的并发写入者都会拿到不同的编号。
+
+**下一步：** 查看 CoSec 做了什么决策，见[可观测性](./observability.md)。

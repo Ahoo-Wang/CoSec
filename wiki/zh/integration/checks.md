@@ -139,7 +139,7 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 会附上每个匹配器的配置。
 
 要解释真实调用方得到的结果，省略 `principal`，把他的凭证放进请求头，例如 `"headers": { "Authorization": "Bearer eyJ..." }`
-或 `{ "X-API-Key": "..." }`。凭证由应用自己的安全上下文解析器读取，包括吊销检查和 API Key。被拒绝的凭证按它所变成的匿名请求来解释，
+或 `{ "X-API-Key": "..." }`。凭证由应用自己的安全上下文解析器读取，包括吊销检查和 API key。被拒绝的凭证按它所变成的匿名请求来解释，
 带有真实的 `401` 原因和一条 `TOKEN_INVALID` 警告。
 
 **输出。**
@@ -155,3 +155,5 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
 
 没有 Actuator 时，注入 `AuthorizationExplainer` Bean，调用 `explain(request, principal)`（或用 `explain(request)` 使用请求自带的
 凭证），例如在一个固定"谁能做什么"的测试中。针对策略文件的测试用例，见[测试策略](../policies/testing.md)。
+
+**下一步：** 每个属性及其默认值，见[配置](../operations/configuration.md)；要编写规则本身，见[策略语言](../policies/language.md)。

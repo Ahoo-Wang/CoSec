@@ -38,7 +38,7 @@ function walkDir(dir) {
   for (const entry of readdirSync(dir)) {
     const fullPath = join(dir, entry)
     const stat = statSync(fullPath)
-    if (stat.isDirectory() && !entry.startsWith('.') && entry !== 'node_modules' && entry !== '_legacy') {
+    if (stat.isDirectory() && !entry.startsWith('.') && entry !== 'node_modules') {
       files.push(...walkDir(fullPath))
     } else if (MD_EXTENSIONS.has(extname(entry))) {
       files.push(fullPath)

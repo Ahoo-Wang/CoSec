@@ -35,7 +35,7 @@ Policies can ship with the application as JSON files and be written into the rep
 | `cosec.authorization.local-policy.force-refresh=true` | Overwrite policies that already exist in the repository. Without it, startup reads each id from the repository first and writes the file only when the id is missing. |
 
 Loading is strict: a file that cannot be read or built, two files with the same policy id, and a configured location
-that matches no file all stop startup ([Loading policy files](../policies/language.md)).
+that matches no file all stop startup ([Loading policy files](../policies/language.md#loading-policy-files)).
 
 ::: warning `force-refresh=true` overwrites
 It replaces the stored copy of **every** local policy with its file, including changes administrators made through
@@ -209,7 +209,7 @@ other Redis command are not read: they fail as foreign data. Write:
 
 - policies with `PolicyRepository.setPolicy`, which validates the policy before storing it;
 - app permissions and role grants through the `AppPermissionCache` and `RolePermissionCache` beans
-  ([Storing catalogs and grants](../policies/role-permissions.md#granting-permissions-to-roles)).
+  ([Storing catalogs and grants](../policies/role-permissions.md#storing-catalogs-and-grants)).
 
 Every write reaches the other instances at once through invalidation.
 
@@ -276,3 +276,5 @@ policyHistory.rollback("orders", revision = 3, author = "bob")
 - Saves without an author are recorded as `unknown`.
 - The policy is written before its revision, so the history never shows a version that was not applied.
 - Revisions are numbered by a Redis counter, so concurrent writers on any instance get distinct numbers.
+
+**Next:** see what CoSec decided, in [Observability](./observability.md).

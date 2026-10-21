@@ -12,30 +12,21 @@ them on. To see every rule a decision checked, not only the one that decided, us
 
 ## The decision chain
 
-The `Authorization` bean is a chain of decorators around `SimpleAuthorization`. Each decorator sees the decision of
-the one inside it, so audit events, metrics and spans all report the final decision, rate limiting included.
-
-```mermaid
-flowchart LR
-    R[request] --> T[TracingAuthorization<br>span cosec.authorize]
-    T --> A[AuditingAuthorization<br>audit event]
-    A --> M[MeteredAuthorization<br>timer cosec.authorization]
-    M --> L[RateLimitingAuthorization<br>spends permits]
-    L --> S[ShadowAuthorization<br>candidate diff]
-    S --> D[SimpleAuthorization<br>the decision]
-```
+The `Authorization` bean is a chain of decorators around `SimpleAuthorization`, from the outside in: tracing,
+auditing, metrics, rate limiting, shadow mode. Each decorator sees the decision of the one inside it, so audit
+events, metrics and spans all report the final decision, rate limiting included. Why the chain is ordered this way
+is in [Authorization chain](../architecture/overview.md#authorization-chain).
 
 | Decorator | Present when |
 |---|---|
 | `TracingAuthorization` | `opentelemetry-support` is on the classpath |
 | `AuditingAuthorization` | `cosec.audit.enabled` (default `true`) |
 | `MeteredAuthorization` | `micrometer-support`, a `MeterRegistry` bean, and `cosec.metrics.enabled` (default `true`) |
-| `RateLimitingAuthorization` | `cosec.limiter.enabled` (default `true`) and a rate limiter |
+| `RateLimitingAuthorization` | `cosec.limiter.enabled` (default `true`), even when no rule file exists |
 | `ShadowAuthorization` | `cosec.shadow.enabled=true` ([Shadow mode](../policies/testing.md#trying-changes-in-shadow-mode)) |
 
-`SimpleAuthorization` checks the blacklist, root (when enabled), global policies, the principal's policies and role
-permissions, in that order ([Evaluation order](../guide/security-model.md#evaluation-order)). The layer that decided is reported as the
-decision's **source**.
+The layer of `SimpleAuthorization` that decided ([Evaluation order](../guide/security-model.md#evaluation-order)) is
+reported as the decision's **source**.
 
 None of the observing decorators changes the decision: an audit sink that fails is logged and ignored.
 
@@ -139,3 +130,5 @@ It is off by default (`cosec.explain.enabled`), because an explanation reveals y
 Boot Actuator it is also the `cosecExplain` endpoint, which goes through CoSec like any other request: expose it only
 to administrators, and allow `POST /actuator/cosecExplain` only for them. The request, the response and how to call
 it from code are in [Explaining a decision](../integration/checks.md#explaining-a-decision).
+
+**Next:** go from a symptom to its cause, in [Troubleshooting](./troubleshooting.md).

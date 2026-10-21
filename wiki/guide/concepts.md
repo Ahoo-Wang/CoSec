@@ -134,3 +134,5 @@ Every request ends in one of these outcomes:
 The order in which these are reached is in [Evaluation order](./security-model.md#evaluation-order). How each
 outcome becomes an HTTP response (`401` for an anonymous caller, `403` for a signed-in one, and so on) is in
 [Responses and status codes](../integration/web.md#responses-and-status-codes).
+
+**Next:** the guarantees every decision keeps, in [Security model](./security-model.md); or, to write rules, [Policy language](../policies/language.md).

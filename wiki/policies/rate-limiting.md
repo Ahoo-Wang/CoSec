@@ -154,3 +154,5 @@ silently dropped removes a protection without anyone noticing. The application d
 A file matched by two locations is loaded once. To load rules from somewhere else, such as a database, declare a
 `RateLimitRuleProvider` bean. It is called on every allowed request, so it must answer from memory;
 `RateLimitRuleProvider.of(rules)` rejects duplicate ids.
+
+**Next:** catch mistakes before they reach production, in [Testing policies](./testing.md).

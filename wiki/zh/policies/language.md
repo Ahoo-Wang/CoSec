@@ -203,7 +203,7 @@ description: "CoSec 策略的每个字段：语句、动作、路径变量、模
 | `role@space`，例如 `admin@team-a` | 恰好是 `admin@team-a`，与请求指定的空间无关 |
 | 不带后缀的 `role`，例如 `suspended` | `suspended`（在任何空间），或 `suspended@<space>`，其中 `<space>` 是请求的 `CoSec-Space-Id` |
 
-不带后缀的写法让拒绝跟着角色进入各个空间：`inRole: suspended` 的拒绝，在请求指定 `team-a` 时也匹配携带 `suspended@team-a` 的 Token；
+不带后缀的写法让拒绝跟着角色进入各个空间：`inRole: suspended` 的拒绝，在请求指定 `team-a` 时也匹配携带 `suspended@team-a` 的令牌；
 而不带后缀持有的角色在所有空间都匹配，所以换一个空间也逃不出这样的拒绝。
 
 两种写法都不会把**允许**限定在请求的空间内。`admin@team-a` 的允许在请求指定 `team-b` 或不指定空间时同样匹配。要只在某个空间内授权，加一个 `request.spaceId` 条件：
@@ -412,3 +412,5 @@ description: "CoSec 策略的每个字段：语句、动作、路径变量、模
 ```
 
 Schema 只描述结构，不检查 part、路径变量作用域、重复 id 或匹配器语义，所以还要用真正的解析器加载策略（[测试](./testing.md#validating-policies)）。
+
+**下一步：** 按角色而不是按主体授予权限，见[角色权限](./role-permissions.md)。

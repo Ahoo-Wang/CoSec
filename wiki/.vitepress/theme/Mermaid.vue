@@ -310,6 +310,8 @@ onBeforeUnmount(() => {
 .mermaid-viewer--expanded {
     position: fixed;
     inset: 0;
+    /* drop the inline block's vertical margin, which would otherwise leave the page showing above and below */
+    margin: 0;
     z-index: 1000;
     display: flex;
     flex-direction: column;

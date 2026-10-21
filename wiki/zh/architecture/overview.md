@@ -69,7 +69,7 @@ sequenceDiagram
 
 - [`SecurityPipeline`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityPipeline.kt) 承担所有与传输层无关的步骤，**包括全部状态码和错误映射**。适配器（WebFlux 和 Gateway 用 [`ReactiveSecurityFilter`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt)，WebMvc 用 [`AbstractAuthorizationInterceptor`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt)）只负责把 `SecurityDecision` 转成响应。让适配器自行判断的修改会破坏一致性，应当放进管道。
 - 每种结果都会变成 `SecurityDecision`，包括 `Authorization` 同步抛出的异常。没有任何错误会逃出管道。
-- `SecurityContextParser.parse` 是同步的。它在调用方线程上运行；只有解析可能阻塞时（开启了令牌吊销，或 API 密钥存储需要 I/O），starter 才把它移到 `boundedElastic`。`TokenVerificationException` 会让调用方变为匿名，并在拒绝结果中报告；其他异常一律按错误处理。
+- `SecurityContextParser.parse` 是同步的。它在调用方线程上运行；只有解析可能阻塞时（开启了令牌吊销，或 API key存储需要 I/O），starter 才把它移到 `boundedElastic`。`TokenVerificationException` 会让调用方变为匿名，并在拒绝结果中报告；其他异常一律按错误处理。
 - 适配器写出的状态码和响应头，以及应用代码如何读取安全上下文，面向用户的说明见 [Web 集成](../integration/web.md#responses-and-status-codes)。
 
 ## 授权链 {#authorization-chain}
@@ -85,14 +85,16 @@ flowchart LR
     S --> Z[SimpleAuthorization<br>cosec-core]
 ```
 
-| 装饰器 | 何时存在 | 作用 |
-|---|---|---|
-| `TracingAuthorization` | `opentelemetry-support` | 为每次决策开启一个 span。 |
-| `AuditingAuthorization` | 审计开启（默认） | 向 `AuditEventSink` 发布 `AuditEvent`。 |
-| `MeteredAuthorization` | `micrometer-support` | 记录决策指标。它是一个 `CoSecAuthorizationCustomizer`，与应用使用的是同一个钩子。 |
-| `RateLimitingAuthorization` | 有规则且有 `RateLimiter` | 只对已允许的请求，为每条匹配的规则消耗一个许可；规则耗尽时把决策改为 `TOO_MANY_REQUESTS`。 |
-| `ShadowAuthorization` | 配置了影子模式 | 用候选策略重新评估抽样请求并报告差异，实际执行的决策不变。 |
-| `SimpleAuthorization` | 始终存在 | 决策本身。求值顺序见[安全模型](../guide/security-model.md#evaluation-order)。 |
+| 装饰器 | 作用 |
+|---|---|
+| `TracingAuthorization` | 为每次决策开启一个 span。 |
+| `AuditingAuthorization` | 向 `AuditEventSink` 发布 `AuditEvent`。 |
+| `MeteredAuthorization` | 记录决策指标。它是一个 `CoSecAuthorizationCustomizer`，与应用使用的是同一个钩子。 |
+| `RateLimitingAuthorization` | 只对已允许的请求，为每条匹配的规则消耗一个许可；规则耗尽时把决策改为 `TOO_MANY_REQUESTS`。 |
+| `ShadowAuthorization` | 用候选策略重新评估抽样请求并报告差异，实际执行的决策不变。 |
+| `SimpleAuthorization` | 决策本身。求值顺序见[安全模型](../guide/security-model.md#evaluation-order)。 |
+
+哪些装饰器会出现、由哪些属性开启，见[决策链](../operations/observability.md#the-decision-chain)。
 
 为什么是这个顺序：
 
@@ -140,16 +142,9 @@ flowchart LR
 
 CoSec 7.0 以 CoCache 6 的布局存储 Redis 数据。未迁移的 6.x 数据并不总在 7.0 查找的位置：以 `:` 结尾的键前缀、更改过的前缀或回滚过的迁移，都会让它留在别处。7.0 会把所有策略、全局 `DENY` 和吊销记录都读成*不存在*，这会导致放行，而且不会出现任何读取错误来暴露问题。
 
-所以在创建任何 CoSec 缓存之前，starter 会用 [`CoSecSchemaMarker`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecSchemaMarker.kt) 检查标记键 `{p}:meta:schema`（`{p}` 是去掉末尾 `:` 的键前缀）：
-
-| Redis 状态 | 结果 |
-|---|---|
-| 存在标记，且 schema 版本一致 | 启动。 |
-| 存在标记，但 schema 版本不同 | 以 `CoSecSchemaException` 终止启动。 |
-| 没有标记，但当前前缀或 6.x 前缀下有 CoSec 数据 | 以 `CoSecSchemaException` 终止启动，直到完成迁移。 |
-| 没有标记，也没有 CoSec 数据 | 新部署：写入标记并启动。 |
-
-迁移最后才写入标记，所以迁移只做了一半时仍会终止启动。该检查由 `CoSecSchemaMarkerTest` 和 `CoSecCacheSchemaAutoConfigurationTest` 守护。如何执行迁移，以及控制该检查的属性，见[升级](../operations/upgrading.md)。
+所以在创建任何 CoSec 缓存之前，starter 会用 [`CoSecSchemaMarker`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecSchemaMarker.kt) 检查标记键 `<p>:meta:schema`：只要 Redis 中有 CoSec 数据却没有 7.0 的标记，就以 `CoSecSchemaException` 终止启动。迁移最后才写入标记，
+所以迁移只做了一半时仍会终止启动。每种状态及其结果见[Schema 标记](../operations/storage.md#schema-marker)，如何执行迁移见
+[迁移数据](../operations/upgrading.md#migrating-the-data)。该检查由 `CoSecSchemaMarkerTest` 和 `CoSecCacheSchemaAutoConfigurationTest` 守护。
 
 ## 性能 {#performance}
 
@@ -180,3 +175,5 @@ CoSec 7.0 以 CoCache 6 的布局存储 Redis 数据。未迁移的 6.x 数据�
 ## 架构的演进方向 {#where-the-architecture-is-going}
 
 [RFC 0001：目标架构](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0001-target-architecture.md)描述了计划中的重新设计：纯模型与同步引擎、基于快照的分发、以监听器取代装饰器，以及从本页所述结构迁移过去的路线。
+
+**下一步：** 添加自己的条件、仓库和钩子，见[扩展 CoSec](./extending.md)。

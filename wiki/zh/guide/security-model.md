@@ -98,7 +98,7 @@ Root 默认关闭。设置 `cosec.authorization.root-enabled: true` 后（见[�
 - 其 id 等于 JVM 系统属性 `cosec.root`（默认 `cosec`）；
 - 它属于平台租户 `(platform)`。
 
-Root 主体跳过第 3 到第 5 层，直接放行。黑名单对它依然有效。
+根主体跳过第 3 到第 5 层，直接放行。黑名单对它依然有效。
 
 **为什么要检查租户。** 主体 id 只在租户内唯一。用户租户的身份提供方也可能签发一个名为 `cosec` 的主体；没有这项检查，这个主体就能绕过所有策略。没有租户的主体永远不是 root。如果需要比 id 更强的信号，请提供自己的 `RootPrincipalMatcher` Bean。
 
@@ -110,7 +110,7 @@ Root 主体跳过第 3 到第 5 层，直接放行。黑名单对它依然有效
 
 | 输入 | 来源 | 由谁控制 |
 |---|---|---|
-| 主体 id、角色、关联策略、属性 | 经过校验的凭证（JWT 声明、API Key） | 签发凭证的一方 |
+| 主体 id、角色、关联策略、属性 | 经过校验的凭证（JWT 声明、API key） | 签发凭证的一方 |
 | 租户 | 凭证（`tenantId` 声明） | 签发凭证的一方 |
 | 路径、方法、查询参数、请求头、Cookie、Origin、Referer | HTTP 请求 | 客户端 |
 | 应用（`CoSec-App-Id`）、空间（`CoSec-Space-Id`）、设备（`CoSec-Device-Id`） | 请求头，或同名查询参数 | 客户端 |
@@ -130,7 +130,7 @@ Root 主体跳过第 3 到第 5 层，直接放行。黑名单对它依然有效
 
 另外两条边界：
 
-- **信任上游网关。** 设置 `cosec.inject.enabled: true` 后，服务从令牌中读取主体时不校验签名（仍校验有效期），前提是它前面的网关已经校验过。只在客户端必须经过该网关才能访问的服务上开启。见[网关之后](../integration/authentication.md#behind-a-gateway)。
+- **信任上游网关。** 设置 `cosec.inject.enabled: true` 并且 `cosec.authorization.enabled: false` 后，服务从令牌中读取主体时不校验签名，也不检查吊销（仍校验有效期），前提是它前面的网关已经校验过。只在客户端必须经过该网关才能访问的服务上开启。见[网关之后](../integration/authentication.md#behind-a-gateway)。
 - **客户端 IP。** 在代理之后，把 `cosec.authorization.remote-ip.max-trusted-index` 设为你所信任的代理跳数；超出部分的条目由客户端写入。见[代理之后的客户端 IP](../integration/web.md#client-ip-behind-proxies)。
 
 ## 租户隔离 {#tenant-isolation}
@@ -148,38 +148,25 @@ CoSec 本身不隔离租户。策略的 `tenantId` 记录的是策略归属哪�
 
 ## 角色作用域与 inRole {#role-scope-and-inrole}
 
-主体的角色是凭证中的字符串，每个角色可以带一个空间：
+主体的角色是凭证中的字符串，每个角色可以带一个空间：`clerk` 在默认空间（不带 `CoSec-Space-Id` 的请求）中生效，
+`clerk@team-a` 只在 `team-a` 中生效。角色权限与 `inRole` 条件对作用域的使用方式不同，这个差别很重要：
 
-- `clerk` 是默认空间（不带 `CoSec-Space-Id` 的请求所在的空间）中的角色 `clerk`；
-- `clerk@team-a` 是仅在空间 `team-a` 中有效的角色 `clerk`；
-- 格式错误的角色（角色或空间为空、含多个 `@`）在任何地方都不生效。
-
-角色权限与 `inRole` 条件对作用域的使用方式不同，这个差别很重要。
-
-**角色权限**严格按作用域生效。请求只使用在其空间内生效的角色，且只使用在其应用中做出的授权。`clerk@team-a` 获得的是
-`team-a` 中 `clerk` 的授权，绝不会获得其他空间或默认空间中 `clerk` 的授权。见[角色授权的作用域](../policies/role-permissions.md#role-grant-scope)。
-
-**`inRole` 条件**的匹配范围更宽：
-
-| 条件 | 匹配持有以下角色的主体 |
-|---|---|
-| `"inRole": { "value": "suspended" }` | `suspended`（无论请求在哪个空间）；或 `suspended@<请求的空间>` |
-| `"inRole": { "value": "suspended@team-a" }` | 恰好是 `suspended@team-a`（无论请求在哪个空间） |
+- **角色权限**严格按作用域生效。请求只使用在其空间内生效的角色，且只使用在其应用中做出的授权
+  （[角色授权的作用域](../policies/role-permissions.md#role-grant-scope)）。
+- **`inRole` 条件**的匹配范围更宽：不带空间的值在所有空间都匹配。具体规则见
+  [匹配角色](../policies/language.md#matching-roles)。
 
 **为什么不带空间的值在所有空间都匹配。** `inRole` 主要用在拒绝规则中，而空间请求头由客户端选择：如果不带空间的
 `inRole: suspended` 只在默认空间匹配，被停用的主体只要随便指定一个其他空间就能逃出这条拒绝。同时匹配
 `suspended@<空间>`，能让这类拒绝在令牌开始携带带空间的角色后继续有效。
 
-**这对放行规则意味着什么。** 两种写法都不会把授权限制在请求的空间内。尤其是写成"除非 `inRole: admin` 否则拒绝"（`"negate": true`）的规则，对持有 `admin@team-a` 的主体，只要客户端发送 `CoSec-Space-Id: team-a` 就会解除，而且解除范围是这条拒绝覆盖的所有路径，不只是 team-a 的。若要只在某个空间内授权，请加上针对 `request.spaceId` 的条件，或通过角色权限授权，它会自动按作用域生效。
+**这对放行规则意味着什么。** `inRole` 的任何写法都不会把授权限制在请求的空间内。尤其是写成"除非 `inRole: admin` 否则拒绝"（`"negate": true`）的规则，对持有 `admin@team-a` 的主体，只要客户端发送 `CoSec-Space-Id: team-a` 就会解除，而且解除范围是这条拒绝覆盖的所有路径，不只是 team-a 的。若要只在某个空间内授权，请加上针对 `request.spaceId` 的条件，或通过角色权限授权，它会自动按作用域生效。
 
 ## 路径变量的作用域 {#path-variable-scope}
 
 `/orders/{orderId}` 这样的 `path` 动作会捕获路径变量，条件通过 `request.path.var.orderId` 读取。这些变量属于捕获它们的那条语句：
-
-- 它们在每一层开始时（任何策略条件运行之前）以及每条语句匹配之前被清空。条件只能看到自己语句的 `path`
-  动作捕获的变量，看不到其他语句、策略或层留下的值。
-- 在没有自己捕获变量的地方读取路径变量，会在加载策略时被拒绝：策略级条件、应用权限的条件、动作不是 `path`
-  动作的语句的条件，以及任何动作（动作在捕获任何东西之前就被评估）。限流规则的条件和 key 遵循同样的规则。
+条件只能看到自己语句的 `path` 动作捕获的变量，看不到其他语句、策略或层留下的值；策略、应用权限或限流规则在其他任何地方读取它们，
+都会在加载时被拒绝。具体可以在哪里读取，见[路径变量](../policies/language.md#path-variables)。
 
 **原因。** 如果变量能跨语句泄漏，条件是否命中就取决于在它之前碰巧运行了哪些语句。一条把 `request.path.var.ownerId`
 与主体做比较的拒绝，可能被另一个模式捕获的值满足或绕开。限定作用域让每条语句无论放在哪里含义都相同，而加载时的检查把一条只可能出错的策略变成启动时就能看到的错误。
@@ -201,7 +188,9 @@ CoSec 决定请求能否到达你的处理器。它不会：
 - 从密钥存储中读取 `cosec.jwt.secret`，并让访问令牌保持较短的有效期。
 - 按你的代理链设置 `cosec.authorization.remote-ip.max-trusted-index`。
 - 多个应用共用网关或路径空间时，在网关上按路由绑定 `CoSec-App-Id`。
-- 只在必须经过校验网关才能访问的服务上开启 `cosec.inject.enabled`。
+- 只在必须经过校验网关才能访问的服务上开启注入模式（`cosec.inject.enabled` 加 `cosec.authorization.enabled: false`）。
 - 除非确实需要，保持 `cosec.authorization.root-enabled` 关闭。开启时，只从用户无法影响的来源签发平台租户的令牌。
 - 必须始终生效的拒绝，放在没有条件的策略里。
 - 用于防滥用的限流规则，如果 Redis 故障时也不能失效，请设置 `"strictFailure": true`。
+
+**下一步：** 代码如何兑现这些保证，见[架构概览](../architecture/overview.md)；要开始使用 CoSec，见[快速开始](./quick-start.md)。

@@ -221,11 +221,9 @@ To let a user switch tenants, extend `AbstractSwitchTenantAuthentication`, imple
 `switchTenant(targetTenantId, previousPrincipal)` (check that the user belongs to the target tenant), and issue a
 new token for the principal it returns.
 
-**The platform tenant `(platform)` is privileged.** The root principal, if enabled with
-`cosec.authorization.root-enabled`, is recognized only in it: a principal is root only when its tenant
-is `(platform)` and its id equals the `cosec.root` system property (`cosec` by default). A user tenant whose
-identity provider issues the id `cosec` gets no root rights. Issue tokens for `(platform)` only from a source that
-users cannot influence. Why, and what root bypasses, is in [Root principal](../guide/security-model.md#root-principal).
+**The platform tenant `(platform)` is privileged**: when root is enabled, only a principal of this tenant can be
+root. Issue tokens for `(platform)` only from a source that users cannot influence. Who counts as root, and what
+root bypasses, is in [Root principal](../guide/security-model.md#root-principal).
 
 ## Social login
 
@@ -267,3 +265,5 @@ Without signature verification, anyone who can reach the service directly can fo
 only for services that are reachable exclusively through the verifying gateway; see
 [Trust boundaries](../guide/security-model.md#trust-boundaries).
 :::
+
+**Next:** ask for decisions from your own code, in [Checks in code](./checks.md).

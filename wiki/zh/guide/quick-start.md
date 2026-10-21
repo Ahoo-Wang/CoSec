@@ -113,7 +113,7 @@ class DemoController(private val tokenConverter: TokenConverter) {
 }
 ```
 
-starter 根据 `cosec.jwt` 配置好 `TokenConverter`（`me.ahoo.cosec.token`）。`SimplePrincipal` 位于 `me.ahoo.cosec.principal`，`CompositeToken` 位于 `me.ahoo.cosec.api.token`；响应中包含 `accessToken` 和 `refreshToken`。真正的登录接口要先校验凭据再签发令牌，见[登录](../integration/authentication.md#logging-in)。
+starter 根据 `cosec.jwt` 配置好 `TokenConverter`（`me.ahoo.cosec.token`）。`SimplePrincipal` 位于 `me.ahoo.cosec.principal`，`CompositeToken` 位于 `me.ahoo.cosec.api.token`；响应中包含 `accessToken` 和 `refreshToken`。真正的登录接口要先校验凭证再签发令牌，见[登录](../integration/authentication.md#logging-in)。
 
 ## 发送请求 {#send-requests}
 
@@ -150,7 +150,7 @@ curl -i -H "Authorization: Bearer $TOKEN" localhost:8080/admin
 
 `403`，原因为 `Implicit Deny`：没有任何语句提到 `/admin`。
 
-所有结果及其状态码见[决策](./concepts.md#decisions)。
+所有结果见[决策](./concepts.md#decisions)，每种结果对应的状态码见[响应与状态码](../integration/web.md#responses-and-status-codes)。
 
 ## 下一步 {#next-steps}
 

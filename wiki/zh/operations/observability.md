@@ -11,29 +11,19 @@ description: "看清 CoSec 做出的每个决策：审计事件、追踪、指�
 
 ## 决策链 {#the-decision-chain}
 
-`Authorization` bean 是包在 `SimpleAuthorization` 外面的一串装饰器。每个装饰器看到的是它内层的决策，所以审计事件、指标和
-span 报告的都是最终决策，包括限流。
-
-```mermaid
-flowchart LR
-    R[请求] --> T[TracingAuthorization<br>span cosec.authorize]
-    T --> A[AuditingAuthorization<br>审计事件]
-    A --> M[MeteredAuthorization<br>计时器 cosec.authorization]
-    M --> L[RateLimitingAuthorization<br>消耗许可]
-    L --> S[ShadowAuthorization<br>候选差异]
-    S --> D[SimpleAuthorization<br>做出决策]
-```
+`Authorization` bean 是包在 `SimpleAuthorization` 外面的一串装饰器，从外到内依次是：链路追踪、审计、指标、限流、影子模式。
+每个装饰器看到的是它内层的决策，所以审计事件、指标和 span 报告的都是最终决策，包括限流。为什么按这个顺序排列，见
+[授权链](../architecture/overview.md#authorization-chain)。
 
 | 装饰器 | 存在条件 |
 |---|---|
 | `TracingAuthorization` | classpath 上有 `opentelemetry-support` |
 | `AuditingAuthorization` | `cosec.audit.enabled`（默认 `true`） |
 | `MeteredAuthorization` | `micrometer-support`、一个 `MeterRegistry` bean，以及 `cosec.metrics.enabled`（默认 `true`） |
-| `RateLimitingAuthorization` | `cosec.limiter.enabled`（默认 `true`）且有限流器 |
+| `RateLimitingAuthorization` | `cosec.limiter.enabled`（默认 `true`），即使没有任何规则文件 |
 | `ShadowAuthorization` | `cosec.shadow.enabled=true`（[影子模式](../policies/testing.md#trying-changes-in-shadow-mode)） |
 
-`SimpleAuthorization` 依次检查黑名单、root（开启时）、全局策略、主体的策略和角色权限（[求值顺序](../guide/security-model.md#evaluation-order)）。
-做出决定的那一层作为决策的 **来源（source）** 报告。
+`SimpleAuthorization` 中做出决定的那一层（[求值顺序](../guide/security-model.md#evaluation-order)）作为决策的 **来源（source）** 报告。
 
 这些观测用的装饰器都不会改变决策：审计 sink 失败只会被记录日志并忽略。
 
@@ -128,3 +118,5 @@ logging:
 它默认关闭（`cosec.explain.enabled`），因为解释结果会暴露你的策略结构。有 Spring Boot Actuator 时它还是 `cosecExplain` 端点，
 这个端点和其他请求一样经过 CoSec：只向管理员暴露，并且只允许管理员 `POST /actuator/cosecExplain`。请求、响应以及如何在代码
 中调用，见 [解释一个决策](../integration/checks.md#explaining-a-decision)。
+
+**下一步：** 从症状找到原因，见[故障排查](./troubleshooting.md)。
