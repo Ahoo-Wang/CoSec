@@ -13,7 +13,10 @@
 
 package me.ahoo.cosec.engine
 
+import com.tngtech.archunit.base.DescribedPredicate
+import com.tngtech.archunit.core.domain.JavaCall
 import com.tngtech.archunit.core.domain.JavaCall.Predicates.target
+import com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo
 import com.tngtech.archunit.core.domain.JavaClass.Predicates.type
 import com.tngtech.archunit.core.domain.properties.HasName.Predicates.name
 import com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner
@@ -51,7 +54,7 @@ class EnginePurityTest {
 
     /**
      * `java.lang` and `java.util` still hold impure classes: threads, clocks, processes, randomness, class loading,
-     * service lookup, stack inspection, reflection, concurrency.
+     * service lookup, resource lookup, stack inspection, reflection, concurrency.
      */
     @ArchTest
     val noImpureJdk: ArchRule = noClasses().should().dependOnClassesThat().belongToAnyOf(
@@ -61,6 +64,7 @@ class EnginePurityTest {
         ProcessBuilder::class.java,
         ProcessHandle::class.java,
         ThreadLocal::class.java,
+        InheritableThreadLocal::class.java,
         StackWalker::class.java,
         ClassLoader::class.java,
         java.util.Timer::class.java,
@@ -70,11 +74,32 @@ class EnginePurityTest {
         java.util.Date::class.java,
         java.util.Calendar::class.java,
         java.util.ServiceLoader::class.java,
+        java.util.ResourceBundle::class.java,
     ).orShould().dependOnClassesThat().resideInAnyPackage("java.lang.reflect..", "java.util.concurrent..")
 
     /** Loading a class by name is reflection without `java.lang.reflect`. Plain class literals stay allowed. */
     @ArchTest
-    val noClassForName: ArchRule = noClasses().should().callMethodWhere(
-        target(name("forName")).and(target(owner(type(Class::class.java)))),
+    val noClassForName: ArchRule = noClasses().should().callMethodWhere(call(Class::class.java, "forName"))
+
+    /**
+     * Impure methods of classes the engine may otherwise use: randomness, system properties, reflective construction,
+     * monitors, the JVM's default locale and time zone, stack inspection and modules.
+     */
+    @ArchTest
+    val noImpureCalls: ArchRule = noClasses().should().callMethodWhere(
+        call(Math::class.java, "random")
+            .or(call(StrictMath::class.java, "random"))
+            .or(call(Integer::class.java, "getInteger"))
+            .or(call(java.lang.Long::class.java, "getLong"))
+            .or(call(java.lang.Boolean::class.java, "getBoolean"))
+            .or(call(Class::class.java, "newInstance"))
+            .or(call(Class::class.java, "getModule"))
+            .or(call(Any::class.java, "wait", subclasses = true))
+            .or(call(Throwable::class.java, "getStackTrace", subclasses = true))
+            .or(call(java.util.Locale::class.java, "getDefault"))
+            .or(call(java.util.TimeZone::class.java, "getDefault", subclasses = true)),
     )
+
+    private fun call(owner: Class<*>, method: String, subclasses: Boolean = false): DescribedPredicate<JavaCall<*>> =
+        target(name(method)).and(target(owner(if (subclasses) assignableTo(owner) else type(owner))))
 }

@@ -25,7 +25,10 @@ class LayerTrace(
     val kind: LayerKind,
     val state: LayerState,
     val absentReason: AbsentReason? = null,
-    /** The layer on its own: its first matched DENY, else its first matched ALLOW, else null. */
+    /**
+     * The layer on its own: its first matched DENY, else its first matched ALLOW, else null. When [cause] is set, the
+     * layer is indeterminate and [cause] takes precedence: a match recorded after the error does not decide it.
+     */
     val matched: StatementRef? = null,
     val matchedEffect: Effect? = null,
     /** Why the layer is indeterminate: the first error in evaluation order, or the layer's missing or unavailable data. */
@@ -53,8 +56,21 @@ enum class LayerState {
     MISSING_POLICIES,
 }
 
-/** [rules] are in source order, as [RuleGroup.forEachRule] visits them. */
-class GroupTrace(val id: String, val guard: GuardOutcome, val guardError: Throwable?, val rules: List<RuleTrace>)
+/**
+ * [rules] are in source order, as [RuleGroup.forEachRule] visits them.
+ *
+ * [contractError] is set when the group broke the adapter contract, or threw, where the trace alone looked: listing a
+ * group whose guard did not match, after the decision, or an allow pass that visited other entries than the deny pass.
+ * Such a failure is recorded rather than thrown, because the untraced evaluation never sees it and the decision must
+ * not depend on the trace level. [rules] then lacks the entries that could not be recorded.
+ */
+class GroupTrace(
+    val id: String,
+    val guard: GuardOutcome,
+    val guardError: Throwable?,
+    val rules: List<RuleTrace>,
+    val contractError: Throwable? = null,
+)
 
 enum class GuardOutcome { MATCHED, MISSED, ERROR }
 

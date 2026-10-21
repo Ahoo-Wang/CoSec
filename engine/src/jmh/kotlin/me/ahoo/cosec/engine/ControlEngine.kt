@@ -24,6 +24,9 @@ import me.ahoo.cosec.model.StatementRef
  * The control of RFC 0002 §7.1: the §4.1 algorithm with no trace code at all, allocating what any implementation
  * must (the evaluation, its decision and reference, the visitor, the bitmap beyond 64 groups). [CoSecEngine] at
  * [TraceLevel.OFF] must allocate no more than this.
+ *
+ * It has none of the engine's adapter-contract checks. A copy with them ran at a third to a half of the engine's own
+ * throughput, from how the JIT compiled it rather than from the checks, so it was no fairer a baseline (round 2).
  */
 object ControlEngine {
     private val IMPLICIT_DENY = Evaluation(Decision.Deny(null), null)
@@ -62,7 +65,7 @@ object ControlEngine {
             result = null
             val groups = layer.groups
             var bits = 0L
-            val words = if (groups.size > 64) LongArray(groups.size / 64 + 1) else null
+            val words = if (groups.size > 64) LongArray((groups.size + 63) / 64) else null
             for (i in groups.indices) {
                 val matched = try {
                     groups[i].guard.matches(request)

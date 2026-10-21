@@ -45,8 +45,11 @@ object CoSecEngine : Engine {
                 return ROOT_EVALUATION
             }
         }
-        val evaluator = if (trace == TraceLevel.OFF) Evaluator(request) else TracingEvaluator(request, trace)
-        return evaluator.evaluate(policies.layers)
+        // Two call sites, so the untraced one never shares a type profile with the traced one.
+        if (trace == TraceLevel.OFF) {
+            return Evaluator(request).evaluate(policies.layers)
+        }
+        return TracingEvaluator(request, trace).evaluate(policies.layers)
     }
 
     internal fun untraced(decision: Decision): Evaluation =

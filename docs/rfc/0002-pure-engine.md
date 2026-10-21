@@ -328,10 +328,16 @@ class UnresolvedGrant(val permissionId: String, val error: Throwable) : RuleEntr
 - `Guard.matches` / `Rule.match` 抛出的 `Exception` 由引擎捕获，变成 `Indeterminate(MatcherFailed)`；`Error`（如
   `NotImplementedError`、`StackOverflowError`）不捕获，照常向外传播，由调用方的 Reactor 变成错误信号，最终仍是 500，与现在一致。
   例外只有一处：`FULL`/`EXHAUSTIVE` 下**只为 trace 而评估**的前置条件或规则（`afterDecision`）抛出的 `Throwable`，除
-  `VirtualMachineError`、`LinkageError` 之外都记为 `ERROR`，不向外传播。`OFF` 根本不会调用它们，解释不应在执法不失败的地方失败。
-- 违反适配契约的输入（`forEachRule` 在访问者没有要求停止时返回 true，或无 trace 时忽略访问者的停止；ROLE 层条目缺少
-  `grantedVia` 或权限 id；其他层条目带 `grantedVia` 或是 `UnresolvedGrant`）一律抛出 `IllegalStateException`，失败即拒绝，
-  不作决策。两种评估器都在访问每个条目时检查，所以在决策之前的条目上，各 trace 级别的失败方式相同；决策之后的条目只有 trace 会访问到。
+  `VirtualMachineError`、`LinkageError`、`InterruptedException` 之外都记为 `ERROR`，不向外传播。`OFF` 根本不会调用它们，
+  解释不应在执法不失败的地方失败。中断照常传播：引擎不得调用 `Thread` 重新设置中断标志（§2.3）。
+- 违反适配契约的输入一律失败即拒绝，抛出 `IllegalStateException`，不作决策：`forEachRule` 在访问者没有要求停止时返回 true，
+  或无 trace 时忽略访问者的停止；ROLE 层条目缺少 `grantedVia` 或权限 id；其他层条目带 `grantedVia` 或是 `UnresolvedGrant`；
+  规则的 `effect` 或 `match` 的结果为 null（Java 适配器可能返回 null；它们不会被当作"不属于本轮扫描"或"未命中"跳过）。
+  **决策与 trace 级别无关**（P2）因此成立的范围是：
+  - 决策之前访问到的条目，两种评估器以同样的顺序检查，失败方式相同；
+  - trace 只为自己做的事——列出前置条件未命中的组的条目、决策之后的条目、核对拒绝扫描与允许扫描访问到的条目是否一致——
+    遇到违反契约或抛出异常（同上，JVM 错误与中断除外）时，记在该组的 `GroupTrace.contractError` 上，不抛出、不改变决策。
+    `OFF` 看不到这些问题，所以它们只出现在 trace 中。
 - `UnresolvedGrant` 留在它在授予序列中的位置，语义见 §4.1 与 §4.2 S10a。它是数据错误而不是匹配器错误，所以得到
   `MissingPermissions` 而不是 `MatcherFailed`，trace 里记为 `UNRESOLVED`，基于 trace 的解释（PR-5）因此能如实说明原因。
 - `forEachRule` 用访问者而不是 `List<Rule>`：ROLE 层的规则是"角色 × 授予的权限"，按列表物化就是每请求 O(授予数) 的分配，
@@ -348,7 +354,7 @@ class LayerTrace(
     val kind: LayerKind,
     val state: LayerState,
     val absentReason: AbsentReason? = null,
-    /** 本层单独看的结果：本层第一条命中的 DENY，否则第一条命中的 ALLOW，否则 null。 */
+    /** 本层单独看的结果：本层第一条命中的 DENY，否则第一条命中的 ALLOW，否则 null。cause 非空时本层无法判定，以 cause 为准。 */
     val matched: StatementRef? = null,
     val matchedEffect: Effect? = null,
     val cause: Cause? = null,
@@ -357,7 +363,14 @@ class LayerTrace(
 
 enum class LayerState { EVALUATED, EVALUATED_AFTER_DECISION, NOT_EVALUATED, ABSENT, UNAVAILABLE, MISSING_POLICIES }
 
-class GroupTrace(val id: String, val guard: GuardOutcome, val guardError: Throwable?, val rules: List<RuleTrace>)
+/** contractError：只为 trace 而访问该组时它违反了适配契约或抛出了异常（见上文）；rules 中缺少无法记录的条目。 */
+class GroupTrace(
+    val id: String,
+    val guard: GuardOutcome,
+    val guardError: Throwable?,
+    val rules: List<RuleTrace>,
+    val contractError: Throwable? = null,
+)
 
 enum class GuardOutcome { MATCHED, MISSED, ERROR }
 
@@ -481,7 +494,7 @@ trace 只是在同一个循环里加记录（§5.1）：`OFF` 时不记录、不
 **本层**剩余的规则，记录为 `afterDecision`，再照常进入下一层；`EXHAUSTIVE` 时还走完决策结束之后的层。`OFF` 下评估的每个匹配器
 在 `FULL` 下以同样的顺序被评估，`afterDecision` 的规则只是额外多出来的；它们的结果（包括错误）不参与组合（§8.4 P2、P4）。
 
-`matched` 不是列表，而是一个位图：组数不超过 64 时是一个 `Long` 局部变量，超过时分配一个 `LongArray(groups.size / 64 + 1)`。
+`matched` 不是列表，而是一个位图：组数不超过 64 时是一个 `Long` 局部变量，超过时分配一个 `LongArray((groups.size + 63) / 64)`。
 前置条件必须在任何语句之前全部评估（S4），所以这份按组的状态无法省掉（§7.1）。
 
 ### 4.2 与现在的 `SimpleAuthorization` 逐条对照
