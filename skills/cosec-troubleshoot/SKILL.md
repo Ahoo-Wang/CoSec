@@ -5,7 +5,7 @@ description: Diagnose CoSec authentication and authorization failures, including
 
 # CoSec Troubleshooting
 
-The human-facing guide is https://cosec.ahoo.me/guide/troubleshooting; this skill adds the agent workflow.
+The human-facing guide is https://cosec.ahoo.me/operations/troubleshooting; this skill adds the agent workflow.
 
 Find the first incorrect transition from request parsing to authentication, policy loading, matching, and response mapping. Gather evidence before proposing a policy or code change.
 
@@ -83,7 +83,7 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 - Since 7.0, `LocalPolicyLoader` fails startup with `Failed to load policy [<file>]` on any malformed JSON, missing required field, unknown matcher type, or constructor-time configuration error (before 7.0 it logged and skipped the file, which could drop a deny). It also fails startup with `Policy id [<id>] is declared more than once` (before 7.0 one copy was silently dropped) and with `Policy location [<location>] matches no file` for a configured location that does not exist or matches nothing, usually a path typo (before 7.0 only a warning); only the default `classpath:cosec-policy/*-policy.json` may match nothing.
 - Since 7.0 rate limit rule files (`cosec.limiter.locations`) and shadow candidates (`cosec.shadow.locations`, `cosec.shadow.app-permission-locations`) fail startup the same way: `Rate limit rule location [<location>] matches no file`, `Shadow policy location [...]`, `Shadow app permission location [...]` for a configured location that does not exist or matches nothing (before 7.0 it loaded nothing, silently, dropping every quota or candidate it held), and `... id [<id>] is declared more than once` for a duplicate id. Only the defaults `classpath:cosec-rate-limit/*-rate-limit.json`, `classpath:cosec-shadow/*-policy.json` and `classpath:cosec-shadow/*-app-permission.json` may match nothing.
 - Deferred matcher errors still load. For example, an unsupported `part` throws during authorization and the transport returns 500; reproduce it with `DefaultPolicyEvaluator` or the failing request.
-- Local policies are deduplicated by ID after location expansion; assert that the expected ID and content loaded.
+- Local policy files are deduplicated by file after location expansion (a file matched by two locations loads once); two files with the same ID fail startup. Assert that the expected ID and content loaded.
 - `LocalPolicyLoader` does not serve authorization decisions directly. Enable `init-repository` or prepopulate `PolicyRepository`; use `force-refresh` only when overwriting repository state is intended.
 
 ### Policies or permissions missing after upgrading to 7.0

@@ -80,7 +80,7 @@ cosec:
 }
 ```
 
-接下来阅读[快速开始](https://cosec.ahoo.me/zh/guide/quick-start)了解如何签发令牌，再阅读[策略参考](https://cosec.ahoo.me/zh/guide/policies)。
+接下来阅读[快速开始](https://cosec.ahoo.me/zh/guide/quick-start)了解如何签发令牌，再阅读[策略语言](https://cosec.ahoo.me/zh/policies/language)。
 
 ## 模块
 
@@ -90,10 +90,15 @@ ip2region、Kafka）都是按需启用的 Gradle 能力。完整列表见[模块
 
 ## 文档
 
-- **指南**：[简介](https://cosec.ahoo.me/zh/guide/introduction) · [快速开始](https://cosec.ahoo.me/zh/guide/quick-start) ·
-  [策略](https://cosec.ahoo.me/zh/guide/policies) · [配置](https://cosec.ahoo.me/zh/guide/configuration) ·
-  [认证](https://cosec.ahoo.me/zh/guide/authentication) · [Web 集成](https://cosec.ahoo.me/zh/guide/web-integration) ·
-  [运维](https://cosec.ahoo.me/zh/guide/operations) · [故障排查](https://cosec.ahoo.me/zh/guide/troubleshooting)
+- **入门**：[简介](https://cosec.ahoo.me/zh/guide/introduction) · [快速开始](https://cosec.ahoo.me/zh/guide/quick-start) ·
+  [核心概念](https://cosec.ahoo.me/zh/guide/concepts) · [安全模型](https://cosec.ahoo.me/zh/guide/security-model)
+- **集成**：[Web 集成](https://cosec.ahoo.me/zh/integration/web) · [认证](https://cosec.ahoo.me/zh/integration/authentication) ·
+  [代码中的权限检查](https://cosec.ahoo.me/zh/integration/checks)
+- **策略**：[策略语言](https://cosec.ahoo.me/zh/policies/language) · [角色权限](https://cosec.ahoo.me/zh/policies/role-permissions) ·
+  [限流](https://cosec.ahoo.me/zh/policies/rate-limiting) · [测试策略](https://cosec.ahoo.me/zh/policies/testing)
+- **运维**：[配置](https://cosec.ahoo.me/zh/operations/configuration) · [存储与缓存](https://cosec.ahoo.me/zh/operations/storage) ·
+  [升级](https://cosec.ahoo.me/zh/operations/upgrading) · [可观测性](https://cosec.ahoo.me/zh/operations/observability) ·
+  [故障排查](https://cosec.ahoo.me/zh/operations/troubleshooting)
 - **架构**：[概览](https://cosec.ahoo.me/zh/architecture/overview) · [扩展](https://cosec.ahoo.me/zh/architecture/extending)
 - **发布记录**：[GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)
 
