@@ -141,6 +141,20 @@ id declared by two files. The duplicate local policy error now reads `Policy id 
 earlier rules had spent their permits. Constructing or loading such a rule now fails
 ([Rate limiting](./rate-limiting.md)).
 
+**Spring MVC authorizes the request URI, not `servletPath`.** The WebMvc adapter used `HttpServletRequest.servletPath`,
+which drops `pathInfo`. With the `DispatcherServlet` mapped under a prefix (`spring.mvc.servlet.path=/api`), every
+request was authorized as `/api`: a deny on `/api/admin/**` never matched, and an allow on `/api/**` let every
+request through. The path is now the request URI without the context path, as Spring MVC routes it and as WebFlux
+sees it ([Web Integration](./web-integration.md)). With the default `/` mapping the matched path is
+the same as before, except that it is no longer percent-decoded: `path` actions decode segments as before, but a
+condition that compares `request.path` as a string (`eq`, `regex`, …) now sees `/a%20b`, not `/a b`. Before
+upgrading an application with a servlet path, add the prefix to its policies, app permissions and rate limit rules.
+
+**`;` path parameters are removed from the authorized path, and `..;` is rejected.** On every adapter,
+`/admin;jsessionid=1` is authorized as `/admin`, as Spring routes it; before, WebFlux and Gateway passed it through,
+so a `request.path` condition could miss it. A `.` or `..` segment followed by a path parameter (`/public/..;/admin`),
+which servlet containers resolve as `..`, now answers `400` like any other traversal.
+
 **OpenAPI-generated app ids replace `:` with `-`.** `OpenAPIAppPermissionGenerator` derives the app id from the
 OpenAPI title, and app ids may no longer contain `:`. An app whose title contains `:` (for example `orders:api`)
 gets the id `orders-api`; clients must send the new id in `CoSec-App-Id`, and its role grants must be written for it.

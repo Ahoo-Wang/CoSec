@@ -19,4 +19,5 @@ dependencies {
     api("jakarta.servlet:jakarta.servlet-api")
     api("org.springframework:spring-webmvc")
     testImplementation("me.ahoo.cosid:cosid-test")
+    testImplementation("org.springframework:spring-test")
 }

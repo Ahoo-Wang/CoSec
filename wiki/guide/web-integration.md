@@ -12,6 +12,11 @@ response), so they respond identically.
 
 When Spring Cloud Gateway is on the classpath, the gateway filter replaces the WebFlux filter.
 
+**The path policies see** (`request.path`, `path` actions) is the request path as sent, still percent-encoded, with
+`;` path parameters removed (`/orders;jsessionid=1/42` is `/orders/42`). On Spring MVC it is the request URI without
+the servlet context path, so it keeps the `DispatcherServlet` mapping prefix: with `spring.mvc.servlet.path=/api`,
+`/api/admin/users` is matched as `/api/admin/users`. On WebFlux and Gateway it is the full request path.
+
 ## Responses
 
 Every request that passes path validation gets a `CoSec-Request-Id` response header: the caller's own
@@ -21,7 +26,7 @@ Rejected requests get a JSON body, `{"authorized": false, "reason": "..."}`, and
 
 | Situation | Status | Reason |
 |---|---|---|
-| Path with `.` or `..` segments (also percent-encoded) or a malformed percent-escape | `400` | — (no body) |
+| Path with `.` or `..` segments (also percent-encoded, or with a path parameter such as `..;`) or a malformed percent-escape | `400` | — (no body) |
 | Denied, anonymous caller | `401` | `Implicit Deny`, `Explicit Deny`, `Token Expired` or `Token Invalid` |
 | Denied, authenticated caller | `403` | `Implicit Deny` or `Explicit Deny` |
 | [Rate limit](./rate-limiting.md) exhausted | `429` | `Too Many Requests` |

@@ -103,6 +103,17 @@ id 请用 `appRoles`）。`AppRolePermission.rolePermissionIndexer` 的默认实
 **限流规则的 `key` 在加载时校验。** 不受支持的 `key`（例如把 `request.remoteIp` 写成 `request.ip`）以前可以加载，
 然后在前面的规则已经消耗许可之后，让每个匹配的请求都以 `500` 失败。现在构造或加载这样的规则会直接失败（见[限流](./rate-limiting.md)）。
 
+**Spring MVC 按请求 URI 授权，不再按 `servletPath`。** WebMvc 适配器原来使用 `HttpServletRequest.servletPath`，它不含 `pathInfo`。
+`DispatcherServlet` 映射在前缀下（`spring.mvc.servlet.path=/api`）时，每个请求都按 `/api` 授权：`/api/admin/**` 上的拒绝永远不会匹配，
+而 `/api/**` 上的允许会放行所有请求。现在使用去掉 context path 之后的请求 URI，与 Spring MVC 的路由和 WebFlux 看到的路径一致
+（见 [Web 集成](./web-integration.md)）。使用默认的 `/` 映射时，匹配的路径与以前相同，只是不再做百分号解码：
+`path` 动作仍像以前一样逐段解码，但把 `request.path` 当字符串比较的条件（`eq`、`regex` 等）现在看到的是 `/a%20b` 而不是 `/a b`。
+升级配置了 Servlet 路径的应用之前，给它的策略、应用权限和限流规则加上这个前缀。
+
+**授权路径去掉 `;` 路径参数，并拒绝 `..;`。** 在所有适配器上，`/admin;jsessionid=1` 都按 `/admin` 授权，与 Spring 的路由一致；
+以前 WebFlux 和 Gateway 原样传递，`request.path` 条件可能匹配不到。后面跟着路径参数的 `.` 或 `..` 段（`/public/..;/admin`）
+会被 Servlet 容器当作 `..` 处理，现在像其他路径穿越一样返回 `400`。
+
 **OpenAPI 生成的应用 id 把 `:` 替换为 `-`。** `OpenAPIAppPermissionGenerator` 由 OpenAPI 标题生成应用 id，而应用 id 不能再含有 `:`。
 标题含有 `:` 的应用（例如 `orders:api`）的 id 变为 `orders-api`；客户端必须在 `CoSec-App-Id` 中发送新的 id，角色授权也要为新 id 写入。
 
