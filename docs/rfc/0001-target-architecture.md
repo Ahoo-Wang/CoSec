@@ -436,7 +436,52 @@ API 时再提高基线。
 **何时提高基线**：出现一个具体的代码需求，而且没有合理的替代办法时（例如 CoSec 必须自己创建虚拟线程执行器）。到那时
 直接升到当时最新的 LTS。
 
-### 3.10 关键依赖：CoCache 6.4、CosId 4.0
+### 3.10 AOT 与 native image
+
+**决定**（已确认，2026-10-21，见 7.1）：AOT 就绪是 8.0 的设计约束。三种"AOT"含义不同，落点也不同：
+
+| 含义 | 是什么 | 落点 |
+|---|---|---|
+| **JDK 25 AOT cache**（Leyden，`-XX:AOTCacheOutput` / `-XX:AOTCache`） | 训练运行时记录类加载、链接和方法 profile，下次启动直接使用 | 部署问题，不需要改代码。`cosec-gateway-server` 的用法由单独的 PR 写进文档 |
+| **Spring AOT**（构建期生成 bean 定义，加上 `RuntimeHints`） | 把反射、资源、代理的需求在构建期声明出来 | 8.0 对所有库模块的约束，见下文 |
+| **GraalVM native image** | 封闭世界的提前编译 | 可选，只针对 `cosec-gateway-server` 这个应用，在 8.0 之后做。库不把 native 作为受支持的目标，任何地方都不把它设为默认 |
+
+**为什么 native 不是默认**：授权在每个请求上都要执行，稳态下 JIT 的吞吐比启动时间重要得多；native image 没有运行时
+profile 引导的优化，峰值吞吐通常更低。所以 native 只是网关应用的一个可选构建方式。**任何改动都不能为了 native 拖慢 JIT 路径**；
+有冲突时以 JIT 路径为准，用 JMH 前后对比证明（不变量"热路径有基准"）。
+
+**8.0 对新代码的约束**：
+- `cosec-model` / `cosec-engine` 不使用反射，也不使用动态代理。`EnginePurityTest` 已经禁止依赖 `java.lang.reflect..`
+  （以及线程、时钟、`java.util.concurrent..` 等），这条约束由它守护。
+- 匹配器工厂继续显式注册：要么写进 `META-INF/services`，由 `MatcherFactoryRegistry` 通过 `ServiceLoader` 加载；要么声明为
+  Spring bean，由 starter 的 `MatcherFactoryRegister` 注册。不引入类路径扫描或按类名反射实例化。
+- 需要反射、资源或代理的每个库模块都自带一个 `RuntimeHintsRegistrar`（经 `META-INF/spring/aot.factories` 注册），并配一个
+  用 Spring 的 `RuntimeHintsPredicates` 断言这些 hint 已注册的测试。目前 CoSec 的模块都还没有 `RuntimeHintsRegistrar`。
+
+**现有代码中的已知障碍**：
+- `OgnlConditionMatcher` 重度依赖反射（OGNL 在运行时按名字解析属性和方法）；`SpelConditionMatcher` 对表达式求值时，根对象
+  `SpelConditionMatcher.Root` 及其可达的每个类型都需要逐类型的 hint。两者都由条件 AST（7.1"条件表达式"）取代：AST 落地时
+  将两者标记为 deprecated，之后删除。这也同时解决了 D6。
+- CoCache 的缓存代理（`@CoCache` / `@EnableCoCache`）已经有覆盖：CoCache 6.6 在 `cocache-spring-boot-starter` 里自带
+  `CoCacheAotProcessor`（`BeanFactoryInitializationAotProcessor`，为缓存接口、key 类型和表达式根注册 hint）和
+  `CoCacheRuntimeHints`，两者都在它的 `META-INF/spring/aot.factories` 中注册。CoSec 不需要为此另写 hint。
+- Jackson 模块通过 `META-INF/services/tools.jackson.databind.JacksonModule` 注册：`cosec-core` 用它注册 `CoSecModule`，
+  `CoSecJsonSerializer` 靠 `findAndAddModules()` 发现它。native image 里这个服务文件必须作为资源保留；更稳妥的做法是在
+  `CoSecJsonSerializer` 中显式注册 `CoSecModule`，`ServiceLoader` 只用于发现第三方模块。
+
+**失败即拒绝**：缺少 hint 必须表现为策略加载失败和请求被拒绝，绝不能表现为某条语句或某个匹配器被悄悄跳过。现状（`main`）：
+- `MatcherFactoryRegistry.getRequired` 遇到未知 `type` 时抛异常。两处反序列化入口都只用它：`JsonActionMatcherDeserializer`
+  用 `ActionMatcherFactoryProvider.getRequired`，`JsonConditionMatcherDeserializer` 用 `ConditionMatcherFactoryProvider.getRequired`。
+  所以一个工厂因为缺少服务文件或 hint 没有注册时，整条策略反序列化失败。`LocalPolicyLoader` 把它包装成
+  `IllegalStateException` 抛出，应用启动失败；从 Redis 读取时，策略缓存是 `ReadFailureMode.THROW`，错误传到 Pipeline，请求被拒绝。
+- 可空的 `MatcherFactoryRegistry.get` 只通过 `ActionMatcherFactoryProvider.get` 和 `ConditionMatcherFactoryProvider.get` 暴露，
+  `main` 上没有任何产品代码调用这两个方法，因此不存在"拿到 `null` 就跳过"的路径。新代码一律用 `getRequired`；8.0 的引擎编译
+  策略时，未知类型是编译错误，不是被忽略的语句。
+
+**8.0 之后**：增加一个夜间 CI 任务，把 `cosec-gateway-server` 构建为 native image 并跑冒烟测试。冒烟测试包括一个反向用例：
+去掉一条 hint 后重新构建，断言对应请求被拒绝（而不是被放行，或者对应语句被跳过）。
+
+### 3.11 关键依赖：CoCache 6.4、CosId 4.0
 
 **决定**：目标架构以 **CoCache 6.4** 和 **CosId 4.0** 为准，并随它们的后续版本更新。main 已升级到 CoCache 6.6.0 和 CosId 4.0.2（7.0）。
 两者的基线都是 JDK 17 与 Spring Boot 4，与 3.9 一致。
@@ -544,7 +589,7 @@ CoCache 6.4 为前提。由于 CoCache 6 不支持从 5.x 滚动升级，7.0 的
 
 ## 7. 决定与待决问题
 
-### 7.1 已确认的决定（2026-10-20）
+### 7.1 已确认的决定（2026-10-20，AOT 一项为 2026-10-21）
 
 | 问题 | 决定 | 理由 |
 |---|---|---|
@@ -554,6 +599,7 @@ CoCache 6.4 为前提。由于 CoCache 6 不支持从 5.x 滚动升级，7.0 的
 | **条件表达式** | 自研有类型、可分析的条件 AST，运算符集合固定：`eq`、`in`、`prefix`、`cidr`、`time`、`exists`、`and`、`or`、`not`。不引入 CEL；将来确实需要时，CEL 只作为可选条件类型，一律视为"不可分析"（只能由平台管理员发布，放进索引的"总是候选"桶） | 只有固定运算符的 AST 才能同时做到成本有界、抽取索引键、做包含分析 |
 | **Action 词汇** | 规范模型是 `service:verb` 加带类型的资源；HTTP 是一层映射。内置 `http` 命名空间（`http:GET` + 规范化路径）供 Gateway 使用；服务内部的路由到 action 映射由 `cosec-openapi` 根据 OpenAPI 生成 | URL 重构不影响授权语义；按 action 键精确查找，索引快且不会漏；越权检查和代码内检查都更容易 |
 | **当前代码中的 D3、D5、D7** | 在现有架构内立即修复，与 D2 一起放进 7.0 的破坏性变更，每项都经过影子比对并写入 `wiki/operations/upgrading.md` 的 6.1 → 7.0 一节。<br>D5：`root-enabled` 默认 `false`；开启时只对平台租户生效，并且仍受黑名单约束。<br>D7：每条语句匹配动作前清空路径变量，条件只能读本语句动作捕获的变量；策略级 condition 或动作不是 `path` 的语句引用 `request.path.var.*` 时加载失败。<br>D3：角色授权的 key 加上 `appId`（`app:role@space`），并提供数据迁移；请求带 `CoSec-Space-Id` 时，只有 token 里显式写成 `role@space` 的角色在该空间生效，不带后缀的角色只在默认空间生效 | 新架构要分阶段落地，安全缺陷不应等待 |
+| **AOT 与 native image**（2026-10-21，维护者确认） | AOT 就绪是 8.0 的设计约束（3.10）：JDK 25 AOT cache 现在就用于部署；8.0 的库模块支持 Spring AOT，需要时自带 `RuntimeHintsRegistrar` 和测试；GraalVM native image 只作为 `cosec-gateway-server` 在 8.0 之后的可选构建，库不支持、也不默认。缺少 hint 必须导致加载失败和拒绝，不能跳过语句 | 授权在每个请求上执行，稳态 JIT 吞吐比启动时间重要；AOT cache 不改代码就能缩短启动；提前声明 hint 的成本低，事后补很难 |
 
 ### 7.2 仍待确认
 
