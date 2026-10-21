@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.snapshot
 
+import me.ahoo.cosec.snapshot.SnapshotSourceTest.Companion.await
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
@@ -100,7 +101,9 @@ class SnapshotSourceFailureTest {
             failure.assert().isInstanceOf(SnapshotUnavailableException::class.java)
             failure.cause.assert().isInstanceOf(IllegalArgumentException::class.java)
             source.peek()!!.version.assert().isEqualTo(SnapshotVersion(2, 0))
-            metrics.compiles.assert().containsExactly(SnapshotKind.POLICIES to false)
+            // The cold read may come from a local copy, so it is confirmed at once, and a document that failed to
+            // compile is always read in full and compiled again.
+            metrics.compiles.assert().containsOnly(SnapshotKind.POLICIES to false).hasSize(2)
         }
     }
 
@@ -205,7 +208,7 @@ class SnapshotSourceFailureTest {
         testSource(store, options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 1)).use { source ->
             source.load("app-a").join()
             source.load("app-b").join()
-            source.peek("app-a").assert().isNull()
+            await { source.peek("app-a") == null }
 
             store.remove(APP_A)
 

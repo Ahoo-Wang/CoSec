@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.snapshot
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Duration
 
 /**
@@ -61,4 +62,39 @@ enum class LoadOutcome {
 
     /** Not installed; the load did not finish within [SnapshotOptions.coldLoadTimeout]. */
     TIMEOUT,
+}
+
+/**
+ * Calls [delegate] and swallows what it throws: a failing meter must never fail a load, lose a reload or break
+ * single-flight.
+ */
+@Suppress("TooGenericExceptionCaught")
+internal class GuardedSnapshotMetrics(private val delegate: SnapshotMetrics) : SnapshotMetrics {
+    private inline fun guard(event: String, call: () -> Unit) {
+        try {
+            call()
+        } catch (error: Exception) {
+            log.warn { "SnapshotMetrics.$event failed: $error" }
+        }
+    }
+
+    override fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) = guard("onLoad") { delegate.onLoad(kind, outcome) }
+
+    override fun onCompile(kind: SnapshotKind, duration: Duration, succeeded: Boolean) =
+        guard("onCompile") { delegate.onCompile(kind, duration, succeeded) }
+
+    override fun onInstall(entry: SnapshotEntry<*>) = guard("onInstall") { delegate.onInstall(entry) }
+
+    override fun onRegression(key: SnapshotKey, installedRevision: Long, loadedRevision: Long) =
+        guard("onRegression") { delegate.onRegression(key, installedRevision, loadedRevision) }
+
+    override fun onDocumentLost(key: SnapshotKey, lastRevision: Long) =
+        guard("onDocumentLost") { delegate.onDocumentLost(key, lastRevision) }
+
+    override fun onLagExceeded(key: SnapshotKey, lag: Duration, escalated: Boolean) =
+        guard("onLagExceeded") { delegate.onLagExceeded(key, lag, escalated) }
+
+    private companion object {
+        private val log = KotlinLogging.logger {}
+    }
 }

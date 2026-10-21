@@ -89,11 +89,12 @@ class SnapshotRevalidationTest {
             store.put(APP_A, document(2, "a2"))
             store.put(APP_B, document(2, "b2"))
 
+            val conditionalReads = store.conditionalReads.get()
             store.reset()
 
             source.peek("app-a")!!.version.assert().isEqualTo(SnapshotVersion(2, 2))
             source.peek("app-b")!!.version.assert().isEqualTo(SnapshotVersion(2, 2))
-            store.conditionalReads.get().assert().isEqualTo(3)
+            store.conditionalReads.get().assert().isEqualTo(conditionalReads + 3)
         }
     }
 
@@ -151,6 +152,7 @@ class SnapshotRevalidationTest {
         testSource(store, options = options, metrics = metrics).use { source ->
             source.load("app-a").join()
             source.load("app-b").join()
+            await { source.peek("app-a") == null }
             store.put(APP_A, document(6, "a6"))
 
             source.load("app-a").join().appCompiled.revision.assert().isEqualTo(6)

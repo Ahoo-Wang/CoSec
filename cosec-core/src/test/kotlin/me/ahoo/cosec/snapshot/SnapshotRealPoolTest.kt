@@ -1,0 +1,92 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.snapshot
+
+import me.ahoo.cosec.snapshot.SnapshotSourceTest.Companion.await
+import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Test
+import java.time.Duration
+import java.util.concurrent.TimeUnit
+
+/**
+ * The main behaviours again, on the real compile pool and scheduler instead of the direct executor most tests use:
+ * installs happen on other threads, so every assertion waits for the state it expects instead of relying on order.
+ */
+class SnapshotRealPoolTest {
+    private val store = ControllableStore().apply {
+        put(SnapshotKey.Policies, document(1))
+        put(APP_A, document(1, "a1"))
+        put(APP_B, document(1, "b1"))
+    }
+
+    private fun SnapshotSource<Compiled, Compiled>.revisionOf(appId: String? = null): Long? {
+        val snapshot = peek(appId) ?: return null
+        val state = if (appId == null) snapshot.policies else snapshot.app
+        return (state as? DocumentState.Present)?.compiled?.revision
+    }
+
+    @Test
+    fun notificationsInstallNewRevisions() {
+        testSource(store, compileExecutor = null).use { source ->
+            source.load("app-a").get(10, TimeUnit.SECONDS)
+            store.put(SnapshotKey.Policies, document(2))
+            store.put(APP_A, document(2, "a2"))
+            await { source.revisionOf() == 2L && source.revisionOf("app-a") == 2L }
+        }
+    }
+
+    @Test
+    fun regressionIsInstalledAndReported() {
+        val metrics = RecordingMetrics()
+        store.put(SnapshotKey.Policies, document(5))
+        testSource(store, metrics = metrics, compileExecutor = null).use { source ->
+            source.load().get(10, TimeUnit.SECONDS)
+            store.put(SnapshotKey.Policies, document(3))
+            await { source.revisionOf() == 3L }
+            metrics.regressions.assert().containsExactly(Triple(SnapshotKey.Policies, 5L, 3L))
+        }
+    }
+
+    @Test
+    fun lostDocumentFailsClosed() {
+        testSource(store, compileExecutor = null).use { source ->
+            source.load("app-a").get(10, TimeUnit.SECONDS)
+            store.remove(APP_A)
+            await { source.peek("app-a")?.app is DocumentState.Failed }
+        }
+    }
+
+    @Test
+    fun evictionKeepsAtMostMaxApps() {
+        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 1)
+        testSource(store, options = options, compileExecutor = null).use { source ->
+            source.load("app-a").get(10, TimeUnit.SECONDS)
+            source.load("app-b").get(10, TimeUnit.SECONDS)
+            await { source.entries().count { it.key is SnapshotKey.App } == 1 }
+            source.load("app-a").get(10, TimeUnit.SECONDS).appCompiled.revision.assert().isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun resetReloadsEverything() {
+        testSource(store, compileExecutor = null).use { source ->
+            source.load("app-a").get(10, TimeUnit.SECONDS)
+            store.dropNotifications = true
+            store.put(SnapshotKey.Policies, document(2))
+            store.put(APP_A, document(2, "a2"))
+            store.reset()
+            await { source.revisionOf() == 2L && source.revisionOf("app-a") == 2L }
+        }
+    }
+}

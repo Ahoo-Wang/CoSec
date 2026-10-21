@@ -20,9 +20,15 @@ import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import java.time.Duration
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The cold path (RFC 0003 §4.3): timeouts (F7), a full compile queue (F8), cancellation (F14), and the threads it runs
@@ -52,19 +58,44 @@ class SnapshotColdLoadTest {
     }.subscribeOn(eventLoop).block(Duration.ofSeconds(10))!!
 
     @Test
-    fun hotPathAnswersOnTheCallerThreadWithoutTouchingTheStore() {
-        testSource(store, compileExecutor = null).use { source ->
+    fun hotPathRunsOnTheCallerThreadAndTouchesNoExecutorOrStore() {
+        val metricThreads = CopyOnWriteArrayList<Thread>()
+        val metrics = object : SnapshotMetrics {
+            override fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) {
+                if (outcome == LoadOutcome.HIT) metricThreads.add(Thread.currentThread())
+            }
+        }
+        val compilePool = Executors.newFixedThreadPool(1)
+        val compileTasks = AtomicInteger()
+        val countingCompile = Executor {
+            compileTasks.incrementAndGet()
+            compilePool.execute(it)
+        }
+        val scheduledTasks = AtomicInteger()
+        val scheduler = object : ScheduledThreadPoolExecutor(1) {
+            override fun schedule(command: Runnable, delay: Long, unit: TimeUnit): ScheduledFuture<*> {
+                scheduledTasks.incrementAndGet()
+                return super.schedule(command, delay, unit)
+            }
+        }
+        testSource(store, metrics = metrics, compileExecutor = countingCompile, scheduler = scheduler).use { source ->
             source.load("app-a").get(10, TimeUnit.SECONDS)
             val reads = store.reads.get()
             val conditionalReads = store.conditionalReads.get()
+            val compiles = compileTasks.get()
+            val scheduled = scheduledTasks.get()
 
-            val (thread, snapshot) = onEventLoop { Thread.currentThread() to source.peek("app-a")!! }
+            val (caller, snapshot) = onEventLoop { Thread.currentThread() to source.peek("app-a")!! }
 
-            Schedulers.isNonBlockingThread(thread).assert().isTrue()
             snapshot.appCompiled.entries.assert().containsExactly("a1")
+            metricThreads.assert().hasSize(2).allMatch { it === caller }
+            compileTasks.get().assert().isEqualTo(compiles)
+            scheduledTasks.get().assert().isEqualTo(scheduled)
             store.reads.get().assert().isEqualTo(reads)
             store.conditionalReads.get().assert().isEqualTo(conditionalReads)
         }
+        compilePool.shutdown()
+        scheduler.shutdown()
     }
 
     @Test
@@ -150,7 +181,10 @@ class SnapshotColdLoadTest {
             store.put(SnapshotKey.Policies, document(2))
             source.reload(SnapshotKey.Policies).get(10, TimeUnit.SECONDS).revision.assert().isEqualTo(1)
             source.peek()!!.policiesCompiled.revision.assert().isEqualTo(1)
+
+            // The rejected reload is retried on its own once the queue drains: no further notification is needed.
             gate.countDown()
+            await { (source.peek()!!.policies as? DocumentState.Present)?.compiled?.revision == 2L }
         }
     }
 

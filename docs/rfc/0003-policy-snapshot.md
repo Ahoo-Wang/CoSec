@@ -394,6 +394,9 @@ sequenceDiagram
   与现在 `toLocalFirstMono` 对未命中的处理相同。只有冷路径切换。
 - **请求侧的等待上限**：`cold-load-timeout` 默认 2 秒。超时后这个请求失败（500），加载在后台继续，下一个请求可能命中。CoCache 的
   `LoadPolicy.asyncTimeout` 默认 30 秒，对请求来说太长，只作为后台加载的上限。
+- **冷加载读哪一层**：本实例从未见过的 key 用 `read`（可以经 L2），装上之后立即补一次条件读，确认或替换它；本实例见过的 key（包括被 LRU
+  淘汰过的）冷加载直接用条件读（L1），所以一份更旧的 L2 副本不会替换本实例已经用过的修订，也不会触发虚假的回退告警。`confirmedAt` 取读取开始的时间。
+- **存储读取的上界**：存储返回的 future 超过 `store-read-timeout`（默认 30 秒）未完成即视为读取失败（F1/F6），这个 key 不会被一个永不完成的读取卡住。
 - **LRU**：`App` 文档按访问淘汰，默认最多 1024 个（Q19，用测量校准）。`Policies` 文档常驻，不被淘汰。被淘汰的文档下次是冷加载。
 - **预热**：启动时加载 `Policies` 和 `cosec.authorization.snapshot.prewarm-apps` 列出的应用。全部成功之前，starter 的 `cosecSnapshot`
   健康指标为 `OUT_OF_SERVICE` 并加入 readiness 组（Q15）。预热失败不阻止启动（与现在"启动时不读策略"一致），但实例保持不就绪，并按退避重试。
@@ -635,6 +638,11 @@ AGENTS.md 的每条不变量在本阶段如何成立，新的失败模式各由�
 | **Authorization is a pure decision** | 不变：快照是不可变数据，加载器是同步纯函数 | 审查；ArchUnit 规则不变 |
 | **策略/权限缓存 `ttl = null`、`ReadFailureMode.THROW`（及 `ForeignFormatMode.FAIL`）** | 适用对象从四个缓存换成 `PolicySnapshotCache`，仍在 customizer 和属性之后施加。另加一条：`SnapshotSource` 中的编译结果不按时间过期，只会被同一个 key 的更新安装替换，或被 LRU 淘汰；淘汰后的下一次读取是严格读，所以"过期丢策略"仍不可能 | `CacheTtlPolicyTest`、`StrictCacheFailureTest` 改为针对新缓存；`SnapshotNeverExpiresTest`（推进时钟远超 `localMaxAge`，Redis 不可用，已安装的文档仍在且 `lag` 增长） |
 | **Hot-path changes come with a JMH before/after** | §9 | `SimpleAuthorizationBenchmark`、新增的 `SnapshotAuthorizationBenchmark` |
+
+**关于 BlockHound**：PR-1 没有引入 BlockHound。理由：它要新增测试依赖，并且在 JDK 17+ 上需要 `-XX:+AllowRedefinitionToAddDeleteMethods`；而 PR-1 的
+存储是内存实现和测试替身，从不调用阻塞的 JDK 方法，BlockHound 在这里检测不到任何东西。"不阻塞事件循环"由结构性的测试守护：热路径测试在
+`NonBlocking` 线程上调用 `peek`，断言它的工作（含指标回调）都在调用线程上完成，且对存储、编译线程池和调度器零调用；冷未命中测试断言编译只在
+`cosec-snapshot-compile-*` 线程上发生。会真正阻塞的是 PR-3 的 Redis 存储，BlockHound（或 `RedisRateLimitingOffEventLoopTest` 式的线程断言）在那里引入。
 
 **新的失败模式**（编号接 §4.4）：
 
