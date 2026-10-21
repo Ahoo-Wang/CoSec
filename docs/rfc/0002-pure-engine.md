@@ -224,8 +224,8 @@ sealed interface Cause {
 
     /** D2：主体引用的策略仓库里没有。 */
     data class MissingPolicies(val policyIds: Set<String>, override val error: Throwable) : Cause
-    /** S10a（7.0）：角色授予了应用权限里不存在的权限 id。 */
-    data class MissingPermissions(val appId: String, val permissionIds: Set<String>, override val error: Throwable) : Cause
+    /** S10a（7.0）：角色授予了应用权限里不存在的权限 id；at 是拒绝扫描到达的那个授予位置，at.permissionId 即缺失的 id。 */
+    data class MissingPermissions(val at: StatementRef.RolePermission, override val error: Throwable) : Cause
     /** 某层的数据读取失败（Redis 超时、严格读失败等）。 */
     data class SourceUnavailable(val layer: LayerKind, override val error: Throwable) : Cause
     /** 匹配器抛出异常。`at` 为 null 表示出错的是组的前置条件（策略 / 应用条件），此时 `groupId` 标明是哪一组。 */
@@ -239,7 +239,8 @@ sealed interface Cause {
   测试直接比较字段。
 - `Subject.root` 与 `Environment.blocked` 是"预先判定的事实"。判定本身（`RootPrincipalMatcher`、`BlacklistChecker`）可能是
   用户代码，`BlacklistChecker` 还返回 `Mono`，都不能放进引擎；引擎只决定"这两个事实在决策中的位置"（§4.1 的前两步）。
-- `MissingPolicies` 也带 `error`：适配层预先构造好 `MissingPolicyException`，让"原样抛出"对所有原因一致。
+- `MissingPolicies` 也带 `error`：适配层预先构造好 `MissingPolicyException`，让"原样抛出"对所有原因一致。`MissingPermissions` 同理，
+  它的 `error` 来自 `UnresolvedGrant.error`（§3.2），即适配层预先构造的 `MissingPermissionException`。
 - RFC 0001 §3.2 里的 `TenantId`/`PrincipalId`/`PolicyId` 值类型推迟到第 4 阶段：本阶段这些值只在适配层与引擎之间传递，
   换成值类型不能带来安全收益，却会让适配代码到处装箱拆箱。
 
@@ -286,8 +287,8 @@ sealed interface LayerInput {
     data class Absent(override val kind: LayerKind, val reason: AbsentReason) : LayerInput
     /** 读取本层数据失败；评估到达本层时得到 Indeterminate(SourceUnavailable)。 */
     data class Unavailable(override val kind: LayerKind, val error: Throwable) : LayerInput
-    /** missing 非空时，评估到达本层即得到 Indeterminate(missing)，不评估任何组。missing 为 MissingPolicies 或 MissingPermissions。 */
-    class Loaded(override val kind: LayerKind, val groups: List<RuleGroup>, val missing: Cause? = null) : LayerInput
+    /** missing 非空时，评估到达本层即得到 Indeterminate(missing)，不评估任何组。只用于 D2；缺失的权限 id 是规则序列中的 UnresolvedGrant。 */
+    class Loaded(override val kind: LayerKind, val groups: List<RuleGroup>, val missing: Cause.MissingPolicies? = null) : LayerInput
 }
 
 enum class AbsentReason { NO_POLICIES, NO_ROLES, NO_ROLE_IN_SPACE, NO_APP_PERMISSION }
@@ -296,18 +297,21 @@ enum class AbsentReason { NO_POLICIES, NO_ROLES, NO_ROLE_IN_SPACE, NO_APP_PERMIS
 interface RuleGroup {
     val id: String                     // policyId 或 appId
     val guard: Guard                   // 策略条件 / 应用条件
-    /** 按源顺序访问规则，访问者返回 true 时停止，返回值表示是否被停止。不得为访问分配集合。 */
+    /** 按源顺序访问条目，访问者返回 true 时停止，返回值表示是否被停止。不得为访问分配集合。 */
     fun forEachRule(visitor: RuleVisitor): Boolean
 }
 
 fun interface RuleVisitor {
-    /** grantedVia：ROLE 层为授予这条权限的角色 id，其余层为 null。 */
-    fun visit(rule: Rule, grantedVia: String?): Boolean
+    /** grantedVia：ROLE 层为授予这一条目的角色 id，其余层为 null。 */
+    fun visit(entry: RuleEntry, grantedVia: String?): Boolean
 }
+
+/** 规则序列中的一个位置：一条 Rule，或者（只在 ROLE 层）一个 UnresolvedGrant。 */
+sealed interface RuleEntry
 
 interface Guard { fun matches(request: AuthzRequest): Boolean }
 
-interface Rule {
+interface Rule : RuleEntry {
     val effect: Effect
     val index: Int                     // 在所属策略（或角色授予列表）中的位置
     val name: String
@@ -316,10 +320,15 @@ interface Rule {
 }
 
 enum class RuleMatch { MATCHED, ACTION_MISS, CONDITION_MISS }
+
+/** S10a：角色授予了应用未定义的 permissionId。纯数据，没有行为；error 是适配层预先构造的 MissingPermissionException。 */
+class UnresolvedGrant(val permissionId: String, val error: Throwable) : RuleEntry
 ```
 
 - `Guard.matches` / `Rule.match` 抛出的 `Exception` 由引擎捕获，变成 `Indeterminate(MatcherFailed)`；`Error`（如
   `NotImplementedError`、`StackOverflowError`）不捕获，照常向外传播，由调用方的 Reactor 变成错误信号，最终仍是 500，与现在一致。
+- `UnresolvedGrant` 留在它在授予序列中的位置，语义见 §4.1 与 §4.2 S10a。它是数据错误而不是匹配器错误，所以得到
+  `MissingPermissions` 而不是 `MatcherFailed`，trace 里记为 `UNRESOLVED`，基于 trace 的解释（PR-5）因此能如实说明原因。
 - `forEachRule` 用访问者而不是 `List<Rule>`：ROLE 层的规则是"角色 × 授予的权限"，按列表物化就是每请求 O(授予数) 的分配，
   而现在的 `SimpleAuthorization.forEachPermission` 是零分配的（§7）。
 - 这些接口是 **CoSec 内部的适配契约**，KDoc 标明"第 4 阶段删除，不要在应用中实现"。用户扩展点仍是 `ActionMatcherFactory` /
@@ -347,16 +356,17 @@ class GroupTrace(val id: String, val guard: GuardOutcome, val guardError: Throwa
 
 enum class GuardOutcome { MATCHED, MISSED, ERROR }
 
+/** UnresolvedGrant 的 effect 为 null，outcome 为 UNRESOLVED 或 NOT_EVALUATED，ref.name 为空串。 */
 class RuleTrace(
     val ref: StatementRef,
-    val effect: Effect,
+    val effect: Effect?,
     val outcome: RuleOutcome,
     val error: Throwable? = null,
     /** OFF 下不会被评估、只为 trace 而评估的规则（本层已有结论之后的规则，或 EXHAUSTIVE 下决策之后的层）；结果和错误不影响决策。 */
     val afterDecision: Boolean = false,
 )
 
-enum class RuleOutcome { MATCHED, ACTION_MISS, CONDITION_MISS, NOT_EVALUATED, ERROR }
+enum class RuleOutcome { MATCHED, ACTION_MISS, CONDITION_MISS, NOT_EVALUATED, ERROR, UNRESOLVED }
 ```
 
 ### 3.3 从现有模型到引擎输入
@@ -369,7 +379,7 @@ enum class RuleOutcome { MATCHED, ACTION_MISS, CONDITION_MISS, NOT_EVALUATED, ER
 | `principal.roles` + `RoleScope.rolesIn` + `getAppRolePermission(appId, spaceId, roles)` | ROLE 层 | 角色为空 → `Absent(NO_ROLES)`；`rolesIn` 为空 → `Absent(NO_ROLE_IN_SPACE)`；空 `Mono` → `Absent(NO_APP_PERMISSION)`；错误 → `Unavailable`；否则 `Loaded`，一个 `AppPermissionGroup` |
 | `Policy` | `PolicyGroup : RuleGroup` | `id` = `policy.id`；`guard` = `policy.condition`；规则 = `policy.statements` 按下标 |
 | `Statement` / `Permission` | `StatementRule : Rule` | `match` 先 `action.match`，未命中返回 `ACTION_MISS`；再 `condition.match`，未命中返回 `CONDITION_MISS`；都命中返回 `MATCHED`。两者都在语句作用域上下文中执行（§6.2）。`Statement` 不是 `StatementData`/`PermissionData` 时改为调用它可能覆写的 `verify`（§4.4 X5） |
-| `AppRolePermission` | `AppPermissionGroup : RuleGroup` | `id` = `appPermission.id`；`guard` = `appPermission.condition`；`forEachRule` 与现在的 `SimpleAuthorization.forEachPermission` 完全相同：按 `rolePermissions` 顺序，`*` 授予 `permissionIndexer.values`，否则按授予的 id 查 `permissionIndexer`；`grantedVia` = 角色 id。授予了不存在的 id 时，按 7.0 修复的语义失败即拒绝（§4.2 S10a） |
+| `AppRolePermission` | `AppPermissionGroup : RuleGroup` | `id` = `appPermission.id`；`guard` = `appPermission.condition`；`forEachRule` 与现在的 `SimpleAuthorization.forEachPermission` 完全相同：按 `rolePermissions` 顺序，`*` 授予 `permissionIndexer.values`，否则按授予的 id 查 `permissionIndexer`；`grantedVia` = 角色 id。授予了不存在的 id 时，在该授予的位置访问一个 `UnresolvedGrant`（`error` 为 7.0 抛出的同一个 `MissingPermissionException`），按 7.0 的语义失败即拒绝（§4.2 S10a） |
 
 **适配对象的复用**：`PolicyData`、`AppPermissionData` 是 `cosec-core` 自己的类，CoCache 本地缓存命中时返回的是同一批实例。
 它们像现在缓存 `requiresBlocking` 一样，惰性缓存自己的 `StatementRule` 列表；`AppRolePermissionData` 每次读取都会重建
@@ -452,8 +462,12 @@ evaluateLayer(layer):
                 try   if g.guard.matches(req): matched += g
                 catch -> return Indeterminate(MatcherFailed(g))
             for effect in [DENY, ALLOW]:                        // S5：本层先 DENY 后 ALLOW
-                for g in matched, (rule, via) in g.rules where rule.effect == effect:
-                    try   if rule.match(req) == MATCHED: return effect == DENY ? Deny(ref) : Permit(ref)
+                for g in matched, (entry, via) in g.rules:
+                    if entry is UnresolvedGrant:                // S10a：只在 DENY 扫描中，按位置
+                        if effect == DENY: return Indeterminate(MissingPermissions(ref, entry.error))
+                        continue
+                    if entry.effect != effect: continue
+                    try   if entry.match(req) == MATCHED: return effect == DENY ? Deny(ref) : Permit(ref)
                     catch -> return Indeterminate(MatcherFailed(g, ref))
             return NoMatch
 ```
@@ -479,7 +493,7 @@ trace 只是在同一个循环里加记录（§5.1）：`OFF` 时不记录、不
 | S8 | D2：主体策略在 `getPolicies` 的结果中缺失 → `MissingPolicyException`，在本层任何条件评估之前；只有评估到达主体层时才会发生（全局层显式拒绝时不会）；`getPolicies` 返回空 `Mono` 视为全部缺失 | 缺失在适配时算出，放进 `Loaded.missing`；引擎**到达本层时**才返回 `Indeterminate(MissingPolicies)`，在评估组之前；适配层抛出同一个 `MissingPolicyException` | 一致 |
 | S9 | `principal.policies` 为空 → 主体层为空 `Mono`，不读仓库 | `Absent(NO_POLICIES)`，不读仓库 | 一致 |
 | S10 | D3：`RoleScope.rolesIn(request.spaceId, principal.roles)`；角色为空或作用域后为空 → 本层为空，不读仓库；仓库按 `(request.appId, spaceId, 去掉后缀的角色)` 查找，空 `Mono`（应用没有应用权限）→ 本层为空 | 适配层调用同一个 `RoleScope.rolesIn` 和同一个仓库方法，产生 `Absent(NO_ROLES / NO_ROLE_IN_SPACE / NO_APP_PERMISSION)` 或 `Loaded` | 一致（`RoleScope` 代码不动） |
-| S10a | 7.0 发布前的修复（与 D2 同一语义）：角色授予了应用权限中不存在的权限 id 时，不再静默跳过，而是失败即拒绝（500） | 适配层按 7.0 实现的**同一个检查点**复现：7.0 若在读取或构造 `AppRolePermission` 时检查，异常经仓库发出，成为 `Unavailable(ROLE)`；若在评估角色层之前检查，则放进 `Loaded.missing = MissingPermissions(...)`，引擎到达本层时返回 `Indeterminate`。两种情况下适配层都原样抛出 7.0 的那个异常 | 一致。PR-3 以合入 `main` 的修复为准实现，并把该修复的测试加入 §8.2 的参数化语料 |
+| S10a | 7.0 发布前的修复（与 D2 同一语义，失败即拒绝）：`verifyAppRolePermission` 在应用条件命中之后、拒绝扫描**到达**某个授予时，若它的权限 id 在应用权限中不存在，抛出 `MissingPermissionException`（500）。因此：应用条件不命中时本层无结果，不抛错；按授予顺序在它之前已有 DENY 命中时，那条 DENY 决定（403）；ALLOW 扫描在它之后不会发生（它之前的 ALLOW 授予在拒绝扫描中不被评估）；`*` 授予不会缺失 | 适配层在缺失授予的位置放一个 `UnresolvedGrant`（纯数据，`error` 为 7.0 的同一个异常）。引擎在应用条件命中的组里，拒绝扫描到达它且本层尚无结果时返回 `Indeterminate(MissingPermissions(ref, error))`，适配层原样抛出；ALLOW 扫描跳过它。`Loaded.missing` 只用于 D2。trace 在该位置记为 `UNRESOLVED` | 一致：异常类、状态码和决定位置都与 7.0 相同。本节原稿的两种检查点（读取时成为 `Unavailable`，或评估前放进 `Loaded.missing`）都与 7.0 不符：它们会把"应用条件不命中"和"之前已有 DENY 命中"两种情形变成 500，已于 PR-2 更正 |
 | S11 | D7：`verifyPolicies` 在全部策略条件之前清空一次路径变量；每条语句经 `Statement.verifyScoped` 在匹配动作前清空（`path` 动作除外：它要么不命中、条件不执行，要么命中后覆盖）；`ReplaceablePathActionMatcher` 在求值模板前自己清空；角色层在应用条件前清空 | 每个 `Guard.matches` 和每个 `Rule.match` 开始时，适配层把语句作用域上下文的路径变量**重置为空**（一次字段赋值，§6.2）；`ReplaceablePathActionMatcher` 的自清空保留 | 一致：对 `path` 动作，"不清空 + 命中必覆盖"与"先清空"效果相同；对策略 / 应用条件，"每个条件前清空"与"全部条件前清空一次"只在一个条件**写入**路径变量、另一个条件读取时才有区别，而读取路径变量的条件在加载时就被 `PathVariableScope.requireScoped` 拒绝（例外见 X4） |
 | S12 | `inRole`：`InRoleConditionMatcher` 先按字面比较 principal 的角色；值不带 `@` 时，再用 `RoleScope.roleIdIn(request.spaceId, role)` 比较带后缀的角色 | 匹配器原样调用，`principal` 与 `request` 都是原对象 | 一致，包括第二轮审查记录的 M1/M2 两个已知行为（§10 Q12） |
 | S13 | `BlockingAware`：某一层的策略或应用权限含阻塞匹配器时，**该层**在 `Schedulers.boundedElastic` 上评估，其余层原地评估 | 任一层含阻塞匹配器时，**整次** `engine.evaluate` 在 `boundedElastic` 上执行一次 | 决策一致；线程不同（X2） |
