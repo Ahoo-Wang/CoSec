@@ -19,6 +19,8 @@ import me.ahoo.cosec.authorization.PolicyVerifySource
 import me.ahoo.cosec.authorization.RoleVerifyContext
 import me.ahoo.cosec.authorization.RootVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext
+import me.ahoo.cosec.model.LayerKind
+import me.ahoo.cosec.model.StatementRef
 
 /**
  * The rule this verification result points at; null when nothing matched.
@@ -44,4 +46,25 @@ fun VerifyContext.toDecisionRef(): DecisionRef? = when (this) {
     RootVerifyContext -> DecisionRef(ExplainLayer.ROOT)
     BlacklistVerifyContext -> DecisionRef(ExplainLayer.BLACKLIST)
     else -> null
+}
+
+/**
+ * The rule an engine decision or trace names, as [VerifyContext.toDecisionRef] names the verify context it maps to.
+ */
+internal fun StatementRef.toDecisionRef(): DecisionRef = when (this) {
+    StatementRef.Blacklist -> DecisionRef(ExplainLayer.BLACKLIST)
+    StatementRef.Root -> DecisionRef(ExplainLayer.ROOT)
+    is StatementRef.PolicyStatement -> DecisionRef(layer.toExplainLayer(), policyId, index, name)
+    is StatementRef.RolePermission -> DecisionRef(
+        layer = ExplainLayer.ROLE_PERMISSION,
+        statementName = name,
+        roleId = roleId,
+        permissionId = permissionId,
+    )
+}
+
+internal fun LayerKind.toExplainLayer(): ExplainLayer = when (this) {
+    LayerKind.GLOBAL -> ExplainLayer.GLOBAL_POLICY
+    LayerKind.PRINCIPAL -> ExplainLayer.PRINCIPAL_POLICY
+    LayerKind.ROLE -> ExplainLayer.ROLE_PERMISSION
 }

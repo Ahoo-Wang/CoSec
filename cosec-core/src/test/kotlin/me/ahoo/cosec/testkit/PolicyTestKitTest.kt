@@ -18,14 +18,36 @@ import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.explain.ExplainPrincipal
 import me.ahoo.cosec.explain.ExplainRequest
+import me.ahoo.cosec.explain.ExplainerImpl
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 
-class PolicyTestKitTest {
+@ParameterizedClass
+@EnumSource(ExplainerImpl::class)
+class PolicyTestKitTest(private val impl: ExplainerImpl) {
+    // The narration goes through the public entry points, exactly as before the trace-based explanation existed.
+    private fun run(vararg locations: String): PolicyTestReport = when (impl) {
+        ExplainerImpl.NARRATION -> PolicyTestKit.run(*locations)
+        ExplainerImpl.TRACE -> PolicyTestKit.run(locations.toList(), RootPrincipalMatcher.NONE, explainFromTrace = true)
+    }
+
+    private fun run(
+        suite: PolicyTestSuite,
+        rootPrincipalMatcher: RootPrincipalMatcher? = null
+    ): List<PolicyTestResult> = when {
+        impl == ExplainerImpl.TRACE ->
+            PolicyTestKit.run(suite, rootPrincipalMatcher ?: RootPrincipalMatcher.NONE, explainFromTrace = true)
+
+        rootPrincipalMatcher == null -> PolicyTestKit.run(suite)
+        else -> PolicyTestKit.run(suite, rootPrincipalMatcher)
+    }
+
     @Test
     fun passingSuite() {
-        val report = PolicyTestKit.run("classpath:cosec-policy-test/orders-policy-test.json")
+        val report = run("classpath:cosec-policy-test/orders-policy-test.json")
         report.results.size.assert().isEqualTo(4)
         report.failures.assert().isEmpty()
         report.assertPasses()
@@ -33,7 +55,7 @@ class PolicyTestKitTest {
 
     @Test
     fun roleGrantsAreScopedToTheirAppAndSpace() {
-        val report = PolicyTestKit.run("classpath:cosec-policy-test/spaces/*-policy-test.json")
+        val report = run("classpath:cosec-policy-test/spaces/*-policy-test.json")
         report.results.size.assert().isEqualTo(5)
         report.assertPasses()
     }
@@ -41,10 +63,10 @@ class PolicyTestKitTest {
     @Test
     fun malformedRolesAndUnknownAppsFail() {
         assertThrows(IllegalArgumentException::class.java) {
-            PolicyTestKit.run(PolicyTestSuite(name = "bad", roles = mapOf("admin@a@b" to setOf("*"))))
+            run(PolicyTestSuite(name = "bad", roles = mapOf("admin@a@b" to setOf("*"))))
         }.message.assert().contains("admin@a@b")
         assertThrows(IllegalArgumentException::class.java) {
-            PolicyTestKit.run(
+            run(
                 PolicyTestSuite(
                     appPermissions = listOf("classpath:cosec-policy/test-app-permission.json"),
                     appRoles = mapOf("manage" to mapOf("@team-a" to setOf("*"))),
@@ -52,7 +74,7 @@ class PolicyTestKitTest {
             )
         }.message.assert().contains("@team-a")
         assertThrows(IllegalArgumentException::class.java) {
-            PolicyTestKit.run(PolicyTestSuite(appRoles = mapOf("unknown" to mapOf("admin" to setOf("*")))))
+            run(PolicyTestSuite(appRoles = mapOf("unknown" to mapOf("admin" to setOf("*")))))
         }.message.assert().contains("[unknown]")
     }
 
@@ -63,7 +85,7 @@ class PolicyTestKitTest {
             "classpath:cosec-policy-test/spaces/billing-app-permission.json",
         )
         assertThrows(IllegalArgumentException::class.java) {
-            PolicyTestKit.run(
+            run(
                 PolicyTestSuite(
                     name = "typo",
                     appPermissions = appPermissions,
@@ -73,7 +95,7 @@ class PolicyTestKitTest {
         }.message.assert().contains("[typo]", "[shipper@team-a]", "[manage.order.typo]", "[manage]")
         // A grant in every app must be defined by every app.
         assertThrows(IllegalArgumentException::class.java) {
-            PolicyTestKit.run(
+            run(
                 PolicyTestSuite(
                     appPermissions = appPermissions,
                     roles = mapOf("shipper" to setOf("manage.order.ship"))
@@ -82,12 +104,12 @@ class PolicyTestKitTest {
         }.message.assert().contains("[manage.order.ship]", "[billing]")
         // `*` still grants every permission of each app.
         val wildcard = PolicyTestSuite(appPermissions = appPermissions, roles = mapOf("admin" to setOf("*", "typo")))
-        PolicyTestKit.run(wildcard).assert().isEmpty()
+        run(wildcard).assert().isEmpty()
     }
 
     @Test
     fun failingSuiteExplainsWhatDecided() {
-        val report = PolicyTestKit.run("classpath:cosec-policy-test/failing/*.json")
+        val report = run("classpath:cosec-policy-test/failing/*.json")
         val failure = report.failures.single()
         failure.case.assert().isEqualTo("expects a deny that does not exist")
         failure.message.assert()
@@ -113,21 +135,21 @@ class PolicyTestKitTest {
                 ),
             ),
         )
-        PolicyTestKit.run(suite).single().passed.assert().isTrue()
-        PolicyTestKit.run(suite, RootPrincipalMatcher.DEFAULT).single().explanation.authorized.assert().isTrue()
+        run(suite).single().passed.assert().isTrue()
+        run(suite, RootPrincipalMatcher.DEFAULT).single().explanation.authorized.assert().isTrue()
     }
 
     @Test
     fun missingLocationsFail() {
-        assertThrows(IllegalStateException::class.java) { PolicyTestKit.run("classpath:not-exists/*.json") }
+        assertThrows(IllegalStateException::class.java) { run("classpath:not-exists/*.json") }
         assertThrows(IllegalStateException::class.java) {
-            PolicyTestKit.run(PolicyTestSuite(policies = listOf("classpath:not-exists/x.json")))
+            run(PolicyTestSuite(policies = listOf("classpath:not-exists/x.json")))
         }
     }
 
     @Test
     fun errorsAndMissingRules() {
-        val failures = PolicyTestKit.run("classpath:cosec-policy-test/broken/*.json").failures
+        val failures = run("classpath:cosec-policy-test/broken/*.json").failures
         failures.single { it.case == "a matcher error" }.message.assert()
             .contains("authorization failed with an error")
             .contains("Matching policy [broken] statement [0] failed")

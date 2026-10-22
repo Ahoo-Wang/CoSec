@@ -39,10 +39,14 @@ import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import reactor.core.publisher.Mono
 
-internal class CoSecExplainAutoConfigurationTest {
+@ParameterizedClass
+@EnumSource(ExplainerImpl::class)
+internal class CoSecExplainAutoConfigurationTest(private val impl: ExplainerImpl) {
     private val policyRepository = object : PolicyRepository {
         private val policy = PolicyData(
             id = "orders",
@@ -84,6 +88,9 @@ internal class CoSecExplainAutoConfigurationTest {
             CoSecRateLimitAutoConfiguration::class.java,
             CoSecRequestParserAutoConfiguration::class.java,
             CoSecAuthorizationAutoConfiguration::class.java,
+            *listOfNotNull(
+                TraceExplainerConfiguration::class.java.takeIf { impl == ExplainerImpl.TRACE }
+            ).toTypedArray(),
             CoSecExplainAutoConfiguration::class.java,
         )
 
@@ -95,6 +102,16 @@ internal class CoSecExplainAutoConfigurationTest {
                 .doesNotHaveBean(AuthorizationExplainer::class.java)
                 .doesNotHaveBean(CoSecExplainEndpoint::class.java)
         }
+    }
+
+    @Test
+    fun explainsWithTheExplainerUnderTest() {
+        contextRunner
+            .withPropertyValues("cosec.explain.enabled=true")
+            .run { context ->
+                val expected = if (impl == ExplainerImpl.TRACE) "traceAuthorizationExplainer" else "authorizationExplainer"
+                context.getBeanNamesForType(AuthorizationExplainer::class.java).assert().containsExactly(expected)
+            }
     }
 
     @Test
