@@ -65,9 +65,13 @@ class StoreOfRecordOverrideTest {
             .build()
     }
 
-    private val weakeningProperties = (
-        CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES + CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
-        ).flatMap { name ->
+    /**
+     * The store-of-record caches the starter creates. The snapshot cache is not wired before RFC 0003 PR-5, and
+     * CoCache refuses properties for caches nobody declares; StrictCacheFailureTest assembles it.
+     */
+    private val wired = CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES - CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME
+
+    private val weakeningProperties = (wired + CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME).flatMap { name ->
         listOf(
             "cocache.caches.$name.ttl=60s",
             "cocache.caches.$name.read-failure=degrade",
@@ -118,8 +122,8 @@ class StoreOfRecordOverrideTest {
         contextRunner.run { context ->
             assertThat(context).hasNotFailed()
             val runtime = context.getBean(CacheRuntime::class.java)
-            runtime.cacheNames.assert().containsAll(CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES)
-            CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES.forEach { assertStoreOfRecord(runtime.createdPolicy(it)) }
+            runtime.cacheNames.assert().containsAll(wired)
+            wired.forEach { assertStoreOfRecord(runtime.createdPolicy(it)) }
             // revoked tokens keep their expiry and degraded reads, but never reclaim a revocation
             val revokedToken = runtime.createdPolicy(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME)
             revokedToken.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)

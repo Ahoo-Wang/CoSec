@@ -415,21 +415,46 @@ object PolicySetParity {
     }
 
     /** What [SnapshotPolicySetLoader] builds over the snapshot of [data] for [request]. */
-    fun ofSnapshot(data: LegacyData, request: Request, context: SecurityContext): List<Any?> {
+    fun ofSnapshot(data: LegacyData, request: Request, context: SecurityContext): List<Any?> =
+        ofSnapshot(request, context) { key ->
+            when (key) {
+                SnapshotKey.Policies -> data.policiesFailure?.let { Result.failure(it) }
+                    ?: Result.success(data.policiesDocument())
+
+                is SnapshotKey.App -> data.appFailures[key.appId]?.let { Result.failure(it) }
+                    ?: Result.success(data.appDocument(key.appId))
+            }
+        }
+
+    /**
+     * The snapshot side over documents from anywhere, such as a real store: [document] answers the document stored
+     * under a key (null when none is), or the failure reading it.
+     */
+    fun ofSnapshot(
+        request: Request,
+        context: SecurityContext,
+        document: (SnapshotKey) -> Result<SnapshotDocument?>,
+    ): List<Any?> {
         val facts = LegacyFacts.authzRequest(request, context).host as LegacyFacts
         val reads = LayerReads.of(facts)
-        val policies = data.policiesFailure?.let { DocumentState.Failed(it) }
-            ?: data.policiesDocument()?.let { compiled { compiler.policies.compile(SnapshotKey.Policies, it) } }
-            ?: DocumentState.Absent
+        val policies = stateOf(SnapshotKey.Policies, document(SnapshotKey.Policies)) { key, stored ->
+            compiler.policies.compile(key, stored)
+        }
         val app = reads.appDocument?.let { appId ->
             val key = SnapshotKey.App(appId)
-            val state = data.appFailures[appId]?.let { DocumentState.Failed(it) }
-                ?: data.appDocument(appId)?.let { compiled { compiler.app.compile(key, it) } }
-                ?: DocumentState.Absent
-            entry(key, state)
+            entry(key, stateOf(key, document(key)) { appKey, stored -> compiler.app.compile(appKey, stored) })
         }
         return describe(SnapshotPolicySetLoader.load(reads, Snapshot(entry(SnapshotKey.Policies, policies), app)))
     }
+
+    private fun <T : Any> stateOf(
+        key: SnapshotKey,
+        read: Result<SnapshotDocument?>,
+        compile: (SnapshotKey, SnapshotDocument) -> T,
+    ): DocumentState<T> = read.fold(
+        onSuccess = { document -> document?.let { compiled { compile(key, it) } } ?: DocumentState.Absent },
+        onFailure = { DocumentState.Failed(it) },
+    )
 
     @Suppress("TooGenericExceptionCaught")
     private fun <T : Any> compiled(compile: () -> T): DocumentState<T> = try {

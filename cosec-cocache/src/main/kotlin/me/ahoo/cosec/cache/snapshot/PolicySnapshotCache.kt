@@ -1,0 +1,89 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.cache.snapshot
+
+import me.ahoo.cocache.api.Cache
+import me.ahoo.cocache.api.spi.InvalidationChannel
+import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.CacheSpec
+import me.ahoo.cocache.core.KeyEncoder
+import me.ahoo.cosec.snapshot.SnapshotDocument
+import me.ahoo.cosec.snapshot.SnapshotKey
+import java.time.Duration
+
+/**
+ * The CoCache cache of snapshot documents (RFC 0003 §4.1): one Redis key per document,
+ * `<keyPrefix>:snapshot:policies` and `<keyPrefix>:snapshot:app:<appId>`.
+ *
+ * It is the engine [CacheRuntime.create] returns, not an interface proxy (RFC 0003 §10): native images need no proxy
+ * hint for it. Besides the cache, it carries what [RedisSnapshotDocumentStore] needs to subscribe to the namespace's
+ * invalidations and to bound the age of a local copy.
+ */
+class PolicySnapshotCache internal constructor(
+    delegate: Cache<SnapshotKey, SnapshotDocument>,
+    /** The CoCache namespace, which also names the invalidation channel. */
+    val namespace: String,
+    /** The oldest a local (L2) copy can be: CoCache's `localMaxAge`, or its degraded counterpart if longer. */
+    val localCopyMaxAge: Duration,
+    internal val channel: InvalidationChannel,
+) : Cache<SnapshotKey, SnapshotDocument> by delegate {
+    /** The storage key of [key], as CoCache's invalidations name it. */
+    internal fun storageKey(key: SnapshotKey): String = "$namespace:${SnapshotKeyEncoder.encode(key)}"
+
+    /** The snapshot key a storage key of this namespace names, or null for any other key. */
+    internal fun snapshotKeyOf(storageKey: String): SnapshotKey? {
+        val prefix = "$namespace:"
+        if (!storageKey.startsWith(prefix)) {
+            return null
+        }
+        return SnapshotKeyEncoder.decode(storageKey.substring(prefix.length))
+    }
+
+    override fun toString(): String = "PolicySnapshotCache(namespace='$namespace')"
+}
+
+/**
+ * Explicit key encoding (RFC 0003 §10): `policies` and `app:<appId>`. `KeyEncoder.ofToString()` would need a reflection
+ * hint, and would tie the Redis layout to [SnapshotKey.toString].
+ */
+object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
+    const val POLICIES = "policies"
+    const val APP_PREFIX = "app:"
+
+    override fun encode(key: SnapshotKey): String = when (key) {
+        SnapshotKey.Policies -> POLICIES
+        is SnapshotKey.App -> APP_PREFIX + key.appId
+    }
+
+    /** The key [encoded] names, or null when it names none, such as an invalid app id. */
+    fun decode(encoded: String): SnapshotKey? = when {
+        encoded == POLICIES -> SnapshotKey.Policies
+        encoded.startsWith(APP_PREFIX) -> encoded.substring(APP_PREFIX.length)
+            .takeIf { SnapshotKey.App.isValidAppId(it) }
+            ?.let { SnapshotKey.App(it) }
+
+        else -> null
+    }
+}
+
+/** Creates the cache declared by [spec], which [me.ahoo.cosec.cache.CoSecCacheSpecs.policySnapshot] builds. */
+fun CacheRuntime.createPolicySnapshotCache(spec: CacheSpec<SnapshotKey, SnapshotDocument>): PolicySnapshotCache {
+    require(spec.keyPrefix.isEmpty()) { "The snapshot cache keeps its keys under its namespace only." }
+    return PolicySnapshotCache(
+        create(spec),
+        spec.namespace,
+        maxOf(spec.policy.localMaxAge, spec.policy.degradedLocalMaxAge),
+        backend.channel,
+    )
+}

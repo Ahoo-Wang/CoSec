@@ -32,6 +32,7 @@ dependencies {
         api(libs.hamcrest)
         api(libs.mockk)
         api(libs.archunit.junit5)
+        api(libs.blockhound)
         api(libs.detekt.formatting)
     }
 }

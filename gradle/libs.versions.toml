@@ -3,7 +3,7 @@
 spring-boot = "4.1.1"
 spring-cloud = "2025.1.3"
 cosid = "4.0.2"
-cocache = "6.6.0"
+cocache = "6.7.0"
 opentelemetry = "2.32.0"
 testcontainers = "2.0.5"
 guava = "33.7.2-jre"
@@ -21,6 +21,7 @@ hamcrest = "3.0"
 mockk = "1.14.11"
 jmh = "1.37"
 archunit = "1.5.1"
+blockhound = "1.0.17.RELEASE"
 # plugins
 detekt = "1.23.8"
 dokka = "2.2.0"
@@ -50,6 +51,7 @@ detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", 
 jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
 jmh-generator-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+blockhound = { module = "io.projectreactor.tools:blockhound", version.ref = "blockhound" }
 [plugins]
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }

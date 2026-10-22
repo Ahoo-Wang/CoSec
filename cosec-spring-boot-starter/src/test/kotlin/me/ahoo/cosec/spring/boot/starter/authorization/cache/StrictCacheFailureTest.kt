@@ -16,9 +16,14 @@ package me.ahoo.cosec.spring.boot.starter.authorization.cache
 import me.ahoo.cocache.api.CacheReadException
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.CacheSpec
+import me.ahoo.cocache.core.SetCacheSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
+import me.ahoo.cocache.core.policy.ForeignFormatMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
+import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
+import me.ahoo.cocache.spring.boot.CoCacheProperties
 import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.Effect
@@ -34,6 +39,10 @@ import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.cache.RolePermissionCache
 import me.ahoo.cosec.cache.createCache
 import me.ahoo.cosec.cache.createGlobalPolicyIndex
+import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
+import me.ahoo.cosec.cache.snapshot.RedisSnapshotPublisher
+import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
@@ -45,6 +54,7 @@ import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.starter.AuthorizationImpl
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
@@ -56,6 +66,8 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import java.time.Duration
+import java.util.concurrent.ExecutionException
 
 /**
  * Policy and permission caches fail closed when Redis is unavailable, whatever the CoCache properties say.
@@ -103,6 +115,62 @@ class StrictCacheFailureTest {
                 assertThrows<CacheReadException> { rolePermissionCache[AppSpacedRoleId("app", "role")] }
                 // the revocation check degrades on purpose (documented): a miss means "not revoked"
                 context.getBean(RevokedTokenCache::class.java)["jti"].assert().isNull()
+            }
+    }
+
+    /**
+     * The snapshot cache (RFC 0003 PR-3, not wired before PR-5) assembled as the starter assembles CoSec's caches:
+     * neither `cocache.defaults.*` nor a customizer can make it expire, degrade a failed read or reclaim content it
+     * cannot read. (CoCache refuses `cocache.caches.*` for a cache nobody declares, so those wait for PR-5.)
+     */
+    @Test
+    fun snapshotCacheRethrowsRemoteFailuresDespiteDegradeDefaults() {
+        val backend = HookedBackend(InMemoryBackend())
+        val name = CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME
+        val weakening = object : CacheSpecCustomizer {
+            override fun customize(spec: CacheSpec.Builder<*, *>) {
+                spec.policy(
+                    spec.policy.toBuilder()
+                        .ttl(Duration.ofMinutes(1))
+                        .readFailure(ReadFailureMode.DEGRADE)
+                        .foreignFormat(ForeignFormatMode.RECLAIM)
+                        .build()
+                )
+            }
+
+            override fun customize(spec: SetCacheSpec.Builder<*, *>) = Unit
+        }
+        ApplicationContextRunner()
+            .withPropertyValues(
+                "cocache.backend=memory",
+                "cocache.defaults.read-failure=degrade",
+                "cocache.defaults.ttl=60s",
+                "cocache.defaults.foreign-format=reclaim",
+            )
+            .withBean(CoherenceBackend::class.java, { backend })
+            .withUserConfiguration(JacksonAutoConfiguration::class.java, CoCacheAutoConfiguration::class.java)
+            .run { context ->
+                assertThat(context).hasNotFailed()
+                val runtime = context.getBean(CacheRuntime::class.java)
+                val properties = context.getBean(CoCacheProperties::class.java)
+                val spec = CoSecCacheAssembler(runtime, listOf(weakening), properties)
+                    .assemble(CoSecCacheSpecs.policySnapshot())
+                spec.policy.ttl.assert().isNull()
+                spec.policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+                spec.policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
+                val cache = runtime.createPolicySnapshotCache(spec)
+                val store = RedisSnapshotDocumentStore(cache)
+                RedisSnapshotPublisher(cache, store)
+                    .setPolicy(PolicyData("p", "c", "n", "", PolicyType.GLOBAL, "t"))
+                    .block()
+                // never expires in Redis
+                checkNotNull(runtime.admin(name)).inspect(SnapshotKeyEncoder.POLICIES).remote.ttl.assert().isNull()
+
+                backend.failAll = true
+                assertThrows<ExecutionException> { store.read(SnapshotKey.Policies).get() }
+                    .cause.assert().isInstanceOf(CacheReadException::class.java)
+                assertThrows<ExecutionException> { store.readIfChanged(SnapshotKey.Policies, null).get() }
+                    .cause.assert().isInstanceOf(CacheReadException::class.java)
             }
     }
 

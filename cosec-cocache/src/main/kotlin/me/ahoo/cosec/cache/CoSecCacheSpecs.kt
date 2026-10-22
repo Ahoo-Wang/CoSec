@@ -30,6 +30,10 @@ import me.ahoo.cosec.api.context.request.AppId
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.policy.Policy
+import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
+import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.snapshot.SnapshotDocument
+import me.ahoo.cosec.snapshot.SnapshotKey
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
 import java.time.Duration
@@ -39,7 +43,7 @@ import java.time.Duration
  *
  * CoCache stores an entry under `{keyPrefix}{namespace}:{key}`; each cache sets an empty `keyPrefix` and a namespace
  * of [cacheNamespace] (`cosec:policy`, `cosec:global`, `cosec:app:permission`, `cosec:app:role:permission`,
- * `cosec:token:revoked`). Policies, the global policy index, app permissions and revoked tokens keep the keys of
+ * `cosec:token:revoked`, `cosec:snapshot`). Policies, the global policy index, app permissions and revoked tokens keep the keys of
  * CoSec 6.x, unless the key prefix ends with `:`, which 6.x did not trim; role grants moved to the app-scoped
  * `cosec:app:role:permission` in 7.0. The values are CoCache 6's binary format, so data written by CoSec 6.x
  * (CoCache 5) must be migrated before 7.0 reads it: see [CoSecCoCache5Migration], [RolePermissionKeyMigration] and
@@ -56,6 +60,15 @@ object CoSecCacheSpecs {
     const val ROLE_PERMISSION_CACHE_NAME = "RolePermissionCache"
     const val REVOKED_TOKEN_CACHE_NAME = "RevokedTokenCache"
 
+    /** The snapshot documents of RFC 0003 (§4.1); nothing reads them before RFC 0003 PR-5 wires them. */
+    const val POLICY_SNAPSHOT_CACHE_NAME = "PolicySnapshotCache"
+
+    /**
+     * How long a local copy of a snapshot document lives (RFC 0003 §4.5, Q7). The copy serves cold loads and writers
+     * only: installed snapshots are confirmed against Redis with conditional reads, so this does not bound their lag.
+     */
+    val DEFAULT_SNAPSHOT_LOCAL_MAX_AGE: Duration = Duration.ofSeconds(30)
+
     /** Encoded key of the single global policy index entry, whatever key the caller passes. */
     const val GLOBAL_POLICY_INDEX_ENCODED_KEY = "policy"
 
@@ -65,6 +78,7 @@ object CoSecCacheSpecs {
         GLOBAL_POLICY_INDEX_CACHE_NAME,
         APP_PERMISSION_CACHE_NAME,
         ROLE_PERMISSION_CACHE_NAME,
+        POLICY_SNAPSHOT_CACHE_NAME,
     )
 
     private val NAMESPACES: Map<String, String> = mapOf(
@@ -73,6 +87,7 @@ object CoSecCacheSpecs {
         APP_PERMISSION_CACHE_NAME to "app:permission",
         ROLE_PERMISSION_CACHE_NAME to "app:role:permission",
         REVOKED_TOKEN_CACHE_NAME to "token:revoked",
+        POLICY_SNAPSHOT_CACHE_NAME to "snapshot",
     )
 
     /** The CoCache namespace of [cacheName]: `{keyPrefix}:policy` and so on. */
@@ -156,6 +171,29 @@ object CoSecCacheSpecs {
             .storageLayout(keyPrefix)
             .codec(codec)
             .policy(policy.storeOfRecord())
+            .build()
+
+    /**
+     * The snapshot documents (RFC 0003 §4.1): [storeOfRecord] like every policy cache, keys encoded explicitly
+     * ([SnapshotKeyEncoder]), values by [SnapshotDocumentCodec]. Create it with
+     * [me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache], never through an interface proxy (RFC 0003 §10).
+     *
+     * Redis must not evict these keys: run it with `maxmemory-policy noeviction`. Under an `allkeys-*` policy a
+     * document can vanish. An instance that had read it fails closed (RFC 0003 §4.4 F2a), but an instance that starts
+     * afterwards reads it as absent (F2): without the policies document there are no global policies, so a global DENY
+     * no longer applies.
+     */
+    fun policySnapshot(
+        keyPrefix: String = CoSec.COSEC,
+        policy: CachePolicy = CachePolicy.DEFAULT,
+        localMaxAge: Duration = DEFAULT_SNAPSHOT_LOCAL_MAX_AGE,
+    ): CacheSpec<SnapshotKey, SnapshotDocument> =
+        CacheSpec.builder<SnapshotKey, SnapshotDocument>(POLICY_SNAPSHOT_CACHE_NAME)
+            .namespace(cacheNamespace(keyPrefix, POLICY_SNAPSHOT_CACHE_NAME))
+            .keyPrefix("")
+            .keyEncoder(SnapshotKeyEncoder)
+            .codec(SnapshotDocumentCodec)
+            .policy(policy.toBuilder().localMaxAge(localMaxAge).build().storeOfRecord())
             .build()
 
     /**
