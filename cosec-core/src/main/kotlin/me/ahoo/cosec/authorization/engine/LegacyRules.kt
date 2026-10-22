@@ -36,8 +36,6 @@ import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.requiresBlocking
-import java.util.concurrent.atomic.AtomicReference
-import java.util.concurrent.atomic.AtomicReferenceArray
 import me.ahoo.cosec.api.policy.Effect as PolicyEffect
 
 /*
@@ -122,8 +120,8 @@ internal class PolicyGroup(val policy: Policy) : RuleGroup {
 internal class AppPermissionRules(
     val appPermission: AppPermission,
     /**
-     * Whether these rules are cached on the app permission and so shared by every request. Shared rules keep one
-     * rule per grant position in [PermissionRules]; rules rebuilt for one request leave that to its group's memo.
+     * Whether these rules are cached on the app permission and so shared by every request. Only shared rules keep a
+     * rule per grant position across requests; rules built for one request leave every position to its group's memo.
      */
     val shared: Boolean = false,
 ) {
@@ -140,8 +138,22 @@ internal class AppPermissionRules(
         }
     }
 
-    private val byId: Map<PermissionId, PermissionRules> =
-        permissionIndexer.mapValuesTo(HashMap(permissionIndexer.size * 2)) { PermissionRules(it.value) }
+    /**
+     * Each permission's rules by grant position. A rule carries its position in its role's grant list ([Rule.index]),
+     * so a permission granted at different positions has a rule for each, and each position below [CACHED_POSITIONS]
+     * has exactly one rule, ever: both passes of an evaluation, and the trace, which aligns them by identity, see the
+     * same one. A position beyond them (any position, when the rules are not shared) is memoized per request by its
+     * [AppPermissionGroup] instead.
+     *
+     * The map's value is the array itself, allocated with the rules and never replaced, and its slots are read without
+     * synchronization: the role layer's deny pass visits every grant, so each dependent load or atomic read on this path
+     * shows in its throughput (RFC 0002 PR-3 measurement, `role-heavy`). A reader that finds a slot empty takes the lock
+     * in [install]; a rule it does find is complete, since all its fields are final.
+     */
+    private val byId: Map<PermissionId, Array<StatementRule?>> =
+        permissionIndexer.mapValuesTo(HashMap(permissionIndexer.size * 2)) {
+            if (shared) arrayOfNulls(CACHED_POSITIONS) else NO_SLOTS
+        }
 
     fun forEachWildcard(roleId: String, visitor: RuleVisitor): Boolean {
         for (rule in wildcard) {
@@ -152,8 +164,22 @@ internal class AppPermissionRules(
         return false
     }
 
-    /** The rules of [permissionId] by grant position, or null when the app does not define it. */
-    fun rulesOf(permissionId: PermissionId): PermissionRules? = byId[permissionId]
+    /**
+     * The shared rules of [permissionId] by grant position, or null when the app does not define it. A position the
+     * array does not reach is the group's to memoize; an empty slot is filled by [install].
+     */
+    fun slotsOf(permissionId: PermissionId): Array<StatementRule?>? = byId[permissionId]
+
+    fun install(permissionId: PermissionId, slots: Array<StatementRule?>, position: Int): StatementRule =
+        synchronized(slots) {
+            slots[position] ?: uncached(permissionId, position).also { slots[position] = it }
+        }
+
+    /** A rule of [permissionId] at [position] built for one request, or null when the app does not define it. */
+    fun uncached(permissionId: PermissionId, position: Int): StatementRule {
+        val permission = checkNotNull(permissionIndexer[permissionId]) { "Permission $permissionId is not defined." }
+        return StatementRule(permission, null, position, permission.id)
+    }
 
     /** The exception 7.0 throws when the deny pass reaches an id [rolePermission] grants and the app does not define. */
     fun missingPermission(rolePermission: RolePermission): MissingPermissionException = MissingPermissionException(
@@ -161,34 +187,12 @@ internal class AppPermissionRules(
         rolePermission.id,
         rolePermission.permissions.filterNotTo(LinkedHashSet()) { permissionIndexer.containsKey(it) },
     )
-}
-
-/**
- * One permission's rules by grant position. The rule carries its position in the grant list ([Rule.index]), so a
- * permission granted at different positions has a rule for each.
- *
- * Shared by every request, so it is race-free: each position below [CACHED_POSITIONS] gets exactly one rule, ever,
- * which both passes of an evaluation (and the trace, which aligns them by identity) see. A position beyond it is
- * memoized per request by its [AppPermissionGroup] instead.
- */
-internal class PermissionRules(private val permission: Permission) {
-    private val byPosition = AtomicReference<AtomicReferenceArray<StatementRule>?>()
-
-    fun at(position: Int): StatementRule {
-        require(position < CACHED_POSITIONS) { "Position $position is not cached." }
-        val rules = byPosition.get() ?: AtomicReferenceArray<StatementRule>(CACHED_POSITIONS).let { created ->
-            if (byPosition.compareAndSet(null, created)) created else checkNotNull(byPosition.get())
-        }
-        rules.get(position)?.let { return it }
-        val rule = uncached(position)
-        return if (rules.compareAndSet(position, null, rule)) rule else checkNotNull(rules.get(position))
-    }
-
-    fun uncached(position: Int): StatementRule = StatementRule(permission, null, position, permission.id)
 
     companion object {
         /** Grant positions with a shared rule; longer grant lists build their tail once per request. */
         const val CACHED_POSITIONS = 64
+
+        private val NO_SLOTS = arrayOfNulls<StatementRule>(0)
     }
 }
 
@@ -212,7 +216,7 @@ internal class AppPermissionGroup(
     private var unresolved: ArrayList<Unresolved>? = null
 
     /**
-     * Rules for grant positions beyond the shared cache, or for every position when the rules are not shared, built
+     * Rules for grant positions beyond the shared slots, built
      * once per request for the same reason.
      */
     private var tail: HashMap<Long, StatementRule>? = null
@@ -232,7 +236,12 @@ internal class AppPermissionGroup(
             }
             var position = 0
             for (permissionId in permissions) {
-                val entry = granted(role, permissionId, position) ?: unresolved(rolePermission, permissionId)
+                val slots = rules.slotsOf(permissionId)
+                val entry = when {
+                    slots == null -> unresolved(rolePermission, permissionId)
+                    position < slots.size -> slots[position] ?: rules.install(permissionId, slots, position)
+                    else -> tail(role, permissionId, position)
+                }
                 if (visitor.visit(entry, roleId)) {
                     return true
                 }
@@ -242,15 +251,11 @@ internal class AppPermissionGroup(
         return false
     }
 
-    private fun granted(role: Int, permissionId: PermissionId, position: Int): StatementRule? {
-        val permissionRules = rules.rulesOf(permissionId) ?: return null
-        if (rules.shared && position < PermissionRules.CACHED_POSITIONS) {
-            return permissionRules.at(position)
-        }
-        // A grant position is one permission of one role: the role is part of the key.
+    /** A grant position beyond the shared slots: one permission of one role, so the role is part of the key. */
+    private fun tail(role: Int, permissionId: PermissionId, position: Int): StatementRule {
         val tail = tail ?: HashMap<Long, StatementRule>().also { tail = it }
         return tail.getOrPut((role.toLong() shl Int.SIZE_BITS) or position.toLong()) {
-            permissionRules.uncached(position)
+            rules.uncached(permissionId, position)
         }
     }
 

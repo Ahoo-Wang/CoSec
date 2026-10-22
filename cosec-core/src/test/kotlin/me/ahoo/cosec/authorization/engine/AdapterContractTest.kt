@@ -579,8 +579,8 @@ class AdapterContractTest {
         group.entries().first.map { it.entry }.zip(first).assert().allMatch { (a, b) -> a === b }
         // Another request shares the cached positions and builds its own tail.
         val other = roleGroup("r" to ids, appPermission = app).entries().first.map { it.entry }
-        (0 until PermissionRules.CACHED_POSITIONS).assert().allMatch { other[it] === first[it] }
-        (PermissionRules.CACHED_POSITIONS until 70).assert().allMatch { other[it] !== first[it] }
+        (0 until AppPermissionRules.CACHED_POSITIONS).assert().allMatch { other[it] === first[it] }
+        (AppPermissionRules.CACHED_POSITIONS until 70).assert().allMatch { other[it] !== first[it] }
     }
 
     @Test
@@ -683,24 +683,28 @@ class AdapterContractTest {
     @Test
     fun concurrentRequestsShareOneRulePerPosition() {
         val threads = 8
-        val positions = PermissionRules.CACHED_POSITIONS
+        val positions = AppPermissionRules.CACHED_POSITIONS
         val pool = Executors.newFixedThreadPool(threads)
         try {
             repeat(300) {
-                val rules = PermissionRules(permission("p"))
+                val app = AppPermissionData(
+                    "app",
+                    groups = listOf(PermissionGroupData("g", permissions = listOf(permission("p"))))
+                )
+                val rules = AppPermissionRules(app, shared = true)
                 val start = CyclicBarrier(threads)
                 val seen = (0 until threads).map { thread ->
                     pool.submit<List<StatementRule>> {
                         start.await()
                         // Every thread races for every position, in its own order.
                         val order = (0 until positions).map { (it * (2 * thread + 1)) % positions }
-                        order.map { position -> position to rules.at(position) }.sortedBy { it.first }.map { it.second }
+                        order.map { position -> position to rules.at("p", position) }.sortedBy { it.first }.map { it.second }
                     }
                 }.map { it.get() }
                 for (position in 0 until positions) {
                     val first = seen[0][position]
                     seen.assert().allMatch { it[position] === first }
-                    rules.at(position).assert().isSameAs(first)
+                    rules.at("p", position).assert().isSameAs(first)
                 }
             }
         } finally {
@@ -749,5 +753,11 @@ class AdapterContractTest {
         verifyContext.source.assert().isEqualTo(me.ahoo.cosec.authorization.PolicyVerifySource.PRINCIPAL)
         verifyContext.policy.assert().isSameAs(principal)
         verifyContext.statement.assert().isSameAs(principal.statements[0])
+    }
+
+    /** What [AppPermissionGroup] does for a grant at a shared position. */
+    private fun AppPermissionRules.at(permissionId: String, position: Int): StatementRule {
+        val slots = checkNotNull(slotsOf(permissionId))
+        return slots[position] ?: install(permissionId, slots, position)
     }
 }

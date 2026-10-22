@@ -206,16 +206,15 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
     /** Evaluates [entry] when it belongs to the current pass, and stops at the layer's first result. */
     @Suppress("TooGenericExceptionCaught")
     override fun visit(entry: RuleEntry, grantedVia: String?): Boolean {
-        checkEntry(entry, grantedVia)
-        val rule = when (entry) {
-            is Rule -> entry
-            is UnresolvedGrant -> {
-                if (pass != Effect.DENY) {
-                    return false
-                }
-                unresolved(entry, grantedVia)
-                return true
-            }
+        // One type check per entry; unresolved grants are rare and take the slow path.
+        if (entry !is Rule) {
+            return visitUnresolved(entry as UnresolvedGrant, grantedVia)
+        }
+        val rule: Rule = entry
+        // The contract of [checkEntry], inlined for a rule: the role layer visits every grant in its deny pass, so
+        // this runs once per grant and must stay a couple of comparisons (RFC 0002 PR-3 measurement, `role`).
+        if (if (kind === LayerKind.ROLE) grantedVia == null || rule.id == null else grantedVia != null) {
+            throw brokenEntry(entry, grantedVia)
         }
         val effect: Effect? = rule.effect
         if (effect !== pass) {
@@ -236,6 +235,15 @@ internal open class Evaluator(protected val request: AuthzRequest) : RuleVisitor
             return false
         }
         matched(rule, grantedVia)
+        return true
+    }
+
+    private fun visitUnresolved(grant: UnresolvedGrant, grantedVia: String?): Boolean {
+        checkEntry(grant, grantedVia)
+        if (pass != Effect.DENY) {
+            return false
+        }
+        unresolved(grant, grantedVia)
         return true
     }
 

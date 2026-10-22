@@ -40,9 +40,14 @@ internal class StatementScopedContext(private val base: SecurityContext) : Secur
     override val attributes: MutableMap<String, Any>
         get() = attributesView ?: ScopedAttributes().also { attributesView = it }
 
-    /** Called before every guard and rule: one field write, nothing written to [base]. */
+    /**
+     * Called before every guard and rule; nothing is written to [base]. Writes the field only when a matcher changed
+     * it: almost no statement does, and a reference store costs a GC write barrier on every guard and rule.
+     */
     fun beginStatement() {
-        pathVariables = EMPTY
+        if (pathVariables !== EMPTY) {
+            pathVariables = EMPTY
+        }
     }
 
     override fun <V> getAttributeValue(attributeKey: String): V? {
