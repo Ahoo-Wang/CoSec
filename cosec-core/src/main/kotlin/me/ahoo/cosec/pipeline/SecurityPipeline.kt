@@ -65,6 +65,60 @@ class SecurityPipeline<S : Any>(
 ) {
     companion object {
         private val log = KotlinLogging.logger {}
+
+        // internal: DecisionParity (test fixtures) derives the status from this mapping rather than copying it.
+        internal fun toDecision(
+            request: Request,
+            securityContext: SecurityContext,
+            decision: AuthorizationDecision
+        ): SecurityDecision {
+            if (decision.rateLimit?.allowed == false) {
+                return SecurityDecision(
+                    status = SecurityStatus.TOO_MANY_REQUESTS,
+                    result = AuthorizeResult.TOO_MANY_REQUESTS,
+                    request = request,
+                    securityContext = securityContext,
+                    verifyContext = decision.verifyContext,
+                    rateLimit = decision.rateLimit,
+                )
+            }
+            if (decision.result.authorized) {
+                return SecurityDecision(
+                    status = SecurityStatus.ALLOWED,
+                    result = decision.result,
+                    request = request,
+                    securityContext = securityContext,
+                    verifyContext = decision.verifyContext,
+                    rateLimit = decision.rateLimit,
+                )
+            }
+            val status = if (securityContext.principal.authenticated) {
+                SecurityStatus.FORBIDDEN
+            } else {
+                SecurityStatus.UNAUTHORIZED
+            }
+            return SecurityDecision(
+                status = status,
+                result = securityContext.getTokenVerificationException()?.toAuthorizeResult() ?: decision.result,
+                request = request,
+                securityContext = securityContext,
+                verifyContext = decision.verifyContext,
+            )
+        }
+
+        internal fun toErrorDecision(
+            request: Request,
+            securityContext: SecurityContext,
+            cause: Throwable
+        ): SecurityDecision {
+            if (cause is RegexTimeoutException) {
+                return toDecision(request, securityContext, AuthorizationDecision(AuthorizeResult.IMPLICIT_DENY))
+            }
+            log.error(cause) {
+                "Unexpected error during authorization of request [${request.path}] [${request.method}]."
+            }
+            return SecurityDecision(SecurityStatus.ERROR, AuthorizeResult.IMPLICIT_DENY, request, securityContext)
+        }
     }
 
     fun evaluate(source: S): Mono<SecurityDecision> = Mono.defer {
@@ -109,57 +163,4 @@ class SecurityPipeline<S : Any>(
             }.onErrorResume { cause ->
                 toErrorDecision(request, securityContext, cause).toMono()
             }
-
-    private fun toDecision(
-        request: Request,
-        securityContext: SecurityContext,
-        decision: AuthorizationDecision
-    ): SecurityDecision {
-        if (decision.rateLimit?.allowed == false) {
-            return SecurityDecision(
-                status = SecurityStatus.TOO_MANY_REQUESTS,
-                result = AuthorizeResult.TOO_MANY_REQUESTS,
-                request = request,
-                securityContext = securityContext,
-                verifyContext = decision.verifyContext,
-                rateLimit = decision.rateLimit,
-            )
-        }
-        if (decision.result.authorized) {
-            return SecurityDecision(
-                status = SecurityStatus.ALLOWED,
-                result = decision.result,
-                request = request,
-                securityContext = securityContext,
-                verifyContext = decision.verifyContext,
-                rateLimit = decision.rateLimit,
-            )
-        }
-        val status = if (securityContext.principal.authenticated) {
-            SecurityStatus.FORBIDDEN
-        } else {
-            SecurityStatus.UNAUTHORIZED
-        }
-        return SecurityDecision(
-            status = status,
-            result = securityContext.getTokenVerificationException()?.toAuthorizeResult() ?: decision.result,
-            request = request,
-            securityContext = securityContext,
-            verifyContext = decision.verifyContext,
-        )
-    }
-
-    private fun toErrorDecision(
-        request: Request,
-        securityContext: SecurityContext,
-        cause: Throwable
-    ): SecurityDecision {
-        if (cause is RegexTimeoutException) {
-            return toDecision(request, securityContext, AuthorizationDecision(AuthorizeResult.IMPLICIT_DENY))
-        }
-        log.error(cause) {
-            "Unexpected error during authorization of request [${request.path}] [${request.method}]."
-        }
-        return SecurityDecision(SecurityStatus.ERROR, AuthorizeResult.IMPLICIT_DENY, request, securityContext)
-    }
 }

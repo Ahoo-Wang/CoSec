@@ -1,0 +1,47 @@
+[
+  {
+    "id": "no-admin",
+    "name": "No admin",
+    "type": "global",
+    "tenantId": "t1",
+    "statements": [
+      { "name": "deny-admin", "effect": "deny", "action": "/admin/**" }
+    ]
+  },
+  {
+    "id": "office-hours",
+    "name": "Office hours",
+    "type": "global",
+    "tenantId": "t1",
+    "statements": [
+      { "name": "open-in-office-hours", "action": "/open/**", "condition": { "time": { "from": "09:00", "to": "17:00" } } }
+    ]
+  },
+  {
+    "id": "orders",
+    "name": "Orders",
+    "type": "custom",
+    "tenantId": "t1",
+    "statements": [
+      {
+        "name": "read-own-tenant-orders",
+        "action": { "path": { "pattern": "/orders/**", "method": "GET" } },
+        "condition": { "eq": { "part": "request.header.X-Tenant", "value": "t1" } }
+      },
+      {
+        "name": "write-as-manager",
+        "action": { "path": { "pattern": "/orders/**", "method": "POST" } },
+        "condition": { "eq": { "part": "context.principal.attributes.level", "value": "manager" } }
+      }
+    ]
+  },
+  {
+    "id": "reports",
+    "name": "Reports",
+    "type": "custom",
+    "tenantId": "t1",
+    "statements": [
+      { "name": "read-reports", "action": "/reports/**", "condition": { "spel": { "expression": "true" } } }
+    ]
+  }
+]
