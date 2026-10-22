@@ -139,8 +139,8 @@ class SnapshotPolicySetLoaderTest {
             false
         }
         roles.assert().containsExactly("r2", "r1")
-        group.rules.assert().isSameAs(
-            ((snapshot.app as DocumentState.Present).compiled.appPermission as Compiled.Ok).value
+        group.appPermission.assert().isSameAs(
+            ((snapshot.app as DocumentState.Present).compiled.appPermission as Compiled.Ok).value.appPermission
         )
     }
 

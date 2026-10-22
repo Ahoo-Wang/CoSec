@@ -54,11 +54,15 @@ import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
-class AuthorizationExplainerTest {
+@ParameterizedClass
+@EnumSource(ExplainerImpl::class)
+class AuthorizationExplainerTest(private val impl: ExplainerImpl) {
     private val globalPolicies = mutableListOf<Policy>()
     private val storedPolicies = mutableMapOf<String, Policy>()
     private var appRolePermission: AppRolePermission? = null
@@ -104,7 +108,7 @@ class AuthorizationExplainerTest {
     private fun explainer(
         blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp,
         rateLimitRuleProvider: RateLimitRuleProvider? = null
-    ) = AuthorizationExplainer(
+    ) = impl.create(
         policyRepository,
         appRolePermissionRepository,
         blacklistChecker,
@@ -245,7 +249,7 @@ class AuthorizationExplainerTest {
 
     @Test
     fun rootIsOffByDefault() {
-        val explanation = AuthorizationExplainer(policyRepository, appRolePermissionRepository)
+        val explanation = impl.create(policyRepository, appRolePermissionRepository)
             .explainOf("/anything", platformRoot)
         explanation.authorized.assert().isFalse()
         explanation.layer(ExplainLayer.ROOT).result.assert().isEqualTo(VerifyResult.IMPLICIT_DENY)
@@ -288,11 +292,17 @@ class AuthorizationExplainerTest {
     fun warnsAboutMissingPolicyAndAppPermission() {
         val principal = SimplePrincipal("user", policies = setOf("gone"), roles = setOf("clerk"))
         val explanation = explainer().explainOf("/orders", principal)
-        explanation.warnings.map { it.code }.assert().containsExactlyInAnyOrder(
-            ExplainWarningCode.MISSING_POLICY,
-            ExplainWarningCode.NO_APP_PERMISSION,
-        )
-        explanation.layer(ExplainLayer.ROLE_PERMISSION).state.assert().isEqualTo(LayerState.EMPTY)
+        if (impl == ExplainerImpl.NARRATION) {
+            explanation.warnings.map { it.code }.assert().containsExactlyInAnyOrder(
+                ExplainWarningCode.MISSING_POLICY,
+                ExplainWarningCode.NO_APP_PERMISSION,
+            )
+            explanation.layer(ExplainLayer.ROLE_PERMISSION).state.assert().isEqualTo(LayerState.EMPTY)
+        } else {
+            // RFC 0002 X6: the missing policy ends the evaluation, so the role layer is never reached.
+            explanation.warnings.map { it.code }.assert().containsExactly(ExplainWarningCode.MISSING_POLICY)
+            explanation.layer(ExplainLayer.ROLE_PERMISSION).state.assert().isEqualTo(LayerState.NOT_EVALUATED)
+        }
         // Authorization fails closed on the missing policy.
         explanation.status.assert().isEqualTo(SecurityStatus.ERROR)
         explanation.authorized.assert().isFalse()
@@ -348,8 +358,13 @@ class AuthorizationExplainerTest {
         val recording = RecordingCondition()
         globalPolicies += policy("public", allow("/public/**"), condition = recording)
         explainer().explainOf("/public/a")
-        // Once for the real decision, once for the trace; both flagged so custom matchers can skip side effects.
-        recording.evaluations.assert().containsExactly(true, true)
+        if (impl == ExplainerImpl.NARRATION) {
+            // Once for the real decision, once for the trace; both flagged so custom matchers can skip side effects.
+            recording.evaluations.assert().containsExactly(true, true)
+        } else {
+            // RFC 0002 §5.2: the trace is the decision's own evaluation, which runs once.
+            recording.evaluations.assert().containsExactly(true)
+        }
     }
 
     @Test
@@ -367,7 +382,13 @@ class AuthorizationExplainerTest {
         globalPolicies += policy("public", allow("/public/**"), condition = flaky)
         val explanation = explainer().explainOf("/public/a")
         explanation.authorized.assert().isTrue()
-        explanation.warnings.map { it.code }.assert().containsExactly(ExplainWarningCode.TRACE_INCONSISTENT)
+        if (impl == ExplainerImpl.NARRATION) {
+            explanation.warnings.map { it.code }.assert().containsExactly(ExplainWarningCode.TRACE_INCONSISTENT)
+        } else {
+            // RFC 0002 X6: one evaluation decides and is traced, so it cannot disagree with itself.
+            explanation.warnings.assert().isEmpty()
+            explanation.layer(ExplainLayer.GLOBAL_POLICY).policies.single().conditionMatched.assert().isTrue()
+        }
     }
 
     @Test
@@ -400,7 +421,7 @@ class AuthorizationExplainerTest {
         }
     }
 
-    private fun tokenExplainer() = AuthorizationExplainer(
+    private fun tokenExplainer() = impl.create(
         policyRepository,
         appRolePermissionRepository,
         securityContextParser = tokenParser,

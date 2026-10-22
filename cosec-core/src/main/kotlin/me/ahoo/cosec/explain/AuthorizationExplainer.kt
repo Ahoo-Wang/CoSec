@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.explain
 
+import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.permission.AppRolePermission
@@ -25,6 +26,7 @@ import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.RequestMatcher
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
+import me.ahoo.cosec.authorization.EngineAuthorization
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
@@ -33,6 +35,7 @@ import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
+import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.limiter.RateLimitRuleProvider
 import me.ahoo.cosec.pipeline.SecurityDecision
 import me.ahoo.cosec.pipeline.SecurityPipeline
@@ -45,6 +48,7 @@ import me.ahoo.cosec.token.toAuthorizeResult
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import java.util.Optional
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Explains authorization decisions for a principal and a request, without side effects.
@@ -59,14 +63,37 @@ import java.util.Optional
  *
  * An explanation reveals policy structure: expose it only to administrators.
  */
-class AuthorizationExplainer(
+class AuthorizationExplainer internal constructor(
     private val policyRepository: PolicyRepository,
     private val appRolePermissionRepository: AppRolePermissionRepository,
-    private val blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp,
-    private val rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE,
-    private val rateLimitRuleProvider: RateLimitRuleProvider? = null,
-    private val securityContextParser: SecurityContextParser? = null
+    private val blacklistChecker: BlacklistChecker,
+    private val rootPrincipalMatcher: RootPrincipalMatcher,
+    private val rateLimitRuleProvider: RateLimitRuleProvider?,
+    private val securityContextParser: SecurityContextParser?,
+    /**
+     * Explain from the trace of the one evaluation that decides ([EngineAuthorization] at [TraceLevel.FULL] or
+     * [TraceLevel.EXHAUSTIVE], RFC 0002 §5.2) instead of narrating. Only tests set it until the engine replaces the
+     * legacy implementation: an explanation must explain the implementation that enforces.
+     */
+    private val fromTrace: Boolean
 ) {
+    constructor(
+        policyRepository: PolicyRepository,
+        appRolePermissionRepository: AppRolePermissionRepository,
+        blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp,
+        rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE,
+        rateLimitRuleProvider: RateLimitRuleProvider? = null,
+        securityContextParser: SecurityContextParser? = null
+    ) : this(
+        policyRepository,
+        appRolePermissionRepository,
+        blacklistChecker,
+        rootPrincipalMatcher,
+        rateLimitRuleProvider,
+        securityContextParser,
+        fromTrace = false,
+    )
+
     /**
      * Explains the decision for a described [principal]. Runs on [Schedulers.boundedElastic]: an explanation reads
      * repositories and may run blocking custom matchers.
@@ -92,6 +119,9 @@ class AuthorizationExplainer(
         options: ExplainOptions,
         contextOf: () -> SecurityContext
     ): Mono<Explanation> = Mono.defer {
+        if (fromTrace) {
+            return@defer explainFromTrace(request, options, contextOf)
+        }
         val policies = SnapshotPolicyRepository(policyRepository)
         val permissions = SnapshotAppRolePermissionRepository(appRolePermissionRepository)
         decide(request, contextOf, policies, permissions).flatMap { decision ->
@@ -100,6 +130,35 @@ class AuthorizationExplainer(
             narrator.narrate(policies, permissions).map { trace -> explanation(decision, trace, narrator) }
         }
     }.subscribeOn(Schedulers.boundedElastic())
+
+    /**
+     * Decides once, with an [EngineAuthorization] that traces, through [SecurityPipeline], and explains that
+     * evaluation: the status comes from the pipeline and everything else from the trace ([TraceExplanations]).
+     */
+    private fun explainFromTrace(
+        request: Request,
+        options: ExplainOptions,
+        contextOf: () -> SecurityContext
+    ): Mono<Explanation> {
+        val warnings = mutableListOf<ExplainWarning>()
+        val traced = AtomicReference<TracedEvaluation>()
+        val authorization = EngineAuthorization(
+            policyRepository,
+            appRolePermissionRepository,
+            blacklistChecker,
+            rootPrincipalMatcher,
+            if (options.exhaustive) TraceLevel.EXHAUSTIVE else TraceLevel.FULL,
+        ) { evaluation, policies -> traced.set(TracedEvaluation(evaluation, policies)) }
+        return pipeline(contextOf, authorization, warnings).evaluate(request).map { decision ->
+            val explanation = TraceExplanations.explain(decision, traced.get(), options.detail)
+            val allWarnings = (warnings + explanation.warnings).toMutableList()
+            val rateLimitRules = decision.securityContext
+                ?.takeIf { decision.allowed }
+                ?.let { matchingRateLimitRules(request, it, allWarnings) }
+                .orEmpty()
+            explanation.copy(rateLimitRules = rateLimitRules, warnings = allWarnings)
+        }
+    }
 
     /**
      * The context [contextOf] produces, marked as a policy evaluation. A rejected credential becomes an anonymous
@@ -127,12 +186,43 @@ class AuthorizationExplainer(
         policies: PolicyRepository,
         permissions: AppRolePermissionRepository
     ): Mono<SecurityDecision> {
+        val authorization = SimpleAuthorization(policies, permissions, blacklistChecker, rootPrincipalMatcher)
+        return pipeline(contextOf, authorization).evaluate(request)
+    }
+
+    private fun pipeline(
+        contextOf: () -> SecurityContext,
+        authorization: Authorization,
+        warnings: MutableList<ExplainWarning>? = null
+    ): SecurityPipeline<Request> {
         val requestParser = object : RequestParser<Request> {
             override fun parse(request: Request): Request = request
         }
-        val authorization = SimpleAuthorization(policies, permissions, blacklistChecker, rootPrincipalMatcher)
-        return SecurityPipeline(requestParser, SecurityContextParser { dryRunContext(contextOf) }, authorization)
-            .evaluate(request)
+        return SecurityPipeline(
+            requestParser,
+            SecurityContextParser { dryRunContext(contextOf, warnings) },
+            authorization
+        )
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun matchingRateLimitRules(
+        request: Request,
+        context: SecurityContext,
+        warnings: MutableList<ExplainWarning>
+    ): List<String> {
+        val rules = rateLimitRuleProvider?.getRules() ?: return emptyList()
+        return rules.filter { rule ->
+            try {
+                rule.matches(request, context)
+            } catch (cause: Exception) {
+                warnings += ExplainWarning(
+                    ExplainWarningCode.MATCHER_ERROR,
+                    "Matching rate limit rule [${rule.id}] failed: $cause",
+                )
+                false
+            }
+        }.map { it.id }
     }
 
     private fun explanation(decision: SecurityDecision, trace: Trace, narrator: Narrator): Explanation {
@@ -468,21 +558,8 @@ class AuthorizationExplainer(
         private fun RequestMatcher.toRef(): MatcherRef =
             MatcherRef(type, configuration.takeIf { options.detail == ExplainDetail.FULL })
 
-        @Suppress("TooGenericExceptionCaught")
-        fun matchingRateLimitRules(warnings: MutableList<ExplainWarning>): List<String> {
-            val rules = rateLimitRuleProvider?.getRules() ?: return emptyList()
-            return rules.filter { rule ->
-                try {
-                    rule.matches(request, context)
-                } catch (cause: Exception) {
-                    warnings += ExplainWarning(
-                        ExplainWarningCode.MATCHER_ERROR,
-                        "Matching rate limit rule [${rule.id}] failed: $cause",
-                    )
-                    false
-                }
-            }.map { it.id }
-        }
+        fun matchingRateLimitRules(warnings: MutableList<ExplainWarning>): List<String> =
+            matchingRateLimitRules(request, context, warnings)
     }
 
     private companion object {

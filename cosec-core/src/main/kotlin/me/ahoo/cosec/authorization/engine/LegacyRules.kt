@@ -200,9 +200,10 @@ internal class PermissionRules(private val permission: Permission) {
  * One per request, used by one evaluation at a time: its memos are not synchronized.
  */
 internal class AppPermissionGroup(
-    val rules: AppPermissionRules,
-    private val rolePermissions: List<RolePermission>,
+    private val rules: AppPermissionRules,
+    val rolePermissions: List<RolePermission>,
 ) : RuleGroup {
+    val appPermission: AppPermission get() = rules.appPermission
     override val id: String = rules.appPermission.id
     override val guard: Guard get() = rules.guard
     val requiresBlocking: Boolean get() = rules.requiresBlocking

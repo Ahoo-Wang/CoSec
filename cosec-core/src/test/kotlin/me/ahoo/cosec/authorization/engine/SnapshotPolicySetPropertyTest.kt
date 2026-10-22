@@ -179,7 +179,7 @@ class SnapshotPolicySetPropertyTest {
                 layer.groups.map { group ->
                     val guard = when (group) {
                         is PolicyGroup -> CoSecJsonSerializer.writeValueAsString(group.policy)
-                        is AppPermissionGroup -> CoSecJsonSerializer.writeValueAsString(group.rules.appPermission)
+                        is AppPermissionGroup -> CoSecJsonSerializer.writeValueAsString(group.appPermission)
                         else -> error("Unexpected group $group")
                     }
                     val first = entries(group)

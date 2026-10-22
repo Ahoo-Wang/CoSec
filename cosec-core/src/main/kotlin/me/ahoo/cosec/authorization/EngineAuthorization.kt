@@ -18,6 +18,7 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.authorization.engine.Decisions
+import me.ahoo.cosec.authorization.engine.EvaluationObserver
 import me.ahoo.cosec.authorization.engine.LegacyFacts
 import me.ahoo.cosec.authorization.engine.PolicySetLoader
 import me.ahoo.cosec.blacklist.BlacklistChecker
@@ -57,8 +58,10 @@ class EngineAuthorization internal constructor(
     appRolePermissionRepository: AppRolePermissionRepository,
     private val blacklistChecker: BlacklistChecker,
     private val rootPrincipalMatcher: RootPrincipalMatcher,
-    /** Only the benchmarks set it, to measure traced evaluations; the trace-based explanation will read the trace. */
-    private val trace: TraceLevel
+    /** Set by the benchmarks, to measure traced evaluations, and by the trace-based explanation, which reads the trace. */
+    private val trace: TraceLevel,
+    /** Sees every evaluation, with the policy set it read, before its decision is mapped. */
+    private val observer: EvaluationObserver? = null
 ) : DecisionAuthorization {
     constructor(
         policyRepository: PolicyRepository,
@@ -118,6 +121,7 @@ class EngineAuthorization internal constructor(
         facts: LegacyFacts?,
         context: SecurityContext
     ): Mono<AuthorizationDecision> {
+        observer?.evaluated(evaluation, policies)
         val decision = evaluation.decision
         if (decision is Decision.Indeterminate) {
             if (log.isDebugEnabled()) {
