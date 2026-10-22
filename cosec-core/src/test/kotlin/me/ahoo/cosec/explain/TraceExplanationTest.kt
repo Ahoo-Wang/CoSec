@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.explain
 
+import io.mockk.every
+import io.mockk.mockkObject
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
@@ -31,16 +33,22 @@ import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.EngineAuthorization
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
+import me.ahoo.cosec.authorization.VerifyContext
+import me.ahoo.cosec.authorization.engine.AppPermissionGroup
 import me.ahoo.cosec.authorization.engine.PolicyGroup
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.context.SecurityContextParser
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.engine.CoSecEngine
 import me.ahoo.cosec.engine.Evaluation
 import me.ahoo.cosec.engine.GroupTrace
 import me.ahoo.cosec.engine.GuardOutcome
 import me.ahoo.cosec.engine.LayerInput
 import me.ahoo.cosec.engine.PolicySet
+import me.ahoo.cosec.engine.RuleOutcome
+import me.ahoo.cosec.engine.RuleTrace
 import me.ahoo.cosec.engine.Trace
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.limiter.RateLimit
@@ -48,6 +56,7 @@ import me.ahoo.cosec.limiter.RateLimitRule
 import me.ahoo.cosec.limiter.RateLimitRuleProvider
 import me.ahoo.cosec.model.Decision
 import me.ahoo.cosec.model.LayerKind
+import me.ahoo.cosec.model.StatementRef
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.AppRolePermissionData
 import me.ahoo.cosec.permission.PermissionData
@@ -61,8 +70,11 @@ import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.PathActionMatcherFactory
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
@@ -80,13 +92,14 @@ class TraceExplanationTest {
     private val storedPolicies = mutableMapOf<String, Policy>()
     private var appRolePermission: AppRolePermission? = null
     private var globalError: Throwable? = null
+    private var principalError: Throwable? = null
 
     private val policyRepository = object : PolicyRepository {
         override fun getGlobalPolicy(): Mono<List<Policy>> =
             globalError?.let { Mono.error(it) } ?: Mono.just(globalPolicies.toList())
 
         override fun getPolicies(policyIds: Set<String>): Mono<List<Policy>> =
-            Mono.just(policyIds.mapNotNull { storedPolicies[it] })
+            principalError?.let { Mono.error(it) } ?: Mono.just(policyIds.mapNotNull { storedPolicies[it] })
 
         override fun setPolicy(policy: Policy): Mono<Void> = Mono.empty()
     }
@@ -105,8 +118,9 @@ class TraceExplanationTest {
         id: String,
         vararg statements: StatementData,
         type: PolicyType = PolicyType.GLOBAL,
-        condition: ConditionMatcher = AllConditionMatcher.INSTANCE
-    ) = PolicyData(id, "", "name-$id", "", type, "tenant", condition, statements.toList())
+        condition: ConditionMatcher = AllConditionMatcher.INSTANCE,
+        name: String = "name-$id"
+    ) = PolicyData(id, "", name, "", type, "tenant", condition, statements.toList())
 
     private fun statement(name: String, pattern: String, effect: Effect = Effect.ALLOW) =
         StatementData(name = name, effect = effect, action = path(pattern))
@@ -229,18 +243,22 @@ class TraceExplanationTest {
 
     @Test
     fun statementsAndPoliciesKeepTheirPositions() {
-        // Two policies share an id, and a policy repeats a statement: the refs tell them apart.
-        globalPolicies += policy("same", statement("s", "/x"), statement("s", "/x"))
-        globalPolicies += policy("same", statement("t", "/y"), statement("s", "/x", Effect.DENY))
-        val explanation = explain("/x")
+        // Two policies share an id, and a policy repeats a statement name: the refs tell them apart.
+        globalPolicies += policy("same", statement("s", "/x"), statement("s", "/x/**"), name = "first")
+        globalPolicies += policy("same", statement("t", "/y"), statement("s", "/*", Effect.DENY), name = "second")
+        val explanation = explain("/x", options = ExplainOptions(detail = ExplainDetail.FULL))
         explanation.decidedBy.assert().isEqualTo(DecisionRef(ExplainLayer.GLOBAL_POLICY, "same", 1, "s"))
-        explanation.layer(ExplainLayer.GLOBAL_POLICY).policies.map { policy ->
-            policy.statements.map { "${it.index}:${it.effect}:${it.outcome}" }
+        val policies = explanation.layer(ExplainLayer.GLOBAL_POLICY).policies
+        policies.map { it.name }.assert().containsExactly("first", "second")
+        policies.map { policy ->
+            policy.statements.map { "${it.index}:${it.name}:${it.action.pattern()}:${it.effect}:${it.outcome}" }
         }.assert().containsExactly(
-            listOf("0:ALLOW:MATCHED", "1:ALLOW:MATCHED"),
-            listOf("0:ALLOW:ACTION_MISS", "1:DENY:MATCHED"),
+            listOf("0:s:/x:ALLOW:MATCHED", "1:s:/x/**:ALLOW:MATCHED"),
+            listOf("0:t:/y:ALLOW:ACTION_MISS", "1:s:/*:DENY:MATCHED"),
         )
     }
+
+    private fun MatcherRef.pattern(): String? = configuration?.asString()
 
     @Test
     fun failedLayerEndsTheEvaluation() {
@@ -293,13 +311,19 @@ class TraceExplanationTest {
 
     @Test
     fun missingPermissionWarnsWhereTheEvaluationFails() {
-        grants(catalog(permission("a", "/x"), permission("b", "/x")), "r1" to listOf("a", "ghost", "b"))
+        grants(
+            catalog(permission("a", "/x"), permission("b", "/x")),
+            "r1" to listOf("a", "ghost", "b", "phantom"),
+        )
         val principal = SimplePrincipal("user", roles = setOf("r1"))
         val explanation = explain("/x", principal)
         explanation.status.assert().isEqualTo(SecurityStatus.ERROR)
         explanation.warnings.single().apply {
             code.assert().isEqualTo(ExplainWarningCode.MISSING_PERMISSION)
-            message.assert().contains("[r1]", "[ghost]", "[app]")
+            message.assert().isEqualTo(
+                "Role [r1] is granted permissions [ghost, phantom], which app [app] does not define; " +
+                    "authorization fails closed.",
+            )
         }
         // The unresolved grant is no statement; the defined ones are counted without it.
         explanation.layer(ExplainLayer.ROLE_PERMISSION).roles.single().permissions.map { "${it.id}@${it.index}" }
@@ -325,7 +349,14 @@ class TraceExplanationTest {
         explain("/x", principal, ExplainOptions(exhaustive = true)).apply {
             status.assert().isEqualTo(SecurityStatus.FORBIDDEN)
             layer(ExplainLayer.PRINCIPAL_POLICY).state.assert().isEqualTo(LayerState.EVALUATED_AFTER_DECISION)
-            warnings.single().code.assert().isEqualTo(ExplainWarningCode.MISSING_POLICY)
+            // The request was denied (403); the missing policy fails only requests that reach it.
+            warnings.single().apply {
+                code.assert().isEqualTo(ExplainWarningCode.MISSING_POLICY)
+                message.assert().isEqualTo(
+                    "The principal lists policy [gone], which the repository does not have; authorization fails " +
+                        "closed on any request that reaches the principal's policies.",
+                )
+            }
         }
     }
 
@@ -343,16 +374,154 @@ class TraceExplanationTest {
     }
 
     @Test
-    fun failedBlacklistCheckExplainsNoLayer() {
-        val failing = object : BlacklistChecker {
-            override fun check(request: Request, context: SecurityContext): Mono<Boolean> =
-                Mono.error(IllegalStateException("blacklist down"))
+    fun unavailableLayerAfterADenyFailsOnlyWhereItIsEvaluated() {
+        globalPolicies += policy("deny", statement("s", "/x", Effect.DENY))
+        val unavailable = IllegalStateException("redis down")
+        principalError = unavailable
+        val principal = SimplePrincipal("user", policies = setOf("mine"))
+        // The deny ends the evaluation before the principal layer, which FULL never reads from the trace.
+        explain("/x", principal).apply {
+            status.assert().isEqualTo(SecurityStatus.FORBIDDEN)
+            layer(ExplainLayer.PRINCIPAL_POLICY).state.assert().isEqualTo(LayerState.NOT_EVALUATED)
         }
-        val explanation = explain("/x", blacklistChecker = failing)
-        explanation.status.assert().isEqualTo(SecurityStatus.ERROR)
-        explanation.decidedBy.assert().isNull()
-        explanation.layers.map { it.state }.assert().allMatch { it == LayerState.NOT_EVALUATED }
-        explanation.layers.map { it.layer }.assert().isEqualTo(ExplainLayer.entries)
+        ExplainerImpl.TRACE.create(policyRepository, appRolePermissionRepository)
+            .explain(request("/x"), principal, ExplainOptions(exhaustive = true))
+            .test()
+            .expectErrorMatches { it === unavailable }
+            .verify()
+    }
+
+    @Test
+    fun failedBlacklistCheckFailsTheExplanationAsTheNarrationDoes() {
+        val down = IllegalStateException("blacklist down")
+        val failing = object : BlacklistChecker {
+            override fun check(request: Request, context: SecurityContext): Mono<Boolean> = Mono.error(down)
+        }
+        ExplainerImpl.entries.forEach { impl ->
+            impl.create(policyRepository, appRolePermissionRepository, failing)
+                .explain(request("/x"), SimplePrincipal("user"))
+                .test()
+                .expectErrorMatches { it === down }
+                .verify()
+        }
+    }
+
+    @Test
+    fun errorBeforeTheDecisionFailsTheExplanationAsTheNarrationDoes() {
+        // An Error is not an engine failure: the engine lets it through, and authorization fails with it (500).
+        val error = NotImplementedError("not yet")
+        val throwing = object : ConditionMatcher by ThrowingCondition {
+            override fun match(request: Request, securityContext: SecurityContext): Boolean = throw error
+        }
+        globalPolicies += policy("broken", statement("s", "/x"), condition = throwing)
+        ExplainerImpl.entries.forEach { impl ->
+            impl.create(policyRepository, appRolePermissionRepository)
+                .explain(request("/x"), SimplePrincipal("user"))
+                .test()
+                .expectErrorMatches { it === error }
+                .verify()
+        }
+    }
+
+    @Test
+    fun unparsableContextFailsTheExplanation() {
+        val broken = IllegalArgumentException("bad header")
+        ExplainerImpl.TRACE.create(
+            policyRepository,
+            appRolePermissionRepository,
+            securityContextParser = { throw broken },
+        ).explain(request("/x")).test().expectErrorMatches { it === broken }.verify()
+    }
+
+    @Test
+    fun brokenEngineFailsTheExplanation() {
+        globalPolicies += policy("public", statement("s", "/x"))
+        val broken = IllegalStateException("adapter contract")
+        mockkObject(CoSecEngine) {
+            every { CoSecEngine.evaluate(any(), any(), any()) } throws broken
+            explain().test().expectErrorMatches { it === broken }.verify()
+        }
+    }
+
+    @Test
+    fun failedEnforcementFailsTheExplanation() {
+        // The engine allows, but recording the verify context fails, so authorization answers 500.
+        globalPolicies += policy("public", statement("s", "/x"))
+        val recording = IllegalStateException("context is read-only")
+        val parser = SecurityContextParser {
+            val base = SimpleSecurityContext(SimplePrincipal("user"))
+            object : SecurityContext by base {
+                override fun setAttributeValue(attributeKey: String, value: Any): SecurityContext {
+                    if (value is VerifyContext) {
+                        throw recording
+                    }
+                    base.setAttributeValue(attributeKey, value)
+                    return this
+                }
+            }
+        }
+        ExplainerImpl.TRACE.create(policyRepository, appRolePermissionRepository, securityContextParser = parser)
+            .explain(request("/x"))
+            .test()
+            .expectErrorMatches { it === recording }
+            .verify()
+    }
+
+    private fun explain() = ExplainerImpl.TRACE.create(policyRepository, appRolePermissionRepository)
+        .explain(request("/x"), SimplePrincipal("user"))
+
+    @Test
+    fun explanationMustNameWhatWasEnforced() {
+        globalPolicies += policy("public", statement("s", "/x"))
+        val evaluation = evaluate("/x", SimplePrincipal("user"), TraceLevel.FULL)
+        val policies = PolicySet(
+            listOf(LayerInput.Loaded(LayerKind.GLOBAL, globalPolicies.map { PolicyGroup(it) })),
+        )
+        val traced = TracedEvaluation(evaluation, policies)
+        val allowed = SecurityDecision(SecurityStatus.ALLOWED, AuthorizeResult.ALLOW, request("/x"))
+        // Allowed without the verify context the engine decided by.
+        assertThrows<IllegalStateException> { TraceExplanations.explain(allowed, traced, ExplainDetail.SUMMARY) }
+            .message.assert().contains("enforced [null]")
+        // Failed, although the engine decided.
+        val failed = SecurityDecision(SecurityStatus.ERROR, AuthorizeResult.IMPLICIT_DENY, request("/x"))
+        assertThrows<IllegalStateException> { TraceExplanations.explain(failed, traced, ExplainDetail.SUMMARY) }
+            .message.assert().contains("Authorization failed")
+    }
+
+    @Test
+    fun root() {
+        val root = SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM)
+        val explanation = checkNotNull(
+            ExplainerImpl.TRACE.create(
+                policyRepository,
+                appRolePermissionRepository,
+                rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT
+            )
+                .explain(request("/x"), root)
+                .block(),
+        )
+        explanation.layer(ExplainLayer.ROOT).apply {
+            state.assert().isEqualTo(LayerState.EVALUATED)
+            result.assert().isEqualTo(VerifyResult.ALLOW)
+            matched.assert().isEqualTo(DecisionRef(ExplainLayer.ROOT))
+        }
+        explanation.decidedBy.assert().isEqualTo(DecisionRef(ExplainLayer.ROOT))
+    }
+
+    @Test
+    fun repeatedRoleIsListedPerGrant() {
+        // A custom repository may list a role twice; each grant keeps its own statements, as in the narration.
+        grants(catalog(permission("a", "/x"), permission("b")), "r1" to listOf("a"), "r1" to listOf("b", "a"))
+        val principal = SimplePrincipal("user", roles = setOf("r1"))
+        val explanations = ExplainerImpl.entries.map { impl ->
+            checkNotNull(
+                impl.create(policyRepository, appRolePermissionRepository).explain(request("/x"), principal).block()
+            )
+        }
+        val roles = explanations.map { it.layer(ExplainLayer.ROLE_PERMISSION).roles }
+        roles.first().map { role -> role.roleId to role.permissions.map { "${it.id}@${it.index}" } }
+            .assert().containsExactly("r1" to listOf("a@0"), "r1" to listOf("b@0", "a@1"))
+        roles.last().assert().isEqualTo(roles.first())
     }
 
     @Test
@@ -416,6 +585,57 @@ class TraceExplanationTest {
         explanation.layer(ExplainLayer.GLOBAL_POLICY).policies.single().statements.assert().isEmpty()
         // The principal and role layers were not in the evaluated set.
         explanation.layer(ExplainLayer.PRINCIPAL_POLICY).state.assert().isEqualTo(LayerState.NOT_EVALUATED)
+    }
+
+    @Test
+    fun incompleteRoleTraceWarns() {
+        val appPermission = catalog(permission("a"), permission("b"))
+        val group = AppPermissionGroup(appPermission.engineRules(), listOf(RolePermissionData("r1", setOf("a", "b"))))
+        val policies = PolicySet(listOf(LayerInput.Loaded(LayerKind.ROLE, listOf(group))))
+        // The engine could record only the first entry.
+        val recorded = RuleTrace(
+            StatementRef.RolePermission("app", "r1", "a", "name-a"),
+            me.ahoo.cosec.model.Effect.ALLOW,
+            RuleOutcome.ACTION_MISS,
+        )
+        val trace = Trace(
+            blocked = false,
+            root = false,
+            layers = listOf(
+                EngineLayerTrace(
+                    LayerKind.ROLE,
+                    EngineLayerState.EVALUATED,
+                    groups = listOf(
+                        GroupTrace(
+                            "app",
+                            GuardOutcome.MATCHED,
+                            null,
+                            listOf(recorded),
+                            IllegalStateException("broken")
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val decision = SecurityDecision(
+            SecurityStatus.FORBIDDEN,
+            AuthorizeResult.IMPLICIT_DENY,
+            request("/x"),
+            SimpleSecurityContext(SimplePrincipal("user", roles = setOf("r1"))),
+        )
+        val explanation = TraceExplanations.explain(
+            decision,
+            TracedEvaluation(Evaluation(Decision.Deny(null), trace), policies),
+            ExplainDetail.SUMMARY,
+        )
+        explanation.warnings.single().apply {
+            code.assert().isEqualTo(ExplainWarningCode.MATCHER_ERROR)
+            message.assert().contains("Tracing [app] failed", "broken")
+        }
+        explanation.layer(ExplainLayer.ROLE_PERMISSION).roles.single().apply {
+            roleId.assert().isEqualTo("r1")
+            permissions.map { it.id }.assert().containsExactly("a")
+        }
     }
 
     private object ThrowingCondition : ConditionMatcher {

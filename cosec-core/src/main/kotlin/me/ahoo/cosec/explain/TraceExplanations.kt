@@ -14,6 +14,7 @@
 package me.ahoo.cosec.explain
 
 import me.ahoo.cosec.api.permission.AppPermission
+import me.ahoo.cosec.api.permission.AppRolePermission
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.RequestMatcher
@@ -34,6 +35,7 @@ import me.ahoo.cosec.model.Decision
 import me.ahoo.cosec.model.LayerKind
 import me.ahoo.cosec.model.StatementRef
 import me.ahoo.cosec.pipeline.SecurityDecision
+import me.ahoo.cosec.pipeline.SecurityStatus
 import me.ahoo.cosec.engine.LayerState as EngineLayerState
 import me.ahoo.cosec.engine.LayerTrace as EngineLayerTrace
 import me.ahoo.cosec.model.Effect as EngineEffect
@@ -55,10 +57,11 @@ internal class TracedEvaluation(val evaluation: Evaluation, val policies: Policy
  */
 internal object TraceExplanations {
     /**
-     * [traced] is null when the pipeline decided without authorizing (a request it could not parse, or a failed
-     * blacklist check): then no layer was evaluated. Rate limit rules are not part of the trace; the caller adds them.
+     * [traced] is null when the pipeline decided without the engine evaluating: then no layer was evaluated. Rate
+     * limit rules are not part of the trace; the caller adds them.
      *
-     * Throws the read error of a layer whose data was unavailable, as the narration fails when it reads that layer.
+     * Throws the read error of a layer whose data was unavailable, as the narration fails when it reads that layer,
+     * and [IllegalStateException] when [decision] is not what the engine decided.
      */
     fun explain(decision: SecurityDecision, traced: TracedEvaluation?, detail: ExplainDetail): Explanation {
         val trace = traced?.evaluation?.trace
@@ -69,6 +72,10 @@ internal object TraceExplanations {
             Mapper(decision, traced.policies, detail, warnings).layers(trace)
         }
         val engineDecision = traced?.evaluation?.decision
+        val decidedBy = engineDecision?.ref()?.toDecisionRef()
+        if (engineDecision != null) {
+            requireEnforced(decision, engineDecision, decidedBy)
+        }
         val overriddenAllows = if (trace != null && engineDecision != null) {
             overridden(engineDecision, trace)
         } else {
@@ -78,12 +85,27 @@ internal object TraceExplanations {
             status = decision.status,
             authorized = decision.result.authorized,
             reason = decision.result.reason,
-            decidedBy = engineDecision?.ref()?.toDecisionRef(),
+            decidedBy = decidedBy,
             layers = layers,
             overriddenAllows = overriddenAllows,
             rateLimitRules = emptyList(),
             warnings = warnings,
         )
+    }
+
+    /**
+     * The explanation must name what was enforced. The caller fails the explanation on any error the engine did not
+     * find, so a mismatch here is a CoSec bug: it fails loudly rather than explain a decision that was not enforced.
+     */
+    private fun requireEnforced(decision: SecurityDecision, engineDecision: Decision, decidedBy: DecisionRef?) {
+        if (decision.status == SecurityStatus.ERROR) {
+            check(engineDecision is Decision.Indeterminate) {
+                "Authorization failed, but the engine decided $engineDecision."
+            }
+            return
+        }
+        val enforced = decision.verifyContext?.toDecisionRef()
+        check(enforced == decidedBy) { "Authorization enforced [$enforced], but the engine decided [$decidedBy]." }
     }
 
     private fun Decision.ref(): StatementRef? = when (this) {
@@ -152,11 +174,16 @@ internal object TraceExplanations {
 
                 EngineLayerState.UNAVAILABLE -> throw checkNotNull(layer.cause).error
                 EngineLayerState.MISSING_POLICIES -> {
+                    // After the decision, the missing policy did not fail this request: say what it does instead.
+                    val consequence = if (afterDecision) {
+                        "authorization fails closed on any request that reaches the principal's policies"
+                    } else {
+                        "authorization fails closed"
+                    }
                     (layer.cause as Cause.MissingPolicies).policyIds.forEach { missing ->
                         warn(
                             ExplainWarningCode.MISSING_POLICY,
-                            "The principal lists policy [$missing], which the repository does not have; " +
-                                "authorization fails closed.",
+                            "The principal lists policy [$missing], which the repository does not have; $consequence.",
                         )
                     }
                     // The engine stops at the missing policies before any of the layer's conditions.
@@ -223,17 +250,31 @@ internal object TraceExplanations {
         }
 
         /**
-         * One [RoleTrace] per role grant, in grant order, so a role whose grants visit nothing is listed too. Each
-         * statement belongs to the role its trace ref names. A statement's index is its position among the role's
+         * One [RoleTrace] per role grant, in grant order, so a role whose grants visit nothing is listed too, and a
+         * role listed twice is listed twice. A grant takes the trace's entries in order: as many as it grants (the
+         * whole catalog for a wildcard), and only those whose ref names its role, so a trace the engine could not
+         * complete never moves an entry to another role. A statement's index is its position among the role's
          * granted permissions the app defines, as the narration counts it; an unresolved grant is not a statement,
          * and the evaluation failing on one is a [ExplainWarningCode.MISSING_PERMISSION].
          */
         private fun roles(group: GroupTrace, appPermissionGroup: AppPermissionGroup): List<RoleTrace> {
-            val byRole = group.rules.groupBy { (it.ref as StatementRef.RolePermission).roleId }
-            val roleIds = appPermissionGroup.rolePermissions.map { it.id }
-            check(roleIds.containsAll(byRole.keys)) { "The trace of app [${group.id}] names roles it does not grant." }
+            val appPermission = appPermissionGroup.appPermission
+            val catalogSize = appPermission.permissionIndexer.size
+            var next = 0
+            val roles = appPermissionGroup.rolePermissions.map { rolePermission ->
+                val grants = rolePermission.permissions
+                val visits = if (AppRolePermission.ALL_PERMISSION_ID in grants) catalogSize else grants.size
+                val start = next
+                while (next < group.rules.size && next - start < visits &&
+                    (group.rules[next].ref as StatementRef.RolePermission).roleId == rolePermission.id
+                ) {
+                    next++
+                }
+                role(appPermission, rolePermission.id, group.rules.subList(start, next))
+            }
+            check(next == group.rules.size) { "The trace of app [${group.id}] has entries its grants do not visit." }
             group.contractError()
-            return roleIds.map { roleId -> role(appPermissionGroup.appPermission, roleId, byRole[roleId].orEmpty()) }
+            return roles
         }
 
         private fun role(appPermission: AppPermission, roleId: String, rules: List<RuleTrace>): RoleTrace {

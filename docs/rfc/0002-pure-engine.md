@@ -553,9 +553,9 @@ RFC 0001 §3.3 的算法是"先对**整个**候选集检查所有 DENY，再检�
 | X3 | **调用方上下文不再留下路径变量**：现在授权结束后，调用方 `SecurityContext` 的 `PATH_VARIABLES` 里是最后一条匹配上的 `path` 语句写下的变量；本阶段它们只写进语句作用域上下文，调用方上下文里没有 | 授权之后自己读 `getPathVariables()` 的应用代码 | 接受（这正是 D1/D7 要消除的共享状态），写进 `upgrading.md` 的破坏性变更 |
 | X4 | **自定义条件匹配器在前置条件里写路径变量**：现在同一层的前置条件之间共享一次清空后的变量；本阶段每个前置条件前都重置 | 在策略 / 应用条件里调用 `setPathVariables` 的自定义匹配器（加载检查只看配置字符串，看不到代码） | 接受。内置匹配器都不这么做，`skills/cosec-custom-matcher` 已经要求"路径变量只属于本语句" |
 | X5 | **自定义 `Statement` 覆写 `verify`**：现在 `SimpleAuthorization` 经 `verifyScoped` 调用的是可覆写的 `Statement.verify` | 覆写了 `verify` 的 `Statement`/`Permission` 实现 | PR-3 中适配层对 `StatementData`/`PermissionData` 之外的实现改调 `verify`（trace 里只能区分命中 / 未命中，未命中记为 `CONDITION_MISS` 并注明），保证等价；PR-6 删除 `Statement.verify` 后这类覆写**编译失败**，写进 `upgrading.md` |
-| X6 | **解释输出**：出错时，现在的 trace 不模拟中止，照常叙述后面的层；本阶段标为 `NOT_EVALUATED`（`EXHAUSTIVE` 时为 `EVALUATED_AFTER_DECISION`）。`TRACE_INCONSISTENT` 不可能再出现，删除；`ACTION_MISS` 不再靠第二次调用 `action.match` 判断 | `CoSecExplainEndpoint` 的使用者、`PolicyTestKit` 的失败消息 | 接受，写进 `upgrading.md`（`ExplainWarningCode` 删除一个值属于公共 API 变更） |
+| X6 | **解释输出**：出错时，现在的 trace 不模拟中止，照常叙述后面的层；本阶段标为 `NOT_EVALUATED`（`EXHAUSTIVE` 时为 `EVALUATED_AFTER_DECISION`）。`TRACE_INCONSISTENT` 不可能再出现，删除；`ACTION_MISS` 不再靠第二次调用 `action.match` 判断。PR-5（#996）及其第一轮审查另外确认了下列输出变化：无法判定的层没有 `result`/`matched`，包括 `EXHAUSTIVE` 下决策之后、到达时会失败的层；主体策略缺失时，该层不列出找到的策略；显式拒绝跳过的层不再产生关于其数据的警告（`NO_ROLE_IN_SPACE`、`NO_APP_PERMISSION`、`MISSING_POLICY`）；警告按层的顺序排列；正则超时的形状与其他出错相同（出错的层没有结果，后面的层不评估，带 `MATCHER_ERROR` 警告），状态仍是 401/403；`FULL` 下被前面的显式拒绝跳过的不可用层不再让解释失败（到达的不可用层、`EXHAUSTIVE` 下的不可用层仍然失败，与原来一致）；`EXHAUSTIVE` 下显式拒绝之后的 `MISSING_POLICY` 改写为“到达主体策略的请求都会失败即拒绝”，不再说本请求失败即拒绝；授予列表中重复出现的角色按授予逐条列出。策略名称、匹配器描述和角色列表由适配层的 `PolicySet` 按 trace 的引用查得，trace 本身不变 | `CoSecExplainEndpoint` 的使用者、`PolicyTestKit` 的失败消息 | 接受，写进 `upgrading.md`（`ExplainWarningCode` 删除一个值属于公共 API 变更） |
 | X7 | **DEBUG 日志**：`SimpleAuthorization` 原来在每个命中点打一条，改为适配层在决策后打一条 | 日志 | 接受 |
-| X8 | **捕获范围**：引擎只捕获 `Exception`；`Error` 照常向外传播。trace 中只为解释而评估（决策之后）的匹配器抛出的 `Throwable`（`VirtualMachineError`、`LinkageError` 除外）记为 `ERROR`，不传播（§3.2） | 抛 `Error` 的自定义匹配器 | 执法的最终映射不变（Reactor 仍把它变成错误信号 → 500），无需处理；解释不再因决策之后的 `Error` 而失败 |
+| X8 | **捕获范围**：引擎只捕获 `Exception`；`Error` 照常向外传播。trace 中只为解释而评估（决策之后）的匹配器抛出的 `Throwable`（`VirtualMachineError`、`LinkageError` 除外）记为 `ERROR`，不传播（§3.2） | 抛 `Error` 的自定义匹配器 | 执法的最终映射不变（Reactor 仍把它变成错误信号 → 500），无需处理；解释不再因决策之后的 `Error` 而失败（原来的叙述会因它失败），写进 `upgrading.md`。决策之前的 `Error`、无法解析的安全上下文、违反适配契约的输入，以及映射决策时的失败，仍让基于 trace 的解释失败，与执法和原来的叙述一致 |
 | X9 | （已撤销）原稿中"角色授予不存在的权限 id 时静默跳过"的现有行为，已由 7.0 发布前的修复改为失败即拒绝，见 S10a 与 §10 Q11 | — | 不再是差异：引擎侧按 S10a 保持 7.0 的行为，门槛按它比较 |
 
 ---
@@ -877,7 +877,7 @@ PR-4 新增 `DecisionParity`，取代原稿的 `EngineParityAuthorization`：它
 |---|---|---|
 | `wiki/architecture/overview.md` | PR-6 | 新模块与依赖规则、决策流程图（`SimpleAuthorization` → 引擎）、"一份算法"、路径变量的语句作用域、JMH 数字 |
 | `wiki/architecture/extending.md`、`skills/cosec-custom-matcher` | PR-6 | 匹配器在语句作用域上下文中执行；X2、X3、X4、X5 对自定义代码的影响 |
-| `wiki/operations/upgrading.md` | PR-6 | 7.x → 8.0：X2、X3、X5、X6 与 `cosec-api` 的删除项（`Policy.verify`、`Statement.verify`、`PermissionVerifier`、`ExplainWarningCode.TRACE_INCONSISTENT`） |
+| `wiki/operations/upgrading.md` | PR-6 | 7.x → 8.0：X2、X3、X5、X6（含 PR-5 确认的各项解释输出变化）、X8（决策之后的 `Error` 不再让解释失败）与 `cosec-api` 的删除项（`Policy.verify`、`Statement.verify`、`PermissionVerifier`、`ExplainWarningCode.TRACE_INCONSISTENT`） |
 | `wiki/operations/troubleshooting.md`、`skills/cosec-troubleshoot` | PR-6 | 删除 `TRACE_INCONSISTENT` 的条目（若有） |
 
 PR-4 不改 `wiki/`（2026-10-21 修订，原来要在 `configuration.md` 写开关、在 `testing.md` 写陪跑影子）：`PolicyTestKit.parity` 在 PR-6 删除，

@@ -23,7 +23,6 @@ import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
-import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.explain.AuthorizationExplainer
 import me.ahoo.cosec.explain.DecisionRef
 import me.ahoo.cosec.explain.ExplainOptions
@@ -161,15 +160,22 @@ object PolicyTestKit {
             suite.appPermissions,
             AppPermission::class.java
         ) { it.id }.associateBy { it.id }
-        val explainer = AuthorizationExplainer(
-            InMemoryPolicyRepository(policies),
-            InMemoryAppRolePermissionRepository(appPermissions, grantsOf(suite, appPermissions)),
-            BlacklistChecker.NoOp,
-            rootPrincipalMatcher,
-            rateLimitRuleProvider = null,
-            securityContextParser = null,
-            fromTrace = explainFromTrace,
-        )
+        val policyRepository = InMemoryPolicyRepository(policies)
+        val appRolePermissionRepository =
+            InMemoryAppRolePermissionRepository(appPermissions, grantsOf(suite, appPermissions))
+        val explainer = if (explainFromTrace) {
+            AuthorizationExplainer.fromTrace(
+                policyRepository,
+                appRolePermissionRepository,
+                rootPrincipalMatcher = rootPrincipalMatcher,
+            )
+        } else {
+            AuthorizationExplainer(
+                policyRepository,
+                appRolePermissionRepository,
+                rootPrincipalMatcher = rootPrincipalMatcher
+            )
+        }
         return suite.cases.map { case ->
             val explanation = checkNotNull(
                 explainer.explain(case.request.toRequest(), case.principal.toPrincipal(), ExplainOptions()).block(),
