@@ -14,37 +14,23 @@
 package me.ahoo.cosec.authorization
 
 import me.ahoo.cosec.blacklist.BlacklistChecker
+import me.ahoo.cosec.parity.AuthorizationFactory
 
 /**
  * The two authorization implementations every decision test runs against until the legacy one is removed
  * (RFC 0002 §8.2): use it with `@ParameterizedClass @EnumSource(AuthorizationImpl::class)`.
  */
-enum class AuthorizationImpl {
-    LEGACY {
-        override fun create(
-            policyRepository: PolicyRepository,
-            appRolePermissionRepository: AppRolePermissionRepository,
-            blacklistChecker: BlacklistChecker,
-            rootPrincipalMatcher: RootPrincipalMatcher
-        ): DecisionAuthorization =
-            SimpleAuthorization(policyRepository, appRolePermissionRepository, blacklistChecker, rootPrincipalMatcher)
-    },
-    ENGINE {
-        override fun create(
-            policyRepository: PolicyRepository,
-            appRolePermissionRepository: AppRolePermissionRepository,
-            blacklistChecker: BlacklistChecker,
-            rootPrincipalMatcher: RootPrincipalMatcher
-        ): DecisionAuthorization =
-            EngineAuthorization(policyRepository, appRolePermissionRepository, blacklistChecker, rootPrincipalMatcher)
-    };
+enum class AuthorizationImpl(private val delegate: AuthorizationFactory) {
+    LEGACY(AuthorizationFactory.LEGACY),
+    ENGINE(AuthorizationFactory.ENGINE);
 
-    abstract fun create(
+    fun create(
         policyRepository: PolicyRepository,
         appRolePermissionRepository: AppRolePermissionRepository,
         blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp,
         rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE
-    ): DecisionAuthorization
+    ): DecisionAuthorization =
+        delegate.create(policyRepository, appRolePermissionRepository, blacklistChecker, rootPrincipalMatcher)
 
     /** For [me.ahoo.cosec.shadow.ShadowAuthorization]'s candidate factory. */
     val factory:

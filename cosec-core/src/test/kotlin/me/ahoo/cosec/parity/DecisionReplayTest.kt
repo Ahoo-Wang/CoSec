@@ -13,10 +13,12 @@
 
 package me.ahoo.cosec.parity
 
+import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.authorization.AuthorizationDecision
 import me.ahoo.cosec.authorization.DecisionAuthorization
+import me.ahoo.cosec.authorization.MissingPolicyException
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactoryProvider
 import me.ahoo.cosec.policy.condition.TimeConditionMatcherFactory
@@ -26,6 +28,8 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import reactor.core.publisher.Mono
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -46,22 +50,68 @@ class DecisionReplayTest {
     private fun sha256(file: Path): String =
         HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file)))
 
+    private fun answer(answer: (Request, SecurityContext) -> Mono<AuthorizationDecision>) = answer
+
+    /** Answers like the engine, except on the samples [answers] covers, keyed by request id. */
+    private fun engineExcept(answers: Map<String, (Request, SecurityContext) -> Mono<AuthorizationDecision>>) =
+        AuthorizationFactory { policyRepository, appRolePermissionRepository, blacklist, root ->
+            val engine = AuthorizationFactory.ENGINE.create(
+                policyRepository,
+                appRolePermissionRepository,
+                blacklist,
+                root
+            )
+            object : DecisionAuthorization {
+                override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> =
+                    answers[request.requestId]?.invoke(request, context) ?: engine.decide(request, context)
+            }
+        }
+
+    private fun runMain(vararg args: String, candidate: AuthorizationFactory = AuthorizationFactory.ENGINE): Pair<Int, String> {
+        val out = ByteArrayOutputStream()
+        val code = replayMain(arrayOf(*args), PrintStream(out, true), candidate = candidate)
+        return code to out.toString()
+    }
+
     @Test
     fun replaysTheSyntheticExport(@TempDir dir: Path) {
-        val report = DecisionReplay().run(export(dir))
+        val report = DecisionReplay(gate = LENIENT).run(export(dir))
 
-        report.samples.assert().isEqualTo(14L)
-        report.same.assert().isEqualTo(14L)
+        report.samples.assert().isEqualTo(16L)
+        report.same.assert().isEqualTo(16L)
         report.mismatch.assert().isEqualTo(0L)
         report.candidateError.assert().isEqualTo(0L)
         // A missing principal policy and a grant of an undefined permission fail closed on both sides.
         report.bothFailed.assert().isEqualTo(2L)
+        report.failedAlikeForDifferentCauses.assert().isEqualTo(0L)
+        report.baselineErrors.assert().isEqualTo(
+            mapOf(
+                "me.ahoo.cosec.api.permission.MissingPermissionException" to 1L,
+                MissingPolicyException::class.java.name to 1L,
+            ),
+        )
+        report.candidateErrors.assert().isEqualTo(report.baselineErrors)
+        report.byStatus.assert().isEqualTo(
+            mapOf("ALLOWED" to 8L, "ERROR" to 2L, "FORBIDDEN" to 4L, "UNAUTHORIZED" to 2L)
+        )
+        report.byLayer.assert().isEqualTo(
+            mapOf(
+                "BLACKLIST" to 1L,
+                "ERROR" to 2L,
+                "GLOBAL_POLICY" to 3L,
+                "NONE" to 2L,
+                "PRINCIPAL_POLICY" to 5L,
+                "ROLE_PERMISSION" to 2L,
+                "ROOT" to 1L,
+            ),
+        )
         report.from.assert().isEqualTo(Instant.parse("2026-10-01T10:00:00Z"))
         report.to.assert().isEqualTo(Instant.parse("2026-10-03T10:00:00Z"))
         report.spanDays.assert().isEqualTo(2.0)
         // The token-expired sample is not compared; the reports policy changed after its sample was recorded.
-        report.recordedCompared.assert().isEqualTo(13L)
-        report.recordedAgreement.assert().isEqualTo(12L)
+        report.recordedCompared.assert().isEqualTo(15L)
+        report.recordedAgreement.assert().isEqualTo(14L)
+        report.authenticatedInconsistent.assert().isEqualTo(1L)
         report.unrecordedInputs.assert().isEqualTo(
             mapOf(
                 "policy:orders" to setOf("principal.attributes", "request.headers"),
@@ -70,16 +120,35 @@ class DecisionReplayTest {
         )
         report.supplemented.assert().isEqualTo(mapOf("principal.attributes" to 1L, "request.headers" to 3L))
         report.inputs.keys.assert().containsExactlyInAnyOrderElementsOf(FILES)
-        report.inputs[DecisionReplay.REQUESTS_FILE].assert().isEqualTo(
-            sha256(dir.resolve(DecisionReplay.REQUESTS_FILE))
-        )
+        FILES.forEach { report.inputs[it].assert().isEqualTo(sha256(dir.resolve(it))) }
+        report.gate.assert().isEqualTo(LENIENT)
+        report.gateUnmet.assert().isEmpty()
 
         val written = CoSecJsonSerializer.readTree(Files.readAllBytes(dir.resolve(DecisionReplay.REPORT_FILE)))
-        written.get("samples").asLong().assert().isEqualTo(14L)
+        written.get("samples").asLong().assert().isEqualTo(16L)
+        written.get("byLayer").get("ROOT").asLong().assert().isEqualTo(1L)
         written.get("inputs").get(DecisionReplay.POLICIES_FILE).asString().assert()
             .isEqualTo(sha256(dir.resolve(DecisionReplay.POLICIES_FILE)))
         Files.readAllLines(dir.resolve(DecisionReplay.MISMATCHES_FILE)).assert().isEmpty()
-        report.summary().assert().contains("same=14 mismatch=0 candidate_error=0").contains("12 / 13")
+        Files.list(
+            dir
+        ).use { files -> files.noneMatch { it.fileName.toString().endsWith(".partial") }.assert().isTrue() }
+        report.summary().assert().contains(
+            "same=16 mismatch=0 candidate_error=0"
+        ).contains("14 / 15").contains("Gate met")
+    }
+
+    @Test
+    fun theDefaultGateNeedsAMillionSamplesOverAWeek(@TempDir dir: Path) {
+        val report = DecisionReplay().run(export(dir))
+        report.gate.assert().isEqualTo(ReplayGate())
+        report.gateUnmet.assert().hasSize(3)
+        report.gateUnmet.joinToString().assert()
+            .contains("16 samples, fewer than 1000000")
+            .contains("shorter than 7.0")
+            .contains("2 of 16 samples failed on both sides")
+        report.summary().assert().contains("GATE NOT MET")
+        ReplayGate().unmet(0, 0.0, 0).assert().contains("no samples")
     }
 
     @Test
@@ -110,48 +179,30 @@ class DecisionReplayTest {
 
     @Test
     fun anInjectedDifferenceShowsInTheReportAndTheMismatches(@TempDir dir: Path) {
-        // Lets the blacklisted sample through: a deliberate difference.
-        val ignoringBlacklist = AuthorizationFactory { policyRepository, appRolePermissionRepository, blacklist, root ->
-            val engine = AuthorizationFactory.ENGINE.create(
-                policyRepository,
-                appRolePermissionRepository,
-                blacklist,
-                root
-            )
-            val unblocked = AuthorizationFactory.ENGINE.create(
+        val unblocked = AuthorizationFactory { policyRepository, appRolePermissionRepository, _, root ->
+            AuthorizationFactory.ENGINE.create(
                 policyRepository,
                 appRolePermissionRepository,
                 BlacklistChecker.NoOp,
-                root,
+                root
             )
-            object : DecisionAuthorization {
-                override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> =
-                    if (request.requestId == "r6") {
-                        unblocked.decide(
-                            request,
-                            context
-                        )
-                    } else {
-                        engine.decide(request, context)
-                    }
-            }
         }
-        val failing = AuthorizationFactory { policyRepository, appRolePermissionRepository, blacklist, root ->
-            val engine = ignoringBlacklist.create(policyRepository, appRolePermissionRepository, blacklist, root)
-            object : DecisionAuthorization {
-                override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> =
-                    if (request.requestId == "r10") {
-                        Mono.error(IllegalStateException("engine bug"))
-                    } else {
-                        engine.decide(request, context)
-                    }
-            }
+        val candidate = AuthorizationFactory { policyRepository, appRolePermissionRepository, blacklist, root ->
+            val ignoringBlacklist = unblocked.create(policyRepository, appRolePermissionRepository, blacklist, root)
+            engineExcept(
+                mapOf(
+                    // Lets the blacklisted sample through: a deliberate difference.
+                    "r6" to answer { request, context -> ignoringBlacklist.decide(request, context) },
+                    "r10" to answer { _, _ -> Mono.error(IllegalStateException("engine bug")) },
+                ),
+            ).create(policyRepository, appRolePermissionRepository, blacklist, root)
         }
-        val report = DecisionReplay(candidate = failing).run(export(dir))
+        val report = DecisionReplay(candidate = candidate, gate = LENIENT).run(export(dir))
 
         report.mismatch.assert().isEqualTo(1L)
         report.candidateError.assert().isEqualTo(1L)
-        report.same.assert().isEqualTo(12L)
+        report.same.assert().isEqualTo(14L)
+        report.candidateErrors[IllegalStateException::class.java.name].assert().isEqualTo(1L)
         val mismatches = Files.readAllLines(dir.resolve(DecisionReplay.MISMATCHES_FILE))
             .map { CoSecJsonSerializer.readTree(it) }
         mismatches.map { it.get("line").asInt() }.assert().containsExactly(6, 10)
@@ -162,17 +213,34 @@ class DecisionReplayTest {
         blacklisted.get("candidate").get("status").asString().assert().isEqualTo("ALLOWED")
         mismatches[1].get("candidate").get("error").asString().assert()
             .isEqualTo(IllegalStateException::class.java.name)
+        mismatches[1].get("candidateCause").asString().assert().isEqualTo("engine bug")
+    }
+
+    @Test
+    fun failuresOfOneClassForDifferentCausesAreListed(@TempDir dir: Path) {
+        // The missing-policy sample, failing for another id.
+        val candidate =
+            engineExcept(mapOf("r8" to answer { _, _ -> Mono.error(MissingPolicyException(setOf("other"))) }))
+        val report = DecisionReplay(candidate = candidate, gate = LENIENT).run(export(dir))
+        report.same.assert().isEqualTo(16L)
+        report.failedAlikeForDifferentCauses.assert().isEqualTo(1L)
+        val listed = CoSecJsonSerializer.readTree(
+            Files.readAllLines(dir.resolve(DecisionReplay.MISMATCHES_FILE)).single()
+        )
+        listed.get("verdict").asString().assert().isEqualTo("SAME")
+        listed.get("flag").asString().assert().isEqualTo("FAILED_ALIKE_FOR_DIFFERENT_CAUSES")
+        listed.get("baselineCause").asString().assert().isEqualTo("PRINCIPAL policies [deleted]")
+        listed.get("candidateCause").asString().assert().isEqualTo("PRINCIPAL policies [other]")
     }
 
     @Test
     fun withoutReplayConfigNoPrincipalIsRoot(@TempDir dir: Path) {
-        val report = DecisionReplay().run(
-            export(dir, FILES - DecisionReplay.CONFIG_FILE),
-        )
+        val report = DecisionReplay().run(export(dir, FILES - DecisionReplay.CONFIG_FILE))
         report.mismatch.assert().isEqualTo(0L)
         report.inputs.keys.assert().doesNotContain(DecisionReplay.CONFIG_FILE)
+        report.byLayer.keys.assert().doesNotContain("ROOT")
         // The root sample is now denied by the admin deny, so it no longer agrees with the recording.
-        report.recordedAgreement.assert().isEqualTo(11L)
+        report.recordedAgreement.assert().isEqualTo(13L)
     }
 
     @Test
@@ -188,14 +256,30 @@ class DecisionReplayTest {
     }
 
     @Test
-    fun malformedInputFails(@TempDir dir: Path) {
-        export(dir, listOf(DecisionReplay.POLICIES_FILE, DecisionReplay.APP_ROLE_PERMISSIONS_FILE))
+    fun aFailedRunLeavesNoReportBehind(@TempDir dir: Path) {
+        DecisionReplay().run(export(dir))
+        Files.exists(dir.resolve(DecisionReplay.REPORT_FILE)).assert().isTrue()
+
         Files.write(dir.resolve(DecisionReplay.REQUESTS_FILE), listOf("""{ "timestamp": "2026-10-01T10:00:00Z" }"""))
         assertThrows(IllegalArgumentException::class.java) { DecisionReplay().run(dir) }.message.assert()
             .contains("line 1")
+        Files.exists(dir.resolve(DecisionReplay.REPORT_FILE)).assert().isFalse()
+        Files.exists(dir.resolve(DecisionReplay.MISMATCHES_FILE)).assert().isFalse()
+        Files.list(
+            dir
+        ).use { files -> files.noneMatch { it.fileName.toString().endsWith(".partial") }.assert().isTrue() }
+    }
 
+    @Test
+    fun malformedInputFails(@TempDir dir: Path) {
+        export(dir, listOf(DecisionReplay.APP_ROLE_PERMISSIONS_FILE, DecisionReplay.REQUESTS_FILE))
         Files.writeString(dir.resolve(DecisionReplay.POLICIES_FILE), "{}")
         assertThrows(IllegalArgumentException::class.java) { DecisionReplay().run(dir) }
+
+        val policy = """{ "id": "p", "name": "p", "type": "global", "tenantId": "t", "statements": [] }"""
+        Files.writeString(dir.resolve(DecisionReplay.POLICIES_FILE), "[$policy, $policy]")
+        assertThrows(IllegalArgumentException::class.java) { DecisionReplay().run(dir) }.message.assert()
+            .contains("[p] more than once")
     }
 
     @Test
@@ -210,10 +294,41 @@ class DecisionReplayTest {
     }
 
     @Test
-    fun mainReplaysTheGivenDirectory(@TempDir dir: Path) {
-        main(arrayOf(export(dir).toString()))
+    fun theCommandLineExitsWithWhatTheReplayFound(@TempDir dir: Path) {
+        val directory = export(dir).toString()
+        val lenient = arrayOf(directory, "--min-samples=10", "--min-days=1", "--max-both-failed-rate=0.2")
+
+        val (ok, okOut) = runMain(*lenient)
+        ok.assert().isEqualTo(REPLAY_OK)
+        okOut.assert().contains("Gate met").contains("Report: ")
+
+        val (notMet, notMetOut) = runMain(directory)
+        notMet.assert().isEqualTo(REPLAY_GATE_NOT_MET)
+        notMetOut.assert().contains("GATE NOT MET")
+
+        val failing = engineExcept(mapOf("r10" to answer { _, _ -> Mono.error(IllegalStateException("engine bug")) }))
+        val (candidateError, candidateErrorOut) = runMain(*lenient, candidate = failing)
+        candidateError.assert().isEqualTo(REPLAY_DIFFERENCES)
+        candidateErrorOut.assert().contains("candidate_error=1").contains("DIFFERENCES: ")
+
+        val denying = engineExcept(
+            mapOf("r1" to answer { _, _ -> Mono.just(AuthorizationDecision(AuthorizeResult.IMPLICIT_DENY)) }),
+        )
+        // Differences win over an unmet gate.
+        runMain(directory, candidate = denying).first.assert().isEqualTo(REPLAY_DIFFERENCES)
+
+        runMain().first.assert().isEqualTo(REPLAY_USAGE)
+        runMain("--min-samples=1").first.assert().isEqualTo(REPLAY_USAGE)
+        runMain(directory, "--min-samples=many").first.assert().isEqualTo(REPLAY_USAGE)
+        val (unknown, unknownOut) = runMain(directory, "--verbose")
+        unknown.assert().isEqualTo(REPLAY_USAGE)
+        unknownOut.assert().contains("Usage: DecisionReplay")
+    }
+
+    @Test
+    fun mainReturnsNormallyWhenTheReplayIsClean(@TempDir dir: Path) {
+        main(arrayOf(export(dir).toString(), "--min-samples=10", "--min-days=1", "--max-both-failed-rate=0.2"))
         Files.exists(dir.resolve(DecisionReplay.REPORT_FILE)).assert().isTrue()
-        assertThrows(IllegalArgumentException::class.java) { main(emptyArray()) }
     }
 
     @Test
@@ -236,5 +351,8 @@ class DecisionReplayTest {
             DecisionReplay.REQUESTS_FILE,
             DecisionReplay.CONFIG_FILE,
         )
+
+        /** For the 16-sample synthetic export, which can never meet the real gate. */
+        private val LENIENT = ReplayGate(minSamples = 10, minDays = 1.0, maxBothFailedRate = 0.2)
     }
 }
