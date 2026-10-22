@@ -51,10 +51,10 @@ internal class PolicySetLoader(
      * [LayerInput.Unavailable], the same way.
      */
     fun load(request: AuthzRequest): Mono<PolicySet> {
-        val facts = request.host as LegacyFacts
+        val reads = LayerReads.of(request.host as LegacyFacts)
         val global = global()
-        val principal = principal(facts)
-        val role = role(facts)
+        val principal = reads.principalLayer ?: principal(reads.policyIds)
+        val role = reads.roleLayer ?: role(reads)
         if (global is LayerInput && principal is LayerInput) {
             if (role is LayerInput) {
                 return Mono.just(PolicySet(listOf(global, principal, role)))
@@ -81,28 +81,14 @@ internal class PolicySetLoader(
         adapt = { policies -> LayerInput.Loaded(LayerKind.GLOBAL, groupsOf(policies)) },
     )
 
-    /**
-     * The principal's policies, read under 7.0's conditions, before evaluation (RFC 0002 X1): a read that throws fails
-     * the layer, when it is reached.
-     */
-    @Suppress("TooGenericExceptionCaught")
-    private fun principal(facts: LegacyFacts): Any {
-        val policyIds = try {
-            facts.base.principal.policies
-        } catch (error: Throwable) {
-            return unavailable(LayerKind.PRINCIPAL, error)
-        }
-        if (policyIds.isEmpty()) {
-            return NO_PRINCIPAL_POLICIES
-        }
-        return layer(
-            LayerKind.PRINCIPAL,
-            read = { policyRepository.getPolicies(policyIds) },
-            // An empty read means none was found.
-            empty = { principalLayer(policyIds, emptyList()) },
-            adapt = { policies -> principalLayer(policyIds, policies) },
-        )
-    }
+    /** The principal's policies, when [LayerReads] found some to read. */
+    private fun principal(policyIds: Set<String>): Any = layer(
+        LayerKind.PRINCIPAL,
+        read = { policyRepository.getPolicies(policyIds) },
+        // An empty read means none was found.
+        empty = { principalLayer(policyIds, emptyList()) },
+        adapt = { policies -> principalLayer(policyIds, policies) },
+    )
 
     /**
      * [PolicyRepository.getPolicies] returns only the policies it found. A missing one may be the deny that keeps
@@ -129,34 +115,14 @@ internal class PolicySetLoader(
 
     /**
      * Only the principal's roles scoped to the request's space count (see [RoleScope]); the repository keys their
-     * grants by the request's app, so a grant never applies in another app or space.
-     *
-     * The roles, the space and the app are read in 7.0's order and under its conditions (each only when the one
-     * before leaves something to read), before evaluation (RFC 0002 X1). A read that throws (a request whose query
-     * cannot be read) fails the layer, when it is reached.
+     * grants by the request's app, so a grant never applies in another app or space. [LayerReads] read the roles, the
+     * space and the app; the repository gets the app id as read, valid or not, as in 7.0.
      */
-    @Suppress("TooGenericExceptionCaught", "ReturnCount")
-    private fun role(facts: LegacyFacts): Any {
-        val spaceId: String
-        val scopedRoles: Set<String>
-        val appId: String
-        try {
-            val roles = facts.base.principal.roles
-            if (roles.isEmpty()) {
-                return NO_ROLES
-            }
-            spaceId = facts.request.spaceId
-            scopedRoles = RoleScope.rolesIn(spaceId, roles)
-            if (scopedRoles.isEmpty()) {
-                return NO_ROLE_IN_SPACE
-            }
-            appId = facts.request.appId
-        } catch (error: Throwable) {
-            return unavailable(LayerKind.ROLE, error)
-        }
+    private fun role(reads: LayerReads): Any {
+        val appId = checkNotNull(reads.appId)
         return layer(
             LayerKind.ROLE,
-            read = { appRolePermissionRepository.getAppRolePermission(appId, spaceId, scopedRoles) },
+            read = { appRolePermissionRepository.getAppRolePermission(appId, reads.spaceId, reads.scopedRoles) },
             empty = { NO_APP_PERMISSION },
             adapt = { appRolePermission ->
                 val group =
@@ -207,9 +173,6 @@ internal class PolicySetLoader(
 
     companion object {
         private val NO_GLOBAL_POLICIES: LayerInput = LayerInput.Absent(LayerKind.GLOBAL, AbsentReason.NO_POLICIES)
-        private val NO_PRINCIPAL_POLICIES: LayerInput = LayerInput.Absent(LayerKind.PRINCIPAL, AbsentReason.NO_POLICIES)
-        private val NO_ROLES: LayerInput = LayerInput.Absent(LayerKind.ROLE, AbsentReason.NO_ROLES)
-        private val NO_ROLE_IN_SPACE: LayerInput = LayerInput.Absent(LayerKind.ROLE, AbsentReason.NO_ROLE_IN_SPACE)
         private val NO_APP_PERMISSION: LayerInput = LayerInput.Absent(LayerKind.ROLE, AbsentReason.NO_APP_PERMISSION)
 
         /** Whether any matcher of [policies] may block, so the evaluation has to leave the caller's thread (X2). */

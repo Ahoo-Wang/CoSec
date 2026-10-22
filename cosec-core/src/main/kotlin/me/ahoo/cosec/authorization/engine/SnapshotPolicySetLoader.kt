@@ -13,13 +13,9 @@
 
 package me.ahoo.cosec.authorization.engine
 
-import me.ahoo.cosec.api.context.request.AppId
-import me.ahoo.cosec.api.context.request.SpaceId
 import me.ahoo.cosec.api.permission.RolePermission
 import me.ahoo.cosec.api.policy.PolicyId
-import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.cosec.authorization.MissingPolicyException
-import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.engine.AbsentReason
 import me.ahoo.cosec.engine.LayerInput
 import me.ahoo.cosec.engine.PolicySet
@@ -27,63 +23,7 @@ import me.ahoo.cosec.model.Cause
 import me.ahoo.cosec.model.LayerKind
 import me.ahoo.cosec.snapshot.DocumentState
 import me.ahoo.cosec.snapshot.SnapshotKey
-import reactor.core.Exceptions
-
-/**
- * What a request's layers read from the request and its principal, read once, in 7.0's order and under its
- * conditions (RFC 0002 X1): the principal's policies, then its roles, the space and the app, each only when the one
- * before leaves something to read. A read that throws fails its layer, when the evaluation reaches it.
- *
- * Read before the snapshot is taken, because [appId] decides which app document the request needs.
- */
-internal class SnapshotReads private constructor(
-    /** The principal layer when the reads already decide it; otherwise null and [policyIds] is set. */
-    val principalLayer: LayerInput?,
-    val policyIds: Set<PolicyId>,
-    /** The role layer when the reads already decide it; otherwise null and [appId] is set. */
-    val roleLayer: LayerInput?,
-    /** The app document the request needs, or null when it needs none. */
-    val appId: AppId?,
-    val spaceId: SpaceId,
-    val scopedRoles: Set<RoleId>,
-) {
-    companion object {
-        /** Reads what the layers of [facts]'s request need. */
-        @Suppress("TooGenericExceptionCaught")
-        fun of(facts: LegacyFacts): SnapshotReads {
-            var principalLayer: LayerInput? = null
-            var policyIds: Set<PolicyId> = emptySet()
-            try {
-                policyIds = facts.base.principal.policies
-                if (policyIds.isEmpty()) {
-                    principalLayer = NO_PRINCIPAL_POLICIES
-                }
-            } catch (error: Throwable) {
-                principalLayer = unavailable(LayerKind.PRINCIPAL, error)
-            }
-            try {
-                val roles = facts.base.principal.roles
-                if (roles.isEmpty()) {
-                    return SnapshotReads(principalLayer, policyIds, NO_ROLES, null, "", emptySet())
-                }
-                val spaceId = facts.request.spaceId
-                val scopedRoles = RoleScope.rolesIn(spaceId, roles)
-                if (scopedRoles.isEmpty()) {
-                    return SnapshotReads(principalLayer, policyIds, NO_ROLE_IN_SPACE, null, spaceId, scopedRoles)
-                }
-                val appId = facts.request.appId
-                // 7.0's repository gives an app id that cannot own grants no app permission.
-                if (!SnapshotKey.App.isValidAppId(appId)) {
-                    return SnapshotReads(principalLayer, policyIds, NO_APP_PERMISSION, null, spaceId, scopedRoles)
-                }
-                return SnapshotReads(principalLayer, policyIds, null, appId, spaceId, scopedRoles)
-            } catch (error: Throwable) {
-                val roleLayer = unavailable(LayerKind.ROLE, error)
-                return SnapshotReads(principalLayer, policyIds, roleLayer, null, "", emptySet())
-            }
-        }
-    }
-}
+import me.ahoo.cosec.snapshot.SnapshotUnavailableException
 
 /**
  * Builds a request's [PolicySet] from a compiled snapshot (RFC 0003 §3.5), synchronously and without I/O: the same
@@ -94,35 +34,44 @@ internal class SnapshotReads private constructor(
  * compiled rules and grants, so its per-request memos (unresolved grants, grant positions beyond the shared cache)
  * are the same as [PolicySetLoader]'s. Nothing handed to the engine is changed after it is built.
  *
+ * A layer that fails gets an error of its own, a [SnapshotUnavailableException] whose cause is the compiled document's
+ * shared error: whatever the caller's error handling adds to the error it receives (suppressed exceptions from
+ * `block()`, checkpoints) never accumulates on an object every request shares.
+ *
  * Every document comes from [snapshot], which holds one immutable revision of each (§8.4 P7).
  */
 internal object SnapshotPolicySetLoader {
-    fun load(reads: SnapshotReads, snapshot: PolicySnapshot): PolicySet {
+    private val NO_APP_PERMISSION: LayerInput = LayerInput.Absent(LayerKind.ROLE, AbsentReason.NO_APP_PERMISSION)
+
+    fun load(reads: LayerReads, snapshot: PolicySnapshot): PolicySet {
         val policies = snapshot.policies
         return PolicySet(listOf(global(policies), principal(reads, policies), role(reads, snapshot)))
     }
 
     private fun global(policies: DocumentState<CompiledPolicies>): LayerInput = when (policies) {
-        is DocumentState.Present -> policies.compiled.globalLayer
+        is DocumentState.Present -> when (val layer = policies.compiled.globalLayer) {
+            is LayerInput.Unavailable -> unavailable(LayerKind.GLOBAL, SnapshotKey.Policies, layer.error)
+            else -> layer
+        }
         // As 7.0's repository with no policy stored.
         DocumentState.Absent -> PolicySnapshotCompiler.NO_GLOBAL_POLICIES
-        is DocumentState.Failed -> LayerInput.Unavailable(LayerKind.GLOBAL, policies.error)
+        is DocumentState.Failed -> unavailable(LayerKind.GLOBAL, SnapshotKey.Policies, policies.error)
     }
 
-    private fun principal(reads: SnapshotReads, policies: DocumentState<CompiledPolicies>): LayerInput {
+    private fun principal(reads: LayerReads, policies: DocumentState<CompiledPolicies>): LayerInput {
         reads.principalLayer?.let { return it }
         val policyIds = reads.policyIds
         val byId = when (policies) {
             is DocumentState.Present -> policies.compiled.byId
             DocumentState.Absent -> emptyMap()
-            is DocumentState.Failed -> return LayerInput.Unavailable(LayerKind.PRINCIPAL, policies.error)
+            is DocumentState.Failed -> return unavailable(LayerKind.PRINCIPAL, SnapshotKey.Policies, policies.error)
         }
         val groups = ArrayList<PolicyGroup>(policyIds.size)
         var missing: LinkedHashSet<PolicyId>? = null
         for (policyId in policyIds) {
             when (val compiled = byId[policyId]) {
                 // 7.0 reads the principal's policies at once: one that cannot be decoded fails the whole read.
-                is Compiled.Broken -> return LayerInput.Unavailable(LayerKind.PRINCIPAL, compiled.error)
+                is Compiled.Broken -> return unavailable(LayerKind.PRINCIPAL, SnapshotKey.Policies, compiled.error)
                 is Compiled.Ok -> groups.add(compiled.value)
                 null -> (missing ?: LinkedHashSet<PolicyId>().also { missing = it }).add(policyId)
             }
@@ -137,9 +86,9 @@ internal object SnapshotPolicySetLoader {
         return LayerInput.Loaded(LayerKind.PRINCIPAL, groups)
     }
 
-    private fun role(reads: SnapshotReads, snapshot: PolicySnapshot): LayerInput {
+    private fun role(reads: LayerReads, snapshot: PolicySnapshot): LayerInput {
         reads.roleLayer?.let { return it }
-        val appId = checkNotNull(reads.appId)
+        val appId = reads.appDocument ?: return NO_APP_PERMISSION
         val appEntry = snapshot.appEntry
         // A snapshot taken for another app (or none) is a caller bug; fail the layer rather than read the wrong grants.
         if (appEntry == null || (appEntry.key as? SnapshotKey.App)?.appId != appId) {
@@ -148,35 +97,30 @@ internal object SnapshotPolicySetLoader {
                 IllegalStateException("The snapshot holds ${appEntry?.key} instead of the document of app [$appId].")
             )
         }
+        val key = appEntry.key
         val app = when (val state = appEntry.state) {
             is DocumentState.Present -> state.compiled
             DocumentState.Absent -> return NO_APP_PERMISSION
-            is DocumentState.Failed -> return LayerInput.Unavailable(LayerKind.ROLE, state.error)
+            is DocumentState.Failed -> return unavailable(LayerKind.ROLE, key, state.error)
         }
         val rules = when (val appPermission = app.appPermission) {
             is Compiled.Ok -> appPermission.value
-            is Compiled.Broken -> return LayerInput.Unavailable(LayerKind.ROLE, appPermission.error)
+            is Compiled.Broken -> return unavailable(LayerKind.ROLE, key, appPermission.error)
         }
         val spaceGrants = app.grants[reads.spaceId].orEmpty()
         // In the principal's role order, skipping roles without grants, as 7.0's repository does.
         val rolePermissions = ArrayList<RolePermission>(reads.scopedRoles.size)
         for (roleId in reads.scopedRoles) {
             when (val grant = spaceGrants[roleId]) {
-                is Compiled.Broken -> return LayerInput.Unavailable(LayerKind.ROLE, grant.error)
+                is Compiled.Broken -> return unavailable(LayerKind.ROLE, key, grant.error)
                 is Compiled.Ok -> rolePermissions.add(grant.value)
                 null -> Unit
             }
         }
         return LayerInput.Loaded(LayerKind.ROLE, listOf(AppPermissionGroup(rules, rolePermissions)))
     }
-}
 
-private val NO_PRINCIPAL_POLICIES: LayerInput = LayerInput.Absent(LayerKind.PRINCIPAL, AbsentReason.NO_POLICIES)
-private val NO_ROLES: LayerInput = LayerInput.Absent(LayerKind.ROLE, AbsentReason.NO_ROLES)
-private val NO_ROLE_IN_SPACE: LayerInput = LayerInput.Absent(LayerKind.ROLE, AbsentReason.NO_ROLE_IN_SPACE)
-private val NO_APP_PERMISSION: LayerInput = LayerInput.Absent(LayerKind.ROLE, AbsentReason.NO_APP_PERMISSION)
-
-private fun unavailable(kind: LayerKind, error: Throwable): LayerInput {
-    Exceptions.throwIfJvmFatal(error)
-    return LayerInput.Unavailable(kind, error)
+    /** A failed layer with an error of this evaluation's own, caused by the document's [shared] one. */
+    private fun unavailable(kind: LayerKind, key: SnapshotKey, shared: Throwable): LayerInput =
+        LayerInput.Unavailable(kind, SnapshotUnavailableException(key, "the $kind layer cannot be read", shared))
 }

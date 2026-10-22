@@ -22,6 +22,8 @@ dependencies {
     testImplementation("me.ahoo.cosid:cosid-core")
     testImplementation("me.ahoo.cosid:cosid-test")
     testImplementation("io.projectreactor:reactor-test")
+    // P5 against the real repositories: the generator and the PolicySet comparison (RFC 0003 §8.4).
+    testImplementation(testFixtures(project(":cosec-core")))
     // cosec-core matches paths with Spring's PathPattern, which it leaves to the application.
     jmh("org.springframework:spring-web")
 }

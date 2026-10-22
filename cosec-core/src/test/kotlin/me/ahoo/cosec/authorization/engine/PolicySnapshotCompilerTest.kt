@@ -13,7 +13,15 @@
 
 package me.ahoo.cosec.authorization.engine
 
+import me.ahoo.cosec.api.permission.AppPermission
+import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.engine.LayerInput
+import me.ahoo.cosec.parity.LegacyData
+import me.ahoo.cosec.parity.PUBLISHED_AT
+import me.ahoo.cosec.parity.appPermissionJson
+import me.ahoo.cosec.parity.permissionJson
+import me.ahoo.cosec.parity.policyJson
+import me.ahoo.cosec.parity.snapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotFormatException
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.SnapshotUnavailableException
@@ -82,6 +90,11 @@ class PolicySnapshotCompilerTest {
             """"policies":{}""",
             """"other":[]""",
             """"policies":[],"extra":1""",
+            // A repeated section must never replace one that holds a deny.
+            """"policies":[{"id":"deny","name":"deny","type":"global","tenantId":"t","statements":[{"effect":"deny","action":"*"}]}],"policies":[]""",
+            """"policies":[{"id":"a","id":"b","name":"a","type":"custom","tenantId":"t"}]""",
+            """"policies":[{"id":"a","name":"a","type":"global","type":"custom","tenantId":"t"}]""",
+            """"policies":[],"schema":1""",
         ]
     )
     fun aMalformedPoliciesDocumentFailsWhole(sections: String) {
@@ -177,9 +190,92 @@ class PolicySnapshotCompilerTest {
             """"appPermission":{"id":"app"},"grants":{"":[]}""",
             """"appPermission":{"id":"app"},"grants":{"r1":[],"r1":["x"]}""",
             """"appPermission":{"id":"app"},"other":1""",
+            """"appPermission":{"id":"app","condition":{"all":{"negate":true}}},"appPermission":{"id":"app"}""",
+            """"appPermission":{"id":"app"},"grants":{"r1":["*"]},"grants":{}""",
+            """"appPermission":{"id":"app","groups":[],"groups":[]}""",
         ]
     )
     fun aMalformedAppDocumentFailsWhole(sections: String) {
         assertThrownBy<SnapshotFormatException> { app(sections) }
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+        strings = [
+            """{"schema":1,"revision":2,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""",
+            """{"schema":2,"revision":1,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""",
+            """{"schema":"1","revision":1,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""",
+            """{"schema":1,"revision":1,"publishedAt":"2026-10-21T08:00:01Z","policies":[]}""",
+            """{"schema":1,"revision":1,"publishedAt":"yesterday","policies":[]}""",
+            """{"schema":1,"revision":1,"publishedAt":{},"policies":[]}""",
+        ]
+    )
+    fun aHeaderThatDiffersFromTheDecodedOneFails(body: String) {
+        val document = me.ahoo.cosec.snapshot.SnapshotDocument(1, 1, PUBLISHED_AT, body.encodeToByteArray())
+        assertThrownBy<SnapshotFormatException> { compiler.policies.compile(SnapshotKey.Policies, document) }
+    }
+
+    @Test
+    fun theHeaderMayBeLeftOutOfTheBody() {
+        val document = me.ahoo.cosec.snapshot.SnapshotDocument(
+            1,
+            1,
+            PUBLISHED_AT,
+            """{"policies":[]}""".encodeToByteArray()
+        )
+        compiler.policies.compile(SnapshotKey.Policies, document).byId.assert().isEmpty()
+    }
+
+    /** A mapper whose policy and app permission decoding fails with [error], as a matcher factory's could. */
+    private fun failingCompiler(error: () -> Throwable): PolicySnapshotCompiler {
+        val module = tools.jackson.databind.module.SimpleModule()
+            .addDeserializer(Policy::class.java, Failing(Policy::class.java, error))
+            .addDeserializer(AppPermission::class.java, Failing(AppPermission::class.java, error))
+        return PolicySnapshotCompiler(tools.jackson.module.kotlin.jsonMapper { addModule(module) })
+    }
+
+    private class Failing<T : Any>(type: Class<T>, private val error: () -> Throwable) :
+        tools.jackson.databind.deser.std.StdDeserializer<T>(type) {
+        override fun deserialize(
+            p: tools.jackson.core.JsonParser,
+            ctxt: tools.jackson.databind.DeserializationContext
+        ): T =
+            throw error()
+    }
+
+    @Test
+    fun aLinkageErrorFailsOnlyItsEntry() {
+        val compiler = failingCompiler { ExceptionInInitializerError("missing hint") }
+        val document = snapshotDocument(1, """"policies":[${policyJson("a")}]""")
+        val broken = compiler.policies.compile(SnapshotKey.Policies, document).byId.getValue("a") as Compiled.Broken
+        broken.error.cause.assert().isInstanceOf(ExceptionInInitializerError::class.java)
+        val app = compiler.app.compile(SnapshotKey.App("app"), snapshotDocument(1, """"appPermission":$catalog"""))
+        (app.appPermission as Compiled.Broken).error.cause.assert().isInstanceOf(LinkageError::class.java)
+    }
+
+    @Test
+    fun aVirtualMachineErrorIsNotSwallowed() {
+        val compiler = failingCompiler { StackOverflowError("deep") }
+        assertThrownBy<StackOverflowError> {
+            compiler.policies.compile(SnapshotKey.Policies, snapshotDocument(1, """"policies":[${policyJson("a")}]"""))
+        }
+    }
+
+    @Test
+    fun compiledCollectionsCannotBeChanged() {
+        val compiled = policies(policyJson("g", "global"))
+        assertThrownBy<UnsupportedOperationException> {
+            @Suppress("UNCHECKED_CAST")
+            (compiled.byId as MutableMap<String, Compiled<PolicyGroup>>).clear()
+        }
+        assertThrownBy<UnsupportedOperationException> {
+            @Suppress("UNCHECKED_CAST")
+            ((compiled.globalLayer as LayerInput.Loaded).groups as MutableList<Any>).clear()
+        }
+        val app = app(""""appPermission":$catalog,"grants":{"r1":["p1"]}""")
+        assertThrownBy<UnsupportedOperationException> {
+            @Suppress("UNCHECKED_CAST")
+            (app.grants.getValue("") as MutableMap<String, Any>).clear()
+        }
     }
 }

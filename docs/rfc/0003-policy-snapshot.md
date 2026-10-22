@@ -191,7 +191,9 @@ sealed interface SnapshotKey {
 }
 ```
 
-- `grants` 里每个角色的权限 id 是有序数组，顺序与 7.0 `RolePermissionCache` 存的 JSON 数组相同：它决定角色层规则的访问顺序（RFC 0002 S5）。
+- `grants` 里每个角色的权限 id 是 JSON 数组，与 7.0 `RolePermissionCache` 存的值相同。访问顺序**不是**数组顺序：7.0 的编解码器把它解码为
+  `Set<PermissionId>`，Jackson 构造的是 `java.util.HashSet`，角色层按哈希顺序访问（RFC 0002 S5）。编译器用同一类型解码，所以顺序与 7.0 相同
+  （P5 守护）；发布者和转换器因此不需要保持数组顺序。第 4 阶段若要定义顺序，在那里决定。
 - 应用存在但从未写过应用权限时，没有 `App` 文档，与 7.0 的"空 `Mono`"对应（`Absent(NO_APP_PERMISSION)`）。只有授予、没有应用权限的数据在
   7.0 里不生效（`getAppRolePermission` 读不到应用权限就返回空），文档里也没有它们的位置，转换时报告出来（§4.7）。
 - `schema` 是文档格式的版本，与 Redis 数据布局的 schema 标记（§4.7）是两回事：后者说明"Redis 里是哪一代布局"，前者说明"这份文档怎么解析"。
@@ -737,14 +739,16 @@ PR-5 起成为唯一的行为，用户在 8.0.0 GA 中第一次看到：
 
 | 基准 | 比较 | 目标 |
 |---|---|---|
-| `SimpleAuthorizationBenchmark`（`cosec-core`，场景 `global`、`role`、`none`、`global-deny`） | 增加参数 `source` ∈ {`repository`, `snapshot`}：`repository` 是第 2 阶段结束时的实现（内存仓库），`snapshot` 是已加载的快照 | 吞吐不低于 `repository` 的 95%（判定方法同 RFC 0002 §7.1）；B/op 不高于 `repository`。预期两者都更好：少了三个 `Mono`、`Mono.zip` 和 `AppRolePermissionData` 的重建 |
+| `SimpleAuthorizationBenchmark`（`cosec-core`，场景 `global`、`role`、`none`、`global-deny`） | 参数 `source` ∈ {`legacy`, `legacy-deferred`, `engine`, `engine-deferred`, `snapshot`}（每个值是一种实际存在的组合，矩阵里没有重复格）：`engine`/`engine-deferred` 是第 2 阶段结束时的实现（内存仓库），`snapshot` 是已加载的快照；setup 断言各来源对每个场景的决策相同 | 吞吐不低于 `engine` 的 95%（判定方法同 RFC 0002 §7.1）；B/op 不高于 `engine`。预期两者都更好：少了三个 `Mono`、`Mono.zip` 和 `AppRolePermissionData` 的重建 |
 | `global-deny` | 同上 | 只记录，不设门槛。第 2 阶段并行预取三层（RFC 0002 X1）；快照下三层都在内存里，这笔开销应当消失 |
 | 新增 `SnapshotAuthorizationBenchmark`（`cosec-cocache`，新的 `jmh` 源码集） | CoCache **内存后端**上，7.0 的 Redis 仓库（L2 全部命中，经 `toLocalFirstMono`）与快照 | 只记录。这是本阶段真正改变的热路径：现有基准用的是返回 `Mono.just` 的内存仓库，测不到 CoCache 的开销。PR-2 加上 `jmh` 源码集和 `repository` 一侧；`snapshot` 一侧依赖 CoCache 快照存储，随 PR-3 加入 |
 | 新增 `SnapshotCompileBenchmark`（`cosec-core`，`avgt`，ms/op） | 编译 10、100、1,000、10,000 条语句的文档 | 只记录，用来解释 §4.8 的真实数据 |
 | `EngineBenchmark`（`engine/`） | — | 不变（引擎不改） |
 
 "分配不随策略数量增长"（AGENTS.md 与 RFC 0001 §5"热路径有基准"）：`SimpleAuthorizationBenchmark` 的 `snapshot` 来源增加参数 `globalPolicies` ∈ {10, 100, 1000}，
-B/op 不随它变化（GLOBAL 层复用预构造的 `LayerInput`）。
+B/op 不随它变化（GLOBAL 层复用预构造的 `LayerInput`）。PR-2 的测量（只计调用线程的分配）：快照加载器不随策略数分配；剩下的增长来自引擎的守卫位图
+（`Evaluator` 在一层超过 64 个组时分配 `ceil(组数 / 64)` 个 `long`，1000 个组即 144 B），引擎不在本阶段修改，是否消除由维护者决定。JMH 的
+`gc.alloc.rate.norm` 计入所有线程，吞吐低时还会摊入后台分配，不能单独用来判定这一条。
 
 ### 9.2 测量方法
 
@@ -754,11 +758,22 @@ B/op 不随它变化（GLOBAL 层复用预构造的 `LayerInput`）。
 ./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark,SnapshotCompileBenchmark -PjmhJavaVersion=25 -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
 ```
 
+`globalPolicies` 不在默认矩阵里，从基准 jar 运行：
+
+```bash
+./gradlew :cosec-core:jmhJar
+```
+
+```bash
+java -jar cosec-core/build/libs/cosec-core-<version>-jmh.jar SimpleAuthorizationBenchmark -p source=engine,snapshot -p scenario=none -p trace=off -p globalPolicies=10,100,1000 -f 3 -wi 5 -i 10 -prof gc -jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml
+```
+
 ```bash
 ./gradlew :cosec-cocache:jmh -PjmhIncludes=SnapshotAuthorizationBenchmark -PjmhJavaVersion=25 -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
 ```
 
 - `cosec-cocache` 现在没有 `jmh` 源码集，PR-2 按根 `build.gradle.kts` 中 `cosec-core` 的配置加上，并支持同样的 `-Pjmh*` 属性。
+- `SnapshotCompileBenchmark` 由注解声明为 `avgt`、ms/op；根构建只在传入 `-PjmhMode` 时覆盖基准自己的模式。
 - 空闲机器，负载低于 1，否则作废重跑；记录 JDK、CPU、操作系统；`repository` 与 `snapshot` 在同一台机器上交替跑三轮。
 - 结果按 `docs/perf/` 的格式记录在 `docs/perf/rfc-0003-snapshot/README.md`（JMH JSON 裁剪为 `benchmark`、`params`、`primaryMetric`、`gc.alloc.rate.norm`），
   在 PR-5 的描述中附前后对比；PR-6 把最终数字写进 `wiki/architecture/overview.md` 的性能一节（中英文）。

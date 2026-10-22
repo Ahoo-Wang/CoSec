@@ -25,6 +25,10 @@ import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.engine.AbsentReason
 import me.ahoo.cosec.engine.LayerInput
 import me.ahoo.cosec.engine.PolicySet
+import me.ahoo.cosec.parity.LegacyData
+import me.ahoo.cosec.parity.appPermissionJson
+import me.ahoo.cosec.parity.permissionJson
+import me.ahoo.cosec.parity.policyJson
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.snapshot.DocumentState
@@ -57,17 +61,17 @@ class SnapshotPolicySetLoaderTest {
         roles: Set<String> = emptySet(),
         appId: String = "app",
         spaceId: String = "",
-    ): SnapshotReads {
+    ): LayerReads {
         val request = EvaluateRequest(
             headers = mapOf(AppIdCapable.APP_ID_KEY to appId, SpaceIdCapable.SPACE_ID_KEY to spaceId)
                 .filterValues { it.isNotEmpty() },
         )
         val context = SimpleSecurityContext(SimplePrincipal("user", policies, roles))
-        return SnapshotReads.of(LegacyFacts.authzRequest(request, context).host as LegacyFacts)
+        return LayerReads.of(LegacyFacts.authzRequest(request, context).host as LegacyFacts)
     }
 
-    private fun load(reads: SnapshotReads, data: LegacyData = this.data): PolicySet =
-        SnapshotPolicySetLoader.load(reads, compiledSnapshot(data, reads.appId, compiler))
+    private fun load(reads: LayerReads, data: LegacyData = this.data): PolicySet =
+        SnapshotPolicySetLoader.load(reads, compiledSnapshot(data, reads.appDocument, compiler))
 
     private fun failedSnapshot(appId: String?): PolicySnapshot {
         val error = IllegalStateException("down")
@@ -78,7 +82,7 @@ class SnapshotPolicySetLoaderTest {
     @Test
     fun aRequestWithoutPoliciesOrRolesNeedsNoAppDocument() {
         val reads = reads()
-        reads.appId.assert().isNull()
+        reads.appDocument.assert().isNull()
         val snapshot = compiledSnapshot(data, null, compiler)
         val layers = SnapshotPolicySetLoader.load(reads, snapshot).layers
         layers[0].assert().isSameAs((snapshot.policies as DocumentState.Present).compiled.globalLayer)
@@ -129,7 +133,7 @@ class SnapshotPolicySetLoaderTest {
     @Test
     fun roleGrantsFollowThePrincipalsRoleOrderAndSkipRolesWithoutGrants() {
         val reads = reads(roles = linkedSetOf("r2", "none", "r1"))
-        reads.appId.assert().isEqualTo("app")
+        reads.appDocument.assert().isEqualTo("app")
         val snapshot = compiledSnapshot(data, "app", compiler)
         val group = (SnapshotPolicySetLoader.load(reads, snapshot).layers[2] as LayerInput.Loaded).groups.single()
             as AppPermissionGroup
@@ -157,7 +161,7 @@ class SnapshotPolicySetLoaderTest {
         (load(reads(roles = setOf("r1"), appId = "unknown")).layers[2] as LayerInput.Absent).reason
             .assert().isEqualTo(AbsentReason.NO_APP_PERMISSION)
         val invalid = reads(roles = setOf("r1"), appId = "a:b")
-        invalid.appId.assert().isNull()
+        invalid.appDocument.assert().isNull()
         (load(invalid).layers[2] as LayerInput.Absent).reason.assert().isEqualTo(AbsentReason.NO_APP_PERMISSION)
     }
 
@@ -186,8 +190,8 @@ class SnapshotPolicySetLoaderTest {
             every { roles } throws IllegalStateException("roles")
         }
         val facts = LegacyFacts.authzRequest(EvaluateRequest(), SimpleSecurityContext(principal)).host as LegacyFacts
-        val reads = SnapshotReads.of(facts)
-        reads.appId.assert().isNull()
+        val reads = LayerReads.of(facts)
+        reads.appDocument.assert().isNull()
         val layers = load(reads).layers
         (layers[1] as LayerInput.Unavailable).error.message.assert().isEqualTo("policies")
         (layers[2] as LayerInput.Unavailable).error.message.assert().isEqualTo("roles")
@@ -203,7 +207,7 @@ class SnapshotPolicySetLoaderTest {
             every { spaceId } returns ""
             every { appId } throws IllegalStateException("app")
         }
-        val reads = SnapshotReads.of(
+        val reads = LayerReads.of(
             LegacyFacts.authzRequest(request, SimpleSecurityContext(principal)).host as LegacyFacts
         )
         (load(reads).layers[2] as LayerInput.Unavailable).error.message.assert().isEqualTo("app")
