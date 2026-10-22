@@ -17,14 +17,14 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.authorization.engine.PolicySnapshot
 import me.ahoo.cosec.authorization.engine.PolicySnapshotCompiler
-import me.ahoo.cosec.authorization.engine.appPermissionJson
-import me.ahoo.cosec.authorization.engine.policyJson
-import me.ahoo.cosec.authorization.engine.snapshotDocument
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.engine.Evaluation
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.LayerKind
 import me.ahoo.cosec.model.StatementRef
+import me.ahoo.cosec.parity.appPermissionJson
+import me.ahoo.cosec.parity.policyJson
+import me.ahoo.cosec.parity.snapshotDocument
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.snapshot.InMemorySnapshotDocumentStore
@@ -50,14 +50,11 @@ import java.util.concurrent.atomic.AtomicInteger
  * throughout: the in-memory store notifies the source, which recompiles on its own threads.
  */
 class SnapshotConsistencyPropertyTest {
-    private fun policies(revision: Long) = snapshotDocument(
-        revision,
-        """"policies":[${policyJson(
-            "g",
-            "global",
-            rules("g", revision, 3)
-        )},${policyJson("p", "custom", rules("p", revision, 3))}]""",
-    )
+    private fun policies(revision: Long): SnapshotDocument {
+        val global = policyJson("g", "global", rules("g", revision, 3))
+        val custom = policyJson("p", "custom", rules("p", revision, 3))
+        return snapshotDocument(revision, """"policies":[$global,$custom]""")
+    }
 
     private fun app(revision: Long): SnapshotDocument {
         val permissions = (0 until 3).joinToString(",") {
@@ -154,7 +151,7 @@ class SnapshotConsistencyPropertyTest {
         }
         violations.assert().isEmpty()
         evaluations.get().assert().isGreaterThan(REVISIONS.toInt())
-        // The readers must have seen several revisions, some of them pairs the writer never published together.
+        // The readers must have evaluated against many distinct (policies, app) revision pairs, or nothing was tested.
         seen.size.assert().isGreaterThan(10)
     }
 

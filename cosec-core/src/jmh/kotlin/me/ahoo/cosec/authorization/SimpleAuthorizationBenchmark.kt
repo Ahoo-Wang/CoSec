@@ -73,33 +73,31 @@ import java.time.Instant
  *   matches, so every grant is visited in both passes
  * - `guard-miss`: every policy condition and the app condition miss, so only the guards run
  *
- * [impl] picks the implementation (RFC 0002 §7.2 step 4): `legacy` is [SimpleAuthorization], `engine` is
- * [EngineAuthorization]. [trace] `mixed` makes every eighth `engine` call a [TraceLevel.FULL] evaluation, so the
- * untraced calls run with a call site that has seen both evaluators; it is ignored for `legacy`.
+ * [source] picks the implementation and where it reads its policies, one value per combination that exists:
+ * - `legacy`, `legacy-deferred`: [SimpleAuthorization] over the repositories (RFC 0002 §7.2 step 4);
+ * - `engine`, `engine-deferred`: [EngineAuthorization] over the same repositories;
+ * - `snapshot`: the engine over a loaded policy snapshot of the same data (RFC 0003 §9), through
+ *   [SnapshotEngineAuthorization] (test assembly until RFC 0003 PR-5).
  *
- * [source] picks where the `engine` reads its policies (RFC 0003 §9): `repository` is the repositories above,
- * `snapshot` is a loaded policy snapshot of the same data, read through [SnapshotEngineAuthorization] (test assembly
- * until RFC 0003 PR-5). It is ignored for `legacy`, and [repository] is ignored for `snapshot`. [globalPolicies] adds
- * global policies that never match, to show that a snapshot's allocation does not grow with them; run
- * `-p globalPolicies=10,100,1000` from the benchmark jar.
+ * `-deferred` repositories answer like the Redis repositories do, through `Mono.defer`, instead of a ready `Mono.just`.
+ * Setup checks that every source decides the scenario alike.
+ *
+ * [trace] `mixed` makes every eighth call of the engine a [TraceLevel.FULL] evaluation, so the untraced calls run with
+ * a call site that has seen both evaluators; it is ignored for `legacy`.
+ *
+ * [globalPolicies] adds global policies that never match, to show that a snapshot's allocation does not grow with
+ * them: run the benchmark jar with `-p source=snapshot -p scenario=none -p globalPolicies=10,100,1000`.
  */
 @State(Scope.Benchmark)
 open class SimpleAuthorizationBenchmark {
     @Param("global", "role", "none", "global-deny", "role-heavy", "guard-miss")
     lateinit var scenario: String
 
-    @Param("legacy", "engine")
-    lateinit var impl: String
+    @Param("legacy", "legacy-deferred", "engine", "engine-deferred", "snapshot")
+    lateinit var source: String
 
     @Param("off", "mixed")
     lateinit var trace: String
-
-    /** `deferred` answers like the Redis repositories do, through `Mono.defer`, instead of a ready `Mono.just`. */
-    @Param("just", "deferred")
-    lateinit var repository: String
-
-    @Param("repository", "snapshot")
-    lateinit var source: String
 
     /** The number of global policies; 3 is the scenarios' own. */
     @Param("3")
@@ -126,7 +124,7 @@ open class SimpleAuthorizationBenchmark {
     }
 
     private fun <T : Any> answer(value: T): Mono<T> =
-        if (repository == "deferred") Mono.defer { Mono.just(value) } else Mono.just(value)
+        if (source.endsWith("-deferred")) Mono.defer { Mono.just(value) } else Mono.just(value)
 
     @Setup
     fun setup() {
@@ -177,18 +175,19 @@ open class SimpleAuthorizationBenchmark {
                 )
             }
         }
-        val snapshot = impl == "engine" && source == "snapshot"
+        val snapshot = source == "snapshot"
         if (snapshot) {
             snapshotSource = snapshotSource(globalPolicies + principalPolicies, appPermission, rolePermissions)
         }
-        authorization = when {
-            impl == "legacy" -> SimpleAuthorization(policyRepository, appRolePermissionRepository)
-            snapshot -> SnapshotEngineAuthorization(snapshotSource!!)
-            impl == "engine" -> EngineAuthorization(policyRepository, appRolePermissionRepository)
-            else -> error("Unknown impl [$impl].")
+        val repositoryEngine = EngineAuthorization(policyRepository, appRolePermissionRepository)
+        authorization = when (source) {
+            "legacy", "legacy-deferred" -> SimpleAuthorization(policyRepository, appRolePermissionRepository)
+            "engine", "engine-deferred" -> repositoryEngine
+            "snapshot" -> SnapshotEngineAuthorization(snapshotSource!!)
+            else -> error("Unknown source [$source].")
         }
         traced = when {
-            impl != "engine" || trace != "mixed" -> authorization
+            source.startsWith("legacy") || trace != "mixed" -> authorization
             snapshot -> SnapshotEngineAuthorization(snapshotSource!!, trace = TraceLevel.FULL)
             else -> EngineAuthorization(
                 policyRepository,
@@ -215,6 +214,13 @@ open class SimpleAuthorizationBenchmark {
             // The repositories ignore it; the snapshot reads the app's document by it.
             headers = mapOf(AppIdCapable.APP_ID_KEY to "app"),
         )
+        // Every source must decide the scenario as the engine over the repositories does, or the numbers compare
+        // different work.
+        val expected = repositoryEngine.authorize(request, SimpleSecurityContext(principal)).block()
+        listOf(authorization, traced).forEach {
+            val actual = it.authorize(request, SimpleSecurityContext(principal)).block()
+            check(actual == expected) { "Source [$source] decided [$actual] in scenario [$scenario], the engine [$expected]." }
+        }
     }
 
     /** The same data as snapshot documents, loaded before the measurement starts. */

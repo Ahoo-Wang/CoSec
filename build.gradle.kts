@@ -134,13 +134,10 @@ configure(libraryProjects) {
         }
         resultFormat.set("json")
 
-        var jmhMode = listOf(
-            "thrpt",
-        )
+        // Without -PjmhMode, each benchmark keeps its own @BenchmarkMode; unannotated ones run JMH's default, thrpt.
         if (project.hasProperty(jmhModeKey)) {
-            jmhMode = project.properties[jmhModeKey].toString().split(delimiter)
+            benchmarkMode.set(project.properties[jmhModeKey].toString().split(delimiter))
         }
-        benchmarkMode.set(jmhMode)
         var jmhThreads = 1
         if (project.hasProperty(jmhThreadsKey)) {
             jmhThreads = Integer.valueOf(project.properties[jmhThreadsKey].toString())

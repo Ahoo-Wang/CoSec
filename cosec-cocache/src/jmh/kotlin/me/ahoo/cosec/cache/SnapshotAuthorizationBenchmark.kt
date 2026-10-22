@@ -123,6 +123,10 @@ open class SnapshotAuthorizationBenchmark {
         )
         // Writes evict the local copies: the first read fills them, so every measured read is a local hit.
         authorize()
+        // A local hit answers on the caller's thread; a read that reaches the backend continues on boundedElastic.
+        check(authorization.authorize(request, securityContext).toFuture().isDone) {
+            "The repositories still read the backend: the benchmark would not measure local hits."
+        }
     }
 
     @TearDown

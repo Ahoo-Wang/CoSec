@@ -34,8 +34,8 @@ import java.util.concurrent.TimeUnit
  * Compiling a policies document of [statements] statements (RFC 0003 §9): parsing, decoding through the matcher
  * factories, and adapting into rule groups. Only recorded, to read the real-data measurements of §4.8 against.
  *
- * Ten statements per policy, a tenth of the policies global, with path, method and condition matchers. The build's
- * `-PjmhMode` overrides the mode below; run it with `-PjmhMode=avgt`.
+ * Ten statements per policy, a tenth of the policies global, with path, method and condition matchers. Reported as the
+ * average time in ms per compilation, unless `-PjmhMode` overrides the mode.
  */
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.AverageTime)
@@ -74,7 +74,7 @@ open class SnapshotCompileBenchmark {
             val type = if (policy % 10 == 0) "global" else "custom"
             """{"id":"policy$policy","name":"policy$policy","category":"","description":"","type":"$type","tenantId":"t","statements":[$body]}"""
         }
-        val body = """{"schema":1,"revision":1,"publishedAt":"2026-10-21T08:00:00Z","policies":[$policies]}"""
+        val body = """{"schema":1,"revision":1,"publishedAt":"1970-01-01T00:00:00Z","policies":[$policies]}"""
         document = SnapshotDocument(SnapshotDocument.CURRENT_SCHEMA, 1, Instant.EPOCH, body.encodeToByteArray())
     }
 

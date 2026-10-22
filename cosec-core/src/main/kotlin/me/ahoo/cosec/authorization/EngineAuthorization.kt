@@ -13,21 +13,15 @@
 
 package me.ahoo.cosec.authorization
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
-import me.ahoo.cosec.authorization.engine.Decisions
+import me.ahoo.cosec.authorization.engine.EngineDecisionFlow
 import me.ahoo.cosec.authorization.engine.EvaluationObserver
-import me.ahoo.cosec.authorization.engine.LegacyFacts
 import me.ahoo.cosec.authorization.engine.PolicySetLoader
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.engine.CoSecEngine
-import me.ahoo.cosec.engine.Evaluation
 import me.ahoo.cosec.engine.PolicySet
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.model.AuthzRequest
-import me.ahoo.cosec.model.Decision
 import reactor.core.Fuseable
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
@@ -56,12 +50,12 @@ import reactor.core.scheduler.Schedulers
 class EngineAuthorization internal constructor(
     policyRepository: PolicyRepository,
     appRolePermissionRepository: AppRolePermissionRepository,
-    private val blacklistChecker: BlacklistChecker,
-    private val rootPrincipalMatcher: RootPrincipalMatcher,
+    blacklistChecker: BlacklistChecker,
+    rootPrincipalMatcher: RootPrincipalMatcher,
     /** Set by the benchmarks, to measure traced evaluations, and by the trace-based explanation, which reads the trace. */
-    private val trace: TraceLevel,
+    trace: TraceLevel,
     /** Sees every evaluation, with the policy set it read, before its decision is mapped. */
-    private val observer: EvaluationObserver? = null
+    observer: EvaluationObserver? = null
 ) : DecisionAuthorization {
     constructor(
         policyRepository: PolicyRepository,
@@ -70,76 +64,18 @@ class EngineAuthorization internal constructor(
         rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE
     ) : this(policyRepository, appRolePermissionRepository, blacklistChecker, rootPrincipalMatcher, TraceLevel.OFF)
 
-    companion object {
-        private val log = KotlinLogging.logger {}
-    }
-
     private val loader = PolicySetLoader(policyRepository, appRolePermissionRepository)
-
-    override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> = Mono.defer {
-        blacklistChecker
-            .check(request, context)
-            .flatMap { allowed ->
-                when {
-                    !allowed -> decide(LegacyFacts.BLOCKED, PolicySet.NOT_LOADED, null, context)
-                    rootPrincipalMatcher.isRoot(context.principal) ->
-                        decide(LegacyFacts.ROOT, PolicySet.NOT_LOADED, null, context)
-
-                    else -> {
-                        val authzRequest = LegacyFacts.authzRequest(request, context)
-                        val facts = authzRequest.host as LegacyFacts
-                        val policies = loader.load(authzRequest)
-                        if (policies is Fuseable.ScalarCallable<*>) {
-                            // Read synchronously: no subscription needed.
-                            decide(authzRequest, policies.call() as PolicySet, facts, context)
-                        } else {
-                            policies.flatMap { decide(authzRequest, it, facts, context) }
-                        }
-                    }
-                }
-            }
+    private val flow = EngineDecisionFlow(blacklistChecker, rootPrincipalMatcher, trace, observer)
+    private val readPolicies = EngineDecisionFlow.PolicyStep { request, facts, context ->
+        val policies = loader.load(request)
+        if (policies is Fuseable.ScalarCallable<*>) {
+            // Read synchronously: no subscription needed.
+            flow.evaluate(request, policies.call() as PolicySet, facts, context)
+        } else {
+            policies.flatMap { flow.evaluate(request, it, facts, context) }
+        }
     }
 
-    /** Called inside an operator, so anything the engine or a matcher throws becomes an error signal, as in 7.0. */
-    private fun decide(
-        request: AuthzRequest,
-        policies: PolicySet,
-        facts: LegacyFacts?,
-        context: SecurityContext
-    ): Mono<AuthorizationDecision> {
-        if (!PolicySetLoader.requiresBlocking(policies)) {
-            return toDecision(CoSecEngine.evaluate(request, policies, trace), policies, facts, context)
-        }
-        return Mono.fromCallable { CoSecEngine.evaluate(request, policies, trace) }
-            .subscribeOn(Schedulers.boundedElastic())
-            .flatMap { toDecision(it, policies, facts, context) }
-    }
-
-    private fun toDecision(
-        evaluation: Evaluation,
-        policies: PolicySet,
-        facts: LegacyFacts?,
-        context: SecurityContext
-    ): Mono<AuthorizationDecision> {
-        observer?.evaluated(evaluation, policies)
-        val decision = evaluation.decision
-        if (decision is Decision.Indeterminate) {
-            if (log.isDebugEnabled()) {
-                log.debug(
-                    decision.cause.error
-                ) { "Verify [${facts?.request}] [$context] failed - [${decision.cause}]." }
-            }
-            return Mono.error(decision.cause.error)
-        }
-        val authorizationDecision = Decisions.of(decision, policies, facts)
-        authorizationDecision.verifyContext.let {
-            if (it is PolicyVerifyContext || it is RoleVerifyContext) {
-                context.setVerifyContext(it)
-            }
-        }
-        if (log.isDebugEnabled()) {
-            log.debug { "Verify [${facts?.request}] [$context] decided by [$decision] - [${authorizationDecision.result}]." }
-        }
-        return Mono.just(authorizationDecision)
-    }
+    override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> =
+        flow.decide(request, context, readPolicies)
 }
