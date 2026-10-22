@@ -39,6 +39,7 @@ class CacheTtlPolicyTest {
         CoSecCacheSpecs.GLOBAL_POLICY_INDEX_CACHE_NAME to CoSecCacheSpecs.globalPolicyIndex(policy = weakened).policy,
         CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME to CoSecCacheSpecs.appPermission(codec(), policy = weakened).policy,
         CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME to CoSecCacheSpecs.rolePermission(codec(), policy = weakened).policy,
+        CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME to CoSecCacheSpecs.policySnapshot(policy = weakened).policy,
     )
 
     private inline fun <reified V : Any> codec() = CoSecCacheSpecs.jacksonCodec<V>(CoSecJsonSerializer)
@@ -59,6 +60,23 @@ class CacheTtlPolicyTest {
         policy.ttl.assert().isNull()
         policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
         policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
+    }
+
+    /** Review requirement: the snapshot cache pins `ttl = null` and `ForeignFormatMode.FAIL` like the others. */
+    @Test
+    fun snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort() {
+        val spec = CoSecCacheSpecs.policySnapshot(policy = weakened)
+        spec.policy.ttl.assert().isNull()
+        spec.policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+        spec.policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
+        spec.policy.localMaxAge.assert().isEqualTo(CoSecCacheSpecs.DEFAULT_SNAPSHOT_LOCAL_MAX_AGE)
+        spec.namespace.assert().isEqualTo("cosec:snapshot")
+        spec.keyPrefix.assert().isEmpty()
+        CoSecCacheSpecs.policySnapshot("other:", localMaxAge = Duration.ofSeconds(5)).let {
+            it.namespace.assert().isEqualTo("other:snapshot")
+            it.policy.localMaxAge.assert().isEqualTo(Duration.ofSeconds(5))
+        }
+        CoSecCacheSpecs.pinnedPolicy(CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME, weakened).ttl.assert().isNull()
     }
 
     @Test

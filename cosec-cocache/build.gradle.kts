@@ -24,6 +24,33 @@ dependencies {
     testImplementation("io.projectreactor:reactor-test")
     // P5 against the real repositories: the generator and the PolicySet comparison (RFC 0003 §8.4).
     testImplementation(testFixtures(project(":cosec-core")))
+    // RFC 0003 §6: the snapshot store must not block a non-blocking caller.
+    testImplementation("io.projectreactor.tools:blockhound")
     // cosec-core matches paths with Spring's PathPattern, which it leaves to the application.
     jmh("org.springframework:spring-web")
+    // The snapshot side assembles cosec-core's internal snapshot authorization (RFC 0003 PR-5 wires it).
+    jmh(testFixtures(project(":cosec-core")))
+}
+
+tasks.withType<Test>().configureEach {
+    // BlockHound instruments JDK methods, which JDK 13+ allows only with this flag.
+    jvmArgs("-XX:+AllowRedefinitionToAddDeleteMethods")
+    // Opt-in Redis targets of the snapshot tests (RedisTarget): a change reruns the tests instead of reusing results.
+    listOf("COSEC_TEST_VALKEY_PORT", "COSEC_TEST_REDIS_CLUSTER_NODES").forEach { name ->
+        inputs.property(name, providers.environmentVariable(name).orElse(""))
+    }
+}
+
+/*
+ * RFC 0003 §4.7: converts the 7.x policy data under -PkeyPrefix in -PredisUrl into snapshot documents. For development
+ * deployments, the gate and sizing; lives in the test source set and is never published. Not part of check.
+ */
+tasks.register<JavaExec>("snapshotConvert") {
+    group = "application"
+    description = "Converts the 7.x policy data in -PredisUrl (-PkeyPrefix, -PdryRun, -Pinstances, -PrevalidateInterval)."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("me.ahoo.cosec.cache.snapshot.SnapshotConvert")
+    listOf("redisUrl", "keyPrefix", "dryRun", "instances", "revalidateInterval").forEach { name ->
+        providers.gradleProperty(name).orNull?.let { systemProperty("cosec.snapshot.convert.$name", it) }
+    }
 }
