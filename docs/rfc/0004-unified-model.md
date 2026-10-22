@@ -1,9 +1,9 @@
 # RFC 0004：统一模型——绑定、租户分层与数据转换（RFC 0001 迁移第 4 阶段，上篇）
 
-> 状态：提议（第 1 版，§15 的决定待维护者确认）· 上位文档：[RFC 0001](0001-target-architecture.md) §3.2、§3.3、§6 第 4 阶段、§7.1 ·
-> 前置：[RFC 0002](0002-pure-engine.md)（第 2 阶段，PR-1、PR-2 已合入，PR-3 进行中）、[RFC 0003](0003-policy-snapshot.md)（第 3 阶段，已确认，PR-1 进行中）·
+> 状态：已确认（第 2 版，§15 / §11 的决定已于 2026-10-22 由维护者确认）· 上位文档：[RFC 0001](0001-target-architecture.md) §3.2、§3.3、§6 第 4 阶段、§7.1 ·
+> 前置：[RFC 0002](0002-pure-engine.md)（第 2 阶段，PR-1 到 PR-5 已合入并完成审查）、[RFC 0003](0003-policy-snapshot.md)（第 3 阶段，已确认，PR-1 到 PR-3 已合入）·
 > 姊妹篇：[RFC 0005](0005-condition-ast.md)（第 4 阶段下篇：条件 AST、动作词汇、编译执行）·
-> 基线：`main` @ `334da022` · 交付：全部合入 `main`（8.0 线）；8.0 在 RFC 0001 第 2–6 阶段全部完成、各做完两轮审查之前不发布任何版本 ·
+> 基线：`main` @ `a361084d`（第 1 版写于 `334da022`） · 交付：全部合入 `main`（8.0 线）；8.0 在 RFC 0001 第 2–6 阶段全部完成、各做完两轮审查之前不发布任何版本 ·
 > 范围：`model/`、`engine/`、`cosec-core`、`cosec-cocache`、`cosec-jwt`、`cosec-spring-boot-starter`，新增 `migrate/`（`cosec-migrate`）
 
 ## 0. 结论先行
@@ -400,7 +400,7 @@ sealed interface ScopeResolution {
 
 | 方案 | 做法 | 评价 |
 |---|---|---|
-| **A. 全部放进平台层（推荐，默认）** | 全局策略、全部非全局策略（可附加）、全部应用文档都属于平台层；租户文档为空 | 语义与 7.x 相同：任何主体能附加任何策略，角色授予对所有租户里的同名角色生效。门槛 A 的差异只来自 C1–C3。缺点是"同名角色跨租户"这个 7.x 的风险原样保留（§5.4） |
+| **A. 全部放进平台层（已决定，默认）** | 全局策略、全部非全局策略（可附加）、全部应用文档都属于平台层；租户文档为空 | 语义与 7.x 相同：任何主体能附加任何策略，角色授予对所有租户里的同名角色生效。门槛 A 的差异只来自 C1–C3。缺点是"同名角色跨租户"这个 7.x 的风险原样保留（§5.4） |
 | B. 按 `Policy.tenantId` 放进租户文档（`--partition=by-owner`） | 非全局策略按 `tenantId` 分到租户文档 | 改变语义：主体不能再附加别的租户的策略。7.x 的生成器（[`OpenAPIPolicyGenerator`](../../cosec-openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIPolicyGenerator.kt)）总是写默认租户，`tenantId` 多半不反映真实归属，按它分区会让大量附加失效（500）。作为可选项提供，转换工具报告每个租户的策略数和跨租户附加的样本数（需要请求样本） |
 | C. 角色授予复制到每个租户 | 每个租户一份应用文档 | 规模乘以租户数；转换工具不知道有哪些租户；新租户没有授予 |
 
@@ -743,7 +743,7 @@ GA 版本的 `convert` 一次完成两篇的转换：先按本文转换模型，
 
 ### 9.2 分类器
 
-在 RFC 0002 §8.1 的 `DecisionParity`（RFC 0002 Q14 / RFC 0003 Q12 保留的通用比较器）上增加一层 `DifferenceClassifier`：
+在 `DecisionParity`（RFC 0002 Q14 / RFC 0003 Q12 保留的通用比较器，已在 `cosec-core` 的测试夹具中，#997、#1002）上增加一层 `DifferenceClassifier`：
 
 ```kotlin
 /** 一个改动类别。matches 只读两边的结果元组、候选的 trace 和样本，不读任何外部状态。 */
@@ -782,7 +782,7 @@ class Evidence(val classId: String, val statement: StatementRef?, val detail: St
 ### 9.4 判定
 
 - 合成语料、离线语料与随机用例：未归类差异为 0。
-- 离线回放：每个部署至少 100 万条、至少 7 天（RFC 0002 Q7 的部署与数据）：未归类差异为 0；`candidate_error` 为 0，或者每一条都对应基准同样出错的样本，
+- 离线回放：每个部署至少 100 万条、至少 7 天，两边同样出错的样本不超过 1 %（即测试夹具中 `ReplayGate` 的默认值；RFC 0002 Q7 的部署与数据）：未归类差异为 0；`candidate_error` 为 0，或者每一条都对应基准同样出错的样本，
   或者归入 C1b/C1d；C1a 的样本逐条列在维护者本地的 `replay-widening.jsonl`，维护者逐条确认（确认的是"这条出错的 ALLOW 被跳过之后、另一条 ALLOW 放行
   是正确的"），确认结论登记在附录 A，只记类别、计数和语句的 id 哈希。
 - 各类别的计数写进 PR-7 的门槛证据，只有计数和哈希（RFC 0002 §8.2.1 的数据处理规则不变）。
@@ -882,9 +882,9 @@ PR-7 是切换、PR-8 是删除；每个 PR 合入后两轮审查。
 | PR-1 | `feat(model): add tenants, bindings, memberships and resolved scopes` | §4.1 的类型；`ScopeResolver`（§4.6）；P11；ArchUnit 规则 | 本 RFC 获批 | **能**：只依赖已合入的 `model/` | `:model:check`、`:engine:check` 通过 |
 | PR-2 | `feat(engine): evaluate the flat algorithm over bindings` | `SnapshotView` 的引擎侧接口、编译后的绑定索引（§6.4）、扁平算法（§6.1）、候选顺序（§6.3）、trace（§6.5）、`evaluate(request, snapshot)`；P1′、P8、P9、P10、P12；`EngineBenchmark` 的新参数 | PR-1；RFC 0002 PR-2（已合入） | **能** | 变更行覆盖率 ≥ 80%；§12 的分配目标 |
 | PR-3 | `feat(core): resolve memberships from claims and providers` | 声明解析（§4.5.1）、`MembershipProvider` SPI 与内存实现、`cosec.membership` 标记、`JwtTokenConverter` 的体积阈值、按主体吊销（§4.5.3） | PR-1 | **能** | `:cosec-core:check`、`:cosec-jwt:check` 通过；`MembershipFailClosedTest` |
-| PR-4 | `feat(core): compile platform, app and tenant snapshot documents` | `schema: 2` 文档与编解码、编译（7.x 匹配器经 RFC 0002 PR-3 的适配层）、编译期检查（引用完整性、租户隔离、主体绑定上限、break-glass）、内置的黑名单和 root 策略、`UnifiedAuthorization`（`DecisionAuthorization`，测试中装配）、`SnapshotPublisher` 的绑定写入 | PR-2、PR-3；RFC 0002 PR-3；RFC 0003 PR-1、PR-2 | **能**：上述 PR 合入即可，不需要 RFC 0002 PR-6 | `:cosec-core:check` 及依赖模块通过 |
-| PR-5 | `feat(migrate): add the 7.x to 8.0 data converter` | `migrate/` 模块、`convert`/`publish`/`verify`（`verify` 依赖 PR-6 的分类器，先只做 `convert`/`publish`）、拒绝项（§8.4）、来源映射、报告 | PR-4；RFC 0003 PR-3（`CoSec7xReader`） | **能** | 合成 7.x 数据（含每一种拒绝项）的转换测试；转换后的文档经 PR-4 编译通过 |
-| PR-6 | `test: classify intended decision differences in replay` | `DifferenceClassifier`、C1a–C3 的类别、正例与反例、合成语料、回放工具的候选模式（转换 + 本阶段实现）、`cosec-migrate verify`；百万例任务 | PR-5；RFC 0002 PR-6（`DecisionParity`、`decisionReplay`）；RFC 0003 PR-4 | **不能**早于 RFC 0002 PR-6（比较器在那里改名、泛化） | 每一类的正例被归入、反例不被归入；用仓库内的合成数据跑通回放与 `verify` |
+| PR-4 | `feat(core): compile platform, app and tenant snapshot documents` | `schema: 2` 文档与编解码、编译（7.x 匹配器经 RFC 0002 PR-3 的适配层）、编译期检查（引用完整性、租户隔离、主体绑定上限、break-glass）、内置的黑名单和 root 策略、`UnifiedAuthorization`（`DecisionAuthorization`，测试中装配）、`SnapshotPublisher` 的绑定写入 | PR-2、PR-3；RFC 0002 PR-3（#993）；RFC 0003 PR-1、PR-2（`SnapshotSource`、编译器、`LayerReads`、`EngineDecisionFlow`，均已合入） | **能**：依赖都已合入，不需要 RFC 0002 PR-6 | `:cosec-core:check` 及依赖模块通过 |
+| PR-5 | `feat(migrate): add the 7.x to 8.0 data converter` | `migrate/` 模块、`convert`/`publish`/`verify`（`verify` 依赖 PR-6 的分类器，先只做 `convert`/`publish`）、拒绝项（§8.4）、来源映射、报告 | PR-4；RFC 0003 PR-3（#1006，CoCache 6.7 的文档存储与发布者，已合入；`CoSec7xReader` 随它提供） | **能** | 合成 7.x 数据（含每一种拒绝项）的转换测试；转换后的文档经 PR-4 编译通过 |
+| PR-6 | `test: classify intended decision differences in replay` | `DifferenceClassifier`、C1a–C3 的类别、正例与反例、合成语料、回放工具的候选模式（转换 + 本阶段实现）、`cosec-migrate verify`；百万例任务 | PR-5；`DecisionParity` 与回放工具（`cosec-core` 测试夹具，#997、#1002，已合入）；RFC 0003 PR-4 | **能**：比较器已经是通用的（比较任意两个 `DecisionAuthorization`）；回放任务现名 `engineReplay`，RFC 0002 PR-6 改名为 `decisionReplay` 后跟随改名 | 每一类的正例被归入、反例不被归入；用仓库内的合成数据跑通回放与 `verify` |
 | — | **门槛 A** | 维护者在本地：对同一批导出跑回放（§9.4），逐条确认 C1a 的样本 | PR-6 | — | 未归类差异为 0；证据（计数与哈希）附在 PR-7 |
 | PR-7 | `refactor!: authorize from bindings over platform and tenant snapshots` | starter 装配 `UnifiedAuthorization`、三种 `SnapshotKey`、`cosec.authorization.scope.*`、`cosec.authorization.membership.*`、`prewarm-tenants`；`SecurityContext.scope`；schema 标记 `"8.4"`；`AuditSourceType`（Q18）；解释按绑定；`PolicyTestKit` 读新文档；文档（§14.3）；JMH | RFC 0003 PR-6；PR-6；门槛 A | **不能** | 全部模块 `check` 通过；门槛证据；§12 的目标 |
 | PR-8 | `refactor!: remove layers, role permissions and the root matcher` | 删除 `LayerKind`、`PolicySet`/`LayerInput`/`RuleGroup`、`evaluate(request, PolicySet)`、`RoleScope` 在授权路径上的使用、`RootPrincipalMatcher`、`root-enabled`、`ROOT_ID`/`isRoot`；`cosec-api` 的 `AppRolePermission`、`RolePermission`、`PolicyCapable` 中与评估有关的部分、`PolicyType.GLOBAL` 的评估含义（Q19）；RFC 0003 的 `Policies` key | PR-7 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
@@ -918,31 +918,31 @@ PR-1、PR-3 可以立即并行；PR-2 只等 PR-1。RFC 0005 的 PR-1（AST 类�
 
 ## 15. 决定
 
-以下各项待维护者确认。推荐理由写在最后一列。
+以下各项已于 **2026-10-22** 由维护者确认，全部按本文的推荐决定。标注"测量后确认"的，PR 按这里的值实现，数字由测量结果校准。
 
-| # | 问题 | 推荐 | 理由 |
+| # | 问题 | 决定 | 理由 |
 |---|---|---|---|
-| Q1 | **`Binding` 的主体是否包括 `group`**（§3 I1） | 不包括：`Principal`、`Role`、`Anyone` 三种 | CoSec 没有组的概念；身份源的组以角色的形式进入 token，效果相同，模型更小 |
-| Q2 | **主体直接引用的策略**（§3 I2、§4.4） | 作为成员关系的"附加"，来自 token 的 `policies` 声明；策略加 `attachable` 标志；快照里的主体绑定只用于 break-glass 与服务账号，每个文档上限 1,000 | 用户级数据不进快照（P11）；转换工具拿不到 token 签发方的数据；沿用声明就不需要重新签发 token |
-| Q3 | **作用域的默认值**（§3 I3） | 每个维度必须显式写出，通配写 `*` | RFC 0001 原文有两种相反的读法；显式写出没有歧义，转换工具生成时不吃亏 |
-| Q4 | **快照版本与组合方式**（§3 I4、I5） | 三份文档 `Platform`、`App(appId)`、`Tenant(tenantId)`，版本三元组；组合而不合并 | 保留 RFC 0003 已确认的按应用分区；平台发布不需要 O(租户数) 的重新编译 |
-| Q5 | **转换后的数据放在哪一层**（§5.2） | 默认全部放平台层（方案 A）；`--partition by-owner` 作为可选项 | 7.x 的数据本来就对所有租户生效；只有这样门槛 A 的差异才只来自刻意的语义修订；`tenantId` 多半不反映真实归属 |
-| Q6 | **扁平算法的两条补充规则**（§3 I6、§6.1） | DENY 命中优先于错误、缺失和不可用；先扫完全部 DENY 再判断出错 | 决策与候选顺序无关（P8）；拒绝已经确定时报告"无法判定"没有意义；E3 不再是差异 |
-| Q7 | **"属性缺失"的含义**（§3 I7） | 本来就可能没有的属性按"不存在"参与比较，不是错误；`onMissing` 只用于第 5 阶段的外部属性 | 否则每个不带可选请求头的请求都会 500；详细规则在 RFC 0005 §3.4 |
-| Q8 | **root**（§3 I8、I9、§4.8） | break-glass 绑定，必须有过期时间，受全部 DENY 约束，没有豁免；本阶段 WARN 日志 + 现有审计，第 5 阶段 `REQUIRED` 审计 | deny-first 对所有主体成立，P1 不再需要例外；break-glass 是补缺失的 ALLOW，不是绕过 DENY |
-| Q9 | **黑名单**（§3 I10、§4.7） | 名单仍由 `BlacklistChecker` 提供（第 5 阶段改为 `AttributeProvider`）；规则是编译时注入的内置 DENY，排在最前 | 规则进了快照又不可能被误删；被拉黑的请求的 I/O 与 7.x 相同 |
-| Q10 | **编解码放在哪里**（§3 I11） | `model/` 保持只依赖标准库；文档编解码在 `cosec-core`，用 Jackson 流式 API | RFC 0002 的纯净约束已确认；流式 API 不需要反射 hint |
-| Q11 | **应用维度的信任**（§4.6） | 宿主可以配置应用（服务内嵌：属性；Gateway：路由元数据），配置后声明不一致即拒绝；不配置时沿用声明值；生产文档建议配置 | 不强制配置，现有部署切换时不会失败；配置是低成本的加固 |
-| Q12 | **成员关系声明的格式**（§3 I14、§4.5.1） | 沿用 7.x 的 `roles` 列表（`role@space`）和 `policies` 列表；键只是空间；新增 `cosec.membership: "provider"` 标记 | 不需要重新签发 token；7.x 的空间本来与应用无关 |
-| Q13 | **按主体吊销**（§3 I17、§4.5.3） | 本阶段增加 `TokenRevoker.revokeSubject` | RFC 0001 §7.1 的"成员关系默认来自声明"依赖它作为紧急手段，而现在没有 |
-| Q14 | **`MembershipProvider` 的交付范围**（§4.5.2） | 本阶段：SPI（`CompletableFuture`）、失败即拒绝的契约、内存实现；Redis 实现与挂起包装在第 5 阶段 | 7.x 没有用户在用它，它不在门槛 A 的比较之内；先定契约，实现随 `cosec-store-redis` |
-| Q15 | **`App`、`Tenant` 文档的 LRU 上限**（测量后确认） | 各 1,024 | 与 RFC 0003 Q19 一致；用测量工具的租户维度校准 |
-| Q16 | **`cosec-migrate` 是否发布** | 发布，带 `main` 的 jar，也可作为库调用；不依赖 Spring | 用户升级时必须运行它；它不是 `cosec-gateway-server` 那样的应用 |
-| Q17 | **schema 标记**（§8.5） | 本阶段改为 `"8.4"`；GA 时定为最终值 | 第 3 阶段的 `"8"` 布局在 `main` 上已有开发部署；标记不变的话，它们会读到"没有 `Platform` 文档"，全局 DENY 静默失效（RFC 0003 §4.7 同类问题） |
-| Q18 | **`AuditSourceType` 等 `cosec-api` 变更**（X1；AGENTS.md 要求先问） | PR-7 改为 `POLICY`/`BINDING`/`ATTACHMENT`/`SCOPE`，合并四种 `VerifyContext` | 层消失之后，旧的来源类型无法如实表达"哪条绑定的哪条语句" |
-| Q19 | **`cosec-api` 中旧模型的删除**（AGENTS.md 要求先问） | PR-8 删除 `AppRolePermission`、`RolePermission`、`PolicyType.GLOBAL` 的评估含义、`RootPrincipalMatcher`、`ROOT_ID`；`Policy`/`Statement`/`ActionMatcher`/`ConditionMatcher` 保留到 RFC 0005 的切换 | 留着它们就留着第二种挂载方式；匹配器接口在 RFC 0005 之前仍是语句的执行者 |
-| Q20 | **门槛标准**（§9） | "未归类差异为零"取代"差异为零"；放宽类（C1a）逐条确认；新增类别必须修订本 RFC | 本阶段有意改变语义；把"有意"变成可机械检查的证据，而不是人工判断 |
-| Q21 | **C3：声明了非成员空间**（§4.6） | 拒绝，不提供开关 | 退回默认空间会让后端在主体不属于的空间执行请求，是绕过 |
+| Q1 | **`Binding` 的主体是否包括 `group`**（§3 I1） | **已决定**：不包括：`Principal`、`Role`、`Anyone` 三种 | CoSec 没有组的概念；身份源的组以角色的形式进入 token，效果相同，模型更小 |
+| Q2 | **主体直接引用的策略**（§3 I2、§4.4） | **已决定**：作为成员关系的"附加"，来自 token 的 `policies` 声明；策略加 `attachable` 标志；快照里的主体绑定只用于 break-glass 与服务账号，每个文档上限 1,000 | 用户级数据不进快照（P11）；转换工具拿不到 token 签发方的数据；沿用声明就不需要重新签发 token |
+| Q3 | **作用域的默认值**（§3 I3） | **已决定**：每个维度必须显式写出，通配写 `*` | RFC 0001 原文有两种相反的读法；显式写出没有歧义，转换工具生成时不吃亏 |
+| Q4 | **快照版本与组合方式**（§3 I4、I5） | **已决定**：三份文档 `Platform`、`App(appId)`、`Tenant(tenantId)`，版本三元组；组合而不合并 | 保留 RFC 0003 已确认的按应用分区；平台发布不需要 O(租户数) 的重新编译 |
+| Q5 | **转换后的数据放在哪一层**（§5.2） | **已决定**：默认全部放平台层（方案 A）；`--partition by-owner` 作为可选项 | 7.x 的数据本来就对所有租户生效；只有这样门槛 A 的差异才只来自刻意的语义修订；`tenantId` 多半不反映真实归属 |
+| Q6 | **扁平算法的两条补充规则**（§3 I6、§6.1） | **已决定**：DENY 命中优先于错误、缺失和不可用；先扫完全部 DENY 再判断出错 | 决策与候选顺序无关（P8）；拒绝已经确定时报告"无法判定"没有意义；E3 不再是差异 |
+| Q7 | **"属性缺失"的含义**（§3 I7） | **已决定**：本来就可能没有的属性按"不存在"参与比较，不是错误；`onMissing` 只用于第 5 阶段的外部属性 | 否则每个不带可选请求头的请求都会 500；详细规则在 RFC 0005 §3.4 |
+| Q8 | **root**（§3 I8、I9、§4.8） | **已决定**：break-glass 绑定，必须有过期时间，受全部 DENY 约束，没有豁免；本阶段 WARN 日志 + 现有审计，第 5 阶段 `REQUIRED` 审计 | deny-first 对所有主体成立，P1 不再需要例外；break-glass 是补缺失的 ALLOW，不是绕过 DENY |
+| Q9 | **黑名单**（§3 I10、§4.7） | **已决定**：名单仍由 `BlacklistChecker` 提供（第 5 阶段改为 `AttributeProvider`）；规则是编译时注入的内置 DENY，排在最前 | 规则进了快照又不可能被误删；被拉黑的请求的 I/O 与 7.x 相同 |
+| Q10 | **编解码放在哪里**（§3 I11） | **已决定**：`model/` 保持只依赖标准库；文档编解码在 `cosec-core`，用 Jackson 流式 API | RFC 0002 的纯净约束已确认；流式 API 不需要反射 hint |
+| Q11 | **应用维度的信任**（§4.6） | **已决定**：宿主可以配置应用（服务内嵌：属性；Gateway：路由元数据），配置后声明不一致即拒绝；不配置时沿用声明值；生产文档建议配置 | 不强制配置，现有部署切换时不会失败；配置是低成本的加固 |
+| Q12 | **成员关系声明的格式**（§3 I14、§4.5.1） | **已决定**：沿用 7.x 的 `roles` 列表（`role@space`）和 `policies` 列表；键只是空间；新增 `cosec.membership: "provider"` 标记 | 不需要重新签发 token；7.x 的空间本来与应用无关 |
+| Q13 | **按主体吊销**（§3 I17、§4.5.3） | **已决定**：本阶段增加 `TokenRevoker.revokeSubject` | RFC 0001 §7.1 的"成员关系默认来自声明"依赖它作为紧急手段，而现在没有 |
+| Q14 | **`MembershipProvider` 的交付范围**（§4.5.2） | **已决定**：本阶段：SPI（`CompletableFuture`）、失败即拒绝的契约、内存实现；Redis 实现与挂起包装在第 5 阶段 | 7.x 没有用户在用它，它不在门槛 A 的比较之内；先定契约，实现随 `cosec-store-redis` |
+| Q15 | **`App`、`Tenant` 文档的 LRU 上限**（测量后确认） | **已决定**：各 1,024 | 与 RFC 0003 Q19 一致；用测量工具的租户维度校准 |
+| Q16 | **`cosec-migrate` 是否发布** | **已决定**：发布，带 `main` 的 jar，也可作为库调用；不依赖 Spring | 用户升级时必须运行它；它不是 `cosec-gateway-server` 那样的应用 |
+| Q17 | **schema 标记**（§8.5） | **已决定**：本阶段改为 `"8.4"`；GA 时定为最终值 | 第 3 阶段的 `"8"` 布局在 `main` 上已有开发部署；标记不变的话，它们会读到"没有 `Platform` 文档"，全局 DENY 静默失效（RFC 0003 §4.7 同类问题） |
+| Q18 | **`AuditSourceType` 等 `cosec-api` 变更**（X1；AGENTS.md 要求先问） | **已决定**：PR-7 改为 `POLICY`/`BINDING`/`ATTACHMENT`/`SCOPE`，合并四种 `VerifyContext` | 层消失之后，旧的来源类型无法如实表达"哪条绑定的哪条语句" |
+| Q19 | **`cosec-api` 中旧模型的删除**（AGENTS.md 要求先问） | **已决定**：PR-8 删除 `AppRolePermission`、`RolePermission`、`PolicyType.GLOBAL` 的评估含义、`RootPrincipalMatcher`、`ROOT_ID`；`Policy`/`Statement`/`ActionMatcher`/`ConditionMatcher` 保留到 RFC 0005 的切换 | 留着它们就留着第二种挂载方式；匹配器接口在 RFC 0005 之前仍是语句的执行者 |
+| Q20 | **门槛标准**（§9） | **已决定**："未归类差异为零"取代"差异为零"；放宽类（C1a）逐条确认；新增类别必须修订本 RFC | 本阶段有意改变语义；把"有意"变成可机械检查的证据，而不是人工判断 |
+| Q21 | **C3：声明了非成员空间**（§4.6） | **已决定**：拒绝，不提供开关 | 退回默认空间会让后端在主体不属于的空间执行请求，是绕过 |
 
 ---
 

@@ -1,8 +1,8 @@
 # RFC 0005：条件 AST、动作词汇与编译执行（RFC 0001 迁移第 4 阶段，下篇）
 
-> 状态：提议（第 1 版，§11 的决定待维护者确认）· 上位文档：[RFC 0001](0001-target-architecture.md) P6、P10、§3.3、§3.10、§6 第 4 阶段、§7.1 ·
+> 状态：已确认（第 2 版，§15 / §11 的决定已于 2026-10-22 由维护者确认）· 上位文档：[RFC 0001](0001-target-architecture.md) P6、P10、§3.3、§3.10、§6 第 4 阶段、§7.1 ·
 > 姊妹篇：[RFC 0004](0004-unified-model.md)（第 4 阶段上篇：绑定、租户分层、转换工具、门槛方法），本文以它为前提 ·
-> 基线：`main` @ `334da022` · 交付：全部合入 `main`（8.0 线），不发布任何版本 ·
+> 基线：`main` @ `a361084d`（第 1 版写于 `334da022`） · 交付：全部合入 `main`（8.0 线），不发布任何版本 ·
 > 范围：`model/`、`engine/`、`cosec-core`、`cosec-openapi`、`cosec-gateway`、`cosec-webflux`、`cosec-webmvc`、`migrate/`
 
 ## 0. 结论先行
@@ -20,8 +20,7 @@ RFC 0004 统一了"一条语句对谁、在哪里生效"。本文统一"一条�
   索引的完整性（候选集 ⊇ 暴力匹配的命中集）由性质测试守护。
 - **迁移**（§7）：转换工具只做**精确**的翻译，翻译不了的拒绝并报告位置，不做近似。自定义条件匹配器经一个不可分析的 `legacy` 节点过渡到第 5 阶段（§3.7）。
 - **门槛 B**（§8）沿用 RFC 0004 §9 的方法：未归类差异为零。改动目录只有三类，都只收紧或修复缺陷。
-- 本文发现了一个 7.x 的潜在缺陷（§2 J9）：路径模板 `#{principal.id}` 把主体 id 原样拼进路径模式再解析，id 中的 `*`、`{`、`/` 会改变模式的含义。
-  AST 的翻译从结构上消除它。
+- 路径模板在 AST 中变成"捕获变量 + `eq`"，代入的值永远不会改变模式（§2 J9）。
 
 ---
 
@@ -62,7 +61,7 @@ RFC 0004 统一了"一条语句对谁、在哪里生效"。本文统一"一条�
 | J6 | §7.1：运算符集合固定 | 7.x 的 `endsWith`、`contains`、`regular` 在策略里很常见（例如按来源域名后缀放行），集合里没有对应的运算符 | 不加运算符。提供一个派生属性 `*.host.labels`（反转的域名标签，§3.2），使"域名后缀"可以写成 `prefix`；其余拒绝转换（§3.6）。Q5 |
 | J7 | §7.1："按 action 键精确查找，索引快且不会漏" | 只对 `service:verb` 成立。`http` 命名空间的路径模式（`**`、`{var}`、模板）不能按键精确查找 | 按命名空间分区：`service:verb` 哈希，`http` 按段前缀树，模板和不可分析的进"总是候选"桶（§6.2） |
 | J8 | §3.3 `onMissing` | 见 RFC 0004 §3 I7 | §3.4 |
-| J9 | （7.x 现状，非 RFC 0001） | [`ReplaceablePathActionMatcher`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/PathActionMatcher.kt) 先用 SpEL 把 `#{principal.id}` 之类的模板求值成字符串，再交给 `PathPatternParser.parse`。值里如果有 `*`、`**`、`{`、`}`、`/`，就变成了模式语法：id 为 `*` 的主体，`/users/#{principal.id}/**` 就成了 `/users/*/**`，匹配所有用户的路径。主体 id 来自身份源，通常不受用户控制，但 `#{principal.attributes['team']}` 这类属性可能是 | **未单独验证**，应当先在 `main` 上写一个探测测试确认，确认后按安全修复的流程处理（可能需要回移到 `7.x`），不等第 4 阶段。AST 的翻译把模板变成"捕获变量 + `eq`"（§7.2），从结构上消除它。Q6 |
+| J9 | （7.x 现状，非 RFC 0001）`#{...}` 路径模板在求值后才成为模式的一部分 | 模板不可分析，也无法建索引 | 路径模板在 AST 中变成"捕获变量 + `eq`"（§7.2），代入的值只参与相等比较，永远不会改变模式。Q6 |
 
 ---
 
@@ -187,7 +186,7 @@ eval(c, req) : Boolean        // 不抛出：AST 求值中没有任何可能失�
 | `endsWith` | 同上 | 域名用 `*.host.labels` 的 `prefix`；其余拒绝 |
 | `path` 条件（对任意 part 做路径模式匹配） | 是第二套模式语言 | 作用于 `request.path` 且语句动作为 `all` 时，移进语句的资源模式（§7.1）；其余拒绝 |
 | `ognl`、`spel` | 图灵完备，攻击面大（D6），需要反射（RFC 0001 §3.10） | 手工改写；转换工具报告每一处 |
-| `#{...}` 模板（`eq` 的值、路径动作） | 字符串拼接后再解释（§2 J9） | `eq` 右边的 `{"attr": ...}`；路径模板改为捕获变量 + `eq`（§7.2） |
+| `#{...}` 模板（`eq` 的值、路径动作） | 求值结果成为模式或比较值的一部分，不可分析（§2 J9） | `eq` 右边的 `{"attr": ...}`；路径模板改为捕获变量 + `eq`（§7.2） |
 | 自定义 `ConditionMatcherFactory` | 不可分析 | 本阶段经 `legacy` 节点过渡（§3.7）；第 5 阶段改为 `AttributeProvider` + AST |
 | 自定义 `ActionMatcherFactory` | 动作必须可以建索引 | 映射到 `service:verb`（§5）；转换工具拒绝 |
 
@@ -430,7 +429,7 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 |---|---|
 | `path` 模式在 `HttpPathPattern` 子集内 | §5.2 的表 |
 | `path` 模式含 `{x:regex}` 或自定义 `separator` | 拒绝 |
-| 路径模板 `/users/#{principal.id}/**` | 资源 `http:path:/users/{__t0}/**` + 条件 `eq(resource.var.__t0, {"attr": "subject.id"})`。7.x 中模板值里的模式字符会改变模式（§2 J9），8.0 中值只做相等比较：差异类 D3 |
+| 路径模板 `/users/#{principal.id}/**` | 资源 `http:path:/users/{__t0}/**` + 条件 `eq(resource.var.__t0, {"attr": "subject.id"})`。代入的值只参与相等比较，不改变模式（§2 J9） |
 | 路径模板出现在一段的中间（`/a/x-#{principal.id}`） | 拒绝（段内模板没有对应的捕获语法） |
 | 自定义 `ActionMatcherFactory` | 拒绝 |
 
@@ -456,7 +455,7 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 |---|---|---|---|
 | D1 | **`inRole` 按方向与作用域判定**（§7.1；RFC 0002 Q12 的 M1/M2） | 只收紧：DENY 变宽、ALLOW 变窄 | 决定性的语句（或缺少的那条 ALLOW）含一个由 `inRole` 翻译来的节点；基准 trace 中该节点为真、候选为假（ALLOW），或者相反（DENY） |
 | D2 | **空串不再等于"不存在"**：一侧不存在（7.x 读作 `""`）、另一侧是空串的 `eq(a, {"attr": b})` | ALLOW 方向收紧；DENY 方向放宽 | 决定性的差异节点是 `eq(a, {"attr": b})`，样本中一侧不存在、另一侧为空串。**DENY 方向的样本逐条确认**（这是本文唯一可能放宽的一类：`deny if resource.ownerId == principal.attributes.x`，资源属性缺失而主体属性是空串时，7.x 拒绝，8.0 不拒绝） |
-| D3 | **7.x 匹配器的错误消失**：`RegexTimeoutException` 不再可能（正则已翻译成精确的 `eq`/`prefix`），模板注入不再可能（§2 J9） | 只改状态码，或修复缺陷 | 基准异常类为 `RegexTimeoutException`，或基准决策的语句由模板路径动作做出且样本主体 id 含模式字符 |
+| D3 | **7.x 匹配器的错误消失**：`RegexTimeoutException` 不再可能（正则已翻译成精确的 `eq`/`prefix`） | 只改状态码 | 基准异常类为 `RegexTimeoutException`，候选 trace 中对应语句为 `MATCH` 或 `NO_MATCH` |
 
 **为什么 D2 不能直接避免**：可以把 `eq(a, {"attr": b})` 翻译成"不存在等于空串"，但那正是 7.x 的缺陷形态：一个缺少 `ownerId` 资源属性的请求，因为主体的对应属性是空串，
 就被当作"所有者本人"放行（ALLOW 方向）。所以本文选择不存在不等于任何值，DENY 方向的少数样本由维护者确认（Q7）。
@@ -494,6 +493,7 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 | 基准 | 目标 |
 |---|---|
 | `EngineBenchmark`，参数 `statements` ∈ {10, 1,000, 10,000, 100,000}（适用绑定内），`namespace` ∈ {`http`, `service`} | 同一场景下 B/op 不随 `statements` 变化；吞吐在 10,000 条时不低于 10 条时的 50%（索引使每请求工作量与命中的分区大小成正比，而不是总数） |
+| `SimpleAuthorizationBenchmark`，场景 `global`、`role`、`none`、`role-heavy`，与 **7.0 的 `SimpleAuthorization`** 比较（**硬性要求**，来自第 2 阶段的性能豁免，RFC 0002 §7.2 第 8 步） | 吞吐**不低于 7.0 的 100 %**，按 RFC 0002 §7.2 的条件测量（JDK 25、5 次预热、10 次迭代、3 个 fork、交替三轮、空闲机器）。任一场景达不到，切换 PR（PR-8）停止，交回维护者决定 |
 | `SimpleAuthorizationBenchmark`，参数 `language` ∈ {`legacy`, `ast`} | 吞吐不低于 `legacy` 的 95%；B/op 不高于 `legacy`。预期明显更好：不再有 `PathContainer` 解析缓存、`ConcurrentHashMap` 属性、SpEL 模板求值 |
 | `ConditionBenchmark` | 每个运算符的单次求值耗时与分配（`OFF` 时零分配） |
 | `HttpPathPatternBenchmark` | 与 Spring `PathPattern.matchAndExtract` 对照，只记录 |
@@ -515,7 +515,7 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 | PR-6 | `feat(migrate): translate 7.x matchers into the condition AST` | §7 全部，包括限流规则；`legacy` 节点（Q2）；报告 | PR-4；RFC 0004 PR-5 | RFC 0004 PR-5 合入后 |
 | PR-7 | `test: classify AST migration differences in replay` | D1–D3、正例与反例、翻译对照语料 | PR-6；RFC 0004 PR-6 | RFC 0004 PR-6 合入后 |
 | — | **门槛 B** | 维护者本地回放 | PR-7；RFC 0004 PR-7（基准是切换后的实现） | — |
-| PR-8 | `refactor!: evaluate compiled conditions and actions` | 切换：文档 `schema: 3`（AST），schema 标记更新（RFC 0004 §8.5）；starter 装配路由映射；`AuthorizationChecker` 的新签名；文档；JMH | 门槛 B | **不能** |
+| PR-8 | `refactor!: evaluate compiled conditions and actions` | 切换（前提：§9.3 对 7.0 的 100 % 吞吐要求已满足，否则停止并交回维护者）：文档 `schema: 3`（AST），schema 标记更新（RFC 0004 §8.5）；starter 装配路由映射；`AuthorizationChecker` 的新签名；文档；JMH | 门槛 B | **不能** |
 | PR-9 | `refactor!: remove the legacy matchers` | 删除 OGNL、SpEL（含 `OgnlSandbox` 和依赖）、全部内置匹配器与工厂、`ActionMatcherFactory` SPI、`PartExtractor`、`Expression`/模板、`StatementScopedContext`、`Rule`/`Guard`/`RuleGroup`、`HostFacts`/`LegacyFacts`、`PathVariableScope`；`cosec-api` 的 `ActionMatcher`、`ConditionMatcher`、`Statement`/`Policy` 中的匹配器字段（Q8） | PR-8 | **不能** |
 
 **文档**（中英文同步，PR-8/PR-9）：`wiki/policies/language.md` 重写（动作、资源、条件 AST、属性目录、不存在的属性、成本上限、迁移对照表）；
@@ -529,16 +529,19 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 
 ## 11. 决定
 
-| # | 问题 | 推荐 | 理由 |
+以下各项已于 **2026-10-22** 由维护者确认，全部按本文的推荐决定；Q12 是同日新增的硬性要求。标注"测量后确认"的，PR 按这里的值实现，数字由测量结果校准。
+
+| # | 问题 | 决定 | 理由 |
 |---|---|---|---|
-| Q1 | **HTTP 路径模式的实现**（§2 J1、§5.2） | 引擎内的纯 Kotlin `HttpPathPattern`，覆盖 Spring `PathPattern` 去掉正则捕获和自定义分隔符之后的子集，用对照性质测试保证等价；子集之外的转换时拒绝 | 引擎不能依赖 `spring-web`，也不能用正则；7.x 策略中的正则捕获预计很少，转换报告会给出确切数量 |
-| Q2 | **自定义条件匹配器的过渡**（§2 J2、§3.7） | 保留不可分析的 `legacy` 节点，只承载自定义工厂，只能由平台层发布，第 5 阶段删除 | 否则第 4 阶段到第 5 阶段之间自定义匹配器无处可去；不可分析的代价由"总是候选"与平台层发布承担 |
-| Q3 | **OGNL/SpEL**（§2 J3） | 切换时直接删除；转换工具拒绝并报告每一处 | 没有发布中间版本，"deprecated"没有使用者；表达式无法精确翻译 |
-| Q4 | **限流规则**（§2 J4、§7.3） | 本文翻译限流规则的匹配部分，执行方式留到第 5 阶段 | 删除匹配器后规则无法加载；匹配语言应当只有一种 |
-| Q5 | **`endsWith` 等不能表达的运算**（§2 J6、§3.6） | 不加运算符；提供 `*.host.labels` 派生属性覆盖域名后缀；其余拒绝转换 | 保持 RFC 0001 §7.1 确认的运算符集合；域名后缀是最常见、也最容易写错的用法（`endsWith("example.com")` 匹配 `badexample.com`） |
-| Q6 | **模板注入**（§2 J9） | 先在 `main` 上写探测测试确认；确认后作为安全修复单独处理（含是否回移 `7.x`），不等第 4 阶段 | 若属实，它影响已发布的 7.x |
-| Q7 | **不存在的属性与 D2**（§3.4、§8） | 不存在不等于任何值，包括另一个不存在；DENY 方向的回放样本逐条确认 | "两边都不存在即相等"会在 ALLOW 方向放行不该放行的请求 |
-| Q8 | **`cosec-api` 匹配器接口的删除**（AGENTS.md 要求先问） | PR-9 删除 `ActionMatcher`、`ConditionMatcher` 及 `Statement`/`Policy` 中的匹配器字段；`legacy` 节点用 `cosec-core` 内部的窄接口 | 它们是第二种执行模型；保留就无法删除适配层 |
-| Q9 | **成本上限的默认值**（§3.5，测量后确认） | 节点 64、深度 8、`in` 1,024、`cidr` 256、字面量 1 KB、语句成本 256 | 用转换报告中 7.x 策略的实际分布校准 |
-| Q10 | **未映射路由的动作**（§5.3） | `http:<METHOD>` + `http:path`，即 `http` 命名空间；一个请求只有一个动作 | 失败即拒绝：`service:verb` 的 ALLOW 不会覆盖未映射的路由；`http` 的 DENY 不因加了映射而失效 |
-| Q11 | **`inRole` 带空间值在 DENY 方向的翻译**（§7.1） | 新增属性 `subject.scopedRoles`（`role@space` 形式），保持 7.x 语义 | 否则 DENY 会变窄，即放宽访问 |
+| Q1 | **HTTP 路径模式的实现**（§2 J1、§5.2） | **已决定**：引擎内的纯 Kotlin `HttpPathPattern`，覆盖 Spring `PathPattern` 去掉正则捕获和自定义分隔符之后的子集，用对照性质测试保证等价；子集之外的转换时拒绝 | 引擎不能依赖 `spring-web`，也不能用正则；7.x 策略中的正则捕获预计很少，转换报告会给出确切数量 |
+| Q2 | **自定义条件匹配器的过渡**（§2 J2、§3.7） | **已决定**：保留不可分析的 `legacy` 节点，只承载自定义工厂，只能由平台层发布，第 5 阶段删除 | 否则第 4 阶段到第 5 阶段之间自定义匹配器无处可去；不可分析的代价由"总是候选"与平台层发布承担 |
+| Q3 | **OGNL/SpEL**（§2 J3） | **已决定**：切换时直接删除；转换工具拒绝并报告每一处 | 没有发布中间版本，"deprecated"没有使用者；表达式无法精确翻译 |
+| Q4 | **限流规则**（§2 J4、§7.3） | **已决定**：本文翻译限流规则的匹配部分，执行方式留到第 5 阶段 | 删除匹配器后规则无法加载；匹配语言应当只有一种 |
+| Q5 | **`endsWith` 等不能表达的运算**（§2 J6、§3.6） | **已决定**：不加运算符；提供 `*.host.labels` 派生属性覆盖域名后缀；其余拒绝转换 | 保持 RFC 0001 §7.1 确认的运算符集合；域名后缀是最常见、也最容易写错的用法（`endsWith("example.com")` 匹配 `badexample.com`） |
+| Q6 | **路径模板**（§2 J9） | **已决定**：作为安全修复单独处理；AST 从结构上消除这一类问题 | 路径模板变成捕获变量 + `eq`，代入的值永远不会改变模式 |
+| Q7 | **不存在的属性与 D2**（§3.4、§8） | **已决定**：不存在不等于任何值，包括另一个不存在；DENY 方向的回放样本逐条确认 | "两边都不存在即相等"会在 ALLOW 方向放行不该放行的请求 |
+| Q8 | **`cosec-api` 匹配器接口的删除**（AGENTS.md 要求先问） | **已决定**：PR-9 删除 `ActionMatcher`、`ConditionMatcher` 及 `Statement`/`Policy` 中的匹配器字段；`legacy` 节点用 `cosec-core` 内部的窄接口 | 它们是第二种执行模型；保留就无法删除适配层 |
+| Q9 | **成本上限的默认值**（§3.5，测量后确认） | **已决定**：节点 64、深度 8、`in` 1,024、`cidr` 256、字面量 1 KB、语句成本 256 | 用转换报告中 7.x 策略的实际分布校准 |
+| Q10 | **未映射路由的动作**（§5.3） | **已决定**：`http:<METHOD>` + `http:path`，即 `http` 命名空间；一个请求只有一个动作 | 失败即拒绝：`service:verb` 的 ALLOW 不会覆盖未映射的路由；`http` 的 DENY 不因加了映射而失效 |
+| Q11 | **`inRole` 带空间值在 DENY 方向的翻译**（§7.1） | **已决定**：新增属性 `subject.scopedRoles`（`role@space` 形式），保持 7.x 语义 | 否则 DENY 会变窄，即放宽访问 |
+| Q12 | **编译执行的吞吐要求**（2026-10-22 新增，来自第 2 阶段的性能豁免，RFC 0002 §7.2 第 8 步） | **已决定**：编译执行在 `global`、`role`、`none`、`role-heavy` 上的吞吐不低于 7.0 的 `SimpleAuthorization` 的 100 %，按 RFC 0002 §7.2 的条件测量（§9.3）；达不到时切换 PR 停止，交回维护者 | 第 2 阶段接受了最多约 7 % 的差距，理由是编译执行将取代整个适配路径；本阶段必须兑现 |
