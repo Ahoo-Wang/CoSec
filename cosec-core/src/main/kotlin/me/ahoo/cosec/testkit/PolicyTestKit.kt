@@ -23,6 +23,7 @@ import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
+import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.explain.AuthorizationExplainer
 import me.ahoo.cosec.explain.DecisionRef
 import me.ahoo.cosec.explain.ExplainOptions
@@ -132,15 +133,28 @@ object PolicyTestKit {
     fun run(
         locations: List<String>,
         rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE
-    ): PolicyTestReport {
-        val suites = load(*locations.toTypedArray())
-        require(suites.isNotEmpty()) { "No policy test suites found at $locations." }
-        return PolicyTestReport(suites.flatMap { run(it, rootPrincipalMatcher) })
-    }
+    ): PolicyTestReport = run(locations, rootPrincipalMatcher, explainFromTrace = false)
 
     fun run(
         suite: PolicyTestSuite,
         rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE
+    ): List<PolicyTestResult> = run(suite, rootPrincipalMatcher, explainFromTrace = false)
+
+    /** [explainFromTrace]: explain from the engine's trace (RFC 0002 §5.2); only tests set it until PR-6. */
+    internal fun run(
+        locations: List<String>,
+        rootPrincipalMatcher: RootPrincipalMatcher,
+        explainFromTrace: Boolean
+    ): PolicyTestReport {
+        val suites = load(*locations.toTypedArray())
+        require(suites.isNotEmpty()) { "No policy test suites found at $locations." }
+        return PolicyTestReport(suites.flatMap { run(it, rootPrincipalMatcher, explainFromTrace) })
+    }
+
+    internal fun run(
+        suite: PolicyTestSuite,
+        rootPrincipalMatcher: RootPrincipalMatcher,
+        explainFromTrace: Boolean
     ): List<PolicyTestResult> {
         val policies = JsonResources.readAll(suite.policies, Policy::class.java) { it.id }
         val appPermissions = JsonResources.readAll(
@@ -150,7 +164,11 @@ object PolicyTestKit {
         val explainer = AuthorizationExplainer(
             InMemoryPolicyRepository(policies),
             InMemoryAppRolePermissionRepository(appPermissions, grantsOf(suite, appPermissions)),
-            rootPrincipalMatcher = rootPrincipalMatcher
+            BlacklistChecker.NoOp,
+            rootPrincipalMatcher,
+            rateLimitRuleProvider = null,
+            securityContextParser = null,
+            fromTrace = explainFromTrace,
         )
         return suite.cases.map { case ->
             val explanation = checkNotNull(
