@@ -39,13 +39,23 @@ enum class ExplainerImpl(val fromTrace: Boolean) {
         rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE,
         rateLimitRuleProvider: RateLimitRuleProvider? = null,
         securityContextParser: SecurityContextParser? = null
-    ): AuthorizationExplainer = AuthorizationExplainer(
-        policyRepository,
-        appRolePermissionRepository,
-        blacklistChecker,
-        rootPrincipalMatcher,
-        rateLimitRuleProvider,
-        securityContextParser,
-        fromTrace,
-    )
+    ): AuthorizationExplainer = if (fromTrace) {
+        AuthorizationExplainer.fromTrace(
+            policyRepository,
+            appRolePermissionRepository,
+            blacklistChecker,
+            rootPrincipalMatcher,
+            rateLimitRuleProvider,
+            securityContextParser,
+        )
+    } else {
+        AuthorizationExplainer(
+            policyRepository,
+            appRolePermissionRepository,
+            blacklistChecker,
+            rootPrincipalMatcher,
+            rateLimitRuleProvider,
+            securityContextParser,
+        )
+    }
 }

@@ -42,7 +42,7 @@ enum class ExplainerImpl {
 
 /**
  * Builds the trace-based explainer from the same beans as `CoSecExplainAutoConfiguration`. Production cannot choose
- * it: its constructor is internal to cosec-core, so this test reaches it through reflection.
+ * it: only cosec-core reaches the explainer's private constructor, so this test does through reflection.
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(value = [ExplainProperties.ENABLED_KEY], havingValue = "true")
@@ -63,7 +63,7 @@ class TraceExplainerConfiguration {
         RateLimitRuleProvider::class.java,
         SecurityContextParser::class.java,
         Boolean::class.javaPrimitiveType,
-    ).newInstance(
+    ).apply { isAccessible = true }.newInstance(
         policyRepository,
         appRolePermissionRepository,
         blacklistChecker.getIfAvailable { BlacklistChecker.NoOp },

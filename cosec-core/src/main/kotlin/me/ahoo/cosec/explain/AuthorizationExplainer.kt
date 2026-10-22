@@ -26,6 +26,8 @@ import me.ahoo.cosec.api.policy.VerifyResult
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.RequestMatcher
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
+import me.ahoo.cosec.authorization.AuthorizationDecision
+import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.authorization.EngineAuthorization
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.RoleScope
@@ -37,6 +39,7 @@ import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.limiter.RateLimitRuleProvider
+import me.ahoo.cosec.model.Decision
 import me.ahoo.cosec.pipeline.SecurityDecision
 import me.ahoo.cosec.pipeline.SecurityPipeline
 import me.ahoo.cosec.policy.action.clearPathVariables
@@ -63,18 +66,14 @@ import java.util.concurrent.atomic.AtomicReference
  *
  * An explanation reveals policy structure: expose it only to administrators.
  */
-class AuthorizationExplainer internal constructor(
+class AuthorizationExplainer private constructor(
     private val policyRepository: PolicyRepository,
     private val appRolePermissionRepository: AppRolePermissionRepository,
     private val blacklistChecker: BlacklistChecker,
     private val rootPrincipalMatcher: RootPrincipalMatcher,
     private val rateLimitRuleProvider: RateLimitRuleProvider?,
     private val securityContextParser: SecurityContextParser?,
-    /**
-     * Explain from the trace of the one evaluation that decides ([EngineAuthorization] at [TraceLevel.FULL] or
-     * [TraceLevel.EXHAUSTIVE], RFC 0002 §5.2) instead of narrating. Only tests set it until the engine replaces the
-     * legacy implementation: an explanation must explain the implementation that enforces.
-     */
+    /** See [fromTrace]. A private constructor, so that Java cannot reach it either. */
     private val fromTrace: Boolean
 ) {
     constructor(
@@ -134,6 +133,11 @@ class AuthorizationExplainer internal constructor(
     /**
      * Decides once, with an [EngineAuthorization] that traces, through [SecurityPipeline], and explains that
      * evaluation: the status comes from the pipeline and everything else from the trace ([TraceExplanations]).
+     *
+     * An error the pipeline maps to [me.ahoo.cosec.pipeline.SecurityStatus.ERROR] without the engine having found it
+     * fails the explanation instead, as it fails the narration: a security context that could not be parsed, an
+     * [Error] or broken adapter contract out of the evaluation, or a failure mapping the engine's decision. The trace
+     * then explains nothing, or a decision that was never enforced.
      */
     private fun explainFromTrace(
         request: Request,
@@ -142,15 +146,35 @@ class AuthorizationExplainer internal constructor(
     ): Mono<Explanation> {
         val warnings = mutableListOf<ExplainWarning>()
         val traced = AtomicReference<TracedEvaluation>()
-        val authorization = EngineAuthorization(
+        val failure = AtomicReference<Throwable>()
+        val engine = EngineAuthorization(
             policyRepository,
             appRolePermissionRepository,
             blacklistChecker,
             rootPrincipalMatcher,
             if (options.exhaustive) TraceLevel.EXHAUSTIVE else TraceLevel.FULL,
         ) { evaluation, policies -> traced.set(TracedEvaluation(evaluation, policies)) }
-        return pipeline(contextOf, authorization, warnings).evaluate(request).map { decision ->
-            val explanation = TraceExplanations.explain(decision, traced.get(), options.detail)
+        val authorization = object : DecisionAuthorization {
+            override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> =
+                engine.decide(request, context).doOnError { failure.set(it) }
+        }
+        val contextParser = SecurityContextParser {
+            @Suppress("TooGenericExceptionCaught")
+            try {
+                dryRunContext(contextOf, warnings)
+            } catch (error: Throwable) {
+                failure.set(error)
+                throw error
+            }
+        }
+        return pipeline(contextParser, authorization).evaluate(request).map { decision ->
+            val evaluation = traced.get()
+            val failed = failure.get()
+            val found = (evaluation?.evaluation?.decision as? Decision.Indeterminate)?.cause?.error
+            if (failed != null && failed !== found) {
+                throw failed
+            }
+            val explanation = TraceExplanations.explain(decision, evaluation, options.detail)
             val allWarnings = (warnings + explanation.warnings).toMutableList()
             val rateLimitRules = decision.securityContext
                 ?.takeIf { decision.allowed }
@@ -187,22 +211,14 @@ class AuthorizationExplainer internal constructor(
         permissions: AppRolePermissionRepository
     ): Mono<SecurityDecision> {
         val authorization = SimpleAuthorization(policies, permissions, blacklistChecker, rootPrincipalMatcher)
-        return pipeline(contextOf, authorization).evaluate(request)
+        return pipeline(SecurityContextParser { dryRunContext(contextOf) }, authorization).evaluate(request)
     }
 
-    private fun pipeline(
-        contextOf: () -> SecurityContext,
-        authorization: Authorization,
-        warnings: MutableList<ExplainWarning>? = null
-    ): SecurityPipeline<Request> {
+    private fun pipeline(contextParser: SecurityContextParser, authorization: Authorization): SecurityPipeline<Request> {
         val requestParser = object : RequestParser<Request> {
             override fun parse(request: Request): Request = request
         }
-        return SecurityPipeline(
-            requestParser,
-            SecurityContextParser { dryRunContext(contextOf, warnings) },
-            authorization
-        )
+        return SecurityPipeline(requestParser, contextParser, authorization)
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -562,20 +578,42 @@ class AuthorizationExplainer internal constructor(
             matchingRateLimitRules(request, context, warnings)
     }
 
-    private companion object {
-        val ABORTING_WARNINGS = setOf(
+    internal companion object {
+        /**
+         * An explainer of the trace of the one evaluation that decides ([EngineAuthorization] at [TraceLevel.FULL] or
+         * [TraceLevel.EXHAUSTIVE], RFC 0002 §5.2) instead of the narration. Only tests build one until the engine
+         * replaces the legacy implementation: an explanation must explain the implementation that enforces.
+         */
+        fun fromTrace(
+            policyRepository: PolicyRepository,
+            appRolePermissionRepository: AppRolePermissionRepository,
+            blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp,
+            rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE,
+            rateLimitRuleProvider: RateLimitRuleProvider? = null,
+            securityContextParser: SecurityContextParser? = null
+        ): AuthorizationExplainer = AuthorizationExplainer(
+            policyRepository,
+            appRolePermissionRepository,
+            blacklistChecker,
+            rootPrincipalMatcher,
+            rateLimitRuleProvider,
+            securityContextParser,
+            fromTrace = true,
+        )
+
+        private val ABORTING_WARNINGS = setOf(
             ExplainWarningCode.MATCHER_ERROR,
             ExplainWarningCode.MISSING_POLICY,
             ExplainWarningCode.MISSING_PERMISSION,
         )
-        val POLICY_LAYERS = listOf(
+        private val POLICY_LAYERS = listOf(
             ExplainLayer.GLOBAL_POLICY,
             ExplainLayer.PRINCIPAL_POLICY,
             ExplainLayer.ROLE_PERMISSION
         )
 
-        fun notEvaluated(layer: ExplainLayer) = LayerTrace(layer, LayerState.NOT_EVALUATED)
+        private fun notEvaluated(layer: ExplainLayer) = LayerTrace(layer, LayerState.NOT_EVALUATED)
 
-        fun <T : Any> T.toMono(): Mono<T> = Mono.just(this)
+        private fun <T : Any> T.toMono(): Mono<T> = Mono.just(this)
     }
 }
