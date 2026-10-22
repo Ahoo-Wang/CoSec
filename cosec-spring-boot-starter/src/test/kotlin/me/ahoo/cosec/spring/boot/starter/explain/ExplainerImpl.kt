@@ -41,8 +41,9 @@ enum class ExplainerImpl {
 }
 
 /**
- * Builds the trace-based explainer from the same beans as `CoSecExplainAutoConfiguration`. Production cannot choose
- * it: only cosec-core reaches the explainer's private constructor, so this test does through reflection.
+ * Builds the trace-based explainer from the same beans as `CoSecExplainAutoConfiguration`. No public API builds it:
+ * its constructor is private, and cosec-core's factory is internal and hidden from Java (`@JvmSynthetic`), so this
+ * test calls the private constructor through reflection.
  */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(value = [ExplainProperties.ENABLED_KEY], havingValue = "true")

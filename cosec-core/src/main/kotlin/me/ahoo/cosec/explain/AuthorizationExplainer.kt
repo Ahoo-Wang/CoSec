@@ -42,6 +42,7 @@ import me.ahoo.cosec.limiter.RateLimitRuleProvider
 import me.ahoo.cosec.model.Decision
 import me.ahoo.cosec.pipeline.SecurityDecision
 import me.ahoo.cosec.pipeline.SecurityPipeline
+import me.ahoo.cosec.pipeline.SecurityStatus
 import me.ahoo.cosec.policy.action.clearPathVariables
 import me.ahoo.cosec.policy.markPolicyEvaluation
 import me.ahoo.cosec.policy.verifyScoped
@@ -156,7 +157,11 @@ class AuthorizationExplainer private constructor(
         ) { evaluation, policies -> traced.set(TracedEvaluation(evaluation, policies)) }
         val authorization = object : DecisionAuthorization {
             override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> =
-                engine.decide(request, context).doOnError { failure.set(it) }
+                engine.decide(request, context)
+                    // The pipeline maps the answer downstream, where a failure (a context that throws while it is
+                    // read) never reaches this operator: map it here too, the same way, to learn the real cause.
+                    .doOnNext { decision -> mappingFailure(request, context, decision)?.let { failure.set(it) } }
+                    .doOnError { failure.set(it) }
         }
         val contextParser = SecurityContextParser {
             @Suppress("TooGenericExceptionCaught")
@@ -174,6 +179,11 @@ class AuthorizationExplainer private constructor(
             if (failed != null && failed !== found) {
                 throw failed
             }
+            // The pipeline answered without an evaluation and without an error, as for a blacklist check that
+            // completes empty: there is nothing to explain, and saying "nothing was evaluated" would hide why.
+            check(evaluation != null || decision.status == SecurityStatus.BAD_REQUEST) {
+                "Authorization answered ${decision.status} without evaluating: the blacklist check completed empty."
+            }
             val explanation = TraceExplanations.explain(decision, evaluation, options.detail)
             val allWarnings = (warnings + explanation.warnings).toMutableList()
             val rateLimitRules = decision.securityContext
@@ -183,6 +193,19 @@ class AuthorizationExplainer private constructor(
             explanation.copy(rateLimitRules = rateLimitRules, warnings = allWarnings)
         }
     }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun mappingFailure(
+        request: Request,
+        context: SecurityContext,
+        decision: AuthorizationDecision
+    ): Throwable? =
+        try {
+            SecurityPipeline.toDecision(request, context, decision)
+            null
+        } catch (error: Throwable) {
+            error
+        }
 
     /**
      * The context [contextOf] produces, marked as a policy evaluation. A rejected credential becomes an anonymous
@@ -584,7 +607,8 @@ class AuthorizationExplainer private constructor(
          * [TraceLevel.EXHAUSTIVE], RFC 0002 §5.2) instead of the narration. Only tests build one until the engine
          * replaces the legacy implementation: an explanation must explain the implementation that enforces.
          */
-        fun fromTrace(
+        @JvmSynthetic
+        internal fun fromTrace(
             policyRepository: PolicyRepository,
             appRolePermissionRepository: AppRolePermissionRepository,
             blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp,
