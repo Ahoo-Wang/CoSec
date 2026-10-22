@@ -22,4 +22,6 @@ dependencies {
     testImplementation("me.ahoo.cosid:cosid-core")
     testImplementation("me.ahoo.cosid:cosid-test")
     testImplementation("io.projectreactor:reactor-test")
+    // cosec-core matches paths with Spring's PathPattern, which it leaves to the application.
+    jmh("org.springframework:spring-web")
 }

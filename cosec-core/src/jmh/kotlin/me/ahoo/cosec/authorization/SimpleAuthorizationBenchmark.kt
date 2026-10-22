@@ -15,12 +15,16 @@ package me.ahoo.cosec.authorization
 
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.authorization.AuthorizeResult
+import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.permission.AppRolePermission
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.principal.RoleId
+import me.ahoo.cosec.authorization.engine.CompiledApp
+import me.ahoo.cosec.authorization.engine.CompiledPolicies
+import me.ahoo.cosec.authorization.engine.PolicySnapshotCompiler
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.context.SimpleSecurityContext
@@ -37,12 +41,23 @@ import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.policy.condition.CONDITION_MATCHER_NEGATE_KEY
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.serialization.CoSecModule
+import me.ahoo.cosec.snapshot.InMemorySnapshotDocumentStore
+import me.ahoo.cosec.snapshot.SnapshotDocument
+import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.snapshot.SnapshotOptions
+import me.ahoo.cosec.snapshot.SnapshotSource
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.Param
 import org.openjdk.jmh.annotations.Scope
 import org.openjdk.jmh.annotations.Setup
 import org.openjdk.jmh.annotations.State
+import org.openjdk.jmh.annotations.TearDown
 import reactor.core.publisher.Mono
+import tools.jackson.module.kotlin.jsonMapper
+import tools.jackson.module.kotlin.kotlinModule
+import java.time.Duration
+import java.time.Instant
 
 /**
  * Authorization hot path with in-memory repositories.
@@ -61,6 +76,12 @@ import reactor.core.publisher.Mono
  * [impl] picks the implementation (RFC 0002 §7.2 step 4): `legacy` is [SimpleAuthorization], `engine` is
  * [EngineAuthorization]. [trace] `mixed` makes every eighth `engine` call a [TraceLevel.FULL] evaluation, so the
  * untraced calls run with a call site that has seen both evaluators; it is ignored for `legacy`.
+ *
+ * [source] picks where the `engine` reads its policies (RFC 0003 §9): `repository` is the repositories above,
+ * `snapshot` is a loaded policy snapshot of the same data, read through [SnapshotEngineAuthorization] (test assembly
+ * until RFC 0003 PR-5). It is ignored for `legacy`, and [repository] is ignored for `snapshot`. [globalPolicies] adds
+ * global policies that never match, to show that a snapshot's allocation does not grow with them; run
+ * `-p globalPolicies=10,100,1000` from the benchmark jar.
  */
 @State(Scope.Benchmark)
 open class SimpleAuthorizationBenchmark {
@@ -77,6 +98,14 @@ open class SimpleAuthorizationBenchmark {
     @Param("just", "deferred")
     lateinit var repository: String
 
+    @Param("repository", "snapshot")
+    lateinit var source: String
+
+    /** The number of global policies; 3 is the scenarios' own. */
+    @Param("3")
+    var globalPolicies: Int = 3
+
+    private var snapshotSource: SnapshotSource<CompiledPolicies, CompiledApp>? = null
     private lateinit var authorization: Authorization
     private lateinit var traced: Authorization
     private var calls = 0
@@ -105,7 +134,7 @@ open class SimpleAuthorizationBenchmark {
             policy("global-public", PolicyType.GLOBAL, "public", 10),
             policy("global-docs", PolicyType.GLOBAL, "docs", 10),
             policy("global-health", PolicyType.GLOBAL, "health", 5),
-        )
+        ) + (3 until this.globalPolicies).map { policy("global-filler$it", PolicyType.GLOBAL, "filler$it", 5) }
         val principalPolicies = listOf(
             policy("principal-a", PolicyType.CUSTOM, "reports", 10),
             policy("principal-b", PolicyType.CUSTOM, "exports", 10),
@@ -148,21 +177,26 @@ open class SimpleAuthorizationBenchmark {
                 )
             }
         }
-        authorization = when (impl) {
-            "legacy" -> SimpleAuthorization(policyRepository, appRolePermissionRepository)
-            "engine" -> EngineAuthorization(policyRepository, appRolePermissionRepository)
+        val snapshot = impl == "engine" && source == "snapshot"
+        if (snapshot) {
+            snapshotSource = snapshotSource(globalPolicies + principalPolicies, appPermission, rolePermissions)
+        }
+        authorization = when {
+            impl == "legacy" -> SimpleAuthorization(policyRepository, appRolePermissionRepository)
+            snapshot -> SnapshotEngineAuthorization(snapshotSource!!)
+            impl == "engine" -> EngineAuthorization(policyRepository, appRolePermissionRepository)
             else -> error("Unknown impl [$impl].")
         }
-        traced = if (impl == "engine" && trace == "mixed") {
-            EngineAuthorization(
+        traced = when {
+            impl != "engine" || trace != "mixed" -> authorization
+            snapshot -> SnapshotEngineAuthorization(snapshotSource!!, trace = TraceLevel.FULL)
+            else -> EngineAuthorization(
                 policyRepository,
                 appRolePermissionRepository,
                 BlacklistChecker.NoOp,
                 RootPrincipalMatcher.NONE,
                 TraceLevel.FULL,
             )
-        } else {
-            authorization
         }
         val principal = SimplePrincipal(
             id = "user",
@@ -178,7 +212,43 @@ open class SimpleAuthorizationBenchmark {
                 "guard-miss" -> "/public/resource3/page"
                 else -> "/unknown/path"
             },
+            // The repositories ignore it; the snapshot reads the app's document by it.
+            headers = mapOf(AppIdCapable.APP_ID_KEY to "app"),
         )
+    }
+
+    /** The same data as snapshot documents, loaded before the measurement starts. */
+    private fun snapshotSource(
+        policies: List<Policy>,
+        appPermission: AppPermissionData,
+        rolePermissions: Map<RoleId, Set<String>>,
+    ): SnapshotSource<CompiledPolicies, CompiledApp> {
+        fun document(body: String) =
+            SnapshotDocument(SnapshotDocument.CURRENT_SCHEMA, 1, Instant.EPOCH, "{$body}".encodeToByteArray())
+        val store = InMemorySnapshotDocumentStore()
+        val policiesJson = policies.joinToString(",") { mapper.writeValueAsString(it) }
+        store.put(SnapshotKey.Policies, document(""""policies":[$policiesJson]"""))
+        val grants = rolePermissions.entries.joinToString(",") { (roleId, permissions) ->
+            "\"$roleId\":${mapper.writeValueAsString(permissions)}"
+        }
+        store.put(
+            SnapshotKey.App("app"),
+            document(""""appPermission":${mapper.writeValueAsString(appPermission)},"grants":{$grants}"""),
+        )
+        val compiler = PolicySnapshotCompiler(mapper)
+        val source = SnapshotSource(
+            store,
+            compiler.policies,
+            compiler.app,
+            SnapshotOptions(revalidateInterval = Duration.ZERO),
+        )
+        source.load("app").get()
+        return source
+    }
+
+    @TearDown
+    fun tearDown() {
+        snapshotSource?.close()
     }
 
     @Benchmark
@@ -188,6 +258,15 @@ open class SimpleAuthorizationBenchmark {
     }
 
     private companion object {
+        /**
+         * The benchmark jar keeps only one of the `JacksonModule` service files, so `CoSecJsonSerializer` would find no
+         * CoSec module there: the modules are registered explicitly.
+         */
+        val mapper = jsonMapper {
+            addModule(kotlinModule())
+            addModule(CoSecModule())
+        }
+
         /** Every eighth call is traced in `mixed`. */
         const val MIXED_TRACE_MASK = 7
     }
