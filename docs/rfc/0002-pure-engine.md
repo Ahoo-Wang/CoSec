@@ -703,8 +703,19 @@ internal class StatementScopedContext(private val base: SecurityContext) : Secur
 6. **基线（PR-1）**：已按上面的命令录在 [`docs/perf/rfc-0002-baseline`](../perf/rfc-0002-baseline/README.md)（JDK 25.0.4.1，
    含 `global-deny`）。录制时机器负载为 1.6–2.9，高于第 3 步的门槛，只作参考；PR-3 的门槛以第 4 步的交替测量为准。
 7. **PR-3 的结果（#993）**：按第 4 步交替测量（[`docs/perf/rfc-0002-pr-3`](../perf/rfc-0002-pr-3/README.md)），`role` 场景吞吐为基线的
-   93.5 %，三轮都低于 95 %，**未达到 §7.1 的门槛**；分配、`global` 与 `none` 的均值达标。为合入 PR-3 已豁免此项，但它是 PR-6 的硬性前提：
-   PR-6 合入前，`role` 必须按第 4 步重新测量并达到 §7.1。
+   93.5 %，三轮都低于 95 %，**未达到 §7.1 的门槛**；分配、`global` 与 `none` 的均值达标。为合入 PR-3 已豁免此项，并要求在 PR-6 之前
+   缩小差距；后续优化与最终处理见第 8 步。
+8. **角色层热路径优化（#1000）与第 2 阶段的豁免**：按第 4 步交替测量（[`docs/perf/rfc-0002-role-hot-path`](../perf/rfc-0002-role-hot-path/README.md)，
+   三轮，每次运行前确认没有其他 JMH fork、Gradle worker，1 分钟负载低于 2）：
+   - **实测**：`role` 均值 95.0 %（最差一轮 93.9 %，置信区间不重叠）；`none` 92.6 %；`role-heavy` 87.1 %；`role` + `deferred` 仓库 97.1 %
+     （置信区间重叠）；`global` 98.2 %。分配在所有 `just` 场景下不高于旧实现。
+   - **剩余差距的来源（JFR，`role-heavy`）**：授予循环本身（`AppPermissionGroup.forEachRule` 的集合迭代与位置数组读取），以及每个授予
+     对应规则的第一次字段读取（引擎契约检查中的 `Rule.id`）造成的缓存未命中。后者源于"每个授予位置一个规则对象"
+     （`Rule.index` 是授予位置，trace 按对象身份对齐两轮扫描），这是第 2 阶段语义要求的，因此在本阶段是固有成本。
+   - **豁免（2026-10-21，协调者决定）**：第 2 阶段对上述场景接受**最多约 7 %** 的吞吐差距，§7.1 的 95 % 门槛在本阶段不再作为 PR-6 的前提。
+     PR-6 仍须按第 4 步重新测量；**任一门槛场景（`global`、`role`、`none`）低于 90 % 时，PR-6 停止并交回协调者决定**。
+   - **第 4 阶段目标（RFC 0005 必须采纳的要求）**：编译执行（RFC 0005）在 `global`、`role`、`none`、`role-heavy` 上的吞吐必须
+     **不低于 7.0 的 `SimpleAuthorization` 的 100 %**，按本节的方法测量。它取代本阶段的整个适配路径，因此本阶段不再做微调。
 
 ---
 
@@ -865,7 +876,7 @@ PR-4 新增 `DecisionParity`，取代原稿的 `EngineParityAuthorization`：它
 | PR-3 | `feat(core): add EngineAuthorization backed by the engine` | 8.0 线 | §3.3、§3.4、§3.5 的适配层；§6.2 的语句作用域上下文；`EngineAuthorization`；`ShadowAuthorization` 的候选实现工厂参数（§5.3）；`SimpleAuthorizationBenchmark` 的 `impl` 参数；§8.2 第一行的参数化测试；P3（固定种子）。`SimpleAuthorization` 不改 | PR-2，以及 7.0 中 S10a 的修复 | `:cosec-core:check`、`:cosec-cocache:check`、`:cosec-spring-boot-starter:check` 及其他依赖 `cosec-core` 的模块通过；两个实现在全部参数化测试上结果相同；JMH 对比满足 §7.1 |
 | PR-4 | `feat(core): add the engine parity comparator and offline replay` | 8.0 线 | 比较器 `DecisionParity`（§8.1，通用，放在 `cosec-core` 的测试夹具中，不发布；含把 `SecurityPipeline` 的 `toDecision`/`toErrorDecision` 改为 `internal`）；`PolicyTestKit.parity`（测试夹具中的扩展函数）；百万例的手动任务；离线回放工具（§8.2.1：输入格式、`engineReplay` Gradle 任务、报告）。不新增 `cosec.*` 属性，不改 starter，不新增 `ShadowDiffKind` 取值（2026-10-21 修订，取代原来的开关与陪跑影子） | PR-3 | starter 的装配与现在完全相同；一个人为制造差异的测试能让比较器报告 `MISMATCH`，同样的差异经回放工具出现在报告和明细中；用仓库内的合成数据（不含真实数据）跑通回放工具；百万例跑通 |
 | PR-5 | `feat(core): explain decisions from the engine trace` | 8.0 线 | §5.2 的基于 trace 的解释路径，只在测试中装配，starter 不使用；`Explanation` 结构不变；旧叙述、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT` 保留 | PR-3（可与 PR-4 并行） | `AuthorizationExplainerTest`、`PolicyTestKitTest`、`CoSecExplainAutoConfigurationTest` 不改即通过；用 trace 解释路径（测试中装配）再跑一遍时，除 X6 涉及的断言外通过，X6 涉及的断言逐条在 PR 描述中说明 |
-| PR-6 | `refactor!: remove the legacy authorization path` | 8.0 线（结束第 2 阶段；8.0.0 GA 在第 6 阶段之后） | 门槛（含离线回放）通过后：`SimpleAuthorization` 改由引擎实现并删除 `EngineAuthorization`；`engineReplay` 改名为 `decisionReplay` 并用参数选择两边的实现（`DecisionParity` 与回放工具 PR-4 起已在测试夹具中且是通用的，§8.1，不删除）；删除 `PolicyTestKit.parity`、`ShadowAuthorization` 的工厂参数；删除旧解释叙述、`Snapshot*Repository`、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT`；`DefaultPolicyEvaluator`/`DefaultAppPermissionEvaluator` 改为调用引擎；删除 `Policy.verify`、`Statement.verify`、`PermissionVerifier`、`verifyScoped`（`clearPathVariablesBeforeMatch` 保留给限流规则）；文档（下表）；最终 JMH 数字 | PR-4、PR-5、§8 的门槛 | 全部模块 `check` 通过；门槛证据附在 PR 上：百万例结果，以及每个回放部署的报告摘要（样本数、时间跨度、各项计数、输入文件的 SHA-256），只有计数和哈希，不含导出数据或差异明细；文档全部更新 |
+| PR-6 | `refactor!: remove the legacy authorization path` | 8.0 线（结束第 2 阶段；8.0.0 GA 在第 6 阶段之后） | 门槛（含离线回放）通过后：`SimpleAuthorization` 改由引擎实现并删除 `EngineAuthorization`；`engineReplay` 改名为 `decisionReplay` 并用参数选择两边的实现（`DecisionParity` 与回放工具 PR-4 起已在测试夹具中且是通用的，§8.1，不删除）；删除 `PolicyTestKit.parity`、`ShadowAuthorization` 的工厂参数；删除旧解释叙述、`Snapshot*Repository`、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT`；`DefaultPolicyEvaluator`/`DefaultAppPermissionEvaluator` 改为调用引擎；删除 `Policy.verify`、`Statement.verify`、`PermissionVerifier`、`verifyScoped`（`clearPathVariablesBeforeMatch` 保留给限流规则）；文档（下表）；最终 JMH 数字 | PR-4、PR-5、§8 的门槛 | 全部模块 `check` 通过；门槛证据附在 PR 上：百万例结果，以及每个回放部署的报告摘要（样本数、时间跨度、各项计数、输入文件的 SHA-256），只有计数和哈希，不含导出数据或差异明细；按 §7.2 第 4 步重新测量 JMH（第 2 阶段对 §7.1 的豁免见 §7.2 第 8 步：差距最多约 7 % 可接受，任一门槛场景低于 90 % 时停止并交回协调者）；文档全部更新 |
 
 每个 PR 合入后照例做两轮审查（与第 1 阶段相同），审查修复以 `fix(engine|core): round-N review fixes ...` 的 PR 合入 `main`。
 
