@@ -11,7 +11,7 @@
 |---|---|---|---|---|
 | 1 | 安全修复与依赖升级（D1–D7、CoCache 6.6、CosId 4.0） | RFC 0001 §6 | 已合入，随 7.0.0 发布 | ✅ 完成 |
 | 2 | 纯函数决策引擎：`model/`、`engine/`、`EngineAuthorization` | [RFC 0002](rfc/0002-pure-engine.md)，已确认 | PR-1 至 PR-5 已合入；PR-6 未开始 | 🟡 进行中 |
-| 3 | 策略快照分发 | [RFC 0003](rfc/0003-policy-snapshot.md)，已确认 | PR-1、PR-2 已合入；PR-3 等 CoCache 6.7.0 发布 | 🟡 进行中 |
+| 3 | 策略快照分发 | [RFC 0003](rfc/0003-policy-snapshot.md)，已确认 | PR-1、PR-2 已合入；PR-3 可以开工（CoCache 6.7.0 已发布） | 🟡 进行中 |
 | 4 | 统一模型：`Binding`、平台层/租户层、条件 AST、`service:verb`、编译执行、转换工具 | RFC 0004 / RFC 0005，待审批（[#987](https://github.com/Ahoo-Wang/CoSec/pull/987)） | 未开始 | ⏳ 等审批 |
 | 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | 未写 | 未开始 | ⚪ |
 | 6 | 控制面 `cosec-control` | 未写 | 未开始 | ⚪ |
@@ -73,7 +73,7 @@ PR-6 前重新测量，任一门槛场景低于 90% 即停下交维护者决定�
 **依赖**
 
 - **CoCache 6.7.0**：按摘要的条件写入与条件读（CoCache [#683](https://github.com/Ahoo-Wang/CoCache/pull/683)，已合入 CoCache `main`，
-  审查发现的两个 major 已修复并复审通过）。**尚未发布，发布需维护者确认。** PR-3 依赖它。
+  审查发现的两个 major 已修复并复审通过），**已于 2026-10-22 发布**（[v6.7.0](https://github.com/Ahoo-Wang/CoCache/releases/tag/v6.7.0)）。PR-3 依赖它。
 - PR-5、PR-6 在 RFC 0002 PR-6 和本阶段的门槛之后。
 
 **PR-3 已记下的要求**（来自各轮审查）：快照缓存固定 `foreignFormat = FAIL`、`ttl = null`；Redis 用不淘汰的内存策略；已见过的文档读到
@@ -99,7 +99,6 @@ PR-6 前重新测量，任一门槛场景低于 90% 即停下交维护者决定�
 
 | 事项 | 影响 |
 |---|---|
-| CoCache 6.7.0 发布 | 第 3 阶段 PR-3 才能开工 |
 | RFC 0004 / RFC 0005 审批 | 第 4 阶段才能开工 |
 | 离线回放用的部署与数据导出 | RFC 0002 PR-6 的门槛 |
 
@@ -109,5 +108,5 @@ PR-6 前重新测量，任一门槛场景低于 90% 即停下交维护者决定�
 
 - PR-4 的第 2 轮审查（含 #1002）；RFC 0003 PR-2 的第 2 轮审查（含 #1003）。
 - RFC 0002 PR-6（等门槛）。
-- RFC 0003 PR-3（等 CoCache 6.7.0）、PR-4。
+- RFC 0003 PR-3（CoCache 6.7.0 已发布，可以派发）、PR-4。
 - 第 4 阶段的实现（等 RFC 审批）；第 5、6 阶段的细化 RFC。
