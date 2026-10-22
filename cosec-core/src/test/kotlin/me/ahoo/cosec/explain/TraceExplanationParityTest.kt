@@ -32,6 +32,9 @@ import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.limiter.RateLimit
+import me.ahoo.cosec.limiter.RateLimitRule
+import me.ahoo.cosec.limiter.RateLimitRuleProvider
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.AppRolePermissionData
 import me.ahoo.cosec.permission.PermissionData
@@ -48,14 +51,15 @@ import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
+import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.core.publisher.Mono
 import kotlin.random.Random
 
 /**
- * Over random policies, grants, spaces, requests, failing matchers, regex timeouts, custom statements, blacklisted
- * and root principals, the explanation from the engine's trace is the narration's, field by field, wherever RFC 0002
+ * Over random policies, grants, spaces, requests, failing matchers, regex timeouts, custom statements, rate limit
+ * rules, blacklisted, root, anonymous and token-rejected principals, the explanation from the engine's trace is the narration's, field by field, wherever RFC 0002
  * X5 and X6 do not apply. Where they apply, the status, the result and the deciding rule still agree, and so does
  * everything up to the layer that failed.
  */
@@ -63,6 +67,7 @@ class TraceExplanationParityTest {
     private val patterns = listOf("/a/**", "/a/b/**", "/b/**", "/a/*/c", "/**")
     private val paths = listOf("/a/x", "/a/b/c", "/b/y", "/a/z/c", "/c")
     private val roles = listOf("r1", "r2", "r3")
+    private val failingLimit = Throwing(IllegalStateException("limit"))
     private val never = AllConditionMatcher(mapOf(CONDITION_MATCHER_NEGATE_KEY to true).asConfiguration())
 
     private fun path(pattern: String) = PathActionMatcherFactory.INSTANCE.create(pattern.asConfiguration())
@@ -124,15 +129,29 @@ class TraceExplanationParityTest {
         val policyRepository: PolicyRepository,
         val appRolePermissionRepository: AppRolePermissionRepository,
         val blacklistChecker: BlacklistChecker,
+        val rateLimitRuleProvider: RateLimitRuleProvider,
         val principal: CoSecPrincipal,
+        /** Explained by its rejected token, so as the anonymous request it becomes. */
+        val tokenRejected: Boolean,
         val request: EvaluateRequest,
         val options: ExplainOptions
     ) {
-        fun explain(impl: ExplainerImpl): Explanation = checkNotNull(
-            impl.create(policyRepository, appRolePermissionRepository, blacklistChecker, RootPrincipalMatcher.DEFAULT)
-                .explain(request, principal, options)
-                .block(),
-        )
+        fun explain(impl: ExplainerImpl): Explanation {
+            val explainer = impl.create(
+                policyRepository,
+                appRolePermissionRepository,
+                blacklistChecker,
+                RootPrincipalMatcher.DEFAULT,
+                rateLimitRuleProvider,
+                securityContextParser = { throw TokenExpiredException() },
+            )
+            val explanation = if (tokenRejected) {
+                explainer.explain(request, options)
+            } else {
+                explainer.explain(request, principal, options)
+            }
+            return checkNotNull(explanation.block())
+        }
     }
 
     private fun Random.case(): Case {
@@ -160,11 +179,24 @@ class TraceExplanationParityTest {
         val policyIds = customPolicies.filter { nextBoolean() }.map { it.id } +
             if (nextInt(8) == 0) listOf("gone") else emptyList()
         val principalRoles = roles.filter { nextBoolean() }.map { if (nextInt(4) == 0) "$it@team-a" else it }
-        val user = SimplePrincipal(
-            id = if (nextInt(20) == 0) CoSecPrincipal.ROOT_ID else "user",
-            policies = policyIds.toSet(),
-            roles = principalRoles.toSet(),
-        )
+        val user = if (nextInt(15) == 0) {
+            SimplePrincipal.ANONYMOUS
+        } else {
+            SimplePrincipal(
+                id = if (nextInt(20) == 0) CoSecPrincipal.ROOT_ID else "user",
+                policies = policyIds.toSet(),
+                roles = principalRoles.toSet(),
+            )
+        }
+        // Rules that match some requests, some that fail to match, for the allowed requests to list.
+        val rateLimitRules = List(nextInt(3)) { index ->
+            RateLimitRule(
+                id = "limit$index",
+                action = path(patterns.random(this)),
+                rateLimit = RateLimit(1.0),
+                condition = if (nextInt(4) == 0) failingLimit else AllConditionMatcher.INSTANCE,
+            )
+        }
         val headers = buildMap {
             put(AppIdCapable.APP_ID_KEY, "app")
             if (nextInt(4) == 0) put(SpaceIdCapable.SPACE_ID_KEY, "team-a")
@@ -173,7 +205,9 @@ class TraceExplanationParityTest {
             policyRepository,
             appRolePermissionRepository,
             blacklistChecker,
+            RateLimitRuleProvider.of(rateLimitRules),
             SimpleTenantPrincipal(user, SimpleTenant.PLATFORM),
+            nextInt(15) == 0,
             EvaluateRequest(path = paths.random(this), headers = headers),
             ExplainOptions(
                 exhaustive = nextBoolean(),
@@ -192,6 +226,7 @@ class TraceExplanationParityTest {
         val random = Random(SEED)
         val kinds = mutableMapOf<Kind, Int>()
         val statuses = mutableSetOf<SecurityStatus>()
+        val reasons = mutableSetOf<String>()
         repeat(ITERATIONS) { iteration ->
             val case = random.case()
             val narrated = case.explain(ExplainerImpl.NARRATION).normalized()
@@ -201,6 +236,9 @@ class TraceExplanationParityTest {
             traced.authorized.assert().describedAs(described).isEqualTo(narrated.authorized)
             traced.reason.assert().describedAs(described).isEqualTo(narrated.reason)
             traced.decidedBy.assert().describedAs(described).isEqualTo(narrated.decidedBy)
+            if (traced.status == SecurityStatus.UNAUTHORIZED) {
+                reasons += traced.reason
+            }
             val failing = traced.layers.indexOfFirst { it.state == LayerState.EVALUATED && it.result == null }
             val kind = when {
                 failing >= 0 -> {
@@ -222,8 +260,10 @@ class TraceExplanationParityTest {
         kinds[Kind.SAME].assert().isGreaterThan(ITERATIONS / 3)
         kinds[Kind.FAILED].assert().isGreaterThan(ITERATIONS / 20)
         kinds.keys.assert().containsAll(Kind.entries)
-        // Failures that are not errors: a regex timeout is a deny (403 for the authenticated corpus, RFC 0002 §3.5).
+        // Failures that are not errors: a regex timeout is a deny (403 when authenticated, RFC 0002 §3.5).
         statuses.assert().contains(SecurityStatus.ERROR, SecurityStatus.FORBIDDEN)
+        // Anonymous principals and rejected tokens are explained as 401s.
+        reasons.assert().contains("Implicit Deny", "Token Expired")
         indeterminate.assert().isPositive()
     }
 

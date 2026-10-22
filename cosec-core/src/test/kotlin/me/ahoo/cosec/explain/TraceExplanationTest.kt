@@ -465,6 +465,13 @@ class TraceExplanationTest {
             .test()
             .expectErrorMatches { it === recording }
             .verify()
+        // RFC 0002 X8: the narration explains the 500 instead, as inconsistent with its own trace.
+        val narrated = ExplainerImpl.NARRATION
+            .create(policyRepository, appRolePermissionRepository, securityContextParser = parser)
+            .explain(request("/x"))
+            .block()
+        narrated?.status.assert().isEqualTo(SecurityStatus.ERROR)
+        narrated?.warnings?.map { it.code }.assert().containsExactly(ExplainWarningCode.TRACE_INCONSISTENT)
     }
 
     private fun explain() = ExplainerImpl.TRACE.create(policyRepository, appRolePermissionRepository)
@@ -587,55 +594,119 @@ class TraceExplanationTest {
         explanation.layer(ExplainLayer.PRINCIPAL_POLICY).state.assert().isEqualTo(LayerState.NOT_EVALUATED)
     }
 
-    @Test
-    fun incompleteRoleTraceWarns() {
-        val appPermission = catalog(permission("a"), permission("b"))
-        val group = AppPermissionGroup(appPermission.engineRules(), listOf(RolePermissionData("r1", setOf("a", "b"))))
+    /** Explains a role layer whose trace recorded only [recorded] of [grants], and broke. */
+    private fun explainIncompleteRoleTrace(
+        grants: List<RolePermissionData>,
+        vararg recorded: Pair<String, String>
+    ): Explanation {
+        val appPermission = catalog(permission("a"), permission("b"), permission("c"))
+        val group = AppPermissionGroup(appPermission.engineRules(), grants)
         val policies = PolicySet(listOf(LayerInput.Loaded(LayerKind.ROLE, listOf(group))))
-        // The engine could record only the first entry.
-        val recorded = RuleTrace(
-            StatementRef.RolePermission("app", "r1", "a", "name-a"),
-            me.ahoo.cosec.model.Effect.ALLOW,
-            RuleOutcome.ACTION_MISS,
-        )
+        val rules = recorded.map { (roleId, permissionId) ->
+            RuleTrace(
+                StatementRef.RolePermission("app", roleId, permissionId, "name-$permissionId"),
+                me.ahoo.cosec.model.Effect.ALLOW,
+                RuleOutcome.ACTION_MISS,
+            )
+        }
+        val groupTrace = GroupTrace("app", GuardOutcome.MATCHED, null, rules, IllegalStateException("broken"))
         val trace = Trace(
             blocked = false,
             root = false,
-            layers = listOf(
-                EngineLayerTrace(
-                    LayerKind.ROLE,
-                    EngineLayerState.EVALUATED,
-                    groups = listOf(
-                        GroupTrace(
-                            "app",
-                            GuardOutcome.MATCHED,
-                            null,
-                            listOf(recorded),
-                            IllegalStateException("broken")
-                        ),
-                    ),
-                ),
-            ),
+            layers = listOf(EngineLayerTrace(LayerKind.ROLE, EngineLayerState.EVALUATED, groups = listOf(groupTrace))),
         )
         val decision = SecurityDecision(
             SecurityStatus.FORBIDDEN,
             AuthorizeResult.IMPLICIT_DENY,
             request("/x"),
-            SimpleSecurityContext(SimplePrincipal("user", roles = setOf("r1"))),
+            SimpleSecurityContext(SimplePrincipal("user", roles = grants.map { it.id }.toSet())),
         )
-        val explanation = TraceExplanations.explain(
+        return TraceExplanations.explain(
             decision,
             TracedEvaluation(Evaluation(Decision.Deny(null), trace), policies),
             ExplainDetail.SUMMARY,
         )
+    }
+
+    private fun Explanation.rolePermissions() = layer(ExplainLayer.ROLE_PERMISSION).roles.map { role ->
+        role.roleId to role.permissions.map { "${it.id}@${it.index}" }
+    }
+
+    @Test
+    fun incompleteRoleTraceWarns() {
+        // The engine could record only the first entry.
+        val explanation = explainIncompleteRoleTrace(listOf(RolePermissionData("r1", setOf("a", "b"))), "r1" to "a")
         explanation.warnings.single().apply {
             code.assert().isEqualTo(ExplainWarningCode.MATCHER_ERROR)
             message.assert().contains("Tracing [app] failed", "broken")
         }
-        explanation.layer(ExplainLayer.ROLE_PERMISSION).roles.single().apply {
-            roleId.assert().isEqualTo("r1")
-            permissions.map { it.id }.assert().containsExactly("a")
+        explanation.rolePermissions().assert().containsExactly("r1" to listOf("a@0"))
+    }
+
+    @Test
+    fun incompleteRoleTraceNeverMovesAnEntryToAnotherRole() {
+        // The trace lost r1's last entry: r1's grant may not take r2's entry in its place.
+        val grants = listOf(RolePermissionData("r1", linkedSetOf("a", "b")), RolePermissionData("r2", setOf("c")))
+        explainIncompleteRoleTrace(grants, "r1" to "a", "r2" to "c").rolePermissions()
+            .assert().containsExactly("r1" to listOf("a@0"), "r2" to listOf("c@0"))
+    }
+
+    @Test
+    fun failedPipelineMappingFailsTheExplanationWithItsCause() {
+        // Nothing matches, so the pipeline reads the token verification result to word the deny, and that throws.
+        val reading = IllegalStateException("attributes unavailable")
+        val parser = SecurityContextParser {
+            val base = SimpleSecurityContext(SimplePrincipal("user"))
+            object : SecurityContext by base {
+                override fun setAttributeValue(attributeKey: String, value: Any): SecurityContext {
+                    base.setAttributeValue(attributeKey, value)
+                    return this
+                }
+
+                override fun <V> getAttributeValue(attributeKey: String): V? {
+                    if (attributeKey == "COSEC_TOKEN_VERIFICATION_EXCEPTION") {
+                        throw reading
+                    }
+                    return base.getAttributeValue(attributeKey)
+                }
+            }
         }
+        ExplainerImpl.TRACE.create(policyRepository, appRolePermissionRepository, securityContextParser = parser)
+            .explain(request("/x"))
+            .test()
+            .expectErrorMatches { it === reading }
+            .verify()
+    }
+
+    @Test
+    fun emptyBlacklistCheckFailsTheExplanation() {
+        // Enforcement denies (no decision, so an implicit deny), but no evaluation explains it.
+        val empty = object : BlacklistChecker {
+            override fun check(request: Request, context: SecurityContext): Mono<Boolean> = Mono.empty()
+        }
+        ExplainerImpl.TRACE.create(policyRepository, appRolePermissionRepository, empty)
+            .explain(request("/x"), SimplePrincipal("user"))
+            .test()
+            .expectErrorMatches { it is IllegalStateException && it.message!!.contains("blacklist check completed empty") }
+            .verify()
+        // RFC 0002 X8: the narration completes without an explanation.
+        ExplainerImpl.NARRATION.create(policyRepository, appRolePermissionRepository, empty)
+            .explain(request("/x"), SimplePrincipal("user"))
+            .test()
+            .verifyComplete()
+    }
+
+    @Test
+    fun javaCannotBuildTheTraceExplainer() {
+        // RFC 0002 §5.2: production must not be able to choose the trace path until PR-6.
+        val publicConstructors = AuthorizationExplainer::class.java.constructors.filterNot { it.isSynthetic }
+        publicConstructors.map { it.parameterCount }.assert().containsExactly(6)
+        val companionMethods = AuthorizationExplainer.Companion::class.java.declaredMethods
+            .filter { it.name.startsWith("fromTrace") }
+        companionMethods.assert().isNotEmpty()
+        companionMethods.assert().allMatch { it.isSynthetic && it.name != "fromTrace" }
+        AuthorizationExplainer::class.java.declaredMethods.filter { it.name.startsWith("fromTrace") }
+            .assert().allMatch { it.isSynthetic }
     }
 
     private object ThrowingCondition : ConditionMatcher {
