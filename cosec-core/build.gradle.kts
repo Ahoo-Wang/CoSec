@@ -50,16 +50,27 @@ listOf("testFixturesApiElements", "testFixturesRuntimeElements").forEach {
     javaComponent.withVariantsFromConfiguration(configurations[it]) { skip() }
 }
 
+val mavenLibrary = the<PublishingExtension>().publications.getByName("mavenLibrary") as MavenPublication
 val verifyTestFixturesUnpublished = tasks.register("verifyTestFixturesUnpublished") {
     group = "verification"
-    description = "Fails if the published module metadata offers the test fixtures."
+    description = "Fails if the publication carries the test fixtures: a variant, an artifact or a POM entry."
+    val publication = mavenLibrary
     val metadata = tasks.named<GenerateModuleMetadata>("generateMetadataFileForMavenLibraryPublication")
         .flatMap { it.outputFile }
+    val pom = tasks.named<GenerateMavenPom>("generatePomFileForMavenLibraryPublication").map { it.destination }
     inputs.file(metadata)
+    inputs.file(pom)
     doLast {
-        val text = metadata.get().asFile.readText()
-        check("testFixtures" !in text && "test-fixtures" !in text) {
-            "The published module metadata of ${project.path} offers its test fixtures:\n$text"
+        fun mentionsTestFixtures(text: String) = "testFixtures" in text || "test-fixtures" in text
+        val metadataText = metadata.get().asFile.readText()
+        check(!mentionsTestFixtures(metadataText)) {
+            "The published module metadata of ${project.path} offers its test fixtures:\n$metadataText"
+        }
+        val pomText = pom.get().readText()
+        check(!mentionsTestFixtures(pomText)) { "The published POM of ${project.path} names its test fixtures:\n$pomText" }
+        val artifacts = publication.artifacts.map { "${it.file.name} (classifier ${it.classifier})" }
+        check(artifacts.none(::mentionsTestFixtures)) {
+            "The publication of ${project.path} carries test fixture artifacts: $artifacts"
         }
     }
 }
@@ -79,13 +90,20 @@ tasks.register<JavaExec>("engineReplay") {
     group = "verification"
     description = "Replays -PreplayDir=<dir> through SimpleAuthorization and EngineAuthorization and reports differences."
     classpath = sourceSets["testFixtures"].runtimeClasspath
-    mainClass.set("me.ahoo.cosec.parity.DecisionReplayKt")
-    // WARN, not the tests' TRACE: a million samples would otherwise log every matcher call.
-    jvmArgs("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-jmh.xml")
+    mainClass.set("me.ahoo.cosec.parity.ReplayMainKt")
+    // WARN, not the tests' TRACE, and no stack trace per failing sample: the report counts failures.
+    jvmArgs("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-parity.xml")
     val replayDir = providers.gradleProperty("replayDir")
+    // ReplayGate thresholds, for trying the tool out; the report records the ones used.
+    val gateOptions = mapOf(
+        "replayMinSamples" to "--min-samples",
+        "replayMinDays" to "--min-days",
+        "replayMaxBothFailedRate" to "--max-both-failed-rate",
+    ).mapValues { (property, option) -> providers.gradleProperty(property).map { "$option=$it" } }
     argumentProviders.add(
         CommandLineArgumentProvider {
-            listOf(replayDir.orNull ?: throw GradleException("Pass the export directory: -PreplayDir=<dir>."))
+            listOf(replayDir.orNull ?: throw GradleException("Pass the export directory: -PreplayDir=<dir>.")) +
+                gateOptions.values.mapNotNull { it.orNull }
         }
     )
 }
@@ -106,4 +124,15 @@ tasks.register<Test>("engineParity") {
     // The default 2,000-case run is cheap; a million is not, so never skip it as up to date.
     outputs.upToDateWhen { false }
     maxHeapSize = "2g"
+    // Replaces the TRACE configuration every Test task gets: at TRACE, and with a stack trace per failing case, a million
+    // cases log tens of gigabytes. Set at execution, after every configuration action has run.
+    doFirst {
+        jvmArgs = jvmArgs.orEmpty().filterNot { it.startsWith("-Dlogback.configurationFile=") } +
+            "-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-parity.xml"
+    }
+    // Nothing worth keeping is captured; the case count is printed to the console instead.
+    reports.html.required.set(false)
+    reports.junitXml.includeSystemOutLog.set(false)
+    reports.junitXml.includeSystemErrLog.set(false)
+    testLogging.showStandardStreams = true
 }

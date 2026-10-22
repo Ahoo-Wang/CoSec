@@ -242,6 +242,7 @@ class EngineParityPropertyTest {
         val random = Random(SEED)
         var failures = 0
         var allowed = 0
+        var blockedRoots = 0
         repeat(ITERATIONS) { iteration ->
             val globalPolicies = List(random.nextInt(4)) { random.policy("g$it", PolicyType.GLOBAL) }
             val customPolicies = List(random.nextInt(4)) { random.policy("p$it", PolicyType.CUSTOM) }
@@ -285,8 +286,14 @@ class EngineParityPropertyTest {
                     SpaceIdCapable.SPACE_ID_KEY to if (long) "" else spaces.random(random),
                 ).filterValues { it.isNotEmpty() },
             )
-            val blocked = random.nextInt(25) == 0
-            val root = random.nextInt(25) == 0
+            // Drawn always, so forcing below does not shift the rest of the random stream.
+            val randomBlocked = random.nextInt(25) == 0
+            val randomRoot = random.nextInt(25) == 0
+            // Every blacklist/root combination at a fixed stride: random draws alone pair them once in ~600 cases.
+            val stride = iteration % FORCED_STRIDE
+            val blocked = if (stride < 4) (stride and 1) == 1 else randomBlocked
+            val root = if (stride < 4) (stride and 2) == 2 else randomRoot
+            if (blocked && root) blockedRoots++
             val result = compare(policyRepository to appRolePermissionRepository, blocked, root, request, principal)
             val legacy = result.baseline
             val engine = result.candidate
@@ -303,10 +310,16 @@ class EngineParityPropertyTest {
         // Every kind of outcome must occur for the comparison to mean anything.
         failures.assert().isBetween(ITERATIONS / 50, ITERATIONS / 2)
         allowed.assert().isBetween(ITERATIONS / 10, ITERATIONS * 9 / 10)
+        blockedRoots.assert().isGreaterThanOrEqualTo(ITERATIONS / FORCED_STRIDE)
+        // Shows in the engineParity task's output how many cases actually ran.
+        println("EngineParityPropertyTest: $ITERATIONS cases, $failures failed alike, $allowed allowed.")
     }
 
     companion object {
         private const val SEED = 20261021
+
+        /** Of every [FORCED_STRIDE] cases, the first four take each blacklist/root combination in turn. */
+        private const val FORCED_STRIDE = 20
 
         /** `./gradlew :cosec-core:engineParity -PparityIterations=1000000` runs more (RFC 0002 §8.2). */
         private val ITERATIONS = System.getProperty("cosec.parity.iterations")?.toInt() ?: 2_000

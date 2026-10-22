@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.permission.AppRolePermission
+import me.ahoo.cosec.api.permission.MissingPermissionException
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
@@ -26,6 +27,7 @@ import me.ahoo.cosec.authorization.MissingPolicyException
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.PolicyVerifyContext
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
+import me.ahoo.cosec.authorization.RootVerifyContext
 import me.ahoo.cosec.authorization.VerifyContext.Companion.setVerifyContext
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.context.SimpleSecurityContext
@@ -181,27 +183,87 @@ class DecisionParityTest {
         emptyResult.baseline.tuple.status.assert().isEqualTo(SecurityStatus.FORBIDDEN)
     }
 
+    private fun parity(blocked: Boolean, root: Boolean): DecisionParity {
+        val blacklist = object : BlacklistChecker {
+            override fun check(request: Request, context: SecurityContext): Mono<Boolean> = Mono.just(!blocked)
+        }
+        val rootMatcher = RootPrincipalMatcher { root }
+        return DecisionParity(
+            AuthorizationFactory.LEGACY.create(policyRepository, appRolePermissionRepository, blacklist, rootMatcher),
+            AuthorizationFactory.ENGINE.create(policyRepository, appRolePermissionRepository, blacklist, rootMatcher),
+        )
+    }
+
     @Test
-    fun blacklistAndRootAreDecidingRules() {
+    fun theBlacklistWinsOverRootAndOverAMatchingAllow() {
+        // Blocked and root: the blacklist decides (S1 before S2).
+        val blockedRoot = parity(blocked = true, root = true).compare(read, alice)
+        blockedRoot.verdict.assert().isEqualTo(ParityVerdict.SAME)
+        blockedRoot.baseline.tuple.decidedBy?.layer.assert().isEqualTo(ExplainLayer.BLACKLIST)
+        blockedRoot.baseline.tuple.status.assert().isEqualTo(SecurityStatus.FORBIDDEN)
+
+        // Blocked, with a global ALLOW that matches.
+        val blockedAllow = parity(blocked = true, root = false).compare(read, alice)
+        blockedAllow.verdict.assert().isEqualTo(ParityVerdict.SAME)
+        blockedAllow.baseline.tuple.decidedBy?.layer.assert().isEqualTo(ExplainLayer.BLACKLIST)
+
+        // Root, with a global DENY that matches: root skips every policy (D5).
+        val rootDeny = parity(blocked = false, root = true)
+            .compare(EvaluateRequest(path = "/orders/internal/1", method = "GET"), alice)
+        rootDeny.verdict.assert().isEqualTo(ParityVerdict.SAME)
+        rootDeny.baseline.tuple.decidedBy?.layer.assert().isEqualTo(ExplainLayer.ROOT)
+        rootDeny.baseline.tuple.status.assert().isEqualTo(SecurityStatus.ALLOWED)
+    }
+
+    @Test
+    fun anImplementationCheckingRootBeforeTheBlacklistIsAMismatch() {
+        val rootFirst = answering { _, _ -> Mono.just(AuthorizationDecision(AuthorizeResult.ALLOW, RootVerifyContext)) }
         val blocked = object : BlacklistChecker {
             override fun check(request: Request, context: SecurityContext): Mono<Boolean> = Mono.just(false)
         }
-        val parity = DecisionParity(
-            AuthorizationFactory.LEGACY.create(
-                policyRepository,
-                appRolePermissionRepository,
-                blocked,
-                RootPrincipalMatcher.NONE
-            ),
-            AuthorizationFactory.ENGINE.create(
-                policyRepository,
-                appRolePermissionRepository,
-                blocked,
-                RootPrincipalMatcher.NONE
-            ),
+        val baseline = AuthorizationFactory.LEGACY.create(
+            policyRepository,
+            appRolePermissionRepository,
+            blocked,
+            RootPrincipalMatcher { true },
         )
-        val result = parity.compare(read, alice)
-        result.verdict.assert().isEqualTo(ParityVerdict.SAME)
-        result.baseline.tuple.decidedBy?.layer.assert().isEqualTo(ExplainLayer.BLACKLIST)
+        DecisionParity(baseline, rootFirst).compare(read, alice).verdict.assert().isEqualTo(ParityVerdict.MISMATCH)
+    }
+
+    @Test
+    fun aDifferenceInTheReasonAloneIsAMismatch() {
+        // An explicit deny that reports no rule against an implicit deny: same status, no rule on either side.
+        val explicit = answering { _, _ -> Mono.just(AuthorizationDecision(AuthorizeResult.EXPLICIT_DENY)) }
+        val implicit = answering { _, _ -> Mono.just(AuthorizationDecision(AuthorizeResult.IMPLICIT_DENY)) }
+        val result = DecisionParity(implicit, explicit).compare(read, alice)
+        result.verdict.assert().isEqualTo(ParityVerdict.MISMATCH)
+        result.baseline.tuple.status.assert().isEqualTo(result.candidate.tuple.status)
+        result.baseline.tuple.decidedBy.assert().isNull()
+        result.candidate.tuple.decidedBy.assert().isNull()
+    }
+
+    @Test
+    fun failuresOfOneClassForDifferentCausesAreFlagged() {
+        val missingP = answering { _, _ -> Mono.error(MissingPolicyException(linkedSetOf("p", "q"))) }
+        val missingPReordered = answering { _, _ -> Mono.error(MissingPolicyException(linkedSetOf("q", "p"))) }
+        val missingR = answering { _, _ -> Mono.error(MissingPolicyException(setOf("r"))) }
+        val reordered = DecisionParity(missingP, missingPReordered).compare(read, alice)
+        reordered.bothFailed.assert().isTrue()
+        reordered.failedAlikeForDifferentCauses.assert().isFalse()
+        reordered.baseline.failureCause.assert().isEqualTo("PRINCIPAL policies [p, q]")
+
+        val different = DecisionParity(missingP, missingR).compare(read, alice)
+        different.verdict.assert().isEqualTo(ParityVerdict.SAME)
+        different.failedAlikeForDifferentCauses.assert().isTrue()
+
+        val permission = answering { _, _ -> Mono.error(MissingPermissionException("app", "role", setOf("b", "a"))) }
+        DecisionParity(permission, permission).compare(read, alice).baseline.failureCause.assert()
+            .isEqualTo("app [app] role [role] permissions [a, b]")
+        DecisionParity(legacy, engine).compare(read, alice).baseline.failureCause.assert().isNull()
+    }
+
+    @Test
+    fun sidesPrintWhatTheyAnswered() {
+        DecisionParity(legacy, engine).compare(read, alice).baseline.toString().assert().contains("ALLOWED")
     }
 }

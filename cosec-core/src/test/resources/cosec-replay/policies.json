@@ -43,5 +43,23 @@
     "statements": [
       { "name": "read-reports", "action": "/reports/**", "condition": { "spel": { "expression": "true" } } }
     ]
+  },
+  {
+    "id": "catalog",
+    "name": "Catalog",
+    "type": "global",
+    "tenantId": "t1",
+    "statements": [
+      { "name": "browse-catalog", "action": { "path": { "pattern": "/catalog/**", "method": "GET" } } }
+    ]
+  },
+  {
+    "id": "no-catalog-export",
+    "name": "No catalog export",
+    "type": "custom",
+    "tenantId": "t1",
+    "statements": [
+      { "name": "deny-export", "effect": "deny", "action": "/catalog/export/**" }
+    ]
   }
 ]

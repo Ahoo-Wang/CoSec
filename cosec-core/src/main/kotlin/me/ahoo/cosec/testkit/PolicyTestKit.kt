@@ -155,14 +155,7 @@ object PolicyTestKit {
         rootPrincipalMatcher: RootPrincipalMatcher,
         explainFromTrace: Boolean
     ): List<PolicyTestResult> {
-        val policies = JsonResources.readAll(suite.policies, Policy::class.java) { it.id }
-        val appPermissions = JsonResources.readAll(
-            suite.appPermissions,
-            AppPermission::class.java
-        ) { it.id }.associateBy { it.id }
-        val policyRepository = InMemoryPolicyRepository(policies)
-        val appRolePermissionRepository =
-            InMemoryAppRolePermissionRepository(appPermissions, grantsOf(suite, appPermissions))
+        val (policyRepository, appRolePermissionRepository) = repositoriesOf(suite)
         val explainer = if (explainFromTrace) {
             AuthorizationExplainer.fromTrace(
                 policyRepository,
@@ -186,8 +179,8 @@ object PolicyTestKit {
     }
 
     /**
-     * The suite's policies and grants as the repositories [run] reads, for `PolicyTestKit.parity` in the test fixtures
-     * (RFC 0002 §5.5). Deleted with it in RFC 0002 PR-6.
+     * The suite's policies and grants as the repositories [run] reads; also used by `PolicyTestKit.parity` in the test
+     * fixtures (RFC 0002 §5.5).
      */
     internal fun repositoriesOf(suite: PolicyTestSuite): Pair<PolicyRepository, AppRolePermissionRepository> {
         val policies = JsonResources.readAll(suite.policies, Policy::class.java) { it.id }

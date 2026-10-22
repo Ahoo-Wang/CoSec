@@ -16,12 +16,14 @@ package me.ahoo.cosec.parity
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.permission.MissingPermissionException
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.AuthorizationDecision
 import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.authorization.EngineAuthorization
+import me.ahoo.cosec.authorization.MissingPolicyException
 import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.authorization.SimpleAuthorization
@@ -70,15 +72,36 @@ enum class ParityVerdict {
  * @param context the fresh context this side ran with, to inspect what it wrote (e.g. its [VerifyContext])
  * @param failure what the authorization failed with, null when it decided
  */
-class ParitySide(val tuple: DecisionTuple, val context: SecurityContext, val failure: Throwable?) {
+data class ParitySide(val tuple: DecisionTuple, val context: SecurityContext, val failure: Throwable?) {
     val verifyContext: VerifyContext?
         get() = context.getVerifyContext()
+
+    /**
+     * What [failure] is about, comparable across implementations: the missing ids for the fail-closed exceptions (as
+     * sorted lists, so set order cannot differ), otherwise the message. Null when this side decided.
+     */
+    val failureCause: String?
+        get() = when (val failure = failure) {
+            null -> null
+            is MissingPolicyException -> "${failure.source} policies ${failure.policyIds.sorted()}"
+            is MissingPermissionException ->
+                "app [${failure.appId}] role [${failure.roleId}] permissions ${failure.permissionIds.sorted()}"
+
+            else -> failure.message.orEmpty()
+        }
 }
 
-class ParityResult(val verdict: ParityVerdict, val baseline: ParitySide, val candidate: ParitySide) {
+data class ParityResult(val verdict: ParityVerdict, val baseline: ParitySide, val candidate: ParitySide) {
     /** Both sides failed with the same exception class: [ParityVerdict.SAME], counted apart by the replay. */
     val bothFailed: Boolean
         get() = baseline.failure != null && candidate.failure != null && verdict == ParityVerdict.SAME
+
+    /**
+     * Both failed with the same exception class but for different causes, e.g. different missing policy ids. The
+     * §8.3 tuple compares the class only, so this is still [ParityVerdict.SAME]; the replay reports it apart.
+     */
+    val failedAlikeForDifferentCauses: Boolean
+        get() = bothFailed && baseline.failureCause != candidate.failureCause
 }
 
 /**
