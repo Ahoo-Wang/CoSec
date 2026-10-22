@@ -155,8 +155,22 @@ class ControllableStore : SnapshotDocumentStore {
      */
     val localCopies: MutableMap<SnapshotKey, SnapshotDocument> = ConcurrentHashMap()
 
+    /** The age this store declares its local copies may have. */
+    @Volatile
+    var declaredLocalCopyMaxAge: Duration = Duration.ZERO
+
+    override val localCopyMaxAge: Duration get() = declaredLocalCopyMaxAge
+
+    /** When set, only conditional reads fail with it. */
+    @Volatile
+    var conditionalFailure: Throwable? = null
+
+    /** Every key read, conditional or not, in order. */
+    val readLog: MutableList<SnapshotKey> = CopyOnWriteArrayList()
+
     override fun read(key: SnapshotKey): CompletableFuture<SnapshotRead> {
         reads.incrementAndGet()
+        readLog.add(key)
         val local = localCopies[key]
         if (local != null) {
             return CompletableFuture.completedFuture(
@@ -168,6 +182,8 @@ class ControllableStore : SnapshotDocumentStore {
 
     override fun readIfChanged(key: SnapshotKey, known: SnapshotDigest?): CompletableFuture<SnapshotRead> {
         conditionalReads.incrementAndGet()
+        readLog.add(key)
+        conditionalFailure?.let { return CompletableFuture.failedFuture(it) }
         return answer(
             key
         ) { read -> if (read is SnapshotRead.Present && read.digest == known) SnapshotRead.Unchanged else read }

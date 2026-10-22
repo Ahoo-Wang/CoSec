@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.snapshot
 
+import java.time.Duration
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -40,6 +41,13 @@ interface SnapshotDocumentStore {
      * `Unchanged` for a missing value. Used to revalidate installed documents, so its answer bounds the lag.
      */
     fun readIfChanged(key: SnapshotKey, known: SnapshotDigest?): CompletableFuture<SnapshotRead>
+
+    /**
+     * The oldest a document answered by [read] can be when it comes from a local copy (CoCache's `localMaxAge` for
+     * L2), or zero when [read] always answers from the store of record. [SnapshotSource] counts such a document as
+     * confirmed this long before the read, so that only a [readIfChanged] answer can make it look fresh.
+     */
+    val localCopyMaxAge: Duration get() = Duration.ZERO
 
     /**
      * Subscribes [listener]. Closing the returned handle unsubscribes. Callbacks must not be delivered while the

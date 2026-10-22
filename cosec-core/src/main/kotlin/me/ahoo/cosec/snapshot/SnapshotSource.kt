@@ -24,6 +24,7 @@ import java.util.concurrent.CompletionException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executor
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
@@ -44,14 +45,16 @@ import java.util.function.LongSupplier
  * - [load] reads and compiles what is missing. The store is read on the caller's thread (stores never block), every
  *   compilation runs on a bounded compile pool, and concurrent loads of one key share a single read and compilation.
  * - Installs of one key happen in the order their loads started: at most one load per key is in flight, each load
- *   finishes exactly once, and a change notification that arrives during a load starts another once it completes.
+ *   finishes exactly once, and a change notification that arrives during a load starts another as that one finishes,
+ *   under the same lock, so nothing can slip in between.
  * - Installed documents are revalidated every [SnapshotOptions.revalidateInterval] with a conditional read of the store
  *   of record, so a document's lag (time since the store last confirmed it) is bounded while the store is reachable.
  *
  * Only a key never seen by this source is cold-loaded with [SnapshotDocumentStore.read], which may answer from a local
- * copy; that install is followed at once by a conditional read that confirms or replaces it. A key seen before (for
- * example one evicted since) is cold-loaded with the conditional read, so an older local copy can never replace what
- * this instance already served.
+ * copy. That install counts as confirmed [SnapshotDocumentStore.localCopyMaxAge] before the read, the oldest the copy can
+ * be, and is followed at once by a conditional read that confirms or replaces it. A key seen before (for example one
+ * evicted since) is cold-loaded with the conditional read, so an older local copy can never replace what this instance
+ * already served.
  *
  * Failures keep 7.0's semantics (RFC 0003 §4.4): a read that fails while a document is installed keeps it (F6, bounded
  * by lag and [checkFresh]); a document that is present but cannot be decoded or compiled is installed as
@@ -66,7 +69,14 @@ import java.util.function.LongSupplier
  * snapshot document, so its disappearance means the store lost data, and the key fails closed until a document returns.
  * The memory of seen keys survives eviction and lasts as long as this source.
  *
- * [SnapshotMetrics] callbacks that throw are logged and ignored.
+ * [SnapshotMetrics] callbacks that throw are logged and ignored; a [VirtualMachineError] is rethrown, but only after the
+ * load it interrupted has finished, so no key is ever left waiting for it. Compilation itself has no time bound: a stuck
+ * [SnapshotCompiler] holds one compile thread, and the requests waiting for it are bounded by
+ * [SnapshotOptions.coldLoadTimeout].
+ *
+ * Threads: compilation runs on the compile pool; the scheduler thread only keeps time (timeouts, periodic passes,
+ * retries); eviction and log lines with stack traces run on a separate housekeeping thread, so a slow log appender
+ * cannot delay a timeout.
  */
 class SnapshotSource<P : Any, A : Any> internal constructor(
     private val store: SnapshotDocumentStore,
@@ -94,6 +104,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private val compileExecutor: Executor = compileExecutor ?: newCompileExecutor(options)
     private val ownsScheduler = scheduler == null
     private val scheduler: ScheduledExecutorService = scheduler ?: newScheduler()
+    private val housekeeping: ThreadPoolExecutor = newHousekeeping()
 
     private val policies = Slot(SnapshotKey.Policies, policiesCompiler)
     private val apps = ConcurrentHashMap<AppId, Slot<A>>()
@@ -103,12 +114,17 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private val seen = ConcurrentHashMap<SnapshotKey, Seen>()
     private val lastLagReport = ConcurrentHashMap<SnapshotKey, Instant>()
     private val pendingPrewarms: MutableSet<CompletableFuture<Void>> = ConcurrentHashMap.newKeySet()
+    private val pendingRequests: MutableSet<Slot<*>.RequestView> = ConcurrentHashMap.newKeySet()
 
     @Volatile
     private var closed = false
 
     @Volatile
     private var prewarmed = false
+
+    /** Tests only: runs between finding an app slot and using it, to force an eviction into that gap. */
+    @Volatile
+    internal var afterSlotLookup: ((SnapshotKey.App) -> Unit)? = null
 
     private val subscription: AutoCloseable = store.subscribe(ChangeListener())
     private val periodic: ScheduledFuture<*>? = schedulePeriodic()
@@ -118,12 +134,15 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     /**
      * The installed snapshot for a request that needs the app document of [appId] (or none when null), or null when a
-     * needed document is not installed. Never does I/O, never touches an executor, and never allocates when [appId] is
-     * null. Everything it does happens on the caller's thread.
+     * needed document is not installed or this source is closed. Never does I/O, never touches an executor, and never
+     * allocates when [appId] is null. Everything it does happens on the caller's thread.
      *
      * A document that is installed but failed is returned as such: the caller fails the layers it feeds.
      */
     fun peek(appId: AppId? = null): Snapshot<P, A>? {
+        if (closed) {
+            return null
+        }
         val policiesEntry = policies.installed ?: return null
         if (appId == null) {
             metrics.onLoad(SnapshotKind.POLICIES, LoadOutcome.HIT)
@@ -131,6 +150,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
         val slot = apps[appId] ?: return null
         val appEntry = slot.installed ?: return null
+        if (slot.removed) {
+            return null
+        }
         slot.touch()
         metrics.onLoad(SnapshotKind.POLICIES, LoadOutcome.HIT)
         metrics.onLoad(SnapshotKind.APP, LoadOutcome.HIT)
@@ -143,7 +165,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      *
      * The future completes normally even when a document cannot be loaded: that document is [DocumentState.Failed],
      * including when it is not ready within [SnapshotOptions.coldLoadTimeout] (the load goes on in the background).
-     * It completes exceptionally only after [close].
+     * It completes exceptionally only when this source is closed, including while the request waits.
      *
      * The future may complete on a CoSec compile or scheduler thread. Those threads exist to compile and to keep time,
      * so callers must move their continuation elsewhere (RFC 0003 §4.3: `publishOn(boundedElastic)`) rather than
@@ -154,7 +176,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     fun load(appId: AppId? = null): CompletableFuture<Snapshot<P, A>> {
         val appKey = appId?.let { SnapshotKey.App(it) }
         if (closed) {
-            return CompletableFuture.failedFuture(IllegalStateException("SnapshotSource is closed."))
+            return CompletableFuture.failedFuture(closedError())
         }
         val policiesEntry = policies.forRequest() ?: error("The policies slot is never removed.")
         if (appKey == null) {
@@ -218,7 +240,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         if (ownsScheduler) {
             scheduler.shutdownNow()
         }
-        pendingPrewarms.forEach { it.completeExceptionally(IllegalStateException("SnapshotSource is closed.")) }
+        pendingPrewarms.forEach { it.completeExceptionally(closedError()) }
+        pendingRequests.forEach { it.abort(closedError()) }
+        housekeeping.shutdown()
         if (ownsCompileExecutor) {
             (compileExecutor as ThreadPoolExecutor).shutdown()
         }
@@ -243,11 +267,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 lastLagReport.remove(entry.key)
                 continue
             }
-            val last = lastLagReport[entry.key]
-            if (last != null && Duration.between(last, now) < options.lagLogInterval) {
+            if (!lagReportDue(entry.key, now)) {
                 continue
             }
-            lastLagReport[entry.key] = now
             metrics.onLagExceeded(entry.key, lag, escalated)
             if (escalated) {
                 log.error { "Snapshot document [${entry.key}] revision ${entry.revision} is stale: not confirmed for $lag." }
@@ -257,6 +279,17 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
     }
 
+    private fun lagReportDue(key: SnapshotKey, now: Instant): Boolean {
+        val last = lastLagReport[key]
+        if (last != null && Duration.between(last, now) < options.lagLogInterval) {
+            return false
+        }
+        lastLagReport[key] = now
+        return true
+    }
+
+    private fun closedError() = IllegalStateException("SnapshotSource is closed.")
+
     private fun schedulePeriodic(): ScheduledFuture<*>? {
         if (options.revalidateInterval.isZero) {
             return null
@@ -265,32 +298,37 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         return scheduler.scheduleWithFixedDelay(::periodicTick, millis, millis, TimeUnit.MILLISECONDS)
     }
 
+    /** Never lets anything escape: a throwing task would silently cancel the periodic schedule. */
     @Suppress("TooGenericExceptionCaught")
     private fun periodicTick() {
         try {
             tick()
-        } catch (error: Exception) {
+        } catch (error: Throwable) {
             log.error(error) { "Snapshot revalidation pass failed." }
         }
     }
 
-    /** Runs [task] on the scheduler, off every request thread; runs it here only if the scheduler is gone. */
+    /** Runs [task] on the housekeeping thread, off every request thread and off the timer; in place if it is gone. */
     private fun offRequestThread(task: () -> Unit) {
         try {
-            scheduler.execute(task)
+            housekeeping.execute(task)
         } catch (rejected: RejectedExecutionException) {
-            log.debug { "Scheduler rejected housekeeping ($rejected); running it in place." }
+            log.debug { "Housekeeping rejected a task ($rejected); running it in place." }
             task()
         }
     }
 
     /**
      * Runs [action] on the slot of [key], retrying with a fresh slot when the one found was removed concurrently
-     * (evicted or forgotten) before the action could start a load on it.
+     * (evicted or forgotten) before the action could start a load on it. A removed slot still in the map is dropped
+     * here too, so the retry never waits for the remover.
      */
     private inline fun <R : Any> withAppSlot(key: SnapshotKey.App, action: (Slot<A>) -> R?): R {
         while (true) {
-            action(apps.computeIfAbsent(key.appId) { Slot(key, appCompiler) })?.let { return it }
+            val slot = apps.computeIfAbsent(key.appId) { Slot(key, appCompiler) }
+            afterSlotLookup?.invoke(key)
+            action(slot)?.let { return it }
+            apps.remove(key.appId, slot)
         }
     }
 
@@ -304,7 +342,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         apps.values.filterTo(this) { it.installed != null }
     }
 
-    /** Runs [reload] on [slots], [SnapshotOptions.reloadConcurrency] at a time; a removed slot counts as done. */
+    /**
+     * Runs [reload] on [slots], [SnapshotOptions.reloadConcurrency] at a time; a removed slot counts as done. Each lane
+     * loops while reloads complete inline (a synchronous store), so the stack never grows with the number of slots.
+     */
     private fun reloadAll(slots: List<Slot<*>>, reload: (Slot<*>) -> CompletableFuture<*>?): CompletableFuture<Void> {
         val done = CompletableFuture<Void>()
         if (slots.isEmpty()) {
@@ -313,33 +354,43 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
         val next = AtomicInteger()
         val remaining = AtomicInteger(slots.size)
-        fun startNext() {
-            val index = next.getAndIncrement()
-            if (index >= slots.size) {
-                return
-            }
-            val reloading = reload(slots[index]) ?: CompletableFuture.completedFuture(null)
-            reloading.whenComplete { _, _ ->
-                if (remaining.decrementAndGet() == 0) {
-                    done.complete(null)
-                } else {
-                    startNext()
-                }
+        fun finishedOne() {
+            if (remaining.decrementAndGet() == 0) {
+                done.complete(null)
             }
         }
-        repeat(minOf(options.reloadConcurrency, slots.size)) { startNext() }
+        fun lane() {
+            while (true) {
+                val index = next.getAndIncrement()
+                if (index >= slots.size) {
+                    return
+                }
+                val reloading = reload(slots[index])
+                if (reloading == null || reloading.isDone) {
+                    finishedOne()
+                    continue
+                }
+                reloading.whenComplete { _, _ ->
+                    finishedOne()
+                    lane()
+                }
+                return
+            }
+        }
+        repeat(minOf(options.reloadConcurrency, slots.size)) { lane() }
         return done
     }
 
     private fun attemptPrewarm(keys: List<SnapshotKey>, backoff: Duration, done: CompletableFuture<Void>) {
         if (closed) {
-            done.completeExceptionally(IllegalStateException("SnapshotSource is closed."))
+            done.completeExceptionally(closedError())
             return
         }
         val loads = keys.map { usableOf(it) }
         CompletableFuture.allOf(*loads.toTypedArray()).whenComplete { _, _ ->
-            val failed = loads.map { it.join() }.filter { it.state is DocumentState.Failed }
-            if (failed.isEmpty()) {
+            val answered = loads.filterNot { it.isCompletedExceptionally }.map { it.join() }
+            val failed = answered.filter { it.state is DocumentState.Failed }
+            if (failed.isEmpty() && answered.size == loads.size) {
                 prewarmed = true
                 done.complete(null)
                 return@whenComplete
@@ -350,13 +401,16 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 scheduler.schedule(
                     { attemptPrewarm(keys, nextBackoff, done) },
                     backoff.toMillis(),
-                    TimeUnit.MILLISECONDS
+                    TimeUnit.MILLISECONDS,
                 )
             } catch (rejected: RejectedExecutionException) {
                 done.completeExceptionally(rejected)
             }
         }
     }
+
+    /** Tests only: evicts the slot of [key] now, as [evictApps] would, if it is idle. */
+    internal fun evict(key: SnapshotKey.App): Boolean = apps[key.appId]?.removeIfIdle(onlyIfEmpty = false) ?: false
 
     private fun evictApps() {
         if (apps.size <= options.maxApps) {
@@ -365,7 +419,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         synchronized(evictionLock) {
             while (apps.size > options.maxApps) {
                 val victim = apps.values.filter { it.installed != null && it.isIdle() }.minByOrNull { it.lastAccess } ?: return
-                if (victim.removeIfIdle()) {
+                if (victim.removeIfIdle(onlyIfEmpty = false)) {
                     lastLagReport.remove(victim.key)
                     log.debug { "Evicted snapshot document [${victim.key}]." }
                 }
@@ -404,7 +458,19 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         private var dirty = false
         private var forceNext = false
         private var next: CompletableFuture<SnapshotEntry<T>>? = null
-        private var removed = false
+
+        /**
+         * Set, under this slot's lock and together with dropping the slot from the map, when the slot is evicted or
+         * forgotten. Volatile because readers that found the slot before that check it without the lock: a removed
+         * slot gets no notifications and no revalidation, so its entry must never be served again.
+         */
+        @Volatile
+        var removed = false
+            private set
+
+        /** The delay before the next retry of a reload the compile queue rejected; doubles while it keeps rejecting. */
+        @Volatile
+        private var retryDelay: Duration = options.rejectedReloadRetry
 
         /** One read of the store and what follows it. Finishes exactly once. */
         inner class Load(
@@ -422,6 +488,12 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
             private val finished = AtomicBoolean()
 
+            /**
+             * When what this load read is known to have been current: the start of the read, or for a local copy the
+             * oldest that copy can be, so that only a conditional read can make it look fresh.
+             */
+            val confirmedAt: Instant get() = if (fromLocalCopy) startedAt.minus(store.localCopyMaxAge) else startedAt
+
             fun claim(): Boolean = finished.compareAndSet(false, true)
 
             val isFinished: Boolean get() = finished.get()
@@ -433,21 +505,28 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
         fun isIdle(): Boolean = synchronized(this) { inFlight == null }
 
-        /** Marks this slot removed and drops it from the map, unless a load is in flight. */
-        fun removeIfIdle(): Boolean {
+        /**
+         * Marks this slot removed and drops it from the map, unless a load is in flight or, with [onlyIfEmpty], a
+         * document is installed. The checks and the mark happen under this slot's lock.
+         */
+        fun removeIfIdle(onlyIfEmpty: Boolean): Boolean {
             val appKey = key as? SnapshotKey.App ?: return false
             synchronized(this) {
-                if (inFlight != null || removed) {
+                val holdsDocument = onlyIfEmpty && installed != null
+                if (inFlight != null || removed || holdsDocument) {
                     return false
                 }
                 removed = true
+                apps.computeIfPresent(appKey.appId) { _, current -> current.takeUnless { it === this } }
             }
-            apps.computeIfPresent(appKey.appId) { _, current -> current.takeUnless { it === this } }
             return true
         }
 
         /** The installed entry if it is usable, otherwise a load; null when this slot was removed. */
         fun usable(): CompletableFuture<SnapshotEntry<T>>? {
+            if (removed) {
+                return null
+            }
             val entry = installed
             if (entry != null && entry.state !is DocumentState.Failed) {
                 return CompletableFuture.completedFuture(entry)
@@ -460,6 +539,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
          * Null when this slot was removed.
          */
         fun forRequest(): CompletableFuture<SnapshotEntry<T>>? {
+            if (removed) {
+                return null
+            }
             installed?.let {
                 touch()
                 metrics.onLoad(key.kind, LoadOutcome.HIT)
@@ -467,6 +549,11 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             }
             val shared = load() ?: return null
             val own = RequestView()
+            pendingRequests.add(own)
+            if (closed) {
+                own.abort(closedError())
+                return own
+            }
             val timeout = if (shared.isDone) null else scheduleTimeout(own)
             shared.whenComplete { entry, error ->
                 val result = entry ?: transientFailure(clock.instant(), unwrap(error))
@@ -479,22 +566,30 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
 
         /**
-         * One request's future. Whoever answers first (the shared load or the timeout) records the outcome before
-         * completing it, so a caller that sees the result also sees the metric.
+         * One request's future. Whoever answers first (the shared load, the timeout, or [close]) claims it; an answer
+         * records the outcome before completing, so a caller that sees the result also sees the metric.
          */
-        private inner class RequestView : CompletableFuture<SnapshotEntry<T>>() {
+        inner class RequestView : CompletableFuture<SnapshotEntry<T>>() {
             private val answered = AtomicBoolean()
 
             fun answer(entry: SnapshotEntry<T>, outcome: LoadOutcome): Boolean {
                 if (!answered.compareAndSet(false, true)) {
                     return false
                 }
+                pendingRequests.remove(this)
                 try {
                     metrics.onLoad(key.kind, outcome)
                 } finally {
                     complete(entry)
                 }
                 return true
+            }
+
+            fun abort(error: Throwable) {
+                if (answered.compareAndSet(false, true)) {
+                    pendingRequests.remove(this)
+                    completeExceptionally(error)
+                }
             }
         }
 
@@ -512,12 +607,18 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             }
         }
 
-        /** Starts a load unless one is in flight, in which case it returns that one. Null when this slot was removed. */
+        /**
+         * Starts a load unless one is in flight, in which case it returns that one. Null when this slot was removed;
+         * after [close], an already failed entry.
+         */
         fun load(force: Boolean = false): CompletableFuture<SnapshotEntry<T>>? {
             val load: Load
             synchronized(this) {
                 if (removed) {
                     return null
+                }
+                if (closed) {
+                    return CompletableFuture.completedFuture(failedEntry(closedError(), clock.instant()))
                 }
                 inFlight?.let { return it.result }
                 load = Load(installed, force, CompletableFuture())
@@ -561,21 +662,6 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 }
             }
             load()
-        }
-
-        /** Starts the load a notification or [reload] asked for while another was in flight. */
-        private fun startNext(force: Boolean, result: CompletableFuture<SnapshotEntry<T>>?) {
-            val load: Load
-            synchronized(this) {
-                if (inFlight != null || removed) {
-                    // Another load started meanwhile: it postdates the change too.
-                    inFlight?.result?.let { current -> result?.let { current.whenComplete { e, _ -> it.complete(e) } } }
-                    return
-                }
-                load = Load(installed, force, result ?: CompletableFuture())
-                inFlight = load
-            }
-            read(load)
         }
 
         private fun read(load: Load) {
@@ -650,17 +736,15 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         private fun onUnchanged(load: Load) {
             val known = load.known
             when {
-                load.fromLocalCopy -> onTransientFailure(
-                    load,
-                    IllegalStateException("Unchanged answer to an unconditional read.")
-                )
+                load.fromLocalCopy -> {
+                    onTransientFailure(load, IllegalStateException("Unchanged answer to an unconditional read."))
+                }
                 load.askedDigest == null -> onAbsent(load)
-                known == null -> onTransientFailure(
-                    load,
-                    IllegalStateException("Unchanged answer without a known digest.")
-                )
+                known == null -> {
+                    onTransientFailure(load, IllegalStateException("Unchanged answer without a known digest."))
+                }
                 else -> {
-                    known.confirm(load.startedAt)
+                    known.confirm(load.confirmedAt)
                     finish(load, known, install = false)
                 }
             }
@@ -670,47 +754,36 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             seen.putIfAbsent(key, Seen(0, null))
             val known = load.known
             if (known != null && known.origin == EntryOrigin.UNDECODABLE) {
-                known.confirm(load.startedAt)
+                known.confirm(load.confirmedAt)
                 finish(load, known, install = false)
                 return
             }
             val failure = SnapshotUnavailableException(key, "the stored document cannot be decoded", cause)
-            val entry =
-                SnapshotEntry(key, DocumentState.Failed(failure), 0, null, load.startedAt, EntryOrigin.UNDECODABLE)
-            finish(load, entry, install = true)
+            finish(load, entryOf(load, DocumentState.Failed(failure), EntryOrigin.UNDECODABLE), install = true)
         }
 
         private fun onAbsent(load: Load) {
             val known = load.known
             if (known != null && known.origin.storedAbsent) {
-                known.confirm(load.startedAt)
+                known.confirm(load.confirmedAt)
                 finish(load, known, install = false)
                 return
             }
             val lastSeen = seen[key]
             if (lastSeen == null) {
-                finish(
-                    load,
-                    SnapshotEntry(key, DocumentState.Absent, 0, null, load.startedAt, EntryOrigin.ABSENT),
-                    install = true
-                )
+                finish(load, entryOf(load, DocumentState.Absent, EntryOrigin.ABSENT), install = true)
                 return
             }
             val error = SnapshotUnavailableException(
                 key,
                 "the store has no document, but revision ${lastSeen.revision} was seen; it may have lost data",
             )
+            finish(load, entryOf(load, DocumentState.Failed(error), EntryOrigin.LOST), install = true)
+            // After the install: a throwing meter must not keep the lost document in service.
             offRequestThread {
-                log.error(
-                    error
-                ) { "Snapshot document [$key] disappeared from the store; failing closed." }
+                log.error(error) { "Snapshot document [$key] disappeared from the store; failing closed." }
             }
             metrics.onDocumentLost(key, lastSeen.revision)
-            finish(
-                load,
-                SnapshotEntry(key, DocumentState.Failed(error), 0, null, load.startedAt, EntryOrigin.LOST),
-                install = true
-            )
         }
 
         private fun compileOffThread(load: Load, read: SnapshotRead.Present) {
@@ -726,39 +799,40 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             }
         }
 
-        /** A reload that found the compile queue full tries again shortly instead of waiting for the next pass. */
+        /**
+         * A reload that found the compile queue full tries again, with a delay that doubles while the queue stays full,
+         * up to the revalidation interval (or [SnapshotOptions.prewarmMaxBackoff] when periodic revalidation is off).
+         */
         private fun retryLater() {
+            val delay = retryDelay
+            val cap = options.revalidateInterval.takeUnless { it.isZero } ?: options.prewarmMaxBackoff
+            retryDelay = minOf(delay.multipliedBy(2), cap)
             try {
-                scheduler.schedule(
-                    { reload(force = false) },
-                    options.rejectedReloadRetry.toNanos(),
-                    TimeUnit.NANOSECONDS
-                )
+                scheduler.schedule({ reload(force = false) }, delay.toNanos(), TimeUnit.NANOSECONDS)
             } catch (rejected: RejectedExecutionException) {
                 log.debug { "No reload retry: $rejected" }
             }
         }
 
-        @Suppress("TooGenericExceptionCaught")
         private fun compileAndInstall(load: Load, read: SnapshotRead.Present) {
             val document = read.document
             val begin = System.nanoTime()
-            val state: DocumentState<T> = try {
-                DocumentState.Present(compiler.compile(key, document))
-            } catch (error: VirtualMachineError) {
-                throw error
-            } catch (error: Throwable) {
-                DocumentState.Failed(
-                    SnapshotUnavailableException(key, "revision ${document.revision} cannot be compiled", error)
-                )
-            }
+            val state = compileState(document)
+            retryDelay = options.rejectedReloadRetry
             metrics.onCompile(key.kind, Duration.ofNanos(System.nanoTime() - begin), state is DocumentState.Present)
             val origin = if (state is DocumentState.Present) EntryOrigin.DOCUMENT else EntryOrigin.UNCOMPILABLE
-            finish(
-                load,
-                SnapshotEntry(key, state, document.revision, read.digest, load.startedAt, origin),
-                install = true
-            )
+            val entry = SnapshotEntry(key, state, document.revision, read.digest, load.confirmedAt, origin)
+            finish(load, entry, install = true)
+        }
+
+        @Suppress("TooGenericExceptionCaught")
+        private fun compileState(document: SnapshotDocument): DocumentState<T> = try {
+            DocumentState.Present(compiler.compile(key, document))
+        } catch (error: VirtualMachineError) {
+            throw error
+        } catch (error: Throwable) {
+            val failure = SnapshotUnavailableException(key, "revision ${document.revision} cannot be compiled", error)
+            DocumentState.Failed(failure)
         }
 
         /** The store could not be read: keep what is installed (F6), or answer failed without installing (F1). */
@@ -766,9 +840,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             val known = load.known
             if (known != null) {
                 offRequestThread {
-                    log.warn(
-                        cause
-                    ) { "Reloading snapshot document [$key] failed; keeping revision ${known.revision}." }
+                    log.warn(cause) { "Reloading snapshot document [$key] failed; keeping revision ${known.revision}." }
                 }
                 finish(load, known, install = false)
                 return
@@ -778,21 +850,28 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
 
         /**
-         * Ends [load] once: records the install (metrics first, then visible to [peek]), clears the in-flight load, starts
-         * the next load if a change arrived meanwhile, and only then completes the load's future. Eviction and dropping an
-         * empty slot run afterwards on the scheduler, off the request thread.
+         * Ends [load] once. The install is recorded (metrics first, then visible to [peek]); then, whatever the metrics
+         * did, the state changes: the in-flight load is cleared and, if a change arrived meanwhile, the next load is
+         * created under the same lock, so no other load and no removal can come between them. The load's future
+         * completes last. Eviction and dropping an empty slot run afterwards on the housekeeping thread.
          */
         private fun finish(load: Load, entry: SnapshotEntry<T>, install: Boolean) {
             if (!load.claim()) {
                 log.error { "Snapshot load of [$key] tried to finish twice; ignored." }
                 return
             }
-            if (install) {
-                recordInstall(entry)
+            try {
+                if (install) {
+                    recordInstall(entry)
+                }
+            } finally {
+                advance(load, entry, install)
             }
-            val again: Boolean
-            val force: Boolean
-            val nextResult: CompletableFuture<SnapshotEntry<T>>?
+        }
+
+        private fun advance(load: Load, entry: SnapshotEntry<T>, install: Boolean) {
+            val nextLoad: Load?
+            val unanswered: CompletableFuture<SnapshotEntry<T>>?
             val empty: Boolean
             synchronized(this) {
                 if (install) {
@@ -802,28 +881,50 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                     inFlight = null
                 }
                 val wanted = dirty || (install && load.fromLocalCopy)
-                again = wanted && !closed && !removed
-                force = forceNext
-                nextResult = next
+                val pending = next
+                val open = !closed && !removed
+                nextLoad = if (wanted && inFlight == null && open) {
+                    Load(installed, forceNext, pending ?: CompletableFuture()).also { inFlight = it }
+                } else {
+                    null
+                }
+                unanswered = if (nextLoad == null) pending else null
                 dirty = false
                 forceNext = false
                 next = null
                 empty = installed == null
             }
-            if (again) {
-                startNext(force, nextResult)
+            try {
+                startOrAnswer(nextLoad, unanswered, entry)
+            } finally {
+                housekeep(empty, install)
+                load.result.complete(entry)
+            }
+        }
+
+        /** Starts [nextLoad], or answers a pending [reload] future with [entry] when no load could follow. */
+        private fun startOrAnswer(
+            nextLoad: Load?,
+            unanswered: CompletableFuture<SnapshotEntry<T>>?,
+            entry: SnapshotEntry<T>,
+        ) {
+            if (nextLoad != null) {
+                read(nextLoad)
             } else {
-                nextResult?.complete(entry)
+                unanswered?.complete(entry)
             }
-            if (empty || install) {
-                offRequestThread { if (empty) forgetIfEmpty() else evictApps() }
+        }
+
+        private fun housekeep(empty: Boolean, install: Boolean) {
+            if (empty) {
+                offRequestThread { removeIfIdle(onlyIfEmpty = true) }
+            } else if (install) {
+                offRequestThread { evictApps() }
             }
-            load.result.complete(entry)
         }
 
         private fun recordInstall(entry: SnapshotEntry<T>) {
             val regressedFrom = synchronized(this) { recordSeen(entry) }
-            metrics.onInstall(entry)
             log.debug { "Installed $entry." }
             if (regressedFrom != null) {
                 offRequestThread {
@@ -832,16 +933,19 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                             "the store may have lost a write (for example a Redis failover). Installing what the store holds."
                     }
                 }
-                metrics.onRegression(key, regressedFrom.revision, entry.revision)
+            }
+            try {
+                metrics.onInstall(entry)
+            } finally {
+                if (regressedFrom != null) {
+                    metrics.onRegression(key, regressedFrom.revision, entry.revision)
+                }
             }
         }
 
-        /** Drops an app slot that holds nothing, so failed cold loads of unknown apps leave no trace. */
-        private fun forgetIfEmpty() {
-            if (installed == null) {
-                removeIfIdle()
-            }
-        }
+        /** An entry with no decoded document behind it: what the store answered, as of [load]'s confirmation time. */
+        private fun entryOf(load: Load, state: DocumentState<T>, origin: EntryOrigin): SnapshotEntry<T> =
+            SnapshotEntry(key, state, 0, null, load.confirmedAt, origin)
 
         private fun transientFailure(at: Instant, cause: Throwable): SnapshotEntry<T> {
             val error = cause as? SnapshotUnavailableException ?: SnapshotUnavailableException(key, "the store cannot be read", cause)
@@ -895,6 +999,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private companion object {
         private val log = KotlinLogging.logger {}
 
+        /** Queued housekeeping beyond this runs in place rather than piling up without bound. */
+        const val HOUSEKEEPING_QUEUE = 4096
+
         fun unwrap(error: Throwable?): Throwable {
             var current = error ?: return IllegalStateException("The load completed without a result.")
             while (current is CompletionException || current is ExecutionException) {
@@ -903,9 +1010,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             return current
         }
 
-        fun Throwable.isFormatFailure(): Boolean = generateSequence(
-            this
-        ) { it.cause }.take(16).any { it is SnapshotFormatException }
+        fun Throwable.isFormatFailure(): Boolean =
+            generateSequence(this) { it.cause }.take(16).any { it is SnapshotFormatException }
 
         fun newCompileExecutor(options: SnapshotOptions): ThreadPoolExecutor = ThreadPoolExecutor(
             options.compileThreads,
@@ -921,6 +1027,16 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             ScheduledThreadPoolExecutor(1, daemonThreads("cosec-snapshot-scheduler")).apply {
                 removeOnCancelPolicy = true
             }
+
+        fun newHousekeeping(): ThreadPoolExecutor = ThreadPoolExecutor(
+            1,
+            1,
+            1,
+            TimeUnit.MINUTES,
+            LinkedBlockingQueue(HOUSEKEEPING_QUEUE),
+            daemonThreads("cosec-snapshot-housekeeping"),
+            ThreadPoolExecutor.AbortPolicy(),
+        ).apply { allowCoreThreadTimeOut(true) }
 
         fun daemonThreads(prefix: String): ThreadFactory {
             val counter = AtomicInteger()
