@@ -123,7 +123,7 @@ internal class AppPermissionRules(
      * Whether these rules are cached on the app permission and so shared by every request. Only shared rules keep a
      * rule per grant position across requests; rules built for one request leave every position to its group's memo.
      */
-    shared: Boolean = false,
+    val shared: Boolean = false,
 ) {
     val guard: Guard = ConditionGuard(appPermission.condition)
     val requiresBlocking: Boolean = appPermission.requiresBlocking
