@@ -35,6 +35,10 @@ dependencies {
 tasks.withType<Test>().configureEach {
     // BlockHound instruments JDK methods, which JDK 13+ allows only with this flag.
     jvmArgs("-XX:+AllowRedefinitionToAddDeleteMethods")
+    // Opt-in Redis targets of the snapshot tests (RedisTarget): a change reruns the tests instead of reusing results.
+    listOf("COSEC_TEST_VALKEY_PORT", "COSEC_TEST_REDIS_CLUSTER_NODES").forEach { name ->
+        inputs.property(name, providers.environmentVariable(name).orElse(""))
+    }
 }
 
 /*

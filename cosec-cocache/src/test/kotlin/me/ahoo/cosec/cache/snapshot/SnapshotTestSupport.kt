@@ -38,25 +38,56 @@ import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.permission.PermissionGroupData
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.snapshot.SnapshotKey
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
-/** The real Redis deployments the snapshot tests run against (AGENTS.md: real Redis, never mocks). */
-enum class RedisTarget(private val uris: List<String>) {
-    REDIS(listOf("redis://localhost:6379")),
-    VALKEY(listOf("redis://localhost:6380")),
-    CLUSTER((7000..7005).map { "redis://localhost:$it" }),
+/**
+ * The real Redis deployments the snapshot tests run against (AGENTS.md: real Redis, never mocks).
+ *
+ * [REDIS] (`localhost:6379`) always runs, as CI provides it. [VALKEY] and [CLUSTER] are opt-in; when their variable is
+ * unset, every case using them is reported as skipped, never passed:
+ *
+ * - `COSEC_TEST_VALKEY_PORT=6380`: a Valkey on that port of localhost;
+ * - `COSEC_TEST_REDIS_CLUSTER_NODES=127.0.0.1:7000,127.0.0.1:7001,...`: the seed nodes of a Redis Cluster.
+ *
+ * Environment variables or system properties of the same name both work. To run all three locally:
+ *
+ * ```
+ * COSEC_TEST_VALKEY_PORT=6380 \
+ * COSEC_TEST_REDIS_CLUSTER_NODES=127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005 \
+ * ./gradlew :cosec-cocache:check
+ * ```
+ */
+enum class RedisTarget(private val variable: String?) {
+    REDIS(null),
+    VALKEY(VALKEY_PORT),
+    CLUSTER(CLUSTER_NODES),
     ;
 
+    /** The URIs of this target, or null when its variable is unset. */
+    private fun urisOrNull(): List<String>? = when (this) {
+        REDIS -> listOf("redis://localhost:6379")
+        VALKEY -> setting(VALKEY_PORT)?.let { listOf("redis://localhost:$it") }
+        CLUSTER -> setting(CLUSTER_NODES)?.split(',')?.map { "redis://${it.trim()}" }?.filter { it != "redis://" }
+    }
+
+    /** This target's URIs; skips the running test when the target is not configured. */
+    private fun uris(): List<String> {
+        val uris = urisOrNull()
+        assumeTrue(!uris.isNullOrEmpty()) { "$name is opt-in: set $variable to run this case." }
+        return checkNotNull(uris)
+    }
+
     fun backend(): RedisBackend {
-        val redisUris = uris.map { RedisURI.create(it) }
+        val redisUris = uris().map { RedisURI.create(it) }
         return if (this == CLUSTER) RedisBackend.cluster(redisUris) else RedisBackend.standalone(redisUris.single())
     }
 
     /** Writes [value] under [key] with a plain SET, as content CoCache did not write (format 0). */
     fun rawSet(key: String, value: ByteArray) {
-        val redisUris = uris.map { RedisURI.create(it) }
+        val redisUris = uris().map { RedisURI.create(it) }
         if (this == CLUSTER) {
             val client = RedisClusterClient.create(redisUris)
             try {
@@ -74,6 +105,12 @@ enum class RedisTarget(private val uris: List<String>) {
         }
     }
 }
+
+private const val VALKEY_PORT = "COSEC_TEST_VALKEY_PORT"
+private const val CLUSTER_NODES = "COSEC_TEST_REDIS_CLUSTER_NODES"
+
+private fun setting(name: String): String? =
+    (System.getenv(name) ?: System.getProperty(name))?.takeIf { it.isNotBlank() }
 
 /** One CoSec instance's snapshot side: its own runtime (local copies) over a [backend] other instances may share. */
 class SnapshotNode(
