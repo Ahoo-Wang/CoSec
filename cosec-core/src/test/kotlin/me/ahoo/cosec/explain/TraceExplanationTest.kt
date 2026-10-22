@@ -43,6 +43,9 @@ import me.ahoo.cosec.engine.LayerInput
 import me.ahoo.cosec.engine.PolicySet
 import me.ahoo.cosec.engine.Trace
 import me.ahoo.cosec.engine.TraceLevel
+import me.ahoo.cosec.limiter.RateLimit
+import me.ahoo.cosec.limiter.RateLimitRule
+import me.ahoo.cosec.limiter.RateLimitRuleProvider
 import me.ahoo.cosec.model.Decision
 import me.ahoo.cosec.model.LayerKind
 import me.ahoo.cosec.permission.AppPermissionData
@@ -350,6 +353,33 @@ class TraceExplanationTest {
         explanation.decidedBy.assert().isNull()
         explanation.layers.map { it.state }.assert().allMatch { it == LayerState.NOT_EVALUATED }
         explanation.layers.map { it.layer }.assert().isEqualTo(ExplainLayer.entries)
+    }
+
+    @Test
+    fun failingRateLimitRuleWarns() {
+        globalPolicies += policy("public", statement("s", "/x"))
+        val rules = RateLimitRuleProvider.of(
+            listOf(
+                RateLimitRule(
+                    id = "broken",
+                    action = path("/x"),
+                    rateLimit = RateLimit(1.0),
+                    condition = ThrowingCondition
+                ),
+                RateLimitRule(id = "x", action = path("/x"), rateLimit = RateLimit(1.0)),
+            ),
+        )
+        val explanation = checkNotNull(
+            ExplainerImpl.TRACE.create(policyRepository, appRolePermissionRepository, rateLimitRuleProvider = rules)
+                .explain(request("/x"), SimplePrincipal("user"))
+                .block(),
+        )
+        explanation.authorized.assert().isTrue()
+        explanation.rateLimitRules.assert().containsExactly("x")
+        explanation.warnings.single().apply {
+            code.assert().isEqualTo(ExplainWarningCode.MATCHER_ERROR)
+            message.assert().contains("Matching rate limit rule [broken] failed", "boom")
+        }
     }
 
     @Test
