@@ -8,7 +8,7 @@ overrides:
   vite: ^6.4.4
   vue: ^3.5.44
   '@vue/server-renderer': ^3.5.44
-  katex: ^0.19.0
+  katex: ^0.19.1
   source-map-js: ^1.2.2
 
 importers:
@@ -1019,8 +1019,8 @@ packages:
     resolution: {integrity: sha512-oG7cgbmg5kLYae2N5IVd3jm2s+vldjxJzK1pcu9LfpGuQ93MQSzo0okvRna+7y5ifrD+20FE8FvjusyGaz14fw==}
     engines: {node: '>=18'}
 
-  katex@0.19.0:
-    resolution: {integrity: sha512-v6Tznz3zJ7u3niRCoDTsumM2+HA2XXcCu+WAacCeHD2z3p9A9Ks987o5FzfTGBN0e8A0vjEgIDvLbICrXpdw/Q==}
+  katex@0.19.1:
+    resolution: {integrity: sha512-jG8uKntjSEcm2EpQOh0XturpPuuC9r3Sq5HLHdsFdWZT27E672SF19QEi+of0/YeOy15lDgRhKvr5614uRrEfA==}
     hasBin: true
 
   khroma@2.1.0:
@@ -2283,7 +2283,7 @@ snapshots:
 
   is-what@5.5.0: {}
 
-  katex@0.19.0:
+  katex@0.19.1:
     dependencies:
       commander: 15.0.0
 
@@ -2333,7 +2333,7 @@ snapshots:
       dompurify: 3.4.16
       elkjs: 0.9.3
       es-toolkit: 1.46.1
-      katex: 0.19.0
+      katex: 0.19.1
       khroma: 2.1.0
       marked: 16.4.2
       roughjs: 4.6.6
