@@ -48,7 +48,6 @@ import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.runtime.http.QueryParameters
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosid.StringIdGenerator
-import me.ahoo.cosid.jvm.UuidGenerator
 import java.time.Clock
 import java.util.concurrent.TimeoutException
 import kotlin.coroutines.cancellation.CancellationException
@@ -76,7 +75,7 @@ class Pipeline(
     private val membershipProvider: MembershipProvider? = null,
     private val engine: FlatEngine = CoSecFlatEngine,
     /** Request ids for requests without a `CoSec-Request-Id` header. */
-    private val idGenerator: StringIdGenerator = UuidGenerator.INSTANCE,
+    private val idGenerator: StringIdGenerator = RandomRequestIds,
     private val clock: Clock = Clock.systemUTC(),
     private val options: PipelineOptions = PipelineOptions(),
 ) {
