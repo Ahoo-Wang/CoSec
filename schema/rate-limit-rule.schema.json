@@ -18,6 +18,10 @@
     "rule": {
       "type": "object",
       "properties": {
+        "$schema": {
+          "description": "The JSON schema of this document, for editors; the parser ignores it",
+          "type": "string"
+        },
         "id": {
           "description": "Names the quota; counters belong to the id. Must be unique.",
           "type": "string",

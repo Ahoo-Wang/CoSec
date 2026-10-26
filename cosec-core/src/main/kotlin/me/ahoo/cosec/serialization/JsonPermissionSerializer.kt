@@ -24,6 +24,7 @@ import tools.jackson.databind.SerializationContext
 
 const val PERMISSION_ID = "id"
 const val PERMISSION_DESCRIPTION = "description"
+val PERMISSION_KEYS = STATEMENT_KEYS + setOf(PERMISSION_ID, PERMISSION_DESCRIPTION)
 
 object JsonPermissionSerializer : AbstractJsonStatementSerializer<Permission>(Permission::class.java) {
     override fun writeExtend(value: Permission, gen: JsonGenerator, provider: SerializationContext) {
@@ -32,7 +33,8 @@ object JsonPermissionSerializer : AbstractJsonStatementSerializer<Permission>(Pe
     }
 }
 
-object JsonPermissionDeserializer : AbstractJsonStatementDeserializer<Permission>(Permission::class.java) {
+object JsonPermissionDeserializer :
+    AbstractJsonStatementDeserializer<Permission>(Permission::class.java, "a permission", PERMISSION_KEYS) {
     override fun createStatement(
         jsonNode: JsonNode,
         name: String,

@@ -80,7 +80,7 @@ shorthands.
 | `composite` | `"action": { "composite": ["/a/**", "/b/**"] }` | Same as the array form. |
 
 `path` and `all` accept `method`: one HTTP method or an array, compared case-insensitively. Omitted means any
-method. An object with more than one key uses only the first; the others are ignored.
+method. An action object has exactly one key; an empty object or a second key fails when the policy loads.
 
 ### `path`
 
@@ -217,8 +217,8 @@ A condition is an object with a single key, the condition type, whose value is i
 { "eq": { "part": "context.tenantId", "value": "(platform)" } }
 ```
 
-Every condition accepts `"negate": true`, which inverts its result. An unknown type fails when the policy is
-built. Condition types:
+Every condition accepts `"negate": true`, which inverts its result. An unknown type, an empty object or a second
+key fails when the policy is built. Condition types:
 
 | Group | Types |
 |---|---|
@@ -383,7 +383,8 @@ The configuration is checked when the policy is built: at least one of `notBefor
 | `or` | when present and not empty, at least one must match as well |
 | `negate` | inverts the combined result |
 
-`{ "bool": {} }` always matches. `bool` nests to any depth.
+`and` and `or` are arrays; a single condition goes in a one-element array. `{ "bool": {} }` always matches. `bool`
+nests to any depth.
 
 ```json
 {
@@ -464,7 +465,8 @@ pre-commit checks:
 | `rate-limit-rule.schema.json` | a rate limit rules file |
 | `action.schema.json`, `condition.schema.json`, `definitions.schema.json` | shared parts |
 
-Reference one from a file with `$schema`, which the parser ignores:
+Reference one from a file with `$schema`, which the parser ignores. Any other field that this page does not list
+fails loading ([Malformed policies fail](../operations/upgrading.md#malformed-policies-fail-instead-of-matching-more)):
 
 ```json
 {

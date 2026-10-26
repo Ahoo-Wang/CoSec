@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
+import me.ahoo.cosec.serialization.decodingAt
 
 const val ACTION_MATCHER_METHOD_KEY = "method"
 
@@ -30,7 +31,9 @@ abstract class AbstractActionMatcher(
             if (methodConfiguration.isString) {
                 return setOf(methodConfiguration.asString().uppercase())
             }
-            return methodConfiguration.asStringList().map { it.uppercase() }.toSet()
+            return decodingAt(ACTION_MATCHER_METHOD_KEY) {
+                methodConfiguration.asStringList().map { it.uppercase() }.toSet()
+            }
         }
     }
 

@@ -16,6 +16,8 @@ package me.ahoo.cosec.configuration
 import me.ahoo.cosec.Delegated
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.serialization.MalformedPolicyException
+import me.ahoo.cosec.serialization.requireArray
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.NullNode
 import tools.jackson.databind.node.StringNode
@@ -52,8 +54,12 @@ class JsonConfiguration(
 
     override fun get(key: String): Configuration? = delegate.get(key)?.let { JsonConfiguration(it) }
 
+    /**
+     * The elements of an array. Anything else fails with [MalformedPolicyException]: a scalar used to read as an empty
+     * list, so `{"bool": {"and": "inRole"}}` matched everything.
+     */
     override fun asList(): List<Configuration> =
-        delegate.values().map {
+        delegate.requireArray().map {
             JsonConfiguration(it)
         }
 

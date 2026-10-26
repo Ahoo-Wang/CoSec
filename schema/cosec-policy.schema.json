@@ -4,6 +4,10 @@
   "title": "CoSec Policy Schema",
   "type": "object",
   "properties": {
+    "$schema": {
+      "description": "The JSON schema of this document, for editors; the parser ignores it",
+      "type": "string"
+    },
     "id": {
       "description": "The id of the policy",
       "type": "string"
@@ -45,6 +49,7 @@
     "tenantId",
     "type"
   ],
+  "additionalProperties": false,
   "definitions": {
     "policyType": {
       "enum": [
@@ -73,7 +78,8 @@
       },
       "required": [
         "action"
-      ]
+      ],
+      "additionalProperties": false
     }
   }
 }

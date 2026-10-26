@@ -17,11 +17,13 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
+import me.ahoo.cosec.serialization.decodingAt
 
 class InConditionMatcher(configuration: Configuration) :
     PartConditionMatcher(InConditionMatcherFactory.TYPE, configuration) {
-    private val value: Set<String> = configuration.getRequired(CONDITION_MATCHER_VALUE_KEY)
-        .asStringList().toSet()
+    private val value: Set<String> = decodingAt(CONDITION_MATCHER_VALUE_KEY) {
+        configuration.getRequired(CONDITION_MATCHER_VALUE_KEY).asStringList().toSet()
+    }
 
     override fun matchPart(partValue: String, securityContext: SecurityContext): Boolean {
         return value.contains(partValue)

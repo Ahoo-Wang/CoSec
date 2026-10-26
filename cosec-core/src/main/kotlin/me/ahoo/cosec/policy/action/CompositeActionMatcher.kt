@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
+import me.ahoo.cosec.serialization.decodingAt
 
 /**
  * Composite action matcher that combines multiple matchers.
@@ -55,8 +56,8 @@ class CompositeActionMatcherFactory : ActionMatcherFactory {
     override fun create(configuration: Configuration): ActionMatcher {
         configuration.asList().let { actionMatcherConfigurations ->
             val actionMatchers =
-                actionMatcherConfigurations.map { actionMatcherConfiguration ->
-                    actionMatcherConfiguration.asObject(ActionMatcher::class.java)
+                actionMatcherConfigurations.mapIndexed { index, actionMatcherConfiguration ->
+                    decodingAt("[$index]") { actionMatcherConfiguration.asObject(ActionMatcher::class.java) }
                 }
             return CompositeActionMatcher(TYPE, actionMatchers, configuration)
         }

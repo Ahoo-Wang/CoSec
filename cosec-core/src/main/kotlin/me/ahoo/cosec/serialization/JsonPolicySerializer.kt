@@ -34,6 +34,17 @@ const val POLICY_CATEGORY_KEY = "category"
 const val POLICY_DESCRIPTION_KEY = "description"
 const val POLICY_TYPE_KEY = "type"
 const val POLICY_STATEMENTS_KEY = "statements"
+val POLICY_KEYS = setOf(
+    JSON_SCHEMA_KEY,
+    POLICY_ID_KEY,
+    POLICY_NAME_KEY,
+    POLICY_CATEGORY_KEY,
+    POLICY_DESCRIPTION_KEY,
+    POLICY_TYPE_KEY,
+    TENANT_ID_KEY,
+    STATEMENT_CONDITION_KEY,
+    POLICY_STATEMENTS_KEY,
+)
 
 object JsonPolicySerializer : StdSerializer<Policy>(Policy::class.java) {
     override fun serialize(value: Policy, gen: JsonGenerator, provider: SerializationContext) {
@@ -59,11 +70,19 @@ object JsonPolicySerializer : StdSerializer<Policy>(Policy::class.java) {
 object JsonPolicyDeserializer : StdDeserializer<Policy>(Policy::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): Policy {
         val jsonNode = p.objectReadContext().readTree<JsonNode>(p)
-        val condition =
+        jsonNode.requireKnownFields("a policy", POLICY_KEYS)
+        val condition = decodingAt(STATEMENT_CONDITION_KEY) {
             jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.objectReadContext())?.readValueAs(ConditionMatcher::class.java)
                 ?: AllConditionMatcher.INSTANCE
-        val statements = jsonNode.get(POLICY_STATEMENTS_KEY)?.values()?.map {
-            it.traverse(p.objectReadContext()).readValueAs(Statement::class.java)
+        }
+        val statements = jsonNode.get(POLICY_STATEMENTS_KEY)?.let { statementsNode ->
+            decodingAt(POLICY_STATEMENTS_KEY) {
+                statementsNode.requireArray().mapIndexed { index, statement ->
+                    decodingAt("[$index]") {
+                        statement.traverse(p.objectReadContext()).readValueAs(Statement::class.java)
+                    }
+                }
+            }
         }.orEmpty()
 
         return PolicyData(

@@ -23,6 +23,7 @@ import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.policy.SpelExpression
 import me.ahoo.cosec.policy.SpelExpression.Companion.isSpelTemplate
 import me.ahoo.cosec.policy.action.PathPatternParsers.asPathPatternParser
+import me.ahoo.cosec.serialization.decodingAt
 import org.springframework.expression.ParserContext
 import org.springframework.expression.common.CompositeStringExpression
 import org.springframework.expression.common.LiteralExpression
@@ -324,8 +325,7 @@ class PathActionMatcherFactory : ActionMatcherFactory {
             if (patternConfiguration.isString) {
                 return patternConfiguration.asString().asPathActionMatcher(this, patternParser)
             }
-            patternConfiguration
-                .asList()
+            decodingAt(PATTERN_KEY) { patternConfiguration.asList() }
                 .map { it.asString().asPathActionMatcher(this, patternParser) }
                 .let { actionMatchers ->
                     if (actionMatchers.size == 1) {

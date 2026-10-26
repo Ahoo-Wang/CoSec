@@ -20,6 +20,7 @@ import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.BlockingAware
 import me.ahoo.cosec.policy.requiresBlocking
+import me.ahoo.cosec.serialization.decodingAt
 
 const val BOOL_CONDITION_MATCHER_AND_KEY = "and"
 const val BOOL_CONDITION_MATCHER_OR_KEY = "or"
@@ -41,18 +42,8 @@ class BoolConditionMatcher(
     configuration,
 ),
     BlockingAware {
-    val and: List<ConditionMatcher> =
-        configuration
-            .get(BOOL_CONDITION_MATCHER_AND_KEY)
-            ?.asList()
-            ?.map { it.asObject<ConditionMatcher>() }
-            .orEmpty()
-    val or: List<ConditionMatcher> =
-        configuration
-            .get(BOOL_CONDITION_MATCHER_OR_KEY)
-            ?.asList()
-            ?.map { it.asObject<ConditionMatcher>() }
-            .orEmpty()
+    val and: List<ConditionMatcher> = configuration.conditions(BOOL_CONDITION_MATCHER_AND_KEY)
+    val or: List<ConditionMatcher> = configuration.conditions(BOOL_CONDITION_MATCHER_OR_KEY)
 
     override val requiresBlocking: Boolean = and.any { it.requiresBlocking } || or.any { it.requiresBlocking }
 
@@ -82,6 +73,14 @@ class BoolConditionMatcher(
         return false
     }
 }
+
+private fun Configuration.conditions(key: String): List<ConditionMatcher> =
+    decodingAt(key) {
+        get(key)
+            ?.asList()
+            ?.mapIndexed { index, condition -> decodingAt("[$index]") { condition.asObject<ConditionMatcher>() } }
+            .orEmpty()
+    }
 
 class BoolConditionMatcherFactory : ConditionMatcherFactory {
     companion object {
