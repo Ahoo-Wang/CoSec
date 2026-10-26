@@ -34,12 +34,6 @@ sealed interface Outcome {
     /** `ScopeResolver` rejected the request before the engine. */
     class Rejected(val reason: ScopeResolution.Rejected.Reason) : Outcome
 
-    /** The pipeline answered: [status], whether the request goes on, and the problem's slug when it does not. */
-    class Answered(val status: Int, val proceed: Boolean, val type: String?) : Outcome
-
-    /** The caller went away and the pipeline made no outcome at all (RFC 0006 §7.4). */
-    data object Cancelled : Outcome
-
     /** A document of the scenario does not compile; the request was never evaluated. */
     class NotCompiled(val error: String) : Outcome
 
