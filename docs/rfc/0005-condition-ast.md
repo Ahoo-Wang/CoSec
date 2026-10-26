@@ -303,6 +303,22 @@ class Resource(val type: String, val id: String, val attributes: Map<String, Str
 
 子集之外的模式在转换时拒绝（§7.2）：`{name:regex}`（正则，§2 J1）、非 `/` 的 `separator`。转换报告列出每一处，运维改写成 `{name}` 加条件，或者拆成多条语句。
 
+**有意的差异**（PR-3 实现时对照 `spring-web` 7.0 确定；对照测试 `HttpPathPatternParityTest` 逐项断言"Spring 能编译、`HttpPathPattern` 拒绝"，除此之外两者对任何模式与路径的结果和捕获值都相同）。
+全部是编译错误，即只会让转换失败，不会让匹配结果变宽或变窄：
+
+| # | 模式 | Spring 的行为 | `HttpPathPattern` |
+|---|---|---|---|
+| P1 | `{name:regex}` | 正则捕获 | 拒绝（§2 J1） |
+| P2 | 空模式 `""` | 匹配 `""` 与 `/` | 拒绝 |
+| P3 | 只由 `*` 与捕获组成、因而能匹配空值的段（单独的 `*` 除外），如 `***`、`{a}{b}`、`*{a}` | 这种段会匹配分隔符：`/a/***/b` 匹配 `/a///b`；`/{a}{b}/x` 匹配 `///x` 时在捕获阶段抛 `ClassCastException` | 拒绝；加一个字面量字符或 `?` |
+| P4 | `{}`、`{*}`（没有名字的捕获） | 捕获到名为 `""` 的变量 | 拒绝：条件无法引用 |
+| P5 | `{*a}` 与 `{a}` 同名 | 允许，其中一个值丢失 | 拒绝（同名捕获一律拒绝） |
+
+实现时确认的 Spring 7.0 语义（`HttpPathPattern` 照此实现）：`**` 与 `{*name}` 可以在模式开头（`/**/*.css`），此时其余部分匹配路径的末尾，
+`{*name}` 捕获前面的部分；不解码（`decodeAndParseSegments: false`）时 `%2F`（仅大写）仍读作 `/`；大小写不敏感时，字面量段按 `String.equalsIgnoreCase` 比较，
+只含 `?` 的段逐字符按 `Character.toLowerCase` 比较，含 `*` 或捕获的段（Spring 中是正则）只折叠 ASCII；段内的 `*`、`?` 按码点而不是 UTF-16 字符计。
+§5.1 的资源类型写作 `http:path`，而 RFC 0004 的请求模型（`Resource`）中 HTTP 资源的类型是 `http`：PR-3 的 `http:path:` 模式匹配类型为 `http` 的资源，两者在 PR-4 接入时统一。
+
 路径在 Pipeline 中规范化一次（RFC 0001 §3.5；路径规范化本身属于第 5 阶段的 Pipeline 重组），本阶段沿用 7.x 的 `RequestPaths` 规范化结果作为 `resource.id`。
 
 ### 5.3 OpenAPI 生成的路由映射
