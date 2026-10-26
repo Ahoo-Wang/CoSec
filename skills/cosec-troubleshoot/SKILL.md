@@ -88,6 +88,7 @@ Each policy tier evaluates matched policy-level conditions once, pools all state
 
 - Path variables use `{id}` and conditions read `request.path.var.id`; `:id` and `request.pathVariable.id` are invalid.
 - Path SpEL templates use `#{principal.id}`. SpEL condition expressions use root properties such as `context.principal.id`; they are different evaluation roots.
+- A templated `path` action (`/users/#{principal.id}/**`) works for most principals but not for one (6.1.2, 7.0.1, 8.0+): the template value is rejected because it is empty or missing, `.`, `..`, or contains `*`, `?`, `{`, `}`, `\` or the path separator (or `%`/`;` with `decodeAndParseSegments: false`). A rejected value never matches in an allow (`Implicit Deny`); in a deny or rate limit rule, or a matcher built in code outside a statement, it throws `RejectedTemplateValueException` (500, fail closed, no permit spent). Such principals cannot be served by templated statements. Fix with a static pattern plus `eq`: `"action": "/users/{userId}/**"` and `{"eq": {"part": "request.path.var.userId", "value": "#{principal.id}"}}`. Do not suggest escaping or loosening the check.
 - Valid part prefixes are singular `request.header.`, `request.attributes.`, `request.path.var.`, and `context.principal.attributes.`. Unsupported parts throw `IllegalArgumentException`.
 - Regex timeouts fail closed as 403. Simplify or bound the pattern instead of increasing exposure to ReDoS.
 

@@ -16,11 +16,18 @@ package me.ahoo.cosec.policy.action
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.permission.Permission
+import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.limiter.RateLimitRule
+import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.test.asserts.assert
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 internal class ReplaceablePathActionMatcherTest {
 
@@ -70,5 +77,144 @@ internal class ReplaceablePathActionMatcherTest {
             every { path } returns "order.2.1"
         }
         assertThat(actionMatcher.match(unmatchedRequest, securityContext), equalTo(false))
+    }
+
+    private fun context(id: String) = SimpleSecurityContext(SimplePrincipal(id))
+
+    private fun request(path: String) = mockk<Request> {
+        every { this@mockk.path } returns path
+        every { method } returns "GET"
+    }
+
+    private fun templated(pattern: String, onRejected: RejectedTemplateValue) =
+        (PathActionMatcherFactory.INSTANCE.create(pattern.asConfiguration()) as ReplaceablePathActionMatcher)
+            .onRejectedTemplateValue(onRejected)
+
+    @Test
+    fun rejectedValuesFollowTheMatchersChoice() {
+        val pattern = "/users/#{principal.id}/**"
+        listOf("*", "{x}", "?", "a/b", "", ".", "..", "}", "a\\b", "\\").forEach { id ->
+            templated(pattern, RejectedTemplateValue.NO_MATCH).match(request("/users/victim/x"), context(id))
+                .assert().describedAs("id [$id]").isFalse()
+            assertThrows<RejectedTemplateValueException> {
+                templated(pattern, RejectedTemplateValue.ERROR).match(request("/users/victim/x"), context(id))
+            }
+        }
+    }
+
+    @Test
+    fun aMatcherBuiltWithoutAnEffectFailsClosedWithAnError() {
+        val matcher = PathActionMatcherFactory.INSTANCE.create("/users/#{principal.id}/**".asConfiguration())
+        (matcher as ReplaceablePathActionMatcher).onRejected.assert().isEqualTo(RejectedTemplateValue.ERROR)
+        assertThrows<RejectedTemplateValueException> { matcher.match(request("/users/victim/x"), context("evil*")) }
+            .message.assert().doesNotContain("evil")
+    }
+
+    @Test
+    fun acceptedValuesStillMatch() {
+        val matcher = templated("/users/#{principal.id}/**", RejectedTemplateValue.NO_MATCH)
+        matcher.match(request("/users/alice/orders"), context("alice")).assert().isTrue()
+        matcher.match(request("/users/victim/orders"), context("alice")).assert().isFalse()
+        // Not pattern syntax: a literal segment like any other.
+        matcher.match(request("/users/a@github.com/orders"), context("a@github.com")).assert().isTrue()
+    }
+
+    @Test
+    fun staticPartsStayPatternSyntax() {
+        val matcher = templated("/orgs/{org}/users/#{principal.id}/*", RejectedTemplateValue.NO_MATCH)
+        val securityContext = context("alice")
+        matcher.match(request("/orgs/acme/users/alice/1"), securityContext).assert().isTrue()
+        securityContext.getPathVariables().assert().isEqualTo(mapOf("org" to "acme"))
+        matcher.match(request("/orgs/acme/users/bob/1"), context("alice")).assert().isFalse()
+    }
+
+    @Test
+    fun aHoleInsideACaptureIsRejectedWhenBuilt() {
+        assertThrows<IllegalArgumentException> {
+            PathActionMatcherFactory.INSTANCE.create("/files/{name:#{principal.attributes['ext']}}".asConfiguration())
+        }
+        assertThrows<IllegalArgumentException> {
+            PathActionMatcherFactory.INSTANCE.create("/files/{#{principal.id}}".asConfiguration())
+        }
+    }
+
+    @Test
+    fun aTemplateMadeOfOneHoleOnlyFillsOneSegment() {
+        val matcher = templated("#{principal.id}", RejectedTemplateValue.NO_MATCH)
+        matcher.match(request("alice"), context("alice")).assert().isTrue()
+        matcher.match(request("/users/alice"), context("/users/alice")).assert().isFalse()
+    }
+
+    @Test
+    fun theSeparatorOfTheParserIsRejected() {
+        val configuration = mapOf(
+            "pattern" to "order.#{principal.id}.*",
+            "options" to mapOf("separator" to "."),
+        ).asConfiguration()
+        val matcher = (PathActionMatcherFactory.INSTANCE.create(configuration) as ReplaceablePathActionMatcher)
+            .onRejectedTemplateValue(RejectedTemplateValue.NO_MATCH)
+        matcher.match(request("order.a.b.1"), context("a.b")).assert().isFalse()
+        matcher.match(request("order.a/b.1"), context("a/b")).assert().isTrue()
+    }
+
+    @Test
+    fun percentAndSemicolonAreRejectedOnlyWithoutDecoding() {
+        fun matcher(decode: Boolean) = (
+            PathActionMatcherFactory.INSTANCE.create(
+                mapOf(
+                    "pattern" to "/users/#{principal.id}/*",
+                    "options" to mapOf("decodeAndParseSegments" to decode),
+                ).asConfiguration()
+            ) as ReplaceablePathActionMatcher
+            ).onRejectedTemplateValue(RejectedTemplateValue.NO_MATCH)
+        listOf("a%2Fb", "a;b").forEach { id ->
+            matcher(decode = false).match(request("/users/$id/x"), context(id)).assert().describedAs(id).isFalse()
+        }
+        // Decoded segments never hold a raw `%2F` or a `;` parameter, so the values are plain literals there.
+        matcher(decode = true).match(request("/users/a%252Fb/x"), context("a%2Fb")).assert().isTrue()
+        matcher(decode = false).match(request("/users/alice/x"), context("alice")).assert().isTrue()
+    }
+
+    @Test
+    fun compositeMembersFollowTheChoice() {
+        val members = listOf("/a/#{principal.id}", "/b/#{principal.id}", "/c")
+            .map { PathActionMatcherFactory.INSTANCE.create(it.asConfiguration()) }
+        val composite = CompositeActionMatcher(PathActionMatcherFactory.TYPE, members, "".asConfiguration())
+        val allowing = composite.onRejectedTemplateValue(RejectedTemplateValue.NO_MATCH) as CompositeActionMatcher
+        allowing.actionMatchers.filterIsInstance<ReplaceablePathActionMatcher>().map { it.onRejected }.assert()
+            .containsExactly(RejectedTemplateValue.NO_MATCH, RejectedTemplateValue.NO_MATCH)
+        allowing.actionMatchers[2].assert().isSameAs(composite.actionMatchers[2])
+        val static = CompositeActionMatcher(
+            PathActionMatcherFactory.TYPE,
+            listOf(PathActionMatcherFactory.INSTANCE.create("/a".asConfiguration())),
+            "".asConfiguration(),
+        )
+        static.onRejectedTemplateValue(RejectedTemplateValue.NO_MATCH).assert().isSameAs(static)
+    }
+
+    @Test
+    fun deserializedStatementsPermissionsAndRateLimitRulesChooseByEffect() {
+        fun Statement.onRejected() = (action as ReplaceablePathActionMatcher).onRejected
+        CoSecJsonSerializer.readValue("""{"action":"/u/#{principal.id}"}""", Statement::class.java)
+            .onRejected().assert().isEqualTo(RejectedTemplateValue.NO_MATCH)
+        CoSecJsonSerializer.readValue("""{"effect":"deny","action":"/u/#{principal.id}"}""", Statement::class.java)
+            .onRejected().assert().isEqualTo(RejectedTemplateValue.ERROR)
+        CoSecJsonSerializer.readValue(
+            """{"id":"p","effect":"deny","action":"/u/#{principal.id}"}""",
+            Permission::class.java
+        ).onRejected().assert().isEqualTo(RejectedTemplateValue.ERROR)
+        CoSecJsonSerializer.readValue(
+            """{"id":"p","action":"/u/#{principal.id}"}""",
+            Permission::class.java
+        ).onRejected().assert().isEqualTo(RejectedTemplateValue.NO_MATCH)
+        val rule = CoSecJsonSerializer.readValue(
+            """{"id":"own","action":"/users/#{principal.id}/**","permitsPerSecond":1}""",
+            RateLimitRule::class.java,
+        )
+        (rule.action as ReplaceablePathActionMatcher).onRejected.assert().isEqualTo(RejectedTemplateValue.ERROR)
+        // A principal whose id is rejected neither escapes the limit nor spends a permit.
+        assertThrows<RejectedTemplateValueException> { rule.matches(request("/users/victim/x"), context("*")) }
+        rule.matches(request("/users/victim/x"), context("alice")).assert().isFalse()
+        rule.matches(request("/users/alice/x"), context("alice")).assert().isTrue()
     }
 }

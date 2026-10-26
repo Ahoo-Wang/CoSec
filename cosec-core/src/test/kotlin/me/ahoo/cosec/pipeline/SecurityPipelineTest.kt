@@ -26,6 +26,7 @@ import me.ahoo.cosec.context.request.InvalidRequestPathException
 import me.ahoo.cosec.context.request.RequestParser
 import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.policy.EvaluateRequest
+import me.ahoo.cosec.policy.action.RejectedTemplateValueException
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.token.TokenExpiredException
@@ -112,6 +113,14 @@ class SecurityPipelineTest {
                 "unexpected error",
                 anonymousParser,
                 failing(IllegalStateException()),
+                SecurityStatus.ERROR,
+                AuthorizeResult.IMPLICIT_DENY
+            ),
+            // A path template value that would change the pattern, in a DENY or a rate limit rule: fail closed.
+            case(
+                "rejected template value",
+                authenticatedParser,
+                failing(RejectedTemplateValueException("rejected")),
                 SecurityStatus.ERROR,
                 AuthorizeResult.IMPLICIT_DENY
             ),

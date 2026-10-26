@@ -100,6 +100,29 @@ Templates are accepted in two places:
   "condition": { "eq": { "part": "request.path.var.userId", "value": "#{principal.id}" } } }
 ```
 
+### Template values in path patterns
+
+In a path pattern, each `#{...}` is evaluated on its own and its value fills one literal part of the pattern; the
+rest of the pattern stays as written. A value is rejected when it is empty (or missing), `.` or `..`, or contains
+`*`, `?`, `{`, `}`, `\` or the path separator (`/`, or the `separator` option), and, with
+`decodeAndParseSegments: false`, `%` or `;`, because it would otherwise act as pattern syntax or reach into other segments.
+A `#{...}` inside a `{...}` capture, such as `{name:#{...}}`, fails when the policy loads. A rejected value never
+grants:
+
+| Where the action is | A rejected value |
+|---|---|
+| an `allow` statement or permission | does not match: the request ends in `Implicit Deny`, not an error |
+| a `deny` statement or permission | fails the request closed with an error (`RejectedTemplateValueException`, a `500`), whatever its condition |
+| a rate limit rule | fails the request closed the same way, and spends no permit |
+| a matcher built in code with `PathActionMatcherFactory`, outside a statement | fails the request closed the same way |
+
+So principals whose ids or attributes contain these characters cannot be served by templated statements: an allow
+never matches them, and every request that reaches a templated deny or rate limit rule fails. With
+`caseSensitive: false`, a value is a literal like any other and also matches its case variants: `Alice` matches
+`/users/alice/...`.
+
+To serve such principals, use the static pattern above with `eq`, which compares strings for equality.
+
 ## Conditions
 
 A condition is a single-key object: the key is the condition type, the value is its configuration.
