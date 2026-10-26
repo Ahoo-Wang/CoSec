@@ -13,8 +13,6 @@
 
 package me.ahoo.cosec.engine.flat
 
-import me.ahoo.cosec.engine.Rule
-import me.ahoo.cosec.engine.RuleMatch
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.decision.BindingRef
@@ -22,11 +20,12 @@ import me.ahoo.cosec.model.decision.BindingRef
 /**
  * A [FlatEvaluator] that records the trace.
  *
- * It evaluates the same candidates in the same order and gives the decision through the same [decide] and [failed],
- * but keeps going after the first match and records every statement. Whatever it evaluates once the decision is known
- * is only for the trace: it is marked [CandidateTrace.afterDecision] and records failures instead of throwing them,
- * because the untraced evaluation never calls it, so the decision never depends on the trace level (P2). Only the JVM's
- * own errors and an interruption propagate.
+ * It evaluates the same candidates in the same order with the same [step] and gives the decision through the same
+ * [decide] and [failed], but keeps going after the first match and records every statement. A statement the index
+ * left out is recorded by what ruled it out, without evaluating anything that calls host code. Whatever it evaluates
+ * once the decision is known is only for the trace: it is marked [CandidateTrace.afterDecision] and records failures
+ * instead of throwing them, because the untraced evaluation never calls it, so the decision never depends on the trace
+ * level (P2). Only the JVM's own errors and an interruption propagate.
  */
 internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, private val level: TraceLevel) :
     FlatEvaluator(request, view) {
@@ -72,59 +71,46 @@ internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, pr
         if (statements.isEmpty()) {
             return false
         }
-        val guard = policy.guard
-        if (guard != null) {
-            val traceOnly = traceOnly()
-            val result = guard(guard)
-            if (result != GUARD_MATCHED) {
-                val error = guardError
-                if (result == GUARD_ERROR && pass === Effect.DENY && !traceOnly) {
-                    failed(policy, statements[0], via, error!!, guard = true)
-                }
-                val outcome = if (result == GUARD_ERROR) CandidateOutcome.GUARD_ERROR else CandidateOutcome.GUARD_MISS
-                for (statement in statements) record(policy, statement, via, outcome, error, traceOnly)
-                return false
+        val index = policy.index(pass)
+        val positions = if (index == null) null else candidates(index)
+        var next = 0
+        for ((position, statement) in statements.withIndex()) {
+            if (positions == null || (next < positions.size && positions[next] == position)) {
+                next++
+                step(policy, statement, via)
+            } else {
+                record(policy, statement, via, skipped(statement), null, traceOnly())
             }
-        }
-        for (statement in statements) {
-            step(policy, statement, via)
         }
         return false
     }
 
-    @Suppress("TooGenericExceptionCaught")
-    private fun step(policy: CompiledPolicy, statement: Rule, via: BindingRef) {
+    /** What ruled out a statement the index left out; the index never leaves out one that passes these (I1). */
+    private fun skipped(statement: CompiledStatement): CandidateOutcome {
+        val outcome = ruledOut(statement)
+        check(outcome != RESOURCE_MISS || statement.resources.none { it.matches(target) }) {
+            "The index left out statement ${statement.name}, whose resource matches"
+        }
+        return OUTCOMES[outcome]
+    }
+
+    private fun step(policy: CompiledPolicy, statement: CompiledStatement, via: BindingRef) {
         val traceOnly = traceOnly()
-        val match: RuleMatch? = try {
-            statement.match(authz)
-        } catch (error: Throwable) {
-            if (!catches(error)) {
-                throw error
-            }
-            if (pass === Effect.DENY && !traceOnly) failed(policy, statement, via, error, guard = false)
-            record(policy, statement, via, CandidateOutcome.ERROR, error, traceOnly)
-            return
-        }
-        val outcome = when (match) {
-            RuleMatch.MATCHED -> CandidateOutcome.MATCHED
-            RuleMatch.ACTION_MISS -> CandidateOutcome.ACTION_MISS
-            RuleMatch.CONDITION_MISS -> CandidateOutcome.CONDITION_MISS
-            null -> {
-                val error = noMatchResult(policy)
-                if (pass === Effect.DENY && !traceOnly) failed(policy, statement, via, error, guard = false)
-                record(policy, statement, via, CandidateOutcome.ERROR, error, traceOnly)
-                return
+        val result = step(policy, statement)
+        var error: Throwable? = null
+        when (result) {
+            MATCHED -> if (!traceOnly) matched = decide(policy, statement, via)
+            ERROR, GUARD_FAILED -> {
+                error = stepError
+                if (pass === Effect.DENY && !traceOnly) failed(policy, statement, via, error!!, result == GUARD_FAILED)
             }
         }
-        if (outcome == CandidateOutcome.MATCHED && !traceOnly) {
-            matched = decide(policy, statement, via)
-        }
-        record(policy, statement, via, outcome, null, traceOnly)
+        record(policy, statement, via, OUTCOMES[result], error, traceOnly)
     }
 
     private fun record(
         policy: CompiledPolicy,
-        statement: Rule,
+        statement: CompiledStatement,
         via: BindingRef,
         outcome: CandidateOutcome,
         error: Throwable?,
@@ -137,5 +123,18 @@ internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, pr
         if (pass === Effect.DENY) {
             expired += via
         }
+    }
+
+    private companion object {
+        /** By the result of [step]. */
+        val OUTCOMES = arrayOf(
+            CandidateOutcome.MATCHED,
+            CandidateOutcome.ACTION_MISS,
+            CandidateOutcome.CONDITION_MISS,
+            CandidateOutcome.RESOURCE_MISS,
+            CandidateOutcome.GUARD_MISS,
+            CandidateOutcome.GUARD_ERROR,
+            CandidateOutcome.ERROR,
+        )
     }
 }

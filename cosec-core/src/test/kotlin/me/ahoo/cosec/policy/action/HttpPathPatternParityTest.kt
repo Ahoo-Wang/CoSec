@@ -116,9 +116,10 @@ class HttpPathPatternParityTest {
         } catch (_: IllegalArgumentException) {
             return Outcome.PathRejected
         }
-        val captures = compiled.match(parsed) ?: return Outcome.NoMatch
-        compiled.matches(parsed).assert().isTrue()
-        return Outcome.Match(captures.toMap())
+        val captures = compiled.match(parsed)
+        // The boolean match decides without capturing (the linear glob); it must agree on misses as well as matches.
+        compiled.matches(parsed).assert().describedAs("matches() of [$pattern] on [$path]").isEqualTo(captures != null)
+        return captures?.let { Outcome.Match(it.toMap()) } ?: Outcome.NoMatch
     }
 
     /** The intended difference [pattern] falls under, decided from its text alone, not by the engine's parser. */

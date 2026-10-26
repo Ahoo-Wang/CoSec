@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "PIP-5"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "Each byte of a dot segment may be encoded on its own: 400.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "http": {
+    "path": "/public/.%2E/admin"
+  },
+  "expect": {
+    "status": 400,
+    "type": "invalid-request"
+  }
+}

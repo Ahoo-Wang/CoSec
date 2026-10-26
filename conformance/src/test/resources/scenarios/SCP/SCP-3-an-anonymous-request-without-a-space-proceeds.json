@@ -1,0 +1,39 @@
+{
+  "rules": [
+    "SCP-3"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The same anonymous request without CoSec-Space-Id is read in the default space and permitted.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

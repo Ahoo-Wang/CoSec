@@ -14,8 +14,6 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.engine.MatcherException
-import me.ahoo.cosec.engine.TestGuard
-import me.ahoo.cosec.engine.TestRule
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Memberships
@@ -128,9 +126,9 @@ class FlatCase(
         }
 
     private fun describe(policy: CompiledPolicy): String {
-        val guard = (policy.guard as TestGuard?)?.let { " guard=${it.behavior}" }.orEmpty()
-        val statements = (policy.denies + policy.allows).sortedBy { it.index }
-            .map { "${it.effect}:${(it as TestRule).behavior}" }
+        val spec = fixture.spec(policy) ?: return policy.id
+        val guard = spec.guard?.let { " guard=${it.behavior}" }.orEmpty()
+        val statements = spec.statements.map { (effect, behavior) -> "$effect:$behavior" }
         return "${policy.id} attachable=${policy.attachable}$guard $statements"
     }
 
@@ -143,5 +141,5 @@ class FlatCase(
 
 fun withAttachments(request: FlatRequest, attachments: List<String>): FlatRequest {
     val memberships = Memberships(request.memberships.source, request.memberships.roles, attachments.map(::PolicyId))
-    return FlatRequest(request.request, request.scope, memberships, request.time)
+    return FlatRequest(request.request, request.scope, memberships, request.time, request.attributes)
 }

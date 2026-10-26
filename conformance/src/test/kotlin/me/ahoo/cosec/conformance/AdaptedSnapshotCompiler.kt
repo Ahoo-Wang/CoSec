@@ -13,17 +13,12 @@
 
 package me.ahoo.cosec.conformance
 
-import me.ahoo.cosec.engine.Guard
-import me.ahoo.cosec.engine.Rule
-import me.ahoo.cosec.engine.RuleMatch
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.CompiledPolicy
-import me.ahoo.cosec.engine.pattern.ActionPattern
-import me.ahoo.cosec.engine.pattern.Captures
-import me.ahoo.cosec.engine.pattern.ResourcePattern
-import me.ahoo.cosec.engine.pattern.ResourceTarget
+import me.ahoo.cosec.engine.flat.PolicyCompiler
+import me.ahoo.cosec.engine.flat.ResourceSource
+import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.AppId
-import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
@@ -35,7 +30,8 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.model.condition.CheckedCondition
+import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.Literal
 import tools.jackson.databind.JsonNode
 
 /** The documents of a scenario, as written. */
@@ -59,9 +55,8 @@ fun interface SnapshotCompiler {
 }
 
 /**
- * Compiles the documents onto what `main` evaluates today: [CompiledDocument]s whose statements are [Rule]s (RFC 0002
- * adapter contracts). Each statement is its action patterns, resource patterns and checked condition (RFC 0005 §5.1);
- * it reads the request from the [RequestFacts] the runner puts in the request.
+ * Compiles the documents with the engine's [PolicyCompiler] (RFC 0005 §6.1): statements are their action patterns,
+ * resource patterns and conditions, compiled. The snapshot compiler of RFC 0004 PR-4 replaces this one.
  *
  * Document syntax (RFC 0004 §7.1, statements as RFC 0005 §5.1):
  *
@@ -73,9 +68,11 @@ fun interface SnapshotCompiler {
  *                   "app": "*", "space": "*", "policy": "p", "expiresAt": "...", "breakGlass": false } ] }
  * ```
  *
- * One addition for the suite only: `"fault": "message"` on a statement or a policy makes evaluating that statement, or
- * that policy's condition, throw. It stands for any failing input (a contract violation, an external attribute that
- * cannot be fetched) so the combination rules can be checked without depending on how a failure arises.
+ * One addition for the suite only: `"fault": "message"` on a statement or a policy makes evaluating that statement's
+ * condition, or that policy's condition, throw. It stands for any failing input (a contract violation, an external
+ * attribute that cannot be fetched) so the combination rules can be checked without depending on how a failure
+ * arises. It is a condition that reads the host attribute `request.attributes.<FAULT><message>` first, which
+ * [RequestFacts.host] answers by throwing [ScenarioFault].
  */
 object AdaptedSnapshotCompiler : SnapshotCompiler {
     override fun compile(documents: ScenarioDocuments): CompiledSnapshot =
@@ -106,32 +103,39 @@ object AdaptedSnapshotCompiler : SnapshotCompiler {
         return document?.get("policies")?.values()?.map(::policy).orEmpty()
     }
 
+    private val compiler = PolicyCompiler()
+
     private fun policy(node: JsonNode): CompiledPolicy {
         node.only("id", "attachable", "condition", "fault", "statements")
         val id = node.required("id").text()
-        val condition = node.get("condition")?.let(ConditionReader::check)
-        val fault = node.get("fault")?.text()
-        val guard = if (condition != null || fault != null) PolicyCondition(condition, fault) else null
-        val statements = node.required("statements").values().mapIndexed(::statement)
-        return CompiledPolicy(PolicyId(id), guard, statements, node.get("attachable")?.bool() ?: false)
+        val condition = faulting(node.get("fault")?.text(), node.get("condition")?.let(ConditionReader::read))
+        val statements = node.required("statements").values().map(::statement)
+        return compiler.compile(PolicyId(id), condition, statements, node.get("attachable")?.bool() ?: false)
     }
 
-    private fun statement(index: Int, node: JsonNode): Rule {
+    private fun statement(node: JsonNode): StatementSource {
         node.only("name", "effect", "action", "resource", "condition", "fault")
         val effect = when (val effect = node.required("effect").text()) {
             "allow" -> Effect.ALLOW
             "deny" -> Effect.DENY
             else -> throw ScenarioFormatException("Effect is allow or deny, not $effect")
         }
-        return Statement(
-            effect = effect,
-            index = index,
+        return StatementSource(
             name = node.get("name")?.text() ?: "",
-            actions = node.required("action").strings().map(ActionPattern::parse),
-            resources = node.get("resource")?.strings()?.map { ResourcePattern.parse(it) },
-            condition = node.get("condition")?.let(ConditionReader::check),
-            fault = node.get("fault")?.text(),
+            effect = effect,
+            actions = node.required("action").strings(),
+            resources = node.get("resource")?.strings()?.map { ResourceSource(it) }.orEmpty(),
+            condition = faulting(node.get("fault")?.text(), node.get("condition")?.let(ConditionReader::read)),
         )
+    }
+
+    /** [condition], preceded by a read that throws [ScenarioFault] with [fault]. */
+    private fun faulting(fault: String?, condition: Condition?): Condition? {
+        if (fault == null) {
+            return condition
+        }
+        val probe = Condition.Eq("request.attributes.$FAULT$fault", Literal.Str(""))
+        return Condition.And(listOfNotNull(probe, condition))
     }
 
     private fun bindings(document: JsonNode?, tenant: TenantId?): List<Binding> =
@@ -174,44 +178,5 @@ object AdaptedSnapshotCompiler : SnapshotCompiler {
 /** A failure injected by `"fault"`. */
 class ScenarioFault(message: String) : RuntimeException(message)
 
-private class PolicyCondition(private val condition: CheckedCondition?, private val fault: String?) : Guard {
-    override fun matches(request: AuthzRequest): Boolean {
-        fault?.let { throw ScenarioFault(it) }
-        return condition!!.evaluate(request.facts.input(null))
-    }
-}
-
-private class Statement(
-    override val effect: Effect,
-    override val index: Int,
-    override val name: String,
-    private val actions: List<ActionPattern>,
-    /** Null for any resource. */
-    private val resources: List<ResourcePattern>?,
-    private val condition: CheckedCondition?,
-    private val fault: String?,
-) : Rule {
-    override val id: String? = null
-
-    override fun match(request: AuthzRequest): RuleMatch {
-        fault?.let { throw ScenarioFault(it) }
-        if (actions.none { it.matches(request.action) }) {
-            return RuleMatch.ACTION_MISS
-        }
-        val captures: Captures? = if (resources == null) {
-            Captures.NONE
-        } else {
-            val target = ResourceTarget(request.resource)
-            resources.firstNotNullOfOrNull { it.match(target) }
-        }
-        if (captures == null) {
-            return RuleMatch.ACTION_MISS
-        }
-        if (condition != null && !condition.evaluate(request.facts.input(captures))) {
-            return RuleMatch.CONDITION_MISS
-        }
-        return RuleMatch.MATCHED
-    }
-}
-
-private val AuthzRequest.facts: RequestFacts get() = host as RequestFacts
+/** The prefix of the request attribute a `"fault"` reads. */
+const val FAULT: String = "cosec.fault:"
