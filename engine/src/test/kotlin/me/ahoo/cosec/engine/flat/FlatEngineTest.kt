@@ -13,17 +13,15 @@
 
 package me.ahoo.cosec.engine.flat
 
-import me.ahoo.cosec.engine.Guard
+import me.ahoo.cosec.engine.CallLog
 import me.ahoo.cosec.engine.GuardBehavior
 import me.ahoo.cosec.engine.MatcherException
-import me.ahoo.cosec.engine.Rule
 import me.ahoo.cosec.engine.RuleBehavior
-import me.ahoo.cosec.engine.RuleMatch
-import me.ahoo.cosec.engine.TestRule
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
@@ -92,7 +90,7 @@ class FlatEngineTest {
             fixture.policy("b", allow()),
             bindings = listOf(anyone("g1", "a"), anyone("g2", "b")),
         )
-        val error = (failing.denies.single() as TestRule).error
+        val error = fixture.error(failing, "a.0")
         decide(flatRequest(), platform).assert()
             .isEqualTo(Decision.Indeterminate(Cause.MatcherFailed(ref("a", 0, bound("g1")), false, error)))
     }
@@ -131,8 +129,8 @@ class FlatEngineTest {
     fun `a condition runs once per evaluation, also when policies share it`() {
         val guard = fixture.guard("c")
         val platform = platform(
-            fixture.policy("p", deny(RuleBehavior.ACTION_MISS), allow(RuleBehavior.ACTION_MISS), guard = guard),
-            fixture.policy("q", allow(RuleBehavior.ACTION_MISS), guard = guard),
+            fixture.policy("p", deny(RuleBehavior.CONDITION_MISS), allow(RuleBehavior.CONDITION_MISS), guard = guard),
+            fixture.policy("q", allow(RuleBehavior.CONDITION_MISS), guard = guard),
             fixture.policy("r", allow(), guard = fixture.guard("other")),
             bindings = listOf(anyone("g1", "p"), anyone("g2", "q"), anyone("g3", "r"), anyone("g4", "p")),
         )
@@ -164,12 +162,25 @@ class FlatEngineTest {
         fixture.log.calls.assert().containsExactly("rule:d.0")
     }
 
+    /** ALG-7: a policy condition is reached only through a statement whose action and resource match. */
+    @Test
+    fun `a condition is not evaluated when no statement of the policy matches the action and resource`() {
+        val guard = fixture.guard("c")
+        val platform = platform(
+            fixture.policy("p", deny(RuleBehavior.ACTION_MISS), allow(RuleBehavior.ACTION_MISS), guard = guard),
+            bindings = listOf(anyone("g", "p")),
+        )
+        fixture.log.clear()
+        decide(flatRequest(), platform).assert().isEqualTo(Decision.Deny(null))
+        fixture.log.calls.assert().isEmpty()
+    }
+
     @Test
     fun `many conditions grow the cache`() {
         // The failing condition comes first, so its error is kept while the cache grows.
         val failing = fixture.policy("a", allow(), guard = fixture.guard("failing", GuardBehavior.THROW))
         val policies = (0 until 10).map {
-            fixture.policy("p$it", allow(RuleBehavior.ACTION_MISS), guard = fixture.guard("c$it"))
+            fixture.policy("p$it", allow(RuleBehavior.CONDITION_MISS), guard = fixture.guard("c$it"))
         }
         val all = listOf(failing) + policies + fixture.policy("y", allow())
         val platform = CompiledDocument.platform(all, all.map { anyone("g-${it.id}", it.id) })
@@ -389,62 +400,55 @@ class FlatEngineTest {
     }
 
     @Test
-    fun `a statement without a match result fails`() {
-        val broken = object : Rule {
-            override val effect = Effect.DENY
-            override val index = 0
-            override val name = "broken"
-            override val id: String? = null
-
-            override fun match(request: AuthzRequest): RuleMatch = javaNull()
-        }
-        val platform =
-            platform(CompiledPolicy(PolicyId("b"), null, listOf(broken)), bindings = listOf(anyone("g", "b")))
+    fun `a path that does not decode fails the statements that need it, never a deny`() {
+        val compiler = PolicyCompiler()
+        val decoding = StatementSource("d", Effect.DENY, listOf("*"), listOf(ResourceSource("http:path:/a/**")))
+        val raw = ResourceSource("http:path:/a/**", decodeAndParseSegments = false)
+        val policy = compiler.compile(PolicyId("p"), null, listOf(decoding, StatementSource("r", Effect.DENY, listOf("*"), listOf(raw))))
+        val platform = platform(policy, bindings = listOf(anyone("g", "p")))
+        // Matched without decoding, the DENY that does not decode decides.
+        decide(flatRequest(path = "/a/%zz"), platform).assert()
+            .isEqualTo(Decision.Deny(StatementRef.Policy(PolicyId("p"), 1, "r", bound("g"))))
+        val failing = compiler.compile(PolicyId("p"), null, listOf(decoding))
+        val view = SnapshotView(platform(failing, bindings = listOf(anyone("g", "p"))), null, emptyTenant)
+        // Every evaluation parses the path again, so each fails with its own exception.
         for (level in TraceLevel.entries) {
-            val decision = CoSecFlatEngine.evaluate(
-                flatRequest(),
-                SnapshotView(platform, null, emptyTenant),
-                level
-            ).decision
-            decision.assert().isInstanceOf(Decision.Indeterminate::class.java)
-            ((decision as Decision.Indeterminate).cause as Cause.MatcherFailed).error.assert()
-                .isInstanceOf(IllegalStateException::class.java)
+            val decision = CoSecFlatEngine.evaluate(flatRequest(path = "/a/%zz"), view, level).decision
+            val cause = (decision as Decision.Indeterminate).cause as Cause.MatcherFailed
+            cause.at.assert().isEqualTo(StatementRef.Policy(PolicyId("p"), 0, "d", bound("g")))
+            cause.error.assert().isInstanceOf(IllegalArgumentException::class.java)
         }
     }
 
     @Test
     fun `an Error propagates`() {
-        val rule = object : Rule {
-            override val effect = Effect.DENY
-            override val index = 0
-            override val name = "oom"
-            override val id: String? = null
-
-            override fun match(request: AuthzRequest): RuleMatch = throw OutOfMemoryError("test")
-        }
-        val platform = platform(CompiledPolicy(PolicyId("b"), null, listOf(rule)), bindings = listOf(anyone("g", "b")))
+        val log = CallLog()
+        Probes.register("oom", Probes.Probe(log, "oom") { throw OutOfMemoryError("test") })
+        Probes.register("so", Probes.Probe(log, "so") { throw StackOverflowError() })
+        val compiler = PolicyCompiler()
+        val statement = StatementSource(
+            "oom",
+            Effect.DENY,
+            listOf("*"),
+            condition = Condition.Eq("request.attributes.oom", Literal.Str("x")),
+        )
+        val policy = compiler.compile(PolicyId("b"), null, listOf(statement))
+        val platform = platform(policy, bindings = listOf(anyone("g", "b")))
         for (level in TraceLevel.entries) {
             assertThrownBy<OutOfMemoryError> {
                 CoSecFlatEngine.evaluate(flatRequest(), SnapshotView(platform, null, emptyTenant), level)
             }
         }
-        val guarded = platform(
-            CompiledPolicy(PolicyId("g"), ThrowingGuard, listOf(rule)),
-            bindings = listOf(anyone("g", "g")),
+        val guarded = compiler.compile(
+            PolicyId("g"),
+            Condition.Eq("request.attributes.so", Literal.Str("x")),
+            listOf(StatementSource("s", Effect.DENY, listOf("*"))),
         )
         assertThrownBy<StackOverflowError> {
             CoSecFlatEngine.evaluate(
                 flatRequest(),
-                SnapshotView(guarded, null, emptyTenant)
+                SnapshotView(platform(guarded, bindings = listOf(anyone("g", "g"))), null, emptyTenant)
             )
         }
     }
-}
-
-/** What a Java matcher returns when it breaks its contract. */
-@Suppress("UNCHECKED_CAST")
-private fun <T> javaNull(): T = null as T
-
-private object ThrowingGuard : Guard {
-    override fun matches(request: AuthzRequest): Boolean = throw StackOverflowError()
 }

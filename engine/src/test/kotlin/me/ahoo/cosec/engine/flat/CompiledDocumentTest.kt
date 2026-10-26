@@ -13,9 +13,6 @@
 
 package me.ahoo.cosec.engine.flat
 
-import me.ahoo.cosec.engine.Rule
-import me.ahoo.cosec.engine.RuleMatch
-import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
@@ -108,19 +105,6 @@ class CompiledDocumentTest {
     }
 
     @Test
-    fun `a statement must have an effect`() {
-        val broken = object : Rule {
-            override val effect: Effect = javaNull()
-            override val index = 3
-            override val name = "broken"
-            override val id: String? = null
-
-            override fun match(request: AuthzRequest): RuleMatch = RuleMatch.MATCHED
-        }
-        rejects("Statement 3 of policy b has no effect") { CompiledPolicy(PolicyId("b"), null, listOf(broken)) }
-    }
-
-    @Test
     fun `a view composes documents of the right kinds`() {
         rejects("Not a platform document") { SnapshotView(tenant(), null, tenant()) }
         rejects("Not an app document") { SnapshotView(platform(), tenant(), tenant()) }
@@ -135,7 +119,4 @@ class CompiledDocumentTest {
         policy.allows.map { it.index }.assert().containsExactly(0, 2)
         BuiltinPolicies.root.attachable.assert().isFalse()
     }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun <T> javaNull(): T = null as T
 }

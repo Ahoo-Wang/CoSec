@@ -24,7 +24,8 @@ import me.ahoo.cosec.model.scope.Scope
  * [me.ahoo.cosec.engine.TraceLevel.EXHAUSTIVE]. It replaces the layered trace when the layers go (PR-8).
  *
  * [candidates] are in evaluation order: the DENY statements of every candidate in candidate order, then the ALLOW ones.
- * Both levels list every statement of every candidate. FULL stops evaluating where the untraced evaluation stops,
+ * Both levels list every statement of every candidate, those the candidate index left out included, with what ruled
+ * them out. FULL stops evaluating where the untraced evaluation stops,
  * except that it finishes the pass that decided; the rest is [CandidateOutcome.NOT_EVALUATED]. EXHAUSTIVE evaluates the
  * ALLOW pass even when the DENY pass decided.
  */
@@ -59,15 +60,20 @@ class CandidateTrace(
 enum class CandidateOutcome {
     MATCHED,
     ACTION_MISS,
+
+    /** The condition is false, or the request's values of the indexed attributes cannot satisfy it. */
     CONDITION_MISS,
 
-    /** The policy condition did not match, so the statement was not evaluated. */
+    /** The action matched, the resource did not. */
+    RESOURCE_MISS,
+
+    /** The action and resource matched, the policy condition did not, so the statement's condition was not evaluated. */
     GUARD_MISS,
 
     /** The policy condition threw; see [CandidateTrace.error]. A DENY counts as an error, an ALLOW as no match. */
     GUARD_ERROR,
 
-    /** The statement threw, or returned no result; see [CandidateTrace.error]. */
+    /** Matching the resource or evaluating the condition failed; see [CandidateTrace.error]. */
     ERROR,
 
     NOT_EVALUATED,

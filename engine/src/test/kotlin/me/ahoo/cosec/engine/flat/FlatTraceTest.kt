@@ -13,15 +13,13 @@
 
 package me.ahoo.cosec.engine.flat
 
-import me.ahoo.cosec.engine.Guard
 import me.ahoo.cosec.engine.GuardBehavior
-import me.ahoo.cosec.engine.Rule
 import me.ahoo.cosec.engine.RuleBehavior
-import me.ahoo.cosec.engine.RuleMatch
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
@@ -101,23 +99,29 @@ class FlatTraceTest {
         trace.candidates[2].error.assert().isNotNull()
     }
 
+    /** A policy whose one DENY statement reads the probe [probe], and whose condition reads [guard] if given. */
+    private fun probed(id: String, probe: String, guard: String? = null): CompiledPolicy =
+        PolicyCompiler().compile(
+            PolicyId(id),
+            guard?.let { Condition.Eq("request.attributes.$it", Literal.Str("yes")) },
+            listOf(
+                StatementSource(
+                    "$id.0",
+                    Effect.DENY,
+                    listOf("*"),
+                    condition = Condition.Eq("request.attributes.$probe", Literal.Str("yes")),
+                ),
+            ),
+        )
+
     @Test
     fun `failures after the decision are recorded, not thrown`() {
-        val failing = object : Rule {
-            override val effect = Effect.DENY
-            override val index = 0
-            override val name = "oom"
-            override val id: String? = null
-
-            override fun match(request: AuthzRequest): RuleMatch = throw AssertionError("after")
-        }
-        val failingGuard = object : Guard {
-            override fun matches(request: AuthzRequest): Boolean = throw AssertionError("guard")
-        }
+        Probes.register("trace-after", Probes.Probe(fixture.log, "after") { throw AssertionError("after") })
+        Probes.register("trace-yes", Probes.Probe(fixture.log, "yes") { "yes" })
         val platform = platform(
             fixture.policy("a", deny()),
-            CompiledPolicy(PolicyId("b"), null, listOf(failing)),
-            CompiledPolicy(PolicyId("c"), failingGuard, listOf(failing)),
+            probed("b", "trace-after"),
+            probed("c", "trace-yes", guard = "trace-after"),
             bindings = listOf(anyone("g1", "a"), anyone("g2", "b"), anyone("g3", "c")),
         )
         val evaluation = CoSecFlatEngine.evaluate(
@@ -129,24 +133,17 @@ class FlatTraceTest {
         evaluation.trace!!.lines().assert().containsExactly(
             "blacklist:CONDITION_MISS",
             "a.0:MATCHED",
-            "oom:ERROR:after",
-            "oom:GUARD_ERROR:after",
+            "b.0:ERROR:after",
+            "c.0:GUARD_ERROR:after",
         )
     }
 
     @Test
     fun `an interruption after the decision still propagates`() {
-        val interrupted = object : Rule {
-            override val effect = Effect.DENY
-            override val index = 0
-            override val name = "interrupted"
-            override val id: String? = null
-
-            override fun match(request: AuthzRequest): RuleMatch = throw InterruptedException()
-        }
+        Probes.register("trace-interrupted", Probes.Probe(fixture.log, "interrupted") { throw InterruptedException() })
         val platform = platform(
             fixture.policy("a", deny()),
-            CompiledPolicy(PolicyId("b"), null, listOf(interrupted)),
+            probed("b", "trace-interrupted"),
             bindings = listOf(anyone("g1", "a"), anyone("g2", "b")),
         )
         assertThrownBy<InterruptedException> {
@@ -158,32 +155,30 @@ class FlatTraceTest {
     }
 
     @Test
-    fun `a broken statement is recorded as an error`() {
-        val broken = object : Rule {
-            override val effect = Effect.ALLOW
-            override val index = 0
-            override val name = "broken"
-            override val id: String? = null
-
-            override fun match(request: AuthzRequest): RuleMatch = javaNull()
-        }
-        val brokenDeny = object : Rule by broken {
-            override val effect = Effect.DENY
-        }
-        val platform = platform(
-            CompiledPolicy(PolicyId("b"), null, listOf(broken, brokenDeny)),
-            bindings = listOf(anyone("g", "b")),
+    fun `statements the index leaves out are recorded by what ruled them out`() {
+        fun statement(name: String, action: String, resource: String?, condition: Condition? = null) =
+            StatementSource(name, Effect.ALLOW, listOf(action), listOfNotNull(resource?.let(::ResourceSource)), condition)
+        val policy = PolicyCompiler(options = IndexOptions(minStatements = 1)).compile(
+            PolicyId("p"),
+            null,
+            listOf(
+                statement("action", "order:read", null),
+                statement("resource", "*", "http:path:/users/**"),
+                statement("keys", "*", null, Condition.Eq("scope.app", Literal.Str("other"))),
+                statement("match", "http:GET", "http:path:/orders/{id}"),
+            ),
         )
-        val evaluation = CoSecFlatEngine.evaluate(
+        val trace = trace(
             flatRequest(),
-            SnapshotView(platform, null, tenant()),
-            TraceLevel.FULL
+            SnapshotView(platform(policy, bindings = listOf(anyone("g", "p"))), null, tenant()),
+            TraceLevel.FULL,
         )
-        evaluation.decision.assert().isInstanceOf(Decision.Indeterminate::class.java)
-        evaluation.trace!!.lines().assert().containsExactly(
+        trace.lines().assert().containsExactly(
             "blacklist:CONDITION_MISS",
-            "broken:ERROR",
-            "broken:NOT_EVALUATED:after",
+            "action:ACTION_MISS",
+            "resource:RESOURCE_MISS",
+            "keys:CONDITION_MISS",
+            "match:MATCHED",
         )
     }
 
@@ -207,8 +202,4 @@ class FlatTraceTest {
         )
         trace.candidates.map { it.via }.distinct().assert().containsExactly(BindingRef.Builtin, bound("new"))
     }
-
-    /** What a Java matcher returns when it breaks its contract. */
-    @Suppress("UNCHECKED_CAST")
-    private fun <T> javaNull(): T = null as T
 }

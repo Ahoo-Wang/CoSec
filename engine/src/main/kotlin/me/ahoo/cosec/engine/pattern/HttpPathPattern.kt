@@ -55,6 +55,14 @@ class HttpPathPattern private constructor(
     private val literals: IntArray =
         if (leadingRest) IntArray(0) else elements.indices.filter { elements[it] is PathElement.Literal }.toIntArray()
 
+    /**
+     * The elements every path this pattern matches starts with, for the candidate index (RFC 0005 §6.2): `null` for a
+     * separator, else a segment's value. They are the pattern's leading separators and case-sensitive literal
+     * segments, so element `i` of a matching path is element `i` here. Empty when the pattern starts with `**` or
+     * `{*name}`, or does not decode: then those positions do not hold.
+     */
+    internal val prefix: Array<String?> = prefixOf(elements, leadingRest || !decodeAndParseSegments)
+
     /** Whether [path] matches. Allocates nothing unless a segment has several `*` or captures. */
     fun matches(path: HttpPath): Boolean = matchPath(path, null)
 
@@ -149,6 +157,21 @@ class HttpPathPattern private constructor(
     companion object {
         private const val NO_MATCH = -1
 
+        private fun prefixOf(elements: Array<PathElement>, none: Boolean): Array<String?> {
+            if (none) {
+                return arrayOfNulls(0)
+            }
+            val prefix = ArrayList<String?>()
+            for (element in elements) {
+                when {
+                    element === PathElement.Separator -> prefix.add(null)
+                    element is PathElement.Literal && element.caseSensitive -> prefix.add(element.text)
+                    else -> break
+                }
+            }
+            return prefix.toTypedArray()
+        }
+
         /**
          * Compiles [pattern], or throws [InvalidPatternException]: a pattern outside the subset never compiles into one
          * that matches more, or less, than it says.
@@ -230,7 +253,7 @@ internal sealed class PathElement {
     }
 
     /** Compared like `String.equalsIgnoreCase` when case-insensitive, as Spring compares literal segments. */
-    class Literal(private val text: String, private val caseSensitive: Boolean) : Segment() {
+    class Literal(val text: String, val caseSensitive: Boolean) : Segment() {
         override fun matches(value: String, captures: Array<String?>?): Boolean =
             value.equals(text, ignoreCase = !caseSensitive)
     }
