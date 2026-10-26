@@ -121,6 +121,11 @@ object Expectations {
                 json.arrayNode().apply { cause.policyIds.map { it.value }.sorted().forEach(::add) },
             )
 
+            is Cause.AmbiguousPolicy -> set(
+                "policies",
+                json.arrayNode().apply { cause.policyIds.map { it.value }.sorted().forEach(::add) },
+            )
+
             is Cause.SourceUnavailable -> put("document", cause.document.name.lowercase())
             is Cause.NotLoaded -> put("document", cause.document.name.lowercase())
             is Cause.MembershipUnavailable -> Unit

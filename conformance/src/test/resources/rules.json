@@ -175,14 +175,14 @@
       "source": "RFC 0004 §4.4 (#1029 review)",
       "statement": "When an attached or bound policy id names both a policy of the principal's tenant document and a platform policy, the request is Indeterminate(AmbiguousPolicy), unless a DENY matches; neither policy silently wins.",
       "level": "engine",
-      "pending": "RFC 0004 PR-2 round-1 review fixes (#1029 review)"
+      "pending": null
     },
     {
       "id": "BND-8",
       "source": "RFC 0004 §4.2, §7.1 (#1029 review)",
       "statement": "A binding whose shape the candidate order can never reach (a subject or scope no request of that document can match) does not compile, so no DENY is lost silently.",
       "level": "engine",
-      "pending": "RFC 0004 PR-2 round-1 review fixes (#1029 review)"
+      "pending": null
     },
     {
       "id": "BLK-1",
@@ -219,7 +219,7 @@
       "source": "RFC 0004 §4.8 (#1029 review)",
       "statement": "The break-glass root binding applies only to principals of the platform tenant; a root binding of any other tenant does not compile.",
       "level": "engine",
-      "pending": "RFC 0004 PR-2 round-1 review fixes (#1029 review)"
+      "pending": null
     },
     {
       "id": "BRK-3",

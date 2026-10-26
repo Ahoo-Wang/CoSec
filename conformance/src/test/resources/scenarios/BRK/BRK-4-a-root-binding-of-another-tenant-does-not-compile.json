@@ -1,0 +1,30 @@
+{
+  "rules": [
+    "BRK-4"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The platform document binds root to alice of acme, not a platform-tenant principal.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "alice",
+            "tenant": "acme"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2026-12-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "must bind a principal of the platform tenant"
+  }
+}
