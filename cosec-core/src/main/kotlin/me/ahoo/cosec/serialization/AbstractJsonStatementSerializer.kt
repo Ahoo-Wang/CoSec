@@ -76,12 +76,13 @@ abstract class AbstractJsonStatementDeserializer<T : Statement>(statementType: C
     }
 
     /**
-     * A templated `path` action whose value is rejected must neither grant (ALLOW) nor stop denying (DENY).
+     * A templated `path` action whose value is rejected must neither grant (ALLOW) nor stop denying (DENY): an ALLOW
+     * does not match, a DENY fails the request closed.
      */
     private fun Effect.onRejectedTemplateValue(): RejectedTemplateValue =
         when (this) {
             Effect.ALLOW -> RejectedTemplateValue.NO_MATCH
-            Effect.DENY -> RejectedTemplateValue.MATCH
+            Effect.DENY -> RejectedTemplateValue.ERROR
         }
 
     abstract fun createStatement(

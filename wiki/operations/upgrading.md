@@ -19,29 +19,31 @@ before. Only code that refers to CoSec's bean by the name `redisRateLimiter` (`@
 
 ### Templated path actions reject values that change the pattern {#templated-path-actions-reject-values-that-change-the-pattern}
 
-Also in 6.1.2 and 8.0. A `#{...}` template in a `path` action, such as `/users/#{principal.id}/**`, used to be
-evaluated into a string that was then parsed as a whole pattern, so a principal id or attribute containing pattern
-syntax changed what the statement matched. Each template value now fills one literal part of the pattern, and a value
-that is empty, `.`, `..`, or contains `*`, `?`, `{`, `}` or the path separator is rejected
-([Template values in `path` actions](../policies/language.md#template-values-in-path-actions)):
+Also in 6.1.2 and 8.0. A `#{...}` template in a `path` action, such as `/users/#{principal.id}/**`, used to be evaluated into a string that
+was then parsed as a whole pattern, so a principal id or attribute containing pattern syntax changed what the
+statement matched. Each template value now fills one literal part of the pattern, and a value that is empty, `.`,
+`..`, or contains `*`, `?`, `{`, `}`, `\` or the path separator (`/`, or the `separator` option), and, with
+`decodeAndParseSegments: false`, `%` or `;` is rejected ([Template values in `path` actions](../policies/language.md#template-values-in-path-actions)):
 
 - an `allow` statement or permission no longer matches such a principal (`Implicit Deny`);
-- a `deny` statement or permission matches every path for such a principal;
-- a rate limit rule applies to every request of such a principal;
-- a templated `path` matcher built in code with `PathActionMatcherFactory` and used outside a statement throws
-  `RejectedTemplateValueException`. Code that deserializes statements, permissions or rate limit rules from JSON is
-  unaffected; a custom deserializer that builds statements itself should call `onRejectedTemplateValue` on the action.
+- a `deny` statement or permission fails such a principal's request closed with an error
+  (`RejectedTemplateValueException`, a `500`), whatever its condition;
+- a rate limit rule fails such a principal's matching requests closed the same way, and spends no permit;
+- a templated matcher built in code with `PathActionMatcherFactory` and used outside a statement fails the same way.
+  Code that deserializes statements, permissions or rate limit rules from JSON is unaffected; a custom deserializer
+  that builds ALLOW statements itself can call `onRejectedTemplateValue(NO_MATCH)` on the action.
 
-A template that produced several segments, such as `#{principal.attributes['home']}/**` with `home` set to
-`/users/alice`, is rejected the same way. A template inside a `{...}` capture, such as `{name:#{...}}`, now fails when
-the policy loads. What to do:
+Principals whose ids or attributes contain these characters can no longer be served by templated statements. A
+template that produced several segments, such as `#{principal.attributes['home']}/**` with `home` set to
+`/users/alice`, is rejected the same way, and a template inside a `{...}` capture, such as `{name:#{...}}`, now
+fails when the policy loads. What to do:
 
 1. Find templated `path` actions: search policies, app permissions and rate limit rules for `#{` in an `action`.
 2. If principal ids or the attributes they use can contain these characters, rewrite the statement as a static
-   pattern plus an `eq` condition on the path variable
-   ([example](../policies/language.md#template-values-in-path-actions)). `eq` compares strings, so any value works.
-3. Check with the [policy test kit](../policies/testing.md) or the explanation that the principals you expect still
-   match ([Templated statement ignores or denies one principal](./troubleshooting.md#templated-statement-ignores-or-denies-one-principal)).
+   pattern plus an `eq` condition on the path variable ([example](../policies/language.md#template-values-in-path-actions)). `eq` compares strings, so any
+   value works.
+3. Check that the principals you expect still match
+   ([Templated statement ignores one principal or fails with 500](./troubleshooting.md#templated-statement-ignores-one-principal-or-fails-with-500)).
 
 ## 6.1 to 7.0
 
