@@ -21,7 +21,6 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.membership.MembershipProvider
-import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.runtime.PipelineFixtures.LoadingViews
 import me.ahoo.cosec.runtime.PipelineFixtures.PERMIT
 import me.ahoo.cosec.runtime.PipelineFixtures.StubEngine
@@ -83,18 +82,15 @@ class PipelineCancellationTest {
     fun cancelledWhileResolvingMemberships() {
         val suspended = CompletableDeferred<Unit>()
         val engine = StubEngine(PERMIT)
-        val shared = CompletableFuture<Memberships>()
         val provider = MembershipProvider { _, _ ->
             suspended.complete(Unit)
-            shared
+            awaitCancellation()
         }
         cancelWhenSuspended(
             pipeline(authenticator(authenticated(null)), engine, membershipProvider = provider),
             suspended
         )
             .assertNoOutcome(engine)
-        // The provider may share its future with other requests: only the pipeline's copy is cancelled.
-        shared.isCancelled.assert().isFalse()
     }
 
     @Test

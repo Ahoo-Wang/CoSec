@@ -22,7 +22,7 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 interface MembershipMarkerCapable {
     /**
      * The claim's value: [MembershipClaims.PROVIDER], or anything else the token said (a value that is not a string is
-     * kept as its JSON text), which [MembershipResolver] refuses.
+     * kept as its JSON text), which the pipeline refuses.
      */
     val membershipMarker: String
 }

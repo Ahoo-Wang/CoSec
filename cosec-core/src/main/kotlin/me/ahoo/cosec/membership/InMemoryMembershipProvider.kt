@@ -16,7 +16,6 @@ package me.ahoo.cosec.membership
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -26,8 +25,8 @@ import java.util.concurrent.ConcurrentHashMap
 class InMemoryMembershipProvider : MembershipProvider {
     private val memberships = ConcurrentHashMap<Key, Memberships>()
 
-    override fun memberships(tenant: TenantId, principal: PrincipalId): CompletableFuture<Memberships> =
-        CompletableFuture.completedFuture(memberships[Key(tenant.value, principal.value)] ?: NONE)
+    override suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships =
+        memberships[Key(tenant.value, principal.value)] ?: NONE
 
     /** Sets the memberships of [principal] in [tenant]; their source must be [Memberships.Source.PROVIDER]. */
     fun put(tenant: TenantId, principal: PrincipalId, memberships: Memberships) {

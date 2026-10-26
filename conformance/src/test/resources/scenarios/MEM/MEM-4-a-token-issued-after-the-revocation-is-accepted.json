@@ -1,0 +1,63 @@
+{
+  "rules": [
+    "MEM-4"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "alice logged in again on 2026-10-03: the new token is accepted and her binding permits.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "p:alice:read",
+            "subject": {
+              "principal": "alice"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "read"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "issuedAt": "2026-10-03T00:00:00Z"
+    }
+  },
+  "revocations": {
+    "subjects": [
+      {
+        "tenant": "acme",
+        "principal": "alice",
+        "issuedBefore": "2026-10-02T00:00:00Z"
+      }
+    ]
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

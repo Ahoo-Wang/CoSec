@@ -80,11 +80,11 @@ CoSec 8.0 把 `roles` 和 `policies` 声明读作主体的**成员关系**：主
 字节（按 JSON 计）时省略它们，改写 `cosec.membership: "provider"`；其他令牌签发方也可以照做。这个上限默认关闭，预期取值是
 4 KB（`JwtTokenConverter.DEFAULT_MEMBERSHIP_CLAIM_LIMIT`）。从带标记的令牌刷新得到的令牌保留这个标记。
 
-**provider。** 带标记的令牌，其成员关系来自应用的 `MembershipProvider` Bean，按主体的租户和 ID 查询。它返回
-`CompletableFuture`，不能阻塞，也不能抛出异常；`InMemoryMembershipProvider` 用于测试和本地开发。一个主体只有一个来源：
+**provider。** 带标记的令牌，其成员关系来自应用的 `MembershipProvider` Bean，按主体的租户和 ID 查询。它是 `suspend` 函数，
+不能阻塞调用线程，查询失败时抛出异常；`InMemoryMembershipProvider` 用于测试和本地开发。一个主体只有一个来源：
 要么是声明，要么是 provider，不会混用。
 
-**失败即拒绝。** `MembershipResolver` 解析主体的成员关系，在下列情况下以 `MembershipUnavailableException` 失败，而不是当作
+**失败即拒绝。** `MembershipResolver`（在 `cosec-runtime` 中）解析主体的成员关系，在下列情况下以 `MembershipUnavailableException` 失败，而不是当作
 "没有成员关系"：
 
 - 令牌带标记，但没有 provider；

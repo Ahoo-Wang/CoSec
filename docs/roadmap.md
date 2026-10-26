@@ -21,7 +21,7 @@
 | 2 | 纯函数决策引擎：`model/`、`engine/` | [RFC 0002](rfc/0002-pure-engine.md)，已确认 | PR-1 至 PR-5 已合入；PR-6 取消（并入切换） | ✅ 剩余工作并入切换 |
 | 3 | 策略快照分发 | [RFC 0003](rfc/0003-policy-snapshot.md)，已确认 | PR-1 至 PR-4 已合入；PR-5 取消，PR-6 并入切换 | ✅ 剩余工作并入切换 |
 | 4 | 统一模型：`Binding`、平台层/租户层、条件 AST、`service:verb`、编译执行、转换工具 | [RFC 0004](rfc/0004-unified-model.md) / [RFC 0005](rfc/0005-condition-ast.md)，已确认（2026-10-22） | RFC 0004 PR-1 至 PR-3、RFC 0005 PR-1 至 PR-4 已合入（PR-4 #1051）；RFC 0004 PR-4 已合入（#1052）；RFC 0004 PR-4b 已合入（#1053）；RFC 0005 PR-5 可以开工 | 🟡 进行中 |
-| 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | [RFC 0006](rfc/0006-coroutine-pipeline.md)，已确认（2026-10-25） | PR-1 已合入（第 1 轮审查修复 #1031 已合入）；PR-2 已合入（#1044）；PR-3、PR-6 可以开工 | 🟡 进行中 |
+| 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | [RFC 0006](rfc/0006-coroutine-pipeline.md)，已确认（2026-10-25） | PR-1 已合入（第 1 轮审查修复 #1031 已合入）；PR-2 已合入（#1044）；PR-3 打开中（#1054）；PR-6 可以开工 | 🟡 进行中 |
 | 6 | 控制面 `cosec-control` | [RFC 0007](rfc/0007-control-plane.md)，已确认（2026-10-26，#1028） | PR-1（#1032）、PR-2（#1038）已合入；PR-6a（授出分析）开工 | 🟡 进行中 |
 | — | 规范一致性套件、端到端切片与切换 S1–S5 | [RFC 0008](rfc/0008-conformance-and-direct-build.md)，已确认（2026-10-26），路线图审查修订（2026-10-26） | PR-1（套件）已合入（#1045）；PR-3（7.0 基线）已派发；PR-2 可以开工 | 🟡 进行中 |
 
@@ -105,7 +105,7 @@ PR-9、PR-10 并入切换；PR-2 增加"同一 `CoSec-*` 参数的 Header 与 qu
 2026-10-26 起：CoSec 写的错误响应改为 RFC 9457 problem+json，显式与隐式拒绝在响应中合并（RFC 0006 Q27）；PR-2 实现，PR-7 写回，切换 PR 写文档。
 PR-2（#1044）：`HttpFacts` 与 `SCP-4`、`PathNormalizer`、`Authenticator` SPI、`Outcome` 与 `StatusMapping`（problem 词汇）、手写的 `ProblemEncoder`、
 `problem` 格式描述与 `schema/problem.schema.json`、`Pipeline.decide` 骨架（整体超时、取消规则、`resumeOffIo` 与 T1–T3）、`SuspendingSnapshotSource`，全部用测试替身；
-快照视图的来源是新的 `SnapshotViews` 接口，由 RFC 0004 PR-4 的文档源实现。PR-3、PR-6 可以开工。2026-10-26 修订（路线图审查）：PR-3 至 PR-7 合入时各自把自己的一段接进端到端切片（RFC 0008 §4.4.3）；PR-9 的 starter 装配落在 S1。
+快照视图的来源是新的 `SnapshotViews` 接口，由 RFC 0004 PR-4 的文档源实现。PR-3（#1054，打开中）：`MembershipProvider` 改为 `suspend`（Q11），成员关系解析搬进 `runtime/` 的挂起 `MembershipResolver`，`TokenAuthenticator` 校验令牌、按令牌与按主体吊销（`MEM-4`）并给出 `token-*`（`PIP-6`），吊销的读接口是新的 `RevocationReader`（`TokenStore` 的同步方法留给 7.x 路径到切换为止）；API Key 认证器、`CoCacheTokenStore` 的非阻塞读与 `CoCacheMembershipProvider` 留给后续 PR。PR-6 可以开工。2026-10-26 修订（路线图审查）：PR-3 至 PR-7 合入时各自把自己的一段接进端到端切片（RFC 0008 §4.4.3）；PR-9 的 starter 装配落在 S1。
 
 ---
 
@@ -154,5 +154,5 @@ PR-1 的登记表（`conformance/src/test/resources/rules.json`）有 64 条规�
 
 - RFC 0008 PR-2（变异检查）。RFC 0008 PR-3（7.0 基线）已派发。
 - RFC 0007 PR-6a（授出分析，2026-10-26 开工）。RFC 0004 PR-4（RFC 0005 PR-4 已合入，#1051）、RFC 0005 PR-5：按 RFC 0008 §4.7 先做 `engine/` 中 #1040、#1051 的审查与 #1029 的第 2 轮。
-- RFC 0006 PR-3、PR-6（PR-2 已合入，#1044；按 RFC 0008 §4.7 先做 #1044 的审查）；端到端切片打开中（#1056）。
+- RFC 0006 PR-6（PR-2 已合入，#1044；按 RFC 0008 §4.7 先做 #1044 的审查）；端到端切片打开中（#1056）。
 - 核对已合入 PR 的两轮审查（RFC 0008 §4.7：同一领域先审查，再开新功能 PR）：RFC 0004 PR-2（#1029，第 2 轮）、PR-3（#1027）、RFC 0005 PR-1（#1022）、PR-2（#1036）的第 2 轮，RFC 0005 PR-3（#1040）、PR-4（#1051）、RFC 0006 PR-2（#1044）、RFC 0007 PR-1（#1032）、RFC 0008 PR-1（#1045）的两轮；本表"—"表示尚无已合入的修复 PR。

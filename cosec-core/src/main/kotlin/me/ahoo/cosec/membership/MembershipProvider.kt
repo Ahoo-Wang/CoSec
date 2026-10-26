@@ -16,20 +16,22 @@ package me.ahoo.cosec.membership
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import java.util.concurrent.CompletableFuture
 
 /**
  * Where the memberships of principals whose token carries [MembershipClaims.PROVIDER] come from (RFC 0004 §4.5.2):
  * memberships that change often, must be revoked at once, or do not fit in a token.
  *
- * Register it as a Spring bean. Callers go through [MembershipResolver], which enforces the contract: failure means
- * deny. A failed or late answer makes the memberships unavailable, and the request fails closed; it never counts as
- * "no memberships", because no roles also means no `inRole` DENY matches.
+ * The pipeline calls it through `me.ahoo.cosec.runtime.MembershipResolver` (`cosec-runtime`), which enforces the
+ * contract: failure means deny. A failed or late answer makes the memberships unavailable, and the request fails closed
+ * with 503; it never counts as "no memberships", because no roles also means no `inRole` DENY matches.
+ *
+ * A suspend function since RFC 0006 PR-3 (Q11): it replaces the `CompletableFuture` form, which was never released.
  */
 fun interface MembershipProvider {
     /**
-     * Never blocks and never throws: report a failed lookup by completing the future exceptionally. Complete with
+     * Must not block the calling thread, which may be an event loop: an implementation that needs a blocking client
+     * moves the call to its own bounded executor (RFC 0006 §7.7). Report a failed lookup by throwing. Answer
      * `Memberships(PROVIDER, emptyMap(), emptyList())` when the principal is unknown.
      */
-    fun memberships(tenant: TenantId, principal: PrincipalId): CompletableFuture<Memberships>
+    suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships
 }
