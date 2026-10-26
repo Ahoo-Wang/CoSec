@@ -50,7 +50,8 @@ statement matched. Each template value now fills one literal part of the pattern
 - an `allow` statement or permission no longer matches such a principal (`Implicit Deny`);
 - a `deny` statement or permission fails such a principal's request closed with an error
   (`RejectedTemplateValueException`, a `500`), whatever its condition;
-- a rate limit rule fails such a principal's matching requests closed the same way, and spends no permit;
+- a rate limit rule fails closed the same way and spends no permit: every request that reaches a templated deny or
+  rate limit rule fails, since the value is rejected before the path is matched;
 - a templated matcher built in code with `PathActionMatcherFactory` and used outside a statement fails the same way.
   Code that deserializes statements, permissions or rate limit rules from JSON is unaffected; a custom deserializer
   that builds ALLOW statements itself can call `onRejectedTemplateValue(NO_MATCH)` on the action.
