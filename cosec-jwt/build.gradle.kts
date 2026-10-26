@@ -17,4 +17,6 @@ dependencies {
     api("com.auth0:java-jwt")
     testImplementation("me.ahoo.cosid:cosid-test")
     testImplementation("io.projectreactor:reactor-test")
+    // MembershipClaimsJwtTest resolves parsed tokens through the pipeline's MembershipResolver.
+    testImplementation(project(":cosec-runtime"))
 }
