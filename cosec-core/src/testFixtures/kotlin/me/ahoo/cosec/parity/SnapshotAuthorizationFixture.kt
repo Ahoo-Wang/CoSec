@@ -15,12 +15,17 @@ package me.ahoo.cosec.parity
 
 import me.ahoo.cosec.api.authorization.Authorization
 import me.ahoo.cosec.api.context.request.AppId
+import me.ahoo.cosec.authorization.DecisionAuthorization
+import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.authorization.SnapshotEngineAuthorization
 import me.ahoo.cosec.authorization.engine.CompiledApp
 import me.ahoo.cosec.authorization.engine.CompiledPolicies
 import me.ahoo.cosec.authorization.engine.PolicySnapshotCompiler
+import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotDocumentStore
+import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.SnapshotOptions
 import me.ahoo.cosec.snapshot.SnapshotSource
 import tools.jackson.databind.ObjectMapper
@@ -34,12 +39,18 @@ class SnapshotAuthorizationFixture(
     store: SnapshotDocumentStore,
     mapper: ObjectMapper = CoSecJsonSerializer,
     options: SnapshotOptions = SnapshotOptions(),
+    blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp,
+    rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE,
 ) : AutoCloseable {
     private val compiler = PolicySnapshotCompiler(mapper)
     private val source: SnapshotSource<CompiledPolicies, CompiledApp> =
         SnapshotSource(store, compiler.policies, compiler.app, options)
 
-    val authorization: Authorization = SnapshotEngineAuthorization(source)
+    /** The pure decision, as [DecisionParity] compares it. */
+    val decisionAuthorization: DecisionAuthorization =
+        SnapshotEngineAuthorization(source, blacklistChecker, rootPrincipalMatcher)
+
+    val authorization: Authorization = decisionAuthorization
 
     /** Loads the policies document and, when given, [appId]'s; returns the revisions loaded. */
     fun load(appId: AppId? = null): Pair<Long, Long> {
@@ -52,5 +63,19 @@ class SnapshotAuthorizationFixture(
 
     override fun close() {
         source.close()
+    }
+}
+
+/**
+ * Compiles snapshot documents exactly as [SnapshotSource] does, for measurements in other modules (RFC 0003 §4.8),
+ * which cannot see the internal compiler.
+ */
+class SnapshotCompilation(mapper: ObjectMapper = CoSecJsonSerializer) {
+    private val compiler = PolicySnapshotCompiler(mapper)
+
+    /** The compiled [document]: an opaque object, whose retained size is what a source holds for it. */
+    fun compile(key: SnapshotKey, document: SnapshotDocument): Any = when (key) {
+        SnapshotKey.Policies -> compiler.policies.compile(key, document)
+        is SnapshotKey.App -> compiler.app.compile(key, document)
     }
 }

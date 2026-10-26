@@ -38,6 +38,7 @@ import me.ahoo.cosec.pipeline.SecurityPipeline
 import me.ahoo.cosec.pipeline.SecurityStatus
 import me.ahoo.cosec.policy.markPolicyEvaluation
 import reactor.core.publisher.Mono
+import tools.jackson.core.JacksonException
 
 /**
  * What one authorization answered, as compared by RFC 0002 §8.3. Two answers are the same only when every field is.
@@ -71,12 +72,45 @@ enum class ParityVerdict {
 }
 
 /**
+ * Which exception of a failure a comparison looks at: its class goes into [DecisionTuple.error], its cause into
+ * [ParitySide.failureCause].
+ */
+enum class FailureView {
+    /** The exception the authorization failed with (RFC 0002 §8.3). */
+    AS_THROWN,
+
+    /**
+     * The innermost cause (RFC 0003 §8.1): the snapshot path wraps a failed read in a
+     * [me.ahoo.cosec.snapshot.SnapshotUnavailableException] where the repositories let the read's own exception through
+     * (§7 X4), a known difference that is not a decision difference. A Jackson error is described without its source
+     * location, which differs between decoding a stored value and reading a document.
+     */
+    INNERMOST_CAUSE;
+
+    fun of(failure: Throwable): Throwable = when (this) {
+        AS_THROWN -> failure
+        INNERMOST_CAUSE -> generateSequence(failure) { it.cause?.takeUnless { cause -> cause === it } }.last()
+    }
+
+    internal fun messageOf(failure: Throwable): String = when {
+        this == INNERMOST_CAUSE && failure is JacksonException -> failure.originalMessage.orEmpty()
+        else -> failure.message.orEmpty()
+    }
+}
+
+/**
  * One side of a comparison.
  *
  * @param context the fresh context this side ran with, to inspect what it wrote (e.g. its [VerifyContext])
  * @param failure what the authorization failed with, null when it decided
+ * @param failureView which exception of [failure] [failureCause] describes
  */
-data class ParitySide(val tuple: DecisionTuple, val context: SecurityContext, val failure: Throwable?) {
+data class ParitySide(
+    val tuple: DecisionTuple,
+    val context: SecurityContext,
+    val failure: Throwable?,
+    val failureView: FailureView = FailureView.AS_THROWN,
+) {
     val verifyContext: VerifyContext?
         get() = context.getVerifyContext()
 
@@ -85,13 +119,13 @@ data class ParitySide(val tuple: DecisionTuple, val context: SecurityContext, va
      * sorted lists, so set order cannot differ), otherwise the message. Null when this side decided.
      */
     val failureCause: String?
-        get() = when (val failure = failure) {
+        get() = when (val failure = failure?.let(failureView::of)) {
             null -> null
             is MissingPolicyException -> "${failure.source} policies ${failure.policyIds.sorted()}"
             is MissingPermissionException ->
                 "app [${failure.appId}] role [${failure.roleId}] permissions ${failure.permissionIds.sorted()}"
 
-            else -> failure.message.orEmpty()
+            else -> failureView.messageOf(failure)
         }
 }
 
@@ -128,7 +162,12 @@ data class ParityResult(val verdict: ParityVerdict, val baseline: ParitySide, va
  *
  * Blocks until both sides answer: call it from a test or a tool, never from an event loop.
  */
-class DecisionParity(val baseline: DecisionAuthorization, val candidate: DecisionAuthorization) {
+class DecisionParity(
+    val baseline: DecisionAuthorization,
+    val candidate: DecisionAuthorization,
+    /** Which exception of a failure is compared: [FailureView.INNERMOST_CAUSE] for the snapshot gate (RFC 0003 §8.1). */
+    val failureView: FailureView = FailureView.AS_THROWN,
+) {
     fun compare(request: Request, principal: CoSecPrincipal, tenant: Tenant = principal.tenant): ParityResult {
         val baselineSide = evaluate(baseline, request, principal, tenant)
         val candidateSide = evaluate(candidate, request, principal, tenant)
@@ -166,6 +205,7 @@ class DecisionParity(val baseline: DecisionAuthorization, val candidate: Decisio
                     ),
                     context,
                     null,
+                    failureView,
                 )
             }
             .onErrorResume { failure ->
@@ -176,11 +216,12 @@ class DecisionParity(val baseline: DecisionAuthorization, val candidate: Decisio
                             mapped.status,
                             mapped.result.reason,
                             null,
-                            failure.javaClass.name,
+                            failureView.of(failure).javaClass.name,
                             context.getVerifyContext()?.toDecisionRef(),
                         ),
                         context,
                         failure,
+                        failureView,
                     ),
                 )
             }
@@ -189,15 +230,23 @@ class DecisionParity(val baseline: DecisionAuthorization, val candidate: Decisio
 }
 
 /**
- * Builds one side of a comparison from the repositories and checks both sides share.
+ * Builds one side of a comparison from the repositories and checks both sides share. As a [ReplaySide], it replays
+ * over repositories holding the export.
  */
-fun interface AuthorizationFactory {
+fun interface AuthorizationFactory : ReplaySide {
     fun create(
         policyRepository: PolicyRepository,
         appRolePermissionRepository: AppRolePermissionRepository,
         blacklistChecker: BlacklistChecker,
         rootPrincipalMatcher: RootPrincipalMatcher
     ): DecisionAuthorization
+
+    override fun replaying(
+        export: ReplayExport,
+        blacklistChecker: BlacklistChecker,
+        rootPrincipalMatcher: RootPrincipalMatcher
+    ): DecisionAuthorization =
+        create(export.policyRepository, export.appRolePermissionRepository, blacklistChecker, rootPrincipalMatcher)
 
     companion object {
         /** The 7.0 implementation, which enforces until RFC 0002 PR-6. */
@@ -207,5 +256,12 @@ fun interface AuthorizationFactory {
         /** The implementation backed by the decision engine (RFC 0002). */
         @JvmField
         val ENGINE: AuthorizationFactory = AuthorizationFactory(::EngineAuthorization)
+
+        /**
+         * The snapshot read path over what the repositories answer for each request (RFC 0003 §8.2): see
+         * [RepositorySnapshotAuthorization]. A failed read fails with the read's own exception wrapped (§7 X4).
+         */
+        @JvmField
+        val SNAPSHOT: AuthorizationFactory = AuthorizationFactory(::RepositorySnapshotAuthorization)
     }
 }
