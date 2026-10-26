@@ -12,11 +12,13 @@
  */
 
 // The spec conformance suite (RFC 0008 §3): the rule registry, hand-written scenarios and their runners. Test sources
-// only, never published (verifyUnpublished). Dependencies on runtime/ and control/ come with their runners.
+// only, never published (verifyUnpublished). The dependency on control/ comes with its runner.
 dependencies {
     testImplementation(project(":cosec-engine"))
     // MembershipResolver (RFC 0004 §4.5) and Jackson for reading scenarios.
     testImplementation(project(":cosec-core"))
+    // PipelineRunner: the coroutine pipeline of RFC 0006.
+    testImplementation(project(":cosec-runtime"))
 }
 
 val repositoryRoot = rootProject.layout.projectDirectory
