@@ -24,6 +24,10 @@ import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.configuration.JsonConfiguration
 import me.ahoo.cosec.limiter.RateLimitRule
+import me.ahoo.cosec.model.scope.Scope
+import tools.jackson.core.JsonParser
+import tools.jackson.databind.DeserializationContext
+import tools.jackson.databind.deser.std.StdDeserializer
 import tools.jackson.databind.module.SimpleModule
 
 /**
@@ -68,5 +72,13 @@ class CoSecModule : SimpleModule() {
         addDeserializer(AppPermission::class.java, JsonAppPermissionDeserializer)
         addSerializer(RateLimitRule::class.java, JsonRateLimitRuleSerializer)
         addDeserializer(RateLimitRule::class.java, JsonRateLimitRuleDeserializer)
+        // Only ScopeResolver builds a resolved scope (SCP-5); Jackson would otherwise call its constructor by reflection.
+        addDeserializer(Scope::class.java, RefusingScopeDeserializer)
     }
+}
+
+/** A resolved scope is never read from JSON, whatever the input: a client could otherwise name its own roles. */
+private object RefusingScopeDeserializer : StdDeserializer<Scope>(Scope::class.java) {
+    override fun deserialize(p: JsonParser, ctxt: DeserializationContext): Scope =
+        throw IllegalStateException("A resolved Scope is never deserialized; only ScopeResolver builds one.")
 }

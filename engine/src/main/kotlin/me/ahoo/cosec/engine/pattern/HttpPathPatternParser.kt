@@ -194,18 +194,70 @@ internal sealed class GlobToken {
 
 /**
  * A segment with `*` or captures among other text. Spring compiles it into a regular expression (`*` is `.*`, `?` is
- * `.`, `{name}` is `(.*)`, with `DOTALL`) and calls `matches`; this backtracks the same way, so every greedy run takes
- * as much as the rest allows and captures the same values.
+ * `.`, `{name}` is `(.*)`, with `DOTALL`) and calls `matches`.
  *
- * With more than one run, failed (token, position) pairs are remembered, so matching takes at most
- * tokens × length² steps instead of growing exponentially with the number of runs.
+ * Whether a segment matches is decided by [accepts], the two-pointer wildcard match: it backtracks only to the last
+ * run, so it takes at most tokens × length steps and allocates nothing, whatever the request path holds (review F4 of
+ * #1040: the backtracking below took 0.2–0.4 s on one 8 KB segment). Only a segment that matches is then captured by
+ * backtracking the way the regular expression does, so every greedy run takes as much as the rest allows and captures
+ * the same values; failed (token, position) pairs are remembered, so that takes at most tokens × length² steps.
  */
 internal class SegmentGlob(private val tokens: Array<GlobToken>) {
     private val remembersFailures = tokens.count { it is GlobToken.Run } > 1
 
     fun matches(value: String, captures: Array<String?>?): Boolean {
+        if (!accepts(value)) {
+            return false
+        }
+        if (captures == null) {
+            return true
+        }
         val failed = if (remembersFailures) BooleanArray(tokens.size * (value.length + 1)) else null
         return step(0, 0, value, captures, failed)
+    }
+
+    /**
+     * Whether [value] matches. A run matches any number of code points; the other tokens match at one position each,
+     * so after a mismatch only the last run needs to take one more code point: an earlier run taking more can only
+     * leave the tokens after it a later start, which the last run already reaches.
+     */
+    @Suppress("ReturnCount")
+    fun accepts(value: String): Boolean {
+        var token = 0
+        var position = 0
+        var lastRun = -1
+        var runEnd = 0
+        while (position < value.length || token < tokens.size) {
+            if (token < tokens.size) {
+                when (val current = tokens[token]) {
+                    is GlobToken.Run -> {
+                        lastRun = token
+                        runEnd = position
+                        token++
+                        continue
+                    }
+
+                    is GlobToken.Literal -> if (current.matchesAt(value, position)) {
+                        position += current.length
+                        token++
+                        continue
+                    }
+
+                    GlobToken.AnyChar -> if (position < value.length) {
+                        position = nextCodePoint(value, position)
+                        token++
+                        continue
+                    }
+                }
+            }
+            if (lastRun < 0 || runEnd >= value.length) {
+                return false
+            }
+            runEnd = nextCodePoint(value, runEnd)
+            position = runEnd
+            token = lastRun + 1
+        }
+        return true
     }
 
     private fun step(

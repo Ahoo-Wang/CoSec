@@ -225,6 +225,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     fun reload(key: SnapshotKey): CompletableFuture<SnapshotEntry<*>> = when (key) {
         SnapshotKey.Policies -> policies.reload(force = true)!!.thenApply<SnapshotEntry<*>> { it }
         is SnapshotKey.App -> withAppSlot(key) { it.reload(force = true) }.thenApply<SnapshotEntry<*>> { it }
+        SnapshotKey.Platform, is SnapshotKey.Tenant -> unsupported(key)
     }
 
     /** Revalidates every installed document with a conditional read, a few at a time. */
@@ -335,7 +336,12 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private fun usableOf(key: SnapshotKey): CompletableFuture<out SnapshotEntry<*>> = when (key) {
         SnapshotKey.Policies -> policies.usable()!!
         is SnapshotKey.App -> withAppSlot(key) { it.usable() }
+        SnapshotKey.Platform, is SnapshotKey.Tenant -> unsupported(key)
     }
+
+    /** This source serves RFC 0003's pair of documents; the platform and tenant documents need their own. */
+    private fun unsupported(key: SnapshotKey): Nothing =
+        throw IllegalArgumentException("[$key] is not one of this source's documents (policies, app).")
 
     private fun installedSlots(): List<Slot<*>> = buildList {
         if (policies.installed != null) add(policies)
@@ -986,6 +992,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 when (key) {
                     SnapshotKey.Policies -> policies.onChanged()
                     is SnapshotKey.App -> apps[key.appId]?.onChanged()
+                    // Not this source's documents: another source is notified of them.
+                    SnapshotKey.Platform, is SnapshotKey.Tenant -> Unit
                 }
             }
         }

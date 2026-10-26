@@ -1,0 +1,74 @@
+{
+  "rules": [
+    "BND-7"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A tenant binding names shared, which both the tenant document (an ALLOW) and the platform (a DENY) define, with different content.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "shared",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "shared",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "g:shared",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "shared"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "AmbiguousPolicy",
+      "policies": [
+        "shared"
+      ]
+    }
+  }
+}

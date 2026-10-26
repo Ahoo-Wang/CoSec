@@ -1,0 +1,45 @@
+{
+  "rules": [
+    "PIP-4"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The membership provider does not answer within its timeout: 503, never no memberships.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "authentication": {
+    "membership": "provider"
+  },
+  "membershipProvider": {
+    "hangs": true
+  },
+  "options": {
+    "membershipTimeoutMillis": 50
+  },
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

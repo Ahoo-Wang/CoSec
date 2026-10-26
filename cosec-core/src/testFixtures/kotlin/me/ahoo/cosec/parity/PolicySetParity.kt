@@ -313,6 +313,7 @@ class LegacyCases(seed: Int, private val brokenEntries: Boolean = true, private 
         val compile: () -> Any = when (key) {
             is SnapshotKey.App -> ({ compiler.app.compile(key, malformed) })
             SnapshotKey.Policies -> ({ compiler.policies.compile(key, malformed) })
+            SnapshotKey.Platform, is SnapshotKey.Tenant -> error("Not a 7.0-shaped document: $key")
         }
         return runCatching(compile).exceptionOrNull()
     }
@@ -424,6 +425,8 @@ object PolicySetParity {
 
                 is SnapshotKey.App -> data.appFailures[key.appId]?.let { Result.failure(it) }
                     ?: Result.success(data.appDocument(key.appId))
+
+                SnapshotKey.Platform, is SnapshotKey.Tenant -> Result.success(null)
             }
         }
 

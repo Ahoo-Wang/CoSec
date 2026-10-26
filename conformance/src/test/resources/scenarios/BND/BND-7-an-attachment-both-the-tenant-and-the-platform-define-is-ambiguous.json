@@ -1,0 +1,72 @@
+{
+  "rules": [
+    "BND-7"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The principal attaches shared, which its tenant document (an ALLOW) and the platform (a DENY) both define, with different content. Anyone may read, but neither policy may silently win.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "shared",
+          "attachable": true,
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "shared",
+            "attachable": true,
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "policies": [
+      "shared"
+    ]
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "AmbiguousPolicy",
+      "policies": [
+        "shared"
+      ]
+    }
+  }
+}

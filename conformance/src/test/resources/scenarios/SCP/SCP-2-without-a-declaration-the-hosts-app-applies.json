@@ -10,7 +10,7 @@
       "order-service": {
         "policies": [
           {
-            "id": "perm-order-service",
+            "id": "perm:order-service/perm-order-service",
             "statements": [
               {
                 "effect": "allow",
@@ -27,7 +27,7 @@
             },
             "app": "order-service",
             "space": "*",
-            "policy": "perm-order-service"
+            "policy": "perm:order-service/perm-order-service"
           }
         ]
       }
@@ -44,7 +44,7 @@
   "expect": {
     "decision": "Permit",
     "by": {
-      "policy": "perm-order-service",
+      "policy": "perm:order-service/perm-order-service",
       "statement": 0,
       "via": {
         "binding": "r:order-service",

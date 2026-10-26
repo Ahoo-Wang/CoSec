@@ -92,9 +92,9 @@ internal object CandidateOrder {
     }
 
     /**
-     * An id both the tenant and the platform define is ambiguous whatever their `attachable` flags: preferring the
-     * tenant's would let it replace a platform DENY, preferring the platform's would let it override the tenant's
-     * (RFC 0007 N2).
+     * An id both the tenant and the platform define resolves only when both have the same content, `attachable`
+     * included; otherwise it is ambiguous: preferring the tenant's would let it replace a platform DENY, preferring the
+     * platform's would let it override the tenant's (RFC 0007 N2, Q15).
      */
     private fun attachments(
         request: FlatRequest,
@@ -107,7 +107,7 @@ internal object CandidateOrder {
             val id = attachments[i].value
             val own = tenant?.policy(id)
             val shared = platform.policy(id)
-            if (own != null && shared != null) {
+            if (own != null && shared != null && !own.sameContent(shared)) {
                 visitor.ambiguous(id)
                 continue
             }
@@ -154,7 +154,7 @@ internal object CandidateOrder {
                 visitor.expired(entry.via)
                 continue
             }
-            if (entry.checksPlatform && platform.policy(entry.policyId) != null) {
+            if (entry.checksPlatform && platform.policy(entry.policyId)?.sameContent(entry.local!!) == false) {
                 visitor.ambiguous(entry.policyId)
                 continue
             }

@@ -77,5 +77,6 @@ class SnapshotCompilation(mapper: ObjectMapper = CoSecJsonSerializer) {
     fun compile(key: SnapshotKey, document: SnapshotDocument): Any = when (key) {
         SnapshotKey.Policies -> compiler.policies.compile(key, document)
         is SnapshotKey.App -> compiler.app.compile(key, document)
+        SnapshotKey.Platform, is SnapshotKey.Tenant -> error("Not a 7.0-shaped document: $key")
     }
 }

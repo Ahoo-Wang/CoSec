@@ -1,0 +1,55 @@
+{
+  "rules": [
+    "BND-7"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The same attachment when only the platform defines shared: it attaches and permits.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "shared",
+          "attachable": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "other",
+            "attachable": true,
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "policies": [
+      "shared"
+    ]
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "shared",
+      "statement": 0,
+      "via": {
+        "attached": "shared"
+      }
+    }
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "$id": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/cosec-binding.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "definitions": {
+    "principalSubject": {
+      "additionalProperties": false,
+      "properties": {
+        "principal": {
+          "examples": [
+            "cosec",
+            "svc-batch"
+          ],
+          "type": "string"
+        },
+        "tenant": {
+          "description": "Required in the platform document; a tenant document's own tenant otherwise.",
+          "examples": [
+            "(platform)",
+            "acme"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "principal"
+      ],
+      "type": "object"
+    },
+    "roleSubject": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "examples": [
+            "editor",
+            "viewer"
+          ],
+          "type": "string"
+        },
+        "tenant": {
+          "description": "Absent: any tenant in an app document, the document's own in a tenant document.",
+          "examples": [
+            "acme"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "role"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "\"[subject] is subject to [policy] in [app] and [space]\" (RFC 0004 §4.2). `*` means any, and only that.",
+  "properties": {
+    "app": {
+      "description": "An id, or `*` for any.",
+      "examples": [
+        "*",
+        "order-service"
+      ],
+      "minLength": 1,
+      "type": "string"
+    },
+    "breakGlass": {
+      "default": false,
+      "description": "A break-glass binding: platform document, platform-tenant principal, expiresAt.",
+      "type": "boolean"
+    },
+    "expiresAt": {
+      "description": "When the binding stops applying. Required for break-glass bindings.",
+      "examples": [
+        "2026-12-31T00:00:00Z"
+      ],
+      "format": "date-time",
+      "type": "string"
+    },
+    "id": {
+      "examples": [
+        "g:deny-ip",
+        "r:editor:read"
+      ],
+      "type": "string"
+    },
+    "policy": {
+      "examples": [
+        "deny-ip",
+        "perm:order-service/read",
+        "cosec:root"
+      ],
+      "type": "string"
+    },
+    "space": {
+      "description": "An id, or `*` for any.",
+      "examples": [
+        "*",
+        "",
+        "team-a"
+      ],
+      "type": "string"
+    },
+    "subject": {
+      "anyOf": [
+        {
+          "description": "Anyone, anonymous principals included.",
+          "enum": [
+            "*"
+          ],
+          "type": "string"
+        },
+        {
+          "$ref": "#/definitions/principalSubject"
+        },
+        {
+          "$ref": "#/definitions/roleSubject"
+        }
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "subject",
+    "app",
+    "space",
+    "policy"
+  ],
+  "title": "CoSec Binding Schema",
+  "type": "object"
+}

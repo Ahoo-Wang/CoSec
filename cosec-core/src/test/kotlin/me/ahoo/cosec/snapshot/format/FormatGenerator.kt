@@ -31,7 +31,7 @@ import kotlin.random.Random
 class FormatGenerator(private val random: Random, private val maxDepth: Int = 4) {
     private val nodes = JsonNodeFactory.instance
 
-    /** The concrete [ObjectType], [ArrayType] or [MapType] of each generated container. */
+    /** The concrete [ObjectType], [ArrayType], [TupleType] or [MapType] of each generated container. */
     val containers: MutableMap<JsonNode, FormatType> = IdentityHashMap()
 
     /** The nearest named definition of each generated container, such as `condition.schema.json#eqConditionMatcher`. */
@@ -43,16 +43,20 @@ class FormatGenerator(private val random: Random, private val maxDepth: Int = 4)
             is Ref -> generate(DocumentFormats.resolve(type), type.toString(), depth + 1)
             is AnyOf -> generate(if (exhausted) type.variants.first() else type.variants.random(random), name, depth)
             is StringType, is BooleanType, is IntegerType, is NumberType -> scalar(type)
-            is ArrayType -> array(type, name, depth, exhausted)
+            is ArrayType, is TupleType -> array(type, name, depth, exhausted)
             is MapType -> map(type, name, depth)
             is ObjectType -> obj(type, name, depth, exhausted)
         }.also {
-            if (type is ArrayType || type is MapType || type is ObjectType) {
+            if (isContainer(type)) {
                 containers[it] = type
                 names[it] = name
             }
         }
     }
+
+    /** The types this generator records: those that build an object or an array themselves. */
+    private fun isContainer(type: FormatType): Boolean =
+        type is ArrayType || type is TupleType || type is MapType || type is ObjectType
 
     private fun scalar(type: FormatType): JsonNode = when (type) {
         is StringType -> nodes.stringNode(string(type))
@@ -72,7 +76,11 @@ class FormatGenerator(private val random: Random, private val maxDepth: Int = 4)
         return type.examples.randomOrNull(random) ?: "s${random.nextInt(100)}"
     }
 
-    private fun array(type: ArrayType, name: String, depth: Int, exhausted: Boolean): ArrayNode {
+    private fun array(type: FormatType, name: String, depth: Int, exhausted: Boolean): ArrayNode {
+        if (type is TupleType) {
+            return nodes.arrayNode().also { tuple -> type.items.forEach { tuple.add(generate(it, name, depth + 1)) } }
+        }
+        type as ArrayType
         val min = type.minItems ?: 0
         val size = if (exhausted) min else random.nextInt(min, min + 3)
         val array = nodes.arrayNode()

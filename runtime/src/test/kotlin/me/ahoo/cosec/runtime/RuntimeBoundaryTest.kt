@@ -62,8 +62,6 @@ class RuntimeBoundaryTest {
         .that().resideInAPackage("$RUNTIME..")
         .should().dependOnClassesThat().resideInAnyPackage(*HOST_PACKAGES)
         .because("adapters bridge to their host; runtime/ only sees HttpFacts and its own SPIs (RFC 0006 §5.1, §7.3)")
-        // runtime/ has no classes until RFC 0006 PR-2.
-        .allowEmptyShould(true)
 
     /**
      * RFC 0006 §7.1 and §7.3: `runBlocking` is the WebMvc adapter's bridge, and CoSec uses neither `GlobalScope` nor
@@ -79,8 +77,6 @@ class RuntimeBoundaryTest {
         .orShould().callMethodWhere(target(owner(name("kotlinx.coroutines.Dispatchers"))).and(target(name("getIO"))))
         .orShould().dependOnClassesThat().haveFullyQualifiedName("kotlinx.coroutines.GlobalScope")
         .because("only the WebMvc adapter blocks, and runtime/ owns the scope of its background work (RFC 0006 §7.1)")
-        // runtime/ has no classes until RFC 0006 PR-2.
-        .allowEmptyShould(true)
 
     /**
      * Every public interface of `runtime/` is a data-plane SPI, so new ones are covered without editing this list.
@@ -106,8 +102,6 @@ class RuntimeBoundaryTest {
         .that().resideInAPackage("$RUNTIME..")
         .should().callMethodWhere(target(name("createFailure")).and(target(owner(name("kotlin.ResultKt")))))
         .because("runCatching swallows CancellationException (RFC 0006 §7.4)")
-        // runtime/ has no classes until RFC 0006 PR-2.
-        .allowEmptyShould(true)
 
     private fun notMentionReactor() = object : ArchCondition<JavaCodeUnit>(
         "not mention a Reactor type in its signature"

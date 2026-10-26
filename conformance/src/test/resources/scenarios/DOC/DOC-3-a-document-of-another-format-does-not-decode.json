@@ -1,0 +1,37 @@
+{
+  "rules": [
+    "DOC-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The platform document is written in RFC 0003's schema 1: it does not decode, so nothing is decided from it.",
+  "documents": {
+    "platform": {
+      "schema": 1,
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "schema 1 is not this version's document format"
+  }
+}

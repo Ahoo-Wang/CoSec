@@ -133,12 +133,18 @@ sealed interface SnapshotContent {
             } catch (error: JacksonException) {
                 throw SnapshotFormatException("Snapshot document [$key] is not valid JSON.", error)
             }
-            return when (key) {
+            return content(key, sections)
+        }
+
+        private fun content(key: SnapshotKey, sections: Map<String, Any>): SnapshotContent =
+            when (key) {
                 SnapshotKey.Policies -> {
                     requireSections(key, sections.keys, setOf(POLICIES))
                     Policies(policiesOf(key, sections.getValue(POLICIES)))
                 }
 
+                // RFC 0004's documents are written by the control plane (RFC 0007 PR-4), not by this publisher.
+                SnapshotKey.Platform, is SnapshotKey.Tenant -> malformed(key, "is not a document this publisher writes")
                 is SnapshotKey.App -> {
                     requireSections(key, sections.keys, setOf(APP_PERMISSION, GRANTS))
                     App(
@@ -148,7 +154,6 @@ sealed interface SnapshotContent {
                     )
                 }
             }
-        }
 
         /** One stored value: its tree, to check it, and its bytes, to write it back. */
         private class Stored(val tree: JsonNode, val raw: JsonNode)

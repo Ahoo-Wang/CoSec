@@ -26,14 +26,21 @@
       "source": "RFC 0004 §4.6 (review of #1015); RFC 0006 §6.1",
       "statement": "An anonymous request that declares CoSec-Space-Id is answered 401.",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-2"
+      "guards": [
+        "runtime:PipelineTest#scopeRejectedForAnAnonymousPrincipal"
+      ],
+      "pending": null
     },
     {
       "id": "SCP-4",
       "source": "RFC 0008 §3.2 (review of #1015); RFC 0006 §6.1",
       "statement": "When the header and the query parameter of the same CoSec-* parameter differ, the request cannot be read unambiguously and is answered 400.",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-2"
+      "guards": [
+        "runtime:CoSecParametersTest#differentHeaderAndQueryValuesAreAmbiguous",
+        "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest"
+      ],
+      "pending": null
     },
     {
       "id": "SCP-5",
@@ -42,9 +49,10 @@
       "level": "build",
       "guards": [
         "model:ScopeConstructionTest#onlyTheResolverConstructsScopes",
-        "model:ScopeConstructionTest#scopeIsNotADataClass"
+        "model:ScopeConstructionTest#scopeIsNotADataClass",
+        "cosec-core:PolicyDocumentCodecTest#a scope is never decoded"
       ],
-      "pending": "RFC 0004 PR-4"
+      "pending": null
     },
     {
       "id": "SCP-6",
@@ -173,16 +181,16 @@
     {
       "id": "BND-7",
       "source": "RFC 0004 §4.4 (#1029 review)",
-      "statement": "When an attached or bound policy id names both a policy of the principal's tenant document and a platform policy, the request is Indeterminate(AmbiguousPolicy), unless a DENY matches; neither policy silently wins.",
+      "statement": "When an attached or bound policy id names both a policy of the principal's tenant document and a platform policy with different content, the request is Indeterminate(AmbiguousPolicy), unless a DENY matches; neither policy silently wins. The same content resolves (RFC 0007 N2).",
       "level": "engine",
-      "pending": "RFC 0004 PR-2 round-1 review fixes (#1029 review)"
+      "pending": null
     },
     {
       "id": "BND-8",
       "source": "RFC 0004 §4.2, §7.1 (#1029 review)",
       "statement": "A binding whose shape the candidate order can never reach (a subject or scope no request of that document can match) does not compile, so no DENY is lost silently.",
       "level": "engine",
-      "pending": "RFC 0004 PR-2 round-1 review fixes (#1029 review)"
+      "pending": null
     },
     {
       "id": "BLK-1",
@@ -219,7 +227,7 @@
       "source": "RFC 0004 §4.8 (#1029 review)",
       "statement": "The break-glass root binding applies only to principals of the platform tenant; a root binding of any other tenant does not compile.",
       "level": "engine",
-      "pending": "RFC 0004 PR-2 round-1 review fixes (#1029 review)"
+      "pending": null
     },
     {
       "id": "BRK-3",
@@ -292,13 +300,17 @@
     {
       "id": "ALG-7",
       "source": "RFC 0004 §6.1",
-      "statement": "A policy's condition is evaluated at most once per evaluation, and only when one of its statements is a candidate.",
+      "statement": "A policy's condition is evaluated at most once per evaluation, and only once one of its statements matched its action and resource (or failed matching the resource); untraced, nothing is evaluated after the statement that decided.",
       "level": "engine",
       "guards": [
         "engine:FlatEngineTest#a condition runs once per evaluation, also when policies share it",
-        "engine:FlatEngineTest#a condition is not evaluated for a pass the policy has no statements in"
+        "engine:FlatEngineTest#a condition is not evaluated when no statement of the policy matches the action and resource"
       ],
-      "pending": "RFC 0005 PR-4"
+      "pending": null,
+      "properties": [
+        "engine:IndexPropertyTest#ALG-7 a policy condition runs at most once, and only for a statement that matched its action and resource",
+        "engine:IndexPropertyTest#ALG-7 untraced, nothing is evaluated after the statement that decided"
+      ]
     },
     {
       "id": "ALG-8",
@@ -325,7 +337,7 @@
       "source": "RFC 0004 §7.2",
       "statement": "A tenant document references only its own tenant's or the platform layer's policies; anything else does not compile.",
       "level": "engine",
-      "pending": "RFC 0004 PR-4"
+      "pending": null
     },
     {
       "id": "TNT-3",
@@ -339,21 +351,24 @@
       "source": "RFC 0004 §7.4; RFC 0003 §4.4",
       "statement": "Dangling and cross-tenant references do not compile; a request that reaches a Broken entry on the data plane fails closed (F4, F5).",
       "level": "engine",
-      "pending": "RFC 0004 PR-4"
+      "pending": null
     },
     {
       "id": "DOC-2",
       "source": "RFC 0008 §3.2 (review of #1015)",
       "statement": "The codecs neither encode nor decode Match.Exactly(\"*\"): * only ever means Match.Any.",
       "level": "build",
-      "pending": "RFC 0004 PR-4"
+      "pending": null,
+      "guards": [
+        "cosec-core:PolicyDocumentCodecTest#the wildcard is only ever Any"
+      ]
     },
     {
       "id": "DOC-3",
       "source": "RFC 0004 §7.1; RFC 0003 F3",
       "statement": "A document whose schema is not this version's format fails to decode, and the requests that need it fail closed.",
       "level": "engine",
-      "pending": "RFC 0004 PR-4"
+      "pending": null
     },
     {
       "id": "SNP-1",
@@ -467,7 +482,12 @@
       "source": "RFC 0005 §6.3",
       "statement": "The candidates the index yields are a superset of the statements a brute-force match finds (I1, I2).",
       "level": "engine",
-      "pending": "RFC 0005 PR-4"
+      "pending": null,
+      "properties": [
+        "engine:IndexPropertyTest#I1 the index never leaves out a statement that can match",
+        "engine:IndexPropertyTest#I1 the decision is that of a scan without the index, DENYs first",
+        "engine:IndexPropertyTest#I2 index parameters never change the decision"
+      ]
     },
     {
       "id": "PIP-1",
@@ -481,21 +501,49 @@
       "source": "RFC 0006 §6.1",
       "statement": "Indeterminate is always 503; 500 is kept for unmodelled exceptions.",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-2"
+      "properties": [
+        "runtime:ProblemBodyPropertyTest#problemBodiesHoldOnlyTheAllowedMembers"
+      ],
+      "guards": [
+        "runtime:PipelineTest#indeterminateDecisionIs503",
+        "runtime:PipelineTest#unmodelledExceptionIs500",
+        "runtime:PipelineTest#authenticatorUnavailableIs503"
+      ],
+      "pending": null
     },
     {
       "id": "PIP-3",
       "source": "RFC 0006 §7.4",
       "statement": "External cancellation never produces an Outcome, and the downstream is never called.",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-2"
+      "guards": [
+        "runtime:PipelineCancellationTest"
+      ],
+      "pending": null
     },
     {
       "id": "PIP-4",
       "source": "RFC 0006 §10.2",
       "statement": "No failure or timeout of any SPI produces a Permit (P13).",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-2"
+      "guards": [
+        "runtime:PipelineTest#failingLateOrWrongMembershipsAre503",
+        "runtime:PipelineTest#snapshotSourceFailureIs503",
+        "runtime:PipelineTest#authenticatorTimeoutIs503"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-5",
+      "source": "RFC 0006 §5.3.1 (amended 2026-10-27, review of #1044)",
+      "statement": "A path with a dot segment after one decoding, in any encoding (including after removing path parameters, with an encoded ';' and with '\\' as a separator), or longer than 2048 characters, or with a segment longer than 256 characters, is answered 400 before authentication.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:PathNormalizerTest#ambiguousPathsAreRejected",
+        "runtime:PathNormalizerTest#longPathsAndSegmentsAreRejected",
+        "runtime:PipelineTest#ambiguousPathIsInvalidRequestBeforeAuthentication"
+      ],
+      "pending": null
     },
     {
       "id": "ATR-1",

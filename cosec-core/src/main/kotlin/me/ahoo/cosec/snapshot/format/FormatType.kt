@@ -58,6 +58,13 @@ class ArrayType(
     override val description: String? = null,
 ) : FormatType
 
+/** An array of exactly [items].size values, each of its own type: the `[attribute, value]` operands of a condition. */
+class TupleType(val items: List<FormatType>, override val description: String? = null) : FormatType {
+    init {
+        require(items.isNotEmpty()) { "A tuple has at least one item." }
+    }
+}
+
 /** An object whose keys are data, such as the grants of an app document keyed by role. */
 class MapType(
     val keys: StringType,

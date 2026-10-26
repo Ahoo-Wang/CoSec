@@ -20,6 +20,9 @@ package me.ahoo.cosec.snapshot.format
  * `./gradlew :cosec-core:generateSchemas` and commit the files. `verifySchemas` (part of `check`) fails when they are
  * stale, and `SchemaConformanceTest` fails when the descriptor and the codecs disagree.
  *
+ * [problemSchema] is the one format CoSec writes rather than reads: `cosec-runtime`'s `ProblemSchemaTest` binds it to the
+ * problem encoder instead.
+ *
  * The descriptor is closed (no unknown fields) where the codecs merely ignore what they do not read: the codecs'
  * known leniencies are listed in `SchemaConformanceTest`, and editors should flag a typo rather than drop it silently.
  */
@@ -31,6 +34,9 @@ object DocumentFormats {
     const val APP_PERMISSION = "cosec-app-permission"
     const val RATE_LIMIT_RULE = "rate-limit-rule"
     const val SNAPSHOT_DOCUMENT = "cosec-snapshot-document"
+    const val BINDING = "cosec-binding"
+    const val CATALOG = "cosec-catalog"
+    const val PROBLEM = "problem"
 
     /** Where the files are published; their `$id`s. */
     const val BASE_URI = "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/"
@@ -389,17 +395,28 @@ object DocumentFormats {
         ),
     )
 
+    /** The 8.0 binding and catalog files, and the definitions of `schema: 2` documents ([PolicyDocumentFormats]). */
+    val bindingSchema: SchemaFile get() = PolicyDocumentFormats.bindingSchema
+    val catalogSchema: SchemaFile get() = PolicyDocumentFormats.catalogSchema
+
     val snapshotDocumentSchema = SchemaFile(
         name = SNAPSHOT_DOCUMENT,
         title = "CoSec Snapshot Document Schema",
-        description = "The body of a stored snapshot document (RFC 0003): the policies document or an app's document. " +
-            "Ids must be unique and an app document's app permission must name the app it is stored under.",
-        root = AnyOf(listOf(ref(SNAPSHOT_DOCUMENT, "policiesDocument"), ref(SNAPSHOT_DOCUMENT, "appDocument"))),
-        definitions = mapOf(
+        description = "The body of a stored snapshot document: a platform, app or tenant document (RFC 0004 §7.1, " +
+            "schema 2), or until the switch RFC 0003's policies document or app document (schema 1). Ids must be unique.",
+        root = AnyOf(
+            listOf(
+                ref(SNAPSHOT_DOCUMENT, "document"),
+                ref(SNAPSHOT_DOCUMENT, "appDocument"),
+                ref(SNAPSHOT_DOCUMENT, "policiesDocument"),
+                ref(SNAPSHOT_DOCUMENT, "legacyAppDocument"),
+            ),
+        ),
+        definitions = PolicyDocumentFormats.documentDefinitions + mapOf(
             "policiesDocument" to ObjectType(
                 headerFields + Field("policies", ArrayType(ref(POLICY)), required = true),
             ),
-            "appDocument" to ObjectType(
+            "legacyAppDocument" to ObjectType(
                 headerFields + listOf(
                     Field("appPermission", ref(APP_PERMISSION), required = true),
                     Field(
@@ -415,6 +432,59 @@ object DocumentFormats {
         ),
     )
 
+    /**
+     * The problem vocabulary (RFC 0006 §6.1, Q27) as (slug, title, status). The code is the slug in UPPER_SNAKE case.
+     * `cosec-runtime`'s `ProblemType` holds the same rows; its `ProblemSchemaTest` keeps the two equal.
+     */
+    val problemTypes: List<Triple<String, String, Int>> = listOf(
+        Triple("invalid-request", "Invalid Request", 400),
+        Triple("unauthorized", "Unauthorized", 401),
+        Triple("token-invalid", "Token Invalid", 401),
+        Triple("token-expired", "Token Expired", 401),
+        Triple("token-revoked", "Token Revoked", 401),
+        Triple("forbidden", "Forbidden", 403),
+        Triple("scope-rejected", "Scope Rejected", 403),
+        Triple("too-many-requests", "Too Many Requests", 429),
+        Triple("unavailable", "Service Unavailable", 503),
+        Triple("internal-error", "Internal Server Error", 500),
+    )
+
+    /** Each problem `type` URI is this prefix and a slug; it resolves to the troubleshooting anchor of that name. */
+    const val PROBLEM_TYPE_PREFIX = "https://cosec.ahoo.me/problems/"
+
+    val problemSchema = SchemaFile(
+        name = PROBLEM,
+        title = "CoSec Problem Schema",
+        description = "The body of every error response CoSec writes (RFC 9457, `application/problem+json`): one of the " +
+            "problem types, with exactly these members. `requestId` equals the `CoSec-Request-Id` response header; " +
+            "`traceId` is present only when tracing is on.",
+        root = AnyOf(problemTypes.map { (slug) -> ref(PROBLEM, slug) }),
+        definitions = problemTypes.associate { (slug, title, status) ->
+            slug to ObjectType(
+                listOf(
+                    Field("type", StringType(enum = listOf(PROBLEM_TYPE_PREFIX + slug)), required = true),
+                    Field("title", StringType(enum = listOf(title)), required = true),
+                    Field("status", IntegerType(const = status.toLong()), required = true),
+                    Field(
+                        "code",
+                        StringType(enum = listOf(slug.uppercase().replace('-', '_'))),
+                        required = true,
+                        description = "Stable, one-to-one with `type`.",
+                    ),
+                    Field("requestId", ref(PROBLEM, "requestId"), required = true),
+                    Field("traceId", ref(PROBLEM, "traceId")),
+                ),
+            )
+        } + mapOf(
+            "requestId" to StringType(
+                minLength = 1,
+                examples = listOf("0TEC7Hw00001zR0"),
+                description = "Finds the decision in audit and `explain`.",
+            ),
+            "traceId" to StringType(minLength = 1, examples = listOf("4bf92f3577b34da6a3ce929d0e0e4736")),
+        ),
+    )
+
     /** Every generated file, in generation order. */
     val files: List<SchemaFile> =
         listOf(
@@ -425,6 +495,9 @@ object DocumentFormats {
             appPermissionSchema,
             rateLimitRuleSchema,
             snapshotDocumentSchema,
+            bindingSchema,
+            catalogSchema,
+            problemSchema,
         )
 
     fun file(fileName: String): SchemaFile = files.first { it.fileName == fileName }

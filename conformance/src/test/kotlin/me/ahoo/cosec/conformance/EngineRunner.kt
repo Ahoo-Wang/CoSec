@@ -81,7 +81,7 @@ import me.ahoo.cosec.model.Scope as DeclaredRequestScope
  * ```
  */
 class EngineRunner(
-    private val compiler: SnapshotCompiler = AdaptedSnapshotCompiler,
+    private val compiler: SnapshotCompiler = DocumentSnapshotCompiler,
     private val engine: FlatEngine = CoSecFlatEngine,
 ) : ScenarioRunner {
     override fun run(scenario: Scenario): Outcome {
@@ -201,7 +201,7 @@ class EngineRunner(
             environment = Environment(ip.orEmpty(), "", device.orEmpty(), blocked),
             host = facts,
         )
-        return FlatRequest(authz, scope, memberships, time)
+        return FlatRequest(authz, scope, memberships, time, facts.host)
     }
 
     private fun resource(node: JsonNode?): Resource {

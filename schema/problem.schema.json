@@ -1,0 +1,475 @@
+{
+  "$id": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/problem.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "anyOf": [
+    {
+      "$ref": "#/definitions/invalid-request"
+    },
+    {
+      "$ref": "#/definitions/unauthorized"
+    },
+    {
+      "$ref": "#/definitions/token-invalid"
+    },
+    {
+      "$ref": "#/definitions/token-expired"
+    },
+    {
+      "$ref": "#/definitions/token-revoked"
+    },
+    {
+      "$ref": "#/definitions/forbidden"
+    },
+    {
+      "$ref": "#/definitions/scope-rejected"
+    },
+    {
+      "$ref": "#/definitions/too-many-requests"
+    },
+    {
+      "$ref": "#/definitions/unavailable"
+    },
+    {
+      "$ref": "#/definitions/internal-error"
+    }
+  ],
+  "definitions": {
+    "forbidden": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "description": "Stable, one-to-one with `type`.",
+          "enum": [
+            "FORBIDDEN"
+          ],
+          "type": "string"
+        },
+        "requestId": {
+          "$ref": "#/definitions/requestId"
+        },
+        "status": {
+          "const": 403,
+          "type": "integer"
+        },
+        "title": {
+          "enum": [
+            "Forbidden"
+          ],
+          "type": "string"
+        },
+        "traceId": {
+          "$ref": "#/definitions/traceId"
+        },
+        "type": {
+          "enum": [
+            "https://cosec.ahoo.me/problems/forbidden"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "requestId"
+      ],
+      "type": "object"
+    },
+    "internal-error": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "description": "Stable, one-to-one with `type`.",
+          "enum": [
+            "INTERNAL_ERROR"
+          ],
+          "type": "string"
+        },
+        "requestId": {
+          "$ref": "#/definitions/requestId"
+        },
+        "status": {
+          "const": 500,
+          "type": "integer"
+        },
+        "title": {
+          "enum": [
+            "Internal Server Error"
+          ],
+          "type": "string"
+        },
+        "traceId": {
+          "$ref": "#/definitions/traceId"
+        },
+        "type": {
+          "enum": [
+            "https://cosec.ahoo.me/problems/internal-error"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "requestId"
+      ],
+      "type": "object"
+    },
+    "invalid-request": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "description": "Stable, one-to-one with `type`.",
+          "enum": [
+            "INVALID_REQUEST"
+          ],
+          "type": "string"
+        },
+        "requestId": {
+          "$ref": "#/definitions/requestId"
+        },
+        "status": {
+          "const": 400,
+          "type": "integer"
+        },
+        "title": {
+          "enum": [
+            "Invalid Request"
+          ],
+          "type": "string"
+        },
+        "traceId": {
+          "$ref": "#/definitions/traceId"
+        },
+        "type": {
+          "enum": [
+            "https://cosec.ahoo.me/problems/invalid-request"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "requestId"
+      ],
+      "type": "object"
+    },
+    "requestId": {
+      "description": "Finds the decision in audit and `explain`.",
+      "examples": [
+        "0TEC7Hw00001zR0"
+      ],
+      "minLength": 1,
+      "type": "string"
+    },
+    "scope-rejected": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "description": "Stable, one-to-one with `type`.",
+          "enum": [
+            "SCOPE_REJECTED"
+          ],
+          "type": "string"
+        },
+        "requestId": {
+          "$ref": "#/definitions/requestId"
+        },
+        "status": {
+          "const": 403,
+          "type": "integer"
+        },
+        "title": {
+          "enum": [
+            "Scope Rejected"
+          ],
+          "type": "string"
+        },
+        "traceId": {
+          "$ref": "#/definitions/traceId"
+        },
+        "type": {
+          "enum": [
+            "https://cosec.ahoo.me/problems/scope-rejected"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "requestId"
+      ],
+      "type": "object"
+    },
+    "token-expired": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "description": "Stable, one-to-one with `type`.",
+          "enum": [
+            "TOKEN_EXPIRED"
+          ],
+          "type": "string"
+        },
+        "requestId": {
+          "$ref": "#/definitions/requestId"
+        },
+        "status": {
+          "const": 401,
+          "type": "integer"
+        },
+        "title": {
+          "enum": [
+            "Token Expired"
+          ],
+          "type": "string"
+        },
+        "traceId": {
+          "$ref": "#/definitions/traceId"
+        },
+        "type": {
+          "enum": [
+            "https://cosec.ahoo.me/problems/token-expired"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "requestId"
+      ],
+      "type": "object"
+    },
+    "token-invalid": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "description": "Stable, one-to-one with `type`.",
+          "enum": [
+            "TOKEN_INVALID"
+          ],
+          "type": "string"
+        },
+        "requestId": {
+          "$ref": "#/definitions/requestId"
+        },
+        "status": {
+          "const": 401,
+          "type": "integer"
+        },
+        "title": {
+          "enum": [
+            "Token Invalid"
+          ],
+          "type": "string"
+        },
+        "traceId": {
+          "$ref": "#/definitions/traceId"
+        },
+        "type": {
+          "enum": [
+            "https://cosec.ahoo.me/problems/token-invalid"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "requestId"
+      ],
+      "type": "object"
+    },
+    "token-revoked": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "description": "Stable, one-to-one with `type`.",
+          "enum": [
+            "TOKEN_REVOKED"
+          ],
+          "type": "string"
+        },
+        "requestId": {
+          "$ref": "#/definitions/requestId"
+        },
+        "status": {
+          "const": 401,
+          "type": "integer"
+        },
+        "title": {
+          "enum": [
+            "Token Revoked"
+          ],
+          "type": "string"
+        },
+        "traceId": {
+          "$ref": "#/definitions/traceId"
+        },
+        "type": {
+          "enum": [
+            "https://cosec.ahoo.me/problems/token-revoked"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "requestId"
+      ],
+      "type": "object"
+    },
+    "too-many-requests": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "description": "Stable, one-to-one with `type`.",
+          "enum": [
+            "TOO_MANY_REQUESTS"
+          ],
+          "type": "string"
+        },
+        "requestId": {
+          "$ref": "#/definitions/requestId"
+        },
+        "status": {
+          "const": 429,
+          "type": "integer"
+        },
+        "title": {
+          "enum": [
+            "Too Many Requests"
+          ],
+          "type": "string"
+        },
+        "traceId": {
+          "$ref": "#/definitions/traceId"
+        },
+        "type": {
+          "enum": [
+            "https://cosec.ahoo.me/problems/too-many-requests"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "requestId"
+      ],
+      "type": "object"
+    },
+    "traceId": {
+      "examples": [
+        "4bf92f3577b34da6a3ce929d0e0e4736"
+      ],
+      "minLength": 1,
+      "type": "string"
+    },
+    "unauthorized": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "description": "Stable, one-to-one with `type`.",
+          "enum": [
+            "UNAUTHORIZED"
+          ],
+          "type": "string"
+        },
+        "requestId": {
+          "$ref": "#/definitions/requestId"
+        },
+        "status": {
+          "const": 401,
+          "type": "integer"
+        },
+        "title": {
+          "enum": [
+            "Unauthorized"
+          ],
+          "type": "string"
+        },
+        "traceId": {
+          "$ref": "#/definitions/traceId"
+        },
+        "type": {
+          "enum": [
+            "https://cosec.ahoo.me/problems/unauthorized"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "requestId"
+      ],
+      "type": "object"
+    },
+    "unavailable": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "description": "Stable, one-to-one with `type`.",
+          "enum": [
+            "UNAVAILABLE"
+          ],
+          "type": "string"
+        },
+        "requestId": {
+          "$ref": "#/definitions/requestId"
+        },
+        "status": {
+          "const": 503,
+          "type": "integer"
+        },
+        "title": {
+          "enum": [
+            "Service Unavailable"
+          ],
+          "type": "string"
+        },
+        "traceId": {
+          "$ref": "#/definitions/traceId"
+        },
+        "type": {
+          "enum": [
+            "https://cosec.ahoo.me/problems/unavailable"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "requestId"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "The body of every error response CoSec writes (RFC 9457, `application/problem+json`): one of the problem types, with exactly these members. `requestId` equals the `CoSec-Request-Id` response header; `traceId` is present only when tracing is on.",
+  "title": "CoSec Problem Schema"
+}

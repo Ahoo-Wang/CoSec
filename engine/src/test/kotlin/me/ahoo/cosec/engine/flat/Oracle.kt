@@ -14,12 +14,9 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.engine.GuardBehavior
-import me.ahoo.cosec.engine.Rule
 import me.ahoo.cosec.engine.RuleBehavior
-import me.ahoo.cosec.engine.RuleMatch
-import me.ahoo.cosec.engine.TestGuard
-import me.ahoo.cosec.engine.TestRule
 import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.SubjectRef
@@ -31,8 +28,11 @@ import me.ahoo.cosec.model.decision.StatementRef
 
 /**
  * RFC 0004 §4.2 (`appliesTo`), §6.3 (candidate order) and §6.1 (the flat algorithm) transcribed over the raw bindings
- * of a [FlatCase], without the index, and reading the test matchers' behaviors instead of calling them. Policy ids
- * resolve by RFC 0007 §3.1 N2: an id the tenant and the platform both define is ambiguous, whatever else is true.
+ * of a [FlatCase], without the index, and reading the fixture statements' behaviors instead of evaluating them. A
+ * statement matches when its action does, then the policy condition, then its condition (RFC 0005 §6.1): a policy
+ * condition is reached only through a statement whose action matches. Policy ids resolve by RFC 0007 §3.1 N2: an id
+ * the tenant and the platform both define is ambiguous, whatever else is true, unless both have the same content (then
+ * it resolves to the tenant's copy).
  */
 object Oracle {
     class Enumeration(
@@ -83,7 +83,7 @@ object Oracle {
                     continue
                 }
                 val id = binding.policy.value
-                if (kind == DocumentKind.TENANT && document.defines(id) && case.platform.defines(id)) {
+                if (kind == DocumentKind.TENANT && differs(document.find(id), case.platform.find(id))) {
                     ambiguous += id
                     continue
                 }
@@ -96,11 +96,15 @@ object Oracle {
             }
         }
 
+        /** Both layers define the id, with different content (RFC 0007 N2). */
+        private fun differs(tenant: CompiledPolicy?, platform: CompiledPolicy?): Boolean =
+            tenant != null && platform != null && !tenant.sameContent(platform)
+
         fun attach(tenant: RawDocument?, id: PolicyId) {
             val inTenant = tenant?.find(id.value)
             val inPlatform = case.platform.find(id.value)
             when {
-                inTenant != null && inPlatform != null -> ambiguous += id.value
+                differs(inTenant, inPlatform) -> ambiguous += id.value
                 inTenant == null && inPlatform == null -> missing += id.value
                 else -> {
                     val policy = checkNotNull(inTenant ?: inPlatform)
@@ -136,34 +140,79 @@ object Oracle {
         }
     }
 
-    private fun behavior(rule: Rule, case: FlatCase): RuleBehavior =
-        when {
-            rule is TestRule -> rule.behavior
-            rule.match(case.request.request) == RuleMatch.MATCHED -> RuleBehavior.MATCH
-            else -> RuleBehavior.ACTION_MISS
-        }
+    /** A statement of a candidate, as the oracle reads it. */
+    private class Spec(val index: Int, val effect: Effect, val behavior: RuleBehavior)
 
-    private fun ref(candidate: Candidate, statement: Rule) =
-        StatementRef.Policy(PolicyId(candidate.policy.id), statement.index, statement.name, candidate.via)
+    private fun statements(case: FlatCase, policy: CompiledPolicy): List<Spec> {
+        val spec = case.fixture.spec(policy)
+        if (spec != null) {
+            return spec.statements.mapIndexed { i, (effect, behavior) -> Spec(i, effect, behavior) }
+        }
+        return when (policy) {
+            BuiltinPolicies.blacklist -> {
+                val behavior = if (case.request.request.environment.blocked) RuleBehavior.MATCH else RuleBehavior.CONDITION_MISS
+                listOf(Spec(0, Effect.DENY, behavior))
+            }
+
+            BuiltinPolicies.root -> listOf(Spec(0, Effect.ALLOW, RuleBehavior.MATCH))
+            else -> error("Unknown policy ${policy.id}")
+        }
+    }
+
+    private fun ref(candidate: Candidate, statement: Spec) =
+        StatementRef.Policy(
+            PolicyId(candidate.policy.id),
+            statement.index,
+            candidate.policy.statements[statement.index].name,
+            candidate.via
+        )
+
+    /** The first statement of [effect] that matches, the first error, or null; errors only for a DENY. */
+    private sealed interface Outcome {
+        class Matched(val ref: StatementRef.Policy) : Outcome
+
+        class Failed(val cause: Cause.MatcherFailed) : Outcome
+    }
+
+    private fun evaluate(case: FlatCase, candidate: Candidate, effect: Effect): List<Outcome> {
+        val guard = case.fixture.spec(candidate.policy)?.guard
+        val outcomes = mutableListOf<Outcome>()
+        for (statement in statements(case, candidate.policy).filter { it.effect == effect }) {
+            if (statement.behavior == RuleBehavior.ACTION_MISS) continue
+            when (guard?.behavior) {
+                GuardBehavior.MISS -> return outcomes
+                GuardBehavior.THROW -> {
+                    outcomes += Outcome.Failed(Cause.MatcherFailed(ref(candidate, statement), true, guard.error))
+                    return outcomes
+                }
+
+                else -> Unit
+            }
+            when (statement.behavior) {
+                RuleBehavior.MATCH -> {
+                    outcomes += Outcome.Matched(ref(candidate, statement))
+                    return outcomes
+                }
+
+                RuleBehavior.THROW -> {
+                    val error = case.fixture.error(candidate.policy, candidate.policy.statements[statement.index].name)
+                    outcomes += Outcome.Failed(Cause.MatcherFailed(ref(candidate, statement), false, error))
+                }
+
+                else -> Unit
+            }
+        }
+        return outcomes
+    }
 
     /** The DENY pass: a matched DENY, else the first error, else null. */
     private fun denyPass(case: FlatCase, candidates: List<Candidate>): Decision? {
         var error: Cause.MatcherFailed? = null
         for (candidate in candidates) {
-            val denies = candidate.policy.denies
-            val guard = candidate.policy.guard as TestGuard?
-            if (denies.isEmpty() || guard?.behavior == GuardBehavior.MISS) continue
-            if (guard?.behavior == GuardBehavior.THROW) {
-                error = error ?: Cause.MatcherFailed(ref(candidate, denies[0]), true, guard.error)
-                continue
-            }
-            for (statement in denies) {
-                when (behavior(statement, case)) {
-                    RuleBehavior.MATCH -> return Decision.Deny(ref(candidate, statement))
-                    RuleBehavior.THROW ->
-                        error = error ?: Cause.MatcherFailed(ref(candidate, statement), false, (statement as TestRule).error)
-
-                    else -> Unit
+            for (outcome in evaluate(case, candidate, Effect.DENY)) {
+                when (outcome) {
+                    is Outcome.Matched -> return Decision.Deny(outcome.ref)
+                    is Outcome.Failed -> error = error ?: outcome.cause
                 }
             }
         }
@@ -189,10 +238,8 @@ object Oracle {
         denyPass(case, enumeration.candidates)?.let { return it }
         unresolved(case, enumeration.missing, enumeration.ambiguous)?.let { return Decision.Indeterminate(it) }
         for (candidate in enumeration.candidates) {
-            val guard = candidate.policy.guard as TestGuard?
-            if (guard != null && guard.behavior != GuardBehavior.MATCH) continue
-            val match = candidate.policy.allows.firstOrNull { behavior(it, case) == RuleBehavior.MATCH }
-            if (match != null) return Decision.Permit(ref(candidate, match))
+            val match = evaluate(case, candidate, Effect.ALLOW).filterIsInstance<Outcome.Matched>().firstOrNull()
+            if (match != null) return Decision.Permit(match.ref)
         }
         return Decision.Deny(null)
     }

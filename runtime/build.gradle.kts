@@ -19,4 +19,11 @@ dependencies {
     api("org.jetbrains.kotlinx:kotlinx-coroutines-core")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
     testImplementation("com.tngtech.archunit:archunit-junit5")
+    // ProblemSchemaTest validates encoded problems against schema/problem.schema.json, as cosec-core's
+    // SchemaConformanceTest does for the formats CoSec reads.
+    testImplementation("com.networknt:json-schema-validator")
+    // OneDecisionPathTest checks the adapters' classes: they must never see a Decision or construct an Outcome.
+    testRuntimeOnly(project(":cosec-webflux"))
+    testRuntimeOnly(project(":cosec-webmvc"))
+    testRuntimeOnly(project(":cosec-gateway"))
 }
