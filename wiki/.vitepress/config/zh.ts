@@ -23,6 +23,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
       { text: '快速开始', link: '/zh/guide/quick-start' },
       { text: '核心概念', link: '/zh/guide/concepts' },
       { text: '安全模型', link: '/zh/guide/security-model' },
+      { text: '路线图', link: '/zh/guide/roadmap' },
     ],
   },
   {
