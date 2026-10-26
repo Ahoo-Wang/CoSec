@@ -75,7 +75,7 @@
       "additionalProperties": false,
       "properties": {
         "attr": {
-          "description": "An attribute of the catalog (RFC 0005 §3.2).",
+          "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
           "examples": [
             "subject.id",
             "subject.authenticated",
@@ -106,7 +106,7 @@
               "additionalItems": false,
               "items": [
                 {
-                  "description": "An attribute of the catalog (RFC 0005 §3.2).",
+                  "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
                   "examples": [
                     "subject.id",
                     "subject.authenticated",
@@ -200,7 +200,7 @@
                       "type": "array"
                     },
                     {
-                      "description": "An attribute of the catalog (RFC 0005 §3.2).",
+                      "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
                       "examples": [
                         "subject.id",
                         "subject.authenticated",
@@ -240,7 +240,7 @@
               "additionalItems": false,
               "items": [
                 {
-                  "description": "An attribute of the catalog (RFC 0005 §3.2).",
+                  "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
                   "examples": [
                     "subject.id",
                     "subject.authenticated",
@@ -280,7 +280,7 @@
               "additionalItems": false,
               "items": [
                 {
-                  "description": "An attribute of the catalog (RFC 0005 §3.2).",
+                  "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
                   "examples": [
                     "subject.id",
                     "subject.authenticated",
@@ -332,7 +332,7 @@
           "additionalProperties": false,
           "properties": {
             "exists": {
-              "description": "An attribute of the catalog (RFC 0005 §3.2).",
+              "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
               "examples": [
                 "subject.id",
                 "subject.authenticated",
@@ -623,6 +623,15 @@
         "name": {
           "examples": [
             "read-orders"
+          ],
+          "type": "string"
+        },
+        "onMissing": {
+          "default": "indeterminate",
+          "description": "What an external attribute (ext.*) the condition reads that cannot be fetched means (RFC 0006 §5.4.3). Only for a condition that reads one; a DENY may say nomatch only in the platform document.",
+          "enum": [
+            "indeterminate",
+            "nomatch"
           ],
           "type": "string"
         },

@@ -124,7 +124,8 @@ internal object PolicyDocumentFormats {
     )
     private val attribute = StringType(
         examples = attributeExamples,
-        description = "An attribute of the catalog (RFC 0005 §3.2)."
+        description = "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a " +
+            "registered AttributeProvider declares (RFC 0006 §5.4.1)."
     )
     private val conditionLiteral = AnyOf(
         listOf(StringType(examples = listOf("admin", "order", "10.0.0.0/8")), BooleanType())
@@ -185,6 +186,14 @@ internal object PolicyDocumentFormats {
                     description = "Absent: any resource.",
                 ),
                 Field("condition", astCondition),
+                Field(
+                    "onMissing",
+                    StringType(enum = listOf("indeterminate", "nomatch")),
+                    description = "What an external attribute (ext.*) the condition reads that cannot be fetched means " +
+                        "(RFC 0006 §5.4.3). Only for a condition that reads one; a DENY may say nomatch only in the " +
+                        "platform document.",
+                    default = "indeterminate",
+                ),
             ),
         ),
         "actionPattern" to StringType(
