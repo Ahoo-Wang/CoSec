@@ -58,7 +58,8 @@ object SnapshotConvert {
         publish(uri, keyPrefix, conversion)
     }
 
-    private fun read(uri: RedisURI, keyPrefix: String): CoSec7xReader.Conversion =
+    /** Reads the 7.x data under [keyPrefix]; never writes. */
+    internal fun read(uri: RedisURI, keyPrefix: String): CoSec7xReader.Conversion =
         RedisClient.create(uri).use { client ->
             client.connect().use { connection ->
                 RedisBackend.standalone(uri).use { backend ->

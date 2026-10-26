@@ -20,6 +20,7 @@ import me.ahoo.cosec.authorization.AuthorizationDecision
 import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.parity.AuthorizationFactory
+import me.ahoo.cosec.parity.FailureView
 import me.ahoo.cosec.parity.ParityVerdict
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -38,6 +39,20 @@ class PolicyTestKitParityTest {
         )
         report.results.size.assert().isGreaterThan(5)
         report.differences.assert().isEmpty()
+        report.assertSame()
+    }
+
+    /** RFC 0003 §8.2: every suite, failing and broken ones included, decides alike over the snapshot source. */
+    @Test
+    fun everySuiteDecidesAlikeOverTheSnapshotSource() {
+        val report = PolicyTestKit.parity(
+            listOf("classpath:cosec-policy-test/**/*-policy-test.json"),
+            baseline = AuthorizationFactory.ENGINE,
+            candidate = AuthorizationFactory.SNAPSHOT,
+            failureView = FailureView.INNERMOST_CAUSE,
+        )
+        report.results.size.assert().isGreaterThan(10)
+        report.results.count { it.result.bothFailed }.assert().isGreaterThan(0)
         report.assertSame()
     }
 

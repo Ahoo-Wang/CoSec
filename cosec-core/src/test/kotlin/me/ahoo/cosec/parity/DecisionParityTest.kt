@@ -38,9 +38,13 @@ import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import me.ahoo.cosec.policy.isPolicyEvaluation
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.snapshot.SnapshotUnavailableException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import reactor.core.publisher.Mono
+import tools.jackson.core.JacksonException
 
 class DecisionParityTest {
     private val policy = CoSecJsonSerializer.readValue(
@@ -297,5 +301,43 @@ class DecisionParityTest {
     @Test
     fun sidesPrintWhatTheyAnswered() {
         DecisionParity(legacy, engine).compare(read, alice).baseline.toString().assert().contains("ALLOWED")
+    }
+
+    private fun failingWith(error: Throwable) = object : DecisionAuthorization {
+        override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> = Mono.error(error)
+    }
+
+    /** RFC 0003 §8.1, X4: the snapshot path wraps a failed read; the innermost cause is what the gate compares. */
+    @Test
+    fun failuresMayBeComparedByTheirInnermostCause() {
+        val down = IllegalStateException("store down")
+        val repository = failingWith(down)
+        val wrapped = SnapshotUnavailableException(SnapshotKey.Policies, "the GLOBAL layer cannot be read", down)
+        val snapshot = failingWith(wrapped)
+
+        val asThrown = DecisionParity(repository, snapshot).compare(read, alice)
+        asThrown.verdict.assert().isEqualTo(ParityVerdict.MISMATCH)
+
+        val innermost = DecisionParity(repository, snapshot, FailureView.INNERMOST_CAUSE).compare(read, alice)
+        innermost.verdict.assert().isEqualTo(ParityVerdict.SAME)
+        innermost.isDifference.assert().isFalse()
+        innermost.candidate.tuple.error.assert().isEqualTo(IllegalStateException::class.java.name)
+        innermost.candidate.failureCause.assert().isEqualTo("store down")
+        // What the side failed with is kept as thrown.
+        innermost.candidate.failure.assert().isInstanceOf(SnapshotUnavailableException::class.java)
+
+        val otherCause = SnapshotUnavailableException(SnapshotKey.Policies, "unreadable", IllegalStateException("x"))
+        val other = failingWith(otherCause)
+        DecisionParity(repository, other, FailureView.INNERMOST_CAUSE).compare(read, alice)
+            .failedAlikeForDifferentCauses.assert().isTrue()
+    }
+
+    @Test
+    fun theInnermostCauseOfAJacksonErrorLeavesOutWhereItWasRead() {
+        val error = assertThrows<JacksonException> { CoSecJsonSerializer.readTree("{ broken") }
+        FailureView.AS_THROWN.of(error).assert().isSameAs(error)
+        FailureView.INNERMOST_CAUSE.of(IllegalStateException("outer", error)).assert().isSameAs(error)
+        FailureView.INNERMOST_CAUSE.messageOf(error).assert().isEqualTo(error.originalMessage)
+        FailureView.AS_THROWN.messageOf(error).assert().isEqualTo(error.message)
     }
 }
