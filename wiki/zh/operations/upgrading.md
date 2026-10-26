@@ -34,6 +34,27 @@ Redis `RateLimiter` bean 的名称由 `redisRateLimiter` 改为 `cosecRedisRateL
 `RateLimiter` 或用自己的 bean 替换它都和以前一样。只有按名称 `redisRateLimiter` 引用 CoSec 这个 bean 的代码（`@Qualifier`、
 `getBean("redisRateLimiter")`、`@ConditionalOnBean(name = …)`）需要改用 `cosecRedisRateLimiter`。
 
+### 模板化的 path 动作拒绝会改变模式的值 {#templated-path-actions-reject-values-that-change-the-pattern}
+
+6.1.2 和 8.0 中同样适用。`path` 动作中的 `#{...}` 模板（例如 `/users/#{principal.id}/**`）以前会先求值成字符串，再整体解析为模式，所以含有模式语法的
+主体 id 或属性会改变语句匹配的范围。现在每个模板值只填充模式中的一段字面量，值为空、`.`、`..`，或含有 `*`、`?`、`{`、`}`、`\` 或路径分隔符（`/`，或 `separator` 选项），或在 `decodeAndParseSegments: false` 时含有 `%` 或 `;` 时会被拒绝
+（[`path` 动作中的模板值](../policies/language.md#template-values-in-path-actions)）：
+
+- `allow` 语句或权限不再匹配这样的主体（`Implicit Deny`）；
+- 无论条件如何，`deny` 语句或权限都会让这样的主体的请求以错误失败关闭（`RejectedTemplateValueException`，`500`）；
+- 限流规则同样失败关闭，且不消耗任何许可：值在匹配路径之前就被拒绝，所以到达模板化拒绝或限流规则的每个请求都会失败；
+- 用 `PathActionMatcherFactory` 在代码中构建、不在语句中使用的模板化匹配器同样失败。从 JSON 反序列化语句、权限或限流规则的
+  代码不受影响；自己构建 ALLOW 语句的自定义反序列化器可以对动作调用 `onRejectedTemplateValue(NO_MATCH)`。
+
+id 或属性含有这些字符的主体不再能使用模板化语句。产生多个路径段的模板，例如 `home` 为 `/users/alice` 时的
+`#{principal.attributes['home']}/**`，同样会被拒绝；放在 `{...}` 捕获内部的模板（例如 `{name:#{...}}`）现在会在加载策略时失败。
+需要做的：
+
+1. 找出模板化的`path` 动作：在策略、应用权限和限流规则的 `action` 中搜索 `#{`。
+2. 如果主体 id 或模板用到的属性可能含有这些字符，把语句改写为静态模式加上对路径变量的 `eq` 条件（[示例](../policies/language.md#template-values-in-path-actions)）。
+   `eq` 比较字符串，任何值都可以。
+3. 确认预期的主体仍然匹配（[模板化语句忽略某个主体或返回 500](./troubleshooting.md#templated-statement-ignores-one-principal-or-fails-with-500)）。
+
 ## 6.1 到 7.0 {#_6-1-to-7-0}
 
 7.0 在多处收紧了授权：在这些地方，6.x 可能会误放行请求。它还迁移到了 [CoCache 6.6](https://cocache.ahoo.me/guide/migration-6)

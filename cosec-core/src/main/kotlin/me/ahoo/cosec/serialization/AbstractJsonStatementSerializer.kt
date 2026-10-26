@@ -17,6 +17,8 @@ import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.policy.action.RejectedTemplateValue
+import me.ahoo.cosec.policy.action.onRejectedTemplateValue
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import tools.jackson.core.JsonGenerator
 import tools.jackson.core.JsonParser
@@ -57,6 +59,7 @@ abstract class AbstractJsonStatementDeserializer<T : Statement>(statementType: C
         val action =
             requireNotNull(jsonNode.get(STATEMENT_ACTION_KEY)).traverse(p.objectReadContext())
                 .readValueAs(ActionMatcher::class.java)
+                .onRejectedTemplateValue(effect.onRejectedTemplateValue())
 
         val condition =
             jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.objectReadContext())
@@ -71,6 +74,16 @@ abstract class AbstractJsonStatementDeserializer<T : Statement>(statementType: C
             condition = condition,
         )
     }
+
+    /**
+     * A templated `path` action whose value is rejected must neither grant (ALLOW) nor stop denying (DENY): an ALLOW
+     * does not match, a DENY fails the request closed.
+     */
+    private fun Effect.onRejectedTemplateValue(): RejectedTemplateValue =
+        when (this) {
+            Effect.ALLOW -> RejectedTemplateValue.NO_MATCH
+            Effect.DENY -> RejectedTemplateValue.ERROR
+        }
 
     abstract fun createStatement(
         jsonNode: JsonNode,

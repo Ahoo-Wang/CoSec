@@ -20,9 +20,12 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.policy.SpelExpression
 import me.ahoo.cosec.policy.SpelExpression.Companion.isSpelTemplate
 import me.ahoo.cosec.policy.action.PathPatternParsers.asPathPatternParser
-import me.ahoo.cosec.policy.asTemplateExpression
+import org.springframework.expression.ParserContext
+import org.springframework.expression.common.CompositeStringExpression
+import org.springframework.expression.common.LiteralExpression
 import org.springframework.http.server.PathContainer
 import org.springframework.web.util.pattern.PathPattern
 import org.springframework.web.util.pattern.PathPatternParser
@@ -96,24 +99,161 @@ class PathActionMatcher(
     }
 }
 
-class ReplaceablePathActionMatcher(
-    private val patternParser: PathPatternParser,
-    private val pattern: String,
-    configuration: Configuration
-) : AbstractActionMatcher(PathActionMatcherFactory.TYPE, configuration) {
-    companion object {
-        private const val PATH_PATTERN_CACHE_SIZE = 1024L
-    }
-
-    private val expression = pattern.asTemplateExpression()
+/**
+ * What a templated `path` action does when a `#{...}` hole yields a value that would change the pattern.
+ *
+ * The value comes from the principal or the request context, so the safe answer depends on the effect: an ALLOW must
+ * not grant, and a DENY or a rate limit rule must not stop applying.
+ *
+ * There is deliberately no "match anyway": a matching action captures no path variables, so a DENY or rate limit
+ * condition that reads them would fail, and the DENY or limit would silently stop applying (or, with a shared bucket,
+ * spend other callers' permits).
+ */
+enum class RejectedTemplateValue {
+    /** The action does not match. Used for ALLOW statements and permissions: the request ends in an implicit deny. */
+    NO_MATCH,
 
     /**
-     * Resolved patterns vary per principal/tenant, so parsed patterns are cached in a bounded LRU
-     * to avoid re-parsing on every request.
+     * The action throws [RejectedTemplateValueException], so the request fails closed with an error, whatever the
+     * condition. Used for DENY statements and permissions and for rate limit rules, and the default for a matcher built
+     * straight from [PathActionMatcherFactory], whose effect is unknown (see [onRejectedTemplateValue]).
      */
-    private val pathPatternCache: Cache<String, PathPattern> = CacheBuilder.newBuilder()
-        .maximumSize(PATH_PATTERN_CACHE_SIZE)
-        .build()
+    ERROR
+}
+
+/**
+ * A `#{...}` hole of a templated `path` action yielded a value that would change the pattern.
+ */
+class RejectedTemplateValueException(message: String) : IllegalStateException(message)
+
+/**
+ * Sets what the templated `path` actions in [this] action do with a rejected template value: the action itself, or
+ * the members of a [CompositeActionMatcher]. Other actions are returned as they are.
+ */
+fun ActionMatcher.onRejectedTemplateValue(onRejected: RejectedTemplateValue): ActionMatcher =
+    when (this) {
+        is ReplaceablePathActionMatcher -> withOnRejected(onRejected)
+        is CompositeActionMatcher -> {
+            val members = actionMatchers.map { it.onRejectedTemplateValue(onRejected) }
+            if (members.indices.all { members[it] === actionMatchers[it] }) {
+                this
+            } else {
+                CompositeActionMatcher(type, members, configuration)
+            }
+        }
+
+        else -> this
+    }
+
+/**
+ * A `path` action whose pattern holds `#{...}` templates, such as `/users/#{principal.id}/orders`.
+ *
+ * Each hole is evaluated on its own and the static parts stay as written, so a value can only ever fill the place of
+ * one literal path segment (or part of one). A hole inside a `{...}` capture is rejected when the matcher is built.
+ * A value is rejected when it is empty, `.` or `..`, or contains `*`, `?`, `{`, `}`, `\` or the path separator, and,
+ * when the parser does not decode segments, `%` or `;`: any of these would turn it into pattern syntax (a wildcard,
+ * a capture, a regex) or move it into other segments, and so widen what the pattern matches, or narrow a DENY.
+ * What a rejected value does is set by [onRejected]; see [RejectedTemplateValue].
+ *
+ * Parsed patterns are cached per resolved pattern, which only accepted values ever produce.
+ */
+class ReplaceablePathActionMatcher private constructor(
+    private val patternParser: PathPatternParser,
+    private val pattern: String,
+    configuration: Configuration,
+    private val parts: List<TemplatePart>,
+    private val pathPatternCache: Cache<String, PathPattern>,
+    val onRejected: RejectedTemplateValue,
+) : AbstractActionMatcher(PathActionMatcherFactory.TYPE, configuration) {
+    constructor(
+        patternParser: PathPatternParser,
+        pattern: String,
+        configuration: Configuration,
+        onRejected: RejectedTemplateValue = RejectedTemplateValue.ERROR,
+    ) : this(
+        patternParser = patternParser,
+        pattern = pattern,
+        configuration = configuration,
+        parts = pattern.asTemplateParts(),
+        pathPatternCache = newPathPatternCache(),
+        onRejected = onRejected,
+    )
+
+    companion object {
+        private const val PATH_PATTERN_CACHE_SIZE = 1024L
+        private const val CURRENT_SEGMENT = "."
+        private const val PARENT_SEGMENT = ".."
+        private val PATTERN_CHARS = charArrayOf('*', '?', '{', '}', '\\')
+
+        /** Without decoding, `%` and `;` reach the matcher as written, so a value could spell an encoded separator. */
+        private val RAW_SEGMENT_CHARS = charArrayOf('%', ';')
+
+        /**
+         * Resolved patterns vary per principal/tenant, so parsed patterns are cached in a bounded LRU
+         * to avoid re-parsing on every request.
+         */
+        private fun newPathPatternCache(): Cache<String, PathPattern> = CacheBuilder.newBuilder()
+            .maximumSize(PATH_PATTERN_CACHE_SIZE)
+            .build()
+
+        private fun String.asTemplateParts(): List<TemplatePart> {
+            val parsed = SpelExpression.SPEL_PARSER.parseExpression(this, ParserContext.TEMPLATE_EXPRESSION)
+            val expressions = if (parsed is CompositeStringExpression) parsed.expressions.toList() else listOf(parsed)
+            // Inside a `{...}` capture a value would be part of its name or regex, where `.` or `+` widen the match.
+            var captureDepth = 0
+            return expressions.map {
+                if (it is LiteralExpression) {
+                    captureDepth += it.expressionString.count { char -> char == '{' } -
+                        it.expressionString.count { char -> char == '}' }
+                    TemplatePart.Literal(it.expressionString)
+                } else {
+                    require(captureDepth == 0) { "Path template [$this] must not place #{...} inside a {...} capture." }
+                    TemplatePart.Hole(SpelExpression(it, String::class.java))
+                }
+            }
+        }
+    }
+
+    private sealed interface TemplatePart {
+        class Literal(val text: String) : TemplatePart
+        class Hole(val expression: SpelExpression<String>) : TemplatePart
+    }
+
+    private val separator: Char = patternParser.pathOptions.separator()
+    private val decodesSegments: Boolean = patternParser.pathOptions.shouldDecodeAndParseSegments()
+
+    internal fun withOnRejected(onRejected: RejectedTemplateValue): ReplaceablePathActionMatcher =
+        if (onRejected == this.onRejected) {
+            this
+        } else {
+            ReplaceablePathActionMatcher(patternParser, pattern, configuration, parts, pathPatternCache, onRejected)
+        }
+
+    private fun isAccepted(value: String?): Boolean =
+        !value.isNullOrEmpty() &&
+            value != CURRENT_SEGMENT &&
+            value != PARENT_SEGMENT &&
+            value.indexOfAny(PATTERN_CHARS) < 0 &&
+            value.indexOf(separator) < 0 &&
+            (decodesSegments || value.indexOfAny(RAW_SEGMENT_CHARS) < 0)
+
+    /** The pattern with every hole filled, or null when a hole yields a rejected value. */
+    private fun resolve(securityContext: SecurityContext): String? {
+        val resolved = StringBuilder(pattern.length)
+        for (part in parts) {
+            when (part) {
+                is TemplatePart.Literal -> resolved.append(part.text)
+                is TemplatePart.Hole -> {
+                    val value = part.expression.getValue(securityContext)
+                    if (!isAccepted(value)) {
+                        return null
+                    }
+                    resolved.append(value)
+                }
+            }
+        }
+        return resolved.toString()
+    }
 
     override fun internalMatch(
         request: Request,
@@ -122,13 +262,22 @@ class ReplaceablePathActionMatcher(
         // The template is evaluated before this action captures anything: a template that builds the attribute name
         // at run time (and so passes the load-time check) must not see another statement's path variables.
         securityContext.clearPathVariables()
-        val resolvedPattern = requireNotNull(expression.getValue(securityContext))
+        val resolvedPattern = resolve(securityContext) ?: return onRejectedValue()
         val pathPattern = pathPatternCache.get(resolvedPattern) { patternParser.parse(resolvedPattern) }
         val pathContainer = securityContext.parseRequestPath(request, patternParser.pathOptions)
         val pathMatchInfo = pathPattern.matchAndExtract(pathContainer) ?: return false
         securityContext.setPathVariables(pathMatchInfo.uriVariables)
         return true
     }
+
+    private fun onRejectedValue(): Boolean =
+        when (onRejected) {
+            RejectedTemplateValue.NO_MATCH -> false
+            // The value is not in the message: it is the principal's, and may be anything.
+            RejectedTemplateValue.ERROR -> throw RejectedTemplateValueException(
+                "Path template [$pattern] yielded a value that would change the pattern."
+            )
+        }
 }
 
 class PathActionMatcherFactory : ActionMatcherFactory {
