@@ -18,6 +18,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.now
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -35,19 +36,19 @@ class InMemoryMembershipProviderTest {
 
     @Test
     fun putReplaceAndRemove() {
-        provider.memberships(tenant, alice).getNow(null).roles.assert().isEmpty()
+        now { provider.memberships(tenant, alice) }.roles.assert().isEmpty()
 
         val admin = memberships("admin")
         provider.put(tenant, alice, admin)
-        provider.memberships(tenant, alice).getNow(null).assert().isSameAs(admin)
-        provider.memberships(TenantId("other"), alice).getNow(null).roles.assert().isEmpty()
+        now { provider.memberships(tenant, alice) }.assert().isSameAs(admin)
+        now { provider.memberships(TenantId("other"), alice) }.roles.assert().isEmpty()
 
         val viewer = memberships("viewer")
         provider.put(tenant, alice, viewer)
-        provider.memberships(tenant, alice).getNow(null).assert().isSameAs(viewer)
+        now { provider.memberships(tenant, alice) }.assert().isSameAs(viewer)
 
         provider.remove(tenant, alice)
-        val none = provider.memberships(tenant, alice).getNow(null)
+        val none = now { provider.memberships(tenant, alice) }
         none.source.assert().isEqualTo(Memberships.Source.PROVIDER)
         none.roles.assert().isEmpty()
         none.attachments.assert().isEmpty()
@@ -73,7 +74,7 @@ class InMemoryMembershipProviderTest {
                         val principal = principals[(thread + round) % PRINCIPALS]
                         provider.put(tenant, principal, memberships("r$thread"))
                         // whatever another thread wrote, a lookup sees a complete value from the provider
-                        provider.memberships(tenant, principal).getNow(null).source
+                        now { provider.memberships(tenant, principal) }.source
                             .assert().isEqualTo(Memberships.Source.PROVIDER)
                     }
                 }
@@ -84,7 +85,7 @@ class InMemoryMembershipProviderTest {
             executor.shutdownNow()
         }
         principals.forEach { principal ->
-            provider.memberships(tenant, principal).getNow(null).roles[SpaceId.DEFAULT].assert().hasSize(1)
+            now { provider.memberships(tenant, principal) }.roles[SpaceId.DEFAULT].assert().hasSize(1)
         }
     }
 

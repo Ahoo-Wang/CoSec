@@ -34,7 +34,7 @@ import java.util.Collections
  * order.
  *
  * A token whose memberships do not fit in it carries [MARKER_KEY] = [PROVIDER] instead, and its memberships come from a
- * [MembershipProvider] ([MembershipResolver]).
+ * [MembershipProvider], through the pipeline's `MembershipResolver` (`cosec-runtime`).
  */
 object MembershipClaims {
     /** The claim that says where the memberships are. Absent: in the `roles` and `policies` claims. */

@@ -90,17 +90,12 @@ class RevocableTokenVerifier(
         checkSubjectNotRevoked(tokenPrincipal)
     }
 
-    /**
-     * RFC 0004 §4.5.3. A token that does not say when it was issued cannot prove it is newer than the revocation, so
-     * it is rejected too. JWT `iat` has whole seconds, which rounds a token's age up: a token issued in the same
-     * second as the revocation, even just after it, is rejected as well.
-     */
+    /** RFC 0004 §4.5.3, by the rule both token paths read ([SubjectRevocation]). */
     private fun checkSubjectNotRevoked(tokenPrincipal: TokenPrincipal) {
         val tenant = MembershipClaims.tenantOf(tokenPrincipal)
         val revokedBefore = tokenStore.subjectRevokedBefore(tenant, PrincipalId(tokenPrincipal.id))
-            ?: return
         val issuedAt = tokenPrincipal.findInDelegationChain<IssuedAtCapable>()?.issuedAt
-        if (issuedAt == null || issuedAt.isBefore(revokedBefore)) {
+        if (SubjectRevocation.revokes(revokedBefore, issuedAt)) {
             throw TokenRevokedException(
                 "The tokens of principal [${tokenPrincipal.id}] issued before [$revokedBefore] have been revoked."
             )

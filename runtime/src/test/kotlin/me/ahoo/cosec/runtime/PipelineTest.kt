@@ -41,9 +41,11 @@ import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.claims
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
 import me.ahoo.cosec.runtime.PipelineFixtures.pipeline
+import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.authn.Credentials
+import me.ahoo.cosec.runtime.authn.MembershipSource
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -289,7 +291,7 @@ class PipelineTest {
         val provider = MembershipProvider { tenant, principal ->
             tenant.assert().isEqualTo(TENANT)
             principal.assert().isEqualTo(PRINCIPAL)
-            CompletableFuture.completedFuture(provided)
+            provided
         }
         pipeline(authenticator(authenticated(null)), engine, membershipProvider = provider).evaluate(facts())
             .proceed.assert().isTrue()
@@ -307,10 +309,9 @@ class PipelineTest {
     @Test
     fun failingLateOrWrongMembershipsAre503() = runTest {
         val providers = listOf(
-            MembershipProvider { _, _ -> CompletableFuture.failedFuture(IllegalStateException("down")) },
-            MembershipProvider { _, _ -> throw IllegalStateException("bug") },
-            MembershipProvider { _, _ -> CompletableFuture() },
-            MembershipProvider { _, _ -> CompletableFuture.completedFuture(claims()) },
+            MembershipProvider { _, _ -> throw IllegalStateException("down") },
+            MembershipProvider { _, _ -> awaitCancellation() },
+            MembershipProvider { _, _ -> claims() },
         )
         providers.forEach { provider ->
             val engine = StubEngine(PERMIT)
@@ -321,6 +322,27 @@ class PipelineTest {
                 .isInstanceOf(Cause.MembershipUnavailable::class.java)
             engine.requests.assert().isEmpty()
         }
+    }
+
+    /** `MEM-1`: unusable membership claims are a 503, and the provider is never asked. */
+    @Test
+    fun unusableMembershipClaimsAre503() = runTest {
+        var asked = false
+        val provider = MembershipProvider { _, _ ->
+            asked = true
+            Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList())
+        }
+        val unusable = AuthnResult.Authenticated(
+            AuthenticatedPrincipal(PRINCIPAL, TENANT, MembershipSource.Unusable("marker and claims")),
+            "test",
+        )
+        val engine = StubEngine(PERMIT)
+        val outcome = pipeline(authenticator(unusable), engine, membershipProvider = provider).evaluate(facts())
+        outcome.assertProblem(ProblemType.UNAVAILABLE)
+        ((outcome.unavailability() as Unavailability.Indeterminate).cause).assert()
+            .isInstanceOf(Cause.MembershipUnavailable::class.java)
+        asked.assert().isFalse()
+        engine.requests.assert().isEmpty()
     }
 
     @Test

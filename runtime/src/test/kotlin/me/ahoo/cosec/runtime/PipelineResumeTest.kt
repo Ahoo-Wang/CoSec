@@ -75,7 +75,7 @@ class PipelineResumeTest {
     fun membershipProviderCompletingOnAClientThreadResumesOnTheResumeDispatcher() {
         val engine = StubEngine(PERMIT)
         val provider = MembershipProvider { _, _ ->
-            completedOn(clientIo, Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList()))
+            completedOn(clientIo, Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList())).await()
         }
         assertResumedOn(
             RESUME,

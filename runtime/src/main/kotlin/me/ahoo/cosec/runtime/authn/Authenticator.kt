@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.runtime.authn
 
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.membership.MembershipClaims
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -62,10 +64,63 @@ sealed interface AuthnResult {
 class AuthenticatedPrincipal(
     val id: PrincipalId,
     val tenant: TenantId,
-    /**
-     * The memberships the token claims (RFC 0004 §4.5.1), or null when the token asks for the `MembershipProvider`
-     * (§4.5.2); the pipeline then asks it, and denies with 503 when it cannot answer.
-     */
-    val memberships: Memberships?,
+    /** Where the principal's memberships come from (RFC 0004 §4.5). */
+    val membershipSource: MembershipSource,
     val attributes: Map<String, Any> = emptyMap(),
-)
+) {
+    /**
+     * [memberships] are the claims of the token (RFC 0004 §4.5.1); null when the token asks for the
+     * `MembershipProvider` (§4.5.2).
+     */
+    constructor(
+        id: PrincipalId,
+        tenant: TenantId,
+        memberships: Memberships?,
+        attributes: Map<String, Any> = emptyMap(),
+    ) : this(id, tenant, memberships?.let(MembershipSource::Claims) ?: MembershipSource.Provider, attributes)
+
+    /** The claimed memberships; null when they come from the provider or cannot be used. */
+    val memberships: Memberships? get() = (membershipSource as? MembershipSource.Claims)?.memberships
+}
+
+/** Where a principal's memberships come from (RFC 0004 §4.5). */
+sealed interface MembershipSource {
+    /** The token's `roles` and `policies` claims (§4.5.1). */
+    class Claims(val memberships: Memberships) : MembershipSource {
+        init {
+            require(memberships.source == Memberships.Source.CLAIMS) {
+                "Claimed memberships must have the source CLAIMS, not ${memberships.source}."
+            }
+        }
+    }
+
+    /** The token carries the provider marker: ask the `MembershipProvider` (§4.5.2). */
+    data object Provider : MembershipSource
+
+    /**
+     * The token's membership claims cannot be used, such as an unknown marker or a marker together with claims
+     * (`MEM-1`). The request fails closed with `Indeterminate(MembershipUnavailable)`, never with no memberships.
+     */
+    class Unusable(val reason: String) : MembershipSource
+
+    companion object {
+        /**
+         * The source a verified token states (RFC 0004 §4.5): no marker means its claims; the provider marker alone
+         * means the provider; any other marker, or the marker together with `roles` or `policies` claims, is unusable.
+         */
+        fun of(principal: CoSecPrincipal): MembershipSource {
+            val marker = MembershipClaims.markerOf(principal)
+                ?: return Claims(MembershipClaims.parse(principal.roles, principal.policies))
+            return when {
+                marker != MembershipClaims.PROVIDER ->
+                    Unusable("The token of principal [${principal.id}] has an unknown membership marker [$marker].")
+
+                principal.roles.isNotEmpty() || principal.policies.isNotEmpty() -> Unusable(
+                    "The token of principal [${principal.id}] asks for a membership provider but also claims roles or policies."
+                )
+
+                else -> Provider
+            }
+        }
+    }
+}

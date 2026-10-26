@@ -1,0 +1,84 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.runtime.authn
+
+import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.findInDelegationChain
+import me.ahoo.cosec.membership.MembershipClaims
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.token.IssuedAtCapable
+import me.ahoo.cosec.token.RevocableTokenVerifier
+import me.ahoo.cosec.token.RevocationReader
+import me.ahoo.cosec.token.SimpleAccessToken
+import me.ahoo.cosec.token.SubjectRevocation
+import me.ahoo.cosec.token.TokenExpiredException
+import me.ahoo.cosec.token.TokenRevokedException
+import me.ahoo.cosec.token.TokenVerificationException
+import me.ahoo.cosec.token.TokenVerifier
+
+/**
+ * Authenticates the request's token (RFC 0006 §5.3.2): [verifier] checks it, which is CPU work and never suspends,
+ * then [revocations] says whether it, or every token of its principal (RFC 0004 §4.5.3, `MEM-4`), was revoked.
+ *
+ * - No token: [AuthnResult.Anonymous]. An API key alone is not read here; the request goes on as anonymous.
+ * - An expired token: [AuthnResult.RejectReason.TOKEN_EXPIRED]; a revoked one: `TOKEN_REVOKED`; any other
+ *   [TokenVerificationException]: `TOKEN_INVALID`. The request is evaluated as anonymous, and a deny answers 401 with
+ *   the matching `token-*` problem (RFC 0006 K2).
+ * - The memberships come from the token as [MembershipSource.of] reads them.
+ *
+ * Give it the plain verifier (such as `JwtTokenVerifier`), not a [RevocableTokenVerifier]: that one reads the
+ * [me.ahoo.cosec.token.TokenStore] synchronously, which may block. A [RevocationReader] that cannot be read answers
+ * "not revoked" itself, the documented exception to fail closed; anything it or [verifier] throws otherwise reaches
+ * the pipeline, which answers 503.
+ */
+class TokenAuthenticator(
+    private val verifier: TokenVerifier,
+    private val revocations: RevocationReader = RevocationReader.NONE,
+    /** How audit names this way of authenticating. */
+    private val method: String = METHOD,
+) : Authenticator {
+    override suspend fun authenticate(credentials: Credentials): AuthnResult {
+        val token = credentials.token ?: return AuthnResult.Anonymous
+        val principal = try {
+            verifier.verify<TokenPrincipal>(SimpleAccessToken(token))
+        } catch (_: TokenExpiredException) {
+            return EXPIRED
+        } catch (_: TokenRevokedException) {
+            return REVOKED
+        } catch (_: TokenVerificationException) {
+            return INVALID
+        }
+        if (revocations.isRevoked(principal.tokenId)) {
+            return REVOKED
+        }
+        val tenant = MembershipClaims.tenantOf(principal)
+        val id = PrincipalId(principal.id)
+        val issuedAt = principal.findInDelegationChain<IssuedAtCapable>()?.issuedAt
+        if (SubjectRevocation.revokes(revocations.subjectRevokedBefore(tenant, id), issuedAt)) {
+            return REVOKED
+        }
+        return AuthnResult.Authenticated(
+            AuthenticatedPrincipal(id, tenant, MembershipSource.of(principal), principal.attributes),
+            method,
+        )
+    }
+
+    companion object {
+        const val METHOD = "token"
+
+        private val EXPIRED = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_EXPIRED)
+        private val REVOKED = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_REVOKED)
+        private val INVALID = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_INVALID)
+    }
+}
