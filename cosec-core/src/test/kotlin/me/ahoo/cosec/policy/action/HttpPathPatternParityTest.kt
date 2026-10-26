@@ -182,7 +182,7 @@ class HttpPathPatternParityTest {
         }
         mismatches.take(MISMATCHES_SHOWN).assert().isEmpty()
         // A generator that rarely matches compares nothing interesting.
-        (matched * 10 > compared).assert().isTrue()
+        matched.assert().isGreaterThan(compared / 10)
     }
 
     @Test
