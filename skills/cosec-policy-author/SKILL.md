@@ -71,7 +71,7 @@ Order deny statements before allow statements for readability, not behavior.
 }
 ```
 
-`"*"` or `{ "all": { "method": "GET" } }` matches all paths. `{ "composite": [...] }` ORs heterogeneous action matchers. Path patterns support variables such as `{id}` and SpEL templates such as `#{principal.id}`. A template value fills one literal segment only: a value that is empty, `.`, `..`, or contains `*`, `?`, `{`, `}` or `/` is rejected (no match in an allow, match-everything in a deny or rate limit rule). When ids or attributes may contain these characters, prefer a static pattern plus `eq` on the path variable (`/users/{userId}/**` with `request.path.var.userId` `eq` `#{principal.id}`).
+`"*"` or `{ "all": { "method": "GET" } }` matches all paths. `{ "composite": [...] }` ORs heterogeneous action matchers. Path patterns support variables such as `{id}` and SpEL templates such as `#{principal.id}`. A template value fills one literal segment only: a value that is empty, `.`, `..`, or contains `*`, `?`, `{`, `}`, `\` or `/` is rejected (no match in an allow; in a deny or rate limit rule the request fails closed with an error). Principals with such ids or attributes cannot be served by templated statements: prefer a static pattern plus `eq` on the path variable (`/users/{userId}/**` with `request.path.var.userId` `eq` `#{principal.id}`).
 
 ## Condition reference
 

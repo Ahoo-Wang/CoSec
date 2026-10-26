@@ -19,6 +19,7 @@ import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.parity.LegacyData
 import me.ahoo.cosec.parity.policyJson
 import me.ahoo.cosec.policy.EvaluateRequest
+import me.ahoo.cosec.policy.action.RejectedTemplateValueException
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.snapshot.ManualClock
@@ -26,6 +27,7 @@ import me.ahoo.cosec.snapshot.SnapshotOptions
 import me.ahoo.cosec.snapshot.SnapshotSource
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 
 /** The snapshot compiler reads statements with the same deserializers, so rejected template values decide alike. */
@@ -51,9 +53,9 @@ class SnapshotPathTemplateValueTest {
             fun decide(path: String, id: String) = authorization
                 .decide(EvaluateRequest(path = path, method = "GET"), SimpleSecurityContext(SimplePrincipal(id)))
                 .block()!!.result
+            // The DENY fails the request closed; the ALLOW alone would not match.
             PathTemplateValueTest.REJECTED.forEach { id ->
-                decide("/users/victim/orders", id).assert().describedAs("id [$id]")
-                    .isEqualTo(AuthorizeResult.EXPLICIT_DENY)
+                assertThrows<RejectedTemplateValueException>("id [$id]") { decide("/users/victim/orders", id) }
             }
             decide("/users/alice/orders", "alice").assert().isEqualTo(AuthorizeResult.ALLOW)
             decide("/users/victim/orders", "alice").assert().isEqualTo(AuthorizeResult.IMPLICIT_DENY)

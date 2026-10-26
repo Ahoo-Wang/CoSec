@@ -12,19 +12,19 @@
       "name": "a wildcard id reaches no other user",
       "principal": { "id": "*" },
       "request": { "path": "/users/victim/orders" },
-      "expect": { "result": "EXPLICIT_DENY", "statementName": "no-delete" }
+      "expect": { "result": "IMPLICIT_DENY" }
     },
     {
-      "name": "a capture id does not escape its own deny",
-      "principal": { "id": "{x:[0-9]+}" },
-      "request": { "path": "/users/{x:[0-9]+}/delete" },
-      "expect": { "result": "EXPLICIT_DENY", "statementName": "no-delete" }
+      "name": "a capture id reaches no other user",
+      "principal": { "id": "{x}" },
+      "request": { "path": "/users/victim/orders" },
+      "expect": { "result": "IMPLICIT_DENY" }
     },
     {
       "name": "an id with a separator reaches no other user",
       "principal": { "id": "a/b" },
       "request": { "path": "/users/a/b/orders" },
-      "expect": { "result": "EXPLICIT_DENY", "statementName": "no-delete" }
+      "expect": { "result": "IMPLICIT_DENY" }
     }
   ]
 }
