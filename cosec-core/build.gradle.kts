@@ -31,6 +31,8 @@ dependencies {
     testImplementation("org.springframework:spring-web")
     testImplementation("org.springframework:spring-expression")
     testImplementation("io.projectreactor:reactor-test")
+    // SchemaConformanceTest validates documents against the generated JSON schemas.
+    testImplementation("com.networknt:json-schema-validator")
 
     testFixturesImplementation(platform(project(":cosec-dependencies")))
     // Path matchers parse with Spring's PathPatternParser; PolicyTestKit reads suites through its resource resolver.
@@ -141,4 +143,34 @@ tasks.register<Test>("engineParity") {
     reports.junitXml.includeSystemOutLog.set(false)
     reports.junitXml.includeSystemErrLog.set(false)
     testLogging.showStandardStreams = true
+}
+
+/*
+ * RFC 0007 §10.4: the JSON schemas in schema/ are generated from the document format descriptors
+ * (me.ahoo.cosec.snapshot.format.DocumentFormats). verifySchemas fails check when the committed files are stale.
+ */
+val schemaDirectory = rootProject.layout.projectDirectory.dir("schema")
+val generateSchemas = tasks.register<JavaExec>("generateSchemas") {
+    group = "build"
+    description = "Writes schema/*.schema.json from the document format descriptors."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("me.ahoo.cosec.snapshot.format.SchemaFilesKt")
+    args(schemaDirectory.asFile.absolutePath)
+}
+val verifySchemas = tasks.register<JavaExec>("verifySchemas") {
+    group = "verification"
+    description = "Fails when schema/*.schema.json differs from what generateSchemas writes."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("me.ahoo.cosec.snapshot.format.SchemaFilesKt")
+    args(schemaDirectory.asFile.absolutePath, "--verify")
+    inputs.dir(schemaDirectory)
+    inputs.files(sourceSets["test"].runtimeClasspath)
+    outputs.upToDateWhen { true }
+    // An up-to-date check needs an output; an empty marker records the last successful run.
+    val marker = layout.buildDirectory.file("verifySchemas/ok")
+    outputs.file(marker)
+    doLast { marker.get().asFile.apply { parentFile.mkdirs() }.writeText("") }
+}
+tasks.named("check") {
+    dependsOn(verifySchemas)
 }

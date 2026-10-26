@@ -423,6 +423,7 @@ description: "CoSec 策略的每个字段：语句、动作、路径变量、模
 | `cosec-policy.schema.json` | 策略文件 |
 | `cosec-app-permission.schema.json` | 应用权限文件 |
 | `rate-limit-rule.schema.json` | 限流规则文件 |
+| `cosec-snapshot-document.schema.json` | 存储的快照文档正文：策略文档或某个应用的文档 |
 | `action.schema.json`、`condition.schema.json`、`definitions.schema.json` | 共用部分 |
 
 在文件中用 `$schema` 引用它，解析器会忽略这个字段：
@@ -438,6 +439,17 @@ description: "CoSec 策略的每个字段：语句、动作、路径变量、模
 }
 ```
 
-Schema 只描述结构，不检查 part、路径变量作用域、重复 id 或匹配器语义，所以还要用真正的解析器加载策略（[测试](./testing.md#validating-policies)）。
+这些文件由 `cosec-core` 中的文档格式描述
+（[`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt)）生成，
+不手工修改。一项测试把格式描述和解析器绑在一起：由描述生成的文档必须能解析；删掉必填字段、加上未知字段或改错值类型的文档，
+schema 必须拒绝。
+
+Schema 在两方面比解析器严格，所以 schema 拒绝的文件仍可能加载成功：
+
+- Schema 拒绝未知字段。解析器会忽略它们（快照文档的顶层除外），所以拼错的 `efect` 会悄悄变成默认的 `allow`。
+- Schema 拒绝类型错误的值。解析器会转换其中一部分：该写字符串的地方写了数字、该写布尔值的地方写了整数、该写数组的地方写了单个值。
+
+任何条件或动作类型名都能通过 schema，因为自定义匹配器类型在运行时才注册。Schema 会检查 `part` 是否受支持，但不检查路径变量作用域、
+重复 id、路径模式语法或匹配器语义，所以还要用真正的解析器加载策略（[测试](./testing.md#validating-policies)）。
 
 **下一步：** 按角色而不是按主体授予权限，见[角色权限](./role-permissions.md)。
