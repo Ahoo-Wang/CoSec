@@ -15,7 +15,6 @@ package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.membership.MembershipProvider
 import me.ahoo.cosec.membership.MembershipUnavailableException
 import me.ahoo.cosec.model.Memberships
@@ -67,14 +66,14 @@ class MembershipResolver(
 
     /**
      * The provider's answer, or null when it did not answer in time. A provider written in Java may answer null;
-     * [NOTHING] stands for that, as [withTimeoutOrNull]'s own null means the timeout. An external cancellation
+     * [NOTHING] stands for that, as [withLazyTimeoutOrNull]'s own null means the timeout. An external cancellation
      * propagates; any other exception, a CancellationException the provider throws while this request is active
      * included, is a failure.
      */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun ask(provider: MembershipProvider, tenant: TenantId, principal: PrincipalId): Memberships? =
         try {
-            withTimeoutOrNull(timeout) {
+            withLazyTimeoutOrNull(timeout) {
                 resumeOffIo { provider.memberships(tenant, principal) as Memberships? ?: NOTHING }
             }
         } catch (e: CancellationException) {

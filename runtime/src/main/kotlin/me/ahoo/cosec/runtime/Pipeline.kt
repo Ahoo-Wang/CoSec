@@ -16,7 +16,6 @@ package me.ahoo.cosec.runtime
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.FlatEngine
@@ -91,9 +90,10 @@ class Pipeline(
     suspend fun evaluate(facts: HttpFacts): Outcome {
         val requestId = requestId(facts)
         return try {
-            // withTimeoutOrNull, never withTimeout: its TimeoutCancellationException would look like an external
-            // cancellation below and vanish instead of answering 503 (RFC 0006 K13).
-            withTimeoutOrNull(options.timeout) { decide(facts, requestId) }
+            // A ...OrNull timeout, never withTimeout: its TimeoutCancellationException would look like an external
+            // cancellation below and vanish instead of answering 503 (RFC 0006 K13). Lazy: a request that never
+            // suspends arms no timer.
+            withLazyTimeoutOrNull(options.timeout) { decide(facts, requestId) }
                 ?: StatusMapping.unavailable(requestId, Unavailability.DeadlineExceeded, null)
         } catch (e: CancellationException) {
             if (!currentCoroutineContext().isActive) {
@@ -188,7 +188,7 @@ class Pipeline(
      */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun <T : Any> call(timeout: Duration?, spi: suspend () -> T): Fetched<T> = try {
-        val value = if (timeout == null) resumeOffIo(spi) else withTimeoutOrNull(timeout) { resumeOffIo(spi) }
+        val value = if (timeout == null) resumeOffIo(spi) else withLazyTimeoutOrNull(timeout) { resumeOffIo(spi) }
         if (value == null) Fetched.Failed(TimeoutException("No answer within $timeout.")) else Fetched.Value(value)
     } catch (e: CancellationException) {
         if (!currentCoroutineContext().isActive) {
