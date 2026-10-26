@@ -47,12 +47,16 @@ import reactor.core.publisher.Mono
  * an implicit one
  * @param decidedBy the rule that decided, null for an implicit deny or an error
  * @param error the class of the exception the authorization failed with, null when it decided
+ * @param contextRef the rule the authorization recorded on the caller's context (`setVerifyContext`), which auditing
+ * and tracing read: null for root, the blacklist and an implicit deny, as in 7.0. Beyond the §8.3 tuple, so that an
+ * implementation that decides alike but forgets to record the rule differs.
  */
 data class DecisionTuple(
     val status: SecurityStatus,
     val reason: String,
     val decidedBy: DecisionRef?,
-    val error: String?
+    val error: String?,
+    val contextRef: DecisionRef?
 )
 
 enum class ParityVerdict {
@@ -98,10 +102,15 @@ data class ParityResult(val verdict: ParityVerdict, val baseline: ParitySide, va
 
     /**
      * Both failed with the same exception class but for different causes, e.g. different missing policy ids. The
-     * §8.3 tuple compares the class only, so this is still [ParityVerdict.SAME]; the replay reports it apart.
+     * §8.3 tuple compares the class only, so this is still [ParityVerdict.SAME], but it is a difference
+     * ([isDifference]).
      */
     val failedAlikeForDifferentCauses: Boolean
         get() = bothFailed && baseline.failureCause != candidate.failureCause
+
+    /** Not [ParityVerdict.SAME], or the same only by exception class: what every gate must have none of. */
+    val isDifference: Boolean
+        get() = verdict != ParityVerdict.SAME || failedAlikeForDifferentCauses
 }
 
 /**
@@ -148,7 +157,13 @@ class DecisionParity(val baseline: DecisionAuthorization, val candidate: Decisio
             .map { decision ->
                 val mapped = SecurityPipeline.toDecision(request, context, decision)
                 ParitySide(
-                    DecisionTuple(mapped.status, mapped.result.reason, decision.verifyContext?.toDecisionRef(), null),
+                    DecisionTuple(
+                        mapped.status,
+                        mapped.result.reason,
+                        decision.verifyContext?.toDecisionRef(),
+                        null,
+                        context.getVerifyContext()?.toDecisionRef(),
+                    ),
                     context,
                     null,
                 )
@@ -157,7 +172,13 @@ class DecisionParity(val baseline: DecisionAuthorization, val candidate: Decisio
                 val mapped = SecurityPipeline.toErrorDecision(request, context, failure)
                 Mono.just(
                     ParitySide(
-                        DecisionTuple(mapped.status, mapped.result.reason, null, failure.javaClass.name),
+                        DecisionTuple(
+                            mapped.status,
+                            mapped.result.reason,
+                            null,
+                            failure.javaClass.name,
+                            context.getVerifyContext()?.toDecisionRef(),
+                        ),
                         context,
                         failure,
                     ),

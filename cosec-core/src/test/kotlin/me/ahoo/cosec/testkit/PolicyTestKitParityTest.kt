@@ -84,6 +84,26 @@ class PolicyTestKitParityTest {
     }
 
     @Test
+    fun failingForAnotherCauseIsADifference() {
+        fun failingWith(cause: String) = AuthorizationFactory { _, _, _, _ ->
+            object : DecisionAuthorization {
+                override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> =
+                    Mono.error(IllegalArgumentException(cause))
+            }
+        }
+        val report = PolicyTestKit.parity(
+            listOf("classpath:cosec-policy-test/orders-policy-test.json"),
+            baseline = failingWith("one cause"),
+            candidate = failingWith("another cause"),
+        )
+        report.results.all { it.result.verdict == ParityVerdict.SAME }.assert().isTrue()
+        report.differences.assert().hasSize(report.results.size)
+        report.differences.all { it.result.failedAlikeForDifferentCauses }.assert().isTrue()
+        assertThrows(AssertionError::class.java) { report.assertSame() }.message.assert()
+            .contains("FAILED_ALIKE_FOR_DIFFERENT_CAUSES").contains("one cause").contains("another cause")
+    }
+
+    @Test
     fun missingLocationsFail() {
         assertThrows(IllegalStateException::class.java) { PolicyTestKit.parity("classpath:not-exists/*.json") }
     }

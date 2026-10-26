@@ -237,12 +237,41 @@ class EngineParityPropertyTest {
         ).compare(request, principal)
     }
 
+    /** How often each blacklist/root combination other than neither occurred. */
+    private class Combinations {
+        var blockedRoot = 0
+        var blockedOnly = 0
+        var rootOnly = 0
+
+        fun add(blocked: Boolean, root: Boolean) {
+            when {
+                blocked && root -> blockedRoot++
+                blocked -> blockedOnly++
+                root -> rootOnly++
+            }
+        }
+    }
+
+    private fun Random.blockedAndRoot(iteration: Int): Pair<Boolean, Boolean> {
+        // Drawn always, so forcing below does not shift the rest of the random stream.
+        val randomBlocked = nextInt(25) == 0
+        val randomRoot = nextInt(25) == 0
+        // Every blacklist/root combination at a fixed stride: random draws alone pair them once in ~600 cases.
+        val stride = iteration % FORCED_STRIDE
+        if (stride < 4) {
+            return ((stride and 1) == 1) to ((stride and 2) == 2)
+        }
+        return randomBlocked to randomRoot
+    }
+
     @Test
     fun legacyAndEngineDecideAlike() {
         val random = Random(SEED)
         var failures = 0
         var allowed = 0
-        var blockedRoots = 0
+        val combinations = Combinations()
+        // A count below 1 would pass every bound below without comparing anything.
+        ITERATIONS.assert().isGreaterThanOrEqualTo(1)
         repeat(ITERATIONS) { iteration ->
             val globalPolicies = List(random.nextInt(4)) { random.policy("g$it", PolicyType.GLOBAL) }
             val customPolicies = List(random.nextInt(4)) { random.policy("p$it", PolicyType.CUSTOM) }
@@ -286,14 +315,8 @@ class EngineParityPropertyTest {
                     SpaceIdCapable.SPACE_ID_KEY to if (long) "" else spaces.random(random),
                 ).filterValues { it.isNotEmpty() },
             )
-            // Drawn always, so forcing below does not shift the rest of the random stream.
-            val randomBlocked = random.nextInt(25) == 0
-            val randomRoot = random.nextInt(25) == 0
-            // Every blacklist/root combination at a fixed stride: random draws alone pair them once in ~600 cases.
-            val stride = iteration % FORCED_STRIDE
-            val blocked = if (stride < 4) (stride and 1) == 1 else randomBlocked
-            val root = if (stride < 4) (stride and 2) == 2 else randomRoot
-            if (blocked && root) blockedRoots++
+            val (blocked, root) = random.blockedAndRoot(iteration)
+            combinations.add(blocked, root)
             val result = compare(policyRepository to appRolePermissionRepository, blocked, root, request, principal)
             val legacy = result.baseline
             val engine = result.candidate
@@ -310,7 +333,9 @@ class EngineParityPropertyTest {
         // Every kind of outcome must occur for the comparison to mean anything.
         failures.assert().isBetween(ITERATIONS / 50, ITERATIONS / 2)
         allowed.assert().isBetween(ITERATIONS / 10, ITERATIONS * 9 / 10)
-        blockedRoots.assert().isGreaterThanOrEqualTo(ITERATIONS / FORCED_STRIDE)
+        combinations.blockedRoot.assert().isGreaterThanOrEqualTo(ITERATIONS / FORCED_STRIDE)
+        combinations.blockedOnly.assert().isGreaterThanOrEqualTo(ITERATIONS / FORCED_STRIDE)
+        combinations.rootOnly.assert().isGreaterThanOrEqualTo(ITERATIONS / FORCED_STRIDE)
         // Shows in the engineParity task's output how many cases actually ran.
         println("EngineParityPropertyTest: $ITERATIONS cases, $failures failed alike, $allowed allowed.")
     }

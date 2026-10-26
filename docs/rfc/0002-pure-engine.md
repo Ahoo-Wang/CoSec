@@ -771,8 +771,9 @@ PR-4 新增 `DecisionParity`，取代原稿的 `EngineParityAuthorization`：它
    和各角色的授予，即 `AppRolePermissionRepository` 读到的内容；
 3. 请求样本：覆盖至少连续 7 天的流量，至少 100 万条（流量不够时延长时间窗口，直到满足）。
 
-策略和角色权限在导出时取一次快照，而请求样本跨越 7 天，期间策略可能变过。这不影响门槛，因为两个实现读的是同一份快照；回放报告另列
-"与样本中记录的决策一致的比例"，只作参考，不是门槛。
+策略和角色权限在导出时取一次快照，而请求样本跨越 7 天，期间策略可能变过。两个实现读的是同一份快照，所以比较本身不受影响；但回放报告的
+"与样本中记录的决策一致的比例"也是门槛的一部分（2026-10-25 修订，原为只作参考）：漏导了策略或应用权限的导出数据里，两个实现同样地
+隐式拒绝一切，彼此一致却什么也没有证明，只有与记录的决策对照才看得出来。门槛要求这个比例不低于 90%（§8.3），期间策略的正常变动应远小于这个余量。
 
 **请求样本的来源**：审计事件（[`AuditEvent`](../../cosec-api/src/main/kotlin/me/ahoo/cosec/api/audit/AuditEvent.kt)，由
 [`AuditEventExtractor`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/audit/AuditEventExtractor.kt) 构造，经 Kafka 或日志 sink 收集）在 `main` 上
@@ -797,16 +798,19 @@ PR-4 新增 `DecisionParity`，取代原稿的 `EngineParityAuthorization`：它
 
 **回放工具**（PR-4）：
 
-- 输入：一个本地目录，含 `policies.json`（策略数组）、`app-role-permissions.json`（应用权限与角色授予）、`requests.jsonl`（每行一条请求：
-  上面列出的审计事件字段，另加可选的 `principal.attributes`、`request.headers`、`request.attributes`），以及可选的 `replay.json`（该部署的 root 配置）。
+- 输入：一个本地目录，含 `policies.json`（策略数组）、`app-role-permissions.json`（应用权限与角色授予；请求样本里出现的每个应用都必须有一项，
+  没有应用权限的应用写成 `{ "appId": "..." }`，缺项的应用按缺失处理，门槛不满足）、`requests.jsonl`（每行一条请求：
+  上面列出的审计事件字段，另加可选的 `principal.attributes`、`request.headers`、`request.attributes`；记录的应用、空间、设备与请求 id 优先于导出的同名请求头），
+  以及可选的 `replay.json`（该部署的 root 配置）。
 - 运行：`./gradlew :cosec-core:engineReplay -PreplayDir=<目录>`（PR-6 起改名为 `decisionReplay`，见 §8.1）。这是一个 `JavaExec` 任务，主类在 `cosec-core` 的测试夹具中，不进发布的 jar，
   不挂到 `check`。策略和角色权限装进内存仓库，两个实现读同一份；每条请求构造纯数据的 `Request` 和主体，交给 `DecisionParity`。
 - 输出：控制台摘要和 `<目录>/replay-report.json`：样本数、时间跨度、`same`/`mismatch`/`candidate_error` 计数、两边同样出错的计数
   （其中原因不同的另计）、按状态和按决策层的分布、两边各自的异常类计数、与记录决策一致的比例、读取了未记录输入的策略清单、各输入文件
-  （按回放实际读到的字节）的 SHA-256，以及 §8.3 的门槛是否满足（样本不少于 100 万、跨度不少于 7 天、两边同样出错不超过 1%；阈值可用参数
-  调低以试用工具，报告记下所用的阈值）。每条差异的明细（请求、两边的元组和出错原因）写进同一目录的 `replay-mismatches.jsonl`。
-  两个文件在回放开始时删除、结束时整体写入，中途失败不会留下旧报告。退出码：0 = 无差异且满足门槛；1 = 有差异；2 = 无差异但不满足门槛
-  （输出 `GATE NOT MET`）。
+  （按回放实际读到的字节）的 SHA-256、不同的 UTC 日数、重复的事件 id、引用了未导出应用的样本数，以及 §8.3 的门槛是否满足、回放能否作为证据
+  （`evidence`）。阈值可用参数调低以试用工具，报告记下所用的阈值；任何阈值弱于 §8.3 时，即使满足也输出"Gate met (lenient thresholds — not gate evidence)"，
+  `evidence` 为 false。每条差异的明细（请求、两边的元组和出错原因）写进同一目录的 `replay-mismatches.jsonl`。
+  两个文件在回放开始时（解析参数之前）删除、结束时整体写入，中途失败不会留下旧报告。退出码：0 = 可作为证据（无差异、按 §8.3 的阈值满足门槛）；
+  1 = 有差异；2 = 无差异但不满足门槛或阈值放宽（输出 `GATE NOT MET` 或 lenient）；64 = 参数错误（含越界的阈值）；70 = 导出数据无法回放。
 
 **数据处理**：导出的数据可能含个人数据（主体 id、IP、设备 id、请求路径）和真实的策略内容，只保存在维护者本地，回放也在维护者本地执行；
 不提交进仓库，不附到 PR，不上传到 CI。PR-6 的门槛证据只记录计数和哈希（报告中的计数、时间跨度、输入文件的 SHA-256），不含任何明细。
@@ -827,15 +831,20 @@ PR-4 新增 `DecisionParity`，取代原稿的 `EngineParityAuthorization`：它
    `SecurityPipeline` 的映射从 `AuthorizationDecision` 或错误推出（§8.1）；
 2. `AuthorizeResult.reason`（区分 `Explicit Deny` 与 `Implicit Deny`）；
 3. 做出决策的规则：`VerifyContext.toDecisionRef()`（层、策略 id、语句下标、语句名、角色 id、权限 id）；
-4. 出错时异常的类名（`MissingPolicyException`、`RegexTimeoutException`、仓库异常类）。
+4. 出错时异常的类名（`MissingPolicyException`、`RegexTimeoutException`、仓库异常类）；
+5. 写进调用方上下文的规则（`setVerifyContext`，审计和追踪读它；root、黑名单、隐式拒绝不写）：决策相同却忘了写入的实现也算差异（2026-10-25 补充）。
+
+两边同样出错时，异常类相同而原因不同（例如缺失的策略 id 不同）的样本，元组相同，但同样算差异（`failedAlikeForDifferentCauses`，2026-10-25 补充）。
 
 判定：
 
 - **离线语料与随机用例**：所有语料零差异；任何差异要么修引擎，要么证明是旧实现的缺陷，登记在本文附录的"已确认差异"表里，并由用户确认
   （RFC 0001 §6 第 2 阶段的门槛原文允许这一种例外）。
-- **离线回放**：每个选定部署至少 100 万条决策、覆盖至少 7 天流量，`mismatch` 为 0，`candidate_error` 为 0（`candidate_error` 只计旧实现
-  作出决策、新实现出错的样本；两边同样出错的样本计入 `same`，另行计数）；两边同样出错的样本不超过 1%，否则回放大多没有作出决策，
-  不能作为证据。§4.4 的 X1–X8 不属于决策差异，不在比较之内。
+- **离线回放**：每个选定部署至少 100 万条决策、覆盖至少 7 天流量且至少 7 个不同的 UTC 日，`mismatch`、`candidate_error`、
+  `failedAlikeForDifferentCauses` 都为 0（`candidate_error` 只计旧实现作出决策、新实现出错的样本；两边同样出错的样本计入 `same`，另行计数）；
+  两边同样出错的样本不超过 1%，与记录决策一致的比例不低于 90%，且没有引用未导出应用的样本，否则回放大多没有作出决策，或作出的不是被记录的那些决策，
+  不能作为证据（2026-10-25 修订：一致比例与应用覆盖改为门槛条件）。回放工具按这些阈值判定，报告的 `evidence` 为 true、退出码为 0 才算通过。
+  §4.4 的 X1–X8 不属于决策差异，不在比较之内。
 - **回放中发现差异**：修复（引擎缺陷修引擎；旧实现缺陷按上一条的规则登记并由用户确认），然后对所有部署的导出数据从零重跑。
 
 ### 8.4 性质测试

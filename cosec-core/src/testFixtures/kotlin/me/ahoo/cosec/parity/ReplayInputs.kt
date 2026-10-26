@@ -38,6 +38,9 @@ import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.permission.AppRolePermissionData
 import me.ahoo.cosec.permission.RolePermissionData
 import me.ahoo.cosec.policy.EvaluateRequest
+import me.ahoo.cosec.policy.condition.BOOL_CONDITION_MATCHER_AND_KEY
+import me.ahoo.cosec.policy.condition.BOOL_CONDITION_MATCHER_OR_KEY
+import me.ahoo.cosec.policy.condition.BoolConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.TimeConditionMatcher
 import me.ahoo.cosec.policy.condition.TimeConditionMatcherFactory
@@ -54,11 +57,13 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.ServiceLoader
 
 /**
  * One line of `requests.jsonl`, rebuilt as plain data.
  */
 internal class ReplayEvent(
+    val eventId: String?,
     val timestamp: Instant,
     val principal: CoSecPrincipal,
     val request: Request,
@@ -95,6 +100,7 @@ internal class ReplayEvent(
                 SimpleTenant(node.required("tenantId").asString()),
             )
             return ReplayEvent(
+                eventId = node.text("eventId"),
                 timestamp = instantOf(node.required("timestamp")),
                 principal = principal,
                 request = requestOf(requestNode, headers.orEmpty(), attributes.orEmpty()),
@@ -117,11 +123,15 @@ internal class ReplayEvent(
                 DeviceIdCapable.DEVICE_ID_KEY to node.get("device")?.text("id"),
                 RequestIdCapable.REQUEST_ID_KEY to node.text("id"),
                 USER_AGENT_HEADER to node.get("device")?.text("userAgent"),
-            ).filterValues { !it.isNullOrEmpty() }.mapValues { it.value!! }
-            // HTTP header names are case-insensitive; exported headers win over the recorded ones they repeat.
+            )
+            // HTTP header names are case-insensitive. What the audit event recorded (app, space, device, request id) is
+            // what was decided on, so it wins over an exported header naming the same field, even when it recorded none
+            // (`null` is the default app or space).
             val allHeaders = sortedMapOf<String, String>(String.CASE_INSENSITIVE_ORDER).apply {
-                putAll(recordedHeaders)
                 putAll(headers)
+                recordedHeaders.forEach { (key, value) ->
+                    if (value.isNullOrEmpty()) remove(key) else put(key, value)
+                }
             }
             val routeId = node.text("routeId")
             val allAttributes = if (routeId.isNullOrEmpty()) {
@@ -174,11 +184,22 @@ internal class ReplayEvent(
 
 /**
  * Finds the policies and app permissions whose conditions read inputs audit events do not record (RFC 0002 §8.2.1),
- * from the configuration as written: a `part` naming such an input, a SpEL or OGNL condition, or a `#{...}` template.
+ * from the configuration as written: a `part` naming such an input, a SpEL or OGNL condition, a `#{...}` template, or a
+ * condition type `cosec-core` does not define (`custom:<type>`: what a custom matcher reads is unknown).
  */
 internal object UnrecordedInputs {
     private const val SCRIPT = "script"
+    private const val CONDITION_KEY = "condition"
+    private const val BUILT_IN_PACKAGE = "me.ahoo.cosec.policy.condition"
     private val SCRIPT_TYPES = setOf("spel", "ognl")
+    private val BOOL_KEYS = listOf(BOOL_CONDITION_MATCHER_AND_KEY, BOOL_CONDITION_MATCHER_OR_KEY)
+
+    /** The condition types `cosec-core` registers itself; any other is a custom matcher. */
+    private val builtInConditionTypes: Set<String> by lazy {
+        ServiceLoader.load(ConditionMatcherFactory::class.java)
+            .filter { it.javaClass.name.startsWith(BUILT_IN_PACKAGE) }
+            .mapTo(HashSet()) { it.type }
+    }
 
     fun of(policies: List<JsonNode>, apps: List<JsonNode>): Map<String, Set<String>> {
         val found = sortedMapOf<String, Set<String>>()
@@ -207,11 +228,25 @@ internal object UnrecordedInputs {
                 if (name == CONDITION_MATCHER_PART_KEY && value.isString) {
                     inputOf(value.asString())?.let { inputs += it }
                 }
+                if (name == CONDITION_KEY && value.isObject) {
+                    customTypes(value, inputs)
+                }
                 collect(value, inputs)
             }
 
             node.isArray -> node.values().forEach { collect(it, inputs) }
             node.isString && "#{" in node.asString() -> inputs += SCRIPT
+        }
+    }
+
+    /** A condition is `{ "<type>": <configuration> }`; `bool` nests conditions under `and` and `or`. */
+    private fun customTypes(condition: JsonNode, inputs: MutableSet<String>) {
+        val (type, configuration) = condition.properties().firstOrNull() ?: return
+        if (type !in builtInConditionTypes) {
+            inputs += "custom:$type"
+        }
+        if (type == BoolConditionMatcherFactory.TYPE) {
+            BOOL_KEYS.forEach { key -> configuration.get(key)?.values()?.forEach { customTypes(it, inputs) } }
         }
     }
 
@@ -226,7 +261,12 @@ internal object UnrecordedInputs {
     }
 }
 
-internal class ReplayApp(val appPermission: AppPermission, val grants: Map<SpacedRoleId, Set<String>>)
+/** [appPermission] is null for an app exported as having no app permission: its role layer is empty, as in 7.0. */
+internal class ReplayApp(
+    val appId: String,
+    val appPermission: AppPermission?,
+    val grants: Map<SpacedRoleId, Set<String>>
+)
 
 /** The verdict recorded for the sample being replayed. Samples are replayed one at a time. */
 internal class ReplayBlacklist : BlacklistChecker {
@@ -275,9 +315,10 @@ internal class ReplayAppRolePermissionRepository(
 ) : AppRolePermissionRepository {
     override fun getAppRolePermission(appId: String, spaceId: String, roleIds: Set<RoleId>): Mono<AppRolePermission> {
         val app = apps[appId] ?: return Mono.empty()
+        val appPermission = app.appPermission ?: return Mono.empty()
         val grants = roleIds.mapNotNull { roleId ->
             app.grants[SpacedRoleId(roleId, spaceId)]?.let { RolePermissionData(roleId, it) }
         }
-        return Mono.just(AppRolePermissionData(app.appPermission, grants))
+        return Mono.just(AppRolePermissionData(appPermission, grants))
     }
 }

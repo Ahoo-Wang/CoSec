@@ -77,6 +77,10 @@ val verifyTestFixturesUnpublished = tasks.register("verifyTestFixturesUnpublishe
 tasks.named("check") {
     dependsOn(verifyTestFixturesUnpublished)
 }
+// The release workflow publishes without running check. Not generateMetadataFile*: the guard reads its output.
+tasks.matching { it.name.startsWith("publish") }.configureEach {
+    dependsOn(verifyTestFixturesUnpublished)
+}
 
 detekt {
     source.from("src/testFixtures/kotlin")
@@ -98,7 +102,9 @@ tasks.register<JavaExec>("engineReplay") {
     val gateOptions = mapOf(
         "replayMinSamples" to "--min-samples",
         "replayMinDays" to "--min-days",
+        "replayMinDistinctDays" to "--min-distinct-days",
         "replayMaxBothFailedRate" to "--max-both-failed-rate",
+        "replayMinAgreementRate" to "--min-agreement-rate",
     ).mapValues { (property, option) -> providers.gradleProperty(property).map { "$option=$it" } }
     argumentProviders.add(
         CommandLineArgumentProvider {
