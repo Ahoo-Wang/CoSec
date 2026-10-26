@@ -462,6 +462,7 @@ pre-commit checks:
 | `cosec-policy.schema.json` | a policy file |
 | `cosec-app-permission.schema.json` | an app permission file |
 | `rate-limit-rule.schema.json` | a rate limit rules file |
+| `cosec-snapshot-document.schema.json` | the body of a stored snapshot document: the policies document or an app's document |
 | `action.schema.json`, `condition.schema.json`, `definitions.schema.json` | shared parts |
 
 Reference one from a file with `$schema`, which the parser ignores:
@@ -477,7 +478,20 @@ Reference one from a file with `$schema`, which the parser ignores:
 }
 ```
 
-The schemas describe the shape only. They do not check parts, path variable scope, duplicate ids or matcher
-semantics, so also load your policies with the real parser ([Testing](./testing.md#validating-policies)).
+The files are generated from the document format descriptors in `cosec-core`
+([`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt))
+and never edited by hand. A test binds the descriptors to the parser: documents generated from them must parse, and
+documents with a required field dropped, an unknown field added or a value of the wrong type must fail the schema.
+
+The schemas are stricter than the parser in two ways, so a file the schema rejects may still load:
+
+- They reject unknown fields. The parser ignores them (except at the top level of a snapshot document), so a
+  misspelled `efect` silently becomes the default `allow`.
+- They reject values of the wrong type. The parser converts some of them: a number where a string belongs, an integer
+  where a boolean belongs, a single value where an array belongs.
+
+Any condition or action type name passes the schema, because custom matcher types are registered at run time.
+The schemas check that a `part` is supported, but not path variable scope, duplicate ids, path pattern syntax or
+matcher semantics, so also load your policies with the real parser ([Testing](./testing.md#validating-policies)).
 
 **Next:** grant permissions by role instead of per principal, in [Role permissions](./role-permissions.md).

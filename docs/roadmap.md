@@ -14,7 +14,7 @@
 | 3 | 策略快照分发 | [RFC 0003](rfc/0003-policy-snapshot.md)，已确认 | PR-1、PR-2、PR-3 已合入；PR-4 未开始 | 🟡 进行中 |
 | 4 | 统一模型：`Binding`、平台层/租户层、条件 AST、`service:verb`、编译执行、转换工具 | [RFC 0004](rfc/0004-unified-model.md) / [RFC 0005](rfc/0005-condition-ast.md)，已确认（2026-10-22） | RFC 0004 PR-1 已合入；RFC 0005 PR-1 进行中 | 🟡 进行中 |
 | 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | [RFC 0006](rfc/0006-coroutine-pipeline.md)，已确认（2026-10-25） | 未开始 | ⚪ 设计已确认，未开工 |
-| 6 | 控制面 `cosec-control` | 未写 | 未开始 | ⚪ |
+| 6 | 控制面 `cosec-control` | [RFC 0007](rfc/0007-control-plane.md)，已确认（2026-10-26） | PR-2（schema 生成）进行中 | 🟡 进行中 |
 
 **发布策略**（RFC 0001 §6，2026-10-21）：第 2–6 阶段全部完成、每个阶段做完两轮审查之前，8.0 不发布任何版本，没有里程碑版和 RC。
 各阶段的门槛都离线完成，不依赖发布版本。
@@ -102,15 +102,27 @@ RFC 0006 已于 2026-10-25 确认（§16 的 26 项决定全部按推荐，含�
 
 ---
 
-## 5. 等待维护者的决定
+## 5. 第 6 阶段：控制面（RFC 0007）
+
+RFC 0007 已于 2026-10-26 确认（§17 的 29 项决定全部按推荐）。PR-1、PR-2 可以立即开工，其余依赖第 4、5 阶段的对应 PR（RFC 0007 §16）。
+
+| PR | 内容 | 合入 | 第 1 轮审查 | 第 2 轮审查 |
+|---|---|---|---|---|
+| PR-2 | 由文档格式描述生成 JSON schema：`DocumentFormats`、`generateSchemas`、`verifySchemas`、`SchemaConformanceTest` | 进行中 | — | — |
+
+PR-2 之后，每个改动文档格式的 PR 都要同时改格式描述并运行 `generateSchemas`，`verifySchemas` 在 `check` 中强制。
+
+---
+
+## 6. 等待维护者的决定
 
 | 事项 | 影响 |
 |---|---|
 | 离线回放用的部署与数据导出 | RFC 0002 PR-6 的门槛 |
 
-## 6. 尚未派发的下一步
+## 7. 尚未派发的下一步
 
 - RFC 0002 PR-6（等离线回放门槛）。
 - RFC 0003 PR-4（比较、回放与规模测量工具）；PR-5、PR-6 在 RFC 0002 PR-6 之后。
 - 第 4 阶段的后续 PR（RFC 0004 PR-2 起、RFC 0005 PR-2 起）。
-- 第 5 阶段 PR-1；第 6 阶段的细化 RFC。
+- 第 5 阶段 PR-1。

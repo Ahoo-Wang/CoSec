@@ -1,37 +1,61 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/action.schema.json",
-  "title": "CoSec Action Matcher Schema",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "anyOf": [
     {
+      "examples": [
+        "*",
+        "/orders/**",
+        "/orders/{id}",
+        "/users/#{principal.id}/orders",
+        "/health"
+      ],
       "type": "string"
     },
     {
-      "type": "array",
       "items": {
-        "anyOf": [
-          {"type": "string"},
-          {"$ref": "#"}
-        ]
+        "$ref": "#"
       },
+      "type": "array",
       "uniqueItems": true
     },
     {
-      "type": "object",
+      "additionalProperties": {
+        "description": "An action matcher type registered by a custom ActionMatcherFactory."
+      },
+      "maxProperties": 1,
+      "minProperties": 1,
       "properties": {
-        "path": {
-          "$ref": "#/definitions/pathActionMatcher"
+        "all": {
+          "$ref": "#/definitions/allActionMatcher"
         },
         "composite": {
           "$ref": "#/definitions/compositeActionMatcher"
         },
-        "all": {
-          "$ref": "#/definitions/allActionMatcher"
+        "path": {
+          "$ref": "#/definitions/pathAction"
         }
-      }
+      },
+      "type": "object"
     }
   ],
   "definitions": {
+    "allActionMatcher": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "$ref": "#/definitions/methodValue"
+        }
+      },
+      "type": "object"
+    },
+    "compositeActionMatcher": {
+      "items": {
+        "$ref": "#"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
     "method": {
       "enum": [
         "GET",
@@ -42,7 +66,8 @@
         "DELETE",
         "OPTIONS",
         "TRACE"
-      ]
+      ],
+      "type": "string"
     },
     "methodValue": {
       "anyOf": [
@@ -50,71 +75,85 @@
           "$ref": "#/definitions/method"
         },
         {
-          "type": "array",
           "items": {
             "$ref": "#/definitions/method"
           },
+          "type": "array",
           "uniqueItems": true
         }
       ]
     },
-    "allActionMatcher": {
-      "type": "object",
-      "properties": {
-        "method": {
-          "$ref": "#/definitions/methodValue"
+    "pathAction": {
+      "anyOf": [
+        {
+          "examples": [
+            "/orders/**",
+            "/orders/{id}",
+            "/users/#{principal.id}/orders",
+            "/health"
+          ],
+          "type": "string"
+        },
+        {
+          "items": {
+            "examples": [
+              "/orders/**",
+              "/orders/{id}",
+              "/users/#{principal.id}/orders",
+              "/health"
+            ],
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        {
+          "$ref": "#/definitions/pathActionMatcher"
         }
-      }
+      ]
     },
     "pathActionMatcher": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
-        "pattern": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "uniqueItems": true
-            }
-          ]
-        },
         "method": {
           "$ref": "#/definitions/methodValue"
         },
         "options": {
           "$ref": "definitions.schema.json#/definitions/pathOptions"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "examples": [
+                "/orders/**",
+                "/orders/{id}",
+                "/users/#{principal.id}/orders",
+                "/health"
+              ],
+              "type": "string"
+            },
+            {
+              "items": {
+                "examples": [
+                  "/orders/**",
+                  "/orders/{id}",
+                  "/users/#{principal.id}/orders",
+                  "/health"
+                ],
+                "type": "string"
+              },
+              "type": "array",
+              "uniqueItems": true
+            }
+          ]
         }
       },
       "required": [
         "pattern"
       ],
-      "additionalProperties": false
-    },
-    "compositeActionMatcher": {
-      "type": "array",
-      "items": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "path": {
-                "$ref": "#/definitions/pathActionMatcher"
-              }
-            }
-          }
-        ]
-      },
-      "minItems": 1
+      "type": "object"
     }
-  }
+  },
+  "description": "What requests a statement applies to: a path pattern (`*` for every request), an array of actions, or an object naming one action matcher type.",
+  "title": "CoSec Action Matcher Schema"
 }
-
-

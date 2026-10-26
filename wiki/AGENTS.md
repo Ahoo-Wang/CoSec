@@ -78,7 +78,7 @@ time one copy is updated. The homes that are easiest to duplicate by accident:
 | Invariants and the tests that guard them; performance numbers | `architecture/overview.md` |
 
 Outside the wiki: contribution workflow and releases in `CONTRIBUTING.md`, agent build rules in the root
-`AGENTS.md`, API details in KDoc, JSON formats in `schema/*.schema.json`.
+`AGENTS.md`, API details in KDoc, JSON formats in the format descriptors that generate `schema/*.schema.json`.
 
 ## Conventions
 
