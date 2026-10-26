@@ -17,6 +17,7 @@ import me.ahoo.cocache.api.Codec
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.permission.AppPermissionData
 import me.ahoo.cosec.permission.PermissionData
 import me.ahoo.cosec.permission.PermissionGroupData
@@ -89,6 +90,7 @@ class CoSecCacheSpecsTest {
             caches.rolePermissionCache.put(AppSpacedRoleId("app", "admin", "space"), setOf("p"))
             caches.revokedTokenCache.put("jti", true)
             caches.revokedSubjectCache.put("1:t:alice", 1L)
+            caches.membershipCache.put("1:t:alice", Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList()))
             mapOf(
                 CoSecCacheSpecs.POLICY_CACHE_NAME to ("p1" to "layout:policy:p1"),
                 CoSecCacheSpecs.GLOBAL_POLICY_INDEX_CACHE_NAME to ("policy" to "layout:global:policy"),
@@ -96,6 +98,7 @@ class CoSecCacheSpecsTest {
                 CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME to ("app:admin@space" to "layout:app:role:permission:app:admin@space"),
                 CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME to ("jti" to "layout:token:revoked:jti"),
                 CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME to ("1:t:alice" to "layout:token:subject:revoked:1:t:alice"),
+                CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME to ("1:t:alice" to "layout:membership:1:t:alice"),
             ).forEach { (cacheName, keys) ->
                 checkNotNull(caches.runtime.admin(cacheName)).inspect(keys.first).storageKey
                     .assert().isEqualTo(keys.second)

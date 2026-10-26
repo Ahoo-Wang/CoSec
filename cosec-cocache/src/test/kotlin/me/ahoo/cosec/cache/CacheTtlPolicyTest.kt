@@ -99,4 +99,29 @@ class CacheTtlPolicyTest {
         CoSecCacheSpecs.pinnedPolicy(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, weakened).foreignFormat
             .assert().isEqualTo(ForeignFormatMode.FAIL)
     }
+
+    /**
+     * RFC 0006 §5.5.2: the memberships cache expires by design, but never degrades a failed read into "no memberships",
+     * and it can never be made to live forever: a lost invalidation would then never apply.
+     */
+    @Test
+    fun membershipCacheExpiresButFailsClosed() {
+        val spec = CoSecCacheSpecs.membership(policy = weakened, ttl = Duration.ofSeconds(5))
+        spec.policy.ttl.assert().isEqualTo(Duration.ofSeconds(5))
+        spec.policy.ttlJitter.assert().isEqualTo(Duration.ZERO)
+        spec.policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+        spec.policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
+        spec.namespace.assert().isEqualTo("cosec:membership")
+
+        val forever = weakened.toBuilder().ttl(null).build()
+        CoSecCacheSpecs.pinnedPolicy(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME, forever).let {
+            it.ttl.assert().isEqualTo(CoSecCacheSpecs.DEFAULT_MEMBERSHIP_TTL)
+            it.ttlJitter.assert().isEqualTo(Duration.ZERO)
+            it.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+            it.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
+        }
+        CoSecCacheSpecs.pinnedPolicy(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME, weakened).ttl
+            .assert().isEqualTo(Duration.ofMinutes(1))
+        CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES.assert().doesNotContain(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME)
+    }
 }

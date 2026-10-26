@@ -32,6 +32,7 @@ import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
 import tools.jackson.core.type.TypeReference
@@ -63,6 +64,15 @@ object CoSecCacheSpecs {
     /** The principals whose tokens were revoked all at once (RFC 0004 §4.5.3). */
     const val REVOKED_SUBJECT_CACHE_NAME = "RevokedSubjectCache"
 
+    /** The memberships a `MembershipLoader` answers for principals whose token asks the provider (RFC 0004 §4.5.2). */
+    const val MEMBERSHIP_CACHE_NAME = "MembershipCache"
+
+    /**
+     * How long a principal's cached memberships live: the longest a membership change can take to apply when its
+     * invalidation is lost (RFC 0001 §3.2, the revocation delay of the provider source).
+     */
+    val DEFAULT_MEMBERSHIP_TTL: Duration = Duration.ofMinutes(1)
+
     /** The snapshot documents of RFC 0003 (§4.1); nothing reads them before RFC 0003 PR-5 wires them. */
     const val POLICY_SNAPSHOT_CACHE_NAME = "PolicySnapshotCache"
 
@@ -93,6 +103,7 @@ object CoSecCacheSpecs {
         // Not under token:revoked, whose keys are token ids.
         REVOKED_SUBJECT_CACHE_NAME to "token:subject:revoked",
         POLICY_SNAPSHOT_CACHE_NAME to "snapshot",
+        MEMBERSHIP_CACHE_NAME to "membership",
     )
 
     /** The CoCache namespace of [cacheName]: `{keyPrefix}:policy` and so on. */
@@ -127,12 +138,30 @@ object CoSecCacheSpecs {
         .build()
 
     /**
+     * The memberships cache is not the store of record, so its entries expire, but a failed read must never become
+     * "no memberships" (RFC 0006 §5.5.2): with no roles, a DENY on a role would not apply. So:
+     *
+     * - entries always expire: a `ttl` of null becomes [DEFAULT_MEMBERSHIP_TTL], since a membership change whose
+     *   invalidation is lost would otherwise never apply; without jitter, so the TTL is the bound it is documented as;
+     * - a failed Redis read throws ([ReadFailureMode.THROW]) and content the cache cannot read fails the read
+     *   ([ForeignFormatMode.FAIL]); the request fails closed with 503.
+     */
+    fun CachePolicy.expiringFailClosed(): CachePolicy = toBuilder()
+        .ttl(ttl ?: DEFAULT_MEMBERSHIP_TTL)
+        .ttlJitter(Duration.ZERO)
+        .readFailure(ReadFailureMode.THROW)
+        .foreignFormat(ForeignFormatMode.FAIL)
+        .build()
+
+    /**
      * What CoSec fixes in the policy of [cacheName], applied after any customizer or property:
-     * [storeOfRecord] for policies and permissions, [failOnForeignFormat] for revoked tokens and subjects.
+     * [storeOfRecord] for policies and permissions, [failOnForeignFormat] for revoked tokens and subjects,
+     * [expiringFailClosed] for memberships.
      */
     fun pinnedPolicy(cacheName: String, policy: CachePolicy): CachePolicy = when (cacheName) {
         in STORE_OF_RECORD_CACHE_NAMES -> policy.storeOfRecord()
         REVOKED_TOKEN_CACHE_NAME, REVOKED_SUBJECT_CACHE_NAME -> policy.failOnForeignFormat()
+        MEMBERSHIP_CACHE_NAME -> policy.expiringFailClosed()
         else -> policy
     }
 
@@ -239,6 +268,20 @@ object CoSecCacheSpecs {
                 .build()
                 .failOnForeignFormat()
         )
+        .build()
+
+    /**
+     * The memberships of principals whose token asks the provider ([CoCacheMembershipProvider]): keyed by
+     * [MembershipCache.key], expiring after [ttl], and failing closed on read ([expiringFailClosed]).
+     */
+    fun membership(
+        keyPrefix: String = CoSec.COSEC,
+        policy: CachePolicy = CachePolicy.DEFAULT,
+        ttl: Duration = DEFAULT_MEMBERSHIP_TTL,
+    ): CacheSpec<String, Memberships> = CacheSpec.builder<String, Memberships>(MEMBERSHIP_CACHE_NAME)
+        .storageLayout(keyPrefix)
+        .codec(MembershipsCodec)
+        .policy(policy.toBuilder().ttl(ttl).build().expiringFailClosed())
         .build()
 
     inline fun <reified V : Any> jacksonCodec(mapper: ObjectMapper): Codec<V> =

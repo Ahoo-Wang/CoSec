@@ -22,6 +22,10 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.apikey.ApiKey
+import me.ahoo.cosec.apikey.ApiKeyReader
+import me.ahoo.cosec.apikey.ApiKeys
+import me.ahoo.cosec.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.membership.InMemoryMembershipProvider
@@ -42,9 +46,11 @@ import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineOptions
+import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.runtime.authn.CompositeAuthenticator
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
@@ -60,7 +66,9 @@ import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.StringIdGenerator
 import tools.jackson.databind.JsonNode
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
@@ -86,7 +94,12 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                       "token": { "jti": "t1", "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
  *                                  "membership": "provider", "issuedAt": "2026-10-01T00:00:00Z" | null,
  *                                  "verification": "valid" | "expired" | "invalid" },
- * "revocations":        { "tokens": ["t1"], "subjects": [{ "tenant": "acme", "principal": "alice", "issuedBefore": "..." }] },
+ *                       // "composite": the CompositeAuthenticator, the API key one over "apiKeys" at 2026-11-01
+ *                       // ("apiKeysFail": "message" makes the store throw), the token one over "token" if any
+ *                       "apiKeys": [{ "key": "k", "id": "billing", "principalId": "svc", "tenantId": "acme", "roles": [...],
+ *                                     "policies": [...], "enabled": true, "expiresAt": "..." }],
+ * "revocations":        { "tokens": ["t1"], "subjects": [{ "tenant": "acme", "principal": "alice", "issuedBefore": "..." }] }
+ *                       | { "fails": "message" },                       // the check reports an error
  * "membershipProvider": { "roles": { "<space>": [...] }, "attachments": [...] } | { "fails": "message" } | { "hangs": true },
  * "snapshot":           { "fails": "message" } | { "hangs": true },      // otherwise every document is installed
  * "options":            { "timeoutMillis": 5000, "authenticationTimeoutMillis": 1000, "membershipTimeoutMillis": 500 },
@@ -174,9 +187,14 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         Outcome.Answered(outcome.status, outcome.proceed, outcome.problem?.type?.slug)
 
     private fun authenticator(node: JsonNode, revocations: JsonNode?, reached: () -> Unit): Authenticator {
-        node.only("result", "reason", "tenant", "id", "roles", "policies", "membership", "token")
+        node.only("result", "reason", "tenant", "id", "roles", "policies", "membership", "token", "apiKeys", "apiKeysFail")
         return when (val result = node.get("result")?.text() ?: "authenticated") {
             "token" -> TokenAuthenticator(ScenarioTokenVerifier(node.required("token")), revocations(revocations))
+            "composite" -> CompositeAuthenticator(
+                token = node.get("token")?.let { TokenAuthenticator(ScenarioTokenVerifier(it), revocations(revocations)) }
+                    ?: Authenticator { AuthnResult.Anonymous },
+                apiKey = ApiKeyAuthenticator(apiKeys(node), Clock.fixed(Instant.parse(NOW), ZoneOffset.UTC)),
+            )
             "anonymous" -> Authenticator { AuthnResult.Anonymous }
             "authenticated" -> Authenticator { authenticated(node) }
             "rejected" -> Authenticator {
@@ -212,9 +230,35 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         return AuthnResult.Authenticated(principal, "scenario")
     }
 
+    /** The scenario's API keys, by the hash of their `key`; `apiKeysFail` makes every lookup throw. */
+    private fun apiKeys(node: JsonNode): ApiKeyReader {
+        node.get("apiKeysFail")?.let { fails -> return ApiKeyReader { throw IllegalStateException(fails.text()) } }
+        val keys = node.get("apiKeys")?.values().orEmpty().associate { key ->
+            key.only("key", "id", "principalId", "tenantId", "roles", "policies", "enabled", "expiresAt")
+            ApiKeys.hash(key.required("key").text()) to ApiKey(
+                id = key.get("id")?.text() ?: "key",
+                principalId = key.required("principalId").text(),
+                tenantId = key.get("tenantId")?.text(),
+                roles = key.get("roles")?.strings().orEmpty().toSet(),
+                policies = key.get("policies")?.strings().orEmpty().toSet(),
+                enabled = key.get("enabled")?.bool() ?: true,
+                expiresAt = key.get("expiresAt")?.text()?.let(Instant::parse),
+            )
+        }
+        return InMemoryApiKeyStore(keys).reader
+    }
+
     private fun revocations(node: JsonNode?): RevocationReader {
         if (node == null) return RevocationReader.NONE
-        node.only("tokens", "subjects")
+        node.only("tokens", "subjects", "fails")
+        node.get("fails")?.let { fails ->
+            return object : RevocationReader {
+                override suspend fun isRevoked(tokenId: String): Boolean = throw IllegalStateException(fails.text())
+
+                override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
+                    throw IllegalStateException(fails.text())
+            }
+        }
         val tokens = node.get("tokens")?.strings().orEmpty().toSet()
         val subjects = node.get("subjects")?.values().orEmpty().associate { subject ->
             subject.only("tenant", "principal", "issuedBefore")
@@ -348,6 +392,9 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
     private companion object {
         const val REQUEST_ID = "scenario-request"
+
+        /** The time API keys are judged at, the default request time of the `engine` runner. */
+        const val NOW = "2026-11-01T00:00:00Z"
         val CANCEL_POINTS = setOf("authentication", "memberships", "snapshot")
         val EMPTY: JsonNode = tools.jackson.databind.node.JsonNodeFactory.instance.objectNode()
 

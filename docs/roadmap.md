@@ -105,7 +105,7 @@ PR-9、PR-10 并入切换；PR-2 增加"同一 `CoSec-*` 参数的 Header 与 qu
 2026-10-26 起：CoSec 写的错误响应改为 RFC 9457 problem+json，显式与隐式拒绝在响应中合并（RFC 0006 Q27）；PR-2 实现，PR-7 写回，切换 PR 写文档。
 PR-2（#1044）：`HttpFacts` 与 `SCP-4`、`PathNormalizer`、`Authenticator` SPI、`Outcome` 与 `StatusMapping`（problem 词汇）、手写的 `ProblemEncoder`、
 `problem` 格式描述与 `schema/problem.schema.json`、`Pipeline.decide` 骨架（整体超时、取消规则、`resumeOffIo` 与 T1–T3）、`SuspendingSnapshotSource`，全部用测试替身；
-快照视图的来源是新的 `SnapshotViews` 接口，由 RFC 0004 PR-4 的文档源实现。PR-3（#1054，打开中）：`MembershipProvider` 改为 `suspend`（Q11），成员关系解析搬进 `runtime/` 的挂起 `MembershipResolver`，`TokenAuthenticator` 校验令牌、按令牌与按主体吊销（`MEM-4`）并给出 `token-*`（`PIP-6`），吊销的读接口是新的 `RevocationReader`（`TokenStore` 的同步方法留给 7.x 路径到切换为止）；API Key 认证器、`CoCacheTokenStore` 的非阻塞读与 `CoCacheMembershipProvider` 留给后续 PR。PR-6 可以开工。2026-10-26 修订（路线图审查）：PR-3 至 PR-7 合入时各自把自己的一段接进端到端切片（RFC 0008 §4.4.3）；PR-9 的 starter 装配落在 S1。
+快照视图的来源是新的 `SnapshotViews` 接口，由 RFC 0004 PR-4 的文档源实现。PR-3（#1054，打开中）：`MembershipProvider` 改为 `suspend`（Q11），成员关系解析搬进 `runtime/` 的挂起 `MembershipResolver`，`TokenAuthenticator` 校验令牌、按令牌与按主体吊销（`MEM-4`）并给出 `token-*`（`PIP-6`），吊销的读接口是新的 `RevocationReader`（`TokenStore` 的同步方法留给 7.x 路径到切换为止）；PR-3b（#1055，打开中）：`CoCacheRevocationReader`（`CoCacheTokenStore.reader`，CoCache 异步视图上的非阻塞吊销读，保留文档化的降级）、`CoCacheMembershipProvider` 与 `MembershipLoader`（带 TTL 的成员关系缓存，读写失败抛出，`MembershipCacheFailureTest`）、新规则 `PIP-7`；PR-3c（#1057，打开中）：`ApiKeyReader`（`ApiKeyStore` 的挂起读接口）与 `RedisApiKeyReader`（响应式客户端，不阻塞）、`ApiKeyAuthenticator`、`CompositeAuthenticator`（带 API Key 的请求只按 Key 判断）、新规则 `PIP-8`。PR-6 可以开工。2026-10-26 修订（路线图审查）：PR-3 至 PR-7 合入时各自把自己的一段接进端到端切片（RFC 0008 §4.4.3）；PR-9 的 starter 装配落在 S1。
 
 ---
 

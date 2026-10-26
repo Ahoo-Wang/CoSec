@@ -55,6 +55,9 @@ data class ApiKey(
         return tenantId?.let { SimpleTenantPrincipal(principal, SimpleTenant(it)) } ?: principal
     }
 
+    /** Whether the key works at [now]: enabled, and not past [expiresAt]. */
+    fun usableAt(now: Instant): Boolean = enabled && (expiresAt == null || now.isBefore(expiresAt))
+
     companion object {
         /** Principal attribute naming the key a request authenticated with. */
         const val API_KEY_ID_ATTRIBUTE = "apiKeyId"
@@ -70,10 +73,22 @@ fun interface ApiKeyStore {
 }
 
 /**
+ * The read side of an API key store for the coroutine pipeline (RFC 0006 §5.3.2): never blocks the calling thread, which
+ * may be an event loop. It sits next to [ApiKeyStore], which the 7.x [ApiKeySecurityContextParser] reads synchronously
+ * until the switch removes that path (RFC 0008 §4.4). A lookup that fails throws: the request is answered 503.
+ */
+fun interface ApiKeyReader {
+    suspend fun findByHash(hash: String): ApiKey?
+}
+
+/**
  * @param keys API keys by hash
  */
 class InMemoryApiKeyStore(private val keys: Map<String, ApiKey>) : ApiKeyStore {
     override fun findByHash(hash: String): ApiKey? = keys[hash]
+
+    /** The same keys for the pipeline: a map lookup, which never blocks. */
+    val reader: ApiKeyReader = ApiKeyReader { keys[it] }
 }
 
 object ApiKeys {
