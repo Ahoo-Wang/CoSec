@@ -18,7 +18,13 @@ name: CodeQL
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - 'wiki/**'
+      - 'docs/**'
+      - '**/*.md'
+      - 'skills/**'
   pull_request:
+    # No path filter here: "Analyze (java-kotlin)" is a required check, so a skipped run would block docs-only PRs.
     branches: [ main ]
   schedule:
     - cron: '23 3 * * 1'
