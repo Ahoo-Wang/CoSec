@@ -23,12 +23,21 @@ import java.util.TreeMap
 object JsonSchemaWriter {
     const val DRAFT_07 = "http://json-schema.org/draft-07/schema#"
 
+    /** Every file says so: a schema cannot express all the compiler checks ([FormatPatterns.NOT_EXPRESSED]). */
+    const val NOT_SUFFICIENT = "Passing this schema is necessary, not sufficient: the compiler also checks what JSON " +
+        "Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too."
+
     fun write(file: SchemaFile, baseUri: String = DocumentFormats.BASE_URI): String {
         val document = TreeMap<String, Any>()
         document["\$schema"] = DRAFT_07
         document["\$id"] = baseUri + file.fileName
         document["title"] = file.title
-        file.description?.let { document["description"] = it }
+        // Problems are what CoSec writes, not a document it reads and compiles.
+        val note = NOT_SUFFICIENT.takeIf { file.name != DocumentFormats.PROBLEM }
+        listOfNotNull(
+            file.description,
+            note
+        ).takeIf { it.isNotEmpty() }?.let { document["description"] = it.joinToString(" ") }
         file.root?.let { document.putAll(schemaOf(it, file)) }
         if (file.definitions.isNotEmpty()) {
             document["definitions"] = file.definitions.mapValuesTo(TreeMap()) { schemaOf(it.value, file) }

@@ -27,6 +27,8 @@ sealed interface FormatType {
 /**
  * A string. [examples] are written to the schema for editor completion and are the values the conformance test
  * generates, so a string whose valid values cannot be generated from [enum] alone must list valid examples.
+ * [counterExamples] are not written: they are values the compiler rejects, and the conformance test checks that the
+ * schema rejects each of them too. A string with a [pattern] lists at least one.
  */
 class StringType(
     val enum: List<String> = emptyList(),
@@ -35,6 +37,7 @@ class StringType(
     val maxLength: Int? = null,
     val format: String? = null,
     val examples: List<String> = emptyList(),
+    val counterExamples: List<String> = emptyList(),
     override val description: String? = null,
 ) : FormatType
 
