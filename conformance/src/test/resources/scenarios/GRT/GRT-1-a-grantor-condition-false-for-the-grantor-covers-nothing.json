@@ -1,0 +1,116 @@
+{
+  "rules": [
+    "GRT-1"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The same as a decided grant, but gina's region is us: her own statement does not apply to her, so it covers nothing.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "eu",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/*",
+                "condition": {
+                  "eq": [
+                    "subject.attributes.region",
+                    "eu"
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "gina",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "eu"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina",
+    "attributes": {
+      "region": "us"
+    }
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "eu",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/*",
+              "condition": {
+                "eq": [
+                  "subject.attributes.region",
+                  "eu"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "g",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/1"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "gina",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "eu"
+        },
+        {
+          "id": "g",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "g"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "g",
+        "statement": 0,
+        "action": "order:read",
+        "resource": "order/1",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "CONDITION"
+      }
+    ]
+  }
+}

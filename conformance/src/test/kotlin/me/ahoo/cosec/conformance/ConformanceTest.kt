@@ -17,14 +17,15 @@ import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.TestFactory
 
 /**
- * Runs every scenario of the corpus through the runner of its level (RFC 0008 §3.3) and checks its `expect`. Runners
- * for `control` come with RFC 0007 PR-5.
+ * Runs every scenario of the corpus through the runner of its level (RFC 0008 §3.3) and checks its `expect`. The
+ * `control` runner runs the grant analysis until RFC 0007 PR-5 adds the writes.
  */
 class ConformanceTest {
     private val runners: Map<String, ScenarioRunner> = mapOf(
         "engine" to EngineRunner(),
         "analysis" to AnalysisRunner,
         "pipeline" to PipelineRunner(),
+        "control" to GrantRunner,
     )
 
     @TestFactory

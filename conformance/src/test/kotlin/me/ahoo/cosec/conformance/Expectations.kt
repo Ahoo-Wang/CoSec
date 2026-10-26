@@ -13,6 +13,9 @@
 
 package me.ahoo.cosec.conformance
 
+import me.ahoo.cosec.control.grant.GrantFragment
+import me.ahoo.cosec.control.grant.GrantVerdict
+import me.ahoo.cosec.control.grant.ProtectedEntry
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.IndexKeys
 import me.ahoo.cosec.model.decision.BindingRef
@@ -37,6 +40,8 @@ import tools.jackson.databind.node.ObjectNode
  * { "status": 200, "proceed": true }                                   // pipeline
  * { "status": 400, "type": "invalid-request" }                         // pipeline, the problem's slug
  * { "outcome": "none" }                                                // pipeline, the caller cancelled
+ * { "fragments": [ { "policy": "p", "statement": 0, "action": "a:b", "resource": "r", "verdict": "YES" } ],
+ *   "unprotect": ["policy:p"] }                                                          // control: grant analysis
  * ```
  *
  * `via` is `{ "binding": id, "document": "platform" | "app" | "tenant" }`, `{ "attached": policy }` or `"builtin"`; a
@@ -78,12 +83,39 @@ object Expectations {
 
         Outcome.Cancelled -> json.objectNode().put("outcome", "none")
         is Outcome.NotCompiled -> json.objectNode().put("decision", "NotCompiled").put("error", outcome.error)
-        is Outcome.Analyzed -> json.objectNode().apply {
-            outcome.keys?.let { set("keys", keys(it)) }
-            outcome.admits?.let { put("admits", it) }
-            outcome.implies?.let { put("implies", it.name) }
-            if (outcome.evaluations.isNotEmpty()) {
-                set("evaluations", json.objectNode().apply { outcome.evaluations.forEach { (k, v) -> put(k, v) } })
+        is Outcome.Analyzed -> analyzed(outcome)
+        is Outcome.Granted -> granted(outcome)
+    }
+
+    private fun analyzed(outcome: Outcome.Analyzed): JsonNode = json.objectNode().apply {
+        outcome.keys?.let { set("keys", keys(it)) }
+        outcome.admits?.let { put("admits", it) }
+        outcome.implies?.let { put("implies", it.name) }
+        if (outcome.evaluations.isNotEmpty()) {
+            set("evaluations", json.objectNode().apply { outcome.evaluations.forEach { (k, v) -> put(k, v) } })
+        }
+    }
+
+    private fun granted(outcome: Outcome.Granted): JsonNode = json.objectNode().apply {
+        set("fragments", json.arrayNode().apply { outcome.analysis.verdicts.forEach { (f, v) -> add(fragment(f, v)) } })
+        if (outcome.analysis.unprotect.isNotEmpty()) {
+            set("unprotect", json.arrayNode().apply { outcome.analysis.unprotect.forEach { add(entry(it)) } })
+        }
+    }
+
+    /** A fragment and its verdict: `YES` for contained (also for the trust root), `UNKNOWN` with reason and shortfall. */
+    private fun fragment(fragment: GrantFragment, verdict: GrantVerdict): JsonNode = json.objectNode().apply {
+        put("policy", fragment.policy.value)
+        put("statement", fragment.statement)
+        put("action", fragment.action.toString())
+        put("resource", fragment.resource.toString())
+        when (verdict) {
+            GrantVerdict.TrustRoot -> put("verdict", "YES").put("trustRoot", true)
+            is GrantVerdict.Contained -> put("verdict", "YES")
+            is GrantVerdict.Unknown -> {
+                put("verdict", "UNKNOWN")
+                put("reason", verdict.reason.name)
+                verdict.shortfall?.let { put("shortfall", it.name) }
             }
         }
     }
@@ -91,6 +123,11 @@ object Expectations {
     private fun answered(outcome: Outcome.Answered): JsonNode = json.objectNode().put("status", outcome.status).apply {
         if (outcome.proceed) put("proceed", true)
         outcome.type?.let { put("type", it) }
+    }
+
+    private fun entry(entry: ProtectedEntry): String = when (entry) {
+        is ProtectedEntry.Policy -> "policy:${entry.id.value}"
+        is ProtectedEntry.Binding -> "binding:${entry.id.value}"
     }
 
     fun render(decision: Decision): JsonNode = when (decision) {

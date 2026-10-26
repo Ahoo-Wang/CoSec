@@ -1,0 +1,113 @@
+{
+  "rules": [
+    "GRT-2"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "The grantor's condition reads an external attribute, which may depend on the subject: not comparable, so the same grant goes to approval.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "ext",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/*",
+                "condition": {
+                  "eq": [
+                    "ext.risk.level",
+                    "low"
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "gina",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "ext"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina"
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "ext",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/*",
+              "condition": {
+                "eq": [
+                  "ext.risk.level",
+                  "low"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "g",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/1"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "gina",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "ext"
+        },
+        {
+          "id": "g",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "g"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "g",
+        "statement": 0,
+        "action": "order:read",
+        "resource": "order/1",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "CONDITION"
+      }
+    ]
+  }
+}

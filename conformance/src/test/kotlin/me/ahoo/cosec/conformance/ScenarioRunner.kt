@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.conformance
 
+import me.ahoo.cosec.control.grant.GrantAnalysis
 import me.ahoo.cosec.model.condition.Containment
 import me.ahoo.cosec.model.condition.IndexKeys
 import me.ahoo.cosec.model.decision.Decision
@@ -50,4 +51,7 @@ sealed interface Outcome {
         val implies: Containment?,
         val evaluations: Map<String, Boolean>,
     ) : Outcome
+
+    /** A control scenario of the grant analysis: the verdict for each fragment, and the protected entries changed. */
+    class Granted(val analysis: GrantAnalysis) : Outcome
 }
