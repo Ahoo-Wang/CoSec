@@ -13,32 +13,26 @@
 
 package me.ahoo.cosec.cache.snapshot
 
-import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.CacheReadException
-import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.ForeignFormatException
-import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cosec.api.context.request.AppId
-import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.AppRolePermission
 import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.policy.PolicyId
 import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.cache.AppPermissionCache
 import me.ahoo.cosec.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache
 import me.ahoo.cosec.cache.PolicyCache
-import me.ahoo.cosec.cache.RedisPolicyRepository
 import me.ahoo.cosec.cache.RolePermissionCache
 import me.ahoo.cosec.cache.createCache
 import me.ahoo.cosec.cache.createGlobalPolicyIndex
+import me.ahoo.cosec.migrate.CoSec7xReader
+import me.ahoo.cosec.migrate.Source7x
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
@@ -49,14 +43,13 @@ import tools.jackson.databind.ObjectMapper
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
 import tools.jackson.databind.util.RawValue
-import java.nio.ByteBuffer
-import java.security.MessageDigest
 import java.time.Instant
 import java.util.TreeMap
 
 /**
- * Reads CoSec 7.x policy data and builds the snapshot documents that hold it (RFC 0003 §4.7), for the gate, the
- * sizing measurement and development deployments. Not a user-facing migration: phase 4 provides that.
+ * Reads CoSec 7.x policy data and builds RFC 0003's 7.0-shaped snapshot documents that hold it (RFC 0003 §4.7), for
+ * the snapshot comparison, replay and sizing tools (removed at switch S2). Not the user-facing migration: that is
+ * `cosec-migrate`, whose [CoSec7xReader] reads the stored bytes here too.
  *
  * Values are read through 7.0's four caches ([CoSecCacheSpecs]), so their format and strict reads are 7.0's. An entry
  * those caches cannot decode (say, a matcher type this instance lacks) is not dropped: it is read again as raw JSON and
@@ -75,18 +68,11 @@ import java.util.TreeMap
  * Grants of permission ids the app does not define are only warned about: the document keeps them, and evaluation
  * fails on them exactly as 7.0 does (RFC 0002 S10a).
  */
-class CoSec7xReader(
+class CoSec7xSnapshotReader(
     backend: CoherenceBackend,
     private val keyPrefix: String,
     private val mapper: ObjectMapper = CoSecJsonSerializer,
 ) : AutoCloseable {
-    /** The keys to read; [scan] finds them in Redis. */
-    data class Keys(
-        val policyIds: Set<PolicyId>,
-        val appIds: Set<AppId>,
-        val grants: Set<AppSpacedRoleId>,
-    )
-
     /** What one read produced. Only an accepted conversion ([problems] empty) may be published. */
     class Conversion(
         val contents: List<SnapshotContent>,
@@ -105,7 +91,6 @@ class CoSec7xReader(
     }
 
     private val typedRuntime = CacheRuntime.builder().backend(backend).build()
-    private val rawRuntime = CacheRuntime.builder().backend(backend).build()
 
     private val policyCache: PolicyCache =
         typedRuntime.createCache(CoSecCacheSpecs.policy(CoSecCacheSpecs.jacksonCodec(mapper), keyPrefix))
@@ -116,28 +101,9 @@ class CoSec7xReader(
     private val rolePermissionCache: RolePermissionCache =
         typedRuntime.createCache(CoSecCacheSpecs.rolePermission(CoSecCacheSpecs.jacksonCodec(mapper), keyPrefix))
 
-    private val rawPolicies = rawCache(CoSecCacheSpecs.POLICY_CACHE_NAME)
-    private val rawAppPermissions = rawCache(CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME)
-    private val rawGrants = rawCache(CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME)
+    private val reader = CoSec7xReader(backend, keyPrefix)
 
     private val treeReader = mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
-
-    /** The same storage layout as 7.0's caches, with values as stored bytes. */
-    private fun rawCache(cacheName: String): Cache<String, ByteArray> = rawRuntime.create(
-        CacheSpec.builder<String, ByteArray>("Raw$cacheName")
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, cacheName))
-            .keyPrefix("")
-            .keyEncoder { it }
-            .codec(RawCodec)
-            .policy(CachePolicy.DEFAULT.storeOfRecord())
-            .build()
-    )
-
-    private object RawCodec : Codec<ByteArray> {
-        override fun encode(value: ByteArray): ByteArray = value
-
-        override fun decode(bytes: ByteArray): ByteArray = bytes
-    }
 
     private class Report {
         val problems = ArrayList<String>()
@@ -145,7 +111,7 @@ class CoSec7xReader(
         val input = TreeMap<String, ByteArray>()
     }
 
-    fun read(keys: Keys): Conversion {
+    fun read(keys: CoSec7xReader.Keys): Conversion {
         val report = Report()
         val contents = ArrayList<SnapshotContent>()
         readPolicies(keys.policyIds, report)?.let { contents.add(it) }
@@ -153,18 +119,18 @@ class CoSec7xReader(
         (keys.appIds + grantsByApp.keys).sorted().forEach { appId ->
             readApp(appId, grantsByApp[appId].orEmpty(), report)?.let { contents.add(it) }
         }
-        return Conversion(contents, report.problems, report.warnings, sha256(report.input))
+        return Conversion(contents, report.problems, report.warnings, Source7x.sha256(report.input))
     }
 
     private fun readPolicies(policyIds: Set<PolicyId>, report: Report): SnapshotContent.Policies? {
-        val index = globalPolicyIndexCache[GlobalPolicyIndexCache.CACHE_KEY].orEmpty()
+        val index = reader.globalIndex()
         report.input["global"] = index.sorted().joinToString("\n").encodeToByteArray()
         val policies = TreeMap<PolicyId, JsonNode>()
         for (id in policyIds.sorted()) {
             readPolicy(id, id in index, report)?.let { policies[id] = it }
         }
         (index - policies.keys).sorted().forEach { id ->
-            if (rawPolicies[id] == null) {
+            if (reader.policy(id) == null) {
                 report.problems += "the global policy index lists policy [$id], which has no content"
             }
         }
@@ -173,7 +139,7 @@ class CoSec7xReader(
 
     /** The policy stored under [id] as it goes into the document, or null when it has no content or a problem. */
     private fun readPolicy(id: PolicyId, inIndex: Boolean, report: Report): JsonNode? {
-        val raw = rawPolicies[id] ?: return null
+        val raw = reader.policy(id) ?: return null
         report.input["policy:$id"] = raw
         val node = objectOf(raw, "policy [$id]", report) ?: return null
         val named = node.hasNonNull(ID)
@@ -194,7 +160,7 @@ class CoSec7xReader(
     }
 
     private fun readApp(appId: AppId, grantIds: List<AppSpacedRoleId>, report: Report): SnapshotContent.App? {
-        val raw = rawAppPermissions[appId]
+        val raw = reader.appPermission(appId)
         if (raw == null) {
             if (grantIds.isNotEmpty()) {
                 report.problems += "app [$appId] has grants ${grantIds.map { it.toString() }.sorted()} " +
@@ -219,7 +185,7 @@ class CoSec7xReader(
 
     /** The grants stored under [grantId] as they go into the document, or null when they have none or a problem. */
     private fun readGrant(grantId: AppSpacedRoleId, defined: Set<PermissionId>?, report: Report): JsonNode? {
-        val rawGrant = rawGrants[grantId.toString()] ?: return null
+        val rawGrant = reader.grants(grantId) ?: return null
         report.input["app:role:permission:$grantId"] = rawGrant
         val grantKey = grantKeyOf(grantId)
         if (!SnapshotContent.isValidGrantKey(grantKey)) {
@@ -242,12 +208,7 @@ class CoSec7xReader(
     private fun AppPermission.definedPermissionIds(): Set<PermissionId> =
         groups.flatMapTo(HashSet()) { group -> group.permissions.map { it.id } }
 
-    private fun grantKeyOf(grantId: AppSpacedRoleId): String =
-        if (grantId.spaceId == SpaceIdCapable.DEFAULT) {
-            grantId.roleId
-        } else {
-            "${grantId.roleId}${SpacedRoleId.SPACE_ID_SEPARATOR}${grantId.spaceId}"
-        }
+    private fun grantKeyOf(grantId: AppSpacedRoleId): String = CoSec7xReader.grantKeyOf(grantId)
 
     /**
      * The value [read] decodes through 7.0's cache, or null (with a warning) when it cannot be decoded. Content that
@@ -316,57 +277,17 @@ class CoSec7xReader(
         }
     }
 
-    private fun sha256(input: Map<String, ByteArray>): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        input.forEach { (key, value) ->
-            val keyBytes = key.encodeToByteArray()
-            digest.update(ByteBuffer.allocate(Int.SIZE_BYTES).putInt(keyBytes.size).array())
-            digest.update(keyBytes)
-            digest.update(ByteBuffer.allocate(Int.SIZE_BYTES).putInt(value.size).array())
-            digest.update(value)
-        }
-        return digest.digest().joinToString("") { "%02x".format(it) }
-    }
-
     override fun close() {
-        rawRuntime.close()
+        reader.close()
         typedRuntime.close()
     }
 
     companion object {
         private const val ID = "id"
 
-        /**
-         * The keys of 7.x data under [keyPrefix], found by [scan] (a SCAN with a MATCH pattern, all keys it returns).
-         * The policy history (`<p>:policy:history:*`) is skipped, as `CoSecSchemaMarker` does.
-         */
-        fun keys(keyPrefix: String, scan: (String) -> Sequence<String>): Keys {
-            val policyPrefix = CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.POLICY_CACHE_NAME) + ":"
-            val appPrefix = CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME) + ":"
-            val grantPrefix = CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME) + ":"
-            val policyIds = scan("$policyPrefix*").map { it.removePrefix(policyPrefix) }
-                .filterNot { it.startsWith(RedisPolicyRepository.RESERVED_POLICY_ID_PREFIX) }
-                .toSortedSet()
-            val appIds = scan("$appPrefix*").map { it.removePrefix(appPrefix) }.toSortedSet()
-            val grants = scan("$grantPrefix*").map { it.removePrefix(grantPrefix) }.map(::parseGrantKey).toSet()
-            return Keys(policyIds, appIds, grants)
-        }
+        fun keys(keyPrefix: String, scan: (String) -> Sequence<String>): CoSec7xReader.Keys =
+            CoSec7xReader.keys(keyPrefix, scan)
 
-        /** `<appId>:<roleId>[@<spaceId>]`, as [AppSpacedRoleId.toString] writes it. */
-        fun parseGrantKey(key: String): AppSpacedRoleId {
-            val appSeparator = key.indexOf(AppSpacedRoleId.APP_ID_SEPARATOR)
-            require(appSeparator > 0) { "Grant key [$key] has no app id." }
-            val role = key.substring(appSeparator + 1)
-            val spaceSeparator = role.indexOf(SpacedRoleId.SPACE_ID_SEPARATOR)
-            return if (spaceSeparator < 0) {
-                AppSpacedRoleId(key.substring(0, appSeparator), role)
-            } else {
-                AppSpacedRoleId(
-                    key.substring(0, appSeparator),
-                    role.substring(0, spaceSeparator),
-                    role.substring(spaceSeparator + 1)
-                )
-            }
-        }
+        fun parseGrantKey(key: String): AppSpacedRoleId = CoSec7xReader.parseGrantKey(key)
     }
 }

@@ -42,7 +42,7 @@ import kotlin.system.exitProcess
  * [-Pinstances=N] [-PrevalidateInterval=10s] [-ProundTrips=true] [-Poutput=<file>]` (RFC 0003 §4.8): sizes the
  * snapshot documents of a deployment's 7.x data, to settle Q7, Q14 and Q19 before the switch.
  *
- * It converts the data with [CoSec7xReader], as `snapshotConvert -PdryRun=true` does, and measures each document:
+ * It converts the data with [CoSec7xSnapshotReader], as `snapshotConvert -PdryRun=true` does, and measures each document:
  * - its size as JSON and as [SnapshotDocumentCodec] encodes it for CoCache, and its entries: policies, global policies and statements; an app's
  *   permissions, granted `(role, space)` pairs and spaces;
  * - its compile time, [COMPILE_RUNS] runs after [COMPILE_WARMUP] discarded ones, on this JVM (run it on JDK 25);
@@ -131,7 +131,7 @@ object SnapshotMeasure {
         return 0
     }
 
-    fun measure(conversion: CoSec7xReader.Conversion, options: Options, uri: RedisURI): ObjectNode {
+    fun measure(conversion: CoSec7xSnapshotReader.Conversion, options: Options, uri: RedisURI): ObjectNode {
         val documents = conversion.documents(publishedAt = Instant.now())
         val report = CoSecJsonSerializer.createObjectNode()
         report.put("inputSha256", conversion.inputSha256)
