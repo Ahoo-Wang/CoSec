@@ -42,15 +42,18 @@ migrate when 8.0 is assembled.
 ## Milestones
 
 In dependency order, without dates. They follow the dependency table and critical path in RFC 0008 §4.5. Status is
-as of `main` on 2026-10-26.
+as of `main` on 2026-10-26. This page changes only when a milestone starts or ends (RFC 0008 §4.7); per-PR status is in
+[`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md).
 
 ```mermaid
 flowchart LR
   M1["M1<br>Engine on the<br>target model"] --> M2["M2<br>Coroutine<br>pipeline"]
   M1 --> M3["M3<br>Control plane"]
   M2 --> M3
-  M3 --> M5["M5<br>Switch"]
-  M4["M4<br>Conformance suite<br>and 7.0 baseline"] --> M5
+  M3 --> M5["M5<br>Switch<br>S1–S5"]
+  M4["M4<br>Conformance suite,<br>7.0 baseline and<br>end-to-end slice"] --> M5
+  M1 -.-> M4
+  M2 -.-> M4
   M5 --> M6["M6<br>Legacy cleanup"]
   M6 --> M7["M7<br>RC readiness"]
 ```
@@ -60,10 +63,10 @@ flowchart LR
 | **M1** Engine on the target model | Bindings, memberships, the condition AST and `service:verb` actions compiled into snapshot documents; route maps; `cosec-migrate` to convert 7.x data (RFC 0005 PR-4–PR-6, RFC 0004 PR-4, PR-5) | Snapshot documents compile and are evaluated by the flat engine; `cosec-migrate convert` produces them from 7.x data | In progress: model, flat algorithm, condition AST and action matching merged |
 | **M2** Coroutine pipeline | Suspend-based authentication and memberships, external attributes, obligations, decision listeners, 503 and problem+json, all three web adapters on the new pipeline (RFC 0006 PR-2–PR-7) | The three adapters answer identically through the new pipeline | In progress: `runtime/` module merged |
 | **M3** Control plane | Revisions, conditional publishing, validation, grant analysis, shadow windows, break-glass, tenant self-service, change audit, HTTP API (RFC 0007 PR-3–PR-9) | Every write goes through the control plane library and its HTTP routes | In progress: `control/` module and JSON schema generation merged |
-| **M4** Conformance suite and baseline | A rule registry with positive and negative scenarios for every normative rule, property and mutation checks, and a 7.0 performance baseline (RFC 0008 PR-1–PR-3) | Every merged rule has both scenarios; the 7.0 baseline is recorded | Not started |
-| **M5** Switch | The 8.0 path wired in the starter; the 7.x path removed; [Upgrading](../operations/upgrading.md) written (RFC 0008 PR-4) | All of RFC 0008 §3.9 holds: suite green, no pending rule, properties and mutants pass, budgets met | Not started |
+| **M4** Conformance suite, baseline and end-to-end slice | A rule registry with positive and negative scenarios for every normative rule, property and mutation checks, and a 7.0 performance baseline (RFC 0008 PR-1–PR-3). An end-to-end slice wires snapshots, the flat engine, the coroutine pipeline and WebFlux over real CoCache and Redis, and measures the performance budgets as soon as it runs (RFC 0008 §4.4.3). The dotted arrows: the slice needs part of M1 and M2 | Every merged rule has both scenarios; the 7.0 baseline is recorded; the slice runs and its first measurement is recorded | In progress: conformance suite merged, 7.0 baseline under way |
+| **M5** Switch | Five PRs in order (RFC 0008 §4.4): S1 wires the 8.0 path in the starter and moves `cosec-gateway-server` to it; S2–S4 remove the 7.x path module by module; S5 writes the docs and [Upgrading](../operations/upgrading.md) | S1 merges only when all of RFC 0008 §3.9 holds (suite green, no pending rule, properties and mutants pass, budgets met); there is no way back after S1. S2–S5 merge in order, each reviewed twice | Not started |
 | **M6** Legacy cleanup | Code, build settings and doc history that exist only for older versions removed (RFC 0008 §4.6, PR-5, PR-6) | The §4.6.1 inventory is empty except "keep" items and its guards run in `check` | Not started |
-| **M7** RC readiness | A candidate the maintainer can release | Every PR has two review rounds; the maintainer decides between an RC and GA | Not started |
+| **M7** RC readiness | A candidate the maintainer can release | Every PR has two review rounds; the `cosec-gateway-server` AOT cache smoke test passes in CI; an RC security review of the integrated system (tenant isolation, control-plane privilege escalation and grant analysis, break-glass, snapshot and cache poisoning, problem+json disclosure, denial of service) is done and its findings are fixed; the maintainer decides between an RC and GA | Not started |
 
 ## Release policy
 
@@ -71,8 +74,8 @@ flowchart LR
   PR has had two review rounds (RFC 0001 §6). Do not depend on `main` from an application.
 - The version on `main` will read `8.0.0-alpha.1`. That is a version string only, not a release (RFC 0008 Q13).
 - **8.0 is not slower than 7.0.** Performance budgets are set from 7.0 measurements: compiled authorization and
-  pipeline throughput at least 100 % of 7.0, with no more allocation (RFC 0008 §3.8). The switch does not merge
-  until they are met.
+  pipeline throughput at least 100 % of 7.0, with no more allocation (RFC 0008 §3.8). They are first measured on the
+  end-to-end slice, and S1 does not merge until they are met.
 
 ## For 7.x users today
 
