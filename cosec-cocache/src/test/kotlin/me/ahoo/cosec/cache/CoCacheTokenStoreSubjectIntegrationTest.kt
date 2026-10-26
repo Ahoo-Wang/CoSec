@@ -22,6 +22,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * RFC 0004 §4.5.3: CoCacheTokenStore's subject revocations against real Redis, with two instances sharing it.
@@ -87,6 +90,59 @@ internal class CoCacheTokenStoreSubjectIntegrationTest {
     }
 
     @Test
+    fun aStaleLocalCopyNeverShortensALaterRevocation() {
+        val principal = principal()
+        // instance B caches "not revoked" locally, then A revokes; B's local copy may still say "not revoked"
+        tokenStoreB.subjectRevokedBefore(tenant, principal).assert().isNull()
+        tokenStoreA.revokeSubject(tenant, principal, issuedBefore, Duration.ofMinutes(1))
+
+        tokenStoreB.revokeSubject(tenant, principal, issuedBefore.minusSeconds(60), Duration.ofMinutes(1))
+
+        instanceA.clearLocal(CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME)
+        tokenStoreA.subjectRevokedBefore(tenant, principal).assert().isEqualTo(issuedBefore)
+    }
+
+    @Test
+    fun concurrentRevocationsKeepTheLatest() {
+        val principal = principal()
+        val stores = listOf(tokenStoreA, tokenStoreB)
+        val pool = Executors.newFixedThreadPool(CONCURRENT_REVOCATIONS)
+        try {
+            val start = CountDownLatch(1)
+            val revocations = (1..CONCURRENT_REVOCATIONS).map { offset ->
+                pool.submit {
+                    start.await()
+                    stores[offset % stores.size]
+                        .revokeSubject(
+                            tenant,
+                            principal,
+                            issuedBefore.plusSeconds(offset.toLong()),
+                            Duration.ofMinutes(1)
+                        )
+                }
+            }
+            start.countDown()
+            revocations.forEach { it.get(30, TimeUnit.SECONDS) }
+        } finally {
+            pool.shutdownNow()
+        }
+
+        instanceA.clearLocal(CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME)
+        tokenStoreA.subjectRevokedBefore(tenant, principal)
+            .assert().isEqualTo(issuedBefore.plusSeconds(CONCURRENT_REVOCATIONS.toLong()))
+    }
+
+    @Test
+    fun subMillisecondIssuedBeforeIsRoundedUp() {
+        val principal = principal()
+        // a token issued at the whole second, just before a revocation 0.3 ms later, must stay revoked
+        val wholeSecond = Instant.ofEpochSecond(1_790_000_000)
+        tokenStoreA.revokeSubject(tenant, principal, wholeSecond.plusNanos(300_000), Duration.ofMinutes(1))
+
+        tokenStoreA.subjectRevokedBefore(tenant, principal).assert().isEqualTo(wholeSecond.plusMillis(1))
+    }
+
+    @Test
     fun keysAreUnambiguous() {
         tokenStoreA.revokeSubject(TenantId("a:b"), PrincipalId("c"), issuedBefore, Duration.ofMinutes(1))
 
@@ -117,5 +173,6 @@ internal class CoCacheTokenStoreSubjectIntegrationTest {
         private val REVOCATION_TTL = Duration.ofSeconds(1)
         private const val MARGIN_MS = 2_000L
         private const val POLL_MS = 50L
+        private const val CONCURRENT_REVOCATIONS = 8
     }
 }

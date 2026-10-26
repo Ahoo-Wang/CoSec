@@ -169,11 +169,13 @@ class DecisionReplayTest {
         ReplayGate().meetsRfc().assert().isTrue()
     }
 
+    /** The synthetic export's requests, from the test fixtures' jar. */
+    private fun syntheticRequests(): List<String> =
+        javaClass.getResourceAsStream("/cosec-replay/${DecisionReplay.REQUESTS_FILE}")!!.bufferedReader().readLines()
+
     /** [count] samples a day over [days] days, all recorded as allowed by a role permission of app `billing`. */
     private fun roleAllows(dir: Path, days: Int, count: Int) {
-        val template = Files.readAllLines(
-            Path.of(javaClass.getResource("/cosec-replay/${DecisionReplay.REQUESTS_FILE}")!!.toURI()),
-        ).single { "\"eventId\":\"e10\"" in it }
+        val template = syntheticRequests().single { "\"eventId\":\"e10\"" in it }
         val lines = (0 until days).flatMap { day ->
             (0 until count).map { index ->
                 template.replace("\"e10\"", "\"d$day-$index\"")
@@ -389,9 +391,7 @@ class DecisionReplayTest {
     @Test
     fun timestampsMayBeEpochSecondsAndBlankLinesAreSkipped(@TempDir dir: Path) {
         export(dir, listOf(DecisionReplay.POLICIES_FILE, DecisionReplay.APP_ROLE_PERMISSIONS_FILE))
-        val line = Files.readAllLines(
-            Path.of(javaClass.getResource("/cosec-replay/${DecisionReplay.REQUESTS_FILE}")!!.toURI()),
-        ).first().replace("\"2026-10-01T10:00:00Z\"", "1759312800.5")
+        val line = syntheticRequests().first().replace("\"2026-10-01T10:00:00Z\"", "1759312800.5")
         Files.write(dir.resolve(DecisionReplay.REQUESTS_FILE), listOf("", line, "  "))
         val report = DecisionReplay().run(dir)
         report.samples.assert().isEqualTo(1L)

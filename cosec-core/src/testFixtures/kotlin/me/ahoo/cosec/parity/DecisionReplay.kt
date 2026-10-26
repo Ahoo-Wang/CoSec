@@ -14,15 +14,18 @@
 package me.ahoo.cosec.parity
 
 import me.ahoo.cosec.api.permission.AppPermission
+import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.tenant.TenantCapable
+import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactoryProvider
 import me.ahoo.cosec.policy.condition.TimeConditionMatcherFactory
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import tools.jackson.core.JacksonException
+import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.JsonNode
 import java.io.BufferedWriter
 import java.nio.file.Files
@@ -45,15 +48,16 @@ import java.util.HexFormat
  *
  * - `policies.json`: an array of policies, each as in `schema/cosec-policy.schema.json`, with unique ids. Include the
  *   global policies and every policy the sampled principals reference. A referenced policy left out replays as missing
- *   (`MissingPolicyException`) on both sides.
+ *   (`MissingPolicyException`) on both sides. Both sides read the global policies by id (RFC 0003 §7 X3).
  * - `app-role-permissions.json`: an array, one entry per app, holding what `AppRolePermissionRepository` reads:
  *   ```json
  *   [{ "appPermission": { "id": "billing", "groups": [ ... ] },
  *      "grants": { "admin": ["*"], "auditor@s1": ["invoice.read"] } }]
  *   ```
  *   `appPermission` follows `schema/cosec-app-permission.schema.json`. `grants` maps a role, with an optional `@space`
- *   suffix, to the permission ids granted to it in that app and space, in grant order. Ids the app does not define are
- *   kept: they replay the fail-closed `MissingPermissionException`. Every app the requests name must have an entry,
+ *   suffix, to the permission ids granted to it in that app and space. They are visited in the order 7.0's cache
+ *   decodes them into (a hash set), not in array order. Ids the app does not define are kept: they replay the
+ *   fail-closed `MissingPermissionException`. Every app the requests name must have an entry,
  *   or the gate is not met; an app without an app permission is exported as `{ "appId": "reports" }`.
  * - `requests.jsonl`: one audit event per line, as the audit sinks write it (`AuditEvent` serialized by
  *   `CoSecJsonSerializer`). Used fields:
@@ -91,9 +95,11 @@ import java.util.HexFormat
  * implementation that reads anything else of the request or context than the inputs above is not replayed faithfully.
  */
 class DecisionReplay(
-    private val baseline: AuthorizationFactory = AuthorizationFactory.LEGACY,
-    private val candidate: AuthorizationFactory = AuthorizationFactory.ENGINE,
-    private val gate: ReplayGate = ReplayGate()
+    private val baseline: ReplaySide = AuthorizationFactory.LEGACY,
+    private val candidate: ReplaySide = AuthorizationFactory.ENGINE,
+    private val gate: ReplayGate = ReplayGate(),
+    /** How failures are compared: RFC 0003's snapshot candidate uses [FailureView.INNERMOST_CAUSE] (§8.1). */
+    private val failureView: FailureView = FailureView.AS_THROWN,
 ) {
     companion object {
         const val POLICIES_FILE = "policies.json"
@@ -110,6 +116,7 @@ class DecisionReplay(
             Files.deleteIfExists(directory.resolve(MISMATCHES_FILE))
         }
         private const val FAILED_ALIKE_FOR_DIFFERENT_CAUSES = "FAILED_ALIKE_FOR_DIFFERENT_CAUSES"
+        private val GRANTS = CoSecJsonSerializer.readerFor(object : TypeReference<Set<PermissionId>>() {})
     }
 
     /**
@@ -140,20 +147,47 @@ class DecisionReplay(
         val policyNodes = readArray(directory.resolve(POLICIES_FILE), inputs)
         val appNodes = readArray(directory.resolve(APP_ROLE_PERMISSIONS_FILE), inputs)
         val rootPrincipalMatcher = rootPrincipalMatcher(directory.resolve(CONFIG_FILE), inputs)
-        val policies = policyNodes.map { CoSecJsonSerializer.treeToValue(it, Policy::class.java) }
+        // Both sides read the policies by id (RFC 0003 §7 X3).
+        val policies = policyNodes.map { it to CoSecJsonSerializer.treeToValue(it, Policy::class.java) }
+            .sortedBy { it.second.id }
         val apps = appNodes.map(::appEntry)
-
-        val blacklist = ReplayBlacklist()
-        val policyRepository = ReplayPolicyRepository(policies)
         val duplicateApps = apps.groupingBy { it.appId }.eachCount().filterValues { it > 1 }.keys
         require(duplicateApps.isEmpty()) { "$APP_ROLE_PERMISSIONS_FILE declares apps $duplicateApps more than once." }
-        val appRolePermissionRepository = ReplayAppRolePermissionRepository(apps.associateBy { it.appId })
-        val parity = DecisionParity(
-            baseline.create(policyRepository, appRolePermissionRepository, blacklist, rootPrincipalMatcher),
-            candidate.create(policyRepository, appRolePermissionRepository, blacklist, rootPrincipalMatcher),
+        val export = ReplayExport(
+            policies.map { (node, policy) -> ExportedPolicy(node, policy) },
+            apps.map { it.exported },
+            ReplayPolicyRepository(policies.map { it.second }),
+            ReplayAppRolePermissionRepository(apps.associateBy { it.appId }),
         )
+        val blacklist = ReplayBlacklist()
+        return closing(baseline.replaying(export, blacklist, rootPrincipalMatcher)) { baselineAuthorization ->
+            closing(candidate.replaying(export, blacklist, rootPrincipalMatcher)) { candidateAuthorization ->
+                val parity = DecisionParity(baselineAuthorization, candidateAuthorization, failureView)
+                val counts = compare(directory, clock, blacklist, parity, apps.mapTo(HashSet()) { it.appId }, inputs)
+                write(directory, counts.toReport(UnrecordedInputs.of(policyNodes, appNodes), inputs, gate, failureView))
+            }
+        }
+    }
 
-        val counts = ReplayCounts(apps.mapTo(HashSet()) { it.appId })
+    /** Closes [authorization] after [use], when it is [AutoCloseable]. */
+    private inline fun <T> closing(authorization: DecisionAuthorization, use: (DecisionAuthorization) -> T): T =
+        try {
+            use(authorization)
+        } finally {
+            (authorization as? AutoCloseable)?.close()
+        }
+
+    /** Compares every sample, writing the differences to the partial mismatches file. */
+    @Suppress("LongParameterList")
+    private fun compare(
+        directory: Path,
+        clock: ReplayClock,
+        blacklist: ReplayBlacklist,
+        parity: DecisionParity,
+        exportedApps: Set<String>,
+        inputs: MutableMap<String, String>,
+    ): ReplayCounts {
+        val counts = ReplayCounts(exportedApps)
         val mismatchesFile = directory.resolve(MISMATCHES_FILE)
         val digest = MessageDigest.getInstance("SHA-256")
         Files.newBufferedWriter(partial(mismatchesFile)).use { mismatches ->
@@ -176,7 +210,12 @@ class DecisionReplay(
                 }
         }
         inputs[REQUESTS_FILE] = HexFormat.of().formatHex(digest.digest())
-        val report = counts.toReport(UnrecordedInputs.of(policyNodes, appNodes), inputs, gate)
+        return counts
+    }
+
+    /** Writes [report], then moves both outputs into place. */
+    private fun write(directory: Path, report: ReplayReport): ReplayReport {
+        val mismatchesFile = directory.resolve(MISMATCHES_FILE)
         val reportFile = directory.resolve(REPORT_FILE)
         CoSecJsonSerializer.writerWithDefaultPrettyPrinter().writeValue(partial(reportFile).toFile(), report)
         Files.move(partial(mismatchesFile), mismatchesFile, StandardCopyOption.ATOMIC_MOVE)
@@ -220,13 +259,20 @@ class DecisionReplay(
         val appId = appPermission?.id ?: requireNotNull(node.get("appId")?.takeUnless { it.isNull }?.asString()) {
             "An $APP_ROLE_PERMISSIONS_FILE entry has neither an appPermission nor an appId."
         }
-        val grants = node.get("grants")?.properties()?.associate { (role, permissionIds) ->
+        val grantNodes = node.get("grants")?.properties()?.associate { it.key to it.value }.orEmpty()
+        val grants = grantNodes.entries.associate { (role, permissionIds) ->
             val spacedRole = requireNotNull(RoleScope.parse(role)) {
                 "App [$appId] grants malformed role [$role]: write `role` or `role@space`."
             }
-            spacedRole to permissionIds.values().mapTo(LinkedHashSet()) { it.asString() }
-        }.orEmpty()
-        return ReplayApp(appId, appPermission, grants)
+            // Decoded as 7.0's RolePermissionCache decodes them, so visited in the same (hash) order (RFC 0003 §3.3).
+            spacedRole to try {
+                GRANTS.readValue<Set<PermissionId>>(permissionIds)
+            } catch (cause: JacksonException) {
+                throw IllegalArgumentException("App [$appId] grants role [$role] something other than permission ids.", cause)
+            }
+        }
+        val exported = ExportedApp(appId, node.get("appPermission")?.takeUnless { it.isNull }, grantNodes)
+        return ReplayApp(appId, appPermission, grants, exported)
     }
 
     private fun rootPrincipalMatcher(configFile: Path, inputs: MutableMap<String, String>): RootPrincipalMatcher {

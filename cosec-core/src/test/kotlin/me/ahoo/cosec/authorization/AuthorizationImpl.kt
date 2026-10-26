@@ -15,14 +15,25 @@ package me.ahoo.cosec.authorization
 
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.parity.AuthorizationFactory
+import me.ahoo.cosec.parity.FailureView
+import me.ahoo.cosec.snapshot.SnapshotUnavailableException
 
 /**
- * The two authorization implementations every decision test runs against until the legacy one is removed
- * (RFC 0002 §8.2): use it with `@ParameterizedClass @EnumSource(AuthorizationImpl::class)`.
+ * The authorization implementations every decision test runs against (RFC 0002 §8.2, RFC 0003 §8.2): the legacy one
+ * until RFC 0002 PR-6 removes it, the engine over repositories until RFC 0003 PR-6 removes them, and the engine over a
+ * snapshot of what the repositories answer. Use it with `@ParameterizedClass @EnumSource(AuthorizationImpl::class)`.
  */
 enum class AuthorizationImpl(private val delegate: AuthorizationFactory) {
     LEGACY(AuthorizationFactory.LEGACY),
-    ENGINE(AuthorizationFactory.ENGINE);
+    ENGINE(AuthorizationFactory.ENGINE),
+    SNAPSHOT(AuthorizationFactory.SNAPSHOT);
+
+    /**
+     * What a test expecting [error] sees: the snapshot path fails a layer it cannot read with a
+     * [SnapshotUnavailableException] caused by the read's own error (RFC 0003 §7 X4).
+     */
+    fun failureOf(error: Throwable): Throwable =
+        if (this == SNAPSHOT && error is SnapshotUnavailableException) FailureView.INNERMOST_CAUSE.of(error) else error
 
     fun create(
         policyRepository: PolicyRepository,

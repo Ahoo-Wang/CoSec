@@ -12,6 +12,8 @@
  */
 package me.ahoo.cosec.cache
 
+import me.ahoo.cocache.api.ConditionalGet
+import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.token.TokenStore
@@ -56,18 +58,34 @@ class CoCacheTokenStore @JvmOverloads constructor(
 
     /**
      * Keeps the later of the existing and the new `issuedBefore`, so that a second revocation never shortens the
-     * first. Two instances revoking the same principal at once may both write; the later write wins.
+     * first. The read bypasses the local copy, which may be stale or a cached miss, and the write is conditional on
+     * what was read, so two instances revoking the same principal at once cannot replace a later entry with an earlier
+     * one. A Redis failure throws rather than writing blind.
      */
     override fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant, ttl: Duration) {
         val subjectCache = subjectCache
             ?: throw UnsupportedOperationException("CoCacheTokenStore needs a RevokedSubjectCache to revoke a principal.")
         val key = RevokedSubjectCache.key(tenant, principal)
-        val revokedBefore = issuedBefore.toEpochMilli()
-        val existing = subjectCache.get(key)
-        if (existing != null && existing >= revokedBefore) {
-            return
+        val revokedBefore = epochMilliRoundedUp(issuedBefore)
+        val entryTtl = ttl.coerceAtLeast(Duration.ZERO).plusSeconds(1)
+        repeat(MAX_REVOKE_SUBJECT_ATTEMPTS) {
+            val current = when (val read = subjectCache.getIfChanged(key, null)) {
+                is ConditionalGet.Present -> read
+                ConditionalGet.Absent -> null
+                ConditionalGet.Unchanged -> error("A read with no known digest cannot be unchanged.")
+            }
+            if (current != null && current.value >= revokedBefore) {
+                return
+            }
+            when (subjectCache.putIfMatch(key, current?.digest, revokedBefore, entryTtl)) {
+                is ConditionalPut.Written -> return
+                is ConditionalPut.Conflict -> Unit
+            }
         }
-        subjectCache.put(key, revokedBefore, ttl.coerceAtLeast(Duration.ZERO).plusSeconds(1))
+        throw IllegalStateException(
+            "Could not revoke the tokens of principal [${principal.value}] in tenant [${tenant.value}]: " +
+                "the entry kept changing for $MAX_REVOKE_SUBJECT_ATTEMPTS attempts."
+        )
     }
 
     /**
@@ -75,4 +93,19 @@ class CoCacheTokenStore @JvmOverloads constructor(
      */
     override fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
         subjectCache?.get(RevokedSubjectCache.key(tenant, principal))?.let(Instant::ofEpochMilli)
+
+    private companion object {
+        const val MAX_REVOKE_SUBJECT_ATTEMPTS = 8
+
+        /**
+         * Millisecond precision would otherwise move `issuedBefore` back by up to a millisecond, and a token issued in
+         * that millisecond, before the revocation, at a whole second (`iat`), would no longer count as revoked.
+         */
+        fun epochMilliRoundedUp(instant: Instant): Long {
+            val millis = instant.toEpochMilli()
+            return if (instant.nano % NANOS_PER_MILLI == 0) millis else millis + 1
+        }
+
+        const val NANOS_PER_MILLI = 1_000_000
+    }
 }
