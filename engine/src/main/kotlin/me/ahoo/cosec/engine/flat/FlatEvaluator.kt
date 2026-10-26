@@ -57,6 +57,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     private var error: Throwable? = null
 
     private var missing: MutableSet<PolicyId>? = null
+    private var ambiguous: MutableSet<PolicyId>? = null
 
     // Conditions evaluated so far, by identity, and their results; allocated on the first condition.
     private var guards: Array<Guard?>? = null
@@ -91,7 +92,10 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
 
     /** The first of what the request could not resolve, in a fixed order: the caller's, then the engine's. */
     private fun unresolved(): Cause? =
-        view.unresolved.firstOrNull() ?: view.notLoaded(request.scope) ?: missing?.let { Cause.MissingPolicies(it) }
+        view.unresolved.firstOrNull()
+            ?: view.notLoaded(request.scope)
+            ?: missing?.let { Cause.MissingPolicies(it) }
+            ?: ambiguous?.let { Cause.AmbiguousPolicy(it) }
 
     /** Everything unresolved, for the trace. */
     protected fun allUnresolved(): List<Cause> =
@@ -99,6 +103,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             addAll(view.unresolved)
             view.notLoaded(request.scope)?.let(::add)
             missing?.let { add(Cause.MissingPolicies(it)) }
+            ambiguous?.let { add(Cause.AmbiguousPolicy(it)) }
         }
 
     @Suppress("TooGenericExceptionCaught")
@@ -142,6 +147,12 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         // Both passes enumerate the same candidates; the DENY pass records.
         if (pass === Effect.DENY) {
             (missing ?: LinkedHashSet<PolicyId>().also { missing = it }) += PolicyId(policyId)
+        }
+    }
+
+    override fun ambiguous(policyId: String) {
+        if (pass === Effect.DENY) {
+            (ambiguous ?: LinkedHashSet<PolicyId>().also { ambiguous = it }) += PolicyId(policyId)
         }
     }
 

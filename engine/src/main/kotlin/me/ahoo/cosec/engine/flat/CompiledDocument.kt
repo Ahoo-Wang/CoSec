@@ -30,11 +30,13 @@ import me.ahoo.cosec.model.decision.DocumentKind
  * bindings, not with the size of the document. The arrays are sorted as the candidate order needs (§6.3) once, here.
  *
  * Compiling checks only what the index relies on: unique ids, which subjects each kind of document binds, the shape of
- * break-glass bindings, and references a platform document cannot leave open. The checks between documents (tenant
- * isolation, the principal binding limit) belong to the snapshot compiler (RFC 0004 PR-4). A binding of an app or
- * tenant document may name a platform policy: it is looked up per request, so a platform update never recompiles them
- * (§3 I5), and a policy the platform no longer has makes the request
- * [me.ahoo.cosec.model.decision.Cause.MissingPolicies] (§7.2).
+ * break-glass bindings, that every binding can apply to some request, and references a platform document cannot leave
+ * open. The checks between documents (tenant isolation, the principal binding limit) belong to the snapshot compiler
+ * (RFC 0004 PR-4). A binding of an app or tenant document may name a platform policy: it is looked up per request, so a
+ * platform update never recompiles them (§3 I5), and a policy the platform no longer has makes the request
+ * [me.ahoo.cosec.model.decision.Cause.MissingPolicies] (§7.2). For the same reason a tenant policy whose id the
+ * platform also defines is found per request, and makes it [me.ahoo.cosec.model.decision.Cause.AmbiguousPolicy]
+ * (RFC 0007 N2).
  */
 class CompiledDocument private constructor(
     val kind: DocumentKind,
@@ -105,7 +107,12 @@ class CompiledDocument private constructor(
                 "Break-glass binding ${binding.id.value} must bind a principal"
             }
             requireNotNull(binding.expiresAt) { "Break-glass binding ${binding.id.value} has no expiry" }
+            // RFC 0004 §4.8, RFC 0007 §8: root is for the platform's own administrators, never a tenant's principal.
+            require((binding.subject as SubjectRef.Principal).tenant == TenantId.PLATFORM) {
+                "Break-glass binding ${binding.id.value} must bind a principal of the platform tenant"
+            }
         }
+        requireReachable(binding)
         val local = if (policyId == BuiltinPolicies.ROOT.value) BuiltinPolicies.root else policies[policyId]
         require(local != null || kind != DocumentKind.PLATFORM) {
             "Binding ${binding.id.value} of the platform document names policy $policyId, which it does not define"
@@ -114,6 +121,8 @@ class CompiledDocument private constructor(
             via = BindingRef.Bound(binding.id, kind),
             policyId = policyId,
             local = local,
+            // A tenant's own policy is only unambiguous while the platform has no policy of the same id (RFC 0007 N2).
+            checksPlatform = kind == DocumentKind.TENANT && local != null,
             app = binding.scope.app.exactApp(),
             space = binding.scope.space.exactSpace(),
             roleTenant = (binding.subject as? SubjectRef.Role)?.tenant?.value,
@@ -121,9 +130,31 @@ class CompiledDocument private constructor(
         )
     }
 
-    internal fun policy(id: String): CompiledPolicy? = policies[id]
+    /**
+     * A tenant document is read only for its own tenant and an app document only for its own app ([SnapshotView]), so
+     * a binding naming another one would never be a candidate: a DENY lost.
+     */
+    private fun requireReachable(binding: Binding) {
+        when (kind) {
+            DocumentKind.PLATFORM -> Unit
+            DocumentKind.APP -> require(binding.scope.app.exactApp().let { it == null || it == owner }) {
+                "Binding ${binding.id.value} of the app document $owner is scoped to another app"
+            }
 
-    internal fun attachable(id: String): CompiledPolicy? = policies[id]?.takeIf { it.attachable }
+            DocumentKind.TENANT -> {
+                val tenant = when (val subject = binding.subject) {
+                    is SubjectRef.Principal -> subject.tenant
+                    is SubjectRef.Role -> subject.tenant
+                    SubjectRef.Anyone -> null
+                }
+                require(tenant == null || tenant.value == owner) {
+                    "Binding ${binding.id.value} of the tenant document $owner binds a subject of tenant ${tenant?.value}"
+                }
+            }
+        }
+    }
+
+    internal fun policy(id: String): CompiledPolicy? = policies[id]
 
     internal fun breakGlass(tenant: String, principal: String): Array<BoundEntry>? = breakGlass[tenant]?.get(principal)
 
@@ -190,6 +221,8 @@ internal class BoundEntry(
     val policyId: String,
     /** The policy when the binding's own document defines it; else it is looked up in the platform per request. */
     val local: CompiledPolicy?,
+    /** Whether the platform must not define [policyId] for [local] to apply. */
+    val checksPlatform: Boolean,
     val app: String?,
     val space: String?,
     /** For a role binding of a given tenant; null for any tenant and for other subjects. */

@@ -204,21 +204,53 @@ class FlatEngineTest {
             )
     }
 
+    /** RFC 0007 N2: preferring the tenant's copy would let a tenant cancel a platform DENY the token attaches. */
     @Test
-    fun `an attachment resolves in the tenant document before the platform`() {
-        val platform = platform(fixture.policy("p", allow(), attachable = true))
-        val tenant = tenant(fixture.policy("p", deny(), attachable = true))
-        decide(flatRequest(attachments = listOf("p")), platform, tenant).assert()
-            .isEqualTo(Decision.Deny(ref("p", 0, BindingRef.Attached(PolicyId("p")))))
-        decide(flatRequest(attachments = listOf("p")), platform, tenant()).assert()
-            .isEqualTo(Decision.Permit(ref("p", 0, BindingRef.Attached(PolicyId("p")))))
+    fun `an attachment whose id both the tenant and the platform define is ambiguous`() {
+        val ambiguous = Decision.Indeterminate(Cause.AmbiguousPolicy(setOf(PolicyId("restricted"))))
+        val platform = platform(fixture.policy("restricted", deny(), attachable = true))
+        val request = flatRequest(attachments = listOf("restricted"))
+        decide(request, platform, tenant(fixture.policy("restricted", allow(), attachable = true))).assert()
+            .isEqualTo(ambiguous)
+        // Whatever the flags: a tenant copy that cannot be attached does not hand the id to the platform either.
+        decide(request, platform, tenant(fixture.policy("restricted", allow()))).assert().isEqualTo(ambiguous)
+        // Alone, either copy resolves.
+        decide(request, platform, tenant()).assert()
+            .isEqualTo(Decision.Deny(ref("restricted", 0, BindingRef.Attached(PolicyId("restricted")))))
+        decide(request, platform(), tenant(fixture.policy("restricted", allow(), attachable = true))).assert()
+            .isEqualTo(Decision.Permit(ref("restricted", 0, BindingRef.Attached(PolicyId("restricted")))))
+        // A DENY that matches still wins, as over a missing policy.
+        val denying = platform(
+            fixture.policy("restricted", allow(), attachable = true),
+            fixture.policy("d", deny()),
+            bindings = listOf(anyone("g", "d")),
+        )
+        decide(request, denying, tenant(fixture.policy("restricted", allow(), attachable = true))).assert()
+            .isEqualTo(Decision.Deny(ref("d", 0, bound("g"))))
+    }
+
+    @Test
+    fun `a tenant binding to a policy both the tenant and the platform define is ambiguous`() {
+        val platform = platform(fixture.policy("p", deny()))
+        val tenant = tenant(fixture.policy("p", allow()), bindings = listOf(anyone("t", "p")))
+        decide(flatRequest(), platform, tenant).assert()
+            .isEqualTo(Decision.Indeterminate(Cause.AmbiguousPolicy(setOf(PolicyId("p")))))
+        // Naming only the platform's, or only its own, is not.
+        decide(flatRequest(), platform, tenant(bindings = listOf(anyone("t", "p")))).assert()
+            .isEqualTo(Decision.Deny(ref("p", 0, bound("t", DocumentKind.TENANT))))
+        decide(flatRequest(), platform(), tenant).assert()
+            .isEqualTo(Decision.Permit(ref("p", 0, bound("t", DocumentKind.TENANT))))
+        // An app document's own policies belong to the platform layer (RFC 0004 §4.3): no ambiguity there.
+        val app = app(fixture.policy("p", allow()), bindings = listOf(role("r", "editor", "p")))
+        decide(flatRequest(roles = listOf("editor")), platform(fixture.policy("p", allow())), tenant(), app).assert()
+            .isEqualTo(Decision.Permit(ref("p", 0, bound("r", DocumentKind.APP))))
     }
 
     @Test
     fun `an anonymous principal has no attachments, principal or break-glass bindings`() {
         val platform = platform(
             fixture.policy("p", allow(), attachable = true),
-            bindings = listOf(principal("b", "p", tenant = "(0)"), root(tenant = "(0)", principal = "alice")),
+            bindings = listOf(principal("b", "p", tenant = "(0)"), root(principal = "alice")),
         )
         decide(
             flatRequest(authenticated = false, attachments = listOf("p", "ghost")),
@@ -314,7 +346,6 @@ class FlatEngineTest {
             *policies,
             bindings = listOf(
                 role("r1", "editor", "perm:app/read", space = "team-a"),
-                role("r2", "viewer", "perm:app/read", app = "other"),
                 role("r3", "viewer", "perm:app/read", tenant = "beta"),
                 role("r4", "viewer", "perm:app/read", space = null, tenant = "acme"),
             ),
