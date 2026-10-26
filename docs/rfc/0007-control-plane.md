@@ -6,6 +6,10 @@
 > 交付：全部合入 `main`（8.0 线）；这是最后一个阶段，它和第 2–5 阶段全部完成、各做完两轮审查之前，8.0 不发布任何版本 ·
 > 范围：新增 `control/`（`cosec-control`）；改动 `engine/`、`cosec-core`、`cosec-cocache`、`runtime/`、`migrate/`、`cosec-kafka`、
 > `cosec-spring-boot-starter`、`schema/`；删除 `SnapshotPublisher` 及其他直接写快照的路径
+>
+> **2026-10-26 修订（[RFC 0008](0008-conformance-and-direct-build.md)）**：8.0 不考虑兼容性。门槛 D（§12）与 PR-10 取消；PR-11 并入 RFC 0008 的切换 PR；PR-9 只做库与 HTTP 路由，starter 的装配移进切换 PR，
+> 依赖改为 RFC 0006 PR-7。§12.3 中的发布往返与 P-B1–P-B3 作为规范性质保留（分别随 PR-8、PR-3）。§14.1 的数据面对照从"第 5 阶段"改为 7.0 的实测数字。
+> 下文保留原样以便追溯。
 
 ## 0. 结论先行
 
@@ -928,6 +932,8 @@ AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新�
 
 ## 12. 门槛 D：本阶段不改变数据面的决策
 
+> **2026-10-26：本节由 [RFC 0008](0008-conformance-and-direct-build.md) 取代。** 发布往返（随 PR-8）与 P-B1–P-B3（随 PR-3）作为规范性质保留；离线回放与"与第 5 阶段零差异"取消。以下原文保留，仅供追溯。
+
 ### 12.1 要证明什么
 
 对同一份数据和同一批请求，第 5 阶段结束时的数据面（RFC 0006 PR-10 之后，下称**基准**）与本阶段的数据面（下称**候选**）给出**完全相同**的结果元组：状态、原因码、
@@ -980,6 +986,8 @@ AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新�
 ## 14. 性能与延迟预算
 
 ### 14.1 数据面（硬性要求）
+
+> **2026-10-26**：`boundary = none` 的对照改为同一构建中去掉边界检查的对照实现（[RFC 0008](0008-conformance-and-direct-build.md) §3.8）；整体吞吐按 7.0 的绝对预算判定。
 
 | 基准 | 比较 | 目标 |
 |---|---|---|
@@ -1036,17 +1044,17 @@ AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新�
 | PR | 标题 | 范围 | 依赖 | 能否提前开工 | 完成标准 |
 |---|---|---|---|---|---|
 | PR-1 | `build: add the cosec-control module` | `control/` 空模块、BOM、ArchUnit（不依赖 Spring、Reactor、Redis 客户端；不引用 `reactor.*`）、`jmh` 源码集 | 本 RFC 获批 | **能** | `:cosec-control:check` 通过；临时引用一个 `reactor.core` 类能让 ArchUnit 失败 |
-| PR-2 | `feat(core): generate JSON schemas from document format descriptors` | §10.4：格式描述（覆盖 `main` 当时的文档格式）、`generateSchemas`、`verifySchemas`、`SchemaConformanceTest`；AGENTS.md 的 schema 一行 | 本 RFC 获批 | **能**。之后每个改格式的 PR（RFC 0004 PR-7、RFC 0005 PR-8、RFC 0006 PR-5 等）必须同时改描述，`verifySchemas` 强制 | `:cosec-core:check` 通过；现有 schema 文件由生成得到 |
+| PR-2 | `feat(core): generate JSON schemas from document format descriptors`（**2026-10-26**：此后改格式的 PR 为 RFC 0004 PR-4、RFC 0006 PR-5、本文 PR-4/PR-5 与切换 PR，见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | §10.4：格式描述（覆盖 `main` 当时的文档格式）、`generateSchemas`、`verifySchemas`、`SchemaConformanceTest`；AGENTS.md 的 schema 一行 | 本 RFC 获批 | **能**。之后每个改格式的 PR（RFC 0004 PR-7、RFC 0005 PR-8、RFC 0006 PR-5 等）必须同时改描述，`verifySchemas` 强制 | `:cosec-core:check` 通过；现有 schema 文件由生成得到 |
 | PR-3 | `feat(engine,core): enforce platform boundaries` | §7.6：文档的边界数据与编译规则、`withinBoundary`、`StatementRef.Boundary`、trace；P-B1–P-B3；`boundary` 基准参数 | RFC 0004 PR-2、PR-4；RFC 0005 PR-4 | RFC 0005 PR-4 合入后 | `:cosec-engine:check`、`:cosec-core:check` 通过；§14.1 的 `none` 目标 |
 | PR-4 | `feat(control,cocache): store revisions and publish documents with putIfMatch` | §5：`ControlStore` 与 CoCache 实现、修订记录与链、索引、写入顺序、回滚、回收、反向引用索引、`provenance` 与 schema 加一；`RevisionChainTest` | PR-1；RFC 0004 PR-4（三种文档）；RFC 0003 PR-3（已合入） | RFC 0004 PR-4 合入后 | `:cosec-control:check`、`:cosec-cocache:check` 通过（需要 Redis） |
 | PR-5 | `feat(control): validate, compile and stage changes` | §6.1–§6.3、§6.7：变更请求与状态机、条目级操作、V1–V5、严格编译、暂存槽、变基、`apply`；N3 的 `limits`/`attributes` 两节 | PR-4；RFC 0005 PR-4（AST 编译与成本）；RFC 0006 PR-4（属性目录） | RFC 0006 PR-4 合入后 | `PublishCompileTest`、`ControlFailClosedTest` |
 | PR-6 | `feat(engine,control): authorize control-plane writes and analyze grants` | §7.1–§7.5：动作与资源、内置控制面策略、硬性规则、`GrantAnalyzer`、收窄判定、审批；RFC 0005 §5.5 的模式包含（N7）；A5–A8 | PR-5；RFC 0005 PR-2（`implies`、A1/A2）、PR-3（模式）；RFC 0006 PR-7（挂起的 `AuthorizationChecker`） | 分析部分在 RFC 0005 PR-2、PR-3 之后即可开工；接线等 RFC 0006 PR-7 | `GrantAnalyzerTest`（§7.4.6 每一行）、A5–A8 |
 | PR-7 | `feat(runtime,control): run shadow windows on candidate documents` | §6.4、§6.5：候选文档、`CandidateSource`、`ShadowListener` 改读候选、`ShadowReportSink` 与 CoCache 实现、实例状态、窗口判定与确认、`propagation` | PR-5；RFC 0006 PR-6（监听器） | RFC 0006 PR-6 合入后 | `ListenerIsolationTest` 扩展；用两个内存实例跑通一个窗口 |
 | PR-8 | `feat(control,core,migrate,kafka): break-glass, tenant self-service and change audit` | §8、§9、§10.5：break-glass、N1/N2 的编译规则、`nomatch` 确认（N6）、`ChangeListener` 与 Kafka 实现、`cosec-migrate bootstrap`/`partition plan`、`publish` 改经 `ControlStore` | PR-6、PR-7；RFC 0004 PR-5（`cosec-migrate`） | PR-6 合入后 | `BreakGlassControlTest`、`ControlTenantIsolationTest`、P12 的控制面形式 |
-| PR-9 | `feat(control,starter): expose the control plane as a library and over HTTP` | §10.1–§10.3：`ControlPlane` 门面、HTTP 路由、`controlSupport` feature variant 与属性、AOT hint 与测试、`simulate`/`explain`/`analyze`（`AccessAnalyzer` 重写）；控制面延迟测量（§14.2） | PR-5 到 PR-8；RFC 0006 PR-9（starter 装配 Pipeline） | RFC 0006 PR-9 合入后 | `:cosec-spring-boot-starter:check` 通过（需要 Redis）；§14.2 的数字 |
-| PR-10 | `test: replay phase 6 against phase 5 with zero differences` | §12：门槛 D 的回放模式、发布往返性质、随机比较、百万例任务 | PR-3、PR-8、PR-9；RFC 0006 PR-10（基准是第 5 阶段结束时的实现） | RFC 0006 PR-10 合入后 | 用仓库内的合成数据跑通回放与往返 |
-| — | **门槛 D** | 维护者在本地：对同一批导出跑回放（§12.3） | PR-10 | — | 差异为 0；证据附在 PR-11 |
-| PR-11 | `refactor!: make the control plane the only writer of snapshot documents` | 删除 §15 X1–X3 的全部项与 `cosecExplain`；`nomatch` 只限平台的规则删除；ArchUnit"快照只有一个写入者"与 Reactor 公开签名规则（M12）；starter 默认装配；文档（§16.3）；AGENTS.md | 门槛 D；PR-1 到 PR-10；RFC 0006 PR-10 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
+| PR-9 | `feat(control,starter): expose the control plane as a library and over HTTP`（**2026-10-26 改动**：starter 装配移进切换 PR；依赖改为 RFC 0006 PR-7） | §10.1–§10.3：`ControlPlane` 门面、HTTP 路由、`controlSupport` feature variant 与属性、AOT hint 与测试、`simulate`/`explain`/`analyze`（`AccessAnalyzer` 重写）；控制面延迟测量（§14.2） | PR-5 到 PR-8；RFC 0006 PR-9（starter 装配 Pipeline） | RFC 0006 PR-9 合入后 | `:cosec-spring-boot-starter:check` 通过（需要 Redis）；§14.2 的数字 |
+| ~~PR-10~~ | ~~`test: replay phase 6 against phase 5 with zero differences`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | §12：门槛 D 的回放模式、发布往返性质、随机比较、百万例任务 | PR-3、PR-8、PR-9；RFC 0006 PR-10（基准是第 5 阶段结束时的实现） | RFC 0006 PR-10 合入后 | 用仓库内的合成数据跑通回放与往返 |
+| — | ~~**门槛 D**~~ **已取消（2026-10-26）** | 维护者在本地：对同一批导出跑回放（§12.3） | PR-10 | — | 差异为 0；证据附在 PR-11 |
+| ~~PR-11~~ | ~~`refactor!: make the control plane the only writer of snapshot documents`~~ **并入 RFC 0008 的切换 PR（2026-10-26）** | 删除 §15 X1–X3 的全部项与 `cosecExplain`；`nomatch` 只限平台的规则删除；ArchUnit"快照只有一个写入者"与 Reactor 公开签名规则（M12）；starter 默认装配；文档（§16.3）；AGENTS.md | 门槛 D；PR-1 到 PR-10；RFC 0006 PR-10 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
 
 PR-1、PR-2 可以立即开工；PR-6 的分析部分只等 RFC 0005 PR-2、PR-3。其余按第 4、5 阶段对应 PR 的合入顺序推进。
 
@@ -1104,8 +1112,8 @@ PR-1、PR-2 可以立即开工；PR-6 的分析部分只等 RFC 0005 PR-2、PR-3
 | Q20 | **"不依赖 Reactor"的最终形式**（§3 M12） | **已决定**：公开签名规则 + `model/`、`engine/`、`runtime/`、`control/` 不引用 `reactor.*`；不做类路径检查 | Lettuce 依赖 `reactor-core`，类路径检查永远无法通过；签名规则守住的是下游真正受影响的东西 |
 | Q21 | **控制面审计**（§10.5） | **已决定**：`ChangeListener`，投递语义沿用 RFC 0006；`PUBLISHING` 与 break-glass 事件先于头写入投递给 REQUIRED 监听器；默认没有 REQUIRED，break-glass 必须有 | 修订记录本身是持久的发布记录；break-glass 与 RFC 0006 Q20 对使用的要求对称 |
 | Q22 | **`simulate`/`explain`/`analyze`**（§3 M14、§10.3） | **已决定**：三者都调用同一个 `Engine.evaluate`；`explain` 可以指定 `SnapshotVersion`；`analyze` 以绑定的主体表达；删除 `cosecExplain` 端点 | P3；RFC 0001 §3.3 要求按版本解释；P11 之后无法列出用户；actuator 端点没有按租户的授权 |
-| Q23 | **门槛 D 的标准**（§12） | **已决定**：差异为零，没有改动目录；任何差异都是缺陷 | 本阶段承诺不改变决策；数据面的改动在现有数据上都是恒等的 |
-| Q24 | **性能**（§14） | **已决定**：数据面：`boundary = none` 吞吐不低于第 5 阶段的 100 %，B/op 不高于，达不到时 PR-3 停止；控制面：§14.2 的预算，超出须在 PR 中说明 | 没有边界时不应有任何代价；控制面不在请求路径上，预算是体验目标而不是门槛 |
+| Q23 | ~~**门槛 D 的标准**（§12）~~（2026-10-26 由 [RFC 0008](0008-conformance-and-direct-build.md) 取代） | **已决定**：差异为零，没有改动目录；任何差异都是缺陷 | 本阶段承诺不改变决策；数据面的改动在现有数据上都是恒等的 |
+| Q24 | **性能**（§14；**2026-10-26 修订**：数据面按 [RFC 0008](0008-conformance-and-direct-build.md) §3.8 的绝对预算） | **已决定**：数据面：`boundary = none` 吞吐不低于第 5 阶段的 100 %，B/op 不高于，达不到时 PR-3 停止；控制面：§14.2 的预算，超出须在 PR 中说明 | 没有边界时不应有任何代价；控制面不在请求路径上，预算是体验目标而不是门槛 |
 | Q25 | **SPI 与 API 变更**（AGENTS.md 要求先问） | **已决定**：新增 SPI `ControlStore`、`ChangeListener`、`ShadowReportSink`；删除 `SnapshotPublisher`、`ShadowPolicyProvider`、`PolicyRevisionStore`；`cosec-api` 不变 | 8.0 没有发布过，删除的接口没有外部使用者；写入只剩一条路径 |
 | Q26 | **自举**（§3 M15、§5.9） | **已决定**：`cosec-migrate bootstrap`，只在没有平台管理员绑定时执行，`--force` 用于恢复；写修订记录 | 存储为空时没有人有权写；拿到 Redis 凭据的人本来就能写，命令只让这类写入留下记录 |
 | Q27 | **复制与确认**（§5.4） | **已决定**：不加 `WAIT`；修订链让丢写可诊断；`storage.md` 建议 `min-replicas-to-write` | RFC 0003 §4.6 的理由不变；控制面没有让 `WAIT` 变得更有效 |
