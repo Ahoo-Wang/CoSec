@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "ALG-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The tenant document could not be read. An ALLOW matches, but the document could hold a DENY.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    },
+    "unavailable": [
+      "tenant"
+    ]
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "SourceUnavailable",
+      "document": "tenant"
+    }
+  }
+}

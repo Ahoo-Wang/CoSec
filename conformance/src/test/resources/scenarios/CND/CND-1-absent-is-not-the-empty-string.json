@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "CND-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The ALLOW asks for an empty X-Team header; the request has no such header.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "http.header.x-team",
+                  ""
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

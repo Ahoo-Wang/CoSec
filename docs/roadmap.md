@@ -21,7 +21,7 @@
 | 4 | 统一模型：`Binding`、平台层/租户层、条件 AST、`service:verb`、编译执行、转换工具 | [RFC 0004](rfc/0004-unified-model.md) / [RFC 0005](rfc/0005-condition-ast.md)，已确认（2026-10-22） | RFC 0004 PR-1 至 PR-3、RFC 0005 PR-1、PR-2 已合入；RFC 0005 PR-3 打开中（#1040） | 🟡 进行中 |
 | 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | [RFC 0006](rfc/0006-coroutine-pipeline.md)，已确认（2026-10-25） | PR-1 已合入（第 1 轮审查修复 #1031 打开中）；PR-2 可以开工 | 🟡 进行中 |
 | 6 | 控制面 `cosec-control` | [RFC 0007](rfc/0007-control-plane.md)，已确认（2026-10-26，#1028） | PR-1（#1032）、PR-2（#1038）已合入 | 🟡 进行中 |
-| — | 规范一致性套件与切换 | [RFC 0008](rfc/0008-conformance-and-direct-build.md)，已确认（2026-10-26） | PR-1（套件）、PR-3（7.0 基线）可以开工 | ⚪ 未开工 |
+| — | 规范一致性套件与切换 | [RFC 0008](rfc/0008-conformance-and-direct-build.md)，已确认（2026-10-26） | PR-1（套件）打开中；PR-3（7.0 基线）可以开工 | 🟡 进行中 |
 
 **发布策略**（RFC 0001 §6，2026-10-21）：目标架构全部达成、每个 PR 做完两轮审查之前，8.0 不发布任何版本，没有里程碑版和 RC。
 切换 PR 的通过标准是一致性套件全绿、每条规则有正反例、不变量性质在固定种子与一次百万例运行下通过、变异体全部被杀死、
@@ -111,7 +111,7 @@ PR-9 只做库与 HTTP，starter 装配移进切换（RFC 0008 §4.1）。
 
 | PR | 内容 | 依赖 | 状态 |
 |---|---|---|---|
-| RFC 0008 PR-1 | `conformance/` 模块、规则登记表、`verifyRuleCoverage`、已合入规则的正反例场景、`propertyStress` | — | 可以开工 |
+| RFC 0008 PR-1 | `conformance/` 模块、规则登记表、`verifyRuleCoverage`、已合入规则的正反例场景、`propertyStress` | — | 打开中 |
 | RFC 0008 PR-2 | 变异体补丁与 `mutationCheck` | RFC 0008 PR-1 | 等 PR-1 |
 | RFC 0008 PR-3 | 从 `v7.0.1` 录 7.0 基线，作为 JMH 绝对预算的对照 | — | 可以开工（需要空闲机器） |
 | RFC 0008 PR-4 | 切换：装配目标路径，删除 7.x 路径与全部等价脚手架，写 `upgrading.md` | 其余全部 PR；RFC 0008 §3.9 | 未开工 |
@@ -119,6 +119,10 @@ PR-9 只做库与 HTTP，starter 装配移进切换（RFC 0008 §4.1）。
 
 取消的 PR：RFC 0002 PR-6、RFC 0003 PR-5、RFC 0004 PR-6、RFC 0005 PR-7、RFC 0006 PR-8、RFC 0007 PR-10，以及第 2、3 阶段的门槛与门槛 A–D。
 并入切换的 PR：RFC 0003 PR-6、RFC 0004 PR-7/PR-8、RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。
+
+PR-1 的登记表（`conformance/src/test/resources/rules.json`）有 64 条规则：31 条已有场景（`SCP`、`MEM`、`BND`、`BLK`、`BRK`、`ALG`、`TNT-1`、`CND`、`ANA`，
+共 99 个正反例），33 条为 `pending`，各自写明实现它的 PR。每个实现 PR 把它实现的规则改为 `"pending": null` 并补上正例与反例，否则
+`:conformance:check` 失败；切换 PR 要求 `pending` 为空（RFC 0008 §3.9）。
 
 ---
 
@@ -130,7 +134,7 @@ PR-9 只做库与 HTTP，starter 装配移进切换（RFC 0008 §4.1）。
 
 可以立即开工（按 RFC 0008 §4.5 的依赖顺序）：
 
-- RFC 0008 PR-1（一致性套件）与 PR-3（7.0 基线）。
+- RFC 0008 PR-3（7.0 基线）；PR-1 合入后 PR-2（变异检查）。
 - RFC 0006 PR-2（#1031 合入后）。
 - RFC 0005 PR-3 之后：RFC 0005 PR-4、PR-5，以及 RFC 0007 PR-6 的分析部分。
 - 核对已合入 PR 的两轮审查：RFC 0004 PR-2（#1029）、PR-3（#1027），RFC 0005 PR-1（#1022）、PR-2（#1036）；本表"—"表示尚无已合入的修复 PR。

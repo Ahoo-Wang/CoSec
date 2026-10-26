@@ -1,0 +1,30 @@
+{
+  "rules": [
+    "ANA-1"
+  ],
+  "polarity": "positive",
+  "level": "analysis",
+  "description": "eq with ignoreCase: the keys are folded, and admit the request's app in any case.",
+  "analysis": {
+    "condition": {
+      "eq": [
+        "scope.app",
+        "Order"
+      ],
+      "ignoreCase": true
+    },
+    "attribute": "scope.app",
+    "request": {
+      "scope.app": "ORDER"
+    }
+  },
+  "expect": {
+    "keys": [
+      "order"
+    ],
+    "admits": true,
+    "evaluations": {
+      "condition": true
+    }
+  }
+}

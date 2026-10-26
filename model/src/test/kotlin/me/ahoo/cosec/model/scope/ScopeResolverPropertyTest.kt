@@ -25,7 +25,8 @@ import kotlin.random.Random
 
 /** Property P11 of RFC 0004 §9.5, on random subjects, declarations and hosts with a fixed seed. */
 class ScopeResolverPropertyTest {
-    private val iterations = 2_000
+    // propertyStress raises the count (RFC 0008 §3.5).
+    private val iterations = maxOf(2_000, Integer.getInteger("cosec.property.iterations", 0))
 
     // Near misses of real values (case, whitespace, separators) catch a resolver that normalises before comparing.
     private val spaces =

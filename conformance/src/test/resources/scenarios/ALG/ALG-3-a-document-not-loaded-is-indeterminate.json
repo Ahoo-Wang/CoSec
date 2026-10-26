@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "ALG-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The tenant document the request needs was not given to the engine.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    },
+    "notLoaded": [
+      "tenant"
+    ]
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "NotLoaded",
+      "document": "tenant"
+    }
+  }
+}

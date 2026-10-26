@@ -1,0 +1,61 @@
+{
+  "rules": [
+    "CND-1"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The header is present and empty: it exists, and equals the empty string.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "and": [
+                  {
+                    "exists": "http.header.x-team"
+                  },
+                  {
+                    "eq": [
+                      "http.header.x-team",
+                      ""
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "request": {
+    "headers": {
+      "X-Team": ""
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "guarded",
+      "statement": 0,
+      "via": {
+        "binding": "g:guarded",
+        "document": "platform"
+      }
+    }
+  }
+}

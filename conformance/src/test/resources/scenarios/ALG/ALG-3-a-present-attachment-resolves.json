@@ -1,0 +1,39 @@
+{
+  "rules": [
+    "ALG-3"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The attached policy exists and is attachable: nothing is unresolved and it permits.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "mine",
+          "attachable": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "credential": {
+    "policies": [
+      "mine"
+    ]
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "mine",
+      "statement": 0,
+      "via": {
+        "attached": "mine"
+      }
+    }
+  }
+}

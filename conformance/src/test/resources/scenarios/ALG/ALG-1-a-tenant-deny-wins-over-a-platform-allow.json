@@ -1,0 +1,67 @@
+{
+  "rules": [
+    "ALG-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A platform ALLOW and a tenant DENY both match: deny-first holds across layers.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "deny-read",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "order:read"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "g:deny-read",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "deny-read"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "deny-read",
+      "statement": 0,
+      "via": {
+        "binding": "g:deny-read",
+        "document": "tenant"
+      }
+    }
+  }
+}

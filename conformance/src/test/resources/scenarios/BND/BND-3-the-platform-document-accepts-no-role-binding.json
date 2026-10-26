@@ -1,0 +1,38 @@
+{
+  "rules": [
+    "BND-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A role binding in the platform document does not compile.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "r:editor:allow-all",
+          "subject": {
+            "role": "editor"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "role grants belong in app documents"
+  }
+}

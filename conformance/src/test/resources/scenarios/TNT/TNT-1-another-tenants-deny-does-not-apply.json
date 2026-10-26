@@ -1,0 +1,67 @@
+{
+  "rules": [
+    "TNT-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "Tenant globex denies everything; alice of acme is permitted by the platform.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    },
+    "tenants": {
+      "globex": {
+        "policies": [
+          {
+            "id": "deny-all",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "g:deny-all",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "deny-all"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "allow-all",
+      "statement": 0,
+      "via": {
+        "binding": "g:allow-all",
+        "document": "platform"
+      }
+    }
+  }
+}

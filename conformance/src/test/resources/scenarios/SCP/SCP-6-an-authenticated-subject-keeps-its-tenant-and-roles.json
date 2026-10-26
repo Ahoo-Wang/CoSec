@@ -1,0 +1,52 @@
+{
+  "rules": [
+    "SCP-6"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "An authenticated principal of acme with role guest gets acme's guest binding.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "allow-all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:guest:allow-all",
+            "subject": {
+              "role": "guest"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "allow-all"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "guest"
+    ]
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "allow-all",
+      "statement": 0,
+      "via": {
+        "binding": "r:guest:allow-all",
+        "document": "tenant"
+      }
+    }
+  }
+}

@@ -40,3 +40,5 @@ include(":cosec-ip2region")
 include(":code-coverage-report")
 include(":cosec-openapi")
 include(":cosec-kafka")
+// Test-only (RFC 0008 §3.1): never published, so no cosec- prefix.
+include(":conformance")

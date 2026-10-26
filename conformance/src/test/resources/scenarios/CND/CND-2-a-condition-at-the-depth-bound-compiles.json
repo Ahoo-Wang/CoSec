@@ -1,0 +1,77 @@
+{
+  "rules": [
+    "CND-2"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "Eight levels of nesting, the bound itself: the condition compiles and evaluates.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "and": [
+                  {
+                    "and": [
+                      {
+                        "and": [
+                          {
+                            "and": [
+                              {
+                                "and": [
+                                  {
+                                    "and": [
+                                      {
+                                        "and": [
+                                          {
+                                            "eq": [
+                                              "subject.id",
+                                              "alice"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "guarded",
+      "statement": 0,
+      "via": {
+        "binding": "g:guarded",
+        "document": "platform"
+      }
+    }
+  }
+}
