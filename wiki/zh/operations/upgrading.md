@@ -23,7 +23,7 @@ Redis `RateLimiter` bean 的名称由 `redisRateLimiter` 改为 `cosecRedisRateL
 
 - `allow` 语句或权限不再匹配这样的主体（`Implicit Deny`）；
 - 无论条件如何，`deny` 语句或权限都会让这样的主体的请求以错误失败关闭（`RejectedTemplateValueException`，`500`）；
-- 限流规则同样让这样的主体的匹配请求失败关闭，且不消耗任何许可；
+- 限流规则同样失败关闭，且不消耗任何许可：值在匹配路径之前就被拒绝，所以到达模板化拒绝或限流规则的每个请求都会失败；
 - 用 `PathActionMatcherFactory` 在代码中构建、不在语句中使用的模板化匹配器同样失败。从 JSON 反序列化语句、权限或限流规则的
   代码不受影响；自己构建 ALLOW 语句的自定义反序列化器可以对动作调用 `onRejectedTemplateValue(NO_MATCH)`。
 
