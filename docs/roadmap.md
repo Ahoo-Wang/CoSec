@@ -17,7 +17,7 @@
 | 2 | 纯函数决策引擎：`model/`、`engine/` | [RFC 0002](rfc/0002-pure-engine.md)，已确认 | PR-1 至 PR-5 已合入；PR-6 取消（并入切换） | ✅ 剩余工作并入切换 |
 | 3 | 策略快照分发 | [RFC 0003](rfc/0003-policy-snapshot.md)，已确认 | PR-1 至 PR-4 已合入；PR-5 取消，PR-6 并入切换 | ✅ 剩余工作并入切换 |
 | 4 | 统一模型：`Binding`、平台层/租户层、条件 AST、`service:verb`、编译执行、转换工具 | [RFC 0004](rfc/0004-unified-model.md) / [RFC 0005](rfc/0005-condition-ast.md)，已确认（2026-10-22） | RFC 0004 PR-1 至 PR-3、RFC 0005 PR-1、PR-2 已合入；RFC 0005 PR-3 打开中（#1040） | 🟡 进行中 |
-| 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | [RFC 0006](rfc/0006-coroutine-pipeline.md)，已确认（2026-10-25） | PR-1 已合入（第 1 轮审查修复 #1031 打开中）；PR-2 可以开工 | 🟡 进行中 |
+| 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | [RFC 0006](rfc/0006-coroutine-pipeline.md)，已确认（2026-10-25） | PR-1 已合入（第 1 轮审查修复 #1031）；PR-2 打开中（#PR2） | 🟡 进行中 |
 | 6 | 控制面 `cosec-control` | [RFC 0007](rfc/0007-control-plane.md)，已确认（2026-10-26，#1028） | PR-1（#1032）、PR-2（#1038）已合入 | 🟡 进行中 |
 | — | 规范一致性套件与切换 | [RFC 0008](rfc/0008-conformance-and-direct-build.md)，已确认（2026-10-26） | PR-1（套件）、PR-3（7.0 基线）可以开工 | ⚪ 未开工 |
 
@@ -90,10 +90,12 @@ key 过滤器、协调 `localMaxAge`）转入切换 PR（RFC 0008 §4.4）。
 
 ## 4. 第 5 阶段：协程化 Pipeline（RFC 0006）
 
-RFC 0006 已于 2026-10-25 确认。PR-1（`runtime/` 模块与依赖）已合入（#1025），第 1 轮审查修复 #1031 打开中。2026-10-26 起：门槛 C 与 PR-8 取消；
+RFC 0006 已于 2026-10-25 确认。PR-1（`runtime/` 模块与依赖）已合入（#1025），第 1 轮审查修复已合入（#1031）。2026-10-26 起：门槛 C 与 PR-8 取消；
 PR-9、PR-10 并入切换；PR-2 增加"同一 `CoSec-*` 参数的 Header 与 query 值不同即 400"；性能对照从第 4 阶段改为 7.0（RFC 0008 §4.1、§3.8）。
 2026-10-26 起：CoSec 写的错误响应改为 RFC 9457 problem+json，显式与隐式拒绝在响应中合并（RFC 0006 Q27）；PR-2 实现，PR-7 写回，切换 PR 写文档。
-PR-2 的依赖都已合入，#1031 合入后即可开工；PR-3、PR-6 只等 PR-2。
+PR-2（#PR2，打开中）：`HttpFacts` 与 `SCP-4`、`PathNormalizer`、`Authenticator` SPI、`Outcome` 与 `StatusMapping`（problem 词汇）、手写的 `ProblemEncoder`、
+`problem` 格式描述与 `schema/problem.schema.json`、`Pipeline.decide` 骨架（整体超时、取消规则、`resumeOffIo` 与 T1–T3）、`SuspendingSnapshotSource`，全部用测试替身；
+快照视图的来源是新的 `SnapshotViews` 接口，由 RFC 0004 PR-4 的文档源实现。PR-3、PR-6 只等 PR-2。
 
 ---
 
@@ -129,6 +131,5 @@ PR-9 只做库与 HTTP，starter 装配移进切换（RFC 0008 §4.1）。
 可以立即开工（按 RFC 0008 §4.5 的依赖顺序）：
 
 - RFC 0008 PR-1（一致性套件）与 PR-3（7.0 基线）。
-- RFC 0006 PR-2（#1031 合入后）。
 - RFC 0005 PR-3 之后：RFC 0005 PR-4、PR-5，以及 RFC 0007 PR-6 的分析部分。
 - 核对已合入 PR 的两轮审查：RFC 0004 PR-2（#1029）、PR-3（#1027），RFC 0005 PR-1（#1022）、PR-2（#1036）；本表"—"表示尚无已合入的修复 PR。
