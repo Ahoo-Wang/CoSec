@@ -42,3 +42,5 @@ include(":cosec-openapi")
 include(":cosec-kafka")
 // Test-only (RFC 0008 §3.1): never published, so no cosec- prefix.
 include(":conformance")
+// Test-only (RFC 0008 §4.4.3): the end-to-end slice of the 8.0 path, against real Redis.
+include(":e2e")
