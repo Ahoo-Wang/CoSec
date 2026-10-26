@@ -1,0 +1,54 @@
+{
+  "rules": [
+    "ATR-1"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The provider of the only ALLOW's attribute does not answer within the attribute timeout: never a Permit.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "in-fence",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.geo.inFence",
+                  true
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:in-fence",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "in-fence"
+        }
+      ]
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.inFence": "bool"
+      },
+      "hangs": true
+    }
+  ],
+  "options": {
+    "attributeTimeoutMillis": 50
+  },
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

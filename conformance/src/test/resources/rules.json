@@ -592,9 +592,16 @@
     {
       "id": "ATR-1",
       "source": "RFC 0006 §5.4.3",
-      "statement": "An external attribute that cannot be fetched never turns a Deny or Indeterminate into a Permit (P9').",
+      "statement": "An external attribute that cannot be fetched never turns a Deny or Indeterminate into a Permit (P9'), except a platform DENY with onMissing nomatch, which lapses by design (ATR-3).",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-4"
+      "properties": [
+        "engine:ExternalAttributesPropertyTest#unavailableAttributesNeverPermitAndThePlanIsComplete"
+      ],
+      "guards": [
+        "engine:ExternalAttributesTest",
+        "runtime:ExternalAttributesPipelineTest"
+      ],
+      "pending": null
     },
     {
       "id": "OBL-1",
@@ -669,6 +676,58 @@
       "statement": "A platform boundary can only turn a Permit into Deny or Indeterminate (P-B2); without boundaries it is the identity (P-B1).",
       "level": "engine",
       "pending": "RFC 0007 PR-3"
+    },
+    {
+      "id": "ATR-2",
+      "source": "RFC 0006 §5.4.3 (K12, Q12)",
+      "statement": "An ALLOW skipped because an external attribute it reads cannot be fetched makes what would be the implicit deny Indeterminate (503); another matching ALLOW still permits, and onMissing nomatch makes it a plain miss.",
+      "level": "pipeline",
+      "guards": [
+        "engine:ExternalAttributesTest",
+        "runtime:ExternalAttributesPipelineTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ATR-3",
+      "source": "RFC 0006 §5.4.3 (Q13)",
+      "statement": "A DENY may say onMissing nomatch only in the platform document, where it lapses while its attribute cannot be fetched; elsewhere the document does not compile.",
+      "level": "pipeline",
+      "guards": [
+        "engine:ExternalAttributesTest",
+        "cosec-core:ExternalAttributeDocumentTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ATR-4",
+      "source": "RFC 0006 §5.4.1",
+      "statement": "A policy that reads an external attribute no registered AttributeProvider declares does not compile.",
+      "level": "pipeline",
+      "guards": [
+        "cosec-core:ExternalAttributeDocumentTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ATR-5",
+      "source": "RFC 0006 §5.4.2; RFC 0004 Q6",
+      "statement": "A provider that fails or times out makes only its own attributes unavailable; the other providers' attributes are still read, so their DENY still matches.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:ExternalAttributesPipelineTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "BLK-2",
+      "source": "RFC 0006 §5.4.4",
+      "statement": "A blacklist that cannot be read is never \"not blocked\": the request is Indeterminate (503) unless a DENY matches.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:ExternalAttributesPipelineTest"
+      ],
+      "pending": null
     }
   ]
 }

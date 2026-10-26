@@ -1,0 +1,82 @@
+{
+  "rules": [
+    "ATR-5"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The geo provider fails; the risk provider answers and its DENY matches: 403, not 503.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "in-fence",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.geo.inFence",
+                  true
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "deny-high-risk",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.risk.high",
+                  true
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:in-fence",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "in-fence"
+        },
+        {
+          "id": "g:deny-high-risk",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "deny-high-risk"
+        }
+      ]
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.inFence": "bool"
+      },
+      "fails": "geo is down"
+    },
+    {
+      "stage": "B",
+      "declares": {
+        "ext.risk.high": "bool"
+      },
+      "values": {
+        "ext.risk.high": true
+      }
+    }
+  ],
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}
