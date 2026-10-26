@@ -48,6 +48,8 @@ class MapInput(
         check(attribute.type == AttributeType.INSTANT) { "read $attribute as an Instant" }
         return time
     }
+
+    override fun toString(): String = "MapInput($strings, $bools, $sets, $ips, time=$time)"
 }
 
 fun attr(path: String): Attribute = requireNotNull(Attribute.parse(path)) { path }
