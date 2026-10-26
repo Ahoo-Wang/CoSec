@@ -99,6 +99,7 @@ object AuditEventExtractor {
                 AuditDecision.IMPLICIT_DENY -> AuditReasonCode.IMPLICIT_DENY
                 AuditDecision.TOO_MANY_REQUESTS -> AuditReasonCode.TOO_MANY_REQUESTS
                 AuditDecision.ERROR -> AuditReasonCode.ERROR
+                AuditDecision.INDETERMINATE -> AuditReasonCode.INDETERMINATE
             }
         }
     }

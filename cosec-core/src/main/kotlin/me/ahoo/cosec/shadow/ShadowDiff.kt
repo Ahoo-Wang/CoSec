@@ -28,6 +28,12 @@ enum class ShadowDiffKind {
 
     /** The candidates failed to evaluate (e.g. a matcher threw); enforcing them would deny with an error. */
     CANDIDATE_ERROR,
+
+    /**
+     * The candidates read an external attribute the request did not fetch, and so are indeterminate (RFC 0006 §9.5.4):
+     * a shadow never fetches one.
+     */
+    CANDIDATE_INDETERMINATE,
 }
 
 /**

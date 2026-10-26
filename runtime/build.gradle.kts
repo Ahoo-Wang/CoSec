@@ -17,6 +17,8 @@ dependencies {
     api(project(":cosec-engine"))
     api(project(":cosec-core"))
     api("org.jetbrains.kotlinx:kotlinx-coroutines-core")
+    // MdcContextContributor (RFC 0006 §7.5): restores the bridging thread's MDC when the pipeline resumes.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-slf4j")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
     testImplementation("com.tngtech.archunit:archunit-junit5")
     // ProblemSchemaTest validates encoded problems against schema/problem.schema.json, as cosec-core's

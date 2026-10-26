@@ -60,6 +60,9 @@ class CompiledDocument private constructor(
     /** Role id → role bindings, in document order (the 7.x grant order). */
     private val roles: Map<String, Array<BoundEntry>>
 
+    /** The ids of the break-glass bindings. */
+    private val breakGlassIds: Set<String>
+
     init {
         val anyone = ArrayList<BoundEntry>()
         val breakGlass = HashMap<String, HashMap<String, ArrayList<BoundEntry>>>()
@@ -83,7 +86,15 @@ class CompiledDocument private constructor(
         this.breakGlass = breakGlass.sortedById()
         this.principals = principals.sortedById()
         this.roles = roles.mapValues { it.value.toTypedArray() }
+        this.breakGlassIds = bindings.filter { it.breakGlass }.mapTo(HashSet()) { it.id.value }
     }
+
+    /**
+     * Whether [via] is a break-glass binding of this document: a permit through it must be written to a REQUIRED audit
+     * (RFC 0006 §9.4.3).
+     */
+    fun isBreakGlass(via: BindingRef): Boolean =
+        via is BindingRef.Bound && via.document == kind && via.id.value in breakGlassIds
 
     private fun entry(binding: Binding): BoundEntry {
         // The candidate order reads role bindings from app and tenant documents and everything else from platform and
