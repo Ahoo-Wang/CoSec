@@ -13,25 +13,25 @@
 
 package me.ahoo.cosec.runtime
 
-import me.ahoo.cosid.StringIdGenerator
 import java.util.UUID
 import java.util.concurrent.ThreadLocalRandom
 
 /**
  * The default request ids of the [Pipeline], for requests without a `CoSec-Request-Id` header: random version 4 UUIDs
- * drawn from [ThreadLocalRandom].
+ * drawn from [ThreadLocalRandom]. Deliberately not a `StringIdGenerator`, so it cannot end up generating ids that must
+ * be unpredictable, such as token ids.
  *
  * Not `UUID.randomUUID()`: its `SecureRandom` refills its buffer from `/dev/urandom` now and then, a blocking file read
  * on whatever thread asks, an event loop included (RFC 0006 §7.1; the end-to-end slice's BlockHound test caught it),
  * and it costs more per request. A request id correlates logs and audit events; it is not a secret.
  */
-internal object RandomRequestIds : StringIdGenerator {
+internal object RandomRequestIds {
     private const val VERSION_MASK = 0xF000L.inv()
     private const val VERSION_4 = 0x4000L
     private const val VARIANT_MASK = 0x3FFFFFFFFFFFFFFFL
     private const val VARIANT_IETF = Long.MIN_VALUE
 
-    override fun generateAsString(): String {
+    fun next(): String {
         val random = ThreadLocalRandom.current()
         val mostSignificant = (random.nextLong() and VERSION_MASK) or VERSION_4
         val leastSignificant = (random.nextLong() and VARIANT_MASK) or VARIANT_IETF

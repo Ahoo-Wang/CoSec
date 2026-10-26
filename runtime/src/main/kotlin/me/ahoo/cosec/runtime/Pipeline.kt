@@ -74,8 +74,8 @@ class Pipeline(
     /** Asked when a token carries the provider marker instead of claims; without one such a request is a 503. */
     private val membershipProvider: MembershipProvider? = null,
     private val engine: FlatEngine = CoSecFlatEngine,
-    /** Request ids for requests without a `CoSec-Request-Id` header. */
-    private val idGenerator: StringIdGenerator = RandomRequestIds,
+    /** Request ids for requests without a `CoSec-Request-Id` header; without one, random ids that never block. */
+    private val idGenerator: StringIdGenerator? = null,
     private val clock: Clock = Clock.systemUTC(),
     private val options: PipelineOptions = PipelineOptions(),
 ) {
@@ -201,8 +201,10 @@ class Pipeline(
     private fun unavailable(requestId: String, cause: Cause): Outcome =
         StatusMapping.unavailable(requestId, Unavailability.Indeterminate(cause), null)
 
-    private fun requestId(facts: HttpFacts): String =
-        facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull { it.isNotBlank() } ?: idGenerator.generateAsString()
+    private fun requestId(facts: HttpFacts): String {
+        val given = facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull { it.isNotBlank() }
+        return given ?: idGenerator?.generateAsString() ?: RandomRequestIds.next()
+    }
 
     /** As `DefaultSecurityContextParser`: the header, else the query parameter when allowed, else the cookie. */
     private fun credentials(facts: HttpFacts): Credentials {

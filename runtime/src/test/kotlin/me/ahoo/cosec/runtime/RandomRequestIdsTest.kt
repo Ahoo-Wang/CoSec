@@ -20,7 +20,7 @@ import java.util.UUID
 class RandomRequestIdsTest {
     @Test
     fun idsAreDistinctVersion4Uuids() {
-        val ids = (1..10_000).map { RandomRequestIds.generateAsString() }
+        val ids = (1..10_000).map { RandomRequestIds.next() }
         ids.toSet().assert().hasSize(ids.size)
         ids.forEach {
             val uuid = UUID.fromString(it)
