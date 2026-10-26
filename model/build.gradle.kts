@@ -13,3 +13,6 @@
 
 // Pure data types of the decision engine (RFC 0002 §2). Kotlin standard library only: the root build leaves out the
 // library defaults (platform, Guava, SLF4J) and verifyPureClasspath fails on anything else.
+dependencies {
+    testImplementation("com.tngtech.archunit:archunit-junit5")
+}

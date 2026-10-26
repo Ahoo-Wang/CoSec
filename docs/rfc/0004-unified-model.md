@@ -192,6 +192,10 @@ class Scope internal constructor(
 - `AuthzRequest` 变化：`subject` 增加 `memberships`，删除 `roles`、`policies`、`root`；`scope` 改为上面的 `Scope`；`environment` 增加
   `time`（epoch 毫秒，由调用方提供，引擎不读时钟，`EnginePurityTest` 已禁止）。`HostFacts` 保留到 RFC 0005 的切换，承载 7.x 匹配器需要的
   `Request`/`SecurityContext`。
+- **包的位置（PR-1，2026-10-25）**：`model/` 里已有 RFC 0002 的 `me.ahoo.cosec.model.Scope`（声明的作用域）、`StatementRef` 和 `Subject`，
+  引擎和 `cosec-core` 都在用，到 PR-7/PR-8 才删除。为了不与它们同名，新的 `Scope` 与 `ScopeResolver`、`DeclaredScope`、`HostScope`、
+  `ScopeResolution` 一起放在 `me.ahoo.cosec.model.scope`；`ScopeResolver` 的主体参数是同一包里的 `ScopeSubject(tenant, authenticated, memberships)`，
+  不是 `Subject`。新的 `StatementRef`（含 `ScopeRejected`）推迟到 PR-2，引擎第一次用到它的时候。其余类型按上面的代码放在 `me.ahoo.cosec.model`。
 
 ### 4.2 `Binding`
 
@@ -333,6 +337,9 @@ sealed interface ScopeResolution {
 - **为什么声明了非成员空间要拒绝，而不是退回默认空间**：后端自己也读 `CoSec-Space-Id`。如果 CoSec 把请求当作默认空间评估、放行，后端
   却在客户端声明的空间里执行，就是一个绕过：主体用默认空间的角色操作了它不属于的空间。只有拒绝是安全的，所以不提供开关。这是改动 C3。
 - 应用不要求成员关系：7.x 没有"应用成员"的概念，主体在应用里有什么权限完全由绑定决定。
+- **检查顺序与匿名主体（PR-1，2026-10-25）**：先检查应用，再检查空间，所以既不一致又声明了非成员空间的请求总是 `APP_MISMATCH`。两者都是拒绝，
+  只有原因不同。未认证的主体一律是默认租户 `(0)`，并且不看传入的成员关系（没有角色，见 §4.2）：7.x 的匿名上下文
+  （`SimpleSecurityContext.anonymous()`、`SimpleTenantPrincipal.ANONYMOUS`）本来就在默认租户，所以与 7.x 相同。`ScopeResolverTest` 守护这两条。
 - `Rejected` 的映射：`Deny(StatementRef.ScopeRejected(reason))`，匿名主体 401、已认证主体 403，经 `SecurityPipeline` 现有的映射。
 
 ### 4.7 黑名单：规则加名单
