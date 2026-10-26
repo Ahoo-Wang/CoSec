@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "ANA-2"
+  ],
+  "polarity": "negative",
+  "level": "analysis",
+  "description": "or(app a, app b) does not imply app a: the request of app b satisfies the first and not the second.",
+  "analysis": {
+    "c1": {
+      "or": [
+        {
+          "eq": [
+            "scope.app",
+            "a"
+          ]
+        },
+        {
+          "eq": [
+            "scope.app",
+            "b"
+          ]
+        }
+      ]
+    },
+    "c2": {
+      "eq": [
+        "scope.app",
+        "a"
+      ]
+    },
+    "request": {
+      "scope.app": "b"
+    }
+  },
+  "expect": {
+    "implies": "UNKNOWN",
+    "evaluations": {
+      "c1": true,
+      "c2": false
+    }
+  }
+}

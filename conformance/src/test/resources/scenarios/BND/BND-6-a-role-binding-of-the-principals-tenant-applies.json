@@ -1,0 +1,56 @@
+{
+  "rules": [
+    "BND-6"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The same binding for role editor of acme applies to alice of acme.",
+  "documents": {
+    "apps": {
+      "order-service": {
+        "policies": [
+          {
+            "id": "perm-read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:editor:perm-read",
+            "subject": {
+              "role": "editor",
+              "tenant": "acme"
+            },
+            "app": "order-service",
+            "space": "*",
+            "policy": "perm-read"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor"
+    ]
+  },
+  "request": {
+    "app": "order-service"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "perm-read",
+      "statement": 0,
+      "via": {
+        "binding": "r:editor:perm-read",
+        "document": "app"
+      }
+    }
+  }
+}

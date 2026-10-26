@@ -1,0 +1,40 @@
+{
+  "rules": [
+    "SCP-7"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The client declares * to a host configured for order-service.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "request": {
+    "app": "*",
+    "hostApp": "order-service"
+  },
+  "expect": {
+    "decision": "Rejected",
+    "reason": "APP_MISMATCH"
+  }
+}

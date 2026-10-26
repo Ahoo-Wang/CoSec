@@ -1,0 +1,22 @@
+{
+  "rules": [
+    "SCP-8"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The declared app differs from the host's and the declared space is not the principal's.",
+  "credential": {
+    "roles": [
+      "editor@team-a"
+    ]
+  },
+  "request": {
+    "hostApp": "order-service",
+    "app": "billing",
+    "space": "team-z"
+  },
+  "expect": {
+    "decision": "Rejected",
+    "reason": "APP_MISMATCH"
+  }
+}

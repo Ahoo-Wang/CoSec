@@ -52,7 +52,8 @@ class SnapshotInstallOrderPropertyTest {
 
     @Test
     fun installsFollowLoadOrderAndConverge() {
-        repeat(300) { seed -> runSeed(seed) }
+        // propertyStress raises the number of seeds (RFC 0008 §3.5).
+        repeat(maxOf(300, Integer.getInteger("cosec.property.iterations", 0))) { seed -> runSeed(seed) }
     }
 
     /** One run: the store, the source and what the test has published. */

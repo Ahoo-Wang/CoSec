@@ -1,0 +1,48 @@
+{
+  "rules": [
+    "MEM-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "Claims with more than one @, an empty role or space, or the space * give no role in any space, the default one included.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "allow-all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:editor:allow-all",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "allow-all"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor@team-a@x",
+      "@team-a",
+      "editor@",
+      "editor@*"
+    ]
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "BRK-4"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The same binding for cosec of the platform tenant compiles and permits.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "cosec",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2026-12-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "tenant": "(platform)",
+    "id": "cosec"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "cosec:root",
+      "statement": 0,
+      "name": "root",
+      "via": {
+        "binding": "root",
+        "document": "platform"
+      }
+    }
+  }
+}

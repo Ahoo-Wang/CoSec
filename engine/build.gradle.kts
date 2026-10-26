@@ -16,4 +16,6 @@
 dependencies {
     api(project(":cosec-model"))
     testImplementation("com.tngtech.archunit:archunit-junit5")
+    // HttpPathPatternBenchmark compares with Spring's PathPattern; the jmh source set is not checked for purity.
+    jmh("org.springframework:spring-web")
 }

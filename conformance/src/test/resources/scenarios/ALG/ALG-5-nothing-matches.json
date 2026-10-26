@@ -1,0 +1,36 @@
+{
+  "rules": [
+    "ALG-5"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The only ALLOW is for another action, so nothing matches: the implicit deny, decided by no statement.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "write",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:write"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:write",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "write"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

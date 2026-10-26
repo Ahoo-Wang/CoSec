@@ -1,0 +1,49 @@
+{
+  "rules": [
+    "CND-4"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The JSON literal true for a Bool attribute compiles and matches an authenticated principal.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "subject.authenticated",
+                  true
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "guarded",
+      "statement": 0,
+      "via": {
+        "binding": "g:guarded",
+        "document": "platform"
+      }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "rules": [
+    "MEM-2"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The provider answers: its roles decide.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "allow-all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:editor:allow-all",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "allow-all"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "membership": "provider"
+  },
+  "membershipProvider": {
+    "roles": {
+      "": [
+        "editor"
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "allow-all",
+      "statement": 0,
+      "via": {
+        "binding": "r:editor:allow-all",
+        "document": "tenant"
+      }
+    }
+  }
+}

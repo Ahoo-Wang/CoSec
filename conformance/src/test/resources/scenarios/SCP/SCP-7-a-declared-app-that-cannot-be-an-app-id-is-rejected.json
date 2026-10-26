@@ -1,0 +1,39 @@
+{
+  "rules": [
+    "SCP-7"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The client declares a:b without a host app; ':' separates document keys.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "request": {
+    "app": "a:b"
+  },
+  "expect": {
+    "decision": "Rejected",
+    "reason": "APP_MISMATCH"
+  }
+}

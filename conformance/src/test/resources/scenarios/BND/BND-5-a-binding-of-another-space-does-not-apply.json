@@ -1,0 +1,48 @@
+{
+  "rules": [
+    "BND-5"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The principal is editor in team-a and asks in team-a; the binding gives editor the policy in team-b only.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "edit",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:editor:edit",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "*",
+            "space": "team-b",
+            "policy": "edit"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor@team-a"
+    ]
+  },
+  "request": {
+    "space": "team-a"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

@@ -36,7 +36,11 @@ val serverProjects = setOf(
     project(":cosec-gateway-server"),
 )
 val codeCoverageReportProject = project(":code-coverage-report")
-val publishProjects = subprojects - serverProjects - codeCoverageReportProject
+// Test-only modules (RFC 0008 §3.1): never published, so neither in the BOM nor in any publication.
+val testOnlyProjects = setOf(
+    project(":conformance"),
+)
+val publishProjects = subprojects - serverProjects - codeCoverageReportProject - testOnlyProjects
 val libraryProjects = publishProjects - bomProjects
 
 // Modules of the decision engine (RFC 0002 §2): they depend on the Kotlin standard library only.
@@ -85,19 +89,7 @@ configure(libraryProjects) {
         withJavadocJar()
         withSourcesJar()
     }
-    apply(plugin = "org.jetbrains.kotlin.jvm")
-    configure<KotlinJvmProjectExtension> {
-        jvmToolchain(17)
-    }
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-        compilerOptions {
-            freeCompilerArgs = listOf("-Xjsr305=strict", "-Xjvm-default=all-compatibility")
-            javaParameters = true
-        }
-    }
-    tasks.withType<JavaCompile> {
-        options.compilerArgs.addAll(listOf("-parameters"))
-    }
+    kotlinJvm()
     apply<me.champeau.jmh.JMHPlugin>()
     configure<me.champeau.jmh.JmhParameters> {
         val delimiter = ','
@@ -146,14 +138,7 @@ configure(libraryProjects) {
         fork.set(project.findProperty(jmhForkKey)?.toString()?.toInt() ?: 1)
         jvmArgs.set(listOf("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-jmh.xml"))
     }
-    tasks.withType<Test> {
-        useJUnitPlatform()
-        testLogging {
-            exceptionFormat = TestExceptionFormat.FULL
-        }
-        // fix logging missing code for JacocoPlugin
-        jvmArgs = listOf("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback.xml")
-    }
+    junitTests()
 
     dependencies {
         if (this@configure in pureProjects) {
@@ -164,20 +149,17 @@ configure(libraryProjects) {
             implementation("com.google.guava:guava")
             implementation("org.slf4j:slf4j-api")
         }
-        testImplementation(platform(rootProject.libs.junit.bom))
         jmh(platform(dependenciesProject))
-        testImplementation("ch.qos.logback:logback-classic")
-        testImplementation("me.ahoo.test:fluent-assert-core")
-        testImplementation("org.hamcrest:hamcrest")
-        testImplementation("io.mockk:mockk") {
-            exclude(group = "org.slf4j", module = "slf4j-api")
-        }
-        testImplementation("org.junit.jupiter:junit-jupiter-api")
-        testImplementation("org.junit.jupiter:junit-jupiter-params")
-        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-        testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
         jmh("org.openjdk.jmh:jmh-core")
         jmh("org.openjdk.jmh:jmh-generator-annprocess")
+    }
+}
+
+configure(testOnlyProjects) {
+    kotlinJvm()
+    junitTests()
+    dependencies {
+        testImplementation(platform(dependenciesProject))
     }
 }
 
@@ -214,6 +196,50 @@ configure(pureProjects) {
         dependsOn(verifyPureClasspath)
     }
 }
+
+/*
+ * RFC 0008 §3.5: the property tests the rule registry (conformance/src/test/resources/rules.json) names, with
+ * -PpropertyIterations random cases each (default 1,000,000). Not part of check, which runs them with their own fixed
+ * counts. A test reads the count from the system property cosec.property.iterations.
+ */
+val propertyStress = tasks.register("propertyStress") {
+    group = "verification"
+    description = "Runs the registered property tests with -PpropertyIterations random cases (default 1,000,000)."
+}
+
+@Suppress("UNCHECKED_CAST")
+val registeredProperties = (
+    groovy.json.JsonSlurper().parse(file("conformance/src/test/resources/rules.json")) as Map<String, Any?>
+    )["rules"] as List<Map<String, Any?>>
+registeredProperties
+    .flatMap { (it["properties"] as List<String>?).orEmpty() }
+    // module:Class#test name
+    .groupBy({ it.substringBefore(':') }, { it.substringAfter(':').substringBefore('#') })
+    .forEach { (directory, classes) ->
+        val target = subprojects.single { it.projectDir.name == directory }
+        val test = target.the<SourceSetContainer>()["test"]
+        val stress = target.tasks.register<Test>("propertyStress") {
+            group = "verification"
+            description = "Runs the property tests rules.json names with -PpropertyIterations random cases."
+            testClassesDirs = test.output.classesDirs
+            classpath = test.runtimeClasspath
+            filter {
+                classes.toSet().forEach { includeTestsMatching("*.$it") }
+            }
+            systemProperty(
+                "cosec.property.iterations",
+                providers.gradleProperty("propertyIterations").getOrElse("1000000"),
+            )
+            outputs.upToDateWhen { false }
+            maxHeapSize = "2g"
+            // As for engineParity: TRACE logging over a million cases would write gigabytes.
+            doFirst {
+                jvmArgs = jvmArgs.orEmpty().filterNot { it.startsWith("-Dlogback.configurationFile=") } +
+                    "-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-parity.xml"
+            }
+        }
+        propertyStress.configure { dependsOn(stress) }
+    }
 
 configure(publishProjects) {
     val isBom = bomProjects.contains(this)
@@ -307,3 +333,45 @@ nexusPublishing {
 }
 
 fun getPropertyOf(name: String) = project.properties[name]?.toString()
+
+/** Kotlin on Java 17, as every module compiles. */
+fun Project.kotlinJvm() {
+    apply(plugin = "org.jetbrains.kotlin.jvm")
+    configure<KotlinJvmProjectExtension> {
+        jvmToolchain(17)
+    }
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+        compilerOptions {
+            freeCompilerArgs = listOf("-Xjsr305=strict", "-Xjvm-default=all-compatibility")
+            javaParameters = true
+        }
+    }
+    tasks.withType<JavaCompile> {
+        options.compilerArgs.addAll(listOf("-parameters"))
+    }
+}
+
+/** JUnit 5 with the test libraries every module shares. */
+fun Project.junitTests() {
+    tasks.withType<Test> {
+        useJUnitPlatform()
+        testLogging {
+            exceptionFormat = TestExceptionFormat.FULL
+        }
+        // fix logging missing code for JacocoPlugin
+        jvmArgs = listOf("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback.xml")
+    }
+    dependencies {
+        testImplementation(platform(rootProject.libs.junit.bom))
+        testImplementation("ch.qos.logback:logback-classic")
+        testImplementation("me.ahoo.test:fluent-assert-core")
+        testImplementation("org.hamcrest:hamcrest")
+        testImplementation("io.mockk:mockk") {
+            exclude(group = "org.slf4j", module = "slf4j-api")
+        }
+        testImplementation("org.junit.jupiter:junit-jupiter-api")
+        testImplementation("org.junit.jupiter:junit-jupiter-params")
+        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+        testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+    }
+}

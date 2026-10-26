@@ -42,6 +42,13 @@ sealed interface Cause {
      */
     data class MissingPolicies(val policyIds: Set<PolicyId>) : Cause
 
+    /**
+     * Policies a request needs that both the tenant document and the platform define (RFC 0007 §3.1 N2, Q15). Which
+     * one was meant cannot be told, and preferring the tenant's would let a tenant replace a platform DENY, so the
+     * request fails closed. Until compiled content can be compared, any shared id is ambiguous.
+     */
+    data class AmbiguousPolicy(val policyIds: Set<PolicyId>) : Cause
+
     /** Reading a snapshot document failed, for example a Redis timeout or a document that does not compile. */
     data class SourceUnavailable(val document: DocumentKind, val error: Throwable) : Cause
 

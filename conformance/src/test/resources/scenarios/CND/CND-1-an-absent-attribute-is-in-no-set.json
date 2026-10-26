@@ -1,0 +1,45 @@
+{
+  "rules": [
+    "CND-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The ALLOW lists the teams that may read, the empty string included; the principal has no team.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "in": [
+                  "subject.attributes.team",
+                  [
+                    "",
+                    "red"
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

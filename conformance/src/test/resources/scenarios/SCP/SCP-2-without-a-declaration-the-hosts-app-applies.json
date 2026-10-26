@@ -1,0 +1,55 @@
+{
+  "rules": [
+    "SCP-2"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The host is order-service and the client declares nothing: the request is in order-service and gets its role bindings.",
+  "documents": {
+    "apps": {
+      "order-service": {
+        "policies": [
+          {
+            "id": "perm-order-service",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:order-service",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "order-service",
+            "space": "*",
+            "policy": "perm-order-service"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor"
+    ]
+  },
+  "request": {
+    "hostApp": "order-service"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "perm-order-service",
+      "statement": 0,
+      "via": {
+        "binding": "r:order-service",
+        "document": "app"
+      }
+    }
+  }
+}

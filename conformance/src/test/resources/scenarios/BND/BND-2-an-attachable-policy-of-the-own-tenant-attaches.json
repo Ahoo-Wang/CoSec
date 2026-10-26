@@ -1,0 +1,41 @@
+{
+  "rules": [
+    "BND-2"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The same attachable policy in the principal's own tenant attaches and permits.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "acme-reader",
+            "attachable": true,
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "policies": [
+      "acme-reader"
+    ]
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "acme-reader",
+      "statement": 0,
+      "via": {
+        "attached": "acme-reader"
+      }
+    }
+  }
+}

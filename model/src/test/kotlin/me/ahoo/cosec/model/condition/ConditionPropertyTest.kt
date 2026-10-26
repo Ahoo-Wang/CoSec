@@ -24,6 +24,8 @@ import kotlin.random.Random
  * the limit. Plus: evaluation allocates nothing.
  */
 class ConditionPropertyTest {
+    // propertyStress raises the count (RFC 0008 §3.5).
+    private val cases = maxOf(3_000, Integer.getInteger("cosec.property.iterations", 0))
     private val strings = listOf("subject.id", "scope.space", "http.header.x-a", "resource.var.owner").map(::attr)
     private val bools = listOf("subject.authenticated", "environment.blocked").map(::attr)
     private val sets = listOf("scope.roles", "subject.roles").map(::attr)
@@ -44,7 +46,7 @@ class ConditionPropertyTest {
         val random = Random(0x5A3)
         var compiled = 0
         var rejected = 0
-        repeat(3_000) {
+        repeat(cases) {
             val condition = condition(random, 1)
             val result = ConditionChecker(zones = JavaZones).check(condition)
             if (result !is CheckResult.Valid) {
@@ -72,7 +74,7 @@ class ConditionPropertyTest {
         val random = Random(0x5A4)
         val limits = ConditionLimits.DEFAULT
         var maxVisits = 0
-        repeat(3_000) {
+        repeat(cases) {
             val checked = (ConditionChecker(limits, JavaZones).check(condition(random, 1)) as? CheckResult.Valid)?.condition ?: return@repeat
             val normal = ConditionNormalizer.normalize(checked)
             repeat(50) {

@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "CND-4"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "subject.name is not in the attribute catalog.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "subject.name",
+                  "alice"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "unknown attribute `subject.name`"
+  }
+}

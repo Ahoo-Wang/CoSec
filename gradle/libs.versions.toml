@@ -24,6 +24,8 @@ mockk = "1.14.11"
 jmh = "1.37"
 archunit = "1.5.1"
 blockhound = "1.0.17.RELEASE"
+# SchemaConformanceTest only (RFC 0007 §10.4); never on a runtime classpath
+json-schema-validator = "3.0.8"
 # plugins
 detekt = "1.23.8"
 dokka = "2.2.0"
@@ -54,6 +56,7 @@ jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
 jmh-generator-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 blockhound = { module = "io.projectreactor.tools:blockhound", version.ref = "blockhound" }
+json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "json-schema-validator" }
 [plugins]
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }

@@ -17,6 +17,8 @@ a change that fails to compile. When unsure, deny, and ask.
 ./gradlew check                                   # every module
 ./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark
 ./gradlew :code-coverage-report:codeCoverageReport
+./gradlew :conformance:check                      # spec conformance suite: scenarios + verifyRuleCoverage
+./gradlew propertyStress -PpropertyIterations=1000000   # the registered property tests, many cases (not in check)
 ```
 
 - `cosec-cocache` and `cosec-spring-boot-starter` tests need Redis on `localhost:6379`
@@ -26,6 +28,10 @@ a change that fails to compile. When unsure, deny, and ask.
   [`wiki/architecture/overview.md#measuring`](wiki/architecture/overview.md#measuring). Run the jar yourself only with
   `-jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml`: without it the forked JVMs log at
   DEBUG and the numbers are skewed. Reference results: `docs/perf/`.
+- `schema/*.schema.json` is generated from the document format descriptors (`DocumentFormats` in `cosec-core`):
+  `./gradlew :cosec-core:generateSchemas` writes it, `verifySchemas` (part of `check`) fails when it is stale, and
+  `SchemaConformanceTest` fails when a descriptor and its codec disagree. Every PR that changes a document format
+  changes the descriptor.
 - Detekt runs with `autoCorrect = true`: `check` and `detekt` **rewrite source files**. Review and commit them.
 - Codecov requires ≥ 80 % coverage on changed lines.
 - Docs (`wiki/`, VitePress, en + zh), run from `wiki/`: `pnpm install`, then `pnpm check:mermaid`
@@ -48,8 +54,9 @@ adapters or caching. The parts that take several files to see:
   `EnginePurityTest` and `verifyPureClasspath` fail otherwise, and the root build leaves out the Guava/SLF4J defaults.
   `cosec-runtime` (directory `runtime/`; RFC 0006, empty until the coroutine pipeline lands) depends on `cosec-engine`
   and `cosec-core`. Coroutines stay in `runtime/` and the adapters: `RuntimeBoundaryTest` fails when `runtime/`,
-  `engine/` or `model/` code references `reactor.*`, when a data-plane SPI signature carries a Reactor type, or when
-  `runtime/` uses `runCatching` (it swallows cancellation).
+  `engine/` or `model/` code references `reactor.*`, when a data-plane SPI signature carries a Reactor type, when
+  `runtime/` references Spring, the Servlet API, `kotlinx.coroutines.reactor`, `runBlocking`, `GlobalScope` or
+  `Dispatchers.IO`, or when it uses `runCatching` (it swallows cancellation).
 - **Request path.** Adapter (WebFlux / WebMvc / Gateway) → `SecurityPipeline` (parse request, resolve
   principal from token, authorize, map to status) → `SecurityDecision` → adapter writes it. Adapters translate;
   they never decide.
@@ -86,12 +93,12 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 
 | Change | Also update |
 |---|---|
-| New action/condition type or option | factory in `cosec-core` + its `META-INF/services` entry, `schema/*.schema.json` (no test checks it), `wiki/policies/language.md`, `skills/cosec-policy-author` |
+| New action/condition type or option | factory in `cosec-core` + its `META-INF/services` entry, update the format descriptor and run `generateSchemas`, `wiki/policies/language.md`, `skills/cosec-policy-author` |
 | App permissions, roles, role grant scope | `wiki/policies/role-permissions.md` |
 | `cosec.*` property or default | `wiki/operations/configuration.md` |
 | Status codes, adapters, security-context access, request attributes | `wiki/integration/web.md` |
 | Checking permissions in code, explaining decisions | `wiki/integration/checks.md` |
-| Rate limit rules, backends, headers | `wiki/policies/rate-limiting.md`, `schema/rate-limit-rule.schema.json` |
+| Rate limit rules, backends, headers | `wiki/policies/rate-limiting.md`, the format descriptor (`generateSchemas`) |
 | Shadow mode (candidates, diffs), policy validation, access reviews | `wiki/policies/testing.md` |
 | Decision order or combination in `SimpleAuthorization` | the narration in `AuthorizationExplainer` (`ExplainerConsistencyTest` fails until they agree), `wiki/guide/security-model.md` |
 | Policy storage, Redis, publishing and rollback | `wiki/operations/storage.md` |
@@ -101,6 +108,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | Architecture, invariants, performance numbers | `wiki/architecture/overview.md` |
 | Extension points | `wiki/architecture/extending.md`, `skills/cosec-custom-matcher` |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
+| A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `conformance/src/test/resources/rules.json` and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |
 | Breaking change (public API, `cosec.*` property, authorization semantics) | `wiki/operations/upgrading.md`: what breaks and how to migrate |
 
 Docs: link to files, never line numbers; verify claims against code, not other docs. Mermaid labels use

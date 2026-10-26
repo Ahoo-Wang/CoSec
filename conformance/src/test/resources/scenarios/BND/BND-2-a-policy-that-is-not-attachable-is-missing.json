@@ -1,0 +1,37 @@
+{
+  "rules": [
+    "BND-2"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The principal attaches a platform policy that is not attachable: it does not attach, and is missing.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "reader",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "credential": {
+    "policies": [
+      "reader"
+    ]
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MissingPolicies",
+      "policies": [
+        "reader"
+      ]
+    }
+  }
+}

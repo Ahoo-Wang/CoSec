@@ -1,0 +1,70 @@
+{
+  "rules": [
+    "ALG-1"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The DENY applies but its condition does not hold, so it does not match and the ALLOW permits.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "deny-red",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "subject.attributes.team",
+                  "red"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        },
+        {
+          "id": "g:deny-red",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "deny-red"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "attributes": {
+      "team": "blue"
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "allow-all",
+      "statement": 0,
+      "via": {
+        "binding": "g:allow-all",
+        "document": "platform"
+      }
+    }
+  }
+}

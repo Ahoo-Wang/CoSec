@@ -1,0 +1,39 @@
+{
+  "rules": [
+    "CND-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The ALLOW needs the team attribute to exist; the principal has none.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "exists": "subject.attributes.team"
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

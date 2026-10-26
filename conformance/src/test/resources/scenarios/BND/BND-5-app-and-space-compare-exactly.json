@@ -1,0 +1,48 @@
+{
+  "rules": [
+    "BND-5"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The binding's app differs from the request's in case only: no match, as matching is exact.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "edit",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:editor:edit",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "Order-Service",
+            "space": "*",
+            "policy": "edit"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor"
+    ]
+  },
+  "request": {
+    "app": "order-service"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

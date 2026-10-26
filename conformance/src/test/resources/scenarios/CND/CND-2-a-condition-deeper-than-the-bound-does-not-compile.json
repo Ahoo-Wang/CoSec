@@ -1,0 +1,74 @@
+{
+  "rules": [
+    "CND-2"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "Nine levels of nesting, over the bound of 8.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "and": [
+                  {
+                    "and": [
+                      {
+                        "and": [
+                          {
+                            "and": [
+                              {
+                                "and": [
+                                  {
+                                    "and": [
+                                      {
+                                        "and": [
+                                          {
+                                            "and": [
+                                              {
+                                                "eq": [
+                                                  "subject.id",
+                                                  "alice"
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "nested deeper than 8"
+  }
+}

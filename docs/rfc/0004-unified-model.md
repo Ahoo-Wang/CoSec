@@ -5,6 +5,10 @@
 > 姊妹篇：[RFC 0005](0005-condition-ast.md)（第 4 阶段下篇：条件 AST、动作词汇、编译执行）·
 > 基线：`main` @ `a361084d`（第 1 版写于 `334da022`） · 交付：全部合入 `main`（8.0 线）；8.0 在 RFC 0001 第 2–6 阶段全部完成、各做完两轮审查之前不发布任何版本 ·
 > 范围：`model/`、`engine/`、`cosec-core`、`cosec-cocache`、`cosec-jwt`、`cosec-spring-boot-starter`，新增 `migrate/`（`cosec-migrate`）
+>
+> **2026-10-26 修订（[RFC 0008](0008-conformance-and-direct-build.md)）**：8.0 不考虑兼容性。门槛 A（§9 整节）、PR-6（分类器）取消；PR-7、PR-8 并入 RFC 0008 的切换 PR；PR-4 的文档直接使用
+> RFC 0005 的 AST，不再有"绑定模型 + 7.x 匹配器"的中间格式，也不做 `UnifiedAuthorization`；PR-5 不做 `verify`（RFC 0008 §4.1、§6 Q3）。
+> §5.3 的 C1–C6 不再是差异类别，而是登记在一致性套件中的规则；P1′、P8–P12 作为规范性质保留（RFC 0008 §3.5）。下文保留原样以便追溯。
 
 ## 0. 结论先行
 
@@ -50,6 +54,9 @@ RFC 0002、0003 的粒度。按"改的是什么"分成两篇：
 | 主要内容 | `Binding`、平台层 / 租户层、成员关系、`ScopeResolver`、黑名单、root、扁平算法、`evaluate(request, snapshot)`、快照三元组、转换工具、门槛方法 | 条件 AST（类型、成本、可分析性）、`service:verb` 与类型化资源、`http` 命名空间、OpenAPI 路由映射、编译执行、索引及其完整性 |
 | 匹配器 | 原样使用 7.x 的动作与条件匹配器（经 RFC 0002 PR-3 的适配层） | 以 AST 取代全部内置匹配器、OGNL、SpEL |
 | 切换 | PR-7：在 7.x 匹配器之上切换到绑定模型（门槛 A） | 它的切换 PR：匹配器换成 AST，线性扫描换成索引（门槛 B） |
+
+> **2026-10-26**：下面"两次切换各有一道门槛"的理由随门槛 A、B 一并取消（[RFC 0008](0008-conformance-and-direct-build.md)）。两篇仍按"模型 / 语言"分工，但只有一次切换（RFC 0008 §4.4），
+> 中间格式不再实现。
 
 **为什么先做模型、后做语言**：
 
@@ -258,6 +265,10 @@ Redis 里的文档编译失败时按 RFC 0003 §4.4 F4 处理（读到它的请�
 - 附加的策略作用域是 `(app = *, space = *)`，与 7.x 主体层相同（主体策略对任何应用、任何空间的请求都参与评估）。
 - **缺失**：附加了找不到（或不可附加）的策略时，评估结果是 `Indeterminate(MissingPolicies)`，除非某条 DENY 已经命中（§6.1）。7.x 是
   到达主体层时抛 `MissingPolicyException`（D2）。差别只在"另一层有 DENY 命中"的情形，属于改动 C1b。
+- **两层同名（PR-2 第一轮审查，2026-10-26）**：租户文档与平台层定义了同一个策略 id 时，附加和租户层绑定都不解析它，评估结果是
+  `Indeterminate(AmbiguousPolicy)`，除非某条 DENY 已经命中（RFC 0007 §3.1 N2、Q15）。租户层优先会让租户定义一条同名策略，使 token 附加的
+  平台 DENY 失效。在 PR-4 能比较编译结果之前，任何同名都按歧义处理。同一轮审查还让引擎在编译文档时拒绝：break-glass 绑定的主体不是平台
+  租户的主体（§4.8）；租户文档绑定其他租户的主体或角色；应用文档的绑定作用于其他应用。这些绑定永远不会成为候选，写在那里的 DENY 会悄悄失效。
 
 快照里的 `Principal` 绑定只用于数量很少、需要由策略管理员（而不是 token 签发方）控制的主体：break-glass root（§4.8）、服务账号。
 转换工具只为 root 生成这种绑定。每个文档的主体绑定数设一个上限（默认 1,000，Q2），超过即编译错误，防止有人把用户级数据塞进快照。
@@ -348,6 +359,8 @@ sealed interface ScopeResolution {
   无论宿主是否配置了应用，都按 `APP_MISMATCH` 拒绝，而不是之后在读文档时变成 500。`ScopeSubject.tenant` 不能为空白（适配层把没有租户的凭证映射为
   `(0)`），`HostScope.app` 必须是合法的应用 id。
 - `Rejected` 的映射：`Deny(StatementRef.ScopeRejected(reason))`，匿名主体 401、已认证主体 403，经 `SecurityPipeline` 现有的映射。
+  2026-10-26 修订（RFC 0006 Q27）：响应体是 problem+json，匿名主体（包括带 `CoSec-Space-Id` 的匿名请求）得到 `unauthorized`（凭证被拒绝时是 `token-*`），
+  已认证主体得到 `scope-rejected`；`APP_MISMATCH` 与 `SPACE_NOT_MEMBER` 的区别只进审计（RFC 0006 §6.1）。
 
 ### 4.7 黑名单：规则加名单
 
@@ -422,6 +435,9 @@ A 不是终点：第 6 阶段控制面让租户写自己的数据，运维可以
 按租户的 LRU 和陈旧度。
 
 ### 5.3 语义改动目录（门槛 A）
+
+> **2026-10-26**：门槛 A 取消（[RFC 0008](0008-conformance-and-direct-build.md)）。下表不再用于给回放差异分类；每一项是 8.0 的一条规则，登记在一致性套件中（例如 C1a → `ALG-4`、
+> C1b → `ALG-1`、C2 → `BRK-1`、C3 → `SCP-1`、C4 → `SCP-2`、C5 → `BND-2`，RFC 0008 §3.2），并写进 `upgrading.md`（RFC 0008 §4.4）。
 
 下面是本阶段**有意**改变的全部决策语义。门槛（§9）要求每一条回放差异都归入其中某一类，并带有该类要求的证据。
 
@@ -730,6 +746,8 @@ GA 版本的 `convert` 一次完成两篇的转换：先按本文转换模型，
 
 ### 8.7 用户怎么验证
 
+> **2026-10-26**：`verify` 在 8.0.0 中不提供（[RFC 0008](0008-conformance-and-direct-build.md) §6 Q3）：它依赖只为门槛 A 存在的分类器。`convert` 的报告列出受语义改动影响的 7.x 配置形态。以下原文保留，仅供追溯。
+
 维护者的门槛（§9）能用旧实现做基准，因为在切换之前旧实现还在 `main` 上。用户升级时旧实现已经不在 8.0 里了，所以 `verify` 以**用户自己的
 7.x 审计日志中记录的决策**为基准：
 
@@ -746,6 +764,8 @@ GA 版本的 `convert` 一次完成两篇的转换：先按本文转换模型，
 ---
 
 ## 9. 门槛
+
+> **2026-10-26：本节整体由 [RFC 0008](0008-conformance-and-direct-build.md) 取代。** §9.5 的 P1′、P8–P12 作为规范性质保留（已在 `engine/`、`model/` 中合入，RFC 0008 §3.5）。以下原文保留，仅供追溯。
 
 ### 9.1 要证明什么
 
@@ -854,6 +874,8 @@ AGENTS.md 的 Invariants 表在 PR-7 更新：Deny-first 一行的守护改为 P
 
 ### 12.1 目标
 
+> **2026-10-26**：下表中与 `layered`（第 3 阶段实现）比较的目标取消，改为 [RFC 0008](0008-conformance-and-direct-build.md) §3.8 以 7.0 实测数字设定的绝对预算；与规模无关的分配目标保留。
+
 | 基准 | 比较 | 目标 |
 |---|---|---|
 | `SimpleAuthorizationBenchmark`（场景 `global`、`role`、`none`、`global-deny`） | 增加参数 `model` ∈ {`layered`, `unified`}：`layered` 是第 3 阶段实现（快照来源），`unified` 是本阶段实现（转换后的数据） | 吞吐不低于 `layered` 的 95%（判定方法同 RFC 0002 §7.1）；B/op 不高于 `layered` |
@@ -896,12 +918,12 @@ PR-7 是切换、PR-8 是删除；每个 PR 合入后两轮审查。
 | PR-1 | `feat(model): add tenants, bindings, memberships and resolved scopes` | §4.1 的类型；`ScopeResolver`（§4.6）；P11；ArchUnit 规则 | 本 RFC 获批 | **能**：只依赖已合入的 `model/` | `:model:check`、`:engine:check` 通过 |
 | PR-2 | `feat(engine): evaluate the flat algorithm over bindings` | `SnapshotView` 的引擎侧接口、编译后的绑定索引（§6.4）、扁平算法（§6.1）、候选顺序（§6.3）、trace（§6.5）、`evaluate(request, snapshot)`；P1′、P8、P9、P10、P12；`EngineBenchmark` 的新参数 | PR-1；RFC 0002 PR-2（已合入） | **能** | 变更行覆盖率 ≥ 80%；§12 的分配目标 |
 | PR-3 | `feat(core): resolve memberships from claims and providers` | 声明解析（§4.5.1）、`MembershipProvider` SPI 与内存实现、`cosec.membership` 标记、`JwtTokenConverter` 的体积阈值、按主体吊销（§4.5.3） | PR-1 | **能** | `:cosec-core:check`、`:cosec-jwt:check` 通过；`MembershipFailClosedTest` |
-| PR-4 | `feat(core): compile platform, app and tenant snapshot documents` | `schema: 2` 文档与编解码、编译（7.x 匹配器经 RFC 0002 PR-3 的适配层）、编译期检查（引用完整性、租户隔离、主体绑定上限、break-glass）、内置的黑名单和 root 策略、`UnifiedAuthorization`（`DecisionAuthorization`，测试中装配）、`SnapshotPublisher` 的绑定写入 | PR-2、PR-3；RFC 0002 PR-3（#993）；RFC 0003 PR-1、PR-2（`SnapshotSource`、编译器、`LayerReads`、`EngineDecisionFlow`，均已合入） | **能**：依赖都已合入，不需要 RFC 0002 PR-6 | `:cosec-core:check` 及依赖模块通过 |
-| PR-5 | `feat(migrate): add the 7.x to 8.0 data converter` | `migrate/` 模块、`convert`/`publish`/`verify`（`verify` 依赖 PR-6 的分类器，先只做 `convert`/`publish`）、拒绝项（§8.4）、来源映射、报告 | PR-4；RFC 0003 PR-3（#1006，CoCache 6.7 的文档存储与发布者，已合入；`CoSec7xReader` 随它提供） | **能** | 合成 7.x 数据（含每一种拒绝项）的转换测试；转换后的文档经 PR-4 编译通过 |
-| PR-6 | `test: classify intended decision differences in replay` | `DifferenceClassifier`、C1a–C3 的类别、正例与反例、合成语料、回放工具的候选模式（转换 + 本阶段实现）、`cosec-migrate verify`；百万例任务 | PR-5；`DecisionParity` 与回放工具（`cosec-core` 测试夹具，#997、#1002，已合入）；RFC 0003 PR-4 | **能**：比较器已经是通用的（比较任意两个 `DecisionAuthorization`）；回放任务现名 `engineReplay`，RFC 0002 PR-6 改名为 `decisionReplay` 后跟随改名 | 每一类的正例被归入、反例不被归入；用仓库内的合成数据跑通回放与 `verify` |
-| — | **门槛 A** | 维护者在本地：对同一批导出跑回放（§9.4），逐条确认 C1a 的样本 | PR-6 | — | 未归类差异为 0；证据（计数与哈希）附在 PR-7 |
-| PR-7 | `refactor!: authorize from bindings over platform and tenant snapshots` | starter 装配 `UnifiedAuthorization`、三种 `SnapshotKey`、`cosec.authorization.scope.*`、`cosec.authorization.membership.*`、`prewarm-tenants`；`SecurityContext.scope`；schema 标记 `"8.4"`；`AuditSourceType`（Q18）；解释按绑定；`PolicyTestKit` 读新文档；文档（§14.3）；JMH | RFC 0003 PR-6；PR-6；门槛 A | **不能** | 全部模块 `check` 通过；门槛证据；§12 的目标 |
-| PR-8 | `refactor!: remove layers, role permissions and the root matcher` | 删除 `LayerKind`、`PolicySet`/`LayerInput`/`RuleGroup`、`evaluate(request, PolicySet)`、`RoleScope` 在授权路径上的使用、`RootPrincipalMatcher`、`root-enabled`、`ROOT_ID`/`isRoot`；`cosec-api` 的 `AppRolePermission`、`RolePermission`、`PolicyCapable` 中与评估有关的部分、`PolicyType.GLOBAL` 的评估含义（Q19）；RFC 0003 的 `Policies` key | PR-7 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
+| PR-4 | `feat(core): compile platform, app and tenant snapshot documents`（**2026-10-26 改动**：语句直接用 RFC 0005 的 AST，依赖改为 RFC 0005 PR-4；不做 `UnifiedAuthorization` 与 `SnapshotPublisher` 的绑定写入；编解码器拒绝 `Match.Exactly("*")`；见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | `schema: 2` 文档与编解码、编译（7.x 匹配器经 RFC 0002 PR-3 的适配层）、编译期检查（引用完整性、租户隔离、主体绑定上限、break-glass）、内置的黑名单和 root 策略、`UnifiedAuthorization`（`DecisionAuthorization`，测试中装配）、`SnapshotPublisher` 的绑定写入 | PR-2、PR-3；RFC 0002 PR-3（#993）；RFC 0003 PR-1、PR-2（`SnapshotSource`、编译器、`LayerReads`、`EngineDecisionFlow`，均已合入） | **能**：依赖都已合入，不需要 RFC 0002 PR-6 | `:cosec-core:check` 及依赖模块通过 |
+| PR-5 | `feat(migrate): add the 7.x to 8.0 data converter`（**2026-10-26 改动**：不做 `verify`；拒绝 `*` 作为应用或空间 id；见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | `migrate/` 模块、`convert`/`publish`/`verify`（`verify` 依赖 PR-6 的分类器，先只做 `convert`/`publish`）、拒绝项（§8.4）、来源映射、报告 | PR-4；RFC 0003 PR-3（#1006，CoCache 6.7 的文档存储与发布者，已合入；`CoSec7xReader` 随它提供） | **能** | 合成 7.x 数据（含每一种拒绝项）的转换测试；转换后的文档经 PR-4 编译通过 |
+| ~~PR-6~~ | ~~`test: classify intended decision differences in replay`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | `DifferenceClassifier`、C1a–C3 的类别、正例与反例、合成语料、回放工具的候选模式（转换 + 本阶段实现）、`cosec-migrate verify`；百万例任务 | PR-5；`DecisionParity` 与回放工具（`cosec-core` 测试夹具，#997、#1002，已合入）；RFC 0003 PR-4 | **能**：比较器已经是通用的（比较任意两个 `DecisionAuthorization`）；回放任务现名 `engineReplay`，RFC 0002 PR-6 改名为 `decisionReplay` 后跟随改名 | 每一类的正例被归入、反例不被归入；用仓库内的合成数据跑通回放与 `verify` |
+| — | ~~**门槛 A**~~ **已取消（2026-10-26）** | 维护者在本地：对同一批导出跑回放（§9.4），逐条确认 C1a 的样本 | PR-6 | — | 未归类差异为 0；证据（计数与哈希）附在 PR-7 |
+| ~~PR-7~~ | ~~`refactor!: authorize from bindings over platform and tenant snapshots`~~ **并入 RFC 0008 的切换 PR（2026-10-26）** | starter 装配 `UnifiedAuthorization`、三种 `SnapshotKey`、`cosec.authorization.scope.*`、`cosec.authorization.membership.*`、`prewarm-tenants`；`SecurityContext.scope`；schema 标记 `"8.4"`；`AuditSourceType`（Q18）；解释按绑定；`PolicyTestKit` 读新文档；文档（§14.3）；JMH | RFC 0003 PR-6；PR-6；门槛 A | **不能** | 全部模块 `check` 通过；门槛证据；§12 的目标 |
+| ~~PR-8~~ | ~~`refactor!: remove layers, role permissions and the root matcher`~~ **并入 RFC 0008 的切换 PR（2026-10-26）**，删除清单不变 | 删除 `LayerKind`、`PolicySet`/`LayerInput`/`RuleGroup`、`evaluate(request, PolicySet)`、`RoleScope` 在授权路径上的使用、`RootPrincipalMatcher`、`root-enabled`、`ROOT_ID`/`isRoot`；`cosec-api` 的 `AppRolePermission`、`RolePermission`、`PolicyCapable` 中与评估有关的部分、`PolicyType.GLOBAL` 的评估含义（Q19）；RFC 0003 的 `Policies` key | PR-7 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
 
 PR-1、PR-3 可以立即并行；PR-2 只等 PR-1。RFC 0005 的 PR-1（AST 类型）与本文 PR-1 互不依赖，可以同时开工。
 
@@ -955,7 +977,7 @@ PR-1、PR-3 可以立即并行；PR-2 只等 PR-1。RFC 0005 的 PR-1（AST 类�
 | Q17 | **schema 标记**（§8.5） | **已决定**：本阶段改为 `"8.4"`；GA 时定为最终值 | 第 3 阶段的 `"8"` 布局在 `main` 上已有开发部署；标记不变的话，它们会读到"没有 `Platform` 文档"，全局 DENY 静默失效（RFC 0003 §4.7 同类问题） |
 | Q18 | **`AuditSourceType` 等 `cosec-api` 变更**（X1；AGENTS.md 要求先问） | **已决定**：PR-7 改为 `POLICY`/`BINDING`/`ATTACHMENT`/`SCOPE`，合并四种 `VerifyContext` | 层消失之后，旧的来源类型无法如实表达"哪条绑定的哪条语句" |
 | Q19 | **`cosec-api` 中旧模型的删除**（AGENTS.md 要求先问） | **已决定**：PR-8 删除 `AppRolePermission`、`RolePermission`、`PolicyType.GLOBAL` 的评估含义、`RootPrincipalMatcher`、`ROOT_ID`；`Policy`/`Statement`/`ActionMatcher`/`ConditionMatcher` 保留到 RFC 0005 的切换 | 留着它们就留着第二种挂载方式；匹配器接口在 RFC 0005 之前仍是语句的执行者 |
-| Q20 | **门槛标准**（§9） | **已决定**："未归类差异为零"取代"差异为零"；放宽类（C1a）逐条确认；新增类别必须修订本 RFC | 本阶段有意改变语义；把"有意"变成可机械检查的证据，而不是人工判断 |
+| Q20 | ~~**门槛标准**（§9）~~（2026-10-26 由 [RFC 0008](0008-conformance-and-direct-build.md) 取代） | **已决定**："未归类差异为零"取代"差异为零"；放宽类（C1a）逐条确认；新增类别必须修订本 RFC | 本阶段有意改变语义；把"有意"变成可机械检查的证据，而不是人工判断 |
 | Q21 | **C3：声明了非成员空间**（§4.6） | **已决定**：拒绝，不提供开关 | 退回默认空间会让后端在主体不属于的空间执行请求，是绕过 |
 
 ---

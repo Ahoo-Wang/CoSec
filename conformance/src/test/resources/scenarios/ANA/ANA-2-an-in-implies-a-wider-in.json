@@ -1,0 +1,37 @@
+{
+  "rules": [
+    "ANA-2"
+  ],
+  "polarity": "positive",
+  "level": "analysis",
+  "description": "in over a subset of the values implies in over the set.",
+  "analysis": {
+    "c1": {
+      "in": [
+        "scope.space",
+        [
+          "a"
+        ]
+      ]
+    },
+    "c2": {
+      "in": [
+        "scope.space",
+        [
+          "a",
+          "b"
+        ]
+      ]
+    },
+    "request": {
+      "scope.space": "a"
+    }
+  },
+  "expect": {
+    "implies": "YES",
+    "evaluations": {
+      "c1": true,
+      "c2": true
+    }
+  }
+}

@@ -60,6 +60,44 @@ jobs:
       - name: Test CoSec-Runtime
         run: ./gradlew cosec-runtime:clean cosec-runtime:check
 
+  cosec-control-test:
+    name: CoSec Control Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Test CoSec-Control
+        run: ./gradlew cosec-control:clean cosec-control:check
+
+  conformance-test:
+    name: Conformance Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Test the spec conformance suite
+        run: ./gradlew conformance:clean conformance:check
+
   cosec-core-test:
     name: CoSec Core Test
     runs-on: ubuntu-latest

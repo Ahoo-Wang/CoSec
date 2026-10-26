@@ -1,0 +1,33 @@
+{
+  "rules": [
+    "BRK-2"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A break-glass binding without expiresAt does not compile.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "cosec",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true
+        }
+      ]
+    }
+  },
+  "credential": {
+    "tenant": "(platform)",
+    "id": "cosec"
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "has no expiry"
+  }
+}

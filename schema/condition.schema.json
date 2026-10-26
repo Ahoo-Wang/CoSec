@@ -1,66 +1,238 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/condition.schema.json",
-  "title": "CoSec Condition Matcher Schema",
-  "type": "object",
-  "properties": {
-    "bool": {
-      "$ref": "#/definitions/boolConditionMatcher"
-    },
-    "all": {
-      "$ref": "#/definitions/allConditionMatcher"
-    },
-    "authenticated": {
-      "$ref": "#/definitions/authenticatedConditionMatcher"
-    },
-    "inTenant": {
-      "$ref": "#/definitions/inTenantConditionMatcher"
-    },
-    "inRole": {
-      "$ref": "#/definitions/inRoleConditionMatcher"
-    },
-    "path": {
-      "$ref": "#/definitions/pathConditionMatcher"
-    },
-    "ognl": {
-      "$ref": "#/definitions/ognlConditionMatcher"
-    },
-    "spel": {
-      "$ref": "#/definitions/spelConditionMatcher"
-    },
-    "contains": {
-      "$ref": "#/definitions/containsConditionMatcher"
-    },
-    "endsWith": {
-      "$ref": "#/definitions/endsWithConditionMatcher"
-    },
-    "startsWith": {
-      "$ref": "#/definitions/startsWithConditionMatcher"
-    },
-    "eq": {
-      "$ref": "#/definitions/eqConditionMatcher"
-    },
-    "in": {
-      "$ref": "#/definitions/inConditionMatcher"
-    },
-    "regular": {
-      "$ref": "#/definitions/regularConditionMatcher"
-    },
-    "time": {
-      "$ref": "#/definitions/timeConditionMatcher"
-    }
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": {
+    "description": "A condition matcher type registered by a custom ConditionMatcherFactory."
   },
-  "maxProperties": 1,
   "definitions": {
-    "tenantType": {
-      "enum": [
-        "default",
-        "user",
-        "platform"
-      ]
+    "allConditionMatcher": {
+      "additionalProperties": false,
+      "properties": {
+        "negate": {
+          "default": false,
+          "description": "Inverts the match.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
     },
-    "part": {
-      "enum": [
+    "authenticatedConditionMatcher": {
+      "additionalProperties": false,
+      "properties": {
+        "negate": {
+          "default": false,
+          "description": "Inverts the match.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "boolConditionMatcher": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "and": {
+          "description": "Every condition must match.",
+          "items": {
+            "$ref": "#"
+          },
+          "type": "array"
+        },
+        "negate": {
+          "default": false,
+          "description": "Inverts the match.",
+          "type": "boolean"
+        },
+        "or": {
+          "description": "When not empty, one condition must match.",
+          "items": {
+            "$ref": "#"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "containsConditionMatcher": {
+      "additionalProperties": false,
+      "properties": {
+        "ignoreCase": {
+          "default": false,
+          "type": "boolean"
+        },
+        "negate": {
+          "default": false,
+          "description": "Inverts the match.",
+          "type": "boolean"
+        },
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "value": {
+          "examples": [
+            "GET",
+            "10.0.0.1",
+            "admin"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "part",
+        "value"
+      ],
+      "type": "object"
+    },
+    "endsWithConditionMatcher": {
+      "additionalProperties": false,
+      "properties": {
+        "ignoreCase": {
+          "default": false,
+          "type": "boolean"
+        },
+        "negate": {
+          "default": false,
+          "description": "Inverts the match.",
+          "type": "boolean"
+        },
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "value": {
+          "examples": [
+            "GET",
+            "10.0.0.1",
+            "admin"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "part",
+        "value"
+      ],
+      "type": "object"
+    },
+    "eqConditionMatcher": {
+      "additionalProperties": false,
+      "properties": {
+        "ignoreCase": {
+          "default": false,
+          "type": "boolean"
+        },
+        "negate": {
+          "default": false,
+          "description": "Inverts the match.",
+          "type": "boolean"
+        },
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "value": {
+          "description": "The value, which may hold #{...} templates.",
+          "examples": [
+            "admin",
+            "#{principal.id}"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "part",
+        "value"
+      ],
+      "type": "object"
+    },
+    "inConditionMatcher": {
+      "additionalProperties": false,
+      "properties": {
+        "negate": {
+          "default": false,
+          "description": "Inverts the match.",
+          "type": "boolean"
+        },
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "value": {
+          "items": {
+            "examples": [
+              "GET",
+              "POST",
+              "admin"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "part",
+        "value"
+      ],
+      "type": "object"
+    },
+    "inRoleConditionMatcher": {
+      "additionalProperties": false,
+      "properties": {
+        "negate": {
+          "default": false,
+          "description": "Inverts the match.",
+          "type": "boolean"
+        },
+        "value": {
+          "examples": [
+            "admin",
+            "admin@team-a"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "type": "object"
+    },
+    "inTenantConditionMatcher": {
+      "additionalProperties": false,
+      "properties": {
+        "negate": {
+          "default": false,
+          "description": "Inverts the match.",
+          "type": "boolean"
+        },
+        "value": {
+          "$ref": "#/definitions/tenantType"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "type": "object"
+    },
+    "ognlConditionMatcher": {
+      "additionalProperties": false,
+      "properties": {
+        "expression": {
+          "examples": [
+            "true"
+          ],
+          "type": "string"
+        },
+        "negate": {
+          "default": false,
+          "description": "Inverts the match.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "expression"
+      ],
+      "type": "object"
+    },
+    "partValue": {
+      "description": "A request or context part. `request.path.var.<name>` reads a variable the statement's own path action captures.",
+      "examples": [
         "request.path",
         "request.method",
         "request.appId",
@@ -71,315 +243,160 @@
         "request.origin.host",
         "request.referer",
         "request.referer.host",
-        "request.header.",
         "request.header.cosec-app-id",
-        "request.attributes.",
         "request.attributes.ipRegion",
-        "request.path.var.",
         "context.tenantId",
         "context.principal.id",
-        "context.principal.attributes.",
-        "resource."
-      ]
-    },
-    "partValue": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/part"
-        },
-        {
-          "type": "string"
-        }
-      ]
-    },
-    "allConditionMatcher": {
-      "type": "object",
-      "properties": {
-        "negate": {
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false
-    },
-    "authenticatedConditionMatcher": {
-      "type": "object",
-      "properties": {
-        "negate": {
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false
-    },
-    "inTenantConditionMatcher": {
-      "type": "object",
-      "properties": {
-        "negate": {
-          "type": "boolean"
-        },
-        "value": {
-          "$ref": "#/definitions/tenantType"
-        }
-      },
-      "required": [
-        "value"
+        "context.principal.attributes.department",
+        "resource.ownerId"
       ],
-      "additionalProperties": false
-    },
-    "inRoleConditionMatcher": {
-      "type": "object",
-      "properties": {
-        "negate": {
-          "type": "boolean"
-        },
-        "value": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "value"
-      ],
-      "additionalProperties": false
-    },
-    "ognlConditionMatcher": {
-      "type": "object",
-      "properties": {
-        "negate": {
-          "type": "boolean"
-        },
-        "expression": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "expression"
-      ],
-      "additionalProperties": false
-    },
-    "spelConditionMatcher": {
-      "type": "object",
-      "properties": {
-        "negate": {
-          "type": "boolean"
-        },
-        "expression": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "expression"
-      ],
-      "additionalProperties": false
-    },
-    "containsConditionMatcher": {
-      "type": "object",
-      "properties": {
-        "negate": {
-          "type": "boolean"
-        },
-        "part": {
-          "$ref": "#/definitions/partValue"
-        },
-        "value": {
-          "type": "string"
-        },
-        "ignoreCase": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "part",
-        "value"
-      ],
-      "additionalProperties": false
-    },
-    "endsWithConditionMatcher": {
-      "type": "object",
-      "properties": {
-        "negate": {
-          "type": "boolean"
-        },
-        "part": {
-          "$ref": "#/definitions/partValue"
-        },
-        "value": {
-          "type": "string"
-        },
-        "ignoreCase": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "part",
-        "value"
-      ],
-      "additionalProperties": false
-    },
-    "startsWithConditionMatcher": {
-      "type": "object",
-      "properties": {
-        "negate": {
-          "type": "boolean"
-        },
-        "part": {
-          "$ref": "#/definitions/partValue"
-        },
-        "value": {
-          "type": "string"
-        },
-        "ignoreCase": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "part",
-        "value"
-      ],
-      "additionalProperties": false
-    },
-    "eqConditionMatcher": {
-      "type": "object",
-      "properties": {
-        "negate": {
-          "type": "boolean"
-        },
-        "part": {
-          "$ref": "#/definitions/partValue"
-        },
-        "value": {
-          "type": "string"
-        },
-        "ignoreCase": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "part",
-        "value"
-      ],
-      "additionalProperties": false
-    },
-    "inConditionMatcher": {
-      "type": "object",
-      "properties": {
-        "negate": {
-          "type": "boolean"
-        },
-        "part": {
-          "$ref": "#/definitions/partValue"
-        },
-        "value": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "required": [
-        "part",
-        "value"
-      ],
-      "additionalProperties": false
-    },
-    "regularConditionMatcher": {
-      "type": "object",
-      "properties": {
-        "negate": {
-          "type": "boolean"
-        },
-        "part": {
-          "$ref": "#/definitions/partValue"
-        },
-        "pattern": {
-          "type": "string",
-          "format": "regex"
-        }
-      },
-      "required": [
-        "part",
-        "pattern"
-      ],
-      "additionalProperties": false
+      "pattern": "^(request\\.(path|method|appId|spaceId|deviceId|remoteIp|origin|origin\\.host|referer|referer\\.host)|context\\.(tenantId|principal\\.id)|(request\\.header\\.|request\\.attributes\\.|resource\\.|context\\.principal\\.attributes\\.|request\\.path\\.var\\.).+)$",
+      "type": "string"
     },
     "pathConditionMatcher": {
-      "type": "object",
+      "additionalProperties": false,
       "properties": {
         "negate": {
+          "default": false,
+          "description": "Inverts the match.",
           "type": "boolean"
-        },
-        "part": {
-          "$ref": "#/definitions/partValue"
-        },
-        "pattern": {
-          "type": "string"
         },
         "options": {
           "$ref": "definitions.schema.json#/definitions/pathOptions"
+        },
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "pattern": {
+          "examples": [
+            "/orders/**",
+            "/orders/{id}",
+            "/health"
+          ],
+          "type": "string"
         }
       },
       "required": [
         "part",
         "pattern"
       ],
-      "additionalProperties": false
+      "type": "object"
     },
-    "boolConditionMatcher": {
+    "regularConditionMatcher": {
+      "additionalProperties": false,
+      "description": "Matches the part against a case-insensitive regular expression.",
       "properties": {
         "negate": {
+          "default": false,
+          "description": "Inverts the match.",
           "type": "boolean"
         },
-        "and": {
-          "type": "array",
-          "items": {
-            "$ref": "#"
-          }
+        "part": {
+          "$ref": "#/definitions/partValue"
         },
-        "or": {
-          "type": "array",
-          "items": {
-            "$ref": "#"
-          }
+        "pattern": {
+          "examples": [
+            "^/orders/\\d+$",
+            "^10\\."
+          ],
+          "format": "regex",
+          "type": "string"
+        },
+        "timeout": {
+          "default": 1000,
+          "description": "The time budget of one match in milliseconds.",
+          "minimum": 1,
+          "type": "integer"
         }
       },
-      "minProperties": 1,
-      "additionalProperties": false
+      "required": [
+        "part",
+        "pattern"
+      ],
+      "type": "object"
+    },
+    "spelConditionMatcher": {
+      "additionalProperties": false,
+      "properties": {
+        "expression": {
+          "examples": [
+            "true"
+          ],
+          "type": "string"
+        },
+        "negate": {
+          "default": false,
+          "description": "Inverts the match.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "expression"
+      ],
+      "type": "object"
+    },
+    "startsWithConditionMatcher": {
+      "additionalProperties": false,
+      "properties": {
+        "ignoreCase": {
+          "default": false,
+          "type": "boolean"
+        },
+        "negate": {
+          "default": false,
+          "description": "Inverts the match.",
+          "type": "boolean"
+        },
+        "part": {
+          "$ref": "#/definitions/partValue"
+        },
+        "value": {
+          "examples": [
+            "GET",
+            "10.0.0.1",
+            "admin"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "part",
+        "value"
+      ],
+      "type": "object"
+    },
+    "tenantType": {
+      "enum": [
+        "default",
+        "user",
+        "platform"
+      ],
+      "type": "string"
     },
     "timeConditionMatcher": {
-      "type": "object",
-      "description": "Matches inside a validity period and, optionally, a recurring daily window. At least one of notBefore, notAfter, daysOfWeek or from/to is required.",
-      "properties": {
-        "negate": {
-          "type": "boolean"
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "notBefore"
+          ]
         },
-        "notBefore": {
-          "type": "string",
-          "description": "ISO date-time; without an offset it is read in zone."
+        {
+          "required": [
+            "notAfter"
+          ]
         },
-        "notAfter": {
-          "type": "string",
-          "description": "ISO date-time, exclusive; without an offset it is read in zone."
+        {
+          "required": [
+            "daysOfWeek"
+          ]
         },
-        "zone": {
-          "type": "string",
-          "description": "Time zone id, default UTC.",
-          "default": "UTC"
-        },
-        "daysOfWeek": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "string",
-            "pattern": "^(?i)(MON|TUE|WED|THU|FRI|SAT|SUN|MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY)$"
-          }
-        },
-        "from": {
-          "type": "string",
-          "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
-        },
-        "to": {
-          "type": "string",
-          "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$"
+        {
+          "required": [
+            "from"
+          ]
         }
-      },
+      ],
       "dependencies": {
         "from": [
           "to"
@@ -388,7 +405,131 @@
           "from"
         ]
       },
-      "additionalProperties": false
+      "description": "Matches inside a validity period and, optionally, a recurring daily window [from, to).",
+      "properties": {
+        "daysOfWeek": {
+          "items": {
+            "enum": [
+              "MON",
+              "TUE",
+              "WED",
+              "THU",
+              "FRI",
+              "SAT",
+              "SUN",
+              "MONDAY",
+              "TUESDAY",
+              "WEDNESDAY",
+              "THURSDAY",
+              "FRIDAY",
+              "SATURDAY",
+              "SUNDAY"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "from": {
+          "examples": [
+            "09:00",
+            "22:00"
+          ],
+          "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
+          "type": "string"
+        },
+        "negate": {
+          "default": false,
+          "description": "Inverts the match.",
+          "type": "boolean"
+        },
+        "notAfter": {
+          "description": "ISO date-time, exclusive; without an offset it is read in zone.",
+          "examples": [
+            "2100-01-01T00:00:00Z",
+            "2100-01-01T08:00:00+08:00"
+          ],
+          "type": "string"
+        },
+        "notBefore": {
+          "description": "ISO date-time; without an offset it is read in zone.",
+          "examples": [
+            "2020-01-01T00:00:00Z",
+            "2020-01-01T08:00:00"
+          ],
+          "type": "string"
+        },
+        "to": {
+          "examples": [
+            "18:00",
+            "06:00:00"
+          ],
+          "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
+          "type": "string"
+        },
+        "zone": {
+          "default": "UTC",
+          "description": "Time zone id.",
+          "examples": [
+            "UTC",
+            "Asia/Shanghai"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
     }
-  }
+  },
+  "description": "An object naming exactly one condition matcher type.",
+  "maxProperties": 1,
+  "minProperties": 1,
+  "properties": {
+    "all": {
+      "$ref": "#/definitions/allConditionMatcher"
+    },
+    "authenticated": {
+      "$ref": "#/definitions/authenticatedConditionMatcher"
+    },
+    "bool": {
+      "$ref": "#/definitions/boolConditionMatcher"
+    },
+    "contains": {
+      "$ref": "#/definitions/containsConditionMatcher"
+    },
+    "endsWith": {
+      "$ref": "#/definitions/endsWithConditionMatcher"
+    },
+    "eq": {
+      "$ref": "#/definitions/eqConditionMatcher"
+    },
+    "in": {
+      "$ref": "#/definitions/inConditionMatcher"
+    },
+    "inRole": {
+      "$ref": "#/definitions/inRoleConditionMatcher"
+    },
+    "inTenant": {
+      "$ref": "#/definitions/inTenantConditionMatcher"
+    },
+    "ognl": {
+      "$ref": "#/definitions/ognlConditionMatcher"
+    },
+    "path": {
+      "$ref": "#/definitions/pathConditionMatcher"
+    },
+    "regular": {
+      "$ref": "#/definitions/regularConditionMatcher"
+    },
+    "spel": {
+      "$ref": "#/definitions/spelConditionMatcher"
+    },
+    "startsWith": {
+      "$ref": "#/definitions/startsWithConditionMatcher"
+    },
+    "time": {
+      "$ref": "#/definitions/timeConditionMatcher"
+    }
+  },
+  "title": "CoSec Condition Matcher Schema",
+  "type": "object"
 }

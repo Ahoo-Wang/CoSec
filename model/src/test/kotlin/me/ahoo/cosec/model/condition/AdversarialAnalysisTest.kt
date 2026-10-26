@@ -68,7 +68,7 @@ class AdversarialAnalysisTest {
     @Test
     fun `A1 holds on adversarial values`() {
         val random = Random(0xADA1)
-        repeat(10_000) {
+        repeat(maxOf(10_000, Integer.getInteger("cosec.property.iterations", 0))) {
             val condition = checkedOrNull(condition(random, 1)) ?: return@repeat
             val keys = strings.associateWith { IndexKeys.of(condition, it) }
             repeat(100) {
@@ -87,7 +87,7 @@ class AdversarialAnalysisTest {
     fun `A2 holds on adversarial values`() {
         val random = Random(0xADA2)
         var yes = 0
-        repeat(40_000) {
+        repeat(maxOf(40_000, Integer.getInteger("cosec.property.iterations", 0))) {
             val (left, right) = pair(random)
             val c1 = checkedOrNull(left) ?: return@repeat
             val c2 = checkedOrNull(right) ?: return@repeat

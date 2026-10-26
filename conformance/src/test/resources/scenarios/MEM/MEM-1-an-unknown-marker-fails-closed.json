@@ -1,0 +1,48 @@
+{
+  "rules": [
+    "MEM-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The marker has a value other than provider.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "membership": "ldap"
+  },
+  "membershipProvider": {
+    "roles": {
+      "": [
+        "editor"
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MembershipUnavailable"
+    }
+  }
+}

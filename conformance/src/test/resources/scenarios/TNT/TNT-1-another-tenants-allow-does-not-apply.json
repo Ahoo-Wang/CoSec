@@ -1,0 +1,52 @@
+{
+  "rules": [
+    "TNT-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "Tenant globex allows everything, for its role editor too; alice of acme, editor, gets nothing from it.",
+  "documents": {
+    "tenants": {
+      "globex": {
+        "policies": [
+          {
+            "id": "allow-all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "g:allow-all",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "allow-all"
+          },
+          {
+            "id": "r:editor:allow-all",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "allow-all"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor"
+    ]
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

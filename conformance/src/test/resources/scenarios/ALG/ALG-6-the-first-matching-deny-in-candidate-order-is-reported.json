@@ -1,0 +1,67 @@
+{
+  "rules": [
+    "ALG-6"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A platform and a tenant DENY both match. Platform Anyone bindings come before tenant ones, whatever the policy ids: the platform one is reported.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "z-deny",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:z-deny",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "z-deny"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "a-deny",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "g:a-deny",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "a-deny"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "z-deny",
+      "statement": 0,
+      "via": {
+        "binding": "g:z-deny",
+        "document": "platform"
+      }
+    }
+  }
+}
