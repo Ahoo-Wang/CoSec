@@ -17,6 +17,9 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.findInDelegationChain
+import me.ahoo.cosec.membership.MembershipClaims
+import me.ahoo.cosec.model.PrincipalId
 
 /**
  * [TokenVerifier] decorator that rejects revoked tokens.
@@ -24,11 +27,13 @@ import me.ahoo.cosec.api.token.TokenPrincipal
  * Both the request path ([verify] and its [toPrincipal] alias used by
  * [me.ahoo.cosec.context.SecurityContextParser]) and the renewal path ([refresh])
  * consult the [TokenStore] after the delegate succeeds, so a logged-out token
- * can neither authenticate nor be refreshed back to life.
+ * can neither authenticate nor be refreshed back to life. The same holds for the
+ * tokens of a principal revoked with [TokenRevoker.revokeSubject].
  *
  * @param delegate the actual verification implementation
  * @param tokenStore the revocation store
- * @throws TokenRevokedException when a delegate-verified token's id is revoked
+ * @throws TokenRevokedException when a delegate-verified token's id is revoked, or
+ * its principal's tokens were revoked after it was issued
  */
 class RevocableTokenVerifier(
     private val delegate: TokenVerifier,
@@ -81,6 +86,24 @@ class RevocableTokenVerifier(
     private fun checkNotRevoked(tokenPrincipal: TokenPrincipal) {
         if (tokenStore.isRevoked(tokenPrincipal.tokenId)) {
             throw TokenRevokedException("Token [${tokenPrincipal.tokenId}] has been revoked.")
+        }
+        checkSubjectNotRevoked(tokenPrincipal)
+    }
+
+    /**
+     * RFC 0004 §4.5.3. A token that does not say when it was issued cannot prove it is newer than the revocation, so
+     * it is rejected too. JWT `iat` has whole seconds, which rounds a token's age up: a token issued in the same
+     * second as the revocation, even just after it, is rejected as well.
+     */
+    private fun checkSubjectNotRevoked(tokenPrincipal: TokenPrincipal) {
+        val tenant = MembershipClaims.tenantOf(tokenPrincipal)
+        val revokedBefore = tokenStore.subjectRevokedBefore(tenant, PrincipalId(tokenPrincipal.id))
+            ?: return
+        val issuedAt = tokenPrincipal.findInDelegationChain<IssuedAtCapable>()?.issuedAt
+        if (issuedAt == null || issuedAt.isBefore(revokedBefore)) {
+            throw TokenRevokedException(
+                "The tokens of principal [${tokenPrincipal.id}] issued before [$revokedBefore] have been revoked."
+            )
         }
     }
 }

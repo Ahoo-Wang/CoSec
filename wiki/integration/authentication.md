@@ -26,7 +26,8 @@ The access token carries the principal, so authorizing a request needs no lookup
 | `policies` | Ids of the policies attached to the principal. Left out when empty. |
 | `attributes` | Free-form principal attributes; conditions read them as `context.principal.attributes.<name>`. |
 | `tenantId` | The tenant, when the principal has one ([Tenants](#tenants)). |
-| `iat`, `exp` | Issued and expiry time. A token without `exp` is rejected. |
+| `cosec.membership` | `"provider"` in place of `roles` and `policies`, when they are too large for the token ([Memberships](#memberships)). Left out otherwise. |
+| `iat`, `exp` | Issued and expiry time. A token without `exp` is rejected. `iat` decides which tokens [revoking a principal](#revoking-every-token-of-a-principal) rejects. |
 
 The refresh token carries only its own `jti`, `exp`, and, as `sub`, the `jti` of the access token it belongs to.
 
@@ -70,7 +71,42 @@ The client chooses the space with a header, but only among the spaces the token 
 the only proof of membership: issue `role@space` only after checking that the user belongs to that space.
 
 Roles and policies travel in the token, so a change to a user's roles takes effect when the user next logs in;
-[refreshing](#refreshing-tokens) keeps the old claims.
+[refreshing](#refreshing-tokens) keeps the old claims. To take access away at once,
+[revoke every token of the principal](#revoking-every-token-of-a-principal).
+
+## Memberships
+
+CoSec 8.0 reads the `roles` and `policies` claims as the principal's **memberships**: its roles in each space, and
+the policies attached to it. Tokens keep the format above, so no token has to be reissued: `MembershipClaims.parse`
+gives every role the same space as [Roles and spaces](#roles-and-spaces) describes, keeps malformed roles apart (they
+apply nowhere), and keeps the order of `policies`. One addition: `role@*` is malformed, because `*` means any space
+in the new model and is not a space id. A token without a tenant belongs to the default tenant `(0)`.
+
+::: warning Not used for authorization yet
+Authorization still reads the principal's `roles` and `policies` directly. Memberships, the marker and the provider
+below take over when 8.0 switches to the new model. Until then, a token with `cosec.membership` authorizes as a
+principal with no roles and no policies, so do not issue one.
+:::
+
+**Large memberships.** A token that names many roles or policies grows with every request. `JwtTokenConverter` can
+leave both claims out once they would take more than `membershipClaimLimit` bytes (their JSON, together) and write
+`cosec.membership: "provider"` instead; another token issuer can do the same. The limit is off by default; 4 KB
+(`JwtTokenConverter.DEFAULT_MEMBERSHIP_CLAIM_LIMIT`) is the intended value. A token refreshed from a marked token
+keeps the marker.
+
+**The provider.** The memberships of a marked token come from the application's `MembershipProvider` bean, asked
+with the principal's tenant and id. It returns a `CompletableFuture` and must neither block nor throw;
+`InMemoryMembershipProvider` serves tests and local development. A principal has one source: claims or the
+provider, never both.
+
+**Failure means deny.** `MembershipResolver` resolves a principal's memberships and fails with
+`MembershipUnavailableException`, never with "no memberships", when:
+
+- the token is marked and there is no provider;
+- the provider throws, fails, answers `null`, or does not answer within the timeout (500 ms by default);
+- the marker is anything but `"provider"`, or the token carries the marker together with `roles` or `policies`.
+
+No memberships would mean no roles, so a deny that matches a role would no longer apply.
 
 ## Logging in
 
@@ -165,6 +201,23 @@ the event loop. Two properties of the check matter:
   every authenticated request during a Redis outage would be worse. Keep access tokens short-lived so this
   window stays small. A revocation entry that Redis returns but CoSec cannot decode still fails the request
   ([When Redis is unavailable](../operations/storage.md#when-redis-is-unavailable)).
+
+### Revoking every token of a principal
+
+To lock a user out at once, for example after a compromise or when roles carried in the token must stop applying,
+call `TokenRevoker.revokeSubject(tenant, principal, issuedBefore)`. `issuedBefore` defaults to now. Every access and
+refresh token of that principal in that tenant whose `iat` is before `issuedBefore` is then rejected as
+`Token Invalid`, on every instance; tokens issued later, such as after the user logs in again, are accepted.
+
+- A principal without a tenant is in the default tenant `(0)`.
+- `iat` has whole seconds, so a token issued in the same second as the revocation, even just after it, is rejected
+  too. A token without `iat` is always rejected once its principal has been revoked.
+- The entry is kept for the refresh token lifetime past `issuedBefore`. A later call with an earlier `issuedBefore`
+  does not shorten it.
+- It needs the same `cosec.jwt.token-revocation.enabled=true` and `cache-support` as revoking one token. Without a
+  store that can record it, it throws `UnsupportedOperationException` instead of doing nothing.
+- The check behaves as described above: a local "not revoked" answer for up to 30 seconds if an invalidation is
+  lost, and the token is accepted while Redis is unreachable.
 
 ## API keys
 

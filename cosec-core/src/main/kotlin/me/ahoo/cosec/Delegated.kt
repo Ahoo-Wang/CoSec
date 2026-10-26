@@ -20,3 +20,19 @@ package me.ahoo.cosec
 interface Delegated<T> {
     val delegate: T
 }
+
+/**
+ * The first object of type [T] in the chain that starts at [this] and follows [Delegated.delegate], or `null`.
+ * Wrappers such as the token principals add facts to the principal they wrap; this finds them through any number of
+ * wrappers.
+ */
+inline fun <reified T : Any> Any.findInDelegationChain(): T? {
+    var current: Any? = this
+    while (current != null) {
+        if (current is T) {
+            return current
+        }
+        current = (current as? Delegated<*>)?.delegate
+    }
+    return null
+}

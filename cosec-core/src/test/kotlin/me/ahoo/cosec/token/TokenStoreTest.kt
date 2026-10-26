@@ -13,9 +13,13 @@
 
 package me.ahoo.cosec.token
 
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.Duration
+import java.time.Instant
 
 class TokenStoreTest {
 
@@ -28,5 +32,13 @@ class TokenStoreTest {
     fun noOpRevoke() {
         TokenStore.NoOp.revoke("tokenId", Duration.ofDays(7))
         TokenStore.NoOp.isRevoked("tokenId").assert().isFalse()
+    }
+
+    @Test
+    fun noOpCannotRevokeSubject() {
+        assertThrows<UnsupportedOperationException> {
+            TokenStore.NoOp.revokeSubject(TenantId("t"), PrincipalId("alice"), Instant.now(), Duration.ofDays(7))
+        }
+        TokenStore.NoOp.subjectRevokedBefore(TenantId("t"), PrincipalId("alice")).assert().isNull()
     }
 }

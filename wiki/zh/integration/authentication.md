@@ -23,7 +23,8 @@ description: "签发、刷新和吊销令牌，接受 API key，以及通过社�
 | `policies` | 附加在主体上的策略 ID。为空时省略。 |
 | `attributes` | 自由格式的主体属性；条件以 `context.principal.attributes.<name>` 读取。 |
 | `tenantId` | 主体有租户时，为其租户（[租户](#tenants)）。 |
-| `iat`、`exp` | 签发时间和过期时间。没有 `exp` 的令牌会被拒绝。 |
+| `cosec.membership` | `roles` 和 `policies` 太大、放不进令牌时，用 `"provider"` 代替它们（[成员关系](#memberships)）。其他情况下省略。 |
+| `iat`、`exp` | 签发时间和过期时间。没有 `exp` 的令牌会被拒绝。[吊销主体的全部令牌](#revoking-every-token-of-a-principal)时，按 `iat` 判断拒绝哪些令牌。 |
 
 刷新令牌只携带它自己的 `jti`、`exp`，以及作为 `sub` 的、它所属访问令牌的 `jti`。
 
@@ -60,7 +61,37 @@ description: "签发、刷新和吊销令牌，接受 API key，以及通过社�
 客户端用请求头选择空间，但只能在令牌声明的空间中选择。因此令牌是成员身份的唯一凭证：只有确认用户属于某个空间之后，才签发
 `role@space`。
 
-角色和策略随令牌传递，所以用户角色的变更要等用户下次登录才生效；[刷新](#refreshing-tokens)会沿用旧的声明。
+角色和策略随令牌传递，所以用户角色的变更要等用户下次登录才生效；[刷新](#refreshing-tokens)会沿用旧的声明。要立即收回权限，
+[吊销该主体的全部令牌](#revoking-every-token-of-a-principal)。
+
+## 成员关系 {#memberships}
+
+CoSec 8.0 把 `roles` 和 `policies` 声明读作主体的**成员关系**：主体在每个空间里的角色，以及附加在主体上的策略。令牌沿用上面的
+格式，不需要重新签发：`MembershipClaims.parse` 给每个角色的空间与[角色与空间](#roles-and-spaces)所述相同，格式不对的角色单独
+保留（它们在任何地方都不生效），`policies` 保持原有顺序。唯一新增的规则：`role@*` 格式不对，因为 `*` 在新模型里表示任意空间，
+不是空间 ID。没有租户的令牌属于默认租户 `(0)`。
+
+::: warning 尚未用于授权
+授权仍直接读取主体的 `roles` 和 `policies`。成员关系以及下面的标记和 provider，要到 8.0 切换到新模型时才接手。在那之前，带
+`cosec.membership` 的令牌按没有角色、没有策略的主体授权，所以不要签发这种令牌。
+:::
+
+**成员关系很多时。** 令牌里的角色或策略越多，每个请求就越大。`JwtTokenConverter` 可以在这两个声明合计超过 `membershipClaimLimit`
+字节（按 JSON 计）时省略它们，改写 `cosec.membership: "provider"`；其他令牌签发方也可以照做。这个上限默认关闭，预期取值是
+4 KB（`JwtTokenConverter.DEFAULT_MEMBERSHIP_CLAIM_LIMIT`）。从带标记的令牌刷新得到的令牌保留这个标记。
+
+**provider。** 带标记的令牌，其成员关系来自应用的 `MembershipProvider` Bean，按主体的租户和 ID 查询。它返回
+`CompletableFuture`，不能阻塞，也不能抛出异常；`InMemoryMembershipProvider` 用于测试和本地开发。一个主体只有一个来源：
+要么是声明，要么是 provider，不会混用。
+
+**失败即拒绝。** `MembershipResolver` 解析主体的成员关系，在下列情况下以 `MembershipUnavailableException` 失败，而不是当作
+"没有成员关系"：
+
+- 令牌带标记，但没有 provider；
+- provider 抛出异常、失败、返回 `null`，或者在超时时间（默认 500 毫秒）内没有回答；
+- 标记不是 `"provider"`，或者令牌在带标记的同时还带有 `roles` 或 `policies`。
+
+没有成员关系就意味着没有角色，按角色匹配的拒绝就不再生效。
 
 ## 登录 {#logging-in}
 
@@ -145,6 +176,20 @@ JWT 是无状态的：不做额外处理的话，令牌在过期之前一直有�
 - **Redis 不可达时放行令牌。** 这是失败即拒绝的[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)之一：签名和过期时间
   仍然会检查，而在 Redis 故障期间拒绝所有已认证请求的后果更糟。保持访问令牌短期有效，让这个窗口尽量小。Redis 返回了但
   CoSec 无法解码的吊销记录仍然会让请求失败（[Redis 不可用时](../operations/storage.md#when-redis-is-unavailable)）。
+
+### 吊销主体的全部令牌 {#revoking-every-token-of-a-principal}
+
+要立即把一个用户挡在外面，例如账号被盗之后，或者令牌里的角色必须立即失效时，调用
+`TokenRevoker.revokeSubject(tenant, principal, issuedBefore)`，`issuedBefore` 默认为当前时间。此后，该主体在该租户中 `iat`
+早于 `issuedBefore` 的每个访问令牌和刷新令牌，在每个实例上都以 `Token Invalid` 被拒绝；之后签发的令牌（例如用户重新登录后）
+照常接受。
+
+- 没有租户的主体属于默认租户 `(0)`。
+- `iat` 精确到秒，所以与吊销在同一秒内签发的令牌，即使晚于吊销，也会被拒绝。主体被吊销之后，没有 `iat` 的令牌一律被拒绝。
+- 吊销记录保留到 `issuedBefore` 之后一个刷新令牌有效期。之后用更早的 `issuedBefore` 再次调用，不会缩短它。
+- 它与吊销单个令牌一样，需要 `cosec.jwt.token-revocation.enabled=true` 和 `cache-support`。存储无法记录时，它抛出
+  `UnsupportedOperationException`，而不是什么都不做。
+- 检查的行为与上面相同：失效消息丢失时，本地的"未吊销"结果最多保留 30 秒；Redis 不可达时放行令牌。
 
 ## API key {#api-keys}
 

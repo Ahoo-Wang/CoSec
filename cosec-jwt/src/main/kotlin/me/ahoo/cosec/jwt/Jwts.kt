@@ -21,6 +21,8 @@ import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
+import me.ahoo.cosec.membership.MembershipClaims
+import me.ahoo.cosec.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.PrincipalConverter
@@ -86,15 +88,33 @@ object Jwts : PrincipalConverter {
         val roles = if (rolesClaim.isMissing) emptySet() else rolesClaim.asList(String::class.java).toSet()
         val attributesClaim = decodedAccessToken.getClaim(CoSecPrincipal::attributes.name)
         val attributes = if (attributesClaim.isMissing) emptyMap<String, Any>() else attributesClaim.asMap()
-        val principal = SimplePrincipal(principalId, policies, roles, attributes)
+        val principal =
+            withMembershipMarker(SimplePrincipal(principalId, policies, roles, attributes), decodedAccessToken)
         val tenantId = decodedAccessToken.getClaim(TENANT_ID_KEY).asString()
-        val tokenPrincipal = SimpleTokenPrincipal(accessTokenId, principal)
+        val tokenPrincipal = SimpleTokenPrincipal(accessTokenId, principal, decodedAccessToken.issuedAtAsInstant)
         if (tenantId.isNullOrEmpty()) {
             @Suppress("UNCHECKED_CAST")
             return tokenPrincipal as T
         }
         @Suppress("UNCHECKED_CAST")
         return SimpleTokenTenantPrincipal(delegate = tokenPrincipal, tenant = SimpleTenant(tenantId)) as T
+    }
+
+    /**
+     * Wraps [principal] in a [MembershipMarkedPrincipal] when the token carries [MembershipClaims.MARKER_KEY], so tokens
+     * without it parse exactly as before. Any value is kept, including one that is not a string, for
+     * [me.ahoo.cosec.membership.MembershipResolver] to refuse.
+     */
+    private fun withMembershipMarker(principal: CoSecPrincipal, decodedAccessToken: DecodedJWT): CoSecPrincipal {
+        val markerClaim = decodedAccessToken.getClaim(MembershipClaims.MARKER_KEY)
+        if (markerClaim.isMissing) {
+            return principal
+        }
+        val marker = when {
+            markerClaim.isNull -> "null"
+            else -> markerClaim.asString() ?: markerClaim.toString()
+        }
+        return MembershipMarkedPrincipal(principal, marker)
     }
 
     /**
