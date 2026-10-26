@@ -1,0 +1,126 @@
+{
+  "rules": [
+    "GRT-1"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RFC 0007 §7.4.6 row 8: a platform deny bound to Anyone requires clearance for order:export; gina has none, but the grantee is bound by the same deny, so granting order:export is contained.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "clearance",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:export",
+              "condition": {
+                "not": {
+                  "eq": [
+                    "subject.attributes.clearance",
+                    "high"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "clearance",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "clearance"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "all",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina"
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*"
+            }
+          ]
+        },
+        {
+          "id": "export",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:export"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "all",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "orders"
+        },
+        {
+          "id": "e",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "export"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "export",
+        "statement": 0,
+        "action": "order:export",
+        "resource": "*",
+        "verdict": "YES"
+      }
+    ]
+  }
+}

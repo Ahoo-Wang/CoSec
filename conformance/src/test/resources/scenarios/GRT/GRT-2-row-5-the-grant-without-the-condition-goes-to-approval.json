@@ -1,0 +1,117 @@
+{
+  "rules": [
+    "GRT-2"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RFC 0007 §7.4.6 row 5: the same statement without the condition is not covered; it goes to approval, it is never let through.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "internal",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/*",
+                "condition": {
+                  "cidr": [
+                    "environment.ip",
+                    [
+                      "10.0.0.0/8"
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "gina",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "internal"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina"
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "internal",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/*",
+              "condition": {
+                "cidr": [
+                  "environment.ip",
+                  [
+                    "10.0.0.0/8"
+                  ]
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "g",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "gina",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "internal"
+        },
+        {
+          "id": "g",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "g"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "g",
+        "statement": 0,
+        "action": "order:read",
+        "resource": "order/*",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "CONDITION"
+      }
+    ]
+  }
+}

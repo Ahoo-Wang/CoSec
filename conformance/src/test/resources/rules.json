@@ -636,14 +636,32 @@
       "source": "RFC 0007 §7.4.2",
       "statement": "Every granted fragment is contained in one of the grantor's own ALLOWs and overlaps no non-Anyone DENY the grantor is subject to.",
       "level": "control",
-      "pending": "RFC 0007 PR-6"
+      "properties": [
+        "control:GrantPropertyTest#A5 the grant analysis is sound",
+        "control:GrantPropertyTest#A6 narrowing is sound",
+        "control:GrantPropertyTest#A8 changes analyzed as contained never grant beyond the grantors",
+        "engine:PatternContainmentPropertyTest#A7 action containment is sound",
+        "engine:PatternContainmentPropertyTest#A7 typed resource containment is sound",
+        "engine:PatternContainmentPropertyTest#A7 http path containment is sound"
+      ],
+      "guards": [
+        "control:GrantAnalyzerTest",
+        "engine:PatternContainmentTest"
+      ],
+      "pending": null
     },
     {
       "id": "GRT-2",
       "source": "RFC 0007 §7.4.3",
       "statement": "A fragment the analysis cannot decide goes to platform administrator approval; it is never let through as probably contained.",
       "level": "control",
-      "pending": "RFC 0007 PR-6"
+      "properties": [
+        "control:GrantPropertyTest#A5 the grant analysis is sound"
+      ],
+      "guards": [
+        "control:GrantAnalyzerTest"
+      ],
+      "pending": "RFC 0007 PR-6 (routing UNKNOWN fragments to approval in the publish flow)"
     },
     {
       "id": "BDY-1",
