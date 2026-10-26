@@ -142,7 +142,7 @@ fun ActionMatcher.onRejectedTemplateValue(onRejected: RejectedTemplateValue): Ac
  * A `path` action whose pattern holds `#{...}` templates, such as `/users/#{principal.id}/orders`.
  *
  * Each hole is evaluated on its own and the static parts stay as written, so a value can only ever fill the place of
- * one literal path segment (or part of one). A value is rejected when it is empty, `.` or `..`, or contains `*`, `?`,
+ * one literal path segment (or part of one). A hole inside a `{...}` capture is rejected when the matcher is built. A value is rejected when it is empty, `.` or `..`, or contains `*`, `?`,
  * `{`, `}` or the path separator: any of these would turn it into pattern syntax (a wildcard, a capture, a regex) or
  * move it into other segments, and so widen what the pattern matches, or narrow a DENY. What a rejected value does is
  * set by [onRejected]; see [RejectedTemplateValue].
@@ -188,11 +188,16 @@ class ReplaceablePathActionMatcher private constructor(
         private fun String.asTemplateParts(): List<TemplatePart> {
             val parsed = SpelExpression.SPEL_PARSER.parseExpression(this, ParserContext.TEMPLATE_EXPRESSION)
             val expressions = if (parsed is CompositeStringExpression) parsed.expressions.toList() else listOf(parsed)
+            // Inside a `{...}` capture a value would be part of its name or regex, where `.` or `+` widen the match.
+            var captureDepth = 0
             return expressions.map {
                 if (it is LiteralExpression) {
+                    captureDepth += it.expressionString.count { char -> char == '{' } -
+                        it.expressionString.count { char -> char == '}' }
                     TemplatePart.Literal(it.expressionString)
                 } else {
-                    TemplatePart.Hole(it.expressionString, SpelExpression(it, String::class.java))
+                    require(captureDepth == 0) { "Path template [$this] must not place #{...} inside a {...} capture." }
+                    TemplatePart.Hole(SpelExpression(it, String::class.java))
                 }
             }
         }
@@ -200,7 +205,7 @@ class ReplaceablePathActionMatcher private constructor(
 
     private sealed interface TemplatePart {
         class Literal(val text: String) : TemplatePart
-        class Hole(val source: String, val expression: SpelExpression<String>) : TemplatePart
+        class Hole(val expression: SpelExpression<String>) : TemplatePart
     }
 
     private val separator: Char = patternParser.pathOptions.separator()

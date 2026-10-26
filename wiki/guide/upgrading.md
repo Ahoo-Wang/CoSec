@@ -23,7 +23,8 @@ statement matched. Each template value now fills one literal part of the pattern
   unaffected; a custom deserializer that builds statements itself should call `onRejectedTemplateValue` on the action.
 
 A template that produced several segments, such as `#{principal.attributes['home']}/**` with `home` set to
-`/users/alice`, is rejected the same way. What to do:
+`/users/alice`, is rejected the same way. A template inside a `{...}` capture, such as `{name:#{...}}`, now fails when
+the policy loads. What to do:
 
 1. Find templated path patterns: search policies, app permissions and rate limit rules for `#{` in an `action`.
 2. If principal ids or the attributes they use can contain these characters, rewrite the statement as a static

@@ -18,7 +18,8 @@
 - 用 `PathActionMatcherFactory` 在代码中构建、不在语句中使用的模板化路径匹配器会抛出 `RejectedTemplateValueException`。
   从 JSON 反序列化语句、权限或限流规则的代码不受影响；自己构建语句的自定义反序列化器应对动作调用 `onRejectedTemplateValue`。
 
-产生多个路径段的模板，例如 `home` 为 `/users/alice` 时的 `#{principal.attributes['home']}/**`，同样会被拒绝。需要做的：
+产生多个路径段的模板，例如 `home` 为 `/users/alice` 时的 `#{principal.attributes['home']}/**`，同样会被拒绝。放在 `{...}` 捕获内部的
+模板（例如 `{name:#{...}}`）现在会在加载策略时失败。需要做的：
 
 1. 找出模板化的路径模式：在策略、应用权限和限流规则的 `action` 中搜索 `#{`。
 2. 如果主体 id 或模板用到的属性可能含有这些字符，把语句改写为静态模式加上对路径变量的 `eq` 条件
