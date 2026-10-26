@@ -16,6 +16,7 @@ import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.token.RevocationReader
 import me.ahoo.cosec.token.TokenStore
 import java.time.Duration
 import java.time.Instant
@@ -37,6 +38,8 @@ class CoCacheTokenStore @JvmOverloads constructor(
     private val cache: RevokedTokenCache,
     private val subjectCache: RevokedSubjectCache? = null
 ) : TokenStore {
+    /** The same revocations, read without blocking, for the coroutine pipeline (RFC 0006 §5.3.2). */
+    val reader: RevocationReader = CoCacheRevocationReader(cache, subjectCache)
 
     /**
      * Writes the revocation with an explicit lifetime; the write invalidates any

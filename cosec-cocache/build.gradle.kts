@@ -17,7 +17,12 @@ dependencies {
     api("me.ahoo.cocache:cocache-codec-jackson")
     api("me.ahoo.cocache:cocache-redis")
     api("org.springframework.data:spring-data-redis")
+    // The non-blocking reads behind the suspend SPIs of RFC 0006 (RevocationReader, MembershipProvider) await
+    // CoCache's async view.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
     testImplementation("me.ahoo.cocache:cocache-test")
+    // MembershipCacheFailureTest resolves through the pipeline's MembershipResolver.
+    testImplementation(project(":cosec-runtime"))
     testImplementation("io.lettuce:lettuce-core")
     testImplementation("me.ahoo.cosid:cosid-core")
     testImplementation("me.ahoo.cosid:cosid-test")

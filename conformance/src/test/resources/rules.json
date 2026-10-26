@@ -100,7 +100,8 @@
       "statement": "When the MembershipProvider is missing, fails or times out, the decision is Indeterminate(MembershipUnavailable); it never falls back to the token's claims or to no memberships.",
       "level": "engine",
       "guards": [
-        "runtime:MembershipResolverTest"
+        "runtime:MembershipResolverTest",
+        "cosec-cocache:MembershipCacheFailureTest"
       ],
       "pending": null
     },
@@ -562,6 +563,17 @@
         "runtime:TokenAuthenticatorTest#rejectedTokensNameWhy",
         "runtime:PipelineTest#rejectedCredentialsDenyWithTheirReason",
         "runtime:PipelineTest#rejectedCredentialsAreEvaluatedAsAnonymous"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-7",
+      "source": "AGENTS.md (Fail closed); RFC 0006 §5.3.2",
+      "statement": "Only the revocation store's own degraded read may count a token as not revoked (the documented exception to failing closed); an error the revocation check reports fails the request with 503, never accepts the token.",
+      "level": "pipeline",
+      "guards": [
+        "cosec-cocache:CoCacheRevocationReaderTest#anUnreadableStoreMeansNotRevoked",
+        "runtime:TokenAuthenticatorTest#otherFailuresPropagate"
       ],
       "pending": null
     },

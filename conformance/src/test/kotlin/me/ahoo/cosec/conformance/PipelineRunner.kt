@@ -86,7 +86,8 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                       "token": { "jti": "t1", "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
  *                                  "membership": "provider", "issuedAt": "2026-10-01T00:00:00Z" | null,
  *                                  "verification": "valid" | "expired" | "invalid" },
- * "revocations":        { "tokens": ["t1"], "subjects": [{ "tenant": "acme", "principal": "alice", "issuedBefore": "..." }] },
+ * "revocations":        { "tokens": ["t1"], "subjects": [{ "tenant": "acme", "principal": "alice", "issuedBefore": "..." }] }
+ *                       | { "fails": "message" },                       // the check reports an error
  * "membershipProvider": { "roles": { "<space>": [...] }, "attachments": [...] } | { "fails": "message" } | { "hangs": true },
  * "snapshot":           { "fails": "message" } | { "hangs": true },      // otherwise every document is installed
  * "options":            { "timeoutMillis": 5000, "authenticationTimeoutMillis": 1000, "membershipTimeoutMillis": 500 },
@@ -214,7 +215,15 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
     private fun revocations(node: JsonNode?): RevocationReader {
         if (node == null) return RevocationReader.NONE
-        node.only("tokens", "subjects")
+        node.only("tokens", "subjects", "fails")
+        node.get("fails")?.let { fails ->
+            return object : RevocationReader {
+                override suspend fun isRevoked(tokenId: String): Boolean = throw IllegalStateException(fails.text())
+
+                override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
+                    throw IllegalStateException(fails.text())
+            }
+        }
         val tokens = node.get("tokens")?.strings().orEmpty().toSet()
         val subjects = node.get("subjects")?.values().orEmpty().associate { subject ->
             subject.only("tenant", "principal", "issuedBefore")

@@ -55,6 +55,8 @@ internal class CoSecTestCaches(
         )
     }
 
+    val membershipCache: MembershipCache by lazy { runtime.createCache(CoSecCacheSpecs.membership(keyPrefix)) }
+
     fun policyRepository() = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
 
     fun appRolePermissionRepository() = RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
