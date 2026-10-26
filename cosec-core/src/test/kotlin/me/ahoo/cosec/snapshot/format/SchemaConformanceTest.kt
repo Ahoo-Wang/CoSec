@@ -58,7 +58,8 @@ class SchemaConformanceTest {
             )
         }
 
-        private val ROOTS = DocumentFormats.files.filter { it.root != null }
+        /** The formats CoSec reads. It writes problems: `cosec-runtime`'s `ProblemSchemaTest` binds that one to its encoder. */
+        private val ROOTS = DocumentFormats.files.filter { it.root != null && it.name != DocumentFormats.PROBLEM }
 
         /**
          * What today's codecs accept although the descriptor does not. Each is a property of a codec, not of one field,
