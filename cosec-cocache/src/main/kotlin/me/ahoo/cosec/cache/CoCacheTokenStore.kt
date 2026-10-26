@@ -12,8 +12,11 @@
  */
 package me.ahoo.cosec.cache
 
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.token.TokenStore
 import java.time.Duration
+import java.time.Instant
 
 /**
  * [TokenStore] backed by a CoCache two-level cache (local + Redis),
@@ -22,10 +25,16 @@ import java.time.Duration
  * Local hits cost no network; cross-instance propagation is bounded by the
  * local cache TTL (default 30 seconds, `cosec.authorization.cache.token.*`).
  *
+ * Revoking all tokens of a principal ([revokeSubject]) needs [subjectCache]; without it, it throws.
+ *
  * @author ahoo wang
  * @see RevokedTokenCache
+ * @see RevokedSubjectCache
  */
-class CoCacheTokenStore(private val cache: RevokedTokenCache) : TokenStore {
+class CoCacheTokenStore @JvmOverloads constructor(
+    private val cache: RevokedTokenCache,
+    private val subjectCache: RevokedSubjectCache? = null
+) : TokenStore {
 
     /**
      * Writes the revocation with an explicit lifetime; the write invalidates any
@@ -44,4 +53,25 @@ class CoCacheTokenStore(private val cache: RevokedTokenCache) : TokenStore {
      * @return true if the token has been revoked; false on a miss
      */
     override fun isRevoked(tokenId: String): Boolean = cache.get(tokenId) == true
+
+    /**
+     * Keeps the later of the existing and the new `issuedBefore`, so that a second revocation never shortens the
+     * first. Two instances revoking the same principal at once may both write; the later write wins.
+     */
+    override fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant, ttl: Duration) {
+        val subjectCache = subjectCache ?: return super.revokeSubject(tenant, principal, issuedBefore, ttl)
+        val key = RevokedSubjectCache.key(tenant, principal)
+        val revokedBefore = issuedBefore.toEpochMilli()
+        val existing = subjectCache.get(key)
+        if (existing != null && existing >= revokedBefore) {
+            return
+        }
+        subjectCache.put(key, revokedBefore, ttl.coerceAtLeast(Duration.ZERO).plusSeconds(1))
+    }
+
+    /**
+     * @return the instant before which the principal's tokens are revoked; `null` on a miss, or without [subjectCache]
+     */
+    override fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
+        subjectCache?.get(RevokedSubjectCache.key(tenant, principal))?.let(Instant::ofEpochMilli)
 }

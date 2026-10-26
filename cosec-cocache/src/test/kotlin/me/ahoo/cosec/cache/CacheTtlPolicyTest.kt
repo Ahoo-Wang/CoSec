@@ -85,4 +85,16 @@ class CacheTtlPolicyTest {
         policy.absentTtl.assert().isEqualTo(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
         policy.readFailure.assert().isEqualTo(ReadFailureMode.DEGRADE)
     }
+
+    @Test
+    fun revokedSubjectCacheIsConfiguredLikeRevokedTokens() {
+        val spec = CoSecCacheSpecs.revokedSubject(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer))
+        spec.policy.absentTtl.assert().isEqualTo(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
+        spec.policy.readFailure.assert().isEqualTo(ReadFailureMode.DEGRADE)
+        spec.policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
+        spec.namespace.assert().isEqualTo("cosec:token:subject:revoked")
+        val weakened = spec.policy.toBuilder().foreignFormat(ForeignFormatMode.RECLAIM).build()
+        CoSecCacheSpecs.pinnedPolicy(CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME, weakened).foreignFormat
+            .assert().isEqualTo(ForeignFormatMode.FAIL)
+    }
 }

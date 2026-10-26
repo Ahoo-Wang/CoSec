@@ -49,6 +49,12 @@ internal class CoSecTestCaches(
         runtime.createCache(CoSecCacheSpecs.revokedToken(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer), keyPrefix))
     }
 
+    val revokedSubjectCache: RevokedSubjectCache by lazy {
+        runtime.createCache(
+            CoSecCacheSpecs.revokedSubject(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer), keyPrefix)
+        )
+    }
+
     fun policyRepository() = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
 
     fun appRolePermissionRepository() = RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)

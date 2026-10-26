@@ -17,20 +17,25 @@ import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.principal.SimplePrincipal
+import java.time.Instant
 
 /**
  * Simple implementation of [TokenPrincipal].
  *
  * @param tokenId The token identifier
  * @param delegate The underlying principal
+ * @param issuedAt When the token was issued, if it says so; revoking a principal's tokens
+ * ([TokenRevoker.revokeSubject]) needs it
  * @see TokenPrincipal
  * @see CoSecPrincipal
  */
-data class SimpleTokenPrincipal(
+data class SimpleTokenPrincipal @JvmOverloads constructor(
     override val tokenId: String,
-    override val delegate: CoSecPrincipal
+    override val delegate: CoSecPrincipal,
+    override val issuedAt: Instant? = null
 ) : TokenPrincipal,
     CoSecPrincipal by delegate,
+    IssuedAtCapable,
     Delegated<CoSecPrincipal> {
     companion object {
         @JvmField
