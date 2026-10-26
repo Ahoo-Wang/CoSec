@@ -77,8 +77,13 @@ class MembershipClaimsTest {
             val memberships = MembershipClaims.parse(roles, emptyList())
             val spaces = roles.map { it.substringAfter('@', "") }.toSet() + SpaceIdCapable.DEFAULT + "unclaimed"
             spaces.forEach { space ->
-                val claimed = memberships.roles[SpaceId(space)].orEmpty().map { it.value }
-                // `*` is no space (RFC 0004 §4.2): the one place the claims deliberately give less than 7.x
+                // `*` is no space (RFC 0004 §4.2), so no SpaceId holds it: the one place the claims deliberately give
+                // less than 7.x
+                val claimed = if (space == "*") {
+                    emptyList()
+                } else {
+                    memberships.roles[SpaceId(space)].orEmpty().map { it.value }
+                }
                 val expected = if (space == "*") emptySet() else RoleScope.rolesIn(space, roles)
                 claimed.assert().describedAs("roles %s in space [%s]", roles, space).containsExactlyElementsOf(expected)
             }

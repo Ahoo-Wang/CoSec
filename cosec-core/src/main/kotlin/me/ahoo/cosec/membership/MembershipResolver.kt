@@ -32,7 +32,8 @@ import java.util.concurrent.TimeoutException
  * - the token's marker is not [MembershipClaims.PROVIDER];
  * - the token carries the marker and also `roles` or `policies` claims, so its source is ambiguous;
  * - there is no [provider];
- * - the provider throws, fails, completes with `null`, or does not complete within [timeout].
+ * - the provider throws, fails, completes with `null` or with memberships whose source is not
+ *   [Memberships.Source.PROVIDER], or does not complete within [timeout].
  *
  * Nothing calls it on the authorization path yet: RFC 0004 PR-7 wires it in.
  */
@@ -79,6 +80,8 @@ class MembershipResolver(
             when {
                 error != null -> resolved.completeExceptionally(failure(principal, unwrap(error)))
                 memberships == null -> resolved.completeExceptionally(nothing(principal))
+                memberships.source != Memberships.Source.PROVIDER ->
+                    resolved.completeExceptionally(wrongSource(principal, memberships.source))
 
                 else -> resolved.complete(memberships)
             }
@@ -97,6 +100,12 @@ class MembershipResolver(
 
     private fun nothing(principal: CoSecPrincipal) =
         MembershipUnavailableException("The membership provider answered nothing for principal [${principal.id}].")
+
+    /** A provider that answers claims-sourced memberships breaks the contract: one principal, one source. */
+    private fun wrongSource(principal: CoSecPrincipal, source: Memberships.Source) =
+        MembershipUnavailableException(
+            "The membership provider answered memberships from [$source] for principal [${principal.id}]."
+        )
 
     /** A dependent stage reports a provider's failure wrapped in [CompletionException]. */
     private fun unwrap(error: Throwable): Throwable = if (error is CompletionException) error.cause ?: error else error
