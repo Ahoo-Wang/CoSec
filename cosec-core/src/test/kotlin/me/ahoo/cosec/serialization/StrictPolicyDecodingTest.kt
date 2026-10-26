@@ -231,6 +231,8 @@ class StrictPolicyDecodingTest {
             AppPermission::class.java,
         )
         appPermission.groups.single().permissions.single().id.assert().isEqualTo("p")
+        CoSecJsonSerializer.readValue("""{"id":"app","groups":[{"name":"g"}]}""", AppPermission::class.java)
+            .groups.single().permissions.assert().isEmpty()
     }
 
     @Test
