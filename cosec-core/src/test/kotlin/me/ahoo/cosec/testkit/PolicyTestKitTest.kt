@@ -27,7 +27,7 @@ class PolicyTestKitTest {
     }
 
     @Test
-    fun rejectedTemplateValuesNeitherGrantNorEscapeADeny() {
+    fun rejectedTemplateValuesNeverGrant() {
         val report = PolicyTestKit.run("classpath:cosec-policy-test/template-values-policy-test.json")
         report.results.size.assert().isEqualTo(4)
         report.assertPasses()

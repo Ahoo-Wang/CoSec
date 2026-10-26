@@ -93,11 +93,9 @@ internal class ReplaceablePathActionMatcherTest {
     @Test
     fun rejectedValuesFollowTheMatchersChoice() {
         val pattern = "/users/#{principal.id}/**"
-        listOf("*", "{x}", "?", "a/b", "", ".", "..", "}").forEach { id ->
+        listOf("*", "{x}", "?", "a/b", "", ".", "..", "}", "a\\b", "\\").forEach { id ->
             templated(pattern, RejectedTemplateValue.NO_MATCH).match(request("/users/victim/x"), context(id))
                 .assert().describedAs("id [$id]").isFalse()
-            templated(pattern, RejectedTemplateValue.MATCH).match(request("/anything"), context(id))
-                .assert().describedAs("id [$id]").isTrue()
             assertThrows<RejectedTemplateValueException> {
                 templated(pattern, RejectedTemplateValue.ERROR).match(request("/users/victim/x"), context(id))
             }
@@ -160,20 +158,38 @@ internal class ReplaceablePathActionMatcherTest {
     }
 
     @Test
+    fun percentAndSemicolonAreRejectedOnlyWithoutDecoding() {
+        fun matcher(decode: Boolean) = (
+            PathActionMatcherFactory.INSTANCE.create(
+                mapOf(
+                    "pattern" to "/users/#{principal.id}/*",
+                    "options" to mapOf("decodeAndParseSegments" to decode),
+                ).asConfiguration()
+            ) as ReplaceablePathActionMatcher
+            ).onRejectedTemplateValue(RejectedTemplateValue.NO_MATCH)
+        listOf("a%2Fb", "a;b").forEach { id ->
+            matcher(decode = false).match(request("/users/$id/x"), context(id)).assert().describedAs(id).isFalse()
+        }
+        // Decoded segments never hold a raw `%2F` or a `;` parameter, so the values are plain literals there.
+        matcher(decode = true).match(request("/users/a%252Fb/x"), context("a%2Fb")).assert().isTrue()
+        matcher(decode = false).match(request("/users/alice/x"), context("alice")).assert().isTrue()
+    }
+
+    @Test
     fun compositeMembersFollowTheChoice() {
         val members = listOf("/a/#{principal.id}", "/b/#{principal.id}", "/c")
             .map { PathActionMatcherFactory.INSTANCE.create(it.asConfiguration()) }
         val composite = CompositeActionMatcher(PathActionMatcherFactory.TYPE, members, "".asConfiguration())
-        val denying = composite.onRejectedTemplateValue(RejectedTemplateValue.MATCH) as CompositeActionMatcher
-        denying.actionMatchers.filterIsInstance<ReplaceablePathActionMatcher>().map { it.onRejected }.assert()
-            .containsExactly(RejectedTemplateValue.MATCH, RejectedTemplateValue.MATCH)
-        denying.actionMatchers[2].assert().isSameAs(composite.actionMatchers[2])
+        val allowing = composite.onRejectedTemplateValue(RejectedTemplateValue.NO_MATCH) as CompositeActionMatcher
+        allowing.actionMatchers.filterIsInstance<ReplaceablePathActionMatcher>().map { it.onRejected }.assert()
+            .containsExactly(RejectedTemplateValue.NO_MATCH, RejectedTemplateValue.NO_MATCH)
+        allowing.actionMatchers[2].assert().isSameAs(composite.actionMatchers[2])
         val static = CompositeActionMatcher(
             PathActionMatcherFactory.TYPE,
             listOf(PathActionMatcherFactory.INSTANCE.create("/a".asConfiguration())),
             "".asConfiguration(),
         )
-        static.onRejectedTemplateValue(RejectedTemplateValue.MATCH).assert().isSameAs(static)
+        static.onRejectedTemplateValue(RejectedTemplateValue.NO_MATCH).assert().isSameAs(static)
     }
 
     @Test
@@ -182,11 +198,11 @@ internal class ReplaceablePathActionMatcherTest {
         CoSecJsonSerializer.readValue("""{"action":"/u/#{principal.id}"}""", Statement::class.java)
             .onRejected().assert().isEqualTo(RejectedTemplateValue.NO_MATCH)
         CoSecJsonSerializer.readValue("""{"effect":"deny","action":"/u/#{principal.id}"}""", Statement::class.java)
-            .onRejected().assert().isEqualTo(RejectedTemplateValue.MATCH)
+            .onRejected().assert().isEqualTo(RejectedTemplateValue.ERROR)
         CoSecJsonSerializer.readValue(
             """{"id":"p","effect":"deny","action":"/u/#{principal.id}"}""",
             Permission::class.java
-        ).onRejected().assert().isEqualTo(RejectedTemplateValue.MATCH)
+        ).onRejected().assert().isEqualTo(RejectedTemplateValue.ERROR)
         CoSecJsonSerializer.readValue(
             """{"id":"p","action":"/u/#{principal.id}"}""",
             Permission::class.java
@@ -195,9 +211,9 @@ internal class ReplaceablePathActionMatcherTest {
             """{"id":"own","action":"/users/#{principal.id}/**","permitsPerSecond":1}""",
             RateLimitRule::class.java,
         )
-        (rule.action as ReplaceablePathActionMatcher).onRejected.assert().isEqualTo(RejectedTemplateValue.MATCH)
-        // A principal whose id is rejected cannot escape the limit.
-        rule.matches(request("/users/victim/x"), context("*")).assert().isTrue()
+        (rule.action as ReplaceablePathActionMatcher).onRejected.assert().isEqualTo(RejectedTemplateValue.ERROR)
+        // A principal whose id is rejected neither escapes the limit nor spends a permit.
+        assertThrows<RejectedTemplateValueException> { rule.matches(request("/users/victim/x"), context("*")) }
         rule.matches(request("/users/victim/x"), context("alice")).assert().isFalse()
         rule.matches(request("/users/alice/x"), context("alice")).assert().isTrue()
     }

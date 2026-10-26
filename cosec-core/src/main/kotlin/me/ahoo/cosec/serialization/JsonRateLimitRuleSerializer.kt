@@ -57,8 +57,8 @@ object JsonRateLimitRuleDeserializer : StdDeserializer<RateLimitRule>(RateLimitR
         val action = requireNotNull(jsonNode.get(STATEMENT_ACTION_KEY)) {
             "Rate limit rule [$id] $STATEMENT_ACTION_KEY is required!"
         }.traverse(p.objectReadContext()).readValueAs(ActionMatcher::class.java)
-            // A principal whose template value is rejected must not escape the limit.
-            .onRejectedTemplateValue(RejectedTemplateValue.MATCH)
+            // A principal whose template value is rejected must neither escape the limit nor spend a shared bucket.
+            .onRejectedTemplateValue(RejectedTemplateValue.ERROR)
         val condition = jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.objectReadContext())
             ?.readValueAs(ConditionMatcher::class.java)
             ?: AllConditionMatcher.INSTANCE

@@ -114,7 +114,7 @@ The caller is known, but nothing allowed the request, or something denied it.
   - for role permissions, the `CoSec-App-Id` and `CoSec-Space-Id` headers and the role's grants in that space.
 - `inTenant` takes a tenant *kind* (`default`, `user`, `platform`), not a tenant id.
 - A templated path pattern and an unusual id or attribute: see
-  [Templated statement ignores or denies one principal](#templated-statement-ignores-or-denies-one-principal).
+  [Templated statement ignores one principal or fails with 500](#templated-statement-ignores-one-principal-or-fails-with-500).
 
 ## Request allowed unexpectedly
 
@@ -125,21 +125,22 @@ The caller is known, but nothing allowed the request, or something denied it.
 - **A deny that does not match**: its action and its condition must both match. A negated condition is a
   common mistake.
 
-## Templated statement ignores or denies one principal
+## Templated statement ignores one principal or fails with 500
 
 **Symptom:** a statement whose path pattern has a `#{...}` template, such as `/users/#{principal.id}/**`, works for
-most principals, but for some: an allow gives `Implicit Deny` on their own path, a deny matches every path (also
-paths outside its pattern), or a rate limit rule limits all their requests. Since 6.1.2.
+most principals, but for some an allow gives `Implicit Deny` on their own path, or their requests fail with `500`
+where a templated deny or rate limit rule applies. Since 6.1.2.
 
 **Cause:** the template value is rejected. A value that is empty or missing, `.`, `..`, or contains `*`, `?`, `{`,
-`}` or the path separator would act as pattern syntax, so it never matches in an allow and always matches in a deny
-or a rate limit rule ([Template values in path patterns](./policies.md#template-values-in-path-patterns)).
-Social-login ids such as `name@github` are fine; ids with `/` or `*` are not.
+`}`, `\` or the path separator would act as pattern syntax, so it never matches in an allow, and in a deny or a rate
+limit rule it fails the request closed with `RejectedTemplateValueException`
+([Template values in path patterns](./policies.md#template-values-in-path-patterns)). Social-login ids such as `name@github` are fine; ids with `/`, `*`
+or `\` are not.
 
-**Fix:** match the segment with a static pattern and compare it with `eq`, which accepts any value:
-`"action": "/users/{userId}/**"` with `"condition": {"eq": {"part": "request.path.var.userId", "value": "#{principal.id}"}}`.
-If the attribute is missing, set it at login. A templated matcher built in code and used outside a statement throws
-`RejectedTemplateValueException` (a `500`); build it through a statement, or call `onRejectedTemplateValue`.
+**Fix:** such principals cannot be served by templated statements. Match the segment with a static pattern and
+compare it with `eq`, which accepts any value: `"action": "/users/{userId}/**"` with
+`"condition": {"eq": {"part": "request.path.var.userId", "value": "#{principal.id}"}}`. If the attribute is missing,
+set it at login. Do not loosen the check.
 
 ## Policy has no effect
 
