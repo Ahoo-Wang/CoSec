@@ -115,9 +115,10 @@ class ProblemBodyPropertyTest {
         return StatementRef.Policy(PolicyId("$marker-policy"), random.nextInt(0, 10), "$marker-statement", via)
     }
 
-    private fun randomCause(random: Random, marker: String, error: Throwable): Cause = when (random.nextInt(5)) {
+    private fun randomCause(random: Random, marker: String, error: Throwable): Cause = when (random.nextInt(6)) {
         0 -> Cause.MatcherFailed(randomStatement(random, marker), random.nextBoolean(), error)
         1 -> Cause.MissingPolicies(setOf(PolicyId("$marker-missing")))
+        5 -> Cause.AmbiguousPolicy(setOf(PolicyId("$marker-ambiguous")))
         2 -> Cause.SourceUnavailable(DocumentKind.entries.random(random), error)
         3 -> Cause.NotLoaded(DocumentKind.entries.random(random))
         else -> Cause.MembershipUnavailable(error)
