@@ -1,0 +1,85 @@
+{
+  "rules": [
+    "PIP-8"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "Without a key, alice's token is read and her binding permits.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "p:svc:read",
+            "subject": {
+              "principal": "svc"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "read"
+          },
+          {
+            "id": "p:alice:read",
+            "subject": {
+              "principal": "alice"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "read"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "composite",
+    "apiKeys": [
+      {
+        "key": "k-valid",
+        "id": "valid",
+        "principalId": "svc",
+        "tenantId": "acme"
+      },
+      {
+        "key": "k-disabled",
+        "id": "disabled",
+        "principalId": "svc",
+        "tenantId": "acme",
+        "enabled": false
+      },
+      {
+        "key": "k-expired",
+        "id": "expired",
+        "principalId": "svc",
+        "tenantId": "acme",
+        "expiresAt": "2026-11-01T00:00:00Z"
+      }
+    ],
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "issuedAt": "2026-10-01T00:00:00Z"
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}
