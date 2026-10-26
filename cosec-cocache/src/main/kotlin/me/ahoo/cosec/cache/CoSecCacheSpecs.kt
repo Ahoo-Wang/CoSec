@@ -91,6 +91,14 @@ object CoSecCacheSpecs {
     /** Encoded key of the single global policy index entry, whatever key the caller passes. */
     const val GLOBAL_POLICY_INDEX_ENCODED_KEY = "policy"
 
+    /** The control plane's caches (RFC 0007 §5.2), created by `CoCacheControlStore.create`, not by the data plane. */
+    val CONTROL_CACHE_NAMES: Set<String> = setOf(
+        REVISION_RECORD_CACHE_NAME,
+        REVISION_INDEX_CACHE_NAME,
+        REFERENCE_INDEX_CACHE_NAME,
+        CONTROL_LEASE_CACHE_NAME,
+    )
+
     /** Names of the caches whose only copy is Redis. */
     val STORE_OF_RECORD_CACHE_NAMES: Set<String> = setOf(
         POLICY_CACHE_NAME,

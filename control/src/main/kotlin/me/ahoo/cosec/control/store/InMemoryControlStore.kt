@@ -23,8 +23,10 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * A [ControlStore] in memory, for tests and single-instance development. Digests are the SHA-1 of a document's bytes
- * and, for the indexes, of their rendering; every write is atomic under one lock.
+ * A [ControlStore] in memory, for tests and single-instance development. Digests are the SHA-256 of a document's
+ * bytes and, for the indexes, of their rendering, cut to the 20 bytes the document format's `parent.digest` holds
+ * (CoCache's are SHA-1, RFC 0003 §4.1). They address content; they are not a security control. Every write is atomic
+ * under one lock.
  */
 class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : ControlStore {
     private val lock = Any()
@@ -34,7 +36,7 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     private val references = HashMap<Pair<SnapshotKey, PolicyId>, Set<SnapshotKey>>()
     private val leases = HashMap<String, Pair<String, Instant>>()
 
-    override fun digestOf(document: SnapshotDocument): SnapshotDigest = sha1(document.bodyBytes())
+    override fun digestOf(document: SnapshotDocument): SnapshotDigest = digest(document.bodyBytes())
 
     override suspend fun head(key: SnapshotKey): StoredDocument? =
         synchronized(lock) { heads[key]?.let { StoredDocument(it, digestOf(it)) } }
@@ -63,11 +65,11 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     }
 
     override suspend fun index(key: SnapshotKey): Versioned<RevisionIndex>? =
-        synchronized(lock) { indexes[key]?.let { Versioned(it, sha1(it.toString().encodeToByteArray())) } }
+        synchronized(lock) { indexes[key]?.let { Versioned(it, digest(it.toString().encodeToByteArray())) } }
 
     override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean =
         synchronized(lock) {
-            val current = indexes[key]?.let { sha1(it.toString().encodeToByteArray()) }
+            val current = indexes[key]?.let { digest(it.toString().encodeToByteArray()) }
             if (current != expected) {
                 return false
             }
@@ -112,9 +114,12 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     }
 
     private fun setDigest(set: Set<SnapshotKey>): SnapshotDigest =
-        sha1(set.map { it.toString() }.sorted().joinToString("\n").encodeToByteArray())
+        digest(set.map { it.toString() }.sorted().joinToString("\n").encodeToByteArray())
 
-    private fun sha1(bytes: ByteArray): SnapshotDigest = SnapshotDigest(
-        MessageDigest.getInstance("SHA-1").digest(bytes)
-    )
+    private fun digest(bytes: ByteArray): SnapshotDigest =
+        SnapshotDigest(MessageDigest.getInstance("SHA-256").digest(bytes).copyOf(DIGEST_BYTES))
+
+    private companion object {
+        const val DIGEST_BYTES = 20
+    }
 }
