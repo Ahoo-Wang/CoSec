@@ -26,14 +26,21 @@
       "source": "RFC 0004 §4.6 (review of #1015); RFC 0006 §6.1",
       "statement": "An anonymous request that declares CoSec-Space-Id is answered 401.",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-2"
+      "guards": [
+        "runtime:PipelineTest#scopeRejectedForAnAnonymousPrincipal"
+      ],
+      "pending": null
     },
     {
       "id": "SCP-4",
       "source": "RFC 0008 §3.2 (review of #1015); RFC 0006 §6.1",
       "statement": "When the header and the query parameter of the same CoSec-* parameter differ, the request cannot be read unambiguously and is answered 400.",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-2"
+      "guards": [
+        "runtime:CoSecParametersTest#differentHeaderAndQueryValuesAreAmbiguous",
+        "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest"
+      ],
+      "pending": null
     },
     {
       "id": "SCP-5",
@@ -481,21 +488,49 @@
       "source": "RFC 0006 §6.1",
       "statement": "Indeterminate is always 503; 500 is kept for unmodelled exceptions.",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-2"
+      "properties": [
+        "runtime:ProblemBodyPropertyTest#problemBodiesHoldOnlyTheAllowedMembers"
+      ],
+      "guards": [
+        "runtime:PipelineTest#indeterminateDecisionIs503",
+        "runtime:PipelineTest#unmodelledExceptionIs500",
+        "runtime:PipelineTest#authenticatorUnavailableIs503"
+      ],
+      "pending": null
     },
     {
       "id": "PIP-3",
       "source": "RFC 0006 §7.4",
       "statement": "External cancellation never produces an Outcome, and the downstream is never called.",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-2"
+      "guards": [
+        "runtime:PipelineCancellationTest"
+      ],
+      "pending": null
     },
     {
       "id": "PIP-4",
       "source": "RFC 0006 §10.2",
       "statement": "No failure or timeout of any SPI produces a Permit (P13).",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-2"
+      "guards": [
+        "runtime:PipelineTest#failingLateOrWrongMembershipsAre503",
+        "runtime:PipelineTest#snapshotSourceFailureIs503",
+        "runtime:PipelineTest#authenticatorTimeoutIs503"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-5",
+      "source": "RFC 0006 §5.3.1 (amended 2026-10-27, review of #1044)",
+      "statement": "A path with a dot segment after one decoding, in any encoding (including after removing path parameters, with an encoded ';' and with '\\' as a separator), or longer than 2048 characters, or with a segment longer than 256 characters, is answered 400 before authentication.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:PathNormalizerTest#ambiguousPathsAreRejected",
+        "runtime:PathNormalizerTest#longPathsAndSegmentsAreRejected",
+        "runtime:PipelineTest#ambiguousPathIsInvalidRequestBeforeAuthentication"
+      ],
+      "pending": null
     },
     {
       "id": "ATR-1",

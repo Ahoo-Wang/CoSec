@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "PIP-4"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The authenticator does not answer within its timeout: 503.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "authentication": {
+    "result": "hangs"
+  },
+  "options": {
+    "authenticationTimeoutMillis": 50
+  },
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}
