@@ -15,6 +15,8 @@
 // only, never published (verifyUnpublished). The dependency on control/ comes with its runner.
 dependencies {
     testImplementation(project(":cosec-engine"))
+    // The grant analysis of RFC 0007 §7.4, run by GrantRunner.
+    testImplementation(project(":cosec-control"))
     // MembershipResolver (RFC 0004 §4.5) and Jackson for reading scenarios.
     testImplementation(project(":cosec-core"))
     // PipelineRunner: the coroutine pipeline of RFC 0006.

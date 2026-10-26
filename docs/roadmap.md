@@ -22,7 +22,7 @@
 | 3 | 策略快照分发 | [RFC 0003](rfc/0003-policy-snapshot.md)，已确认 | PR-1 至 PR-4 已合入；PR-5 取消，PR-6 并入切换 | ✅ 剩余工作并入切换 |
 | 4 | 统一模型：`Binding`、平台层/租户层、条件 AST、`service:verb`、编译执行、转换工具 | [RFC 0004](rfc/0004-unified-model.md) / [RFC 0005](rfc/0005-condition-ast.md)，已确认（2026-10-22） | RFC 0004 PR-1 至 PR-3、RFC 0005 PR-1 至 PR-4 已合入（PR-4 #1051）；RFC 0004 PR-4 已合入（#1052）；RFC 0004 PR-4b 已合入（#1053）；RFC 0005 PR-5 可以开工 | 🟡 进行中 |
 | 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | [RFC 0006](rfc/0006-coroutine-pipeline.md)，已确认（2026-10-25） | PR-1 已合入（第 1 轮审查修复 #1031 已合入）；PR-2 已合入（#1044）；PR-3 已合入（#1054、#1055、#1057）；PR-6 可以开工 | 🟡 进行中 |
-| 6 | 控制面 `cosec-control` | [RFC 0007](rfc/0007-control-plane.md)，已确认（2026-10-26，#1028） | PR-1（#1032）、PR-2（#1038）已合入；PR-6a（授出分析）开工 | 🟡 进行中 |
+| 6 | 控制面 `cosec-control` | [RFC 0007](rfc/0007-control-plane.md)，已确认（2026-10-26，#1028） | PR-1（#1032）、PR-2（#1038）已合入；PR-6a（授出分析）打开中（#1059） | 🟡 进行中 |
 | — | 规范一致性套件、端到端切片与切换 S1–S5 | [RFC 0008](rfc/0008-conformance-and-direct-build.md)，已确认（2026-10-26），路线图审查修订（2026-10-26） | PR-1（套件）已合入（#1045）；PR-3（7.0 基线）已派发；PR-2 可以开工 | 🟡 进行中 |
 
 **发布策略**（RFC 0001 §6，2026-10-21）：目标架构全部达成、每个 PR 做完两轮审查之前，8.0 不发布任何版本，没有里程碑版和 RC。
@@ -114,7 +114,11 @@ PR-2（#1044）：`HttpFacts` 与 `SCP-4`、`PathNormalizer`、`Authenticator` S
 RFC 0007 已于 2026-10-26 确认（#1028）。PR-2（由文档格式描述生成 JSON schema）已合入（#1038）：此后每个改动文档格式的 PR 都要同时改格式描述并运行
 `generateSchemas`，`verifySchemas` 在 `check` 中强制。PR-1（`control/` 模块，`ControlBoundaryTest` 守护不引用 Spring、Reactor、Redis 客户端）已合入（#1032）。2026-10-26 起：门槛 D 与 PR-10 取消；PR-11 并入切换；
 PR-9 只做库与 HTTP，starter 装配移进切换（RFC 0008 §4.1）。
-2026-10-26 修订（路线图审查）：PR-6 的分析部分（`GrantAnalyzer`、模式包含 N7、RFC 0007 §7.4）拆成 **PR-6a** 现在开工，依赖 RFC 0005 PR-2（#1036）、PR-3（#1040）都已合入；接线、A8 与 `GRT-*` 场景留在 PR-6（RFC 0008 §4.5）。
+2026-10-26 修订（路线图审查）：PR-6 的分析部分（`GrantAnalyzer`、模式包含 N7、RFC 0007 §7.4）拆成 **PR-6a** 现在开工，依赖 RFC 0005 PR-2（#1036）、PR-3（#1040）都已合入；接线留在 PR-6（RFC 0008 §4.5）。
+
+PR-6a（`feat(engine,control): analyze grants against the grantor's own rights`）：`engine/` 的模式包含与不相交判断（N7，`PatternContainment`，A7）、
+`control/` 的 `GrantAnalyzer`（§7.4.1 拆片段、§7.4.3 算法、§7.4.4 收窄与 `protected`）、A5、A6、A8、§7.4.6 每一行的单元测试与 `GRT-*` 场景（`control` 级 runner 断言分析结果）。
+`GRT-1` 改为已实现；`GRT-2` 的"送审批"一半随 PR-6 的接线实现，仍为 `pending`。分析的输入 `GrantSnapshot`/`GrantDocument` 由接线部分从 RFC 0004 PR-4 的文档构造。
 
 ---
 
@@ -153,6 +157,6 @@ PR-1 的登记表（`conformance/src/test/resources/rules.json`）有 64 条规�
 可以立即开工（按 RFC 0008 §4.5 的依赖顺序）：
 
 - RFC 0008 PR-2（变异检查）。RFC 0008 PR-3（7.0 基线）已派发。
-- RFC 0007 PR-6a（授出分析，2026-10-26 开工）。RFC 0004 PR-4（RFC 0005 PR-4 已合入，#1051）、RFC 0005 PR-5：按 RFC 0008 §4.7 先做 `engine/` 中 #1040、#1051 的审查与 #1029 的第 2 轮。
+- RFC 0007 PR-6a（授出分析）打开中（#1059）。RFC 0004 PR-4（RFC 0005 PR-4 已合入，#1051）、RFC 0005 PR-5：按 RFC 0008 §4.7 先做 `engine/` 中 #1040、#1051 的审查与 #1029 的第 2 轮。
 - RFC 0006 PR-6（PR-2 已合入，#1044；按 RFC 0008 §4.7 先做 #1044 的审查）。
 - 核对已合入 PR 的两轮审查（RFC 0008 §4.7：同一领域先审查，再开新功能 PR）：RFC 0004 PR-2（#1029，第 2 轮）、PR-3（#1027）、RFC 0005 PR-1（#1022）、PR-2（#1036）的第 2 轮，RFC 0005 PR-3（#1040）、PR-4（#1051）、RFC 0006 PR-2（#1044）、RFC 0007 PR-1（#1032）、RFC 0008 PR-1（#1045）的两轮；本表"—"表示尚无已合入的修复 PR。

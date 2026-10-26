@@ -1,0 +1,94 @@
+{
+  "rules": [
+    "GRT-1"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "RFC 0007 §7.4.6 row 6: gina holds order:read on order/* only through a role bound in team-a; granting it in every space is not covered.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read",
+                "resource": "order/*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "reader",
+            "subject": {
+              "role": "reader"
+            },
+            "app": "*",
+            "space": "team-a",
+            "policy": "read"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina",
+    "roles": [
+      "reader@team-a"
+    ]
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "reader",
+          "subject": {
+            "role": "reader"
+          },
+          "app": "*",
+          "space": "team-a",
+          "policy": "read"
+        },
+        {
+          "id": "all",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "read",
+        "statement": 0,
+        "action": "order:read",
+        "resource": "order/*",
+        "verdict": "UNKNOWN",
+        "reason": "NOT_COVERED",
+        "shortfall": "SCOPE"
+      }
+    ]
+  }
+}

@@ -1,0 +1,133 @@
+{
+  "rules": [
+    "GRT-1"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "RFC 0007 §7.4.6 row 7: gina holds order:* but a deny of order:delete is bound to her; granting order:delete overlaps it.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*"
+              }
+            ]
+          },
+          {
+            "id": "no-delete",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "order:delete"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "all",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "orders"
+          },
+          {
+            "id": "nd",
+            "subject": {
+              "principal": "gina"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "no-delete"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina"
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "policies": [
+        {
+          "id": "orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*"
+            }
+          ]
+        },
+        {
+          "id": "no-delete",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:delete"
+            }
+          ]
+        },
+        {
+          "id": "delete",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:delete"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "all",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "orders"
+        },
+        {
+          "id": "nd",
+          "subject": {
+            "principal": "gina"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "no-delete"
+        },
+        {
+          "id": "d",
+          "subject": {
+            "role": "viewer"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "delete"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "delete",
+        "statement": 0,
+        "action": "order:delete",
+        "resource": "*",
+        "verdict": "UNKNOWN",
+        "reason": "DENY_OVERLAP"
+      }
+    ]
+  }
+}

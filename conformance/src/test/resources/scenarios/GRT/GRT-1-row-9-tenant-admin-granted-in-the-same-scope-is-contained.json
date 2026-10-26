@@ -1,0 +1,207 @@
+{
+  "rules": [
+    "GRT-1"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RFC 0007 §7.4.6 row 9: gina holds cosec:tenant-admin through a role in the default space of cosec-control; binding it to ops2 in the same scope is contained once subject.tenant is acme on both sides.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "cosec:tenant-admin",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish",
+                "cosec:simulate",
+                "cosec:explain",
+                "cosec:analyze",
+                "cosec:shadow-read"
+              ],
+              "resource": [
+                "doc/tenant/{t}/**",
+                "scope/{t}/**"
+              ],
+              "condition": {
+                "eq": [
+                  "resource.var.t",
+                  {
+                    "attr": "subject.tenant"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "admin",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          }
+        ]
+      }
+    }
+  },
+  "grantor": {
+    "tenant": "acme",
+    "id": "gina",
+    "roles": [
+      "admin"
+    ]
+  },
+  "candidate": {
+    "tenant": "acme",
+    "document": {
+      "bindings": [
+        {
+          "id": "admin",
+          "subject": {
+            "role": "admin"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:tenant-admin"
+        },
+        {
+          "id": "ops2",
+          "subject": {
+            "role": "ops2"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:tenant-admin"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "fragments": [
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:read",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:read",
+        "resource": "scope/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:write",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:write",
+        "resource": "scope/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:grant",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:grant",
+        "resource": "scope/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:publish",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:publish",
+        "resource": "scope/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:simulate",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:simulate",
+        "resource": "scope/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:explain",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:explain",
+        "resource": "scope/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:analyze",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:analyze",
+        "resource": "scope/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:shadow-read",
+        "resource": "doc/tenant/{t}/**",
+        "verdict": "YES"
+      },
+      {
+        "policy": "cosec:tenant-admin",
+        "statement": 0,
+        "action": "cosec:shadow-read",
+        "resource": "scope/{t}/**",
+        "verdict": "YES"
+      }
+    ]
+  }
+}
