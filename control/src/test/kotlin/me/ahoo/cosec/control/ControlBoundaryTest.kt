@@ -13,42 +13,81 @@
 
 package me.ahoo.cosec.control
 
+import com.tngtech.archunit.base.DescribedPredicate
+import com.tngtech.archunit.core.domain.JavaCall.Predicates.target
+import com.tngtech.archunit.core.domain.JavaClasses
+import com.tngtech.archunit.core.domain.properties.HasName.Predicates.name
+import com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner
 import com.tngtech.archunit.core.importer.ClassFileImporter
-import com.tngtech.archunit.core.importer.ImportOption
+import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 /**
  * The control plane is a library that adapters wire in (RFC 0007 §5.1): its code never references Spring, Reactor
- * or a Redis client. The Redis store is `CoCacheControlStore` in `cosec-cocache`; the HTTP routes are wired by the
- * starter. `cosec-core` still brings Reactor onto the classpath, so this checks references, not dependencies (Q20).
+ * (nor the coroutine and Reactive Streams bridges to it) or a Redis client, and never blocks or leaves its scope. The
+ * Redis store is `CoCacheControlStore` in `cosec-cocache`; the HTTP routes are wired by the starter. `cosec-core` still
+ * brings Reactor onto the classpath, so this checks references, not dependencies (Q20).
+ *
+ * The classes are imported from where the module's own classes are compiled, not by package, so a class `control/`
+ * puts in another package is checked too, and is itself a violation.
  */
 class ControlBoundaryTest {
-    private val classes = ClassFileImporter()
-        .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
-        .importPackages(CONTROL)
+    private val classes: JavaClasses = ClassFileImporter()
+        .importUrl(ControlModule::class.java.protectionDomain.codeSource.location)
 
     @Test
     fun importsControlClasses() {
-        // Without this an empty import would make the rule below pass on nothing.
-        classes.contain(ControlModule.javaClass).assert().isTrue()
+        // Without this an empty import would make the rules below pass on nothing.
+        classes.contain(ControlModule::class.java).assert().isTrue()
+    }
+
+    @Test
+    fun everyClassIsInTheControlPackage() {
+        classes()
+            .should().resideInAPackage("$CONTROL..")
+            .because("the boundary rules are written for me.ahoo.cosec.control (RFC 0007 §5.1)")
+            .check(classes)
     }
 
     @Test
     fun noSpringReactorOrRedisClients() {
         noClasses()
-            .that().resideInAPackage("$CONTROL..")
             .should().dependOnClassesThat().resideInAnyPackage(*FORBIDDEN)
             .because("the control plane stays free of Spring, Reactor and Redis clients (RFC 0007 §5.1, Q20)")
             .check(classes)
     }
 
+    /** As in `runtime/` (RFC 0006 §7.1): only the WebMvc adapter blocks, and no work runs outside a supervised scope. */
+    @Test
+    fun noBlockingBridgeOrUnscopedCoroutines() {
+        noClasses()
+            .should().callMethodWhere(
+                target(owner(name("kotlinx.coroutines.BuildersKt")))
+                    .and(target(DescribedPredicate.describe("runBlocking") { it.name.startsWith("runBlocking") })),
+            )
+            .orShould().callMethodWhere(
+                target(owner(name("kotlinx.coroutines.Dispatchers"))).and(target(name("getIO")))
+            )
+            .orShould().dependOnClassesThat().haveFullyQualifiedName("kotlinx.coroutines.GlobalScope")
+            .because("the control plane neither blocks nor escapes its scope (RFC 0006 §7.1)")
+            .check(classes)
+    }
+
     companion object {
         private const val CONTROL = "me.ahoo.cosec.control"
+
+        /**
+         * CoCache (`me.ahoo.cache`) is not here: `ControlStore` adapters may use it (RFC 0007 PR-4). Its Redis backends
+         * are in `cosec-cocache`, and the Redis clients themselves stay forbidden.
+         */
         private val FORBIDDEN = arrayOf(
             "org.springframework..",
             "reactor..",
+            "kotlinx.coroutines.reactor..",
+            "kotlinx.coroutines.reactive..",
+            "org.reactivestreams..",
             "io.lettuce..",
             "redis.clients..",
             "org.redisson..",
