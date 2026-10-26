@@ -77,13 +77,14 @@ import java.time.Instant
  * - `legacy`, `legacy-deferred`: [SimpleAuthorization] over the repositories (RFC 0002 §7.2 step 4);
  * - `engine`, `engine-deferred`: [EngineAuthorization] over the same repositories;
  * - `snapshot`: the engine over a loaded policy snapshot of the same data (RFC 0003 §9), through
- *   [SnapshotEngineAuthorization] (test assembly until RFC 0003 PR-5).
+ *   [SnapshotEngineAuthorization] (test assembly until RFC 0003 PR-5);
+ * - `engine-mixed`, `engine-deferred-mixed`, `snapshot-mixed`: the same, with every eighth call a [TraceLevel.FULL]
+ *   evaluation, so the untraced calls run with a call site that has seen both evaluators. `legacy` has no trace
+ *   level, so it has no `-mixed` value: the matrix holds no duplicate cell.
  *
  * `-deferred` repositories answer like the Redis repositories do, through `Mono.defer`, instead of a ready `Mono.just`.
- * Setup checks that every source decides the scenario alike.
- *
- * [trace] `mixed` makes every eighth call of the engine a [TraceLevel.FULL] evaluation, so the untraced calls run with
- * a call site that has seen both evaluators; it is ignored for `legacy`.
+ * Setup checks that every source decides the scenario alike: the same result, by the same policy and statement or
+ * the same role and permission.
  *
  * [globalPolicies] adds global policies that never match, to show that a snapshot's allocation does not grow with
  * them: run the benchmark jar with `-p source=snapshot -p scenario=none -p globalPolicies=10,100,1000`.
@@ -93,11 +94,17 @@ open class SimpleAuthorizationBenchmark {
     @Param("global", "role", "none", "global-deny", "role-heavy", "guard-miss")
     lateinit var scenario: String
 
-    @Param("legacy", "legacy-deferred", "engine", "engine-deferred", "snapshot")
+    @Param(
+        "legacy",
+        "legacy-deferred",
+        "engine",
+        "engine-deferred",
+        "snapshot",
+        "engine-mixed",
+        "engine-deferred-mixed",
+        "snapshot-mixed",
+    )
     lateinit var source: String
-
-    @Param("off", "mixed")
-    lateinit var trace: String
 
     /** The number of global policies; 3 is the scenarios' own. */
     @Param("3")
@@ -123,8 +130,11 @@ open class SimpleAuthorizationBenchmark {
         return PolicyData(id, "category", id, "", type, "tenant", condition = guard, statements = statements)
     }
 
+    /** [source] without the `-mixed` suffix: where the policies come from. */
+    private val base: String get() = source.removeSuffix(MIXED_SUFFIX)
+
     private fun <T : Any> answer(value: T): Mono<T> =
-        if (source.endsWith("-deferred")) Mono.defer { Mono.just(value) } else Mono.just(value)
+        if (base.endsWith("-deferred")) Mono.defer { Mono.just(value) } else Mono.just(value)
 
     @Setup
     fun setup() {
@@ -175,19 +185,19 @@ open class SimpleAuthorizationBenchmark {
                 )
             }
         }
-        val snapshot = source == "snapshot"
+        val snapshot = base == "snapshot"
         if (snapshot) {
             snapshotSource = snapshotSource(globalPolicies + principalPolicies, appPermission, rolePermissions)
         }
         val repositoryEngine = EngineAuthorization(policyRepository, appRolePermissionRepository)
-        authorization = when (source) {
+        authorization = when (base) {
             "legacy", "legacy-deferred" -> SimpleAuthorization(policyRepository, appRolePermissionRepository)
             "engine", "engine-deferred" -> repositoryEngine
             "snapshot" -> SnapshotEngineAuthorization(snapshotSource!!)
             else -> error("Unknown source [$source].")
         }
         traced = when {
-            source.startsWith("legacy") || trace != "mixed" -> authorization
+            !source.endsWith(MIXED_SUFFIX) -> authorization
             snapshot -> SnapshotEngineAuthorization(snapshotSource!!, trace = TraceLevel.FULL)
             else -> EngineAuthorization(
                 policyRepository,
@@ -214,13 +224,24 @@ open class SimpleAuthorizationBenchmark {
             // The repositories ignore it; the snapshot reads the app's document by it.
             headers = mapOf(AppIdCapable.APP_ID_KEY to "app"),
         )
-        // Every source must decide the scenario as the engine over the repositories does, or the numbers compare
-        // different work.
-        val expected = repositoryEngine.authorize(request, SimpleSecurityContext(principal)).block()
+        // Every source must decide the scenario as the engine over the repositories does, by the same rule, or the
+        // numbers compare different work.
+        val expected = decisionOf(repositoryEngine, principal)
         listOf(authorization, traced).forEach {
-            val actual = it.authorize(request, SimpleSecurityContext(principal)).block()
+            val actual = decisionOf(it as DecisionAuthorization, principal)
             check(actual == expected) { "Source [$source] decided [$actual] in scenario [$scenario], the engine [$expected]." }
         }
+    }
+
+    /** The result and what decided it, by id: the sources decode their own copies of the policies. */
+    private fun decisionOf(authorization: DecisionAuthorization, principal: SimplePrincipal): List<Any?> {
+        val decision = checkNotNull(authorization.decide(request, SimpleSecurityContext(principal)).block())
+        val by = when (val context = decision.verifyContext) {
+            is PolicyVerifyContext -> listOf(context.source, context.policy.id, context.statementIndex, context.statement.name)
+            is RoleVerifyContext -> listOf(context.roleId, context.permission.id)
+            else -> listOf(context?.javaClass)
+        }
+        return listOf(decision.result) + by
     }
 
     /** The same data as snapshot documents, loaded before the measurement starts. */
@@ -273,7 +294,8 @@ open class SimpleAuthorizationBenchmark {
             addModule(CoSecModule())
         }
 
-        /** Every eighth call is traced in `mixed`. */
+        /** Every eighth call is traced in the `-mixed` sources. */
         const val MIXED_TRACE_MASK = 7
+        const val MIXED_SUFFIX = "-mixed"
     }
 }

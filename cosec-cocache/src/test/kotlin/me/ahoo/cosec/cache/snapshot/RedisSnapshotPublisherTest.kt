@@ -23,6 +23,7 @@ import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotChangeListener
@@ -33,6 +34,12 @@ import me.ahoo.cosec.snapshot.SnapshotRead
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import reactor.core.scheduler.Schedulers
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import java.util.TreeMap
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
@@ -71,7 +78,7 @@ class RedisSnapshotPublisherTest {
             node.publisher.setPolicy(policy("a", PolicyType.CUSTOM)).block()
             node.document(SnapshotKey.Policies)!!.revision.assert().isEqualTo(3L)
             val stored = (node.content(SnapshotKey.Policies) as SnapshotContent.Policies).policies.getValue("a")
-            CoSecJsonSerializer.treeToValue(stored, Policy::class.java).type
+            CoSecJsonSerializer.treeToValue(SnapshotContent.treeOf(stored), Policy::class.java).type
                 .assert().isEqualTo(PolicyType.CUSTOM)
         }
     }
@@ -125,6 +132,171 @@ class RedisSnapshotPublisherTest {
         }
     }
 
+    /**
+     * Review: `AppSpacedRoleId` does not check the space, so a space containing `@` made the key `r@a@b`, which the
+     * compiler rejects for the whole app. The publisher refuses it and writes nothing.
+     */
+    @Test
+    fun refusesASpaceTheCompilerCouldNotReadBack() {
+        SnapshotNode(backend, keyPrefix).use { node ->
+            node.publisher.setAppPermission(appPermission("app")).block()
+            listOf("a@b", "@").forEach { space ->
+                assertThrows<IllegalArgumentException> {
+                    node.publisher.setRoleGrants("app", "r", space, setOf("p1")).block()
+                }
+                assertThrows<IllegalArgumentException> { node.publisher.removeRoleGrants("app", "r", space).block() }
+            }
+            node.document(SnapshotKey.App("app"))!!.revision.assert().isEqualTo(1L)
+        }
+    }
+
+    @Test
+    fun batchesChangeADocumentOnce() {
+        SnapshotNode(backend, keyPrefix).use { node ->
+            node.publisher.setPolicies(listOf(policy("a"), policy("b"), policy("c"))).block()
+            node.document(SnapshotKey.Policies)!!.revision.assert().isEqualTo(1L)
+            node.policyIds().assert().containsExactly("a", "b", "c")
+            assertThrows<IllegalArgumentException> {
+                node.publisher.setPolicies(
+                    listOf(policy("a"), policy("a"))
+                ).block()
+            }
+            // one bad policy fails the batch: none of it is written
+            assertThrows<IllegalArgumentException> {
+                node.publisher.setPolicies(listOf(policy("d"), policy("history:e"))).block()
+            }
+            node.publisher.setPolicies(emptyList()).block()
+            node.document(SnapshotKey.Policies)!!.revision.assert().isEqualTo(1L)
+
+            node.publisher.setAppPermission(appPermission("app")).block()
+            node.publisher.setRoleGrants(
+                "app",
+                mapOf(SpacedRoleId("r1") to setOf("p1"), SpacedRoleId("r2", "team") to setOf("p1")),
+            ).block()
+            node.grants("app").keys.assert().containsExactly("r1", "r2@team")
+            node.document(SnapshotKey.App("app"))!!.revision.assert().isEqualTo(2L)
+            node.publisher.setRoleGrants("app", emptyMap()).block()
+            node.document(SnapshotKey.App("app"))!!.revision.assert().isEqualTo(2L)
+        }
+    }
+
+    /** Review: a write that changes nothing publishes nothing: no revision, no reload anywhere. */
+    @Test
+    fun aWriteThatChangesNothingPublishesNothing() {
+        SnapshotNode(backend, keyPrefix).use { node ->
+            val published = CopyOnWriteArrayList<SnapshotKey>()
+            val publisher = RedisSnapshotPublisher(node.cache, { published += it })
+            publisher.setPolicy(policy("a")).block()
+            publisher.setAppPermission(appPermission("app")).block()
+            publisher.setRoleGrants("app", "r", SpaceIdCapable.DEFAULT, setOf("p1")).block()
+            published.clear()
+
+            publisher.setPolicy(policy("a")).block()
+            publisher.setPolicies(listOf(policy("a"))).block()
+            publisher.setAppPermission(appPermission("app")).block()
+            publisher.setRoleGrants("app", "r", SpaceIdCapable.DEFAULT, setOf("p1")).block()
+            published.assert().isEmpty()
+            node.document(SnapshotKey.Policies)!!.revision.assert().isEqualTo(1L)
+            node.document(SnapshotKey.App("app"))!!.revision.assert().isEqualTo(2L)
+
+            publisher.setRoleGrants("app", "r", SpaceIdCapable.DEFAULT, setOf("p1", "p2")).block()
+            published.assert().containsExactly(SnapshotKey.App("app"))
+        }
+    }
+
+    /** Review: entries the publisher does not touch keep their stored bytes, numbers a tree would rewrite included. */
+    @Test
+    fun keepsTheBytesOfEntriesItDoesNotTouch() {
+        RawSnapshotWriter(backend, keyPrefix).use { raw ->
+            SnapshotNode(backend, keyPrefix).use { node ->
+                val odd = """{"id":"z","x":[1e400,0.12345678901234567890123,1.10]}"""
+                raw.put(
+                    SnapshotKey.Policies,
+                    """{"schema":1,"revision":1,"publishedAt":"2026-10-21T08:00:00Z","policies":[$odd]}"""
+                )
+                node.publisher.setPolicy(policy("a")).block()
+                node.document(SnapshotKey.Policies)!!.bodyBytes().decodeToString().assert().contains(odd)
+            }
+        }
+    }
+
+    /** Review: documents are changed and serialized on the publisher's scheduler, not on the thread that completed I/O. */
+    @Test
+    fun changesDocumentsOnItsScheduler() {
+        val scheduler = Schedulers.newSingle("publisher-test")
+        try {
+            SnapshotNode(backend, keyPrefix).use { node ->
+                val threads = CopyOnWriteArrayList<String>()
+                val clock = object : Clock() {
+                    override fun getZone(): ZoneId = ZoneOffset.UTC
+
+                    override fun withZone(zone: ZoneId): Clock = this
+
+                    override fun instant(): Instant {
+                        threads += Thread.currentThread().name
+                        return Instant.now()
+                    }
+                }
+                RedisSnapshotPublisher(node.cache, clock = clock, scheduler = scheduler).setPolicy(policy("a")).block()
+                threads.assert().isNotEmpty()
+                threads.forEach { it.assert().startsWith("publisher-test") }
+            }
+        } finally {
+            scheduler.dispose()
+        }
+    }
+
+    /**
+     * Review: the read of a read-modify-write goes to Redis, not to a local copy. Here the writer's local copy is
+     * stale and never told (a silent channel): reading it would conflict on every attempt.
+     */
+    @Test
+    fun readsRedisNotAStaleLocalCopy() {
+        SnapshotNode(SilentChannelBackend(backend), keyPrefix).use { stale ->
+            SnapshotNode(backend, keyPrefix).use { other ->
+                other.publisher.setPolicy(policy("a")).block()
+                (stale.store.read(SnapshotKey.Policies).get() as SnapshotRead.Present).document.revision
+                    .assert().isEqualTo(1L)
+                other.publisher.setPolicy(policy("b")).block()
+
+                val publisher = RedisSnapshotPublisher(stale.cache, maxAttempts = 1)
+                publisher.setPolicy(policy("c")).block()
+                publisher.conflicts.assert().isZero()
+                other.policyIds().assert().containsExactly("a", "b", "c")
+            }
+        }
+    }
+
+    @Test
+    fun backsOffBetweenConflictingAttempts() {
+        SnapshotNode(backend, keyPrefix).use { node ->
+            SnapshotNode(backend, keyPrefix).use { other ->
+                node.publisher.setPolicy(policy("a")).block()
+                val racing =
+                    racingCache(node.cache, times = 3) { other.publisher.setPolicy(policy("other$it")).block() }
+                val backoff = Duration.ofMillis(10)
+                val publisher =
+                    RedisSnapshotPublisher(racing, retryBackoff = backoff, maxRetryBackoff = Duration.ofMillis(25))
+                val bounds = CopyOnWriteArrayList<Long>()
+                // the longest wait each time, so the waits are measurable
+                publisher.jitter = { bound -> bound.also { bounds += it } }
+                val started = System.nanoTime()
+                publisher.setPolicy(policy("b")).block()
+                publisher.conflicts.assert().isEqualTo(3L)
+                // the bound doubles from retryBackoff and stops at maxRetryBackoff
+                bounds.assert().containsExactly(10_000_000L, 20_000_000L, 25_000_000L)
+                Duration.ofNanos(System.nanoTime() - started).assert().isGreaterThanOrEqualTo(Duration.ofMillis(55))
+                node.policyIds().assert().contains("b")
+                assertThrows<IllegalArgumentException> {
+                    RedisSnapshotPublisher(node.cache, retryBackoff = Duration.ofSeconds(1), maxRetryBackoff = backoff)
+                }
+                assertThrows<IllegalArgumentException> {
+                    RedisSnapshotPublisher(node.cache, retryBackoff = Duration.ofMillis(-1))
+                }
+            }
+        }
+    }
+
     @Test
     fun keepsEntriesItCannotDecodeAsTheyWere() {
         SnapshotNode(backend, keyPrefix).use { node ->
@@ -136,7 +308,7 @@ class RedisSnapshotPublisherTest {
             node.publisher.setPolicy(policy("a")).block()
             val policies = (node.content(SnapshotKey.Policies) as SnapshotContent.Policies).policies
             policies.keys.assert().containsExactly("a", "z")
-            policies.getValue("z").assert().isEqualTo(CoSecJsonSerializer.readTree(foreign))
+            SnapshotContent.treeOf(policies.getValue("z")).assert().isEqualTo(CoSecJsonSerializer.readTree(foreign))
         }
     }
 

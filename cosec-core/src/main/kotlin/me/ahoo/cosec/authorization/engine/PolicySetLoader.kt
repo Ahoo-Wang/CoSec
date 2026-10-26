@@ -51,8 +51,9 @@ internal class PolicySetLoader(
      * [LayerInput.Unavailable], the same way.
      */
     fun load(request: AuthzRequest): Mono<PolicySet> {
-        val reads = LayerReads.of(request.host as LegacyFacts)
+        // 7.0 reads the global policies before the principal's policies and roles.
         val global = global()
+        val reads = LayerReads.of(request.host as LegacyFacts)
         val principal = reads.principalLayer ?: principal(reads.policyIds)
         val role = reads.roleLayer ?: role(reads)
         if (global is LayerInput && principal is LayerInput) {

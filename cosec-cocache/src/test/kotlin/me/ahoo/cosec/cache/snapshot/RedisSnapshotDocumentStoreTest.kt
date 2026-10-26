@@ -13,22 +13,35 @@
 
 package me.ahoo.cosec.cache.snapshot
 
+import me.ahoo.cocache.api.AsyncCache
+import me.ahoo.cocache.api.Cache
+import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.Lookup
+import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.test.HookedBackend
+import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.parity.PolicySetParity
+import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.policy.PolicyData
+import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.snapshot.SnapshotChangeListener
+import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotFormatException
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.SnapshotRead
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * [RedisSnapshotDocumentStore] on real Redis, Valkey and a Redis Cluster: reads, conditional reads, the invalidation
@@ -213,6 +226,99 @@ class RedisSnapshotDocumentStoreTest {
             })
             node.store.notifyChanged(SnapshotKey.Policies)
             heard.assert().contains("changed")
+        }
+    }
+
+    /** Review (M12): a reset of the channel reaches the store's listeners. */
+    @Test
+    fun forwardsResets() {
+        val backend = ReversingChannelBackend(InMemoryBackend())
+        SnapshotNode(backend, newKeyPrefix()).use { node ->
+            val resets = AtomicInteger()
+            node.store.subscribe(object : SnapshotChangeListener {
+                override fun onChanged(keys: Collection<SnapshotKey>) = Unit
+
+                override fun onReset() {
+                    resets.incrementAndGet()
+                }
+            }).use {
+                val before = resets.get()
+                backend.reset(node.cache.namespace)
+                resets.get().assert().isEqualTo(before + 1)
+            }
+            backend.reset(node.cache.namespace)
+        }
+    }
+
+    /** Review (M16): the digest of a local copy, which grows with the document, is computed off the caller's thread. */
+    @Test
+    fun computesTheDigestOfALocalCopyOffTheCallersThread() {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            node.publisher.setPolicy(policy("a")).block()
+            val ran = CopyOnWriteArrayList<String>()
+            val executor = Executor { task ->
+                Thread({
+                    ran += Thread.currentThread().name
+                    task.run()
+                }, "digest-test").start()
+            }
+            val store = RedisSnapshotDocumentStore(node.cache, executor)
+            store.read(SnapshotKey.Policies).get()
+            ran.clear()
+            // now a local hit: answered without Redis, but hashed on the executor
+            val read = store.read(SnapshotKey.Policies).get() as SnapshotRead.Present
+            ran.assert().containsExactly("digest-test")
+            read.digest.assert().isEqualTo(RedisSnapshotDocumentStore.digestOf(read.document))
+        }
+    }
+
+    /** Review (M19): an unconditional read answered "unchanged" is a CoCache bug, never taken for absent. */
+    @Test
+    fun anUnconditionalReadAnsweredUnchangedFails() {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val async = object : AsyncCache<SnapshotKey, SnapshotDocument> by node.cache.async() {
+                override fun getIfChanged(
+                    key: SnapshotKey,
+                    known: Digest?
+                ): CompletableFuture<ConditionalGet<SnapshotDocument>> = CompletableFuture.completedFuture(
+                    ConditionalGet.Unchanged
+                )
+            }
+            val cache = PolicySnapshotCache(
+                object : Cache<SnapshotKey, SnapshotDocument> by node.cache {
+                    override fun async(): AsyncCache<SnapshotKey, SnapshotDocument> = async
+                },
+                node.cache.namespace,
+                node.cache.localCopyMaxAge,
+                node.cache.channel,
+            )
+            val error = failureOf(RedisSnapshotDocumentStore(cache).read(SnapshotKey.Policies))
+            (error is IllegalStateException).assert().isTrue()
+        }
+    }
+
+    /** Review: app A's document copied under `app:B` is read, but never compiled into B's permissions. */
+    @Test
+    fun aDocumentCopiedUnderAnotherAppsKeyFailsClosed() {
+        val backend = InMemoryBackend()
+        val keyPrefix = newKeyPrefix()
+        SnapshotNode(backend, keyPrefix).use { node ->
+            node.publisher.setAppPermission(appPermission("a")).block()
+            node.publisher.setRoleGrants("a", "r", "", setOf("p1")).block()
+            val copied = (node.store.read(SnapshotKey.App("a")).get() as SnapshotRead.Present).document
+            RawSnapshotWriter(backend, keyPrefix).use { raw ->
+                raw.cache.put(SnapshotKey.App("b"), copied.bodyBytes())
+            }
+            val read = node.store.read(SnapshotKey.App("b")).get() as SnapshotRead.Present
+            val layers = PolicySetParity.ofSnapshot(
+                EvaluateRequest(path = "/a", headers = mapOf(AppIdCapable.APP_ID_KEY to "b")),
+                SimpleSecurityContext(SimplePrincipal("user", roles = setOf("r"))),
+            ) { key -> Result.success(if (key == SnapshotKey.App("b")) read.document else null) }
+            (layers[2] as List<*>)[1].assert().isEqualTo("unavailable")
+            // and a writer refuses to build on it
+            assertThrows<SnapshotFormatException> {
+                node.publisher.setRoleGrants("b", "r", "", setOf("p1")).block()
+            }
         }
     }
 }

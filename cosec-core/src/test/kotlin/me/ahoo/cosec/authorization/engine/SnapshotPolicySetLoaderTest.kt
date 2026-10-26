@@ -15,6 +15,7 @@ package me.ahoo.cosec.authorization.engine
 
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import io.mockk.verifyOrder
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.Request
@@ -211,6 +212,11 @@ class SnapshotPolicySetLoaderTest {
             LegacyFacts.authzRequest(request, SimpleSecurityContext(principal)).host as LegacyFacts
         )
         (load(reads).layers[2] as LayerInput.Unavailable).error.message.assert().isEqualTo("app")
+        // each read once, in 7.0's order
+        verify(exactly = 1) { principal.policies }
+        verify(exactly = 1) { principal.roles }
+        verify(exactly = 1) { request.spaceId }
+        verify(exactly = 1) { request.appId }
         verifyOrder {
             principal.policies
             principal.roles

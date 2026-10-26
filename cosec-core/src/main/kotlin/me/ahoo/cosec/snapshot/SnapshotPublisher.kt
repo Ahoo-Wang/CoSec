@@ -19,6 +19,7 @@ import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.RoleId
+import me.ahoo.cosec.api.principal.SpacedRoleId
 import reactor.core.publisher.Mono
 
 /**
@@ -26,17 +27,27 @@ import reactor.core.publisher.Mono
  * document that publishes it with the next revision. Phase 6's control plane replaces it.
  *
  * Concurrent writers of one document never lose an update: a write that raced another is retried from what the
- * other wrote. A returned `Mono` that completes means this instance reads the new revision from then on.
+ * other wrote. A write that changes nothing publishes nothing. A returned `Mono` that completes means this instance
+ * reads the new revision from then on.
  */
 interface SnapshotPublisher {
     /** Adds or replaces [policy] in the policies document. Replaces `PolicyRepository.setPolicy`. */
     fun setPolicy(policy: Policy): Mono<Void>
+
+    /**
+     * Adds or replaces every one of [policies] in one write of the policies document, all or none; an id may appear
+     * once. For writers of many policies at once, such as `LocalPolicyInitializer` on every instance's start.
+     */
+    fun setPolicies(policies: Collection<Policy>): Mono<Void>
 
     /** Adds or replaces the app permission of [AppPermission.id], keeping the app's grants. */
     fun setAppPermission(appPermission: AppPermission): Mono<Void>
 
     /** Sets the grants of [roleId] in [spaceId] of [appId]. The app must have an app permission. */
     fun setRoleGrants(appId: AppId, roleId: RoleId, spaceId: SpaceId, permissionIds: Set<PermissionId>): Mono<Void>
+
+    /** Sets the grants of every role in [grants] in one write of [appId]'s document, all or none. */
+    fun setRoleGrants(appId: AppId, grants: Map<SpacedRoleId, Set<PermissionId>>): Mono<Void>
 
     /** Removes the grants of [roleId] in [spaceId] of [appId]; does nothing when there are none. */
     fun removeRoleGrants(appId: AppId, roleId: RoleId, spaceId: SpaceId): Mono<Void>

@@ -46,7 +46,9 @@ import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
+import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
+import tools.jackson.databind.util.RawValue
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.time.Instant
@@ -170,10 +172,11 @@ class CoSec7xReader(
     }
 
     /** The policy stored under [id] as it goes into the document, or null when it has no content or a problem. */
-    private fun readPolicy(id: PolicyId, inIndex: Boolean, report: Report): ObjectNode? {
+    private fun readPolicy(id: PolicyId, inIndex: Boolean, report: Report): JsonNode? {
         val raw = rawPolicies[id] ?: return null
         report.input["policy:$id"] = raw
         val node = objectOf(raw, "policy [$id]", report) ?: return null
+        val named = node.hasNonNull(ID)
         if (!keepKeyId(node, id, "policy", report)) {
             return null
         }
@@ -187,7 +190,7 @@ class CoSec7xReader(
             report.problems += "policy [$id] cannot be decoded and its readable type " +
                 "disagrees with the global policy index (indexed: $inIndex)"
         }
-        return node
+        return if (named) stored(raw) else node
     }
 
     private fun readApp(appId: AppId, grantIds: List<AppSpacedRoleId>, report: Report): SnapshotContent.App? {
@@ -201,6 +204,7 @@ class CoSec7xReader(
         }
         report.input["app:permission:$appId"] = raw
         val node = objectOf(raw, "the app permission of [$appId]", report) ?: return null
+        val named = node.hasNonNull(ID)
         if (!keepKeyId(node, appId, "app permission", report)) {
             return null
         }
@@ -208,20 +212,31 @@ class CoSec7xReader(
         val defined = appPermission?.definedPermissionIds()
         val grants = TreeMap<String, JsonNode>()
         for (grantId in grantIds.sortedBy { it.toString() }) {
-            val rawGrant = rawGrants[grantId.toString()] ?: continue
-            report.input["app:role:permission:$grantId"] = rawGrant
-            val grant = treeOf(rawGrant, "the grants of [$grantId]", report) ?: continue
-            val permissionIds = decoded("the grants of [$grantId]", report) { rolePermissionCache[grantId] }
-            if (defined != null && permissionIds != null) {
-                val unresolved = permissionIds - defined - AppRolePermission.ALL_PERMISSION_ID
-                if (unresolved.isNotEmpty()) {
-                    report.warnings += "the grants of [$grantId] name permissions ${unresolved.sorted()} " +
-                        "that app [$appId] does not define; evaluation fails on them, as in 7.0"
-                }
-            }
-            grants[grantKeyOf(grantId)] = grant
+            readGrant(grantId, defined, report)?.let { grants[grantKeyOf(grantId)] = it }
         }
-        return SnapshotContent.App(SnapshotKey.App(appId), node, grants)
+        return SnapshotContent.App(SnapshotKey.App(appId), if (named) stored(raw) else node, grants)
+    }
+
+    /** The grants stored under [grantId] as they go into the document, or null when they have none or a problem. */
+    private fun readGrant(grantId: AppSpacedRoleId, defined: Set<PermissionId>?, report: Report): JsonNode? {
+        val rawGrant = rawGrants[grantId.toString()] ?: return null
+        report.input["app:role:permission:$grantId"] = rawGrant
+        val grantKey = grantKeyOf(grantId)
+        if (!SnapshotContent.isValidGrantKey(grantKey)) {
+            report.problems += "the grants of [$grantId] are keyed [$grantKey], which names no role in a space: " +
+                "7.0 never applies them, and a document cannot hold them"
+            return null
+        }
+        treeOf(rawGrant, "the grants of [$grantId]", report) ?: return null
+        val permissionIds = decoded("the grants of [$grantId]", report) { rolePermissionCache[grantId] }
+        if (defined != null && permissionIds != null) {
+            val unresolved = permissionIds - defined - AppRolePermission.ALL_PERMISSION_ID
+            if (unresolved.isNotEmpty()) {
+                report.warnings += "the grants of [$grantId] name permissions ${unresolved.sorted()} " +
+                    "that app [${grantId.appId}] does not define; evaluation fails on them, as in 7.0"
+            }
+        }
+        return stored(rawGrant)
     }
 
     private fun AppPermission.definedPermissionIds(): Set<PermissionId> =
@@ -252,6 +267,9 @@ class CoSec7xReader(
     }
 
     private fun Throwable.rootCauseMessage(): String? = generateSequence(this) { it.cause }.last().message
+
+    /** The stored bytes as they are, so the document holds exactly what 7.0 stored. */
+    private fun stored(raw: ByteArray): JsonNode = JsonNodeFactory.instance.rawValueNode(RawValue(raw.decodeToString()))
 
     /** [raw] as a JSON object, or null with a problem. */
     private fun objectOf(raw: ByteArray, what: String, report: Report): ObjectNode? {

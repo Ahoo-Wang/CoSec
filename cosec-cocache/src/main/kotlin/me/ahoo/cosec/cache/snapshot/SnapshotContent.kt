@@ -14,26 +14,34 @@
 package me.ahoo.cosec.cache.snapshot
 
 import me.ahoo.cosec.api.policy.PolicyId
+import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotFormatException
 import me.ahoo.cosec.snapshot.SnapshotKey
 import tools.jackson.core.JacksonException
+import tools.jackson.core.JsonParser
+import tools.jackson.core.JsonToken
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 import tools.jackson.databind.ObjectReader
 import tools.jackson.databind.node.JsonNodeFactory
-import tools.jackson.databind.node.ObjectNode
+import tools.jackson.databind.node.POJONode
+import tools.jackson.databind.util.RawValue
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.SortedMap
 import java.util.TreeMap
 
 /**
- * The sections of a snapshot document as JSON trees (RFC 0003 §3.3), for writers: the publisher edits one entry and
- * writes the rest back as it read them, without decoding them, so an entry this instance cannot decode (a matcher type
- * it lacks) neither blocks a write nor is lost by one.
+ * The sections of a snapshot document as JSON (RFC 0003 §3.3), for writers: the publisher edits one entry and writes
+ * the rest back without decoding them, so an entry this instance cannot decode (a matcher type it lacks) neither
+ * blocks a write nor is lost by one.
+ *
+ * Entries [read] from a document are kept as their stored bytes ([JsonNodeFactory.rawValueNode]) and written back
+ * byte for byte: a round trip through a tree would rewrite numbers such as `1e400`, `1.10` or a float longer than a
+ * double. Entries a writer changes are trees.
  *
  * [write] is deterministic: the header first, policies ordered by id (RFC 0003 Q13), grants by key.
  */
@@ -73,7 +81,7 @@ sealed interface SnapshotContent {
         const val POLICIES = "policies"
         const val APP_PERMISSION = "appPermission"
         const val GRANTS = "grants"
-        private const val POLICY_ID = "id"
+        private const val ID = "id"
         private val HEADER_FIELDS = setOf(
             SnapshotDocumentCodec.SCHEMA,
             SnapshotDocumentCodec.REVISION,
@@ -88,52 +96,124 @@ sealed interface SnapshotContent {
          * would reject as a whole: a writer never "repairs" a malformed document, it leaves it to the operator.
          */
         fun read(key: SnapshotKey, document: SnapshotDocument): SnapshotContent {
-            val root = try {
-                document.bodyStream().use { reader.readTree(it) }
+            val bytes = document.bodyBytes()
+            val sections = HashMap<String, Any>()
+            try {
+                reader.createParser(bytes).use { parser ->
+                    if (parser.nextToken() != JsonToken.START_OBJECT) {
+                        malformed(key, "the body is not a JSON object")
+                    }
+                    while (parser.nextToken() == JsonToken.PROPERTY_NAME) {
+                        val name = parser.currentName()
+                        val token = parser.nextToken()
+                        when {
+                            name in HEADER_FIELDS -> parser.skipChildren()
+                            sections.containsKey(name) -> malformed(key, "[$name] is listed twice")
+                            name == APP_PERMISSION && token == JsonToken.START_OBJECT ->
+                                sections[name] = parser.stored(bytes)
+
+                            token == JsonToken.START_ARRAY -> sections[name] = parser.entries(bytes)
+                            token == JsonToken.START_OBJECT -> sections[name] = parser.fields(bytes)
+                            else -> malformed(key, "[$name] is neither an array nor an object")
+                        }
+                    }
+                }
             } catch (error: JacksonException) {
                 throw SnapshotFormatException("Snapshot document [$key] is not valid JSON.", error)
             }
-            if (root !is ObjectNode) {
-                malformed(key, "the body is not a JSON object")
-            }
-            val sections = root.propertyNames().filterNot { it in HEADER_FIELDS }.toSet()
             return when (key) {
                 SnapshotKey.Policies -> {
-                    requireSections(key, sections, setOf(POLICIES))
-                    Policies(policiesOf(key, root.get(POLICIES)))
+                    requireSections(key, sections.keys, setOf(POLICIES))
+                    Policies(policiesOf(key, sections.getValue(POLICIES)))
                 }
 
                 is SnapshotKey.App -> {
-                    requireSections(key, sections, setOf(APP_PERMISSION, GRANTS))
-                    val appPermission = root.get(APP_PERMISSION)
-                    if (!appPermission.isObject) {
-                        malformed(key, "[$APP_PERMISSION] is not an object")
-                    }
-                    val grants = root.get(GRANTS)
-                    if (!grants.isObject) {
-                        malformed(key, "[$GRANTS] is not an object")
-                    }
-                    App(key, appPermission, grants.properties().associateTo(TreeMap()) { it.key to it.value })
+                    requireSections(key, sections.keys, setOf(APP_PERMISSION, GRANTS))
+                    App(
+                        key,
+                        appPermissionOf(key, sections.getValue(APP_PERMISSION)),
+                        grantsOf(key, sections.getValue(GRANTS))
+                    )
                 }
             }
         }
 
-        private fun policiesOf(key: SnapshotKey, node: JsonNode): SortedMap<PolicyId, JsonNode> {
-            if (!node.isArray) {
-                malformed(key, "[$POLICIES] is not an array")
+        /** One stored value: its tree, to check it, and its bytes, to write it back. */
+        private class Stored(val tree: JsonNode, val raw: JsonNode)
+
+        /** The elements of the array the parser is at, as stored. */
+        private fun JsonParser.entries(bytes: ByteArray): List<Stored> = buildList {
+            while (nextToken() != JsonToken.END_ARRAY) {
+                add(stored(bytes))
             }
+        }
+
+        /** The fields of the object the parser is at, as stored; repeated names were rejected by the parser. */
+        private fun JsonParser.fields(bytes: ByteArray): Map<String, Stored> = buildMap {
+            while (nextToken() == JsonToken.PROPERTY_NAME) {
+                val name = currentName()
+                nextToken()
+                put(name, stored(bytes))
+            }
+        }
+
+        /** The value starting at the current token, with the exact bytes it was stored as. */
+        private fun JsonParser.stored(bytes: ByteArray): Stored {
+            val start = currentTokenLocation().byteOffset.toInt()
+            val tree = readValueAsTree<JsonNode>()
+            val end = currentLocation().byteOffset.toInt()
+            val raw = String(bytes, start, end - start, Charsets.UTF_8)
+            return Stored(tree, JsonNodeFactory.instance.rawValueNode(RawValue(raw)))
+        }
+
+        private fun policiesOf(key: SnapshotKey, section: Any): SortedMap<PolicyId, JsonNode> {
+            @Suppress("UNCHECKED_CAST")
+            val entries = section as? List<Stored> ?: malformed(key, "[$POLICIES] is not an array")
             val policies = TreeMap<PolicyId, JsonNode>()
-            for (policy in node) {
-                val id = policyId(policy) ?: malformed(key, "a policy has no string [$POLICY_ID]")
-                if (policies.putIfAbsent(id, policy) != null) {
+            for (policy in entries) {
+                val id = policyId(policy.tree) ?: malformed(key, "a policy has no string [$ID]")
+                if (policies.putIfAbsent(id, policy.raw) != null) {
                     malformed(key, "policy [$id] is listed twice")
                 }
             }
             return policies
         }
 
-        /** The id a policy tree names, or null when it names none. */
-        fun policyId(policy: JsonNode): PolicyId? = policy.get(POLICY_ID)?.takeIf { it.isString }?.asString()
+        /** The app permission must name the key's app: a document is bound to its key. */
+        private fun appPermissionOf(key: SnapshotKey.App, section: Any): JsonNode {
+            val stored = section as? Stored ?: malformed(key, "[$APP_PERMISSION] is not an object")
+            val id = stored.tree.get(ID)?.takeIf { it.isString }?.asString()
+            if (id != key.appId) {
+                malformed(key, "the app permission names app [$id], not [${key.appId}]")
+            }
+            return stored.raw
+        }
+
+        private fun grantsOf(key: SnapshotKey, section: Any): SortedMap<String, JsonNode> {
+            @Suppress("UNCHECKED_CAST")
+            val fields = section as? Map<String, Stored> ?: malformed(key, "[$GRANTS] is not an object")
+            fields.keys.forEach { grantKey ->
+                if (!isValidGrantKey(grantKey)) {
+                    malformed(key, "grant key [$grantKey] is not a role or role@space")
+                }
+            }
+            return fields.mapValuesTo(TreeMap()) { it.value.raw }
+        }
+
+        /** The id a policy names, or null when it names none; [policy] may be a tree or stored bytes. */
+        fun policyId(policy: JsonNode): PolicyId? = treeOf(policy).get(ID)?.takeIf { it.isString }?.asString()
+
+        /** [node] as a tree: stored bytes are parsed, a tree is returned as it is. */
+        fun treeOf(node: JsonNode): JsonNode {
+            val raw = ((node as? POJONode)?.pojo as? RawValue)?.rawValue() ?: return node
+            return reader.readTree(raw.toString())
+        }
+
+        /**
+         * Whether [grantKey] names a role in a space the way the compiler and `RoleScope` read it: `role`, or
+         * `role@space` with one `@` and a non-empty space. A grant under any other key would fail the whole document.
+         */
+        fun isValidGrantKey(grantKey: String): Boolean = RoleScope.parse(grantKey) != null
 
         private fun requireSections(key: SnapshotKey, sections: Set<String>, expected: Set<String>) {
             if (sections != expected) {
