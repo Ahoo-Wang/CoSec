@@ -788,8 +788,10 @@ PR-5 如果太大，拆成两个可以并行的 PR：代码与 API（L3、L4、L
    这个领域不开新的功能 PR；先派发并合入它的审查修复。审查修复 PR 本身、S1–S5 与只改文档的 PR 不受限制。
    本修订决定现在开工的 RFC 0007 PR-6a 与 RFC 0008 PR-3 是维护者的决定，不受这一条限制；`control/` 的 #1032 与 `engine/` 的 #1040 的审查与它们同时派发。
    按这一条，`engine/` 中的 RFC 0005 PR-4、PR-5 在 #1040 的审查（以及 #1029 的第 2 轮）之后开工。
-2. **建议在 `main` 上启用 GitHub merge queue。** 两对各自 CI 全绿的 PR 合在一起后 `main` 失败过：#1024 与 #1027、#1033 与 #1034（协调者记录）。
-   merge queue 在合入前用"`main` + 排在前面的 PR"重新跑 CI，正好挡住这种情况。这是仓库设置，由维护者启用；本文只记录建议，不改任何 CI 文件。
+2. **`main` 的分支保护要求合入前分支是最新的**（`required_status_checks.strict = true`）。两对各自 CI 全绿的 PR 合在一起后 `main` 失败过：
+   #1024 与 #1027、#1033 与 #1034（协调者记录）。打开这项设置后，每个 PR 都要在最新的 `main` 上重新测试才能合入，正好挡住这种情况；代价是多跑几次 CI。
+   落后于 `main` 的 PR 由协调者用 `gh pr update-branch` 更新。这是仓库设置，由维护者启用；本文只记录建议，不改任何 CI 文件。
+   不用 GitHub merge queue：`Ahoo-Wang/CoSec` 属于个人账号，merge queue 只对组织拥有的仓库开放。
 3. **两份路线图分工。** 按 PR 的状态只写在 [`docs/roadmap.md`](../roadmap.md)；`wiki/guide/roadmap.md`（及 `wiki/zh/`）只在里程碑开始或完成时更新，不随单个 PR 改动。
 
 ---

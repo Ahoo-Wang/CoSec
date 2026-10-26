@@ -37,7 +37,7 @@ RC 前提（RFC 0008 §3.9）：S1–S5 与 RC 前清理全部合入并做完两
 **维护版本**：2026-10-26 发布 [6.1.2](https://github.com/Ahoo-Wang/CoSec/releases/tag/v6.1.2) 与 [7.0.1](https://github.com/Ahoo-Wang/CoSec/releases/tag/v7.0.1)，修复 [GHSA-2293-jx8h-56m8](https://github.com/Ahoo-Wang/CoSec/security/advisories/GHSA-2293-jx8h-56m8)（路径模板的值被当作模式语法）；同一修复已进入 `main`（#1020）。
 
 **过程**：每个阶段先写细化 RFC，由维护者审批；每个实现 PR 合入后做两轮独立审查，审查发现以 `fix(...): round-N review fixes` PR 修复。
-2026-10-26 起（RFC 0008 §4.7）：同一领域有已合入、未做完两轮审查的 PR 时，该领域不开新的功能 PR；建议维护者在 `main` 上启用 GitHub merge queue（#1024 + #1027、#1033 + #1034 各自全绿、合起来让 `main` 失败）；按 PR 的状态只写在本文，[wiki 路线图](../wiki/zh/guide/roadmap.md)只在里程碑边界更新。
+2026-10-26 起（RFC 0008 §4.7）：同一领域有已合入、未做完两轮审查的 PR 时，该领域不开新的功能 PR；建议维护者在 `main` 的分支保护中要求合入前分支是最新的（`required_status_checks.strict`；#1024 + #1027、#1033 + #1034 各自全绿、合起来让 `main` 失败；落后的 PR 由协调者用 `gh pr update-branch` 更新；个人账号的仓库没有 merge queue）；按 PR 的状态只写在本文，[wiki 路线图](../wiki/zh/guide/roadmap.md)只在里程碑边界更新。
 
 ---
 
