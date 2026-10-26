@@ -4,6 +4,10 @@
 > 姊妹篇：[RFC 0004](0004-unified-model.md)（第 4 阶段上篇：绑定、租户分层、转换工具、门槛方法），本文以它为前提 ·
 > 基线：`main` @ `a361084d`（第 1 版写于 `334da022`） · 交付：全部合入 `main`（8.0 线），不发布任何版本 ·
 > 范围：`model/`、`engine/`、`cosec-core`、`cosec-openapi`、`cosec-gateway`、`cosec-webflux`、`cosec-webmvc`、`migrate/`
+>
+> **2026-10-26 修订（[RFC 0008](0008-conformance-and-direct-build.md)）**：8.0 不考虑兼容性。门槛 B（§8）与 PR-7 取消；PR-8、PR-9 并入 RFC 0008 的切换 PR；`legacy` 节点（§3.7、Q2）不实现，
+> 自定义条件匹配器在转换时被拒绝，迁移到 RFC 0006 的 `AttributeProvider`（RFC 0008 §6 Q4）。§9.3 中对 7.0 的 100 % 吞吐要求（Q12）作为绝对预算保留，
+> 对 `legacy` 语言的相对目标取消。A1–A4 作为规范性质保留。下文保留原样以便追溯。
 
 ## 0. 结论先行
 
@@ -191,6 +195,8 @@ eval(c, req) : Boolean        // 不抛出：AST 求值中没有任何可能失�
 | 自定义 `ActionMatcherFactory` | 动作必须可以建索引 | 映射到 `service:verb`（§5）；转换工具拒绝 |
 
 ### 3.7 `legacy` 节点（过渡到第 5 阶段）
+
+> **2026-10-26：不实现**（[RFC 0008](0008-conformance-and-direct-build.md) §6 Q4）。只有一次切换时，`AttributeProvider` 与条件 AST 同时可用，不需要过渡。以下原文保留，仅供追溯。
 
 ```jsonc
 { "legacy": { "type": "geoFence", "config": { ... } } }   // type 是一个已注册的自定义 ConditionMatcherFactory
@@ -448,6 +454,9 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 
 ## 8. 门槛 B
 
+> **2026-10-26：本节由 [RFC 0008](0008-conformance-and-direct-build.md) 取代。** D1–D3 是 8.0 的规则（例如 D2 → `CND-1`），登记在一致性套件中并写进 `upgrading.md`；不再与 7.x 比较。
+> "7.x 匹配器与翻译后 AST 在 §7.1 标注相同的行上逐例相同"作为 PR-6 中转换工具自己的单元测试保留。以下原文保留，仅供追溯。
+
 方法与 RFC 0004 §9 完全相同：基准是 RFC 0004 切换后的实现（绑定模型 + 7.x 匹配器）在转换工具的模型输出上；候选是本文的实现在完整转换（模型 + AST）的输出上；
 未归类差异为零；放宽类逐条确认。改动目录：
 
@@ -490,6 +499,8 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 
 ### 9.3 性能
 
+> **2026-10-26**：第二行（对 7.0 的 100 %）保留，基线按 [RFC 0008](0008-conformance-and-direct-build.md) §3.8 从 `v7.0.1` 标签同机重跑；第三行（对 `legacy` 语言的 95 %）取消；其余只记录或与规模有关的目标保留。
+
 | 基准 | 目标 |
 |---|---|
 | `EngineBenchmark`，参数 `statements` ∈ {10, 1,000, 10,000, 100,000}（适用绑定内），`namespace` ∈ {`http`, `service`} | 同一场景下 B/op 不随 `statements` 变化；吞吐在 10,000 条时不低于 10 条时的 50%（索引使每请求工作量与命中的分区大小成正比，而不是总数） |
@@ -512,11 +523,11 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 | PR-3 | `feat(engine): match actions and resources without Spring` | §5.1、§5.2：`Action`/`Resource` 模式、`HttpPathPattern`；与 `PathPattern` 的对照测试（`cosec-core`） | PR-1 | **能** |
 | PR-4 | `feat(engine): compile statements and index candidates` | §6：`CompiledStatement`、索引、捕获结果、引擎接入；I1、I2；`EngineBenchmark` 的新参数 | PR-2、PR-3；RFC 0004 PR-2 | RFC 0004 PR-2 合入后 |
 | PR-5 | `feat(openapi): generate route maps and service actions` | §5.3：路由映射生成、宿主侧加载与查找、生成器改为 `service:verb`；§5.4 | PR-3 | **能** |
-| PR-6 | `feat(migrate): translate 7.x matchers into the condition AST` | §7 全部，包括限流规则；`legacy` 节点（Q2）；报告 | PR-4；RFC 0004 PR-5 | RFC 0004 PR-5 合入后 |
-| PR-7 | `test: classify AST migration differences in replay` | D1–D3、正例与反例、翻译对照语料 | PR-6；RFC 0004 PR-6 | RFC 0004 PR-6 合入后 |
-| — | **门槛 B** | 维护者本地回放 | PR-7；RFC 0004 PR-7（基准是切换后的实现） | — |
-| PR-8 | `refactor!: evaluate compiled conditions and actions` | 切换（前提：§9.3 对 7.0 的 100 % 吞吐要求已满足，否则停止并交回维护者）：文档 `schema: 3`（AST），schema 标记更新（RFC 0004 §8.5）；starter 装配路由映射；`AuthorizationChecker` 的新签名；文档；JMH | 门槛 B | **不能** |
-| PR-9 | `refactor!: remove the legacy matchers` | 删除 OGNL、SpEL（含 `OgnlSandbox` 和依赖）、全部内置匹配器与工厂、`ActionMatcherFactory` SPI、`PartExtractor`、`Expression`/模板、`StatementScopedContext`、`Rule`/`Guard`/`RuleGroup`、`HostFacts`/`LegacyFacts`、`PathVariableScope`；`cosec-api` 的 `ActionMatcher`、`ConditionMatcher`、`Statement`/`Policy` 中的匹配器字段（Q8） | PR-8 | **不能** |
+| PR-6 | `feat(migrate): translate 7.x matchers into the condition AST`（**2026-10-26 改动**：不做 `legacy` 节点，自定义条件匹配器转换时拒绝；见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | §7 全部，包括限流规则；`legacy` 节点（Q2）；报告 | PR-4；RFC 0004 PR-5 | RFC 0004 PR-5 合入后 |
+| ~~PR-7~~ | ~~`test: classify AST migration differences in replay`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | D1–D3、正例与反例、翻译对照语料 | PR-6；RFC 0004 PR-6 | RFC 0004 PR-6 合入后 |
+| — | ~~**门槛 B**~~ **已取消（2026-10-26）** | 维护者本地回放 | PR-7；RFC 0004 PR-7（基准是切换后的实现） | — |
+| ~~PR-8~~ | ~~`refactor!: evaluate compiled conditions and actions`~~ **并入 RFC 0008 的切换 PR（2026-10-26）**，100 % 吞吐要求不变 | 切换（前提：§9.3 对 7.0 的 100 % 吞吐要求已满足，否则停止并交回维护者）：文档 `schema: 3`（AST），schema 标记更新（RFC 0004 §8.5）；starter 装配路由映射；`AuthorizationChecker` 的新签名；文档；JMH | 门槛 B | **不能** |
+| ~~PR-9~~ | ~~`refactor!: remove the legacy matchers`~~ **并入 RFC 0008 的切换 PR（2026-10-26）**，删除清单不变 | 删除 OGNL、SpEL（含 `OgnlSandbox` 和依赖）、全部内置匹配器与工厂、`ActionMatcherFactory` SPI、`PartExtractor`、`Expression`/模板、`StatementScopedContext`、`Rule`/`Guard`/`RuleGroup`、`HostFacts`/`LegacyFacts`、`PathVariableScope`；`cosec-api` 的 `ActionMatcher`、`ConditionMatcher`、`Statement`/`Policy` 中的匹配器字段（Q8） | PR-8 | **不能** |
 
 **文档**（中英文同步，PR-8/PR-9）：`wiki/policies/language.md` 重写（动作、资源、条件 AST、属性目录、不存在的属性、成本上限、迁移对照表）；
 `wiki/policies/rate-limiting.md`（规则的新写法）；`wiki/guide/security-model.md` 的 "Role scope and inRole"、"Path variable scope"；`wiki/integration/checks.md`；
@@ -534,7 +545,7 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 | # | 问题 | 决定 | 理由 |
 |---|---|---|---|
 | Q1 | **HTTP 路径模式的实现**（§2 J1、§5.2） | **已决定**：引擎内的纯 Kotlin `HttpPathPattern`，覆盖 Spring `PathPattern` 去掉正则捕获和自定义分隔符之后的子集，用对照性质测试保证等价；子集之外的转换时拒绝 | 引擎不能依赖 `spring-web`，也不能用正则；7.x 策略中的正则捕获预计很少，转换报告会给出确切数量 |
-| Q2 | **自定义条件匹配器的过渡**（§2 J2、§3.7） | **已决定**：保留不可分析的 `legacy` 节点，只承载自定义工厂，只能由平台层发布，第 5 阶段删除 | 否则第 4 阶段到第 5 阶段之间自定义匹配器无处可去；不可分析的代价由"总是候选"与平台层发布承担 |
+| Q2 | **自定义条件匹配器的过渡**（§2 J2、§3.7；**2026-10-26 由 [RFC 0008](0008-conformance-and-direct-build.md) §6 Q4 取代**：不实现 `legacy` 节点） | **已决定**：保留不可分析的 `legacy` 节点，只承载自定义工厂，只能由平台层发布，第 5 阶段删除 | 否则第 4 阶段到第 5 阶段之间自定义匹配器无处可去；不可分析的代价由"总是候选"与平台层发布承担 |
 | Q3 | **OGNL/SpEL**（§2 J3） | **已决定**：切换时直接删除；转换工具拒绝并报告每一处 | 没有发布中间版本，"deprecated"没有使用者；表达式无法精确翻译 |
 | Q4 | **限流规则**（§2 J4、§7.3） | **已决定**：本文翻译限流规则的匹配部分，执行方式留到第 5 阶段 | 删除匹配器后规则无法加载；匹配语言应当只有一种 |
 | Q5 | **`endsWith` 等不能表达的运算**（§2 J6、§3.6） | **已决定**：不加运算符；提供 `*.host.labels` 派生属性覆盖域名后缀；其余拒绝转换 | 保持 RFC 0001 §7.1 确认的运算符集合；域名后缀是最常见、也最容易写错的用法（`endsWith("example.com")` 匹配 `badexample.com`） |
