@@ -68,6 +68,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
    - `inTenant` 接收的是租户 *类型*（`default`、`user`、`platform`），不是租户 id。
 3. **`regular` 条件超时** 会拒绝请求（匿名调用方得到 `401`），审计事件中的原因码为 `REGEX_TIMEOUT`。简化该模式。
 4. **升级到 7.0 之后**，没有迁移到某个应用的角色授权在该应用中不存在（[迁移角色授权](./upgrading.md#migrating-role-grants)）。
+5. **模板化的 `path` 动作遇到不寻常的 id 或属性**：见
+   [模板化语句忽略或拒绝某个主体](#templated-statement-ignores-or-denies-one-principal)。
 
 ## 请求被意外放行 {#request-allowed-unexpectedly}
 
@@ -79,6 +81,19 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
    `ACTION_MISS` 还是 `CONDITION_MISS`。
 5. **用 `in`、`spel` 或 `ognl` 写的角色条件。** 它们看到的是原始的角色字符串，所以令牌改用 `role@space` 后，裸角色名就不再
    匹配；请用 `inRole`（[匹配角色](../policies/language.md#matching-roles)）。
+
+## 模板化语句忽略或拒绝某个主体 {#templated-statement-ignores-or-denies-one-principal}
+
+**现象：** `path` 动作带有 `#{...}` 模板的语句（例如 `/users/#{principal.id}/**`）对大多数主体正常，但对某些主体：允许在其自己的
+路径上得到 `Implicit Deny`，拒绝匹配所有路径（包括模式之外的路径），或限流规则限制了它的所有请求。自 6.1.2、7.0.1 和 8.0 起。
+
+**原因：** 模板值被拒绝了。为空或不存在、为 `.`、`..`，或含有 `*`、`?`、`{`、`}` 或路径分隔符的值会被当作模式语法，所以它在允许中
+永远不匹配，在拒绝或限流规则中总是匹配（[`path` 动作中的模板值](../policies/language.md#template-values-in-path-actions)）。
+例如 `name@github` 这样的社交登录 id 没有问题，含有 `/` 或 `*` 的 id 则不行。
+
+**解决：** 用静态模式匹配该路径段，再用接受任何值的 `eq` 比较：`"action": "/users/{userId}/**"` 加上
+`"condition": {"eq": {"part": "request.path.var.userId", "value": "#{principal.id}"}}`。如果属性不存在，在登录时设置它。在代码中构建、
+不在语句中使用的模板化匹配器会抛出 `RejectedTemplateValueException`（`500`）；请通过语句构建它，或调用 `onRejectedTemplateValue`。
 
 ## 策略不生效 {#policy-has-no-effect}
 
