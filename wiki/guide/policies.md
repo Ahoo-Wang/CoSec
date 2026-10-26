@@ -100,6 +100,23 @@ Templates are accepted in two places:
   "condition": { "eq": { "part": "request.path.var.userId", "value": "#{principal.id}" } } }
 ```
 
+### Template values in path patterns
+
+In a path pattern, each `#{...}` is evaluated on its own and its value fills one literal part of the pattern; the
+rest of the pattern stays as written. A value is rejected when it is empty (or missing), `.` or `..`, or contains
+`*`, `?`, `{`, `}` or the path separator (`/`, or the `separator` option), because it would otherwise act as
+pattern syntax or reach into other segments. A rejected value never widens access and never narrows a deny:
+
+| Where the action is | A rejected value |
+|---|---|
+| an `allow` statement or permission | does not match: the request ends in `Implicit Deny`, not an error |
+| a `deny` statement or permission | matches every path, so the principal is denied wherever the policy (or app permission) applies |
+| a rate limit rule | matches every path, so the principal cannot escape the limit |
+| a matcher built in code with `PathActionMatcherFactory`, outside a statement | throws `RejectedTemplateValueException`, so the request fails closed with an error |
+
+To match ids or attributes that may contain these characters, use the static pattern above with `eq`, which
+compares strings for equality.
+
 ## Conditions
 
 A condition is a single-key object: the key is the condition type, the value is its configuration.

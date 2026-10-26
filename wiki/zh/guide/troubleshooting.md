@@ -105,12 +105,26 @@ curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/
   - 对于主体策略，确认策略 id 在令牌的 `policies` 中；
   - 对于角色权限，确认 `CoSec-App-Id` 和 `CoSec-Space-Id` 请求头，以及该角色在该空间中的授权。
 - `inTenant` 接收的是租户*种类*（`default`、`user`、`platform`），而不是租户 id。
+- 模板化的路径模式遇到不寻常的 id 或属性：见[模板化语句忽略或拒绝某个主体](#templated-statement-ignores-or-denies-one-principal)。
 
 ## 请求被意外放行 {#request-allowed-unexpectedly}
 
 - **root 主体**：`cosec.authorization.root-enabled` 为 `true` 时，主体 id `cosec`（或 `cosec.root` 系统属性的值）绕过所有检查。
 - **过宽的允许规则**：查找使用 `"*"`、`/**` 或没有条件的全局 `allow`。添加一条 `deny`，或收窄这条允许规则。
 - **没有命中的拒绝规则**：动作和条件必须都匹配。条件取反写错是常见错误。
+
+## 模板化语句忽略或拒绝某个主体 {#templated-statement-ignores-or-denies-one-principal}
+
+**现象：** 路径模式带有 `#{...}` 模板的语句（例如 `/users/#{principal.id}/**`）对大多数主体正常，但对某些主体：允许在其自己的
+路径上得到 `Implicit Deny`，拒绝匹配所有路径（包括模式之外的路径），或限流规则限制了它的所有请求。自 6.1.2 起。
+
+**原因：** 模板值被拒绝了。为空或不存在、为 `.`、`..`，或含有 `*`、`?`、`{`、`}` 或路径分隔符的值会被当作模式语法，所以它在允许中
+永远不匹配，在拒绝或限流规则中总是匹配（[路径模式中的模板值](./policies.md#template-values-in-path-patterns)）。
+例如 `name@github` 这样的社交登录 id 没有问题，含有 `/` 或 `*` 的 id 则不行。
+
+**解决：** 用静态模式匹配该路径段，再用接受任何值的 `eq` 比较：`"action": "/users/{userId}/**"` 加上
+`"condition": {"eq": {"part": "request.path.var.userId", "value": "#{principal.id}"}}`。如果属性不存在，在登录时设置它。在代码中构建、
+不在语句中使用的模板化匹配器会抛出 `RejectedTemplateValueException`（`500`）；请通过语句构建它，或调用 `onRejectedTemplateValue`。
 
 ## 策略没有生效 {#policy-has-no-effect}
 

@@ -3,6 +3,35 @@
 What changes between versions and what to do about it. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
+## 6.1.1 to 6.1.2
+
+6.1.2 is a security release. Upgrade every 6.x deployment.
+
+### Templated path patterns reject values that change the pattern
+
+A `#{...}` template in a path pattern, such as `/users/#{principal.id}/**`, used to be evaluated into a string that
+was then parsed as a whole pattern, so a principal id or attribute containing pattern syntax changed what the
+statement matched. Each template value now fills one literal part of the pattern, and a value that is empty, `.`,
+`..`, or contains `*`, `?`, `{`, `}` or the path separator is rejected
+([Template values in path patterns](./policies.md#template-values-in-path-patterns)):
+
+- an `allow` statement or permission no longer matches such a principal (`Implicit Deny`);
+- a `deny` statement or permission matches every path for such a principal;
+- a rate limit rule applies to every request of such a principal;
+- a templated path matcher built in code with `PathActionMatcherFactory` and used outside a statement throws
+  `RejectedTemplateValueException`. Code that deserializes statements, permissions or rate limit rules from JSON is
+  unaffected; a custom deserializer that builds statements itself should call `onRejectedTemplateValue` on the action.
+
+A template that produced several segments, such as `#{principal.attributes['home']}/**` with `home` set to
+`/users/alice`, is rejected the same way. What to do:
+
+1. Find templated path patterns: search policies, app permissions and rate limit rules for `#{` in an `action`.
+2. If principal ids or the attributes they use can contain these characters, rewrite the statement as a static
+   pattern plus an `eq` condition on the path variable
+   ([example](./policies.md#templates)). `eq` compares strings, so any value works.
+3. Check with the policy test kit or the debug log that the principals you expect still match
+   ([Templated statement ignores or denies one principal](./troubleshooting.md#templated-statement-ignores-or-denies-one-principal)).
+
 ## 6.1.0 to 6.1.1
 
 6.1.1 is a security release. Upgrade every 6.x deployment; there is no change to policies, properties or APIs.

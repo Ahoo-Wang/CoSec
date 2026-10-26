@@ -2,6 +2,30 @@
 
 各版本之间有哪些变化，以及你需要做什么。每个版本的发布说明见 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
+## 从 6.1.1 升级到 6.1.2 {#_6-1-1-to-6-1-2}
+
+6.1.2 是安全修复版本。请升级所有 6.x 部署。
+
+### 模板化的路径模式拒绝会改变模式的值 {#templated-path-patterns-reject-values-that-change-the-pattern}
+
+路径模式中的 `#{...}` 模板（例如 `/users/#{principal.id}/**`）以前会先求值成字符串，再整体解析为模式，所以含有模式语法的
+主体 id 或属性会改变语句匹配的范围。现在每个模板值只填充模式中的一段字面量，值为空、`.`、`..`，或含有 `*`、`?`、`{`、`}`
+或路径分隔符时会被拒绝（[路径模式中的模板值](./policies.md#template-values-in-path-patterns)）：
+
+- `allow` 语句或权限不再匹配这样的主体（`Implicit Deny`）；
+- `deny` 语句或权限对这样的主体匹配所有路径；
+- 限流规则作用于这样的主体的所有请求；
+- 用 `PathActionMatcherFactory` 在代码中构建、不在语句中使用的模板化路径匹配器会抛出 `RejectedTemplateValueException`。
+  从 JSON 反序列化语句、权限或限流规则的代码不受影响；自己构建语句的自定义反序列化器应对动作调用 `onRejectedTemplateValue`。
+
+产生多个路径段的模板，例如 `home` 为 `/users/alice` 时的 `#{principal.attributes['home']}/**`，同样会被拒绝。需要做的：
+
+1. 找出模板化的路径模式：在策略、应用权限和限流规则的 `action` 中搜索 `#{`。
+2. 如果主体 id 或模板用到的属性可能含有这些字符，把语句改写为静态模式加上对路径变量的 `eq` 条件
+   （[示例](./policies.md#templates)）。`eq` 比较字符串，任何值都可以。
+3. 用策略测试工具或调试日志确认预期的主体仍然匹配
+   （[模板化语句忽略或拒绝某个主体](./troubleshooting.md#templated-statement-ignores-or-denies-one-principal)）。
+
 ## 从 6.1.0 升级到 6.1.1 {#_6-1-0-to-6-1-1}
 
 6.1.1 是安全修复版本。请升级所有 6.x 部署；策略、配置属性和 API 都没有变化。
