@@ -688,7 +688,8 @@ withinBoundary(p, req, view):
 
 - 边界是请求的性质，与哪一条 ALLOW 命中无关，所以只检查一次。`matchAny`：任一语句 MATCH 即 MATCH；否则任一 ERROR 即 ERROR；否则 NO_MATCH。
 - 结果只可能把 Permit 改成 Deny 或 Indeterminate，从不产生 Permit：deny-first 与失败即拒绝不受影响（P-B2）。
-- 状态码沿用 RFC 0006 §6.1：`Deny` 401/403，`Indeterminate` 503。原因码新增 `BOUNDARY`；指标 `cosec.authorization` 的 `source` 新增 `boundary`。
+- 状态码沿用 RFC 0006 §6.1：`Deny` 401/403，`Indeterminate` 503。审计原因码新增 `BOUNDARY`（2026-10-26 修订：响应体不带它，边界拒绝的 problem 是 `unauthorized`/`forbidden`，
+  边界不可用是 `unavailable`，RFC 0006 Q27）；指标 `cosec.authorization` 的 `source` 新增 `boundary`。
 - break-glass 的主体只能是平台租户的主体（§8），平台租户没有边界，所以 break-glass 不受边界约束，也不需要特例。
 
 ---
