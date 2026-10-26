@@ -1,0 +1,40 @@
+{
+  "rules": [
+    "DOC-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A statement spells its condition key `conditon`. 7.x dropped the unknown key and allowed unconditionally; 8.0 does not decode the document.",
+  "documents": {
+    "platform": {
+      "schema": 2,
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "conditon": {
+                "exists": "subject.id"
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "unknown field conditon"
+  }
+}

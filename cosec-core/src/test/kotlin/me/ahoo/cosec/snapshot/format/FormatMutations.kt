@@ -43,7 +43,17 @@ enum class JsonKind(val value: () -> JsonNode) {
     }
 }
 
-enum class MutationKind { DROP_REQUIRED, UNKNOWN_FIELD, CHANGE_TYPE }
+enum class MutationKind {
+    DROP_REQUIRED,
+    UNKNOWN_FIELD,
+    CHANGE_TYPE,
+
+    /** A string the descriptor rules out: one of its counter-examples, or a value outside its enum. */
+    INVALID_VALUE,
+
+    /** A number below its minimum or other than its const, or an array with fewer items than its minimum. */
+    OUT_OF_RANGE,
+}
 
 /**
  * One single-point change that makes a conforming document non-conforming.
@@ -64,15 +74,22 @@ class Mutation(
     val replacement: JsonKind?,
     val topLevel: Boolean,
     val document: JsonNode,
+    /** What an [MutationKind.INVALID_VALUE] or [MutationKind.OUT_OF_RANGE] mutation puts in place of the value. */
+    val value: JsonNode? = null,
+    /** The object or array that holds the changed value, as generated. */
+    val parent: JsonNode? = null,
 ) {
+    val isValueMutation: Boolean get() = kind == MutationKind.INVALID_VALUE || kind == MutationKind.OUT_OF_RANGE
+
     override fun toString(): String = "$kind at [$path] (${owner}${field?.let { ".$it" }.orEmpty()})" +
-        replacement?.let { " -> $it" }.orEmpty()
+        replacement?.let { " -> $it" }.orEmpty() + value?.let { " -> $it" }.orEmpty()
 }
 
 /**
  * Lists every single-point mutation of a document [FormatGenerator] built: each required field dropped, an unknown
- * field added to each object that allows none, and each value replaced by one of every kind its declared type does not
- * accept. Every mutation is applied to a fresh copy of the document.
+ * field added to each object that allows none, each value replaced by one of every kind its declared type does not
+ * accept, each string by its counter-examples and by a value outside its enum, each number by one outside its range,
+ * and each array cut below its minimum size. Every mutation is applied to a fresh copy of the document.
  */
 class FormatMutations(private val generator: FormatGenerator) {
     fun of(document: JsonNode, rootType: FormatType, rootName: String): List<Mutation> {
@@ -105,9 +122,15 @@ class FormatMutations(private val generator: FormatGenerator) {
                 }
             }
 
-            is ArrayType -> (node as ArrayNode).forEachIndexed { index, item ->
-                changeTypes(mutations, document, path + index, owner, null, type.items, type)
-                walk(mutations, document, item, path + index)
+            is ArrayType -> {
+                val array = node as ArrayNode
+                tooFewItems(type, array)?.let {
+                    mutations += valueMutation(MutationKind.OUT_OF_RANGE, document, path, owner, null, type, null, it)
+                }
+                array.forEachIndexed { index, item ->
+                    changeTypes(mutations, document, path + index, owner, null, type.items, type)
+                    walk(mutations, document, item, path + index)
+                }
             }
 
             is TupleType -> {
@@ -123,6 +146,12 @@ class FormatMutations(private val generator: FormatGenerator) {
             }
 
             is MapType -> (node as ObjectNode).properties().forEach { (key, value) ->
+                mutations += invalidKeys(type, node, key).map { invalid ->
+                    mutation(MutationKind.INVALID_VALUE, path, owner, key, type.keys, type, null, document) {
+                        val map = it as ObjectNode
+                        map.set(invalid, map.remove(key))
+                    }
+                }
                 changeTypes(mutations, document, path + key, owner, null, type.values, type)
                 walk(mutations, document, value, path + key)
             }
@@ -130,6 +159,19 @@ class FormatMutations(private val generator: FormatGenerator) {
             else -> Unit
         }
     }
+
+    /** [array] cut to one item fewer than [type] allows, or null when it allows none fewer. */
+    private fun tooFewItems(type: ArrayType, array: ArrayNode): ArrayNode? {
+        val min = type.minItems ?: 0
+        if (min == 0 || array.size() < min) {
+            return null
+        }
+        return array.deepCopy().also { while (it.size() >= min) it.remove(it.size() - 1) }
+    }
+
+    /** The counter-examples of [type]'s keys that can replace [key] in [map] without colliding with another key. */
+    private fun invalidKeys(type: MapType, map: ObjectNode, key: String): List<String> =
+        type.keys.counterExamples.filter { it != key && !map.has(it) }
 
     @Suppress("LongParameterList")
     private fun changeTypes(
@@ -155,7 +197,73 @@ class FormatMutations(private val generator: FormatGenerator) {
                 document = replace(document, path, kind.value()),
             )
         }
+        val current = navigate(document, path)
+        invalidValues(declared, current).forEach { (kind, value) ->
+            mutations += valueMutation(kind, document, path, owner, field, holder, declared, value)
+        }
     }
+
+    /**
+     * The values that break [declared]'s value rules where [current] stands. Only when [declared] has a single variant
+     * of [current]'s JSON kind: in an [AnyOf] with two string variants, one variant's counter-example may be the other's
+     * valid value.
+     */
+    private fun invalidValues(declared: FormatType, current: JsonNode): List<Pair<MutationKind, JsonNode>> {
+        val leaves = leaves(declared)
+        val nodes = JsonNodeFactory.instance
+        return when {
+            current.isString -> {
+                val string = leaves.filterIsInstance<StringType>().singleOrNull() ?: return emptyList()
+                val invalid = string.counterExamples + if (string.enum.isEmpty()) emptyList() else listOf(OUT_OF_ENUM)
+                invalid.map { MutationKind.INVALID_VALUE to nodes.stringNode(it) }
+            }
+
+            current.isIntegralNumber -> {
+                val integer = leaves.filterIsInstance<IntegerType>().singleOrNull()
+                val number = leaves.filterIsInstance<NumberType>().singleOrNull()
+                listOfNotNull(
+                    integer?.minimum?.let { nodes.numberNode(it - 1) },
+                    integer?.const?.let { nodes.numberNode(it + 1) },
+                    number?.exclusiveMinimum?.let { nodes.numberNode(it) },
+                ).map { MutationKind.OUT_OF_RANGE to it }
+            }
+
+            current.isNumber -> leaves.filterIsInstance<NumberType>().singleOrNull()?.exclusiveMinimum
+                ?.let { listOf(MutationKind.OUT_OF_RANGE to nodes.numberNode(it)) }.orEmpty()
+
+            else -> emptyList()
+        }
+    }
+
+    private fun leaves(type: FormatType): List<FormatType> = when (type) {
+        is Ref -> leaves(DocumentFormats.resolve(type))
+        is AnyOf -> type.variants.flatMap(::leaves)
+        else -> listOf(type)
+    }
+
+    @Suppress("LongParameterList")
+    private fun valueMutation(
+        kind: MutationKind,
+        document: JsonNode,
+        path: List<Any>,
+        owner: String,
+        field: String?,
+        holder: FormatType?,
+        declared: FormatType?,
+        value: JsonNode,
+    ) = Mutation(
+        kind = kind,
+        path = path.joinToString("/"),
+        owner = owner,
+        field = field,
+        declared = declared,
+        holder = holder,
+        replacement = null,
+        topLevel = path.size == 1,
+        document = replace(document, path, value),
+        value = value,
+        parent = if (path.isEmpty()) null else navigate(document, path.dropLast(1)),
+    )
 
     @Suppress("LongParameterList")
     private fun mutation(
@@ -196,5 +304,6 @@ class FormatMutations(private val generator: FormatGenerator) {
 
     companion object {
         const val UNKNOWN = "mutatedUnknownField"
+        const val OUT_OF_ENUM = "mutatedOutOfEnum"
     }
 }

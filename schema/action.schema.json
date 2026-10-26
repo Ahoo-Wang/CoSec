@@ -10,6 +10,7 @@
         "/users/#{principal.id}/orders",
         "/health"
       ],
+      "pattern": "^(?!.*[^/].*/(\\*\\*|\\{\\*[^/]*\\})/)",
       "type": "string"
     },
     {
@@ -92,6 +93,7 @@
             "/users/#{principal.id}/orders",
             "/health"
           ],
+          "pattern": "^(?!.*[^/].*/(\\*\\*|\\{\\*[^/]*\\})/)",
           "type": "string"
         },
         {
@@ -102,6 +104,7 @@
               "/users/#{principal.id}/orders",
               "/health"
             ],
+            "pattern": "^(?!.*[^/].*/(\\*\\*|\\{\\*[^/]*\\})/)",
             "type": "string"
           },
           "type": "array",
@@ -130,6 +133,7 @@
                 "/users/#{principal.id}/orders",
                 "/health"
               ],
+              "pattern": "^(?!.*[^/].*/(\\*\\*|\\{\\*[^/]*\\})/)",
               "type": "string"
             },
             {
@@ -140,6 +144,7 @@
                   "/users/#{principal.id}/orders",
                   "/health"
                 ],
+                "pattern": "^(?!.*[^/].*/(\\*\\*|\\{\\*[^/]*\\})/)",
                 "type": "string"
               },
               "type": "array",
@@ -154,6 +159,6 @@
       "type": "object"
     }
   },
-  "description": "What requests a statement applies to: a path pattern (`*` for every request), an array of actions, or an object naming one action matcher type.",
+  "description": "What requests a statement applies to: a path pattern (`*` for every request), an array of actions, or an object naming one action matcher type. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",
   "title": "CoSec Action Matcher Schema"
 }
