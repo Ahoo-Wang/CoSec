@@ -16,7 +16,6 @@ package me.ahoo.cosec.runtime
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.FlatEngine
@@ -49,7 +48,6 @@ import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.runtime.http.QueryParameters
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosid.StringIdGenerator
-import me.ahoo.cosid.jvm.UuidGenerator
 import java.time.Clock
 import java.util.concurrent.TimeoutException
 import kotlin.coroutines.cancellation.CancellationException
@@ -76,8 +74,8 @@ class Pipeline(
     /** Asked when a token carries the provider marker instead of claims; without one such a request is a 503. */
     private val membershipProvider: MembershipProvider? = null,
     private val engine: FlatEngine = CoSecFlatEngine,
-    /** Request ids for requests without a `CoSec-Request-Id` header. */
-    private val idGenerator: StringIdGenerator = UuidGenerator.INSTANCE,
+    /** Request ids for requests without a `CoSec-Request-Id` header; without one, random ids that never block. */
+    private val idGenerator: StringIdGenerator? = null,
     private val clock: Clock = Clock.systemUTC(),
     private val options: PipelineOptions = PipelineOptions(),
 ) {
@@ -91,9 +89,10 @@ class Pipeline(
     suspend fun evaluate(facts: HttpFacts): Outcome {
         val requestId = requestId(facts)
         return try {
-            // withTimeoutOrNull, never withTimeout: its TimeoutCancellationException would look like an external
-            // cancellation below and vanish instead of answering 503 (RFC 0006 K13).
-            withTimeoutOrNull(options.timeout) { decide(facts, requestId) }
+            // A ...OrNull timeout, never withTimeout: its TimeoutCancellationException would look like an external
+            // cancellation below and vanish instead of answering 503 (RFC 0006 K13). Lazy: a request that never
+            // suspends arms no timer.
+            withLazyTimeoutOrNull(options.timeout) { decide(facts, requestId) }
                 ?: StatusMapping.unavailable(requestId, Unavailability.DeadlineExceeded, null)
         } catch (e: CancellationException) {
             if (!currentCoroutineContext().isActive) {
@@ -188,7 +187,7 @@ class Pipeline(
      */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun <T : Any> call(timeout: Duration?, spi: suspend () -> T): Fetched<T> = try {
-        val value = if (timeout == null) resumeOffIo(spi) else withTimeoutOrNull(timeout) { resumeOffIo(spi) }
+        val value = if (timeout == null) resumeOffIo(spi) else withLazyTimeoutOrNull(timeout) { resumeOffIo(spi) }
         if (value == null) Fetched.Failed(TimeoutException("No answer within $timeout.")) else Fetched.Value(value)
     } catch (e: CancellationException) {
         if (!currentCoroutineContext().isActive) {
@@ -202,8 +201,10 @@ class Pipeline(
     private fun unavailable(requestId: String, cause: Cause): Outcome =
         StatusMapping.unavailable(requestId, Unavailability.Indeterminate(cause), null)
 
-    private fun requestId(facts: HttpFacts): String =
-        facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull { it.isNotBlank() } ?: idGenerator.generateAsString()
+    private fun requestId(facts: HttpFacts): String {
+        val given = facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull { it.isNotBlank() }
+        return given ?: idGenerator?.generateAsString() ?: RandomRequestIds.next()
+    }
 
     /** As `DefaultSecurityContextParser`: the header, else the query parameter when allowed, else the cookie. */
     private fun credentials(facts: HttpFacts): Credentials {

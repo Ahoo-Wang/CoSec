@@ -271,7 +271,7 @@ R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`�
 | P9′、P14 | `engine/`、`runtime/` | RFC 0006 PR-4 |
 | P13、取消从不放行 | `runtime/` | RFC 0006 PR-2 |
 | P15 | `runtime/` | RFC 0006 PR-5 |
-| A5–A8 不能越权授权的可靠性 | `control/`、`engine/` | RFC 0007 PR-6 |
+| A5–A8 不能越权授权的可靠性 | `control/`、`engine/` | RFC 0007 PR-6a（#1059） |
 | P-B1–P-B3 边界 | `engine/` | RFC 0007 PR-3 |
 | 发布往返：转换后的文档经控制面 `apply` 发布，编译出结构相同的快照（RFC 0007 §12.3 中保留下来的一项） | `control/` | RFC 0007 PR-8 |
 
@@ -663,8 +663,10 @@ RFC 0006 PR-2 #1044 随后也已合入）；RFC 0008 PR-4 一行换成 S1–S5�
 
 **RFC 0007 PR-6a**：`feat(engine,control): analyze grants`。范围是 RFC 0007 PR-6 中不需要控制面接线的部分：RFC 0007 §7.4.1–§7.4.4 的 `GrantAnalyzer`
 （片段拆分、`specialize`、捕获变量、`disjoint`、收窄判定）、RFC 0005 §5.5 的模式包含 `⊑`（RFC 0007 §3.1 N7，`engine/`）、性质 A6、A7，以及
-RFC 0007 §7.4.6 每一行的 `GrantAnalyzerTest`。A5 需要对 8.0 文档求值，RFC 0004 PR-4 合入时由 PR-6a（如果仍打开）或 PR-6 加入；A8 需要发布，留在 PR-6。
-`GRT-1`/`GRT-2` 的场景需要 `control` runner（RFC 0007 PR-5），登记表中仍为 `pending: "RFC 0007 PR-6"`。PR-6 剩下 §7.1–§7.3、§7.5 与接线。
+RFC 0007 §7.4.6 每一行的 `GrantAnalyzerTest`。实现时（#1059）A5、A8 与 `GRT-*` 场景也随 PR-6a 加入：A5、A8 用一个独立转写的数据面 oracle 在分析自己的
+输入（`GrantSnapshot`）上求值，A8 依次"发布"候选文档，不需要控制面的发布流程；`GRT-*` 场景用 `control` 级的 `GrantRunner`，断言每个片段的分析结论，
+RFC 0007 PR-5 之后它再扩展为 `ControlPlane` 的写操作。`GRT-1` 改为已实现；`GRT-2` 中"送平台管理员审批"的一半随 PR-6 的接线实现，仍为
+`pending: "RFC 0007 PR-6"`。PR-6 剩下 §7.1–§7.3、§7.5 与接线（由 RFC 0004 PR-4 的文档构造 `GrantSnapshot`）。
 
 ### 4.6 RC 前清理（2026-10-26 新增）
 

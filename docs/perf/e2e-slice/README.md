@@ -3,9 +3,13 @@
 The first measurement of RFC 0008 §3.8's "Pipeline throughput" budget (§3.8 "measure early", §4.4.3). It is not a
 merge gate; the hard gate stays at switch S1.
 
-**Result:** 8.0 is faster than 7.0 in `global`, `role` and `none` and allocates less per request in every scenario.
-It **misses the budget in `anonymous`** (about 61 % of 7.0 in every round). `blocked` and `rate-limited` cannot be
+**Current result** (after the timer fix, see [below](#after-the-timer-fix)): 8.0 meets the budget in every measurable
+scenario, at 196 % to 314 % of 7.0, and allocates less per request in all of them. `blocked` and `rate-limited` cannot be
 measured yet.
+
+**First measurement** (the tables in this section): 8.0 is faster than 7.0 in `global`, `role` and `none` and
+allocates less per request in every scenario. It **misses the budget in `anonymous`** (about 61 % of 7.0 in every
+round).
 
 | Scenario | 7.0.1 ops/s (rounds 1 / 2 / 3) | 8.0 ops/s (rounds 1 / 2 / 3) | 8.0 / 7.0 per round | Mean | Budget ≥ 100 %, every round ≥ 97 % | B/op 7.0.1 → 8.0 |
 |---|---|---|---|---|---|---|
@@ -20,7 +24,7 @@ Round 2's 7.0.1 run had a load average of up to 4.5 (another session's work), wh
 `none` numbers. The 8.0 runs were steady across rounds. Read rounds 1 and 3 for those three scenarios: every one of
 them is still at or above 107 %. B/op is from round 1; it moves by less than 1 % between rounds.
 
-## Why `anonymous` misses
+## Why `anonymous` missed at first
 
 8.0 costs about 2 µs per request in every scenario: its fixed cost is larger than the decision itself. 7.0's
 anonymous path is unusually cheap (about 1.25 µs): an anonymous principal has no roles and no attached policies, so
@@ -107,3 +111,21 @@ java -jar cosec-core/build/libs/cosec-core-7.0.1-jmh.jar 'SecurityPipelineBenchm
   -f 3 -wi 5 -i 10 -w 2s -r 2s -prof gc -rf json -rff jmh-7.0.1.json \
   -jvmArgsAppend "-Dlogback.configurationFile=$PWD/config/logback-jmh.xml"
 ```
+
+## After the timer fix
+
+`perf(runtime): remove the per-request timer cost from the pipeline` made two changes:
+
+- Every timeout in the pipeline arms its timer only once the request really suspends (`withLazyTimeoutOrNull`). This
+  covers the overall deadline, the authenticator's and the membership provider's. A warm request arms none.
+- Default request ids are drawn from `ThreadLocalRandom` instead of `UUID.randomUUID()`.
+
+It was measured with the same benchmarks, settings and machine: three alternating rounds of 7.0.1, then 8.0, at a load
+average of 1.7 to 2.7.
+
+| Scenario | 7.0.1 ops/s (rounds 1 / 2 / 3) | 8.0 ops/s (rounds 1 / 2 / 3) | 8.0 / 7.0 per round | Mean | Budget ≥ 100 %, every round ≥ 97 % | B/op 7.0.1 → 8.0 |
+|---|---|---|---|---|---|---|
+| `global` | 293k / 299k / 296k | 932k / 935k / 927k | 318 % / 313 % / 313 % | 314 % | met | 10,576 → 4,685 |
+| `role` | 261k / 261k / 263k | 608k / 619k / 618k | 233 % / 238 % / 235 % | 235 % | met | 11,061 → 4,643 |
+| `none` | 331k / 334k / 329k | 672k / 669k / 670k | 203 % / 200 % / 203 % | 202 % | met | 6,088 → 4,712 |
+| `anonymous` | 817k / 790k / 787k | 1,558k / 1,568k / 1,555k | 191 % / 198 % / 198 % | 196 % | met | 4,560 → 3,253 |
