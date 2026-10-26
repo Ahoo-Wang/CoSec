@@ -24,6 +24,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Quick Start', link: '/guide/quick-start' },
       { text: 'Concepts', link: '/guide/concepts' },
       { text: 'Security Model', link: '/guide/security-model' },
+      { text: 'Roadmap', link: '/guide/roadmap' },
     ],
   },
   {
