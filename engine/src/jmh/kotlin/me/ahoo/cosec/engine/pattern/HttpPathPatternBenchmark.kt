@@ -29,7 +29,8 @@ import org.springframework.web.util.pattern.PathPatternParser
  * Scenarios, each a pattern and a path it matches: `literal`, `capture` (one `{id}`), `glob` (`{name}.{ext}`, a regular
  * expression in Spring), `rest` (a trailing `**`), `leading` (`**` followed by `*.css`), `miss`, a capture pattern whose
  * last literal differs, and `long`, a glob of six `*` that misses one 8 KB segment (review F4 of #1040: a cost that
- * grows with the segment's length squared would show here).
+ * grows with the segment's length squared would show here; Spring's regular expression does not finish, so only the
+ * `cosec*` benchmarks run on it).
  */
 @State(Scope.Benchmark)
 open class HttpPathPatternBenchmark {
@@ -60,7 +61,8 @@ open class HttpPathPatternBenchmark {
         cosecPattern = HttpPathPattern.compile(pattern)
         cosecPath = HttpPath.parse(path)
         val matches = scenario != "miss" && scenario != "long"
-        check(springMatch() != null == matches && cosecMatch() != null == matches)
+        // Spring's regular expression backtracks without bound on `long`: run only the cosec benchmarks there.
+        check((scenario == "long" || springMatch() != null == matches) && cosecMatch() != null == matches)
     }
 
     @Benchmark
