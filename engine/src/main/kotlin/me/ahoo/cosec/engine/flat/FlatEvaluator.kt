@@ -88,7 +88,8 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     /** The captures of the statement whose condition is being evaluated. */
     private var captures: Captures? = null
 
-    // The positions an index lookup collected, merged by [candidates].
+    // The positions an index lookup collected, merged by [candidates]: the first list alone needs no buffer.
+    private var firstList: IntArray? = null
     private var lists: Array<IntArray?>? = null
     private var listCount = 0
 
@@ -290,13 +291,14 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         listCount = 0
         index.lookup(this)
         val count = listCount
-        val lists = lists
-        if (count == 0 || lists == null) {
-            return EMPTY
+        if (count <= 1) {
+            val first = firstList
+            firstList = null
+            return first ?: EMPTY
         }
-        if (count == 1) {
-            return lists[0]!!
-        }
+        val lists = lists!!
+        lists[0] = firstList
+        firstList = null
         var total = 0
         for (i in 0 until count) {
             total += lists[i]!!.size
@@ -341,6 +343,11 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
 
     override fun add(positions: IntArray) {
         if (positions.isEmpty()) {
+            return
+        }
+        if (listCount == 0) {
+            firstList = positions
+            listCount = 1
             return
         }
         var lists = lists
