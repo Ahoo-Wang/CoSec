@@ -64,8 +64,9 @@ Arrows point at what a module depends on. The rules behind the picture:
   ([RFC 0006](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0006-coroutine-pipeline.md), Chinese). It depends on
   `cosec-engine` and `cosec-core`. Coroutines stay in this module and the web adapters, and Reactor only at the adapter
   bridges: `RuntimeBoundaryTest` (ArchUnit) fails when code in `runtime/`, `engine/` or `model/` references `reactor.*`,
-  when a data-plane SPI signature carries a Reactor type, or when `runtime/` calls `runCatching`, which swallows
-  cancellation. `cosec-core` still brings Reactor onto its classpath, so the test checks references, not dependencies.
+  when a data-plane SPI signature carries a Reactor type, when `runtime/` references Spring, the Servlet API or a
+  coroutine bridge (`kotlinx.coroutines.reactor`, `runBlocking`), `GlobalScope` or `Dispatchers.IO`, or when it calls
+  `runCatching`, which swallows cancellation. `cosec-core` still brings Reactor onto its classpath, so the test checks references, not dependencies.
   The module is empty so far.
 - **Every other library module adapts exactly one technology**: JWT, Redis through CoCache, OAuth, OpenTelemetry,
   Micrometer, OpenAPI, ip2region, Kafka, or one web stack. An adapter module never contains a decision.

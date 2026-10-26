@@ -36,9 +36,11 @@ import me.ahoo.cosec.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.snapshot.SnapshotSource
 
 /**
- * Reactor stays at the adapter bridges (RFC 0006 §5.1, Q6). Two rules for now: the code of `runtime/`, `engine/` and
- * `model/` never references `reactor.*`, and no data-plane SPI signature carries a Reactor type. Implementations may
- * still await a Reactor-based client internally. A classpath check follows once phase 6 rewrites `SnapshotPublisher`.
+ * Reactor stays at the adapter bridges (RFC 0006 §5.1, Q6): the code of `runtime/`, `engine/` and `model/` never
+ * references `reactor.*`, and no data-plane SPI signature carries a Reactor type. `runtime/` also stays out of its host
+ * (Spring, the Servlet API, the coroutine bridges) and never uses `runCatching`. SPI implementations in other
+ * modules may still await a Reactor-based client internally. A classpath check follows once phase 6 rewrites
+ * `SnapshotPublisher`.
  */
 @AnalyzeClasses(
     packages = ["me.ahoo.cosec.runtime", "me.ahoo.cosec.engine", "me.ahoo.cosec.model", "me.ahoo.cosec.snapshot"],
@@ -50,6 +52,35 @@ class RuntimeBoundaryTest {
         .that().resideInAnyPackage(*PIPELINE_PACKAGES)
         .should().dependOnClassesThat().resideInAnyPackage(REACTOR)
         .because("only the WebFlux and Gateway adapters bridge to Reactor (RFC 0006 Q6)")
+
+    /**
+     * RFC 0006 §5.1, §7.2 T3 and §7.3: `runtime/` never knows its host. Spring and the Servlet API stay in the adapters
+     * and the starter, and the Reactor bridge (`kotlinx.coroutines.reactor`) stays in the WebFlux and Gateway adapters.
+     */
+    @ArchTest
+    val noHostTypesInRuntime: ArchRule = noClasses()
+        .that().resideInAPackage("$RUNTIME..")
+        .should().dependOnClassesThat().resideInAnyPackage(*HOST_PACKAGES)
+        .because("adapters bridge to their host; runtime/ only sees HttpFacts and its own SPIs (RFC 0006 §5.1, §7.3)")
+        // runtime/ has no classes until RFC 0006 PR-2.
+        .allowEmptyShould(true)
+
+    /**
+     * RFC 0006 §7.1 and §7.3: `runBlocking` is the WebMvc adapter's bridge, and CoSec uses neither `GlobalScope` nor
+     * `Dispatchers.IO`; background work runs in the runtime's own supervised scope.
+     */
+    @ArchTest
+    val noBridgeOrUnscopedCoroutinesInRuntime: ArchRule = noClasses()
+        .that().resideInAPackage("$RUNTIME..")
+        .should().callMethodWhere(
+            target(owner(name("kotlinx.coroutines.BuildersKt")))
+                .and(target(DescribedPredicate.describe("runBlocking") { it.name.startsWith("runBlocking") })),
+        )
+        .orShould().callMethodWhere(target(owner(name("kotlinx.coroutines.Dispatchers"))).and(target(name("getIO"))))
+        .orShould().dependOnClassesThat().haveFullyQualifiedName("kotlinx.coroutines.GlobalScope")
+        .because("only the WebMvc adapter blocks, and runtime/ owns the scope of its background work (RFC 0006 §7.1)")
+        // runtime/ has no classes until RFC 0006 PR-2.
+        .allowEmptyShould(true)
 
     /**
      * Every public interface of `runtime/` is a data-plane SPI, so new ones are covered without editing this list.
@@ -95,6 +126,7 @@ class RuntimeBoundaryTest {
 
         fun JavaClass.isIn(root: String) = packageName == root || packageName.startsWith("$root.")
         val PIPELINE_PACKAGES = arrayOf("me.ahoo.cosec.runtime..", "me.ahoo.cosec.engine..", "me.ahoo.cosec.model..")
+        val HOST_PACKAGES = arrayOf("org.springframework..", "jakarta.servlet..", "kotlinx.coroutines.reactor..")
 
         val dataPlaneSpi: DescribedPredicate<JavaClass> = belongToAnyOf(
             Engine::class.java,

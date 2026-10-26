@@ -172,7 +172,7 @@ suspend Pipeline.evaluate(HttpFacts): Outcome
 
 - 新依赖（Q7，AGENTS.md 要求先问）：`org.jetbrains.kotlinx:kotlinx-coroutines-core`、`-reactor`（只给 WebFlux / Gateway）、`-slf4j`（starter，MDC）、
   `-test` 与 `-debug`（测试；`-debug` 自带 BlockHound 集成，把 `Dispatchers.Default` 的工作线程标为不可阻塞）；`io.opentelemetry:opentelemetry-extension-kotlin`。
-  版本只写在 `gradle/libs.versions.toml`，与 Spring Boot 4 BOM 管理的 `kotlinx-coroutines` 版本对齐。
+  不另写版本：Spring Boot 4 BOM 已经管理 `kotlinx-coroutines-bom` 与 `opentelemetry-bom`，各模块只写坐标，`gradle/libs.versions.toml` 只留一条说明（PR-1 #1025）。
 - `cosec-core` 仍有 Reactor（`SnapshotPublisher` 返回 `Mono`，§1.2）。`runtime/` 依赖 `cosec-core`，所以 `runtime/` 的**运行时类路径**上仍有 `reactor-core`；
   K9 的规则因此守的是**类引用**，不是类路径（Q6）。第 6 阶段控制面重写发布接口后，再加类路径检查。
 
@@ -599,7 +599,8 @@ protected fun authorize(request: HttpServletRequest, response: HttpServletRespon
 **捕获规则**（`PipelineCancellationTest` 守护）：
 
 1. `Pipeline` 中任何 `catch (e: Exception)` 之前都有 `catch (e: CancellationException) { throw e }`，或者用 `runCatching` 之外的写法；
-   `detekt` 加一条规则：`runtime/` 中禁止 `runCatching` 包住挂起调用（它会吞掉取消）。
+   `runtime/` 中禁止 `runCatching`（它会吞掉取消）。规则写在 `RuntimeBoundaryTest`（ArchUnit，检查字节码中对 `kotlin.ResultKt.createFailure` 的调用），
+   而不是 detekt：detekt 1.23 对 Kotlin 2.4 做不了类型解析，`ForbiddenMethodCall` 会静默通过（PR-1 #1025）。
 2. 超时一律用 `withTimeoutOrNull`，不用 `withTimeout`：后者抛出的 `TimeoutCancellationException` 是 `CancellationException`，会被第 1 条重新抛出，变成"像外部取消一样消失"，
    这正是 K13 指出的混淆。
 3. `Error`（`StackOverflowError` 等）不捕获，与 RFC 0002 §3.2 相同：它们传到适配器，Reactor 与 Servlet 容器各自返回 500。

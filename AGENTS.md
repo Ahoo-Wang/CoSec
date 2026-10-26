@@ -48,8 +48,9 @@ adapters or caching. The parts that take several files to see:
   `EnginePurityTest` and `verifyPureClasspath` fail otherwise, and the root build leaves out the Guava/SLF4J defaults.
   `cosec-runtime` (directory `runtime/`; RFC 0006, empty until the coroutine pipeline lands) depends on `cosec-engine`
   and `cosec-core`. Coroutines stay in `runtime/` and the adapters: `RuntimeBoundaryTest` fails when `runtime/`,
-  `engine/` or `model/` code references `reactor.*`, when a data-plane SPI signature carries a Reactor type, or when
-  `runtime/` uses `runCatching` (it swallows cancellation).
+  `engine/` or `model/` code references `reactor.*`, when a data-plane SPI signature carries a Reactor type, when
+  `runtime/` references Spring, the Servlet API, `kotlinx.coroutines.reactor`, `runBlocking`, `GlobalScope` or
+  `Dispatchers.IO`, or when it uses `runCatching` (it swallows cancellation).
 - **Request path.** Adapter (WebFlux / WebMvc / Gateway) → `SecurityPipeline` (parse request, resolve
   principal from token, authorize, map to status) → `SecurityDecision` → adapter writes it. Adapters translate;
   they never decide.
