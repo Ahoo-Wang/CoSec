@@ -177,6 +177,31 @@ Templates use SpEL's read-only data binding: they read properties and map entrie
 or construct anything. Anywhere else, `#{...}` is literal text. A `path` template reads no path variables
 ([Path variables](#path-variables)).
 
+### Template values in `path` actions {#template-values-in-path-actions}
+
+In a `path` action, each `#{...}` is evaluated on its own and its value fills one literal part of the pattern; the
+rest of the pattern stays as written. A value is rejected when it is empty (or missing), `.` or `..`, or contains
+`*`, `?`, `{`, `}` or the path separator (`/`, or the `separator` option), because it would otherwise act as
+pattern syntax or reach into other segments. A rejected value never widens access and never narrows a deny:
+
+| Where the action is | A rejected value |
+|---|---|
+| an `allow` statement or permission | does not match: the request ends in `Implicit Deny`, not an error |
+| a `deny` statement or permission | matches every path, so the principal is denied wherever the policy (or app permission) applies |
+| a rate limit rule | matches every path, so the principal cannot escape the limit |
+| a matcher built in code with `PathActionMatcherFactory`, outside a statement | throws `RejectedTemplateValueException`, so the request fails closed with an error |
+
+To match ids or attributes that may contain these characters, use a static pattern that captures the segment and
+compare it with `eq`, which compares strings for equality:
+
+```json
+{
+  "name": "own-profile",
+  "action": "/users/{userId}/**",
+  "condition": { "eq": { "part": "request.path.var.userId", "value": "#{principal.id}" } }
+}
+```
+
 ## Conditions
 
 A condition is an object with a single key, the condition type, whose value is its configuration:

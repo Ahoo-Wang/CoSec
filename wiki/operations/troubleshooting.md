@@ -79,6 +79,8 @@ same causes.
    `REGEX_TIMEOUT` in the audit event. Simplify the pattern.
 4. **After upgrading to 7.0**, role grants that were not migrated to an app are missing there
    ([Migrating role grants](./upgrading.md#migrating-role-grants)).
+5. **A templated `path` action and an unusual id or attribute**: see
+   [Templated statement ignores or denies one principal](#templated-statement-ignores-or-denies-one-principal).
 
 ## Request allowed unexpectedly
 
@@ -92,6 +94,22 @@ same causes.
    mistake. Explain the request and read the deny's `outcome`: `ACTION_MISS` or `CONDITION_MISS`.
 5. **A role condition written with `in`, `spel` or `ognl`.** These see raw role strings, so a bare role name stops
    matching once tokens carry `role@space`; use `inRole` ([Matching roles](../policies/language.md#matching-roles)).
+
+## Templated statement ignores or denies one principal
+
+**Symptom:** a statement whose `path` action has a `#{...}` template, such as `/users/#{principal.id}/**`, works for
+most principals, but for some: an allow gives `Implicit Deny` on their own path, a deny matches every path (also
+paths outside its pattern), or a rate limit rule limits all their requests. Since 6.1.2, 7.0.1 and 8.0.
+
+**Cause:** the template value is rejected. A value that is empty or missing, `.`, `..`, or contains `*`, `?`, `{`,
+`}` or the path separator would act as pattern syntax, so it never matches in an allow and always matches in a deny
+or a rate limit rule ([Template values in `path` actions](../policies/language.md#template-values-in-path-actions)).
+Typical ids: social-login ids such as `name@github` are fine, ids with `/` or `*` are not.
+
+**Fix:** match the segment with a static pattern and compare it with `eq`, which accepts any value:
+`"action": "/users/{userId}/**"` with `"condition": {"eq": {"part": "request.path.var.userId", "value": "#{principal.id}"}}`.
+If the attribute is missing, set it at login. A templated matcher built in code and used outside a statement throws
+`RejectedTemplateValueException` (a `500`); build it through a statement, or call `onRejectedTemplateValue`.
 
 ## Policy has no effect
 
