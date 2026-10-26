@@ -1,0 +1,43 @@
+{
+  "rules": [
+    "ANA-2"
+  ],
+  "polarity": "positive",
+  "level": "analysis",
+  "description": "The grantor's condition and one more: implied, and a request satisfying the narrowed one satisfies the original.",
+  "analysis": {
+    "c1": {
+      "and": [
+        {
+          "eq": [
+            "scope.app",
+            "a"
+          ]
+        },
+        {
+          "eq": [
+            "subject.id",
+            "x"
+          ]
+        }
+      ]
+    },
+    "c2": {
+      "eq": [
+        "scope.app",
+        "a"
+      ]
+    },
+    "request": {
+      "scope.app": "a",
+      "subject.id": "x"
+    }
+  },
+  "expect": {
+    "implies": "YES",
+    "evaluations": {
+      "c1": true,
+      "c2": true
+    }
+  }
+}

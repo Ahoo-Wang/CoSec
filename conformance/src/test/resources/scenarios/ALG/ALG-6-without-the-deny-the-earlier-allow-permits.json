@@ -1,0 +1,86 @@
+{
+  "rules": [
+    "ALG-6"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The same role DENY with a condition that does not hold: the earlier ALLOW permits.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    },
+    "apps": {
+      "order-service": {
+        "policies": [
+          {
+            "id": "perm-deny",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "order:read",
+                "condition": {
+                  "eq": [
+                    "subject.attributes.team",
+                    "red"
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:editor:perm-deny",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "order-service",
+            "space": "*",
+            "policy": "perm-deny"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor"
+    ],
+    "attributes": {
+      "team": "blue"
+    }
+  },
+  "request": {
+    "app": "order-service"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "allow-all",
+      "statement": 0,
+      "via": {
+        "binding": "g:allow-all",
+        "document": "platform"
+      }
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "rules": [
+    "ALG-2"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "No DENY matches and one DENY fails; an ALLOW matches, but the failed DENY could have denied.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "broken",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*",
+              "fault": "the input of this DENY cannot be read"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        },
+        {
+          "id": "g:broken",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "broken"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MatcherFailed",
+      "at": {
+        "policy": "broken",
+        "statement": 0,
+        "via": {
+          "binding": "g:broken",
+          "document": "platform"
+        }
+      },
+      "guard": false
+    }
+  }
+}

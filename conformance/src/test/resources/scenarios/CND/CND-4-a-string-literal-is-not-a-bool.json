@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "CND-4"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "subject.authenticated is a Bool; the string \"true\" is not.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "subject.authenticated",
+                  "true"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "a String does not compare with subject.authenticated (Bool)"
+  }
+}

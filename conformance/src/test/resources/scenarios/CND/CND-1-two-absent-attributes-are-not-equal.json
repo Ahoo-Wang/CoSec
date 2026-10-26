@@ -1,0 +1,44 @@
+{
+  "rules": [
+    "CND-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The ALLOW compares two attributes the request has neither of: absent equals nothing, another absent value included.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "subject.attributes.team",
+                  {
+                    "attr": "resource.attributes.team"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "rules": [
+    "SCP-6"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "An anonymous credential that claims role guest has no role: the guest binding does not apply.",
+  "documents": {
+    "tenants": {
+      "(0)": {
+        "policies": [
+          {
+            "id": "allow-all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:guest:allow-all",
+            "subject": {
+              "role": "guest"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "allow-all"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "anonymous": true,
+    "roles": [
+      "guest"
+    ]
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

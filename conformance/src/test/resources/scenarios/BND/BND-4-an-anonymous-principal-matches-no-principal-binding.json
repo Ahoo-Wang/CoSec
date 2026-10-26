@@ -1,0 +1,44 @@
+{
+  "rules": [
+    "BND-4"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A principal binding names the anonymous principal's id in its tenant; an anonymous principal still matches only Anyone bindings.",
+  "documents": {
+    "tenants": {
+      "(0)": {
+        "policies": [
+          {
+            "id": "allow-all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "p:(0):allow-all",
+            "subject": {
+              "principal": "(0)",
+              "tenant": "(0)"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "allow-all"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "anonymous": true
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

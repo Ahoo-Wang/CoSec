@@ -1,0 +1,34 @@
+{
+  "rules": [
+    "BND-4"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "An anonymous credential that claims an attachment gets nothing from it.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "mine",
+          "attachable": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "credential": {
+    "anonymous": true,
+    "policies": [
+      "mine"
+    ]
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

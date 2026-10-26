@@ -1,0 +1,52 @@
+{
+  "rules": [
+    "BLK-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The request is blocked. An ALLOW matches, an attachment is missing and the tenant document is not loaded: the blacklist rule denies, with the platform document alone.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    },
+    "notLoaded": [
+      "tenant"
+    ]
+  },
+  "credential": {
+    "policies": [
+      "ghost"
+    ]
+  },
+  "request": {
+    "blocked": true
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "cosec:blacklist",
+      "statement": 0,
+      "name": "blacklist",
+      "via": "builtin"
+    }
+  }
+}

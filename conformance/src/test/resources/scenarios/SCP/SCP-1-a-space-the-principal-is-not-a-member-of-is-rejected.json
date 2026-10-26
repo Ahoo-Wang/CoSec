@@ -1,0 +1,44 @@
+{
+  "rules": [
+    "SCP-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The principal is editor in team-a and declares team-b. Anyone may read, but the request is rejected rather than evaluated in the default space.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor@team-a"
+    ]
+  },
+  "request": {
+    "space": "team-b"
+  },
+  "expect": {
+    "decision": "Rejected",
+    "reason": "SPACE_NOT_MEMBER"
+  }
+}

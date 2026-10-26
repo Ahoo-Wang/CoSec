@@ -1,0 +1,44 @@
+{
+  "rules": [
+    "ANA-1"
+  ],
+  "polarity": "negative",
+  "level": "analysis",
+  "description": "The request's app is not among the keys, and the condition is false for it.",
+  "analysis": {
+    "condition": {
+      "and": [
+        {
+          "in": [
+            "scope.app",
+            [
+              "a",
+              "b"
+            ]
+          ]
+        },
+        {
+          "eq": [
+            "subject.id",
+            "x"
+          ]
+        }
+      ]
+    },
+    "attribute": "scope.app",
+    "request": {
+      "scope.app": "c",
+      "subject.id": "x"
+    }
+  },
+  "expect": {
+    "keys": [
+      "a",
+      "b"
+    ],
+    "admits": false,
+    "evaluations": {
+      "condition": false
+    }
+  }
+}

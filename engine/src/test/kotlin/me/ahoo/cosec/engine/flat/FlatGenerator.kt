@@ -29,7 +29,7 @@ import kotlin.random.Random
  */
 class FlatGenerator(private val random: Random) {
     private val fixture = FlatFixture()
-    private val tenants = listOf("acme", "beta")
+    private val tenants = listOf("acme", "beta", TenantId.PLATFORM.value)
     private val principals = listOf("alice", "bob")
     private val roles = listOf("admin", "editor", "viewer")
     private val guards = List(3) {
@@ -106,17 +106,18 @@ class FlatGenerator(private val random: Random) {
                 }
                 if (chance(10)) {
                     val policy = ids.random(random)
-                    add(principal("bg", policy, tenants.random(random), principals.random(random), NOW + 1, true))
+                    add(principal("bg", policy, TenantId.PLATFORM.value, principals.random(random), NOW + 1, true))
                 }
             }
             if (chance(20)) {
-                add(root("root", tenants.random(random), principals.random(random), pick(NOW to 1, NOW + 1 to 3)))
+                add(root("root", TenantId.PLATFORM.value, principals.random(random), pick(NOW to 1, NOW + 1 to 3)))
             }
         }
 
     private fun appBindings(ids: List<String>, request: FlatRequest): List<Binding> =
         List(random.nextInt(6)) { i ->
-            val app = pick(request.scope.app.value to 6, null to 2, "other" to 1, "" to 1)
+            // Bindings scoped to another app do not compile (CompiledDocumentTest).
+            val app = pick(request.scope.app.value to 3, null to 1)
             val tenant = pick(null to 6, "acme" to 2, "beta" to 2)
             role("r$i", roles.random(random), ids.random(random), app, space(), tenant, expiry())
         }
@@ -152,19 +153,31 @@ class FlatGenerator(private val random: Random) {
         )
     }
 
-    /** A document of [tenant] that tries to decide for [case]'s principal and roles. */
+    /**
+     * A document of [tenant] that tries to decide for [case]'s principal and roles: a principal of the same id, its
+     * roles in any tenant, anyone, and attachable policies of the ids the principal attaches. Naming the principal or
+     * roles of [case]'s tenant does not compile ([hostileBindings]).
+     */
     fun hostileTenant(tenant: String, case: FlatCase): CompiledDocument {
         val subject = case.request.request.subject
-        val target = case.request.scope.tenant.value
-        val policies = listOf(fixture.policy("h-deny", deny()), fixture.policy("h-allow", allow(), attachable = true))
+        val attached = case.request.memberships.attachments.map { it.value }.distinct()
+        val policies = listOf(fixture.policy("h-deny", deny()), fixture.policy("h-allow", allow(), attachable = true)) +
+            attached.map { fixture.policy(it, if (chance(50)) deny() else allow(), attachable = true) }
         val ids = policies.map { it.id }
         val bindings = buildList {
-            add(principal("h1", ids.random(random), target, subject.id))
+            add(principal("h1", ids.random(random), tenant, subject.id))
             case.request.scope.roles.forEachIndexed { i, role ->
-                add(role("h-r$i", role.value, ids.random(random), null, null, target))
+                add(role("h-r$i", role.value, ids.random(random), null, null, null))
             }
             add(anyone("h-any", ids.random(random)))
         }
         return CompiledDocument.tenant(TenantId(tenant), policies, bindings)
+    }
+
+    /** Bindings of another tenant's document naming [case]'s principal or roles in [case]'s tenant. */
+    fun hostileBindings(case: FlatCase): List<Binding> {
+        val subject = case.request.request.subject
+        val target = case.request.scope.tenant.value
+        return listOf(principal("h1", "h-deny", target, subject.id), role("h-r", "admin", "h-deny", null, null, target))
     }
 }

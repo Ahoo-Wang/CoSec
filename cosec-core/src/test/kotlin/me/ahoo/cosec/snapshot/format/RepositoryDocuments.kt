@@ -49,7 +49,8 @@ object RepositoryDocuments {
 
     private fun resource(root: File, file: File): List<RepositoryDocument> {
         val where = file.relativeTo(root).invariantSeparatorsPath
-        if (NOT_A_DOCUMENT_FORMAT.any { it.matches(file.name) }) {
+        // The conformance suite's registry and scenarios (RFC 0008 §3.2, §3.3) are test data with a format of their own.
+        if (NOT_A_DOCUMENT_FORMAT.any { it.matches(file.name) } || where.startsWith("conformance/")) {
             return emptyList()
         }
         val node = CoSecJsonSerializer.readTree(file.readBytes())

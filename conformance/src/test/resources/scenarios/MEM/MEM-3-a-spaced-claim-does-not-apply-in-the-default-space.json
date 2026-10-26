@@ -1,0 +1,45 @@
+{
+  "rules": [
+    "MEM-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The principal claims editor@team-a and asks in the default space, where it has no role.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "allow-all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:editor:allow-all",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "allow-all"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor@team-a"
+    ]
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

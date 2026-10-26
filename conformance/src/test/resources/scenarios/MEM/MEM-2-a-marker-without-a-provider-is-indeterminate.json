@@ -1,0 +1,41 @@
+{
+  "rules": [
+    "MEM-2"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The token asks for a provider and none is configured.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "membership": "provider"
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MembershipUnavailable"
+    }
+  }
+}

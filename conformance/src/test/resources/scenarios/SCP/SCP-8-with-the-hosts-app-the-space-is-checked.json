@@ -1,0 +1,22 @@
+{
+  "rules": [
+    "SCP-8"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The declared app is the host's, so the space decides.",
+  "credential": {
+    "roles": [
+      "editor@team-a"
+    ]
+  },
+  "request": {
+    "hostApp": "order-service",
+    "app": "order-service",
+    "space": "team-z"
+  },
+  "expect": {
+    "decision": "Rejected",
+    "reason": "SPACE_NOT_MEMBER"
+  }
+}

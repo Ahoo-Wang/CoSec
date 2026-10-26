@@ -1,0 +1,37 @@
+{
+  "rules": [
+    "ALG-4"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The only ALLOW fails: it does not match, so the decision is the implicit deny, not indeterminate.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "broken",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "fault": "the input of this ALLOW cannot be read"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:broken",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "broken"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

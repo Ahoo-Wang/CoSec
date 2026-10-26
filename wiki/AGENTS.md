@@ -25,7 +25,7 @@ Organized by the task the reader is doing, not by module.
 
 | Area | Reader | Pages |
 |---|---|---|
-| `guide/` | Evaluating CoSec, or starting with it | `introduction`, `quick-start`, `concepts`, `security-model` |
+| `guide/` | Evaluating CoSec, or starting with it | `introduction`, `quick-start`, `concepts`, `security-model`, `roadmap` |
 | `integration/` | Developer wiring CoSec into an application | `web`, `authentication`, `checks` |
 | `policies/` | Writing and reviewing the rules | `language`, `role-permissions`, `rate-limiting`, `testing` |
 | `operations/` | Running CoSec in production | `configuration`, `storage`, `upgrading`, `observability`, `troubleshooting` |

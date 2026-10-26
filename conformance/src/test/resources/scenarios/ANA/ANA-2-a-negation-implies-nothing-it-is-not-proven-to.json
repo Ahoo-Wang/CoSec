@@ -1,0 +1,34 @@
+{
+  "rules": [
+    "ANA-2"
+  ],
+  "polarity": "negative",
+  "level": "analysis",
+  "description": "not(app a) does not imply app b: the request of app c satisfies the first and not the second.",
+  "analysis": {
+    "c1": {
+      "not": {
+        "eq": [
+          "scope.app",
+          "a"
+        ]
+      }
+    },
+    "c2": {
+      "eq": [
+        "scope.app",
+        "b"
+      ]
+    },
+    "request": {
+      "scope.app": "c"
+    }
+  },
+  "expect": {
+    "implies": "UNKNOWN",
+    "evaluations": {
+      "c1": true,
+      "c2": false
+    }
+  }
+}

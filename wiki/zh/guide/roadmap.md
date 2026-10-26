@@ -1,0 +1,81 @@
+---
+title: "路线图"
+description: "CoSec 8.0 改变什么、发布前还剩哪些里程碑，以及 7.x 用户现在该做什么。"
+---
+
+# 路线图 {#roadmap}
+
+面向正在使用 CoSec 7.x 或正在评估 CoSec、想知道 8.0 是什么以及何时可以发布的团队。本页只写到里程碑一级。按 PR 的进度见贡献者用的
+[`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)，每一项设计决定见
+[RFC](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/rfc)。本页与 RFC 不一致时，以 RFC 为准。
+
+## 8.0 是什么 {#what-8-0-is}
+
+8.0 是 CoSec 的一次彻底重新设计，没有兼容目标：它遵循目标架构，而不是 7.x 的行为
+（[RFC 0008 §2](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0008-conformance-and-direct-build.md)）。
+正确性由 8.0 的规范定义，由一致性套件检查。改变的内容：
+
+- **纯函数决策引擎。** 授权是请求与内存中策略集的函数，不做 I/O
+  （[RFC 0002](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0002-pure-engine.md)）。
+- **基于绑定的唯一扁平算法**，分平台层与租户层，带成员关系与作用域，取代 7.x 中全局策略、主体策略、角色权限的分层顺序
+  （[RFC 0004](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0004-unified-model.md)）。
+- **带类型的条件 AST、`service:verb` 动作与编译执行**，取代 OGNL、SpEL 与内置匹配器
+  （[RFC 0005](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0005-condition-ast.md)）。
+- **策略快照**，取代每个请求读一次仓库
+  （[RFC 0003](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0003-policy-snapshot.md)）。
+- **协程 Pipeline**：`Indeterminate` 决策返回 503，限流改为义务，决策监听器取代装饰器链
+  （[RFC 0006](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0006-coroutine-pipeline.md)）。
+- CoSec 写的错误响应一律使用 **RFC 9457 problem+json**（RFC 0006 Q27）。
+- **控制面**：修订记录、发布前的影子窗口，以及授出分析，保证任何人授出的权限不超过自己持有的
+  （[RFC 0007](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0007-control-plane.md)）。
+- 设计上**支持 AOT**
+  （[RFC 0001 §3.10](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0001-target-architecture.md)）。
+
+7.x 应用必须迁移：策略、权限和配置的形状都会改变，`cosec-migrate` 把 7.x 数据转换成 8.0 的格式。8.0 装配完成时，
+[升级](../operations/upgrading.md)会列出每一项改变及其迁移方法。
+
+## 里程碑 {#milestones}
+
+按依赖顺序排列，不给日期，依据 RFC 0008 §4.5 的依赖表与关键路径。状态以 2026-10-26 的 `main` 为准。
+
+```mermaid
+flowchart LR
+  M1["M1<br>目标模型上的引擎"] --> M2["M2<br>协程 Pipeline"]
+  M1 --> M3["M3<br>控制面"]
+  M2 --> M3
+  M3 --> M5["M5<br>切换"]
+  M4["M4<br>一致性套件<br>与 7.0 基线"] --> M5
+  M5 --> M6["M6<br>遗留清理"]
+  M6 --> M7["M7<br>RC 就绪"]
+```
+
+| 里程碑 | 你得到什么 | 完成标准 | 状态 |
+|---|---|---|---|
+| **M1** 目标模型上的引擎 | 绑定、成员关系、条件 AST 与 `service:verb` 动作编译进快照文档；路由映射；把 7.x 数据转换过来的 `cosec-migrate`（RFC 0005 PR-4–PR-6、RFC 0004 PR-4、PR-5） | 快照文档能编译并由扁平引擎求值；`cosec-migrate convert` 能从 7.x 数据生成它们 | 进行中：模型、扁平算法、条件 AST 与动作匹配已合入 |
+| **M2** 协程 Pipeline | 挂起式认证与成员关系、外部属性、义务、决策监听器、503 与 problem+json，三个 Web 适配器都接到新 Pipeline（RFC 0006 PR-2–PR-7） | 三个适配器经新 Pipeline 给出相同的响应 | 进行中：`runtime/` 模块已合入 |
+| **M3** 控制面 | 修订记录、条件发布、校验、授出分析、影子窗口、break-glass、租户自助、变更审计、HTTP API（RFC 0007 PR-3–PR-9） | 每一次写入都经过控制面的库与 HTTP 路由 | 进行中：`control/` 模块与 JSON schema 生成已合入 |
+| **M4** 一致性套件与基线 | 规则登记表，每条规范性规则都有正例和反例场景；性质检查与变异检查；7.0 性能基线（RFC 0008 PR-1–PR-3） | 每条已合入的规则都有两种场景；7.0 基线已录制 | 未开工 |
+| **M5** 切换 | starter 装配 8.0 路径；删除 7.x 路径；写完[升级](../operations/upgrading.md)（RFC 0008 PR-4） | RFC 0008 §3.9 全部满足：套件全绿、没有待定规则、性质与变异体通过、预算达标 | 未开工 |
+| **M6** 遗留清理 | 删除只为旧版本存在的代码、构建配置与文档沿革（RFC 0008 §4.6、PR-5、PR-6） | §4.6.1 的清单除"保留"项外为空，守护挂在 `check` 上 | 未开工 |
+| **M7** RC 就绪 | 维护者可以发布的候选版本 | 每个 PR 都做完两轮审查；由维护者决定发 RC 还是 GA | 未开工 |
+
+## 发布策略 {#release-policy}
+
+- 目标架构全部达成、每个 PR 做完两轮审查之前，**8.0 不发布任何版本**，没有里程碑版，也没有 RC（RFC 0001 §6）。应用不要依赖 `main`。
+- `main` 的版本号将改为 `8.0.0-alpha.1`。这只是版本字符串，不是发布（RFC 0008 Q13）。
+- **8.0 不比 7.0 慢。** 性能预算以 7.0 的实测数字设定：编译执行的授权吞吐与 Pipeline 吞吐不低于 7.0 的 100 %，分配不高于 7.0
+  （RFC 0008 §3.8）。预算达标之前，切换不会合入。
+
+## 给 7.x 用户 {#for-7-x-users-today}
+
+- `7.x` 接收安全和关键修复，直到 8.0 GA 之后 6 个月；`release/6.1.x` 只接收安全修复
+  （[`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md)）。
+- 最新的安全公告是
+  [GHSA-2293-jx8h-56m8](https://github.com/Ahoo-Wang/CoSec/security/advisories/GHSA-2293-jx8h-56m8)，已在 7.0.1 与 6.1.2 中修复。
+- 现在该做的：停留在最新的 7.0.x。想跟进设计，读 RFC。目前还没有需要迁移的东西。
+
+## 如何跟进 {#how-to-follow}
+
+- [RFC 索引](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/rfc)：设计、决定与待决问题。
+- [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md)：按 PR 的进度与审查轮次。
+- GitHub 上的 [Issues](https://github.com/Ahoo-Wang/CoSec/issues) 与 [Pull Requests](https://github.com/Ahoo-Wang/CoSec/pulls)。

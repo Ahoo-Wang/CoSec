@@ -1,0 +1,64 @@
+{
+  "rules": [
+    "ALG-4"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The same failing statement as a DENY: the relaxation is for ALLOWs only.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "a-broken",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*",
+              "fault": "the input of this DENY cannot be read"
+            }
+          ]
+        },
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:a-broken",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "a-broken"
+        },
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MatcherFailed",
+      "at": {
+        "policy": "a-broken",
+        "statement": 0,
+        "via": {
+          "binding": "g:a-broken",
+          "document": "platform"
+        }
+      },
+      "guard": false
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "BRK-1"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "Without a matching DENY the root binding permits.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "deny-write",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:write"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "cosec",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2026-12-31T00:00:00Z"
+        },
+        {
+          "id": "g:deny-write",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "deny-write"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "tenant": "(platform)",
+    "id": "cosec"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "cosec:root",
+      "statement": 0,
+      "name": "root",
+      "via": {
+        "binding": "root",
+        "document": "platform"
+      }
+    }
+  }
+}

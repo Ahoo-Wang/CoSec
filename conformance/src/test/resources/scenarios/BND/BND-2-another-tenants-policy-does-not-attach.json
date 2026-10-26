@@ -1,0 +1,40 @@
+{
+  "rules": [
+    "BND-2"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The principal of acme attaches an attachable policy of tenant globex: only its own tenant's and the platform's attach.",
+  "documents": {
+    "tenants": {
+      "globex": {
+        "policies": [
+          {
+            "id": "globex-reader",
+            "attachable": true,
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "policies": [
+      "globex-reader"
+    ]
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MissingPolicies",
+      "policies": [
+        "globex-reader"
+      ]
+    }
+  }
+}

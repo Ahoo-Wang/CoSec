@@ -1,0 +1,46 @@
+{
+  "rules": [
+    "BND-4"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "An Anyone binding applies to the anonymous principal.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "anonymous": true
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "allow-all",
+      "statement": 0,
+      "via": {
+        "binding": "g:allow-all",
+        "document": "platform"
+      }
+    }
+  }
+}

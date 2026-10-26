@@ -1,0 +1,65 @@
+{
+  "rules": [
+    "CND-1"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "Both attributes are present and equal.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "subject.attributes.team",
+                  {
+                    "attr": "resource.attributes.team"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "attributes": {
+      "team": "red"
+    }
+  },
+  "request": {
+    "resource": {
+      "type": "order",
+      "id": "1",
+      "attributes": {
+        "team": "red"
+      }
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "guarded",
+      "statement": 0,
+      "via": {
+        "binding": "g:guarded",
+        "document": "platform"
+      }
+    }
+  }
+}

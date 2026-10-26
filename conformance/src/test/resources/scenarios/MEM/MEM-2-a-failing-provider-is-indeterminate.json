@@ -1,0 +1,44 @@
+{
+  "rules": [
+    "MEM-2"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The provider fails. Anyone may read: the request is indeterminate all the same, never decided as if there were no memberships.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "membership": "provider"
+  },
+  "membershipProvider": {
+    "fails": "the directory is down"
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MembershipUnavailable"
+    }
+  }
+}

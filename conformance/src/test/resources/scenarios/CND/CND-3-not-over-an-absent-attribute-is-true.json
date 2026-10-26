@@ -1,0 +1,51 @@
+{
+  "rules": [
+    "CND-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The ALLOW is for principals not of team red; the principal has no team, so the comparison is false and its negation true.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "not": {
+                  "eq": [
+                    "subject.attributes.team",
+                    "red"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "guarded",
+      "statement": 0,
+      "via": {
+        "binding": "g:guarded",
+        "document": "platform"
+      }
+    }
+  }
+}

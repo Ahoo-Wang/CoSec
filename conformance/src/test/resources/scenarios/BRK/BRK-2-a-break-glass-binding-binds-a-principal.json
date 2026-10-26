@@ -1,0 +1,38 @@
+{
+  "rules": [
+    "BRK-2"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A break-glass binding of Anyone does not compile.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all",
+          "breakGlass": true,
+          "expiresAt": "2026-12-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "must bind a principal"
+  }
+}

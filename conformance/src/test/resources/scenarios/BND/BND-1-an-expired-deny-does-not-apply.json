@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "BND-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "An expired DENY binding is no DENY: the ALLOW permits.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "deny-read",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:read"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        },
+        {
+          "id": "g:deny-read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "deny-read",
+          "expiresAt": "2026-10-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "allow-all",
+      "statement": 0,
+      "via": {
+        "binding": "g:allow-all",
+        "document": "platform"
+      }
+    }
+  }
+}

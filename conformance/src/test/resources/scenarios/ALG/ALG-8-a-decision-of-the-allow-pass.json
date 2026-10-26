@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "ALG-8"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "No DENY: the ALLOW pass decides at every level, past the failing ALLOW.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "a-broken",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "fault": "the input of this ALLOW cannot be read"
+            }
+          ]
+        },
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:a-broken",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "a-broken"
+        },
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "allow-all",
+      "statement": 0,
+      "via": {
+        "binding": "g:allow-all",
+        "document": "platform"
+      }
+    }
+  }
+}

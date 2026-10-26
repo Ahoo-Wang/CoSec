@@ -50,6 +50,7 @@ class DecisionTest {
         ).cause.assert().isEqualTo(Cause.MembershipUnavailable(error))
         Cause.MatcherFailed(ref, guard = true, error).guard.assert().isTrue()
         Cause.MissingPolicies(setOf(PolicyId("p"))).policyIds.assert().containsExactly(PolicyId("p"))
+        Cause.AmbiguousPolicy(setOf(PolicyId("p"))).policyIds.assert().containsExactly(PolicyId("p"))
         Cause.SourceUnavailable(DocumentKind.TENANT, error).document.assert().isEqualTo(DocumentKind.TENANT)
         Cause.NotLoaded(DocumentKind.APP).document.assert().isEqualTo(DocumentKind.APP)
         DocumentKind.entries.assert().containsExactly(DocumentKind.PLATFORM, DocumentKind.APP, DocumentKind.TENANT)
