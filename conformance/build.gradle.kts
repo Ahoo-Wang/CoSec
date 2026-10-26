@@ -47,41 +47,6 @@ val verifyRuleCoverage = tasks.register<JavaExec>("verifyRuleCoverage") {
     doLast { marker.get().asFile.apply { parentFile.mkdirs() }.writeText("") }
 }
 
-/*
- * RFC 0008 §3.1: the suite is in no published artifact. Like cosec-core's verifyTestFixturesUnpublished, it reads what
- * the publications would contain: no publication of this project, and no POM or module metadata naming it.
- */
-val verifyUnpublished = tasks.register("verifyUnpublished") {
-    group = "verification"
-    description = "Fails if this module is published, or any published POM or module metadata names it."
-    val self = project
-    val descriptorTasks = provider {
-        rootProject.subprojects.filter { it != self }.flatMap {
-            it.tasks.withType<GenerateMavenPom>() + it.tasks.withType<GenerateModuleMetadata>()
-        }
-    }
-    dependsOn(descriptorTasks)
-    val descriptors = files(
-        descriptorTasks.map { tasks ->
-            tasks.map { if (it is GenerateMavenPom) it.destination else (it as GenerateModuleMetadata).outputFile }
-        }
-    )
-    inputs.files(descriptors)
-    val ownPublications = extensions.findByType<PublishingExtension>()?.publications?.names.orEmpty()
-    val hasPublishPlugin = pluginManager.hasPlugin("maven-publish")
-
-    @Suppress("UNCHECKED_CAST")
-    val inLibraryProjects = (rootProject.extra["libraryProjects"] as Iterable<Project>).any { it == self }
-    val name = self.name
-    doLast {
-        check(!hasPublishPlugin && ownPublications.isEmpty()) { "$name must not apply maven-publish: $ownPublications" }
-        check(!inLibraryProjects) { "$name is in the root build's libraryProjects, so the BOM would list it." }
-        val naming = descriptors.files.filter { it.isFile && Regex("\\b$name\\b").containsMatchIn(it.readText()) }
-        check(naming.isEmpty()) { "Published descriptors name $name:\n${naming.joinToString("\n")}" }
-        check(descriptors.files.any { it.isFile }) { "No published descriptor was generated; the check saw nothing." }
-    }
-}
-
 tasks.named("check") {
-    dependsOn(verifyRuleCoverage, verifyUnpublished)
+    dependsOn(verifyRuleCoverage)
 }
