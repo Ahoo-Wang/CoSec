@@ -135,6 +135,11 @@ class Pipeline(
             }
         }
 
+        // The tenant is the scope's from here on: ScopeResolver makes it the principal's tenant (the default one when
+        // anonymous), the view loads that tenant's document, and the engine refuses a view of another tenant.
+        //
+        // Not blocked: the blacklist stage (RFC 0006 PR-4) is not here yet. When it is, a failed lookup must become an
+        // unresolved input (Indeterminate, 503), never "not blocked": the engine sees only this yes/no value.
         val view = when (val fetched = call(null) { snapshots.view(scope, blocked = false) }) {
             is Fetched.Value -> fetched.value
             is Fetched.Failed -> return unavailable(

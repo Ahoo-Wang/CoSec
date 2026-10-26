@@ -38,6 +38,25 @@ class PathNormalizerTest {
             "/public/.;/admin",
             "..",
             "/a/%٣٣",
+            // Every encoding of a dot segment: the engine's HttpPath does not resolve them.
+            "/public/.%2e/admin",
+            "/public/%2e./admin",
+            "/public/%2E%2e/admin",
+            "/public/%2e/admin",
+            "/public/%2E/admin",
+            "/public/..",
+            "/public/%2e%2e",
+            "/public/%2e%2e;x/admin",
+            "/public/%2E%2E;/admin",
+            "/public/.%2e;jsessionid=1/admin",
+            "/public/..%2fadmin",
+            "/public/..%2Fadmin",
+            "/public/..\\admin",
+            "/public/..%5cadmin",
+            "/public/%2e%2e%5Cadmin",
+            "/public\\..\\admin",
+            "/public/%2e%2e%3Bx/admin",
+            "/public/..%3b/admin",
         ]
     )
     fun ambiguousPathsAreRejected(path: String) {
@@ -58,10 +77,27 @@ class PathNormalizerTest {
             "/a%3Bb|/a%3Bb",
             "/a/.b/c..|/a/.b/c..",
             "/caf%C3%A9|/caf%C3%A9",
+            "/a..b/...|/a..b/...",
         ]
     )
     fun safePathsLoseOnlyPathParameters(path: String, normalized: String) {
         PathNormalizer.normalize(path).assert().isEqualTo(normalized)
+    }
+
+    @Test
+    fun longPathsAndSegmentsAreRejected() {
+        val segment = "a".repeat(PathNormalizer.MAX_SEGMENT_LENGTH)
+        PathNormalizer.normalize("/$segment/b").assert().isEqualTo("/$segment/b")
+        PathNormalizer.normalize("/${segment}a/b").assert().isNull()
+        PathNormalizer.normalize("/b/${segment}a").assert().isNull()
+        PathNormalizer.normalize("${segment}a").assert().isNull()
+        // Path parameters are removed before segments are measured; the whole path is measured as received.
+        PathNormalizer.normalize("/$segment;${"p".repeat(100)}").assert().isEqualTo("/$segment")
+
+        val path = "/" + "a/".repeat((PathNormalizer.MAX_PATH_LENGTH - 1) / 2)
+        path.length.assert().isLessThanOrEqualTo(PathNormalizer.MAX_PATH_LENGTH)
+        PathNormalizer.normalize(path).assert().isEqualTo(path)
+        PathNormalizer.normalize(path + "aa").assert().isNull()
     }
 
     @Test

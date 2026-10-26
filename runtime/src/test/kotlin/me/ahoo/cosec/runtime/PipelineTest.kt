@@ -16,9 +16,12 @@ package me.ahoo.cosec.runtime
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
+import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.membership.MembershipProvider
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -198,6 +201,34 @@ class PipelineTest {
         request.scope.tenant.assert().isEqualTo(TENANT)
         request.scope.app.value.assert().isEqualTo("shop")
         request.scope.roles.map { it.value }.assert().containsExactly("admin")
+    }
+
+    /** One tenant throughout: the principal's, in the scope, the subject and the view the engine is given. */
+    @Test
+    fun theEngineSeesThePrincipalsTenantOnly() = runTest {
+        val engine = StubEngine(PERMIT)
+        val views = InstalledViews()
+        pipeline(authenticator(authenticated()), engine, LoadingViews(views::load)).evaluate(facts())
+        val request = engine.requests.single()
+        request.scope.tenant.assert().isEqualTo(TENANT)
+        request.request.subject.tenantId.assert().isEqualTo(TENANT.value)
+        views.loads.single().tenant.assert().isEqualTo(TENANT)
+    }
+
+    /** A view of another tenant's document is a defect, and the engine refuses it: 500, never a decision. */
+    @Test
+    fun aViewOfAnotherTenantIsRefused() = runTest {
+        val foreign = LoadingViews {
+            CompletableFuture.completedFuture(
+                SnapshotView(
+                    CompiledDocument.platform(emptyList(), emptyList()),
+                    null,
+                    CompiledDocument.tenant(TenantId("tenant-b"), emptyList(), emptyList()),
+                )
+            )
+        }
+        pipeline(authenticator(authenticated()), CoSecFlatEngine, foreign).evaluate(facts())
+            .assertProblem(ProblemType.INTERNAL_ERROR)
     }
 
     @Test

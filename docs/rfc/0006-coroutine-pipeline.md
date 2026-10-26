@@ -241,6 +241,10 @@ class HttpFacts(
 
 - `PathNormalizer` 是 [`RequestPaths`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/context/request/RequestPaths.kt) 的规则原样搬进 `runtime/`（解码一次、
   合并斜杠、处理 `.`/`..`、剥离 `;` 矩阵参数、拒绝二次编码与编码后的 `/`），不改任何一条规则：门槛 C 要求 400 零差异。
+  **2026-10-27 修订（PR-2 #1044 审查）**：在原有规则之外只增加更严的拒绝，全部是 400 `invalid-request`：① 引擎的 `HttpPath` 不处理 `.`/`..`
+  （`/public` 下的通配符会匹配 `/public/../admin`），所以解码后的点段在任何编码下都拒绝（`%2e`、`%2E`、`.%2e`、`..;`、`..%3B`），`\`（含 `%5C`）也视为分隔符；
+  ② 路径长度上限 `MAX_PATH_LENGTH` = 2048 字符、单段上限 `MAX_SEGMENT_LENGTH` = 256 字符（按收到的编码形式计，去掉 `;` 参数后量段）：
+  通配符匹配的代价约为段长的平方，8 KB 的段每条语句要 200–400 ms，上限让一个请求无法长时间占住事件循环。两者是常量，不是配置项。
 - 三个适配器的 `RequestParser` 只剩"从宿主对象读出 `HttpFacts`"，不再各自调用规范化。现在 [`ServletRequestParser`](../../cosec-webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt)
   自己抛 `InvalidRequestPathException`，搬走之后这类判断只剩一处。
 - 恶意路径语料（`WebAdapterParityTest` 的 `traversal`、`path parameters`、`encoded path` 等场景）三个适配器结果一致，RFC 0001 §5"路径一致"不变量。
