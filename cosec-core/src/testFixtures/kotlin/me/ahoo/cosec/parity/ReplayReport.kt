@@ -23,36 +23,98 @@ import me.ahoo.cosec.pipeline.SecurityStatus
 import me.ahoo.cosec.policy.condition.part.RegexTimeoutException
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 /**
- * What a replay must cover to count as gate evidence (RFC 0002 §8.3, Q7). Lower thresholds are for trying the tool
- * out: the report records the thresholds it was judged by.
+ * What a replay must cover to count as gate evidence (RFC 0002 §8.3, Q7). The defaults are the RFC's; weaker thresholds
+ * are for trying the tool out, and a replay judged by them is never evidence ([meetsRfc]). The report records the
+ * thresholds it was judged by.
  *
  * @param minSamples the fewest samples
  * @param minDays the shortest span between the earliest and the latest sample
+ * @param minDistinctDays the fewest distinct UTC days with samples: a long span with traffic on two days is not a week
  * @param maxBothFailedRate the largest share of samples both sides may fail alike: a replay where most samples fail
  * (missing policies, an unreadable export) agrees without deciding anything
+ * @param minRecordedAgreementRate the smallest share of compared samples whose replayed decision agrees with the
+ * recorded one: an export missing the policies or grants that decided the traffic agrees with itself, implicitly
+ * denying everything, but not with the recording
  */
 data class ReplayGate(
     val minSamples: Long = 1_000_000,
     val minDays: Double = 7.0,
-    val maxBothFailedRate: Double = 0.01
+    val minDistinctDays: Int = 7,
+    val maxBothFailedRate: Double = 0.01,
+    val minRecordedAgreementRate: Double = 0.9
 ) {
-    /** Why a replay with these counts does not meet this gate; empty when it does. Differences are counted apart. */
-    fun unmet(samples: Long, spanDays: Double, bothFailed: Long): List<String> = buildList {
+    init {
+        require(minSamples >= 1) { "minSamples must be at least 1, not $minSamples." }
+        require(minDays.isFinite() && minDays >= 0) { "minDays must be a finite, non-negative number, not $minDays." }
+        require(minDistinctDays >= 0) { "minDistinctDays must not be negative, not $minDistinctDays." }
+        require(maxBothFailedRate in 0.0..1.0) { "maxBothFailedRate must be within [0, 1], not $maxBothFailedRate." }
+        require(minRecordedAgreementRate in 0.0..1.0) {
+            "minRecordedAgreementRate must be within [0, 1], not $minRecordedAgreementRate."
+        }
+    }
+
+    /** Whether every threshold is at least as strict as RFC 0002 §8.3's: only then is a met gate evidence. */
+    fun meetsRfc(): Boolean {
+        val rfc = ReplayGate()
+        return minSamples >= rfc.minSamples &&
+            minDays >= rfc.minDays &&
+            minDistinctDays >= rfc.minDistinctDays &&
+            maxBothFailedRate <= rfc.maxBothFailedRate &&
+            minRecordedAgreementRate >= rfc.minRecordedAgreementRate
+    }
+
+    /** Why a replay with this [coverage] does not meet this gate; empty when it does. Differences are counted apart. */
+    internal fun unmet(coverage: ReplayCoverage): List<String> = buildList {
+        val samples = coverage.samples
         if (samples == 0L) {
             add("no samples")
         }
         if (samples < minSamples) {
             add("$samples samples, fewer than $minSamples")
         }
-        if (spanDays < minDays) {
-            add("a span of ${"%.2f".format(spanDays)} days, shorter than $minDays")
+        if (coverage.spanDays < minDays) {
+            add("a span of ${"%.2f".format(coverage.spanDays)} days, shorter than $minDays")
         }
-        if (samples > 0 && bothFailed.toDouble() / samples > maxBothFailedRate) {
-            add("$bothFailed of $samples samples failed on both sides, more than ${maxBothFailedRate * 100} %")
+        if (coverage.distinctDays < minDistinctDays) {
+            add("samples on ${coverage.distinctDays} distinct days, fewer than $minDistinctDays")
+        }
+        if (samples > 0 && coverage.bothFailed.toDouble() / samples > maxBothFailedRate) {
+            add(
+                "${coverage.bothFailed} of $samples samples failed on both sides, more than ${maxBothFailedRate * 100} %"
+            )
+        }
+        if (coverage.recordedAgreementRate < minRecordedAgreementRate) {
+            add(
+                "${coverage.recordedAgreement} of ${coverage.recordedCompared} compared samples agree with the recorded " +
+                    "decision, fewer than ${minRecordedAgreementRate * 100} %",
+            )
+        }
+        if (coverage.unexportedAppRequests > 0) {
+            add(
+                "${coverage.unexportedAppRequests} samples name apps ${coverage.unexportedApps} that " +
+                    "${DecisionReplay.APP_ROLE_PERMISSIONS_FILE} does not export",
+            )
         }
     }
+}
+
+/** What the gate judges, apart from the differences. */
+internal class ReplayCoverage(
+    val samples: Long,
+    val spanDays: Double,
+    val distinctDays: Int,
+    val bothFailed: Long,
+    val recordedAgreement: Long,
+    val recordedCompared: Long,
+    val unexportedAppRequests: Long,
+    val unexportedApps: Set<String>
+) {
+    val recordedAgreementRate: Double
+        get() = if (recordedCompared == 0L) 0.0 else recordedAgreement / recordedCompared.toDouble()
 }
 
 /**
@@ -60,30 +122,38 @@ data class ReplayGate(
  *
  * @param from the earliest recorded timestamp, null without samples
  * @param to the latest recorded timestamp, null without samples
+ * @param distinctDays the distinct UTC days with samples
+ * @param duplicateEventIds samples whose `eventId` an earlier sample already had: the export may repeat events
  * @param bothFailed samples where both sides failed with the same exception class (counted in [same] too)
  * @param failedAlikeForDifferentCauses of [bothFailed], those whose causes differ (e.g. other missing policy ids):
- * listed in the mismatches file, though the §8.3 tuple compares the exception class only
+ * though the §8.3 tuple compares the exception class only, they count as [differences]
  * @param byStatus samples per status the baseline answered
  * @param byLayer samples per layer of the baseline's deciding rule: `NONE` for an implicit deny, `ERROR` for a failure
  * @param baselineErrors failures of the baseline per exception class
  * @param candidateErrors failures of the candidate per exception class
  * @param recordedAgreement samples whose baseline decision agrees with the recorded one, out of [recordedCompared];
  * token failures are not compared (the replay has no token), a rate-limited request counts as allowed
+ * @param unexportedAppRequests samples naming an app that `app-role-permissions.json` has no entry for, the apps in
+ * [unexportedApps]: their role layer cannot be replayed
  * @param authenticatedInconsistent samples whose recorded `principal.authenticated` disagrees with the one derived from
  * the principal id: the export may be inconsistent
  * @param unrecordedInputs policies (`policy:<id>`) and app permissions (`app:<id>`) mapped to the unrecorded inputs
- * their conditions read: `principal.attributes`, `request.headers`, `request.attributes`, or `script` for SpEL/OGNL
- * conditions and `#{...}` templates
+ * their conditions read: `principal.attributes`, `request.headers`, `request.attributes`, `script` for SpEL/OGNL
+ * conditions and `#{...}` templates, or `custom:<type>` for a condition type `cosec-core` does not define
  * @param supplemented how many samples carried each optional input
  * @param inputs the SHA-256 of each input file, of the bytes the replay read
  * @param gate the thresholds the replay was judged by
  * @param gateUnmet why the replay does not meet [gate]; empty when it does
+ * @param evidence whether the replay is gate evidence: no differences, the gate met, and thresholds at least as strict
+ * as RFC 0002 §8.3's
  */
 data class ReplayReport(
     val samples: Long,
     val from: Instant?,
     val to: Instant?,
     val spanDays: Double,
+    val distinctDays: Int,
+    val duplicateEventIds: Long,
     val same: Long,
     val mismatch: Long,
     val candidateError: Long,
@@ -96,28 +166,40 @@ data class ReplayReport(
     val recordedAgreement: Long,
     val recordedCompared: Long,
     val recordedAgreementRate: Double,
+    val unexportedAppRequests: Long,
+    val unexportedApps: Set<String>,
     val authenticatedInconsistent: Long,
     val unrecordedInputs: Map<String, Set<String>>,
     val supplemented: Map<String, Long>,
     val inputs: Map<String, String>,
     val gate: ReplayGate,
-    val gateUnmet: List<String>
+    val gateUnmet: List<String>,
+    val evidence: Boolean
 ) {
+    /** Mismatches, candidate errors, and failures alike for different causes. */
     val differences: Long
-        get() = mismatch + candidateError
+        get() = mismatch + candidateError + failedAlikeForDifferentCauses
 
     fun summary(): String = buildString {
-        appendLine("Replayed $samples samples from $from to $to (${"%.2f".format(spanDays)} days).")
-        appendLine("same=$same mismatch=$mismatch candidate_error=$candidateError")
         appendLine(
-            "Both failed alike: $bothFailed ($failedAlikeForDifferentCauses for different causes); " +
-                "baseline errors $baselineErrors; candidate errors $candidateErrors",
+            "Replayed $samples samples from $from to $to (${"%.2f".format(spanDays)} days, $distinctDays distinct days, " +
+                "$duplicateEventIds duplicate event ids).",
+        )
+        appendLine(
+            "same=$same mismatch=$mismatch candidate_error=$candidateError " +
+                "failed_alike_for_different_causes=$failedAlikeForDifferentCauses",
+        )
+        appendLine(
+            "Both failed alike: $bothFailed; baseline errors $baselineErrors; candidate errors $candidateErrors",
         )
         appendLine("By status: $byStatus; by layer: $byLayer")
         appendLine(
             "Agreement with recorded decisions: $recordedAgreement / $recordedCompared " +
-                "(${"%.4f".format(recordedAgreementRate)}), for reference only.",
+                "(${"%.4f".format(recordedAgreementRate)}).",
         )
+        if (unexportedAppRequests > 0) {
+            appendLine("Samples naming apps the export lacks: $unexportedAppRequests, apps $unexportedApps")
+        }
         if (authenticatedInconsistent > 0) {
             appendLine(
                 "Samples whose recorded authenticated flag disagrees with the principal id: $authenticatedInconsistent"
@@ -127,18 +209,27 @@ data class ReplayReport(
             appendLine("Read unrecorded inputs: $unrecordedInputs")
         }
         inputs.forEach { (file, hash) -> appendLine("sha256 $file $hash") }
-        if (gateUnmet.isEmpty()) {
-            appendLine("Gate met: $gate")
-        } else {
-            appendLine("GATE NOT MET ($gate): ${gateUnmet.joinToString("; ")}")
+        if (differences > 0) {
+            appendLine(
+                "DIFFERENCES: $mismatch mismatches, $candidateError candidate errors, " +
+                    "$failedAlikeForDifferentCauses failures alike for different causes",
+            )
+        }
+        when {
+            gateUnmet.isNotEmpty() -> appendLine("GATE NOT MET ($gate): ${gateUnmet.joinToString("; ")}")
+            !gate.meetsRfc() -> appendLine("Gate met (lenient thresholds — not gate evidence): $gate")
+            else -> appendLine("Gate met: $gate")
         }
     }
 }
 
-internal class ReplayCounts {
+internal class ReplayCounts(private val exportedApps: Set<String>) {
     private var samples = 0L
     private var from: Instant? = null
     private var to: Instant? = null
+    private val days = HashSet<LocalDate>()
+    private val eventIds = HashSet<String>()
+    private var duplicateEventIds = 0L
     private val verdicts = LongArray(ParityVerdict.entries.size)
     private var bothFailed = 0L
     private var failedAlikeForDifferentCauses = 0L
@@ -148,6 +239,8 @@ internal class ReplayCounts {
     private val candidateErrors = sortedMapOf<String, Long>()
     private var agreed = 0L
     private var compared = 0L
+    private var unexportedAppRequests = 0L
+    private val unexportedApps = sortedSetOf<String>()
     private var authenticatedInconsistent = 0L
     private val supplemented = sortedMapOf<String, Long>()
 
@@ -155,6 +248,17 @@ internal class ReplayCounts {
         samples++
         from = from?.let { minOf(it, event.timestamp) } ?: event.timestamp
         to = to?.let { maxOf(it, event.timestamp) } ?: event.timestamp
+        days += LocalDate.ofInstant(event.timestamp, ZoneOffset.UTC)
+        event.eventId?.let {
+            if (!eventIds.add(it)) {
+                duplicateEventIds++
+            }
+        }
+        val appId = event.request.appId
+        if (appId.isNotEmpty() && appId !in exportedApps) {
+            unexportedAppRequests++
+            unexportedApps += appId
+        }
         addOutcome(result)
         if (!event.authenticatedConsistent) {
             authenticatedInconsistent++
@@ -189,15 +293,29 @@ internal class ReplayCounts {
         gate: ReplayGate
     ): ReplayReport {
         val span = if (from != null && to != null) Duration.between(from, to) else Duration.ZERO
-        val spanDays = span.toMillis() / Duration.ofDays(1).toMillis().toDouble()
+        val coverage = ReplayCoverage(
+            samples = samples,
+            spanDays = span.toMillis() / Duration.ofDays(1).toMillis().toDouble(),
+            distinctDays = days.size,
+            bothFailed = bothFailed,
+            recordedAgreement = agreed,
+            recordedCompared = compared,
+            unexportedAppRequests = unexportedAppRequests,
+            unexportedApps = unexportedApps,
+        )
+        val gateUnmet = gate.unmet(coverage)
+        val mismatch = verdicts[ParityVerdict.MISMATCH.ordinal]
+        val candidateError = verdicts[ParityVerdict.CANDIDATE_ERROR.ordinal]
         return ReplayReport(
             samples = samples,
             from = from,
             to = to,
-            spanDays = spanDays,
+            spanDays = coverage.spanDays,
+            distinctDays = coverage.distinctDays,
+            duplicateEventIds = duplicateEventIds,
             same = verdicts[ParityVerdict.SAME.ordinal],
-            mismatch = verdicts[ParityVerdict.MISMATCH.ordinal],
-            candidateError = verdicts[ParityVerdict.CANDIDATE_ERROR.ordinal],
+            mismatch = mismatch,
+            candidateError = candidateError,
             bothFailed = bothFailed,
             failedAlikeForDifferentCauses = failedAlikeForDifferentCauses,
             byStatus = byStatus,
@@ -206,13 +324,17 @@ internal class ReplayCounts {
             candidateErrors = candidateErrors,
             recordedAgreement = agreed,
             recordedCompared = compared,
-            recordedAgreementRate = if (compared == 0L) 0.0 else agreed / compared.toDouble(),
+            recordedAgreementRate = coverage.recordedAgreementRate,
+            unexportedAppRequests = unexportedAppRequests,
+            unexportedApps = unexportedApps,
             authenticatedInconsistent = authenticatedInconsistent,
             unrecordedInputs = unrecordedInputs,
             supplemented = supplemented,
             inputs = inputs,
             gate = gate,
-            gateUnmet = gate.unmet(samples, spanDays, bothFailed),
+            gateUnmet = gateUnmet,
+            evidence = mismatch + candidateError + failedAlikeForDifferentCauses == 0L &&
+                gateUnmet.isEmpty() && gate.meetsRfc(),
         )
     }
 

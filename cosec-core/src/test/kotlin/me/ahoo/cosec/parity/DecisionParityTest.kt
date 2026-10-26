@@ -149,9 +149,39 @@ class DecisionParityTest {
         result.candidate.tuple.status.assert().isEqualTo(SecurityStatus.ERROR)
         result.candidate.tuple.error.assert().isEqualTo(IllegalStateException::class.java.name)
         result.candidate.failure?.message.assert().isEqualTo("broken")
+        result.bothFailed.assert().isFalse()
+        result.isDifference.assert().isTrue()
 
         // The other way round the baseline failed: a difference, not a candidate error.
-        DecisionParity(failing, legacy).compare(read, alice).verdict.assert().isEqualTo(ParityVerdict.MISMATCH)
+        val baselineFailing = DecisionParity(failing, legacy).compare(read, alice)
+        baselineFailing.verdict.assert().isEqualTo(ParityVerdict.MISMATCH)
+        baselineFailing.bothFailed.assert().isFalse()
+    }
+
+    @Test
+    fun failuresOfDifferentClassesAreAMismatchNotFailuresAlike() {
+        val missing = answering { _, _ -> Mono.error(MissingPolicyException(setOf("p"))) }
+        val broken = answering { _, _ -> Mono.error(IllegalStateException("broken")) }
+        val result = DecisionParity(missing, broken).compare(read, alice)
+        result.verdict.assert().isEqualTo(ParityVerdict.MISMATCH)
+        result.bothFailed.assert().isFalse()
+        result.failedAlikeForDifferentCauses.assert().isFalse()
+    }
+
+    @Test
+    fun forgettingToRecordTheRuleOnTheContextIsAMismatch() {
+        // Decides like the engine, but never calls setVerifyContext: auditing and tracing would see no rule.
+        val forgetful = answering { request, context ->
+            engine.decide(request, SimpleSecurityContext(context.principal, context.tenant))
+        }
+        val result = DecisionParity(legacy, forgetful).compare(read, alice)
+        result.verdict.assert().isEqualTo(ParityVerdict.MISMATCH)
+        result.baseline.tuple.decidedBy.assert().isEqualTo(result.candidate.tuple.decidedBy)
+        result.baseline.tuple.contextRef?.policyId.assert().isEqualTo("orders")
+        result.candidate.tuple.contextRef.assert().isNull()
+        // Root, the blacklist and an implicit deny record nothing on either side.
+        DecisionParity(legacy, engine).compare(EvaluateRequest(path = "/elsewhere"), alice).baseline.tuple.contextRef
+            .assert().isNull()
     }
 
     @Test
@@ -255,6 +285,8 @@ class DecisionParityTest {
         val different = DecisionParity(missingP, missingR).compare(read, alice)
         different.verdict.assert().isEqualTo(ParityVerdict.SAME)
         different.failedAlikeForDifferentCauses.assert().isTrue()
+        different.isDifference.assert().isTrue()
+        reordered.isDifference.assert().isFalse()
 
         val permission = answering { _, _ -> Mono.error(MissingPermissionException("app", "role", setOf("b", "a"))) }
         DecisionParity(permission, permission).compare(read, alice).baseline.failureCause.assert()

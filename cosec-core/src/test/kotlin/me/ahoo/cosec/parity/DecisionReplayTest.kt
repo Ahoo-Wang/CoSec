@@ -15,7 +15,9 @@ package me.ahoo.cosec.parity
 
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.authorization.AuthorizationDecision
 import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.authorization.MissingPolicyException
@@ -135,20 +137,157 @@ class DecisionReplayTest {
         ).use { files -> files.noneMatch { it.fileName.toString().endsWith(".partial") }.assert().isTrue() }
         report.summary().assert().contains(
             "same=16 mismatch=0 candidate_error=0"
-        ).contains("14 / 15").contains("Gate met")
+        ).contains("14 / 15").contains("Gate met (lenient thresholds — not gate evidence)")
+    }
+
+    @Test
+    fun aLenientGateIsNeverEvidence(@TempDir dir: Path) {
+        val report = DecisionReplay(gate = LENIENT).run(export(dir))
+        report.gateUnmet.assert().isEmpty()
+        report.distinctDays.assert().isEqualTo(3)
+        report.duplicateEventIds.assert().isEqualTo(0L)
+        report.unexportedAppRequests.assert().isEqualTo(0L)
+        report.differences.assert().isEqualTo(0L)
+        // Met, but only with thresholds weaker than RFC 0002 §8.3's.
+        report.evidence.assert().isFalse()
+        exitCodeOf(report).assert().isEqualTo(REPLAY_GATE_NOT_MET)
+        exitCodeOf(report.copy(evidence = true)).assert().isEqualTo(REPLAY_OK)
     }
 
     @Test
     fun theDefaultGateNeedsAMillionSamplesOverAWeek(@TempDir dir: Path) {
         val report = DecisionReplay().run(export(dir))
         report.gate.assert().isEqualTo(ReplayGate())
-        report.gateUnmet.assert().hasSize(3)
+        report.gateUnmet.assert().hasSize(4)
         report.gateUnmet.joinToString().assert()
             .contains("16 samples, fewer than 1000000")
             .contains("shorter than 7.0")
+            .contains("samples on 3 distinct days, fewer than 7")
             .contains("2 of 16 samples failed on both sides")
         report.summary().assert().contains("GATE NOT MET")
-        ReplayGate().unmet(0, 0.0, 0).assert().contains("no samples")
+        report.evidence.assert().isFalse()
+        ReplayGate().meetsRfc().assert().isTrue()
+    }
+
+    /** [count] samples a day over [days] days, all recorded as allowed by a role permission of app `billing`. */
+    private fun roleAllows(dir: Path, days: Int, count: Int) {
+        val template = Files.readAllLines(
+            Path.of(javaClass.getResource("/cosec-replay/${DecisionReplay.REQUESTS_FILE}")!!.toURI()),
+        ).single { "\"eventId\":\"e10\"" in it }
+        val lines = (0 until days).flatMap { day ->
+            (0 until count).map { index ->
+                template.replace("\"e10\"", "\"d$day-$index\"")
+                    .replace(
+                        "2026-10-02T12:00:00Z",
+                        Instant.parse("2026-10-01T12:00:00Z").plusSeconds(day * 86_400L).toString()
+                    )
+            }
+        }
+        Files.write(dir.resolve(DecisionReplay.REQUESTS_FILE), lines)
+    }
+
+    @Test
+    fun anExportThatDecidesNothingFailsTheGate(@TempDir dir: Path) {
+        // No policies, no apps: every sample is an implicit deny on both sides, which agrees with itself.
+        Files.writeString(dir.resolve(DecisionReplay.POLICIES_FILE), "[]")
+        Files.writeString(dir.resolve(DecisionReplay.APP_ROLE_PERMISSIONS_FILE), "[]")
+        roleAllows(dir, days = 8, count = 3)
+        val report = DecisionReplay().run(dir)
+        report.same.assert().isEqualTo(24L)
+        report.differences.assert().isEqualTo(0L)
+        report.recordedAgreement.assert().isEqualTo(0L)
+        report.unexportedAppRequests.assert().isEqualTo(24L)
+        report.unexportedApps.assert().containsExactly("billing")
+        report.gateUnmet.joinToString().assert()
+            .contains("0 of 24 compared samples agree with the recorded decision, fewer than 90.0 %")
+            .contains("24 samples name apps [billing] that app-role-permissions.json does not export")
+        // Lenient on volume only: the agreement and the unexported app still fail it.
+        val volumeOnly = ReplayGate(minSamples = 1, minDays = 1.0, minDistinctDays = 1)
+        DecisionReplay(gate = volumeOnly).run(dir).gateUnmet.assert().hasSize(2)
+    }
+
+    @Test
+    fun anAppExportedWithoutAppPermissionCountsAsExported(@TempDir dir: Path) {
+        Files.writeString(dir.resolve(DecisionReplay.POLICIES_FILE), "[]")
+        Files.writeString(dir.resolve(DecisionReplay.APP_ROLE_PERMISSIONS_FILE), """[{ "appId": "billing" }]""")
+        roleAllows(dir, days = 1, count = 2)
+        val report = DecisionReplay().run(dir)
+        report.unexportedAppRequests.assert().isEqualTo(0L)
+        report.byLayer.assert().isEqualTo(mapOf("NONE" to 2L))
+
+        Files.writeString(dir.resolve(DecisionReplay.APP_ROLE_PERMISSIONS_FILE), """[{ "grants": {} }]""")
+        assertThrows(IllegalArgumentException::class.java) { DecisionReplay().run(dir) }.message.assert()
+            .contains("neither an appPermission nor an appId")
+        Files.writeString(
+            dir.resolve(DecisionReplay.APP_ROLE_PERMISSIONS_FILE),
+            """[{ "appId": "a" }, { "appId": "a" }]"""
+        )
+        assertThrows(IllegalArgumentException::class.java) { DecisionReplay().run(dir) }.message.assert()
+            .contains("apps [a] more than once")
+    }
+
+    @Test
+    fun repeatedEventsAreCounted(@TempDir dir: Path) {
+        export(dir)
+        val requests = dir.resolve(DecisionReplay.REQUESTS_FILE)
+        Files.write(requests, Files.readAllLines(requests) + Files.readAllLines(requests).first())
+        DecisionReplay(gate = LENIENT).run(dir).duplicateEventIds.assert().isEqualTo(1L)
+    }
+
+    @Test
+    fun recordedFieldsWinOverExportedHeaders(@TempDir dir: Path) {
+        export(dir)
+        val requests = dir.resolve(DecisionReplay.REQUESTS_FILE)
+        // Sample 10 (app billing) also exports a header naming another app and space.
+        Files.write(
+            requests,
+            Files.readAllLines(requests).map {
+                if ("\"eventId\":\"e10\"" !in it) {
+                    it
+                } else {
+                    it.replace(
+                        "\"device\":",
+                        "\"headers\":{\"${AppIdCapable.APP_ID_KEY}\":\"other\",\"${SpaceIdCapable.SPACE_ID_KEY}\":\"s9\"},\"device\":",
+                    )
+                }
+            },
+        )
+        val seen = mutableListOf<Pair<String, String>>()
+        val recording = engineExcept(emptyMap()).let { engine ->
+            AuthorizationFactory { policies, permissions, blacklist, root ->
+                val delegate = engine.create(policies, permissions, blacklist, root)
+                object : DecisionAuthorization {
+                    override fun decide(request: Request, context: SecurityContext): Mono<AuthorizationDecision> {
+                        if (request.requestId == "r10") {
+                            seen += request.appId to request.spaceId
+                        }
+                        return delegate.decide(request, context)
+                    }
+                }
+            }
+        }
+        DecisionReplay(candidate = recording, gate = LENIENT).run(dir).differences.assert().isEqualTo(0L)
+        seen.assert().containsExactly("billing" to "")
+    }
+
+    @Test
+    fun thresholdsMustBeValid() {
+        assertThrows(IllegalArgumentException::class.java) { ReplayGate(minSamples = 0) }
+        assertThrows(IllegalArgumentException::class.java) { ReplayGate(minDays = Double.NaN) }
+        assertThrows(IllegalArgumentException::class.java) { ReplayGate(minDays = Double.POSITIVE_INFINITY) }
+        assertThrows(IllegalArgumentException::class.java) { ReplayGate(minDistinctDays = -1) }
+        assertThrows(IllegalArgumentException::class.java) { ReplayGate(maxBothFailedRate = 1.5) }
+        assertThrows(IllegalArgumentException::class.java) { ReplayGate(maxBothFailedRate = Double.NaN) }
+        assertThrows(IllegalArgumentException::class.java) { ReplayGate(minRecordedAgreementRate = -0.1) }
+        listOf(
+            ReplayGate(minSamples = 999_999),
+            ReplayGate(minDays = 6.9),
+            ReplayGate(minDistinctDays = 6),
+            ReplayGate(maxBothFailedRate = 0.02),
+            ReplayGate(minRecordedAgreementRate = 0.8),
+        ).forEach { it.meetsRfc().assert().describedAs("$it").isFalse() }
+        ReplayGate(minSamples = 2_000_000, maxBothFailedRate = 0.0, minRecordedAgreementRate = 1.0).meetsRfc().assert()
+            .isTrue()
     }
 
     @Test
@@ -224,6 +363,10 @@ class DecisionReplayTest {
         val report = DecisionReplay(candidate = candidate, gate = LENIENT).run(export(dir))
         report.same.assert().isEqualTo(16L)
         report.failedAlikeForDifferentCauses.assert().isEqualTo(1L)
+        // The tuple compares the exception class only, but a different cause is still a difference.
+        report.differences.assert().isEqualTo(1L)
+        exitCodeOf(report).assert().isEqualTo(REPLAY_DIFFERENCES)
+        report.summary().assert().contains("failed_alike_for_different_causes=1").contains("DIFFERENCES: ")
         val listed = CoSecJsonSerializer.readTree(
             Files.readAllLines(dir.resolve(DecisionReplay.MISMATCHES_FILE)).single()
         )
@@ -296,11 +439,19 @@ class DecisionReplayTest {
     @Test
     fun theCommandLineExitsWithWhatTheReplayFound(@TempDir dir: Path) {
         val directory = export(dir).toString()
-        val lenient = arrayOf(directory, "--min-samples=10", "--min-days=1", "--max-both-failed-rate=0.2")
+        val lenient = arrayOf(
+            directory,
+            "--min-samples=10",
+            "--min-days=1",
+            "--min-distinct-days=1",
+            "--max-both-failed-rate=0.2",
+            "--min-agreement-rate=0.5",
+        )
 
-        val (ok, okOut) = runMain(*lenient)
-        ok.assert().isEqualTo(REPLAY_OK)
-        okOut.assert().contains("Gate met").contains("Report: ")
+        // Met only with lenient thresholds: not evidence.
+        val (lenientCode, lenientOut) = runMain(*lenient)
+        lenientCode.assert().isEqualTo(REPLAY_GATE_NOT_MET)
+        lenientOut.assert().contains("Gate met (lenient thresholds — not gate evidence)").contains("Report: ")
 
         val (notMet, notMetOut) = runMain(directory)
         notMet.assert().isEqualTo(REPLAY_GATE_NOT_MET)
@@ -309,7 +460,7 @@ class DecisionReplayTest {
         val failing = engineExcept(mapOf("r10" to answer { _, _ -> Mono.error(IllegalStateException("engine bug")) }))
         val (candidateError, candidateErrorOut) = runMain(*lenient, candidate = failing)
         candidateError.assert().isEqualTo(REPLAY_DIFFERENCES)
-        candidateErrorOut.assert().contains("candidate_error=1").contains("DIFFERENCES: ")
+        candidateErrorOut.assert().contains("candidate_error=1").contains("Differences: ")
 
         val denying = engineExcept(
             mapOf("r1" to answer { _, _ -> Mono.just(AuthorizationDecision(AuthorizeResult.IMPLICIT_DENY)) }),
@@ -319,16 +470,50 @@ class DecisionReplayTest {
 
         runMain().first.assert().isEqualTo(REPLAY_USAGE)
         runMain("--min-samples=1").first.assert().isEqualTo(REPLAY_USAGE)
-        runMain(directory, "--min-samples=many").first.assert().isEqualTo(REPLAY_USAGE)
+        listOf(
+            "--min-samples=many",
+            "--min-samples=0",
+            "--min-days=NaN",
+            "--max-both-failed-rate=2",
+            "--min-agreement-rate=-1"
+        )
+            .forEach { runMain(directory, it).first.assert().describedAs(it).isEqualTo(REPLAY_USAGE) }
         val (unknown, unknownOut) = runMain(directory, "--verbose")
         unknown.assert().isEqualTo(REPLAY_USAGE)
         unknownOut.assert().contains("Usage: DecisionReplay")
     }
 
     @Test
-    fun mainReturnsNormallyWhenTheReplayIsClean(@TempDir dir: Path) {
-        main(arrayOf(export(dir).toString(), "--min-samples=10", "--min-days=1", "--max-both-failed-rate=0.2"))
+    fun theCommandLineDeletesOldOutputsFirstAndReportsUnreplayableInput(@TempDir dir: Path) {
+        export(dir)
+        DecisionReplay().run(dir)
         Files.exists(dir.resolve(DecisionReplay.REPORT_FILE)).assert().isTrue()
+        // Even arguments too wrong to replay leave no earlier report behind.
+        runMain(dir.toString(), "--verbose").first.assert().isEqualTo(REPLAY_USAGE)
+        Files.exists(dir.resolve(DecisionReplay.REPORT_FILE)).assert().isFalse()
+        Files.exists(dir.resolve(DecisionReplay.MISMATCHES_FILE)).assert().isFalse()
+
+        Files.write(dir.resolve(DecisionReplay.REQUESTS_FILE), listOf("not json"))
+        val (invalid, invalidOut) = runMain(dir.toString())
+        invalid.assert().isEqualTo(REPLAY_INVALID_INPUT)
+        invalidOut.assert().contains("INVALID INPUT: requests.jsonl line 1 is not a replayable event.")
+    }
+
+    @Test
+    fun customConditionTypesAreUnrecordedInputs() {
+        val policy = CoSecJsonSerializer.readTree(
+            """
+            {
+              "id": "geo",
+              "condition": { "bool": { "and": [ { "all": {} }, { "geoFence": { "region": "eu" } } ] } },
+              "statements": [ { "action": "*", "condition": { "eq": { "part": "request.path", "value": "/" } } } ]
+            }
+            """.trimIndent(),
+        )
+        UnrecordedInputs.of(
+            listOf(policy),
+            emptyList()
+        ).assert().isEqualTo(mapOf("policy:geo" to setOf("custom:geoFence")))
     }
 
     @Test
@@ -353,6 +538,12 @@ class DecisionReplayTest {
         )
 
         /** For the 16-sample synthetic export, which can never meet the real gate. */
-        private val LENIENT = ReplayGate(minSamples = 10, minDays = 1.0, maxBothFailedRate = 0.2)
+        private val LENIENT = ReplayGate(
+            minSamples = 10,
+            minDays = 1.0,
+            minDistinctDays = 1,
+            maxBothFailedRate = 0.2,
+            minRecordedAgreementRate = 0.5,
+        )
     }
 }

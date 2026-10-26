@@ -17,29 +17,35 @@ import java.io.PrintStream
 import java.nio.file.Path
 import kotlin.system.exitProcess
 
-/** Every sample agreed and the gate is met. */
+/** No differences, and the gate is met with RFC 0002 §8.3's thresholds: the replay is gate evidence. */
 const val REPLAY_OK = 0
 
-/** At least one sample is a mismatch or a candidate error. */
+/** At least one sample is a mismatch, a candidate error, or a failure alike for a different cause. */
 const val REPLAY_DIFFERENCES = 1
 
-/** No differences, but the replay does not meet its [ReplayGate]: it is not gate evidence. */
+/** No differences, but the gate is not met, or met only with lenient thresholds: not gate evidence. */
 const val REPLAY_GATE_NOT_MET = 2
 
 /** The arguments are wrong. */
 const val REPLAY_USAGE = 64
 
-private const val USAGE =
-    "Usage: DecisionReplay <export directory> [--min-samples=N] [--min-days=D] [--max-both-failed-rate=R]"
+/** The export cannot be replayed: a malformed file or line. Nothing was judged. */
+const val REPLAY_INVALID_INPUT = 70
+
+private const val USAGE = "Usage: DecisionReplay <export directory> [--min-samples=N] [--min-days=D] " +
+    "[--min-distinct-days=N] [--max-both-failed-rate=R] [--min-agreement-rate=R]"
 
 /**
- * The command line of [DecisionReplay]: `<export directory>` and optional [ReplayGate] thresholds
- * (`--min-samples=1000000`, `--min-days=7`, `--max-both-failed-rate=0.01` by default; the Gradle task passes
- * `-PreplayMinSamples`, `-PreplayMinDays` and `-PreplayMaxBothFailedRate`).
+ * The command line of [DecisionReplay]: `<export directory>` and optional [ReplayGate] thresholds, RFC 0002 §8.3's by
+ * default (`--min-samples=1000000`, `--min-days=7`, `--min-distinct-days=7`, `--max-both-failed-rate=0.01`,
+ * `--min-agreement-rate=0.9`; the Gradle task passes `-PreplayMinSamples`, `-PreplayMinDays`, `-PreplayMinDistinctDays`,
+ * `-PreplayMaxBothFailedRate` and `-PreplayMinAgreementRate`). Weaker thresholds are for trying the tool out: a replay
+ * judged by them exits with [REPLAY_GATE_NOT_MET] even when it meets them.
  *
+ * Any report left in the directory is deleted first, even when the arguments turn out to be wrong.
  * [baseline] and [candidate] default to the two implementations RFC 0002 compares. Prints the summary and returns
- * [REPLAY_OK], [REPLAY_DIFFERENCES] (which wins when the gate is not met either), [REPLAY_GATE_NOT_MET] or
- * [REPLAY_USAGE].
+ * [REPLAY_OK], [REPLAY_DIFFERENCES] (which wins over an unmet gate), [REPLAY_GATE_NOT_MET], [REPLAY_USAGE] or
+ * [REPLAY_INVALID_INPUT].
  */
 fun replayMain(
     args: Array<String>,
@@ -47,36 +53,50 @@ fun replayMain(
     baseline: AuthorizationFactory = AuthorizationFactory.LEGACY,
     candidate: AuthorizationFactory = AuthorizationFactory.ENGINE
 ): Int {
-    val directory = args.firstOrNull()?.takeUnless { it.startsWith("--") }
-    val gate = directory?.let { gateOf(args.drop(1)) }
-    if (directory == null || gate == null) {
+    val path = args.firstOrNull()?.takeUnless { it.startsWith("--") }?.let { Path.of(it).toAbsolutePath() }
+    path?.let(DecisionReplay::deleteOutputs)
+    val gate = path?.let { gateOf(args.drop(1)) }
+    if (path == null || gate == null) {
         out.println(USAGE)
         return REPLAY_USAGE
     }
-    val path = Path.of(directory).toAbsolutePath()
-    val report = DecisionReplay(baseline, candidate, gate).run(path)
+    val report = try {
+        DecisionReplay(baseline, candidate, gate).run(path)
+    } catch (cause: IllegalArgumentException) {
+        out.println("INVALID INPUT: ${cause.message}${cause.cause?.let { " (${it.message})" }.orEmpty()}")
+        return REPLAY_INVALID_INPUT
+    }
     out.print(report.summary())
     out.println("Report: ${path.resolve(DecisionReplay.REPORT_FILE)}")
     if (report.differences > 0) {
-        out.println("DIFFERENCES: ${path.resolve(DecisionReplay.MISMATCHES_FILE)}")
-        return REPLAY_DIFFERENCES
+        out.println("Differences: ${path.resolve(DecisionReplay.MISMATCHES_FILE)}")
     }
-    if (report.gateUnmet.isNotEmpty()) {
-        return REPLAY_GATE_NOT_MET
-    }
-    return REPLAY_OK
+    return exitCodeOf(report)
 }
 
-/** Null when an option is unknown or malformed. */
+/** [REPLAY_DIFFERENCES] wins over an unmet gate; only evidence is [REPLAY_OK]. */
+fun exitCodeOf(report: ReplayReport): Int = when {
+    report.differences > 0 -> REPLAY_DIFFERENCES
+    !report.evidence -> REPLAY_GATE_NOT_MET
+    else -> REPLAY_OK
+}
+
+/** Null when an option is unknown or malformed, or a threshold out of range. */
 private fun gateOf(options: List<String>): ReplayGate? {
     var gate = ReplayGate()
     options.forEach { option ->
         val value = option.substringAfter('=', "")
-        gate = when (option.substringBefore('=')) {
-            "--min-samples" -> gate.copy(minSamples = value.toLongOrNull() ?: return null)
-            "--min-days" -> gate.copy(minDays = value.toDoubleOrNull() ?: return null)
-            "--max-both-failed-rate" -> gate.copy(maxBothFailedRate = value.toDoubleOrNull() ?: return null)
-            else -> return null
+        gate = try {
+            when (option.substringBefore('=')) {
+                "--min-samples" -> gate.copy(minSamples = value.toLongOrNull() ?: return null)
+                "--min-days" -> gate.copy(minDays = value.toDoubleOrNull() ?: return null)
+                "--min-distinct-days" -> gate.copy(minDistinctDays = value.toIntOrNull() ?: return null)
+                "--max-both-failed-rate" -> gate.copy(maxBothFailedRate = value.toDoubleOrNull() ?: return null)
+                "--min-agreement-rate" -> gate.copy(minRecordedAgreementRate = value.toDoubleOrNull() ?: return null)
+                else -> return null
+            }
+        } catch (_: IllegalArgumentException) {
+            return null
         }
     }
     return gate
@@ -84,7 +104,7 @@ private fun gateOf(options: List<String>): ReplayGate? {
 
 /**
  * `./gradlew :cosec-core:engineReplay -PreplayDir=<dir>`: see [replayMain]. Exits with its code, so the Gradle task
- * fails unless the replay is clean and meets the gate.
+ * fails unless the replay is gate evidence.
  */
 fun main(args: Array<String>) {
     val code = replayMain(args)

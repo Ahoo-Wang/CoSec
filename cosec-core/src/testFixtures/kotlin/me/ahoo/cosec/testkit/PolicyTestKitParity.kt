@@ -23,9 +23,12 @@ import me.ahoo.cosec.parity.ParityVerdict
 class PolicyParityResult(val suite: String, val case: String, val result: ParityResult)
 
 class PolicyParityReport(val results: List<PolicyParityResult>) {
-    /** Every case whose two answers are not [ParityVerdict.SAME]. */
+    /**
+     * Every case whose two answers differ: not [ParityVerdict.SAME], or failing with the same exception class for
+     * different causes.
+     */
     val differences: List<PolicyParityResult>
-        get() = results.filter { it.result.verdict != ParityVerdict.SAME }
+        get() = results.filter { it.result.isDifference }
 
     /**
      * Throws an [AssertionError] listing every case the two implementations answer differently, with both answers.
@@ -36,8 +39,10 @@ class PolicyParityReport(val results: List<PolicyParityResult>) {
             return
         }
         val details = differences.joinToString(separator = "\n") {
-            "- ${it.suite} › ${it.case}: ${it.result.verdict}; baseline ${it.result.baseline.tuple}; " +
-                "candidate ${it.result.candidate.tuple}"
+            val result = it.result
+            val kind = if (result.verdict == ParityVerdict.SAME) "FAILED_ALIKE_FOR_DIFFERENT_CAUSES" else result.verdict
+            "- ${it.suite} › ${it.case}: $kind; baseline ${result.baseline.tuple} (${result.baseline.failureCause}); " +
+                "candidate ${result.candidate.tuple} (${result.candidate.failureCause})"
         }
         throw AssertionError("${differences.size} of ${results.size} policy test cases differ:\n$details")
     }
