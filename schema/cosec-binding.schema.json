@@ -51,7 +51,7 @@
       "type": "object"
     }
   },
-  "description": "\"[subject] is subject to [policy] in [app] and [space]\" (RFC 0004 §4.2). `*` means any, and only that.",
+  "description": "\"[subject] is subject to [policy] in [app] and [space]\" (RFC 0004 §4.2). `*` means any, and only that. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",
   "properties": {
     "app": {
       "description": "An id, or `*` for any.",

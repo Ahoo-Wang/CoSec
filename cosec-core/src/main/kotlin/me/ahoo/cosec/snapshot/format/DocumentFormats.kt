@@ -60,11 +60,17 @@ object DocumentFormats {
 
     /** Valid path patterns (Spring `PathPattern`), also the values the conformance test generates. */
     private val pathPattern = StringType(
+        pattern = FormatPatterns.PATH_PATTERN,
         examples = listOf("/orders/**", "/orders/{id}", "/users/#{principal.id}/orders", "/health"),
+        counterExamples = FormatPatterns.PATH_PATTERN_COUNTER_EXAMPLES,
     )
 
     /** A path condition's pattern, which holds no `#{...}` template. */
-    private val plainPathPattern = StringType(examples = listOf("/orders/**", "/orders/{id}", "/health"))
+    private val plainPathPattern = StringType(
+        pattern = FormatPatterns.PATH_PATTERN,
+        examples = listOf("/orders/**", "/orders/{id}", "/health"),
+        counterExamples = FormatPatterns.PATH_PATTERN_COUNTER_EXAMPLES,
+    )
 
     val definitionsSchema = SchemaFile(
         name = DEFINITIONS,
@@ -75,7 +81,17 @@ object DocumentFormats {
             "pathOptions" to ObjectType(
                 listOf(
                     Field("caseSensitive", BooleanType(), default = true),
-                    Field("separator", StringType(minLength = 1, maxLength = 1, examples = listOf("/", ".")), default = "/"),
+                    Field(
+                        "separator",
+                        StringType(
+                            pattern = FormatPatterns.SEPARATOR,
+                            minLength = 1,
+                            maxLength = 1,
+                            examples = listOf("/", "."),
+                            counterExamples = FormatPatterns.SEPARATOR_COUNTER_EXAMPLES,
+                        ),
+                        default = "/",
+                    ),
                     Field("decodeAndParseSegments", BooleanType(), default = true),
                 ),
                 description = "How a path pattern is parsed and matched.",
@@ -90,7 +106,11 @@ object DocumentFormats {
             "actions, or an object naming one action matcher type.",
         root = AnyOf(
             listOf(
-                StringType(examples = listOf("*") + pathPattern.examples),
+                StringType(
+                    pattern = FormatPatterns.PATH_PATTERN,
+                    examples = listOf("*") + pathPattern.examples,
+                    counterExamples = FormatPatterns.PATH_PATTERN_COUNTER_EXAMPLES,
+                ),
                 ArrayType(actionRef, uniqueItems = true),
                 ObjectType(
                     listOf(
@@ -166,6 +186,7 @@ object DocumentFormats {
                     "context.tenantId", "context.principal.id", "context.principal.attributes.department",
                     "resource.ownerId",
                 ),
+                counterExamples = listOf("request.query.page", "request.", "Request.path", "context.principal"),
                 description = "A request or context part. `request.path.var.<name>` reads a variable the statement's " +
                     "own path action captures.",
             ),
@@ -225,12 +246,20 @@ object DocumentFormats {
                     negate,
                     Field(
                         "notBefore",
-                        StringType(examples = listOf("2020-01-01T00:00:00Z", "2020-01-01T08:00:00")),
+                        StringType(
+                            pattern = FormatPatterns.DATE_TIME,
+                            examples = listOf("2020-01-01T00:00:00Z", "2020-01-01T08:00:00"),
+                            counterExamples = FormatPatterns.DATE_TIME_COUNTER_EXAMPLES,
+                        ),
                         description = "ISO date-time; without an offset it is read in zone.",
                     ),
                     Field(
                         "notAfter",
-                        StringType(examples = listOf("2100-01-01T00:00:00Z", "2100-01-01T08:00:00+08:00")),
+                        StringType(
+                            pattern = FormatPatterns.DATE_TIME,
+                            examples = listOf("2100-01-01T00:00:00Z", "2100-01-01T08:00:00+08:00"),
+                            counterExamples = FormatPatterns.DATE_TIME_COUNTER_EXAMPLES,
+                        ),
                         description = "ISO date-time, exclusive; without an offset it is read in zone.",
                     ),
                     Field(
@@ -251,8 +280,8 @@ object DocumentFormats {
                             minItems = 1,
                         ),
                     ),
-                    Field("from", StringType(pattern = TIME_OF_DAY, examples = listOf("09:00", "22:00"))),
-                    Field("to", StringType(pattern = TIME_OF_DAY, examples = listOf("18:00", "06:00:00"))),
+                    Field("from", timeOfDay("09:00", "22:00")),
+                    Field("to", timeOfDay("18:00", "06:00:00")),
                 ),
                 requireAnyOf = listOf("notBefore", "notAfter", "daysOfWeek", "from"),
                 dependencies = mapOf("from" to listOf("to"), "to" to listOf("from")),
@@ -353,7 +382,11 @@ object DocumentFormats {
                     schemaReference(RATE_LIMIT_RULE),
                     Field(
                         "id",
-                        StringType(pattern = "^[A-Za-z0-9_.-]+$", examples = listOf("login", "api.per-user")),
+                        StringType(
+                            pattern = "^[A-Za-z0-9_.-]+$",
+                            examples = listOf("login", "api.per-user"),
+                            counterExamples = listOf("log in", "api/per-user", ""),
+                        ),
                         required = true,
                         description = "Names the quota; counters belong to the id. Must be unique.",
                     ),
@@ -422,7 +455,11 @@ object DocumentFormats {
                     Field(
                         "grants",
                         MapType(
-                            keys = StringType(pattern = "^[^@]+(@[^@]+)?$", examples = listOf("admin", "shipper@team-a")),
+                            keys = StringType(
+                                pattern = "^[^@]+(@[^@]+)?$",
+                                examples = listOf("admin", "shipper@team-a"),
+                                counterExamples = listOf("", "admin@", "@team-a", "shipper@team-a@x"),
+                            ),
                             values = ArrayType(StringType(examples = listOf("manage.order.ship", "manage.order.read"))),
                         ),
                         description = "The permission ids granted to each role, keyed `role` or `role@space`.",
@@ -515,4 +552,9 @@ object DocumentFormats {
     }
 }
 
-private const val TIME_OF_DAY = "^\\d{2}:\\d{2}(:\\d{2})?$"
+/** A time of day: `from` and `to` of a time condition, in 7.x and 8.0 documents. */
+internal fun timeOfDay(vararg examples: String) = StringType(
+    pattern = FormatPatterns.TIME_OF_DAY,
+    examples = examples.toList(),
+    counterExamples = FormatPatterns.TIME_OF_DAY_COUNTER_EXAMPLES,
+)
