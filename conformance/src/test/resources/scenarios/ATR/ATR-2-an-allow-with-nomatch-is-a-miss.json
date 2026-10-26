@@ -1,0 +1,52 @@
+{
+  "rules": [
+    "ATR-2"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The only ALLOW says onMissing nomatch and its attribute is unavailable: a miss, so the implicit deny's 403.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "in-fence",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.geo.inFence",
+                  true
+                ]
+              },
+              "onMissing": "nomatch"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:in-fence",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "in-fence"
+        }
+      ]
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.inFence": "bool"
+      },
+      "fails": "geo is down"
+    }
+  ],
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

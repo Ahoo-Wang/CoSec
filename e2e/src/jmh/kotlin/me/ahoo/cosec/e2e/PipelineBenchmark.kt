@@ -15,6 +15,10 @@ package me.ahoo.cosec.e2e
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.runtime.Outcome
+import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
+import me.ahoo.cosec.runtime.attribute.BlacklistKind
+import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.SnapshotOptions
@@ -38,15 +42,16 @@ import kotlin.coroutines.startCoroutine
  * The data is 7.0's `SimpleAuthorizationBenchmark` (tag `v7.0.1`) converted as RFC 0004 §5.1 converts it: three global
  * policies with `Anyone` bindings, two attachable principal policies the token attaches, and app `app`'s permissions as
  * permission policies granted to `viewer` (twenty) and `admin` (`*`). Scenarios: `global`, a global ALLOW permits;
- * `role`, the `*` grant permits; `none`, nothing does (403); `anonymous`, no token, a global ALLOW permits. `blocked`
- * joins with the blacklist stage (RFC 0006 PR-4) and `rate-limited` with PR-5.
+ * `role`, the `*` grant permits; `none`, nothing does (403); `anonymous`, no token, a global ALLOW permits. With the
+ * in-memory blacklist in stage A (RFC 0006 §5.4.4): `blacklist`, the `global` request, which it does not name;
+ * `blocked`, the same request from a blocked address (403). `rate-limited` joins with PR-5.
  *
  * Each operation starts the request as an adapter would and finishes it on the calling thread: a warm request never
  * suspends (`SliceBlockHoundTest`); one that did would be waited for, and counted.
  */
 @State(Scope.Benchmark)
 open class PipelineBenchmark {
-    @Param("global", "role", "none", "anonymous")
+    @Param("global", "role", "none", "anonymous", "blacklist", "blocked")
     lateinit var scenario: String
 
     private lateinit var slice: Slice
@@ -55,20 +60,29 @@ open class PipelineBenchmark {
     @Setup(Level.Trial)
     fun setup() {
         // The default revalidation interval, as in production; the tests' 200 ms would add background passes.
-        slice = Slice(options = SnapshotOptions())
+        val blacklist = InMemoryBlacklistSource()
+        if (scenario == "blocked") {
+            blacklist.block(BlacklistKind.IP, "10.0.0.1")
+        }
+        val attributes = if (scenario == "blacklist" || scenario == "blocked") {
+            AttributeProviders(listOf(BlacklistAttributeProvider(blacklist)))
+        } else {
+            AttributeProviders.NONE
+        }
+        slice = Slice(options = SnapshotOptions(), attributes = attributes)
         slice.publish(SnapshotKey.Platform, platform())
         slice.publish(SnapshotKey.App("app"), app())
         slice.publish(SnapshotKey.Tenant("acme"), "")
         val token = "user@acme:viewer,admin|principal-a,principal-b".takeUnless { scenario == "anonymous" }
         val path = when (scenario) {
-            "global", "anonymous" -> "/public/resource3/page"
+            "global", "anonymous", "blacklist", "blocked" -> "/public/resource3/page"
             "role" -> "/orders/op49/detail"
             "none" -> "/unknown/path"
             else -> error("Unknown scenario $scenario")
         }
         facts = request("GET", path, token, app = "app")
         val outcome = runBlocking { slice.evaluate(facts) }
-        check(outcome.proceed == (scenario != "none")) { "Scenario $scenario: $outcome" }
+        check(outcome.proceed == (scenario != "none" && scenario != "blocked")) { "Scenario $scenario: $outcome" }
         check(evaluate().status == outcome.status)
     }
 

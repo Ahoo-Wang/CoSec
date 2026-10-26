@@ -39,6 +39,8 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.AttributeType
+import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
@@ -46,6 +48,14 @@ import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineOptions
+import me.ahoo.cosec.runtime.attribute.AttributeDeclaration
+import me.ahoo.cosec.runtime.attribute.AttributeProvider
+import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.attribute.AttributeRequest
+import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
+import me.ahoo.cosec.runtime.attribute.BlacklistKind
+import me.ahoo.cosec.runtime.attribute.BlacklistSource
+import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
 import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
@@ -102,7 +112,14 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                       | { "fails": "message" },                       // the check reports an error
  * "membershipProvider": { "roles": { "<space>": [...] }, "attachments": [...] } | { "fails": "message" } | { "hangs": true },
  * "snapshot":           { "fails": "message" } | { "hangs": true },      // otherwise every document is installed
- * "options":            { "timeoutMillis": 5000, "authenticationTimeoutMillis": 1000, "membershipTimeoutMillis": 500 },
+ * "options":            { "timeoutMillis": 5000, "authenticationTimeoutMillis": 1000, "membershipTimeoutMillis": 500,
+ *                         "attributeTimeoutMillis": 300 },
+ * // External attributes (RFC 0006 §5.4): providers that declare them, which the documents are compiled against
+ * "attributeProviders": [{ "stage": "B", "declares": { "ext.geo.inFence": "bool" | "string" | "stringSet" | "ip" },
+ *                          "values": { "ext.geo.inFence": true } | "fails": "message" | "hangs": true }],
+ * // The real BlacklistAttributeProvider over an in-memory list holding the request's own principal, address
+ * // (10.0.0.1) or device, as named; or over a list that fails
+ * "blacklist":          { "blocks": ["principal", "ip", "device"] } | { "fails": "message" },
  * "cancel":             "authentication" | "memberships" | "snapshot"    // the caller goes away while it waits there
  * ```
  *
@@ -114,10 +131,17 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         val node = scenario.node
         node.only(
             "\$comment", "rules", "polarity", "level", "description", "documents", "http", "authentication",
-            "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations",
+            "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations", "attributeProviders",
+            "blacklist",
         )
+        val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
         documents.only("platform", "apps", "tenants", "unavailable")
+        val compiler = if (compiler === DocumentSnapshotCompiler && !attributes.isEmpty) {
+            DocumentSnapshotCompiler.with(attributes.catalog)
+        } else {
+            compiler
+        }
         val snapshot = try {
             compiler.compile(
                 ScenarioDocuments(
@@ -147,6 +171,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             membershipProvider = provider,
             idGenerator = StringIdGenerator { REQUEST_ID },
             options = options(node.get("options") ?: EMPTY),
+            attributes = attributes,
         )
         val facts = facts(node.get("http") ?: EMPTY)
         if (cancelAt != null) {
@@ -360,14 +385,72 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     }
 
     private fun options(node: JsonNode): PipelineOptions {
-        node.only("timeoutMillis", "authenticationTimeoutMillis", "membershipTimeoutMillis")
+        node.only("timeoutMillis", "authenticationTimeoutMillis", "membershipTimeoutMillis", "attributeTimeoutMillis")
         val defaults = PipelineOptions()
         fun millis(field: String) = node.get(field)?.let { it.asLong().milliseconds }
         return PipelineOptions(
             timeout = millis("timeoutMillis") ?: defaults.timeout,
             authenticationTimeout = millis("authenticationTimeoutMillis") ?: defaults.authenticationTimeout,
             membershipTimeout = millis("membershipTimeoutMillis") ?: defaults.membershipTimeout,
+            attributeTimeout = millis("attributeTimeoutMillis") ?: defaults.attributeTimeout,
         )
+    }
+
+    private fun attributeProviders(node: JsonNode): List<AttributeProvider> {
+        val providers = node.get("attributeProviders")?.values().orEmpty().map(::attributeProvider)
+        val blacklist = node.get("blacklist")?.let { blacklist ->
+            blacklist.only("blocks", "fails")
+            val source = blacklist.get("fails")?.let { fails ->
+                BlacklistSource { _, _ -> throw IllegalStateException(fails.text()) }
+            } ?: InMemoryBlacklistSource().apply {
+                blacklist.get("blocks")?.strings().orEmpty().forEach { kind ->
+                    when (kind) {
+                        "principal" -> block(BlacklistKind.PRINCIPAL, BlacklistKind.principal("acme", "alice"))
+                        "ip" -> block(BlacklistKind.IP, REMOTE_ADDRESS)
+                        "device" -> block(BlacklistKind.DEVICE, DEVICE_ID)
+                        else -> throw ScenarioFormatException("A blacklist blocks principal, ip or device, not $kind")
+                    }
+                }
+            }
+            BlacklistAttributeProvider(source)
+        }
+        return providers + listOfNotNull(blacklist)
+    }
+
+    /** One provider as the scenario declares it: its values, or a failure, or no answer. */
+    private fun attributeProvider(node: JsonNode): AttributeProvider {
+        node.only("stage", "declares", "values", "fails", "hangs")
+        val stage = AttributeDeclaration.Stage.valueOf(node.get("stage")?.text() ?: "B")
+        val declared = node.required("declares").fields().map { (path, type) ->
+            val attributeType = ATTRIBUTE_TYPES[type.text()]
+                ?: throw ScenarioFormatException("An attribute type is one of ${ATTRIBUTE_TYPES.keys}, not $type")
+            AttributeDeclaration(path, attributeType, stage)
+        }
+        val types = declared.associate { it.path to it.type }
+        val values = node.get("values")?.fields().orEmpty().mapValues { (path, value) ->
+            val type = types[path] ?: throw ScenarioFormatException("A value for $path, which the provider does not declare")
+            attributeValue(type, value)
+        }
+        val fails = node.get("fails")?.text()
+        val hangs = node.get("hangs")?.bool() == true
+        return object : AttributeProvider {
+            override val attributes = declared
+
+            override suspend fun fetch(request: AttributeRequest, names: Set<String>): Map<String, Any> {
+                fails?.let { throw IllegalStateException(it) }
+                if (hangs) awaitCancellation()
+                return values.filterKeys { it in names }
+            }
+        }
+    }
+
+    /** A value as JSON writes it; the wrong JSON for the declared type is kept, to check it is unavailable. */
+    private fun attributeValue(type: AttributeType, value: JsonNode): Any = when {
+        value.isBoolean -> value.booleanValue()
+        value.isArray -> value.strings().toSet()
+        type == AttributeType.IP -> IpAddress.parse(value.text())
+            ?: throw ScenarioFormatException("Not an IP address: $value")
+        else -> value.text()
     }
 
     private fun facts(node: JsonNode): HttpFacts {
@@ -381,7 +464,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             rawQuery = node.get("query")?.textOrNull(),
             headers = Headers.of(headers),
             cookies = Cookies.EMPTY,
-            remoteAddress = "10.0.0.1",
+            remoteAddress = REMOTE_ADDRESS,
             host = HostScope(node.get("hostApp")?.textOrNull()?.let(::AppId)),
         )
     }
@@ -392,6 +475,16 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
     private companion object {
         const val REQUEST_ID = "scenario-request"
+        const val REMOTE_ADDRESS = "10.0.0.1"
+
+        /** The device a `blacklist` that blocks `device` names; a request sends it as `CoSec-Device-Id`. */
+        const val DEVICE_ID = "device-1"
+        val ATTRIBUTE_TYPES = mapOf(
+            "string" to AttributeType.STRING,
+            "bool" to AttributeType.BOOL,
+            "stringSet" to AttributeType.STRING_SET,
+            "ip" to AttributeType.IP,
+        )
 
         /** The time API keys are judged at, the default request time of the `engine` runner. */
         const val NOW = "2026-11-01T00:00:00Z"

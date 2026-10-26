@@ -53,6 +53,13 @@ class CompiledPolicy(
     private val denyIndex: StatementIndex?
     private val allowIndex: StatementIndex?
 
+    /** The external attributes [condition] reads. */
+    internal val externals: Array<Attribute> =
+        condition?.let { ConditionAttributes.of(it).filter(Attribute::external).distinct().toTypedArray() } ?: NO_ATTRIBUTES
+
+    /** Whether the policy reads any external attribute, in its condition or a statement's. */
+    internal val readsExternal: Boolean = externals.isNotEmpty() || statements.any { it.externals.isNotEmpty() }
+
     /** Allocated once, so attaching the policy allocates nothing per request. */
     internal val attached: BindingRef.Attached = BindingRef.Attached(id)
 

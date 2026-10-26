@@ -1,0 +1,41 @@
+{
+  "rules": [
+    "BLK-1"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The blacklist holds the request's address: the builtin rule denies though an ALLOW matches.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "blacklist": {
+    "blocks": [
+      "ip"
+    ]
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

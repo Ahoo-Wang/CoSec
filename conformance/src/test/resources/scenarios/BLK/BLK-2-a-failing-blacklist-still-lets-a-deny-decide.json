@@ -1,0 +1,55 @@
+{
+  "rules": [
+    "BLK-2"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The blacklist cannot be read, and a DENY matches: 403.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "deny-all",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        },
+        {
+          "id": "g:deny-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "deny-all"
+        }
+      ]
+    }
+  },
+  "blacklist": {
+    "fails": "blacklist is down"
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

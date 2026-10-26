@@ -33,8 +33,16 @@ enum class AttributeType {
  *
  * Header names are case-insensitive, so `http.header.<name>` keeps the name in ASCII lower case.
  */
-class Attribute private constructor(val kind: Kind, val name: String) {
-    val type: AttributeType get() = kind.type
+class Attribute private constructor(
+    val kind: Kind,
+    val name: String,
+    /** The declared type of an [Kind.EXTERNAL] attribute; every other kind has its own. */
+    private val externalType: AttributeType? = null,
+) {
+    val type: AttributeType get() = externalType ?: kind.type
+
+    /** Whether an `AttributeProvider` supplies it (RFC 0006 §5.4): its value can be unavailable, unlike any other. */
+    val external: Boolean get() = kind == Kind.EXTERNAL
 
     val path: String = kind.path + name
 
@@ -92,12 +100,22 @@ class Attribute private constructor(val kind: Kind, val name: String) {
         HTTP_ORIGIN_HOST_LABELS("http.origin.host.labels", AttributeType.LABELS),
         HTTP_REFERER_HOST_LABELS("http.referer.host.labels", AttributeType.LABELS),
         REQUEST_ATTRIBUTE("request.attributes.", AttributeType.STRING, parameterized = true),
+
+        /**
+         * `ext.<provider>.<name>`, supplied by an `AttributeProvider` (RFC 0006 §5.4.1) with the type it declares (the
+         * type here is a placeholder). Not in the built-in catalog: only an [AttributeCatalog] resolves these paths.
+         */
+        EXTERNAL("ext.", AttributeType.STRING, parameterized = true),
     }
 
     companion object {
         private val FIXED: Map<String, Attribute> = Kind.entries.filterNot { it.parameterized }
             .associate { it.path to Attribute(it, "") }
-        private val PARAMETERIZED: List<Kind> = Kind.entries.filter { it.parameterized }
+        private val PARAMETERIZED: List<Kind> = Kind.entries.filter { it.parameterized && it != Kind.EXTERNAL }
+
+        /** What an external attribute can be: a provider supplies plain values, never times or derived labels. */
+        val EXTERNAL_TYPES: Set<AttributeType> =
+            setOf(AttributeType.STRING, AttributeType.BOOL, AttributeType.STRING_SET, AttributeType.IP)
 
         /** The attribute of a kind that takes no name. */
         fun of(kind: Kind): Attribute {
@@ -108,11 +126,32 @@ class Attribute private constructor(val kind: Kind, val name: String) {
         /** The attribute [name] of a parameterized kind. */
         fun of(kind: Kind, name: String): Attribute {
             require(kind.parameterized) { "Attribute ${kind.path} takes no name." }
+            require(kind != Kind.EXTERNAL) { "External attributes have a declared type: use Attribute.external." }
             require(name.isNotEmpty()) { "Attribute ${kind.path}<name> needs a name." }
             return Attribute(kind, if (kind == Kind.HTTP_HEADER) Ascii.lowercase(name) else name)
         }
 
-        /** The catalog attribute at [path], or null if there is none. */
+        /**
+         * The external attribute at [path] (`ext.<provider>.<name>`) of [type]. [path] has the `ext.` prefix, a
+         * provider segment and a name, and [type] is one of [EXTERNAL_TYPES].
+         */
+        fun external(path: String, type: AttributeType): Attribute {
+            require(type in EXTERNAL_TYPES) { "External attribute $path cannot be ${type.name}." }
+            require(isExternalPath(path)) { "External attribute paths are ext.<provider>.<name>, not $path." }
+            return Attribute(Kind.EXTERNAL, path.substring(Kind.EXTERNAL.path.length), type)
+        }
+
+        /** Whether [path] has the form of an external attribute: `ext.<provider>.<name>`, neither part empty. */
+        fun isExternalPath(path: String): Boolean {
+            if (!path.startsWith(Kind.EXTERNAL.path)) {
+                return false
+            }
+            val rest = path.substring(Kind.EXTERNAL.path.length)
+            val dot = rest.indexOf('.')
+            return dot > 0 && dot < rest.length - 1
+        }
+
+        /** The built-in catalog attribute at [path], or null if there is none. External attributes are never built in. */
         fun parse(path: String): Attribute? {
             FIXED[path]?.let { return it }
             for (kind in PARAMETERIZED) {
@@ -121,6 +160,32 @@ class Attribute private constructor(val kind: Kind, val name: String) {
                 }
             }
             return null
+        }
+    }
+}
+
+/**
+ * The external attributes the registered `AttributeProvider`s declare (RFC 0006 §5.4.1). Conditions are checked
+ * against the built-in catalog and this one; a path in `ext.` that no provider declares does not compile.
+ */
+fun interface AttributeCatalog {
+    /** The declared attribute at [path], or null when no provider declares it. */
+    fun external(path: String): Attribute?
+
+    companion object {
+        /** No provider: every `ext.` path is unknown. */
+        val NONE: AttributeCatalog = AttributeCatalog { null }
+
+        /** The catalog of [attributes], all external, with distinct paths. */
+        fun of(attributes: Collection<Attribute>): AttributeCatalog {
+            val byPath = HashMap<String, Attribute>(attributes.size * 2)
+            for (attribute in attributes) {
+                require(attribute.external) { "Not an external attribute: $attribute" }
+                require(
+                    byPath.put(attribute.path, attribute) == null
+                ) { "External attribute $attribute is declared twice." }
+            }
+            return AttributeCatalog { byPath[it] }
         }
     }
 }

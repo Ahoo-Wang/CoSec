@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.snapshot.document
 
+import me.ahoo.cosec.engine.flat.OnMissing
 import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.AppId
@@ -60,7 +61,7 @@ object PolicyDocumentCodec {
 
     private val DOCUMENT_FIELDS = arrayOf("schema", "revision", "publishedAt", "policies", "bindings")
     private val POLICY_FIELDS = arrayOf("id", "attachable", "condition", "statements")
-    private val STATEMENT_FIELDS = arrayOf("name", "effect", "action", "resource", "condition")
+    private val STATEMENT_FIELDS = arrayOf("name", "effect", "action", "resource", "condition", "onMissing")
     private val RESOURCE_FIELDS = arrayOf("pattern", "caseSensitive", "decodeAndParseSegments")
     private val BINDING_FIELDS = arrayOf("id", "subject", "app", "space", "policy", "expiresAt", "breakGlass")
 
@@ -120,7 +121,14 @@ object PolicyDocumentCodec {
             actions = node.required("action").strings(),
             resources = node.field("resource")?.let(::resources).orEmpty(),
             condition = node.field("condition")?.let(ConditionJson::read),
+            onMissing = node.field("onMissing")?.let(::onMissing),
         )
+    }
+
+    private fun onMissing(node: DocumentNode): OnMissing = when (val text = node.text()) {
+        "indeterminate" -> OnMissing.INDETERMINATE
+        "nomatch" -> OnMissing.NOMATCH
+        else -> node.fail("onMissing is indeterminate or nomatch, not [$text]")
     }
 
     /** A pattern or an object with options, or an array of them. */
@@ -261,6 +269,12 @@ object PolicyDocumentCodec {
                 }
             }
             statement.condition?.let { item.set("condition", ConditionJson.write(it)) }
+            statement.onMissing?.let {
+                item.put(
+                    "onMissing",
+                    if (it == OnMissing.NOMATCH) "nomatch" else "indeterminate"
+                )
+            }
         }
         return node
     }
