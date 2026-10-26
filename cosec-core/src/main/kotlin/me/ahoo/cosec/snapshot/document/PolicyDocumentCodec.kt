@@ -125,7 +125,15 @@ object PolicyDocumentCodec {
 
     /** A pattern or an object with options, or an array of them. */
     private fun resources(node: DocumentNode): List<ResourceSource> {
-        val items = if (node.json.isArray) node.elements().ifEmpty { node.fail("expected at least one resource") } else listOf(node)
+        val items = if (node.json.isArray) {
+            node.elements().ifEmpty {
+                node.fail(
+                    "expected at least one resource"
+                )
+            }
+        } else {
+            listOf(node)
+        }
         return items.map { item ->
             if (item.json.isObject) {
                 item.requireObject(*RESOURCE_FIELDS)

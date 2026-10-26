@@ -52,14 +52,7 @@ object JsonSchemaWriter {
                 type.exclusiveMinimum?.let { schema["exclusiveMinimum"] = it }
             }
 
-            is ArrayType -> arraySchema(type, file, schema)
-            is TupleType -> {
-                // Draft 7 tuples: positional items, nothing more, nothing less.
-                schema["type"] = "array"
-                schema["items"] = type.items.map { schemaOf(it, file) }
-                schema["additionalItems"] = false
-                schema["minItems"] = type.items.size
-            }
+            is ArrayType, is TupleType -> arraySchema(type, file, schema)
 
             is MapType -> {
                 schema["type"] = "object"
@@ -85,8 +78,16 @@ object JsonSchemaWriter {
         type.examples.takeIf { it.isNotEmpty() }?.let { schema["examples"] = it }
     }
 
-    private fun arraySchema(type: ArrayType, file: SchemaFile, schema: TreeMap<String, Any>) {
+    private fun arraySchema(type: FormatType, file: SchemaFile, schema: TreeMap<String, Any>) {
         schema["type"] = "array"
+        if (type is TupleType) {
+            // Draft 7 tuples: positional items, nothing more, nothing less.
+            schema["items"] = type.items.map { schemaOf(it, file) }
+            schema["additionalItems"] = false
+            schema["minItems"] = type.items.size
+            return
+        }
+        type as ArrayType
         schema["items"] = schemaOf(type.items, file)
         type.minItems?.let { schema["minItems"] = it }
         if (type.uniqueItems) {

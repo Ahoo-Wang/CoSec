@@ -31,8 +31,11 @@ import me.ahoo.cosec.snapshot.SnapshotFormatException
 import me.ahoo.cosec.snapshot.SnapshotKey
 
 /** A document that decodes but does not compile; it is never installed, and every request needing it fails closed. */
-class DocumentCompileException(val document: String, val errors: List<CompileError>) :
-    CoSecException("The $document document does not compile: " + errors.joinToString("; ") { "${it.path}: ${it.message}" })
+class DocumentCompileException(val document: String, val errors: List<CompileError>, cause: Throwable? = null) :
+    CoSecException(
+        "The $document document does not compile: " + errors.joinToString("; ") { "${it.path}: ${it.message}" },
+        cause,
+    )
 
 /**
  * Compiles platform, app and tenant documents ([PolicyDocument]) into the engine's [CompiledDocument]s (RFC 0004 §7,
@@ -84,7 +87,14 @@ class PolicyDocumentCompiler(
     fun compile(document: PolicyDocument): CompiledDocument {
         val name = describe(document)
         val errors = ArrayList<CompileError>()
-        val compiled = document.policies.mapIndexedNotNull { i, policy -> policy(document, policy, "$.policies[$i]", errors) }
+        val compiled = document.policies.mapIndexedNotNull { i, policy ->
+            policy(
+                document,
+                policy,
+                "$.policies[$i]",
+                errors
+            )
+        }
         checkBindings(document, errors)
         if (errors.isNotEmpty()) {
             throw DocumentCompileException(name, errors)
@@ -96,7 +106,7 @@ class PolicyDocumentCompiler(
                 DocumentKind.TENANT -> CompiledDocument.tenant(TenantId(document.owner), compiled, document.bindings)
             }
         } catch (error: IllegalArgumentException) {
-            throw DocumentCompileException(name, listOf(CompileError("$", error.message ?: "invalid")))
+            throw DocumentCompileException(name, listOf(CompileError("$", error.message ?: "invalid")), error)
         }
     }
 
@@ -113,7 +123,10 @@ class PolicyDocumentCompiler(
             BuiltinPolicies.ROOT.value
         val errors = document.bindings.withIndex().filter { (_, binding) -> binding.policy.value !in defined }
             .map { (i, binding) ->
-                CompileError("$.bindings[$i].policy", "[${binding.policy.value}] is defined neither here nor in the platform")
+                CompileError(
+                    "$.bindings[$i].policy",
+                    "[${binding.policy.value}] is defined neither here nor in the platform"
+                )
             }
         if (errors.isNotEmpty()) {
             throw DocumentCompileException(describe(document), errors)

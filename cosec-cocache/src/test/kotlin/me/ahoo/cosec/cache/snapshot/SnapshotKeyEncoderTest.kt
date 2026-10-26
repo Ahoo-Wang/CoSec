@@ -59,7 +59,9 @@ class SnapshotKeyEncoderTest {
             assertThrownBy<IllegalArgumentException> { SnapshotKey.Tenant(id) }
         }
         listOf("acme", "(platform)", "(0)", "a*b", "t".repeat(128)).forEach { id ->
-            SnapshotKeyEncoder.decode(SnapshotKeyEncoder.encode(SnapshotKey.Tenant(id))).assert().isEqualTo(SnapshotKey.Tenant(id))
+            SnapshotKeyEncoder.decode(
+                SnapshotKeyEncoder.encode(SnapshotKey.Tenant(id))
+            ).assert().isEqualTo(SnapshotKey.Tenant(id))
         }
     }
 }

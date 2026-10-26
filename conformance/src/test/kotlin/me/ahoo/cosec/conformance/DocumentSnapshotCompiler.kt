@@ -13,11 +13,10 @@
 
 package me.ahoo.cosec.conformance
 
+import me.ahoo.cosec.CoSecException
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotFormatException
-import me.ahoo.cosec.snapshot.document.DocumentCompileException
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
 import tools.jackson.databind.JsonNode
@@ -74,10 +73,9 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
         document.get("policies")?.values()?.forEach { faulting(it as ObjectNode) }
         return try {
             compiler.compile(PolicyDocumentCodec.decode(kind, owner, CoSecJsonSerializer.writeValueAsBytes(document)))
-        } catch (error: SnapshotFormatException) {
-            throw DocumentException("The $name document does not decode: ${error.message}", error)
-        } catch (error: DocumentCompileException) {
-            throw DocumentException(error.message ?: "The $name document does not compile", error)
+        } catch (error: CoSecException) {
+            // SnapshotFormatException (does not decode) or DocumentCompileException (does not compile).
+            throw DocumentException("The $name document: ${error.message}", error)
         }
     }
 
@@ -92,7 +90,10 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
         val probe = factory.objectNode()
         probe.putArray("eq").add("request.attributes.$FAULT${fault.asString()}").add("")
         val condition = owner.remove(CONDITION)
-        owner.set(CONDITION, if (condition == null) probe else factory.objectNode().also { it.putArray("and").add(probe).add(condition) })
+        owner.set(
+            CONDITION,
+            if (condition == null) probe else factory.objectNode().also { it.putArray("and").add(probe).add(condition) }
+        )
     }
 
     private const val FAULT_FIELD = "fault"

@@ -41,18 +41,7 @@ internal object ConditionJson {
         }
         val operands = node.required(operator)
         return when (operator) {
-            "eq" -> binary(operands) { left, right -> Condition.Eq(left.text(), operand(right), ignoreCase ?: false) }
-            "prefix" -> binary(operands) { left, right -> Condition.Prefix(left.text(), string(right), ignoreCase ?: false) }
-            "cidr" -> binary(operands) { left, right -> Condition.Cidr(left.text(), right.elements().map(::string)) }
-            "in" -> binary(operands) { left, right ->
-                // [attribute, [literals]] or [literal, set attribute]; a set holds strings only.
-                if (right.json.isArray) {
-                    Condition.In(left.text(), right.elements().map(::literal))
-                } else {
-                    Condition.Contains(string(left), right.text())
-                }
-            }
-
+            "eq", "prefix", "cidr", "in" -> binary(operator, operands, ignoreCase ?: false)
             "time" -> time(operands)
             "exists" -> Condition.Exists(operands.text())
             "and" -> Condition.And(operands.elements().map(::read).ifEmpty { operands.fail("and needs a condition") })
@@ -62,12 +51,24 @@ internal object ConditionJson {
         }
     }
 
-    private inline fun binary(operands: DocumentNode, build: (DocumentNode, DocumentNode) -> Condition): Condition {
+    /** The operators written `[left, right]`. */
+    private fun binary(operator: String, operands: DocumentNode, ignoreCase: Boolean): Condition {
         val pair = operands.elements()
         if (pair.size != 2) {
             operands.fail("expected [left, right]")
         }
-        return build(pair[0], pair[1])
+        val (left, right) = pair
+        return when (operator) {
+            "eq" -> Condition.Eq(left.text(), operand(right), ignoreCase)
+            "prefix" -> Condition.Prefix(left.text(), string(right), ignoreCase)
+            "cidr" -> Condition.Cidr(left.text(), right.elements().map(::string))
+            // [attribute, [literals]] or [literal, set attribute]; a set holds strings only.
+            else -> if (right.json.isArray) {
+                Condition.In(left.text(), right.elements().map(::literal))
+            } else {
+                Condition.Contains(string(left), right.text())
+            }
+        }
     }
 
     private fun operand(node: DocumentNode): Operand =
@@ -102,6 +103,22 @@ internal object ConditionJson {
     fun write(condition: Condition): JsonNode {
         val node = factory.objectNode()
         when (condition) {
+            is Condition.Time -> time(node.putObject("time"), condition)
+            is Condition.Exists -> node.put("exists", condition.attribute)
+            is Condition.And -> node.putArray(
+                "and"
+            ).also { array -> condition.conditions.forEach { array.add(write(it)) } }
+            is Condition.Or -> node.putArray(
+                "or"
+            ).also { array -> condition.conditions.forEach { array.add(write(it)) } }
+            is Condition.Not -> node.set("not", write(condition.condition))
+            else -> binary(node, condition)
+        }
+        return node
+    }
+
+    private fun binary(node: ObjectNode, condition: Condition) {
+        when (condition) {
             is Condition.Eq -> {
                 node.putArray("eq").add(condition.attribute).add(operand(condition.value))
                 if (condition.ignoreCase) node.put(IGNORE_CASE, true)
@@ -112,21 +129,15 @@ internal object ConditionJson {
                 if (condition.ignoreCase) node.put(IGNORE_CASE, true)
             }
 
-            is Condition.In -> node.putArray("in").add(condition.attribute)
-                .add(factory.arrayNode().also { array -> condition.values.forEach { array.add(literal(it)) } })
-
+            is Condition.In -> node.putArray("in").add(condition.attribute).add(literals(condition.values))
             is Condition.Contains -> node.putArray("in").add(literal(condition.value)).add(condition.attribute)
-            is Condition.Cidr -> node.putArray("cidr").add(condition.attribute)
-                .add(factory.arrayNode().also { array -> condition.blocks.forEach { array.add(literal(it)) } })
-
-            is Condition.Time -> time(node.putObject("time"), condition)
-            is Condition.Exists -> node.put("exists", condition.attribute)
-            is Condition.And -> node.putArray("and").also { array -> condition.conditions.forEach { array.add(write(it)) } }
-            is Condition.Or -> node.putArray("or").also { array -> condition.conditions.forEach { array.add(write(it)) } }
-            is Condition.Not -> node.set("not", write(condition.condition))
+            is Condition.Cidr -> node.putArray("cidr").add(condition.attribute).add(literals(condition.blocks))
+            else -> throw IllegalArgumentException("Not a binary condition: $condition")
         }
-        return node
     }
+
+    private fun literals(values: List<Literal>): JsonNode =
+        factory.arrayNode().also { array -> values.forEach { array.add(literal(it)) } }
 
     private fun time(node: ObjectNode, time: Condition.Time) {
         time.notBefore?.let { node.put("notBefore", it) }

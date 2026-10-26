@@ -44,6 +44,8 @@ import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import java.time.Instant
 
+/** Documents are written inline, one JSON line each. */
+@Suppress("MaxLineLength")
 class PolicyDocumentCompilerTest {
     private val compiler = PolicyDocumentCompiler()
 
@@ -87,7 +89,11 @@ class PolicyDocumentCompilerTest {
             mapOf(SpaceId.DEFAULT to roles.mapTo(LinkedHashSet(), ::RoleId)),
             emptyList(),
         )
-        val resolution = ScopeResolver.resolve(ScopeSubject(TenantId("acme"), true, memberships), DeclaredScope("order", ""), HostScope(null))
+        val resolution = ScopeResolver.resolve(
+            ScopeSubject(TenantId("acme"), true, memberships),
+            DeclaredScope("order", ""),
+            HostScope(null)
+        )
         val authz = AuthzRequest(
             Subject("alice", "acme", true, emptySet(), emptySet(), emptyMap(), false),
             Scope.declared("acme", "order", ""),
@@ -100,24 +106,45 @@ class PolicyDocumentCompilerTest {
             compiler.compile(SnapshotKey.App("order"), stored(app)),
             compiler.compile(SnapshotKey.Tenant("acme"), stored(tenant)),
         )
-        return CoSecFlatEngine.evaluate(FlatRequest(authz, (resolution as ScopeResolution.Resolved).scope, memberships, 0), view).decision
+        return CoSecFlatEngine.evaluate(
+            FlatRequest(authz, (resolution as ScopeResolution.Resolved).scope, memberships, 0),
+            view
+        ).decision
     }
 
     @Test
     fun `platform, app and tenant documents decide together`() {
         val ship = decide(Action("order", "ship"), Resource("order", "1", emptyMap()), listOf("shipper"))
         ship.assert().isEqualTo(
-            Decision.Permit(StatementRef.Policy(PolicyId("perm:order/ship"), 0, "ship", BindingRef.Bound(me.ahoo.cosec.model.BindingId("r1"), DocumentKind.APP))),
+            Decision.Permit(
+                StatementRef.Policy(
+                    PolicyId("perm:order/ship"),
+                    0,
+                    "ship",
+                    BindingRef.Bound(me.ahoo.cosec.model.BindingId("r1"), DocumentKind.APP)
+                )
+            ),
         )
         decide(Action("order", "read"), Resource("order", "1", emptyMap()), listOf("viewer")).assert()
             .isInstanceOf(Decision.Permit::class.java)
         decide(Action("order", "cancel"), Resource("order", "1", emptyMap()), listOf("shipper")).assert()
             .isEqualTo(
-                Decision.Deny(StatementRef.Policy(PolicyId("no-cancel"), 0, "cancel", BindingRef.Bound(me.ahoo.cosec.model.BindingId("t"), DocumentKind.TENANT))),
+                Decision.Deny(
+                    StatementRef.Policy(
+                        PolicyId("no-cancel"),
+                        0,
+                        "cancel",
+                        BindingRef.Bound(me.ahoo.cosec.model.BindingId("t"), DocumentKind.TENANT)
+                    )
+                ),
             )
         decide(Action("http", "GET"), Resource("http", "/admin/x", emptyMap()), emptyList()).assert()
             .isInstanceOf(Decision.Deny::class.java)
-        decide(Action("order", "read"), Resource("order", "1", emptyMap()), emptyList()).assert().isEqualTo(Decision.Deny(null))
+        decide(
+            Action("order", "read"),
+            Resource("order", "1", emptyMap()),
+            emptyList()
+        ).assert().isEqualTo(Decision.Deny(null))
     }
 
     /** DOC-3: a document that is not this version's format fails to decode; RFC 0003's keys are not read either. */
@@ -147,9 +174,15 @@ class PolicyDocumentCompilerTest {
     /** TNT-2: permission policies belong to their app's document; nothing else defines or binds them. */
     @Test
     fun `permission policies live in their app's document`() {
-        errors(SnapshotKey.Tenant("acme"), ""","policies":[{"id":"perm:order/ship","statements":[]}]""").single().assert()
+        errors(
+            SnapshotKey.Tenant("acme"),
+            ""","policies":[{"id":"perm:order/ship","statements":[]}]"""
+        ).single().assert()
             .startsWith("$.policies[0].id: [perm:] names an app's permission policy")
-        errors(SnapshotKey.Tenant("acme"), ""","bindings":[{"id":"b","subject":"*","app":"*","space":"*","policy":"perm:order/ship"}]""")
+        errors(
+            SnapshotKey.Tenant("acme"),
+            ""","bindings":[{"id":"b","subject":"*","app":"*","space":"*","policy":"perm:order/ship"}]"""
+        )
             .single().assert().startsWith("$.bindings[0].policy: [perm:order/ship] is another app's permission policy")
         errors(SnapshotKey.Platform, ""","policies":[{"id":"perm:order/ship","statements":[]}]""").single().assert()
             .startsWith("$.policies[0].id")
@@ -157,16 +190,24 @@ class PolicyDocumentCompilerTest {
             .isEqualTo("$.policies[0].id: a policy of app order is [perm:order/<permission>], not [ship]")
         errors(SnapshotKey.App("order"), ""","policies":[{"id":"perm:order/ship","attachable":true,"statements":[]}]""")
             .single().assert().isEqualTo("$.policies[0].attachable: a permission policy cannot be attached")
-        errors(SnapshotKey.App("order"), ""","bindings":[{"id":"b","subject":{"role":"r"},"app":"order","space":"*","policy":"perm:billing/pay"}]""")
+        errors(
+            SnapshotKey.App("order"),
+            ""","bindings":[{"id":"b","subject":{"role":"r"},"app":"order","space":"*","policy":"perm:billing/pay"}]"""
+        )
             .single().assert().contains("another app's permission policy")
-        errors(SnapshotKey.App("order"), ""","bindings":[{"id":"b","subject":{"role":"r"},"app":"order","space":"*","policy":"perm:order/gone"}]""")
+        errors(
+            SnapshotKey.App("order"),
+            ""","bindings":[{"id":"b","subject":{"role":"r"},"app":"order","space":"*","policy":"perm:order/gone"}]"""
+        )
             .single().assert().isEqualTo("$.bindings[0].policy: [perm:order/gone] is not defined in this document")
     }
 
     @Test
     fun `a document binds a bounded number of principals`() {
         val limited = PolicyDocumentCompiler(principalBindingLimit = 1)
-        val bindings = (1..2).joinToString(",") { """{"id":"b$it","subject":{"principal":"p$it"},"app":"*","space":"*","policy":"p"}""" }
+        val bindings = (1..2).joinToString(",") {
+            """{"id":"b$it","subject":{"principal":"p$it"},"app":"*","space":"*","policy":"p"}"""
+        }
         val body = ""","policies":[{"id":"p","statements":[]}],"bindings":[$bindings]"""
         try {
             limited.compile(SnapshotKey.Tenant("acme"), stored(body))
@@ -175,7 +216,9 @@ class PolicyDocumentCompilerTest {
             error.errors.single().message.assert().startsWith("2 principal bindings, more than 1")
             error.document.assert().isEqualTo("tenant acme")
         }
-        PolicyDocumentCompiler(principalBindingLimit = 2).compile(SnapshotKey.Tenant("acme"), stored(body)).owner.assert().isEqualTo("acme")
+        PolicyDocumentCompiler(
+            principalBindingLimit = 2
+        ).compile(SnapshotKey.Tenant("acme"), stored(body)).owner.assert().isEqualTo("acme")
         assertThrownBy<IllegalArgumentException> { PolicyDocumentCompiler(principalBindingLimit = -1) }
     }
 
@@ -204,7 +247,9 @@ class PolicyDocumentCompilerTest {
         val dangling = PolicyDocumentCodec.decode(
             DocumentKind.TENANT,
             "acme",
-            stored(""","bindings":[{"id":"b","subject":"*","app":"*","space":"*","policy":"gone"},{"id":"r","subject":{"principal":"cosec","tenant":"acme"},"app":"*","space":"*","policy":"cosec:root"}]""").bodyBytes(),
+            stored(
+                ""","bindings":[{"id":"b","subject":"*","app":"*","space":"*","policy":"gone"},{"id":"r","subject":{"principal":"cosec","tenant":"acme"},"app":"*","space":"*","policy":"cosec:root"}]"""
+            ).bodyBytes(),
         )
         try {
             compiler.checkReferences(dangling, platformDocument)
@@ -213,7 +258,11 @@ class PolicyDocumentCompilerTest {
             error.errors.map { it.path }.assert().containsExactly("$.bindings[0].policy")
         }
         // Without the check, the data plane compiles it and a request reaching the binding fails closed.
-        compiler.compile(dangling.let { PolicyDocument(it.kind, it.owner, it.revision, it.publishedAt, it.policies, it.bindings.take(1)) })
+        compiler.compile(
+            dangling.let {
+                PolicyDocument(it.kind, it.owner, it.revision, it.publishedAt, it.policies, it.bindings.take(1))
+            }
+        )
             .owner.assert().isEqualTo("acme")
     }
 }

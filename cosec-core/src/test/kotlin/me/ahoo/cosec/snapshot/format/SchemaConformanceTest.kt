@@ -24,17 +24,17 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.authorization.engine.Compiled
 import me.ahoo.cosec.authorization.engine.PolicySnapshotCompiler
 import me.ahoo.cosec.limiter.RateLimitRule
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.policy.condition.part.DefaultPartExtractor
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
-import me.ahoo.cosec.model.decision.DocumentKind
-import tools.jackson.databind.node.JsonNodeFactory
-import tools.jackson.databind.node.ObjectNode
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
+import tools.jackson.databind.node.JsonNodeFactory
+import tools.jackson.databind.node.ObjectNode
 import java.io.File
 import java.time.Instant
 import kotlin.random.Random
@@ -157,7 +157,11 @@ class SchemaConformanceTest {
      */
     private fun decodeDocument(node: JsonNode) {
         val bytes = CoSecJsonSerializer.writeValueAsBytes(node)
-        val kinds = listOf(DocumentKind.PLATFORM to "", DocumentKind.TENANT to "acme", DocumentKind.APP to "order-service")
+        val kinds = listOf(
+            DocumentKind.PLATFORM to "",
+            DocumentKind.TENANT to "acme",
+            DocumentKind.APP to "order-service"
+        )
         val errors = kinds.mapNotNull { (kind, owner) ->
             runCatching { PolicyDocumentCodec.decode(kind, owner, bytes) }.exceptionOrNull()
         }

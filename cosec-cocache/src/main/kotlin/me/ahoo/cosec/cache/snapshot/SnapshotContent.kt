@@ -133,7 +133,11 @@ sealed interface SnapshotContent {
             } catch (error: JacksonException) {
                 throw SnapshotFormatException("Snapshot document [$key] is not valid JSON.", error)
             }
-            return when (key) {
+            return content(key, sections)
+        }
+
+        private fun content(key: SnapshotKey, sections: Map<String, Any>): SnapshotContent =
+            when (key) {
                 SnapshotKey.Policies -> {
                     requireSections(key, sections.keys, setOf(POLICIES))
                     Policies(policiesOf(key, sections.getValue(POLICIES)))
@@ -150,7 +154,6 @@ sealed interface SnapshotContent {
                     )
                 }
             }
-        }
 
         /** One stored value: its tree, to check it, and its bytes, to write it back. */
         private class Stored(val tree: JsonNode, val raw: JsonNode)

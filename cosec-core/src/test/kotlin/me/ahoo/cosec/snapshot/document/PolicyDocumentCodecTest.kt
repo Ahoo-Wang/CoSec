@@ -28,6 +28,8 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
+/** Documents are written inline, one JSON line each. */
+@Suppress("MaxLineLength")
 class PolicyDocumentCodecTest {
     private val header = """"schema":2,"revision":3,"publishedAt":"2026-10-26T00:00:00Z""""
 
@@ -85,7 +87,9 @@ class PolicyDocumentCodecTest {
     /** DOC-2: `*` is Match.Any and only that; nothing can hold Match.Exactly("*"). */
     @Test
     fun `the wildcard is only ever Any`() {
-        val document = decode(""","policies":[{"id":"p","statements":[]}],"bindings":[{"id":"b","subject":"*","app":"*","space":"*","policy":"p"}]""")
+        val document = decode(
+            ""","policies":[{"id":"p","statements":[]}],"bindings":[{"id":"b","subject":"*","app":"*","space":"*","policy":"p"}]"""
+        )
         document.bindings.single().scope.app.assert().isEqualTo(Match.Any)
         document.bindings.single().scope.space.assert().isEqualTo(Match.Any)
         assertThrownBy<IllegalArgumentException> { Match.Exactly(AppId("*")) }
@@ -156,18 +160,46 @@ class PolicyDocumentCodecTest {
     @Test
     fun `the header must be this format's`() {
         fun decodeRaw(text: String) = PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", text.encodeToByteArray())
-        assertThrownBy<SnapshotFormatException> { decodeRaw("""{"schema":1,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"}""") }
+        assertThrownBy<SnapshotFormatException> {
+            decodeRaw(
+                """{"schema":1,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"}"""
+            )
+        }
             .hasMessageContaining("schema 1 is not this version's document format, 2")
-        assertThrownBy<SnapshotFormatException> { decodeRaw("""{"schema":2,"revision":0,"publishedAt":"2026-10-26T00:00:00Z"}""") }
+        assertThrownBy<SnapshotFormatException> {
+            decodeRaw(
+                """{"schema":2,"revision":0,"publishedAt":"2026-10-26T00:00:00Z"}"""
+            )
+        }
             .hasMessageContaining("$.revision: must be positive")
-        assertThrownBy<SnapshotFormatException> { decodeRaw("""{"schema":2,"revision":1.5,"publishedAt":"2026-10-26T00:00:00Z"}""") }
+        assertThrownBy<SnapshotFormatException> {
+            decodeRaw(
+                """{"schema":2,"revision":1.5,"publishedAt":"2026-10-26T00:00:00Z"}"""
+            )
+        }
         assertThrownBy<SnapshotFormatException> { decodeRaw("""{"schema":2,"revision":1}""") }
-        assertThrownBy<SnapshotFormatException> { decodeRaw("""{"schema":2,"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"}""") }
+        assertThrownBy<SnapshotFormatException> {
+            decodeRaw(
+                """{"schema":2,"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"}"""
+            )
+        }
             .hasMessageContaining("not a JSON document")
         assertThrownBy<SnapshotFormatException> { decodeRaw("") }
-        assertThrownBy<SnapshotFormatException> { decodeRaw("[]") }.hasMessageContaining("$: expected an object, found an array")
+        assertThrownBy<SnapshotFormatException> {
+            decodeRaw(
+                "[]"
+            )
+        }.hasMessageContaining("$: expected an object, found an array")
         assertThrownBy<IllegalArgumentException> {
-            PolicyDocument(DocumentKind.TENANT, "acme", 1, java.time.Instant.EPOCH, emptyList(), emptyList(), Catalog(emptyList()))
+            PolicyDocument(
+                DocumentKind.TENANT,
+                "acme",
+                1,
+                java.time.Instant.EPOCH,
+                emptyList(),
+                emptyList(),
+                Catalog(emptyList())
+            )
         }
     }
 }

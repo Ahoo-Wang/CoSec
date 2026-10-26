@@ -32,7 +32,9 @@ internal class DocumentNode(val json: JsonNode, val path: String) {
         }
         val unknown = names().filter { it !in allowed }
         if (unknown.isNotEmpty()) {
-            fail("unknown field${if (unknown.size > 1) "s" else ""} ${unknown.joinToString()}; expected ${allowed.joinToString()}")
+            fail(
+                "unknown field${if (unknown.size > 1) "s" else ""} ${unknown.joinToString()}; expected ${allowed.joinToString()}"
+            )
         }
         return this
     }
