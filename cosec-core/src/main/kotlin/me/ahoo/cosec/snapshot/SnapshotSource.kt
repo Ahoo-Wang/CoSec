@@ -38,8 +38,11 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.LongSupplier
 
 /**
- * Holds the compiled policy snapshot (RFC 0003 §4.2–§4.5): the shared [SnapshotKey.Policies] document, which is never
- * evicted, and up to [SnapshotOptions.maxApps] [SnapshotKey.App] documents, evicted least recently used.
+ * Holds the compiled policy snapshot (RFC 0003 §4.2–§4.5, RFC 0004 §7.4): one shared document, which every request needs
+ * and which is never evicted, and the documents of each [SnapshotFamily], each family holding up to its own bound and
+ * evicting least recently used. RFC 0003's source shares [SnapshotKey.Policies] and has one family of
+ * [SnapshotKey.App] documents; the 8.0 source ([documents]) shares [SnapshotKey.Platform] and has the app and tenant
+ * families. Every guarantee below holds for every key of every family alike.
  *
  * - [peek] is the hot path: a synchronous in-memory lookup with no future and no I/O, safe on an event loop.
  * - [load] reads and compiles what is missing. The store is read on the caller's thread (stores never block), every
@@ -80,8 +83,10 @@ import java.util.function.LongSupplier
  */
 class SnapshotSource<P : Any, A : Any> internal constructor(
     private val store: SnapshotDocumentStore,
-    policiesCompiler: SnapshotCompiler<P>,
-    private val appCompiler: SnapshotCompiler<A>,
+    /** The document every request needs. */
+    private val sharedKey: SnapshotKey,
+    sharedCompiler: SnapshotCompiler<P>,
+    families: List<SnapshotFamily<A>>,
     private val options: SnapshotOptions,
     private val clock: Clock,
     metrics: SnapshotMetrics,
@@ -90,6 +95,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private val ticker: LongSupplier,
 ) : AutoCloseable {
 
+    /** RFC 0003's source: the policies document, and app documents. */
     constructor(
         store: SnapshotDocumentStore,
         policiesCompiler: SnapshotCompiler<P>,
@@ -99,6 +105,29 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         metrics: SnapshotMetrics = SnapshotMetrics.NOOP,
     ) : this(store, policiesCompiler, appCompiler, options, clock, metrics, null, null, System::nanoTime)
 
+    internal constructor(
+        store: SnapshotDocumentStore,
+        policiesCompiler: SnapshotCompiler<P>,
+        appCompiler: SnapshotCompiler<A>,
+        options: SnapshotOptions,
+        clock: Clock,
+        metrics: SnapshotMetrics,
+        compileExecutor: Executor?,
+        scheduler: ScheduledExecutorService?,
+        ticker: LongSupplier,
+    ) : this(
+        store,
+        SnapshotKey.Policies,
+        policiesCompiler,
+        listOf(SnapshotFamily(SnapshotKind.APP, appCompiler, options.maxApps)),
+        options,
+        clock,
+        metrics,
+        compileExecutor,
+        scheduler,
+        ticker,
+    )
+
     private val metrics: SnapshotMetrics = GuardedSnapshotMetrics(metrics)
     private val ownsCompileExecutor = compileExecutor == null
     private val compileExecutor: Executor = compileExecutor ?: newCompileExecutor(options)
@@ -106,9 +135,16 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private val scheduler: ScheduledExecutorService = scheduler ?: newScheduler()
     private val housekeeping: ThreadPoolExecutor = newHousekeeping()
 
-    private val policies = Slot(SnapshotKey.Policies, policiesCompiler)
-    private val apps = ConcurrentHashMap<AppId, Slot<A>>()
+    private val shared = Slot(sharedKey, sharedCompiler)
+    private val families: List<Family> = families.map { Family(it) }
     private val evictionLock = Any()
+
+    init {
+        require(
+            this.families.map { it.spec.kind }.toSet().size == this.families.size
+        ) { "Families must differ in kind." }
+        require(this.families.none { it.spec.kind == sharedKey.kind }) { "The shared key cannot be a family's." }
+    }
 
     /** The last decoded revision read or installed per key, kept across eviction (see the class comment). */
     private val seen = ConcurrentHashMap<SnapshotKey, Seen>()
@@ -122,9 +158,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     @Volatile
     private var prewarmed = false
 
-    /** Tests only: runs between finding an app slot and using it, to force an eviction into that gap. */
+    /** Tests only: runs between finding a family's slot and using it, to force an eviction into that gap. */
     @Volatile
-    internal var afterSlotLookup: ((SnapshotKey.App) -> Unit)? = null
+    internal var afterSlotLookup: ((SnapshotKey) -> Unit)? = null
 
     private val subscription: AutoCloseable = store.subscribe(ChangeListener())
     private val periodic: ScheduledFuture<*>? = schedulePeriodic()
@@ -143,20 +179,46 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         if (closed) {
             return null
         }
-        val policiesEntry = policies.installed ?: return null
+        val policiesEntry = shared.installed ?: return null
         if (appId == null) {
-            metrics.onLoad(SnapshotKind.POLICIES, LoadOutcome.HIT)
+            metrics.onLoad(sharedKey.kind, LoadOutcome.HIT)
             return policiesEntry.alone
         }
-        val slot = apps[appId] ?: return null
-        val appEntry = slot.installed ?: return null
+        val appEntry = peekScoped(family(SnapshotKind.APP), appId) ?: return null
+        metrics.onLoad(sharedKey.kind, LoadOutcome.HIT)
+        metrics.onLoad(SnapshotKind.APP, LoadOutcome.HIT)
+        return Snapshot(policiesEntry, appEntry)
+    }
+
+    /**
+     * The installed shared document and the documents of [keys], each a key of one of this source's families, or null
+     * when one of them is not installed or this source is closed. Like [peek]: no I/O, no executor, the caller's thread.
+     *
+     * @throws IllegalArgumentException when a key belongs to no family of this source.
+     */
+    fun peekAll(keys: List<SnapshotKey>): SnapshotSet<P, A>? {
+        val families = keys.map(::familyOf)
+        if (closed) {
+            return null
+        }
+        val sharedEntry = shared.installed ?: return null
+        val entries = ArrayList<SnapshotEntry<A>>(keys.size)
+        for (i in keys.indices) {
+            entries += peekScoped(families[i], families[i].spec.idOf(keys[i])) ?: return null
+        }
+        metrics.onLoad(sharedKey.kind, LoadOutcome.HIT)
+        families.forEach { metrics.onLoad(it.spec.kind, LoadOutcome.HIT) }
+        return SnapshotSet(sharedEntry, entries)
+    }
+
+    private fun peekScoped(family: Family, id: String): SnapshotEntry<A>? {
+        val slot = family.slots[id] ?: return null
+        val entry = slot.installed ?: return null
         if (slot.removed) {
             return null
         }
         slot.touch()
-        metrics.onLoad(SnapshotKind.POLICIES, LoadOutcome.HIT)
-        metrics.onLoad(SnapshotKind.APP, LoadOutcome.HIT)
-        return Snapshot(policiesEntry, appEntry)
+        return entry
     }
 
     /**
@@ -178,12 +240,28 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         if (closed) {
             return CompletableFuture.failedFuture(closedError())
         }
-        val policiesEntry = policies.forRequest() ?: error("The policies slot is never removed.")
+        val policiesEntry = shared.forRequest() ?: error("The shared slot is never removed.")
         if (appKey == null) {
             return policiesEntry.thenApply { it.alone }
         }
-        val appEntry = withAppSlot(appKey) { it.forRequest() }
+        val appEntry = withSlot(appKey) { it.forRequest() }
         return policiesEntry.thenCombine(appEntry) { p, a -> Snapshot(p, a) }
+    }
+
+    /**
+     * The shared document and the documents of [keys], loading what is missing; see [load] for how it completes.
+     *
+     * @throws IllegalArgumentException when a key belongs to no family of this source.
+     */
+    fun loadAll(keys: List<SnapshotKey>): CompletableFuture<SnapshotSet<P, A>> {
+        keys.forEach(::familyOf)
+        if (closed) {
+            return CompletableFuture.failedFuture(closedError())
+        }
+        val sharedEntry = shared.forRequest() ?: error("The shared slot is never removed.")
+        val entries = keys.map { key -> withSlot(key) { it.forRequest() } }
+        return CompletableFuture.allOf(sharedEntry, *entries.toTypedArray())
+            .thenApply { SnapshotSet(sharedEntry.join(), entries.map { it.join() }) }
     }
 
     /**
@@ -203,10 +281,19 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * [SnapshotOptions.failClosedMaxLag]. Other tenants are never affected (RFC 0003 §4.5).
      */
     fun checkFresh(snapshot: Snapshot<*, *>, tenantId: String) {
+        checkFresh(tenantId) { snapshot.lagAt(it) }
+    }
+
+    /** [checkFresh] for the documents of one evaluation of the 8.0 source: the oldest of them decides. */
+    fun checkFresh(snapshot: SnapshotSet<*, *>, tenantId: String) {
+        checkFresh(tenantId) { snapshot.lagAt(it) }
+    }
+
+    private inline fun checkFresh(tenantId: String, lagAt: (Instant) -> Duration) {
         if (options.failClosedTenants.isEmpty() || tenantId !in options.failClosedTenants) {
             return
         }
-        val lag = snapshot.lagAt(clock.instant())
+        val lag = lagAt(clock.instant())
         if (lag > options.failClosedMaxLag) {
             throw SnapshotStaleException(tenantId, lag, options.failClosedMaxLag)
         }
@@ -214,19 +301,20 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     /** Every installed entry: for gauges and the actuator endpoint. */
     fun entries(): List<SnapshotEntry<*>> = buildList {
-        policies.installed?.let { add(it) }
-        apps.values.forEach { slot -> slot.installed?.let { add(it) } }
+        shared.installed?.let { add(it) }
+        families.forEach { family -> family.slots.values.forEach { slot -> slot.installed?.let { add(it) } } }
     }
 
     /**
      * Reads and compiles [key] again on this instance only, whether or not it is installed, with a full read that
      * bypasses the digest check. When a load is in flight, the returned future is that of the load started after it.
      */
-    fun reload(key: SnapshotKey): CompletableFuture<SnapshotEntry<*>> = when (key) {
-        SnapshotKey.Policies -> policies.reload(force = true)!!.thenApply<SnapshotEntry<*>> { it }
-        is SnapshotKey.App -> withAppSlot(key) { it.reload(force = true) }.thenApply<SnapshotEntry<*>> { it }
-        SnapshotKey.Platform, is SnapshotKey.Tenant -> unsupported(key)
-    }
+    fun reload(key: SnapshotKey): CompletableFuture<SnapshotEntry<*>> =
+        if (key == sharedKey) {
+            shared.reload(force = true)!!.thenApply<SnapshotEntry<*>> { it }
+        } else {
+            withSlot(key) { it.reload(force = true) }.thenApply<SnapshotEntry<*>> { it }
+        }
 
     /** Revalidates every installed document with a conditional read, a few at a time. */
     fun revalidate(): CompletableFuture<Void> = reloadAll(installedSlots()) { it.load() }
@@ -324,28 +412,32 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * (evicted or forgotten) before the action could start a load on it. A removed slot still in the map is dropped
      * here too, so the retry never waits for the remover.
      */
-    private inline fun <R : Any> withAppSlot(key: SnapshotKey.App, action: (Slot<A>) -> R?): R {
+    private inline fun <R : Any> withSlot(key: SnapshotKey, action: (Slot<A>) -> R?): R {
+        val family = familyOf(key)
+        val id = family.spec.idOf(key)
         while (true) {
-            val slot = apps.computeIfAbsent(key.appId) { Slot(key, appCompiler) }
+            val slot = family.slots.computeIfAbsent(id) { Slot(key, family.spec.compiler) }
             afterSlotLookup?.invoke(key)
             action(slot)?.let { return it }
-            apps.remove(key.appId, slot)
+            family.slots.remove(id, slot)
         }
     }
 
-    private fun usableOf(key: SnapshotKey): CompletableFuture<out SnapshotEntry<*>> = when (key) {
-        SnapshotKey.Policies -> policies.usable()!!
-        is SnapshotKey.App -> withAppSlot(key) { it.usable() }
-        SnapshotKey.Platform, is SnapshotKey.Tenant -> unsupported(key)
-    }
+    private fun usableOf(key: SnapshotKey): CompletableFuture<out SnapshotEntry<*>> =
+        if (key == sharedKey) shared.usable()!! else withSlot(key) { it.usable() }
 
-    /** This source serves RFC 0003's pair of documents; the platform and tenant documents need their own. */
-    private fun unsupported(key: SnapshotKey): Nothing =
-        throw IllegalArgumentException("[$key] is not one of this source's documents (policies, app).")
+    /** The family [key] belongs to; [IllegalArgumentException] when it is no document of this source. */
+    private fun familyOf(key: SnapshotKey): Family =
+        families.firstOrNull { it.spec.kind == key.kind }
+            ?: throw IllegalArgumentException("[$key] is not one of this source's documents.")
+
+    private fun family(kind: SnapshotKind): Family =
+        families.firstOrNull { it.spec.kind == kind }
+            ?: throw IllegalArgumentException("This source has no $kind documents.")
 
     private fun installedSlots(): List<Slot<*>> = buildList {
-        if (policies.installed != null) add(policies)
-        apps.values.filterTo(this) { it.installed != null }
+        if (shared.installed != null) add(shared)
+        families.forEach { family -> family.slots.values.filterTo(this) { it.installed != null } }
     }
 
     /**
@@ -415,22 +507,33 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
     }
 
-    /** Tests only: evicts the slot of [key] now, as [evictApps] would, if it is idle. */
-    internal fun evict(key: SnapshotKey.App): Boolean = apps[key.appId]?.removeIfIdle(onlyIfEmpty = false) ?: false
+    /** Tests only: evicts the slot of [key] now, as [evictBeyond] would, if it is idle. */
+    internal fun evict(key: SnapshotKey): Boolean {
+        val family = familyOf(key)
+        return family.slots[family.spec.idOf(key)]?.removeIfIdle(onlyIfEmpty = false) ?: false
+    }
 
-    private fun evictApps() {
-        if (apps.size <= options.maxApps) {
+    /** Evicts the least recently used idle documents of [family] beyond its bound. */
+    private fun evictBeyond(family: Family) {
+        val slots = family.slots
+        val bound = family.spec.maxEntries
+        if (slots.size <= bound) {
             return
         }
         synchronized(evictionLock) {
-            while (apps.size > options.maxApps) {
-                val victim = apps.values.filter { it.installed != null && it.isIdle() }.minByOrNull { it.lastAccess } ?: return
+            while (slots.size > bound) {
+                val victim = slots.values.filter { it.installed != null && it.isIdle() }.minByOrNull { it.lastAccess } ?: return
                 if (victim.removeIfIdle(onlyIfEmpty = false)) {
                     lastLagReport.remove(victim.key)
                     log.debug { "Evicted snapshot document [${victim.key}]." }
                 }
             }
         }
+    }
+
+    /** One family's documents, by id. */
+    private inner class Family(val spec: SnapshotFamily<A>) {
+        val slots = ConcurrentHashMap<String, Slot<A>>()
     }
 
     /** Registers the decoded revision of [entry]; returns the previous one when [entry] regresses from it. */
@@ -516,14 +619,17 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
          * document is installed. The checks and the mark happen under this slot's lock.
          */
         fun removeIfIdle(onlyIfEmpty: Boolean): Boolean {
-            val appKey = key as? SnapshotKey.App ?: return false
+            // The shared slot is never removed.
+            val family = families.firstOrNull { it.spec.kind == key.kind } ?: return false
             synchronized(this) {
                 val holdsDocument = onlyIfEmpty && installed != null
                 if (inFlight != null || removed || holdsDocument) {
                     return false
                 }
                 removed = true
-                apps.computeIfPresent(appKey.appId) { _, current -> current.takeUnless { it === this } }
+                family.slots.computeIfPresent(
+                    family.spec.idOf(key)
+                ) { _, current -> current.takeUnless { it === this } }
             }
             return true
         }
@@ -925,7 +1031,13 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             if (empty) {
                 offRequestThread { removeIfIdle(onlyIfEmpty = true) }
             } else if (install) {
-                offRequestThread { evictApps() }
+                families.firstOrNull { it.spec.kind == key.kind }?.let { family ->
+                    offRequestThread {
+                        evictBeyond(
+                            family
+                        )
+                    }
+                }
             }
         }
 
@@ -989,12 +1101,13 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private inner class ChangeListener : SnapshotChangeListener {
         override fun onChanged(keys: Collection<SnapshotKey>) {
             for (key in keys) {
-                when (key) {
-                    SnapshotKey.Policies -> policies.onChanged()
-                    is SnapshotKey.App -> apps[key.appId]?.onChanged()
-                    // Not this source's documents: another source is notified of them.
-                    SnapshotKey.Platform, is SnapshotKey.Tenant -> Unit
+                if (key == sharedKey) {
+                    shared.onChanged()
+                    continue
                 }
+                // A key of no family here is another source's document.
+                val family = families.firstOrNull { it.spec.kind == key.kind } ?: continue
+                family.slots[family.spec.idOf(key)]?.onChanged()
             }
         }
 

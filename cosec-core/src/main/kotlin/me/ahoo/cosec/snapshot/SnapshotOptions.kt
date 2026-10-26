@@ -33,6 +33,8 @@ data class SnapshotOptions(
     val coldLoadTimeout: Duration = Duration.ofSeconds(2),
     /** The most app documents held at once; the least recently used one is evicted beyond it. */
     val maxApps: Int = 1024,
+    /** The most tenant documents held at once (RFC 0004 Q15); the least recently used one is evicted beyond it. */
+    val maxTenants: Int = 1024,
     val compileThreads: Int = 2,
     /** Compilations waiting for a thread; beyond it a load fails closed (RFC 0003 §6 F8). */
     val compileQueueCapacity: Int = 64,
@@ -53,6 +55,7 @@ data class SnapshotOptions(
         require(!failClosedMaxLag.isNegative) { "failClosedMaxLag must not be negative." }
         require((!coldLoadTimeout.isNegative && !coldLoadTimeout.isZero)) { "coldLoadTimeout must be positive." }
         require(maxApps > 0) { "maxApps must be positive." }
+        require(maxTenants > 0) { "maxTenants must be positive." }
         require(compileThreads > 0) { "compileThreads must be positive." }
         require(compileQueueCapacity > 0) { "compileQueueCapacity must be positive." }
         require(reloadConcurrency > 0) { "reloadConcurrency must be positive." }
