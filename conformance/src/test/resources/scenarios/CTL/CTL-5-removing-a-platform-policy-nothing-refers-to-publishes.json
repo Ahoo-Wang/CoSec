@@ -1,0 +1,53 @@
+{
+  "rules": [
+    "CTL-5"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Tenant acme stopped binding shared before the platform candidate removes it: the back-reference was dropped and the platform publishes revision 2.",
+  "publishes": [
+    {
+      "document": "platform",
+      "policies": [
+        "shared",
+        "other"
+      ]
+    },
+    {
+      "bindings": [
+        "shared"
+      ]
+    },
+    {},
+    {
+      "document": "platform",
+      "policies": [
+        "other"
+      ]
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published",
+      "Published",
+      "Published"
+    ],
+    "head": {
+      "revision": 2,
+      "parent": 1,
+      "parentRecord": true
+    },
+    "records": 2,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head"
+    ]
+  }
+}

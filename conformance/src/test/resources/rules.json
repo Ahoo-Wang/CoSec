@@ -622,7 +622,11 @@
       "source": "RFC 0007 §5.4",
       "statement": "The revision record is written before the head, and the head carries its parent.",
       "level": "control",
-      "pending": "RFC 0007 PR-4"
+      "guards": [
+        "control:RevisionsTest",
+        "cosec-cocache:RevisionChainTest"
+      ],
+      "pending": null
     },
     {
       "id": "CTL-3",
@@ -630,6 +634,27 @@
       "statement": "simulate, explain and analyze call the same Engine.evaluate as enforcement, and explanations are built by the enforcing flow.",
       "level": "control",
       "pending": "RFC 0007 PR-9"
+    },
+    {
+      "id": "CTL-4",
+      "source": "RFC 0007 §5.4, §5.5",
+      "statement": "A head is replaced only over the digest of the base it was published on; a stale base conflicts, nothing is overwritten and the change is not rebased automatically.",
+      "level": "control",
+      "guards": [
+        "control:RevisionsTest",
+        "cosec-cocache:RevisionChainTest#two instances publishing on the same base never overwrite each other"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-5",
+      "source": "RFC 0007 §5.8",
+      "statement": "A platform or app candidate that removes a policy another document's binding refers to is not published; the back-reference index is added to before a head moves and removed from only after.",
+      "level": "control",
+      "guards": [
+        "control:RevisionsTest"
+      ],
+      "pending": null
     },
     {
       "id": "GRT-1",

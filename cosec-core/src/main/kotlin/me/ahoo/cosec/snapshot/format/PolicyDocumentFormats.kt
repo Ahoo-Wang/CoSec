@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.snapshot.format
 
+import me.ahoo.cosec.snapshot.document.ProvenanceKind
 import me.ahoo.cosec.snapshot.format.DocumentFormats.BINDING
 import me.ahoo.cosec.snapshot.format.DocumentFormats.CATALOG
 import me.ahoo.cosec.snapshot.format.DocumentFormats.DEFINITIONS
@@ -146,6 +147,18 @@ internal object PolicyDocumentFormats {
             StringType(format = "date-time", examples = listOf("2026-10-26T00:00:00Z")),
             required = true
         ),
+        Field(
+            "provenance",
+            ref(SNAPSHOT_DOCUMENT, "provenance"),
+            description = "Where the revision came from (RFC 0007 §5.3); the control plane writes it on every publish.",
+        ),
+    )
+
+    private val actor = ObjectType(
+        listOf(
+            Field("tenant", StringType(minLength = 1, examples = listOf("acme", "(platform)")), required = true),
+            Field("principal", StringType(minLength = 1, examples = listOf("alice", "ops-1")), required = true),
+        ),
     )
 
     private val documentSections = listOf(
@@ -161,6 +174,43 @@ internal object PolicyDocumentFormats {
         "appDocument" to ObjectType(
             documentHeader + Field("catalog", ref(CATALOG)) + documentSections,
             description = "An app document: its catalog, its permission policies `perm:<app>/<permission>` and role bindings.",
+        ),
+        "provenance" to ObjectType(
+            listOf(
+                Field(
+                    "parent",
+                    ObjectType(
+                        listOf(
+                            Field("revision", IntegerType(minimum = 1), required = true),
+                            Field(
+                                "digest",
+                                StringType(pattern = DIGEST, examples = listOf("9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6")),
+                                required = true,
+                                description = "The store's digest of the parent: the address of its revision record.",
+                            ),
+                        ),
+                    ),
+                    description = "The head this revision replaced; absent for the first revision.",
+                ),
+                Field("change", StringType(minLength = 1, examples = listOf("0QH8K3")), required = true),
+                Field(
+                    "kind",
+                    StringType(enum = ProvenanceKind.entries.map { it.name }),
+                    required = true,
+                ),
+                Field("publishedBy", actor, required = true),
+                Field("approvedBy", ArrayType(actor), description = "Absent or empty without an approval."),
+                Field(
+                    "shadow",
+                    ObjectType(
+                        listOf(
+                            Field("window", StringType(minLength = 1, examples = listOf("0QH8M1"))),
+                            Field("skipped", BooleanType(), required = true),
+                        ),
+                    ),
+                ),
+            ),
+            description = "The control plane's record of how a revision was published; it decides nothing.",
         ),
         "policy" to ObjectType(
             listOf(
@@ -241,3 +291,4 @@ internal object PolicyDocumentFormats {
 }
 
 private const val TIME_OF_DAY = "^\\d{2}:\\d{2}(:\\d{2})?$"
+private const val DIGEST = "^[0-9a-f]{40}$"
