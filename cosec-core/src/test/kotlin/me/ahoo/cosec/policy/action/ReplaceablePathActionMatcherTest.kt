@@ -16,10 +16,10 @@ package me.ahoo.cosec.policy.action
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.context.request.Request
-import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
-import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.api.permission.Permission
 import me.ahoo.cosec.api.policy.Statement
+import me.ahoo.cosec.configuration.JsonConfiguration.Companion.asConfiguration
+import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.limiter.RateLimitRule
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
@@ -144,6 +144,16 @@ internal class ReplaceablePathActionMatcherTest {
         matcher.match(request("/orgs/acme/users/alice/1"), securityContext).assert().isTrue()
         securityContext.getPathVariables().assert().isEqualTo(mapOf("org" to "acme"))
         matcher.match(request("/orgs/acme/users/bob/1"), context("alice")).assert().isFalse()
+    }
+
+    @Test
+    fun aHoleInsideACaptureIsRejectedWhenBuilt() {
+        assertThrows<IllegalArgumentException> {
+            PathActionMatcherFactory.INSTANCE.create("/files/{name:#{principal.attributes['ext']}}".asConfiguration())
+        }
+        assertThrows<IllegalArgumentException> {
+            PathActionMatcherFactory.INSTANCE.create("/files/{#{principal.id}}".asConfiguration())
+        }
     }
 
     @Test
