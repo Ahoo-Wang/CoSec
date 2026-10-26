@@ -1,0 +1,40 @@
+{
+  "rules": [
+    "BND-8"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The order-service document binds a role in app billing, where its bindings are never read.",
+  "documents": {
+    "apps": {
+      "order-service": {
+        "policies": [
+          {
+            "id": "perm",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:editor",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "billing",
+            "space": "*",
+            "policy": "perm"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "is scoped to another app"
+  }
+}

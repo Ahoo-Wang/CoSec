@@ -122,8 +122,8 @@ PR-9 只做库与 HTTP，starter 装配移进切换（RFC 0008 §4.1）。
 取消的 PR：RFC 0002 PR-6、RFC 0003 PR-5、RFC 0004 PR-6、RFC 0005 PR-7、RFC 0006 PR-8、RFC 0007 PR-10，以及第 2、3 阶段的门槛与门槛 A–D。
 并入切换的 PR：RFC 0003 PR-6、RFC 0004 PR-7/PR-8、RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。
 
-PR-1 的登记表（`conformance/src/test/resources/rules.json`）有 64 条规则：31 条已有场景（`SCP`、`MEM`、`BND`、`BLK`、`BRK`、`ALG`、`TNT-1`、`CND`、`ANA`，
-共 99 个正反例），33 条为 `pending`，各自写明实现它的 PR。每个实现 PR 把它实现的规则改为 `"pending": null` 并补上正例与反例，否则
+PR-1 的登记表（`conformance/src/test/resources/rules.json`）有 64 条规则：34 条已有场景（`SCP`、`MEM`、`BND`、`BLK`、`BRK`、`ALG`、`TNT-1`、`CND`、`ANA`，
+共 107 个正反例），30 条为 `pending`，各自写明实现它的 PR。每个实现 PR 把它实现的规则改为 `"pending": null` 并补上正例与反例，否则
 `:conformance:check` 失败；切换 PR 要求 `pending` 为空（RFC 0008 §3.9）。
 
 ---

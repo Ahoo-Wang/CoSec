@@ -1,0 +1,41 @@
+{
+  "rules": [
+    "BND-8"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The acme document binds a principal of globex, which no request reading the acme document can be.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "allow-all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "p:bob",
+            "subject": {
+              "principal": "bob",
+              "tenant": "globex"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "allow-all"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "binds a subject of tenant globex"
+  }
+}
