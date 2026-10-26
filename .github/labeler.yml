@@ -48,6 +48,9 @@
 'module: runtime':
   - changed-files:
       - any-glob-to-any-file: 'runtime/**'
+'module: control':
+  - changed-files:
+      - any-glob-to-any-file: 'control/**'
 'module: spring-boot-starter':
   - changed-files:
       - any-glob-to-any-file: 'cosec-spring-boot-starter/**'
