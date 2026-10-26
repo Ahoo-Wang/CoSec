@@ -79,8 +79,9 @@ CoCache 6.6 保留一份进程内副本。
 | `AppPermissionCache` | 按应用 id 的应用权限 | 是 | 无 | 请求被拒绝 | 只能用 `cocache.caches.AppPermissionCache.*` |
 | `RolePermissionCache` | 某个角色在一个应用、一个空间中的权限 id | 是 | 无 | 请求被拒绝 | `cosec.authorization.cache.role.*` |
 | `RevokedTokenCache` | 已吊销的令牌 id（开启令牌吊销时） | 否 | 令牌的刷新令牌剩余寿命，再加 1 秒 | 令牌被接受 | `cosec.authorization.cache.token.*`（30 秒，100,000 条） |
+| `RevokedSubjectCache` | [全部令牌被吊销](../integration/authentication.md#revoking-every-token-of-a-principal)的主体（开启令牌吊销时） | 否 | `issuedBefore` 之后一个刷新令牌有效期，再加 1 秒 | 令牌被接受 | `cosec.authorization.cache.token.*`，与 `RevokedTokenCache` 相同 |
 
-每个缓存遇到解码不了的值都会失败，`RevokedTokenCache` 也不例外：删除一条读不懂的吊销记录会让对应令牌重新有效。
+每个缓存遇到解码不了的值都会失败，两个吊销缓存也不例外：删除一条读不懂的吊销记录会让对应令牌重新有效。
 
 已吊销令牌不是权威存储。每条吊销记录带有自己的寿命，令牌也会自行过期，所以读取失败时有意降级。"未吊销"的结果在本地缓存
 30 秒，这限定了失效消息丢失时，其他实例最多多久察觉不到一次新的吊销。
@@ -98,6 +99,7 @@ CoCache 6.6 保留一份进程内副本。
 | `<p>:app:role:permission:<appId>:<roleId>` | `RolePermissionCache` | 某角色在默认空间的权限 id（CoCache 值） |
 | `<p>:app:role:permission:<appId>:<roleId>@<spaceId>` | `RolePermissionCache` | 某角色在空间 `<spaceId>` 的权限 id（CoCache 值） |
 | `<p>:token:revoked:<tokenId>` | `TokenStore.revoke`（登出） | 已吊销令牌 id（`jti`）对应 `true`，带 TTL（CoCache 值） |
+| `<p>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | 以 epoch 毫秒计的 `issuedBefore`，带 TTL（CoCache 值）；`<n>` 是 `<tenantId>` 的长度 |
 | `<p>:meta:schema` | schema 检查、迁移 | `7`：数据是 7.0 布局（[Schema 标记](#schema-marker)） |
 | `<h>:<policyId>` | 策略历史 | 修订列表，JSON，最新的在前，最多 `max-revisions` 条 |
 | `<h>:<policyId>:seq` | 策略历史 | 计数器：该策略最后一个修订号 |
@@ -126,7 +128,7 @@ CoCache 6.6 保留一份进程内副本。
 （[迁移数据](./upgrading.md#migrating-the-data)）。
 
 每个 CoSec 缓存有自己的失效通道：`cocache:inv:<p>:policy`、`cocache:inv:<p>:global`、`cocache:inv:<p>:app:permission`、
-`cocache:inv:<p>:app:role:permission` 和 `cocache:inv:<p>:token:revoked`，所以 key 前缀不同的部署在同一个 Redis 上互不干扰。
+`cocache:inv:<p>:app:role:permission`、`cocache:inv:<p>:token:revoked` 和 `cocache:inv:<p>:token:subject:revoked`，所以 key 前缀不同的部署在同一个 Redis 上互不干扰。
 
 ### Schema 标记 {#schema-marker}
 
@@ -168,7 +170,7 @@ CoSec 数据指 `<prefix>:policy:`、`<prefix>:global:policy`、`<prefix>:app:pe
 | 数据 | 行为 |
 |---|---|
 | 策略、全局策略索引、应用权限、角色授权 | 本地副本中的值继续可用。其他读取失败，请求以 `500` **被拒绝**。 |
-| 已吊销令牌 | 检查 **接受** 该令牌，避免一次故障拒绝所有已认证的请求。令牌仍会校验签名，也会自行过期。 |
+| 已吊销的令牌和主体 | 检查 **接受** 该令牌，避免一次故障拒绝所有已认证的请求。令牌仍会校验签名，也会自行过期。 |
 | Redis 中的 API key（`cosec.api-key.store=redis`） | 查询失败，请求以 `500` **被拒绝**。 |
 | 限流计数器 | 跳过该规则，请求继续；规则设置了 `strictFailure: true` 时返回 `429`（[失败时的行为](../policies/rate-limiting.md#failure-behavior)）。 |
 

@@ -43,9 +43,9 @@ import java.time.Duration
  *
  * CoCache stores an entry under `{keyPrefix}{namespace}:{key}`; each cache sets an empty `keyPrefix` and a namespace
  * of [cacheNamespace] (`cosec:policy`, `cosec:global`, `cosec:app:permission`, `cosec:app:role:permission`,
- * `cosec:token:revoked`, `cosec:snapshot`). Policies, the global policy index, app permissions and revoked tokens keep the keys of
- * CoSec 6.x, unless the key prefix ends with `:`, which 6.x did not trim; role grants moved to the app-scoped
- * `cosec:app:role:permission` in 7.0. The values are CoCache 6's binary format, so data written by CoSec 6.x
+ * `cosec:token:revoked`, `cosec:token:subject:revoked`, `cosec:snapshot`). Policies, the global policy index, app
+ * permissions and revoked tokens keep the keys of CoSec 6.x, unless the key prefix ends with `:`, which 6.x did not
+ * trim; role grants moved to the app-scoped `cosec:app:role:permission` in 7.0. The values are CoCache 6's binary format, so data written by CoSec 6.x
  * (CoCache 5) must be migrated before 7.0 reads it: see [CoSecCoCache5Migration], [RolePermissionKeyMigration] and
  * [CoSecSchemaMarker]. Each namespace also names its own invalidation channel `cocache:inv:{namespace}`, so
  * deployments with different key prefixes stay apart.
@@ -59,6 +59,9 @@ object CoSecCacheSpecs {
     const val APP_PERMISSION_CACHE_NAME = "AppPermissionCache"
     const val ROLE_PERMISSION_CACHE_NAME = "RolePermissionCache"
     const val REVOKED_TOKEN_CACHE_NAME = "RevokedTokenCache"
+
+    /** The principals whose tokens were revoked all at once (RFC 0004 §4.5.3). */
+    const val REVOKED_SUBJECT_CACHE_NAME = "RevokedSubjectCache"
 
     /** The snapshot documents of RFC 0003 (§4.1); nothing reads them before RFC 0003 PR-5 wires them. */
     const val POLICY_SNAPSHOT_CACHE_NAME = "PolicySnapshotCache"
@@ -87,6 +90,8 @@ object CoSecCacheSpecs {
         APP_PERMISSION_CACHE_NAME to "app:permission",
         ROLE_PERMISSION_CACHE_NAME to "app:role:permission",
         REVOKED_TOKEN_CACHE_NAME to "token:revoked",
+        // Not under token:revoked, whose keys are token ids.
+        REVOKED_SUBJECT_CACHE_NAME to "token:subject:revoked",
         POLICY_SNAPSHOT_CACHE_NAME to "snapshot",
     )
 
@@ -123,11 +128,11 @@ object CoSecCacheSpecs {
 
     /**
      * What CoSec fixes in the policy of [cacheName], applied after any customizer or property:
-     * [storeOfRecord] for policies and permissions, [failOnForeignFormat] for revoked tokens.
+     * [storeOfRecord] for policies and permissions, [failOnForeignFormat] for revoked tokens and subjects.
      */
     fun pinnedPolicy(cacheName: String, policy: CachePolicy): CachePolicy = when (cacheName) {
         in STORE_OF_RECORD_CACHE_NAMES -> policy.storeOfRecord()
-        REVOKED_TOKEN_CACHE_NAME -> policy.failOnForeignFormat()
+        REVOKED_TOKEN_CACHE_NAME, REVOKED_SUBJECT_CACHE_NAME -> policy.failOnForeignFormat()
         else -> policy
     }
 
@@ -206,6 +211,26 @@ object CoSecCacheSpecs {
         keyPrefix: String = CoSec.COSEC,
         policy: CachePolicy = CachePolicy.DEFAULT
     ): CacheSpec<String, Boolean> = CacheSpec.builder<String, Boolean>(REVOKED_TOKEN_CACHE_NAME)
+        .storageLayout(keyPrefix)
+        .codec(codec)
+        .policy(
+            policy.toBuilder()
+                .absentTtl(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
+                .build()
+                .failOnForeignFormat()
+        )
+        .build()
+
+    /**
+     * The revoked subjects, under the same rules as [revokedToken]: explicit lifetimes, CoCache's degraded read mode
+     * (the documented exception to failing closed), and unreadable content fails the read. A key is a subject's
+     * [RevokedSubjectCache.key]; a value is the revocation's `issuedBefore`, in epoch milliseconds.
+     */
+    fun revokedSubject(
+        codec: Codec<Long>,
+        keyPrefix: String = CoSec.COSEC,
+        policy: CachePolicy = CachePolicy.DEFAULT
+    ): CacheSpec<String, Long> = CacheSpec.builder<String, Long>(REVOKED_SUBJECT_CACHE_NAME)
         .storageLayout(keyPrefix)
         .codec(codec)
         .policy(

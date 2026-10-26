@@ -46,6 +46,10 @@ adapters or caching. The parts that take several files to see:
   so an application pulls in only what it asks for.
   `cosec-model` and `cosec-engine` (directories `model/`, `engine/`; RFC 0002, not used yet) depend on the Kotlin standard library only:
   `EnginePurityTest` and `verifyPureClasspath` fail otherwise, and the root build leaves out the Guava/SLF4J defaults.
+  `cosec-runtime` (directory `runtime/`; RFC 0006, empty until the coroutine pipeline lands) depends on `cosec-engine`
+  and `cosec-core`. Coroutines stay in `runtime/` and the adapters: `RuntimeBoundaryTest` fails when `runtime/`,
+  `engine/` or `model/` code references `reactor.*`, when a data-plane SPI signature carries a Reactor type, or when
+  `runtime/` uses `runCatching` (it swallows cancellation).
 - **Request path.** Adapter (WebFlux / WebMvc / Gateway) → `SecurityPipeline` (parse request, resolve
   principal from token, authorize, map to status) → `SecurityDecision` → adapter writes it. Adapters translate;
   they never decide.

@@ -25,7 +25,10 @@ import org.junit.jupiter.api.assertThrows
 class RevocableTokenVerifierTest {
 
     private val tokenVerifier = mockk<TokenVerifier>()
-    private val tokenStore = mockk<TokenStore>()
+    private val tokenStore = mockk<TokenStore> {
+        // subject revocation is covered by SubjectRevocationTest, against a real store
+        every { subjectRevokedBefore(any(), any()) } returns null
+    }
     private val revocableTokenVerifier = RevocableTokenVerifier(tokenVerifier, tokenStore)
 
     private val tokenPrincipal = SimpleTokenPrincipal("tokenId", SimplePrincipal.ANONYMOUS)

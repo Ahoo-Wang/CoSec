@@ -19,6 +19,7 @@ import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
 import me.ahoo.cocache.spring.boot.CoCacheProperties
 import me.ahoo.cosec.cache.CoCacheTokenStore
 import me.ahoo.cosec.cache.CoSecCacheSpecs
+import me.ahoo.cosec.cache.RevokedSubjectCache
 import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
@@ -54,12 +55,16 @@ class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: Ca
 
     companion object {
         const val REVOKED_TOKEN_CACHE_BEAN_NAME = CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
+        const val REVOKED_SUBJECT_CACHE_BEAN_NAME = CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME
     }
 
     @Bean
     @ConditionalOnMissingBean
-    fun coCacheTokenStore(revokedTokenCache: RevokedTokenCache): TokenStore {
-        return CoCacheTokenStore(revokedTokenCache)
+    fun coCacheTokenStore(
+        revokedTokenCache: RevokedTokenCache,
+        revokedSubjectCache: RevokedSubjectCache
+    ): TokenStore {
+        return CoCacheTokenStore(revokedTokenCache, revokedSubjectCache)
     }
 
     /**
@@ -82,5 +87,30 @@ class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: Ca
             cacheProperties.token.toCachePolicy(CachePolicy.DEFAULT),
         )
         return cosecCacheAssembler(runtime, customizers, cocacheProperties).create(RevokedTokenCache::class.java, spec)
+    }
+
+    /**
+     * Backs `TokenRevoker.revokeSubject` (RFC 0004 §4.5.3), with the same local tier as [revokedTokenCache].
+     */
+    @Bean(REVOKED_SUBJECT_CACHE_BEAN_NAME)
+    @ConditionalOnMissingBean
+    fun revokedSubjectCache(
+        runtime: CacheRuntime,
+        schemaCheck: ObjectProvider<CoSecSchemaCheck>,
+        objectMapper: ObjectMapper,
+        customizers: ObjectProvider<CacheSpecCustomizer>,
+        cocacheProperties: ObjectProvider<CoCacheProperties>,
+    ): RevokedSubjectCache {
+        schemaCheck.awaitSchemaCheck()
+        val spec = CoSecCacheSpecs.revokedSubject(
+            CoSecCacheSpecs.jacksonCodec<Long>(objectMapper),
+            cacheProperties.keyPrefix,
+            cacheProperties.token.toCachePolicy(CachePolicy.DEFAULT),
+        )
+        return cosecCacheAssembler(
+            runtime,
+            customizers,
+            cocacheProperties
+        ).create(RevokedSubjectCache::class.java, spec)
     }
 }

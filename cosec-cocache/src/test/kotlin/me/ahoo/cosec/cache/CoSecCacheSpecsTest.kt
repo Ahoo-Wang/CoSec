@@ -88,12 +88,14 @@ class CoSecCacheSpecsTest {
             caches.appPermissionCache.put("app", AppPermissionData(id = "app"))
             caches.rolePermissionCache.put(AppSpacedRoleId("app", "admin", "space"), setOf("p"))
             caches.revokedTokenCache.put("jti", true)
+            caches.revokedSubjectCache.put("1:t:alice", 1L)
             mapOf(
                 CoSecCacheSpecs.POLICY_CACHE_NAME to ("p1" to "layout:policy:p1"),
                 CoSecCacheSpecs.GLOBAL_POLICY_INDEX_CACHE_NAME to ("policy" to "layout:global:policy"),
                 CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME to ("app" to "layout:app:permission:app"),
                 CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME to ("app:admin@space" to "layout:app:role:permission:app:admin@space"),
                 CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME to ("jti" to "layout:token:revoked:jti"),
+                CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME to ("1:t:alice" to "layout:token:subject:revoked:1:t:alice"),
             ).forEach { (cacheName, keys) ->
                 checkNotNull(caches.runtime.admin(cacheName)).inspect(keys.first).storageKey
                     .assert().isEqualTo(keys.second)

@@ -93,9 +93,10 @@ weaken them ([Precedence](./configuration.md#precedence)).
 | `AppPermissionCache` | app permissions by app id | yes | none | the request is denied | `cocache.caches.AppPermissionCache.*` only |
 | `RolePermissionCache` | permission ids of a role in one app and space | yes | none | the request is denied | `cosec.authorization.cache.role.*` |
 | `RevokedTokenCache` | revoked token ids, with token revocation on | no | the remaining lifetime of the token's refresh token, plus 1 second | the token is accepted | `cosec.authorization.cache.token.*` (30 seconds, 100,000 entries) |
+| `RevokedSubjectCache` | principals whose tokens were [all revoked](../integration/authentication.md#revoking-every-token-of-a-principal), with token revocation on | no | the refresh token lifetime past `issuedBefore`, plus 1 second | the token is accepted | `cosec.authorization.cache.token.*`, as `RevokedTokenCache` |
 
-Every cache fails on a value it cannot decode, `RevokedTokenCache` included: deleting an unreadable revocation would
-make its token valid again.
+Every cache fails on a value it cannot decode, the revocation caches included: deleting an unreadable revocation would
+make its tokens valid again.
 
 Revoked tokens are not the store of record. Each revocation carries its own lifetime and the token expires on its
 own, so a failed read degrades on purpose. A "not revoked" answer is cached locally for 30 seconds, which bounds how
@@ -114,6 +115,7 @@ removed. CoSec's caches use no CoCache key prefix of their own: CoCache's `cocac
 | `<p>:app:role:permission:<appId>:<roleId>` | `RolePermissionCache` | permission ids of a role in the default space (CoCache value) |
 | `<p>:app:role:permission:<appId>:<roleId>@<spaceId>` | `RolePermissionCache` | permission ids of a role in space `<spaceId>` (CoCache value) |
 | `<p>:token:revoked:<tokenId>` | `TokenStore.revoke` (logout) | `true` for a revoked token id (`jti`), with a TTL (CoCache value) |
+| `<p>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds, with a TTL (CoCache value); `<n>` is the length of `<tenantId>` |
 | `<p>:meta:schema` | the schema check, the migration | `7`: the data is in the 7.0 layout ([Schema marker](#schema-marker)) |
 | `<h>:<policyId>` | policy history | a list of revisions as JSON, newest first, at most `max-revisions` |
 | `<h>:<policyId>:seq` | policy history | a counter: the last revision number of the policy |
@@ -145,8 +147,8 @@ During an upgrade from 6.x, two more kinds of keys exist:
 ([Migrating the data](./upgrading.md#migrating-the-data)).
 
 Each CoSec cache has its own invalidation channel, `cocache:inv:<p>:policy`, `cocache:inv:<p>:global`,
-`cocache:inv:<p>:app:permission`, `cocache:inv:<p>:app:role:permission` and `cocache:inv:<p>:token:revoked`, so
-deployments with different key prefixes stay apart on one Redis.
+`cocache:inv:<p>:app:permission`, `cocache:inv:<p>:app:role:permission`, `cocache:inv:<p>:token:revoked` and
+`cocache:inv:<p>:token:subject:revoked`, so deployments with different key prefixes stay apart on one Redis.
 
 ### Schema marker
 
@@ -193,7 +195,7 @@ removes it first.
 | Data | Behavior |
 |---|---|
 | Policies, global policy index, app permissions, role grants | Values in the local copy keep working. Anything else fails, and the request is **denied** with `500`. |
-| Revoked tokens | The check **accepts** the token, so an outage does not reject every authenticated request. Tokens are still signature-verified and expire on their own. |
+| Revoked tokens and principals | The check **accepts** the token, so an outage does not reject every authenticated request. Tokens are still signature-verified and expire on their own. |
 | API keys in Redis (`cosec.api-key.store=redis`) | The lookup fails, and the request is **denied** with `500`. |
 | Rate limit counters | The rule is skipped and the request goes on, unless the rule sets `strictFailure: true`, which answers `429` ([Failure behavior](../policies/rate-limiting.md#failure-behavior)). |
 

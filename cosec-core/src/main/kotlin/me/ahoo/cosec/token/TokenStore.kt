@@ -13,12 +13,16 @@
 
 package me.ahoo.cosec.token
 
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import java.time.Duration
+import java.time.Instant
 
 /**
  * Store for token revocation.
  *
- * Tokens are revoked by their [me.ahoo.cosec.api.token.TokenIdCapable.tokenId] (jti).
+ * Tokens are revoked by their [me.ahoo.cosec.api.token.TokenIdCapable.tokenId] (jti),
+ * or all at once by their principal ([revokeSubject]).
  * A revoked token is rejected by [RevocableTokenVerifier] until its natural expiry,
  * so entries only need to outlive the refresh token bound to them.
  *
@@ -51,10 +55,29 @@ interface TokenStore {
     fun isRevoked(tokenId: String): Boolean
 
     /**
+     * Revokes every token of [principal] in [tenant] issued before [issuedBefore] (RFC 0004 §4.5.3).
+     *
+     * A later call with an earlier [issuedBefore] must not shorten an existing entry. Stores that cannot record it
+     * throw, so that an emergency revocation never silently does nothing.
+     *
+     * @param ttl how long to keep the entry; must cover the lifetime of the refresh tokens issued until [issuedBefore]
+     * @throws UnsupportedOperationException if the store does not support it, as the default does
+     */
+    fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant, ttl: Duration): Unit =
+        throw UnsupportedOperationException("${javaClass.name} cannot revoke the tokens of a principal.")
+
+    /**
+     * The instant before which the tokens of [principal] in [tenant] are revoked, or `null` when none are.
+     * The default, for stores without [revokeSubject], is `null`.
+     */
+    fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? = null
+
+    /**
      * No-op token store that never revokes anything.
      *
      * This is the default wired by the Spring Boot starter, keeping verification
      * fully stateless: logout is inert until a real [TokenStore] bean is provided.
+     * [revokeSubject] throws, as the interface default does.
      */
     object NoOp : TokenStore {
         override fun revoke(tokenId: String, ttl: Duration) = Unit

@@ -196,6 +196,9 @@ class Scope internal constructor(
   引擎和 `cosec-core` 都在用，到 PR-7/PR-8 才删除。为了不与它们同名，新的 `Scope` 与 `ScopeResolver`、`DeclaredScope`、`HostScope`、
   `ScopeResolution` 一起放在 `me.ahoo.cosec.model.scope`；`ScopeResolver` 的主体参数是同一包里的 `ScopeSubject(tenant, authenticated, memberships)`，
   不是 `Subject`。新的 `StatementRef`（含 `ScopeRejected`）推迟到 PR-2，引擎第一次用到它的时候。其余类型按上面的代码放在 `me.ahoo.cosec.model`。
+- **`*` 是保留值（第一轮审查，2026-10-26）**：文档用 `*` 表示 `Match.Any`（§7.1），所以 `AppId`、`SpaceId` 和 `Match.Exactly` 都不接受 `*`
+  （`Match.WILDCARD`），否则一条授予给字面空间 `*` 的数据解码回来就成了"所有空间"。`ScopeResolver` 把声明为 `*` 的应用按 `APP_MISMATCH`、
+  空间按 `SPACE_NOT_MEMBER` 拒绝。
 
 ### 4.2 `Binding`
 
@@ -220,6 +223,7 @@ subjectMatches(Role(t, r), s, scope)         = (t == null || t == s.tenant) && r
 - 绑定的空间维度与成员关系的空间维度是两回事：成员关系决定"主体在这个空间里是什么角色"，绑定的 `space` 决定"这个角色在哪个空间里
   得到这条策略"。7.x 的 `RolePermissionCache` 按 `(app, role, space)` 存放授予，两者恰好一一对应（§5.1）。
 - 匿名主体不匹配任何 `Principal` 绑定，也没有角色，只能匹配 `Anyone`。
+- 作用域的比较是精确的、区分大小写的，不做去空白（`Match.matches`）。`*` 只表示 `Any`，不能作为具体的应用或空间 id（§4.1）。
 
 **引用完整性**：绑定指向的策略在同一个组合快照（§7.3）里找不到，就是**编译错误**：文档不能发布（发布者在写入前编译检查），已经在
 Redis 里的文档编译失败时按 RFC 0003 §4.4 F4 处理（读到它的请求失败）。这与 RFC 0001 §3.3 一致，D2 在发布前就被拦住。
@@ -340,6 +344,9 @@ sealed interface ScopeResolution {
 - **检查顺序与匿名主体（PR-1，2026-10-25）**：先检查应用，再检查空间，所以既不一致又声明了非成员空间的请求总是 `APP_MISMATCH`。两者都是拒绝，
   只有原因不同。未认证的主体一律是默认租户 `(0)`，并且不看传入的成员关系（没有角色，见 §4.2）：7.x 的匿名上下文
   （`SimpleSecurityContext.anonymous()`、`SimpleTenantPrincipal.ANONYMOUS`）本来就在默认租户，所以与 7.x 相同。`ScopeResolverTest` 守护这两条。
+- **声明的应用必须是合法的 id（第一轮审查，2026-10-26）**：非空的声明应用若为空白、为 `*`、含 `:`（`SnapshotKey.App` 的 key 分隔符）或超过 128 个字符，
+  无论宿主是否配置了应用，都按 `APP_MISMATCH` 拒绝，而不是之后在读文档时变成 500。`ScopeSubject.tenant` 不能为空白（适配层把没有租户的凭证映射为
+  `(0)`），`HostScope.app` 必须是合法的应用 id。
 - `Rejected` 的映射：`Deny(StatementRef.ScopeRejected(reason))`，匿名主体 401、已认证主体 403，经 `SecurityPipeline` 现有的映射。
 
 ### 4.7 黑名单：规则加名单

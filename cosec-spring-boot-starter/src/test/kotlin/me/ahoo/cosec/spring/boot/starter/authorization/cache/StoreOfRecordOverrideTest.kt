@@ -71,7 +71,12 @@ class StoreOfRecordOverrideTest {
      */
     private val wired = CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES - CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME
 
-    private val weakeningProperties = (wired + CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME).flatMap { name ->
+    private val revocationCaches = listOf(
+        CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
+        CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME
+    )
+
+    private val weakeningProperties = (wired + revocationCaches).flatMap { name ->
         listOf(
             "cocache.caches.$name.ttl=60s",
             "cocache.caches.$name.read-failure=degrade",
@@ -124,11 +129,13 @@ class StoreOfRecordOverrideTest {
             val runtime = context.getBean(CacheRuntime::class.java)
             runtime.cacheNames.assert().containsAll(wired)
             wired.forEach { assertStoreOfRecord(runtime.createdPolicy(it)) }
-            // revoked tokens keep their expiry and degraded reads, but never reclaim a revocation
-            val revokedToken = runtime.createdPolicy(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME)
-            revokedToken.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
-            revokedToken.ttl.assert().isEqualTo(Duration.ofMinutes(1))
-            revokedToken.readFailure.assert().isEqualTo(ReadFailureMode.DEGRADE)
+            // revoked tokens and subjects keep their expiry and degraded reads, but never reclaim a revocation
+            revocationCaches.forEach {
+                val revoked = runtime.createdPolicy(it)
+                revoked.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
+                revoked.ttl.assert().isEqualTo(Duration.ofMinutes(1))
+                revoked.readFailure.assert().isEqualTo(ReadFailureMode.DEGRADE)
+            }
         }
     }
 
