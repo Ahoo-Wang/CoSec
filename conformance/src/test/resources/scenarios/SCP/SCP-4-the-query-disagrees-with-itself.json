@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "SCP-4"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "CoSec-Space-Id appears twice in the query with different values: 400.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "http": {
+    "query": "CoSec-Space-Id=a&CoSec-Space-Id=b"
+  },
+  "expect": {
+    "status": 400,
+    "type": "invalid-request"
+  }
+}

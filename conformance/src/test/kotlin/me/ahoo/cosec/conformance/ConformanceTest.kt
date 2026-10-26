@@ -18,12 +18,13 @@ import org.junit.jupiter.api.TestFactory
 
 /**
  * Runs every scenario of the corpus through the runner of its level (RFC 0008 §3.3) and checks its `expect`. Runners
- * for `pipeline` and `control` come with RFC 0006 PR-2 and RFC 0007 PR-5.
+ * for `control` come with RFC 0007 PR-5.
  */
 class ConformanceTest {
     private val runners: Map<String, ScenarioRunner> = mapOf(
         "engine" to EngineRunner(),
         "analysis" to AnalysisRunner,
+        "pipeline" to PipelineRunner(),
     )
 
     @TestFactory
