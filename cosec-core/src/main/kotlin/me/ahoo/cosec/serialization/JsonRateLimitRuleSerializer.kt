@@ -17,6 +17,8 @@ import me.ahoo.cosec.api.policy.ActionMatcher
 import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.limiter.RateLimit
 import me.ahoo.cosec.limiter.RateLimitRule
+import me.ahoo.cosec.policy.action.RejectedTemplateValue
+import me.ahoo.cosec.policy.action.onRejectedTemplateValue
 import me.ahoo.cosec.policy.condition.AllConditionMatcher
 import tools.jackson.core.JsonGenerator
 import tools.jackson.core.JsonParser
@@ -55,6 +57,8 @@ object JsonRateLimitRuleDeserializer : StdDeserializer<RateLimitRule>(RateLimitR
         val action = requireNotNull(jsonNode.get(STATEMENT_ACTION_KEY)) {
             "Rate limit rule [$id] $STATEMENT_ACTION_KEY is required!"
         }.traverse(p.objectReadContext()).readValueAs(ActionMatcher::class.java)
+            // A principal whose template value is rejected must neither escape the limit nor spend a shared bucket.
+            .onRejectedTemplateValue(RejectedTemplateValue.ERROR)
         val condition = jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.objectReadContext())
             ?.readValueAs(ConditionMatcher::class.java)
             ?: AllConditionMatcher.INSTANCE

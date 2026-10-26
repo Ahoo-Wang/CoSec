@@ -32,6 +32,13 @@ class PolicyTestKitTest {
     }
 
     @Test
+    fun rejectedTemplateValuesNeverGrant() {
+        val report = PolicyTestKit.run("classpath:cosec-policy-test/template-values-policy-test.json")
+        report.results.size.assert().isEqualTo(4)
+        report.assertPasses()
+    }
+
+    @Test
     fun roleGrantsAreScopedToTheirAppAndSpace() {
         val report = PolicyTestKit.run("classpath:cosec-policy-test/spaces/*-policy-test.json")
         report.results.size.assert().isEqualTo(5)
