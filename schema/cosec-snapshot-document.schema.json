@@ -25,6 +25,7 @@
         "http:GET",
         "http:*"
       ],
+      "pattern": "^(\\*|[^:*\\s\\x00-\\x1F\\x7F-\\x9F]+:(\\*|[^:*\\s\\x00-\\x1F\\x7F-\\x9F]+))$",
       "type": "string"
     },
     "appDocument": {
@@ -729,6 +730,7 @@
         "http:path:/orders/{id}",
         "http:path:/admin/**"
       ],
+      "pattern": "^(http:path:(?!.*[^/].*/(\\*\\*|\\{\\*[^/]*\\})/)([^{}]|\\{\\*?[^/{}*?:\\s\\d-][^/{}*?:\\s]*\\})+|(?!http(/|$))[^/*?{}:\\s\\x00-\\x1F\\x7F-\\x9F]+(/(\\*|\\{[^/{}*?:\\s\\d-][^/{}*?:\\s]*\\}|[^/*?{}\\s\\x00-\\x1F\\x7F-\\x9F]+))*(/\\*\\*)?)$",
       "type": "string"
     },
     "statement": {
@@ -804,26 +806,32 @@
           "examples": [
             "09:00"
           ],
-          "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,9})?)?$",
           "type": "string"
         },
         "notAfter": {
+          "description": "An ISO date-time; without an offset it is read in zone.",
           "examples": [
-            "2027-01-01T00:00:00Z"
+            "2027-01-01T00:00:00Z",
+            "2027-01-01T08:00:00+08:00"
           ],
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,9})?)?(Z|[+-]((0\\d|1[0-7]):[0-5]\\d|18:00))?$",
           "type": "string"
         },
         "notBefore": {
+          "description": "An ISO date-time; without an offset it is read in zone.",
           "examples": [
-            "2026-01-01T00:00:00Z"
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T08:00:00"
           ],
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,9})?)?(Z|[+-]((0\\d|1[0-7]):[0-5]\\d|18:00))?$",
           "type": "string"
         },
         "to": {
           "examples": [
             "18:00"
           ],
-          "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,9})?)?$",
           "type": "string"
         },
         "zone": {
@@ -837,6 +845,6 @@
       "type": "object"
     }
   },
-  "description": "The body of a stored snapshot document: a platform, app or tenant document (RFC 0004 §7.1, schema 2), or until the switch RFC 0003's policies document or app document (schema 1). Ids must be unique.",
+  "description": "The body of a stored snapshot document: a platform, app or tenant document (RFC 0004 §7.1, schema 2), or until the switch RFC 0003's policies document or app document (schema 1). Ids must be unique. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",
   "title": "CoSec Snapshot Document Schema"
 }

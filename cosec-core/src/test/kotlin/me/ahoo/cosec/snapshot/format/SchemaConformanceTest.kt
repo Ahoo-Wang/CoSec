@@ -44,11 +44,15 @@ import kotlin.random.Random
  * (RFC 0007 §10.4):
  * 1. documents generated from the descriptors are accepted by the schema and by the codec;
  * 2. every single-point mutation of them (a required field dropped, an unknown field added, a value of the wrong
- *    type) is rejected by the schema, and by the codec unless one of the [LENIENCIES] excuses it;
+ *    type, a string's counter-example or a value outside its enum, a number or an array size outside its range) is
+ *    rejected by the schema, and by the codec unless one of the [LENIENCIES] excuses it;
  * 3. every JSON document in the repository's resources and documentation gets the same verdict from both.
  *
- * The schema is stricter than today's codecs in the ways [LENIENCIES] lists; nothing the schema accepts may be rejected
- * by a codec, except where only a run-time registry knows the answer (a custom matcher type).
+ * The schema is stricter than today's codecs in the ways [LENIENCIES] lists. It is not as strict as the compilers:
+ * passing it is necessary, not sufficient. What no schema keyword expresses is in [FormatPatterns.NOT_EXPRESSED];
+ * generated strings come from the descriptors' examples, so this test cannot find a valid-looking value the compiler
+ * rejects. Counter-examples cover the value rules the schema does express; `PolicyDocumentValuesTest` compiles the 8.0
+ * ones.
  */
 class SchemaConformanceTest {
     companion object {
@@ -70,8 +74,10 @@ class SchemaConformanceTest {
          * so later codecs (RFC 0004 Q10) can drop them one by one; every rule must still excuse at least one mutation.
          */
         val LENIENCIES: List<Leniency> = listOf(
+            // Also a second key of a matcher object, known or not: the 7.x codecs read only the first (RFC 0004 Q10).
             Leniency(
-                "fields the codec does not read (unknown ones, \$schema) are ignored, except at the top level of a snapshot document"
+                "fields the codec does not read (unknown ones, a matcher object's keys after the first, \$schema) are " +
+                    "ignored, except at the top level of a snapshot document"
             ) {
                 (it.kind == MutationKind.UNKNOWN_FIELD || it.field == "\$schema") &&
                     !(it.topLevel && it.owner.startsWith(DocumentFormats.snapshotDocumentSchema.fileName))
@@ -92,14 +98,46 @@ class SchemaConformanceTest {
                 it.kind == MutationKind.CHANGE_TYPE && it.replacement != JsonKind.OBJECT &&
                     (it.holder as? ObjectType)?.extension != null
             },
+            Leniency("path options that are not an object are read as the default options") {
+                it.kind == MutationKind.CHANGE_TYPE && it.field == "options"
+            },
+            // The three below accept a value that then never matches or always fails: never wider than written.
+            Leniency("an empty composite action is read as one that matches no request") {
+                it.kind == MutationKind.OUT_OF_RANGE && it.owner.endsWith("#compositeActionMatcher")
+            },
+            Leniency("an action's method is upper-cased, not checked: an unknown one matches no request") {
+                it.kind == MutationKind.INVALID_VALUE &&
+                    it.declared?.toString().orEmpty().let { declared -> declared.endsWith("#method") || declared.endsWith("#methodValue") }
+            },
+            // Only when a generated pattern sits beside a "." separator; separatorMakesSlashLiteral pins it.
+            Leniency(
+                "with a separator other than /, a path pattern's / is a literal, so its ** is not in the middle",
+                rare = true
+            ) {
+                it.kind == MutationKind.INVALID_VALUE && it.field == "pattern" &&
+                    it.parent?.get("options")?.get("separator")?.asString()?.trim()?.let { separator -> separator != "/" } == true
+            },
+            Leniency("a regular expression timeout below 1 ms is read as is: every match times out and fails closed") {
+                it.kind == MutationKind.OUT_OF_RANGE && it.field == "timeout"
+            },
+            Leniency("8.0 documents are decoded here, not compiled: PolicyDocumentValuesTest compiles their values") {
+                it.isValueMutation && it.isPolicyDocument()
+            },
         )
+
+        /** A mutation of an 8.0 document: a schema 2 snapshot document, or a binding or catalog. */
+        private fun Mutation.isPolicyDocument(): Boolean =
+            owner.startsWith(DocumentFormats.bindingSchema.fileName) ||
+                owner.startsWith(DocumentFormats.catalogSchema.fileName) ||
+                document.get("schema")?.takeIf { it.isIntegralNumber }?.asInt() == PolicyDocumentCodec.SCHEMA
 
         private fun Mutation.changesTo(vararg kinds: JsonKind): Boolean = kind == MutationKind.CHANGE_TYPE && replacement in kinds
 
         private fun Mutation.acceptedKinds(): Set<JsonKind> = declared?.let { JsonKind.accepted(it) }.orEmpty()
     }
 
-    class Leniency(val name: String, val matches: (Mutation) -> Boolean)
+    /** [rare]: the generated documents meet it only for some seeds, so it may excuse nothing for the default one. */
+    class Leniency(val name: String, val rare: Boolean = false, val matches: (Mutation) -> Boolean)
 
     private val compiler = PolicySnapshotCompiler()
 
@@ -216,7 +254,9 @@ class SchemaConformanceTest {
                 for (mutation in FormatMutations(generator).of(document, requireNotNull(file.root), file.fileName)) {
                     mutationCount++
                     if (schemaErrors(file, mutation.document).isEmpty()) {
-                        failures += "${file.fileName}: the schema accepts $mutation\n  ${mutation.document}"
+                        if (!isAnotherVariant(file, mutation)) {
+                            failures += "${file.fileName}: the schema accepts $mutation\n  ${mutation.document}"
+                        }
                         continue
                     }
                     if (codecError(file, mutation.document) != null) {
@@ -231,7 +271,7 @@ class SchemaConformanceTest {
                 }
             }
         }
-        val unused = LENIENCIES.map { it.name } - excused.keys
+        val unused = LENIENCIES.filterNot { it.rare }.map { it.name } - excused.keys
         val report = failures.groupBy { it.substringBefore("\n").replace(Regex("\\[[^]]*]"), "[..]") }
             .entries.joinToString(
                 "\n"
@@ -241,8 +281,23 @@ class SchemaConformanceTest {
         unused.assert().describedAs("Leniencies that excuse nothing: drop them").isEmpty()
     }
 
-    /** Makes ids unique where a codec rejects duplicates, which no JSON Schema keyword expresses. */
+    /**
+     * A snapshot document's header decides its format: dropping `schema` or setting it to 2 can turn one variant of the
+     * file into another, which both the schema and the codec accept.
+     */
+    private fun isAnotherVariant(file: SchemaFile, mutation: Mutation): Boolean =
+        file == DocumentFormats.snapshotDocumentSchema && mutation.topLevel && mutation.field == "schema" &&
+            codecError(file, mutation.document) == null
+
+    /**
+     * Makes ids unique where a codec rejects duplicates, and has an app document's principals name their tenant, which
+     * the shared binding schema cannot require of one kind of document only ([FormatPatterns.NOT_EXPRESSED]).
+     */
     private fun selfConsistent(file: SchemaFile, document: JsonNode): JsonNode {
+        if (file.name == DocumentFormats.SNAPSHOT_DOCUMENT && document.has("catalog")) {
+            document.get("bindings")?.values()?.map { it.get("subject") }?.filterIsInstance<ObjectNode>()
+                ?.filter { it.has("principal") && !it.has("tenant") }?.forEach { it.put("tenant", "acme") }
+        }
         val entries = when (file.name) {
             DocumentFormats.SNAPSHOT_DOCUMENT -> document.get("policies")?.values()?.toList().orEmpty()
             DocumentFormats.RATE_LIMIT_RULE -> if (document.isArray) document.values().toList() else emptyList()
@@ -252,6 +307,15 @@ class SchemaConformanceTest {
             (entry as tools.jackson.databind.node.ObjectNode).put("id", "${entry.get("id").asString()}-$index")
         }
         return document
+    }
+
+    @Test
+    fun separatorMakesSlashLiteral() {
+        val node = CoSecJsonSerializer.readTree(
+            """{"path":{"pattern":"/orders/**/items","options":{"separator":"."}}}"""
+        )
+        schemaErrors(DocumentFormats.actionSchema, node).assert().isNotEmpty()
+        codecError(DocumentFormats.actionSchema, node).assert().isNull()
     }
 
     @Test
@@ -270,6 +334,28 @@ class SchemaConformanceTest {
                 it
             ).assert().describedAs("partValue pattern on [$it]").isEqualTo(DefaultPartExtractor.isSupported(it))
         }
+    }
+
+    /**
+     * A string's examples satisfy its own rules and its counter-examples break them, and every pattern lists
+     * counter-examples, so a pattern too loose to reject anything is caught here rather than by a user.
+     */
+    @Test
+    fun stringRulesAgreeWithTheirExamples() {
+        fun StringType.allows(value: String): Boolean =
+            (enum.isEmpty() || value in enum) &&
+                (pattern == null || Regex(pattern!!).containsMatchIn(value)) &&
+                value.codePointCount(0, value.length) in (minLength ?: 0)..(maxLength ?: Int.MAX_VALUE)
+        val problems = allStringTypes().flatMap { type ->
+            type.examples.filterNot { type.allows(it) }.map { "example [$it] breaks ${type.pattern ?: type.enum}" } +
+                type.counterExamples.filter { type.allows(it) }.map { "counter-example [$it] passes ${type.pattern}" } +
+                listOfNotNull(
+                    "pattern ${type.pattern} has no counter-examples".takeIf {
+                        type.pattern != null && type.counterExamples.isEmpty()
+                    },
+                )
+        }
+        problems.assert().describedAs(problems.joinToString("\n")).isEmpty()
     }
 
     /** Editors evaluate `pattern` as ECMA-262; constructs only Java knows would silently fail there. */

@@ -1,0 +1,40 @@
+{
+  "rules": [
+    "DOC-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "An action is an object with two matcher keys. 7.x read only the first (`all`) and dropped `path`; 8.0 actions are strings, so the document does not decode.",
+  "documents": {
+    "platform": {
+      "schema": 2,
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": {
+                "all": {},
+                "path": "/admin/**"
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "expected a string, found an object"
+  }
+}

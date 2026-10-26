@@ -213,6 +213,28 @@ class PolicyDocumentCodecTest {
         error(body).assert().contains(message)
     }
 
+    /**
+     * The shapes 7.x's codecs read as something broader than written (#1038 review, F2): an unknown key dropped, only
+     * the first key of a matcher object read, a scalar read as an empty list. None of them decodes in 8.0 (`DOC-3`).
+     */
+    @ParameterizedTest
+    @CsvSource(
+        delimiter = '|',
+        value = [
+            ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*","conditon":{"exists":"subject.id"}}]}]|$.policies[0].statements[0]: unknown field conditon""",
+            ""","policies":[{"id":"p","conditon":{"exists":"subject.id"},"statements":[]}]|$.policies[0]: unknown field conditon""",
+            ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*","condition":{"exists":"subject.id","not":{"exists":"subject.id"}}}]}]|$.policies[0].statements[0].condition: a condition has exactly one operator""",
+            ""","policies":[{"id":"p","statements":[{"effect":"allow","action":{"all":{},"path":"/admin/**"}}]}]|$.policies[0].statements[0].action: expected a string, found an object""",
+            ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*","resource":{"pattern":"order/**","path":"x"}}]}]|$.policies[0].statements[0].resource: unknown field path""",
+            ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*","condition":{"and":"exists"}}]}]|$.policies[0].statements[0].condition.and: expected an array, found a string""",
+            ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*","condition":{"or":{"exists":"subject.id"}}}]}]|$.policies[0].statements[0].condition.or: expected an array, found an object""",
+            ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*","condition":{"not":[{"exists":"subject.id"}]}}]}]|$.policies[0].statements[0].condition.not: expected an object, found an array""",
+        ],
+    )
+    fun `what the 7 codecs read as broader than written does not decode`(body: String, message: String) {
+        error(body).assert().contains(message)
+    }
+
     @Test
     fun `the header must be this format's`() {
         fun decodeRaw(text: String) = PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", text.encodeToByteArray())

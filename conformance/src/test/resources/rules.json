@@ -371,7 +371,7 @@
     {
       "id": "DOC-3",
       "source": "RFC 0004 §7.1; RFC 0003 F3",
-      "statement": "A document whose schema is not this version's format fails to decode, and the requests that need it fail closed.",
+      "statement": "A document whose schema is not this version's format fails to decode, as does one that is not exactly this format (an unknown field, a second operator, a value of the wrong JSON type), and the requests that need it fail closed.",
       "level": "engine",
       "pending": null
     },

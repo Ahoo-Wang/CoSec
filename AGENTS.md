@@ -57,6 +57,10 @@ adapters or caching. The parts that take several files to see:
   `engine/` or `model/` code references `reactor.*`, when a data-plane SPI signature carries a Reactor type, when
   `runtime/` references Spring, the Servlet API, `kotlinx.coroutines.reactor`, `runBlocking`, `GlobalScope` or
   `Dispatchers.IO`, or when it uses `runCatching` (it swallows cancellation).
+  `cosec-control` (directory `control/`; RFC 0007, empty until the control plane lands) depends on `cosec-runtime`.
+  `ControlBoundaryTest` imports the module's own compiled classes, not a package, and fails when one of them is outside
+  `me.ahoo.cosec.control`, references Spring, `reactor.*`, the coroutine or Reactive Streams bridges or a Redis client,
+  or calls `runBlocking`, `Dispatchers.IO` or `GlobalScope`.
 - **Request path.** Adapter (WebFlux / WebMvc / Gateway) → `SecurityPipeline` (parse request, resolve
   principal from token, authorize, map to status) → `SecurityDecision` → adapter writes it. Adapters translate;
   they never decide.

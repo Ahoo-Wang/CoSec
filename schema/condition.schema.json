@@ -273,6 +273,7 @@
             "/orders/{id}",
             "/health"
           ],
+          "pattern": "^(?!.*[^/].*/(\\*\\*|\\{\\*[^/]*\\})/)",
           "type": "string"
         }
       },
@@ -435,7 +436,7 @@
             "09:00",
             "22:00"
           ],
-          "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,9})?)?$",
           "type": "string"
         },
         "negate": {
@@ -449,6 +450,7 @@
             "2100-01-01T00:00:00Z",
             "2100-01-01T08:00:00+08:00"
           ],
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,9})?)?(Z|[+-]((0\\d|1[0-7]):[0-5]\\d|18:00))?$",
           "type": "string"
         },
         "notBefore": {
@@ -457,6 +459,7 @@
             "2020-01-01T00:00:00Z",
             "2020-01-01T08:00:00"
           ],
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,9})?)?(Z|[+-]((0\\d|1[0-7]):[0-5]\\d|18:00))?$",
           "type": "string"
         },
         "to": {
@@ -464,7 +467,7 @@
             "18:00",
             "06:00:00"
           ],
-          "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d{1,9})?)?$",
           "type": "string"
         },
         "zone": {
@@ -480,7 +483,7 @@
       "type": "object"
     }
   },
-  "description": "An object naming exactly one condition matcher type.",
+  "description": "An object naming exactly one condition matcher type. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",
   "maxProperties": 1,
   "minProperties": 1,
   "properties": {

@@ -1,0 +1,43 @@
+{
+  "rules": [
+    "DOC-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A condition object holds two operators. 7.x read only the first and dropped the second; 8.0 does not decode the document.",
+  "documents": {
+    "platform": {
+      "schema": 2,
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "exists": "subject.id",
+                "not": {
+                  "exists": "subject.id"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "a condition has exactly one operator"
+  }
+}

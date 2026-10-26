@@ -184,7 +184,11 @@ internal object PolicyDocumentFormats {
                             Field("revision", IntegerType(minimum = 1), required = true),
                             Field(
                                 "digest",
-                                StringType(pattern = DIGEST, examples = listOf("9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6")),
+                                StringType(
+                                    pattern = DIGEST,
+                                    examples = listOf("9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6"),
+                                    counterExamples = listOf("9F2C0B1E6A6D1F2C3B4A5D6E7F8091A2B3C4D5E6", "9f2c", "9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6a", ""),
+                                ),
                                 required = true,
                                 description = "The store's digest of the parent: the address of its revision record.",
                             ),
@@ -238,7 +242,9 @@ internal object PolicyDocumentFormats {
             ),
         ),
         "actionPattern" to StringType(
+            pattern = FormatPatterns.ACTION_PATTERN,
             examples = listOf("*", "order:*", "order:read", "http:GET", "http:*"),
+            counterExamples = FormatPatterns.ACTION_PATTERN_COUNTER_EXAMPLES,
             description = "`service:verb`, `service:*` or `*` (RFC 0005 §5.1).",
         ),
         "resource" to AnyOf(
@@ -255,7 +261,9 @@ internal object PolicyDocumentFormats {
             ),
         ),
         "resourcePattern" to StringType(
+            pattern = FormatPatterns.RESOURCE_PATTERN,
             examples = listOf("order/{orderId}", "order/**", "http:path:/orders/{id}", "http:path:/admin/**"),
+            counterExamples = FormatPatterns.RESOURCE_PATTERN_COUNTER_EXAMPLES,
             description = "`type/segment/...` or `http:path:<pattern>` (RFC 0005 §5.1, §5.2). A DENY cannot name a bare type.",
         ),
         "condition" to AnyOf(
@@ -279,16 +287,22 @@ internal object PolicyDocumentFormats {
         "attributeOperand" to ObjectType(listOf(Field("attr", attribute, required = true))),
         "time" to ObjectType(
             listOf(
-                Field("notBefore", StringType(examples = listOf("2026-01-01T00:00:00Z"))),
-                Field("notAfter", StringType(examples = listOf("2027-01-01T00:00:00Z"))),
+                Field("notBefore", dateTime("2026-01-01T00:00:00Z", "2026-01-01T08:00:00")),
+                Field("notAfter", dateTime("2027-01-01T00:00:00Z", "2027-01-01T08:00:00+08:00")),
                 Field("zone", StringType(examples = listOf("UTC", "Asia/Shanghai"))),
                 Field("daysOfWeek", ArrayType(StringType(enum = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")))),
-                Field("from", StringType(pattern = TIME_OF_DAY, examples = listOf("09:00"))),
-                Field("to", StringType(pattern = TIME_OF_DAY, examples = listOf("18:00"))),
+                Field("from", timeOfDay("09:00")),
+                Field("to", timeOfDay("18:00")),
             ),
         ),
     )
 }
 
-private const val TIME_OF_DAY = "^\\d{2}:\\d{2}(:\\d{2})?$"
 private const val DIGEST = "^[0-9a-f]{40}$"
+
+private fun dateTime(vararg examples: String) = StringType(
+    pattern = FormatPatterns.DATE_TIME,
+    examples = examples.toList(),
+    counterExamples = FormatPatterns.DATE_TIME_COUNTER_EXAMPLES,
+    description = "An ISO date-time; without an offset it is read in zone.",
+)
