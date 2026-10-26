@@ -23,6 +23,7 @@ body:
         - cosec-api
         - cosec-model
         - cosec-engine
+        - cosec-runtime
         - cosec-core
         - cosec-jwt
         - cosec-cocache

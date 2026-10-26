@@ -44,6 +44,7 @@ flowchart BT
     server[cosec-gateway-server] --> starter
     model[cosec-model]
     engine[cosec-engine] --> model
+    runtime[cosec-runtime] --> engine & core
 ```
 
 Arrows point at what a module depends on. The rules behind the picture:
@@ -59,6 +60,13 @@ Arrows point at what a module depends on. The rules behind the picture:
   ([RFC 0002](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0002-pure-engine.md), Chinese). They depend on the Kotlin standard library only: `EnginePurityTest` (ArchUnit) fails on
   any reference to Reactor, Spring, logging, I/O, threads or clocks, and the `verifyPureClasspath` task, part of
   `check`, fails on any other dependency. Nothing uses them yet.
+- **`cosec-runtime`** (directory `runtime/`) will hold the coroutine request pipeline new in 8.0
+  ([RFC 0006](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0006-coroutine-pipeline.md), Chinese). It depends on
+  `cosec-engine` and `cosec-core`. Coroutines stay in this module and the web adapters, and Reactor only at the adapter
+  bridges: `RuntimeBoundaryTest` (ArchUnit) fails when code in `runtime/`, `engine/` or `model/` references `reactor.*`,
+  when a data-plane SPI signature carries a Reactor type, or when `runtime/` calls `runCatching`, which swallows
+  cancellation. `cosec-core` still brings Reactor onto its classpath, so the test checks references, not dependencies.
+  The module is empty so far.
 - **Every other library module adapts exactly one technology**: JWT, Redis through CoCache, OAuth, OpenTelemetry,
   Micrometer, OpenAPI, ip2region, Kafka, or one web stack. An adapter module never contains a decision.
 - **`cosec-spring-boot-starter`** wires everything. Each integration is a Gradle feature variant declared in
