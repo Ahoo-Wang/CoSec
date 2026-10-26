@@ -16,6 +16,7 @@ package me.ahoo.cosec.snapshot
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.random.Random
@@ -25,6 +26,9 @@ import kotlin.random.Random
  * revalidations and resets, installs of a key follow the order its loads started (so revisions never go backwards
  * while the store's only grow), at most one load per key is in flight, and once everything settles the installed
  * revision is the store's.
+ *
+ * Both sources run it: RFC 0003's (policies and one family of apps) and the 8.0 one (the platform, and families of
+ * apps and tenants, each bounded to one document so that loads of one family evict while the other installs).
  */
 class SnapshotInstallOrderPropertyTest {
     /** Queues compilations so the test decides when each one runs. */
@@ -49,6 +53,7 @@ class SnapshotInstallOrderPropertyTest {
     }
 
     private val keys = listOf(SnapshotKey.Policies, APP_A, APP_B)
+    private val documentKeys = listOf(SnapshotKey.Platform, APP_A, APP_B, TENANT_A, TENANT_B)
 
     @Test
     fun installsFollowLoadOrderAndConverge() {
@@ -56,8 +61,13 @@ class SnapshotInstallOrderPropertyTest {
         repeat(maxOf(300, Integer.getInteger("cosec.property.iterations", 0))) { seed -> runSeed(seed) }
     }
 
+    @Test
+    fun installsFollowLoadOrderAndConvergeInEveryFamily() {
+        repeat(maxOf(300, Integer.getInteger("cosec.property.iterations", 0))) { seed -> runDocumentSeed(seed) }
+    }
+
     /** One run: the store, the source and what the test has published. */
-    private class Run(seed: Int) {
+    private class Run(seed: Int, val documents: Boolean = false) {
         val random = Random(seed)
         val store = ControllableStore().apply { hold = true }
         val executor = ManualExecutor()
@@ -65,18 +75,25 @@ class SnapshotInstallOrderPropertyTest {
         val metrics = RecordingMetrics()
         val revisions = mutableMapOf<SnapshotKey, Long>()
         val ticks = AtomicLong()
-        val source = SnapshotSource(
-            store,
-            FakeCompiler(),
-            FakeCompiler(),
-            // One app at most, so loading the other evicts it: eviction runs concurrently on the scheduler.
-            SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 1),
-            clock,
-            metrics,
-            executor,
-            null,
-            ticks::incrementAndGet,
-        )
+
+        // One app and one tenant at most, so loading the other evicts it: eviction runs concurrently on the scheduler.
+        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 1, maxTenants = 1)
+        val source = if (documents) {
+            SnapshotSource(
+                store,
+                SnapshotKey.Platform,
+                FakeCompiler(),
+                DocumentSnapshots.families(FakeCompiler(), options),
+                options,
+                clock,
+                metrics,
+                executor,
+                null,
+                ticks::incrementAndGet,
+            )
+        } else {
+            SnapshotSource(store, FakeCompiler(), FakeCompiler(), options, clock, metrics, executor, null, ticks::incrementAndGet)
+        }
 
         fun publish(key: SnapshotKey) {
             val revision = (revisions[key] ?: 0) + 1
@@ -99,10 +116,37 @@ class SnapshotInstallOrderPropertyTest {
                 3 -> executor.runOne(random)
                 4 -> source.revalidate()
                 5 -> if (random.nextInt(4) == 0) store.reset()
-                6 -> source.load("app-a")
-                7 -> source.load("app-b")
+                6, 7 -> load(keys.filter { it is SnapshotKey.App || it is SnapshotKey.Tenant }.random(random))
                 8 -> store.failure = if (random.nextInt(3) == 0) IllegalStateException("redis down") else null
                 else -> clock.advance(Duration.ofSeconds(1))
+            }
+        }
+
+        /** A request that needs [key] besides the shared document. */
+        fun load(key: SnapshotKey): CompletableFuture<*> =
+            if (documents) source.loadAll(listOf(key)) else source.load((key as SnapshotKey.App).appId)
+
+        /** Loads [key] until it answers, releasing reads and compilations. */
+        fun loadSettled(key: SnapshotKey): SnapshotSet<Compiled, Compiled> {
+            store.hold = false
+            val loading = source.loadAll(listOf(key))
+            while (!loading.isDone) {
+                executor.runAll()
+                store.releaseAll()
+            }
+            store.hold = true
+            return loading.join()
+        }
+
+        fun settleAll(key: SnapshotKey) {
+            store.failure = null
+            load(key)
+            repeat(3) {
+                while (store.pending.isNotEmpty() || executor.tasks.isNotEmpty()) {
+                    store.releaseAll()
+                    executor.runAll()
+                }
+                source.revalidate()
             }
         }
 
@@ -116,6 +160,33 @@ class SnapshotInstallOrderPropertyTest {
                 }
                 source.revalidate()
             }
+        }
+    }
+
+    private fun runDocumentSeed(seed: Int) {
+        val run = Run(seed, documents = true)
+        run.source.use { _ ->
+            repeat(200) {
+                run.step(documentKeys)
+                documentKeys.forEach { key ->
+                    run.store.pending.count { it.key == key }.assert().isLessThanOrEqualTo(
+                        1
+                    )
+                }
+            }
+            for (key in documentKeys.drop(1)) {
+                run.settleAll(key)
+                val set = run.loadSettled(key)
+                set.shared.revision.assert().describedAs(
+                    "seed $seed"
+                ).isEqualTo(run.revisions[SnapshotKey.Platform] ?: 0)
+                set.scoped.single().revision.assert().describedAs("seed $seed, $key").isEqualTo(run.revisions[key] ?: 0)
+            }
+            documentKeys.forEach { key ->
+                val installed = run.metrics.installs.filter { it.key == key }.map { it.revision }
+                installed.assert().describedAs("seed $seed, key $key: $installed").isSorted()
+            }
+            run.metrics.regressions.assert().isEmpty()
         }
     }
 

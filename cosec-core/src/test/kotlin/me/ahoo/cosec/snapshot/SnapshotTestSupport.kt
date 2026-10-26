@@ -319,4 +319,6 @@ val Snapshot<Compiled, Compiled>.appCompiled: Compiled
 
 val APP_A = SnapshotKey.App("app-a")
 val APP_B = SnapshotKey.App("app-b")
+val TENANT_A = SnapshotKey.Tenant("tenant-a")
+val TENANT_B = SnapshotKey.Tenant("tenant-b")
 val APP_C = SnapshotKey.App("app-c")
