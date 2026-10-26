@@ -18,10 +18,15 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.token.AccessToken
+import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.membership.MembershipClaims
+import me.ahoo.cosec.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.membership.MembershipProvider
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
@@ -33,19 +38,29 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
+import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
+import me.ahoo.cosec.tenant.SimpleTenant
+import me.ahoo.cosec.token.RevocationReader
+import me.ahoo.cosec.token.SimpleTokenPrincipal
+import me.ahoo.cosec.token.TokenExpiredException
+import me.ahoo.cosec.token.TokenVerificationException
+import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.StringIdGenerator
 import tools.jackson.databind.JsonNode
+import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
@@ -63,9 +78,15 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  * "documents":          { "platform": {...}, "apps": {...}, "tenants": {...}, "unavailable": ["tenant", ...] },
  * "http":               { "method": "GET", "path": "/orders", "query": "a=b", "headers": { "<name>": "v" | ["v", ...] },
  *                         "hostApp": null },
- * "authentication":     { "result": "anonymous" | "authenticated" | "rejected" | "unavailable" | "throws" | "hangs",
+ * "authentication":     { "result": "token" | "anonymous" | "authenticated" | "rejected" | "unavailable" | "throws" | "hangs",
  *                         "reason": "TOKEN_EXPIRED", "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
  *                         "membership": "provider" },
+ *                       // "token": the real TokenAuthenticator over a verifier that accepts the request's
+ *                       // Authorization header as this token (absent: anonymous) and the scenario's revocations
+ *                       "token": { "jti": "t1", "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
+ *                                  "membership": "provider", "issuedAt": "2026-10-01T00:00:00Z" | null,
+ *                                  "verification": "valid" | "expired" | "invalid" },
+ * "revocations":        { "tokens": ["t1"], "subjects": [{ "tenant": "acme", "principal": "alice", "issuedBefore": "..." }] },
  * "membershipProvider": { "roles": { "<space>": [...] }, "attachments": [...] } | { "fails": "message" } | { "hangs": true },
  * "snapshot":           { "fails": "message" } | { "hangs": true },      // otherwise every document is installed
  * "options":            { "timeoutMillis": 5000, "authenticationTimeoutMillis": 1000, "membershipTimeoutMillis": 500 },
@@ -80,7 +101,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         val node = scenario.node
         node.only(
             "\$comment", "rules", "polarity", "level", "description", "documents", "http", "authentication",
-            "membershipProvider", "snapshot", "options", "cancel", "expect",
+            "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations",
         )
         val documents = node.get("documents") ?: EMPTY
         documents.only("platform", "apps", "tenants", "unavailable")
@@ -106,7 +127,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         val authentication = node.get("authentication") ?: EMPTY
         val provider = node.get("membershipProvider")?.let { provider(authentication, it) { reach("memberships") } }
         val pipeline = Pipeline(
-            authenticator = authenticator(authentication) { reach("authentication") },
+            authenticator = authenticator(authentication, node.get("revocations")) { reach("authentication") },
             snapshots = SuspendingSnapshotSource(
                 views(snapshot, documents, node.get("snapshot")) { reach("snapshot") }
             ),
@@ -152,9 +173,10 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     private fun answered(outcome: PipelineOutcome): Outcome =
         Outcome.Answered(outcome.status, outcome.proceed, outcome.problem?.type?.slug)
 
-    private fun authenticator(node: JsonNode, reached: () -> Unit): Authenticator {
-        node.only("result", "reason", "tenant", "id", "roles", "policies", "membership")
+    private fun authenticator(node: JsonNode, revocations: JsonNode?, reached: () -> Unit): Authenticator {
+        node.only("result", "reason", "tenant", "id", "roles", "policies", "membership", "token")
         return when (val result = node.get("result")?.text() ?: "authenticated") {
+            "token" -> TokenAuthenticator(ScenarioTokenVerifier(node.required("token")), revocations(revocations))
             "anonymous" -> Authenticator { AuthnResult.Anonymous }
             "authenticated" -> Authenticator { authenticated(node) }
             "rejected" -> Authenticator {
@@ -190,15 +212,60 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         return AuthnResult.Authenticated(principal, "scenario")
     }
 
+    private fun revocations(node: JsonNode?): RevocationReader {
+        if (node == null) return RevocationReader.NONE
+        node.only("tokens", "subjects")
+        val tokens = node.get("tokens")?.strings().orEmpty().toSet()
+        val subjects = node.get("subjects")?.values().orEmpty().associate { subject ->
+            subject.only("tenant", "principal", "issuedBefore")
+            (TenantId(subject.required("tenant").text()) to PrincipalId(subject.required("principal").text())) to
+                Instant.parse(subject.required("issuedBefore").text())
+        }
+        return object : RevocationReader {
+            override suspend fun isRevoked(tokenId: String): Boolean = tokenId in tokens
+
+            override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
+                subjects[tenant to principal]
+        }
+    }
+
+    /** Takes whatever token the request presents as the scenario's token, as a verified JWT would read. */
+    private class ScenarioTokenVerifier(private val node: JsonNode) : TokenVerifier {
+        init {
+            node.only("jti", "tenant", "id", "roles", "policies", "membership", "issuedAt", "verification")
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T {
+            when (val verification = node.get("verification")?.text() ?: "valid") {
+                "valid" -> Unit
+                "expired" -> throw TokenExpiredException("The scenario's token has expired.")
+                "invalid" -> throw TokenVerificationException("The scenario's token is invalid.")
+                else -> throw ScenarioFormatException("Unknown token verification $verification")
+            }
+            var principal: CoSecPrincipal = SimplePrincipal(
+                node.get("id")?.text() ?: "alice",
+                node.get("policies")?.strings().orEmpty().toSet(),
+                node.get("roles")?.strings().orEmpty().toSet(),
+            )
+            node.get("tenant")?.text()?.let { principal = SimpleTenantPrincipal(principal, SimpleTenant(it)) }
+            node.get("membership")?.text()?.let { principal = MembershipMarkedPrincipal(principal, it) }
+            val issuedAt = node.get("issuedAt")?.textOrNull()?.let(Instant::parse)
+            return SimpleTokenPrincipal(node.get("jti")?.text() ?: "t1", principal, issuedAt) as T
+        }
+
+        override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = throw UnsupportedOperationException()
+    }
+
     private fun provider(authentication: JsonNode, node: JsonNode, reached: () -> Unit): MembershipProvider {
         node.only("roles", "attachments", "fails", "hangs")
         node.get("fails")?.let { fails ->
-            return MembershipProvider { _, _ -> CompletableFuture.failedFuture(IllegalStateException(fails.text())) }
+            return MembershipProvider { _, _ -> throw IllegalStateException(fails.text()) }
         }
         if (node.get("hangs")?.bool() == true) {
             return MembershipProvider { _, _ ->
                 reached()
-                CompletableFuture()
+                awaitCancellation()
             }
         }
         val roles = node.get("roles")?.fields().orEmpty().map { (space, ids) ->

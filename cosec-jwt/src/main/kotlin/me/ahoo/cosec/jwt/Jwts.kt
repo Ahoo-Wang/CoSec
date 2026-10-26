@@ -103,7 +103,7 @@ object Jwts : PrincipalConverter {
     /**
      * Wraps [principal] in a [MembershipMarkedPrincipal] when the token carries [MembershipClaims.MARKER_KEY], so tokens
      * without it parse exactly as before. Any value is kept, including one that is not a string, for
-     * [me.ahoo.cosec.membership.MembershipResolver] to refuse.
+     * the pipeline to refuse (`MembershipSource.Unusable` in `cosec-runtime`).
      */
     private fun withMembershipMarker(principal: CoSecPrincipal, decodedAccessToken: DecodedJWT): CoSecPrincipal {
         val markerClaim = decodedAccessToken.getClaim(MembershipClaims.MARKER_KEY)

@@ -15,7 +15,6 @@ package me.ahoo.cosec.runtime
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.future.await
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.api.principal.CoSecPrincipal
@@ -82,6 +81,8 @@ class Pipeline(
     private val clock: Clock = Clock.systemUTC(),
     private val options: PipelineOptions = PipelineOptions(),
 ) {
+    private val memberships = MembershipResolver(membershipProvider, options.membershipTimeout)
+
     /**
      * The only entry point of the adapters. An external cancellation propagates unchanged and makes no outcome;
      * everything else, a defect included, becomes one. An [Error] propagates too: the host answers it (§7.4).
@@ -166,29 +167,18 @@ class Pipeline(
         }
 
     /**
-     * The memberships of [principal] (RFC 0004 §4.5): none for an anonymous one, its claims, or the provider's answer.
-     * A missing, failing, late or wrong answer is a failure, never "no memberships": no roles would also mean no `inRole`
-     * DENY matches.
+     * The memberships of [principal] (RFC 0004 §4.5): none for an anonymous one, else what [memberships] resolves. Its
+     * failure is a failure, never "no memberships": no roles would also mean no `inRole` DENY matches.
      */
     private suspend fun memberships(principal: AuthenticatedPrincipal?): Fetched<Memberships> {
         if (principal == null) {
             return NO_MEMBERSHIPS
         }
-        principal.memberships?.let { return Fetched.Value(it) }
-        val provider = membershipProvider
-            ?: return Fetched.Failed(
-                MembershipUnavailableException("The token of [${principal.id.value}] asks for a membership provider, and none is configured.")
-            )
-        // A copy: awaiting cancels the future when the request is cancelled, and the provider may share it.
-        val fetched = call(options.membershipTimeout) {
-            provider.memberships(principal.tenant, principal.id).copy().await()
+        return try {
+            Fetched.Value(memberships.resolve(principal.tenant, principal.id, principal.membershipSource))
+        } catch (e: MembershipUnavailableException) {
+            Fetched.Failed(e)
         }
-        if (fetched is Fetched.Value && fetched.value.source != Memberships.Source.PROVIDER) {
-            return Fetched.Failed(
-                MembershipUnavailableException("The membership provider answered claims for [${principal.id.value}].")
-            )
-        }
-        return fetched
     }
 
     /**

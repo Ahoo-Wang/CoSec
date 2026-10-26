@@ -95,11 +95,11 @@ leave both claims out once they would take more than `membershipClaimLimit` byte
 keeps the marker.
 
 **The provider.** The memberships of a marked token come from the application's `MembershipProvider` bean, asked
-with the principal's tenant and id. It returns a `CompletableFuture` and must neither block nor throw;
-`InMemoryMembershipProvider` serves tests and local development. A principal has one source: claims or the
+with the principal's tenant and id. It is a `suspend` function that must not block the calling thread, and reports a
+failed lookup by throwing; `InMemoryMembershipProvider` serves tests and local development. A principal has one source: claims or the
 provider, never both.
 
-**Failure means deny.** `MembershipResolver` resolves a principal's memberships and fails with
+**Failure means deny.** `MembershipResolver` (in `cosec-runtime`) resolves a principal's memberships and fails with
 `MembershipUnavailableException`, never with "no memberships", when:
 
 - the token is marked and there is no provider;

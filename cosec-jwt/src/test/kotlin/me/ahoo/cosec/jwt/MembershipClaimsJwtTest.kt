@@ -14,12 +14,13 @@
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.JWT
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.membership.MembershipClaims
 import me.ahoo.cosec.membership.MembershipMarkedPrincipal
-import me.ahoo.cosec.membership.MembershipResolver
+import me.ahoo.cosec.membership.MembershipProvider
 import me.ahoo.cosec.membership.MembershipUnavailableException
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
@@ -28,6 +29,8 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.runtime.MembershipResolver
+import me.ahoo.cosec.runtime.authn.MembershipSource
 import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.SimpleAccessToken
 import me.ahoo.cosec.token.SimpleTokenPrincipal
@@ -41,8 +44,6 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.Date
-import java.util.concurrent.ExecutionException
-import java.util.concurrent.TimeUnit
 
 /**
  * RFC 0004 §4.5.1: membership claims, the `cosec.membership` marker and the claim-size threshold.
@@ -114,11 +115,16 @@ class MembershipClaimsJwtTest {
         parsed.innermost().assert().isEqualTo(SimplePrincipal("alice", policies, roles, attributes))
     }
 
+    /** Resolves [parsed] the way the pipeline does: its membership source, then the resolver. */
+    private fun resolve(provider: MembershipProvider?, parsed: TokenPrincipal): Memberships = runBlocking {
+        MembershipResolver(provider).resolve(tenant, PrincipalId(parsed.id), MembershipSource.of(parsed))
+    }
+
     @Test
     fun currentTokensResolveToTheirClaims() {
         val parsed = Jwts.toPrincipal<TokenPrincipal>(sevenXToken("tenant"))
 
-        val memberships = MembershipResolver(null).resolve(tenant, parsed).getNow(null)
+        val memberships = resolve(null, parsed)
 
         memberships.source.assert().isEqualTo(Memberships.Source.CLAIMS)
         memberships.roles[SpaceId.DEFAULT]!!.toList().assert().containsExactly(RoleId("admin"))
@@ -166,12 +172,9 @@ class MembershipClaimsJwtTest {
         val fromProvider =
             Memberships(Memberships.Source.PROVIDER, mapOf(SpaceId.DEFAULT to setOf(RoleId("admin"))), emptyList())
         provider.put(tenant, PrincipalId("alice"), fromProvider)
-        MembershipResolver(provider).resolve(tenant, parsed).get(5, TimeUnit.SECONDS).assert().isSameAs(fromProvider)
+        resolve(provider, parsed).assert().isSameAs(fromProvider)
 
-        val failure = assertThrows<ExecutionException> {
-            MembershipResolver(null).resolve(tenant, parsed).get(5, TimeUnit.SECONDS)
-        }
-        failure.cause.assert().isInstanceOf(MembershipUnavailableException::class.java)
+        assertThrows<MembershipUnavailableException> { resolve(null, parsed) }
     }
 
     @Test
@@ -228,10 +231,7 @@ class MembershipClaimsJwtTest {
             val parsed = Jwts.toPrincipal<TokenPrincipal>(builder.sign(JwtFixture.ALGORITHM))
 
             MembershipClaims.markerOf(parsed).assert().isEqualTo(text)
-            val failure = assertThrows<ExecutionException> {
-                MembershipResolver(InMemoryMembershipProvider()).resolve(tenant, parsed).get(5, TimeUnit.SECONDS)
-            }
-            failure.cause.assert().isInstanceOf(MembershipUnavailableException::class.java)
+            assertThrows<MembershipUnavailableException> { resolve(InMemoryMembershipProvider(), parsed) }
         }
     }
 

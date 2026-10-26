@@ -1,0 +1,51 @@
+{
+  "rules": [
+    "PIP-6"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The token has expired, but everyone may read: as anonymous the request is permitted, so a browser with an old cookie still opens public pages.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "http": {
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "issuedAt": "2026-10-01T00:00:00Z",
+      "verification": "expired"
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

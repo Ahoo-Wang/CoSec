@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.conformance
 
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
@@ -24,7 +25,6 @@ import me.ahoo.cosec.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.membership.MembershipClaims
 import me.ahoo.cosec.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.membership.MembershipProvider
-import me.ahoo.cosec.membership.MembershipResolver
 import me.ahoo.cosec.membership.MembershipUnavailableException
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
@@ -49,17 +49,16 @@ import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.principal.SimplePrincipal
+import me.ahoo.cosec.runtime.MembershipResolver
+import me.ahoo.cosec.runtime.authn.MembershipSource
 import tools.jackson.databind.JsonNode
 import java.time.Instant
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutionException
-import java.util.concurrent.TimeUnit
 import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /**
  * The `engine` runner (RFC 0008 §3.3): documents → compile → [SnapshotView] → [FlatEngine].
  *
- * Before the engine it runs what `main` has for the steps the pipeline will own (RFC 0006 PR-2, PR-3): memberships
+ * Before the engine it runs the steps the pipeline owns: memberships
  * through [MembershipResolver], whose failure is the `MembershipUnavailable` cause of RFC 0004 §4.5.2, and the scope
  * through [ScopeResolver]. It hands the engine the documents RFC 0004 §7.4 says a request needs: the platform, the
  * principal's own tenant and, for a scope with an app, that app; a document the scenario does not write exists and is
@@ -133,18 +132,20 @@ class EngineRunner(
             return MembershipClaims.parse(credential.roles, credential.policies)
         }
         val resolver = MembershipResolver(provider?.let { provider(credential, it) })
-        val future = resolver.resolve(credential.tenant, credential.principal())
-        return try {
-            future.get(MEMBERSHIP_WAIT_SECONDS, TimeUnit.SECONDS)
-        } catch (error: ExecutionException) {
-            throw error.cause as? MembershipUnavailableException ?: error
+        val principal = credential.principal()
+        return runBlocking {
+            resolver.resolve(
+                credential.tenant,
+                PrincipalId(principal.id),
+                MembershipSource.of(principal)
+            )
         }
     }
 
     private fun provider(credential: Credential, node: JsonNode): MembershipProvider {
         node.only("roles", "attachments", "fails")
         node.get("fails")?.let { fails ->
-            return MembershipProvider { _, _ -> CompletableFuture.failedFuture(IllegalStateException(fails.text())) }
+            return MembershipProvider { _, _ -> throw IllegalStateException(fails.text()) }
         }
         val roles = node.get("roles")?.fields().orEmpty().map { (space, ids) ->
             SpaceId(space) to ids.strings().mapTo(LinkedHashSet(), ::RoleId)
@@ -254,7 +255,6 @@ class EngineRunner(
 
     private companion object {
         const val DEFAULT_TIME = "2026-11-01T00:00:00Z"
-        const val MEMBERSHIP_WAIT_SECONDS = 5L
         val EMPTY: JsonNode = tools.jackson.databind.node.JsonNodeFactory.instance.objectNode()
 
         fun kind(name: String): DocumentKind = when (name) {
