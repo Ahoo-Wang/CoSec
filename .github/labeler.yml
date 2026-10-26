@@ -45,6 +45,9 @@
 'module: engine':
   - changed-files:
       - any-glob-to-any-file: ['model/**', 'engine/**']
+'module: runtime':
+  - changed-files:
+      - any-glob-to-any-file: 'runtime/**'
 'module: spring-boot-starter':
   - changed-files:
       - any-glob-to-any-file: 'cosec-spring-boot-starter/**'
