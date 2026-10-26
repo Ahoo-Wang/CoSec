@@ -95,6 +95,9 @@ internal class FetchedAttributes {
     private val available = HashSet<String>()
     private val asked = HashSet<String>()
 
+    /** Nothing asked for, so nothing available. */
+    val isEmpty: Boolean get() = asked.isEmpty()
+
     fun asked(path: String): Boolean = path in asked
 
     fun value(path: String): Any? = values[path]

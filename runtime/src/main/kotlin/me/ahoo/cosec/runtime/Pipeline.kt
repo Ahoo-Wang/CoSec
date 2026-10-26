@@ -187,10 +187,11 @@ class Pipeline(
 
     /** Stage B, when there are providers, then the engine. */
     private suspend fun evaluate(request: FlatRequest, view: SnapshotView, fetched: FetchedAttributes?): Decision {
-        val evaluated = if (fetched == null) {
+        fetched?.let { fetchStageB(request, view, it) }
+        val evaluated = if (fetched == null || fetched.isEmpty) {
+            // Nothing fetched reads as ExternalValues.NONE: every external attribute is missing.
             request
         } else {
-            fetchStageB(request, view, fetched)
             with(request) { FlatRequest(this.request, scope, memberships, time, external = fetched.toExternalValues()) }
         }
         return engine.evaluate(evaluated, view, options.traceLevel).decision
