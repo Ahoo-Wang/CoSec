@@ -40,6 +40,10 @@ enum class Containment {
  *
  * Both conditions must come from checkers with the same [ZoneResolver]; identical `time` nodes must also have equal
  * zone tables.
+ *
+ * Both conditions are read against the same request. A caller that evaluates them for different subjects (the grant
+ * check compares the grantee's request with the grantor's) must first substitute every attribute that differs between
+ * the two, such as `subject.*`, `scope.roles` and `resource.var.*`: rule 1 proves `x` implies `x` for any atom.
  */
 object ConditionContainment {
     fun implies(c1: CheckedCondition, c2: CheckedCondition): Containment {
