@@ -355,6 +355,8 @@ sealed interface ScopeResolution {
   无论宿主是否配置了应用，都按 `APP_MISMATCH` 拒绝，而不是之后在读文档时变成 500。`ScopeSubject.tenant` 不能为空白（适配层把没有租户的凭证映射为
   `(0)`），`HostScope.app` 必须是合法的应用 id。
 - `Rejected` 的映射：`Deny(StatementRef.ScopeRejected(reason))`，匿名主体 401、已认证主体 403，经 `SecurityPipeline` 现有的映射。
+  2026-10-26 修订（RFC 0006 Q27）：响应体是 problem+json，匿名主体（包括带 `CoSec-Space-Id` 的匿名请求）得到 `unauthorized`（凭证被拒绝时是 `token-*`），
+  已认证主体得到 `scope-rejected`；`APP_MISMATCH` 与 `SPACE_NOT_MEMBER` 的区别只进审计（RFC 0006 §6.1）。
 
 ### 4.7 黑名单：规则加名单
 

@@ -451,6 +451,7 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 | 任何地方都不反序列化 `Scope` | #1015 第一轮审查 | `SCP-5` 的 ArchUnit 规则 |
 | 同一个 `CoSec-*` 参数的 Header 与 query 值不同的请求返回 400（实现在 RFC 0006 PR-2） | #1015 第一轮审查 | `SCP-4`；`WebAdapterParityTest` 增加该场景 |
 | `upgrading.md` 写明"匿名请求 + `CoSec-Space-Id` → 401"，并逐条写出 RFC 0002 §4.4 的 X1–X8、RFC 0006 §14 的 X1–X8、RFC 0007 §15 的 X1–X8：每一条要么写成 8.0 相对 7.x 的变化与迁移方法，要么注明它描述的中间状态已不存在（例如 RFC 0002 X2 的 `BlockingAware` 线程切换，`BlockingAware` 已删除） | #996、#999、#1015 审查 | PR 描述逐条对照 |
+| `upgrading.md` 写明"错误响应体改为 problem+json（`application/problem+json`，`type`、`title`、`status`、`code`、`requestId`）；显式与隐式拒绝在响应中不再区分"，并给出 7.x 的 `reason` 到 8.0 的 `code` 的对照（RFC 0006 §6.1、§6.2、X5） | RFC 0006 Q27（2026-10-26 修订） | PR 描述逐条对照 |
 | `upgrading.md` 同样覆盖 RFC 0003 §7、RFC 0004 §5.3 与 §13、RFC 0005 §8 的语义改动与非决策差异（C1–C6、D1–D3、R1–R3 作为"8.0 的规则"写出，并给出受影响的 7.x 配置形态） | 本文 §3.2 | 同上 |
 | §3.9 的通过标准全部满足 | 本文 | PR 附件 |
 
