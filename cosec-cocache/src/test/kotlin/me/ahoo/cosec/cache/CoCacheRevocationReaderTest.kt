@@ -82,17 +82,24 @@ class CoCacheRevocationReaderTest {
         store.reader.isRevoked(revoked).assert().isTrue()
     }
 
-    /** T1: once the answer is in the local tier, the read completes on the caller's thread without suspending. */
+    /**
+     * T1: once the answer is in the local tier, the read completes on the caller's thread without suspending. The write
+     * goes through the reading instance, and the read is primed again until no invalidation in flight evicts the local
+     * copy between priming and reading: the property is that a local hit never suspends, not when the copy settles.
+     */
     @Test
     fun aLocalHitDoesNotSuspend() {
         val revoked = tokenId()
-        store.revoke(revoked, Duration.ofMinutes(1))
-        runBlocking { reader.isRevoked(revoked) }.assert().isTrue()
-
+        CoCacheTokenStore(reading.revokedTokenCache).revoke(revoked, Duration.ofMinutes(1))
         var answer: Result<Boolean>? = null
-        val read: suspend () -> Boolean = { reader.isRevoked(revoked) }
-        read.startCoroutine(Continuation(EmptyCoroutineContext) { answer = it })
-        answer.assert().describedAs("completed before startCoroutine returned").isNotNull()
+        repeat(PRIMING_ATTEMPTS) {
+            if (answer != null) return@repeat
+            runBlocking { reader.isRevoked(revoked) }.assert().isTrue()
+            val read: suspend () -> Boolean = { reader.isRevoked(revoked) }
+            read.startCoroutine(Continuation(EmptyCoroutineContext) { answer = it })
+            if (answer == null) Thread.sleep(PRIMING_PAUSE_MS)
+        }
+        answer.assert().describedAs("a read completed before startCoroutine returned").isNotNull()
         answer!!.getOrThrow().assert().isTrue()
     }
 
@@ -105,5 +112,10 @@ class CoCacheRevocationReaderTest {
         backend.failAll = true
         reader.isRevoked(revoked).assert().isFalse()
         reader.subjectRevokedBefore(tenant, alice).assert().isNull()
+    }
+
+    private companion object {
+        const val PRIMING_ATTEMPTS = 50
+        const val PRIMING_PAUSE_MS = 20L
     }
 }

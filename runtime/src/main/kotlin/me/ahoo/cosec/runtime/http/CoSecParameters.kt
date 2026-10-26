@@ -46,17 +46,24 @@ class CoSecParameters internal constructor(val appId: String, val spaceId: Strin
 
         /** The one non-blank value, empty when there is none, null when there are several. */
         private fun single(headers: List<String>, query: List<String>?): String? {
-            var value = ""
-            for (candidate in headers.asSequence() + query.orEmpty().asSequence()) {
-                if (candidate.isBlank() || candidate == value) {
+            val fromHeaders = single("", headers) ?: return null
+            return if (query == null) fromHeaders else single(fromHeaders, query)
+        }
+
+        /** [value] joined with the non-blank [candidates]: null as soon as two differ. Indexed, so it allocates nothing. */
+        private fun single(value: String, candidates: List<String>): String? {
+            var single = value
+            for (index in candidates.indices) {
+                val candidate = candidates[index]
+                if (candidate.isBlank() || candidate == single) {
                     continue
                 }
-                if (value.isNotEmpty()) {
+                if (single.isNotEmpty()) {
                     return null
                 }
-                value = candidate
+                single = candidate
             }
-            return value
+            return single
         }
     }
 }
