@@ -126,6 +126,8 @@ class SnapshotRepositoryParityTest {
                             }
                         }
                     }
+                    // the document lists policies by id (RFC 0003 Q13): sorting must change nothing on this side
+                    globalInIdOrder(actual).assert().describedAs("iteration $iteration").isEqualTo(actual)
                     globalInIdOrder(
                         actual
                     ).assert().describedAs("iteration $iteration").isEqualTo(globalInIdOrder(expected))

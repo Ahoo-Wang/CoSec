@@ -35,6 +35,14 @@ import java.util.concurrent.atomic.AtomicInteger
  * No blocking on the event loop (AGENTS.md, RFC 0003 §6): BlockHound watches threads named like a non-blocking caller,
  * and every store and publisher entry point, and a [SnapshotSource] cold load over the store, runs on such a thread
  * against real Redis. Only these threads are watched, so other tests in the JVM are unaffected.
+ *
+ * Two waits are allowed, each exactly where it happens:
+ * - logback's console appender lock: the logging setup of the test JVMs, not the code under test;
+ * - `ScheduledThreadPoolExecutor$DelayedWorkQueue.offer`: a cold load arms its timeout on the caller's thread, and
+ *   scheduling a delayed task takes the queue's lock for one heap insertion, never across I/O. Every JDK way to schedule
+ *   a delayed task (including handing it to the scheduler thread, which offers to the same kind of queue) takes such a
+ *   lock, Reactor's own timers on an event loop included, so it is a bounded wait, not blocking I/O (RFC 0003 §5.3).
+ *   Without the allowance, the test failed only when the lock happened to be contended: flaky, not a finding.
  */
 class SnapshotStoreBlockHoundTest {
     private fun policy(id: String) = PolicyData(id, "c", id, "", PolicyType.CUSTOM, "t")
@@ -127,9 +135,12 @@ class SnapshotStoreBlockHoundTest {
         init {
             BlockHound.builder()
                 .nonBlockingThreadPredicate { current -> current.or { it.name.startsWith(THREAD_PREFIX) } }
-                // The tests log Lettuce at DEBUG to a console appender, which takes a lock: the logging setup, not
-                // the code under test. Everything else on the watched threads must not block.
+                // The test JVMs log with config/logback.xml (the root build sets it): the root logger at TRACE on a
+                // console appender, which takes a lock, so Lettuce's command logging can wait on it. That is the
+                // logging setup, not the code under test; everything else on the watched threads must not block.
                 .allowBlockingCallsInside("ch.qos.logback.core.OutputStreamAppender", "writeBytes")
+                // A bounded lock around one heap insertion when a timeout is armed (see the class comment).
+                .allowBlockingCallsInside("java.util.concurrent.ScheduledThreadPoolExecutor\$DelayedWorkQueue", "offer")
                 .blockingMethodCallback { method ->
                     violations += "${Thread.currentThread().name}: $method\n" +
                         Throwable().stackTrace.take(STACK_DEPTH).joinToString("\n") { "    at $it" }

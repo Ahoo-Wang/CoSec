@@ -15,6 +15,8 @@ package me.ahoo.cosec.authorization.engine
 
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import io.mockk.verifyOrder
 import me.ahoo.cosec.api.authorization.AuthorizeResult
 import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
@@ -32,6 +34,7 @@ import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.policy.Statement
 import me.ahoo.cosec.api.policy.VerifyResult
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.cosec.authorization.AppRolePermissionRepository
 import me.ahoo.cosec.authorization.AuthorizationImpl
@@ -615,6 +618,46 @@ class AdapterContractTest {
             "r2:a:2:name-a:ALLOW",
             "r3:a:0:name-a:ALLOW",
         )
+    }
+
+    /**
+     * The repository loader reads in 7.0's order, each read once: the global policies, then the principal's policies
+     * and roles, then the request's space and app, then the principal's policies and the app's grants.
+     */
+    @Test
+    fun theRepositoryLoaderReadsIn70sOrder() {
+        val policyRepository = mockk<PolicyRepository> {
+            every { getGlobalPolicy() } returns Mono.empty()
+            every { getPolicies(any()) } returns Mono.empty()
+        }
+        val roleRepository = mockk<AppRolePermissionRepository> {
+            every { getAppRolePermission(any(), any(), any()) } returns Mono.empty()
+        }
+        val principal = mockk<CoSecPrincipal>(relaxed = true) {
+            every { policies } returns setOf("p")
+            every { roles } returns setOf("r")
+        }
+        val request = mockk<Request>(relaxed = true) {
+            every { spaceId } returns ""
+            every { appId } returns "app"
+        }
+        PolicySetLoader(policyRepository, roleRepository)
+            .load(LegacyFacts.authzRequest(request, SimpleSecurityContext(principal)))
+            .block()
+        verify(exactly = 1) { policyRepository.getGlobalPolicy() }
+        verify(exactly = 1) { principal.policies }
+        verify(exactly = 1) { principal.roles }
+        verify(exactly = 1) { request.spaceId }
+        verify(exactly = 1) { request.appId }
+        verifyOrder {
+            policyRepository.getGlobalPolicy()
+            principal.policies
+            principal.roles
+            request.spaceId
+            request.appId
+            policyRepository.getPolicies(setOf("p"))
+            roleRepository.getAppRolePermission("app", "", setOf("r"))
+        }
     }
 
     /** The principal's policies and roles are read where 7.0 reads them: a read that throws fails only its layer. */

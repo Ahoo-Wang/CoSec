@@ -114,4 +114,59 @@ class SnapshotContentTest {
         SnapshotContent.policyId(tree("""{"id":1}""")).assert().isNull()
         SnapshotContent.policyId(tree("""{}""")).assert().isNull()
     }
+
+    /** Review: untouched entries go back as they were stored, so numbers a tree would rewrite survive. */
+    @Test
+    fun writesStoredEntriesBackByteForByte() {
+        val odd = """{"id":"p", "x": [1e400, 0.12345678901234567890123, 1.10],"y" : {"z":-0.0}}"""
+        val grant = """[ "p1",  "p2" ]"""
+        val policies = document("""{"policies":[$odd,{"id":"q"}]}""")
+        val read = SnapshotContent.read(SnapshotKey.Policies, policies) as SnapshotContent.Policies
+        // a writer changes another entry
+        read.policies["r"] = tree("""{"id":"r"}""")
+        val written = read.write(2, publishedAt).bodyBytes().decodeToString()
+        written.assert().contains(odd).contains("""{"id":"q"}""")
+
+        val key = SnapshotKey.App("app")
+        val appPermission = """{"id":"app","n":1.10}"""
+        val app = document("""{"appPermission":$appPermission,"grants":{"r":$grant}}""")
+        val readApp = SnapshotContent.read(key, app) as SnapshotContent.App
+        readApp.grants["s"] = tree("""["p3"]""")
+        readApp.write(2, publishedAt).bodyBytes().decodeToString().assert()
+            .contains(""""appPermission":$appPermission""")
+            .contains(""""r":$grant""")
+        SnapshotContent.treeOf(readApp.grants.getValue("r")).assert().isEqualTo(tree(grant))
+    }
+
+    /** Review: a grant key the compiler rejects would fail every request of the app. */
+    @ParameterizedTest
+    @ValueSource(strings = ["r@a@b", "r@", "@s", ""])
+    fun refusesGrantKeysThatNameNoRoleInASpace(grantKey: String) {
+        val body = """{"schema":1,"revision":1,"publishedAt":"2026-10-21T08:00:00Z",""" +
+            """"appPermission":{"id":"app"},"grants":{"$grantKey":["p1"]}}"""
+        assertThrows<SnapshotFormatException> { SnapshotContent.read(SnapshotKey.App("app"), document(body)) }
+        SnapshotContent.isValidGrantKey(grantKey).assert().isFalse()
+    }
+
+    @Test
+    fun acceptsGrantKeysOfRolesAndSpaces() {
+        listOf("r", "r@s").forEach { SnapshotContent.isValidGrantKey(it).assert().describedAs(it).isTrue() }
+    }
+
+    /** Review: a document is bound to its key; app A's document under `app:B` must not be accepted. */
+    @ParameterizedTest
+    @ValueSource(strings = ["""{"id":"other"}""", """{}""", """{"id":1}"""])
+    fun refusesAnAppPermissionOfAnotherApp(appPermission: String) {
+        val body = """{"schema":1,"revision":1,"publishedAt":"2026-10-21T08:00:00Z",""" +
+            """"appPermission":$appPermission,"grants":{}}"""
+        assertThrows<SnapshotFormatException> { SnapshotContent.read(SnapshotKey.App("app"), document(body)) }
+    }
+
+    @Test
+    fun refusesSectionsThatAreNeitherArraysNorObjects() {
+        val body = """{"schema":1,"revision":1,"publishedAt":"2026-10-21T08:00:00Z","policies":1}"""
+        assertThrows<SnapshotFormatException> { SnapshotContent.read(SnapshotKey.Policies, document(body)) }
+        val app = """{"schema":1,"revision":1,"publishedAt":"2026-10-21T08:00:00Z","appPermission":[],"grants":{}}"""
+        assertThrows<SnapshotFormatException> { SnapshotContent.read(SnapshotKey.App("app"), document(app)) }
+    }
 }

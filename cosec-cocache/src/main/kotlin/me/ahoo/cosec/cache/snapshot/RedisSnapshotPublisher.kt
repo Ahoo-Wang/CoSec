@@ -27,6 +27,7 @@ import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.principal.RoleId
 import me.ahoo.cosec.api.principal.SpacedRoleId
+import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.RedisPolicyRepository
 import me.ahoo.cosec.permission.DefaultAppPermissionEvaluator
@@ -42,7 +43,9 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectMapper
 import tools.jackson.databind.node.JsonNodeFactory
 import java.time.Clock
+import java.time.Duration
 import java.util.TreeMap
+import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -53,6 +56,12 @@ import java.util.concurrent.atomic.AtomicLong
  * On [ConditionalPut.Conflict] the write starts over from a fresh read, never from the conflict's digest: that digest
  * may belong to a value this instance cannot decode, and writing over it would replace a document nobody has seen.
  * A value that cannot be decoded therefore fails the write (the re-read throws) and stays in Redis for the operator.
+ * Attempts after a conflict wait a random time up to an exponentially growing bound ([retryBackoff], at most
+ * [maxRetryBackoff]), so writers that keep colliding, such as every instance starting at once, spread out.
+ *
+ * A write that would leave the document as it is (the same policy again, a grant that is already there) writes
+ * nothing: no revision, no invalidation, no reload on any instance. Batches ([setPolicies], the map form of
+ * [setRoleGrants]) change a document once for many entries.
  *
  * A write is validated as 7.0 validates it ([DefaultPolicyEvaluator], [DefaultAppPermissionEvaluator]). The other
  * entries of the document are written back as they were read (see [SnapshotContent]).
@@ -73,9 +82,15 @@ class RedisSnapshotPublisher(
     private val maxAttempts: Int = DEFAULT_MAX_ATTEMPTS,
     /** Where a document is changed and serialized: CPU work that grows with the document, kept off the caller. */
     private val scheduler: Scheduler = Schedulers.boundedElastic(),
+    /** The bound of the first wait after a conflict; it doubles with every further conflict. */
+    private val retryBackoff: Duration = DEFAULT_RETRY_BACKOFF,
+    private val maxRetryBackoff: Duration = DEFAULT_MAX_RETRY_BACKOFF,
 ) : SnapshotPublisher {
     init {
         require(maxAttempts > 0) { "maxAttempts must be positive." }
+        require(!retryBackoff.isNegative && retryBackoff <= maxRetryBackoff) {
+            "retryBackoff must not be negative and must not exceed maxRetryBackoff."
+        }
     }
 
     constructor(cache: PolicySnapshotCache, store: RedisSnapshotDocumentStore) : this(cache, store::notifyChanged)
@@ -86,16 +101,27 @@ class RedisSnapshotPublisher(
     /** Writes that lost a race and started over; for tests and diagnostics. */
     val conflicts: Long get() = conflictCount.get()
 
-    override fun setPolicy(policy: Policy): Mono<Void> = update(SnapshotKey.Policies) { current ->
-        log.info { "setPolicy - policy: [${policy.id}]." }
-        require(!policy.id.startsWith(RedisPolicyRepository.RESERVED_POLICY_ID_PREFIX)) {
-            "Policy id [${policy.id}] must not start with [${RedisPolicyRepository.RESERVED_POLICY_ID_PREFIX}], " +
-                "which holds the policy history."
+    override fun setPolicy(policy: Policy): Mono<Void> = setPolicies(listOf(policy))
+
+    override fun setPolicies(policies: Collection<Policy>): Mono<Void> = Mono.defer {
+        val ids = policies.map { it.id }
+        require(ids.size == ids.toSet().size) { "Policies $ids are listed more than once." }
+        if (policies.isEmpty()) {
+            return@defer Mono.empty()
         }
-        DefaultPolicyEvaluator.evaluate(policy)
-        val policies = (current as SnapshotContent.Policies?)?.policies ?: TreeMap()
-        policies[policy.id] = treeOf(policy, Policy::class.java)
-        SnapshotContent.Policies(policies)
+        update(SnapshotKey.Policies) { current ->
+            log.info { "setPolicies - policies: $ids." }
+            val stored = (current as SnapshotContent.Policies?)?.policies ?: TreeMap()
+            for (policy in policies) {
+                require(!policy.id.startsWith(RedisPolicyRepository.RESERVED_POLICY_ID_PREFIX)) {
+                    "Policy id [${policy.id}] must not start with [${RedisPolicyRepository.RESERVED_POLICY_ID_PREFIX}], " +
+                        "which holds the policy history."
+                }
+                DefaultPolicyEvaluator.evaluate(policy)
+                stored[policy.id] = treeOf(policy, Policy::class.java)
+            }
+            SnapshotContent.Policies(stored)
+        }
     }
 
     override fun setAppPermission(appPermission: AppPermission): Mono<Void> = Mono.defer {
@@ -112,16 +138,23 @@ class RedisSnapshotPublisher(
         roleId: RoleId,
         spaceId: SpaceId,
         permissionIds: Set<PermissionId>
-    ): Mono<Void> = Mono.defer {
-        val grantKey = grantKey(appId, roleId, spaceId)
+    ): Mono<Void> = setRoleGrants(appId, mapOf(SpacedRoleId(roleId, spaceId) to permissionIds))
+
+    override fun setRoleGrants(appId: AppId, grants: Map<SpacedRoleId, Set<PermissionId>>): Mono<Void> = Mono.defer {
+        val keyed = grants.mapKeys { (role, _) -> grantKey(appId, role.roleId, role.spaceId) }
+        if (keyed.isEmpty()) {
+            return@defer Mono.empty()
+        }
         update(SnapshotKey.App(appId)) { current ->
             val app = current as SnapshotContent.App?
                 ?: throw IllegalStateException(
                     "App [$appId] has no app permission: write it before its grants, which would not apply without it."
                 )
-            val grants = JsonNodeFactory.instance.arrayNode()
-            permissionIds.sorted().forEach { grants.add(it) }
-            app.grants[grantKey] = grants
+            keyed.forEach { (grantKey, permissionIds) ->
+                val node = JsonNodeFactory.instance.arrayNode()
+                permissionIds.sorted().forEach { node.add(it) }
+                app.grants[grantKey] = node
+            }
             app
         }
     }
@@ -143,10 +176,18 @@ class RedisSnapshotPublisher(
     private fun <T : Any> treeOf(value: T, type: Class<T>): JsonNode =
         mapper.readTree(mapper.writerFor(type).writeValueAsBytes(value))
 
-    /** The key of a grant inside its app document; the same checks as the 7.0 Redis key. */
+    /**
+     * The key of a grant inside its app document: the checks of the 7.0 Redis key, and a key the compiler reads back
+     * as this role in this space. A space containing `@` would make `role@a@b`, which the compiler rejects: one such
+     * grant would fail every request of the app, where 7.0 only left it unused.
+     */
     private fun grantKey(appId: AppId, roleId: RoleId, spaceId: SpaceId): String {
         AppSpacedRoleId(appId, roleId, spaceId)
-        return if (spaceId == SpaceIdCapable.DEFAULT) roleId else "$roleId${SpacedRoleId.SPACE_ID_SEPARATOR}$spaceId"
+        val key = if (spaceId == SpaceIdCapable.DEFAULT) roleId else "$roleId${SpacedRoleId.SPACE_ID_SEPARATOR}$spaceId"
+        require(RoleScope.parse(key) == SpacedRoleId(roleId, spaceId)) {
+            "Space id [$spaceId] of role [$roleId] must not contain '${SpacedRoleId.SPACE_ID_SEPARATOR}'."
+        }
+        return key
     }
 
     /**
@@ -164,11 +205,14 @@ class RedisSnapshotPublisher(
         Mono.fromFuture { async.getIfChanged(key, null) }
             .publishOn(scheduler)
             .flatMap { read ->
-                val current = read as? ConditionalGet.Present
-                val expected = current?.digest
-                val content = change(current?.value?.let { SnapshotContent.read(key, it) })
+                val current = (read as? ConditionalGet.Present)?.value
+                val expected = (read as? ConditionalGet.Present)?.digest
+                val content = change(current?.let { SnapshotContent.read(key, it) })
                     ?: return@flatMap Mono.just(Unit)
-                val next = content.write((current?.value?.revision ?: 0) + 1, clock.instant(), mapper)
+                if (current != null && unchanged(content, current)) {
+                    return@flatMap Mono.just(Unit)
+                }
+                val next = content.write(current?.revision?.plus(1) ?: 1, clock.instant(), mapper)
                 write(key, expected, next).flatMap { written ->
                     when {
                         written -> {
@@ -180,10 +224,24 @@ class RedisSnapshotPublisher(
                             SnapshotPublishConflictException(key, attempt)
                         )
 
-                        else -> tryWrite(key, change, attempt + 1)
+                        else -> Mono.delay(backoff(attempt), scheduler).then(tryWrite(key, change, attempt + 1))
                     }
                 }
             }
+
+    /** Whether [content] is what [current] already holds: written with [current]'s header, the bytes are the same. */
+    private fun unchanged(content: SnapshotContent, current: SnapshotDocument): Boolean =
+        content.write(current.revision, current.publishedAt, mapper).bodyBytes().contentEquals(current.bodyBytes())
+
+    /** A random wait up to [retryBackoff] doubled for every conflict after the first, at most [maxRetryBackoff]. */
+    private fun backoff(attempt: Int): Duration {
+        val bound = retryBackoff.toNanos().shl((attempt - 1).coerceAtMost(MAX_BACKOFF_SHIFT))
+            .coerceIn(0, maxRetryBackoff.toNanos())
+        return Duration.ofNanos(jitter(bound))
+    }
+
+    /** A wait in nanoseconds in `[0, bound]`; tests replace it. */
+    internal var jitter: (Long) -> Long = { bound -> ThreadLocalRandom.current().nextLong(bound + 1) }
 
     /**
      * Writes [next] if Redis holds [expected]; true when written, false on a conflict. A write that fails with an
@@ -212,6 +270,11 @@ class RedisSnapshotPublisher(
     companion object {
         private val log = KotlinLogging.logger {}
         const val DEFAULT_MAX_ATTEMPTS = 64
+        val DEFAULT_RETRY_BACKOFF: Duration = Duration.ofMillis(5)
+        val DEFAULT_MAX_RETRY_BACKOFF: Duration = Duration.ofMillis(200)
+
+        /** Keeps the shifted bound from overflowing; any bound this large is capped by [maxRetryBackoff] anyway. */
+        private const val MAX_BACKOFF_SHIFT = 20
     }
 }
 

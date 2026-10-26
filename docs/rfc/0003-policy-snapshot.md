@@ -196,6 +196,11 @@ sealed interface SnapshotKey {
   （P5 守护）；发布者和转换器因此不需要保持数组顺序。第 4 阶段若要定义顺序，在那里决定。
 - 应用存在但从未写过应用权限时，没有 `App` 文档，与 7.0 的"空 `Mono`"对应（`Absent(NO_APP_PERMISSION)`）。只有授予、没有应用权限的数据在
   7.0 里不生效（`getAppRolePermission` 读不到应用权限就返回空），文档里也没有它们的位置，转换时报告出来（§4.7）。
+- **文档绑定到它的 key**（PR-3 第 1 轮审查）：`App(appId)` 文档的 `appPermission.id` 必须等于 `appId`，否则编译器和发布者都把整份文档当作格式错误。
+  否则把应用 A 的文档复制到 `app:B`，B 的主体就会得到 A 的授予。
+- **授予的 key 必须能读回同一个角色和空间**（同上）：`role`，或者 `role@space`，其中只有一个 `@`、空间非空。7.0 的 `AppSpacedRoleId` 不检查空间，
+  `setRoleGrants(app, "r", "a@b", …)` 会写出 key `r@a@b`；7.0 里这条授予只是永远不生效，而编译器拒绝这样的 key，整个应用的请求都会 500。
+  所以发布者拒绝这样的写入，`SnapshotContent.read` 拒绝含这种 key 的文档，转换器把它报告为问题。
 - `schema` 是文档格式的版本，与 Redis 数据布局的 schema 标记（§4.7）是两回事：后者说明"Redis 里是哪一代布局"，前者说明"这份文档怎么解析"。
 
 ### 3.4 编译后的快照与版本号
@@ -539,6 +544,13 @@ N 个实例同时启动就是 N 个并发写入方。而 CoCache 6.6 只有无�
 
 需要更强保证的部署应当让 Redis 自己保证（`min-replicas-to-write` 等），这一条在 PR-5 写进 `storage.md`。
 
+**写入的负担**（PR-3 第 1 轮审查）：
+
+- 冲突之后的重试等待一个随机时长，上界从 5 ms 起每次翻倍、最多 200 ms（full jitter），所以同时启动的大量实例不会一起空转；
+- 不改变文档的写入（同一条策略、已有的授予）什么都不写：不加修订号、不广播、不触发任何实例的重新加载。判定方法是用当前文档的头部写出新内容、按字节比较；
+- `setPolicies(policies)` 和 `setRoleGrants(appId, grants)` 一次写入改动整份文档里的多条，要么全部写入要么都不写。PR-5 让 `LocalPolicyInitializer` 用前者；
+- 发布者不动的条目按读到的字节原样写回（`SnapshotContent` 保存每个条目的原始字节），`1e400`、`1.10` 这类经过树会被改写的数字保持不变。
+
 **写入后的可见性**：条件写入成功即 L1 已更新、失效已广播；本节点的 `SnapshotSource` 立即标记该 key 为脏（不依赖广播回到自己）。
 `SnapshotPublisher` 的 `Mono` 完成时，本节点后续的请求看到新版本（读己之写）；其他节点在通知送达后看到，最迟 `lag` 上界。
 
@@ -557,8 +569,9 @@ N 个实例同时启动就是 N 个并发写入方。而 CoCache 6.6 只有无�
    （7.0 按 S10a 在拒绝扫描到达时失败，文档里原样保留，评估时行为相同，只报告不拒绝）。
    另外（PR-3 审查要求）：key 中的 id 与内容中的 id 不同（编译器按内容 id 建索引，7.0 按 key），拒绝；无法解码的策略，若"可读出的类型是否可能为
    全局"（与编译器 `mayBeGlobal` 的规则相同：没有类型或类型读不出都算可能）与它是否在索引中不一致，拒绝——否则一边让全局层失败、另一边只让引用它的主体失败。
+   授予的 key 读不回同一个角色和空间（7.0 不检查空间，例如 `r@a@b`）的，同样报告并拒绝：7.0 里它从不生效，文档里它会让整个应用失败。
 4. **无法解码的条目保留在文档里**（PR-3 审查要求，F4）：7.0 的缓存解码失败（例如本实例没有注册的匹配器类型）时，读取器改用原始字节重新读出 JSON，
-   以 key 中的 id 放进文档（内容没有 id 时补上），所以编译后只有这一条是 `Broken`，不让整份文档失败。不是 JSON 的内容报告并拒绝；不是 CoCache 6
+   以 key 中的 id 放进文档（内容没有 id 时补上），所以编译后只有这一条是 `Broken`，不让整份文档失败。不需要补 id 的值按 7.0 存的字节原样放进文档。不是 JSON 的内容报告并拒绝；不是 CoCache 6
    写入的内容（未迁移的 5.x 数据、更新版本写入的）让整个转换失败。
 5. 输出：两种文档、每种文档的条目数和字节数、输入的 SHA-256，以及 §4.8 的重新校验开销估算。
 
@@ -671,6 +684,12 @@ evaluateOn(snapshot):
 | 冷未命中 | 读取：CoCache 异步执行器；编译：编译线程池；继续：`boundedElastic` | 是，只此一次 |
 | 重新加载、重新校验、`onReset` | 编译线程池与一个调度线程，不在任何请求线程上 | 不影响请求 |
 
+冷未命中在调用方线程上做的唯一一件可能等待的事，是给这次加载挂上超时（`cold-load-timeout`、`store-read-timeout`）：向调度线程的
+`ScheduledThreadPoolExecutor` 提交一个延时任务，会取得它的延时队列（`DelayedWorkQueue`）的锁，做一次堆插入。这把锁只在插入期间持有，
+从不跨越 I/O；把挂超时交给调度线程去做也一样要向一个同类的队列提交任务，JDK 里没有不取锁的延时调度，Reactor 自己在事件循环上的定时器
+也是如此。所以这是有界的短暂等待，不是阻塞调用：`SnapshotStoreBlockHoundTest` 只对 `DelayedWorkQueue.offer` 这一个方法放行（以及测试日志
+配置本身的 appender 锁），其余任何等待都算失败。没有这条放行时，该测试只在这把锁恰好被争用时失败，是不确定的，而不是发现了问题。
+
 ---
 
 ## 6. 不变量
@@ -695,8 +714,9 @@ AGENTS.md 的每条不变量在本阶段如何成立，新的失败模式各由�
 PR-3 引入了 BlockHound（`io.projectreactor.tools:blockhound`，`cosec-cocache` 的测试依赖，测试 JVM 加 `-XX:+AllowRedefinitionToAddDeleteMethods`）。
 `SnapshotStoreBlockHoundTest` 只监视名字带固定前缀的测试线程（不加载 Reactor 的集成，所以同一个 JVM 里的其它测试不受影响），在这些线程上对真实 Redis
 调用存储的全部入口、发布者的全部写操作，以及 `SnapshotSource` 经存储的冷加载，断言没有任何阻塞调用；另一例确认监视确实生效。唯一的豁免是 logback
-控制台 appender 的锁：测试把 Lettuce 的日志开到 DEBUG，这是日志配置，不是被测代码。为此 L2 命中时的摘要计算在调用方线程之外进行，发布者的日志
-也写在调度线程上。
+控制台 appender 的锁：测试 JVM 用根构建指定的 `config/logback.xml`，根日志级别 TRACE、输出到控制台，Lettuce 记录每条命令时可能等这把锁；这是日志配置，
+不是被测代码。与此无关的两点：L2 命中时的摘要在 `digestExecutor` 上计算，不在调用方线程上（`RedisSnapshotDocumentStoreTest` 固定），因为它与文档
+大小成正比；发布者的修改、序列化和日志都在它的调度线程上（同样有测试固定）。
 
 **新的失败模式**（编号接 §4.4）：
 
@@ -790,7 +810,7 @@ PR-5 起成为唯一的行为，用户在 8.0.0 GA 中第一次看到：
 
 | 基准 | 比较 | 目标 |
 |---|---|---|
-| `SimpleAuthorizationBenchmark`（`cosec-core`，场景 `global`、`role`、`none`、`global-deny`） | 参数 `source` ∈ {`legacy`, `legacy-deferred`, `engine`, `engine-deferred`, `snapshot`}（每个值是一种实际存在的组合，矩阵里没有重复格）：`engine`/`engine-deferred` 是第 2 阶段结束时的实现（内存仓库），`snapshot` 是已加载的快照；setup 断言各来源对每个场景的决策相同 | 吞吐不低于 `engine` 的 95%（判定方法同 RFC 0002 §7.1）；B/op 不高于 `engine`。预期两者都更好：少了三个 `Mono`、`Mono.zip` 和 `AppRolePermissionData` 的重建 |
+| `SimpleAuthorizationBenchmark`（`cosec-core`，场景 `global`、`role`、`none`、`global-deny`） | 参数 `source` ∈ {`legacy`, `legacy-deferred`, `engine`, `engine-deferred`, `snapshot`}，另有 `engine-mixed`、`engine-deferred-mixed`、`snapshot-mixed`（每 8 次调用有一次 `TraceLevel.FULL`；`legacy` 没有追踪级别，所以没有 `-mixed` 值）。每个值是一种实际存在的组合，矩阵里没有重复格：`engine`/`engine-deferred` 是第 2 阶段结束时的实现（内存仓库），`snapshot` 是已加载的快照；setup 断言各来源对每个场景的决策相同 | 吞吐不低于 `engine` 的 95%（判定方法同 RFC 0002 §7.1）；B/op 不高于 `engine`。预期两者都更好：少了三个 `Mono`、`Mono.zip` 和 `AppRolePermissionData` 的重建 |
 | `global-deny` | 同上 | 只记录，不设门槛。第 2 阶段并行预取三层（RFC 0002 X1）；快照下三层都在内存里，这笔开销应当消失 |
 | 新增 `SnapshotAuthorizationBenchmark`（`cosec-cocache`，新的 `jmh` 源码集） | CoCache **内存后端**上，7.0 的 Redis 仓库（L2 全部命中，经 `toLocalFirstMono`）与快照 | 只记录。这是本阶段真正改变的热路径：现有基准用的是返回 `Mono.just` 的内存仓库，测不到 CoCache 的开销。PR-2 加上 `jmh` 源码集和 `repository` 一侧；`snapshot` 一侧依赖 CoCache 快照存储，随 PR-3 加入 |
 | 新增 `SnapshotCompileBenchmark`（`cosec-core`，`avgt`，ms/op） | 编译 10、100、1,000、10,000 条语句的文档 | 只记录，用来解释 §4.8 的真实数据 |
@@ -816,7 +836,7 @@ B/op 不随它变化（GLOBAL 层复用预构造的 `LayerInput`）。PR-2 的�
 ```
 
 ```bash
-java -jar cosec-core/build/libs/cosec-core-<version>-jmh.jar SimpleAuthorizationBenchmark -p source=engine,snapshot -p scenario=none -p trace=off -p globalPolicies=10,100,1000 -f 3 -wi 5 -i 10 -prof gc -jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml
+java -jar cosec-core/build/libs/cosec-core-<version>-jmh.jar SimpleAuthorizationBenchmark -p source=engine,snapshot -p scenario=none -p globalPolicies=10,100,1000 -f 3 -wi 5 -i 10 -prof gc -jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml
 ```
 
 ```bash

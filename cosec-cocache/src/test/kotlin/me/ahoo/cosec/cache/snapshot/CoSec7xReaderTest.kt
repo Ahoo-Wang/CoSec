@@ -258,4 +258,32 @@ class CoSec7xReaderTest {
         load.busyFraction(listOf(document)).assert().isEqualTo(0.02)
         load.describe(listOf(document)).assert().contains("2.00%")
     }
+
+    /**
+     * Review: 7.0 accepts a space containing `@` (`r@a@b`) and never applies such a grant; a document cannot hold it,
+     * because the compiler would fail the whole app on it.
+     */
+    @Test
+    fun reportsGrantsKeyedByNoRoleInASpace() {
+        Raw7xWriter(backend, keyPrefix).use { raw ->
+            raw.appPermission("app", app)
+            raw.grants(AppSpacedRoleId("app", "r", "a@b"), """["p1"]""")
+        }
+        val conversion = read(keys(apps = setOf("app"), grants = setOf(AppSpacedRoleId("app", "r", "a@b"))))
+        conversion.problems.single().assert().contains("keyed [r@a@b]")
+    }
+
+    @Test
+    fun keepsTheStoredBytesOf7xValues() {
+        val odd = """{"id":"p","name":"p","type":"custom","tenantId":"t","statements":[],"x":[1e400,1.10]}"""
+        Raw7xWriter(backend, keyPrefix).use { raw ->
+            raw.policy("p", odd)
+            raw.appPermission("app", app)
+            raw.grants(AppSpacedRoleId("app", "r"), """[ "p1" ]""")
+        }
+        val documents = read(keys(setOf("p"), setOf("app"), setOf(AppSpacedRoleId("app", "r")))).documents()
+        documents.getValue(SnapshotKey.Policies).bodyBytes().decodeToString().assert().contains(odd)
+        documents.getValue(SnapshotKey.App("app")).bodyBytes().decodeToString().assert()
+            .contains(app).contains(""""r":[ "p1" ]""")
+    }
 }

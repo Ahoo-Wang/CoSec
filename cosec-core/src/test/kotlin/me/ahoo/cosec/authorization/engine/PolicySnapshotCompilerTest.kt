@@ -28,6 +28,7 @@ import me.ahoo.cosec.snapshot.SnapshotUnavailableException
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -45,6 +46,19 @@ class PolicySnapshotCompilerTest {
         compiler.app.compile(SnapshotKey.App(appId), snapshotDocument(3, sections))
 
     private val catalog = appPermissionJson("app", listOf(permissionJson("p1"), permissionJson("p2")).joinToString(","))
+
+    /**
+     * A document is bound to its key: app A's document copied under app B would otherwise grant B's principals
+     * what A grants. Any other id, or none, fails the whole document.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = [""""id":"other",""", """""", """"id":7,"""])
+    fun rejectsAnAppDocumentOfAnotherApp(id: String) {
+        val appPermission = """{$id"condition":{"all":{}},"groups":[]}"""
+        assertThrows<SnapshotFormatException> { app(""""appPermission":$appPermission,"grants":{}""") }
+        app(""""appPermission":$catalog,"grants":{}""").appId.assert().isEqualTo("app")
+        assertThrows<SnapshotFormatException> { app(""""appPermission":$catalog,"grants":{}""", appId = "other") }
+    }
 
     @Test
     fun compilesPoliciesInDocumentOrder() {

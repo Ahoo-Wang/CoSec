@@ -56,6 +56,7 @@ import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotEntry
 import me.ahoo.cosec.snapshot.SnapshotKey
 import reactor.core.publisher.Mono
+import tools.jackson.core.JacksonException
 import tools.jackson.core.type.TypeReference
 import java.time.Instant
 import kotlin.random.Random
@@ -481,7 +482,7 @@ object PolicySetParity {
             is LayerInput.Unavailable ->
                 rootCause(
                     layer.error
-                ).let { listOf(layer.kind, "unavailable", it.javaClass, withoutLocation(it.message)) }
+                ).let { listOf(layer.kind, "unavailable", it.javaClass, messageOf(it)) }
             is LayerInput.Loaded -> listOf(
                 layer.kind,
                 "loaded",
@@ -534,9 +535,12 @@ object PolicySetParity {
      * Jackson appends where in the input it failed, which differs between decoding a stored value and a tree read
      * from a document; the rest of the message is the same.
      */
-    private fun withoutLocation(message: String?): String? = message?.replace(JACKSON_LOCATION, "")
-
-    private val JACKSON_LOCATION = Regex("""\s+at \[(Source:|No location information).*""", RegexOption.DOT_MATCHES_ALL)
+    /**
+     * The message without the parts that depend on where the input came from: for a Jackson error, its original
+     * message and the path into the value, not the source location (a tree on one side, bytes on the other).
+     */
+    private fun messageOf(error: Throwable): String? =
+        if (error is JacksonException) "${error.originalMessage} (path: ${error.pathReference})" else error.message
 
     private fun rootCause(error: Throwable): Throwable {
         var cause = error

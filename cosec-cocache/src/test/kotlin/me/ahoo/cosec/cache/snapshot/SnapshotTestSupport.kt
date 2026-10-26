@@ -199,6 +199,11 @@ class ReversingChannelBackend(private val delegate: CoherenceBackend) : Coherenc
         }
     }
 
+    /** Tells the listeners of [namespace] that notifications may have been lost, as a re-established subscription does. */
+    fun reset(namespace: String) {
+        listeners[namespace].orEmpty().reversed().forEach { it.onReset() }
+    }
+
     override fun close() {
         subscriptions.values.forEach { it.close() }
     }

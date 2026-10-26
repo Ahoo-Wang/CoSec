@@ -110,6 +110,23 @@ class SnapshotPublisherConcurrencyTest {
         }
     }
 
+    /**
+     * Review: every instance writing what is already there, such as `LocalPolicyInitializer` on a rolling restart,
+     * publishes nothing: no revision churn, no invalidations, no reloads.
+     */
+    @ParameterizedTest
+    @EnumSource(RedisTarget::class)
+    fun concurrentWritesOfWhatIsThereChangeNothing(target: RedisTarget) {
+        withNodes(target) { nodes ->
+            nodes.first().publisher.setPolicies(listOf(policy("a"), policy("b"))).block()
+            contend(nodes) { node, _ -> node.publisher.setPolicies(listOf(policy("a"), policy("b"))) }
+
+            val read = nodes.first().store.readIfChanged(SnapshotKey.Policies, null).get() as SnapshotRead.Present
+            read.document.revision.assert().isEqualTo(1L)
+            nodes.sumOf { it.publisher.conflicts }.assert().isZero()
+        }
+    }
+
     companion object {
         private const val INSTANCES = 3
         private const val THREADS = 4

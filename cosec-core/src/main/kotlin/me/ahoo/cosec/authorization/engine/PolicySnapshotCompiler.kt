@@ -55,7 +55,8 @@ import java.util.Collections
  * What cannot be compiled:
  * - a malformed document (unparsable JSON, an unknown schema or field, a missing or repeated section, a repeated key
  *   anywhere in the body, a header that disagrees with the decoded one, a policy without an id, a duplicate id or
- *   role, a grant key that is not `role` or `role@space`): the compiler throws, and the whole document fails closed.
+ *   role, a grant key that is not `role` or `role@space`, an app permission whose id is not the key's app): the
+ *   compiler throws, and the whole document fails closed.
  *   Nothing is ever "last one wins": a repeated section could otherwise replace one that holds a deny;
  * - one policy, app permission or grant that the deserializers reject, including with a [LinkageError] such as a
  *   missing AOT hint causes: that entry is [Compiled.Broken], so only the layers reading it fail (§4.4 F4), as in 7.0,
@@ -127,6 +128,11 @@ internal class PolicySnapshotCompiler(private val mapper: ObjectMapper = CoSecJs
             true
         }
         val node = appPermissionNode ?: malformed(key, "the [$APP_PERMISSION] section is missing")
+        // A document is bound to its key: app A's document stored under app B must not grant B what A grants.
+        val appId = node.get(ID)?.takeIf { it.isString }?.asString()
+        if (appId != key.appId) {
+            malformed(key, "the app permission names app [$appId], not [${key.appId}]")
+        }
         return CompiledApp(document.revision, key.appId, compileAppPermission(key, node), grants)
     }
 
@@ -136,8 +142,8 @@ internal class PolicySnapshotCompiler(private val mapper: ObjectMapper = CoSecJs
         node: JsonNode,
         byId: MutableMap<PolicyId, Compiled<PolicyGroup>>,
     ): Compiled<PolicyGroup> {
-        val id = node.get(POLICY_ID)?.takeIf { it.isString }?.asString()
-            ?: malformed(key, "a policy has no string [$POLICY_ID]")
+        val id = node.get(ID)?.takeIf { it.isString }?.asString()
+            ?: malformed(key, "a policy has no string [$ID]")
         val compiled = entry(key, "policy [$id]") {
             val policy = mapper.treeToValue(node, Policy::class.java)
             if (policy is PolicyData) policy.engineGroup() else PolicyGroup(policy)
@@ -295,7 +301,7 @@ internal class PolicySnapshotCompiler(private val mapper: ObjectMapper = CoSecJs
         const val POLICIES = "policies"
         const val APP_PERMISSION = "appPermission"
         const val GRANTS = "grants"
-        private const val POLICY_ID = "id"
+        private const val ID = "id"
         private const val POLICY_TYPE = "type"
         private val HEADER_FIELDS = setOf(SCHEMA, REVISION, PUBLISHED_AT)
 
