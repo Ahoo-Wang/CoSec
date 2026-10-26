@@ -33,6 +33,11 @@ class RedisApiKeyStore(
 ) : ApiKeyStore {
     private val keyPrefix = keyPrefix.trimEnd(':')
 
+    companion object {
+        /** `<keyPrefix>:<hash>`, with a trailing `:` of [keyPrefix] trimmed. */
+        fun redisKey(keyPrefix: String, hash: String): String = "${keyPrefix.trimEnd(':')}:$hash"
+    }
+
     override fun findByHash(hash: String): ApiKey? =
         stringRedisTemplate.opsForValue().get(
             redisKey(hash)
@@ -57,5 +62,5 @@ class RedisApiKeyStore(
     /** Removes the key with [hash]; it stops working on the next request. */
     fun revoke(hash: String): Boolean = stringRedisTemplate.delete(redisKey(hash))
 
-    private fun redisKey(hash: String): String = "$keyPrefix:$hash"
+    private fun redisKey(hash: String): String = redisKey(keyPrefix, hash)
 }
