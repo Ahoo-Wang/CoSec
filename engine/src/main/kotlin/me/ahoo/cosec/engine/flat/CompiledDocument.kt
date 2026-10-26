@@ -37,6 +37,10 @@ import me.ahoo.cosec.model.decision.DocumentKind
  * [me.ahoo.cosec.model.decision.Cause.MissingPolicies] (§7.2). For the same reason a tenant policy whose id the
  * platform also defines is found per request, and makes it [me.ahoo.cosec.model.decision.Cause.AmbiguousPolicy]
  * unless both have the same content (RFC 0007 N2, [CompiledPolicy.sameContent]).
+ *
+ * Platform boundaries (RFC 0007 §7.6) live in the platform document, apart from its policies: a boundary policy holds
+ * only ALLOW statements, at most [MAX_BOUNDARY_STATEMENTS], and no binding or attachment can reach it. The platform
+ * names a default boundary, a tenant document may name another; the platform tenant has none.
  */
 class CompiledDocument private constructor(
     val kind: DocumentKind,
@@ -44,6 +48,13 @@ class CompiledDocument private constructor(
     val owner: String,
     private val policies: Map<String, CompiledPolicy>,
     bindings: List<Binding>,
+    /** The platform's boundary policies, by id; empty for the other kinds. */
+    private val boundaries: Map<String, CompiledPolicy> = emptyMap(),
+    /**
+     * The boundary the document names: the platform's default, or a tenant's own (RFC 0007 §7.6); null for none. A
+     * tenant's names a policy of the platform, looked up per request.
+     */
+    internal val boundary: String? = null,
 ) {
     /** `Anyone` bindings, by policy id, then binding id. */
     internal val anyone: Array<BoundEntry>
@@ -58,6 +69,13 @@ class CompiledDocument private constructor(
     private val roles: Map<String, Array<BoundEntry>>
 
     init {
+        require(boundary == null || kind != DocumentKind.APP) { "An app document names no boundary." }
+        require(!(kind == DocumentKind.TENANT && boundary != null && owner == TenantId.PLATFORM.value)) {
+            "The platform tenant has no boundary"
+        }
+        require(boundary == null || kind != DocumentKind.PLATFORM || boundary in boundaries) {
+            "The default boundary $boundary is not a boundary policy of the platform document"
+        }
         val anyone = ArrayList<BoundEntry>()
         val breakGlass = HashMap<String, HashMap<String, ArrayList<BoundEntry>>>()
         val principals = HashMap<String, HashMap<String, ArrayList<BoundEntry>>>()
@@ -114,6 +132,7 @@ class CompiledDocument private constructor(
         }
         requireReachable(binding)
         val local = if (policyId == BuiltinPolicies.ROOT.value) BuiltinPolicies.root else policies[policyId]
+        require(policyId !in boundaries) { "Binding ${binding.id.value} binds boundary policy $policyId" }
         require(local != null || kind != DocumentKind.PLATFORM) {
             "Binding ${binding.id.value} of the platform document names policy $policyId, which it does not define"
         }
@@ -156,6 +175,9 @@ class CompiledDocument private constructor(
 
     internal fun policy(id: String): CompiledPolicy? = policies[id]
 
+    /** The platform's boundary policy [id], or null. */
+    internal fun boundaryPolicy(id: String): CompiledPolicy? = boundaries[id]
+
     internal fun breakGlass(tenant: String, principal: String): Array<BoundEntry>? = breakGlass[tenant]?.get(principal)
 
     internal fun principal(tenant: String, principal: String): Array<BoundEntry>? = principals[tenant]?.get(principal)
@@ -185,20 +207,59 @@ class CompiledDocument private constructor(
                 is Match.Exactly -> value.value
             }
 
+        /** The most statements a boundary policy may hold (RFC 0007 §7.6). */
+        const val MAX_BOUNDARY_STATEMENTS: Int = 64
+
         /**
          * The platform document: `Anyone` bindings (7.x global policies), break-glass bindings and the shared policies.
          * The blacklist rule and the root policy are added; every binding must name a policy defined here.
+         * [boundaries] are its boundary policies and [defaultBoundary] the one a tenant gets unless it names another.
          */
-        fun platform(policies: List<CompiledPolicy>, bindings: List<Binding>): CompiledDocument =
-            CompiledDocument(DocumentKind.PLATFORM, "", index(DocumentKind.PLATFORM, policies), bindings)
+        fun platform(
+            policies: List<CompiledPolicy>,
+            bindings: List<Binding>,
+            boundaries: List<CompiledPolicy> = emptyList(),
+            defaultBoundary: String? = null,
+        ): CompiledDocument {
+            val index = index(DocumentKind.PLATFORM, policies)
+            val boundaryIndex = HashMap<String, CompiledPolicy>(boundaries.size * 2)
+            for (boundary in boundaries) {
+                require(boundary.id !in index && boundaryIndex.put(boundary.id, boundary) == null) {
+                    "Duplicate policy id ${boundary.id} in the platform document"
+                }
+                require(!BuiltinPolicies.isBuiltin(boundary.id)) { "Builtin policy ${boundary.id} is not a boundary" }
+                require(
+                    boundary.denies.isEmpty()
+                ) { "Boundary ${boundary.id} holds a DENY statement; a boundary only allows" }
+                require(!boundary.attachable) { "Boundary ${boundary.id} cannot be attached" }
+                require(boundary.allows.size <= MAX_BOUNDARY_STATEMENTS) {
+                    "Boundary ${boundary.id} holds ${boundary.allows.size} statements, more than $MAX_BOUNDARY_STATEMENTS"
+                }
+            }
+            return CompiledDocument(DocumentKind.PLATFORM, "", index, bindings, boundaryIndex, defaultBoundary)
+        }
 
         /** The document of [app]: its permission policies and role bindings (7.x app permissions and grants). */
         fun app(app: AppId, policies: List<CompiledPolicy>, bindings: List<Binding>): CompiledDocument =
             CompiledDocument(DocumentKind.APP, app.value, index(DocumentKind.APP, policies), bindings)
 
-        /** The document of [tenant]: its own policies and bindings. */
-        fun tenant(tenant: TenantId, policies: List<CompiledPolicy>, bindings: List<Binding>): CompiledDocument =
-            CompiledDocument(DocumentKind.TENANT, tenant.value, index(DocumentKind.TENANT, policies), bindings)
+        /**
+         * The document of [tenant]: its own policies and bindings, and the platform [boundary] it is held to instead
+         * of the default (only the platform writes it, RFC 0007 Q11).
+         */
+        fun tenant(
+            tenant: TenantId,
+            policies: List<CompiledPolicy>,
+            bindings: List<Binding>,
+            boundary: String? = null,
+        ): CompiledDocument =
+            CompiledDocument(
+                DocumentKind.TENANT,
+                tenant.value,
+                index(DocumentKind.TENANT, policies),
+                bindings,
+                boundary = boundary
+            )
 
         private fun index(kind: DocumentKind, policies: List<CompiledPolicy>): Map<String, CompiledPolicy> {
             val index = HashMap<String, CompiledPolicy>(policies.size * 2)

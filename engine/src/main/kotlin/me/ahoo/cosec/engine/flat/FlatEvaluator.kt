@@ -39,6 +39,8 @@ import me.ahoo.cosec.model.decision.StatementRef
  *    indeterminate, and so does anything unresolved: there could be a DENY nobody could check.
  * 3. Only then the ALLOW pass: the first match permits; an erroring ALLOW counts as no match (C1a); nothing matched is
  *    an implicit deny.
+ * 4. A Permit is held to the tenant's platform boundary, if any (RFC 0007 §7.6, [withinBoundary]): it stays a Permit
+ *    only if a boundary statement matches. The boundary can only turn a Permit into a Deny or an Indeterminate (P-B2).
  *
  * So the decision depends on the set of candidates, never on their order (P8): only which statement is reported does.
  * A candidate policy's statements are those its index gives (I1), each evaluated by [step].
@@ -107,8 +109,44 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         }
         pass = Effect.ALLOW
         enumerate()
-        return matched ?: CoSecFlatEngine.IMPLICIT_DENY
+        val permit = matched ?: return CoSecFlatEngine.IMPLICIT_DENY
+        return withinBoundary(permit)
     }
+
+    /**
+     * [decision], held to the boundary of the request's tenant (RFC 0007 §7.6). Without a boundary it is returned as
+     * it is, having read two fields. Otherwise it stays a Permit only if a statement of the boundary matches, as an
+     * ALLOW would; else it is a Deny, or an Indeterminate when a boundary statement failed. The boundary is a property
+     * of the request, not of which ALLOW matched, so it is checked once. A boundary the platform does not define is a
+     * missing policy: the request fails closed.
+     */
+    protected fun withinBoundary(decision: Decision): Decision {
+        if (decision !is Decision.Permit) {
+            return decision
+        }
+        val id = view.boundaryOf(request.scope) ?: return decision
+        val boundary = view.platform.boundaryPolicy(id)
+            ?: return Decision.Indeterminate(Cause.MissingPolicies(setOf(PolicyId(id))))
+        var failure: Throwable? = null
+        for (statement in boundary.allows) {
+            when (boundaryStep(boundary, statement)) {
+                MATCHED -> return decision
+                ERROR, GUARD_FAILED -> failure = failure ?: stepError
+                GUARD_MISS -> break
+            }
+        }
+        return if (failure != null) {
+            Decision.Indeterminate(Cause.BoundaryUnavailable(PolicyId(id), failure))
+        } else {
+            Decision.Deny(StatementRef.Boundary(PolicyId(id), request.scope.tenant))
+        }
+    }
+
+    /** One boundary statement, as [step] evaluates an ALLOW. The trace records it. */
+    protected open fun boundaryStep(
+        boundary: CompiledPolicy,
+        statement: CompiledStatement
+    ): Int = step(boundary, statement)
 
     /** Runs the DENY pass and returns its decision, or null when the ALLOW pass decides. */
     protected fun denyPass(): Decision? {

@@ -31,6 +31,10 @@ internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, pr
     FlatEvaluator(request, view) {
     private val candidates = ArrayList<CandidateTrace>()
     private val expired = ArrayList<BindingRef.Bound>()
+    private val boundary = ArrayList<CandidateTrace>()
+
+    /** Set while the boundary decides: its errors are caught as the untraced evaluation catches them. */
+    private var inBoundary = false
 
     /** Set once a pass has decided without a match, so the ALLOW pass after it runs only for the trace. */
     private var decided = false
@@ -49,14 +53,27 @@ internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, pr
         } else {
             pass = Effect.ALLOW
             enumerate()
-            matched ?: CoSecFlatEngine.IMPLICIT_DENY
+            withinBoundary(matched ?: CoSecFlatEngine.IMPLICIT_DENY)
         }
-        return FlatEvaluation(decision, FlatTrace(request.scope, candidates, expired, allUnresolved()))
+        return FlatEvaluation(decision, FlatTrace(request.scope, candidates, expired, allUnresolved(), boundary))
     }
 
-    private fun traceOnly(): Boolean = decided || matched != null
+    private fun traceOnly(): Boolean = !inBoundary && (decided || matched != null)
 
     override fun catches(error: Throwable): Boolean = if (traceOnly()) recordable(error) else error is Exception
+
+    override fun boundaryStep(boundary: CompiledPolicy, statement: CompiledStatement): Int {
+        inBoundary = true
+        val result = try {
+            step(boundary, statement)
+        } finally {
+            inBoundary = false
+        }
+        val error = if (result == ERROR || result == GUARD_FAILED) stepError else null
+        val via = BindingRef.Boundary(request.scope.tenant)
+        this.boundary += CandidateTrace(ref(boundary, statement, via), Effect.ALLOW, OUTCOMES[result], error)
+        return result
+    }
 
     /** The JVM's own failures and an interruption propagate even after the decision. */
     private fun recordable(error: Throwable): Boolean =

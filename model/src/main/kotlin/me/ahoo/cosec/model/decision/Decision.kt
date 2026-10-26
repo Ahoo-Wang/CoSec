@@ -55,6 +55,12 @@ sealed interface Cause {
     /** A document the request needs was not given to the engine. */
     data class NotLoaded(val document: DocumentKind) : Cause
 
+    /**
+     * A statement of the platform boundary [boundary] failed for a request an ALLOW permitted, and none matched
+     * (RFC 0007 §7.6): whether the request is within the boundary cannot be told.
+     */
+    data class BoundaryUnavailable(val boundary: PolicyId, val error: Throwable) : Cause
+
     /** The principal's memberships could not be resolved (RFC 0004 §4.5.2). */
     data class MembershipUnavailable(val error: Throwable) : Cause
 }

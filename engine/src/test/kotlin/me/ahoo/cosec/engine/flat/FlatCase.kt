@@ -50,10 +50,15 @@ class FlatCase(
     val tenantLoaded: Boolean,
     val unresolved: List<Cause>,
     val request: FlatRequest,
+    /** The platform's boundary policies (RFC 0007 §7.6), its default and the tenant's own. */
+    val boundaries: List<CompiledPolicy> = emptyList(),
+    val defaultBoundary: String? = null,
+    val tenantBoundary: String? = null,
 ) {
-    val platformDocument = CompiledDocument.platform(platform.policies, platform.bindings)
+    val platformDocument = CompiledDocument.platform(platform.policies, platform.bindings, boundaries, defaultBoundary)
     val appDocument = CompiledDocument.app(request.scope.app, app.policies, app.bindings)
-    val tenantDocument = CompiledDocument.tenant(request.scope.tenant, tenant.policies, tenant.bindings)
+    val tenantDocument =
+        CompiledDocument.tenant(request.scope.tenant, tenant.policies, tenant.bindings, tenantBoundary)
 
     fun view(tenant: CompiledDocument? = tenantDocument.takeIf { tenantLoaded }) =
         SnapshotView(platformDocument, appDocument.takeIf { appLoaded }, tenant, unresolved)
@@ -68,7 +73,13 @@ class FlatCase(
         tenantLoaded: Boolean = this.tenantLoaded,
         unresolved: List<Cause> = this.unresolved,
         request: FlatRequest = this.request,
-    ) = FlatCase(fixture, platform, app, tenant, appLoaded, tenantLoaded, unresolved, request)
+        boundaries: List<CompiledPolicy> = this.boundaries,
+        defaultBoundary: String? = this.defaultBoundary,
+        tenantBoundary: String? = this.tenantBoundary,
+    ) = FlatCase(
+        fixture, platform, app, tenant, appLoaded, tenantLoaded, unresolved, request,
+        boundaries, defaultBoundary, tenantBoundary,
+    )
 
     private val attachmentIds: List<String> get() = request.memberships.attachments.map { it.value }
 
@@ -118,6 +129,8 @@ class FlatCase(
             append("app=${scope.app.value} space=${scope.space.value} roles=${scope.roles.map { it.value }} ")
             appendLine("attachments=$attachmentIds blocked=${request.request.environment.blocked}")
             appendLine("loaded: app=$appLoaded tenant=$tenantLoaded unresolved=$unresolved")
+            appendLine("boundaries: default=$defaultBoundary tenant=$tenantBoundary")
+            boundaries.forEach { appendLine("  boundary ${describe(it)}") }
             for ((name, document) in listOf("platform" to platform, "app" to app, "tenant" to tenant)) {
                 appendLine("$name:")
                 document.policies.forEach { appendLine("  policy ${describe(it)}") }

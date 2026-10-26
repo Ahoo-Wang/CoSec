@@ -59,7 +59,7 @@ object PolicyDocumentCodec {
     private val factory = JsonNodeFactory.instance
 
     private val DOCUMENT_FIELDS = arrayOf("schema", "revision", "publishedAt", "policies", "bindings")
-    private val POLICY_FIELDS = arrayOf("id", "attachable", "condition", "statements")
+    private val POLICY_FIELDS = arrayOf("id", "attachable", "boundary", "condition", "statements")
     private val STATEMENT_FIELDS = arrayOf("name", "effect", "action", "resource", "condition")
     private val RESOURCE_FIELDS = arrayOf("pattern", "caseSensitive", "decodeAndParseSegments")
     private val BINDING_FIELDS = arrayOf("id", "subject", "app", "space", "policy", "expiresAt", "breakGlass")
@@ -76,7 +76,11 @@ object PolicyDocumentCodec {
 
     fun decode(kind: DocumentKind, owner: String, tree: JsonNode): PolicyDocument {
         val root = DocumentNode(tree, ROOT)
-        val fields = if (kind == DocumentKind.APP) DOCUMENT_FIELDS + "catalog" else DOCUMENT_FIELDS
+        val fields = when (kind) {
+            DocumentKind.APP -> DOCUMENT_FIELDS + "catalog"
+            DocumentKind.PLATFORM -> DOCUMENT_FIELDS + "boundaries"
+            DocumentKind.TENANT -> DOCUMENT_FIELDS + "boundary"
+        }
         root.requireObject(*fields)
         val schema = root.required("schema").long()
         if (schema != SCHEMA.toLong()) {
@@ -94,8 +98,19 @@ object PolicyDocumentCodec {
             policies = root.field("policies")?.elements()?.map(::policy).orEmpty(),
             bindings = root.field("bindings")?.elements()?.map { binding(it, kind, owner) }.orEmpty(),
             catalog = root.field("catalog")?.let(::catalog),
+            boundary = when (kind) {
+                DocumentKind.PLATFORM -> root.field("boundaries")?.let { boundaries ->
+                    boundaries.requireObject("default")
+                    boundaries.field("default")?.let { PolicyId(it.nonEmpty()) }
+                }
+
+                DocumentKind.TENANT -> root.field("boundary")?.let { PolicyId(it.nonEmpty()) }
+                DocumentKind.APP -> null
+            },
         )
     }
+
+    private fun DocumentNode.nonEmpty(): String = text().ifEmpty { fail("must not be empty") }
 
     private fun policy(node: DocumentNode): PolicyDefinition {
         node.requireObject(*POLICY_FIELDS)
@@ -104,6 +119,7 @@ object PolicyDocumentCodec {
             attachable = node.field("attachable")?.bool() ?: false,
             condition = node.field("condition")?.let(ConditionJson::read),
             statements = node.required("statements").elements().map(::statement),
+            boundary = node.field("boundary")?.bool() ?: false,
         )
     }
 
@@ -230,6 +246,12 @@ object PolicyDocumentCodec {
         root.put("schema", SCHEMA)
         root.put("revision", document.revision)
         root.put("publishedAt", document.publishedAt.toString())
+        document.boundary?.let { boundary ->
+            when (document.kind) {
+                DocumentKind.PLATFORM -> root.putObject("boundaries").put("default", boundary.value)
+                else -> root.put("boundary", boundary.value)
+            }
+        }
         document.catalog?.let { root.set("catalog", catalog(it)) }
         val policies = root.putArray("policies")
         document.policies.forEach { policies.add(policy(it)) }
@@ -241,6 +263,7 @@ object PolicyDocumentCodec {
     private fun policy(policy: PolicyDefinition): ObjectNode {
         val node = factory.objectNode().put("id", policy.id.value)
         if (policy.attachable) node.put("attachable", true)
+        if (policy.boundary) node.put("boundary", true)
         policy.condition?.let { node.set("condition", ConditionJson.write(it)) }
         val statements = node.putArray("statements")
         for (statement in policy.statements) {

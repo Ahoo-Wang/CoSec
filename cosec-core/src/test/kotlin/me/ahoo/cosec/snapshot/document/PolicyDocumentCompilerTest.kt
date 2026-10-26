@@ -147,6 +147,61 @@ class PolicyDocumentCompilerTest {
         ).assert().isEqualTo(Decision.Deny(null))
     }
 
+    /** RFC 0007 §7.6: the platform's default boundary holds every tenant that names none, its own one instead. */
+    @Test
+    fun `a platform boundary holds a tenant's permits`() {
+        val platform = compiler.compile(
+            SnapshotKey.Platform,
+            stored(
+                ""","boundaries":{"default":"orders-only"},
+                   "policies":[{"id":"all","statements":[{"effect":"allow","action":"*"}]},
+                               {"id":"orders-only","boundary":true,"statements":[{"effect":"allow","action":"order:*"}]},
+                               {"id":"anything","boundary":true,"statements":[{"effect":"allow","action":"*"}]}],
+                   "bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"all"}]"""
+            ),
+        )
+        fun decide(tenantBody: String, action: Action): Decision {
+            val memberships = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
+            val scope = (ScopeResolver.resolve(ScopeSubject(TenantId("acme"), true, memberships), DeclaredScope("", ""), HostScope(null)) as ScopeResolution.Resolved).scope
+            val authz = AuthzRequest(
+                Subject("alice", "acme", true, emptySet(), emptySet(), emptyMap(), false),
+                Scope.declared("acme", "", ""),
+                action,
+                Resource("order", "1", emptyMap()),
+                Environment("10.0.0.1", "r", "d", blocked = false),
+            )
+            val view = SnapshotView(platform, null, compiler.compile(SnapshotKey.Tenant("acme"), stored(tenantBody)))
+            return CoSecFlatEngine.evaluate(FlatRequest(authz, scope, memberships, 0), view).decision
+        }
+        decide("", Action("order", "read")).assert().isInstanceOf(Decision.Permit::class.java)
+        decide("", Action("user", "read")).assert()
+            .isEqualTo(Decision.Deny(StatementRef.Boundary(PolicyId("orders-only"), TenantId("acme"))))
+        decide(""","boundary":"anything"""", Action("user", "read")).assert().isInstanceOf(Decision.Permit::class.java)
+    }
+
+    @Test
+    fun `boundaries live in the platform, only allow, and are never bound`() {
+        errors(SnapshotKey.Tenant("acme"), ""","policies":[{"id":"b","boundary":true,"statements":[]}]""")
+            .assert().containsExactly("$.policies[0].boundary: only the platform document holds boundaries")
+        errors(SnapshotKey.Platform, ""","policies":[{"id":"b","boundary":true,"attachable":true,"statements":[{"effect":"deny","action":"*"}]}]""")
+            .assert().containsExactly(
+                "$.policies[0].attachable: a boundary cannot be attached",
+                "$.policies[0].statements[0].effect: a boundary only allows",
+            )
+        val many = (1..65).joinToString(",") { """{"effect":"allow","action":"*"}""" }
+        errors(SnapshotKey.Platform, ""","policies":[{"id":"b","boundary":true,"statements":[$many]}]""")
+            .assert().containsExactly("$.policies[0].statements: 65 statements, more than 64")
+        errors(SnapshotKey.Platform, ""","policies":[{"id":"b","boundary":true,"statements":[]}],"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"b"}]""")
+            .assert().containsExactly("$.bindings[0].policy: [b] is a boundary; boundaries are not bound")
+        errors(SnapshotKey.Platform, ""","boundaries":{"default":"p"},"policies":[{"id":"p","statements":[]}]""")
+            .assert().containsExactly("$.boundaries.default: [p] is not a boundary of this document")
+        errors(SnapshotKey.Tenant("(platform)"), ""","boundary":"b"""")
+            .assert().containsExactly("$.boundary: the platform tenant has no boundary")
+        assertThrownBy<SnapshotFormatException> { compiler.compile(SnapshotKey.App("order"), stored(""","boundary":"b"""")) }
+        assertThrownBy<SnapshotFormatException> { compiler.compile(SnapshotKey.Tenant("acme"), stored(""","boundaries":{"default":"b"}""")) }
+        assertThrownBy<SnapshotFormatException> { compiler.compile(SnapshotKey.Platform, stored(""","boundary":"b"""")) }
+    }
+
     /** DOC-3: a document that is not this version's format fails to decode; RFC 0003's keys are not read either. */
     @Test
     fun `only this format and these keys compile`() {

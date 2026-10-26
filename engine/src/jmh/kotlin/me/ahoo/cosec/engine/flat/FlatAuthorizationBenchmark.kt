@@ -60,11 +60,18 @@ import org.openjdk.jmh.annotations.State
  * Scenarios, as in 7.0: `global`, a global ALLOW matches; `role`, a permission near the end of the app's list, through
  * the `*` grant; `none`, nothing matches; `role-heavy`, 12 roles granting 30 permissions each plus a `*` grant over 120
  * permissions, nothing matches.
+ *
+ * `boundary` (RFC 0007 §14.1): `none`, no platform boundary; `1` or `8`, a default boundary of that many ALLOWs whose
+ * last one admits every path, so permits stay permits after all of them are tried. `none` must keep the throughput and
+ * B/op of the same benchmark without the boundary check (RFC 0007 Q24).
  */
 @State(org.openjdk.jmh.annotations.Scope.Benchmark)
 open class FlatAuthorizationBenchmark {
     @Param("global", "role", "none", "role-heavy")
     lateinit var scenario: String
+
+    @Param("none", "1", "8")
+    lateinit var boundary: String
 
     private lateinit var platform: CompiledDocument
     private lateinit var app: CompiledDocument
@@ -93,9 +100,19 @@ open class FlatAuthorizationBenchmark {
             policy("principal-a", "reports", 10, attachable = true),
             policy("principal-b", "exports", 10, attachable = true),
         )
+        val boundaries = if (boundary == "none") {
+            emptyList()
+        } else {
+            val count = boundary.toInt()
+            val statements = (1 until count).map { statement("b$it", Effect.ALLOW, "/outside$it/**") } +
+                statement("b$count", Effect.ALLOW, "/**")
+            listOf(compiler.compile(PolicyId("boundary"), null, statements))
+        }
         platform = CompiledDocument.platform(
             global + principal,
             global.map { Binding(BindingId("g-${it.id}"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), it.policyId) },
+            boundaries,
+            boundaries.firstOrNull()?.policyId?.value,
         )
 
         val heavy = scenario == "role-heavy"

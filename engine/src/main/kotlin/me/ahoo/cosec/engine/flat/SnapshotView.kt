@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.Scope
@@ -51,6 +52,17 @@ class SnapshotView(
         require(app == null || (scope.app.value.isNotEmpty() && app.owner == scope.app.value)) {
             "The app document of ${app?.owner} cannot decide for app '${scope.app.value}'"
         }
+    }
+
+    /**
+     * The boundary that holds the request's tenant (RFC 0007 §7.6): its tenant document's, else the platform's
+     * default; none for the platform tenant. Two field reads when there is none.
+     */
+    internal fun boundaryOf(scope: Scope): String? {
+        if (scope.tenant == TenantId.PLATFORM) {
+            return null
+        }
+        return tenant?.boundary ?: platform.boundary
     }
 
     /** The first document the request needs and was not given, or null. */

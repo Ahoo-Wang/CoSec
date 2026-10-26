@@ -439,7 +439,8 @@ object DocumentFormats {
             "schema 2), or until the switch RFC 0003's policies document or app document (schema 1). Ids must be unique.",
         root = AnyOf(
             listOf(
-                ref(SNAPSHOT_DOCUMENT, "document"),
+                ref(SNAPSHOT_DOCUMENT, "platformDocument"),
+                ref(SNAPSHOT_DOCUMENT, "tenantDocument"),
                 ref(SNAPSHOT_DOCUMENT, "appDocument"),
                 ref(SNAPSHOT_DOCUMENT, "policiesDocument"),
                 ref(SNAPSHOT_DOCUMENT, "legacyAppDocument"),

@@ -20,6 +20,7 @@ import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.SubjectRef
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
@@ -239,8 +240,52 @@ object Oracle {
         unresolved(case, enumeration.missing, enumeration.ambiguous)?.let { return Decision.Indeterminate(it) }
         for (candidate in enumeration.candidates) {
             val match = evaluate(case, candidate, Effect.ALLOW).filterIsInstance<Outcome.Matched>().firstOrNull()
-            if (match != null) return Decision.Permit(match.ref)
+            if (match != null) return withinBoundary(case, Decision.Permit(match.ref))
         }
         return Decision.Deny(null)
+    }
+
+    /** Whether a statement of [boundary] matches, and the first error if none does. */
+    private fun boundaryStatements(case: FlatCase, boundary: CompiledPolicy): Pair<Boolean, Throwable?> {
+        val spec = case.fixture.spec(boundary)!!
+        var error: Throwable? = null
+        for ((index, statement) in spec.statements.withIndex()) {
+            val behavior = statement.second
+            if (behavior == RuleBehavior.ACTION_MISS) continue
+            when (spec.guard?.behavior) {
+                GuardBehavior.MISS -> return false to error
+                GuardBehavior.THROW -> {
+                    error = error ?: spec.guard!!.error
+                    continue
+                }
+
+                else -> Unit
+            }
+            when (behavior) {
+                RuleBehavior.MATCH -> return true to null
+                RuleBehavior.THROW -> error = error ?: case.fixture.error(boundary, "${boundary.id}.$index")
+                else -> Unit
+            }
+        }
+        return false to error
+    }
+
+    /**
+     * RFC 0007 §7.6, as written: the tenant's boundary, else the platform default, none for the platform tenant; any
+     * boundary statement MATCH keeps the Permit, else any ERROR is Indeterminate, else Deny.
+     */
+    private fun withinBoundary(case: FlatCase, permit: Decision.Permit): Decision {
+        val tenant = case.request.scope.tenant
+        if (tenant == TenantId.PLATFORM) return permit
+        val id = case.tenantBoundary ?: case.defaultBoundary ?: return permit
+        val boundary = case.boundaries.firstOrNull { it.id == id }
+            ?: return Decision.Indeterminate(Cause.MissingPolicies(setOf(PolicyId(id))))
+        val (matched, error) = boundaryStatements(case, boundary)
+        if (matched) return permit
+        return if (error != null) {
+            Decision.Indeterminate(Cause.BoundaryUnavailable(PolicyId(id), error))
+        } else {
+            Decision.Deny(StatementRef.Boundary(PolicyId(id), tenant))
+        }
     }
 }

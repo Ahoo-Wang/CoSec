@@ -1,0 +1,69 @@
+{
+  "rules": [
+    "BDY-1"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The same documents, and order:read is inside the default boundary: the Permit stands.",
+  "documents": {
+    "platform": {
+      "boundaries": {
+        "default": "orders-only"
+      },
+      "policies": [
+        {
+          "id": "all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "orders-only",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*"
+            }
+          ]
+        },
+        {
+          "id": "anything",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "all"
+        }
+      ]
+    }
+  },
+  "request": {
+    "action": "order:read"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "all",
+      "statement": 0,
+      "via": {
+        "binding": "g:all",
+        "document": "platform"
+      }
+    }
+  }
+}

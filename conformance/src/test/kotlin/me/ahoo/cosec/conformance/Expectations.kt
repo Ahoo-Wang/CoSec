@@ -33,6 +33,7 @@ import tools.jackson.databind.node.ObjectNode
  * ```jsonc
  * { "decision": "Permit", "by": { "policy": "p", "statement": 0, "via": { "binding": "b", "document": "platform" } } }
  * { "decision": "Deny", "by": null }                                   // the implicit deny
+ * { "decision": "Deny", "by": { "boundary": "b", "tenant": "acme" } }   // outside the platform boundary
  * { "decision": "Indeterminate", "cause": { "type": "MissingPolicies", "policies": ["p"] } }
  * { "decision": "Rejected", "reason": "SPACE_NOT_MEMBER" }
  * { "decision": "NotCompiled", "error": "a part of the error message" }
@@ -151,6 +152,10 @@ object Expectations {
         }
 
         is StatementRef.ScopeRejected -> json.objectNode().put("rejected", ref.reason.name)
+        is StatementRef.Boundary -> json.objectNode().put(
+            "boundary",
+            ref.boundary.value
+        ).put("tenant", ref.tenant.value)
     }
 
     private fun via(via: BindingRef): JsonNode = when (via) {
@@ -160,6 +165,7 @@ object Expectations {
         ).put("document", via.document.name.lowercase())
         is BindingRef.Attached -> json.objectNode().put("attached", via.policy.value)
         BindingRef.Builtin -> json.stringNode("builtin")
+        is BindingRef.Boundary -> json.objectNode().put("boundaryOf", via.tenant.value)
     }
 
     private fun cause(cause: Cause): ObjectNode = json.objectNode().put("type", cause::class.simpleName).apply {
@@ -170,6 +176,7 @@ object Expectations {
             is Cause.SourceUnavailable -> put("document", cause.document.name.lowercase())
             is Cause.NotLoaded -> put("document", cause.document.name.lowercase())
             is Cause.MembershipUnavailable -> Unit
+            is Cause.BoundaryUnavailable -> put("boundary", cause.boundary.value)
         }
     }
 

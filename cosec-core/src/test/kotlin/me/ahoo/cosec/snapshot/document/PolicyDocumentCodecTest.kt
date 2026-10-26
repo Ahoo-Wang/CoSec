@@ -84,6 +84,26 @@ class PolicyDocumentCodecTest {
         PolicyDocumentCompiler().compile(again).owner.assert().isEqualTo("order")
     }
 
+    /** RFC 0007 §7.6: the platform's default boundary, a tenant's own, and the boundary flag of a policy. */
+    @Test
+    fun `boundaries read and write back the same`() {
+        val platform = decode(""","boundaries":{"default":"b"},"policies":[{"id":"b","boundary":true,"statements":[]}]""")
+        platform.boundary!!.value.assert().isEqualTo("b")
+        platform.policies.single().boundary.assert().isTrue()
+        val written = PolicyDocumentCodec.encode(platform)
+        PolicyDocumentCodec.encode(PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", written)).assert().isEqualTo(written)
+        decode(""","boundaries":{}""").boundary.assert().isNull()
+        val tenant = decode(""","boundary":"b"""", DocumentKind.TENANT, "acme")
+        tenant.boundary!!.value.assert().isEqualTo("b")
+        CoSecJsonSerializer.readTree(PolicyDocumentCodec.encode(tenant)).get("boundary").asString().assert().isEqualTo("b")
+        error(""","boundary":"b"""").assert().contains("unknown field boundary")
+        error(""","boundaries":{"default":""}""").assert().contains("$.boundaries.default: must not be empty")
+        error(""","boundaries":{"default":"b","other":1}""").assert().contains("$.boundaries: unknown field other")
+        error(""","boundary":"b"""", DocumentKind.APP, "order").assert().contains("unknown field boundary")
+        error(""","boundaries":{"default":"b"}""", DocumentKind.TENANT, "acme").assert().contains("unknown field boundaries")
+        error(""","policies":[{"id":"p","boundary":"yes","statements":[]}]""").assert().contains("$.policies[0].boundary: expected a boolean")
+    }
+
     /** DOC-2: `*` is Match.Any and only that; nothing can hold Match.Exactly("*"). */
     @Test
     fun `the wildcard is only ever Any`() {
