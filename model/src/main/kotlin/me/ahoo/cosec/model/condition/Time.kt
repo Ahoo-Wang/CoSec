@@ -137,7 +137,7 @@ internal class Moment(val epochSecond: Long, val nano: Int) : Comparable<Moment>
     /** The first whole millisecond at or after this moment. */
     fun ceilMillis(): Long {
         val millis = (nano + NANOS_PER_MILLI - 1) / NANOS_PER_MILLI
-        return epochSecond * ZoneOffsets.MILLIS_PER_SECOND + millis
+        return (epochSecond * ZoneOffsets.MILLIS_PER_SECOND) + millis
     }
 
     companion object {
@@ -171,7 +171,7 @@ internal object IsoTime {
             end++
         }
         val nanoOfDay = parseLocalTime(text, DATE_LENGTH + 1, end) ?: return null
-        val local = epochDay * SECONDS_PER_DAY + nanoOfDay / NANOS_PER_SECOND
+        val local = (epochDay * SECONDS_PER_DAY) + (nanoOfDay / NANOS_PER_SECOND)
         val nano = (nanoOfDay % NANOS_PER_SECOND).toInt()
         val epochSecond = when {
             end == text.length -> zone.epochSecondOf(local)
@@ -196,7 +196,7 @@ internal object IsoTime {
         if (hour > 23 || maxOf(minute, second) > 59) {
             return null
         }
-        return (hour * 3600L + minute * 60L + second) * NANOS_PER_SECOND + nano
+        return (((hour * 3600L) + (minute * 60L) + second) * NANOS_PER_SECOND) + nano
     }
 
     /** `.f` to `.fffffffff` in `text[start, end)`, as nanoseconds. */
@@ -221,7 +221,7 @@ internal object IsoTime {
         val fields = shapes.firstNotNullOfOrNull { numbers(text, start + 1, end, it) } ?: return null
         val minutes = fields.getOrElse(1) { 0 }
         val seconds = fields.getOrElse(2) { 0 }
-        val total = fields[0] * 3600 + minutes * 60 + seconds
+        val total = (fields[0] * 3600) + (minutes * 60) + seconds
         if (maxOf(minutes, seconds) > 59 || total > ZoneOffsets.MAX_OFFSET_SECONDS) {
             return null
         }
@@ -273,7 +273,7 @@ internal object IsoTime {
 
     /** As `LocalDate.toEpochDay`, for years 0–9999. */
     fun epochDay(year: Int, month: Int, day: Int): Long {
-        var total = 365L * year + (year + 3) / 4 - (year + 99) / 100 + (year + 399) / 400
+        var total = (365L * year) + ((year + 3) / 4) - ((year + 99) / 100) + ((year + 399) / 400)
         total += (367L * month - 362) / 12
         total += day - 1
         if (month > 2) {
