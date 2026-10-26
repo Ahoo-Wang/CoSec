@@ -20,7 +20,6 @@ import me.ahoo.cosec.model.TenantId
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
-import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
@@ -99,8 +98,8 @@ class MembershipResolver(
     private fun nothing(principal: CoSecPrincipal) =
         MembershipUnavailableException("The membership provider answered nothing for principal [${principal.id}].")
 
-    private fun unwrap(error: Throwable): Throwable =
-        if ((error is CompletionException || error is ExecutionException) && error.cause != null) error.cause!! else error
+    /** A dependent stage reports a provider's failure wrapped in [CompletionException]. */
+    private fun unwrap(error: Throwable): Throwable = if (error is CompletionException) error.cause ?: error else error
 
     private fun unavailable(message: String, cause: Throwable? = null): CompletableFuture<Memberships> =
         CompletableFuture.failedFuture(MembershipUnavailableException(message, cause))

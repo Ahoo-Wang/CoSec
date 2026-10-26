@@ -59,7 +59,8 @@ class CoCacheTokenStore @JvmOverloads constructor(
      * first. Two instances revoking the same principal at once may both write; the later write wins.
      */
     override fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant, ttl: Duration) {
-        val subjectCache = subjectCache ?: return super.revokeSubject(tenant, principal, issuedBefore, ttl)
+        val subjectCache = subjectCache
+            ?: throw UnsupportedOperationException("CoCacheTokenStore needs a RevokedSubjectCache to revoke a principal.")
         val key = RevokedSubjectCache.key(tenant, principal)
         val revokedBefore = issuedBefore.toEpochMilli()
         val existing = subjectCache.get(key)

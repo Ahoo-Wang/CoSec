@@ -96,5 +96,7 @@ class CacheTtlPolicyTest {
         val weakened = spec.policy.toBuilder().foreignFormat(ForeignFormatMode.RECLAIM).build()
         CoSecCacheSpecs.pinnedPolicy(CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME, weakened).foreignFormat
             .assert().isEqualTo(ForeignFormatMode.FAIL)
+        CoSecCacheSpecs.pinnedPolicy(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, weakened).foreignFormat
+            .assert().isEqualTo(ForeignFormatMode.FAIL)
     }
 }

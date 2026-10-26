@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -140,6 +141,15 @@ class MembershipFailClosedTest {
         ).resolve(tenant, marked()).failure()
 
         failure.cause.assert().isSameAs(cause)
+    }
+
+    @Test
+    fun providerFailsWithACompletionExceptionWithoutCause() {
+        val error = CompletionException(null as Throwable?)
+        val failure = MembershipResolver(MembershipProvider { _, _ -> CompletableFuture.failedFuture(error) })
+            .resolve(tenant, marked()).failure()
+
+        failure.cause.assert().isSameAs(error)
     }
 
     @Test

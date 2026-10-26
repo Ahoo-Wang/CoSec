@@ -14,6 +14,7 @@
 package me.ahoo.cosec.token
 
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
@@ -112,6 +113,18 @@ class SubjectRevocationTest {
         revoker.revokeSubject(tenant, alice, now)
 
         assertRevoked(token(null))
+    }
+
+    @Test
+    fun aTokenPrincipalWithoutIssuedAtIsRevoked() {
+        val plain = object : TokenPrincipal, CoSecPrincipal by SimplePrincipal(alice.value) {
+            override val tokenId: String = "plain"
+        }
+        assertAccepted(plain)
+
+        revoker.revokeSubject(TenantId.DEFAULT, alice, now)
+
+        assertRevoked(plain)
     }
 
     @Test

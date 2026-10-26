@@ -175,6 +175,15 @@ class MembershipClaimsJwtTest {
     }
 
     @Test
+    fun onlyRolesCountWhenThereAreNoPolicies() {
+        val principal = SimplePrincipal("alice", roles = roles)
+        val decoded = Jwts.decode(converter(claimSize(roles)).toToken(principal).accessToken)
+
+        decoded.getClaim("roles").asList(String::class.java).assert().containsExactly("admin", "editor@team-a")
+        decoded.claims.keys.assert().doesNotContain("policies", MembershipClaims.MARKER_KEY)
+    }
+
+    @Test
     fun theDefaultNeverMoves() {
         val manyRoles = (0 until 2_000).map { "role-$it@space-$it" }.toSet()
         val decoded = Jwts.decode(converter().toToken(principal(manyRoles)).accessToken)
