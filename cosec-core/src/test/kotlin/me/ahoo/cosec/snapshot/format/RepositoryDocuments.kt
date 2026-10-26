@@ -63,16 +63,16 @@ object RepositoryDocuments {
         return when {
             where.contains(
                 "/cosec-rate-limit/"
-            ) -> listOf(RepositoryDocument(where, DocumentFormats.rateLimitRule, node))
+            ) -> listOf(RepositoryDocument(where, DocumentFormats.rateLimitRuleSchema, node))
             file.name.endsWith(
                 "-app-permission.json"
-            ) -> listOf(RepositoryDocument(where, DocumentFormats.appPermission, node))
+            ) -> listOf(RepositoryDocument(where, DocumentFormats.appPermissionSchema, node))
             file.name.endsWith("-policy.json") || where.contains("/cosec-policy/") -> listOf(
-                RepositoryDocument(where, DocumentFormats.policy, node)
+                RepositoryDocument(where, DocumentFormats.policySchema, node)
             )
             // The replay tool's inputs: an array of policies, and an array of app document bodies.
-            where.endsWith("/cosec-replay/policies.json") -> each(DocumentFormats.policy)
-            where.endsWith("/cosec-replay/app-role-permissions.json") -> each(DocumentFormats.snapshotDocument)
+            where.endsWith("/cosec-replay/policies.json") -> each(DocumentFormats.policySchema)
+            where.endsWith("/cosec-replay/app-role-permissions.json") -> each(DocumentFormats.snapshotDocumentSchema)
             else -> throw IllegalStateException(
                 "Resource [$where] has no known document format: classify it in RepositoryDocuments."
             )
@@ -96,11 +96,11 @@ object RepositoryDocuments {
             return null
         }
         return when {
-            sample.has("permitsPerSecond") -> DocumentFormats.rateLimitRule
+            sample.has("permitsPerSecond") -> DocumentFormats.rateLimitRuleSchema
             node.isArray -> null
-            sample.has("policies") || sample.has("appPermission") -> DocumentFormats.snapshotDocument
-            sample.has("groups") -> DocumentFormats.appPermission
-            sample.has("tenantId") || (sample.has("statements") && sample.has("id")) -> DocumentFormats.policy
+            sample.has("policies") || sample.has("appPermission") -> DocumentFormats.snapshotDocumentSchema
+            sample.has("groups") -> DocumentFormats.appPermissionSchema
+            sample.has("tenantId") || (sample.has("statements") && sample.has("id")) -> DocumentFormats.policySchema
             else -> null
         }
     }

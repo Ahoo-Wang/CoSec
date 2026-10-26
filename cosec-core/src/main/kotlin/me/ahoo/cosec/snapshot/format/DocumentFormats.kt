@@ -60,7 +60,7 @@ object DocumentFormats {
     /** A path condition's pattern, which holds no `#{...}` template. */
     private val plainPathPattern = StringType(examples = listOf("/orders/**", "/orders/{id}", "/health"))
 
-    val definitions = SchemaFile(
+    val definitionsSchema = SchemaFile(
         name = DEFINITIONS,
         title = "CoSec Shared Definitions",
         root = null,
@@ -77,7 +77,7 @@ object DocumentFormats {
         ),
     )
 
-    val action = SchemaFile(
+    val actionSchema = SchemaFile(
         name = ACTION,
         title = "CoSec Action Matcher Schema",
         description = "What requests a statement applies to: a path pattern (`*` for every request), an array of " +
@@ -133,7 +133,7 @@ object DocumentFormats {
 
     private val stringValue = Field("value", StringType(examples = listOf("GET", "10.0.0.1", "admin")), required = true)
 
-    val condition = SchemaFile(
+    val conditionSchema = SchemaFile(
         name = CONDITION,
         title = "CoSec Condition Matcher Schema",
         description = "An object naming exactly one condition matcher type.",
@@ -262,7 +262,7 @@ object DocumentFormats {
         Field("condition", conditionRef),
     )
 
-    val policy = SchemaFile(
+    val policySchema = SchemaFile(
         name = POLICY,
         title = "CoSec Policy Schema",
         root = ObjectType(
@@ -303,7 +303,7 @@ object DocumentFormats {
         ),
     )
 
-    val appPermission = SchemaFile(
+    val appPermissionSchema = SchemaFile(
         name = APP_PERMISSION,
         title = "CoSec App Permission Schema",
         root = ObjectType(
@@ -336,7 +336,7 @@ object DocumentFormats {
         ),
     )
 
-    val rateLimitRule = SchemaFile(
+    val rateLimitRuleSchema = SchemaFile(
         name = RATE_LIMIT_RULE,
         title = "CoSec Rate Limit Rule Schema",
         description = "A rate limit rules file: one rule or an array of rules.",
@@ -389,7 +389,7 @@ object DocumentFormats {
         ),
     )
 
-    val snapshotDocument = SchemaFile(
+    val snapshotDocumentSchema = SchemaFile(
         name = SNAPSHOT_DOCUMENT,
         title = "CoSec Snapshot Document Schema",
         description = "The body of a stored snapshot document (RFC 0003): the policies document or an app's document. " +
@@ -417,7 +417,15 @@ object DocumentFormats {
 
     /** Every generated file, in generation order. */
     val files: List<SchemaFile> =
-        listOf(definitions, action, condition, policy, appPermission, rateLimitRule, snapshotDocument)
+        listOf(
+            definitionsSchema,
+            actionSchema,
+            conditionSchema,
+            policySchema,
+            appPermissionSchema,
+            rateLimitRuleSchema,
+            snapshotDocumentSchema,
+        )
 
     fun file(fileName: String): SchemaFile = files.first { it.fileName == fileName }
 

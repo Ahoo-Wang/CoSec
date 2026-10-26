@@ -69,7 +69,7 @@ class SchemaConformanceTest {
                 "fields the codec does not read (unknown ones, \$schema) are ignored, except at the top level of a snapshot document"
             ) {
                 (it.kind == MutationKind.UNKNOWN_FIELD || it.field == "\$schema") &&
-                    !(it.topLevel && it.owner.startsWith(DocumentFormats.snapshotDocument.fileName))
+                    !(it.topLevel && it.owner.startsWith(DocumentFormats.snapshotDocumentSchema.fileName))
             },
             Leniency("a number or boolean is read as a string (JsonNode.asString)") {
                 it.changesTo(JsonKind.NUMBER, JsonKind.INTEGER, JsonKind.BOOLEAN) && JsonKind.STRING in it.acceptedKinds()
@@ -220,7 +220,7 @@ class SchemaConformanceTest {
 
     @Test
     fun partValuePatternIsTheSupportedParts() {
-        val pattern = Regex((DocumentFormats.condition.definitions.getValue("partValue") as StringType).pattern!!)
+        val pattern = Regex((DocumentFormats.conditionSchema.definitions.getValue("partValue") as StringType).pattern!!)
         val candidates = listOf(
             "request.path", "request.method", "request.appId", "request.spaceId", "request.deviceId", "request.remoteIp",
             "request.origin", "request.origin.host", "request.referer", "request.referer.host", "context.tenantId",
