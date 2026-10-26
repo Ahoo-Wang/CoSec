@@ -43,9 +43,9 @@ class Subject(
 /**
  * The scope a request is made in.
  *
- * For now it can only be [declared]: it comes from client headers or query parameters (`CoSec-App-Id`,
- * `CoSec-Space-Id`) and nobody has checked membership. Once a `ScopeResolver` exists, only it constructs [Source.RESOLVED]
- * scopes (RFC 0001 P4).
+ * It can only be [declared]: it comes from client headers or query parameters (`CoSec-App-Id`, `CoSec-Space-Id`) and
+ * nobody has checked membership. Checked scopes are `me.ahoo.cosec.model.scope.Scope`, which only `ScopeResolver`
+ * constructs (RFC 0004 §4.6); this class is removed with the layers (RFC 0004 PR-8).
  */
 class Scope private constructor(val tenantId: String, val appId: String, val spaceId: String, val source: Source) {
     enum class Source { DECLARED, RESOLVED }
