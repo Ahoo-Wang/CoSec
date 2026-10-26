@@ -53,6 +53,14 @@ object JsonSchemaWriter {
             }
 
             is ArrayType -> arraySchema(type, file, schema)
+            is TupleType -> {
+                // Draft 7 tuples: positional items, nothing more, nothing less.
+                schema["type"] = "array"
+                schema["items"] = type.items.map { schemaOf(it, file) }
+                schema["additionalItems"] = false
+                schema["minItems"] = type.items.size
+            }
+
             is MapType -> {
                 schema["type"] = "object"
                 schema["propertyNames"] = schemaOf(type.keys, file)

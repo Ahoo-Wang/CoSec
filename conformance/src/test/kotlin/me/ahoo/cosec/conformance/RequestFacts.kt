@@ -52,7 +52,7 @@ class RequestFacts(
 
     /**
      * The host attributes of the engine's request: the engine answers the rest itself. A read of
-     * `request.attributes.<FAULT><message>` throws [ScenarioFault] (see [AdaptedSnapshotCompiler]).
+     * `request.attributes.<FAULT><message>` throws [ScenarioFault] (see [DocumentSnapshotCompiler]).
      */
     val host: ConditionInput = object : ConditionInput by FactsInput(this, null) {
         override fun string(attribute: Attribute): String? {

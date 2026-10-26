@@ -1,0 +1,44 @@
+{
+  "rules": [
+    "DOC-3"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The same platform document in schema 2 decodes and applies.",
+  "documents": {
+    "platform": {
+      "schema": 2,
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "allow-all",
+      "statement": 0,
+      "via": {
+        "binding": "g:allow-all",
+        "document": "platform"
+      }
+    }
+  }
+}

@@ -31,7 +31,7 @@ import kotlin.random.Random
 class FormatGenerator(private val random: Random, private val maxDepth: Int = 4) {
     private val nodes = JsonNodeFactory.instance
 
-    /** The concrete [ObjectType], [ArrayType] or [MapType] of each generated container. */
+    /** The concrete [ObjectType], [ArrayType], [TupleType] or [MapType] of each generated container. */
     val containers: MutableMap<JsonNode, FormatType> = IdentityHashMap()
 
     /** The nearest named definition of each generated container, such as `condition.schema.json#eqConditionMatcher`. */
@@ -44,10 +44,14 @@ class FormatGenerator(private val random: Random, private val maxDepth: Int = 4)
             is AnyOf -> generate(if (exhausted) type.variants.first() else type.variants.random(random), name, depth)
             is StringType, is BooleanType, is IntegerType, is NumberType -> scalar(type)
             is ArrayType -> array(type, name, depth, exhausted)
+            is TupleType -> nodes.arrayNode().also { tuple ->
+                type.items.forEach { tuple.add(generate(it, name, depth + 1)) }
+            }
+
             is MapType -> map(type, name, depth)
             is ObjectType -> obj(type, name, depth, exhausted)
         }.also {
-            if (type is ArrayType || type is MapType || type is ObjectType) {
+            if (type is ArrayType || type is TupleType || type is MapType || type is ObjectType) {
                 containers[it] = type
                 names[it] = name
             }

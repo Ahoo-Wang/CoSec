@@ -49,9 +49,10 @@
       "level": "build",
       "guards": [
         "model:ScopeConstructionTest#onlyTheResolverConstructsScopes",
-        "model:ScopeConstructionTest#scopeIsNotADataClass"
+        "model:ScopeConstructionTest#scopeIsNotADataClass",
+        "cosec-core:PolicyDocumentCodecTest#a scope is never decoded"
       ],
-      "pending": "RFC 0004 PR-4"
+      "pending": null
     },
     {
       "id": "SCP-6",
@@ -299,13 +300,17 @@
     {
       "id": "ALG-7",
       "source": "RFC 0004 §6.1",
-      "statement": "A policy's condition is evaluated at most once per evaluation, and only when one of its statements is a candidate.",
+      "statement": "A policy's condition is evaluated at most once per evaluation, and only once one of its statements matched its action and resource (or failed matching the resource); untraced, nothing is evaluated after the statement that decided.",
       "level": "engine",
       "guards": [
         "engine:FlatEngineTest#a condition runs once per evaluation, also when policies share it",
-        "engine:FlatEngineTest#a condition is not evaluated for a pass the policy has no statements in"
+        "engine:FlatEngineTest#a condition is not evaluated when no statement of the policy matches the action and resource"
       ],
-      "pending": "RFC 0005 PR-4"
+      "pending": null,
+      "properties": [
+        "engine:IndexPropertyTest#ALG-7 a policy condition runs at most once, and only for a statement that matched its action and resource",
+        "engine:IndexPropertyTest#ALG-7 untraced, nothing is evaluated after the statement that decided"
+      ]
     },
     {
       "id": "ALG-8",
@@ -332,7 +337,7 @@
       "source": "RFC 0004 §7.2",
       "statement": "A tenant document references only its own tenant's or the platform layer's policies; anything else does not compile.",
       "level": "engine",
-      "pending": "RFC 0004 PR-4"
+      "pending": null
     },
     {
       "id": "TNT-3",
@@ -346,21 +351,24 @@
       "source": "RFC 0004 §7.4; RFC 0003 §4.4",
       "statement": "Dangling and cross-tenant references do not compile; a request that reaches a Broken entry on the data plane fails closed (F4, F5).",
       "level": "engine",
-      "pending": "RFC 0004 PR-4"
+      "pending": null
     },
     {
       "id": "DOC-2",
       "source": "RFC 0008 §3.2 (review of #1015)",
       "statement": "The codecs neither encode nor decode Match.Exactly(\"*\"): * only ever means Match.Any.",
       "level": "build",
-      "pending": "RFC 0004 PR-4"
+      "pending": null,
+      "guards": [
+        "cosec-core:PolicyDocumentCodecTest#the wildcard is only ever Any"
+      ]
     },
     {
       "id": "DOC-3",
       "source": "RFC 0004 §7.1; RFC 0003 F3",
       "statement": "A document whose schema is not this version's format fails to decode, and the requests that need it fail closed.",
       "level": "engine",
-      "pending": "RFC 0004 PR-4"
+      "pending": null
     },
     {
       "id": "SNP-1",
@@ -474,7 +482,12 @@
       "source": "RFC 0005 §6.3",
       "statement": "The candidates the index yields are a superset of the statements a brute-force match finds (I1, I2).",
       "level": "engine",
-      "pending": "RFC 0005 PR-4"
+      "pending": null,
+      "properties": [
+        "engine:IndexPropertyTest#I1 the index never leaves out a statement that can match",
+        "engine:IndexPropertyTest#I1 the decision is that of a scan without the index, DENYs first",
+        "engine:IndexPropertyTest#I2 index parameters never change the decision"
+      ]
     },
     {
       "id": "PIP-1",

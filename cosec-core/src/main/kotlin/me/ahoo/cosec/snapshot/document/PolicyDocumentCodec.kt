@@ -1,0 +1,305 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.snapshot.document
+
+import me.ahoo.cosec.engine.flat.ResourceSource
+import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.BindingScope
+import me.ahoo.cosec.model.Effect
+import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SpaceId
+import me.ahoo.cosec.model.SubjectRef
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.snapshot.SnapshotDocument
+import me.ahoo.cosec.snapshot.SnapshotFormatException
+import tools.jackson.core.JacksonException
+import tools.jackson.core.StreamReadFeature
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.ObjectReader
+import tools.jackson.databind.node.JsonNodeFactory
+import tools.jackson.databind.node.ObjectNode
+import java.time.Instant
+
+/**
+ * Reads and writes [PolicyDocument]s, the one format of platform, app and tenant documents (RFC 0004 §7.1, RFC 0008
+ * Q5). Reading is strict: a repeated key, an unknown field, a value of the wrong JSON type or a schema other than
+ * [SCHEMA] is a [SnapshotFormatException] naming the JSON path, so a document never means less than it says.
+ *
+ * `*` is [Match.Any] and only that (`DOC-2`): an app or space id can never be `*` ([AppId], [SpaceId]), so no document
+ * reads or writes `Match.Exactly("*")`. Nothing here reads a resolved scope (`SCP-5`): only `ScopeResolver` builds one.
+ *
+ * A subject's tenant may be left out in a tenant document, where it is that tenant, and for a role binding of the app
+ * document, where it means any tenant. A platform principal names its tenant.
+ */
+object PolicyDocumentCodec {
+    /** The format of platform, app and tenant documents. RFC 0003's 7.0-shaped documents are schema 1. */
+    const val SCHEMA: Int = SnapshotDocument.DOCUMENT_SCHEMA
+    const val WILDCARD: String = Match.WILDCARD
+
+    private val reader: ObjectReader = CoSecJsonSerializer.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+    private val factory = JsonNodeFactory.instance
+
+    private val DOCUMENT_FIELDS = arrayOf("schema", "revision", "publishedAt", "policies", "bindings")
+    private val POLICY_FIELDS = arrayOf("id", "attachable", "condition", "statements")
+    private val STATEMENT_FIELDS = arrayOf("name", "effect", "action", "resource", "condition")
+    private val RESOURCE_FIELDS = arrayOf("pattern", "caseSensitive", "decodeAndParseSegments")
+    private val BINDING_FIELDS = arrayOf("id", "subject", "app", "space", "policy", "expiresAt", "breakGlass")
+
+    /** Decodes the document of [kind] stored under [owner] (the app or tenant id; empty for the platform). */
+    fun decode(kind: DocumentKind, owner: String, bytes: ByteArray): PolicyDocument {
+        val tree = try {
+            reader.readTree(bytes)
+        } catch (error: JacksonException) {
+            throw SnapshotFormatException("$ROOT: not a JSON document: ${error.originalMessage}", error)
+        }
+        return decode(kind, owner, tree ?: throw SnapshotFormatException("$ROOT: the document is empty"))
+    }
+
+    fun decode(kind: DocumentKind, owner: String, tree: JsonNode): PolicyDocument {
+        val root = DocumentNode(tree, ROOT)
+        val fields = if (kind == DocumentKind.APP) DOCUMENT_FIELDS + "catalog" else DOCUMENT_FIELDS
+        root.requireObject(*fields)
+        val schema = root.required("schema").long()
+        if (schema != SCHEMA.toLong()) {
+            root.required("schema").fail("schema $schema is not this version's document format, $SCHEMA")
+        }
+        val revision = root.required("revision").long()
+        if (revision <= 0) {
+            root.required("revision").fail("must be positive")
+        }
+        return PolicyDocument(
+            kind = kind,
+            owner = owner,
+            revision = revision,
+            publishedAt = root.required("publishedAt").instant(),
+            policies = root.field("policies")?.elements()?.map(::policy).orEmpty(),
+            bindings = root.field("bindings")?.elements()?.map { binding(it, kind, owner) }.orEmpty(),
+            catalog = root.field("catalog")?.let(::catalog),
+        )
+    }
+
+    private fun policy(node: DocumentNode): PolicyDefinition {
+        node.requireObject(*POLICY_FIELDS)
+        return PolicyDefinition(
+            id = PolicyId(node.required("id").text()),
+            attachable = node.field("attachable")?.bool() ?: false,
+            condition = node.field("condition")?.let(ConditionJson::read),
+            statements = node.required("statements").elements().map(::statement),
+        )
+    }
+
+    private fun statement(node: DocumentNode): StatementSource {
+        node.requireObject(*STATEMENT_FIELDS)
+        val effect = node.required("effect")
+        return StatementSource(
+            name = node.field("name")?.text() ?: "",
+            effect = when (val text = effect.text()) {
+                "allow" -> Effect.ALLOW
+                "deny" -> Effect.DENY
+                else -> effect.fail("an effect is allow or deny, not [$text]")
+            },
+            actions = node.required("action").strings(),
+            resources = node.field("resource")?.let(::resources).orEmpty(),
+            condition = node.field("condition")?.let(ConditionJson::read),
+        )
+    }
+
+    /** A pattern or an object with options, or an array of them. */
+    private fun resources(node: DocumentNode): List<ResourceSource> {
+        val items = if (node.json.isArray) node.elements().ifEmpty { node.fail("expected at least one resource") } else listOf(node)
+        return items.map { item ->
+            if (item.json.isObject) {
+                item.requireObject(*RESOURCE_FIELDS)
+                ResourceSource(
+                    item.required("pattern").text(),
+                    caseSensitive = item.field("caseSensitive")?.bool() ?: true,
+                    decodeAndParseSegments = item.field("decodeAndParseSegments")?.bool() ?: true,
+                )
+            } else {
+                ResourceSource(item.text())
+            }
+        }
+    }
+
+    private fun binding(node: DocumentNode, kind: DocumentKind, owner: String): Binding {
+        node.requireObject(*BINDING_FIELDS)
+        val id = node.required("id").text()
+        return try {
+            Binding(
+                id = BindingId(id),
+                subject = subject(node.required("subject"), kind, owner),
+                scope = BindingScope(match(node.required("app"), ::AppId), match(node.required("space"), ::SpaceId)),
+                policy = PolicyId(node.required("policy").text()),
+                expiresAt = node.field("expiresAt")?.instant()?.toEpochMilli(),
+                breakGlass = node.field("breakGlass")?.bool() ?: false,
+            )
+        } catch (error: IllegalArgumentException) {
+            throw SnapshotFormatException("${node.path}: binding [$id]: ${error.message}", error)
+        }
+    }
+
+    private fun subject(node: DocumentNode, kind: DocumentKind, owner: String): SubjectRef {
+        if (node.json.isString) {
+            val text = node.text()
+            if (text != WILDCARD) {
+                node.fail("a subject is $WILDCARD, a principal or a role, not [$text]")
+            }
+            return SubjectRef.Anyone
+        }
+        node.requireObject("principal", "role", "tenant")
+        val tenant = node.field("tenant")?.text()?.let(::TenantId) ?: if (kind == DocumentKind.TENANT) TenantId(owner) else null
+        val principal = node.field("principal")
+        val role = node.field("role")
+        return when {
+            principal != null && role != null -> node.fail("a subject is a principal or a role, not both")
+            principal != null -> SubjectRef.Principal(
+                tenant ?: node.fail("a principal of the $kind document names its tenant"),
+                PrincipalId(principal.text()),
+            )
+
+            role != null -> SubjectRef.Role(tenant, RoleId(role.text()))
+            else -> node.fail("a subject is $WILDCARD, a principal or a role")
+        }
+    }
+
+    private fun <T> match(node: DocumentNode, of: (String) -> T): Match<T> {
+        val text = node.text()
+        if (text == WILDCARD) {
+            return Match.Any
+        }
+        if (text.isEmpty() && node.path.endsWith(".app")) {
+            node.fail("an app is an app id or $WILDCARD, not empty")
+        }
+        return Match.Exactly(of(text))
+    }
+
+    private fun catalog(node: DocumentNode): Catalog {
+        node.requireObject("groups")
+        return Catalog(
+            node.required("groups").elements().map { group ->
+                group.requireObject("name", "description", "spaced", "permissions")
+                CatalogGroup(
+                    name = group.required("name").text(),
+                    description = group.field("description")?.text(),
+                    spaced = group.field("spaced")?.bool() ?: false,
+                    permissions = group.required("permissions").elements().map { permission ->
+                        permission.requireObject("id", "name", "description")
+                        CatalogPermission(
+                            id = permission.required("id").text(),
+                            name = permission.field("name")?.text(),
+                            description = permission.field("description")?.text(),
+                        )
+                    },
+                )
+            },
+        )
+    }
+
+    /** The stored bytes of [document]: its header first, then each section in the order [decode] reads them. */
+    fun encode(document: PolicyDocument): ByteArray = CoSecJsonSerializer.writeValueAsBytes(tree(document))
+
+    fun tree(document: PolicyDocument): ObjectNode {
+        val root = factory.objectNode()
+        root.put("schema", SCHEMA)
+        root.put("revision", document.revision)
+        root.put("publishedAt", document.publishedAt.toString())
+        document.catalog?.let { root.set("catalog", catalog(it)) }
+        val policies = root.putArray("policies")
+        document.policies.forEach { policies.add(policy(it)) }
+        val bindings = root.putArray("bindings")
+        document.bindings.forEach { bindings.add(binding(it, document.kind, document.owner)) }
+        return root
+    }
+
+    private fun policy(policy: PolicyDefinition): ObjectNode {
+        val node = factory.objectNode().put("id", policy.id.value)
+        if (policy.attachable) node.put("attachable", true)
+        policy.condition?.let { node.set("condition", ConditionJson.write(it)) }
+        val statements = node.putArray("statements")
+        for (statement in policy.statements) {
+            val item = statements.addObject()
+            if (statement.name.isNotEmpty()) item.put("name", statement.name)
+            item.put("effect", if (statement.effect == Effect.DENY) "deny" else "allow")
+            item.putArray("action").also { actions -> statement.actions.forEach(actions::add) }
+            if (statement.resources.isNotEmpty()) {
+                val resources = item.putArray("resource")
+                for (resource in statement.resources) {
+                    if (resource.hasOptions()) {
+                        resources.addObject().put("pattern", resource.pattern)
+                            .put("caseSensitive", resource.caseSensitive)
+                            .put("decodeAndParseSegments", resource.decodeAndParseSegments)
+                    } else {
+                        resources.add(resource.pattern)
+                    }
+                }
+            }
+            statement.condition?.let { item.set("condition", ConditionJson.write(it)) }
+        }
+        return node
+    }
+
+    private fun binding(binding: Binding, kind: DocumentKind, owner: String): ObjectNode {
+        val node = factory.objectNode().put("id", binding.id.value)
+        when (val subject = binding.subject) {
+            SubjectRef.Anyone -> node.put("subject", WILDCARD)
+            is SubjectRef.Principal -> node.putObject("subject").put("principal", subject.id.value)
+                .put("tenant", subject.tenant.value)
+
+            is SubjectRef.Role -> node.putObject("subject").put("role", subject.id.value).also { role ->
+                // A tenant document reads a role without a tenant as its own: write it only when it differs.
+                if (subject.tenant != null && !(kind == DocumentKind.TENANT && subject.tenant!!.value == owner)) {
+                    role.put("tenant", subject.tenant!!.value)
+                }
+            }
+        }
+        node.put("app", binding.scope.app.text { it.value })
+        node.put("space", binding.scope.space.text { it.value })
+        node.put("policy", binding.policy.value)
+        binding.expiresAt?.let { node.put("expiresAt", Instant.ofEpochMilli(it).toString()) }
+        if (binding.breakGlass) node.put("breakGlass", true)
+        return node
+    }
+
+    private inline fun <T> Match<T>.text(value: (T) -> String): String = when (this) {
+        Match.Any -> WILDCARD
+        is Match.Exactly -> value(this.value)
+    }
+
+    private fun catalog(catalog: Catalog): ObjectNode {
+        val node = factory.objectNode()
+        val groups = node.putArray("groups")
+        for (group in catalog.groups) {
+            val item = groups.addObject().put("name", group.name)
+            group.description?.let { item.put("description", it) }
+            if (group.spaced) item.put("spaced", true)
+            val permissions = item.putArray("permissions")
+            for (permission in group.permissions) {
+                val entry = permissions.addObject().put("id", permission.id)
+                permission.name?.let { entry.put("name", it) }
+                permission.description?.let { entry.put("description", it) }
+            }
+        }
+        return node
+    }
+
+    private const val ROOT = "$"
+}

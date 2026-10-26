@@ -75,7 +75,7 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  * The outcome is `{ "status": 200, "proceed": true }`, `{ "status": 503, "type": "unavailable" }` or, when the caller
  * cancelled, `{ "outcome": "none" }`.
  */
-class PipelineRunner(private val compiler: SnapshotCompiler = AdaptedSnapshotCompiler) : ScenarioRunner {
+class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCompiler) : ScenarioRunner {
     override fun run(scenario: Scenario): Outcome {
         val node = scenario.node
         node.only(

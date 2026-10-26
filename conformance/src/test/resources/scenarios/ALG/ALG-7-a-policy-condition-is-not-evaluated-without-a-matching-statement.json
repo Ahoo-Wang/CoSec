@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "ALG-7"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A policy whose condition cannot be read has only a DENY for another action: the condition is never evaluated, so it fails nothing, and the ALLOW decides.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "guarded",
+          "fault": "the condition cannot be read",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:delete"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        },
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "allow-all",
+      "statement": 0,
+      "via": {
+        "binding": "g:allow-all",
+        "document": "platform"
+      }
+    }
+  }
+}

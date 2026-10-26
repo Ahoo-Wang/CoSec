@@ -34,6 +34,8 @@ object DocumentFormats {
     const val APP_PERMISSION = "cosec-app-permission"
     const val RATE_LIMIT_RULE = "rate-limit-rule"
     const val SNAPSHOT_DOCUMENT = "cosec-snapshot-document"
+    const val BINDING = "cosec-binding"
+    const val CATALOG = "cosec-catalog"
     const val PROBLEM = "problem"
 
     /** Where the files are published; their `$id`s. */
@@ -393,17 +395,222 @@ object DocumentFormats {
         ),
     )
 
+    private val wildcardOrId = { examples: List<String>, minLength: Int? ->
+        StringType(minLength = minLength, examples = listOf("*") + examples, description = "An id, or `*` for any.")
+    }
+
+    val bindingSchema = SchemaFile(
+        name = BINDING,
+        title = "CoSec Binding Schema",
+        description = "\"[subject] is subject to [policy] in [app] and [space]\" (RFC 0004 §4.2). `*` means any, and only that.",
+        root = ObjectType(
+            listOf(
+                Field("id", StringType(examples = listOf("g:deny-ip", "r:editor:read")), required = true),
+                Field(
+                    "subject",
+                    AnyOf(
+                        listOf(
+                            StringType(enum = listOf("*"), description = "Anyone, anonymous principals included."),
+                            ref(BINDING, "principalSubject"),
+                            ref(BINDING, "roleSubject"),
+                        ),
+                    ),
+                    required = true,
+                ),
+                Field("app", wildcardOrId(listOf("order-service"), 1), required = true),
+                Field("space", wildcardOrId(listOf("", "team-a"), null), required = true),
+                Field("policy", StringType(examples = listOf("deny-ip", "perm:order-service/read", "cosec:root")), required = true),
+                Field(
+                    "expiresAt",
+                    StringType(format = "date-time", examples = listOf("2026-12-31T00:00:00Z")),
+                    description = "When the binding stops applying. Required for break-glass bindings.",
+                ),
+                Field(
+                    "breakGlass",
+                    BooleanType(),
+                    description = "A break-glass binding: platform document, platform-tenant principal, expiresAt.",
+                    default = false,
+                ),
+            ),
+        ),
+        definitions = mapOf(
+            "principalSubject" to ObjectType(
+                listOf(
+                    Field("principal", StringType(examples = listOf("cosec", "svc-batch")), required = true),
+                    Field(
+                        "tenant",
+                        StringType(examples = listOf("(platform)", "acme")),
+                        description = "Required in the platform document; a tenant document's own tenant otherwise.",
+                    ),
+                ),
+            ),
+            "roleSubject" to ObjectType(
+                listOf(
+                    Field("role", StringType(examples = listOf("editor", "viewer")), required = true),
+                    Field(
+                        "tenant",
+                        StringType(examples = listOf("acme")),
+                        description = "Absent: any tenant in an app document, the document's own in a tenant document.",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    val catalogSchema = SchemaFile(
+        name = CATALOG,
+        title = "CoSec Catalog Schema",
+        description = "An app's permission catalog (RFC 0004 §4.9): for UIs and generators; it takes no part in evaluation.",
+        root = ObjectType(listOf(Field("groups", ArrayType(ref(CATALOG, "group")), required = true))),
+        definitions = mapOf(
+            "group" to ObjectType(
+                listOf(
+                    Field("name", StringType(examples = listOf("order")), required = true),
+                    Field("description", StringType(examples = listOf("Orders"))),
+                    Field("spaced", BooleanType(), description = "Granted per space; informational.", default = false),
+                    Field("permissions", ArrayType(ref(CATALOG, "permission")), required = true),
+                ),
+            ),
+            "permission" to ObjectType(
+                listOf(
+                    Field("id", StringType(examples = listOf("read", "ship")), required = true),
+                    Field("name", StringType(examples = listOf("Read"))),
+                    Field("description", StringType(examples = listOf("Read orders"))),
+                ),
+            ),
+        ),
+    )
+
+    private val attributeExamples = listOf(
+        "subject.id", "subject.authenticated", "scope.app", "scope.space", "scope.roles", "resource.var.id",
+        "resource.type", "environment.ip", "http.header.x-trace", "http.origin.host.labels", "request.attributes.region",
+    )
+    private val attribute = StringType(examples = attributeExamples, description = "An attribute of the catalog (RFC 0005 §3.2).")
+    private val conditionLiteral = AnyOf(listOf(StringType(examples = listOf("admin", "order", "10.0.0.0/8")), BooleanType()))
+    private val astCondition = ref(SNAPSHOT_DOCUMENT, "condition")
+
+    private fun operator(name: String, operands: FormatType, ignoreCase: Boolean = false, description: String? = null) =
+        ObjectType(
+            listOf(Field(name, operands, required = true)) +
+                if (ignoreCase) listOf(Field("ignoreCase", BooleanType(), description = "ASCII case folding.", default = false)) else emptyList(),
+            description = description,
+        )
+
+    private val documentHeader = listOf(
+        Field("schema", IntegerType(const = 2), required = true, description = "The document format version."),
+        Field("revision", IntegerType(minimum = 1), required = true),
+        Field("publishedAt", StringType(format = "date-time", examples = listOf("2026-10-26T00:00:00Z")), required = true),
+    )
+
+    private val documentSections = listOf(
+        Field("policies", ArrayType(ref(SNAPSHOT_DOCUMENT, "policy"))),
+        Field("bindings", ArrayType(ref(BINDING))),
+    )
+
+    private val documentDefinitions: Map<String, FormatType> = mapOf(
+        "document" to ObjectType(
+            documentHeader + documentSections,
+            description = "A platform or tenant document (RFC 0004 §7.1).",
+        ),
+        "appDocument" to ObjectType(
+            documentHeader + Field("catalog", ref(CATALOG)) + documentSections,
+            description = "An app document: its catalog, its permission policies `perm:<app>/<permission>` and role bindings.",
+        ),
+        "policy" to ObjectType(
+            listOf(
+                Field("id", StringType(examples = listOf("deny-ip", "perm:order-service/read")), required = true),
+                Field("attachable", BooleanType(), description = "Whether a principal may attach it.", default = false),
+                Field("condition", astCondition, description = "The policy condition; it cannot read captured variables."),
+                Field("statements", ArrayType(ref(SNAPSHOT_DOCUMENT, "statement")), required = true),
+            ),
+        ),
+        "statement" to ObjectType(
+            listOf(
+                Field("name", StringType(examples = listOf("read-orders"))),
+                Field("effect", effect, required = true),
+                Field(
+                    "action",
+                    AnyOf(listOf(ref(SNAPSHOT_DOCUMENT, "actionPattern"), ArrayType(ref(SNAPSHOT_DOCUMENT, "actionPattern"), minItems = 1))),
+                    required = true,
+                ),
+                Field(
+                    "resource",
+                    AnyOf(listOf(ref(SNAPSHOT_DOCUMENT, "resource"), ArrayType(ref(SNAPSHOT_DOCUMENT, "resource"), minItems = 1))),
+                    description = "Absent: any resource.",
+                ),
+                Field("condition", astCondition),
+            ),
+        ),
+        "actionPattern" to StringType(
+            examples = listOf("*", "order:*", "order:read", "http:GET", "http:*"),
+            description = "`service:verb`, `service:*` or `*` (RFC 0005 §5.1).",
+        ),
+        "resource" to AnyOf(
+            listOf(
+                ref(SNAPSHOT_DOCUMENT, "resourcePattern"),
+                ObjectType(
+                    listOf(
+                        Field("pattern", ref(SNAPSHOT_DOCUMENT, "resourcePattern"), required = true),
+                        Field("caseSensitive", BooleanType(), default = true),
+                        Field("decodeAndParseSegments", BooleanType(), default = true),
+                    ),
+                    description = "An `http:path:` pattern with options.",
+                ),
+            ),
+        ),
+        "resourcePattern" to StringType(
+            examples = listOf("order/{orderId}", "order/**", "http:path:/orders/{id}", "http:path:/admin/**"),
+            description = "`type/segment/...` or `http:path:<pattern>` (RFC 0005 §5.1, §5.2). A DENY cannot name a bare type.",
+        ),
+        "condition" to AnyOf(
+            listOf(
+                operator("eq", TupleType(listOf(attribute, AnyOf(conditionLiteral.variants + ref(SNAPSHOT_DOCUMENT, "attributeOperand")))), ignoreCase = true),
+                operator(
+                    "in",
+                    TupleType(listOf(StringType(examples = attributeExamples + "admin"), AnyOf(listOf(ArrayType(conditionLiteral), attribute)))),
+                    description = "`[attribute, [literals]]`: the value is one of them; `[literal, set attribute]`: the set holds it.",
+                ),
+                operator("prefix", TupleType(listOf(attribute, StringType(examples = listOf("ad", "com.example")))), ignoreCase = true),
+                operator("cidr", TupleType(listOf(attribute, ArrayType(StringType(examples = listOf("10.0.0.0/8", "2001:db8::/32")))))),
+                operator("time", ref(SNAPSHOT_DOCUMENT, "time")),
+                operator("exists", attribute),
+                operator("and", ArrayType(astCondition, minItems = 1)),
+                operator("or", ArrayType(astCondition, minItems = 1)),
+                operator("not", astCondition),
+            ),
+            description = "A condition (RFC 0005 §3.1): one operator.",
+        ),
+        "attributeOperand" to ObjectType(listOf(Field("attr", attribute, required = true))),
+        "time" to ObjectType(
+            listOf(
+                Field("notBefore", StringType(examples = listOf("2026-01-01T00:00:00Z"))),
+                Field("notAfter", StringType(examples = listOf("2027-01-01T00:00:00Z"))),
+                Field("zone", StringType(examples = listOf("UTC", "Asia/Shanghai"))),
+                Field("daysOfWeek", ArrayType(StringType(enum = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")))),
+                Field("from", StringType(pattern = TIME_OF_DAY, examples = listOf("09:00"))),
+                Field("to", StringType(pattern = TIME_OF_DAY, examples = listOf("18:00"))),
+            ),
+        ),
+    )
+
     val snapshotDocumentSchema = SchemaFile(
         name = SNAPSHOT_DOCUMENT,
         title = "CoSec Snapshot Document Schema",
-        description = "The body of a stored snapshot document (RFC 0003): the policies document or an app's document. " +
-            "Ids must be unique and an app document's app permission must name the app it is stored under.",
-        root = AnyOf(listOf(ref(SNAPSHOT_DOCUMENT, "policiesDocument"), ref(SNAPSHOT_DOCUMENT, "appDocument"))),
-        definitions = mapOf(
+        description = "The body of a stored snapshot document: a platform, app or tenant document (RFC 0004 §7.1, " +
+            "schema 2), or until the switch RFC 0003's policies document or app document (schema 1). Ids must be unique.",
+        root = AnyOf(
+            listOf(
+                ref(SNAPSHOT_DOCUMENT, "document"),
+                ref(SNAPSHOT_DOCUMENT, "appDocument"),
+                ref(SNAPSHOT_DOCUMENT, "policiesDocument"),
+                ref(SNAPSHOT_DOCUMENT, "legacyAppDocument"),
+            ),
+        ),
+        definitions = documentDefinitions + mapOf(
             "policiesDocument" to ObjectType(
                 headerFields + Field("policies", ArrayType(ref(POLICY)), required = true),
             ),
-            "appDocument" to ObjectType(
+            "legacyAppDocument" to ObjectType(
                 headerFields + listOf(
                     Field("appPermission", ref(APP_PERMISSION), required = true),
                     Field(
@@ -482,6 +689,8 @@ object DocumentFormats {
             appPermissionSchema,
             rateLimitRuleSchema,
             snapshotDocumentSchema,
+            bindingSchema,
+            catalogSchema,
             problemSchema,
         )
 

@@ -1,0 +1,31 @@
+{
+  "rules": [
+    "DOC-1",
+    "TNT-2"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The tenant document binds an app's permission policy, which only that app's document may bind.",
+  "documents": {
+    "platform": {},
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "t",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "perm:order-service/read"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "another app's permission policy"
+  }
+}

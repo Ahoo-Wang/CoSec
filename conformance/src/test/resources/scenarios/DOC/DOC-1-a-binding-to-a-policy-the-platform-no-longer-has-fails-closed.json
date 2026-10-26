@@ -1,0 +1,54 @@
+{
+  "rules": [
+    "DOC-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The tenant document binds a platform policy the platform does not have (it was removed after the tenant document was published): the request is indeterminate, not permitted.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "t",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "removed"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MissingPolicies",
+      "policies": [
+        "removed"
+      ]
+    }
+  }
+}

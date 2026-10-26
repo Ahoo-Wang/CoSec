@@ -28,6 +28,10 @@ import me.ahoo.cosec.policy.condition.part.DefaultPartExtractor
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
+import me.ahoo.cosec.model.decision.DocumentKind
+import tools.jackson.databind.node.JsonNodeFactory
+import tools.jackson.databind.node.ObjectNode
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
@@ -130,8 +134,35 @@ class SchemaConformanceTest {
                 require(rules.map { it.id }.toSet().size == rules.size) { "Duplicate rule id." }
             }
 
-            DocumentFormats.SNAPSHOT_DOCUMENT -> compile(node)
+            DocumentFormats.SNAPSHOT_DOCUMENT ->
+                if (node.get("schema")?.takeIf { it.isIntegralNumber }?.asInt() == PolicyDocumentCodec.SCHEMA) {
+                    decodeDocument(node)
+                } else {
+                    compile(node)
+                }
+
+            DocumentFormats.BINDING -> decodeDocument(document().also { it.putArray("bindings").add(node) })
+            DocumentFormats.CATALOG -> decodeDocument(document().also { it.set("catalog", node) })
             else -> error("No codec for ${file.fileName}.")
+        }
+    }
+
+    private fun document(): ObjectNode = JsonNodeFactory.instance.objectNode()
+        .put("schema", PolicyDocumentCodec.SCHEMA).put("revision", 1).put("publishedAt", PUBLISHED_AT.toString())
+
+    /**
+     * Decodes a platform, app or tenant document with the 8.0 codec, as whichever kind accepts it: the descriptor does
+     * not say which kind a document is (a platform principal must name its tenant, a tenant's may leave it out). Only
+     * the codec: whether it compiles (attribute types, references) is semantic, which a schema cannot say (RFC 0007 §10.4).
+     */
+    private fun decodeDocument(node: JsonNode) {
+        val bytes = CoSecJsonSerializer.writeValueAsBytes(node)
+        val kinds = listOf(DocumentKind.PLATFORM to "", DocumentKind.TENANT to "acme", DocumentKind.APP to "order-service")
+        val errors = kinds.mapNotNull { (kind, owner) ->
+            runCatching { PolicyDocumentCodec.decode(kind, owner, bytes) }.exceptionOrNull()
+        }
+        if (errors.size == kinds.size) {
+            throw errors.first()
         }
     }
 
@@ -252,6 +283,7 @@ class SchemaConformanceTest {
             when (type) {
                 is StringType -> found += type
                 is ArrayType -> visit(type.items)
+                is TupleType -> type.items.forEach(::visit)
                 is MapType -> {
                     visit(type.keys)
                     visit(type.values)

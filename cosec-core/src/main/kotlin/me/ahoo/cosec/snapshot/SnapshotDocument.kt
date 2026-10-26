@@ -66,8 +66,14 @@ class SnapshotDocument(
         "SnapshotDocument(schema=$schema, revision=$revision, publishedAt=$publishedAt, bodySize=$bodySize)"
 
     companion object {
-        /** The document format this version of CoSec writes. */
+        /** RFC 0003's 7.0-shaped documents (`policies` and the schema-1 `app`), removed at the switch. */
         const val CURRENT_SCHEMA = 1
+
+        /** The platform, app and tenant documents (RFC 0004 §7.1): the one 8.0 format (RFC 0008 Q5). */
+        const val DOCUMENT_SCHEMA = 2
+
+        /** The formats a store may hold until the switch; each compiler accepts only its own. */
+        val SCHEMAS: Set<Int> = setOf(CURRENT_SCHEMA, DOCUMENT_SCHEMA)
     }
 }
 
