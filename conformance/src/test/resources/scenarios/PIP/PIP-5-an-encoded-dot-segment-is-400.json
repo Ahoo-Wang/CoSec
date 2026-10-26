@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "PIP-5"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A wildcard under /public would match /public/../admin, so an encoded dot segment is 400 before anything else.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "http": {
+    "path": "/public/%2e%2e/admin"
+  },
+  "expect": {
+    "status": 400,
+    "type": "invalid-request"
+  }
+}

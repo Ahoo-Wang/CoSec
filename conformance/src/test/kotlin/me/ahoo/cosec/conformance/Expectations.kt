@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.conformance
 
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.IndexKeys
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
@@ -33,6 +34,9 @@ import tools.jackson.databind.node.ObjectNode
  * { "decision": "Rejected", "reason": "SPACE_NOT_MEMBER" }
  * { "decision": "NotCompiled", "error": "a part of the error message" }
  * { "keys": ["a"], "admits": true, "implies": "YES", "evaluations": { "c1": true } }   // analysis
+ * { "status": 200, "proceed": true }                                   // pipeline
+ * { "status": 400, "type": "invalid-request" }                         // pipeline, the problem's slug
+ * { "outcome": "none" }                                                // pipeline, the caller cancelled
  * ```
  *
  * `via` is `{ "binding": id, "document": "platform" | "app" | "tenant" }`, `{ "attached": policy }` or `"builtin"`; a
@@ -70,6 +74,9 @@ object Expectations {
     fun render(outcome: Outcome): JsonNode = when (outcome) {
         is Outcome.Decided -> render(outcome.decision)
         is Outcome.Rejected -> json.objectNode().put("decision", "Rejected").put("reason", outcome.reason.name)
+        is Outcome.Answered -> answered(outcome)
+
+        Outcome.Cancelled -> json.objectNode().put("outcome", "none")
         is Outcome.NotCompiled -> json.objectNode().put("decision", "NotCompiled").put("error", outcome.error)
         is Outcome.Analyzed -> json.objectNode().apply {
             outcome.keys?.let { set("keys", keys(it)) }
@@ -79,6 +86,11 @@ object Expectations {
                 set("evaluations", json.objectNode().apply { outcome.evaluations.forEach { (k, v) -> put(k, v) } })
             }
         }
+    }
+
+    private fun answered(outcome: Outcome.Answered): JsonNode = json.objectNode().put("status", outcome.status).apply {
+        if (outcome.proceed) put("proceed", true)
+        outcome.type?.let { put("type", it) }
     }
 
     fun render(decision: Decision): JsonNode = when (decision) {
@@ -116,16 +128,17 @@ object Expectations {
     private fun cause(cause: Cause): ObjectNode = json.objectNode().put("type", cause::class.simpleName).apply {
         when (cause) {
             is Cause.MatcherFailed -> set("at", ref(cause.at)).put("guard", cause.guard)
-            is Cause.MissingPolicies -> set(
-                "policies",
-                json.arrayNode().apply { cause.policyIds.map { it.value }.sorted().forEach(::add) },
-            )
+            is Cause.MissingPolicies -> set("policies", policies(cause.policyIds))
+            is Cause.AmbiguousPolicy -> set("policies", policies(cause.policyIds))
 
             is Cause.SourceUnavailable -> put("document", cause.document.name.lowercase())
             is Cause.NotLoaded -> put("document", cause.document.name.lowercase())
             is Cause.MembershipUnavailable -> Unit
         }
     }
+
+    private fun policies(ids: Set<PolicyId>): JsonNode =
+        json.arrayNode().apply { ids.map { it.value }.sorted().forEach(::add) }
 
     private fun keys(keys: IndexKeys): JsonNode = when (keys) {
         IndexKeys.Unconstrained -> json.stringNode("any")

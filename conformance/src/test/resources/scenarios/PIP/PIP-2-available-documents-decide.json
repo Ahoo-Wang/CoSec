@@ -1,0 +1,36 @@
+{
+  "rules": [
+    "PIP-2"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The same request with every document available is permitted.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}
