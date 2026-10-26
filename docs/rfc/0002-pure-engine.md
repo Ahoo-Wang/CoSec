@@ -3,6 +3,10 @@
 > 状态：已确认（第 4 版，§10 的决定已于 2026-10-20 确认，Q6、Q8、Q9 于 2026-10-21 修订为直接在 8.0 交付；同日 Q6、Q7、Q8、Q10 再次修订：门槛改为离线回放真实数据，不再有开关，8.0 在目标架构全部达成之前不发布任何版本）· 上位文档：[RFC 0001](0001-target-architecture.md) §3.3、§6 第 2 阶段 ·
 > 基线：`main` @ 7.0 候选（`0436acb4`，另加 7.0 发布前对角色授予缺失权限 id 的失败即拒绝修复，见 §4.2 S10a）· 交付：全部合入 `main`（8.0 线），门槛（含离线回放）通过后合入 PR-6，第 2 阶段到此结束；8.0.0 GA 要等第 6 阶段完成之后（RFC 0001 §6），本阶段不发布任何版本 ·
 > 范围：新增 `cosec-model`、`cosec-engine`，改动 `cosec-core`、`cosec-spring-boot-starter`
+>
+> **2026-10-26 修订（[RFC 0008](0008-conformance-and-direct-build.md)）**：8.0 不考虑兼容性。本文的切换门槛（§8 整节：比较器、离线回放、"差异为零"、P3）、PR-6（§9.2）、§7.2 第 8 步中以 PR-6 为前提的停止线、
+> §10 Q6–Q8 与 Q14 中与门槛有关的部分由 RFC 0008 的规范一致性套件取代。PR-6 取消：按层引擎与 7.x 路径在 RFC 0008 的切换 PR 中一起删除。
+> 下文保留原样以便追溯；已合入的比较器与回放工具（PR-4，#997）在切换时删除（RFC 0008 §4.2）。
 
 ## 0. 结论先行
 
@@ -714,12 +718,15 @@ internal class StatementScopedContext(private val base: SecurityContext) : Secur
      （`Rule.index` 是授予位置，trace 按对象身份对齐两轮扫描），这是第 2 阶段语义要求的，因此在本阶段是固有成本。
    - **豁免（2026-10-21，协调者决定）**：第 2 阶段对上述场景接受**最多约 7 %** 的吞吐差距，§7.1 的 95 % 门槛在本阶段不再作为 PR-6 的前提。
      PR-6 仍须按第 4 步重新测量；**任一门槛场景（`global`、`role`、`none`）低于 90 % 时，PR-6 停止并交回协调者决定**。
+   - **2026-10-26 修订**：上一条的 PR-6 停止线随 PR-6 取消；取而代之的是 [RFC 0008](0008-conformance-and-direct-build.md) §3.8 的绝对预算（编译执行不低于 7.0 的 100 %），由切换 PR 满足。
    - **第 4 阶段目标（RFC 0005 必须采纳的要求）**：编译执行（RFC 0005）在 `global`、`role`、`none`、`role-heavy` 上的吞吐必须
      **不低于 7.0 的 `SimpleAuthorization` 的 100 %**，按本节的方法测量。它取代本阶段的整个适配路径，因此本阶段不再做微调。
 
 ---
 
 ## 8. 切换门槛
+
+> **2026-10-26：本节整体由 [RFC 0008](0008-conformance-and-direct-build.md) 取代**（规范一致性套件；不再与 7.x 比较决策，不再需要真实数据导出）。以下原文保留，仅供追溯。
 
 "切换"指 PR-6：删除旧实现，`SimpleAuthorization` 只剩引擎实现，第 2 阶段到此结束。在此之前（`main` 上 PR-1 到 PR-5），旧实现就是原样不动的
 `SimpleAuthorization`，新实现是 `EngineAuthorization`。**PR-6 只有在 §8.3 的门槛全部通过之后才能合入。** 门槛全部离线完成，不依赖任何发布版本，
@@ -889,7 +896,7 @@ PR-4 新增 `DecisionParity`，取代原稿的 `EngineParityAuthorization`：它
 | PR-3 | `feat(core): add EngineAuthorization backed by the engine` | 8.0 线 | §3.3、§3.4、§3.5 的适配层；§6.2 的语句作用域上下文；`EngineAuthorization`；`ShadowAuthorization` 的候选实现工厂参数（§5.3）；`SimpleAuthorizationBenchmark` 的 `impl` 参数；§8.2 第一行的参数化测试；P3（固定种子）。`SimpleAuthorization` 不改 | PR-2，以及 7.0 中 S10a 的修复 | `:cosec-core:check`、`:cosec-cocache:check`、`:cosec-spring-boot-starter:check` 及其他依赖 `cosec-core` 的模块通过；两个实现在全部参数化测试上结果相同；JMH 对比满足 §7.1 |
 | PR-4 | `feat(core): add the engine parity comparator and offline replay` | 8.0 线 | 比较器 `DecisionParity`（§8.1，通用，放在 `cosec-core` 的测试夹具中，不发布；含把 `SecurityPipeline` 的 `toDecision`/`toErrorDecision` 改为 `internal`）；`PolicyTestKit.parity`（测试夹具中的扩展函数）；百万例的手动任务；离线回放工具（§8.2.1：输入格式、`engineReplay` Gradle 任务、报告）。不新增 `cosec.*` 属性，不改 starter，不新增 `ShadowDiffKind` 取值（2026-10-21 修订，取代原来的开关与陪跑影子） | PR-3 | starter 的装配与现在完全相同；一个人为制造差异的测试能让比较器报告 `MISMATCH`，同样的差异经回放工具出现在报告和明细中；用仓库内的合成数据（不含真实数据）跑通回放工具；百万例跑通 |
 | PR-5 | `feat(core): explain decisions from the engine trace` | 8.0 线 | §5.2 的基于 trace 的解释路径，只在测试中装配，starter 不使用；`Explanation` 结构不变；旧叙述、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT` 保留 | PR-3（可与 PR-4 并行） | `AuthorizationExplainerTest`、`PolicyTestKitTest`、`CoSecExplainAutoConfigurationTest` 不改即通过；用 trace 解释路径（测试中装配）再跑一遍时，除 X6 涉及的断言外通过，X6 涉及的断言逐条在 PR 描述中说明 |
-| PR-6 | `refactor!: remove the legacy authorization path` | 8.0 线（结束第 2 阶段；8.0.0 GA 在第 6 阶段之后） | 门槛（含离线回放）通过后：`SimpleAuthorization` 改由引擎实现并删除 `EngineAuthorization`；`engineReplay` 改名为 `decisionReplay` 并用参数选择两边的实现（`DecisionParity` 与回放工具 PR-4 起已在测试夹具中且是通用的，§8.1，不删除）；删除 `PolicyTestKit.parity`、`ShadowAuthorization` 的工厂参数；删除旧解释叙述、`Snapshot*Repository`、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT`；`DefaultPolicyEvaluator`/`DefaultAppPermissionEvaluator` 改为调用引擎；删除 `Policy.verify`、`Statement.verify`、`PermissionVerifier`、`verifyScoped`（`clearPathVariablesBeforeMatch` 保留给限流规则）；文档（下表）；最终 JMH 数字 | PR-4、PR-5、§8 的门槛 | 全部模块 `check` 通过；门槛证据附在 PR 上：百万例结果，以及每个回放部署的报告摘要（样本数、时间跨度、各项计数、输入文件的 SHA-256），只有计数和哈希，不含导出数据或差异明细；按 §7.2 第 4 步重新测量 JMH（第 2 阶段对 §7.1 的豁免见 §7.2 第 8 步：差距最多约 7 % 可接受，任一门槛场景低于 90 % 时停止并交回协调者）；文档全部更新 |
+| ~~PR-6~~ | ~~`refactor!: remove the legacy authorization path`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）**：删除旧实现并入 RFC 0008 的切换 PR，回放门槛取消 | 8.0 线（结束第 2 阶段；8.0.0 GA 在第 6 阶段之后） | 门槛（含离线回放）通过后：`SimpleAuthorization` 改由引擎实现并删除 `EngineAuthorization`；`engineReplay` 改名为 `decisionReplay` 并用参数选择两边的实现（`DecisionParity` 与回放工具 PR-4 起已在测试夹具中且是通用的，§8.1，不删除）；删除 `PolicyTestKit.parity`、`ShadowAuthorization` 的工厂参数；删除旧解释叙述、`Snapshot*Repository`、`ExplainerConsistencyTest`、`TRACE_INCONSISTENT`；`DefaultPolicyEvaluator`/`DefaultAppPermissionEvaluator` 改为调用引擎；删除 `Policy.verify`、`Statement.verify`、`PermissionVerifier`、`verifyScoped`（`clearPathVariablesBeforeMatch` 保留给限流规则）；文档（下表）；最终 JMH 数字 | PR-4、PR-5、§8 的门槛 | 全部模块 `check` 通过；门槛证据附在 PR 上：百万例结果，以及每个回放部署的报告摘要（样本数、时间跨度、各项计数、输入文件的 SHA-256），只有计数和哈希，不含导出数据或差异明细；按 §7.2 第 4 步重新测量 JMH（第 2 阶段对 §7.1 的豁免见 §7.2 第 8 步：差距最多约 7 % 可接受，任一门槛场景低于 90 % 时停止并交回协调者）；文档全部更新 |
 
 每个 PR 合入后照例做两轮审查（与第 1 阶段相同），审查修复以 `fix(engine|core): round-N review fixes ...` 的 PR 合入 `main`。
 
@@ -930,7 +937,9 @@ PR-4 不改 `wiki/`（2026-10-21 修订，原来要在 `configuration.md` 写开
 | Q11 | **角色授予了不存在的权限 id** | **已决定**：在 7.0 发布前于 `main` 修复为失败即拒绝（500），与 D2 相同（由另一个会话实现）。本 RFC 以此为 7.0 的行为（§4.2 S10a）：第 2 阶段保持它，门槛也以它为比较基准 | 原来的静默跳过会让授予给角色的 DENY 权限失效；在 7.0 修掉，引擎就不必复制一个已知缺陷 |
 | Q12 | **`inRole` 的已知行为**（第二轮审查 M1/M2） | **已决定**：本阶段原样保留；第 4 阶段改为按 `Scope` 和成员关系判定时一并解决 | 匹配器不动是方案 B 的前提；它们的修复是语义变化 |
 | Q13 | **三层并行预取**（X1） | **已决定**：同意 | 引擎需要完整输入；决策和错误信号不变；第 3 阶段快照化后自然消失 |
-| Q14 | **比较器和回放工具在 PR-6 之后的去留**（2026-10-21 新增，RFC 0003 Q12） | **已决定**：PR-6 不删除它们。比较器从 PR-4 起就以通用的 `DecisionParity` 引入（比较任意两个 `DecisionAuthorization`），与回放工具一起放在 `cosec-core` 的测试夹具中，不进发布的 jar；PR-6 只把 `engineReplay` 改名为 `decisionReplay`；`PolicyTestKit.parity`（测试夹具中的扩展函数）照常删除（§8.1） | 第 3 阶段证明等价、第 4 阶段的影子门槛都需要它们；先删再加只是重复劳动 |
+| Q14 | ~~**比较器和回放工具在 PR-6 之后的去留**~~（2026-10-26 由 RFC 0008 取代：两者在切换 PR 中删除）（2026-10-21 新增，RFC 0003 Q12） | **已决定**：PR-6 不删除它们。比较器从 PR-4 起就以通用的 `DecisionParity` 引入（比较任意两个 `DecisionAuthorization`），与回放工具一起放在 `cosec-core` 的测试夹具中，不进发布的 jar；PR-6 只把 `engineReplay` 改名为 `decisionReplay`；`PolicyTestKit.parity`（测试夹具中的扩展函数）照常删除（§8.1） | 第 3 阶段证明等价、第 4 阶段的影子门槛都需要它们；先删再加只是重复劳动 |
+
+**2026-10-26**：Q6、Q7、Q8 中关于门槛（比较器、离线回放、真实数据口径）的部分与 Q14 由 [RFC 0008](0008-conformance-and-direct-build.md) 取代；Q8 中"目标达成之前不发布任何版本"不变。
 
 ---
 

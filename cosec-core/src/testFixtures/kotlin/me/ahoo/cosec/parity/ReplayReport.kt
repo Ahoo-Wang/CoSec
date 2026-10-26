@@ -174,7 +174,9 @@ data class ReplayReport(
     val inputs: Map<String, String>,
     val gate: ReplayGate,
     val gateUnmet: List<String>,
-    val evidence: Boolean
+    val evidence: Boolean,
+    /** How failures were compared: by the exception thrown, or by its innermost cause (RFC 0003 §8.1). */
+    val failureView: FailureView = FailureView.AS_THROWN,
 ) {
     /** Mismatches, candidate errors, and failures alike for different causes. */
     val differences: Long
@@ -192,7 +194,7 @@ data class ReplayReport(
         appendLine(
             "Both failed alike: $bothFailed; baseline errors $baselineErrors; candidate errors $candidateErrors",
         )
-        appendLine("By status: $byStatus; by layer: $byLayer")
+        appendLine("By status: $byStatus; by layer: $byLayer; failures compared ${failureView.name}")
         appendLine(
             "Agreement with recorded decisions: $recordedAgreement / $recordedCompared " +
                 "(${"%.4f".format(recordedAgreementRate)}).",
@@ -290,7 +292,8 @@ internal class ReplayCounts(private val exportedApps: Set<String>) {
     fun toReport(
         unrecordedInputs: Map<String, Set<String>>,
         inputs: Map<String, String>,
-        gate: ReplayGate
+        gate: ReplayGate,
+        failureView: FailureView,
     ): ReplayReport {
         val span = if (from != null && to != null) Duration.between(from, to) else Duration.ZERO
         val coverage = ReplayCoverage(
@@ -335,6 +338,7 @@ internal class ReplayCounts(private val exportedApps: Set<String>) {
             gateUnmet = gateUnmet,
             evidence = mismatch + candidateError + failedAlikeForDifferentCauses == 0L &&
                 gateUnmet.isEmpty() && gate.meetsRfc(),
+            failureView = failureView,
         )
     }
 

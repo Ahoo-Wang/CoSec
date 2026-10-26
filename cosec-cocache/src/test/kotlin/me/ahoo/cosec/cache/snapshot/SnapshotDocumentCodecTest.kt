@@ -90,4 +90,32 @@ class SnapshotDocumentCodecTest {
     fun rejectsWhatTheCompilerWouldReject(text: String) {
         assertThrows<SnapshotFormatException> { SnapshotDocumentCodec.decode(text.encodeToByteArray()) }
     }
+
+    /** Round 2: only UTF-8 without a byte order mark, so stored entries keep meaningful byte offsets. */
+    @Test
+    fun rejectsBodiesThatAreNotUtf8() {
+        val utf16 = body.toByteArray(Charsets.UTF_16BE)
+        val utf16le = body.toByteArray(Charsets.UTF_16LE)
+        val bom = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) + body.encodeToByteArray()
+        val utf16Bom = body.toByteArray(Charsets.UTF_16)
+        val utf16LeBom = byteArrayOf(0xFF.toByte(), 0xFE.toByte()) + utf16le
+        val utf32 = body.toByteArray(charset("UTF-32BE"))
+        listOf(
+            utf16,
+            utf16le,
+            bom,
+            utf16Bom,
+            utf16LeBom,
+            utf32,
+            byteArrayOf(0),
+            byteArrayOf(0xFE.toByte(), 0x7B)
+        ).forEach { bytes ->
+            assertThrows<SnapshotFormatException> { SnapshotDocumentCodec.decode(bytes) }
+        }
+        // invalid UTF-8 after the first bytes is the parser's to refuse
+        val invalid = body.encodeToByteArray().copyOf().also { it[it.size - 10] = 0xC3.toByte() }
+        assertThrows<SnapshotFormatException> { SnapshotDocumentCodec.decode(invalid) }
+        // too short to carry a byte order mark: the parser decides
+        assertThrows<SnapshotFormatException> { SnapshotDocumentCodec.decode("{".encodeToByteArray()) }
+    }
 }

@@ -53,12 +53,24 @@ sealed interface SnapshotContent {
         override val key: SnapshotKey get() = SnapshotKey.Policies
     }
 
-    /** One app's permission and its grants by `role` or `role@space`. */
+    /**
+     * One app's permission and its grants by `role` or `role@space`. Bound to its key from the start: the app
+     * permission must name [key]'s app, and every grant key must name a role in a space, so no writer can build a
+     * document the compiler would reject as a whole.
+     */
     class App(
         override val key: SnapshotKey.App,
         val appPermission: JsonNode,
         val grants: SortedMap<String, JsonNode>,
-    ) : SnapshotContent
+    ) : SnapshotContent {
+        init {
+            val appId = appIdOf(treeOf(appPermission))
+            require(appId == key.appId) { "The app permission names app [$appId], not [${key.appId}]." }
+            grants.keys.forEach { grantKey ->
+                require(isValidGrantKey(grantKey)) { "Grant key [$grantKey] is not a role or role@space." }
+            }
+        }
+    }
 
     /** The document holding this content at [revision], published at [publishedAt] (kept to milliseconds). */
     fun write(revision: Long, publishedAt: Instant, mapper: ObjectMapper = CoSecJsonSerializer): SnapshotDocument {
@@ -159,10 +171,14 @@ sealed interface SnapshotContent {
 
         /** The value starting at the current token, with the exact bytes it was stored as. */
         private fun JsonParser.stored(bytes: ByteArray): Stored {
-            val start = currentTokenLocation().byteOffset.toInt()
+            val start = currentTokenLocation().byteOffset
             val tree = readValueAsTree<JsonNode>()
-            val end = currentLocation().byteOffset.toInt()
-            val raw = String(bytes, start, end - start, Charsets.UTF_8)
+            val end = currentLocation().byteOffset
+            // Byte offsets exist only for a UTF-8 body read as bytes; the codec refuses any other.
+            if (start < 0 || end < start) {
+                throw SnapshotFormatException("Snapshot document is not UTF-8 JSON: no byte offsets.")
+            }
+            val raw = String(bytes, start.toInt(), (end - start).toInt(), Charsets.UTF_8)
             return Stored(tree, JsonNodeFactory.instance.rawValueNode(RawValue(raw)))
         }
 
@@ -182,7 +198,7 @@ sealed interface SnapshotContent {
         /** The app permission must name the key's app: a document is bound to its key. */
         private fun appPermissionOf(key: SnapshotKey.App, section: Any): JsonNode {
             val stored = section as? Stored ?: malformed(key, "[$APP_PERMISSION] is not an object")
-            val id = stored.tree.get(ID)?.takeIf { it.isString }?.asString()
+            val id = appIdOf(stored.tree)
             if (id != key.appId) {
                 malformed(key, "the app permission names app [$id], not [${key.appId}]")
             }
@@ -199,6 +215,11 @@ sealed interface SnapshotContent {
             }
             return fields.mapValuesTo(TreeMap()) { it.value.raw }
         }
+
+        /** The app an app permission tree names: its `id`, when that is a string. */
+        private fun appIdOf(appPermission: JsonNode): String? = appPermission.get(
+            ID
+        )?.takeIf { it.isString }?.asString()
 
         /** The id a policy names, or null when it names none; [policy] may be a tree or stored bytes. */
         fun policyId(policy: JsonNode): PolicyId? = treeOf(policy).get(ID)?.takeIf { it.isString }?.asString()

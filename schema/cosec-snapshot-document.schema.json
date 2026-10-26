@@ -1,0 +1,101 @@
+{
+  "$id": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/cosec-snapshot-document.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "anyOf": [
+    {
+      "$ref": "#/definitions/policiesDocument"
+    },
+    {
+      "$ref": "#/definitions/appDocument"
+    }
+  ],
+  "definitions": {
+    "appDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "appPermission": {
+          "$ref": "cosec-app-permission.schema.json"
+        },
+        "grants": {
+          "additionalProperties": {
+            "items": {
+              "examples": [
+                "manage.order.ship",
+                "manage.order.read"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": "The permission ids granted to each role, keyed `role` or `role@space`.",
+          "propertyNames": {
+            "examples": [
+              "admin",
+              "shipper@team-a"
+            ],
+            "pattern": "^[^@]+(@[^@]+)?$",
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "publishedAt": {
+          "description": "When the revision was published. When present it must equal the stored header.",
+          "examples": [
+            "2026-10-26T00:00:00Z"
+          ],
+          "format": "date-time",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The revision. When present it must equal the stored header.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "schema": {
+          "const": 1,
+          "description": "The document format version. When present it must equal the stored header.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "appPermission"
+      ],
+      "type": "object"
+    },
+    "policiesDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "policies": {
+          "items": {
+            "$ref": "cosec-policy.schema.json"
+          },
+          "type": "array"
+        },
+        "publishedAt": {
+          "description": "When the revision was published. When present it must equal the stored header.",
+          "examples": [
+            "2026-10-26T00:00:00Z"
+          ],
+          "format": "date-time",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The revision. When present it must equal the stored header.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "schema": {
+          "const": 1,
+          "description": "The document format version. When present it must equal the stored header.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "policies"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "The body of a stored snapshot document (RFC 0003): the policies document or an app's document. Ids must be unique and an app document's app permission must name the app it is stored under.",
+  "title": "CoSec Snapshot Document Schema"
+}

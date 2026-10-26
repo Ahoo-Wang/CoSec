@@ -60,7 +60,9 @@ import java.util.concurrent.atomic.AtomicLong
  * [maxRetryBackoff]), so writers that keep colliding, such as every instance starting at once, spread out.
  *
  * A write that would leave the document as it is (the same policy again, a grant that is already there) writes
- * nothing: no revision, no invalidation, no reload on any instance. Batches ([setPolicies], the map form of
+ * nothing: no revision and no invalidation. [onPublished] is still told, so this instance confirms what it holds
+ * against Redis (a conditional read) and serves what the caller just asked for: the writer reads its own write even
+ * when another instance had published it first. Batches ([setPolicies], the map form of
  * [setRoleGrants]) change a document once for many entries.
  *
  * A write is validated as 7.0 validates it ([DefaultPolicyEvaluator], [DefaultAppPermissionEvaluator]). The other
@@ -141,11 +143,13 @@ class RedisSnapshotPublisher(
     ): Mono<Void> = setRoleGrants(appId, mapOf(SpacedRoleId(roleId, spaceId) to permissionIds))
 
     override fun setRoleGrants(appId: AppId, grants: Map<SpacedRoleId, Set<PermissionId>>): Mono<Void> = Mono.defer {
+        // The app id is checked before an empty batch returns, so a bad id never looks accepted.
+        val key = SnapshotKey.App(appId)
         val keyed = grants.mapKeys { (role, _) -> grantKey(appId, role.roleId, role.spaceId) }
         if (keyed.isEmpty()) {
             return@defer Mono.empty()
         }
-        update(SnapshotKey.App(appId)) { current ->
+        update(key) { current ->
             val app = current as SnapshotContent.App?
                 ?: throw IllegalStateException(
                     "App [$appId] has no app permission: write it before its grants, which would not apply without it."
@@ -169,8 +173,36 @@ class RedisSnapshotPublisher(
     /**
      * Replaces the document of [content]'s key with [content], at the next revision. For tools that build whole
      * documents, such as the 7.x converter.
+     *
+     * The document is checked as the other writes check theirs: it must read back as a document of its key (sections,
+     * the app permission naming the key's app, grant keys, see [SnapshotContent.read]), and every entry this instance
+     * can decode passes 7.0's evaluators. An entry it cannot decode is written as it is, on purpose: the converter keeps
+     * such entries so that only they fail once compiled (RFC 0003 §4.7, F4).
      */
-    fun replace(content: SnapshotContent): Mono<Void> = update(content.key) { content }
+    fun replace(content: SnapshotContent): Mono<Void> = update(content.key) { _ ->
+        val written = content.write(1, clock.instant(), mapper)
+        when (val checked = SnapshotContent.read(content.key, written)) {
+            is SnapshotContent.Policies -> checked.policies.values.forEach { node ->
+                decodedOrNull(node, Policy::class.java)?.let(DefaultPolicyEvaluator::evaluate)
+            }
+
+            is SnapshotContent.App ->
+                decodedOrNull(
+                    checked.appPermission,
+                    AppPermission::class.java
+                )?.let(DefaultAppPermissionEvaluator::evaluate)
+        }
+        content
+    }
+
+    /** [node] decoded as [type], or null when this instance cannot decode it. */
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+    private fun <T : Any> decodedOrNull(node: JsonNode, type: Class<T>): T? = try {
+        mapper.treeToValue(SnapshotContent.treeOf(node), type)
+    } catch (error: Exception) {
+        log.warn { "Writing an entry this instance cannot decode as it is: ${error.message}" }
+        null
+    }
 
     /** [value] as 7.0's cache codec writes it: serialized as [type], not as its runtime class. */
     private fun <T : Any> treeOf(value: T, type: Class<T>): JsonNode =
@@ -205,11 +237,14 @@ class RedisSnapshotPublisher(
         Mono.fromFuture { async.getIfChanged(key, null) }
             .publishOn(scheduler)
             .flatMap { read ->
+                check(read != ConditionalGet.Unchanged) { "An unconditional read of [$key] was answered as unchanged." }
                 val current = (read as? ConditionalGet.Present)?.value
                 val expected = (read as? ConditionalGet.Present)?.digest
                 val content = change(current?.let { SnapshotContent.read(key, it) })
-                    ?: return@flatMap Mono.just(Unit)
-                if (current != null && unchanged(content, current)) {
+                if (content == null || (current != null && unchanged(content, current))) {
+                    // Nothing to write, but this instance may not have read what Redis holds yet (another instance
+                    // published it and the invalidation is on its way): reload here, without a revision or a broadcast.
+                    onPublished(key)
                     return@flatMap Mono.just(Unit)
                 }
                 val next = content.write(current?.revision?.plus(1) ?: 1, clock.instant(), mapper)

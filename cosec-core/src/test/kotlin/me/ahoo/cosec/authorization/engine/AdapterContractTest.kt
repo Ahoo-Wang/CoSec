@@ -712,8 +712,9 @@ class AdapterContractTest {
                 RolePermissionData("ra", (shared.map { it.id } + "a64").toCollection(LinkedHashSet())),
                 RolePermissionData("rb", (shared.map { it.id } + "b64").toCollection(LinkedHashSet())),
             )
+            val request = EvaluateRequest(headers = mapOf(AppIdCapable.APP_ID_KEY to "app"))
             val decision = authorization(impl, role = Mono.just(AppRolePermissionData(appPermission, grants)))
-                .decide(EvaluateRequest(), SimpleSecurityContext(SimplePrincipal("user", roles = setOf("ra", "rb"))))
+                .decide(request, SimpleSecurityContext(SimplePrincipal("user", roles = setOf("ra", "rb"))))
                 .block()!!
             decision.result.assert().describedAs(
                 appPermission.javaClass.simpleName
@@ -766,7 +767,7 @@ class AdapterContractTest {
         authorization(impl, global = failed)
             .decide(EvaluateRequest(), SimpleSecurityContext(SimplePrincipal("user")))
             .test()
-            .expectErrorSatisfies { it.assert().isSameAs(error) }
+            .expectErrorSatisfies { impl.failureOf(it).assert().isSameAs(error) }
             .verify()
     }
 

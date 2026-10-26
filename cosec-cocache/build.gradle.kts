@@ -54,3 +54,78 @@ tasks.register<JavaExec>("snapshotConvert") {
         providers.gradleProperty(name).orNull?.let { systemProperty("cosec.snapshot.convert.$name", it) }
     }
 }
+
+/*
+ * RFC 0003 §4.8: sizes the snapshot documents of the 7.x data under -PkeyPrefix in -PredisUrl. Reads only, unless
+ * -ProundTrips=true. On the maintainer's machine; the output stays there. Not part of check.
+ */
+tasks.register<JavaExec>("snapshotMeasure") {
+    group = "verification"
+    description = "Measures the snapshot documents of -PredisUrl (-PkeyPrefix, -PrequestsFile, -Pinstances, " +
+        "-PrevalidateInterval, -ProundTrips, -Poutput)."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("me.ahoo.cosec.cache.snapshot.SnapshotMeasure")
+    jvmArgs("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-parity.xml")
+    listOf("redisUrl", "keyPrefix", "requestsFile", "instances", "revalidateInterval", "roundTrips", "output")
+        .forEach { name ->
+            providers.gradleProperty(name).orNull?.let { systemProperty("cosec.snapshot.measure.$name", it) }
+        }
+}
+
+/*
+ * RFC 0003 §8.2: replays an export (RFC 0002 §8.2.1) with the snapshot read path as the candidate, the export reaching
+ * it through the 7.x reader, the publisher and the snapshot store, all in memory. On the maintainer's machine only;
+ * not part of check.
+ */
+tasks.register<JavaExec>("snapshotReplay") {
+    group = "verification"
+    description = "Replays -PreplayDir=<dir> through the engine over repositories and over policy snapshots."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("me.ahoo.cosec.cache.snapshot.SnapshotReplay")
+    // WARN, not the tests' TRACE, and no stack trace per failing sample: the report counts failures.
+    jvmArgs("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-parity.xml")
+    val replayDir = providers.gradleProperty("replayDir")
+    // The same ReplayGate thresholds as :cosec-core:engineReplay; the report records the ones used.
+    val gateOptions = mapOf(
+        "replayMinSamples" to "--min-samples",
+        "replayMinDays" to "--min-days",
+        "replayMinDistinctDays" to "--min-distinct-days",
+        "replayMaxBothFailedRate" to "--max-both-failed-rate",
+        "replayMinAgreementRate" to "--min-agreement-rate",
+    ).mapValues { (property, option) -> providers.gradleProperty(property).map { "$option=$it" } }
+    argumentProviders.add(
+        CommandLineArgumentProvider {
+            listOf(replayDir.orNull ?: throw GradleException("Pass the export directory: -PreplayDir=<dir>.")) +
+                gateOptions.values.mapNotNull { it.orNull }
+        }
+    )
+}
+
+/*
+ * RFC 0003 §8.2: the random-case decision parity through the 7.x reader, the publisher and the snapshot store
+ * (SnapshotDecisionParityPropertyTest) with -PparityIterations cases, 1,000,000 by default, on -PparityThreads threads.
+ * Not part of check, which runs it with 2,000 on one thread.
+ */
+tasks.register<Test>("snapshotParity") {
+    group = "verification"
+    description = "Runs SnapshotDecisionParityPropertyTest with -PparityIterations random cases (default 1,000,000)."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    filter {
+        includeTestsMatching("me.ahoo.cosec.cache.snapshot.SnapshotDecisionParityPropertyTest")
+    }
+    systemProperty("cosec.parity.iterations", providers.gradleProperty("parityIterations").getOrElse("1000000"))
+    systemProperty("cosec.parity.threads", providers.gradleProperty("parityThreads").getOrElse("4"))
+    // The default 2,000-case run is cheap; a million is not, so never skip it as up to date.
+    outputs.upToDateWhen { false }
+    maxHeapSize = "2g"
+    // As :cosec-core:engineParity: at TRACE, a million cases log tens of gigabytes.
+    doFirst {
+        jvmArgs = jvmArgs.orEmpty().filterNot { it.startsWith("-Dlogback.configurationFile=") } +
+            "-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-parity.xml"
+    }
+    reports.html.required.set(false)
+    reports.junitXml.includeSystemOutLog.set(false)
+    reports.junitXml.includeSystemErrLog.set(false)
+    testLogging.showStandardStreams = true
+}

@@ -233,6 +233,8 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.policies } returns setOf("policyId")
             every { principal.roles } returns emptySet()
             every { setAttributeValue(any(), any()) } returns this
+            // The snapshot path checks the tenant's staleness limit (RFC 0003 §4.5).
+            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -268,6 +270,8 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.id } returns ""
             every { principal.policies } returns setOf("policyId")
             every { setAttributeValue(any(), any()) } returns this
+            // The snapshot path checks the tenant's staleness limit (RFC 0003 §4.5).
+            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -308,7 +312,7 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             ),
             rolePermissions = listOf(
                 RolePermissionData(
-                    id = "roleId",
+                    id = "rolePolicy", // the role the principal holds in the request's space
                     permissions = setOf(permissionId),
                 ),
             ),
@@ -320,6 +324,8 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy@spaceId")
             every { setAttributeValue(any(), any()) } returns this
+            // The snapshot path checks the tenant's staleness limit (RFC 0003 §4.5).
+            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -362,7 +368,7 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             ),
             rolePermissions = listOf(
                 RolePermissionData(
-                    id = "roleId",
+                    id = "rolePolicy", // the role the principal holds in the request's space
                     permissions = setOf("*"),
                 ),
             ),
@@ -373,6 +379,8 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy@spaceId")
             every { setAttributeValue(any(), any()) } returns this
+            // The snapshot path checks the tenant's staleness limit (RFC 0003 §4.5).
+            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -420,7 +428,7 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             ),
             rolePermissions = listOf(
                 RolePermissionData(
-                    id = "roleId",
+                    id = "rolePolicy", // the role the principal holds in the request's space
                     permissions = setOf(permissionId),
                 ),
             ),
@@ -432,6 +440,8 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.policies } returns emptySet()
             every { principal.roles } returns setOf("rolePolicy@spaceId")
             every { setAttributeValue(any(), any()) } returns this
+            // The snapshot path checks the tenant's staleness limit (RFC 0003 §4.5).
+            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.empty()
@@ -525,6 +535,8 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.policies } returns setOfNotNull(principalPolicy?.id)
             every { principal.roles } returns setOf("roleId@spaceId")
             every { setAttributeValue(any(), any()) } returns this
+            // The snapshot path checks the tenant's staleness limit (RFC 0003 §4.5).
+            every { tenant } returns SimpleTenant.DEFAULT
         }
         val policyRepository = mockk<PolicyRepository> {
             every { getGlobalPolicy() } returns Mono.justOrEmpty(globalPolicy).map { listOf(it) }
@@ -586,6 +598,8 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
             every { principal.policies } returns setOf("principalPolicy")
             every { principal.roles } returns setOf("roleId@spaceId")
             every { setAttributeValue(any(), any()) } returns this
+            // The snapshot path checks the tenant's staleness limit (RFC 0003 §4.5).
+            every { tenant } returns SimpleTenant.DEFAULT
         }
         impl.create(policyRepository, permissionRepository).authorize(mockk(), securityContext)
             .test()
@@ -754,7 +768,9 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
         val context = SimpleSecurityContext(
             SimplePrincipal("user", policies = principalPolicies, roles = setOf("role"))
         )
-        return impl.create(policyRepository, permissionRepository).authorize(EvaluateRequest(), context)
+        // An app the role layer can read: no repository is asked about an id that names no app.
+        val request = EvaluateRequest(headers = mapOf(AppIdCapable.APP_ID_KEY to "app"))
+        return impl.create(policyRepository, permissionRepository).authorize(request, context)
     }
 
     @ParameterizedTest
@@ -775,6 +791,6 @@ internal class SimpleAuthorizationTest(private val impl: AuthorizationImpl) {
     @ValueSource(booleans = [false, true])
     fun globalAllowDoesNotHideAFailedRoleRead(deferred: Boolean) {
         failedRead(deferred, global = Effect.ALLOW, principal = null, roleFails = true, principalFails = false)
-            .test().expectErrorMessage("store down").verify()
+            .test().expectErrorSatisfies { impl.failureOf(it).message.assert().isEqualTo("store down") }.verify()
     }
 }

@@ -22,18 +22,24 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 
 /**
  * The repositories skip the boundedElastic hop when everything they need is in the local cache, and continue on
  * boundedElastic after a Redis read. Uses real CoCache engines on real Redis rather than mocks: the in-memory backend
- * answers synchronously, so it cannot show the miss path. Redis reads are slowed down a little, so a read is still in
- * flight when the repository checks for a local answer, as it is under real network latency.
+ * answers synchronously, so it cannot show the miss path.
+ *
+ * Every Redis answer is delivered on another thread [SLOW_READ_MS] later, so a read is still in flight when the
+ * repository checks for a local answer, as it is under real network latency. A hook that sleeps on the answer
+ * (`afterRead`) does not guarantee that: when Redis answers before the hook is attached, `HookedBackend` runs the hook
+ * on the caller's thread, the whole read completes there, and the repository rightly sees a finished read. Fast CI
+ * Redis made that happen now and then.
  */
 class LocalCacheFastPathTest {
     private val redis = CoSecTestCaches.redisBackend()
     private val backend = HookedBackend(redis).apply {
-        afterRead = { _, read -> read.also { Thread.sleep(SLOW_READ_MS) } }
-        afterReadAll = { reads -> reads.also { Thread.sleep(SLOW_READ_MS) } }
+        ioExecutor = CompletableFuture.delayedExecutor(SLOW_READ_MS, TimeUnit.MILLISECONDS)
     }
     private val caches = CoSecTestCaches(backend)
     private val policy = PolicyData("policy", "category", "name", "", PolicyType.GLOBAL, "tenant")

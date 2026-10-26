@@ -33,6 +33,7 @@ dependencies {
         api(libs.mockk)
         api(libs.archunit.junit5)
         api(libs.blockhound)
+        api(libs.json.schema.validator)
         api(libs.detekt.formatting)
     }
 }

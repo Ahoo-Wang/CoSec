@@ -77,7 +77,26 @@ object SnapshotDocumentCodec : Codec<SnapshotDocument> {
         }
     }
 
+    /**
+     * JSON documents are UTF-8 without a byte order mark (RFC 8259). Jackson would also detect UTF-16 and UTF-32 from
+     * the first bytes; refusing them here keeps byte offsets meaningful for writers that splice stored entries.
+     */
+    private fun requireUtf8(bytes: ByteArray) {
+        val head = bytes.take(UTF_DETECTION_BYTES)
+        val bom = head.size >= 2 && (
+            (head[0] == 0xEF.toByte() && head[1] == 0xBB.toByte()) ||
+                (head[0] == 0xFE.toByte() && head[1] == 0xFF.toByte()) ||
+                (head[0] == 0xFF.toByte() && head[1] == 0xFE.toByte())
+            )
+        if (bom || head.any { it == 0.toByte() }) {
+            malformed("the document is not UTF-8 without a byte order mark")
+        }
+    }
+
+    private const val UTF_DETECTION_BYTES = 4
+
     private fun readHeader(bytes: ByteArray): Header {
+        requireUtf8(bytes)
         val found = Fields()
         try {
             reader.createParser(bytes).use { parser ->
