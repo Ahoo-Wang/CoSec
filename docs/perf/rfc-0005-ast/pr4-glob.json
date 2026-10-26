@@ -1,0 +1,130 @@
+[
+ {
+  "benchmark": "me.ahoo.cosec.engine.pattern.HttpPathPatternBenchmark.cosecMatch",
+  "params": {
+   "scenario": "long"
+  },
+  "primaryMetric": {
+   "score": 46816.87544619244,
+   "scoreError": 177.89327867355118,
+   "scoreConfidence": [
+    46638.98216751889,
+    46994.76872486599
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     46762.94738898146,
+     46768.771813849395,
+     46937.86527664455,
+     46960.014228644926,
+     46937.162918527916
+    ],
+    [
+     46797.60210535858,
+     46824.49355908321,
+     46620.37585912492,
+     46661.457711117655,
+     46898.06360059183
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 0.0746723664566677
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.pattern.HttpPathPatternBenchmark.cosecMatch",
+  "params": {
+   "scenario": "glob"
+  },
+  "primaryMetric": {
+   "score": 10990610.701542048,
+   "scoreError": 149019.44855472643,
+   "scoreConfidence": [
+    10841591.252987321,
+    11139630.150096774
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     11072046.375058083,
+     11062089.563832784,
+     11065391.186835751,
+     11048081.648496233,
+     11014709.41614206
+    ],
+    [
+     11037205.2132559,
+     10940403.276058178,
+     10746437.284631783,
+     10956688.271589948,
+     10963054.779519755
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 216.00031891107545
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.pattern.HttpPathPatternBenchmark.cosecMatches",
+  "params": {
+   "scenario": "long"
+  },
+  "primaryMetric": {
+   "score": 46632.66156759463,
+   "scoreError": 693.3275009909349,
+   "scoreConfidence": [
+    45939.3340666037,
+    47325.989068585564
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     46727.563201314944,
+     46829.384228176736,
+     46694.825892290086,
+     46530.199356036355,
+     46568.190122120875
+    ],
+    [
+     46830.6287485662,
+     46921.626049936574,
+     45391.677960394074,
+     46954.70497103588,
+     46877.815146074594
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 0.07493003211382598
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.pattern.HttpPathPatternBenchmark.cosecMatches",
+  "params": {
+   "scenario": "glob"
+  },
+  "primaryMetric": {
+   "score": 29732670.801252775,
+   "scoreError": 207834.3661228975,
+   "scoreConfidence": [
+    29524836.435129877,
+    29940505.167375673
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     29824660.32582004,
+     29825683.033629265,
+     29393965.62097028,
+     29594273.82380008,
+     29741895.632792372
+    ],
+    [
+     29766559.84254742,
+     29824124.561940424,
+     29796174.835791253,
+     29756861.470858857,
+     29802508.86437775
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 0.00011725095335666331
+ }
+]

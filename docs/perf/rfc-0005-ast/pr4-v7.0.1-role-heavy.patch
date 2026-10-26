@@ -1,0 +1,53 @@
+diff --git a/cosec-core/src/jmh/kotlin/me/ahoo/cosec/authorization/SimpleAuthorizationBenchmark.kt b/cosec-core/src/jmh/kotlin/me/ahoo/cosec/authorization/SimpleAuthorizationBenchmark.kt
+index cd8b898d..7bbb9922 100644
+--- a/cosec-core/src/jmh/kotlin/me/ahoo/cosec/authorization/SimpleAuthorizationBenchmark.kt
++++ b/cosec-core/src/jmh/kotlin/me/ahoo/cosec/authorization/SimpleAuthorizationBenchmark.kt
+@@ -50,7 +50,7 @@ import reactor.core.publisher.Mono
+  */
+ @State(Scope.Benchmark)
+ open class SimpleAuthorizationBenchmark {
+-    @Param("global", "role", "none")
++    @Param("global", "role", "none", "role-heavy")
+     lateinit var scenario: String
+ 
+     private lateinit var authorization: SimpleAuthorization
+@@ -77,17 +77,25 @@ open class SimpleAuthorizationBenchmark {
+             policy("principal-a", PolicyType.CUSTOM, "reports", 10),
+             policy("principal-b", PolicyType.CUSTOM, "exports", 10),
+         )
+-        val permissions = (1..50).map {
++        val heavy = scenario == "role-heavy"
++        val permissionCount = if (heavy) 120 else 50
++        val permissions = (1..permissionCount).map {
+             PermissionData(id = "p$it", name = "p$it", action = path("/orders/op$it/**"))
+         } + PermissionData(id = "deny-internal", name = "deny", effect = Effect.DENY, action = path("/orders/internal/**"))
+         val appPermission = AppPermissionData(
+             id = "app",
+             groups = permissions.chunked(10).mapIndexed { index, group -> PermissionGroupData("g$index", permissions = group) },
+         )
+-        val rolePermissions: Map<RoleId, Set<String>> = mapOf(
+-            "admin" to setOf(AppRolePermission.ALL_PERMISSION_ID),
+-            "viewer" to (1..20).map { "p$it" }.toSet(),
+-        )
++        // role-heavy is backported from main (RFC 0002 PR-1): benchmark data only, the decision path is 7.0.1's.
++        val rolePermissions: Map<RoleId, Set<String>> = if (heavy) {
++            (1..12).associate { role -> "role$role" to (1..30).map { "p${(role * 7 + it) % permissionCount + 1}" }.toSet() } +
++                ("admin" to setOf(AppRolePermission.ALL_PERMISSION_ID))
++        } else {
++            mapOf(
++                "admin" to setOf(AppRolePermission.ALL_PERMISSION_ID),
++                "viewer" to (1..20).map { "p$it" }.toSet(),
++            )
++        }
+         val policyRepository = object : PolicyRepository {
+             private val global = Mono.just(globalPolicies)
+             private val principal = Mono.just(principalPolicies)
+@@ -111,7 +119,7 @@ open class SimpleAuthorizationBenchmark {
+         val principal = SimplePrincipal(
+             id = "user",
+             policies = setOf("principal-a", "principal-b"),
+-            roles = setOf("viewer", "admin"),
++            roles = if (heavy) rolePermissions.keys else setOf("viewer", "admin"),
+         )
+         securityContext = SimpleSecurityContext(principal)
+         request = EvaluateRequest(

@@ -28,8 +28,8 @@ import java.net.URI
 
 /**
  * What the statements of a scenario read about its request: the attribute catalog of RFC 0005 §3.2, filled from the
- * scenario. It travels as the [HostFacts] of the engine's request, the way the adapted statements of RFC 0002 read
- * theirs, until the engine evaluates compiled AST statements itself (RFC 0005 PR-4).
+ * scenario. The engine answers most attributes from its own request; [host] answers the rest (`http.*`,
+ * `request.attributes.*`) and injects `"fault"`s. It also travels as the [HostFacts] of the engine's request.
  */
 class RequestFacts(
     val authenticated: Boolean,
@@ -49,6 +49,19 @@ class RequestFacts(
 ) : HostFacts {
     /** The input of a condition; [captures] are the variables of the statement's resource pattern, if any. */
     fun input(captures: Captures?): ConditionInput = FactsInput(this, captures)
+
+    /**
+     * The host attributes of the engine's request: the engine answers the rest itself. A read of
+     * `request.attributes.<FAULT><message>` throws [ScenarioFault] (see [AdaptedSnapshotCompiler]).
+     */
+    val host: ConditionInput = object : ConditionInput by FactsInput(this, null) {
+        override fun string(attribute: Attribute): String? {
+            if (attribute.kind == Kind.REQUEST_ATTRIBUTE && attribute.name.startsWith(FAULT)) {
+                throw ScenarioFault(attribute.name.removePrefix(FAULT))
+            }
+            return input(null).string(attribute)
+        }
+    }
 }
 
 /** An absent attribute reads as null (RFC 0005 §3.4). */

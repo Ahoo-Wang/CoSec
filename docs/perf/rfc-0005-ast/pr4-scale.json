@@ -1,0 +1,818 @@
+[
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "http",
+   "scenario": "allow",
+   "statements": "10"
+  },
+  "primaryMetric": {
+   "score": 3326223.656448255,
+   "scoreError": 98187.85348862666,
+   "scoreConfidence": [
+    3228035.8029596284,
+    3424411.5099368813
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     3167581.1703509344,
+     3302699.4488974237,
+     3307322.4345276346,
+     3304410.585051093,
+     3313278.6549620717
+    ],
+    [
+     3364421.3928191285,
+     3372190.6778571447,
+     3377040.124585591,
+     3376997.88066066,
+     3376294.1947708665
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 424.00105378824065
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "http",
+   "scenario": "allow",
+   "statements": "1000"
+  },
+  "primaryMetric": {
+   "score": 1674876.4067193295,
+   "scoreError": 42112.49666023378,
+   "scoreConfidence": [
+    1632763.9100590958,
+    1716988.9033795632
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     1601572.721008158,
+     1674863.6441621347,
+     1674639.129496932,
+     1671646.65715483,
+     1666137.8675195114
+    ],
+    [
+     1694629.9561679459,
+     1693855.8110477338,
+     1688886.543565029,
+     1686861.3253260488,
+     1695670.4117449715
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 424.0020933421047
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "http",
+   "scenario": "allow",
+   "statements": "10000"
+  },
+  "primaryMetric": {
+   "score": 1666685.4750306793,
+   "scoreError": 19620.209486197742,
+   "scoreConfidence": [
+    1647065.2655444816,
+    1686305.684516877
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     1678969.5648191036,
+     1678604.8023617363,
+     1680034.520307668,
+     1678510.3649110603,
+     1678702.9921790324
+    ],
+    [
+     1652645.6365504684,
+     1655569.5263385754,
+     1653529.0239211551,
+     1655426.6709895404,
+     1654861.6479284493
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 424.00210328061496
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "http",
+   "scenario": "allow",
+   "statements": "100000"
+  },
+  "primaryMetric": {
+   "score": 1507808.0747872135,
+   "scoreError": 90813.66355883697,
+   "scoreConfidence": [
+    1416994.4112283764,
+    1598621.7383460505
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     1405665.0228175605,
+     1510197.438469683,
+     1524346.2149417347,
+     1515951.7723267928,
+     1520905.948794231
+    ],
+    [
+     1394127.62429123,
+     1532009.3252977466,
+     1553580.2900620964,
+     1547716.1182499018,
+     1573580.9926211569
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 424.0023286298189
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "http",
+   "scenario": "deny",
+   "statements": "10"
+  },
+  "primaryMetric": {
+   "score": 4968999.7365175765,
+   "scoreError": 74588.97239179019,
+   "scoreConfidence": [
+    4894410.764125787,
+    5043588.708909366
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     4830431.274345959,
+     4976838.053685125,
+     4973953.224549956,
+     4976174.929353343,
+     4980748.887668847
+    ],
+    [
+     4989337.545316305,
+     4980393.799769533,
+     4995759.137318621,
+     4992578.670720966,
+     4993781.842447112
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 424.00070536081677
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "http",
+   "scenario": "deny",
+   "statements": "1000"
+  },
+  "primaryMetric": {
+   "score": 3414835.1755572967,
+   "scoreError": 77172.84534337866,
+   "scoreConfidence": [
+    3337662.330213918,
+    3492008.0209006756
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     3460560.405987757,
+     3355181.5851984755,
+     3481471.1160427914,
+     3488349.6246309844,
+     3447067.953717934
+    ],
+    [
+     3384035.725645372,
+     3404166.8342191065,
+     3348873.860429476,
+     3399378.026196078,
+     3379266.623504992
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 424.0010267611336
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "http",
+   "scenario": "deny",
+   "statements": "10000"
+  },
+  "primaryMetric": {
+   "score": 2871224.947848379,
+   "scoreError": 83236.50676613362,
+   "scoreConfidence": [
+    2787988.4410822457,
+    2954461.4546145126
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     2839145.0302832583,
+     2851632.7057801876,
+     2843101.571347298,
+     2851534.5964753064,
+     2755245.074811917
+    ],
+    [
+     2874946.6882320284,
+     2924995.2561915014,
+     2926709.4619657234,
+     2921553.9003814384,
+     2923385.1930151326
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 424.0012217555448
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "http",
+   "scenario": "deny",
+   "statements": "100000"
+  },
+  "primaryMetric": {
+   "score": 3219411.5090600858,
+   "scoreError": 193666.34403619784,
+   "scoreConfidence": [
+    3025745.165023888,
+    3413077.8530962835
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     3348433.575293814,
+     3356394.844178535,
+     3329119.6619620034,
+     3349690.216670809,
+     3318934.340477586
+    ],
+    [
+     3099301.353400988,
+     3096607.24401478,
+     3098858.3138355804,
+     3101874.6872709873,
+     3094900.853495771
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 424.0010903893649
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "http",
+   "scenario": "none",
+   "statements": "10"
+  },
+  "primaryMetric": {
+   "score": 3582231.402968201,
+   "scoreError": 53880.371709925275,
+   "scoreConfidence": [
+    3528351.0312582757,
+    3636111.774678126
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     3622244.82577797,
+     3602553.079655287,
+     3557045.0736035905,
+     3606086.8397274786,
+     3651384.2420516917
+    ],
+    [
+     3564452.2575634853,
+     3554316.6542024,
+     3555017.617974579,
+     3548725.2677631993,
+     3560488.171362335
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 352.0009783143118
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "http",
+   "scenario": "none",
+   "statements": "1000"
+  },
+  "primaryMetric": {
+   "score": 2041439.4227528968,
+   "scoreError": 200306.54420903866,
+   "scoreConfidence": [
+    1841132.8785438582,
+    2241745.9669619356
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     2124282.7165295724,
+     2165704.900327135,
+     2178850.117809679,
+     2181371.1602902003,
+     2175804.829271818
+    ],
+    [
+     1908639.5025351038,
+     1935847.0970447103,
+     1876911.154429726,
+     1934217.7284092098,
+     1932765.020881813
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 352.0017235751768
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "http",
+   "scenario": "none",
+   "statements": "10000"
+  },
+  "primaryMetric": {
+   "score": 2017496.8413742539,
+   "scoreError": 68886.67066313424,
+   "scoreConfidence": [
+    1948610.1707111197,
+    2086383.512037388
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     2046759.1481384395,
+     2008627.362259165,
+     1960072.1568429077,
+     2038131.7685301253,
+     2046102.725067913
+    ],
+    [
+     2072063.3241077454,
+     2042948.4927763548,
+     1991545.9112953378,
+     1926422.2547301613,
+     2042295.2699943886
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 352.0017390063864
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "http",
+   "scenario": "none",
+   "statements": "100000"
+  },
+  "primaryMetric": {
+   "score": 2079659.3431100964,
+   "scoreError": 27314.4300593685,
+   "scoreConfidence": [
+    2052344.913050728,
+    2106973.773169465
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     2091156.6799679862,
+     2095609.1381631626,
+     2031552.151089227,
+     2075036.7154523155,
+     2088074.850181788
+    ],
+    [
+     2075993.3279903517,
+     2082433.8872594172,
+     2084126.8070930946,
+     2089060.3710404832,
+     2083549.5028631394
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 352.0016850741123
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "service",
+   "scenario": "allow",
+   "statements": "10"
+  },
+  "primaryMetric": {
+   "score": 7584374.03366216,
+   "scoreError": 473786.316216248,
+   "scoreConfidence": [
+    7110587.717445912,
+    8058160.349878408
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     7881159.209666584,
+     7881960.57904776,
+     7881024.04991013,
+     7875333.976562481,
+     7888557.063688419
+    ],
+    [
+     7296329.109680996,
+     7287361.756313979,
+     7275020.778504839,
+     7294302.120909879,
+     7282691.692336536
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 216.00046302454317
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "service",
+   "scenario": "allow",
+   "statements": "1000"
+  },
+  "primaryMetric": {
+   "score": 4738873.337939582,
+   "scoreError": 213092.50399208153,
+   "scoreConfidence": [
+    4525780.8339475,
+    4951965.841931663
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     4855375.697402052,
+     4870415.344694844,
+     4873172.543085002,
+     4858182.213865472,
+     4859135.270143431
+    ],
+    [
+     4684121.856736269,
+     4625371.110297559,
+     4540921.729004043,
+     4692954.683117793,
+     4529082.931049356
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 216.00074006364827
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "service",
+   "scenario": "allow",
+   "statements": "10000"
+  },
+  "primaryMetric": {
+   "score": 4757253.686075847,
+   "scoreError": 54184.805417961936,
+   "scoreConfidence": [
+    4703068.880657884,
+    4811438.491493809
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     4786274.416745163,
+     4766486.273790275,
+     4770897.715478142,
+     4809474.416365983,
+     4800071.320472997
+    ],
+    [
+     4746205.782653685,
+     4710725.305996953,
+     4717397.955840873,
+     4712680.247779201,
+     4752323.4256352
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 216.0007368786276
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "service",
+   "scenario": "allow",
+   "statements": "100000"
+  },
+  "primaryMetric": {
+   "score": 4528628.087238813,
+   "scoreError": 489773.9786091214,
+   "scoreConfidence": [
+    4038854.1086296914,
+    5018402.065847934
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     4816979.410823512,
+     4828184.6662031235,
+     4817349.750096576,
+     4792521.5640628,
+     4811674.8209783435
+    ],
+    [
+     4380529.299933735,
+     4453560.990407772,
+     4254102.040289222,
+     4124717.596613166,
+     4006660.7329798806
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 216.0007776101848
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "service",
+   "scenario": "deny",
+   "statements": "10"
+  },
+  "primaryMetric": {
+   "score": 12511047.332583513,
+   "scoreError": 955926.1896570411,
+   "scoreConfidence": [
+    11555121.142926471,
+    13466973.522240555
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     11941911.115020217,
+     12889378.07636902,
+     12983484.75169667,
+     12856820.449335484,
+     13197961.372721588
+    ],
+    [
+     11158686.476845283,
+     12019955.568611829,
+     12376210.122829158,
+     12780774.210272318,
+     12905291.182133574
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 216.00028096977
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "service",
+   "scenario": "deny",
+   "statements": "1000"
+  },
+  "primaryMetric": {
+   "score": 5989802.600744644,
+   "scoreError": 177078.0706348892,
+   "scoreConfidence": [
+    5812724.530109755,
+    6166880.671379534
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     6035128.821224077,
+     6049685.198882681,
+     5660453.4109529825,
+     6051294.407107395,
+     6048035.404576675
+    ],
+    [
+     6010234.824925393,
+     6010163.1028317725,
+     6010980.937795947,
+     6010032.092821548,
+     6012017.8063279735
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 216.00058510363996
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "service",
+   "scenario": "deny",
+   "statements": "10000"
+  },
+  "primaryMetric": {
+   "score": 8101163.393630457,
+   "scoreError": 164915.26454185383,
+   "scoreConfidence": [
+    7936248.129088603,
+    8266078.658172311
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     8174536.347032555,
+     8167735.101366484,
+     8175689.969751029,
+     8177965.061413687,
+     8149256.099358666
+    ],
+    [
+     7891567.3436180325,
+     7908518.533028039,
+     8107132.900973706,
+     8109490.040583775,
+     8149742.539178602
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 216.00043306992265
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "service",
+   "scenario": "deny",
+   "statements": "100000"
+  },
+  "primaryMetric": {
+   "score": 5815244.116132688,
+   "scoreError": 340678.0473394516,
+   "scoreConfidence": [
+    5474566.068793236,
+    6155922.163472139
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     5876170.661155425,
+     5882276.119062674,
+     5852843.469886584,
+     5176605.395344291,
+     5854429.177479748
+    ],
+    [
+     5915341.079518632,
+     5895756.320744431,
+     5896838.572454646,
+     5907428.1520673325,
+     5894752.213613114
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 216.00060350787902
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "service",
+   "scenario": "none",
+   "statements": "10"
+  },
+  "primaryMetric": {
+   "score": 8505068.900783656,
+   "scoreError": 347618.8882020222,
+   "scoreConfidence": [
+    8157450.012581634,
+    8852687.788985679
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     8414832.354022505,
+     8210310.4817424705,
+     8449847.56325177,
+     8244768.778057715,
+     8610348.933372723
+    ],
+    [
+     8735746.349426921,
+     8735178.719959205,
+     8716417.843386237,
+     8197266.873662184,
+     8735971.110954825
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 144.00041250011773
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "service",
+   "scenario": "none",
+   "statements": "1000"
+  },
+  "primaryMetric": {
+   "score": 5842880.834952656,
+   "scoreError": 253542.57249412817,
+   "scoreConfidence": [
+    5589338.262458528,
+    6096423.407446784
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     6013416.689941348,
+     6011371.574260687,
+     5997649.54887136,
+     5961337.081322907,
+     5880585.20636893
+    ],
+    [
+     5781503.8661330845,
+     5740725.387865525,
+     5475529.446520439,
+     5783757.94165461,
+     5782931.6065876605
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 144.0006004752457
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "service",
+   "scenario": "none",
+   "statements": "10000"
+  },
+  "primaryMetric": {
+   "score": 5376190.967319051,
+   "scoreError": 777513.3435952918,
+   "scoreConfidence": [
+    4598677.623723759,
+    6153704.310914342
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     4881514.8067975715,
+     4893136.176878662,
+     4903923.375752687,
+     4877135.501404292,
+     4886790.409687611
+    ],
+    [
+     5883981.607074494,
+     5835389.55653094,
+     5854535.010414688,
+     5873719.515991989,
+     5871783.71265757
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 144.0006576889662
+ },
+ {
+  "benchmark": "me.ahoo.cosec.engine.flat.CompiledEngineBenchmark.evaluate",
+  "params": {
+   "namespace": "service",
+   "scenario": "none",
+   "statements": "100000"
+  },
+  "primaryMetric": {
+   "score": 5690986.07257338,
+   "scoreError": 35334.98073905419,
+   "scoreConfidence": [
+    5655651.091834325,
+    5726321.053312434
+   ],
+   "scoreUnit": "ops/s",
+   "rawData": [
+    [
+     5676533.077601399,
+     5666273.983700085,
+     5696838.293835547,
+     5655413.122424347,
+     5720060.37498096
+    ],
+    [
+     5693642.470374778,
+     5682224.491803447,
+     5679057.734162348,
+     5714784.78994429,
+     5725032.386906594
+    ]
+   ]
+  },
+  "gc.alloc.rate.norm": 144.00061560783712
+ }
+]
