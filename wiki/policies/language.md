@@ -182,7 +182,8 @@ or construct anything. Anywhere else, `#{...}` is literal text. A `path` templat
 In a `path` action, each `#{...}` is evaluated on its own and its value fills one literal part of the pattern; the
 rest of the pattern stays as written. A value is rejected when it is empty (or missing), `.` or `..`, or contains
 `*`, `?`, `{`, `}` or the path separator (`/`, or the `separator` option), because it would otherwise act as
-pattern syntax or reach into other segments. A rejected value never widens access and never narrows a deny:
+pattern syntax or reach into other segments. A `#{...}` inside a `{...}` capture, such as `{name:#{...}}`, fails
+when the policy loads. A rejected value never widens access and never narrows a deny:
 
 | Where the action is | A rejected value |
 |---|---|
