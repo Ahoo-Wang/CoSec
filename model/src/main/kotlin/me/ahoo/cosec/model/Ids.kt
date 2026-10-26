@@ -31,11 +31,21 @@ value class TenantId(val value: String) {
 @JvmInline
 value class PrincipalId(val value: String)
 
+/** Never [Match.WILDCARD]: documents write `*` for [Match.Any], so a literal `*` app would decode as every app. */
 @JvmInline
-value class AppId(val value: String)
+value class AppId(val value: String) {
+    init {
+        require(value != Match.WILDCARD) { "App id must not be the wildcard [${Match.WILDCARD}]." }
+    }
+}
 
+/** Never [Match.WILDCARD], for the same reason as [AppId]. */
 @JvmInline
 value class SpaceId(val value: String) {
+    init {
+        require(value != Match.WILDCARD) { "Space id must not be the wildcard [${Match.WILDCARD}]." }
+    }
+
     companion object {
         /** Same as `SpaceIdCapable.DEFAULT`. */
         val DEFAULT = SpaceId("")

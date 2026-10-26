@@ -34,7 +34,35 @@ class BindingScope(val app: Match<AppId>, val space: Match<SpaceId>)
 sealed interface Match<out T> {
     data object Any : Match<Nothing>
 
-    data class Exactly<T>(val value: T) : Match<T>
+    /** [value] is never [WILDCARD]; [AppId] and [SpaceId] already refuse it. */
+    data class Exactly<T>(val value: T) : Match<T> {
+        init {
+            require(value != WILDCARD) { "Match.Exactly must not hold the wildcard [$WILDCARD]; use Match.Any." }
+        }
+    }
+
+    companion object {
+        /** How documents write [Any]. Reserved: no app or space id may be this. */
+        const val WILDCARD = "*"
+    }
+}
+
+/** Exact, case-sensitive equality; [Match.Any] matches every value. */
+fun <T> Match<T>.matches(value: T): Boolean = when (this) {
+    Match.Any -> true
+    is Match.Exactly -> this.value == value
+}
+
+/** Same as the generic [matches], without boxing [app]. */
+fun Match<AppId>.matches(app: AppId): Boolean = when (this) {
+    Match.Any -> true
+    is Match.Exactly -> value == app
+}
+
+/** Same as the generic [matches], without boxing [space]. */
+fun Match<SpaceId>.matches(space: SpaceId): Boolean = when (this) {
+    Match.Any -> true
+    is Match.Exactly -> value == space
 }
 
 /**

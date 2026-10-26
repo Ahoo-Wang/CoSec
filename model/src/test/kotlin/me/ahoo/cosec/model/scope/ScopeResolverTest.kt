@@ -79,6 +79,47 @@ class ScopeResolverTest {
         scope.roles.assert().isEmpty()
     }
 
+    /** Spaces match exactly: no trimming, no case folding, and the wildcard is never a member. */
+    @Test
+    fun `a near miss of a member space is rejected`() {
+        for (space in listOf(" team-a", "team-a ", "TEAM-A", "*", "a@b", "team-a@team-a")) {
+            rejectedFor(ScopeResolver.resolve(user, DeclaredScope("order", space), noHost))
+                .assert().describedAs(space).isEqualTo(ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER)
+        }
+    }
+
+    @Test
+    fun `a declared app that cannot be an app id is rejected with or without a host app`() {
+        val invalid = listOf("*", "a:b", ":", " ", "x".repeat(ScopeResolver.MAX_APP_ID_LENGTH + 1))
+        for (host in listOf(noHost, HostScope(AppId("order")))) {
+            for (app in invalid) {
+                rejectedFor(ScopeResolver.resolve(user, DeclaredScope(app, ""), host))
+                    .assert().describedAs(app).isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
+            }
+        }
+        val longest = "x".repeat(ScopeResolver.MAX_APP_ID_LENGTH)
+        resolved(ScopeResolver.resolve(user, DeclaredScope(longest, ""), noHost)).app.assert()
+            .isEqualTo(AppId(longest))
+    }
+
+    @Test
+    fun `a near miss of the host app is rejected`() {
+        for (app in listOf(" order", "order ", "ORDER", "a@b")) {
+            rejectedFor(ScopeResolver.resolve(user, DeclaredScope(app, ""), HostScope(AppId("order"))))
+                .assert().describedAs(app).isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
+        }
+    }
+
+    @Test
+    fun `blank tenants and invalid host apps cannot be given`() {
+        for (tenant in listOf("", " ")) {
+            runCatching { ScopeSubject(TenantId(tenant), true, memberships) }.isFailure.assert().isTrue()
+        }
+        for (app in listOf("", " ", "a:b")) {
+            runCatching { HostScope(AppId(app)) }.isFailure.assert().describedAs(app).isTrue()
+        }
+    }
+
     @Test
     fun `the host app applies when nothing or the same app is declared`() {
         val host = HostScope(AppId("order"))

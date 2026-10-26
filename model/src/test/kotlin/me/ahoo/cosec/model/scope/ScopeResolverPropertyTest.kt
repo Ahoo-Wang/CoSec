@@ -14,6 +14,7 @@
 package me.ahoo.cosec.model.scope
 
 import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
@@ -25,8 +26,12 @@ import kotlin.random.Random
 /** Property P11 of RFC 0004 §9.5, on random subjects, declarations and hosts with a fixed seed. */
 class ScopeResolverPropertyTest {
     private val iterations = 2_000
-    private val spaces = listOf("", "team-a", "team-b", "team-c")
-    private val apps = listOf("", "order", "billing")
+
+    // Near misses of real values (case, whitespace, separators) catch a resolver that normalises before comparing.
+    private val spaces = listOf("", "team-a", "TEAM-A", " team-a", "team-a ", "team-b", "a@b", "a:b", " ")
+    private val declaredSpaces = spaces + listOf("*", "team-c")
+    private val hostApps = listOf("order", "billing", "a@b")
+    private val apps = listOf("", "order", "ORDER", " order", "billing", "*", "a:b", "a@b", " ", "x".repeat(129))
     private val roles = listOf("admin", "editor", "viewer")
 
     private class Case(val subject: ScopeSubject, val declared: DeclaredScope, val host: HostScope) {
@@ -46,8 +51,8 @@ class ScopeResolverPropertyTest {
             nextBoolean(),
             Memberships(Memberships.Source.entries.random(this), memberships, emptyList()),
         )
-        val host = HostScope(if (nextBoolean()) null else AppId(apps.drop(1).random(this)))
-        return Case(subject, DeclaredScope(apps.random(this), spaces.random(this)), host)
+        val host = HostScope(if (nextBoolean()) null else AppId(hostApps.random(this)))
+        return Case(subject, DeclaredScope(apps.random(this), declaredSpaces.random(this)), host)
     }
 
     private fun forEachCase(seed: Int, block: (Case, ScopeResolution) -> Unit) {
@@ -67,7 +72,9 @@ class ScopeResolverPropertyTest {
     fun `P11 a resolved scope only narrows`() {
         forEachCase(seed = 20261025) { case, resolution ->
             val granted = if (case.subject.authenticated) case.subject.memberships.roles else emptyMap()
-            if (case.declared.space.isNotEmpty() && granted[SpaceId(case.declared.space)].isNullOrEmpty()) {
+            val member = case.declared.space != Match.WILDCARD &&
+                granted[SpaceId(case.declared.space)].orEmpty().isNotEmpty()
+            if (case.declared.space.isNotEmpty() && !member) {
                 resolution.assert().isInstanceOf(ScopeResolution.Rejected::class.java)
             }
             if (resolution is ScopeResolution.Resolved) {
@@ -78,12 +85,15 @@ class ScopeResolverPropertyTest {
         }
     }
 
-    /** The host app wins over the declared one, and the tenant comes from the credential. */
+    /** The host app wins over the declared one, malformed apps are rejected, and the tenant comes from the credential. */
     @Test
     fun `the app and tenant follow the host and the credential`() {
         forEachCase(seed = 7) { case, resolution ->
             val hostApp = case.host.app
-            val mismatch = hostApp != null && case.declared.app.isNotEmpty() && case.declared.app != hostApp.value
+            val declared = case.declared.app
+            val invalid = declared.isNotEmpty() &&
+                (declared.isBlank() || declared == "*" || ':' in declared || declared.length > 128)
+            val mismatch = invalid || hostApp != null && declared.isNotEmpty() && declared != hostApp.value
             if (mismatch) {
                 (resolution as ScopeResolution.Rejected).reason.assert()
                     .isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)

@@ -60,6 +60,40 @@ class BindingTest {
         binding.breakGlass.assert().isFalse()
     }
 
+    /** Documents write `*` for Match.Any, so no concrete id may be `*` (RFC 0004 §4.1). */
+    @Test
+    fun `the wildcard is not an app or space id`() {
+        runCatching { AppId(Match.WILDCARD) }.isFailure.assert().isTrue()
+        runCatching { SpaceId(Match.WILDCARD) }.isFailure.assert().isTrue()
+        runCatching { Match.Exactly(Match.WILDCARD) }.isFailure.assert().isTrue()
+        listOf(
+            AppId("**").value,
+            SpaceId(" *").value,
+            Match.Exactly("a*").value
+        ).assert().containsExactly("**", " *", "a*")
+    }
+
+    @Test
+    fun `any matches every value and exactly matches only its own`() {
+        val anyApp: Match<AppId> = Match.Any
+        val order: Match<AppId> = Match.Exactly(AppId("order"))
+        val teamA: Match<SpaceId> = Match.Exactly(SpaceId("team-a"))
+        val anySpace: Match<SpaceId> = Match.Any
+        for (app in listOf("order", "ORDER", " order", "", "billing")) {
+            anyApp.matches(AppId(app)).assert().isTrue()
+            order.matches(AppId(app)).assert().describedAs(app).isEqualTo(app == "order")
+        }
+        for (space in listOf("team-a", "TEAM-A", "team-a ", "")) {
+            anySpace.matches(SpaceId(space)).assert().isTrue()
+            teamA.matches(SpaceId(space)).assert().describedAs(space).isEqualTo(space == "team-a")
+        }
+        val role: Match<RoleId> = Match.Exactly(RoleId("admin"))
+        role.matches(RoleId("admin")).assert().isTrue()
+        role.matches(RoleId("Admin")).assert().isFalse()
+        val anyRole: Match<RoleId> = Match.Any
+        anyRole.matches(RoleId("x")).assert().isTrue()
+    }
+
     @Test
     fun `subject references compare by value`() {
         SubjectRef.Role(null, RoleId("admin")).assert().isEqualTo(SubjectRef.Role(null, RoleId("admin")))
