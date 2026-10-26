@@ -15,6 +15,7 @@ package me.ahoo.cosec.cache.snapshot
 
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 
 class SnapshotKeyEncoderTest {
@@ -22,19 +23,45 @@ class SnapshotKeyEncoderTest {
     fun encodesExplicitly() {
         SnapshotKeyEncoder.encode(SnapshotKey.Policies).assert().isEqualTo("policies")
         SnapshotKeyEncoder.encode(SnapshotKey.App("order-service")).assert().isEqualTo("app:order-service")
+        SnapshotKeyEncoder.encode(SnapshotKey.Platform).assert().isEqualTo("platform")
+        SnapshotKeyEncoder.encode(SnapshotKey.Tenant("acme")).assert().isEqualTo("tenant:acme")
+        SnapshotKeyEncoder.encode(SnapshotKey.Tenant("(platform)")).assert().isEqualTo("tenant:(platform)")
     }
 
     @Test
     fun decodesWhatItEncodes() {
-        listOf(SnapshotKey.Policies, SnapshotKey.App("order-service")).forEach {
+        listOf(
+            SnapshotKey.Policies,
+            SnapshotKey.App("order-service"),
+            SnapshotKey.Platform,
+            SnapshotKey.Tenant("acme"),
+            SnapshotKey.Tenant("(0)"),
+        ).forEach {
             SnapshotKeyEncoder.decode(SnapshotKeyEncoder.encode(it)).assert().isEqualTo(it)
         }
     }
 
     @Test
     fun decodesNothingElse() {
-        listOf("", "policy", "app:", "app:a:b", "other:x").forEach {
+        listOf(
+            "", "policy", "app:", "app:a:b", "other:x", "platform:x", "tenant:", "tenant:a:b", "tenant:*", "tenant: ",
+            "tenant:a\nb", "tenant:" + "t".repeat(129),
+        ).forEach {
             SnapshotKeyEncoder.decode(it).assert().describedAs(it).isNull()
+        }
+    }
+
+    /** A tenant id names exactly one key: no separator, wildcard, blank, control character or unbounded length. */
+    @Test
+    fun aTenantIdCannotReachAnotherKey() {
+        listOf("a:b", "*", "", " ", "a\nb", "a\u0000b", "t".repeat(129)).forEach { id ->
+            SnapshotKey.Tenant.isValidTenantId(id).assert().describedAs(id).isFalse()
+            assertThrownBy<IllegalArgumentException> { SnapshotKey.Tenant(id) }
+        }
+        listOf("acme", "(platform)", "(0)", "a*b", "t".repeat(128)).forEach { id ->
+            SnapshotKeyEncoder.decode(
+                SnapshotKeyEncoder.encode(SnapshotKey.Tenant(id))
+            ).assert().isEqualTo(SnapshotKey.Tenant(id))
         }
     }
 }

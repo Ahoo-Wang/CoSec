@@ -1,0 +1,48 @@
+{
+  "rules": [
+    "DOC-1",
+    "TNT-2"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The tenant document binds a platform policy that exists: it compiles and applies.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "shared-read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read"
+            }
+          ]
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "t",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "shared-read"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "shared-read",
+      "statement": 0,
+      "via": {
+        "binding": "t",
+        "document": "tenant"
+      }
+    }
+  }
+}

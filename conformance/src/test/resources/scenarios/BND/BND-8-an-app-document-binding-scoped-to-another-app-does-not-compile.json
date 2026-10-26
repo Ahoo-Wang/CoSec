@@ -10,7 +10,7 @@
       "order-service": {
         "policies": [
           {
-            "id": "perm",
+            "id": "perm:order-service/perm",
             "statements": [
               {
                 "effect": "allow",
@@ -27,7 +27,7 @@
             },
             "app": "billing",
             "space": "*",
-            "policy": "perm"
+            "policy": "perm:order-service/perm"
           }
         ]
       }

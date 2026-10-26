@@ -122,6 +122,8 @@ internal class RepositorySnapshotAuthorization(
         private fun readNow(key: SnapshotKey): CompletableFuture<SnapshotRead> = when (key) {
             SnapshotKey.Policies -> readPolicies().map<SnapshotRead> { present(it) }
             is SnapshotKey.App -> readApp(key).map<SnapshotRead> { present(it) }.defaultIfEmpty(SnapshotRead.Absent)
+            // The repositories hold 7.x data only.
+            SnapshotKey.Platform, is SnapshotKey.Tenant -> Mono.just(SnapshotRead.Absent)
         }.toFuture().thenApply { checkNotNull(it) }
 
         private fun present(compiled: Any): SnapshotRead {

@@ -36,7 +36,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
  * platform update never recompiles them (§3 I5), and a policy the platform no longer has makes the request
  * [me.ahoo.cosec.model.decision.Cause.MissingPolicies] (§7.2). For the same reason a tenant policy whose id the
  * platform also defines is found per request, and makes it [me.ahoo.cosec.model.decision.Cause.AmbiguousPolicy]
- * (RFC 0007 N2).
+ * unless both have the same content (RFC 0007 N2, [CompiledPolicy.sameContent]).
  */
 class CompiledDocument private constructor(
     val kind: DocumentKind,
@@ -121,7 +121,7 @@ class CompiledDocument private constructor(
             via = BindingRef.Bound(binding.id, kind),
             policyId = policyId,
             local = local,
-            // A tenant's own policy is only unambiguous while the platform has no policy of the same id (RFC 0007 N2).
+            // A tenant's own policy is unambiguous while the platform has no different policy of that id (RFC 0007 N2).
             checksPlatform = kind == DocumentKind.TENANT && local != null,
             app = binding.scope.app.exactApp(),
             space = binding.scope.space.exactSpace(),

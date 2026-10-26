@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "engine",
-  "description": "The principal attaches shared, which both its tenant document and the platform define. Anyone may read, but neither policy may silently win.",
+  "description": "The principal attaches shared, which its tenant document (an ALLOW) and the platform (a DENY) both define, with different content. Anyone may read, but neither policy may silently win.",
   "documents": {
     "platform": {
       "policies": [
@@ -22,7 +22,7 @@
           "attachable": true,
           "statements": [
             {
-              "effect": "allow",
+              "effect": "deny",
               "action": "*"
             }
           ]

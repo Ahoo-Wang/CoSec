@@ -1,0 +1,58 @@
+{
+  "rules": [
+    "BND-7"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "A tenant binding names shared, which the tenant document and the platform both define with the same content: it resolves (RFC 0007 N2), and the binding applies.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "shared",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "shared",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "g:shared",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "shared"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "shared",
+      "statement": 0,
+      "via": {
+        "binding": "g:shared",
+        "document": "tenant"
+      }
+    }
+  }
+}

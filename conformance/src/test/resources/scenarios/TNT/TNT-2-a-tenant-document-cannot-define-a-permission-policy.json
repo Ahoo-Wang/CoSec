@@ -1,0 +1,30 @@
+{
+  "rules": [
+    "TNT-2"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The tenant document defines a policy in an app's permission namespace.",
+  "documents": {
+    "platform": {},
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "perm:order-service/read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "names an app's permission policy"
+  }
+}

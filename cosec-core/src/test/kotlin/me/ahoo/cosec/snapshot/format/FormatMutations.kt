@@ -35,7 +35,7 @@ enum class JsonKind(val value: () -> JsonNode) {
             is BooleanType -> setOf(BOOLEAN)
             is IntegerType -> setOf(INTEGER)
             is NumberType -> setOf(NUMBER, INTEGER)
-            is ArrayType -> setOf(ARRAY)
+            is ArrayType, is TupleType -> setOf(ARRAY)
             is MapType, is ObjectType -> setOf(OBJECT)
             is AnyOf -> type.variants.flatMapTo(HashSet()) { accepted(it) }
             is Ref -> accepted(DocumentFormats.resolve(type))
@@ -108,6 +108,18 @@ class FormatMutations(private val generator: FormatGenerator) {
             is ArrayType -> (node as ArrayNode).forEachIndexed { index, item ->
                 changeTypes(mutations, document, path + index, owner, null, type.items, type)
                 walk(mutations, document, item, path + index)
+            }
+
+            is TupleType -> {
+                val tuple = node as ArrayNode
+                // Every item is required: dropping the last one shortens the tuple.
+                mutations += mutation(MutationKind.DROP_REQUIRED, path, owner, "[${tuple.size() - 1}]", null, type, null, document) {
+                    (it as ArrayNode).remove(tuple.size() - 1)
+                }
+                tuple.forEachIndexed { index, item ->
+                    changeTypes(mutations, document, path + index, owner, null, type.items[index], type)
+                    walk(mutations, document, item, path + index)
+                }
             }
 
             is MapType -> (node as ObjectNode).properties().forEach { (key, value) ->

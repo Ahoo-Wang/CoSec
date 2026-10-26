@@ -81,7 +81,7 @@ import me.ahoo.cosec.model.Scope as DeclaredRequestScope
  * ```
  */
 class EngineRunner(
-    private val compiler: SnapshotCompiler = AdaptedSnapshotCompiler,
+    private val compiler: SnapshotCompiler = DocumentSnapshotCompiler,
     private val engine: FlatEngine = CoSecFlatEngine,
 ) : ScenarioRunner {
     override fun run(scenario: Scenario): Outcome {

@@ -1,0 +1,182 @@
+{
+  "rules": [
+    "IDX-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A policy of 21 statements, indexed: the one DENY for the request's action is found and decides over the ALLOW of another policy.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "many",
+          "statements": [
+            {
+              "name": "s0",
+              "effect": "allow",
+              "action": "order:op0",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s1",
+              "effect": "allow",
+              "action": "order:op1",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s2",
+              "effect": "allow",
+              "action": "order:op2",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s3",
+              "effect": "allow",
+              "action": "order:op3",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s4",
+              "effect": "allow",
+              "action": "order:op4",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s5",
+              "effect": "allow",
+              "action": "order:op5",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s6",
+              "effect": "allow",
+              "action": "order:op6",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s7",
+              "effect": "allow",
+              "action": "order:op7",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s8",
+              "effect": "allow",
+              "action": "order:op8",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s9",
+              "effect": "allow",
+              "action": "order:op9",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s10",
+              "effect": "allow",
+              "action": "order:op10",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s11",
+              "effect": "allow",
+              "action": "order:op11",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s12",
+              "effect": "allow",
+              "action": "order:op12",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "deny-read",
+              "effect": "deny",
+              "action": "order:read",
+              "resource": "order/**"
+            },
+            {
+              "name": "s13",
+              "effect": "allow",
+              "action": "order:op13",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s14",
+              "effect": "allow",
+              "action": "order:op14",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s15",
+              "effect": "allow",
+              "action": "order:op15",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s16",
+              "effect": "allow",
+              "action": "order:op16",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s17",
+              "effect": "allow",
+              "action": "order:op17",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s18",
+              "effect": "allow",
+              "action": "order:op18",
+              "resource": "order/{id}"
+            },
+            {
+              "name": "s19",
+              "effect": "allow",
+              "action": "order:op19",
+              "resource": "order/{id}"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        },
+        {
+          "id": "g:many",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "many"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "many",
+      "statement": 13,
+      "name": "deny-read",
+      "via": {
+        "binding": "g:many",
+        "document": "platform"
+      }
+    }
+  }
+}

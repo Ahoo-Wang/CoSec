@@ -10,7 +10,7 @@
       "order-service": {
         "policies": [
           {
-            "id": "allow-all",
+            "id": "perm:order-service/allow-all",
             "statements": [
               {
                 "effect": "allow",
@@ -25,7 +25,7 @@
             "subject": "*",
             "app": "*",
             "space": "*",
-            "policy": "allow-all"
+            "policy": "perm:order-service/allow-all"
           }
         ]
       }

@@ -1,0 +1,64 @@
+{
+  "rules": [
+    "ALG-7"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The same policy's DENY matches the request's action: its condition is evaluated, fails, and the request is indeterminate.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "guarded",
+          "fault": "the condition cannot be read",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:read"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        },
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MatcherFailed",
+      "at": {
+        "policy": "guarded",
+        "statement": 0,
+        "via": {
+          "binding": "g:guarded",
+          "document": "platform"
+        }
+      },
+      "guard": true
+    }
+  }
+}

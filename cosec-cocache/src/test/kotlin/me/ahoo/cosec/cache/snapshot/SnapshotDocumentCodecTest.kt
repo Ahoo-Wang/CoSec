@@ -58,6 +58,13 @@ class SnapshotDocumentCodecTest {
         }
     }
 
+    /** Until the switch a store holds both RFC 0003's schema 1 and RFC 0004's schema 2; each compiler takes its own. */
+    @Test
+    fun decodesBothFormatsUntilTheSwitch() {
+        val platform = """{"schema":2,"revision":7,"publishedAt":"2026-10-21T08:00:00Z","policies":[],"bindings":[]}"""
+        SnapshotDocumentCodec.decode(platform.encodeToByteArray()).schema.assert().isEqualTo(2)
+    }
+
     @ParameterizedTest
     @ValueSource(
         strings = [
@@ -79,7 +86,7 @@ class SnapshotDocumentCodecTest {
             """{"schema":1,"revision":42,"publishedAt":1}""",
             """{"schema":99999999999,"revision":42,"publishedAt":"2026-10-21T08:00:00Z"}""",
             // a schema this version does not know
-            """{"schema":2,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""",
+            """{"schema":3,"revision":42,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}""",
             // not a document
             """[]""",
             """{"schema":1,"revision":42,"publishedAt":"2026-10-21T08:00:00Z"} {}""",

@@ -24,7 +24,8 @@ import java.time.Duration
 
 /**
  * The CoCache cache of snapshot documents (RFC 0003 §4.1): one Redis key per document,
- * `<keyPrefix>:snapshot:policies` and `<keyPrefix>:snapshot:app:<appId>`.
+ * `<keyPrefix>:snapshot:policies`, `<keyPrefix>:snapshot:platform`, `<keyPrefix>:snapshot:app:<appId>` and
+ * `<keyPrefix>:snapshot:tenant:<tenantId>`.
  *
  * It is the engine [CacheRuntime.create] returns, not an interface proxy (RFC 0003 §10): native images need no proxy
  * hint for it. Besides the cache, it carries what [RedisSnapshotDocumentStore] needs to subscribe to the namespace's
@@ -54,24 +55,34 @@ class PolicySnapshotCache internal constructor(
 }
 
 /**
- * Explicit key encoding (RFC 0003 §10): `policies` and `app:<appId>`. `KeyEncoder.ofToString()` would need a reflection
- * hint, and would tie the Redis layout to [SnapshotKey.toString].
+ * Explicit key encoding (RFC 0003 §10, RFC 0004 §7.1): `platform`, `app:<appId>`, `tenant:<tenantId>` and RFC 0003's
+ * `policies`. `KeyEncoder.ofToString()` would need a reflection hint, and would tie the Redis layout to
+ * [SnapshotKey.toString].
  */
 object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
     const val POLICIES = "policies"
+    const val PLATFORM = "platform"
     const val APP_PREFIX = "app:"
+    const val TENANT_PREFIX = "tenant:"
 
     override fun encode(key: SnapshotKey): String = when (key) {
         SnapshotKey.Policies -> POLICIES
+        SnapshotKey.Platform -> PLATFORM
         is SnapshotKey.App -> APP_PREFIX + key.appId
+        is SnapshotKey.Tenant -> TENANT_PREFIX + key.tenantId
     }
 
-    /** The key [encoded] names, or null when it names none, such as an invalid app id. */
+    /** The key [encoded] names, or null when it names none, such as an invalid app or tenant id. */
     fun decode(encoded: String): SnapshotKey? = when {
         encoded == POLICIES -> SnapshotKey.Policies
+        encoded == PLATFORM -> SnapshotKey.Platform
         encoded.startsWith(APP_PREFIX) -> encoded.substring(APP_PREFIX.length)
             .takeIf { SnapshotKey.App.isValidAppId(it) }
             ?.let { SnapshotKey.App(it) }
+
+        encoded.startsWith(TENANT_PREFIX) -> encoded.substring(TENANT_PREFIX.length)
+            .takeIf { SnapshotKey.Tenant.isValidTenantId(it) }
+            ?.let { SnapshotKey.Tenant(it) }
 
         else -> null
     }

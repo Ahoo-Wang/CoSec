@@ -14,23 +14,61 @@
 package me.ahoo.cosec.snapshot
 
 import me.ahoo.cosec.api.context.request.AppId
+import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.scope.ScopeResolver
 
 /**
- * The key of a snapshot document (RFC 0003 §3.2). Phase 4 replaces both kinds with platform and tenant documents.
+ * The key of a snapshot document.
  *
- * The two kinds never reference each other, so each is read and versioned on its own.
+ * - [Platform], [App] and [Tenant] hold the 8.0 documents (RFC 0004 §7.1, schema 2): app and tenant documents may name
+ *   platform policies, never the other way round, and each is read and versioned on its own.
+ * - [Policies], with [App] in schema 1, is RFC 0003's 7.0-shaped pair (§3.2), removed at the switch (RFC 0008 §4.2).
  */
 sealed interface SnapshotKey {
     val kind: SnapshotKind
 
-    /** Every policy, global or not. Every request needs it, so it is prewarmed and never evicted. */
+    /** The platform document: platform policies and bindings. Every request needs it: prewarmed, never evicted. */
+    data object Platform : SnapshotKey {
+        override val kind: SnapshotKind get() = SnapshotKind.PLATFORM
+
+        override fun toString(): String = "platform"
+    }
+
+    /** One tenant's own policies and bindings. Loaded on demand and evicted least recently used. */
+    data class Tenant(val tenantId: String) : SnapshotKey {
+        init {
+            require(isValidTenantId(tenantId)) {
+                "Tenant id [$tenantId] must not be blank or [${Match.WILDCARD}], contain '${App.APP_ID_SEPARATOR}' or a " +
+                    "control character, or exceed ${ScopeResolver.MAX_APP_ID_LENGTH} characters."
+            }
+        }
+
+        override val kind: SnapshotKind get() = SnapshotKind.TENANT
+
+        override fun toString(): String = "tenant:$tenantId"
+
+        companion object {
+            /**
+             * A tenant id names exactly one Redis key: the rule of a declared app id (`ScopeResolver.isValidAppId`, #1024:
+             * not blank, not `*`, no `:`, bounded length) and no control characters, so no id can reach another key,
+             * a key pattern or a log line it does not own. `(platform)` and `(0)` are valid and encoded as they are.
+             */
+            fun isValidTenantId(tenantId: String): Boolean =
+                ScopeResolver.isValidAppId(tenantId) && tenantId.none { it.isISOControl() }
+        }
+    }
+
+    /** 7.0-shaped: every policy, global or not. Every request needs it, so it is prewarmed and never evicted. */
     data object Policies : SnapshotKey {
         override val kind: SnapshotKind get() = SnapshotKind.POLICIES
 
         override fun toString(): String = "policies"
     }
 
-    /** One app's permissions and its role grants in every space. Loaded on demand and evicted least recently used. */
+    /**
+     * One app's document, loaded on demand and evicted least recently used: in schema 2 its catalog, permission
+     * policies and role bindings; in RFC 0003's schema 1 its permissions and role grants.
+     */
     data class App(val appId: AppId) : SnapshotKey {
         init {
             require(
@@ -55,4 +93,6 @@ sealed interface SnapshotKey {
 enum class SnapshotKind {
     POLICIES,
     APP,
+    PLATFORM,
+    TENANT,
 }

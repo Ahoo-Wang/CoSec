@@ -34,6 +34,8 @@ object DocumentFormats {
     const val APP_PERMISSION = "cosec-app-permission"
     const val RATE_LIMIT_RULE = "rate-limit-rule"
     const val SNAPSHOT_DOCUMENT = "cosec-snapshot-document"
+    const val BINDING = "cosec-binding"
+    const val CATALOG = "cosec-catalog"
     const val PROBLEM = "problem"
 
     /** Where the files are published; their `$id`s. */
@@ -393,17 +395,28 @@ object DocumentFormats {
         ),
     )
 
+    /** The 8.0 binding and catalog files, and the definitions of `schema: 2` documents ([PolicyDocumentFormats]). */
+    val bindingSchema: SchemaFile get() = PolicyDocumentFormats.bindingSchema
+    val catalogSchema: SchemaFile get() = PolicyDocumentFormats.catalogSchema
+
     val snapshotDocumentSchema = SchemaFile(
         name = SNAPSHOT_DOCUMENT,
         title = "CoSec Snapshot Document Schema",
-        description = "The body of a stored snapshot document (RFC 0003): the policies document or an app's document. " +
-            "Ids must be unique and an app document's app permission must name the app it is stored under.",
-        root = AnyOf(listOf(ref(SNAPSHOT_DOCUMENT, "policiesDocument"), ref(SNAPSHOT_DOCUMENT, "appDocument"))),
-        definitions = mapOf(
+        description = "The body of a stored snapshot document: a platform, app or tenant document (RFC 0004 §7.1, " +
+            "schema 2), or until the switch RFC 0003's policies document or app document (schema 1). Ids must be unique.",
+        root = AnyOf(
+            listOf(
+                ref(SNAPSHOT_DOCUMENT, "document"),
+                ref(SNAPSHOT_DOCUMENT, "appDocument"),
+                ref(SNAPSHOT_DOCUMENT, "policiesDocument"),
+                ref(SNAPSHOT_DOCUMENT, "legacyAppDocument"),
+            ),
+        ),
+        definitions = PolicyDocumentFormats.documentDefinitions + mapOf(
             "policiesDocument" to ObjectType(
                 headerFields + Field("policies", ArrayType(ref(POLICY)), required = true),
             ),
-            "appDocument" to ObjectType(
+            "legacyAppDocument" to ObjectType(
                 headerFields + listOf(
                     Field("appPermission", ref(APP_PERMISSION), required = true),
                     Field(
@@ -482,6 +495,8 @@ object DocumentFormats {
             appPermissionSchema,
             rateLimitRuleSchema,
             snapshotDocumentSchema,
+            bindingSchema,
+            catalogSchema,
             problemSchema,
         )
 

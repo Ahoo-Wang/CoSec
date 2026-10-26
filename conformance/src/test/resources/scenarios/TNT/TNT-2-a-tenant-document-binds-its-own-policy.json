@@ -1,0 +1,46 @@
+{
+  "rules": [
+    "TNT-2"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The tenant document binds a policy of its own.",
+  "documents": {
+    "platform": {},
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "own-read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "t",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "own-read"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "own-read",
+      "statement": 0,
+      "via": {
+        "binding": "t",
+        "document": "tenant"
+      }
+    }
+  }
+}

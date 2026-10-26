@@ -10,7 +10,7 @@
       "order-service": {
         "policies": [
           {
-            "id": "perm-order-service",
+            "id": "perm:order-service/perm-order-service",
             "statements": [
               {
                 "effect": "allow",
@@ -27,14 +27,14 @@
             },
             "app": "order-service",
             "space": "*",
-            "policy": "perm-order-service"
+            "policy": "perm:order-service/perm-order-service"
           }
         ]
       },
       "billing": {
         "policies": [
           {
-            "id": "perm-billing",
+            "id": "perm:billing/perm-billing",
             "statements": [
               {
                 "effect": "allow",
@@ -51,7 +51,7 @@
             },
             "app": "billing",
             "space": "*",
-            "policy": "perm-billing"
+            "policy": "perm:billing/perm-billing"
           }
         ]
       }
@@ -68,7 +68,7 @@
   "expect": {
     "decision": "Permit",
     "by": {
-      "policy": "perm-billing",
+      "policy": "perm:billing/perm-billing",
       "statement": 0,
       "via": {
         "binding": "r:billing",

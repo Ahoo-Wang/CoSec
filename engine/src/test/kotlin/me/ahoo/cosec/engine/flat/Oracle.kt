@@ -31,7 +31,8 @@ import me.ahoo.cosec.model.decision.StatementRef
  * of a [FlatCase], without the index, and reading the fixture statements' behaviors instead of evaluating them. A
  * statement matches when its action does, then the policy condition, then its condition (RFC 0005 §6.1): a policy
  * condition is reached only through a statement whose action matches. Policy ids resolve by RFC 0007 §3.1 N2: an id
- * the tenant and the platform both define is ambiguous, whatever else is true.
+ * the tenant and the platform both define is ambiguous, whatever else is true, unless both have the same content (then
+ * it resolves to the tenant's copy).
  */
 object Oracle {
     class Enumeration(
@@ -82,7 +83,7 @@ object Oracle {
                     continue
                 }
                 val id = binding.policy.value
-                if (kind == DocumentKind.TENANT && document.defines(id) && case.platform.defines(id)) {
+                if (kind == DocumentKind.TENANT && differs(document.find(id), case.platform.find(id))) {
                     ambiguous += id
                     continue
                 }
@@ -95,11 +96,15 @@ object Oracle {
             }
         }
 
+        /** Both layers define the id, with different content (RFC 0007 N2). */
+        private fun differs(tenant: CompiledPolicy?, platform: CompiledPolicy?): Boolean =
+            tenant != null && platform != null && !tenant.sameContent(platform)
+
         fun attach(tenant: RawDocument?, id: PolicyId) {
             val inTenant = tenant?.find(id.value)
             val inPlatform = case.platform.find(id.value)
             when {
-                inTenant != null && inPlatform != null -> ambiguous += id.value
+                differs(inTenant, inPlatform) -> ambiguous += id.value
                 inTenant == null && inPlatform == null -> missing += id.value
                 else -> {
                     val policy = checkNotNull(inTenant ?: inPlatform)
