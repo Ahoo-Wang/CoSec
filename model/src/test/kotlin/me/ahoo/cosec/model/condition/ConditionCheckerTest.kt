@@ -259,6 +259,37 @@ class ConditionCheckerTest {
     }
 
     @Test
+    fun `attribute paths and time fields are bounded like literals`() {
+        val name = "a".repeat(1024 - "subject.attributes.".length)
+        checked(Condition.Exists("subject.attributes.$name"))
+        single(
+            Condition.Exists("subject.attributes.${name}a")
+        ).assert().isEqualTo(ConditionError("$.exists", "is 1025 bytes long, more than 1024"))
+        single(Condition.Eq("subject.id", Operand.Attr("http.header.${"x".repeat(2000)}"))).assert()
+            .isEqualTo(ConditionError("$.eq[1].attr", "is 2012 bytes long, more than 1024"))
+        single(Condition.Exists("x".repeat(1025))).message.assert().isEqualTo("is 1025 bytes long, more than 1024")
+
+        val long = "1".repeat(1025)
+        listOf(
+            Condition.Time(zone = long, daysOfWeek = listOf("MON")) to "$.time.zone",
+            Condition.Time(notBefore = long) to "$.time.notBefore",
+            Condition.Time(notAfter = long) to "$.time.notAfter",
+            Condition.Time(from = long, to = "18:00") to "$.time.from",
+            Condition.Time(from = "09:00", to = long) to "$.time.to",
+            Condition.Time(daysOfWeek = listOf("MON", long)) to "$.time.daysOfWeek[1]",
+        ).forEach { (condition, path) ->
+            single(condition).assert().isEqualTo(ConditionError(path, "is 1025 bytes long, more than 1024"))
+        }
+        checked(Condition.Time(daysOfWeek = List(1024) { "MON" }))
+        single(Condition.Time(daysOfWeek = List(1025) { "MON" }))
+            .assert().isEqualTo(ConditionError("$.time.daysOfWeek", "has 1025 values, more than 1024"))
+        // The zone resolver never sees an oversized id.
+        val resolver = ZoneResolver { error("resolved $it") }
+        single(Condition.Time(zone = long, daysOfWeek = listOf("MON")), ConditionChecker(zones = resolver))
+            .path.assert().isEqualTo("$.time.zone")
+    }
+
+    @Test
     fun `cost is bounded`() {
         val time = Condition.Time(daysOfWeek = listOf("MON"))
         checked(Condition.Or(List(31) { time })).cost.assert().isEqualTo(1 + 31 * 8)

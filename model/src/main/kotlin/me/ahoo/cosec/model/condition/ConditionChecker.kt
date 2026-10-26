@@ -99,7 +99,7 @@ class ConditionChecker(
                 is Condition.Contains -> contains(condition, path)
                 is Condition.Prefix -> prefix(condition, path)
                 is Condition.Cidr -> cidr(condition, path)
-                is Condition.Time -> TimeChecker(path) { at, message -> error(at, message) }.check(condition, zones)
+                is Condition.Time -> TimeChecker(path, limits, this::error).check(condition, zones)
                 is Condition.Exists -> exists(condition, path)
                 is Condition.And -> group(condition.conditions, "$path.and", depth, isAnd = true)
                 is Condition.Or -> group(condition.conditions, "$path.or", depth, isAnd = false)
@@ -297,8 +297,11 @@ class ConditionChecker(
             return false
         }
 
-        private fun attribute(path: String, at: String): Attribute? =
-            Attribute.parse(path) ?: null.also { error(at, "unknown attribute `$path`") }
+        /** Paths take names (`subject.attributes.<name>`), so they are bounded like literals. */
+        private fun attribute(path: String, at: String): Attribute? {
+            string(path, at) ?: return null
+            return Attribute.parse(path) ?: null.also { error(at, "unknown attribute `$path`") }
+        }
 
         private fun strings(values: List<Literal>, path: String, attribute: Attribute): List<String>? {
             val strings = values.mapIndexed { i, value ->
