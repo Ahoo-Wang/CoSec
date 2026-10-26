@@ -16,6 +16,9 @@ package me.ahoo.cosec.engine.flat
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.ConditionInput
+import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.scope.Scope
 
@@ -29,7 +32,8 @@ interface FlatEngine {
     /**
      * Decides [request] against [snapshot]. The decision never depends on [trace], nor on the order of the candidates.
      *
-     * An [Exception] thrown by a condition or statement is an error of that statement; an [Error] propagates. Throws
+     * An [Exception] thrown while matching a statement (a path that does not decode, a host attribute read that breaks
+     * the [ConditionInput] contract) is an error of that statement; an [Error] propagates. Throws
      * [IllegalArgumentException] when [snapshot] holds an app or tenant document of another scope than the request's.
      */
     fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel = TraceLevel.OFF): FlatEvaluation
@@ -38,20 +42,38 @@ interface FlatEngine {
 /**
  * What one evaluation over bindings reads besides the snapshot.
  *
- * Until the request model changes (RFC 0004 §4.1, PR-7), [request] is what the adapted 7.x matchers read, and the
- * principal's id and whether it is authenticated come from its subject. The rest of that subject (tenant, roles,
- * policies, root) is not read: [scope] and [memberships] replace it. The tenant comes from [scope] only, which is the
- * subject's for an authenticated principal and the default tenant for an anonymous one.
+ * Until the request model changes (RFC 0006), [request] holds the action, the resource, the environment and the
+ * principal's id, attributes and whether it is authenticated. The rest of its subject (tenant, roles, policies, root)
+ * is not read: [scope] and [memberships] replace it. The tenant comes from [scope] only, which is the subject's for
+ * an authenticated principal and the default tenant for an anonymous one.
+ *
+ * Conditions read the request's attributes (RFC 0005 §3.2). The engine answers those it holds itself from these
+ * fields; [attributes] answers the rest (`http.*`, `request.attributes.*`) and is never asked for the others.
  */
 class FlatRequest(
     val request: AuthzRequest,
     /** Resolved by `ScopeResolver`: its tenant is the principal's, its roles those in the request's space. */
     val scope: Scope,
-    /** Only the attachments are read, and only for an authenticated principal. */
+    /** The attachments, for an authenticated principal, and the roles in every space, for `subject.roles`. */
     val memberships: Memberships,
-    /** The request time in epoch milliseconds, for binding expiry. The engine reads no clock. */
+    /** The request time in epoch milliseconds, for binding expiry and `environment.time`. The engine reads no clock. */
     val time: Long,
+    /** The host's attributes. Must keep the [ConditionInput] contract: reads never throw. */
+    val attributes: ConditionInput = AbsentAttributes,
 )
+
+/** A host that has no attributes of its own: every read is absent. */
+object AbsentAttributes : ConditionInput {
+    override fun string(attribute: Attribute): String? = null
+
+    override fun bool(attribute: Attribute): Boolean? = null
+
+    override fun stringSet(attribute: Attribute): Set<String>? = null
+
+    override fun ip(attribute: Attribute): IpAddress? = null
+
+    override fun time(attribute: Attribute): Long = ConditionInput.NO_TIME
+}
 
 /** [trace] is null at [TraceLevel.OFF]. */
 class FlatEvaluation(val decision: Decision, val trace: FlatTrace?)

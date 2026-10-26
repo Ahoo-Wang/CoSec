@@ -15,10 +15,12 @@ package me.ahoo.cosec.engine.pattern
 
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
+import org.junit.jupiter.api.Assertions.assertTimeoutPreemptively
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import org.junit.jupiter.params.provider.ValueSource
+import java.time.Duration
 
 /** Examples of Spring's semantics; `HttpPathPatternParityTest` in `cosec-core` compares against Spring itself. */
 class HttpPathPatternTest {
@@ -245,5 +247,19 @@ class HttpPathPatternTest {
     fun `many runs in one segment stay polynomial`() {
         val segment = "a".repeat(500)
         HttpPathPattern.compile("/*a*a*a*a*a*a*a*b").matches(HttpPath.parse("/$segment")).assert().isFalse()
+    }
+
+    /** Review F4 of #1040: deciding a miss is linear in the segment, so a 64 KB segment is no slower to refuse. */
+    @Test
+    fun `a long segment is refused in linear time`() {
+        val pattern = HttpPathPattern.compile("/*a*a*a*a*a*a*a*b")
+        val path = HttpPath.parse("/" + "a".repeat(65_536))
+        assertTimeoutPreemptively(Duration.ofSeconds(2)) {
+            pattern.matches(path).assert().isFalse()
+            pattern.match(path).assert().isNull()
+        }
+        // A segment that matches is still captured as the regular expression does.
+        HttpPathPattern.compile("/{x}a{y}b").match(HttpPath.parse("/" + "a".repeat(1_000) + "b"))!!["x"].assert()
+            .isEqualTo("a".repeat(999))
     }
 }

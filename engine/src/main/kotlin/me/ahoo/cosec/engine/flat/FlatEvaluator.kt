@@ -13,19 +13,25 @@
 
 package me.ahoo.cosec.engine.flat
 
-import me.ahoo.cosec.engine.Guard
-import me.ahoo.cosec.engine.Rule
-import me.ahoo.cosec.engine.RuleMatch
+import me.ahoo.cosec.engine.pattern.Captures
+import me.ahoo.cosec.engine.pattern.HttpPath
+import me.ahoo.cosec.engine.pattern.ResourceTarget
+import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.SpaceId
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.CheckedCondition
+import me.ahoo.cosec.model.condition.ConditionInput
+import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.StatementRef
 
 /**
- * One evaluation over bindings: the flat algorithm of RFC 0004 §6.1.
+ * One evaluation over bindings: the flat algorithm of RFC 0004 §6.1 over compiled statements (RFC 0005 §6).
  *
  * 1. The DENY pass visits every candidate's DENY statements. The first match is the decision: a DENY wins over errors,
  *    missing policies and documents that could not be read.
@@ -35,15 +41,23 @@ import me.ahoo.cosec.model.decision.StatementRef
  *    an implicit deny.
  *
  * So the decision depends on the set of candidates, never on their order (P8): only which statement is reported does.
+ * A candidate policy's statements are those its index gives (I1), each evaluated by [step].
  *
- * Untraced, it stops at the decision and records nothing. Besides itself and the decision, it allocates only for
- * policies with a condition (a small cache, so each condition runs at most once) and on error paths. It is the
- * [CandidateVisitor] of its own enumeration, so visiting allocates no visitor. [FlatTracingEvaluator] overrides only
- * [candidate], the step per candidate, so no trace code sits in the untraced one (see `Evaluator` for why).
+ * Untraced, it stops at the decision and records nothing (`ALG-7`). Besides itself and the decision, it allocates
+ * only for index lookups that merge several partitions, captures a condition reads, policies with a condition (a small
+ * cache, so each condition runs at most once), the role sets and address a condition reads, and on error paths. It is
+ * the [CandidateVisitor] of its own enumeration, the [ConditionInput] of every condition and the [IndexLookup] of every
+ * index, so none of those allocate. [FlatTracingEvaluator] overrides only [candidate], the step per candidate, so no
+ * trace code sits in the untraced one (see `Evaluator` for why).
  */
+@Suppress("TooManyFunctions")
 internal open class FlatEvaluator(protected val request: FlatRequest, protected val view: SnapshotView) :
-    CandidateVisitor {
+    CandidateVisitor,
+    ConditionInput,
+    IndexLookup {
     protected val authz: AuthzRequest = request.request
+    private val host: ConditionInput = request.attributes
+    protected val target: ResourceTarget = ResourceTarget(authz.resource)
 
     /** The effect whose statements the current pass evaluates. */
     protected var pass: Effect = Effect.DENY
@@ -59,14 +73,32 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     private var missing: MutableSet<PolicyId>? = null
     private var ambiguous: MutableSet<PolicyId>? = null
 
-    // Conditions evaluated so far, by identity, and their results; allocated on the first condition.
-    private var guards: Array<Guard?>? = null
+    // Policy conditions evaluated so far, by identity, and their results; allocated on the first condition.
+    private var guards: Array<CheckedCondition?>? = null
     private var guardResults: IntArray? = null
     private var guardErrors: Array<Throwable?>? = null
     private var guardCount = 0
 
     /** The error of the condition [guard] returned [GUARD_ERROR] for last. */
-    protected var guardError: Throwable? = null
+    private var guardError: Throwable? = null
+
+    /** The error of the last [step] that returned [ERROR] or [GUARD_FAILED]. */
+    protected var stepError: Throwable? = null
+
+    /** The captures of the statement whose condition is being evaluated. */
+    private var captures: Captures? = null
+
+    // The positions an index lookup collected, merged by [candidates]: the first list alone needs no buffer.
+    private var firstList: IntArray? = null
+    private var lists: Array<IntArray?>? = null
+    private var listCount = 0
+
+    private var pathState = PATH_UNPARSED
+    private var subjectRoles: Set<String>? = null
+    private var scopedRoles: Set<String>? = null
+    private var scopeRoles: Set<String>? = null
+    private var remoteIpParsed = false
+    private var remoteIp: IpAddress? = null
 
     fun evaluate(): Decision {
         val decision = denyPass()
@@ -106,39 +138,308 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             ambiguous?.let { add(Cause.AmbiguousPolicy(it)) }
         }
 
-    @Suppress("TooGenericExceptionCaught")
     override fun candidate(policy: CompiledPolicy, via: BindingRef): Boolean {
         val statements = policy.statements(pass)
         if (statements.isEmpty()) {
             return false
         }
-        val guard = policy.guard
-        if (guard != null) {
-            val result = guard(guard)
-            if (result != GUARD_MATCHED) {
-                if (result == GUARD_ERROR && pass === Effect.DENY) {
-                    failed(policy, statements[0], via, guardError!!, guard = true)
+        val index = policy.index(pass)
+        if (index == null) {
+            for (statement in statements) {
+                val next = visit(policy, statement, via)
+                if (next != NEXT_STATEMENT) {
+                    return next == DECIDED
                 }
-                return false
             }
+            return false
         }
-        for (statement in statements) {
-            val match: RuleMatch? = try {
-                statement.match(authz)
-            } catch (error: Exception) {
-                if (pass === Effect.DENY) failed(policy, statement, via, error, guard = false)
-                continue
-            }
-            // Compared rather than switched on: a `when` over the enum costs a table lookup per statement.
-            if (match === RuleMatch.MATCHED) {
-                matched = decide(policy, statement, via)
-                return true
-            }
-            if (match == null && pass === Effect.DENY) {
-                failed(policy, statement, via, noMatchResult(policy), guard = false)
+        for (position in candidates(index)) {
+            val next = visit(policy, statements[position], via)
+            if (next != NEXT_STATEMENT) {
+                return next == DECIDED
             }
         }
         return false
+    }
+
+    /**
+     * Evaluates [statement] and acts on the result: [DECIDED] on a match, [NEXT_POLICY] when the policy condition does
+     * not hold (none of the policy's statements can match), else [NEXT_STATEMENT].
+     */
+    private fun visit(policy: CompiledPolicy, statement: CompiledStatement, via: BindingRef): Int {
+        when (step(policy, statement)) {
+            MATCHED -> {
+                matched = decide(policy, statement, via)
+                return DECIDED
+            }
+
+            ERROR -> if (pass === Effect.DENY) failed(policy, statement, via, stepError!!, guard = false)
+            GUARD_FAILED -> {
+                if (pass === Effect.DENY) failed(policy, statement, via, stepError!!, guard = true)
+                return NEXT_POLICY
+            }
+
+            GUARD_MISS -> return NEXT_POLICY
+        }
+        return NEXT_STATEMENT
+    }
+
+    /**
+     * Evaluates [statement] of [policy]: its action, index keys, resource, the policy condition, then its condition,
+     * stopping at the first that does not hold (see [CompiledStatement]). On [ERROR] and [GUARD_FAILED], [stepError]
+     * is the error. An error that [catches] rejects propagates.
+     *
+     * The result depends only on the request, never on which statements were evaluated before: the policy condition's
+     * result is cached, and a failed resource defers to it.
+     */
+    @Suppress("TooGenericExceptionCaught", "ReturnCount")
+    protected fun step(policy: CompiledPolicy, statement: CompiledStatement): Int {
+        if (!statement.matchesAction(authz.action)) {
+            return ACTION_MISS
+        }
+        if (!statement.admits(this)) {
+            return CONDITION_MISS
+        }
+        var failure: Throwable? = null
+        val captures = try {
+            resource(statement)
+        } catch (thrown: Throwable) {
+            if (!catches(thrown)) {
+                throw thrown
+            }
+            failure = thrown
+            null
+        }
+        if (captures == null && failure == null) {
+            return RESOURCE_MISS
+        }
+        // Consulted even when the resource failed: a policy condition that does not hold rules out every statement of
+        // the policy, so the untraced evaluation may skip the rest of them and still decide as the trace does.
+        val guard = guardOf(policy)
+        if (guard != MATCHED) {
+            return guard
+        }
+        if (failure != null) {
+            stepError = failure
+            return ERROR
+        }
+        val condition = statement.condition ?: return MATCHED
+        this.captures = captures
+        return try {
+            if (condition.evaluate(this)) MATCHED else CONDITION_MISS
+        } catch (thrown: Throwable) {
+            if (!catches(thrown)) {
+                throw thrown
+            }
+            stepError = thrown
+            ERROR
+        } finally {
+            this.captures = null
+        }
+    }
+
+    /** [MATCHED] when [policy] has no condition or it holds, else [GUARD_MISS] or [GUARD_FAILED] with [stepError]. */
+    private fun guardOf(policy: CompiledPolicy): Int {
+        val guard = policy.condition ?: return MATCHED
+        return when (guard(guard)) {
+            GUARD_MISSED -> GUARD_MISS
+            GUARD_ERROR -> {
+                stepError = guardError
+                GUARD_FAILED
+            }
+
+            else -> MATCHED
+        }
+    }
+
+    /**
+     * The captures of the first resource pattern that matches ([Captures.NONE] when the condition reads none), or
+     * null. A pattern that fails (a path that does not decode) fails the statement unless another one matches.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun resource(statement: CompiledStatement): Captures? {
+        var failure: Exception? = null
+        for (pattern in statement.resources) {
+            try {
+                if (!statement.captures) {
+                    if (pattern.matches(target)) {
+                        return Captures.NONE
+                    }
+                } else {
+                    pattern.match(target)?.let { return it }
+                }
+            } catch (error: Exception) {
+                failure = failure ?: error
+            }
+        }
+        if (failure != null) {
+            throw failure
+        }
+        return null
+    }
+
+    /** Whether the index or the scan can skip [statement]: what [step] checks before calling host code. */
+    protected fun ruledOut(statement: CompiledStatement): Int =
+        when {
+            !statement.matchesAction(authz.action) -> ACTION_MISS
+            !statement.admits(this) -> CONDITION_MISS
+            else -> RESOURCE_MISS
+        }
+
+    /** The positions [index] gives for this request, sorted. */
+    protected fun candidates(index: StatementIndex): IntArray {
+        listCount = 0
+        index.lookup(this)
+        val count = listCount
+        if (count <= 1) {
+            val first = firstList
+            firstList = null
+            return first ?: EMPTY
+        }
+        val lists = lists!!
+        lists[0] = firstList
+        firstList = null
+        var total = 0
+        for (i in 0 until count) {
+            total += lists[i]!!.size
+        }
+        val merged = IntArray(total)
+        var at = 0
+        for (i in 0 until count) {
+            val list = lists[i]!!
+            list.copyInto(merged, at)
+            at += list.size
+            lists[i] = null
+        }
+        merged.sort()
+        var size = 0
+        for (i in merged.indices) {
+            if (size == 0 || merged[size - 1] != merged[i]) {
+                merged[size++] = merged[i]
+            }
+        }
+        return if (size == merged.size) merged else merged.copyOf(size)
+    }
+
+    override val action: Action get() = authz.action
+
+    override val resourceType: String get() = authz.resource.type
+
+    @Suppress("SwallowedException")
+    override fun decodedPath(): HttpPath? {
+        if (pathState == PATH_UNPARSED) {
+            pathState = try {
+                target.httpPath(true)
+                PATH_PARSED
+            } catch (malformed: IllegalArgumentException) {
+                // Matching the patterns fails the statements instead; the index only learns it cannot use the path.
+                PATH_MALFORMED
+            }
+        }
+        return if (pathState == PATH_PARSED) target.httpPath(true) else null
+    }
+
+    override fun indexValue(attribute: Attribute): String? = string(attribute)
+
+    override fun add(positions: IntArray) {
+        if (positions.isEmpty()) {
+            return
+        }
+        if (listCount == 0) {
+            firstList = positions
+            listCount = 1
+            return
+        }
+        var lists = lists
+        if (lists == null) {
+            lists = arrayOfNulls(INITIAL_LISTS)
+            this.lists = lists
+        } else if (listCount == lists.size) {
+            lists = lists.copyOf(listCount * 2)
+            this.lists = lists
+        }
+        lists[listCount++] = positions
+    }
+
+    /*
+     * The attributes of the request (RFC 0005 §3.2). The engine answers what it holds itself: the subject, the scope
+     * ScopeResolver checked and the bindings used, the action, the resource and the variables the statement captured,
+     * the request time and the blacklist flag. A host input cannot contradict them, nor make up a captured variable.
+     * The rest (headers, request attributes) comes from [FlatRequest.attributes].
+     */
+
+    override fun string(attribute: Attribute): String? =
+        when (attribute.kind) {
+            Attribute.Kind.SUBJECT_ID -> if (authz.subject.authenticated) authz.subject.id else null
+            Attribute.Kind.SUBJECT_TENANT, Attribute.Kind.SCOPE_TENANT -> request.scope.tenant.value
+            Attribute.Kind.SUBJECT_ATTRIBUTE -> authz.subject.attributes[attribute.name]?.toString()
+            Attribute.Kind.SCOPE_APP -> request.scope.app.value.takeUnless { it.isEmpty() }
+            Attribute.Kind.SCOPE_SPACE -> request.scope.space.value
+            Attribute.Kind.ENVIRONMENT_DEVICE -> authz.environment.deviceId.takeUnless { it.isEmpty() }
+            else -> target(attribute)
+        }
+
+    /** The action, the resource and the captures; the host for the rest. */
+    private fun target(attribute: Attribute): String? =
+        when (attribute.kind) {
+            Attribute.Kind.ACTION_SERVICE -> authz.action.namespace
+            Attribute.Kind.ACTION_VERB -> authz.action.verb
+            Attribute.Kind.RESOURCE_TYPE -> authz.resource.type
+            Attribute.Kind.RESOURCE_ID -> authz.resource.id
+            Attribute.Kind.RESOURCE_ATTRIBUTE -> authz.resource.attributes[attribute.name]
+            Attribute.Kind.RESOURCE_VAR -> captures?.get(attribute.name)
+            else -> host.string(attribute)
+        }
+
+    override fun bool(attribute: Attribute): Boolean? =
+        when (attribute.kind) {
+            Attribute.Kind.SUBJECT_AUTHENTICATED -> authz.subject.authenticated
+            Attribute.Kind.ENVIRONMENT_BLOCKED -> authz.environment.blocked
+            else -> host.bool(attribute)
+        }
+
+    override fun stringSet(attribute: Attribute): Set<String>? =
+        when (attribute.kind) {
+            Attribute.Kind.SUBJECT_ROLES -> subjectRoles ?: subjectRoles().also { subjectRoles = it }
+            Attribute.Kind.SUBJECT_SCOPED_ROLES -> scopedRoles ?: scopedRoles().also { scopedRoles = it }
+            Attribute.Kind.SCOPE_ROLES -> scopeRoles ?: request.scope.roles.mapTo(HashSet()) { it.value }
+                .also { scopeRoles = it }
+
+            else -> host.stringSet(attribute)
+        }
+
+    override fun ip(attribute: Attribute): IpAddress? {
+        if (attribute.kind != Attribute.Kind.ENVIRONMENT_IP) {
+            return host.ip(attribute)
+        }
+        if (!remoteIpParsed) {
+            remoteIp = IpAddress.parse(authz.environment.remoteIp)
+            remoteIpParsed = true
+        }
+        return remoteIp
+    }
+
+    override fun time(attribute: Attribute): Long =
+        if (attribute.kind == Attribute.Kind.ENVIRONMENT_TIME) request.time else host.time(attribute)
+
+    /** Bare role ids in any space. */
+    private fun subjectRoles(): Set<String> {
+        val roles = HashSet<String>()
+        for (spaceRoles in request.memberships.roles.values) {
+            spaceRoles.mapTo(roles) { it.value }
+        }
+        return roles
+    }
+
+    /** As the token claims them: `role` in the default space, `role@space` elsewhere. */
+    private fun scopedRoles(): Set<String> {
+        val roles = HashSet<String>()
+        for ((space, spaceRoles) in request.memberships.roles) {
+            for (role in spaceRoles) {
+                roles += if (space == SpaceId.DEFAULT) role.value else role.value + "@" + space.value
+            }
+        }
+        return roles
     }
 
     override fun expired(via: BindingRef.Bound) = Unit
@@ -161,7 +462,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
      * [catches] rejects propagates.
      */
     @Suppress("TooGenericExceptionCaught")
-    protected fun guard(guard: Guard): Int {
+    private fun guard(guard: CheckedCondition): Int {
         val guards = guards
         if (guards != null) {
             for (i in 0 until guardCount) {
@@ -173,7 +474,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         }
         var error: Throwable? = null
         val result = try {
-            if (guard.matches(authz)) GUARD_MATCHED else GUARD_MISSED
+            if (guard.evaluate(this)) GUARD_MATCHED else GUARD_MISSED
         } catch (thrown: Throwable) {
             if (!catches(thrown)) {
                 throw thrown
@@ -186,7 +487,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         return result
     }
 
-    private fun remember(guard: Guard, result: Int, error: Throwable?) {
+    private fun remember(guard: CheckedCondition, result: Int, error: Throwable?) {
         var guards = guards
         var results = guardResults
         if (guards == null || results == null) {
@@ -208,16 +509,22 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         guardCount++
     }
 
-    /** Whether an error thrown by a matcher is that matcher's error rather than the evaluation's. */
+    /** Whether an error thrown while evaluating is that statement's error rather than the evaluation's. */
     protected open fun catches(error: Throwable): Boolean = error is Exception
 
-    protected fun decide(policy: CompiledPolicy, statement: Rule, via: BindingRef): Decision {
+    protected fun decide(policy: CompiledPolicy, statement: CompiledStatement, via: BindingRef): Decision {
         val ref = ref(policy, statement, via)
         return if (pass === Effect.DENY) Decision.Deny(ref) else Decision.Permit(ref)
     }
 
     /** A DENY statement, or the condition reached through it, failed. Keeps the first. */
-    protected fun failed(policy: CompiledPolicy, statement: Rule, via: BindingRef, error: Throwable, guard: Boolean) {
+    protected fun failed(
+        policy: CompiledPolicy,
+        statement: CompiledStatement,
+        via: BindingRef,
+        error: Throwable,
+        guard: Boolean,
+    ) {
         if (errorAt == null) {
             errorAt = ref(policy, statement, via)
             errorInGuard = guard
@@ -225,17 +532,34 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         }
     }
 
-    /** A null from a Java matcher is a broken contract, which fails the statement: never a miss. */
-    protected fun noMatchResult(policy: CompiledPolicy): IllegalStateException =
-        IllegalStateException("A statement of policy ${policy.id} returned no match result")
-
-    protected fun ref(policy: CompiledPolicy, statement: Rule, via: BindingRef): StatementRef.Policy =
+    protected fun ref(policy: CompiledPolicy, statement: CompiledStatement, via: BindingRef): StatementRef.Policy =
         StatementRef.Policy(PolicyId(policy.id), statement.index, statement.name, via)
 
     protected companion object {
-        const val GUARD_MATCHED = 1
-        const val GUARD_MISSED = 2
-        const val GUARD_ERROR = 3
+        // What [step] found.
+        const val MATCHED = 0
+        const val ACTION_MISS = 1
+        const val CONDITION_MISS = 2
+        const val RESOURCE_MISS = 3
+        const val GUARD_MISS = 4
+        const val GUARD_FAILED = 5
+        const val ERROR = 6
+
+        // What [visit] asks for next.
+        private const val NEXT_STATEMENT = 0
+        private const val NEXT_POLICY = 1
+        private const val DECIDED = 2
+
+        private const val GUARD_MATCHED = 1
+        private const val GUARD_MISSED = 2
+        private const val GUARD_ERROR = 3
         private const val INITIAL_GUARDS = 4
+        private const val INITIAL_LISTS = 8
+
+        private const val PATH_UNPARSED = 0
+        private const val PATH_PARSED = 1
+        private const val PATH_MALFORMED = 2
+
+        private val EMPTY = IntArray(0)
     }
 }

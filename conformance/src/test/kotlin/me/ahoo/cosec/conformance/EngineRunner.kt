@@ -201,7 +201,7 @@ class EngineRunner(
             environment = Environment(ip.orEmpty(), "", device.orEmpty(), blocked),
             host = facts,
         )
-        return FlatRequest(authz, scope, memberships, time)
+        return FlatRequest(authz, scope, memberships, time, facts.host)
     }
 
     private fun resource(node: JsonNode?): Resource {

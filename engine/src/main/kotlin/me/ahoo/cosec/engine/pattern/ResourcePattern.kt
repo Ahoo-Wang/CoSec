@@ -31,13 +31,16 @@ sealed class ResourcePattern {
 
     abstract fun match(target: ResourceTarget): Captures?
 
-    fun matches(target: ResourceTarget): Boolean = match(target) != null
+    /** Whether the resource matches, without capturing: allocates nothing beyond parsing the path once. */
+    abstract fun matches(target: ResourceTarget): Boolean
 
     /** Every resource; captures nothing. */
     object AnyResource : ResourcePattern() {
         override val variableNames: List<String> = emptyList()
 
         override fun match(target: ResourceTarget): Captures = Captures.NONE
+
+        override fun matches(target: ResourceTarget): Boolean = true
 
         override fun toString(): String = "*"
     }
@@ -51,6 +54,9 @@ sealed class ResourcePattern {
             }
             return path.match(target.httpPath(path.decodeAndParseSegments))
         }
+
+        override fun matches(target: ResourceTarget): Boolean =
+            target.resource.type == HTTP_TYPE && path.matches(target.httpPath(path.decodeAndParseSegments))
 
         override fun equals(other: Any?): Boolean = other is Http && other.path == path
 
@@ -69,6 +75,9 @@ sealed class ResourcePattern {
     ) : ResourcePattern() {
         private val names = variableNames.toTypedArray()
 
+        /** A type alone, as `order`: it matches only the resource of that type with an empty id. */
+        val bare: Boolean get() = segments.isEmpty() && !rest
+
         override fun match(target: ResourceTarget): Captures? {
             val resource = target.resource
             if (resource.type != type) {
@@ -79,6 +88,11 @@ sealed class ResourcePattern {
                 return null
             }
             return if (values == null) Captures.NONE else Captures(names, values.requireNoNulls())
+        }
+
+        override fun matches(target: ResourceTarget): Boolean {
+            val resource = target.resource
+            return resource.type == type && matchId(resource.id, null)
         }
 
         private fun matchId(id: String, values: Array<String?>?): Boolean {

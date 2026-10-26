@@ -13,9 +13,6 @@
 
 package me.ahoo.cosec.engine.flat
 
-import me.ahoo.cosec.engine.Guard
-import me.ahoo.cosec.engine.Rule
-import me.ahoo.cosec.engine.RuleMatch
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
@@ -35,6 +32,9 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.CheckedCondition
+import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -46,7 +46,7 @@ import org.openjdk.jmh.annotations.Setup
 import org.openjdk.jmh.annotations.State
 
 /**
- * The flat engine over bindings (RFC 0004 §12.1), on test rules that compare the request path and allocate nothing.
+ * The flat engine over bindings (RFC 0004 §12.1), on compiled statements that match an `http:path:` literal.
  *
  * `bindings` is the number of bindings in the app document. Ten of them apply to the principal: role bindings spread
  * over its `roles` roles, each to a permission policy with one DENY and one ALLOW. The rest bind roles the principal
@@ -55,10 +55,11 @@ import org.openjdk.jmh.annotations.State
  *
  * Scenarios: `allow`, the ALLOW of the last applicable binding matches, so both passes visit every candidate; `deny`,
  * its DENY matches; `none`, an implicit deny. `guard`: `none` gives the permission policies no condition; `shared`
- * gives them one shared condition, as converted app conditions have, which the per-evaluation cache allocates for.
+ * gives them one shared condition that holds, as converted app conditions have, which the per-evaluation cache
+ * allocates for.
  *
  * Expected: throughput and B/op independent of `bindings` (the lookup is a hash, §6.4); B/op with `guard=none` only the
- * evaluator and, for `allow` and `deny`, the decision.
+ * evaluator, its resource target, the parsed path and, for `allow` and `deny`, the decision.
  */
 @State(org.openjdk.jmh.annotations.Scope.Benchmark)
 open class FlatEngineBenchmark {
@@ -79,15 +80,20 @@ open class FlatEngineBenchmark {
 
     @Setup
     fun setup() {
-        val condition = if (guard == "shared") AlwaysGuard else null
+        val compiler = PolicyCompiler()
+        val condition = if (guard == "shared") {
+            compiler.condition(PolicyId("app"), Condition.Eq("subject.authenticated", Literal.Bool(true)))
+        } else {
+            null
+        }
         val roleIds = List(roles) { "role$it" }
         val policies = (0 until APPLICABLE).map { i ->
-            CompiledPolicy(PolicyId("perm:$i"), condition, listOf(PathRule("/deny/$i", Effect.DENY), PathRule("/allow/$i", Effect.ALLOW)))
+            policy(compiler, "perm:$i", condition, path("/deny/$i", Effect.DENY), path("/allow/$i", Effect.ALLOW))
         }
-        val filler = CompiledPolicy(PolicyId("perm:filler"), condition, listOf(PathRule("/filler", Effect.ALLOW)))
+        val filler = policy(compiler, "perm:filler", condition, path("/filler", Effect.ALLOW))
         val roleBindings = (0 until APPLICABLE).map { i -> role("applies$i", roleIds[i % roles], policies[i].policyId) } +
             (0 until bindings - APPLICABLE).map { i -> role("other$i", "other$i", filler.policyId) }
-        val never = CompiledPolicy(PolicyId("global"), null, listOf(PathRule("/never", Effect.DENY)))
+        val never = policy(compiler, "global", null, path("/never", Effect.DENY))
         val platform = CompiledDocument.platform(
             listOf(never),
             listOf(Binding(BindingId("g"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), never.policyId)),
@@ -109,6 +115,19 @@ open class FlatEngineBenchmark {
 
     @Benchmark
     fun evaluate(): FlatEvaluation = CoSecFlatEngine.evaluate(request, view)
+
+    private fun path(path: String, effect: Effect) =
+        StatementSource(path, effect, listOf("http:*"), listOf(ResourceSource("http:path:$path")))
+
+    private fun policy(
+        compiler: PolicyCompiler,
+        id: String,
+        condition: CheckedCondition?,
+        vararg statements: StatementSource,
+    ): CompiledPolicy {
+        val compiled = statements.mapIndexed { index, source -> compiler.statement(PolicyId(id), index, source) }
+        return CompiledPolicy(PolicyId(id), condition, compiled)
+    }
 
     private fun role(id: String, role: String, policy: PolicyId) =
         Binding(
@@ -139,17 +158,4 @@ open class FlatEngineBenchmark {
     private companion object {
         const val APPLICABLE = 10
     }
-}
-
-private object AlwaysGuard : Guard {
-    override fun matches(request: AuthzRequest): Boolean = true
-}
-
-private class PathRule(private val path: String, override val effect: Effect) : Rule {
-    override val index: Int = if (effect == Effect.DENY) 0 else 1
-    override val name: String = path
-    override val id: String? = null
-
-    override fun match(request: AuthzRequest): RuleMatch =
-        if (request.resource.id == path) RuleMatch.MATCHED else RuleMatch.ACTION_MISS
 }
