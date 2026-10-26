@@ -23,6 +23,7 @@ import me.ahoo.cosec.engine.flat.PolicyCompiler
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.snapshot.SnapshotCompiler
 import me.ahoo.cosec.snapshot.SnapshotDocument
@@ -54,7 +55,7 @@ class DocumentCompileException(val document: String, val errors: List<CompileErr
  * against a given platform document, as a publisher does before it writes (RFC 0004 §7.4).
  */
 class PolicyDocumentCompiler(
-    private val policies: PolicyCompiler = PolicyCompiler(),
+    private val policies: PolicyCompiler = PolicyCompiler(ConditionChecker(zones = JavaZones.RESOLVER)),
     val principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
 ) : SnapshotCompiler<CompiledDocument> {
     init {

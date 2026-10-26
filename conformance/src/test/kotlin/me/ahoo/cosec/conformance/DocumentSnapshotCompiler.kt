@@ -70,7 +70,7 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
             .put("schema", PolicyDocumentCodec.SCHEMA)
             .put("revision", 1)
             .put("publishedAt", PUBLISHED_AT)
-        document.setAll<JsonNode>(body)
+        document.setAll(body)
         document.get("policies")?.values()?.forEach { faulting(it as ObjectNode) }
         return try {
             compiler.compile(PolicyDocumentCodec.decode(kind, owner, CoSecJsonSerializer.writeValueAsBytes(document)))

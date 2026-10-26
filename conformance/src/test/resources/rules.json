@@ -181,7 +181,7 @@
     {
       "id": "BND-7",
       "source": "RFC 0004 §4.4 (#1029 review)",
-      "statement": "When an attached or bound policy id names both a policy of the principal's tenant document and a platform policy, the request is Indeterminate(AmbiguousPolicy), unless a DENY matches; neither policy silently wins.",
+      "statement": "When an attached or bound policy id names both a policy of the principal's tenant document and a platform policy with different content, the request is Indeterminate(AmbiguousPolicy), unless a DENY matches; neither policy silently wins. The same content resolves (RFC 0007 N2).",
       "level": "engine",
       "pending": null
     },

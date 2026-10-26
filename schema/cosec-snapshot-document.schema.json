@@ -3,14 +3,444 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "anyOf": [
     {
-      "$ref": "#/definitions/policiesDocument"
+      "$ref": "#/definitions/document"
     },
     {
       "$ref": "#/definitions/appDocument"
+    },
+    {
+      "$ref": "#/definitions/policiesDocument"
+    },
+    {
+      "$ref": "#/definitions/legacyAppDocument"
     }
   ],
   "definitions": {
+    "actionPattern": {
+      "description": "`service:verb`, `service:*` or `*` (RFC 0005 §5.1).",
+      "examples": [
+        "*",
+        "order:*",
+        "order:read",
+        "http:GET",
+        "http:*"
+      ],
+      "type": "string"
+    },
     "appDocument": {
+      "additionalProperties": false,
+      "description": "An app document: its catalog, its permission policies `perm:<app>/<permission>` and role bindings.",
+      "properties": {
+        "bindings": {
+          "items": {
+            "$ref": "cosec-binding.schema.json"
+          },
+          "type": "array"
+        },
+        "catalog": {
+          "$ref": "cosec-catalog.schema.json"
+        },
+        "policies": {
+          "items": {
+            "$ref": "#/definitions/policy"
+          },
+          "type": "array"
+        },
+        "publishedAt": {
+          "examples": [
+            "2026-10-26T00:00:00Z"
+          ],
+          "format": "date-time",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "schema": {
+          "const": 2,
+          "description": "The document format version.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema",
+        "revision",
+        "publishedAt"
+      ],
+      "type": "object"
+    },
+    "attributeOperand": {
+      "additionalProperties": false,
+      "properties": {
+        "attr": {
+          "description": "An attribute of the catalog (RFC 0005 §3.2).",
+          "examples": [
+            "subject.id",
+            "subject.authenticated",
+            "scope.app",
+            "scope.space",
+            "scope.roles",
+            "resource.var.id",
+            "resource.type",
+            "environment.ip",
+            "http.header.x-trace",
+            "http.origin.host.labels",
+            "request.attributes.region"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "attr"
+      ],
+      "type": "object"
+    },
+    "condition": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "eq": {
+              "additionalItems": false,
+              "items": [
+                {
+                  "description": "An attribute of the catalog (RFC 0005 §3.2).",
+                  "examples": [
+                    "subject.id",
+                    "subject.authenticated",
+                    "scope.app",
+                    "scope.space",
+                    "scope.roles",
+                    "resource.var.id",
+                    "resource.type",
+                    "environment.ip",
+                    "http.header.x-trace",
+                    "http.origin.host.labels",
+                    "request.attributes.region"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "anyOf": [
+                    {
+                      "examples": [
+                        "admin",
+                        "order",
+                        "10.0.0.0/8"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "$ref": "#/definitions/attributeOperand"
+                    }
+                  ]
+                }
+              ],
+              "minItems": 2,
+              "type": "array"
+            },
+            "ignoreCase": {
+              "default": false,
+              "description": "ASCII case folding.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "eq"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "`[attribute, [literals]]`: the value is one of them; `[literal, set attribute]`: the set holds it.",
+          "properties": {
+            "in": {
+              "additionalItems": false,
+              "items": [
+                {
+                  "examples": [
+                    "subject.id",
+                    "subject.authenticated",
+                    "scope.app",
+                    "scope.space",
+                    "scope.roles",
+                    "resource.var.id",
+                    "resource.type",
+                    "environment.ip",
+                    "http.header.x-trace",
+                    "http.origin.host.labels",
+                    "request.attributes.region",
+                    "admin"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "anyOf": [
+                          {
+                            "examples": [
+                              "admin",
+                              "order",
+                              "10.0.0.0/8"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "boolean"
+                          }
+                        ]
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "description": "An attribute of the catalog (RFC 0005 §3.2).",
+                      "examples": [
+                        "subject.id",
+                        "subject.authenticated",
+                        "scope.app",
+                        "scope.space",
+                        "scope.roles",
+                        "resource.var.id",
+                        "resource.type",
+                        "environment.ip",
+                        "http.header.x-trace",
+                        "http.origin.host.labels",
+                        "request.attributes.region"
+                      ],
+                      "type": "string"
+                    }
+                  ]
+                }
+              ],
+              "minItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "in"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "ignoreCase": {
+              "default": false,
+              "description": "ASCII case folding.",
+              "type": "boolean"
+            },
+            "prefix": {
+              "additionalItems": false,
+              "items": [
+                {
+                  "description": "An attribute of the catalog (RFC 0005 §3.2).",
+                  "examples": [
+                    "subject.id",
+                    "subject.authenticated",
+                    "scope.app",
+                    "scope.space",
+                    "scope.roles",
+                    "resource.var.id",
+                    "resource.type",
+                    "environment.ip",
+                    "http.header.x-trace",
+                    "http.origin.host.labels",
+                    "request.attributes.region"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "examples": [
+                    "ad",
+                    "com.example"
+                  ],
+                  "type": "string"
+                }
+              ],
+              "minItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "prefix"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "cidr": {
+              "additionalItems": false,
+              "items": [
+                {
+                  "description": "An attribute of the catalog (RFC 0005 §3.2).",
+                  "examples": [
+                    "subject.id",
+                    "subject.authenticated",
+                    "scope.app",
+                    "scope.space",
+                    "scope.roles",
+                    "resource.var.id",
+                    "resource.type",
+                    "environment.ip",
+                    "http.header.x-trace",
+                    "http.origin.host.labels",
+                    "request.attributes.region"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "examples": [
+                      "10.0.0.0/8",
+                      "2001:db8::/32"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ],
+              "minItems": 2,
+              "type": "array"
+            }
+          },
+          "required": [
+            "cidr"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "time": {
+              "$ref": "#/definitions/time"
+            }
+          },
+          "required": [
+            "time"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "exists": {
+              "description": "An attribute of the catalog (RFC 0005 §3.2).",
+              "examples": [
+                "subject.id",
+                "subject.authenticated",
+                "scope.app",
+                "scope.space",
+                "scope.roles",
+                "resource.var.id",
+                "resource.type",
+                "environment.ip",
+                "http.header.x-trace",
+                "http.origin.host.labels",
+                "request.attributes.region"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "exists"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "and": {
+              "items": {
+                "$ref": "#/definitions/condition"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "and"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "or": {
+              "items": {
+                "$ref": "#/definitions/condition"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "or"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "not": {
+              "$ref": "#/definitions/condition"
+            }
+          },
+          "required": [
+            "not"
+          ],
+          "type": "object"
+        }
+      ],
+      "description": "A condition (RFC 0005 §3.1): one operator."
+    },
+    "document": {
+      "additionalProperties": false,
+      "description": "A platform or tenant document (RFC 0004 §7.1).",
+      "properties": {
+        "bindings": {
+          "items": {
+            "$ref": "cosec-binding.schema.json"
+          },
+          "type": "array"
+        },
+        "policies": {
+          "items": {
+            "$ref": "#/definitions/policy"
+          },
+          "type": "array"
+        },
+        "publishedAt": {
+          "examples": [
+            "2026-10-26T00:00:00Z"
+          ],
+          "format": "date-time",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "schema": {
+          "const": 2,
+          "description": "The document format version.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema",
+        "revision",
+        "publishedAt"
+      ],
+      "type": "object"
+    },
+    "legacyAppDocument": {
       "additionalProperties": false,
       "properties": {
         "appPermission": {
@@ -94,8 +524,183 @@
         "policies"
       ],
       "type": "object"
+    },
+    "policy": {
+      "additionalProperties": false,
+      "properties": {
+        "attachable": {
+          "default": false,
+          "description": "Whether a principal may attach it.",
+          "type": "boolean"
+        },
+        "condition": {
+          "$ref": "#/definitions/condition",
+          "description": "The policy condition; it cannot read captured variables."
+        },
+        "id": {
+          "examples": [
+            "deny-ip",
+            "perm:order-service/read"
+          ],
+          "type": "string"
+        },
+        "statements": {
+          "items": {
+            "$ref": "#/definitions/statement"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "statements"
+      ],
+      "type": "object"
+    },
+    "resource": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/resourcePattern"
+        },
+        {
+          "additionalProperties": false,
+          "description": "An `http:path:` pattern with options.",
+          "properties": {
+            "caseSensitive": {
+              "default": true,
+              "type": "boolean"
+            },
+            "decodeAndParseSegments": {
+              "default": true,
+              "type": "boolean"
+            },
+            "pattern": {
+              "$ref": "#/definitions/resourcePattern"
+            }
+          },
+          "required": [
+            "pattern"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "resourcePattern": {
+      "description": "`type/segment/...` or `http:path:<pattern>` (RFC 0005 §5.1, §5.2). A DENY cannot name a bare type.",
+      "examples": [
+        "order/{orderId}",
+        "order/**",
+        "http:path:/orders/{id}",
+        "http:path:/admin/**"
+      ],
+      "type": "string"
+    },
+    "statement": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/actionPattern"
+            },
+            {
+              "items": {
+                "$ref": "#/definitions/actionPattern"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          ]
+        },
+        "condition": {
+          "$ref": "#/definitions/condition"
+        },
+        "effect": {
+          "$ref": "definitions.schema.json#/definitions/effect"
+        },
+        "name": {
+          "examples": [
+            "read-orders"
+          ],
+          "type": "string"
+        },
+        "resource": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/resource"
+            },
+            {
+              "items": {
+                "$ref": "#/definitions/resource"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          ],
+          "description": "Absent: any resource."
+        }
+      },
+      "required": [
+        "effect",
+        "action"
+      ],
+      "type": "object"
+    },
+    "time": {
+      "additionalProperties": false,
+      "properties": {
+        "daysOfWeek": {
+          "items": {
+            "enum": [
+              "MON",
+              "TUE",
+              "WED",
+              "THU",
+              "FRI",
+              "SAT",
+              "SUN"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "from": {
+          "examples": [
+            "09:00"
+          ],
+          "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
+          "type": "string"
+        },
+        "notAfter": {
+          "examples": [
+            "2027-01-01T00:00:00Z"
+          ],
+          "type": "string"
+        },
+        "notBefore": {
+          "examples": [
+            "2026-01-01T00:00:00Z"
+          ],
+          "type": "string"
+        },
+        "to": {
+          "examples": [
+            "18:00"
+          ],
+          "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
+          "type": "string"
+        },
+        "zone": {
+          "examples": [
+            "UTC",
+            "Asia/Shanghai"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
     }
   },
-  "description": "The body of a stored snapshot document (RFC 0003): the policies document or an app's document. Ids must be unique and an app document's app permission must name the app it is stored under.",
+  "description": "The body of a stored snapshot document: a platform, app or tenant document (RFC 0004 §7.1, schema 2), or until the switch RFC 0003's policies document or app document (schema 1). Ids must be unique.",
   "title": "CoSec Snapshot Document Schema"
 }

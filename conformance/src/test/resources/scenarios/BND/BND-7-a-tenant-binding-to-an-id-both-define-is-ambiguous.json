@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "engine",
-  "description": "A tenant binding names shared, which both the tenant document and the platform define.",
+  "description": "A tenant binding names shared, which both the tenant document (an ALLOW) and the platform (a DENY) define, with different content.",
   "documents": {
     "platform": {
       "policies": [
@@ -21,7 +21,7 @@
           "id": "shared",
           "statements": [
             {
-              "effect": "allow",
+              "effect": "deny",
               "action": "*"
             }
           ]

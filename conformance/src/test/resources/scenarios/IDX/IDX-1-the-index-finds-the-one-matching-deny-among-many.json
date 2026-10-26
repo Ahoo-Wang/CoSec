@@ -172,6 +172,7 @@
     "by": {
       "policy": "many",
       "statement": 13,
+      "name": "deny-read",
       "via": {
         "binding": "g:many",
         "document": "platform"

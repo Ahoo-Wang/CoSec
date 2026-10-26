@@ -18,7 +18,7 @@
 | 1 | 安全修复与依赖升级（D1–D7、CoCache 6.6、CosId 4.0） | RFC 0001 §6 | 已合入，随 7.0.0 发布 | ✅ 完成 |
 | 2 | 纯函数决策引擎：`model/`、`engine/` | [RFC 0002](rfc/0002-pure-engine.md)，已确认 | PR-1 至 PR-5 已合入；PR-6 取消（并入切换） | ✅ 剩余工作并入切换 |
 | 3 | 策略快照分发 | [RFC 0003](rfc/0003-policy-snapshot.md)，已确认 | PR-1 至 PR-4 已合入；PR-5 取消，PR-6 并入切换 | ✅ 剩余工作并入切换 |
-| 4 | 统一模型：`Binding`、平台层/租户层、条件 AST、`service:verb`、编译执行、转换工具 | [RFC 0004](rfc/0004-unified-model.md) / [RFC 0005](rfc/0005-condition-ast.md)，已确认（2026-10-22） | RFC 0004 PR-1 至 PR-3、RFC 0005 PR-1 至 PR-3 已合入；RFC 0005 PR-4 打开中（#1051） | 🟡 进行中 |
+| 4 | 统一模型：`Binding`、平台层/租户层、条件 AST、`service:verb`、编译执行、转换工具 | [RFC 0004](rfc/0004-unified-model.md) / [RFC 0005](rfc/0005-condition-ast.md)，已确认（2026-10-22） | RFC 0004 PR-1 至 PR-3、RFC 0005 PR-1 至 PR-4 已合入；RFC 0004 PR-4 打开中 | 🟡 进行中 |
 | 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | [RFC 0006](rfc/0006-coroutine-pipeline.md)，已确认（2026-10-25） | PR-1 已合入（第 1 轮审查修复 #1031）；PR-2 打开中（#1044） | 🟡 进行中 |
 | 6 | 控制面 `cosec-control` | [RFC 0007](rfc/0007-control-plane.md)，已确认（2026-10-26，#1028） | PR-1（#1032）、PR-2（#1038）已合入 | 🟡 进行中 |
 | — | 规范一致性套件与切换 | [RFC 0008](rfc/0008-conformance-and-direct-build.md)，已确认（2026-10-26） | PR-1（套件）打开中；PR-3（7.0 基线）可以开工 | 🟡 进行中 |
@@ -84,9 +84,11 @@ key 过滤器、协调 `localMaxAge`）转入切换 PR（RFC 0008 §4.4）。
 | RFC 0005 PR-1 | 条件 AST：类型、成本上限、规范化与求值 | #1022 | ✅ 修复 #1035 | — |
 | RFC 0005 PR-2 | 索引键抽取与条件包含 `implies` | #1036 | ✅ 修复 #1037 | — |
 | RFC 0005 PR-3 | 不依赖 Spring 的动作与资源匹配 | #1040 | — | — |
-| RFC 0005 PR-4 | 编译语句与候选索引，扁平引擎改为评估编译后的语句；I1、I2、`ALG-7` 的性质；对 7.0 的吞吐预算 | 打开中（#1051） | — | — |
+| RFC 0005 PR-4 | 编译语句与候选索引，扁平引擎改为评估编译后的语句；I1、I2、`ALG-7` 的性质；对 7.0 的吞吐预算 | #1051 | — | — |
+| RFC 0004 PR-4 | `schema: 2` 的平台、应用、租户文档与编解码、文档编译与编译期检查、两层同名按内容解析（RFC 0007 N2）、格式描述、`DOC-*`/`TNT-2` 等场景 | 打开中 | — | — |
+| RFC 0004 PR-4 后续 | `SnapshotSource` 推广为一个共享槽加多个 LRU 族，加载平台、应用、租户文档并实现 `SnapshotViews`；`SNP-1`、`SNP-2` | 未开工（PR-4 之后，同一会话） | — | — |
 
-后续：RFC 0005 PR-5（路由映射）；RFC 0004 PR-4（文档与编译，改动）、PR-5（`cosec-migrate`，改动）；RFC 0005 PR-6（翻译 7.x 匹配器，改动）。
+后续：RFC 0004 PR-4 的后续（三文档的 `SnapshotSource`）；RFC 0005 PR-5（路由映射）；RFC 0004 PR-5（`cosec-migrate`，改动）；RFC 0005 PR-6（翻译 7.x 匹配器，改动）。
 依赖见 RFC 0008 §4.5。
 
 ---
@@ -138,5 +140,5 @@ PR-1 的登记表（`conformance/src/test/resources/rules.json`）有 64 条规�
 可以立即开工（按 RFC 0008 §4.5 的依赖顺序）：
 
 - RFC 0008 PR-3（7.0 基线）；PR-1 合入后 PR-2（变异检查）。
-- RFC 0005 PR-5，以及 RFC 0007 PR-6 的分析部分；RFC 0004 PR-4 在 RFC 0005 PR-4 合入后开工。
+- RFC 0005 PR-5，以及 RFC 0007 PR-6 的分析部分；RFC 0004 PR-5 在 RFC 0004 PR-4 合入后开工。
 - 核对已合入 PR 的两轮审查：RFC 0004 PR-2（#1029）、PR-3（#1027），RFC 0005 PR-1（#1022）、PR-2（#1036）；本表"—"表示尚无已合入的修复 PR。

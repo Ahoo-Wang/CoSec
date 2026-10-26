@@ -137,10 +137,10 @@ class PolicyDocumentCompilerTest {
             ""","policies":[{"id":"p","statements":[{"effect":"deny","action":"order","resource":"order"},
                                                     {"effect":"allow","action":"*","condition":{"eq":["nowhere","x"]}}]}]""",
         ).assert().containsExactly(
-            "$.policies[0].statements[0].action[0]: [order] is not a valid pattern at 0: an action is service:verb, service:* or *",
+            "$.policies[0].statements[0].action[0]: Invalid pattern [order] at 0: an action is service:verb, service:* or *",
             "$.policies[0].statements[0].resource[0]: a DENY on the bare type [order] covers only the order with an empty id; " +
                 "write [order/**] for every order, and add an eq on resource.id with the empty string for the empty id alone",
-            "$.policies[0].statements[1].condition.eq[0]: unknown attribute [nowhere]",
+            "$.policies[0].statements[1].condition.eq[0]: unknown attribute `nowhere`",
         )
     }
 

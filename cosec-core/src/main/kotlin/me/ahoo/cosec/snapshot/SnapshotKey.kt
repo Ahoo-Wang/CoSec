@@ -14,6 +14,8 @@
 package me.ahoo.cosec.snapshot
 
 import me.ahoo.cosec.api.context.request.AppId
+import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.scope.ScopeResolver
 
 /**
  * The key of a snapshot document.
@@ -36,7 +38,8 @@ sealed interface SnapshotKey {
     data class Tenant(val tenantId: String) : SnapshotKey {
         init {
             require(isValidTenantId(tenantId)) {
-                "Tenant id [$tenantId] must be non-empty and must not contain '${App.APP_ID_SEPARATOR}'."
+                "Tenant id [$tenantId] must not be blank or [${Match.WILDCARD}], contain '${App.APP_ID_SEPARATOR}' or a " +
+                    "control character, or exceed ${ScopeResolver.MAX_APP_ID_LENGTH} characters."
             }
         }
 
@@ -45,9 +48,13 @@ sealed interface SnapshotKey {
         override fun toString(): String = "tenant:$tenantId"
 
         companion object {
-            /** The same rule as an app id: `(platform)` and `(0)` are valid and encoded as they are. */
+            /**
+             * A tenant id names exactly one Redis key: the rule of a declared app id (`ScopeResolver.isValidAppId`, #1024:
+             * not blank, not `*`, no `:`, bounded length) and no control characters, so no id can reach another key,
+             * a key pattern or a log line it does not own. `(platform)` and `(0)` are valid and encoded as they are.
+             */
             fun isValidTenantId(tenantId: String): Boolean =
-                tenantId.isNotEmpty() && !tenantId.contains(App.APP_ID_SEPARATOR)
+                ScopeResolver.isValidAppId(tenantId) && tenantId.none { it.isISOControl() }
         }
     }
 

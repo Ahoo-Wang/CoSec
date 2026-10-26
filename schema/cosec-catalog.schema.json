@@ -1,0 +1,82 @@
+{
+  "$id": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/cosec-catalog.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "definitions": {
+    "group": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "examples": [
+            "Orders"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "examples": [
+            "order"
+          ],
+          "type": "string"
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/definitions/permission"
+          },
+          "type": "array"
+        },
+        "spaced": {
+          "default": false,
+          "description": "Granted per space; informational.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "permissions"
+      ],
+      "type": "object"
+    },
+    "permission": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "examples": [
+            "Read orders"
+          ],
+          "type": "string"
+        },
+        "id": {
+          "examples": [
+            "read",
+            "ship"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "examples": [
+            "Read"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "An app's permission catalog (RFC 0004 §4.9): for UIs and generators; it takes no part in evaluation.",
+  "properties": {
+    "groups": {
+      "items": {
+        "$ref": "#/definitions/group"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "groups"
+  ],
+  "title": "CoSec Catalog Schema",
+  "type": "object"
+}
