@@ -223,7 +223,7 @@ sealed class CheckedCondition(
                     day = (day + 6) % 7
                 }
             }
-            return days and (1 shl day) != 0
+            return (days and (1 shl day)) != 0
         }
 
         private companion object {
@@ -244,7 +244,7 @@ sealed class CheckedCondition(
                 notAfter?.let { fields += "\"notAfter\":${it.ceilMillis()}" }
                 fields += "\"zone\":${quote(zone.id)}"
                 if (days != DaysOfWeek.ALL) {
-                    fields += DaysOfWeek.NAMES.filterIndexed { i, _ -> days and (1 shl i) != 0 }
+                    fields += DaysOfWeek.NAMES.filterIndexed { i, _ -> (days and (1 shl i)) != 0 }
                         .joinToString(",", "\"daysOfWeek\":[", "]", transform = { quote(it) })
                 }
                 if (from >= 0) {

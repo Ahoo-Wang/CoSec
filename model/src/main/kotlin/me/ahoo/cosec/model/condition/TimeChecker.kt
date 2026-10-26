@@ -14,10 +14,18 @@
 package me.ahoo.cosec.model.condition
 
 /** Checks `time` as the 7.x `TimeConditionMatcher` validates its configuration, reporting errors to [error]. */
-internal class TimeChecker(private val path: String, private val error: (String, String) -> Unit) {
+internal class TimeChecker(
+    private val path: String,
+    private val limits: ConditionLimits,
+    private val error: (String, String) -> Unit,
+) {
     private var failed = false
 
     fun check(condition: Condition.Time, zones: ZoneResolver): CheckedCondition? {
+        bound(condition)
+        if (failed) {
+            return null
+        }
         val zoneId = condition.zone ?: "UTC"
         val zone = zones.resolve(zoneId)
         if (zone == null) {
@@ -45,6 +53,28 @@ internal class TimeChecker(private val path: String, private val error: (String,
             hasFrom && from == to -> fail(".to", "must differ from `from`: the window would be empty")
             notBefore != null && notAfter != null && notBefore >= notAfter ->
                 fail(".notAfter", "must be after notBefore")
+        }
+    }
+
+    /** The fields are literals: bounded before any is parsed, or reaches the host's zone resolver. */
+    private fun bound(condition: Condition.Time) {
+        length(condition.zone, ".zone")
+        length(condition.notBefore, ".notBefore")
+        length(condition.notAfter, ".notAfter")
+        length(condition.from, ".from")
+        length(condition.to, ".to")
+        val days = condition.daysOfWeek ?: return
+        if (days.size > limits.maxInValues) {
+            fail(".daysOfWeek", "has ${days.size} values, more than ${limits.maxInValues}")
+            return
+        }
+        days.forEachIndexed { i, day -> length(day, ".daysOfWeek[$i]") }
+    }
+
+    private fun length(text: String?, field: String) {
+        val bytes = if (text == null) 0 else ConditionChecker.utf8Length(text)
+        if (bytes > limits.maxLiteralBytes) {
+            fail(field, "is $bytes bytes long, more than ${limits.maxLiteralBytes}")
         }
     }
 
