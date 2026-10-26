@@ -497,7 +497,7 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 | RFC 0007 PR-9 库与 HTTP（改动） | RFC 0007 PR-5–PR-8；RFC 0006 PR-7 | 否 |
 | RFC 0008 PR-4 切换 | 以上全部；§3.9 | 否 |
 | 提前清理：L17、L31（§4.6.3） | — | **能**（不依赖切换；不做也可并入 PR-5） |
-| RFC 0008 PR-5 清理遗留代码（§4.6） | RFC 0008 PR-4；§6 Q9–Q15 的决定 | 否 |
+| RFC 0008 PR-5 清理遗留代码（§4.6） | RFC 0008 PR-4；§6 Q9–Q15 ✓（2026-10-26 批准） | 否 |
 | RFC 0008 PR-6 删除文档中的版本沿革（§4.6） | RFC 0008 PR-4 | 否（可与 PR-5 并行，文件不重叠） |
 | 8.0 RC（维护者决定） | RFC 0008 PR-5、PR-6；§3.9 的 RC 前提 | 否 |
 
@@ -518,7 +518,7 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 - **切换 PR**：依赖 7.x 路径，随 RFC 0008 PR-4 删除。描述被删代码的文档在同一个 PR 里修改（AGENTS.md：一个事实只有一处）。这些项并入 §4.4 的范围。
 - **清理 PR**：切换之后、任何 RC 之前的新 PR，见 §4.6.3。
 - **保留**：写明理由。
-- **维护者决定**：给出推荐，问题列在 §6 Q9–Q15。
+- **维护者决定**：给出推荐，问题列在 §6 Q9–Q15。2026-10-26 维护者已全部按推荐批准，下表的分类列写明了决定。
 
 #### 4.6.1 清单
 
@@ -546,16 +546,16 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 | L8 | 7.x JSON 格式的 Jackson 序列化器 | `cosec-core/.../serialization/`：`CoSecModule.kt`、`AbstractJsonStatementSerializer.kt` 与各个 `Json*Serializer.kt`（策略、语句、应用权限、权限组、匹配器、限流规则）；`cosec-core/src/main/resources/META-INF/services/tools.jackson.databind.JacksonModule` | 读写 7.x 的策略与应用权限 JSON。8.0 的文档由 `DocumentFormats` 描述的编解码器处理 | 切换 PR：`migrate/` 需要的读取部分搬进 `migrate/`，其余删除 | `verifySchemas`（`schema/` 只剩 8.0 格式） |
 | L9 | 建立在 7.x 数据模型上的访问分析 | `cosec-core/.../analysis/AccessAnalyzer.kt` | RFC 0007 §10.3 在 `control/` 中基于编译后的快照重写 `analyze`。旧实现建立在 `RequestMatcher` 上，`main` 中没有调用者 | 切换 PR | — |
 | L10 | `InternalIds` | `cosec-api/.../internal/InternalIds.kt` | `main` 中没有任何引用，只有 `cosec-core` 的 `InternalIdsTest` 用它 | 清理 PR（`cosec-api` 变更，见 §6 Q9） | G5 |
-| L11 | `cosec-api` 模块本身 | `cosec-api/` | RFC 0001 §4 设想由 `cosec-model` 取代"`cosec-api` 大部分"；RFC 0006 Q5 决定不改名现有模块。切换后还剩主体、token、认证、`SecurityContext`、审计事件、租户 | 维护者决定（§6 Q9）。推荐：保留为 8.0 的薄契约模块 | G5 |
+| L11 | `cosec-api` 模块本身 | `cosec-api/` | RFC 0001 §4 设想由 `cosec-model` 取代"`cosec-api` 大部分"；RFC 0006 Q5 决定不改名现有模块。切换后还剩主体、token、认证、`SecurityContext`、审计事件、租户 | 保留（§6 Q9，2026-10-26 批准）：作为 8.0 的薄契约模块；PR-5 删除切换后在 `cosec-api` 之外没有 `main` 引用的类型 | G5 |
 
 **(d) 死代码、只供测试的代码与过渡注释**
 
 | # | 项 | 路径 | 为什么是遗留 | 分类 | 守护 |
 |---|---|---|---|---|---|
-| L12 | 切换租户的认证 | `cosec-core/.../authentication/token/AbstractSwitchTenantAuthentication.kt`（含 `SwitchTenantCredentials`） | `main` 和测试里都没有使用者，`wiki/integration/authentication.md`、`wiki/architecture/extending.md` 却把它写成扩展点 | 维护者决定（§6 Q10）。推荐：补测试后保留 | — |
+| L12 | 切换租户的认证 | `cosec-core/.../authentication/token/AbstractSwitchTenantAuthentication.kt`（含 `SwitchTenantCredentials`） | `main` 和测试里都没有使用者，`wiki/integration/authentication.md`、`wiki/architecture/extending.md` 却把它写成扩展点 | 清理 PR（§6 Q10，2026-10-26 批准）：保留，PR-5 补上测试；没有测试不能留到 RC | — |
 | L13 | 只供测试使用的 `main` 代码 | `cosec-cocache/.../cache/CoSecCacheSpecs.kt` 的 `CacheRuntime.createCache(spec)` | 只有 `cosec-cocache` 的测试与 JMH 在用 | 清理 PR：移到测试源码集 | G5 |
 | L14 | 过渡阶段的注释 | 描述 6.x、7.0 行为或"直到某个 PR"的 KDoc：<br>`cosec-cocache/.../CoSecCacheSpecs.kt`（6.x 的 key；`POLICY_SNAPSHOT_CACHE_NAME` 的"before RFC 0003 PR-5"，该 PR 已取消）；<br>`cosec-spring-boot-starter/.../CoSecCacheAssembler.kt`；<br>`cosec-core/.../membership/MembershipClaims.kt`、`MembershipResolver.kt`；<br>`cosec-jwt/.../JwtTokenConverter.kt`（"until RFC 0004 PR-7"）；<br>`cosec-core/.../snapshot/SnapshotSource.kt`、`.../testkit/PolicyTestKit.kt`；<br>`model/` 的 `AuthzRequest.kt`、`Binding.kt`、`Decision.kt`、`Memberships.kt`、`decision/StatementRef.kt`、`scope/Scope.kt`、`scope/ScopeResolver.kt`、`condition/Condition.kt`、`CheckedCondition.kt`、`ConditionChecker.kt`、`Time.kt`、`TimeChecker.kt`；<br>`engine/.../flat/` 的 `FlatEngine.kt`、`FlatTrace.kt`、`CompiledPolicy.kt`、`CompiledDocument.kt`、`CandidateOrder.kt` | 这些注释解释的是代码与已删除的实现或已取消的 PR 之间的关系，切换之后不再成立 | 切换 PR 改掉它所删除对象的引用，其余由清理 PR 改写 | G2 |
-| L15 | 7.x 形式的 `PolicyTestKit` | `cosec-core/.../testkit/PolicyTestKit.kt`、`cosec-core/src/test/resources/cosec-policy-test/`；`wiki/policies/testing.md` | 面向用户的测试工具，读的是 7.x 的策略文件。RFC 0001 §4 规划了 `cosec-testkit`，但 RFC 0004–0008 都没有定下它在 8.0 的形态 | 维护者决定（§6 Q11）。推荐：切换 PR 中基于 8.0 文档重写，复用 §3.3 的场景格式 | — |
+| L15 | 7.x 形式的 `PolicyTestKit` | `cosec-core/.../testkit/PolicyTestKit.kt`、`cosec-core/src/test/resources/cosec-policy-test/`；`wiki/policies/testing.md` | 面向用户的测试工具，读的是 7.x 的策略文件。RFC 0001 §4 规划了 `cosec-testkit`，但 RFC 0004–0008 都没有定下它在 8.0 的形态 | 切换 PR（§6 Q11，2026-10-26 批准）：基于 8.0 文档重写，复用 §3.3 的场景格式；7.x 的形式删除 | — |
 | L16 | `MembershipClaims` 读取 `roles`/`policies` 声明 | `cosec-core/.../membership/MembershipClaims.kt` | 注释给出的理由是"不需要重新签发 token" | 保留：`roles`/`policies` 是 RFC 0004 §4.5.1 定下的 8.0 声明格式，不是兼容读取；只按 L14 改写注释 | `MEM-1` |
 
 **(e) 构建与依赖**
@@ -585,7 +585,7 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 
 | # | 项 | 路径 | 为什么是遗留 | 分类 | 守护 |
 |---|---|---|---|---|---|
-| L30 | 版本号 | `gradle.properties` 的 `version=7.0.0` | `main` 是 8.0 线，版本号仍是 7.0.0 | 维护者决定（§6 Q13）。推荐：清理 PR 中改为 `8.0.0-SNAPSHOT` | — |
+| L30 | 版本号 | `gradle.properties` 的 `version=7.0.0` | `main` 是 8.0 线，版本号仍是 7.0.0 | 清理 PR（§6 Q13，2026-10-26 批准）：改为 `8.0.0-SNAPSHOT` | — |
 | L31 | 指向不存在目录的 glob | `.github/labeler.yml`（`area: docs` 中的 `document/**`）、`codecov.yml`（`ignore` 中的 `document/.*`）、`.github/workflows/codecov.yml`（`paths-ignore` 中的 `document/**`） | 旧的文档目录，现在是 `wiki/` | 清理 PR；可以提前做（§4.6.3） | G6 |
 | L32 | 模块清单与 `settings.gradle.kts` 不一致 | `.github/labeler.yml` 没有 `cosec-micrometer`；`.github/ISSUE_TEMPLATE/bug_report.yml` 的模块下拉框没有 `cosec-micrometer`、`cosec-gateway-server`；`.github/workflows/integration-test.yml` 没有 `cosec-api`、`cosec-gateway`、`cosec-micrometer`、`cosec-ip2region`、`cosec-openapi` 的任务（它们的测试只经 `codecov.yml` 的 `codeCoverageReport` 运行）；`control/`、`conformance/`、`migrate/` 合入时也要补上 | 清单靠手工维护，已经漂移 | 清理 PR：切换之后按最终的模块集一次补齐 | G6 |
 | L33 | `k8s/` 示例的版本与文件名 | `k8s/cosec-gateway-deployment.yml`（镜像 `ghcr.io/ahoo-wang/cosec-gateway:7.0.0`）；`k8s/cosec-gateway-reids.yaml`（文件名拼错） | 版本与文件名的遗留 | 清理 PR：镜像标签与 L30 一起更新，文件改名为 `cosec-gateway-redis.yaml`。配置内容见 L26 | — |
@@ -599,7 +599,7 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 | L36 | `cosec-openapi` | `cosec-openapi/` | RFC 0005 PR-5 用它生成路由映射 | 保留 | — |
 | L37 | `cosec-gateway-server` | `cosec-gateway-server/` | §3.8 的端到端预算和 RFC 0001 §3.10 的 native image 都以它为对象；它不发布（AGENTS.md） | 保留 | — |
 | L38 | RFC 0001 §4 的新模块名（`cosec-http-*`、`cosec-store-redis`、`cosec-authn-*`、`cosec-observability-*`） | — | RFC 0006 Q5 已决定不改名 | 保留现有名字 | — |
-| L39 | `cosec-social` | `cosec-social/`（12 个 `main` 文件，依赖 JustAuth `1.16.7`）；starter 的 `.../authentication/social/CoSecSocialAuthenticationAutoConfiguration.kt` | RFC 0001 §4 列为 `cosec-authn-social`。但 RFC 0006 的 `Authenticator`（§5.3）没有涉及它：它在登录时用 OAuth 换取 token，不做请求认证 | 维护者决定（§6 Q14）。推荐：保留，8.0 不改造 | — |
+| L39 | `cosec-social` | `cosec-social/`（12 个 `main` 文件，依赖 JustAuth `1.16.7`）；starter 的 `.../authentication/social/CoSecSocialAuthenticationAutoConfiguration.kt` | RFC 0001 §4 列为 `cosec-authn-social`。但 RFC 0006 的 `Authenticator`（§5.3）没有涉及它：它在登录时用 OAuth 换取 token，不做请求认证 | 保留（§6 Q14，2026-10-26 批准）：8.0 不改造 | — |
 
 #### 4.6.2 守护
 
@@ -620,11 +620,11 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 | PR | 标题 | 范围 | 依赖 |
 |---|---|---|---|
 | 提前清理 | `chore(build): remove unused catalog entries and stale globs` | L17、L31，以及 G3、G6 | 无；不做也可以并入 PR-5 |
-| RFC 0008 PR-5 | `refactor!: remove legacy code before the 8.0 RC` | 分类为"清理 PR"的代码、构建与 CI 项：L3、L4、L10、L13、L14、L19、L20、L22、L30、L32、L33；"维护者决定"中决定为删除的项；守护 G1、G2、G5、G7；`upgrading.md` 写清 L4 的属性改名与删除的类型 | 切换 PR；§6 Q9–Q15 的决定 |
+| RFC 0008 PR-5 | `refactor!: remove legacy code before the 8.0 RC` | 分类为"清理 PR"的代码、构建与 CI 项：L3、L4、L10、L12（补测试）、L13、L14、L19、L20、L22、L30、L32、L33；守护 G1、G2、G5、G7；`upgrading.md` 写清 L4 的属性改名与删除的类型 | 切换 PR；§6 Q9–Q15 ✓ |
 | RFC 0008 PR-6 | `docs: remove version history from the docs before the 8.0 RC` | L25 与 G4 | 切换 PR；可以与 PR-5 并行（文件不重叠） |
 
-PR-5 如果太大，拆成两个可以并行的 PR：代码与 API（L3、L4、L10、L13、L14，`refactor!:`），构建、CI 与示例（L19、L20、L22、L30、L32、L33，`build:`）。
-分类为"切换 PR"的 L1、L2、L5–L9、L18、L21、L23、L24、L26 加入 §4.4 的范围，L14 中与被删对象有关的注释也一样。
+PR-5 如果太大，拆成两个可以并行的 PR：代码与 API（L3、L4、L10、L12、L13、L14，`refactor!:`），构建、CI 与示例（L19、L20、L22、L30、L32、L33，`build:`）。
+分类为"切换 PR"的 L1、L2、L5–L9、L15、L18、L21、L23、L24、L26 加入 §4.4 的范围，L14 中与被删对象有关的注释也一样。
 
 ---
 
@@ -661,17 +661,21 @@ RFC 0007 由 #1028 合入 `main` 后，本文在同一 PR 中补上了它的就�
 | Q7 | **7.0 基线的来源**（§3.8） | 每次比较都从 `v7.0.1` 标签在同一台机器上重跑，不使用跨机器存下来的数字；RFC 0008 PR-3 录一次作为参考 | 绝对吞吐依赖机器；同机交替测量是 RFC 0002 §7.2 已经确立的方法 |
 | Q8 | **回放覆盖不到的运行时行为**（线程、缓存时序、端到端延迟） | 不变：由各自的测试（BlockHound、真实 Redis、压测）覆盖；目标达成后由维护者决定是否在预发环境验证 | 这部分从来不依赖回放；本文不改变 RFC 0001 §6 的发布策略 |
 
-以下 Q9–Q15 由 §4.6 的 RC 前清理（2026-10-26 新增）提出，是清单中"维护者决定"的项，以及 AGENTS.md 要求先问的 `cosec-api` 与依赖变更。维护者决定之前，RFC 0008 PR-5 不开工。
+以下 Q9–Q15 由 §4.6 的 RC 前清理（2026-10-26 新增）提出，是清单中"维护者决定"的项，以及 AGENTS.md 要求先问的 `cosec-api` 与依赖变更。
 
-| # | 问题 | 推荐 | 理由 |
+**2026-10-26，维护者已批准 Q9–Q15，全部按推荐执行**（原文）：
+
+> Approve RFC 0008 §4.6 Q9–Q15 as recommended: keep cosec-api as a thin contract layer, keep tenant switching only with tests, rewrite PolicyTestKit on the conformance format, remove the unused dependencies (testcontainers, kapt alias, ognl, hamcrest; guava only where used), set main to 8.0.0-SNAPSHOT
+
+| # | 问题 | 决定 | 理由 |
 |---|---|---|---|
-| Q9 | **`cosec-api` 的去留**（§4.6 L10、L11；AGENTS.md 要求先问） | 保留模块，作为 8.0 的薄契约层（主体、token、认证、`SecurityContext`、审计事件、租户）。PR-5 删除切换之后在 `cosec-api` 之外没有 `main` 引用的类型，包括现在就没有引用的 `InternalIds`；并入 `model/` 留到 8.0 之后再议 | RFC 0006 Q5 已决定不改名、不合并现有模块。剩下的契约有外部实现者（token、认证），搬家只会多一次破坏性变更，换不来收益 |
-| Q10 | **切换租户认证**（§4.6 L12） | 补上测试后保留；如果维护者不打算支持"切换租户"，就在 PR-5 中连同 `authentication.md`、`extending.md` 的说明一起删除 | 它是写进文档的扩展点，但 `main` 和测试里都没有使用者，等于没人验证过。8.0 的租户与成员关系（RFC 0004 §4.5）改变了它的前提 |
-| Q11 | **`PolicyTestKit` 的 8.0 形态**（§4.6 L15） | 在切换 PR 中基于 8.0 文档重写，复用一致性套件的场景格式（§3.3）与 `engine` runner；7.x 的形式与 `cosec-policy-test/` 删除；暂不单独建 `cosec-testkit` 模块 | 用户的策略测试与规范场景是同一件事，两种格式只会分叉；RFC 0001 §4 的 `cosec-testkit` 是否拆成模块，可以等 runner 稳定之后再定 |
-| Q12 | **依赖变更**（§4.6 L17–L20；AGENTS.md 要求先问） | 全部删除：`testcontainers` 的版本与 BOM、`kotlin-kapt` 插件别名、`ognl`（随切换）、`hamcrest`（剩下的测试改用 FluentAssert 之后）；`guava` 不再作为每个模块的默认依赖，只在用到的模块里显式声明 | 都没有使用者，或者只有遗留的使用者；只删不加，版本不变 |
-| Q13 | **`main` 的版本号**（§4.6 L30） | PR-5 把 `gradle.properties` 改为 `8.0.0-SNAPSHOT`；RC 的版本号仍由发布 PR 按 CONTRIBUTING.md §7 设置 | `main` 是 8.0 线，`version=7.0.0` 会让本地构建与文档示例看起来像 7.0 |
-| Q14 | **`cosec-social`**（§4.6 L39） | 保留，8.0 不改造：它在登录时用 OAuth 换取 token，不在请求路径上，RFC 0006 的 `Authenticator` 不涉及它。PR-5 只清理注释 | RFC 0001 §4 把它列为 `cosec-authn-social`，所以它属于目标架构。但如果维护者不打算继续维护 JustAuth 集成，8.0 是删除它的唯一窗口 |
-| Q15 | **守护的实现方式**（§4.6.2） | 不引入新依赖：G1、G7 用 ArchUnit（已有），放在 `conformance/`；G2 用 detekt 内置的 `ForbiddenComment`；G3、G6 用根项目的 Gradle 任务；G4 用 `wiki/scripts/` 下的 Node 脚本 | 都是几十行的检查，现有工具链已经够用；版本目录检查插件之类的工具是新依赖，收益不抵维护成本 |
+| Q9 | **`cosec-api` 的去留**（§4.6 L10、L11；AGENTS.md 要求先问） | **已决定**：保留模块，作为 8.0 的薄契约层（主体、token、认证、`SecurityContext`、审计事件、租户）。PR-5 删除切换之后在 `cosec-api` 之外没有 `main` 引用的类型，包括现在就没有引用的 `InternalIds`；并入 `model/` 留到 8.0 之后再议 | RFC 0006 Q5 已决定不改名、不合并现有模块。剩下的契约有外部实现者（token、认证），搬家只会多一次破坏性变更，换不来收益 |
+| Q10 | **切换租户认证**（§4.6 L12） | **已决定**：保留切换租户的认证，前提是有测试。RFC 0008 PR-5 为 `AbstractSwitchTenantAuthentication` 与 `SwitchTenantCredentials` 补上测试；没有测试，它就不能留到 RC | 它是写进文档的扩展点，但 `main` 和测试里都没有使用者，等于没人验证过。8.0 的租户与成员关系（RFC 0004 §4.5）改变了它的前提 |
+| Q11 | **`PolicyTestKit` 的 8.0 形态**（§4.6 L15） | **已决定**：在切换 PR 中基于 8.0 文档重写，复用一致性套件的场景格式（§3.3）与 `engine` runner；7.x 的形式与 `cosec-policy-test/` 删除；暂不单独建 `cosec-testkit` 模块 | 用户的策略测试与规范场景是同一件事，两种格式只会分叉；RFC 0001 §4 的 `cosec-testkit` 是否拆成模块，可以等 runner 稳定之后再定 |
+| Q12 | **依赖变更**（§4.6 L17–L20；AGENTS.md 要求先问） | **已决定**：全部删除：`testcontainers` 的版本与 BOM、`kotlin-kapt` 插件别名、`ognl`（随切换）、`hamcrest`（剩下的测试改用 FluentAssert 之后）；`guava` 不再作为每个模块的默认依赖，只在用到的模块里显式声明 | 都没有使用者，或者只有遗留的使用者；只删不加，版本不变 |
+| Q13 | **`main` 的版本号**（§4.6 L30） | **已决定**：PR-5 把 `gradle.properties` 改为 `8.0.0-SNAPSHOT`；RC 的版本号仍由发布 PR 按 CONTRIBUTING.md §7 设置 | `main` 是 8.0 线，`version=7.0.0` 会让本地构建与文档示例看起来像 7.0 |
+| Q14 | **`cosec-social`**（§4.6 L39） | **已决定**：保留，8.0 不改造：它在登录时用 OAuth 换取 token，不在请求路径上，RFC 0006 的 `Authenticator` 不涉及它。PR-5 只清理注释 | RFC 0001 §4 把它列为 `cosec-authn-social`，所以它属于目标架构。但如果维护者不打算继续维护 JustAuth 集成，8.0 是删除它的唯一窗口 |
+| Q15 | **守护的实现方式**（§4.6.2） | **已决定**：不引入新依赖：G1、G7 用 ArchUnit（已有），放在 `conformance/`；G2 用 detekt 内置的 `ForbiddenComment`；G3、G6 用根项目的 Gradle 任务；G4 用 `wiki/scripts/` 下的 Node 脚本 | 都是几十行的检查，现有工具链已经够用；版本目录检查插件之类的工具是新依赖，收益不抵维护成本 |
 
 ---
 
