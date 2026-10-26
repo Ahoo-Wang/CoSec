@@ -13,7 +13,7 @@
 | 2 | 纯函数决策引擎：`model/`、`engine/`、`EngineAuthorization` | [RFC 0002](rfc/0002-pure-engine.md)，已确认 | PR-1 至 PR-5 已合入；PR-6 未开始 | 🟡 进行中 |
 | 3 | 策略快照分发 | [RFC 0003](rfc/0003-policy-snapshot.md)，已确认 | PR-1、PR-2、PR-3 已合入；PR-4 未开始 | 🟡 进行中 |
 | 4 | 统一模型：`Binding`、平台层/租户层、条件 AST、`service:verb`、编译执行、转换工具 | RFC 0004 / RFC 0005，待审批（[#987](https://github.com/Ahoo-Wang/CoSec/pull/987)） | 未开始 | ⏳ 等审批 |
-| 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | 未写 | 未开始 | ⚪ |
+| 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | [RFC 0006](rfc/0006-coroutine-pipeline.md)，待审批 | 未开始 | ⏳ 等审批 |
 | 6 | 控制面 `cosec-control` | 未写 | 未开始 | ⚪ |
 
 **发布策略**（RFC 0001 §6，2026-10-21）：第 2–6 阶段全部完成、每个阶段做完两轮审查之前，8.0 不发布任何版本，没有里程碑版和 RC。
@@ -107,4 +107,4 @@ PR-6 前重新测量，任一门槛场景低于 90% 即停下交维护者决定�
 - PR-4 的第 2 轮审查（含 #1002）；RFC 0003 PR-2 的第 2 轮审查（含 #1003）。
 - RFC 0002 PR-6（等门槛）。
 - RFC 0003 PR-4。
-- 第 4 阶段的实现（等 RFC 审批）；第 5、6 阶段的细化 RFC。
+- 第 4 阶段的实现（等 RFC 审批）；第 6 阶段的细化 RFC。第 5 阶段的细化 RFC（RFC 0006）已写完，等审批：26 个待决问题，需要特别确认的是 §16 的 Q1（`Indeterminate` 一律 503）、Q11/Q22（SPI 与 `cosec-api` 的删除项）、Q24（Pipeline 吞吐不低于第 4 阶段的 100 %）。
