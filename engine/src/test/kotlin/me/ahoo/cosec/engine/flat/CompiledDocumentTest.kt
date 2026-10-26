@@ -14,7 +14,6 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.model.Binding
-import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.test.asserts.assert

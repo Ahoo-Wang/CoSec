@@ -196,7 +196,10 @@ internal class StatementIndex(statements: Array<CompiledStatement>, options: Ind
         var anyVerb: ResourceBuilder? = null
         val verbs = LinkedHashMap<String, ResourceBuilder>()
 
-        fun build(builder: Builder) = ServicePartition(anyVerb?.build(builder), verbs.mapValues { it.value.build(builder) })
+        fun build(builder: Builder) = ServicePartition(
+            anyVerb?.build(builder),
+            verbs.mapValues { it.value.build(builder) }
+        )
     }
 
     private class ResourceBuilder {

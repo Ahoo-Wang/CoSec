@@ -57,7 +57,9 @@ class CompiledPolicy(
     internal val attached: BindingRef.Attached = BindingRef.Attached(id)
 
     init {
-        require(condition == null || ConditionAttributes.of(condition).none { it.kind == Attribute.Kind.RESOURCE_VAR }) {
+        require(
+            condition == null || ConditionAttributes.of(condition).none { it.kind == Attribute.Kind.RESOURCE_VAR }
+        ) {
             "The condition of policy ${id.value} reads a captured variable; only a statement's condition can"
         }
         val denies = ArrayList<CompiledStatement>()

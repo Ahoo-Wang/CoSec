@@ -214,15 +214,9 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         }
         // Consulted even when the resource failed: a policy condition that does not hold rules out every statement of
         // the policy, so the untraced evaluation may skip the rest of them and still decide as the trace does.
-        val guard = policy.condition
-        if (guard != null) {
-            when (guard(guard)) {
-                GUARD_MISSED -> return GUARD_MISS
-                GUARD_ERROR -> {
-                    stepError = guardError
-                    return GUARD_FAILED
-                }
-            }
+        val guard = guardOf(policy)
+        if (guard != MATCHED) {
+            return guard
         }
         if (failure != null) {
             stepError = failure
@@ -240,6 +234,20 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             ERROR
         } finally {
             this.captures = null
+        }
+    }
+
+    /** [MATCHED] when [policy] has no condition or it holds, else [GUARD_MISS] or [GUARD_FAILED] with [stepError]. */
+    private fun guardOf(policy: CompiledPolicy): Int {
+        val guard = policy.condition ?: return MATCHED
+        return when (guard(guard)) {
+            GUARD_MISSED -> GUARD_MISS
+            GUARD_ERROR -> {
+                stepError = guardError
+                GUARD_FAILED
+            }
+
+            else -> MATCHED
         }
     }
 
@@ -360,13 +368,19 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             Attribute.Kind.SUBJECT_ATTRIBUTE -> authz.subject.attributes[attribute.name]?.toString()
             Attribute.Kind.SCOPE_APP -> request.scope.app.value.takeUnless { it.isEmpty() }
             Attribute.Kind.SCOPE_SPACE -> request.scope.space.value
+            Attribute.Kind.ENVIRONMENT_DEVICE -> authz.environment.deviceId.takeUnless { it.isEmpty() }
+            else -> target(attribute)
+        }
+
+    /** The action, the resource and the captures; the host for the rest. */
+    private fun target(attribute: Attribute): String? =
+        when (attribute.kind) {
             Attribute.Kind.ACTION_SERVICE -> authz.action.namespace
             Attribute.Kind.ACTION_VERB -> authz.action.verb
             Attribute.Kind.RESOURCE_TYPE -> authz.resource.type
             Attribute.Kind.RESOURCE_ID -> authz.resource.id
             Attribute.Kind.RESOURCE_ATTRIBUTE -> authz.resource.attributes[attribute.name]
             Attribute.Kind.RESOURCE_VAR -> captures?.get(attribute.name)
-            Attribute.Kind.ENVIRONMENT_DEVICE -> authz.environment.deviceId.takeUnless { it.isEmpty() }
             else -> host.string(attribute)
         }
 

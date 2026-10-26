@@ -157,7 +157,13 @@ class FlatTraceTest {
     @Test
     fun `statements the index leaves out are recorded by what ruled them out`() {
         fun statement(name: String, action: String, resource: String?, condition: Condition? = null) =
-            StatementSource(name, Effect.ALLOW, listOf(action), listOfNotNull(resource?.let(::ResourceSource)), condition)
+            StatementSource(
+                name,
+                Effect.ALLOW,
+                listOf(action),
+                listOfNotNull(resource?.let(::ResourceSource)),
+                condition
+            )
         val policy = PolicyCompiler(options = IndexOptions(minStatements = 1)).compile(
             PolicyId("p"),
             null,

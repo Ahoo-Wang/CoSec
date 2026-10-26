@@ -155,7 +155,12 @@ object Oracle {
     }
 
     private fun ref(candidate: Candidate, statement: Spec) =
-        StatementRef.Policy(PolicyId(candidate.policy.id), statement.index, candidate.policy.statements[statement.index].name, candidate.via)
+        StatementRef.Policy(
+            PolicyId(candidate.policy.id),
+            statement.index,
+            candidate.policy.statements[statement.index].name,
+            candidate.via
+        )
 
     /** The first statement of [effect] that matches, the first error, or null; errors only for a DENY. */
     private sealed interface Outcome {

@@ -71,7 +71,11 @@ class RequestAttributesTest {
             emptyList(),
         )
         val tenant = if (authenticated) TenantId("acme") else TenantId.DEFAULT
-        val resolution = ScopeResolver.resolve(ScopeSubject(tenant, authenticated, memberships), DeclaredScope(app, ""), HostScope(null))
+        val resolution = ScopeResolver.resolve(
+            ScopeSubject(tenant, authenticated, memberships),
+            DeclaredScope(app, ""),
+            HostScope(null)
+        )
         val authz = AuthzRequest(
             Subject("alice", tenant.value, authenticated, emptySet(), emptySet(), mapOf("level" to 3), false),
             me.ahoo.cosec.model.Scope.declared(tenant.value, app, ""),
@@ -87,11 +91,24 @@ class RequestAttributesTest {
         val policy = PolicyCompiler().compile(
             PolicyId("p"),
             null,
-            listOf(StatementSource("s", Effect.ALLOW, listOf("*"), listOf(ResourceSource("http:path:/orders/{id}")), condition)),
+            listOf(
+                StatementSource(
+                    "s",
+                    Effect.ALLOW,
+                    listOf("*"),
+                    listOf(ResourceSource("http:path:/orders/{id}")),
+                    condition
+                )
+            ),
         )
         // Roles in a request with an app need the app's document, even an empty one.
         val app = request.scope.app.value.takeIf { it.isNotEmpty() }?.let { app(app = it) }
-        val view = SnapshotView(platform(policy, bindings = listOf(anyone("g", "p"))), app, tenant(tenant = request.scope.tenant.value))
+        val view =
+            SnapshotView(
+                platform(policy, bindings = listOf(anyone("g", "p"))),
+                app,
+                tenant(tenant = request.scope.tenant.value)
+            )
         return CoSecFlatEngine.evaluate(request, view).decision is Decision.Permit
     }
 
@@ -121,7 +138,9 @@ class RequestAttributesTest {
         permits(contains("subject.scopedRoles", "viewer")).assert().isTrue()
         permits(contains("scope.roles", "viewer")).assert().isTrue()
         permits(contains("scope.roles", "editor")).assert().isFalse()
-        permits(Condition.And(listOf(contains("subject.roles", "viewer"), contains("subject.roles", "editor")))).assert().isTrue()
+        permits(
+            Condition.And(listOf(contains("subject.roles", "viewer"), contains("subject.roles", "editor")))
+        ).assert().isTrue()
     }
 
     @Test

@@ -100,7 +100,12 @@ object Probes : ConditionInput {
 }
 
 /** A policy condition that behaves as [behavior] and logs `guard:<name>`. */
-class TestCondition(val name: String, val behavior: GuardBehavior, val error: MatcherException, val checked: CheckedCondition)
+class TestCondition(
+    val name: String,
+    val behavior: GuardBehavior,
+    val error: MatcherException,
+    val checked: CheckedCondition
+)
 
 /** What a fixture policy was built from, for the oracle. */
 class PolicySpec(val statements: List<Pair<Effect, RuleBehavior>>, val guard: TestCondition?)

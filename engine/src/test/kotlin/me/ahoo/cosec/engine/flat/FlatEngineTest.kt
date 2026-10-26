@@ -404,7 +404,11 @@ class FlatEngineTest {
         val compiler = PolicyCompiler()
         val decoding = StatementSource("d", Effect.DENY, listOf("*"), listOf(ResourceSource("http:path:/a/**")))
         val raw = ResourceSource("http:path:/a/**", decodeAndParseSegments = false)
-        val policy = compiler.compile(PolicyId("p"), null, listOf(decoding, StatementSource("r", Effect.DENY, listOf("*"), listOf(raw))))
+        val policy = compiler.compile(
+            PolicyId("p"),
+            null,
+            listOf(decoding, StatementSource("r", Effect.DENY, listOf("*"), listOf(raw)))
+        )
         val platform = platform(policy, bindings = listOf(anyone("g", "p")))
         // Matched without decoding, the DENY that does not decode decides.
         decide(flatRequest(path = "/a/%zz"), platform).assert()

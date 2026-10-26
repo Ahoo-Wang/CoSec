@@ -52,15 +52,28 @@ class PolicyCompilerTest {
                 Effect.ALLOW,
                 listOf("order:read", "http:GET"),
                 listOf(ResourceSource("order/{id}"), ResourceSource("http:path:/orders/{id}", caseSensitive = false)),
-                Condition.And(listOf(eq("resource.var.id", "1"), Condition.In("scope.app", listOf(Literal.Str("a"), Literal.Str("b"))))),
+                Condition.And(
+                    listOf(
+                        eq("resource.var.id", "1"),
+                        Condition.In("scope.app", listOf(Literal.Str("a"), Literal.Str("b")))
+                    )
+                ),
             ),
         )
         statement.name.assert().isEqualTo("read")
-        statement.actionPatterns.assert().containsExactly(ActionPattern.parse("order:read"), ActionPattern.parse("http:GET"))
+        statement.actionPatterns.assert().containsExactly(
+            ActionPattern.parse("order:read"),
+            ActionPattern.parse("http:GET")
+        )
         statement.resourcePatterns.assert()
-            .containsExactly(ResourcePattern.parse("order/{id}"), ResourcePattern.parse("http:path:/orders/{id}", false))
+            .containsExactly(
+                ResourcePattern.parse("order/{id}"),
+                ResourcePattern.parse("http:path:/orders/{id}", false)
+            )
         statement.captures.assert().isTrue()
-        statement.keys.toList().assert().containsExactly(IndexKeys.of(statement.condition!!, Attribute.of(Attribute.Kind.SCOPE_APP)))
+        statement.keys.toList().assert().containsExactly(
+            IndexKeys.of(statement.condition!!, Attribute.of(Attribute.Kind.SCOPE_APP))
+        )
         statement.toString().assert().contains("ALLOW read")
     }
 
@@ -75,7 +88,9 @@ class PolicyCompilerTest {
     @Test
     fun `a statement needs an action`() {
         errors(null, StatementSource("s", Effect.ALLOW, emptyList())).assert()
-            .containsExactly(CompileError("$.statements[0].action", "at least one action is required; write \"*\" for every action"))
+            .containsExactly(
+                CompileError("$.statements[0].action", "at least one action is required; write \"*\" for every action")
+            )
     }
 
     @Test
@@ -98,7 +113,12 @@ class PolicyCompilerTest {
     fun `condition errors carry the statement's path`() {
         val errors = errors(
             eq("nowhere.at.all", "x"),
-            StatementSource("s", Effect.ALLOW, listOf("*"), condition = Condition.And(listOf(eq("scope.app", "a"), eq("subject.authenticated", "yes")))),
+            StatementSource(
+                "s",
+                Effect.ALLOW,
+                listOf("*"),
+                condition = Condition.And(listOf(eq("scope.app", "a"), eq("subject.authenticated", "yes")))
+            ),
         )
         errors.map { it.path }.assert().containsExactly("$.condition.eq[0]", "$.statements[0].condition.and[1].eq[1]")
     }
@@ -116,7 +136,12 @@ class PolicyCompilerTest {
     fun `a condition reads only variables every resource pattern captures`() {
         val reads = eq("resource.var.id", "1")
         errors(null, StatementSource("s", Effect.ALLOW, listOf("*"), condition = reads)).assert()
-            .containsExactly(CompileError("$.statements[0].resource", "the condition reads resource.var.id, which [*] does not capture"))
+            .containsExactly(
+                CompileError(
+                    "$.statements[0].resource",
+                    "the condition reads resource.var.id, which [*] does not capture"
+                )
+            )
         val partly = StatementSource(
             "s",
             Effect.ALLOW,
@@ -137,7 +162,13 @@ class PolicyCompilerTest {
         val capturing = compiler.statement(
             id,
             0,
-            StatementSource("s", Effect.ALLOW, listOf("*"), listOf(ResourceSource("order/{id}")), eq("resource.var.id", "1")),
+            StatementSource(
+                "s",
+                Effect.ALLOW,
+                listOf("*"),
+                listOf(ResourceSource("order/{id}")),
+                eq("resource.var.id", "1")
+            ),
         )
         assertThrownBy<IllegalArgumentException> { CompiledPolicy(id, capturing.condition, emptyList()) }
     }
@@ -151,8 +182,12 @@ class PolicyCompilerTest {
 
     @Test
     fun `index options take only attributes the engine reads itself`() {
-        assertThrownBy<IllegalArgumentException> { IndexOptions(attributes = listOf(Attribute.of(Attribute.Kind.HTTP_HEADER, "x"))) }
+        assertThrownBy<IllegalArgumentException> {
+            IndexOptions(attributes = listOf(Attribute.of(Attribute.Kind.HTTP_HEADER, "x")))
+        }
         assertThrownBy<IllegalArgumentException> { IndexOptions(minStatements = -1) }
-        IndexOptions(attributes = listOf(Attribute.of(Attribute.Kind.RESOURCE_ATTRIBUTE, "owner"))).attributes.assert().hasSize(1)
+        IndexOptions(
+            attributes = listOf(Attribute.of(Attribute.Kind.RESOURCE_ATTRIBUTE, "owner"))
+        ).attributes.assert().hasSize(1)
     }
 }

@@ -50,7 +50,11 @@ class IndexPropertyTest {
     /** Everything indexed, every partition split, and the attributes in another order. */
     private val variants = listOf(
         IndexOptions(minStatements = 0, conditionThreshold = 0),
-        IndexOptions(minStatements = 0, conditionThreshold = 0, attributes = IndexOptions.DEFAULT_ATTRIBUTES.reversed()),
+        IndexOptions(
+            minStatements = 0,
+            conditionThreshold = 0,
+            attributes = IndexOptions.DEFAULT_ATTRIBUTES.reversed()
+        ),
         IndexOptions(minStatements = 0, conditionThreshold = 0, attributes = emptyList()),
         IndexOptions(minStatements = 3, conditionThreshold = 4),
         IndexOptions.DEFAULT,
@@ -109,7 +113,12 @@ class IndexPropertyTest {
      * The decision, with a failure's error reduced to its class: every evaluation parses a path that does not decode
      * again, and fails with its own exception.
      */
-    private fun decide(case: Case, generator: IndexGenerator, options: IndexOptions, level: TraceLevel = TraceLevel.OFF): Any {
+    private fun decide(
+        case: Case,
+        generator: IndexGenerator,
+        options: IndexOptions,
+        level: TraceLevel = TraceLevel.OFF
+    ): Any {
         val decision = CoSecFlatEngine.evaluate(
             case.with(IndexGenerator.Counting(case.guards)),
             case.view(generator.compile(case.policies, options)),
@@ -203,13 +212,20 @@ class IndexPropertyTest {
             val decision = CoSecFlatEngine.evaluate(case.with(counting), view).decision
             val by = (decision as? Decision.Deny)?.by ?: (decision as? Decision.Permit)?.by ?: return@forEachCase
             // FULL lists the statements in evaluation order; untraced stops at the one that decided.
-            val trace = CoSecFlatEngine.evaluate(case.with(IndexGenerator.Counting(case.guards)), view, TraceLevel.FULL).trace!!
+            val trace = CoSecFlatEngine.evaluate(
+                case.with(IndexGenerator.Counting(case.guards)),
+                view,
+                TraceLevel.FULL
+            ).trace!!
             val decided = trace.candidates.indexOfFirst { it.ref == by && it.outcome == CandidateOutcome.MATCHED }
             decided.assert().isGreaterThanOrEqualTo(0)
             val before = trace.candidates.subList(0, decided + 1)
             val evaluated = counting.reads.keys.filter { it.startsWith("s:") }.map { it.removePrefix("s:") }
             val allowed = before.filter { it.outcome != CandidateOutcome.NOT_EVALUATED }.map { it.ref.name }.toSet()
-            evaluated.forEach { it.assert().describedAs("evaluated after ${(by as StatementRef.Policy).name}").isIn(allowed) }
+            val decider = (by as StatementRef.Policy).name
+            for (statement in evaluated) {
+                statement.assert().describedAs("evaluated after $decider").isIn(allowed)
+            }
             val guards = counting.reads.keys.filter { it.startsWith("g:") }.map { it.removePrefix("g:") }
             val policiesBefore = before.map { it.ref.policy.value }.toSet()
             guards.forEach { it.assert().isIn(policiesBefore) }
@@ -221,6 +237,7 @@ class IndexPropertyTest {
      * resource match and its condition holds, or its action matches, its index keys admit the request and matching
      * its resource fails (a path that does not decode).
      */
+    @Suppress("SwallowedException")
     private fun mayMatch(statement: CompiledStatement, request: FlatRequest): Boolean {
         if (statement.actionPatterns.none { it.matches(request.request.action) }) {
             return false

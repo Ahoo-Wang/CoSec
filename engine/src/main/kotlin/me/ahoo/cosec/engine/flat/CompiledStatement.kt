@@ -136,26 +136,32 @@ internal object ConditionAttributes {
 
     private fun collect(condition: CheckedCondition, into: MutableList<Attribute>) {
         when (condition) {
-            is CheckedCondition.Eq -> into += condition.attribute
-            is CheckedCondition.BoolEq -> into += condition.attribute
-            is CheckedCondition.IpEq -> into += condition.attribute
+            is CheckedCondition.And -> condition.conditions.forEach { collect(it, into) }
+            is CheckedCondition.Or -> condition.conditions.forEach { collect(it, into) }
+            is CheckedCondition.Not -> collect(condition.condition, into)
             is CheckedCondition.AttributeEq -> {
                 into += condition.left
                 into += condition.right
             }
 
-            is CheckedCondition.In -> into += condition.attribute
-            is CheckedCondition.Contains -> into += condition.attribute
-            is CheckedCondition.Prefix -> into += condition.attribute
-            is CheckedCondition.LabelsPrefix -> into += condition.attribute
-            is CheckedCondition.Cidr -> into += condition.attribute
-            is CheckedCondition.Time -> into += TIME
-            is CheckedCondition.Exists -> into += condition.attribute
-            is CheckedCondition.And -> condition.conditions.forEach { collect(it, into) }
-            is CheckedCondition.Or -> condition.conditions.forEach { collect(it, into) }
-            is CheckedCondition.Not -> collect(condition.condition, into)
+            else -> into += leaf(condition)
         }
     }
+
+    private fun leaf(condition: CheckedCondition): Attribute =
+        when (condition) {
+            is CheckedCondition.Eq -> condition.attribute
+            is CheckedCondition.BoolEq -> condition.attribute
+            is CheckedCondition.IpEq -> condition.attribute
+            is CheckedCondition.In -> condition.attribute
+            is CheckedCondition.Contains -> condition.attribute
+            is CheckedCondition.Prefix -> condition.attribute
+            is CheckedCondition.LabelsPrefix -> condition.attribute
+            is CheckedCondition.Cidr -> condition.attribute
+            is CheckedCondition.Exists -> condition.attribute
+            is CheckedCondition.Time -> TIME
+            else -> throw IllegalArgumentException("Not a leaf: $condition")
+        }
 
     private val TIME = Attribute.of(Attribute.Kind.ENVIRONMENT_TIME)
 }

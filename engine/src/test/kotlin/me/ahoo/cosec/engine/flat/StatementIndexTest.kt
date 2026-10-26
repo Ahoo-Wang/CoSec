@@ -92,7 +92,11 @@ class StatementIndexTest {
             statement("user", listOf("*"), listOf(ResourceSource("user/**"))),
             statement("http", listOf("*"), listOf(http("/orders/**"))),
         )
-        find(statements, Action("order", "read"), Resource("order", "1", emptyMap())).assert().containsExactly("any", "order")
+        find(
+            statements,
+            Action("order", "read"),
+            Resource("order", "1", emptyMap())
+        ).assert().containsExactly("any", "order")
         find(statements, get, path("/orders/1")).assert().containsExactly("any", "http")
     }
 
@@ -112,8 +116,16 @@ class StatementIndexTest {
         )
         find(statements, get, path("/orders/1")).assert()
             .containsExactly("root", "orders", "order", "items", "leading", "glob", "folded", "raw")
-        find(statements, get, path("/users/1")).assert().containsExactly("root", "users", "leading", "glob", "folded", "raw")
-        find(statements, get, path("//orders")).assert().containsExactly("root", "leading", "glob", "folded", "raw", "double")
+        find(
+            statements,
+            get,
+            path("/users/1")
+        ).assert().containsExactly("root", "users", "leading", "glob", "folded", "raw")
+        find(
+            statements,
+            get,
+            path("//orders")
+        ).assert().containsExactly("root", "leading", "glob", "folded", "raw", "double")
         find(statements, get, path("")).assert().containsExactly("leading", "raw")
         // A path that does not decode rules nothing out.
         find(statements, get, path("/orders/%zz")).assert().hasSize(statements.size)
@@ -125,7 +137,11 @@ class StatementIndexTest {
         val statements = listOf(
             statement("a", listOf("*"), condition = app("a")),
             statement("A", listOf("*"), condition = app("A", ignoreCase = true)),
-            statement("in", listOf("*"), condition = Condition.In("scope.app", listOf(Literal.Str("a"), Literal.Str("b")))),
+            statement(
+                "in",
+                listOf("*"),
+                condition = Condition.In("scope.app", listOf(Literal.Str("a"), Literal.Str("b")))
+            ),
             statement("b", listOf("*"), condition = app("b")),
             statement("free", listOf("*"), condition = Condition.Not(app("a"))),
             statement("never", listOf("*"), condition = Condition.And(listOf(app("a"), app("b")))),
@@ -135,14 +151,23 @@ class StatementIndexTest {
         val action = Action("order", "read")
         find(statements, action, resource, mapOf(Attribute.Kind.SCOPE_APP to "a")).assert()
             .containsExactly("a", "A", "in", "free", "space")
-        find(statements, action, resource, mapOf(Attribute.Kind.SCOPE_APP to "A")).assert().containsExactly("A", "free", "space")
+        find(
+            statements,
+            action,
+            resource,
+            mapOf(Attribute.Kind.SCOPE_APP to "A")
+        ).assert().containsExactly("A", "free", "space")
         find(statements, action, resource).assert().containsExactly("free", "space")
     }
 
     @Test
     fun `a small partition is not split`() {
         val policy = PolicyCompiler(options = IndexOptions(minStatements = 0))
-            .compile(PolicyId("p"), null, listOf(statement("a", listOf("*"), condition = Condition.Eq("scope.app", Literal.Str("a")))))
+            .compile(
+                PolicyId("p"),
+                null,
+                listOf(statement("a", listOf("*"), condition = Condition.Eq("scope.app", Literal.Str("a"))))
+            )
         val lookup = Lookup(get, path("/"), emptyMap())
         policy.index(Effect.ALLOW)!!.lookup(lookup)
         lookup.positions.assert().containsExactly(0)

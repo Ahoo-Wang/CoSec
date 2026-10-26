@@ -48,13 +48,30 @@ import kotlin.random.Random
  * drawn per policy. [Counting] answers them and counts the reads.
  */
 class IndexGenerator(private val random: Random) {
-    private val actions = listOf("*", "http:*", "http:GET", "http:POST", "order:*", "order:read", "order:write", "user:read")
+    private val actions = listOf(
+        "*",
+        "http:*",
+        "http:GET",
+        "http:POST",
+        "order:*",
+        "order:read",
+        "order:write",
+        "user:read"
+    )
     private val httpPatterns = listOf(
         "/orders/**", "/orders/{id}", "/orders/*/items", "/orders/1", "/orders/{id}/items/{item}", "/users/{id}",
         "/**/*.css", "/{*rest}", "/a?c/x", "/ord*", "/orders/", "/", "/orders/{id}.json", "/**", "/orders/1/**",
         "/{*id}", "/**/items",
     )
-    private val typedPatterns = listOf("order", "order/{id}", "order/*", "order/**", "order/{id}/x", "user/{id}", "user")
+    private val typedPatterns = listOf(
+        "order",
+        "order/{id}",
+        "order/*",
+        "order/**",
+        "order/{id}/x",
+        "user/{id}",
+        "user"
+    )
     private val apps = listOf("app", "other", "App")
     private val spaces = listOf("", "team", "Team")
     private val tenants = listOf("acme", "beta", "ACME")
@@ -84,7 +101,14 @@ class IndexGenerator(private val random: Random) {
             1 -> Condition.In("scope.space", List(random.nextInt(1, 3)) { str(spaces.pick()) })
             2 -> Condition.Eq("subject.tenant", str(tenants.pick()), ignoreCase = chance(30))
             3 -> Condition.Eq("resource.type", str(types.pick()))
-            4 -> if (capturesId) Condition.Eq("resource.var.id", str(listOf("1", "2").pick())) else Condition.Exists("scope.app")
+            4 -> if (capturesId) {
+                Condition.Eq(
+                    "resource.var.id",
+                    str(listOf("1", "2").pick())
+                )
+            } else {
+                Condition.Exists("scope.app")
+            }
             5 -> Condition.Prefix("scope.app", str("ap"))
             6 -> Condition.In("resource.type", listOf(str("order"), str("user")))
             7 -> Condition.And(List(random.nextInt(1, 3)) { condition(depth + 1, capturesId) })
@@ -133,7 +157,13 @@ class IndexGenerator(private val random: Random) {
             ).pick()
             Resource("http", path, emptyMap())
         } else {
-            val (type, id) = listOf("order" to "1", "order" to "1/x", "order" to "", "user" to "2", "Order" to "1").pick()
+            val (type, id) = listOf(
+                "order" to "1",
+                "order" to "1/x",
+                "order" to "",
+                "user" to "2",
+                "Order" to "1"
+            ).pick()
             Resource(type, id, emptyMap())
         }
         val action = if (http) {
