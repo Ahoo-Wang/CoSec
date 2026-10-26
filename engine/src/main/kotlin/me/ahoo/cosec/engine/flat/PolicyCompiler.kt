@@ -34,6 +34,8 @@ class StatementSource(
     /** Empty for any resource. */
     val resources: List<ResourceSource> = emptyList(),
     val condition: Condition? = null,
+    /** What an external attribute the condition reads that cannot be fetched means; null for the default. */
+    val onMissing: OnMissing? = null,
 )
 
 /** A resource pattern and the options of `http:path:` patterns (RFC 0005 §5.2). */
@@ -64,17 +66,21 @@ class PolicyCompiler(
     private val checker: ConditionChecker = ConditionChecker(),
     private val options: IndexOptions = IndexOptions.DEFAULT,
 ) {
-    /** Compiles a policy, or throws [CompileException] with every error. */
+    /**
+     * Compiles a policy, or throws [CompileException] with every error. [denyNomatch] says whether a DENY may write
+     * `onMissing: nomatch`, which only the platform document may (RFC 0006 Q13).
+     */
     fun compile(
         id: PolicyId,
         condition: Condition?,
         statements: List<StatementSource>,
         attachable: Boolean = false,
+        denyNomatch: Boolean = false,
     ): CompiledPolicy {
         val errors = ArrayList<CompileError>()
         val checked = condition?.let { policyCondition(it, "$.condition", errors) }
         val compiled = statements.mapIndexedNotNull { index, source ->
-            statement(index, source, "$.statements[$index]", errors)
+            statement(index, source, "$.statements[$index]", errors, denyNomatch)
         }
         if (errors.isNotEmpty()) {
             throw CompileException(id.value, errors)
@@ -92,9 +98,14 @@ class PolicyCompiler(
     }
 
     /** Compiles one statement at [index] of its policy, or throws [CompileException]. */
-    fun statement(policyId: PolicyId, index: Int, source: StatementSource): CompiledStatement {
+    fun statement(
+        policyId: PolicyId,
+        index: Int,
+        source: StatementSource,
+        denyNomatch: Boolean = false
+    ): CompiledStatement {
         val errors = ArrayList<CompileError>()
-        return statement(index, source, "$.statements[$index]", errors)
+        return statement(index, source, "$.statements[$index]", errors, denyNomatch)
             ?: throw CompileException(policyId.value, errors)
     }
 
@@ -113,6 +124,7 @@ class PolicyCompiler(
         source: StatementSource,
         path: String,
         errors: MutableList<CompileError>,
+        denyNomatch: Boolean,
     ): CompiledStatement? {
         val before = errors.size
         if (source.actions.isEmpty()) {
@@ -133,6 +145,7 @@ class PolicyCompiler(
         if (condition != null) {
             checkVariables(condition, resources, path, errors)
         }
+        checkOnMissing(source, condition, path, errors, denyNomatch)
         if (errors.size > before) {
             return null
         }
@@ -159,7 +172,32 @@ class PolicyCompiler(
             condition = condition,
             keyAttributes = keyAttributes.toTypedArray(),
             keys = keys.toTypedArray(),
+            onMissing = source.onMissing ?: OnMissing.INDETERMINATE,
         )
+    }
+
+    /**
+     * `onMissing` applies to external attributes only, so a statement whose condition reads none cannot write it: it
+     * would do nothing (RFC 0005 §3.4). A DENY may write `nomatch` only where [denyNomatch] allows it (RFC 0006 Q13).
+     */
+    private fun checkOnMissing(
+        source: StatementSource,
+        condition: CheckedCondition?,
+        path: String,
+        errors: MutableList<CompileError>,
+        denyNomatch: Boolean,
+    ) {
+        val onMissing = source.onMissing ?: return
+        if (condition == null || ConditionAttributes.of(condition).none(Attribute::external)) {
+            errors += CompileError("$path.onMissing", "onMissing applies to external attributes only, and the condition reads none")
+            return
+        }
+        if (onMissing == OnMissing.NOMATCH && source.effect === Effect.DENY && !denyNomatch) {
+            errors += CompileError(
+                "$path.onMissing",
+                "a DENY may write onMissing: nomatch only in the platform document: it lapses while its provider fails",
+            )
+        }
     }
 
     /**
