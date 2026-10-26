@@ -480,18 +480,35 @@ Reference one from a file with `$schema`, which the parser ignores:
 
 The files are generated from the document format descriptors in `cosec-core`
 ([`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt))
-and never edited by hand. A test binds the descriptors to the parser: documents generated from them must parse, and
-documents with a required field dropped, an unknown field added or a value of the wrong type must fail the schema.
+and never edited by hand. A test binds the descriptors to the parsers: documents generated from them must parse, and
+documents with a required field dropped, an unknown field added, a value of the wrong type, a value outside its enum or
+range, or one of a value's counter-examples (such as `25:00` for a time of day) must fail the schema. Each
+counter-example must fail the parser too, or, in an 8.0 document, the compiler.
 
-The schemas are stricter than the parser in two ways, so a file the schema rejects may still load:
+The schemas are stricter than the 7.x parser, so a file the schema rejects may still load:
 
 - They reject unknown fields. The parser ignores them (except at the top level of a snapshot document), so a
-  misspelled `efect` silently becomes the default `allow`.
+  misspelled `efect` silently becomes the default `allow`. It also reads only the first key of a condition or action
+  object, so a second matcher written there is dropped without a word.
 - They reject values of the wrong type. The parser converts some of them: a number where a string belongs, an integer
   where a boolean belongs, a single value where an array belongs.
+- They reject an empty `composite` action, an unknown `method`, a regular expression `timeout` below 1, and a `**` in
+  the middle of a path pattern even when a `separator` other than `/` makes it legal.
 
-Any condition or action type name passes the schema, because custom matcher types are registered at run time.
-The schemas check that a `part` is supported, but not path variable scope, duplicate ids, path pattern syntax or
-matcher semantics, so also load your policies with the real parser ([Testing](./testing.md#validating-policies)).
+The 8.0 parser (documents with `schema: 2`) has none of these leniencies.
+
+Passing a schema is necessary, not sufficient. Every schema file says so, because JSON Schema cannot express:
+
+- unique ids, roles and grant keys, and references between documents;
+- whether a time zone id exists, and dates such as February 30;
+- a time window whose `from` equals its `to`, and `notBefore` after `notAfter`;
+- SpEL, OGNL and `#{...}` template syntax, and regular expressions beyond ECMA-262;
+- 7.x path patterns with `{name:regex}` captures, whose braces may nest, and with a `separator` other than `/`;
+- path variable scope, capture names that are not Java identifiers, and a variable captured twice;
+- the attribute catalog and the types of condition operands (8.0);
+- which documents a principal binding must name its tenant in: all but a tenant's own (8.0);
+- custom condition and action types, which only the run-time registry knows (7.x).
+
+So also load your policies with the real parser, or compile your 8.0 documents ([Testing](./testing.md#validating-policies)).
 
 **Next:** grant permissions by role instead of per principal, in [Role permissions](./role-permissions.md).

@@ -65,6 +65,6 @@
       "type": "object"
     }
   },
-  "description": "A rate limit rules file: one rule or an array of rules.",
+  "description": "A rate limit rules file: one rule or an array of rules. Passing this schema is necessary, not sufficient: the compiler also checks what JSON Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too.",
   "title": "CoSec Rate Limit Rule Schema"
 }

@@ -28,7 +28,7 @@ import kotlin.random.Random
  * time zones) are the descriptor's to list. Recursion is bounded by [maxDepth]: past it, arrays take their minimum
  * size, objects their required fields and [AnyOf] its first variant.
  */
-class FormatGenerator(private val random: Random, private val maxDepth: Int = 4) {
+class FormatGenerator(private val random: Random, private val maxDepth: Int = 7) {
     private val nodes = JsonNodeFactory.instance
 
     /** The concrete [ObjectType], [ArrayType], [TupleType] or [MapType] of each generated container. */

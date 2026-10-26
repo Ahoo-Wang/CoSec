@@ -1,0 +1,40 @@
+{
+  "rules": [
+    "DOC-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "`and` holds a string instead of an array. 7.x read it as no conditions, which matched everything; 8.0 does not decode the document.",
+  "documents": {
+    "platform": {
+      "schema": 2,
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "and": "exists"
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "expected an array, found a string"
+  }
+}
