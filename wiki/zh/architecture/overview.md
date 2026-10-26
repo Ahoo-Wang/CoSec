@@ -38,6 +38,7 @@ flowchart BT
     model[cosec-model]
     engine[cosec-engine] --> model
     runtime[cosec-runtime] --> engine & core
+    control[cosec-control] --> runtime
 ```
 
 箭头指向模块所依赖的模块。图背后的规则：
@@ -46,6 +47,7 @@ flowchart BT
 - **`cosec-core`** 放所有算法（策略引擎及其匹配器、`SimpleAuthorization`、`SecurityPipeline`、审计/限流/影子模式的授权装饰器、令牌抽象、本地加载、JSON 序列化），以及供其他模块和应用实现的 SPI（见[扩展 CoSec](./extending.md)）。
 - **`cosec-model` 和 `cosec-engine`**（目录为 `model/` 和 `engine/`）将容纳 8.0 新增的纯函数决策引擎（[RFC 0002](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0002-pure-engine.md)）。它们只依赖 Kotlin 标准库：`EnginePurityTest`（ArchUnit）在代码引用 Reactor、Spring、日志、I/O、线程或时钟时失败，`check` 中的 `verifyPureClasspath` 任务在出现任何其他依赖时失败。目前还没有模块使用它们。
 - **`cosec-runtime`**（目录为 `runtime/`）将容纳 8.0 新增的协程请求 Pipeline（[RFC 0006](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0006-coroutine-pipeline.md)），依赖 `cosec-engine` 和 `cosec-core`。协程只出现在这个模块和 Web 适配器里，Reactor 只出现在适配器的桥接处：`RuntimeBoundaryTest`（ArchUnit）在 `runtime/`、`engine/` 或 `model/` 的代码引用 `reactor.*`、数据面 SPI 的签名含有 Reactor 类型，`runtime/` 引用 Spring、Servlet API、协程桥接（`kotlinx.coroutines.reactor`、`runBlocking`）、`GlobalScope` 或 `Dispatchers.IO`，或调用会吞掉取消的 `runCatching` 时失败。`cosec-core` 仍把 Reactor 带上类路径，所以这个测试检查的是代码引用，而不是依赖。目前模块还是空的。
+- **`cosec-control`**（目录为 `control/`）将容纳 8.0 新增的控制面：修订、发布流程和控制面写入的授权（[RFC 0007](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0007-control-plane.md)），依赖 `cosec-runtime`。它是由适配器装配的库：`ControlBoundaryTest`（ArchUnit）导入本模块自己编译出的类（不论包名），在其中有类不在 `me.ahoo.cosec.control` 包下、引用 Spring、`reactor.*`、通往 Reactor 的协程或 Reactive Streams 桥接或 Redis 客户端，或调用 `runBlocking`、`Dispatchers.IO`、`GlobalScope` 时失败。与 `RuntimeBoundaryTest` 一样，它检查的是代码引用，而不是依赖。目前模块还是空的。
 - **其余每个库模块只适配一种技术**：JWT、基于 CoCache 的 Redis、OAuth、OpenTelemetry、Micrometer、OpenAPI、ip2region、Kafka，或一种 Web 技术栈。适配模块里不做任何决策。
 - **`cosec-spring-boot-starter`** 负责装配。每个集成都是 [`cosec-spring-boot-starter/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts) 中声明的一个 Gradle feature variant：适配模块只是该 variant 的依赖，其自动配置由 `@ConditionalOnClass` 保护，所以只有应用请求了该能力才会生效。新增集成意味着新增一个模块和一个 variant，而不是给 starter 增加硬依赖。能力及其对应的模块列在[简介](../guide/introduction.md#modules)中。
 - **`cosec-gateway-server`** 是基于 starter 的开箱即用应用，永不发布。

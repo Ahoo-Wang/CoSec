@@ -45,6 +45,7 @@ flowchart BT
     model[cosec-model]
     engine[cosec-engine] --> model
     runtime[cosec-runtime] --> engine & core
+    control[cosec-control] --> runtime
 ```
 
 Arrows point at what a module depends on. The rules behind the picture:
@@ -67,6 +68,13 @@ Arrows point at what a module depends on. The rules behind the picture:
   when a data-plane SPI signature carries a Reactor type, when `runtime/` references Spring, the Servlet API or a
   coroutine bridge (`kotlinx.coroutines.reactor`, `runBlocking`), `GlobalScope` or `Dispatchers.IO`, or when it calls
   `runCatching`, which swallows cancellation. `cosec-core` still brings Reactor onto its classpath, so the test checks references, not dependencies.
+  The module is empty so far.
+- **`cosec-control`** (directory `control/`) will hold the control plane new in 8.0: revisions, the publish flow and the
+  authorization of control-plane writes ([RFC 0007](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0007-control-plane.md), Chinese).
+  It depends on `cosec-runtime`. It is a library that adapters wire in: `ControlBoundaryTest` (ArchUnit) imports the
+  module's own compiled classes, whatever their package, and fails when one of them is outside `me.ahoo.cosec.control`,
+  references Spring, `reactor.*`, the coroutine or Reactive Streams bridges to it or a Redis client, or calls
+  `runBlocking`, `Dispatchers.IO` or `GlobalScope`. Like `RuntimeBoundaryTest`, it checks references, not dependencies.
   The module is empty so far.
 - **Every other library module adapts exactly one technology**: JWT, Redis through CoCache, OAuth, OpenTelemetry,
   Micrometer, OpenAPI, ip2region, Kafka, or one web stack. An adapter module never contains a decision.
