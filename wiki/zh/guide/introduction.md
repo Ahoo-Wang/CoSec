@@ -80,7 +80,7 @@ Gateway 中是 `GlobalFilter`。对每个请求，过滤器会：
 | 把客户端所在地区作为请求属性 | `ip2region-support` | `cosec-ip2region` |
 
 starter 始终引入 `cosec-api`（公共契约）、`cosec-core`（决策引擎、策略加载、审计、限流）和 `cosec-jwt`（JWT 令牌）。`cosec-bom`
-用于对齐版本。`cosec-model` 和 `cosec-engine` 是 8.0 新增的模块，容纳纯函数决策引擎，`cosec-runtime` 将容纳包在它外面的协程请求 Pipeline；应用不直接依赖它们。`cosec-gateway-server` 是由这些模块构建的、开箱即用的网关：直接部署它，不要依赖它（见[网关](../integration/web.md#gateway)）。
+用于对齐版本。`cosec-model` 和 `cosec-engine` 是 8.0 新增的模块，容纳纯函数决策引擎，`cosec-runtime` 将容纳包在它外面的协程请求 Pipeline，`cosec-control` 将容纳发布策略的控制面；应用不直接依赖它们。`cosec-gateway-server` 是由这些模块构建的、开箱即用的网关：直接部署它，不要依赖它（见[网关](../integration/web.md#gateway)）。
 
 不使用 Spring Boot 时，可以直接使用 `cosec-core`：用你自己的 `PolicyRepository` 和 `AppRolePermissionRepository` 构建
 `SimpleAuthorization`，在你自己的传输层中调用它。见[仓库](../architecture/extending.md#repositories)。
