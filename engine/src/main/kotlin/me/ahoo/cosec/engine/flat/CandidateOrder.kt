@@ -25,6 +25,9 @@ internal interface CandidateVisitor {
 
     /** An attachment or binding names [policyId], which the snapshot does not have (or does not let it attach). */
     fun missing(policyId: String)
+
+    /** An attachment or tenant binding names [policyId], which both the tenant document and the platform define. */
+    fun ambiguous(policyId: String)
 }
 
 /**
@@ -88,7 +91,11 @@ internal object CandidateOrder {
         return tenant != null && visit(tenant.principal(tenantId, principal), request, platform, visitor)
     }
 
-    /** A tenant's own policy wins over a platform policy of the same id. */
+    /**
+     * An id both the tenant and the platform define is ambiguous whatever their `attachable` flags: preferring the
+     * tenant's would let it replace a platform DENY, preferring the platform's would let it override the tenant's
+     * (RFC 0007 N2).
+     */
     private fun attachments(
         request: FlatRequest,
         platform: CompiledDocument,
@@ -98,7 +105,13 @@ internal object CandidateOrder {
         val attachments = request.memberships.attachments
         for (i in attachments.indices) {
             val id = attachments[i].value
-            val policy = tenant?.attachable(id) ?: platform.attachable(id)
+            val own = tenant?.policy(id)
+            val shared = platform.policy(id)
+            if (own != null && shared != null) {
+                visitor.ambiguous(id)
+                continue
+            }
+            val policy = (own ?: shared)?.takeIf { it.attachable }
             if (policy == null) {
                 visitor.missing(id)
             } else if (visitor.candidate(policy, policy.attached)) {
@@ -139,6 +152,10 @@ internal object CandidateOrder {
             }
             if (request.time >= entry.expiresAt) {
                 visitor.expired(entry.via)
+                continue
+            }
+            if (entry.checksPlatform && platform.policy(entry.policyId) != null) {
+                visitor.ambiguous(entry.policyId)
                 continue
             }
             val policy = entry.local ?: platform.policy(entry.policyId)

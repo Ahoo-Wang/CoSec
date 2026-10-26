@@ -14,7 +14,9 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.engine.TraceLevel
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.BindingRef
+import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -74,6 +76,7 @@ class FlatEnginePropertyTest {
             collector.candidates.assert().isEqualTo(expected.candidates)
             collector.expired.assert().isEqualTo(expected.expired)
             collector.missing.assert().isEqualTo(expected.missing)
+            collector.ambiguous.assert().isEqualTo(expected.ambiguous)
         }
     }
 
@@ -90,6 +93,36 @@ class FlatEnginePropertyTest {
         }
     }
 
+    /**
+     * P1′ through an id both layers define (RFC 0007 N2): when the tenant defines the id of an attached platform DENY,
+     * the tenant's copy never replaces it. No permit, and the id is reported as ambiguous.
+     */
+    @Test
+    fun `P1' a tenant policy of the same id never cancels an attached deny`() {
+        forEachCase(seed = 11) { case, random ->
+            if (!case.request.request.subject.authenticated) return@forEachCase
+            val deny = case.fixture.policy("added-deny", deny(), attachable = true)
+            val copy = case.fixture.policy("added-deny", allow(), attachable = random.nextBoolean())
+            val shadowed = case.copy(
+                platform = case.platform.with(deny),
+                tenant = case.tenant.with(copy),
+                tenantLoaded = true,
+                request = withAttachments(
+                    case.request,
+                    case.request.memberships.attachments.map { it.value } + deny.id
+                ),
+            )
+            for (level in TraceLevel.entries) {
+                val evaluation = shadowed.evaluate(level)
+                evaluation.decision.assert().describedAs("$level").isNotInstanceOf(Decision.Permit::class.java)
+                if (level != TraceLevel.OFF) {
+                    val ambiguous = evaluation.trace!!.unresolved.filterIsInstance<Cause.AmbiguousPolicy>()
+                    ambiguous.flatMap { it.policyIds }.assert().contains(deny.policyId)
+                }
+            }
+        }
+    }
+
     /** P8: shuffling the candidates never changes the kind of decision. */
     @Test
     fun `P8 the decision does not depend on the candidate order`() {
@@ -99,7 +132,8 @@ class FlatEnginePropertyTest {
             repeat(3) {
                 val candidates = enumeration.candidates.shuffled(random)
                 val missing = enumeration.missing.shuffled(random)
-                val shuffled = ShuffledEvaluator(case.request, case.view(), candidates, missing)
+                val ambiguous = enumeration.ambiguous.shuffled(random)
+                val shuffled = ShuffledEvaluator(case.request, case.view(), candidates, missing, ambiguous)
                 shuffled.evaluate().javaClass.assert().isEqualTo(expected)
             }
         }
@@ -117,7 +151,10 @@ class FlatEnginePropertyTest {
         }
     }
 
-    /** P12: another tenant's document never changes a decision, even one naming this tenant's principal and roles. */
+    /**
+     * P12: another tenant's document never changes a decision, even one with this principal's id, roles and attached
+     * ids; one naming this tenant's principal or roles does not compile.
+     */
     @Test
     fun `P12 another tenant's document never changes a decision`() {
         forEachCase(seed = 12) { case, random ->
@@ -135,6 +172,15 @@ class FlatEnginePropertyTest {
             assertThrownBy<IllegalArgumentException> {
                 CoSecFlatEngine.evaluate(case.request, case.view(tenant = hostile[0]))
             }
+            for (binding in FlatGenerator(random).hostileBindings(case)) {
+                assertThrownBy<IllegalArgumentException> {
+                    CompiledDocument.tenant(
+                        TenantId(other),
+                        listOf(case.fixture.policy("h-deny", deny())),
+                        listOf(binding)
+                    )
+                }
+            }
         }
     }
 
@@ -142,6 +188,7 @@ class FlatEnginePropertyTest {
         val candidates = mutableListOf<Candidate>()
         val expired = mutableListOf<BindingRef.Bound>()
         val missing = linkedSetOf<String>()
+        val ambiguous = linkedSetOf<String>()
 
         override fun candidate(policy: CompiledPolicy, via: BindingRef): Boolean {
             candidates += Candidate(policy, via)
@@ -155,6 +202,10 @@ class FlatEnginePropertyTest {
         override fun missing(policyId: String) {
             missing += policyId
         }
+
+        override fun ambiguous(policyId: String) {
+            ambiguous += policyId
+        }
     }
 
     private class ShuffledEvaluator(
@@ -162,9 +213,11 @@ class FlatEnginePropertyTest {
         view: SnapshotView,
         private val candidates: List<Candidate>,
         private val missingIds: List<String>,
+        private val ambiguousIds: List<String>,
     ) : FlatEvaluator(request, view) {
         override fun enumerate(): Boolean {
             missingIds.forEach(::missing)
+            ambiguousIds.forEach(::ambiguous)
             return candidates.any { candidate(it.policy, it.via) }
         }
     }

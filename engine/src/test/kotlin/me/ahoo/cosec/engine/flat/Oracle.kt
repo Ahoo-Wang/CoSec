@@ -31,10 +31,16 @@ import me.ahoo.cosec.model.decision.StatementRef
 
 /**
  * RFC 0004 §4.2 (`appliesTo`), §6.3 (candidate order) and §6.1 (the flat algorithm) transcribed over the raw bindings
- * of a [FlatCase], without the index, and reading the test matchers' behaviors instead of calling them.
+ * of a [FlatCase], without the index, and reading the test matchers' behaviors instead of calling them. Policy ids
+ * resolve by RFC 0007 §3.1 N2: an id the tenant and the platform both define is ambiguous, whatever else is true.
  */
 object Oracle {
-    class Enumeration(val candidates: List<Candidate>, val expired: List<BindingRef.Bound>, val missing: Set<String>)
+    class Enumeration(
+        val candidates: List<Candidate>,
+        val expired: List<BindingRef.Bound>,
+        val missing: Set<String>,
+        val ambiguous: Set<String>,
+    )
 
     private val byId = Comparator<Binding> { a, b -> a.id.value.compareTo(b.id.value) }
     private val byPolicy = Comparator<Binding> { a, b ->
@@ -60,6 +66,11 @@ object Oracle {
         val candidates = mutableListOf(Candidate(BuiltinPolicies.blacklist, BindingRef.Builtin))
         val expired = mutableListOf<BindingRef.Bound>()
         val missing = linkedSetOf<String>()
+        val ambiguous = linkedSetOf<String>()
+
+        private fun RawDocument.defines(id: String) = policies.any { it.id == id }
+
+        private fun RawDocument.find(id: String) = policies.find { it.id == id }
 
         fun applying(document: RawDocument, predicate: (Binding) -> Boolean) =
             document.bindings.filter { predicate(it) && appliesTo(it, case.request) }
@@ -71,22 +82,31 @@ object Oracle {
                     expired += via
                     continue
                 }
-                val policy = resolve(document, binding.policy.value)
-                if (policy == null) missing += binding.policy.value else candidates += Candidate(policy, via)
+                val id = binding.policy.value
+                if (kind == DocumentKind.TENANT && document.defines(id) && case.platform.defines(id)) {
+                    ambiguous += id
+                    continue
+                }
+                val policy = if (id == BuiltinPolicies.ROOT.value) {
+                    BuiltinPolicies.root
+                } else {
+                    document.find(id) ?: case.platform.find(id)
+                }
+                if (policy == null) missing += id else candidates += Candidate(policy, via)
             }
         }
 
-        private fun resolve(document: RawDocument, id: String): CompiledPolicy? =
-            if (id == BuiltinPolicies.ROOT.value) {
-                BuiltinPolicies.root
-            } else {
-                document.policies.find { it.id == id } ?: case.platform.policies.find { it.id == id }
-            }
-
         fun attach(tenant: RawDocument?, id: PolicyId) {
-            val policy = tenant?.policies?.find { it.id == id.value && it.attachable }
-                ?: case.platform.policies.find { it.id == id.value && it.attachable }
-            if (policy == null) missing += id.value else candidates += Candidate(policy, BindingRef.Attached(id))
+            val inTenant = tenant?.find(id.value)
+            val inPlatform = case.platform.find(id.value)
+            when {
+                inTenant != null && inPlatform != null -> ambiguous += id.value
+                inTenant == null && inPlatform == null -> missing += id.value
+                else -> {
+                    val policy = checkNotNull(inTenant ?: inPlatform)
+                    if (policy.attachable) candidates += Candidate(policy, BindingRef.Attached(id)) else missing += id.value
+                }
+            }
         }
     }
 
@@ -112,7 +132,7 @@ object Oracle {
                     add(document, kind, applying(document) { (it.subject as? SubjectRef.Role)?.id == role })
                 }
             }
-            return Enumeration(candidates, expired, missing)
+            return Enumeration(candidates, expired, missing, ambiguous)
         }
     }
 
@@ -150,7 +170,7 @@ object Oracle {
         return error?.let { Decision.Indeterminate(it) }
     }
 
-    private fun unresolved(case: FlatCase, missing: Set<String>): Cause? {
+    private fun unresolved(case: FlatCase, missing: Set<String>, ambiguous: Set<String>): Cause? {
         val scope = case.request.scope
         val appNeeded = scope.roles.isNotEmpty() && scope.app.value.isNotEmpty()
         val notLoaded = when {
@@ -159,13 +179,15 @@ object Oracle {
             else -> null
         }
         val missingPolicies = if (missing.isEmpty()) null else Cause.MissingPolicies(missing.map(::PolicyId).toSet())
-        return case.unresolved.firstOrNull() ?: notLoaded ?: missingPolicies
+        val ambiguousIds = ambiguous.map(::PolicyId).toSet()
+        val ambiguousPolicies = if (ambiguousIds.isEmpty()) null else Cause.AmbiguousPolicy(ambiguousIds)
+        return case.unresolved.firstOrNull() ?: notLoaded ?: missingPolicies ?: ambiguousPolicies
     }
 
     fun decide(case: FlatCase): Decision {
         val enumeration = enumerate(case)
         denyPass(case, enumeration.candidates)?.let { return it }
-        unresolved(case, enumeration.missing)?.let { return Decision.Indeterminate(it) }
+        unresolved(case, enumeration.missing, enumeration.ambiguous)?.let { return Decision.Indeterminate(it) }
         for (candidate in enumeration.candidates) {
             val guard = candidate.policy.guard as TestGuard?
             if (guard != null && guard.behavior != GuardBehavior.MATCH) continue

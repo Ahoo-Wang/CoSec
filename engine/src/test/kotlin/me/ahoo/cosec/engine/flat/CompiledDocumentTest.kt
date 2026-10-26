@@ -49,7 +49,16 @@ class CompiledDocumentTest {
 
     @Test
     fun `break-glass bindings are expiring principal bindings of the platform`() {
-        rejects("has no expiry") { platform(bindings = listOf(principal("r", "cosec:root", breakGlass = true))) }
+        rejects("has no expiry") {
+            platform(bindings = listOf(principal("r", "cosec:root", tenant = "(platform)", breakGlass = true)))
+        }
+        // Root is for the platform's administrators: a tenant's principal of the same id is someone else.
+        rejects("must bind a principal of the platform tenant") {
+            platform(bindings = listOf(root(tenant = "acme", principal = "alice")))
+        }
+        rejects("must bind a principal of the platform tenant") {
+            platform(p, bindings = listOf(principal("r", "p", tenant = "(0)", expiresAt = NOW, breakGlass = true)))
+        }
         rejects("in the TENANT document") { tenant(bindings = listOf(root())) }
         val anyoneBreakGlass = anyone("r", "cosec:root", expiresAt = NOW)
         rejects("must bind a principal") {
@@ -71,6 +80,24 @@ class CompiledDocumentTest {
             p,
             bindings = listOf(anyone("a", "p"), principal("b", "p"), role("c", "editor", "p"))
         ).owner.assert().isEqualTo("acme")
+    }
+
+    /** A binding no request can reach would silently drop a DENY. */
+    @Test
+    fun `a binding that can never apply is rejected`() {
+        rejects("binds a subject of tenant beta") { tenant(p, bindings = listOf(principal("x", "p", tenant = "beta"))) }
+        rejects("binds a subject of tenant beta") {
+            tenant(p, bindings = listOf(role("x", "editor", "p", tenant = "beta")))
+        }
+        rejects("is scoped to another app") { app(p, bindings = listOf(role("x", "editor", "p", app = "other"))) }
+        rejects("is scoped to another app") { app(p, bindings = listOf(role("x", "editor", "p", app = ""))) }
+        // Their own tenant, any tenant, their own app or any app: fine.
+        tenant(
+            p,
+            bindings = listOf(principal("a", "p"), role("b", "editor", "p", tenant = "acme"), role("c", "editor", "p")),
+        ).owner.assert().isEqualTo("acme")
+        app(p, bindings = listOf(role("a", "editor", "p"), role("b", "editor", "p", app = null))).owner.assert()
+            .isEqualTo("app")
     }
 
     @Test

@@ -33,7 +33,10 @@ class FlatTrace(
     val candidates: List<CandidateTrace>,
     /** Bindings that would apply to the request had they not expired, in candidate order. */
     val expired: List<BindingRef.Bound>,
-    /** What the request could not resolve: the caller's, then documents not given, then missing policies. */
+    /**
+     * What the request could not resolve: the caller's, then documents not given, then missing policies, then
+     * ambiguous ones.
+     */
     val unresolved: List<Cause>,
 )
 
