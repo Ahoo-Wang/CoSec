@@ -1,0 +1,48 @@
+{
+  "rules": [
+    "BND-8"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The acme document binds its own principal alice: it compiles and applies.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "allow-all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "p:alice",
+            "subject": {
+              "principal": "alice",
+              "tenant": "acme"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "allow-all"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "allow-all",
+      "statement": 0,
+      "via": {
+        "binding": "p:alice",
+        "document": "tenant"
+      }
+    }
+  }
+}
