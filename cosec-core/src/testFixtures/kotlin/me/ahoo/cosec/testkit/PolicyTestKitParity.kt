@@ -17,6 +17,7 @@ import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.parity.AuthorizationFactory
 import me.ahoo.cosec.parity.DecisionParity
+import me.ahoo.cosec.parity.FailureView
 import me.ahoo.cosec.parity.ParityResult
 import me.ahoo.cosec.parity.ParityVerdict
 
@@ -50,7 +51,8 @@ class PolicyParityReport(val results: List<PolicyParityResult>) {
 
 /**
  * Runs every case of the suites at [locations] through both [baseline] and [candidate] and compares the answers with
- * [DecisionParity] (RFC 0002 §5.5, §8.2). Expectations are not checked: a case that fails [PolicyTestKit.run] still
+ * [DecisionParity] (RFC 0002 §5.5, §8.2), judging failures by [failureView]; RFC 0003 §8.2 runs them against the
+ * snapshot source with [FailureView.INNERMOST_CAUSE]. Expectations are not checked: a case that fails [PolicyTestKit.run] still
  * passes here as long as both implementations answer alike, errors included.
  *
  * To run a deployment's own suites, call it from a local build of CoSec's `main` (it lives in `cosec-core`'s test
@@ -63,7 +65,8 @@ fun PolicyTestKit.parity(
     locations: List<String>,
     rootPrincipalMatcher: RootPrincipalMatcher = RootPrincipalMatcher.NONE,
     baseline: AuthorizationFactory = AuthorizationFactory.LEGACY,
-    candidate: AuthorizationFactory = AuthorizationFactory.ENGINE
+    candidate: AuthorizationFactory = AuthorizationFactory.ENGINE,
+    failureView: FailureView = FailureView.AS_THROWN,
 ): PolicyParityReport {
     val suites = load(*locations.toTypedArray())
     require(suites.isNotEmpty()) { "No policy test suites found at $locations." }
@@ -83,6 +86,7 @@ fun PolicyTestKit.parity(
                     BlacklistChecker.NoOp,
                     rootPrincipalMatcher
                 ),
+                failureView,
             )
             suite.cases.map { case ->
                 PolicyParityResult(

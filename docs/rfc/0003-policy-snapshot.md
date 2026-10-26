@@ -4,6 +4,10 @@
 > 前置：[RFC 0002](0002-pure-engine.md)（第 2 阶段，PR-1、PR-2 已合入，PR-3 进行中）·
 > 基线：`main` @ `a130eb90` · 交付：全部合入 `main`（8.0 线）；8.0 在 RFC 0001 第 2–6 阶段全部完成、各做完两轮审查之前不发布任何版本 ·
 > 范围：`cosec-core`、`cosec-cocache`、`cosec-spring-boot-starter`；`engine/`、`model/` 不改
+>
+> **2026-10-26 修订（[RFC 0008](0008-conformance-and-direct-build.md)）**：8.0 不考虑兼容性。§8 的门槛与等价、§9.1 中对 `engine` 的相对目标、§11.2 的门槛行与 PR-5 取消；PR-6 并入 RFC 0008 的切换 PR。
+> 7.0 形状的 `Policies`/`App` 文档、`SnapshotPolicySetLoader` 与 PR-4（#1030）的比较、回放和测量工具在切换时删除（RFC 0008 §4.2）；`SnapshotSource`、
+> `SnapshotDocumentStore`、`RedisSnapshotDocumentStore` 与条件写入原样复用（RFC 0008 §4.3）。PR-5 中仍然成立的要求转入切换 PR（RFC 0008 §4.4）。下文保留原样以便追溯。
 
 ## 0. 结论先行
 
@@ -547,7 +551,9 @@ N 个实例同时启动就是 N 个并发写入方。而 CoCache 6.6 只有无�
 **写入的负担**（PR-3 第 1 轮审查）：
 
 - 冲突之后的重试等待一个随机时长，上界从 5 ms 起每次翻倍、最多 200 ms（full jitter），所以同时启动的大量实例不会一起空转；
-- 不改变文档的写入（同一条策略、已有的授予）什么都不写：不加修订号、不广播、不触发任何实例的重新加载。判定方法是用当前文档的头部写出新内容、按字节比较；
+- 不改变文档的写入（同一条策略、已有的授予）什么都不写：不加修订号、不广播，其它实例不重新加载。判定方法是用当前文档的头部写出新内容、按字节比较。
+  但本实例照样标记该 key 为脏、做一次条件读（第 2 轮审查）：另一个实例可能已经发布了同样的内容，而本实例还没收到失效，跳过写入不能让调用方
+  继续读到旧版本（读己之写）；
 - `setPolicies(policies)` 和 `setRoleGrants(appId, grants)` 一次写入改动整份文档里的多条，要么全部写入要么都不写。PR-5 让 `LocalPolicyInitializer` 用前者；
 - 发布者不动的条目按读到的字节原样写回（`SnapshotContent` 保存每个条目的原始字节），`1e400`、`1.10` 这类经过树会被改写的数字保持不变。
 
@@ -713,10 +719,15 @@ AGENTS.md 的每条不变量在本阶段如何成立，新的失败模式各由�
 
 PR-3 引入了 BlockHound（`io.projectreactor.tools:blockhound`，`cosec-cocache` 的测试依赖，测试 JVM 加 `-XX:+AllowRedefinitionToAddDeleteMethods`）。
 `SnapshotStoreBlockHoundTest` 只监视名字带固定前缀的测试线程（不加载 Reactor 的集成，所以同一个 JVM 里的其它测试不受影响），在这些线程上对真实 Redis
-调用存储的全部入口、发布者的全部写操作，以及 `SnapshotSource` 经存储的冷加载，断言没有任何阻塞调用；另一例确认监视确实生效。唯一的豁免是 logback
-控制台 appender 的锁：测试 JVM 用根构建指定的 `config/logback.xml`，根日志级别 TRACE、输出到控制台，Lettuce 记录每条命令时可能等这把锁；这是日志配置，
-不是被测代码。与此无关的两点：L2 命中时的摘要在 `digestExecutor` 上计算，不在调用方线程上（`RedisSnapshotDocumentStoreTest` 固定），因为它与文档
-大小成正比；发布者的修改、序列化和日志都在它的调度线程上（同样有测试固定）。
+调用存储的全部入口、发布者的全部写操作，以及 `SnapshotSource` 经存储的冷加载，断言没有任何阻塞调用；另一例确认监视确实生效。豁免恰好两处，各自只放行
+一个方法：
+
+- logback 控制台 appender 的锁（`OutputStreamAppender.writeBytes`）：测试 JVM 用根构建指定的 `config/logback.xml`，根日志级别 TRACE、输出到控制台。
+  Lettuce 在**发出命令的线程**上记录这条命令（`DefaultEndpoint.write`），所以被监视的调用方线程会在这里等这把锁。这是测试的日志配置，不是被测代码；
+- 调度线程延时队列的锁（`ScheduledThreadPoolExecutor$DelayedWorkQueue.offer`）：冷加载在调用方线程上挂超时，一次堆插入的有界等待，理由见 §5.3。
+
+与豁免无关的两点：L2 命中时的摘要在 `digestExecutor` 上计算，不在调用方线程上（`RedisSnapshotDocumentStoreTest` 固定），因为它与文档大小成正比；
+发布者的修改、序列化和它自己的日志都在它的调度线程上，不在调用方线程上（`RedisSnapshotPublisherTest` 固定）。
 
 **新的失败模式**（编号接 §4.4）：
 
@@ -754,6 +765,8 @@ PR-5 起成为唯一的行为，用户在 8.0.0 GA 中第一次看到：
 ---
 
 ## 8. 门槛与等价
+
+> **2026-10-26：本节整体由 [RFC 0008](0008-conformance-and-direct-build.md) 取代。** P6、P7 作为规范性质保留（RFC 0008 §3.5）；P5 与比较、回放一并取消。以下原文保留，仅供追溯。
 
 ### 8.1 要证明什么，用什么比较
 
@@ -807,6 +820,8 @@ PR-5 起成为唯一的行为，用户在 8.0.0 GA 中第一次看到：
 ## 9. 性能
 
 ### 9.1 目标
+
+> **2026-10-26**：下表中与 `engine`（第 2 阶段实现）比较的相对目标取消；保留的是 RFC 0003 Q14 的编译预算（RFC 0008 §3.8）。
 
 | 基准 | 比较 | 目标 |
 |---|---|---|
@@ -883,10 +898,10 @@ java -jar cosec-core/build/libs/cosec-core-<version>-jmh.jar SimpleAuthorization
 | PR-1 | `feat(core): add the snapshot source with on-demand loading and bounded staleness` | `SnapshotKey`、`SnapshotDocument`、`SnapshotVersion`、`SnapshotDocumentStore`/`SnapshotChangeListener` SPI、内存 `SnapshotDocumentStore`、`SnapshotSource`（对编译函数泛化：单飞、有序安装、重新校验、LRU、落后时长、fail-closed 判定、预热、指标接口）；F1–F11、F14、F15 的测试和 P6（用一个假的编译函数） | 本 RFC 获批 | **能**：不依赖引擎适配层 | `:cosec-core:check` 通过，变更行覆盖率 ≥ 80% |
 | PR-2 | `feat(core): compile policy snapshots and load the PolicySet from them` | `SnapshotCompiler`（JSON → `PolicyData`/`AppPermissionData` → PR-3 的规则组，含 `Broken`）、`CompiledPolicies`/`CompiledApp`、`PolicySnapshot`、`SnapshotPolicySetLoader`；P5、P7；`SimpleAuthorizationBenchmark` 的 `source` 参数（`snapshot` 来源在 PR-5 之前经测试用的装配运行）；`SnapshotCompileBenchmark`；`cosec-cocache` 的 `jmh` 源码集 | PR-1；RFC 0002 PR-3（`PolicySetLoader`、`PolicyGroup`、`AppPermissionRules`） | **能**：RFC 0002 PR-3 合入即可 | `:cosec-core:check` 及依赖它的模块通过；P5 固定种子 2,000 例零差异 |
 | PR-3 | `feat(cocache): store snapshot documents in CoCache` | `PolicySnapshotCache` 声明（`storeOfRecord`，显式 key 编码）、`SnapshotDocumentCodec`、`RedisSnapshotDocumentStore`（含失效通道订阅）、`RedisSnapshotPublisher`（条件写入）、`CoSec7xReader` 与 `snapshotConvert` 任务、`RuntimeHintsRegistrar`；F3、F9、F12 在真实 Redis 上的测试；`CacheTtlPolicyTest`、`StrictCacheFailureTest` 增加针对新缓存的用例 | PR-1；CoCache 6.7.0 的条件写入与条件读（Q5；2026-10-22 发布） | **能** | `:cosec-cocache:check` 通过（需要 Redis）；一个人为制造的并发写入测试证明不丢更新 |
-| PR-4 | `test: add snapshot parity, replay and sizing tools` | `DecisionParity` 对快照来源的装配；回放工具增加候选为快照的模式；百万例任务；`snapshotMeasure` 任务（§4.8）；§8.2 第一行的参数化测试 | PR-2、PR-3；RFC 0002 PR-4（比较器、回放工具） | **能**：基于 RFC 0002 PR-4 的代码；RFC 0002 PR-6 之后改用改名后的 `DecisionParity`、`decisionReplay`（Q12） | 用仓库内的合成数据跑通回放和测量；一个人为制造的差异出现在报告中；百万例跑通 |
-| — | **门槛** | 维护者在本地：对 RFC 0002 的同一批导出数据跑回放（§8.3）；对完整数据跑 `snapshotMeasure`（§4.8），据此确认 Q7、Q14、Q19 的数字 | PR-4 | — | 回放零差异；测量摘要贴在 issue 或 PR-5 中 |
-| PR-5 | `refactor!: authorize from the policy snapshot` | `SimpleAuthorization` 改为 §5.1 的流程；starter 装配 `SnapshotSource`、`RedisSnapshotDocumentStore`、`SnapshotPublisher`、健康指标、actuator 端点、`cosec.authorization.snapshot.*` 属性；`LocalPolicyInitializer`、`PolicyHistory`、解释、`AuthorizationChecker`、`PolicyTestKit` 改为读快照或经发布者写入；影子改为快照叠加，删除 `Overlay*Repository`；`CoSecSchemaMarker` 升为 `"8"`；`WebAdapterParityTest` 的新用例；文档（§11.3）；JMH 对比 | RFC 0002 PR-6；PR-4；门槛 | **不能** | 全部模块 `check` 通过；门槛证据（计数与哈希）附在 PR 上；§9 的目标满足 |
-| PR-6 | `refactor(cocache)!: remove the per-request policy repositories` | 删除 `PolicyRepository`、`AppRolePermissionRepository`、两个 Redis 仓库、四个缓存及其 bean 和属性（`cosec.authorization.cache.policy.*`、`.role.*`）、`CacheFutures.kt`、`LocalCacheFastPathTest`；参数化测试去掉仓库来源（`DecisionParity`、`decisionReplay` 保留，Q12）；文档中仓库的描述 | PR-5 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
+| PR-4 | `test: add snapshot parity, replay and sizing tools`（已合入，#1030；**2026-10-26**：工具在 RFC 0008 的切换 PR 中删除） | `DecisionParity` 对快照来源的装配；回放工具增加候选为快照的模式；百万例任务；`snapshotMeasure` 任务（§4.8）；§8.2 第一行的参数化测试 | PR-2、PR-3；RFC 0002 PR-4（比较器、回放工具） | **能**：基于 RFC 0002 PR-4 的代码；RFC 0002 PR-6 之后改用改名后的 `DecisionParity`、`decisionReplay`（Q12） | 用仓库内的合成数据跑通回放和测量；一个人为制造的差异出现在报告中；百万例跑通 |
+| — | ~~**门槛**~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | 维护者在本地：对 RFC 0002 的同一批导出数据跑回放（§8.3）；对完整数据跑 `snapshotMeasure`（§4.8），据此确认 Q7、Q14、Q19 的数字 | PR-4 | — | 回放零差异；测量摘要贴在 issue 或 PR-5 中 |
+| ~~PR-5~~ | ~~`refactor!: authorize from the policy snapshot`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）**：7.0 形状的文档被 RFC 0004 取代；仍然成立的要求转入切换 PR | `SimpleAuthorization` 改为 §5.1 的流程；starter 装配 `SnapshotSource`、`RedisSnapshotDocumentStore`、`SnapshotPublisher`、健康指标、actuator 端点、`cosec.authorization.snapshot.*` 属性；`LocalPolicyInitializer`、`PolicyHistory`、解释、`AuthorizationChecker`、`PolicyTestKit` 改为读快照或经发布者写入；影子改为快照叠加，删除 `Overlay*Repository`；`CoSecSchemaMarker` 升为 `"8"`；`WebAdapterParityTest` 的新用例；文档（§11.3）；JMH 对比 | RFC 0002 PR-6；PR-4；门槛 | **不能** | 全部模块 `check` 通过；门槛证据（计数与哈希）附在 PR 上；§9 的目标满足 |
+| ~~PR-6~~ | ~~`refactor(cocache)!: remove the per-request policy repositories`~~ **并入 RFC 0008 的切换 PR（2026-10-26）**，删除清单不变 | 删除 `PolicyRepository`、`AppRolePermissionRepository`、两个 Redis 仓库、四个缓存及其 bean 和属性（`cosec.authorization.cache.policy.*`、`.role.*`）、`CacheFutures.kt`、`LocalCacheFastPathTest`；参数化测试去掉仓库来源（`DecisionParity`、`decisionReplay` 保留，Q12）；文档中仓库的描述 | PR-5 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
 
 PR-1 和 PR-3 互不依赖对方的实现（PR-3 只用 PR-1 的 SPI 类型），可以在 PR-1 的类型合入后并行；PR-2 等 RFC 0002 PR-3。
 
@@ -930,8 +945,8 @@ PR 按这里的值实现，数字由门槛的测量结果（§4.8）校准。
 | Q8 | **编译或解码失败**（§4.4，§2 I5） | **已决定**：本阶段保持 7.0 的语义：失败的文档或条目让到达它的层 500，不保留旧版本（F4、F5）；读取暂时失败时保留已安装的版本（F6）。RFC 0001 的"保留旧版本"推迟到第 6 阶段控制面在发布前编译之后 | 本阶段承诺不改变决策；保留旧版本会让本该拒绝的请求按旧内容放行 |
 | Q9 | **`BlockingAware`**（§5.2，§2 I2） | **已决定**：本阶段保留，只删除策略数据的调度器切换；第 5 阶段 `AttributeProvider` 落地后删除 | 它针对阻塞匹配器，删除它会让这些匹配器在事件循环上执行，违反"不阻塞事件循环" |
 | Q10 | **`SnapshotSource` 的编程模型**（§4.2，§2 I3） | **已决定**：本阶段返回 `CompletableFuture`，变更通知用监听器；第 5 阶段加挂起包装 | 协程在第 5 阶段才进入运行时；`CompletableFuture` 与 CoCache 的异步 API 直接对应 |
-| Q11 | **7.0 数据的迁移**（§4.7） | **已决定**：本阶段只提供读取器和 `snapshotConvert`（测试源码集），用于门槛、测量和开发环境；面向用户的 7.x → 8.0 迁移在第 4 阶段一次性提供；schema 标记升为 `"8"` | 8.0 在第 6 阶段之前不发布，用户只迁移一次；第 3 阶段的文档布局是内部的中间状态 |
-| Q12 | **比较器与回放工具**（§8.1，§2 I10） | **已决定**：修订 RFC 0002 PR-6：`EngineParity`、`engineReplay` 改名为通用的 `DecisionParity`、`decisionReplay` 留在测试夹具中，不删除；`PolicyTestKit.parity` 照常删除 | 第 3 阶段证明等价、第 4 阶段的影子门槛都需要它们；先删再加只是重复劳动 |
+| Q11 | **7.0 数据的迁移**（§4.7；**2026-10-26**：`snapshotConvert` 随切换删除，读取器由 RFC 0004 PR-5 搬进 `migrate/`，见 [RFC 0008](0008-conformance-and-direct-build.md) §4.2） | **已决定**：本阶段只提供读取器和 `snapshotConvert`（测试源码集），用于门槛、测量和开发环境；面向用户的 7.x → 8.0 迁移在第 4 阶段一次性提供；schema 标记升为 `"8"` | 8.0 在第 6 阶段之前不发布，用户只迁移一次；第 3 阶段的文档布局是内部的中间状态 |
+| Q12 | **比较器与回放工具**（§8.1，§2 I10；**2026-10-26 由 [RFC 0008](0008-conformance-and-direct-build.md) 取代**：切换时删除） | **已决定**：修订 RFC 0002 PR-6：`EngineParity`、`engineReplay` 改名为通用的 `DecisionParity`、`decisionReplay` 留在测试夹具中，不删除；`PolicyTestKit.parity` 照常删除 | 第 3 阶段证明等价、第 4 阶段的影子门槛都需要它们；先删再加只是重复劳动 |
 | Q13 | **全局策略的顺序**（§7 X3） | **已决定**：按 `policyId` 排序 | 7.0 的顺序是 Redis 集合的迭代顺序，没有定义；确定的顺序让解释和审计在实例之间一致；决策不变 |
 | Q14 | **规模上限与分片**（§4.8）（测量后确认） | **已决定**：文档 ≤ 8 MB、编译 p99 ≤ 200 ms；超限时按 §4.8 的方案分片 | 给测量一个明确的判定标准；分片只影响 `SnapshotKey` 和加载器，接口不变 |
 | Q15 | **预热与就绪**（§4.3） | **已决定**：启动时预热 `Policies` 和 `prewarm-apps`；完成前 readiness 不就绪；预热失败不阻止启动，按退避重试 | 避免实例在快照未就绪时接流量；不阻止启动，与 7.0 "启动时不读策略" 的可用性一致 |

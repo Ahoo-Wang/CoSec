@@ -6,6 +6,10 @@
 > 第 2–6 阶段全部完成、各做完两轮审查之前不发布任何版本 ·
 > 范围：新增 `runtime/`（`cosec-runtime`）；改动 `engine/`、`cosec-core`、`cosec-cocache`、`cosec-jwt`、`cosec-webflux`、`cosec-webmvc`、`cosec-gateway`、
 > `cosec-opentelemetry`、`cosec-micrometer`、`cosec-kafka`、`cosec-ip2region`、`cosec-spring-boot-starter`；删除 `cosec-api` 中的响应式授权契约
+>
+> **2026-10-26 修订（[RFC 0008](0008-conformance-and-direct-build.md)）**：8.0 不考虑兼容性。门槛 C（§11）与 PR-8 取消；PR-9、PR-10 并入 RFC 0008 的切换 PR；PR-2 增加"同一 `CoSec-*` 参数的
+> Header 与 query 值不同即 400"；PR-7 的 `WebAdapterParityTest` 只对新 Pipeline 运行。§13 的性能基准从"第 4 阶段结束时"改为 7.0 的实测数字（绝对预算）。
+> R1–R3 是 8.0 的规则（例如 R1 → `PIP-2`）；§10.2 的不变量与 P9′、P13–P15 作为规范性质保留。下文保留原样以便追溯。
 
 ## 0. 结论先行
 
@@ -870,6 +874,8 @@ AGENTS.md 的 Invariants 表在 PR-9 更新：守护列换成上面的测试名�
 
 ## 11. 门槛 C
 
+> **2026-10-26：本节整体由 [RFC 0008](0008-conformance-and-direct-build.md) 取代。** 以下原文保留，仅供追溯。
+
 ### 11.1 要证明什么
 
 本阶段**不改变 Permit / Deny 的划分**。要证明的是：对同一份数据和同一批请求，第 4 阶段结束时的 Pipeline（`SecurityPipeline` + 装饰器链 + 编译执行的引擎，下称**基准**）
@@ -940,6 +946,8 @@ AGENTS.md 的 Invariants 表在 PR-9 更新：守护列换成上面的测试名�
 
 ### 13.1 目标
 
+> **2026-10-26**：`impl` 的对照从 `phase4` 改为从 `v7.0.1` 标签构建的 7.0 `SecurityPipeline` + 装饰器链，端到端压测同样对照 7.0；百分比不变（[RFC 0008](0008-conformance-and-direct-build.md) §3.8）。
+
 | 基准 | 比较 | 目标 |
 |---|---|---|
 | 新增 `PipelineBenchmark`（`runtime/` 的 `jmh` 源码集） | 参数 `impl` ∈ {`phase4`, `coroutine`}：`phase4` 是第 4 阶段结束时的 `SecurityPipeline` + 与 starter 相同的装饰器链（OTel 用 no-op SDK，审计到 no-op sink，指标到 `SimpleMeterRegistry`）；`coroutine` 是本文的 Pipeline，监听器配置对应。参数 `bridge` ∈ {`mono`, `runBlocking`}，场景 `scenario` ∈ {`global`, `role`, `none`, `blocked`, `rate-limited`（`LocalRateLimiter`）, `anonymous`} | **吞吐不低于 `phase4` 的 100 %**（交替三轮的平均；任何一轮不低于 97 %）；**B/op 不高于 `phase4`**。任一场景达不到，切换 PR（PR-9）停止，交回维护者（与 RFC 0005 Q12 同样的做法，Q24） |
@@ -990,16 +998,16 @@ PR-9 的描述附前后对比，PR-10 把最终数字写进 `wiki/architecture/o
 | PR | 标题 | 范围 | 依赖 | 能否提前开工 | 完成标准 |
 |---|---|---|---|---|---|
 | PR-1 | `build: add the cosec-runtime module with kotlinx-coroutines` | `runtime/` 空模块与 BOM；`libs.versions.toml` 增加协程与 `opentelemetry-extension-kotlin`（Q7）；`RuntimeBoundaryTest`（ArchUnit）；`jmh` 源码集；`detekt` 的 `runCatching` 规则 | 本 RFC 获批 | **能**：只依赖已合入的 `model/`、`engine/` | `:cosec-runtime:check` 通过；临时引用一个 `reactor.core` 类能让 ArchUnit 失败（PR 描述给出输出） |
-| PR-2 | `feat(runtime): add the coroutine pipeline with outcomes and one status mapping` | `HttpFacts`、`PathNormalizer`（搬家）、`Authenticator` SPI、`Outcome`、`StatusMapping`、`Pipeline.decide` 骨架、整体超时、取消规则、`resumeOffIo` 与 T1–T3、`SuspendingSnapshotSource`；全部用测试替身 | PR-1；RFC 0004 PR-2（`evaluate(request, view)`）、PR-1（`Scope`、`ScopeResolver`） | RFC 0004 PR-2 合入后 | 变更行覆盖率 ≥ 80%；`PipelineHotPathTest`、`PipelineResumeTest`、`PipelineCancellationTest` |
+| PR-2 | `feat(runtime): add the coroutine pipeline with outcomes and one status mapping`（**2026-10-26 改动**：增加 Header 与 query 不一致即 400，见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | `HttpFacts`、`PathNormalizer`（搬家）、`Authenticator` SPI、`Outcome`、`StatusMapping`、`Pipeline.decide` 骨架、整体超时、取消规则、`resumeOffIo` 与 T1–T3、`SuspendingSnapshotSource`；全部用测试替身 | PR-1；RFC 0004 PR-2（`evaluate(request, view)`）、PR-1（`Scope`、`ScopeResolver`） | RFC 0004 PR-2 合入后 | 变更行覆盖率 ≥ 80%；`PipelineHotPathTest`、`PipelineResumeTest`、`PipelineCancellationTest` |
 | PR-3 | `feat(core,jwt,cocache): authenticate and resolve memberships with suspend functions` | `CompositeAuthenticator`、JWT 与 API Key 认证器、挂起的 `TokenStore.isRevoked`、`ApiKeyStore`；`MembershipProvider` 改为 `suspend`（Q11）与 `CoCacheMembershipProvider`；`MembershipCacheFailureTest` | PR-2；RFC 0004 PR-3 | RFC 0004 PR-3 合入后 | `:cosec-core:check`、`:cosec-jwt:check`、`:cosec-cocache:check` 通过（需要 Redis） |
 | PR-4 | `feat(engine,runtime): fetch external attributes and apply onMissing` | `AttributeProvider`、属性目录、`Engine.plan`、`onMissing`（§5.4.3）、阶段 A / B 预取、`BlacklistAttributeProvider` 与 `BlacklistSource`、`Ip2RegionAttributeProvider`；P9′、P14 | PR-2；RFC 0005 PR-1、PR-4（AST、编译执行）；RFC 0004 PR-4（文档编译） | RFC 0005 PR-4 合入后 | `:cosec-engine:check`、`:cosec-runtime:check`、`:cosec-ip2region:check` 通过 |
 | PR-5 | `feat(engine,runtime): enforce rate limits as obligations` | 文档的 `rateLimits` 节与编译、`Obligation`、`Permit.obligations`、义务执行、挂起的 `RateLimiter`、非阻塞的 `RedisRateLimiter`；P15；`RateLimitObligationTest`；转换工具把 7.x 规则写进 `Platform` 文档 | PR-4；RFC 0005 PR-6（限流规则的翻译） | RFC 0005 PR-6 合入后 | `:cosec-cocache:check` 通过；`RedisRateLimitingOffEventLoopTest` 改写后通过 |
 | PR-6 | `feat(runtime,opentelemetry,micrometer,kafka): add decision events and listeners` | `DecisionEvent`、`DecisionListener`、投递（§9.3、§9.4）、break-glass 规则；`TracingListener`、`MetricsListener`、`LoggingAuditListener`、`KafkaAuditListener`、`ShadowListener`、`AuditEvents.from`；`BridgeContextContributor` 的 OTel 与 MDC 实现；`ListenerIsolationTest` | PR-2；RFC 0004 PR-2（`BindingRef`、三元组版本） | PR-2 合入后，与 PR-3 到 PR-5 并行 | 各模块 `check` 通过 |
-| PR-7 | `feat(webflux,gateway,webmvc): bridge the adapters to the coroutine pipeline` | `HttpFactsReader`、`mono {}` 与 `runBlocking` 桥接、`Outcome` 写回、`SecurityContext.scope`、挂起的 `AuthorizationChecker` 与两种扩展；`WebAdapterParityTest` 增加 Gateway（L1）与 §6.3 的场景，两种实现各跑一遍；`PipelineBlockHoundTest` | PR-2、PR-6 | **能**（L1 的 Gateway 场景可以先作为独立的 `test:` PR 进 `main`） | `:cosec-spring-boot-starter:check` 通过（需要 Redis） |
-| PR-8 | `test: compare the coroutine pipeline with the phase 4 pipeline in replay` | `PipelineParity`、R1–R3 的类别与正反例、合成语料、限流重放（虚拟时钟）、审计字段比较、回放的 `pipeline` 模式、百万例任务 | PR-3 到 PR-7；RFC 0004 PR-6（分类器） | RFC 0004 PR-6 合入后 | 每一类的正例被归入、反例不被归入；用仓库内的合成数据跑通回放 |
-| — | **门槛 C** | 维护者在本地：对同一批导出跑回放（§11.5） | PR-8；第 4 阶段的切换（RFC 0004 PR-7、RFC 0005 PR-8，基准是切换后的实现） | — | 未归类差异为 0；证据附在 PR-9 |
-| PR-9 | `refactor!: serve requests through the coroutine pipeline` | starter 装配 `Pipeline`、认证器、提供者、监听器与新属性（X8）；三个适配器改用新桥接；状态码变更生效；`upgrading.md` 与其余文档（§15.3）；JMH 与端到端压测（§13，Q24） | 第 4 阶段全部完成（RFC 0004 PR-8、RFC 0005 PR-9）；PR-8；门槛 C | **不能** | 全部模块 `check` 通过；门槛证据；§13 的目标 |
-| PR-10 | `refactor!: remove the decorator chain, BlockingAware and the reactive authorization API` | 删除 §5.7 表中的全部旧类型与 SPI、`legacy` 节点、`ConditionMatcherFactory`、`MatcherFactoryRegistry`、`SecurityPipeline`、`SecurityContextParseSchedulers`、`RateLimitRuleProvider`、`BlacklistChecker`、`AuditEventSink`；参数化测试去掉基准一侧（`DecisionParity`、`PipelineParity`、回放工具保留在测试夹具中） | PR-9 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
+| PR-7 | `feat(webflux,gateway,webmvc): bridge the adapters to the coroutine pipeline`（**2026-10-26 改动**：`WebAdapterParityTest` 只对新 Pipeline 运行） | `HttpFactsReader`、`mono {}` 与 `runBlocking` 桥接、`Outcome` 写回、`SecurityContext.scope`、挂起的 `AuthorizationChecker` 与两种扩展；`WebAdapterParityTest` 增加 Gateway（L1）与 §6.3 的场景，两种实现各跑一遍；`PipelineBlockHoundTest` | PR-2、PR-6 | **能**（L1 的 Gateway 场景可以先作为独立的 `test:` PR 进 `main`） | `:cosec-spring-boot-starter:check` 通过（需要 Redis） |
+| ~~PR-8~~ | ~~`test: compare the coroutine pipeline with the phase 4 pipeline in replay`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | `PipelineParity`、R1–R3 的类别与正反例、合成语料、限流重放（虚拟时钟）、审计字段比较、回放的 `pipeline` 模式、百万例任务 | PR-3 到 PR-7；RFC 0004 PR-6（分类器） | RFC 0004 PR-6 合入后 | 每一类的正例被归入、反例不被归入；用仓库内的合成数据跑通回放 |
+| — | ~~**门槛 C**~~ **已取消（2026-10-26）** | 维护者在本地：对同一批导出跑回放（§11.5） | PR-8；第 4 阶段的切换（RFC 0004 PR-7、RFC 0005 PR-8，基准是切换后的实现） | — | 未归类差异为 0；证据附在 PR-9 |
+| ~~PR-9~~ | ~~`refactor!: serve requests through the coroutine pipeline`~~ **并入 RFC 0008 的切换 PR（2026-10-26）** | starter 装配 `Pipeline`、认证器、提供者、监听器与新属性（X8）；三个适配器改用新桥接；状态码变更生效；`upgrading.md` 与其余文档（§15.3）；JMH 与端到端压测（§13，Q24） | 第 4 阶段全部完成（RFC 0004 PR-8、RFC 0005 PR-9）；PR-8；门槛 C | **不能** | 全部模块 `check` 通过；门槛证据；§13 的目标 |
+| ~~PR-10~~ | ~~`refactor!: remove the decorator chain, BlockingAware and the reactive authorization API`~~ **并入 RFC 0008 的切换 PR（2026-10-26）**，删除清单不变（比较器与回放工具也一并删除） | 删除 §5.7 表中的全部旧类型与 SPI、`legacy` 节点、`ConditionMatcherFactory`、`MatcherFactoryRegistry`、`SecurityPipeline`、`SecurityContextParseSchedulers`、`RateLimitRuleProvider`、`BlacklistChecker`、`AuditEventSink`；参数化测试去掉基准一侧（`DecisionParity`、`PipelineParity`、回放工具保留在测试夹具中） | PR-9 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
 
 PR-1 可以立即开工；PR-2 只等 RFC 0004 PR-2；PR-6、PR-7 只等 PR-2，可以与 PR-3 到 PR-5 并行。L1（Gateway 进 `WebAdapterParityTest`）不依赖本 RFC 的任何代码，
 建议立即作为独立 PR 处理。
@@ -1055,8 +1063,8 @@ PR-1 可以立即开工；PR-2 只等 RFC 0004 PR-2；PR-6、PR-7 只等 PR-2，
 | Q20 | **break-glass 与 REQUIRED**（§9.4.3；RFC 0004 I9） | **已决定**：break-glass 的 Permit 至少要有一个 REQUIRED 监听器成功；没有配置时也是 503；启动时 WARN | RFC 0001 §3.7 要求每一次使用都写 REQUIRED 审计；没有 REQUIRED 监听器时无法满足，只能拒绝 |
 | Q21 | **OpenTelemetry**（§3 K6、§9.5.1） | **已决定**：`TracingListener` 按事件的时间戳事后生成 `cosec.authorize` span；评估中的 I/O 挂在父 span 下；审计记录父 span id。备选：保留一个只能包住评估的钩子（它就是一个装饰器） | 保住"观察不改变决策"这条结构性保证；trace 视图里的时间位置不变，丢掉的只是一层嵌套 |
 | Q22 | **`cosec-api` 的删除项**（AGENTS.md 要求先问；RFC 0002 Q5 推迟的 `VerifyResult`） | **已决定**：PR-10 删除 `Authorization`、`DecisionAuthorization`、`AuthorizationDecision`、`AuthorizeResult`、`VerifyResult`、`VerifyContext` 及子类、`SecurityContext` 中内部使用的可变属性；`SecurityContext` 保留为只读视图并增加 `scope`；响应体的 JSON 形状保留 | 四种结果类型收敛为 `Decision` + `Outcome`（RFC 0001 §1.2）；保留响应体形状，客户端不必改解析 |
-| Q23 | **门槛 C 的标准**（§11） | **已决定**：沿用 RFC 0004 Q20："未归类差异为零"；改动目录 R1–R3 都只改状态码，没有放宽类；新增类别必须修订本 RFC | 本阶段承诺不改变 Permit / Deny 的划分；没有放宽类，任何放宽都直接失败 |
-| Q24 | **性能要求**（§13） | **已决定**：`PipelineBenchmark` 全部场景吞吐不低于第 4 阶段结束时的 100 %、B/op 不高于它；端到端最大吞吐不低于 100 %、70 % 负载下 p99 不高于 105 %；达不到时 PR-9 停止，交回维护者 | "不回退"需要一个可检查的数字；装饰器链的开销应当大于协程桥接的开销，否则这次重组没有兑现 RFC 0001 §3.8 的前提 |
+| Q23 | ~~**门槛 C 的标准**（§11）~~（2026-10-26 由 [RFC 0008](0008-conformance-and-direct-build.md) 取代） | **已决定**：沿用 RFC 0004 Q20："未归类差异为零"；改动目录 R1–R3 都只改状态码，没有放宽类；新增类别必须修订本 RFC | 本阶段承诺不改变 Permit / Deny 的划分；没有放宽类，任何放宽都直接失败 |
+| Q24 | **性能要求**（§13；**2026-10-26 修订**：对照从第 4 阶段改为 7.0，见 [RFC 0008](0008-conformance-and-direct-build.md) §3.8） | **已决定**：`PipelineBenchmark` 全部场景吞吐不低于第 4 阶段结束时的 100 %、B/op 不高于它；端到端最大吞吐不低于 100 %、70 % 负载下 p99 不高于 105 %；达不到时 PR-9 停止，交回维护者 | "不回退"需要一个可检查的数字；装饰器链的开销应当大于协程桥接的开销，否则这次重组没有兑现 RFC 0001 §3.8 的前提 |
 | Q25 | **超时默认值**（测量后确认） | **已决定**：整体 `cosec.pipeline.timeout` 5 秒（上限，不是各阶段之和）；认证 1 秒；成员关系 500 ms（RFC 0004）；外部属性每个提供者 300 ms；冷加载 2 秒（RFC 0003）；限流 200 ms；REQUIRED 监听器 1 秒；BEST_EFFORT 队列 1024 | 给每个外部调用一个上界；数字用端到端压测和真实部署的依赖延迟校准 |
 | Q26 | **审计的范围**（§3.1 L2、§9.2） | **已决定**：每个结果都产生 `DecisionEvent`，包括 400、认证不可用、取消、未建模的异常 | 现在认证阶段的失败不留任何记录；"无法判定"与"出错"恰恰是事后最需要追查的 |
 

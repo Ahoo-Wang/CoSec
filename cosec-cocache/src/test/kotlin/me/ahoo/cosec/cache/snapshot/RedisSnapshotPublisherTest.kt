@@ -16,6 +16,7 @@ package me.ahoo.cosec.cache.snapshot
 import me.ahoo.cocache.api.AsyncCache
 import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.CacheWriteException
+import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.memory.InMemoryBackend
@@ -27,10 +28,13 @@ import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotChangeListener
+import me.ahoo.cosec.snapshot.SnapshotCompiler
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotFormatException
 import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.snapshot.SnapshotOptions
 import me.ahoo.cosec.snapshot.SnapshotRead
+import me.ahoo.cosec.snapshot.SnapshotSource
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -180,27 +184,146 @@ class RedisSnapshotPublisherTest {
         }
     }
 
-    /** Review: a write that changes nothing publishes nothing: no revision, no reload anywhere. */
+    /**
+     * Review: a write that changes nothing publishes nothing: no revision, no invalidation to other instances. This
+     * instance is still told, so it confirms what it holds against Redis (round 2: read-your-writes).
+     */
     @Test
     fun aWriteThatChangesNothingPublishesNothing() {
         SnapshotNode(backend, keyPrefix).use { node ->
-            val published = CopyOnWriteArrayList<SnapshotKey>()
-            val publisher = RedisSnapshotPublisher(node.cache, { published += it })
-            publisher.setPolicy(policy("a")).block()
-            publisher.setAppPermission(appPermission("app")).block()
-            publisher.setRoleGrants("app", "r", SpaceIdCapable.DEFAULT, setOf("p1")).block()
-            published.clear()
+            SnapshotNode(backend, keyPrefix).use { other ->
+                val published = CopyOnWriteArrayList<SnapshotKey>()
+                val publisher = RedisSnapshotPublisher(node.cache, { published += it })
+                publisher.setPolicy(policy("a")).block()
+                publisher.setAppPermission(appPermission("app")).block()
+                publisher.setRoleGrants("app", "r", SpaceIdCapable.DEFAULT, setOf("p1")).block()
+                published.clear()
+                val invalidated = CopyOnWriteArrayList<SnapshotKey>()
+                other.store.subscribe(object : SnapshotChangeListener {
+                    override fun onChanged(keys: Collection<SnapshotKey>) {
+                        invalidated.addAll(keys)
+                    }
 
-            publisher.setPolicy(policy("a")).block()
-            publisher.setPolicies(listOf(policy("a"))).block()
-            publisher.setAppPermission(appPermission("app")).block()
-            publisher.setRoleGrants("app", "r", SpaceIdCapable.DEFAULT, setOf("p1")).block()
-            published.assert().isEmpty()
-            node.document(SnapshotKey.Policies)!!.revision.assert().isEqualTo(1L)
-            node.document(SnapshotKey.App("app"))!!.revision.assert().isEqualTo(2L)
+                    override fun onReset() = Unit
+                })
 
-            publisher.setRoleGrants("app", "r", SpaceIdCapable.DEFAULT, setOf("p1", "p2")).block()
-            published.assert().containsExactly(SnapshotKey.App("app"))
+                publisher.setPolicy(policy("a")).block()
+                publisher.setPolicies(listOf(policy("a"))).block()
+                publisher.setAppPermission(appPermission("app")).block()
+                publisher.setRoleGrants("app", "r", SpaceIdCapable.DEFAULT, setOf("p1")).block()
+                publisher.removeRoleGrants("app", "absent", SpaceIdCapable.DEFAULT).block()
+                // told locally every time, so this instance revalidates
+                published.assert().containsExactly(
+                    SnapshotKey.Policies,
+                    SnapshotKey.Policies,
+                    SnapshotKey.App("app"),
+                    SnapshotKey.App("app"),
+                    SnapshotKey.App("app"),
+                )
+                node.document(SnapshotKey.Policies)!!.revision.assert().isEqualTo(1L)
+                node.document(SnapshotKey.App("app"))!!.revision.assert().isEqualTo(2L)
+
+                publisher.setRoleGrants("app", "r", SpaceIdCapable.DEFAULT, setOf("p1", "p2")).block()
+                awaitTrue(what = "the invalidation of a real write") { SnapshotKey.App("app") in invalidated }
+                // nothing but the real write was broadcast
+                invalidated.assert().containsOnly(SnapshotKey.App("app"))
+            }
+        }
+    }
+
+    /**
+     * Round 2: another instance already published what this one is asked to write, and this one has not heard yet.
+     * The write is skipped, but this instance still serves the new revision, not the old one until revalidation.
+     */
+    @Test
+    fun aSkippedWriteStillReadsItsOwnWrite() {
+        SnapshotNode(SilentChannelBackend(backend), keyPrefix).use { node ->
+            SnapshotNode(backend, keyPrefix).use { other ->
+                other.publisher.setPolicy(policy("a")).block()
+                SnapshotSource(
+                    node.store,
+                    SnapshotCompiler { _, document -> document.revision },
+                    SnapshotCompiler { _, document -> document.revision },
+                    SnapshotOptions(revalidateInterval = Duration.ZERO),
+                ).use { source ->
+                    source.load().get().version.shared.assert().isEqualTo(1L)
+                    other.publisher.setPolicy(policy("b")).block()
+                    // this instance never hears of it (silent channel, no revalidation), then writes the same
+                    node.publisher.setPolicy(policy("b")).block()
+                    node.document(SnapshotKey.Policies)!!.revision.assert().isEqualTo(2L)
+                    awaitTrue(what = "revision 2 installed") { source.peek()?.version?.shared == 2L }
+                }
+            }
+        }
+    }
+
+    /** Round 2: `replace` checks what it writes as the other writes do; undecodable entries stay allowed (F4). */
+    @Test
+    fun replaceChecksTheDocument() {
+        SnapshotNode(backend, keyPrefix).use { node ->
+            // a policy without an id: the document would not read back
+            val noId = SnapshotContent.Policies(TreeMap(mapOf("x" to CoSecJsonSerializer.readTree("""{"name":"x"}"""))))
+            assertThrows<SnapshotFormatException> { node.publisher.replace(noId).block() }
+            node.document(SnapshotKey.Policies).assert().isNull()
+            // an app document of another app, or with a grant key no role in a space reads as, cannot be built
+            assertThrows<IllegalArgumentException> {
+                SnapshotContent.App(
+                    SnapshotKey.App("app"),
+                    CoSecJsonSerializer.readTree("""{"id":"other"}"""),
+                    TreeMap()
+                )
+            }
+            assertThrows<IllegalArgumentException> {
+                SnapshotContent.App(
+                    SnapshotKey.App("app"),
+                    CoSecJsonSerializer.readTree("""{"id":"app"}"""),
+                    TreeMap(mapOf("r@a@b" to CoSecJsonSerializer.readTree("""["p1"]"""))),
+                )
+            }
+            // a decodable app permission goes through 7.0's evaluator
+            node.publisher.replace(
+                SnapshotContent.App(
+                    SnapshotKey.App("app"),
+                    CoSecJsonSerializer.readTree(CoSecJsonSerializer.writeValueAsString(appPermission("app"))),
+                    TreeMap(),
+                )
+            ).block()
+            node.document(SnapshotKey.App("app"))!!.revision.assert().isEqualTo(1L)
+        }
+    }
+
+    /** Round 2: the read of a read-modify-write is unconditional; "unchanged" there is a CoCache bug, never a skip. */
+    @Test
+    fun anUnconditionalReadAnsweredUnchangedFailsTheWrite() {
+        SnapshotNode(backend, keyPrefix).use { node ->
+            val unchanged = wrap(node.cache) { delegate ->
+                object : AsyncCache<SnapshotKey, SnapshotDocument> by delegate {
+                    override fun getIfChanged(
+                        key: SnapshotKey,
+                        known: Digest?
+                    ): CompletableFuture<ConditionalGet<SnapshotDocument>> =
+                        CompletableFuture.completedFuture(ConditionalGet.Unchanged)
+                }
+            }
+            assertThrows<IllegalStateException> { RedisSnapshotPublisher(unchanged).setPolicy(policy("a")).block() }
+            node.document(SnapshotKey.Policies).assert().isNull()
+        }
+    }
+
+    /** Round 2: a batch is checked whole, and the app id before an empty batch returns. */
+    @Test
+    fun batchGrantsAreCheckedBeforeAnythingIsWritten() {
+        SnapshotNode(backend, keyPrefix).use { node ->
+            node.publisher.setAppPermission(appPermission("app")).block()
+            assertThrows<IllegalArgumentException> {
+                node.publisher.setRoleGrants(
+                    "app",
+                    mapOf(SpacedRoleId("ok") to setOf("p1"), SpacedRoleId("r", "a@b") to setOf("p1")),
+                ).block()
+            }
+            node.grants("app").assert().isEmpty()
+            assertThrows<IllegalArgumentException> { node.publisher.setRoleGrants("bad:app", emptyMap()).block() }
+            assertThrows<IllegalArgumentException> { node.publisher.setRoleGrants("", emptyMap()).block() }
         }
     }
 

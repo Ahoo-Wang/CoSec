@@ -1,32 +1,39 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/definitions.schema.json",
-  "title": "CoSec Schema",
-  "type": "object",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "definitions": {
     "effect": {
       "enum": [
         "allow",
         "deny"
-      ]
+      ],
+      "type": "string"
     },
     "pathOptions": {
-      "type": "object",
+      "additionalProperties": false,
+      "description": "How a path pattern is parsed and matched.",
       "properties": {
         "caseSensitive": {
+          "default": true,
+          "type": "boolean"
+        },
+        "decodeAndParseSegments": {
+          "default": true,
           "type": "boolean"
         },
         "separator": {
-          "type": "string",
+          "default": "/",
+          "examples": [
+            "/",
+            "."
+          ],
+          "maxLength": 1,
           "minLength": 1,
-          "maxLength": 1
-        },
-        "decodeAndParseSegments": {
-          "type": "boolean"
+          "type": "string"
         }
-      }
+      },
+      "type": "object"
     }
-  }
+  },
+  "title": "CoSec Shared Definitions"
 }
-
-

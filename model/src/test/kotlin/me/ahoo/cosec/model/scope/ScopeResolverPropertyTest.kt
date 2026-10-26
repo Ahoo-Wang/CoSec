@@ -28,10 +28,13 @@ class ScopeResolverPropertyTest {
     private val iterations = 2_000
 
     // Near misses of real values (case, whitespace, separators) catch a resolver that normalises before comparing.
-    private val spaces = listOf("", "team-a", "TEAM-A", " team-a", "team-a ", "team-b", "a@b", "a:b", " ")
-    private val declaredSpaces = spaces + listOf("*", "team-c")
+    private val spaces =
+        listOf("", "team-a", "TEAM-A", " team-a", "team-a ", "team-b", "a@b", "a:b", " ", "café", "café")
+    private val declaredSpaces = spaces + listOf("*", "team-c", "team-a​")
     private val hostApps = listOf("order", "billing", "a@b")
-    private val apps = listOf("", "order", "ORDER", " order", "billing", "*", "a:b", "a@b", " ", "x".repeat(129))
+    private val apps = listOf(
+        "", "order", "ORDER", " order", "billing", "*", "a:b", "a@b", " ", "x".repeat(129), "ｏrder", "order ",
+    )
     private val roles = listOf("admin", "editor", "viewer")
 
     private class Case(val subject: ScopeSubject, val declared: DeclaredScope, val host: HostScope) {

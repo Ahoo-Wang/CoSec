@@ -103,7 +103,7 @@ provider, never both.
 `MembershipUnavailableException`, never with "no memberships", when:
 
 - the token is marked and there is no provider;
-- the provider throws, fails, answers `null`, or does not answer within the timeout (500 ms by default);
+- the provider throws, fails, answers `null` or memberships whose source is not `PROVIDER`, or does not answer within the timeout (500 ms by default);
 - the marker is anything but `"provider"`, or the token carries the marker together with `roles` or `policies`.
 
 No memberships would mean no roles, so a deny that matches a role would no longer apply.
@@ -212,8 +212,11 @@ refresh token of that principal in that tenant whose `iat` is before `issuedBefo
 - A principal without a tenant is in the default tenant `(0)`.
 - `iat` has whole seconds, so a token issued in the same second as the revocation, even just after it, is rejected
   too. A token without `iat` is always rejected once its principal has been revoked.
+- `iat` comes from the issuer's clock and `issuedBefore` from the clock of the instance that revokes. If the issuer's
+  clock runs ahead, a token issued just before the revocation can carry a later `iat` and stay valid. Keep the clocks
+  in sync, or pass an `issuedBefore` a few seconds after now.
 - The entry is kept for the refresh token lifetime past `issuedBefore`. A later call with an earlier `issuedBefore`
-  does not shorten it.
+  does not shorten it, even when two instances revoke the same principal at once.
 - It needs the same `cosec.jwt.token-revocation.enabled=true` and `cache-support` as revoking one token. Without a
   store that can record it, it throws `UnsupportedOperationException` instead of doing nothing.
 - The check behaves as described above: a local "not revoked" answer for up to 30 seconds if an invalidation is

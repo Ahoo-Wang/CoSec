@@ -265,7 +265,8 @@ internal object UnrecordedInputs {
 internal class ReplayApp(
     val appId: String,
     val appPermission: AppPermission?,
-    val grants: Map<SpacedRoleId, Set<String>>
+    val grants: Map<SpacedRoleId, Set<String>>,
+    val exported: ExportedApp,
 )
 
 /** The verdict recorded for the sample being replayed. Samples are replayed one at a time. */

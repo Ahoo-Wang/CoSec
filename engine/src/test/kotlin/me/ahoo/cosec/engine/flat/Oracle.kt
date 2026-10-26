@@ -1,0 +1,177 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.engine.flat
+
+import me.ahoo.cosec.engine.GuardBehavior
+import me.ahoo.cosec.engine.Rule
+import me.ahoo.cosec.engine.RuleBehavior
+import me.ahoo.cosec.engine.RuleMatch
+import me.ahoo.cosec.engine.TestGuard
+import me.ahoo.cosec.engine.TestRule
+import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.SubjectRef
+import me.ahoo.cosec.model.decision.BindingRef
+import me.ahoo.cosec.model.decision.Cause
+import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.model.decision.StatementRef
+
+/**
+ * RFC 0004 §4.2 (`appliesTo`), §6.3 (candidate order) and §6.1 (the flat algorithm) transcribed over the raw bindings
+ * of a [FlatCase], without the index, and reading the test matchers' behaviors instead of calling them.
+ */
+object Oracle {
+    class Enumeration(val candidates: List<Candidate>, val expired: List<BindingRef.Bound>, val missing: Set<String>)
+
+    private val byId = Comparator<Binding> { a, b -> a.id.value.compareTo(b.id.value) }
+    private val byPolicy = Comparator<Binding> { a, b ->
+        a.policy.value.compareTo(b.policy.value).takeIf { it != 0 } ?: byId.compare(a, b)
+    }
+
+    private fun appliesTo(binding: Binding, request: FlatRequest): Boolean {
+        val scope = request.scope
+        val subject = request.request.subject
+        val subjectMatches = when (val s = binding.subject) {
+            SubjectRef.Anyone -> true
+            is SubjectRef.Principal -> subject.authenticated && s.tenant == scope.tenant && s.id.value == subject.id
+            is SubjectRef.Role -> (s.tenant == null || s.tenant == scope.tenant) && s.id in scope.roles
+        }
+        val app = binding.scope.app
+        val space = binding.scope.space
+        return subjectMatches &&
+            (app == Match.Any || app == Match.Exactly(scope.app)) &&
+            (space == Match.Any || space == Match.Exactly(scope.space))
+    }
+
+    private class Builder(val case: FlatCase) {
+        val candidates = mutableListOf(Candidate(BuiltinPolicies.blacklist, BindingRef.Builtin))
+        val expired = mutableListOf<BindingRef.Bound>()
+        val missing = linkedSetOf<String>()
+
+        fun applying(document: RawDocument, predicate: (Binding) -> Boolean) =
+            document.bindings.filter { predicate(it) && appliesTo(it, case.request) }
+
+        fun add(document: RawDocument, kind: DocumentKind, bindings: List<Binding>) {
+            for (binding in bindings) {
+                val via = BindingRef.Bound(binding.id, kind)
+                if (case.request.time >= (binding.expiresAt ?: Long.MAX_VALUE)) {
+                    expired += via
+                    continue
+                }
+                val policy = resolve(document, binding.policy.value)
+                if (policy == null) missing += binding.policy.value else candidates += Candidate(policy, via)
+            }
+        }
+
+        private fun resolve(document: RawDocument, id: String): CompiledPolicy? =
+            if (id == BuiltinPolicies.ROOT.value) {
+                BuiltinPolicies.root
+            } else {
+                document.policies.find { it.id == id } ?: case.platform.policies.find { it.id == id }
+            }
+
+        fun attach(tenant: RawDocument?, id: PolicyId) {
+            val policy = tenant?.policies?.find { it.id == id.value && it.attachable }
+                ?: case.platform.policies.find { it.id == id.value && it.attachable }
+            if (policy == null) missing += id.value else candidates += Candidate(policy, BindingRef.Attached(id))
+        }
+    }
+
+    fun enumerate(case: FlatCase): Enumeration {
+        val request = case.request
+        val tenant = case.tenant.takeIf { case.tenantLoaded }
+        val platform = case.platform
+        val anyone = { b: Binding -> b.subject == SubjectRef.Anyone }
+        val principal = { b: Binding -> b.subject is SubjectRef.Principal && !b.breakGlass }
+        with(Builder(case)) {
+            add(platform, DocumentKind.PLATFORM, applying(platform) { it.breakGlass }.sortedWith(byId))
+            add(platform, DocumentKind.PLATFORM, applying(platform, anyone).sortedWith(byPolicy))
+            tenant?.let { add(it, DocumentKind.TENANT, applying(it, anyone).sortedWith(byPolicy)) }
+            if (request.request.subject.authenticated) {
+                request.memberships.attachments.forEach { attach(tenant, it) }
+                add(platform, DocumentKind.PLATFORM, applying(platform, principal).sortedWith(byId))
+                tenant?.let { add(it, DocumentKind.TENANT, applying(it, principal).sortedWith(byId)) }
+            }
+            val app = case.app.takeIf { case.appLoaded }
+            for ((document, kind) in listOf(app to DocumentKind.APP, tenant to DocumentKind.TENANT)) {
+                if (document == null) continue
+                for (role in request.scope.roles) {
+                    add(document, kind, applying(document) { (it.subject as? SubjectRef.Role)?.id == role })
+                }
+            }
+            return Enumeration(candidates, expired, missing)
+        }
+    }
+
+    private fun behavior(rule: Rule, case: FlatCase): RuleBehavior =
+        when {
+            rule is TestRule -> rule.behavior
+            rule.match(case.request.request) == RuleMatch.MATCHED -> RuleBehavior.MATCH
+            else -> RuleBehavior.ACTION_MISS
+        }
+
+    private fun ref(candidate: Candidate, statement: Rule) =
+        StatementRef.Policy(PolicyId(candidate.policy.id), statement.index, statement.name, candidate.via)
+
+    /** The DENY pass: a matched DENY, else the first error, else null. */
+    private fun denyPass(case: FlatCase, candidates: List<Candidate>): Decision? {
+        var error: Cause.MatcherFailed? = null
+        for (candidate in candidates) {
+            val denies = candidate.policy.denies
+            val guard = candidate.policy.guard as TestGuard?
+            if (denies.isEmpty() || guard?.behavior == GuardBehavior.MISS) continue
+            if (guard?.behavior == GuardBehavior.THROW) {
+                error = error ?: Cause.MatcherFailed(ref(candidate, denies[0]), true, guard.error)
+                continue
+            }
+            for (statement in denies) {
+                when (behavior(statement, case)) {
+                    RuleBehavior.MATCH -> return Decision.Deny(ref(candidate, statement))
+                    RuleBehavior.THROW ->
+                        error = error ?: Cause.MatcherFailed(ref(candidate, statement), false, (statement as TestRule).error)
+
+                    else -> Unit
+                }
+            }
+        }
+        return error?.let { Decision.Indeterminate(it) }
+    }
+
+    private fun unresolved(case: FlatCase, missing: Set<String>): Cause? {
+        val scope = case.request.scope
+        val appNeeded = scope.roles.isNotEmpty() && scope.app.value.isNotEmpty()
+        val notLoaded = when {
+            !case.tenantLoaded -> Cause.NotLoaded(DocumentKind.TENANT)
+            !case.appLoaded && appNeeded -> Cause.NotLoaded(DocumentKind.APP)
+            else -> null
+        }
+        val missingPolicies = if (missing.isEmpty()) null else Cause.MissingPolicies(missing.map(::PolicyId).toSet())
+        return case.unresolved.firstOrNull() ?: notLoaded ?: missingPolicies
+    }
+
+    fun decide(case: FlatCase): Decision {
+        val enumeration = enumerate(case)
+        denyPass(case, enumeration.candidates)?.let { return it }
+        unresolved(case, enumeration.missing)?.let { return Decision.Indeterminate(it) }
+        for (candidate in enumeration.candidates) {
+            val guard = candidate.policy.guard as TestGuard?
+            if (guard != null && guard.behavior != GuardBehavior.MATCH) continue
+            val match = candidate.policy.allows.firstOrNull { behavior(it, case) == RuleBehavior.MATCH }
+            if (match != null) return Decision.Permit(ref(candidate, match))
+        }
+        return Decision.Deny(null)
+    }
+}

@@ -169,4 +169,13 @@ class SnapshotContentTest {
         val app = """{"schema":1,"revision":1,"publishedAt":"2026-10-21T08:00:00Z","appPermission":[],"grants":{}}"""
         assertThrows<SnapshotFormatException> { SnapshotContent.read(SnapshotKey.App("app"), document(app)) }
     }
+
+    /** Round 2 (M10): the id must be the string the key names; `1` under `app:1` is not `"1"`. */
+    @Test
+    fun refusesANumericIdUnderAMatchingKey() {
+        val body = """{"schema":1,"revision":1,"publishedAt":"2026-10-21T08:00:00Z","appPermission":{"id":1},"grants":{}}"""
+        assertThrows<SnapshotFormatException> { SnapshotContent.read(SnapshotKey.App("1"), document(body)) }
+        val matching = """{"schema":1,"revision":1,"publishedAt":"2026-10-21T08:00:00Z","appPermission":{"id":"1"},"grants":{}}"""
+        SnapshotContent.read(SnapshotKey.App("1"), document(matching)).key.assert().isEqualTo(SnapshotKey.App("1"))
+    }
 }

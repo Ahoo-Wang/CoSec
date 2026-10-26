@@ -43,15 +43,17 @@ private const val USAGE = "Usage: DecisionReplay <export directory> [--min-sampl
  * judged by them exits with [REPLAY_GATE_NOT_MET] even when it meets them.
  *
  * Any report left in the directory is deleted first, even when the arguments turn out to be wrong.
- * [baseline] and [candidate] default to the two implementations RFC 0002 compares. Prints the summary and returns
+ * [baseline] and [candidate] default to the two implementations RFC 0002 compares; RFC 0003 runs it with the snapshot
+ * path as the candidate and [failureView] [FailureView.INNERMOST_CAUSE] (`cosec-cocache`'s `snapshotReplay` task). Prints the summary and returns
  * [REPLAY_OK], [REPLAY_DIFFERENCES] (which wins over an unmet gate), [REPLAY_GATE_NOT_MET], [REPLAY_USAGE] or
  * [REPLAY_INVALID_INPUT].
  */
 fun replayMain(
     args: Array<String>,
     out: PrintStream = System.out,
-    baseline: AuthorizationFactory = AuthorizationFactory.LEGACY,
-    candidate: AuthorizationFactory = AuthorizationFactory.ENGINE
+    baseline: ReplaySide = AuthorizationFactory.LEGACY,
+    candidate: ReplaySide = AuthorizationFactory.ENGINE,
+    failureView: FailureView = FailureView.AS_THROWN,
 ): Int {
     val path = args.firstOrNull()?.takeUnless { it.startsWith("--") }?.let { Path.of(it).toAbsolutePath() }
     path?.let(DecisionReplay::deleteOutputs)
@@ -61,7 +63,7 @@ fun replayMain(
         return REPLAY_USAGE
     }
     val report = try {
-        DecisionReplay(baseline, candidate, gate).run(path)
+        DecisionReplay(baseline, candidate, gate, failureView).run(path)
     } catch (cause: IllegalArgumentException) {
         out.println("INVALID INPUT: ${cause.message}${cause.cause?.let { " (${it.message})" }.orEmpty()}")
         return REPLAY_INVALID_INPUT

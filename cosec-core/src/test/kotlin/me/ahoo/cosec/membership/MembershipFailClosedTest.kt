@@ -160,6 +160,14 @@ class MembershipFailClosedTest {
     }
 
     @Test
+    fun providerAnswersClaimsSourcedMemberships() {
+        val claims = MembershipClaims.parse(listOf("admin"), emptyList())
+        MembershipResolver(MembershipProvider { _, _ -> CompletableFuture.completedFuture(claims) })
+            .resolve(tenant, marked()).failure()
+            .message.assert().contains("[CLAIMS]")
+    }
+
+    @Test
     fun providerReturnsNull() {
         // what a provider written in Java can do
         val javaLike = MembershipProvider { _, _ -> uncheckedNull() }

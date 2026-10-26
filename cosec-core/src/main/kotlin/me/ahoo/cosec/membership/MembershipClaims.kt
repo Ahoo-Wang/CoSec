@@ -74,7 +74,9 @@ object MembershipClaims {
 
     /**
      * The tenant of [principal], looking through [me.ahoo.cosec.Delegated] wrappers: [TenantId.DEFAULT] when its
-     * token has no tenant claim, or an empty one, as in 7.x; never a blank tenant.
+     * token has no tenant claim, or an empty one, as in 7.x. A blank claim such as `" "` is kept as it is, not mapped
+     * to [TenantId.DEFAULT], which would move the principal into another tenant; `ScopeSubject` refuses it, so such a
+     * request fails closed.
      */
     fun tenantOf(principal: Any): TenantId {
         val tenantId = principal.findInDelegationChain<TenantCapable>()?.tenant?.tenantId

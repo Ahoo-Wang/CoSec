@@ -26,6 +26,10 @@ a change that fails to compile. When unsure, deny, and ask.
   [`wiki/architecture/overview.md#measuring`](wiki/architecture/overview.md#measuring). Run the jar yourself only with
   `-jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml`: without it the forked JVMs log at
   DEBUG and the numbers are skewed. Reference results: `docs/perf/`.
+- `schema/*.schema.json` is generated from the document format descriptors (`DocumentFormats` in `cosec-core`):
+  `./gradlew :cosec-core:generateSchemas` writes it, `verifySchemas` (part of `check`) fails when it is stale, and
+  `SchemaConformanceTest` fails when a descriptor and its codec disagree. Every PR that changes a document format
+  changes the descriptor.
 - Detekt runs with `autoCorrect = true`: `check` and `detekt` **rewrite source files**. Review and commit them.
 - Codecov requires ≥ 80 % coverage on changed lines.
 - Docs (`wiki/`, VitePress, en + zh), run from `wiki/`: `pnpm install`, then `pnpm check:mermaid`
@@ -87,12 +91,12 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 
 | Change | Also update |
 |---|---|
-| New action/condition type or option | factory in `cosec-core` + its `META-INF/services` entry, `schema/*.schema.json` (no test checks it), `wiki/policies/language.md`, `skills/cosec-policy-author` |
+| New action/condition type or option | factory in `cosec-core` + its `META-INF/services` entry, update the format descriptor and run `generateSchemas`, `wiki/policies/language.md`, `skills/cosec-policy-author` |
 | App permissions, roles, role grant scope | `wiki/policies/role-permissions.md` |
 | `cosec.*` property or default | `wiki/operations/configuration.md` |
 | Status codes, adapters, security-context access, request attributes | `wiki/integration/web.md` |
 | Checking permissions in code, explaining decisions | `wiki/integration/checks.md` |
-| Rate limit rules, backends, headers | `wiki/policies/rate-limiting.md`, `schema/rate-limit-rule.schema.json` |
+| Rate limit rules, backends, headers | `wiki/policies/rate-limiting.md`, the format descriptor (`generateSchemas`) |
 | Shadow mode (candidates, diffs), policy validation, access reviews | `wiki/policies/testing.md` |
 | Decision order or combination in `SimpleAuthorization` | the narration in `AuthorizationExplainer` (`ExplainerConsistencyTest` fails until they agree), `wiki/guide/security-model.md` |
 | Policy storage, Redis, publishing and rollback | `wiki/operations/storage.md` |
