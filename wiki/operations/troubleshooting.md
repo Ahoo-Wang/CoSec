@@ -146,6 +146,7 @@ Find the exception in the application log: CoSec logs
 | `MissingPolicyException: The global policy index lists policies [...] that have no content.` (`source` is `GLOBAL_POLICY_INDEX`) | A global policy's content was lost, or not migrated from 6.x (a 6.x cached miss migrates as a miss). It may be a global deny, so CoSec fails rather than skips it ([Global policy index](./storage.md#the-global-policy-index)). | Write the policy again with `PolicyRepository.setPolicy`; to drop it instead, save it with a type other than `global`, which removes it from the index. |
 | `Condition [<type>] part [<part>] is not a supported part` while reading a policy | A policy stored by a version before 7.0 names a part that does not exist ([Parts](../policies/language.md#parts)). Since 7.0 such a condition fails when the policy loads, so a local file stops startup and `setPolicy` rejects it. | Fix and save the policy again; [validate policies](../policies/testing.md#validating-policies) before deploying. |
 | `PathVariableScopeException` naming a policy and statement | A stored policy reads `request.path.var.*` outside its scope, which 7.0 rejects ([Path variables](../policies/language.md#path-variables)). | Fix and save the policy again. |
+| `CacheReadException` caused by `MalformedPolicyException: Malformed JSON at <path>` | Since 7.0.2: a policy or app permission stored by 7.0.1 has a scalar where a list belongs, such as `"and": "inRole"`, which 7.0.1 read as an empty list ([Malformed policies fail](./upgrading.md#malformed-policies-fail-instead-of-matching-more)). | Fix the source and publish it again with `setPolicy` (or write the app permission again), which replaces the stored value without reading it. |
 | an exception from your code | A custom matcher, repository or `ApiKeyStore` threw. | The stack trace names it. |
 
 With the Redis API key store, a Redis failure during the key lookup also answers `500`.
@@ -180,6 +181,7 @@ the app's catalog, or remove the id from the role's grant. An explanation report
 | Message | Cause |
 |---|---|
 | `Failed to load policy [<file>]: <reason>` | A local policy file cannot be parsed or built: malformed JSON, an unknown action or condition type, an invalid option, or an unsupported condition part (`Condition [<type>] part [<part>] is not a supported part`). The cause below says which. |
+| `Failed to load policy [<file>]: Malformed JSON at <path>: <reason>` | Since 7.0.2: the file has an unknown field (often a typo such as `conditon`), a condition or action object without exactly one key, a scalar where a list belongs (`"and": "inRole"`), or a duplicate key. 7.0.1 loaded such a file and matched more than it said ([Malformed policies fail](./upgrading.md#malformed-policies-fail-instead-of-matching-more)). Fix the field at `<path>`. Rate limit rule and shadow files fail the same way. |
 | `Policy id [<id>] is declared more than once: [<files>].` | Two local policy files declare the same id. Give each its own id, or remove the copy. |
 | `Policy location [<location>] matches no file.` | A location in `cosec.authorization.local-policy.locations` does not exist or its pattern matches nothing, usually a typo. Only the default may match nothing. |
 | `Rate limit rule location [<location>] matches no file.`, `Rate limit rule id [<id>] is declared more than once: [...]` | The same for `cosec.limiter.locations`. |
@@ -213,6 +215,8 @@ valid:
 - `PathVariableScopeException`: the stored copy (often migrated from 6.x) reads `request.path.var.*` outside its
   scope. Fix the stored policy, or start once with `force-refresh=true` so the local files overwrite the stored copies
   without reading them.
+- `MalformedPolicyException` (since 7.0.2): the stored copy, written by 7.0.1, has a scalar where a list belongs
+  ([Malformed policies fail](./upgrading.md#malformed-policies-fail-instead-of-matching-more)). Fix it the same way.
 
 ::: warning `force-refresh=true` overwrites
 It replaces the stored copy of **every** local policy with its file, including changes administrators made through

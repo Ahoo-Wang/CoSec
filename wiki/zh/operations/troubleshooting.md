@@ -123,6 +123,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
 | `MissingPolicyException: The global policy index lists policies [...] that have no content.`（`source` 为 `GLOBAL_POLICY_INDEX`） | 某个全局策略的内容丢失，或没有从 6.x 迁移（6.x 的缓存未命中会迁移成未命中）。它可能是一条全局拒绝，所以 CoSec 宁可失败也不跳过（[全局策略索引](./storage.md#the-global-policy-index)）。 | 用 `PolicyRepository.setPolicy` 重新写入该策略；若要删除它，把它保存为 `global` 以外的类型，它就会离开索引。 |
 | 读取策略时出现 `Condition [<type>] part [<part>] is not a supported part` | 7.0 之前的版本存储的策略引用了不存在的 part（[Part](../policies/language.md#parts)）。从 7.0 起，这样的条件在策略加载时就会失败：本地文件会阻止启动，`setPolicy` 也会拒绝它。 | 修正后重新保存该策略；部署前 [校验策略](../policies/testing.md#validating-policies)。 |
 | 指向某个策略和语句的 `PathVariableScopeException` | 存储的策略在作用域之外读取 `request.path.var.*`，7.0 拒绝这种写法（[路径变量](../policies/language.md#path-variables)）。 | 修正并重新保存该策略。 |
+| `CacheReadException`，原因为 `MalformedPolicyException: Malformed JSON at <path>` | 从 7.0.2 起：7.0.1 存储的某个策略或应用权限在应为列表的位置写了标量，如 `"and": "inRole"`，7.0.1 把它读成了空列表（[格式错误的策略会失败](./upgrading.md#malformed-policies-fail-instead-of-matching-more)）。 | 修正源文件并用 `setPolicy` 重新发布（或重新写入应用权限），这会不经读取直接替换已存储的值。 |
 | 来自你代码的异常 | 自定义匹配器、仓库或 `ApiKeyStore` 抛出了异常。 | 堆栈会指出是哪个。 |
 
 使用 Redis API key 存储时，key 查询期间的 Redis 故障也会返回 `500`。
@@ -149,6 +150,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行或失
 | 消息 | 原因 |
 |---|---|
 | `Failed to load policy [<file>]: <reason>` | 某个本地策略文件无法解析或构建：JSON 格式错误、未知的动作或条件类型、无效的选项，或不支持的条件 part（`Condition [<type>] part [<part>] is not a supported part`）。下面的 cause 会说明是哪一种。 |
+| `Failed to load policy [<file>]: Malformed JSON at <path>: <reason>` | 从 7.0.2 起：文件中有未知字段（常见的是 `conditon` 这类拼写错误）、条件或动作对象不是恰好一个键、应为列表的位置写了标量（`"and": "inRole"`），或有重复的键。7.0.1 会加载这样的文件，并且匹配得比写的更宽（[格式错误的策略会失败](./upgrading.md#malformed-policies-fail-instead-of-matching-more)）。修正 `<path>` 处的字段。限流规则文件和影子文件同样会失败。 |
 | `Policy id [<id>] is declared more than once: [<files>].` | 两个本地策略文件声明了同一个 id。给每个策略单独的 id，或删除副本。 |
 | `Policy location [<location>] matches no file.` | `cosec.authorization.local-policy.locations` 中的某个位置不存在，或其模式匹配不到任何文件，通常是拼写错误。只有默认位置可以匹配不到文件。 |
 | `Rate limit rule location [<location>] matches no file.`、`Rate limit rule id [<id>] is declared more than once: [...]` | 同上，针对 `cosec.limiter.locations`。 |
@@ -175,6 +177,8 @@ id，只在 id 不存在时写入文件。已存储的副本读不了时，即�
 - `CacheReadException`，原因为 `ForeignFormatException`：该副本是未迁移的 6.x 数据。执行 [数据迁移](./upgrading.md#migrating-the-data)。
 - `PathVariableScopeException`：已存储的副本（通常是从 6.x 迁移来的）在作用域之外读取 `request.path.var.*`。修正已存储的策略，
   或用 `force-refresh=true` 启动一次，让本地文件不经读取直接覆盖已存储的副本。
+- `MalformedPolicyException`（从 7.0.2 起）：由 7.0.1 写入的已存储副本在应为列表的位置写了标量
+  （[格式错误的策略会失败](./upgrading.md#malformed-policies-fail-instead-of-matching-more)）。用同样的方法修正。
 
 ::: warning `force-refresh=true` 会覆盖
 它会用文件替换 **每一个** 本地策略的存储副本，包括管理员此后通过仓库所做的修改；而且它修不了未迁移的数据：迁移之前每次发布

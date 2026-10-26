@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.serialization
 
+import tools.jackson.core.StreamReadFeature
 import tools.jackson.module.kotlin.jsonMapper
 
 /**
@@ -25,4 +26,6 @@ import tools.jackson.module.kotlin.jsonMapper
 val CoSecJsonSerializer =
     jsonMapper {
         findAndAddModules()
+        // Otherwise the last of two equal keys silently wins, e.g. a second `effect` or `condition` in a statement.
+        enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
     }

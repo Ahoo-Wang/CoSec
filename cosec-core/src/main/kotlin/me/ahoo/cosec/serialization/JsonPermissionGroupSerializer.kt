@@ -28,6 +28,17 @@ const val PERMISSION_GROUP_NAME_KEY = "name"
 const val PERMISSION_GROUP_DESCRIPTION_KEY = "description"
 const val PERMISSION_GROUP_PERMISSIONS_KEY = "permissions"
 
+/**
+ * `spaced` is in the JSON schema but has never been read; it stays accepted and ignored.
+ */
+const val PERMISSION_GROUP_SPACED_KEY = "spaced"
+val PERMISSION_GROUP_KEYS = setOf(
+    PERMISSION_GROUP_NAME_KEY,
+    PERMISSION_GROUP_DESCRIPTION_KEY,
+    PERMISSION_GROUP_PERMISSIONS_KEY,
+    PERMISSION_GROUP_SPACED_KEY,
+)
+
 object JsonPermissionGroupSerializer : StdSerializer<PermissionGroup>(PermissionGroup::class.java) {
     override fun serialize(value: PermissionGroup, gen: JsonGenerator, provider: SerializationContext) {
         gen.writeStartObject()
@@ -47,8 +58,15 @@ object JsonPermissionGroupSerializer : StdSerializer<PermissionGroup>(Permission
 object JsonPermissionGroupDeserializer : StdDeserializer<PermissionGroup>(PermissionGroup::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): PermissionGroup {
         val jsonNode = p.objectReadContext().readTree<JsonNode>(p)
-        val permissions = jsonNode.get(PERMISSION_GROUP_PERMISSIONS_KEY)?.values()?.map {
-            it.traverse(p.objectReadContext()).readValueAs(Permission::class.java)
+        jsonNode.requireKnownFields("a permission group", PERMISSION_GROUP_KEYS)
+        val permissions = jsonNode.get(PERMISSION_GROUP_PERMISSIONS_KEY)?.let { permissionsNode ->
+            decodingAt(PERMISSION_GROUP_PERMISSIONS_KEY) {
+                permissionsNode.requireArray().mapIndexed { index, permission ->
+                    decodingAt("[$index]") {
+                        permission.traverse(p.objectReadContext()).readValueAs(Permission::class.java)
+                    }
+                }
+            }
         }.orEmpty()
         return PermissionGroupData(
             name = requireNotNull(jsonNode.get(PERMISSION_GROUP_NAME_KEY)) {

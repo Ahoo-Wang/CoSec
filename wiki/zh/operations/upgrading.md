@@ -8,6 +8,139 @@ description: "CoSec 各版本之间有哪些破坏性变更，以及如何迁移
 面向把现有 CoSec 部署升级到新版本的团队。每一节列出破坏了什么、要改什么，以及一份检查清单；本页是迁移步骤的唯一出处。每个
 版本的发布说明见 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
+## 7.0.1 到 7.0.2 {#_7-0-1-to-7-0-2}
+
+### 格式错误的策略会失败，而不是匹配得更宽 {#malformed-policies-fail-instead-of-matching-more}
+
+8.0 同样严格解码策略。7.0.1 及更早版本会接受作者明显写错的策略 JSON，并把它编译成比所写内容 **匹配得更宽** 的规则：
+
+| 写法 | 7.0.1 的理解 |
+|---|---|
+| `"conditon": { "inRole": { "value": "admin" } }`（字段名拼错） | 没有条件：语句对所有人生效 |
+| `"condition": { "all": {}, "inRole": { "value": "admin" } }`（两个键） | `all`：只读取第一个键 |
+| `{ "bool": { "and": "inRole" } }`（应为列表的位置写了标量） | 空的 `and`，匹配一切 |
+| `"action": { "all": {}, "path": "/admin/**" }`（两个键） | `all` |
+
+现在解码策略、应用权限或限流规则时，以上每一种都会以 `MalformedPolicyException`（一种 `IllegalArgumentException`）失败，
+消息会指出 JSON 路径：`Malformed JSON at $.statements[0]: unknown field [conditon] in a statement, expected only [...]`。
+会失败的情况：
+
+- **未知字段。** 每种对象只接受其文档列出的字段：
+
+  | 对象 | 字段 |
+  |---|---|
+  | 策略 | `$schema`、`id`、`name`、`category`、`description`、`type`、`tenantId`、`condition`、`statements` |
+  | 语句 | `name`、`effect`、`action`、`condition` |
+  | 应用权限 | `$schema`、`id`、`condition`、`groups` |
+  | 权限组 | `name`、`description`、`permissions`、`spaced`（在 JSON schema 中；与以前一样接受并忽略） |
+  | 权限 | `id`、`name`、`description`、`effect`、`action`、`condition` |
+  | 限流规则 | `$schema`、`id`、`action`、`condition`、`key`、`permitsPerSecond`、`windowSeconds`、`strictFailure` |
+
+  匹配器配置（`inRole`、`path` 等键下的对象）不检查未知字段。
+- **不是恰好一个键的匹配器对象。** 条件，以及写成对象的动作，必须恰好有一个键，即其类型。`{}` 也会失败。
+- **应为列表的位置写了标量。** `bool` 的 `and` 和 `or`、`in` 的 `value`、`time` 的 `daysOfWeek`、`composite`，以及
+  `statements`、`groups` 和 `permissions` 都必须是数组。`pattern` 和 `method` 仍接受字符串或数组。
+- 任何对象中的 **重复键**，以前会悄悄以最后一个为准。
+
+解码错误从不跳过策略，所以不会丢掉拒绝。错误出现在：
+
+- **本地文件**（`cosec.authorization.local-policy.locations`、`cosec.limiter.locations`、`cosec.shadow.*`）会让启动以
+  `Failed to load policy [<file>]: Malformed JSON at ...` 失败（[加载策略文件时启动失败](./troubleshooting.md#startup-fails-loading-a-policy-file)），
+  与 7.0 起任何无法解码的文件一样。`PolicyTestKit` 和 `AccessAnalyzer` 的运行也会同样失败。
+- **你自己的代码** 在调用 `PolicyRepository.setPolicy` 或写入应用权限之前解码 JSON 时会得到该异常，什么也不会写入。
+- **存储在 Redis 中的策略和应用权限** 是按 7.0.1 解码后的结果存储的，因此：
+  - 含有标量 `and`、`or`、`in` 的 `value` 或 `daysOfWeek` 的存储副本按原样保留了它，现在会 **读取失败**：每个需要它的请求都以
+    `500` 失败（全局策略：所有请求；主体的策略：该主体；应用权限：该应用中到达角色层的请求）；在 `local-policy.init-repository`
+    且 `force-refresh=false` 时，启动以 `Init Policy - [<id>] failed.` 失败。含有它的策略历史版本无法回滚。该值会留在 Redis 中，
+    直到重新写入（[所有请求都返回 500](./troubleshooting.md#every-request-fails-with-500)）；
+  - 字段名拼错或多出键的策略，其存储副本 **可以正常读取**：7.0.1 在存储前就丢掉了它们，所以它仍然是 7.0.1 编译出的、更宽的含义。
+    只有你发布时所用的源文件才能看出错误。
+
+升级前要做的：
+
+1. **检查你发布用的源文件**：本地策略、应用权限和限流规则文件，以及应用传给 `setPolicy` 的 JSON 所在之处。对每个文件运行下面的
+   `jq` 脚本；它为 7.0.2 拒绝的每个问题输出一行，干净的文件不输出任何内容：
+
+   ```bash
+   for f in src/main/resources/cosec-policy/*.json; do jq -r -f cosec-policy-lint.jq "$f" | sed "s|^|$f: |"; done
+   ```
+
+   ::: details `cosec-policy-lint.jq`
+
+   ```text
+   def keys_not_in($allowed; $path):
+     keys[] | select(. as $k | $allowed | index($k) | not) | "\($path): unknown field \(.)";
+   def condition($path):
+     if type != "object" then "\($path): a condition must be an object"
+     elif length != 1 then "\($path): a condition must have exactly one key, has \(keys)"
+     else to_entries[0] as $e
+       | if $e.key == "bool" and ($e.value | type) == "object" then
+           $e.value | (
+             (to_entries[] | select(.key == "and" or .key == "or") as $l
+               | if ($l.value | type) != "array" then "\($path).bool.\($l.key): must be an array"
+                 else $l.value | to_entries[] | .key as $i | .value | condition("\($path).bool.\($l.key)[\($i)]") end))
+         elif $e.key == "in" and ($e.value.value | type) != "array" then "\($path).in.value: must be an array"
+         elif $e.key == "time" and ($e.value | has("daysOfWeek")) and ($e.value.daysOfWeek | type) != "array" then
+           "\($path).time.daysOfWeek: must be an array"
+         else empty end
+     end;
+   def action($path):
+     if type == "string" then empty
+     elif type == "array" then to_entries[] | .key as $i | .value | action("\($path)[\($i)]")
+     elif type == "object" then
+       if length != 1 then "\($path): an action must have exactly one key, has \(keys)"
+       elif has("composite") then
+         if (.composite | type) != "array" then "\($path).composite: must be an array"
+         else .composite | to_entries[] | .key as $i | .value | action("\($path).composite[\($i)]") end
+       else empty end
+     else "\($path): an action must be a string, an array or an object" end;
+   def statement($path; $allowed):
+     keys_not_in($allowed; $path),
+     (if has("action") then .action | action("\($path).action") else empty end),
+     (if has("condition") then .condition | condition("\($path).condition") else empty end);
+   def items($path):
+     if type != "array" then {problem: "\($path): must be an array"}
+     else to_entries[] | {path: "\($path)[\(.key)]", value: .value} end;
+   def document:
+     def rule($p): statement($p; ["$schema","id","action","condition","key","permitsPerSecond","windowSeconds","strictFailure"]);
+     if type == "array" then to_entries[] | .key as $i | .value | rule("$[\($i)]")
+     elif has("groups") then
+       keys_not_in(["$schema","id","condition","groups"]; "$"),
+       (if has("condition") then .condition | condition("$.condition") else empty end),
+       (.groups | items("$.groups") | if has("problem") then .problem else .path as $g | .value
+         | keys_not_in(["name","description","permissions","spaced"]; $g),
+           (if has("permissions") then .permissions | items("\($g).permissions")
+             | if has("problem") then .problem
+               else .path as $pp | .value | statement($pp; ["id","name","description","effect","action","condition"]) end
+            else empty end) end)
+     elif has("permitsPerSecond") then rule("$")
+     else
+       keys_not_in(["$schema","id","name","category","description","type","tenantId","condition","statements"]; "$"),
+       (if has("condition") then .condition | condition("$.condition") else empty end),
+       (if has("statements") then .statements | items("$.statements")
+         | if has("problem") then .problem else .path as $sp | .value | statement($sp; ["name","effect","action","condition"]) end
+        else empty end)
+     end;
+   document
+   ```
+
+   :::
+
+   该脚本只检查上述形状，不检查匹配器配置和语义。权威的检查是在单元测试中用 7.0.2 加载这些文件
+   （[校验策略](../policies/testing.md#validating-policies)）。
+2. **检查 Redis 中的内容。** 存储的值是二进制头加上 JSON。以 `cosec` 作为 `cosec.authorization.cache.key-prefix` 时：
+
+   ```bash
+   redis-cli --scan --pattern 'cosec:policy:*' | grep -v ':policy:history:' | while read -r key; do
+     redis-cli --raw GET "$key" | LC_ALL=C sed '1s/^[^{]*//' | grep '^{' | jq -r -f cosec-policy-lint.jq | sed "s|^|$key: |"
+   done
+   ```
+
+   对应用权限用 `cosec:app:permission:*` 再执行一次。这里只会出现标量列表。
+3. **修正每一处发现**：在源文件中修正，然后在升级之后（或之前：7.0.1 也能读取修正后的版本）用 `setPolicy` 重新发布（或重新写入应用
+   权限）。源文件中有拼错字段或多出键的策略，即使 Redis 能正常读取，也要重新发布，让存储副本表达所写的含义。
+4. **然后升级**，并在启动日志中确认每个本地文件都已加载。
+
 ## 7.0.0 到 7.0.1 {#_7-0-0-to-7-0-1}
 
 Redis `RateLimiter` bean 的名称由 `redisRateLimiter` 改为 `cosecRedisRateLimiter`；旧名称与 Spring Cloud Gateway 使用的名称相同

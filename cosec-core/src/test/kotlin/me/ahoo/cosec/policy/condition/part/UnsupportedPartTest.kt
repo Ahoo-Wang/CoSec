@@ -58,10 +58,12 @@ class UnsupportedPartTest {
     @Test
     fun createWhenPartSupported() {
         factories.forEach { factory ->
+            // `in` takes a list; a scalar value is a decode error.
+            val value: Any = if (factory is InConditionMatcherFactory) listOf("value") else "value"
             factory.create(
                 mapOf(
                     CONDITION_MATCHER_PART_KEY to RequestParts.REMOTE_IP,
-                    CONDITION_MATCHER_VALUE_KEY to "value",
+                    CONDITION_MATCHER_VALUE_KEY to value,
                     "pattern" to "value",
                 ).asConfiguration()
             ).type.assert().isEqualTo(factory.type)

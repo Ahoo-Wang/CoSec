@@ -33,6 +33,16 @@ const val RATE_LIMIT_RULE_KEY_KEY = "key"
 const val RATE_LIMIT_RULE_PERMITS_PER_SECOND_KEY = "permitsPerSecond"
 const val RATE_LIMIT_RULE_WINDOW_SECONDS_KEY = "windowSeconds"
 const val RATE_LIMIT_RULE_STRICT_FAILURE_KEY = "strictFailure"
+val RATE_LIMIT_RULE_KEYS = setOf(
+    JSON_SCHEMA_KEY,
+    RATE_LIMIT_RULE_ID_KEY,
+    STATEMENT_ACTION_KEY,
+    STATEMENT_CONDITION_KEY,
+    RATE_LIMIT_RULE_KEY_KEY,
+    RATE_LIMIT_RULE_PERMITS_PER_SECOND_KEY,
+    RATE_LIMIT_RULE_WINDOW_SECONDS_KEY,
+    RATE_LIMIT_RULE_STRICT_FAILURE_KEY,
+)
 
 object JsonRateLimitRuleSerializer : StdSerializer<RateLimitRule>(RateLimitRule::class.java) {
     override fun serialize(value: RateLimitRule, gen: JsonGenerator, provider: SerializationContext) {
@@ -51,17 +61,22 @@ object JsonRateLimitRuleSerializer : StdSerializer<RateLimitRule>(RateLimitRule:
 object JsonRateLimitRuleDeserializer : StdDeserializer<RateLimitRule>(RateLimitRule::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): RateLimitRule {
         val jsonNode = p.objectReadContext().readTree<JsonNode>(p)
+        jsonNode.requireKnownFields("a rate limit rule", RATE_LIMIT_RULE_KEYS)
         val id = requireNotNull(jsonNode.get(RATE_LIMIT_RULE_ID_KEY)) {
             "$RATE_LIMIT_RULE_ID_KEY is required!"
         }.asString()
-        val action = requireNotNull(jsonNode.get(STATEMENT_ACTION_KEY)) {
-            "Rate limit rule [$id] $STATEMENT_ACTION_KEY is required!"
-        }.traverse(p.objectReadContext()).readValueAs(ActionMatcher::class.java)
-            // A principal whose template value is rejected must neither escape the limit nor spend a shared bucket.
-            .onRejectedTemplateValue(RejectedTemplateValue.ERROR)
-        val condition = jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.objectReadContext())
-            ?.readValueAs(ConditionMatcher::class.java)
-            ?: AllConditionMatcher.INSTANCE
+        val action = decodingAt(STATEMENT_ACTION_KEY) {
+            requireNotNull(jsonNode.get(STATEMENT_ACTION_KEY)) {
+                "Rate limit rule [$id] $STATEMENT_ACTION_KEY is required!"
+            }.traverse(p.objectReadContext()).readValueAs(ActionMatcher::class.java)
+                // A principal whose template value is rejected must neither escape the limit nor spend a shared bucket.
+                .onRejectedTemplateValue(RejectedTemplateValue.ERROR)
+        }
+        val condition = decodingAt(STATEMENT_CONDITION_KEY) {
+            jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.objectReadContext())
+                ?.readValueAs(ConditionMatcher::class.java)
+                ?: AllConditionMatcher.INSTANCE
+        }
         val permitsPerSecond = requireNotNull(jsonNode.get(RATE_LIMIT_RULE_PERMITS_PER_SECOND_KEY)) {
             "Rate limit rule [$id] $RATE_LIMIT_RULE_PERMITS_PER_SECOND_KEY is required!"
         }.asDouble()

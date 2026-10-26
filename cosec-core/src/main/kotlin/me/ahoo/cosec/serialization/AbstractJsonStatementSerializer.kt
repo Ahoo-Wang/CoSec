@@ -33,6 +33,12 @@ const val STATEMENT_EFFECT_KEY = "effect"
 const val STATEMENT_ACTION_KEY = "action"
 const val STATEMENT_CONDITION_KEY = "condition"
 
+/**
+ * The `$schema` key a document may carry for editors, which the parser ignores.
+ */
+const val JSON_SCHEMA_KEY = "\$schema"
+val STATEMENT_KEYS = setOf(STATEMENT_NAME, STATEMENT_EFFECT_KEY, STATEMENT_ACTION_KEY, STATEMENT_CONDITION_KEY)
+
 abstract class AbstractJsonStatementSerializer<T : Statement>(statementType: Class<T>) :
     StdSerializer<T>(statementType) {
     override fun serialize(value: T, gen: JsonGenerator, provider: SerializationContext) {
@@ -48,23 +54,35 @@ abstract class AbstractJsonStatementSerializer<T : Statement>(statementType: Cla
     protected open fun writeExtend(value: T, gen: JsonGenerator, provider: SerializationContext) = Unit
 }
 
-abstract class AbstractJsonStatementDeserializer<T : Statement>(statementType: Class<T>) :
-    StdDeserializer<T>(statementType) {
+/**
+ * @param kind names the object in errors, e.g. `a statement`
+ * @param keys the fields the object may have; any other field fails decoding. `null` (a subclass written before
+ * 7.0.2, which may read fields of its own) skips this check.
+ */
+abstract class AbstractJsonStatementDeserializer<T : Statement> @JvmOverloads constructor(
+    statementType: Class<T>,
+    private val kind: String = "a statement",
+    private val keys: Set<String>? = null,
+) : StdDeserializer<T>(statementType) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): T {
         val jsonNode = p.objectReadContext().readTree<JsonNode>(p)
+        // An unknown field used to be ignored, so a misspelled `condition` made the statement unconditional.
+        keys?.let { jsonNode.requireKnownFields(kind, it) }
         val effect = jsonNode.get(STATEMENT_EFFECT_KEY)?.traverse(p.objectReadContext())
             ?.readValueAs(Effect::class.java)
             ?: Effect.ALLOW
 
-        val action =
+        val action = decodingAt(STATEMENT_ACTION_KEY) {
             requireNotNull(jsonNode.get(STATEMENT_ACTION_KEY)).traverse(p.objectReadContext())
                 .readValueAs(ActionMatcher::class.java)
                 .onRejectedTemplateValue(effect.onRejectedTemplateValue())
+        }
 
-        val condition =
+        val condition = decodingAt(STATEMENT_CONDITION_KEY) {
             jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.objectReadContext())
                 ?.readValueAs(ConditionMatcher::class.java)
                 ?: AllConditionMatcher.INSTANCE
+        }
 
         return createStatement(
             jsonNode = jsonNode,

@@ -28,7 +28,9 @@
         "all": {
           "$ref": "#/definitions/allActionMatcher"
         }
-      }
+      },
+      "minProperties": 1,
+      "maxProperties": 1
     }
   ],
   "definitions": {

@@ -54,13 +54,13 @@ object JsonActionMatcherDeserializer : StdDeserializer<ActionMatcher>(ActionMatc
             return CompositeActionMatcherFactory.INSTANCE.create(actionConfiguration)
         }
 
-        require(actionConfiguration.isObject)
-        /**
-         * isObject
-         */
-        val field = actionConfiguration.delegate.properties().first()
+        // A second key used to be ignored, so `{"all": {}, "path": "/admin/**"}` compiled to `all`.
+        val field = actionConfiguration.delegate.singleMatcherField("an action that is not a string or an array")
         val conditionConfiguration =
             field.value.traverse(p.objectReadContext()).readValueAs(JsonConfiguration::class.java)
-        return ActionMatcherFactoryProvider.getRequired(field.key).create(conditionConfiguration)
+        val actionMatcherFactory = ActionMatcherFactoryProvider.getRequired(field.key)
+        return decodingAt(field.key) {
+            actionMatcherFactory.create(conditionConfiguration)
+        }
     }
 }

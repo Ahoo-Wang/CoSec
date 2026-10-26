@@ -35,11 +35,14 @@ object JsonConditionMatcherSerializer : StdSerializer<ConditionMatcher>(Conditio
 object JsonConditionMatcherDeserializer : StdDeserializer<ConditionMatcher>(ConditionMatcher::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): ConditionMatcher {
         val conditionObject = p.objectReadContext().readTree<JsonNode>(p)
-        val field = conditionObject.properties().first()
+        // A second key used to be ignored, so `{"all": {}, "inRole": ...}` compiled to `all`.
+        val field = conditionObject.singleMatcherField("a condition")
         val conditionConfiguration = field.value.traverse(
             p.objectReadContext()
         ).readValueAs(JsonConfiguration::class.java)
         val conditionMatcherFactory = ConditionMatcherFactoryProvider.getRequired(field.key)
-        return conditionMatcherFactory.create(conditionConfiguration)
+        return decodingAt(field.key) {
+            conditionMatcherFactory.create(conditionConfiguration)
+        }
     }
 }

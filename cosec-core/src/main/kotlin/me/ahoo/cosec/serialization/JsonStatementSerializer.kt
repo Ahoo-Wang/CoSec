@@ -22,7 +22,8 @@ import tools.jackson.databind.JsonNode
 
 object JsonStatementSerializer : AbstractJsonStatementSerializer<Statement>(Statement::class.java)
 
-object JsonStatementDeserializer : AbstractJsonStatementDeserializer<Statement>(Statement::class.java) {
+object JsonStatementDeserializer :
+    AbstractJsonStatementDeserializer<Statement>(Statement::class.java, "a statement", STATEMENT_KEYS) {
     override fun createStatement(
         jsonNode: JsonNode,
         name: String,

@@ -28,6 +28,8 @@ import tools.jackson.databind.ser.std.StdSerializer
 
 const val APP_PERMISSION_ID_KEY = "id"
 const val APP_PERMISSION_GROUPS_KEY = "groups"
+val APP_PERMISSION_KEYS =
+    setOf(JSON_SCHEMA_KEY, APP_PERMISSION_ID_KEY, STATEMENT_CONDITION_KEY, APP_PERMISSION_GROUPS_KEY)
 
 object JsonAppPermissionSerializer : StdSerializer<AppPermission>(AppPermission::class.java) {
     override fun serialize(value: AppPermission, gen: JsonGenerator, provider: SerializationContext) {
@@ -48,11 +50,19 @@ object JsonAppPermissionSerializer : StdSerializer<AppPermission>(AppPermission:
 object JsonAppPermissionDeserializer : StdDeserializer<AppPermission>(AppPermission::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): AppPermission {
         val jsonNode = p.objectReadContext().readTree<JsonNode>(p)
-        val condition =
+        jsonNode.requireKnownFields("an app permission", APP_PERMISSION_KEYS)
+        val condition = decodingAt(STATEMENT_CONDITION_KEY) {
             jsonNode.get(STATEMENT_CONDITION_KEY)?.traverse(p.objectReadContext())?.readValueAs(ConditionMatcher::class.java)
                 ?: AllConditionMatcher.INSTANCE
-        val groups = jsonNode.get(APP_PERMISSION_GROUPS_KEY)?.values()?.map {
-            it.traverse(p.objectReadContext()).readValueAs(PermissionGroup::class.java)
+        }
+        val groups = jsonNode.get(APP_PERMISSION_GROUPS_KEY)?.let { groupsNode ->
+            decodingAt(APP_PERMISSION_GROUPS_KEY) {
+                groupsNode.requireArray().mapIndexed { index, group ->
+                    decodingAt("[$index]") {
+                        group.traverse(p.objectReadContext()).readValueAs(PermissionGroup::class.java)
+                    }
+                }
+            }
         }.orEmpty()
         return AppPermissionData(
             id = requireNotNull(jsonNode.get(APP_PERMISSION_ID_KEY)) {

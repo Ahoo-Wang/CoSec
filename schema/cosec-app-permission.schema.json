@@ -4,6 +4,10 @@
   "title": "CoSec App Permission Schema",
   "type": "object",
   "properties": {
+    "$schema": {
+      "description": "The JSON schema of this document, for editors; the parser ignores it",
+      "type": "string"
+    },
     "id": {
       "description": "The id of the app permission",
       "type": "string"
@@ -23,6 +27,7 @@
     "id",
     "groups"
   ],
+  "additionalProperties": false,
   "definitions": {
     "permissionGroup": {
       "type": "object",
@@ -50,7 +55,8 @@
       "required": [
         "name",
         "permissions"
-      ]
+      ],
+      "additionalProperties": false
     },
     "permission": {
       "type": "object",
@@ -82,7 +88,8 @@
         "id",
         "name",
         "action"
-      ]
+      ],
+      "additionalProperties": false
     }
   }
 }

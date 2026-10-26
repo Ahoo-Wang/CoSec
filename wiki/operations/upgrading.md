@@ -9,6 +9,148 @@ For teams moving an existing CoSec deployment to a newer version. Each section l
 and a checklist; this page is the single home of migration steps. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
+## 7.0.1 to 7.0.2
+
+### Malformed policies fail instead of matching more {#malformed-policies-fail-instead-of-matching-more}
+
+8.0 decodes policies strictly as well. 7.0.1 and earlier accepted policy JSON that the author clearly got wrong and
+compiled it to something that **matches more** than was written:
+
+| Written | 7.0.1 read it as |
+|---|---|
+| `"conditon": { "inRole": { "value": "admin" } }` (a misspelled field) | no condition: the statement applies to everyone |
+| `"condition": { "all": {}, "inRole": { "value": "admin" } }` (two keys) | `all`: only the first key was read |
+| `{ "bool": { "and": "inRole" } }` (a scalar where a list belongs) | an empty `and`, which matches everything |
+| `"action": { "all": {}, "path": "/admin/**" }` (two keys) | `all` |
+
+Decoding a policy, app permission or rate limit rule now fails on each of these with `MalformedPolicyException` (an
+`IllegalArgumentException`), whose message names the JSON path:
+`Malformed JSON at $.statements[0]: unknown field [conditon] in a statement, expected only [...]`. What fails:
+
+- **Unknown fields.** Each object accepts only its documented fields:
+
+  | Object | Fields |
+  |---|---|
+  | policy | `$schema`, `id`, `name`, `category`, `description`, `type`, `tenantId`, `condition`, `statements` |
+  | statement | `name`, `effect`, `action`, `condition` |
+  | app permission | `$schema`, `id`, `condition`, `groups` |
+  | permission group | `name`, `description`, `permissions`, `spaced` (in the JSON schema; accepted and ignored as before) |
+  | permission | `id`, `name`, `description`, `effect`, `action`, `condition` |
+  | rate limit rule | `$schema`, `id`, `action`, `condition`, `key`, `permitsPerSecond`, `windowSeconds`, `strictFailure` |
+
+  Matcher configurations (the object under `inRole`, `path` and so on) are not checked for unknown fields.
+- **Matcher objects without exactly one key.** A condition, and an action written as an object, must have exactly
+  one key, its type. `{}` fails too.
+- **Scalars where a list belongs.** `bool`'s `and` and `or`, `in`'s `value`, `time`'s `daysOfWeek`, `composite`, and
+  `statements`, `groups` and `permissions` must be arrays. `pattern` and `method` still take a string or an array.
+- **Duplicate keys** in any object, where the last one used to win silently.
+
+A decode error never skips the policy, so it cannot drop a deny. Where it surfaces:
+
+- **Local files** (`cosec.authorization.local-policy.locations`, `cosec.limiter.locations`, `cosec.shadow.*`) stop
+  startup with `Failed to load policy [<file>]: Malformed JSON at ...` ([Startup fails loading a policy file](./troubleshooting.md#startup-fails-loading-a-policy-file)),
+  as any undecodable file has since 7.0. `PolicyTestKit` and `AccessAnalyzer` runs fail the same way.
+- **Your own code** that decodes JSON before calling `PolicyRepository.setPolicy` or writing an app permission gets the
+  exception, and nothing is written.
+- **Policies and app permissions stored in Redis** were stored by 7.0.1 as it decoded them, so:
+  - a stored copy with a scalar `and`, `or`, `in` `value` or `daysOfWeek` kept it as written and now **fails its
+    reads**: every request that needs it fails with `500` (a global policy: every request; a principal's policy:
+    that principal; an app permission: that app's requests that reach the role layer), and with
+    `local-policy.init-repository` and `force-refresh=false` startup fails with `Init Policy - [<id>] failed.`. A
+    policy history revision with one fails its rollback. The value stays in Redis until it is written again
+    ([Every request fails with 500](./troubleshooting.md#every-request-fails-with-500));
+  - a stored copy of a policy with a misspelled field or a second key **reads fine**: 7.0.1 dropped them before
+    storing it, so it still means what 7.0.1 compiled, the wider reading. Only the source you published from shows
+    the mistake.
+
+What to do before upgrading:
+
+1. **Check the sources** you publish from: local policy, app permission and rate limit files, and wherever your
+   application keeps the JSON it passes to `setPolicy`. Run this `jq` script over each file; it prints one line per
+   problem 7.0.2 rejects, and nothing for a clean file:
+
+   ```bash
+   for f in src/main/resources/cosec-policy/*.json; do jq -r -f cosec-policy-lint.jq "$f" | sed "s|^|$f: |"; done
+   ```
+
+   ::: details `cosec-policy-lint.jq`
+
+   ```text
+   def keys_not_in($allowed; $path):
+     keys[] | select(. as $k | $allowed | index($k) | not) | "\($path): unknown field \(.)";
+   def condition($path):
+     if type != "object" then "\($path): a condition must be an object"
+     elif length != 1 then "\($path): a condition must have exactly one key, has \(keys)"
+     else to_entries[0] as $e
+       | if $e.key == "bool" and ($e.value | type) == "object" then
+           $e.value | (
+             (to_entries[] | select(.key == "and" or .key == "or") as $l
+               | if ($l.value | type) != "array" then "\($path).bool.\($l.key): must be an array"
+                 else $l.value | to_entries[] | .key as $i | .value | condition("\($path).bool.\($l.key)[\($i)]") end))
+         elif $e.key == "in" and ($e.value.value | type) != "array" then "\($path).in.value: must be an array"
+         elif $e.key == "time" and ($e.value | has("daysOfWeek")) and ($e.value.daysOfWeek | type) != "array" then
+           "\($path).time.daysOfWeek: must be an array"
+         else empty end
+     end;
+   def action($path):
+     if type == "string" then empty
+     elif type == "array" then to_entries[] | .key as $i | .value | action("\($path)[\($i)]")
+     elif type == "object" then
+       if length != 1 then "\($path): an action must have exactly one key, has \(keys)"
+       elif has("composite") then
+         if (.composite | type) != "array" then "\($path).composite: must be an array"
+         else .composite | to_entries[] | .key as $i | .value | action("\($path).composite[\($i)]") end
+       else empty end
+     else "\($path): an action must be a string, an array or an object" end;
+   def statement($path; $allowed):
+     keys_not_in($allowed; $path),
+     (if has("action") then .action | action("\($path).action") else empty end),
+     (if has("condition") then .condition | condition("\($path).condition") else empty end);
+   def items($path):
+     if type != "array" then {problem: "\($path): must be an array"}
+     else to_entries[] | {path: "\($path)[\(.key)]", value: .value} end;
+   def document:
+     def rule($p): statement($p; ["$schema","id","action","condition","key","permitsPerSecond","windowSeconds","strictFailure"]);
+     if type == "array" then to_entries[] | .key as $i | .value | rule("$[\($i)]")
+     elif has("groups") then
+       keys_not_in(["$schema","id","condition","groups"]; "$"),
+       (if has("condition") then .condition | condition("$.condition") else empty end),
+       (.groups | items("$.groups") | if has("problem") then .problem else .path as $g | .value
+         | keys_not_in(["name","description","permissions","spaced"]; $g),
+           (if has("permissions") then .permissions | items("\($g).permissions")
+             | if has("problem") then .problem
+               else .path as $pp | .value | statement($pp; ["id","name","description","effect","action","condition"]) end
+            else empty end) end)
+     elif has("permitsPerSecond") then rule("$")
+     else
+       keys_not_in(["$schema","id","name","category","description","type","tenantId","condition","statements"]; "$"),
+       (if has("condition") then .condition | condition("$.condition") else empty end),
+       (if has("statements") then .statements | items("$.statements")
+         | if has("problem") then .problem else .path as $sp | .value | statement($sp; ["name","effect","action","condition"]) end
+        else empty end)
+     end;
+   document
+   ```
+
+   :::
+
+   The script checks the shapes above, not matcher configurations or semantics. The authoritative check is loading
+   the files with 7.0.2 in a unit test ([Validating policies](../policies/testing.md#validating-policies)).
+2. **Check what Redis holds.** Stored values are a binary header followed by the JSON. With `cosec` as
+   `cosec.authorization.cache.key-prefix`:
+
+   ```bash
+   redis-cli --scan --pattern 'cosec:policy:*' | grep -v ':policy:history:' | while read -r key; do
+     redis-cli --raw GET "$key" | LC_ALL=C sed '1s/^[^{]*//' | grep '^{' | jq -r -f cosec-policy-lint.jq | sed "s|^|$key: |"
+   done
+   ```
+
+   Repeat with `cosec:app:permission:*` for app permissions. Only scalar lists can show up here.
+3. **Fix each finding** in its source, then publish it again with `setPolicy` (or write the app permission again)
+   after the upgrade, or before it: 7.0.1 reads the fixed version too. Republish the policies whose source had a
+   misspelled field or a second key even though Redis reads them fine, so the stored copy means what was written.
+4. **Then upgrade**, and confirm in the startup log that every local file loaded.
+
 ## 7.0.0 to 7.0.1
 
 The Redis `RateLimiter` bean is now named `cosecRedisRateLimiter` instead of `redisRateLimiter`, the name Spring Cloud

@@ -76,7 +76,7 @@ description: "CoSec 策略的每个字段：语句、动作、路径变量、模
 | `all` | `"action": { "all": { "method": "GET" } }` | 所有路径，可以只限某些方法。 |
 | `composite` | `"action": { "composite": ["/a/**", "/b/**"] }` | 同数组写法。 |
 
-`path` 和 `all` 接受 `method`：一个 HTTP 方法或方法数组，比较时不区分大小写。省略表示任意方法。对象有多个键时只用第一个，其余被忽略。
+`path` 和 `all` 接受 `method`：一个 HTTP 方法或方法数组，比较时不区分大小写。省略表示任意方法。动作对象只能有一个键；空对象或多出的键会在加载策略时失败。
 
 ### `path` {#path}
 
@@ -199,7 +199,7 @@ description: "CoSec 策略的每个字段：语句、动作、路径变量、模
 { "eq": { "part": "context.tenantId", "value": "(platform)" } }
 ```
 
-每种条件都接受 `"negate": true`，把结果取反。未知类型在构建策略时失败。条件类型：
+每种条件都接受 `"negate": true`，把结果取反。未知类型、空对象或多出的键会在构建策略时失败。条件类型：
 
 | 分组 | 类型 |
 |---|---|
@@ -356,7 +356,7 @@ description: "CoSec 策略的每个字段：语句、动作、路径变量、模
 | `or` | 存在且不为空时，还必须至少匹配一个 |
 | `negate` | 把组合后的结果取反 |
 
-`{ "bool": {} }` 总是匹配。`bool` 可以任意嵌套。
+`and` 和 `or` 是数组；只有一个条件时也要写成单元素数组。`{ "bool": {} }` 总是匹配。`bool` 可以任意嵌套。
 
 ```json
 {
@@ -425,7 +425,7 @@ description: "CoSec 策略的每个字段：语句、动作、路径变量、模
 | `rate-limit-rule.schema.json` | 限流规则文件 |
 | `action.schema.json`、`condition.schema.json`、`definitions.schema.json` | 共用部分 |
 
-在文件中用 `$schema` 引用它，解析器会忽略这个字段：
+在文件中用 `$schema` 引用它，解析器会忽略这个字段。本页未列出的其他字段都会导致加载失败（[格式错误的策略会失败](../operations/upgrading.md#malformed-policies-fail-instead-of-matching-more)）：
 
 ```json
 {

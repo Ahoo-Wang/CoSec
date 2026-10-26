@@ -17,6 +17,7 @@ import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.api.policy.ConditionMatcher
+import me.ahoo.cosec.serialization.decodingAt
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.Instant
@@ -56,8 +57,9 @@ class TimeConditionMatcher internal constructor(
         ?.let { ZoneId.of(it) } ?: ZoneId.of("UTC")
     private val notBefore: Instant? = instantOf(TIME_CONDITION_MATCHER_NOT_BEFORE_KEY)
     private val notAfter: Instant? = instantOf(TIME_CONDITION_MATCHER_NOT_AFTER_KEY)
-    private val daysOfWeek: Set<DayOfWeek>? = configuration.get(TIME_CONDITION_MATCHER_DAYS_OF_WEEK_KEY)
-        ?.asStringList()?.map(::dayOf)?.toSet()
+    private val daysOfWeek: Set<DayOfWeek>? = decodingAt(TIME_CONDITION_MATCHER_DAYS_OF_WEEK_KEY) {
+        configuration.get(TIME_CONDITION_MATCHER_DAYS_OF_WEEK_KEY)?.asStringList()?.map(::dayOf)?.toSet()
+    }
     private val from: LocalTime? = localTimeOf(TIME_CONDITION_MATCHER_FROM_KEY)
     private val to: LocalTime? = localTimeOf(TIME_CONDITION_MATCHER_TO_KEY)
 
