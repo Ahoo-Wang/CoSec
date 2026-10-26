@@ -39,6 +39,7 @@ val codeCoverageReportProject = project(":code-coverage-report")
 // Test-only modules (RFC 0008 §3.1): never published, so neither in the BOM nor in any publication.
 val testOnlyProjects = setOf(
     project(":conformance"),
+    project(":e2e"),
 )
 val publishProjects = subprojects - serverProjects - codeCoverageReportProject - testOnlyProjects
 val libraryProjects = publishProjects - bomProjects
@@ -90,54 +91,7 @@ configure(libraryProjects) {
         withSourcesJar()
     }
     kotlinJvm()
-    apply<me.champeau.jmh.JMHPlugin>()
-    configure<me.champeau.jmh.JmhParameters> {
-        val delimiter = ','
-        val jmhIncludesKey = "jmhIncludes"
-        val jmhExcludesKey = "jmhExcludes"
-        val jmhThreadsKey = "jmhThreads"
-        val jmhModeKey = "jmhMode"
-        val jmhWarmupIterationsKey = "jmhWarmupIterations"
-        val jmhIterationsKey = "jmhIterations"
-        val jmhForkKey = "jmhFork"
-        val jmhProfilersKey = "jmhProfilers"
-        val jmhJavaVersionKey = "jmhJavaVersion"
-
-        if (project.hasProperty(jmhIncludesKey)) {
-            val jmhIncludes = project.properties[jmhIncludesKey].toString().split(delimiter)
-            includes.set(jmhIncludes)
-        }
-        if (project.hasProperty(jmhExcludesKey)) {
-            val jmhExcludes = project.properties[jmhExcludesKey].toString().split(delimiter)
-            excludes.set(jmhExcludes)
-        }
-
-        warmupIterations.set(project.findProperty(jmhWarmupIterationsKey)?.toString()?.toInt() ?: 1)
-        iterations.set(project.findProperty(jmhIterationsKey)?.toString()?.toInt() ?: 1)
-        if (project.hasProperty(jmhProfilersKey)) {
-            profilers.set(project.properties[jmhProfilersKey].toString().split(delimiter))
-        }
-        // Benchmarks are compiled for 17 like everything else; this only picks the JDK the forked benchmark JVMs run on.
-        if (project.hasProperty(jmhJavaVersionKey)) {
-            val launcher = project.the<JavaToolchainService>().launcherFor {
-                languageVersion.set(JavaLanguageVersion.of(project.properties[jmhJavaVersionKey].toString()))
-            }
-            jvm.set(launcher.map { it.executablePath.asFile.absolutePath })
-        }
-        resultFormat.set("json")
-
-        // Without -PjmhMode, each benchmark keeps its own @BenchmarkMode; unannotated ones run JMH's default, thrpt.
-        if (project.hasProperty(jmhModeKey)) {
-            benchmarkMode.set(project.properties[jmhModeKey].toString().split(delimiter))
-        }
-        var jmhThreads = 1
-        if (project.hasProperty(jmhThreadsKey)) {
-            jmhThreads = Integer.valueOf(project.properties[jmhThreadsKey].toString())
-        }
-        threads.set(jmhThreads)
-        fork.set(project.findProperty(jmhForkKey)?.toString()?.toInt() ?: 1)
-        jvmArgs.set(listOf("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-jmh.xml"))
-    }
+    jmhBenchmarks()
     junitTests()
 
     dependencies {
@@ -160,6 +114,17 @@ configure(testOnlyProjects) {
     junitTests()
     dependencies {
         testImplementation(platform(dependenciesProject))
+    }
+    verifyUnpublished()
+}
+
+// The end-to-end slice measures the 8.0 path (RFC 0008 §4.4.3).
+project(":e2e") {
+    jmhBenchmarks()
+    dependencies {
+        "jmh"(platform(dependenciesProject))
+        "jmh"("org.openjdk.jmh:jmh-core")
+        "jmh"("org.openjdk.jmh:jmh-generator-annprocess")
     }
 }
 
@@ -373,5 +338,97 @@ fun Project.junitTests() {
         testImplementation("org.junit.jupiter:junit-jupiter-params")
         testRuntimeOnly("org.junit.platform:junit-platform-launcher")
         testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+    }
+}
+
+/** The JMH conventions (AGENTS.md "Feedback loop"): `-PjmhIncludes`, `-PjmhFork`, `-PjmhJavaVersion`, ... */
+fun Project.jmhBenchmarks() {
+    apply<me.champeau.jmh.JMHPlugin>()
+    configure<me.champeau.jmh.JmhParameters> {
+        val delimiter = ','
+        val jmhIncludesKey = "jmhIncludes"
+        val jmhExcludesKey = "jmhExcludes"
+        val jmhThreadsKey = "jmhThreads"
+        val jmhModeKey = "jmhMode"
+        val jmhWarmupIterationsKey = "jmhWarmupIterations"
+        val jmhIterationsKey = "jmhIterations"
+        val jmhForkKey = "jmhFork"
+        val jmhProfilersKey = "jmhProfilers"
+        val jmhJavaVersionKey = "jmhJavaVersion"
+
+        if (project.hasProperty(jmhIncludesKey)) {
+            val jmhIncludes = project.properties[jmhIncludesKey].toString().split(delimiter)
+            includes.set(jmhIncludes)
+        }
+        if (project.hasProperty(jmhExcludesKey)) {
+            val jmhExcludes = project.properties[jmhExcludesKey].toString().split(delimiter)
+            excludes.set(jmhExcludes)
+        }
+
+        warmupIterations.set(project.findProperty(jmhWarmupIterationsKey)?.toString()?.toInt() ?: 1)
+        iterations.set(project.findProperty(jmhIterationsKey)?.toString()?.toInt() ?: 1)
+        if (project.hasProperty(jmhProfilersKey)) {
+            profilers.set(project.properties[jmhProfilersKey].toString().split(delimiter))
+        }
+        // Benchmarks are compiled for 17 like everything else; this only picks the JDK the forked benchmark JVMs run on.
+        if (project.hasProperty(jmhJavaVersionKey)) {
+            val launcher = project.the<JavaToolchainService>().launcherFor {
+                languageVersion.set(JavaLanguageVersion.of(project.properties[jmhJavaVersionKey].toString()))
+            }
+            jvm.set(launcher.map { it.executablePath.asFile.absolutePath })
+        }
+        resultFormat.set("json")
+
+        // Without -PjmhMode, each benchmark keeps its own @BenchmarkMode; unannotated ones run JMH's default, thrpt.
+        if (project.hasProperty(jmhModeKey)) {
+            benchmarkMode.set(project.properties[jmhModeKey].toString().split(delimiter))
+        }
+        var jmhThreads = 1
+        if (project.hasProperty(jmhThreadsKey)) {
+            jmhThreads = Integer.valueOf(project.properties[jmhThreadsKey].toString())
+        }
+        threads.set(jmhThreads)
+        fork.set(project.findProperty(jmhForkKey)?.toString()?.toInt() ?: 1)
+        jvmArgs.set(listOf("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-jmh.xml"))
+    }
+}
+
+/*
+ * RFC 0008 §3.1: a test-only module is in no published artifact. Like cosec-core's verifyTestFixturesUnpublished, it
+ * reads what the publications would contain: no publication of this project, and no POM or module metadata naming it.
+ */
+fun Project.verifyUnpublished() {
+    val verifyUnpublished = tasks.register("verifyUnpublished") {
+        group = "verification"
+        description = "Fails if this module is published, or any published POM or module metadata names it."
+        val self = project
+        val descriptorTasks = provider {
+            rootProject.subprojects.filter { it != self }.flatMap {
+                it.tasks.withType<GenerateMavenPom>() + it.tasks.withType<GenerateModuleMetadata>()
+            }
+        }
+        dependsOn(descriptorTasks)
+        val descriptors = files(
+            descriptorTasks.map { tasks ->
+                tasks.map { if (it is GenerateMavenPom) it.destination else (it as GenerateModuleMetadata).outputFile }
+            }
+        )
+        inputs.files(descriptors)
+        val ownPublications = self.extensions.findByType<PublishingExtension>()?.publications?.names.orEmpty()
+        val hasPublishPlugin = self.pluginManager.hasPlugin("maven-publish")
+
+        @Suppress("UNCHECKED_CAST")
+        val inLibraryProjects = (rootProject.extra["libraryProjects"] as Iterable<Project>).any { it == self }
+        val name = self.name
+        doLast {
+            check(!hasPublishPlugin && ownPublications.isEmpty()) { "$name must not apply maven-publish: $ownPublications" }
+            check(!inLibraryProjects) { "$name is in the root build's libraryProjects, so the BOM would list it." }
+            val naming = descriptors.files.filter { it.isFile && Regex("\\b$name\\b").containsMatchIn(it.readText()) }
+            check(naming.isEmpty()) { "Published descriptors name $name:\n${naming.joinToString("\n")}" }
+            check(descriptors.files.any { it.isFile }) { "No published descriptor was generated; the check saw nothing." }
+        }
+    }
+    tasks.named("check") {
+        dependsOn(verifyUnpublished)
     }
 }

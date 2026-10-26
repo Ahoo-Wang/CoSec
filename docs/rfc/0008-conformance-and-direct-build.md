@@ -504,6 +504,7 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 |---|---|---|
 | 解释由执法的同一条流程构造：`explain`/`simulate` 与执法调用同一个 `Engine.evaluate`，没有第二条构造路径（`SnapshotEngineAuthorization` 的 `onEvaluated` 与 `explainFromTrace` 的分叉随之消失） | #996、#998 审查 | `CTL-3` 的场景 |
 | 启动时检查 Redis 的 `maxmemory-policy`，不是 `noeviction` 时拒绝启动（淘汰会让新实例把被淘汰的平台文档读成"不存在"，全局 DENY 静默失效） | #1006 第一轮审查 | `SNP-3` 的测试（真实 Redis） |
+| 控制面的引导保证平台文档存在之后，**缺失**的平台文档按失败处理（请求 fail closed），不再读成空文档（缺失与 Redis 淘汰叠加时，空的平台文档会让全局 DENY 静默失效） | #1053 审查 | `DocumentSnapshotViews` 的测试与端到端切片的场景 |
 | 快照缓存固定编解码器与 key 过滤器，禁止 loader；`localMaxAge` 与 `cosec.authorization.snapshot.local-max-age` 协调成一个值，在 CoCache 定制器之后应用 | #1006 第一轮审查 | `CacheTtlPolicyTest`、`StrictCacheFailureTest` 扩展 |
 | `LocalPolicyInitializer` 不再写库：按 RFC 0007 Q17 删除 `init-repository`/`force-refresh`，本地策略文件只装进内存存储；需要写入的用声明式 `apply` | #1006 审查；RFC 0007 Q17 | 删除即守护；`configuration.md` 删除对应属性 |
 | 编解码器拒绝 `Match.Exactly("*")`（实现在 RFC 0004 PR-4） | #1015 第一轮审查 | `DOC-2` |
@@ -523,7 +524,7 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 
 | PR | 标题 | 范围 | 合入门槛 | 依赖 |
 |---|---|---|---|---|
-| **S1** | `refactor!: wire the 8.0 path in the starter` | starter 装配目标路径：`Pipeline`、认证器、成员关系、外部属性提供者、监听器、`SnapshotSource` 读 `Platform`/`App`/`Tenant` 三种文档、`controlSupport`；新的 `cosec.*` 属性（RFC 0004 §14.3、RFC 0006 X8、RFC 0007 X5）；路由映射；schema 标记。三个适配器只走新桥接。starter 中 7.x 的自动配置本身就是装配，S1 用新的取代并删除它们（含 L1、L2 的自动配置与 L5 的属性）；其他模块里 7.x 的库代码留在原处，照常编译和测试，但不再被装配。继承自原 RFC 0003 PR-5 与各轮审查的装配要求：启动时检查 `noeviction`（`SNP-3`）、固定快照缓存的编解码器与 key 过滤器并禁止 loader、`localMaxAge` 与 `cosec.authorization.snapshot.local-max-age` 协调成一个值、`LocalPolicyInitializer` 不再写库（删除 `init-repository`/`force-refresh`）、`explain`/`simulate` 装配到执法的同一条流程（`CTL-3`）、`WebAdapterParityTest` 加上 `SCP-4` 的场景。`cosec-gateway-server` 与 `k8s/cosec-gateway-config.yaml` 改用 8.0 的属性（§3.9 RC 前提第 7 条）；`aot-smoke` 作业（RC 前提第 5 条）；端到端切片改由 starter 装配（§4.4.3）。AGENTS.md 只在 Mental model 开头加一句过渡说明："starter 已装配 8.0 路径；以下各节在 S5 之前仍描述 7.x" | §3.9 第 1–5 条 | 其余全部实现 PR（§4.5） |
+| **S1** | `refactor!: wire the 8.0 path in the starter` | starter 装配目标路径：`Pipeline`、认证器、成员关系、外部属性提供者、监听器、`SnapshotSource` 读 `Platform`/`App`/`Tenant` 三种文档、`controlSupport`；新的 `cosec.*` 属性（RFC 0004 §14.3、RFC 0006 X8、RFC 0007 X5）；路由映射；schema 标记。三个适配器只走新桥接。starter 中 7.x 的自动配置本身就是装配，S1 用新的取代并删除它们（含 L1、L2 的自动配置与 L5 的属性）；其他模块里 7.x 的库代码留在原处，照常编译和测试，但不再被装配。继承自原 RFC 0003 PR-5 与各轮审查的装配要求：启动时检查 `noeviction`（`SNP-3`）、引导之后缺失的平台文档 fail closed、固定快照缓存的编解码器与 key 过滤器并禁止 loader、`localMaxAge` 与 `cosec.authorization.snapshot.local-max-age` 协调成一个值、`LocalPolicyInitializer` 不再写库（删除 `init-repository`/`force-refresh`）、`explain`/`simulate` 装配到执法的同一条流程（`CTL-3`）、`WebAdapterParityTest` 加上 `SCP-4` 的场景。`cosec-gateway-server` 与 `k8s/cosec-gateway-config.yaml` 改用 8.0 的属性（§3.9 RC 前提第 7 条）；`aot-smoke` 作业（RC 前提第 5 条）；端到端切片改由 starter 装配（§4.4.3）。AGENTS.md 只在 Mental model 开头加一句过渡说明："starter 已装配 8.0 路径；以下各节在 S5 之前仍描述 7.x" | §3.9 第 1–5 条 | 其余全部实现 PR（§4.5） |
 | **S2** | `refactor(cocache)!: remove the 7.x storage and write paths` | 删除存储与写入一侧：每请求读仓库的路径（RFC 0003 PR-6 的清单）、`cosec-cocache` 中快照的比较、回放与测量工具及其任务、7.x 的写入与历史（RFC 0007 X1–X3：`SnapshotPublisher`、`RedisSnapshotPublisher`、`PolicyHistory`、`RedisPolicyRevisionStore`）、`SnapshotContent`/`SnapshotDocumentCodec` 中 7.0 格式的部分、L1 与 L2 的 `cosec-cocache` 部分 | 全部模块 `check` 通过 | S1 |
 | **S3** | `refactor!: remove the 7.x decision path` | 删除决策一侧：`cosec-core` 的 7.x 授权实现、按层引擎的适配层、7.0 形状的快照、决策比较与回放的测试夹具与任务、等价性质、7.x 的解释与影子；`engine/` 的按层引擎与 `model/` 中只为它存在的类型；RFC 0006 PR-10 中 `cosec-core` 与适配器的部分（装饰器链、`BlockingAware`、`SecurityPipeline`、L6 的旧构造器、观察模块中的 7.x 装饰器）；RFC 0004 PR-8 中 `cosec-core` 的部分（`RoleScope`、`RootPrincipalMatcher`、`root-enabled`）；L15（`PolicyTestKit` 按 Q11 重写）、L21 | 全部模块 `check` 通过 | S2 |
 | **S4** | `refactor(api)!: remove the 7.x contracts and matchers` | 删除契约与匹配器：RFC 0005 PR-9 的清单（OGNL、SpEL、全部内置匹配器与工厂、`ActionMatcherFactory`）、RFC 0004 PR-8 中 `cosec-api` 的部分（`AppRolePermission`、`RolePermission`、`ROOT_ID`/`isRoot`）、RFC 0006 PR-10 中 `cosec-api` 的部分（响应式授权契约、`ConditionMatcherFactory`、`MatcherFactoryRegistry`）、L7、L8、L9、L18；`schema/` 随格式描述的删除重新生成（`verifySchemas` 要求同一个 PR）；打开 RFC 0007 PR-11 的 ArchUnit 规则（快照只有一个写入者、公开签名不含 Reactor 类型，M12） | 全部模块 `check` 通过 | S3 |
@@ -577,6 +578,11 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 在陈旧时间上界内看到新决策；Netty 线程上不阻塞（BlockHound，做法同 `SnapshotStoreBlockHoundTest`）。切片不重复一致性场景，只检查装配起来才存在的东西：
 缓存时序、线程、Redis 故障、真实的编解码。
 
+**第一个切片 PR（#E2E）实际包含的部分。** `Pipeline` 的入口是 `evaluate`（上文的 `Pipeline.decide` 指它）。测试应用随 RFC 0006 PR-7 的 HTTP 一段加入，
+在那之前 `src/test` 只有切片的装配（`Slice`）与测试。Redis 停止用一个可切断的 TCP 中继模拟（Redis 由同一台机器上的所有测试共用）：未加载过的文档 → 503，
+已安装的文档继续按最后确认的内容决策。`blocked` 场景等 RFC 0006 PR-4 的黑名单阶段（在那之前 `Pipeline` 总以 `blocked = false` 求值）。
+第一次测量见 `docs/perf/e2e-slice/README.md`。
+
 **依赖。** RFC 0005 PR-4、RFC 0004 PR-4、RFC 0006 PR-2 ✓（#1044）。RFC 0004 PR-4 依赖 RFC 0005 PR-4，所以实际上只等 RFC 0004 PR-4。
 
 **之后由谁扩展。** 下列 PR 各自把自己的一段接进切片，作为完成标准的一部分：
@@ -612,8 +618,8 @@ RFC 0006 PR-2 #1044 随后也已合入）；RFC 0008 PR-4 一行换成 S1–S5�
 | RFC 0005 PR-3 动作与资源 | RFC 0005 PR-1 ✓（#1022） | ✓ 已合入（#1040） |
 | RFC 0005 PR-4 编译与索引 | RFC 0005 PR-2 ✓（#1036、修复 #1037）、PR-3 ✓（#1040）；RFC 0004 PR-2 ✓（#1029） | ✓ 已合入（#1051） |
 | RFC 0005 PR-5 路由映射 | RFC 0005 PR-3 ✓ | 依赖已合入；按 §4.7 第 1 条在 #1040 的审查之后 |
-| RFC 0004 PR-4 文档与编译（改动） | RFC 0004 PR-2 ✓、PR-3 ✓（#1027）；RFC 0005 PR-4 ✓（#1051） | **能**（按 §4.7 第 1 条在 `engine/` 的审查之后） |
-| RFC 0004 PR-4b 加载平台、应用、租户快照（2026-10-26 新增：`SnapshotSource` 推广为一个共享槽加多个 LRU 族，`runtime` 的 `DocumentSnapshotViews`） | RFC 0004 PR-4（#1052） | PR-4 合入后 |
+| RFC 0004 PR-4 文档与编译（改动） | RFC 0004 PR-2 ✓、PR-3 ✓（#1027）；RFC 0005 PR-4 ✓（#1051） | ✓ 已合入（#1052） |
+| RFC 0004 PR-4b 加载平台、应用、租户快照（2026-10-26 新增：`SnapshotSource` 推广为一个共享槽加多个 LRU 族，`runtime` 的 `DocumentSnapshotViews`） | RFC 0004 PR-4 ✓（#1052） | ✓ 已合入（#1053） |
 | RFC 0004 PR-5 `cosec-migrate`（改动） | RFC 0004 PR-4 | 否 |
 | RFC 0005 PR-6 翻译 7.x 匹配器（改动） | RFC 0005 PR-4；RFC 0004 PR-5 | 否 |
 | RFC 0006 PR-2 Pipeline（改动） | RFC 0006 PR-1 ✓（#1025，审查修复 #1031 ✓）；RFC 0004 PR-1 ✓、PR-2 ✓ | ✓ 已合入（#1044） |
@@ -632,7 +638,7 @@ RFC 0006 PR-2 #1044 随后也已合入）；RFC 0008 PR-4 一行换成 S1–S5�
 | RFC 0007 PR-7 影子窗口 | RFC 0007 PR-5；RFC 0006 PR-6 | 否 |
 | RFC 0007 PR-8 break-glass、租户自助、变更审计 | RFC 0007 PR-6、PR-7；RFC 0004 PR-5 | 否 |
 | RFC 0007 PR-9 库与 HTTP（改动） | RFC 0007 PR-5–PR-8；RFC 0006 PR-7 | 否 |
-| 端到端切片（§4.4.3；2026-10-26 修订（路线图审查）） | RFC 0005 PR-4；RFC 0004 PR-4、PR-4b；RFC 0006 PR-2 ✓（#1044） | 否（RFC 0004 PR-4、PR-4b 合入后） |
+| 端到端切片（§4.4.3；2026-10-26 修订（路线图审查）） | RFC 0005 PR-4 ✓；RFC 0004 PR-4 ✓、PR-4b ✓（#1053）；RFC 0006 PR-2 ✓（#1044） | 打开中（#E2E） |
 | ~~RFC 0008 PR-4 切换~~ | ~~以上全部；§3.9~~ | 2026-10-26 修订（路线图审查）：拆成下面五行 |
 | RFC 0008 S1 装配 8.0 路径 | 以上全部，包括端到端切片；§3.9 第 1–5 条 | 否 |
 | RFC 0008 S2 删除存储与写入路径 | S1 | 否 |
