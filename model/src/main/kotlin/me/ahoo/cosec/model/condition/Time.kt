@@ -130,9 +130,15 @@ internal class Moment(val epochSecond: Long, val nano: Int) : Comparable<Moment>
     override fun compareTo(other: Moment): Int =
         if (epochSecond != other.epochSecond) epochSecond.compareTo(other.epochSecond) else nano.compareTo(other.nano)
 
+    override fun equals(other: Any?): Boolean = other is Moment && other.epochSecond == epochSecond && other.nano == nano
+
+    override fun hashCode(): Int = 31 * epochSecond.hashCode() + nano
+
     /** The first whole millisecond at or after this moment. */
-    fun ceilMillis(): Long =
-        epochSecond * ZoneOffsets.MILLIS_PER_SECOND + (nano + NANOS_PER_MILLI - 1) / NANOS_PER_MILLI
+    fun ceilMillis(): Long {
+        val millis = (nano + NANOS_PER_MILLI - 1) / NANOS_PER_MILLI
+        return epochSecond * ZoneOffsets.MILLIS_PER_SECOND + millis
+    }
 
     companion object {
         const val NANOS_PER_MILLI = 1_000_000
@@ -268,7 +274,7 @@ internal object IsoTime {
     /** As `LocalDate.toEpochDay`, for years 0–9999. */
     fun epochDay(year: Int, month: Int, day: Int): Long {
         var total = 365L * year + (year + 3) / 4 - (year + 99) / 100 + (year + 399) / 400
-        total += (367 * month - 362) / 12
+        total += (367L * month - 362) / 12
         total += day - 1
         if (month > 2) {
             total--

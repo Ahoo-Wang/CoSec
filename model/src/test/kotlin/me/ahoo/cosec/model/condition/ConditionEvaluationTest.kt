@@ -313,6 +313,6 @@ class ConditionEvaluationTest {
         val b = checked(Condition.In("scope.space", listOf(str("b"), str("a"))))
         a.assert().isEqualTo(b)
         a.hashCode().assert().isEqualTo(b.hashCode())
-        a.equals(a.canonical).assert().isFalse()
+        a.assert().isNotEqualTo(Any())
     }
 }

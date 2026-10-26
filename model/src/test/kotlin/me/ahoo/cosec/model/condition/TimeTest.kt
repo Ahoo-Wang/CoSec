@@ -91,7 +91,7 @@ class TimeTest {
         val zone = ZoneOffsets("x", longArrayOf(10), intArrayOf(0, 3600))
         zone.assert().isEqualTo(ZoneOffsets("x", longArrayOf(10), intArrayOf(0, 3600)))
         zone.assert().isNotEqualTo(ZoneOffsets("x", longArrayOf(10), intArrayOf(0, 7200)))
-        zone.equals("x").assert().isFalse()
+        zone.assert().isNotEqualTo(Any())
         zone.hashCode().assert().isEqualTo("x".hashCode())
         zone.toString().assert().isEqualTo("x")
         listOf(zone.offsetSecondsAt(9), zone.offsetSecondsAt(10)).assert().containsExactly(0, 3600)
@@ -136,6 +136,15 @@ class TimeTest {
         listOf("9:00", "09:00:0", "09:00:00.", "0900", "09-00", "09:00:00,5")
             .forEach { IsoTime.parseLocalTime(it, 0).assert().describedAs(it).isNull() }
         IsoTime.parseLocalTime("23:59:59.999999999", 0).assert().isEqualTo(LocalTime.MAX.toNanoOfDay())
+    }
+
+    @Test
+    fun `moments compare and equal by instant`() {
+        val moment = Moment(1, 2)
+        listOf(moment == Moment(1, 2), moment == Moment(1, 3), moment.compareTo(Moment(1, 3)) < 0).assert()
+            .containsExactly(true, false, true)
+        moment.hashCode().assert().isEqualTo(Moment(1, 2).hashCode())
+        moment.assert().isNotEqualTo(Any())
     }
 
     @Test

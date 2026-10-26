@@ -48,7 +48,7 @@ class IpTest {
         IpAddress.parse("::ffff:10.0.0.1")?.v4.assert().isEqualTo(true)
         IpAddress.parse("10.0.0.1").hashCode().assert().isEqualTo(IpAddress.v4(0x0a000001).hashCode())
         IpAddress.parse("10.0.0.1").assert().isNotEqualTo(IpAddress.parse("::a00:1"))
-        IpAddress.parse("10.0.0.1")?.equals("10.0.0.1").assert().isEqualTo(false)
+        IpAddress.parse("10.0.0.1").assert().isNotEqualTo(Any())
     }
 
     @Test
@@ -109,7 +109,7 @@ class IpTest {
         CidrBlock.parse("10.0.0.0/8").assert().isEqualTo(CidrBlock.parse("10.9.9.9/8"))
         CidrBlock.parse("10.0.0.0/8").hashCode().assert().isEqualTo(CidrBlock.parse("10.9.9.9/8").hashCode())
         CidrBlock.parse("10.0.0.0/8").assert().isNotEqualTo(CidrBlock.parse("10.0.0.0/9"))
-        CidrBlock.parse("10.0.0.0/8")?.equals("10.0.0.0/8").assert().isEqualTo(false)
+        CidrBlock.parse("10.0.0.0/8").assert().isNotEqualTo(Any())
         runCatching { CidrBlock.of(IpAddress.v4(0), 33) }.isFailure.assert().isTrue()
     }
 

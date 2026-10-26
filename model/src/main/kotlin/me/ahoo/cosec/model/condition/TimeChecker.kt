@@ -37,10 +37,12 @@ internal class TimeChecker(private val path: String, private val error: (String,
 
     private fun validate(condition: Condition.Time, notBefore: Moment?, notAfter: Moment?, from: Long, to: Long) {
         val empty = notBefore == null && notAfter == null && condition.daysOfWeek == null && condition.from == null
+        val hasFrom = from >= 0
+        val hasTo = to >= 0
         when {
             empty -> fail("", "needs at least one of notBefore, notAfter, daysOfWeek or from/to")
-            (from < 0) != (to < 0) -> fail("", "needs both from and to, or neither")
-            from >= 0 && from == to -> fail(".to", "must differ from `from`: the window would be empty")
+            hasFrom != hasTo -> fail("", "needs both from and to, or neither")
+            hasFrom && from == to -> fail(".to", "must differ from `from`: the window would be empty")
             notBefore != null && notAfter != null && notBefore >= notAfter ->
                 fail(".notAfter", "must be after notBefore")
         }

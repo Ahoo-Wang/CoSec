@@ -54,7 +54,7 @@ class AttributeTest {
         attr("http.header.X-Debug").hashCode().assert().isEqualTo(attr("http.header.x-debug").hashCode())
         attr("http.origin.host").assert().isSameAs(Attribute.of(Attribute.Kind.HTTP_ORIGIN_HOST))
         attr("resource.var.a").assert().isNotEqualTo(attr("resource.attributes.a"))
-        attr("resource.var.a").equals("resource.var.a").assert().isFalse()
+        attr("resource.var.a").assert().isNotEqualTo(Any())
     }
 
     @Test
