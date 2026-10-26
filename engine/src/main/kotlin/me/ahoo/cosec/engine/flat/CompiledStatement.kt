@@ -77,6 +77,24 @@ class CompiledStatement internal constructor(
         return true
     }
 
+    /**
+     * What the statement means, as text: two statements with the same content decide every request alike. Patterns
+     * are compared as written with their options, conditions by their canonical form.
+     */
+    internal val content: String = buildString {
+        append(name.length).append(':').append(name).append('|').append(effect).append('|')
+        actions.joinTo(this, ",")
+        append('|')
+        resources.joinTo(this, ",") { resource ->
+            if (resource is ResourcePattern.Http) {
+                "$resource(${resource.path.caseSensitive},${resource.path.decodeAndParseSegments})"
+            } else {
+                resource.toString()
+            }
+        }
+        append('|').append(condition?.canonical ?: "")
+    }
+
     override fun toString(): String = "$effect $name ${actionPatterns}${resourcePatterns}${condition ?: ""}"
 }
 

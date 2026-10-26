@@ -78,6 +78,24 @@ class CompiledPolicy(
 
     val policyId: PolicyId get() = PolicyId(id)
 
+    /** The content: whether it is attachable, its condition and its statements in order. */
+    private val content: String by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        buildString {
+            append(
+                attachable
+            ).append('|').append(condition?.canonical ?: "").append('|').append(this@CompiledPolicy.statements.size)
+            for (statement in this@CompiledPolicy.statements) {
+                append('\n').append(statement.content)
+            }
+        }
+    }
+
+    /**
+     * Whether [other] has the same content: the same id, attachability, condition and statements. A tenant policy and a
+     * platform policy of the same id resolve only then (RFC 0007 N2, Q15); otherwise the id is ambiguous.
+     */
+    fun sameContent(other: CompiledPolicy): Boolean = this === other || (other.id == id && other.content == content)
+
     internal fun statements(effect: Effect): Array<CompiledStatement> = if (effect === Effect.DENY) denies else allows
 
     /** The index over [statements] of [effect], or null to scan them. */

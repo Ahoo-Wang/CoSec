@@ -240,6 +240,34 @@ class FlatEngineTest {
             .isEqualTo(Decision.Deny(ref("d", 0, bound("g"))))
     }
 
+    /** RFC 0007 N2, Q15: the same content in both layers resolves, so a policy can move between them. */
+    @Test
+    fun `an id both layers define with the same content resolves`() {
+        val compiler = PolicyCompiler()
+        fun copy(effect: Effect, attachable: Boolean = true, name: String = "s") =
+            compiler.compile(PolicyId("shared"), null, listOf(StatementSource(name, effect, listOf("*"))), attachable)
+        val request = flatRequest(attachments = listOf("shared"))
+        val attached = BindingRef.Attached(PolicyId("shared"))
+        val deny = Decision.Deny(StatementRef.Policy(PolicyId("shared"), 0, "s", attached))
+        decide(request, platform(copy(Effect.DENY)), tenant(copy(Effect.DENY))).assert().isEqualTo(deny)
+        val bound = tenant(copy(Effect.DENY), bindings = listOf(anyone("t", "shared")))
+        decide(flatRequest(), platform(copy(Effect.DENY)), bound).assert()
+            .isEqualTo(Decision.Deny(StatementRef.Policy(PolicyId("shared"), 0, "s", bound("t", DocumentKind.TENANT))))
+        // Any difference, the flag or a statement's name included, is ambiguous.
+        val ambiguous = Decision.Indeterminate(Cause.AmbiguousPolicy(setOf(PolicyId("shared"))))
+        decide(request, platform(copy(Effect.DENY)), tenant(copy(Effect.ALLOW))).assert().isEqualTo(ambiguous)
+        decide(
+            request,
+            platform(copy(Effect.DENY)),
+            tenant(copy(Effect.DENY, attachable = false))
+        ).assert().isEqualTo(ambiguous)
+        decide(
+            request,
+            platform(copy(Effect.DENY)),
+            tenant(copy(Effect.DENY, name = "t"))
+        ).assert().isEqualTo(ambiguous)
+    }
+
     @Test
     fun `a tenant binding to a policy both the tenant and the platform define is ambiguous`() {
         val platform = platform(fixture.policy("p", deny()))
