@@ -29,6 +29,7 @@ import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
+import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
@@ -137,6 +138,7 @@ object PipelineFixtures {
         views: SnapshotViews = InstalledViews(),
         membershipProvider: me.ahoo.cosec.membership.MembershipProvider? = null,
         options: PipelineOptions = PipelineOptions(),
+        attributes: AttributeProviders = AttributeProviders.NONE,
     ): Pipeline = Pipeline(
         authenticator = authenticator,
         snapshots = SuspendingSnapshotSource(views),
@@ -144,5 +146,6 @@ object PipelineFixtures {
         engine = engine,
         idGenerator = ids,
         options = options,
+        attributes = attributes,
     )
 }

@@ -14,12 +14,16 @@
 package me.ahoo.cosec.runtime
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.FlatEngine
 import me.ahoo.cosec.engine.flat.FlatRequest
+import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.membership.MembershipProvider
 import me.ahoo.cosec.membership.MembershipUnavailableException
 import me.ahoo.cosec.model.Action
@@ -38,6 +42,10 @@ import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
+import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.attribute.AttributeRequest
+import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
+import me.ahoo.cosec.runtime.attribute.FetchedAttributes
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
@@ -59,9 +67,10 @@ private val log = KotlinLogging.logger {}
 /**
  * The request pipeline (RFC 0006 §5.8): one suspend function from [HttpFacts] to [Outcome], which adapters write.
  *
- * Normalize the path and read the `CoSec-*` parameters (400 when ambiguous) → [Authenticator] → memberships → scope
- * → snapshot view → engine → [StatusMapping]. External attributes, the blacklist (RFC 0006 PR-4), rate-limit
- * obligations (PR-5) and decision listeners (PR-6) join later; the starter wires the pipeline at the switch.
+ * Normalize the path and read the `CoSec-*` parameters (400 when ambiguous) → [Authenticator] → memberships, together
+ * with the stage-A attributes such as the blacklist → scope → snapshot view → attribute plan and the stage-B
+ * attributes → engine → [StatusMapping] (§5.4). Rate-limit obligations (PR-5) and decision listeners (PR-6) join
+ * later; the starter wires the pipeline at the switch.
  *
  * Fail closed, structurally: only a [Decision.Permit] makes an outcome that proceeds. Each SPI call that fails, throws
  * or does not answer in time is a 503; an exception nothing modelled is a 500; and an external cancellation makes no
@@ -78,6 +87,8 @@ class Pipeline(
     private val idGenerator: StringIdGenerator? = null,
     private val clock: Clock = Clock.systemUTC(),
     private val options: PipelineOptions = PipelineOptions(),
+    /** The external attribute providers; the documents must be compiled with their [AttributeProviders.catalog]. */
+    private val attributes: AttributeProviders = AttributeProviders.NONE,
 ) {
     private val memberships = MembershipResolver(membershipProvider, options.membershipTimeout)
 
@@ -120,12 +131,24 @@ class Pipeline(
         // A rejected credential is evaluated as anonymous (RFC 0006 K2).
         val principal = (authn as? AuthnResult.Authenticated)?.principal
 
-        val memberships = when (val fetched = memberships(principal)) {
-            is Fetched.Value -> fetched.value
-            is Fetched.Failed -> return unavailable(requestId, Cause.MembershipUnavailable(fetched.error))
+        val tenant = principal?.tenant ?: TenantId.DEFAULT
+        val authzSubject = subject(principal, tenant)
+        val action = Action(HTTP, facts.method)
+        val resource = Resource(HTTP, path, emptyMap())
+        val fetched = if (attributes.isEmpty) null else FetchedAttributes()
+
+        val stageA = if (fetched == null || attributes.stageA.isEmpty()) {
+            null
+        } else {
+            AttributeRequest(authzSubject, null, action, resource, facts.remoteAddress, requestId, parameters.deviceId)
+        }
+        val membershipsFetched = membershipsWithStageA(principal, stageA, fetched)
+        val memberships = when (membershipsFetched) {
+            is Fetched.Value -> membershipsFetched.value
+            is Fetched.Failed -> return unavailable(requestId, Cause.MembershipUnavailable(membershipsFetched.error))
         }
 
-        val subject = ScopeSubject(principal?.tenant ?: TenantId.DEFAULT, principal != null, memberships)
+        val subject = ScopeSubject(tenant, principal != null, memberships)
         val declared = DeclaredScope(parameters.appId, parameters.spaceId)
         val scope = when (val resolution = ScopeResolver.resolve(subject, declared, facts.host)) {
             is ScopeResolution.Resolved -> resolution.scope
@@ -137,26 +160,203 @@ class Pipeline(
 
         // The tenant is the scope's from here on: ScopeResolver makes it the principal's tenant (the default one when
         // anonymous), the view loads that tenant's document, and the engine refuses a view of another tenant.
-        //
-        // Not blocked: the blacklist stage (RFC 0006 PR-4) is not here yet. When it is, a failed lookup must become an
-        // unresolved input (Indeterminate, 503), never "not blocked": the engine sees only this yes/no value.
-        val view = when (val fetched = call(null) { snapshots.view(scope, blocked = false) }) {
-            is Fetched.Value -> fetched.value
+        val blacklist = blacklist(fetched)
+        val view = when (val loaded = view(scope, blacklist)) {
+            is Fetched.Value -> loaded.value
             is Fetched.Failed -> return unavailable(
                 requestId,
-                Cause.SourceUnavailable(DocumentKind.PLATFORM, fetched.error)
+                Cause.SourceUnavailable(DocumentKind.PLATFORM, loaded.error)
             )
         }
 
-        val request = FlatRequest(
-            authzRequest(principal, scope, path, parameters, facts, requestId),
-            scope,
-            memberships,
-            clock.millis(),
+        val authz = AuthzRequest(
+            subject = authzSubject,
+            scope = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value),
+            action = action,
+            resource = resource,
+            environment = Environment(
+                remoteIp = facts.remoteAddress,
+                requestId = requestId,
+                deviceId = parameters.deviceId,
+                blocked = blacklist.blocked,
+            ),
         )
-        val decision = engine.evaluate(request, view, options.traceLevel).decision
+        val decision = evaluate(FlatRequest(authz, scope, memberships, clock.millis()), view, fetched)
         return StatusMapping.decided(requestId, decision, authn, null)
     }
+
+    /** Stage B, when there are providers, then the engine. */
+    private suspend fun evaluate(request: FlatRequest, view: SnapshotView, fetched: FetchedAttributes?): Decision {
+        val evaluated = if (fetched == null) {
+            request
+        } else {
+            fetchStageB(request, view, fetched)
+            with(request) { FlatRequest(this.request, scope, memberships, time, external = fetched.toExternalValues()) }
+        }
+        return engine.evaluate(evaluated, view, options.traceLevel).decision
+    }
+
+    /**
+     * The request's subject. Until the request model changes at the switch, the engine reads the RFC 0002 types: it
+     * takes the tenant from the scope and reads only the subject's id and whether it is authenticated.
+     */
+    private fun subject(principal: AuthenticatedPrincipal?, tenant: TenantId): Subject = Subject(
+        id = principal?.id?.value ?: CoSecPrincipal.ANONYMOUS_ID,
+        tenantId = tenant.value,
+        authenticated = principal != null,
+        roles = emptySet(),
+        policies = emptySet(),
+        attributes = principal?.attributes.orEmpty(),
+        root = false,
+    )
+
+    /** Stage A, when there is a [request] for it, together with the memberships (K17): neither waits for the other. */
+    private suspend fun membershipsWithStageA(
+        principal: AuthenticatedPrincipal?,
+        request: AttributeRequest?,
+        fetched: FetchedAttributes?,
+    ): Fetched<Memberships> {
+        if (request == null || fetched == null) {
+            return memberships(principal)
+        }
+        return coroutineScope {
+            val stageA = async(start = CoroutineStart.UNDISPATCHED) { fetchStageA(request, fetched) }
+            val memberships = memberships(principal)
+            stageA.await()
+            memberships
+        }
+    }
+
+    /**
+     * The snapshot view for [scope]: the platform document only when [blacklist] blocks the request. A blacklist that
+     * could not be read is never "not blocked": the evaluation is then indeterminate unless a DENY matches, as for a
+     * document that could not be read (RFC 0006 §5.4.4).
+     */
+    private suspend fun view(scope: Scope, blacklist: Blacklist): Fetched<SnapshotView> {
+        val loaded = call(null) { snapshots.view(scope, blacklist.blocked) }
+        val unavailable = blacklist.unavailable ?: return loaded
+        return when (loaded) {
+            is Fetched.Value -> Fetched.Value(loaded.value.withUnresolved(unavailable))
+            is Fetched.Failed -> loaded
+        }
+    }
+
+    /** Every stage-A attribute, each provider in parallel. Records failures; never throws. */
+    private suspend fun fetchStageA(request: AttributeRequest, fetched: FetchedAttributes) {
+        val stageA = attributes.stageA
+        if (stageA.size == 1) {
+            fetchFrom(stageA[0], stageA[0].names, request, fetched)
+            return
+        }
+        val answers = coroutineScope {
+            stageA.map { async(start = CoroutineStart.UNDISPATCHED) { provide(it, it.names, request) } }
+                .map { it.await() }
+        }
+        stageA.forEachIndexed { index, registered -> fetched.record(registered, registered.names, answers[index]) }
+    }
+
+    /**
+     * The planned attributes stage A did not fetch, each provider in parallel with its own timeout: a provider that
+     * fails or times out makes only its own attributes unavailable (§5.4.2). A planned attribute no provider declares
+     * stays unavailable.
+     */
+    private suspend fun fetchStageB(request: FlatRequest, view: SnapshotView, fetched: FetchedAttributes) {
+        if (request.request.environment.blocked) {
+            // The blacklist rule decides; nothing else would be read.
+            return
+        }
+        val plan = engine.plan(request, view)
+        if (plan.isEmpty) {
+            return
+        }
+        var groups: LinkedHashMap<AttributeProviders.Registered, MutableSet<String>>? = null
+        for (attribute in plan.attributes) {
+            val path = attribute.path
+            if (fetched.asked(path)) {
+                continue
+            }
+            val registered = attributes.registered(path) ?: continue
+            val names = (groups ?: LinkedHashMap<AttributeProviders.Registered, MutableSet<String>>().also { groups = it })
+                .getOrPut(registered) { LinkedHashSet() }
+            names += path
+        }
+        val asked = groups ?: return
+        val attributeRequest = AttributeRequest(
+            request.request.subject,
+            request.scope,
+            request.request.action,
+            request.request.resource,
+            request.request.environment.remoteIp,
+            request.request.environment.requestId,
+            request.request.environment.deviceId,
+        )
+        if (asked.size == 1) {
+            val (registered, names) = asked.entries.first()
+            fetchFrom(registered, names, attributeRequest, fetched)
+            return
+        }
+        val entries = asked.entries.toList()
+        val answers = coroutineScope {
+            entries.map { (registered, names) ->
+                async(start = CoroutineStart.UNDISPATCHED) { provide(registered, names, attributeRequest) }
+            }.map { it.await() }
+        }
+        entries.forEachIndexed { index, (registered, names) -> fetched.record(registered, names, answers[index]) }
+    }
+
+    private suspend fun fetchFrom(
+        registered: AttributeProviders.Registered,
+        names: Set<String>,
+        request: AttributeRequest,
+        fetched: FetchedAttributes,
+    ) {
+        fetched.record(registered, names, provide(registered, names, request))
+    }
+
+    /** What [registered] answered for [names]; null when it failed or did not answer in time. */
+    private suspend fun provide(
+        registered: AttributeProviders.Registered,
+        names: Set<String>,
+        request: AttributeRequest,
+    ): Map<String, Any>? {
+        val timeout = registered.provider.timeout ?: options.attributeTimeout
+        return when (val answer = call(timeout) { registered.provider.fetch(request, names) }) {
+            is Fetched.Value -> answer.value
+            is Fetched.Failed -> {
+                log.warn(answer.error) { "${registered.provider} failed to fetch $names." }
+                null
+            }
+        }
+    }
+
+    /** Blocked when any blacklist attribute says so; else unavailable when any of them could not be read. */
+    private fun blacklist(fetched: FetchedAttributes?): Blacklist {
+        if (fetched == null) {
+            return Blacklist.NOT_BLOCKED
+        }
+        var unavailable: MutableSet<String>? = null
+        for (path in BlacklistAttributeProvider.ATTRIBUTES) {
+            if (!fetched.asked(path)) {
+                continue
+            }
+            if (!fetched.available(path)) {
+                (unavailable ?: LinkedHashSet<String>().also { unavailable = it }) += path
+            } else if (fetched.value(path) == true) {
+                return Blacklist.BLOCKED
+            }
+        }
+        return unavailable?.let { Blacklist(false, Cause.AttributeUnavailable(it, null)) } ?: Blacklist.NOT_BLOCKED
+    }
+
+    private class Blacklist(val blocked: Boolean, val unavailable: Cause?) {
+        companion object {
+            val BLOCKED = Blacklist(true, null)
+            val NOT_BLOCKED = Blacklist(false, null)
+        }
+    }
+
+    private fun SnapshotView.withUnresolved(cause: Cause): SnapshotView =
+        SnapshotView(platform, app, tenant, unresolved + cause)
 
     /** The authenticator's answer; a failure, a stray cancellation or no answer in time is [AuthnResult.Unavailable]. */
     private suspend fun authenticate(credentials: Credentials): AuthnResult =
@@ -224,38 +424,6 @@ class Pipeline(
             AUTHORIZATION_NAMES
         )?.get(AUTHORIZATION)?.firstOrNull { it.isNotBlank() }
     }
-
-    /**
-     * The request the engine reads. Until the request model changes at the switch, it carries the RFC 0002 types; the
-     * engine takes the tenant from [scope] and reads only the subject's id and whether it is authenticated.
-     */
-    private fun authzRequest(
-        principal: AuthenticatedPrincipal?,
-        scope: Scope,
-        path: String,
-        parameters: CoSecParameters,
-        facts: HttpFacts,
-        requestId: String,
-    ): AuthzRequest = AuthzRequest(
-        subject = Subject(
-            id = principal?.id?.value ?: CoSecPrincipal.ANONYMOUS_ID,
-            tenantId = scope.tenant.value,
-            authenticated = principal != null,
-            roles = emptySet(),
-            policies = emptySet(),
-            attributes = principal?.attributes.orEmpty(),
-            root = false,
-        ),
-        scope = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value),
-        action = Action(HTTP, facts.method),
-        resource = Resource(HTTP, path, emptyMap()),
-        environment = Environment(
-            remoteIp = facts.remoteAddress,
-            requestId = requestId,
-            deviceId = parameters.deviceId,
-            blocked = false,
-        ),
-    )
 
     /** What an SPI call gave: a value, or why not. Internal to the pipeline, so failures stay values (§7.4). */
     private sealed interface Fetched<out T : Any> {
