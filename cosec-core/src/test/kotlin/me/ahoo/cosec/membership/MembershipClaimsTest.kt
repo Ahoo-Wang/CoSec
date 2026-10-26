@@ -20,6 +20,7 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.cosec.token.SimpleTokenPrincipal
@@ -143,6 +144,17 @@ class MembershipClaimsTest {
             .assert().isEqualTo(TenantId.DEFAULT)
         MembershipClaims.tenantOf(SimpleTokenTenantPrincipal(tokenPrincipal, SimpleTenant("t")))
             .assert().isEqualTo(TenantId("t"))
+    }
+
+    /** Mapping a blank tenant to the default one would move the principal into another tenant. */
+    @Test
+    fun tenantOfABlankTenantIsKeptAndRefusedByTheScope() {
+        val tokenPrincipal = SimpleTokenPrincipal("jti", SimplePrincipal("alice"))
+        val tenant = MembershipClaims.tenantOf(SimpleTokenTenantPrincipal(tokenPrincipal, SimpleTenant(" ")))
+        tenant.assert().isEqualTo(TenantId(" "))
+        assertThrows<IllegalArgumentException> {
+            ScopeSubject(tenant, true, MembershipClaims.parse(emptyList(), emptyList()))
+        }
     }
 
     @Test
