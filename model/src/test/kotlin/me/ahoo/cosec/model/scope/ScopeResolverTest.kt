@@ -88,6 +88,44 @@ class ScopeResolverTest {
         }
     }
 
+    /**
+     * Unicode near misses: invisible or look-alike characters and other normal forms. A resolver that normalised (NFC,
+     * NFKC, `strip`) would accept some of them while the backend reads the header as sent.
+     */
+    @Test
+    fun `a unicode near miss of a member space or the host app is rejected`() {
+        val nfc = "café"
+        val subject = ScopeSubject(
+            acme,
+            authenticated = true,
+            Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId(nfc) to setOf(RoleId("editor"))), emptyList()),
+        )
+        resolved(ScopeResolver.resolve(subject, DeclaredScope("order", nfc), noHost)).space.value.assert()
+            .isEqualTo(nfc)
+        val spaces = listOf(
+            "café", // NFD of the member space
+            "café​", // zero-width space
+            "﻿café", // byte order mark
+            "café ", // no-break space
+            "CAFÉ",
+        )
+        for (space in spaces) {
+            rejectedFor(ScopeResolver.resolve(subject, DeclaredScope("order", space), noHost))
+                .assert().describedAs(space).isEqualTo(ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER)
+        }
+        val apps = listOf(
+            "оrder", // Cyrillic o
+            "ｏrder", // fullwidth o, NFKC folds it to "order"
+            "order​",
+            "order ",
+            " order",
+        )
+        for (app in apps) {
+            rejectedFor(ScopeResolver.resolve(user, DeclaredScope(app, ""), HostScope(AppId("order"))))
+                .assert().describedAs(app).isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
+        }
+    }
+
     @Test
     fun `a declared app that cannot be an app id is rejected with or without a host app`() {
         val invalid = listOf("*", "a:b", ":", " ", "x".repeat(ScopeResolver.MAX_APP_ID_LENGTH + 1))

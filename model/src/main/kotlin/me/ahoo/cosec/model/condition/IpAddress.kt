@@ -120,13 +120,13 @@ class IpAddress private constructor(val v4: Boolean, val high: Long, val low: Lo
         }
 
         private fun formatV4(bits: Long): String =
-            "${bits ushr 24 and 0xff}.${bits ushr 16 and 0xff}.${bits ushr 8 and 0xff}.${bits and 0xff}"
+            "${(bits ushr 24) and 0xff}.${(bits ushr 16) and 0xff}.${(bits ushr 8) and 0xff}.${bits and 0xff}"
 
         /** RFC 5952: lower case, no leading zeros, the longest run of two or more zero groups as `::`. */
         private fun formatV6(high: Long, low: Long): String {
             val groups = IntArray(GROUPS) {
                 val half = if (it < GROUPS / 2) high else low
-                (half ushr (48 - 16 * (it % 4)) and GROUP_MASK).toInt()
+                ((half ushr (48 - (16 * (it % 4)))) and GROUP_MASK).toInt()
             }
             var bestStart = -1
             var bestLength = 1
