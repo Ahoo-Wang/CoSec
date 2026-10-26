@@ -109,6 +109,33 @@ class PolicyCompilerTest {
             .containsExactly("$.statements[1].action[1]", "$.statements[1].resource[0]", "$.statements[1].resource[1]")
     }
 
+    /** Fail closed: a DENY whose pattern does not compile is a compile error, never a statement left out. */
+    @Test
+    fun `a deny with an invalid pattern does not compile`() {
+        val deny = StatementSource("d", Effect.DENY, listOf("*"), listOf(ResourceSource("http:path:/admin/{id:\\d+}")))
+        val allow = StatementSource("a", Effect.ALLOW, listOf("*"))
+        errors(null, allow, deny).map { it.path }.assert().containsExactly("$.statements[1].resource[0]")
+        errors(null, StatementSource("d", Effect.DENY, listOf("admin"))).map { it.path }.assert()
+            .containsExactly("$.statements[0].action[0]")
+    }
+
+    @Test
+    fun `a deny on a bare type does not compile`() {
+        val bare = StatementSource(
+            "d",
+            Effect.DENY,
+            listOf("*"),
+            listOf(ResourceSource("order/**"), ResourceSource("order"))
+        )
+        errors(null, bare).single().let {
+            it.path.assert().isEqualTo("$.statements[0].resource[1]")
+            it.message.assert().contains("[order/**] for every order")
+        }
+        // An ALLOW on it covers less than it reads, which only narrows access.
+        compiler.statement(id, 0, StatementSource("a", Effect.ALLOW, listOf("*"), listOf(ResourceSource("order"))))
+        compiler.statement(id, 0, StatementSource("d", Effect.DENY, listOf("*"), listOf(ResourceSource("order/{id}"))))
+    }
+
     @Test
     fun `condition errors carry the statement's path`() {
         val errors = errors(

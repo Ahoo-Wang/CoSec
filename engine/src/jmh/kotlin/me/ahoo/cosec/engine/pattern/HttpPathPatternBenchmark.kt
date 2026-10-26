@@ -27,12 +27,13 @@ import org.springframework.web.util.pattern.PathPatternParser
  * `cosec*` how the engine will. Both parse the request path once per request, so `*Parse` and `*Match` are separate.
  *
  * Scenarios, each a pattern and a path it matches: `literal`, `capture` (one `{id}`), `glob` (`{name}.{ext}`, a regular
- * expression in Spring), `rest` (a trailing `**`), `leading` (`**` followed by `*.css`), and `miss`, a capture pattern whose
- * last literal differs.
+ * expression in Spring), `rest` (a trailing `**`), `leading` (`**` followed by `*.css`), `miss`, a capture pattern whose
+ * last literal differs, and `long`, a glob of six `*` that misses one 8 KB segment (review F4 of #1040: a cost that
+ * grows with the segment's length squared would show here).
  */
 @State(Scope.Benchmark)
 open class HttpPathPatternBenchmark {
-    @Param("literal", "capture", "glob", "rest", "leading", "miss")
+    @Param("literal", "capture", "glob", "rest", "leading", "miss", "long")
     lateinit var scenario: String
 
     private lateinit var path: String
@@ -50,6 +51,7 @@ open class HttpPathPatternBenchmark {
             "rest" -> "/api/orders/**" to "/api/orders/12345/items/6"
             "leading" -> "/**/*.css" to "/static/theme/site.css"
             "miss" -> "/api/orders/{orderId}/items" to "/api/orders/12345/lines"
+            "long" -> "/files/*a*a*a*a*a*a*b" to "/files/" + "a".repeat(LONG_SEGMENT)
             else -> error("Unknown scenario $scenario")
         }
         this.path = path
@@ -57,7 +59,8 @@ open class HttpPathPatternBenchmark {
         springPath = PathContainer.parsePath(path)
         cosecPattern = HttpPathPattern.compile(pattern)
         cosecPath = HttpPath.parse(path)
-        check(springMatch() != null == (scenario != "miss") && cosecMatch() != null == (scenario != "miss"))
+        val matches = scenario != "miss" && scenario != "long"
+        check(springMatch() != null == matches && cosecMatch() != null == matches)
     }
 
     @Benchmark
@@ -77,4 +80,8 @@ open class HttpPathPatternBenchmark {
 
     @Benchmark
     fun cosecMatches(): Boolean = cosecPattern.matches(cosecPath)
+
+    private companion object {
+        const val LONG_SEGMENT = 8192
+    }
 }

@@ -126,6 +126,9 @@ class PolicyCompiler(
                 ResourcePattern.parse(resource.pattern, resource.caseSensitive, resource.decodeAndParseSegments)
             }
         }.ifEmpty { listOf(ResourcePattern.AnyResource) }
+        if (source.effect === Effect.DENY) {
+            checkBare(resources, path, errors)
+        }
         val condition = source.condition?.let { check(it, "$path.condition", errors) }
         if (condition != null) {
             checkVariables(condition, resources, path, errors)
@@ -157,6 +160,23 @@ class PolicyCompiler(
             keyAttributes = keyAttributes.toTypedArray(),
             keys = keys.toTypedArray(),
         )
+    }
+
+    /**
+     * A bare type (`order`) matches only the resource with an empty id, while a final `**` segment matches every order: a DENY
+     * written the bare way would cover far less than it reads, so it does not compile (review S3 of #1040).
+     */
+    private fun checkBare(resources: List<ResourcePattern>, path: String, errors: MutableList<CompileError>) {
+        for ((i, resource) in resources.withIndex()) {
+            if (resource is ResourcePattern.Typed && resource.bare) {
+                errors += CompileError(
+                    "$path.resource[$i]",
+                    "a DENY on the bare type [$resource] covers only the ${resource.type} with an empty id; write " +
+                        "[$resource/**] for every ${resource.type}, and add an eq on resource.id with the empty " +
+                        "string for the empty id alone",
+                )
+            }
+        }
     }
 
     private fun checkVariables(

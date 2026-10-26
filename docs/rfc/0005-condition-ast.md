@@ -404,6 +404,11 @@ class Resource(val type: String, val id: String, val attributes: Map<String, Str
   是语义的一部分，与索引参数无关，因此阈值、是否拆分（I2）在宿主违反 `ConditionInput` 契约时也不改变决策。
 - **策略级条件惰性求值**：只在该策略的某条语句的动作、索引键匹配且资源匹配（或匹配出错）之后求值，每次评估至多一次（`ALG-7`）。
 
+- **DENY 不能写裸类型**：资源模式 `order` 只匹配 id 为空的 `order`，`order/**` 才匹配全部；写在 DENY 里会让它覆盖的范围远小于字面意思，
+  所以是编译错误（错误信息给出 `order/**` 的写法；只想拒绝 id 为空的资源时，加 `resource.id` 等于空串的条件）。ALLOW 写裸类型只会收窄，照常编译。
+- **段内通配是线性的**：`HttpPathPattern` 判断一段是否匹配用双指针的通配匹配（失败时只回到最后一个 `*`），步数不超过记号数 × 段长；
+  只有匹配成功、且条件读捕获变量时，才按正则的贪婪回溯取捕获值（#1040 第 1 轮审查 F4）。
+
 可索引条件属性只能是引擎自己从请求读出的属性（`scope.*`、`subject.tenant`、`resource.type`、`resource.attributes.*`），读取不会失败。
 
 ### 6.3 完整性

@@ -81,7 +81,8 @@ class IndexGenerator(private val random: Random) {
 
     private fun chance(percent: Int) = random.nextInt(100) < percent
 
-    private fun resource(): ResourceSource =
+    /** A DENY on a bare type does not compile, so a DENY gets the type and everything under it instead. */
+    private fun resource(deny: Boolean): ResourceSource =
         if (chance(70)) {
             ResourceSource(
                 "http:path:" + httpPatterns.pick(),
@@ -89,7 +90,7 @@ class IndexGenerator(private val random: Random) {
                 decodeAndParseSegments = !chance(10),
             )
         } else {
-            ResourceSource(typedPatterns.pick())
+            ResourceSource(typedPatterns.pick().let { if (deny && '/' !in it) "$it/**" else it })
         }
 
     private fun str(value: String) = Literal.Str(value)
@@ -117,7 +118,8 @@ class IndexGenerator(private val random: Random) {
         }
 
     private fun statement(policy: String, index: Int): StatementSource {
-        val resources = List(random.nextInt(0, 3)) { resource() }
+        val effect = if (chance(35)) Effect.DENY else Effect.ALLOW
+        val resources = List(random.nextInt(0, 3)) { resource(effect == Effect.DENY) }
         val capturesId = resources.isNotEmpty() && resources.all { source ->
             runCatching {
                 ResourcePatterns.variables(source).contains("id")
@@ -127,7 +129,7 @@ class IndexGenerator(private val random: Random) {
         val condition = if (chance(60)) Condition.And(listOf(probe, condition(0, capturesId))) else probe
         return StatementSource(
             "$policy.$index",
-            if (chance(35)) Effect.DENY else Effect.ALLOW,
+            effect,
             List(random.nextInt(1, 3)) { actions.pick() },
             resources,
             condition,

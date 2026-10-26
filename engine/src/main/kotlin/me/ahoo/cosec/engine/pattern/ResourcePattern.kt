@@ -75,6 +75,9 @@ sealed class ResourcePattern {
     ) : ResourcePattern() {
         private val names = variableNames.toTypedArray()
 
+        /** A type alone, as `order`: it matches only the resource of that type with an empty id. */
+        val bare: Boolean get() = segments.isEmpty() && !rest
+
         override fun match(target: ResourceTarget): Captures? {
             val resource = target.resource
             if (resource.type != type) {
