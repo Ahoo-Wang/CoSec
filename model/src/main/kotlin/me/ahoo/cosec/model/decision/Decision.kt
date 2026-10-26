@@ -1,0 +1,53 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.model.decision
+
+import me.ahoo.cosec.model.PolicyId
+
+sealed interface Decision {
+    data class Permit(val by: StatementRef.Policy) : Decision
+
+    /** [by] is null for an implicit deny: no ALLOW matched. */
+    data class Deny(val by: StatementRef?) : Decision
+
+    /** No decision could be made, and no DENY matched. Callers deny. */
+    data class Indeterminate(val cause: Cause) : Decision
+}
+
+/**
+ * Why a decision is [Decision.Indeterminate]. Unlike the layered causes, the engine finds some of them itself (missing
+ * policies, documents not loaded), so not every cause carries an exception: the adapter builds the one it reports.
+ */
+sealed interface Cause {
+    /**
+     * A matcher threw before the decision: a DENY statement at [at], or, when [guard] is true, the condition of [at]'s
+     * policy, reached through a DENY statement. A failing ALLOW never makes a decision indeterminate (RFC 0004 C1a).
+     */
+    data class MatcherFailed(val at: StatementRef.Policy, val guard: Boolean, val error: Throwable) : Cause
+
+    /**
+     * Policies a request needs are not in the snapshot: attachments that are missing or not attachable (RFC 0004 §4.4),
+     * and bindings of an app or tenant document whose platform policy is gone (§7.2).
+     */
+    data class MissingPolicies(val policyIds: Set<PolicyId>) : Cause
+
+    /** Reading a snapshot document failed, for example a Redis timeout or a document that does not compile. */
+    data class SourceUnavailable(val document: DocumentKind, val error: Throwable) : Cause
+
+    /** A document the request needs was not given to the engine. */
+    data class NotLoaded(val document: DocumentKind) : Cause
+
+    /** The principal's memberships could not be resolved (RFC 0004 §4.5.2). */
+    data class MembershipUnavailable(val error: Throwable) : Cause
+}
