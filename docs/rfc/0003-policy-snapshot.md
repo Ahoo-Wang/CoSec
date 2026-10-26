@@ -547,7 +547,9 @@ N 个实例同时启动就是 N 个并发写入方。而 CoCache 6.6 只有无�
 **写入的负担**（PR-3 第 1 轮审查）：
 
 - 冲突之后的重试等待一个随机时长，上界从 5 ms 起每次翻倍、最多 200 ms（full jitter），所以同时启动的大量实例不会一起空转；
-- 不改变文档的写入（同一条策略、已有的授予）什么都不写：不加修订号、不广播、不触发任何实例的重新加载。判定方法是用当前文档的头部写出新内容、按字节比较；
+- 不改变文档的写入（同一条策略、已有的授予）什么都不写：不加修订号、不广播，其它实例不重新加载。判定方法是用当前文档的头部写出新内容、按字节比较。
+  但本实例照样标记该 key 为脏、做一次条件读（第 2 轮审查）：另一个实例可能已经发布了同样的内容，而本实例还没收到失效，跳过写入不能让调用方
+  继续读到旧版本（读己之写）；
 - `setPolicies(policies)` 和 `setRoleGrants(appId, grants)` 一次写入改动整份文档里的多条，要么全部写入要么都不写。PR-5 让 `LocalPolicyInitializer` 用前者；
 - 发布者不动的条目按读到的字节原样写回（`SnapshotContent` 保存每个条目的原始字节），`1e400`、`1.10` 这类经过树会被改写的数字保持不变。
 
@@ -713,10 +715,15 @@ AGENTS.md 的每条不变量在本阶段如何成立，新的失败模式各由�
 
 PR-3 引入了 BlockHound（`io.projectreactor.tools:blockhound`，`cosec-cocache` 的测试依赖，测试 JVM 加 `-XX:+AllowRedefinitionToAddDeleteMethods`）。
 `SnapshotStoreBlockHoundTest` 只监视名字带固定前缀的测试线程（不加载 Reactor 的集成，所以同一个 JVM 里的其它测试不受影响），在这些线程上对真实 Redis
-调用存储的全部入口、发布者的全部写操作，以及 `SnapshotSource` 经存储的冷加载，断言没有任何阻塞调用；另一例确认监视确实生效。唯一的豁免是 logback
-控制台 appender 的锁：测试 JVM 用根构建指定的 `config/logback.xml`，根日志级别 TRACE、输出到控制台，Lettuce 记录每条命令时可能等这把锁；这是日志配置，
-不是被测代码。与此无关的两点：L2 命中时的摘要在 `digestExecutor` 上计算，不在调用方线程上（`RedisSnapshotDocumentStoreTest` 固定），因为它与文档
-大小成正比；发布者的修改、序列化和日志都在它的调度线程上（同样有测试固定）。
+调用存储的全部入口、发布者的全部写操作，以及 `SnapshotSource` 经存储的冷加载，断言没有任何阻塞调用；另一例确认监视确实生效。豁免恰好两处，各自只放行
+一个方法：
+
+- logback 控制台 appender 的锁（`OutputStreamAppender.writeBytes`）：测试 JVM 用根构建指定的 `config/logback.xml`，根日志级别 TRACE、输出到控制台。
+  Lettuce 在**发出命令的线程**上记录这条命令（`DefaultEndpoint.write`），所以被监视的调用方线程会在这里等这把锁。这是测试的日志配置，不是被测代码；
+- 调度线程延时队列的锁（`ScheduledThreadPoolExecutor$DelayedWorkQueue.offer`）：冷加载在调用方线程上挂超时，一次堆插入的有界等待，理由见 §5.3。
+
+与豁免无关的两点：L2 命中时的摘要在 `digestExecutor` 上计算，不在调用方线程上（`RedisSnapshotDocumentStoreTest` 固定），因为它与文档大小成正比；
+发布者的修改、序列化和它自己的日志都在它的调度线程上，不在调用方线程上（`RedisSnapshotPublisherTest` 固定）。
 
 **新的失败模式**（编号接 §4.4）：
 

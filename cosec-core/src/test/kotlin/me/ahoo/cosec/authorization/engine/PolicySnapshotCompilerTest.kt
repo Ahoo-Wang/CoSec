@@ -57,7 +57,15 @@ class PolicySnapshotCompilerTest {
         val appPermission = """{$id"condition":{"all":{}},"groups":[]}"""
         assertThrows<SnapshotFormatException> { app(""""appPermission":$appPermission,"grants":{}""") }
         app(""""appPermission":$catalog,"grants":{}""").appId.assert().isEqualTo("app")
-        assertThrows<SnapshotFormatException> { app(""""appPermission":$catalog,"grants":{}""", appId = "other") }
+        assertThrows<SnapshotFormatException> {
+            app(""""appPermission":$catalog,"grants":{}""", appId = "other")
+        }
+        // the id is a string: 1 is not app "1"
+        assertThrows<SnapshotFormatException> {
+            app(""""appPermission":{"id":1,"condition":{"all":{}},"groups":[]},"grants":{}""", appId = "1")
+        }
+        app(""""appPermission":{"id":"1","condition":{"all":{}},"groups":[]},"grants":{}""", appId = "1")
+            .appId.assert().isEqualTo("1")
     }
 
     @Test
