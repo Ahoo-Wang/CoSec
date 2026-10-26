@@ -125,7 +125,7 @@ PR-9 只做库与 HTTP，starter 装配移进切换（RFC 0008 §4.1）。
 | RFC 0008 PR-1 | `conformance/` 模块、规则登记表、`verifyRuleCoverage`、已合入规则的正反例场景、`propertyStress` | — | ✅ 已合入（#1045） |
 | RFC 0008 PR-2 | 变异体补丁与 `mutationCheck` | RFC 0008 PR-1 ✓ | 可以开工 |
 | RFC 0008 PR-3 | 从 `v7.0.1` 录 7.0 基线，作为 JMH 绝对预算的对照 | — | 已派发（2026-10-26） |
-| 端到端切片 | `e2e/` 测试模块：快照 → 扁平引擎 → 协程 Pipeline → WebFlux 桥接，真实 CoCache 与 Redis；第一次 JMH/wrk2 测量（RFC 0008 §4.4.3） | RFC 0005 PR-4 ✓、RFC 0004 PR-4 ✓、PR-4b ✓、RFC 0006 PR-2 ✓ | 打开中（#E2E）：快照到 Pipeline 一段与第一次 JMH 测量；WebFlux 桥接与 k6 随 RFC 0006 PR-7 |
+| 端到端切片 | `e2e/` 测试模块：快照 → 扁平引擎 → 协程 Pipeline → WebFlux 桥接，真实 CoCache 与 Redis；第一次 JMH/wrk2 测量（RFC 0008 §4.4.3） | RFC 0005 PR-4 ✓、RFC 0004 PR-4 ✓、PR-4b ✓、RFC 0006 PR-2 ✓ | 打开中（#1056）：快照到 Pipeline 一段与第一次 JMH 测量；WebFlux 桥接与 k6 随 RFC 0006 PR-7 |
 | ~~RFC 0008 PR-4~~ | ~~切换~~：2026-10-26 拆成 S1–S5（RFC 0008 §4.4.1） | — | — |
 | S1 | `refactor!: wire the 8.0 path in the starter`：装配目标路径与新属性，`noeviction`、缓存固定、`LocalPolicyInitializer`；`cosec-gateway-server` 改到 8.0；`aot-smoke` 作业 | 其余全部实现 PR、端到端切片；RFC 0008 §3.9 第 1–5 条 | 未开工 |
 | S2 | 删除存储与写入路径（`cosec-cocache`、RFC 0007 X1–X3） | S1 | 未开工 |
@@ -154,5 +154,5 @@ PR-1 的登记表（`conformance/src/test/resources/rules.json`）有 64 条规�
 
 - RFC 0008 PR-2（变异检查）。RFC 0008 PR-3（7.0 基线）已派发。
 - RFC 0007 PR-6a（授出分析，2026-10-26 开工）。RFC 0004 PR-4（RFC 0005 PR-4 已合入，#1051）、RFC 0005 PR-5：按 RFC 0008 §4.7 先做 `engine/` 中 #1040、#1051 的审查与 #1029 的第 2 轮。
-- RFC 0006 PR-3、PR-6（PR-2 已合入，#1044；按 RFC 0008 §4.7 先做 #1044 的审查）；端到端切片打开中（#E2E）。
+- RFC 0006 PR-3、PR-6（PR-2 已合入，#1044；按 RFC 0008 §4.7 先做 #1044 的审查）；端到端切片打开中（#1056）。
 - 核对已合入 PR 的两轮审查（RFC 0008 §4.7：同一领域先审查，再开新功能 PR）：RFC 0004 PR-2（#1029，第 2 轮）、PR-3（#1027）、RFC 0005 PR-1（#1022）、PR-2（#1036）的第 2 轮，RFC 0005 PR-3（#1040）、PR-4（#1051）、RFC 0006 PR-2（#1044）、RFC 0007 PR-1（#1032）、RFC 0008 PR-1（#1045）的两轮；本表"—"表示尚无已合入的修复 PR。

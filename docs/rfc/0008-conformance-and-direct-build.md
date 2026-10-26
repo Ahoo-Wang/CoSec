@@ -578,7 +578,7 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 在陈旧时间上界内看到新决策；Netty 线程上不阻塞（BlockHound，做法同 `SnapshotStoreBlockHoundTest`）。切片不重复一致性场景，只检查装配起来才存在的东西：
 缓存时序、线程、Redis 故障、真实的编解码。
 
-**第一个切片 PR（#E2E）实际包含的部分。** `Pipeline` 的入口是 `evaluate`（上文的 `Pipeline.decide` 指它）。测试应用随 RFC 0006 PR-7 的 HTTP 一段加入，
+**第一个切片 PR（#1056）实际包含的部分。** `Pipeline` 的入口是 `evaluate`（上文的 `Pipeline.decide` 指它）。测试应用随 RFC 0006 PR-7 的 HTTP 一段加入，
 在那之前 `src/test` 只有切片的装配（`Slice`）与测试。Redis 停止用一个可切断的 TCP 中继模拟（Redis 由同一台机器上的所有测试共用）：未加载过的文档 → 503，
 已安装的文档继续按最后确认的内容决策。`blocked` 场景等 RFC 0006 PR-4 的黑名单阶段（在那之前 `Pipeline` 总以 `blocked = false` 求值）。
 第一次测量见 `docs/perf/e2e-slice/README.md`。
@@ -638,7 +638,7 @@ RFC 0006 PR-2 #1044 随后也已合入）；RFC 0008 PR-4 一行换成 S1–S5�
 | RFC 0007 PR-7 影子窗口 | RFC 0007 PR-5；RFC 0006 PR-6 | 否 |
 | RFC 0007 PR-8 break-glass、租户自助、变更审计 | RFC 0007 PR-6、PR-7；RFC 0004 PR-5 | 否 |
 | RFC 0007 PR-9 库与 HTTP（改动） | RFC 0007 PR-5–PR-8；RFC 0006 PR-7 | 否 |
-| 端到端切片（§4.4.3；2026-10-26 修订（路线图审查）） | RFC 0005 PR-4 ✓；RFC 0004 PR-4 ✓、PR-4b ✓（#1053）；RFC 0006 PR-2 ✓（#1044） | 打开中（#E2E） |
+| 端到端切片（§4.4.3；2026-10-26 修订（路线图审查）） | RFC 0005 PR-4 ✓；RFC 0004 PR-4 ✓、PR-4b ✓（#1053）；RFC 0006 PR-2 ✓（#1044） | 打开中（#1056） |
 | ~~RFC 0008 PR-4 切换~~ | ~~以上全部；§3.9~~ | 2026-10-26 修订（路线图审查）：拆成下面五行 |
 | RFC 0008 S1 装配 8.0 路径 | 以上全部，包括端到端切片；§3.9 第 1–5 条 | 否 |
 | RFC 0008 S2 删除存储与写入路径 | S1 | 否 |
