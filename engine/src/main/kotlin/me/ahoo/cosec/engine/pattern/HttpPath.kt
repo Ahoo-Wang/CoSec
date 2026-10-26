@@ -59,14 +59,18 @@ class HttpPath private constructor(
          * pipeline rejects it before authorization (`RequestPaths`).
          */
         fun parse(path: String, decodeAndParseSegments: Boolean = true): HttpPath {
-            // Sized exactly up front: parsing runs once per request, and growing a list dominated it.
+            // Sized exactly up front, and segments copied as they are unless the path has anything to decode: parsing
+            // runs once per request, and growing a list or scanning character by character dominated it.
             val elements = arrayOfNulls<String>(countElements(path))
+            val plain = path.indexOf(PercentDecoding.ESCAPE) < 0 &&
+                (!decodeAndParseSegments || path.indexOf(PercentDecoding.PARAMETER) < 0)
             var count = 0
             var begin = 0
             while (begin < path.length) {
                 val end = path.indexOf(SEPARATOR, begin).let { if (it < 0) path.length else it }
                 if (end > begin) {
-                    elements[count++] = segment(path, begin, end, decodeAndParseSegments)
+                    val segment = path.substring(begin, end)
+                    elements[count++] = if (plain) segment else valueToMatch(segment, decodeAndParseSegments)
                 }
                 if (end == path.length) {
                     break
@@ -78,38 +82,30 @@ class HttpPath private constructor(
             return HttpPath(path, decodeAndParseSegments, elements)
         }
 
-        private fun needsWork(path: String, begin: Int, end: Int, decodeAndParseSegments: Boolean): Boolean {
-            for (index in begin until end) {
-                val char = path[index]
-                if (char == PercentDecoding.ESCAPE || (decodeAndParseSegments && char == PercentDecoding.PARAMETER)) {
-                    return true
-                }
-            }
-            return false
-        }
-
-        /** One element per `/`, and one per run of other characters. */
+        /** One element per `/`, and one per non-empty text between them. */
         private fun countElements(path: String): Int {
             var count = 0
-            for (index in path.indices) {
-                if (path[index] == SEPARATOR || index == 0 || path[index - 1] == SEPARATOR) {
+            var begin = 0
+            while (begin < path.length) {
+                val end = path.indexOf(SEPARATOR, begin).let { if (it < 0) path.length else it }
+                if (end > begin) {
                     count++
                 }
+                if (end == path.length) {
+                    break
+                }
+                count++
+                begin = end + 1
             }
             return count
         }
 
-        private fun segment(path: String, begin: Int, end: Int, decodeAndParseSegments: Boolean): String {
-            val segment = path.substring(begin, end)
-            if (!needsWork(path, begin, end, decodeAndParseSegments)) {
-                return segment
-            }
-            return if (decodeAndParseSegments) {
+        private fun valueToMatch(segment: String, decodeAndParseSegments: Boolean): String =
+            if (decodeAndParseSegments) {
                 PercentDecoding.valueToMatch(segment)
             } else {
                 segment.replace(ENCODED_SEPARATOR, SEPARATOR_TEXT)
             }
-        }
     }
 }
 
