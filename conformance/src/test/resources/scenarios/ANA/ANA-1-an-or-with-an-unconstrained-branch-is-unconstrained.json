@@ -1,0 +1,38 @@
+{
+  "rules": [
+    "ANA-1"
+  ],
+  "polarity": "positive",
+  "level": "analysis",
+  "description": "One branch of the or says nothing about scope.app, so a request of any app can match: the keys must be unconstrained.",
+  "analysis": {
+    "condition": {
+      "or": [
+        {
+          "eq": [
+            "scope.app",
+            "a"
+          ]
+        },
+        {
+          "eq": [
+            "subject.id",
+            "x"
+          ]
+        }
+      ]
+    },
+    "attribute": "scope.app",
+    "request": {
+      "scope.app": "z",
+      "subject.id": "x"
+    }
+  },
+  "expect": {
+    "keys": "any",
+    "admits": true,
+    "evaluations": {
+      "condition": true
+    }
+  }
+}

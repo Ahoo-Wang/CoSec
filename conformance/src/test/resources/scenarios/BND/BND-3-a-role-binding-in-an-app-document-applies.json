@@ -1,0 +1,55 @@
+{
+  "rules": [
+    "BND-3"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The role binding in the app document compiles and applies.",
+  "documents": {
+    "apps": {
+      "order-service": {
+        "policies": [
+          {
+            "id": "perm-read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:editor:perm-read",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "order-service",
+            "space": "*",
+            "policy": "perm-read"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor"
+    ]
+  },
+  "request": {
+    "app": "order-service"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "perm-read",
+      "statement": 0,
+      "via": {
+        "binding": "r:editor:perm-read",
+        "document": "app"
+      }
+    }
+  }
+}

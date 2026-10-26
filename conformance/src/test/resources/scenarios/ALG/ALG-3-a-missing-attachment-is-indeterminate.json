@@ -1,0 +1,46 @@
+{
+  "rules": [
+    "ALG-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The principal attaches a policy the snapshot does not have. An ALLOW matches, but the missing policy could hold a DENY.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "policies": [
+      "ghost"
+    ]
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MissingPolicies",
+      "policies": [
+        "ghost"
+      ]
+    }
+  }
+}

@@ -1,0 +1,564 @@
+{
+  "$comment": "The 8.0 rule registry (RFC 0008 §3.2). Ids are never reused: a rule whose meaning changes gets a new id and the old one is marked superseded. pending names the PR that implements the rule; the switch PR (RFC 0008 PR-4) needs every pending to be null. properties and guards name tests as module-directory:TestClass#test name; verifyRuleCoverage checks that they exist.",
+  "rules": [
+    {
+      "id": "SCP-1",
+      "source": "RFC 0004 §4.6",
+      "statement": "A declared non-empty space the principal has no role in is Rejected(SPACE_NOT_MEMBER); it never falls back to the default space (C3).",
+      "level": "engine",
+      "properties": [
+        "model:ScopeResolverPropertyTest#P11 a resolved scope only narrows"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SCP-2",
+      "source": "RFC 0004 §4.6",
+      "statement": "When the host is configured with an app, a different declared app is Rejected(APP_MISMATCH), and without a declaration the host's app applies (C4); without a host app the declared app applies.",
+      "level": "engine",
+      "properties": [
+        "model:ScopeResolverPropertyTest#the app and tenant follow the host and the credential"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SCP-3",
+      "source": "RFC 0004 §4.6 (review of #1015); RFC 0006 §6.1",
+      "statement": "An anonymous request that declares CoSec-Space-Id is answered 401.",
+      "level": "pipeline",
+      "pending": "RFC 0006 PR-2"
+    },
+    {
+      "id": "SCP-4",
+      "source": "RFC 0008 §3.2 (review of #1015); RFC 0006 §6.1",
+      "statement": "When the header and the query parameter of the same CoSec-* parameter differ, the request cannot be read unambiguously and is answered 400.",
+      "level": "pipeline",
+      "pending": "RFC 0006 PR-2"
+    },
+    {
+      "id": "SCP-5",
+      "source": "RFC 0004 §4.1, §10",
+      "statement": "Only ScopeResolver constructs a Scope; no decoding path (JSON, header, cache) deserializes one.",
+      "level": "build",
+      "guards": [
+        "model:ScopeConstructionTest#onlyTheResolverConstructsScopes",
+        "model:ScopeConstructionTest#scopeIsNotADataClass"
+      ],
+      "pending": "RFC 0004 PR-4"
+    },
+    {
+      "id": "SCP-6",
+      "source": "RFC 0004 §4.6",
+      "statement": "An unauthenticated subject is always in the default tenant (0) and has no roles, whatever memberships it is given.",
+      "level": "engine",
+      "guards": [
+        "model:ScopeResolverTest#an anonymous subject is in the default tenant and has no roles"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SCP-7",
+      "source": "RFC 0004 §4.6 (round-1 review, 2026-10-26)",
+      "statement": "A declared app that cannot be an app id (blank, *, containing ':' or longer than 128 characters) is Rejected(APP_MISMATCH), with or without a host app.",
+      "level": "engine",
+      "guards": [
+        "model:ScopeResolverTest#a declared app that cannot be an app id is rejected with or without a host app"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SCP-8",
+      "source": "RFC 0004 §4.6 (PR-1, 2026-10-25)",
+      "statement": "The app is checked before the space: a request failing both is Rejected(APP_MISMATCH).",
+      "level": "engine",
+      "guards": [
+        "model:ScopeResolverTest#the app is checked before the space"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MEM-1",
+      "source": "RFC 0004 §4.5.2 (#1027)",
+      "statement": "A token that carries the membership marker together with role or policy claims fails closed: Indeterminate(MembershipUnavailable).",
+      "level": "engine",
+      "guards": [
+        "cosec-core:MembershipFailClosedTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MEM-2",
+      "source": "RFC 0004 §4.5.2",
+      "statement": "When the MembershipProvider is missing, fails or times out, the decision is Indeterminate(MembershipUnavailable); it never falls back to the token's claims or to no memberships.",
+      "level": "engine",
+      "guards": [
+        "cosec-core:MembershipFailClosedTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MEM-3",
+      "source": "RFC 0004 §4.5.1",
+      "statement": "Membership claims read as 7.x RoleScope: `role` is a role in the default space, `role@space` a role in that space only, and a malformed entry (empty role or space, more than one @, `role@*`) applies in no space.",
+      "level": "engine",
+      "guards": [
+        "cosec-core:MembershipClaimsTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MEM-4",
+      "source": "RFC 0004 §4.5.3",
+      "statement": "After revokeSubject(tenant, principal, issuedBefore), every token of that principal issued before the instant is rejected.",
+      "level": "pipeline",
+      "pending": "RFC 0006 PR-3"
+    },
+    {
+      "id": "BND-1",
+      "source": "RFC 0004 §4.2",
+      "statement": "An expired binding does not apply.",
+      "level": "engine",
+      "guards": [
+        "engine:FlatEngineTest#principal bindings apply to their principal in their tenant"
+      ],
+      "pending": null
+    },
+    {
+      "id": "BND-2",
+      "source": "RFC 0004 §4.4",
+      "statement": "A principal attaches only policies of its own tenant document or of the platform layer that are attachable (C5); any other attachment is missing.",
+      "level": "engine",
+      "guards": [
+        "engine:FlatEngineTest#only attachable policies attach, and the root policy never does"
+      ],
+      "pending": null
+    },
+    {
+      "id": "BND-3",
+      "source": "RFC 0004 §7.1 (#1029)",
+      "statement": "The platform document accepts no role bindings, and an app document accepts only role bindings.",
+      "level": "engine",
+      "guards": [
+        "engine:CompiledDocumentTest#each kind of document binds only the subjects the candidate order reads from it"
+      ],
+      "pending": null
+    },
+    {
+      "id": "BND-4",
+      "source": "RFC 0004 §4.2",
+      "statement": "An anonymous principal matches no Principal binding and has no roles or attachments: only Anyone bindings apply to it.",
+      "level": "engine",
+      "guards": [
+        "engine:FlatEngineTest#an anonymous principal has no attachments, principal or break-glass bindings"
+      ],
+      "pending": null
+    },
+    {
+      "id": "BND-5",
+      "source": "RFC 0004 §4.2",
+      "statement": "A role binding applies through the roles the principal has in the request's space, and only where its app and space match the scope exactly (case-sensitive, no trimming; * is Any).",
+      "level": "engine",
+      "properties": [
+        "engine:FlatEnginePropertyTest#P10 the binding index agrees with a scan of every binding"
+      ],
+      "pending": null
+    },
+    {
+      "id": "BND-6",
+      "source": "RFC 0004 §4.2",
+      "statement": "A role binding that names a tenant applies only to principals of that tenant.",
+      "level": "engine",
+      "pending": null
+    },
+    {
+      "id": "BND-7",
+      "source": "RFC 0004 §4.4 (#1029 review)",
+      "statement": "When an attached or bound policy id names both a policy of the principal's tenant document and a platform policy, the request is Indeterminate(AmbiguousPolicy), unless a DENY matches; neither policy silently wins.",
+      "level": "engine",
+      "pending": "RFC 0004 PR-2 round-1 review fixes (#1029 review)"
+    },
+    {
+      "id": "BND-8",
+      "source": "RFC 0004 §4.2, §7.1 (#1029 review)",
+      "statement": "A binding whose shape the candidate order can never reach (a subject or scope no request of that document can match) does not compile, so no DENY is lost silently.",
+      "level": "engine",
+      "pending": "RFC 0004 PR-2 round-1 review fixes (#1029 review)"
+    },
+    {
+      "id": "BLK-1",
+      "source": "RFC 0004 §4.7, §7.4",
+      "statement": "A blocked principal is always denied, by the builtin blacklist rule, and the decision needs the platform document only.",
+      "level": "engine",
+      "guards": [
+        "engine:FlatEngineTest#a blocked request is denied by the blacklist whatever else is unresolved"
+      ],
+      "pending": null
+    },
+    {
+      "id": "BRK-1",
+      "source": "RFC 0004 §4.8",
+      "statement": "A break-glass principal is bound by every DENY (C2).",
+      "level": "engine",
+      "guards": [
+        "engine:FlatEngineTest#root is a break-glass binding that permits everything but every deny"
+      ],
+      "pending": null
+    },
+    {
+      "id": "BRK-2",
+      "source": "RFC 0004 §4.8",
+      "statement": "Break-glass bindings exist only in the platform document, bind only a principal, and must have expiresAt.",
+      "level": "engine",
+      "guards": [
+        "engine:CompiledDocumentTest#break-glass bindings are expiring principal bindings of the platform"
+      ],
+      "pending": null
+    },
+    {
+      "id": "BRK-4",
+      "source": "RFC 0004 §4.8 (#1029 review)",
+      "statement": "The break-glass root binding applies only to principals of the platform tenant; a root binding of any other tenant does not compile.",
+      "level": "engine",
+      "pending": "RFC 0004 PR-2 round-1 review fixes (#1029 review)"
+    },
+    {
+      "id": "BRK-3",
+      "source": "RFC 0007 §8",
+      "statement": "Break-glass is created only through the control plane: two people, a bounded lifetime, and a REQUIRED audit written first.",
+      "level": "control",
+      "pending": "RFC 0007 PR-8"
+    },
+    {
+      "id": "ALG-1",
+      "source": "RFC 0004 §6.1",
+      "statement": "Any applicable DENY that matches makes the decision Deny, whatever errors, missing or unavailable inputs exist elsewhere (C1b).",
+      "level": "engine",
+      "properties": [
+        "engine:FlatEnginePropertyTest#P1' adding a matching deny always denies",
+        "engine:FlatEnginePropertyTest#the decision is that of the pseudocode"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ALG-2",
+      "source": "RFC 0004 §6.1",
+      "statement": "Without a matching DENY, a DENY that fails (the statement or its policy's condition) makes the decision Indeterminate(MatcherFailed).",
+      "level": "engine",
+      "properties": [
+        "engine:FlatEnginePropertyTest#the decision is that of the pseudocode"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ALG-3",
+      "source": "RFC 0004 §6.1",
+      "statement": "Without a matching DENY, an unresolved input (a missing attachment or policy, a required document unavailable or not loaded) makes the decision Indeterminate, never Permit.",
+      "level": "engine",
+      "properties": [
+        "engine:FlatEnginePropertyTest#P9 missing and unavailable data never permit"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ALG-4",
+      "source": "RFC 0004 §6.1",
+      "statement": "An ALLOW that fails counts as no match (C1a).",
+      "level": "engine",
+      "properties": [
+        "engine:FlatEnginePropertyTest#the decision is that of the pseudocode"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ALG-5",
+      "source": "RFC 0004 §6.1",
+      "statement": "When nothing matches the decision is the implicit deny Deny(null).",
+      "level": "engine",
+      "properties": [
+        "engine:FlatEnginePropertyTest#the decision is that of the pseudocode"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ALG-6",
+      "source": "RFC 0004 §6.3",
+      "statement": "The candidate order decides only which statement is reported (by), never the kind of decision.",
+      "level": "engine",
+      "properties": [
+        "engine:FlatEnginePropertyTest#P8 the decision does not depend on the candidate order"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ALG-7",
+      "source": "RFC 0004 §6.1",
+      "statement": "A policy's condition is evaluated at most once per evaluation, and only when one of its statements is a candidate.",
+      "level": "engine",
+      "guards": [
+        "engine:FlatEngineTest#a condition runs once per evaluation, also when policies share it",
+        "engine:FlatEngineTest#a condition is not evaluated for a pass the policy has no statements in"
+      ],
+      "pending": "RFC 0005 PR-4"
+    },
+    {
+      "id": "ALG-8",
+      "source": "RFC 0004 §6.5",
+      "statement": "The decision does not depend on the trace level: what FULL and EXHAUSTIVE evaluate after the decision never changes it.",
+      "level": "engine",
+      "properties": [
+        "engine:FlatEnginePropertyTest#P2 the decision does not depend on the trace level"
+      ],
+      "pending": null
+    },
+    {
+      "id": "TNT-1",
+      "source": "RFC 0004 §10",
+      "statement": "Another tenant's document never changes a decision for this tenant's principals (P12).",
+      "level": "engine",
+      "properties": [
+        "engine:FlatEnginePropertyTest#P12 another tenant's document never changes a decision"
+      ],
+      "pending": null
+    },
+    {
+      "id": "TNT-2",
+      "source": "RFC 0004 §7.2",
+      "statement": "A tenant document references only its own tenant's or the platform layer's policies; anything else does not compile.",
+      "level": "engine",
+      "pending": "RFC 0004 PR-4"
+    },
+    {
+      "id": "TNT-3",
+      "source": "RFC 0007 §7.2",
+      "statement": "A tenant's principals write only their own tenant's documents (a hard rule, not a policy).",
+      "level": "control",
+      "pending": "RFC 0007 PR-6"
+    },
+    {
+      "id": "DOC-1",
+      "source": "RFC 0004 §7.4; RFC 0003 §4.4",
+      "statement": "Dangling and cross-tenant references do not compile; a request that reaches a Broken entry on the data plane fails closed (F4, F5).",
+      "level": "engine",
+      "pending": "RFC 0004 PR-4"
+    },
+    {
+      "id": "DOC-2",
+      "source": "RFC 0008 §3.2 (review of #1015)",
+      "statement": "The codecs neither encode nor decode Match.Exactly(\"*\"): * only ever means Match.Any.",
+      "level": "build",
+      "pending": "RFC 0004 PR-4"
+    },
+    {
+      "id": "DOC-3",
+      "source": "RFC 0004 §7.1; RFC 0003 F3",
+      "statement": "A document whose schema is not this version's format fails to decode, and the requests that need it fail closed.",
+      "level": "engine",
+      "pending": "RFC 0004 PR-4"
+    },
+    {
+      "id": "SNP-1",
+      "source": "RFC 0003 §6",
+      "statement": "Every document one evaluation reads comes from a single revision (P7).",
+      "level": "pipeline",
+      "properties": [
+        "cosec-core:SnapshotConsistencyPropertyTest#everyEvaluationReadsOneRevisionPerDocument"
+      ],
+      "pending": "RFC 0004 PR-4"
+    },
+    {
+      "id": "SNP-2",
+      "source": "RFC 0003 §4.4",
+      "statement": "For one key, installs happen in the order loads started (P6).",
+      "level": "pipeline",
+      "properties": [
+        "cosec-core:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConverge"
+      ],
+      "pending": "RFC 0004 PR-4"
+    },
+    {
+      "id": "SNP-3",
+      "source": "RFC 0003 §4.1; RFC 0008 §4.4 (review of #1006)",
+      "statement": "Snapshot caches have ttl = null and throw on failed reads; an instance refuses to start when Redis's maxmemory-policy is not noeviction.",
+      "level": "pipeline",
+      "pending": "RFC 0008 PR-4"
+    },
+    {
+      "id": "CND-1",
+      "source": "RFC 0005 §3.4, Q7",
+      "statement": "An absent attribute equals no value, not another absent one and not the empty string; exists is false for it.",
+      "level": "engine",
+      "guards": [
+        "model:ConditionEvaluationTest#absent is equal to nothing",
+        "model:ConditionEvaluationTest#exists sees present values, empty ones included"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CND-2",
+      "source": "RFC 0005 §3.5",
+      "statement": "A condition over a cost bound (nodes, depth, in values, CIDR blocks, literal length, total weight) does not compile.",
+      "level": "engine",
+      "properties": [
+        "model:ConditionPropertyTest#A4 evaluation visits at most the node limit"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CND-3",
+      "source": "RFC 0005 §3.4",
+      "statement": "Evaluation is two-valued: not negates its operand, so not over a comparison with an absent attribute is true.",
+      "level": "engine",
+      "properties": [
+        "model:ConditionPropertyTest#A3 normalizing does not change decisions"
+      ],
+      "guards": [
+        "model:ConditionEvaluationTest#absent makes every comparison false and not negates it"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CND-4",
+      "source": "RFC 0005 §3.2",
+      "statement": "Attributes are typed statically: a path outside the catalog, an operand of the wrong type, or a string literal for a Bool does not compile.",
+      "level": "engine",
+      "guards": [
+        "model:ConditionCheckerTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ANA-1",
+      "source": "RFC 0005 §4.1",
+      "statement": "When a condition is true, the request's value of an indexable attribute is among the condition's index keys, or the keys are unconstrained (A1).",
+      "level": "analysis",
+      "properties": [
+        "model:AnalysisPropertyTest#A1 index keys admit every request the condition matches",
+        "model:AdversarialAnalysisTest#A1 holds on adversarial values"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ANA-2",
+      "source": "RFC 0005 §4.2",
+      "statement": "When implies(c1, c2) = YES, no request satisfies c1 but not c2 (A2).",
+      "level": "analysis",
+      "properties": [
+        "model:AnalysisPropertyTest#A2 implies is sound",
+        "model:AdversarialAnalysisTest#A2 holds on adversarial values"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ACT-1",
+      "source": "RFC 0005 §2 J9; GHSA-2293-jx8h-56m8",
+      "statement": "A value substituted for a path template variable never changes the pattern.",
+      "level": "engine",
+      "pending": "RFC 0005 PR-4"
+    },
+    {
+      "id": "ACT-2",
+      "source": "RFC 0005 Q10",
+      "statement": "An unmapped route falls into the http namespace; an ALLOW on service:verb does not cover unmapped routes.",
+      "level": "pipeline",
+      "pending": "RFC 0005 PR-5"
+    },
+    {
+      "id": "IDX-1",
+      "source": "RFC 0005 §6.3",
+      "statement": "The candidates the index yields are a superset of the statements a brute-force match finds (I1, I2).",
+      "level": "engine",
+      "pending": "RFC 0005 PR-4"
+    },
+    {
+      "id": "PIP-1",
+      "source": "RFC 0006 §6.3",
+      "statement": "Status codes come only from StatusMapping, and the three adapters answer the same request identically.",
+      "level": "pipeline",
+      "pending": "RFC 0006 PR-7"
+    },
+    {
+      "id": "PIP-2",
+      "source": "RFC 0006 §6.1",
+      "statement": "Indeterminate is always 503; 500 is kept for unmodelled exceptions.",
+      "level": "pipeline",
+      "pending": "RFC 0006 PR-2"
+    },
+    {
+      "id": "PIP-3",
+      "source": "RFC 0006 §7.4",
+      "statement": "External cancellation never produces an Outcome, and the downstream is never called.",
+      "level": "pipeline",
+      "pending": "RFC 0006 PR-2"
+    },
+    {
+      "id": "PIP-4",
+      "source": "RFC 0006 §10.2",
+      "statement": "No failure or timeout of any SPI produces a Permit (P13).",
+      "level": "pipeline",
+      "pending": "RFC 0006 PR-2"
+    },
+    {
+      "id": "ATR-1",
+      "source": "RFC 0006 §5.4.3",
+      "statement": "An external attribute that cannot be fetched never turns a Deny or Indeterminate into a Permit (P9').",
+      "level": "pipeline",
+      "pending": "RFC 0006 PR-4"
+    },
+    {
+      "id": "OBL-1",
+      "source": "RFC 0006 §8.2",
+      "statement": "Obligations run only with a Permit; denied requests consume no rate-limit quota (P15).",
+      "level": "pipeline",
+      "pending": "RFC 0006 PR-5"
+    },
+    {
+      "id": "OBS-1",
+      "source": "RFC 0006 §9.3, §9.4",
+      "statement": "No failure of a BEST_EFFORT listener changes the Outcome; a REQUIRED failure can only turn a Permit into 503.",
+      "level": "pipeline",
+      "pending": "RFC 0006 PR-6"
+    },
+    {
+      "id": "CTL-1",
+      "source": "RFC 0007 §6.3",
+      "statement": "A candidate containing any Broken entry is not published, and the head does not move.",
+      "level": "control",
+      "pending": "RFC 0007 PR-5"
+    },
+    {
+      "id": "CTL-2",
+      "source": "RFC 0007 §5.4",
+      "statement": "The revision record is written before the head, and the head carries its parent.",
+      "level": "control",
+      "pending": "RFC 0007 PR-4"
+    },
+    {
+      "id": "CTL-3",
+      "source": "RFC 0007 Q22; RFC 0008 §3.2 (reviews of #996, #998)",
+      "statement": "simulate, explain and analyze call the same Engine.evaluate as enforcement, and explanations are built by the enforcing flow.",
+      "level": "control",
+      "pending": "RFC 0007 PR-9"
+    },
+    {
+      "id": "GRT-1",
+      "source": "RFC 0007 §7.4.2",
+      "statement": "Every granted fragment is contained in one of the grantor's own ALLOWs and overlaps no non-Anyone DENY the grantor is subject to.",
+      "level": "control",
+      "pending": "RFC 0007 PR-6"
+    },
+    {
+      "id": "GRT-2",
+      "source": "RFC 0007 §7.4.3",
+      "statement": "A fragment the analysis cannot decide goes to platform administrator approval; it is never let through as probably contained.",
+      "level": "control",
+      "pending": "RFC 0007 PR-6"
+    },
+    {
+      "id": "BDY-1",
+      "source": "RFC 0007 §7.6",
+      "statement": "A platform boundary can only turn a Permit into Deny or Indeterminate (P-B2); without boundaries it is the identity (P-B1).",
+      "level": "engine",
+      "pending": "RFC 0007 PR-3"
+    }
+  ]
+}

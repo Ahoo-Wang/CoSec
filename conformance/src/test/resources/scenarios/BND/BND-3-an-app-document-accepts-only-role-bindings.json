@@ -1,0 +1,38 @@
+{
+  "rules": [
+    "BND-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "An Anyone binding in an app document does not compile.",
+  "documents": {
+    "apps": {
+      "order-service": {
+        "policies": [
+          {
+            "id": "allow-all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "g:allow-all",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "allow-all"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "does not bind a role"
+  }
+}

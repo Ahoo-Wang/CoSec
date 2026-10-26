@@ -60,7 +60,7 @@ class AnalysisPropertyTest {
         val random = Random(0x5A1)
         var matched = 0
         var constrained = 0
-        repeat(4_000) {
+        repeat(maxOf(4_000, Integer.getInteger("cosec.property.iterations", 0))) {
             val condition = checkedOrNull(condition(random, 1)) ?: return@repeat
             val keys = strings.associateWith { IndexKeys.of(condition, it) }
             if (keys.values.any { it is IndexKeys.Only }) constrained++
@@ -85,7 +85,7 @@ class AnalysisPropertyTest {
         var yes = 0
         var refuted = 0
         val strategies = IntArray(STRATEGIES)
-        repeat(30_000) {
+        repeat(maxOf(30_000, Integer.getInteger("cosec.property.iterations", 0))) {
             val strategy = random.nextInt(STRATEGIES)
             val (left, right) = pair(random, strategy)
             val c1 = checkedOrNull(left) ?: return@repeat

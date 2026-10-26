@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "BRK-2"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "A break-glass binding of a principal in the platform document, with an expiry, compiles and applies.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "cosec",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2026-12-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "tenant": "(platform)",
+    "id": "cosec"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "cosec:root",
+      "statement": 0,
+      "name": "root",
+      "via": {
+        "binding": "root",
+        "document": "platform"
+      }
+    }
+  }
+}

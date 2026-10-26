@@ -1,0 +1,49 @@
+{
+  "rules": [
+    "BND-6"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "An app document binds role editor of tenant globex; alice of acme is editor too.",
+  "documents": {
+    "apps": {
+      "order-service": {
+        "policies": [
+          {
+            "id": "perm-read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:editor:perm-read",
+            "subject": {
+              "role": "editor",
+              "tenant": "globex"
+            },
+            "app": "order-service",
+            "space": "*",
+            "policy": "perm-read"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor"
+    ]
+  },
+  "request": {
+    "app": "order-service"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

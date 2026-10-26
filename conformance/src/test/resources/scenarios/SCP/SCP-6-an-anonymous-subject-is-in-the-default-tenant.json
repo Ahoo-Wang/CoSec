@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "SCP-6"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "An anonymous credential that names tenant acme is in the default tenant: acme's ALLOW does not apply.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "allow-all",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "g:allow-all",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "allow-all"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "anonymous": true,
+    "tenant": "acme"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

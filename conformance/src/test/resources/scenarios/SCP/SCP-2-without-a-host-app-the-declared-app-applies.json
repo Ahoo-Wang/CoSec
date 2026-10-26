@@ -1,0 +1,79 @@
+{
+  "rules": [
+    "SCP-2"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The host has no app: the declared app applies.",
+  "documents": {
+    "apps": {
+      "order-service": {
+        "policies": [
+          {
+            "id": "perm-order-service",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:order-service",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "order-service",
+            "space": "*",
+            "policy": "perm-order-service"
+          }
+        ]
+      },
+      "billing": {
+        "policies": [
+          {
+            "id": "perm-billing",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:billing",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "billing",
+            "space": "*",
+            "policy": "perm-billing"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor"
+    ]
+  },
+  "request": {
+    "app": "billing"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "perm-billing",
+      "statement": 0,
+      "via": {
+        "binding": "r:billing",
+        "document": "app"
+      }
+    }
+  }
+}

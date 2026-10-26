@@ -1,0 +1,36 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.conformance
+
+import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.TestFactory
+
+/**
+ * Runs every scenario of the corpus through the runner of its level (RFC 0008 §3.3) and checks its `expect`. Runners
+ * for `pipeline` and `control` come with RFC 0006 PR-2 and RFC 0007 PR-5.
+ */
+class ConformanceTest {
+    private val runners: Map<String, ScenarioRunner> = mapOf(
+        "engine" to EngineRunner(),
+        "analysis" to AnalysisRunner,
+    )
+
+    @TestFactory
+    fun scenarios(): List<DynamicTest> = Corpus.ofModule().scenarios().map { scenario ->
+        DynamicTest.dynamicTest(scenario.name) {
+            val runner = runners[scenario.level] ?: throw AssertionError("$scenario: no runner for level ${scenario.level} yet")
+            Expectations.check(scenario, runner.run(scenario))
+        }
+    }
+}

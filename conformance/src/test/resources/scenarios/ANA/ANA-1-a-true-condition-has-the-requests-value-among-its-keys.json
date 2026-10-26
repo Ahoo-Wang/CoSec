@@ -1,0 +1,44 @@
+{
+  "rules": [
+    "ANA-1"
+  ],
+  "polarity": "positive",
+  "level": "analysis",
+  "description": "and of an in on scope.app and another attribute: the keys are the in's values, and the request's app is one of them.",
+  "analysis": {
+    "condition": {
+      "and": [
+        {
+          "in": [
+            "scope.app",
+            [
+              "a",
+              "b"
+            ]
+          ]
+        },
+        {
+          "eq": [
+            "subject.id",
+            "x"
+          ]
+        }
+      ]
+    },
+    "attribute": "scope.app",
+    "request": {
+      "scope.app": "a",
+      "subject.id": "x"
+    }
+  },
+  "expect": {
+    "keys": [
+      "a",
+      "b"
+    ],
+    "admits": true,
+    "evaluations": {
+      "condition": true
+    }
+  }
+}

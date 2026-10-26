@@ -1,0 +1,59 @@
+{
+  "rules": [
+    "BRK-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The root binding permits everything, but a DENY matches: it denies.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "deny-read",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:read"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "cosec",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2026-12-31T00:00:00Z"
+        },
+        {
+          "id": "g:deny-read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "deny-read"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "tenant": "(platform)",
+    "id": "cosec"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "deny-read",
+      "statement": 0,
+      "via": {
+        "binding": "g:deny-read",
+        "document": "platform"
+      }
+    }
+  }
+}

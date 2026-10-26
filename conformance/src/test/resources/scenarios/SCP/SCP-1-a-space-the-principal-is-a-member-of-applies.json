@@ -1,0 +1,55 @@
+{
+  "rules": [
+    "SCP-1"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The principal declares team-a, where it is editor: the request is evaluated there.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "edit",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "*"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:editor:edit",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "*",
+            "space": "team-a",
+            "policy": "edit"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor@team-a"
+    ]
+  },
+  "request": {
+    "space": "team-a"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "edit",
+      "statement": 0,
+      "via": {
+        "binding": "r:editor:edit",
+        "document": "tenant"
+      }
+    }
+  }
+}

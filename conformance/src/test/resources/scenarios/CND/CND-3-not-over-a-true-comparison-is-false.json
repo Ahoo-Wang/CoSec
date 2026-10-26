@@ -1,0 +1,49 @@
+{
+  "rules": [
+    "CND-3"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The principal is of team red.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "not": {
+                  "eq": [
+                    "subject.attributes.team",
+                    "red"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "attributes": {
+      "team": "red"
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

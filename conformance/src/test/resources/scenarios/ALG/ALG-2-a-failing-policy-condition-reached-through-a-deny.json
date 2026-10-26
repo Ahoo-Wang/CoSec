@@ -1,0 +1,64 @@
+{
+  "rules": [
+    "ALG-2"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The policy condition of a DENY fails: the DENY failed, the decision is indeterminate and says it was the condition.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "guarded",
+          "fault": "the policy condition cannot be read",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        },
+        {
+          "id": "g:guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MatcherFailed",
+      "at": {
+        "policy": "guarded",
+        "statement": 0,
+        "via": {
+          "binding": "g:guarded",
+          "document": "platform"
+        }
+      },
+      "guard": true
+    }
+  }
+}

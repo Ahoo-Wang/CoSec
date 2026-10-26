@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "ALG-8"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A DENY decides; EXHAUSTIVE then evaluates the ALLOW pass, where an ALLOW fails. Every trace level gives the same decision.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "broken",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "fault": "the input of this ALLOW cannot be read"
+            }
+          ]
+        },
+        {
+          "id": "deny-read",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:read"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:broken",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "broken"
+        },
+        {
+          "id": "g:deny-read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "deny-read"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "deny-read",
+      "statement": 0,
+      "via": {
+        "binding": "g:deny-read",
+        "document": "platform"
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "rules": [
+    "BND-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The only ALLOW is bound until the day before the request.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all",
+          "expiresAt": "2026-10-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

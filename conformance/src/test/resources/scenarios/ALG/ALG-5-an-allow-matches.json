@@ -1,0 +1,43 @@
+{
+  "rules": [
+    "ALG-5"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The same ALLOW for the requested action matches, so the decision is no implicit deny.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "read",
+      "statement": 0,
+      "via": {
+        "binding": "g:read",
+        "document": "platform"
+      }
+    }
+  }
+}

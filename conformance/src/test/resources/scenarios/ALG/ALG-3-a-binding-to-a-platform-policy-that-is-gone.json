@@ -1,0 +1,54 @@
+{
+  "rules": [
+    "ALG-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A tenant binding names a platform policy the platform no longer has (RFC 0004 §7.2).",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "g:shared",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "shared"
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MissingPolicies",
+      "policies": [
+        "shared"
+      ]
+    }
+  }
+}
