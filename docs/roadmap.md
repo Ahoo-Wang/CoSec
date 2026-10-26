@@ -18,7 +18,7 @@
 | 3 | 策略快照分发 | [RFC 0003](rfc/0003-policy-snapshot.md)，已确认 | PR-1 至 PR-4 已合入；PR-5 取消，PR-6 并入切换 | ✅ 剩余工作并入切换 |
 | 4 | 统一模型：`Binding`、平台层/租户层、条件 AST、`service:verb`、编译执行、转换工具 | [RFC 0004](rfc/0004-unified-model.md) / [RFC 0005](rfc/0005-condition-ast.md)，已确认（2026-10-22） | RFC 0004 PR-1 至 PR-3、RFC 0005 PR-1、PR-2 已合入；RFC 0005 PR-3 打开中（#1040） | 🟡 进行中 |
 | 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | [RFC 0006](rfc/0006-coroutine-pipeline.md)，已确认（2026-10-25） | PR-1 已合入（第 1 轮审查修复 #1031 打开中）；PR-2 可以开工 | 🟡 进行中 |
-| 6 | 控制面 `cosec-control` | [RFC 0007](rfc/0007-control-plane.md)，已确认（2026-10-26，#1028） | PR-2 已合入（#1038）；PR-1 打开中（#1032） | 🟡 进行中 |
+| 6 | 控制面 `cosec-control` | [RFC 0007](rfc/0007-control-plane.md)，已确认（2026-10-26，#1028） | PR-1（#1032）、PR-2（#1038）已合入 | 🟡 进行中 |
 | — | 规范一致性套件与切换 | [RFC 0008](rfc/0008-conformance-and-direct-build.md)，已确认（2026-10-26） | PR-1（套件）、PR-3（7.0 基线）可以开工 | ⚪ 未开工 |
 
 **发布策略**（RFC 0001 §6，2026-10-21）：目标架构全部达成、每个 PR 做完两轮审查之前，8.0 不发布任何版本，没有里程碑版和 RC。
@@ -99,7 +99,7 @@ PR-2 的依赖都已合入，#1031 合入后即可开工；PR-3、PR-6 只等 PR
 ## 5. 第 6 阶段：控制面（RFC 0007）
 
 RFC 0007 已于 2026-10-26 确认（#1028）。PR-2（由文档格式描述生成 JSON schema）已合入（#1038）：此后每个改动文档格式的 PR 都要同时改格式描述并运行
-`generateSchemas`，`verifySchemas` 在 `check` 中强制。PR-1（`control/` 模块）打开中（#1032）。2026-10-26 起：门槛 D 与 PR-10 取消；PR-11 并入切换；
+`generateSchemas`，`verifySchemas` 在 `check` 中强制。PR-1（`control/` 模块，`ControlBoundaryTest` 守护不引用 Spring、Reactor、Redis 客户端）已合入（#1032）。2026-10-26 起：门槛 D 与 PR-10 取消；PR-11 并入切换；
 PR-9 只做库与 HTTP，starter 装配移进切换（RFC 0008 §4.1）。
 
 ---
