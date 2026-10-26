@@ -744,7 +744,7 @@ java -jar cosec-migrate.jar verify --in ./converted --requests ./audit.jsonl [--
 GA 版本的 `convert` 一次完成两篇的转换：先按本文转换模型，再按 RFC 0005 §7 把每条语句的匹配器翻译成 AST，翻译不了的按 RFC 0005 的规则拒绝。
 用户不会见到中间格式。
 
-> **2026-10-26 实现说明（PR-5，#MIG）**：
+> **2026-10-26 实现说明（PR-5，#1067）**：
 > - **翻译的范围。** PR-5 只翻译动作（§5.2 的 `http` 命名空间：`all`、`path` 模式及其方法与选项、`composite`）与 `all` 条件。其余条件按 RFC 0005 §7.1 由 RFC 0005 PR-6 翻译；在那之前转换时拒绝并报告位置（`CONDITION_NOT_TRANSLATED`）。`spel`、`ognl`（`EXPRESSION_CONDITION`）与自定义条件（`CUSTOM_CONDITION`，RFC 0008 Q4）在任何版本都拒绝。路径模板与非 `/` 的分隔符同样留给 PR-6。
 > - **解码。** 每个 7.x 策略与应用权限先用 7.x 的反序列化器解码，7.x 读不了的数据拒绝（`UNDECODABLE`），不会被转换成会放行的语句。
 > - **报告。** `report.json` 的 `semanticChanges` 列出受 C1a–C6、D1–D3 影响的每一处 7.x 配置形态（RFC 0008 Q3）。
