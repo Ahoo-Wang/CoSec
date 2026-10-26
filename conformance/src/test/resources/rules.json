@@ -378,7 +378,10 @@
       "properties": [
         "cosec-core:SnapshotConsistencyPropertyTest#everyEvaluationReadsOneRevisionPerDocument"
       ],
-      "pending": "RFC 0004 PR-4"
+      "pending": "a scenario format for snapshot timing (RFC 0008 §3.3); guarded by the test above",
+      "guards": [
+        "runtime:DocumentSnapshotViewsTest#a view decides with the revisions it was built from"
+      ]
     },
     {
       "id": "SNP-2",
@@ -386,9 +389,10 @@
       "statement": "For one key, installs happen in the order loads started (P6).",
       "level": "pipeline",
       "properties": [
+        "cosec-core:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
         "cosec-core:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConverge"
       ],
-      "pending": "RFC 0004 PR-4"
+      "pending": "a scenario format for snapshot timing (RFC 0008 §3.3); guarded by the properties above"
     },
     {
       "id": "SNP-3",
