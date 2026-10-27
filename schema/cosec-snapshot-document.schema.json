@@ -3,10 +3,10 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "anyOf": [
     {
-      "$ref": "#/definitions/document"
+      "$ref": "#/definitions/platformDocument"
     },
     {
-      "$ref": "#/definitions/platformDocument"
+      "$ref": "#/definitions/tenantDocument"
     },
     {
       "$ref": "#/definitions/appDocument"
@@ -415,57 +415,6 @@
       ],
       "description": "A condition (RFC 0005 §3.1): one operator."
     },
-    "document": {
-      "additionalProperties": false,
-      "description": "A platform or tenant document (RFC 0004 §7.1).",
-      "properties": {
-        "bindings": {
-          "items": {
-            "$ref": "cosec-binding.schema.json"
-          },
-          "type": "array"
-        },
-        "policies": {
-          "items": {
-            "$ref": "#/definitions/policy"
-          },
-          "type": "array"
-        },
-        "provenance": {
-          "$ref": "#/definitions/provenance",
-          "description": "Where the revision came from (RFC 0007 §5.3); the control plane writes it on every publish."
-        },
-        "publishedAt": {
-          "examples": [
-            "2026-10-26T00:00:00Z"
-          ],
-          "format": "date-time",
-          "type": "string"
-        },
-        "rateLimits": {
-          "description": "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends.",
-          "items": {
-            "$ref": "#/definitions/rateLimit"
-          },
-          "type": "array"
-        },
-        "revision": {
-          "minimum": 1,
-          "type": "integer"
-        },
-        "schema": {
-          "const": 2,
-          "description": "The document format version.",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "schema",
-        "revision",
-        "publishedAt"
-      ],
-      "type": "object"
-    },
     "legacyAppDocument": {
       "additionalProperties": false,
       "properties": {
@@ -618,7 +567,7 @@
     },
     "platformDocument": {
       "additionalProperties": false,
-      "description": "The platform document with what only it holds: the limits and attributes every document compiles against (RFC 0007 §3.1 N3).",
+      "description": "The platform document (RFC 0004 §7.1) with what only it holds: boundaries, and the limits and attributes every document compiles against (RFC 0007 §7.6, §3.1 N3). A principal names its tenant.",
       "properties": {
         "attributes": {
           "description": "The external attributes documents may read (RFC 0006 §5.4.1), with their types; paths unique. Platform only.",
@@ -656,6 +605,20 @@
             "$ref": "#/definitions/platformBinding"
           },
           "type": "array"
+        },
+        "boundaries": {
+          "additionalProperties": false,
+          "properties": {
+            "default": {
+              "description": "The boundary policy that holds every tenant that names none (RFC 0007 §7.6).",
+              "examples": [
+                "boundary-standard"
+              ],
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "type": "object"
         },
         "limits": {
           "additionalProperties": false,
@@ -780,6 +743,11 @@
         "attachable": {
           "default": false,
           "description": "Whether a principal may attach it.",
+          "type": "boolean"
+        },
+        "boundary": {
+          "default": false,
+          "description": "A platform boundary (RFC 0007 §7.6): in the platform document only, at most 64 ALLOW statements, never bound or attached.",
           "type": "boolean"
         },
         "condition": {
@@ -1160,6 +1128,65 @@
       "required": [
         "effect",
         "action"
+      ],
+      "type": "object"
+    },
+    "tenantDocument": {
+      "additionalProperties": false,
+      "description": "A tenant document (RFC 0004 §7.1): the tenant's own policies and bindings.",
+      "properties": {
+        "bindings": {
+          "items": {
+            "$ref": "cosec-binding.schema.json"
+          },
+          "type": "array"
+        },
+        "boundary": {
+          "description": "The platform boundary policy that holds this tenant instead of the default; only the platform writes it.",
+          "examples": [
+            "boundary-restricted"
+          ],
+          "minLength": 1,
+          "type": "string"
+        },
+        "policies": {
+          "items": {
+            "$ref": "#/definitions/policy"
+          },
+          "type": "array"
+        },
+        "provenance": {
+          "$ref": "#/definitions/provenance",
+          "description": "Where the revision came from (RFC 0007 §5.3); the control plane writes it on every publish."
+        },
+        "publishedAt": {
+          "examples": [
+            "2026-10-26T00:00:00Z"
+          ],
+          "format": "date-time",
+          "type": "string"
+        },
+        "rateLimits": {
+          "description": "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends.",
+          "items": {
+            "$ref": "#/definitions/rateLimit"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "schema": {
+          "const": 2,
+          "description": "The document format version.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema",
+        "revision",
+        "publishedAt"
       ],
       "type": "object"
     },

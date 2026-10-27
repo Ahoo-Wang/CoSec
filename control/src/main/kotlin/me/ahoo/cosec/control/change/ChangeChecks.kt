@@ -203,6 +203,10 @@ class ChangeChecks(private val options: ChangeOptions = ChangeOptions()) {
                 findings += Finding("REFERENCES", "$.bindings[$i].policy", "[$policy] is defined neither here nor where this document may refer", UNPROCESSABLE)
             }
         }
+        val boundary = candidate.boundary ?: return
+        if (platform?.policies?.none { it.id == boundary && it.boundary } != false) {
+            findings += Finding("REFERENCES", "$.boundary", "[${boundary.value}] is not a boundary of the platform", UNPROCESSABLE)
+        }
     }
 
     private suspend fun removedReferences(

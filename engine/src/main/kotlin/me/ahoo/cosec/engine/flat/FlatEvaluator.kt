@@ -41,6 +41,8 @@ import me.ahoo.cosec.model.decision.StatementRef
  *    indeterminate, and so does anything unresolved: there could be a DENY nobody could check.
  * 3. Only then the ALLOW pass: the first match permits; an erroring ALLOW counts as no match (C1a); nothing matched is
  *    an implicit deny.
+ * 4. A Permit is held to the tenant's platform boundary, if any (RFC 0007 §7.6, [withinBoundary]): it stays a Permit
+ *    only if a boundary statement matches. The boundary can only turn a Permit into a Deny or an Indeterminate (P-B2).
  *
  * So the decision depends on the set of candidates, never on their order (P8): only which statement is reported does.
  * A candidate policy's statements are those its index gives (I1), each evaluated by [step].
@@ -112,7 +114,9 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         }
         pass = Effect.ALLOW
         enumerate()
-        return withObligations(allowDecision())
+        val permit = allowDecision()
+        // The boundary first: a request it denies spends no rate limit permit.
+        return withObligations(if (view.bounded) withinBoundary(permit) else permit)
     }
 
     /**
@@ -177,6 +181,45 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     } finally {
         captures = null
     }
+
+    /**
+     * [decision], held to the boundary of the request's tenant (RFC 0007 §7.6). Without a boundary it is returned as
+     * it is, having read two fields. Otherwise it stays a Permit only if a statement of the boundary matches, as an
+     * ALLOW would; else it is a Deny, or an Indeterminate when a boundary statement failed. The boundary is a property
+     * of the request, not of which ALLOW matched, so it is checked once. A boundary the platform does not define is a
+     * missing policy: the request fails closed.
+     */
+    protected fun withinBoundary(decision: Decision): Decision {
+        if (decision !is Decision.Permit) {
+            return decision
+        }
+        val id = view.boundaryOf(request.scope) ?: return decision
+        val boundary = view.platform.boundaryPolicy(id)
+            ?: return Decision.Indeterminate(Cause.MissingPolicies(setOf(PolicyId(id))))
+        var failure: Throwable? = null
+        for (statement in boundary.allows) {
+            when (boundaryStep(boundary, statement)) {
+                MATCHED -> return decision
+                ERROR, GUARD_FAILED -> if (!lapses(statement, stepError)) failure = failure ?: stepError
+                GUARD_MISS -> break
+            }
+        }
+        return if (failure != null) {
+            Decision.Indeterminate(Cause.BoundaryUnavailable(PolicyId(id), failure))
+        } else {
+            Decision.Deny(StatementRef.Boundary(PolicyId(id), request.scope.tenant))
+        }
+    }
+
+    /** A boundary statement whose external attribute is missing and says `onMissing nomatch` is a miss. */
+    private fun lapses(statement: CompiledStatement, error: Throwable?): Boolean =
+        error is AttributeMissing && statement.onMissing == OnMissing.NOMATCH
+
+    /** One boundary statement, as [step] evaluates an ALLOW. The trace records it. */
+    protected open fun boundaryStep(
+        boundary: CompiledPolicy,
+        statement: CompiledStatement
+    ): Int = step(boundary, statement)
 
     /**
      * The ALLOW pass's decision: its match, else `Indeterminate` when an ALLOW was skipped for a missing external

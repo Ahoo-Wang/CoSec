@@ -1,0 +1,56 @@
+{
+  "rules": [
+    "BDY-1"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The same platform without a default boundary: user:read is permitted (P-B1).",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "orders-only",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "all"
+        }
+      ]
+    }
+  },
+  "request": {
+    "action": "user:read"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "all",
+      "statement": 0,
+      "via": {
+        "binding": "g:all",
+        "document": "platform"
+      }
+    }
+  }
+}

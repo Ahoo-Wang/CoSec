@@ -1,0 +1,74 @@
+{
+  "rules": [
+    "BDY-1"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The tenant document names the boundary anything, which holds every action: user:read is permitted as without a boundary.",
+  "documents": {
+    "platform": {
+      "boundaries": {
+        "default": "orders-only"
+      },
+      "policies": [
+        {
+          "id": "all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "orders-only",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*"
+            }
+          ]
+        },
+        {
+          "id": "anything",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "all"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "boundary": "anything"
+      }
+    }
+  },
+  "request": {
+    "action": "user:read"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "all",
+      "statement": 0,
+      "via": {
+        "binding": "g:all",
+        "document": "platform"
+      }
+    }
+  }
+}

@@ -99,6 +99,12 @@ sealed interface Operation {
 
     /** The external attributes the platform document declares (RFC 0007 §3.1 N3); `null` removes the section. */
     class SetAttributes(val attributes: List<Attribute>?) : Operation
+
+    /**
+     * The platform boundary (RFC 0007 §7.6): in the platform document the default, in a tenant document the one that
+     * holds that tenant instead; `null` removes it.
+     */
+    class SetBoundary(val boundary: PolicyId?) : Operation
 }
 
 /** How bad a finding is: an error keeps the change from being checked clean, a warning is shown at publish. */

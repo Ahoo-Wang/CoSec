@@ -73,6 +73,8 @@ class FlatGenerator(private val random: Random) {
         val platformIds = platformPolicies.map { it.id }
         val request = request(platformIds + tenantPolicies.map { it.id } + "perm:0" + "ghost")
         val unavailable = Cause.SourceUnavailable(DocumentKind.entries.random(random), MatcherException("redis"))
+        val boundaries = if (chance(30)) List(random.nextInt(1, 3)) { boundary("boundary$it") } else emptyList()
+        val boundaryIds = boundaries.map { it.id }
         return FlatCase(
             fixture,
             RawDocument(platformPolicies, platformBindings(platformIds)),
@@ -82,7 +84,27 @@ class FlatGenerator(private val random: Random) {
             tenantLoaded = chance(92),
             unresolved = if (chance(8)) listOf(unavailable) else emptyList(),
             request = request,
+            boundaries = boundaries,
+            defaultBoundary = boundaryIds.randomOrNull(random)?.takeIf { chance(70) },
+            tenantBoundary = if (request.scope.tenant != TenantId.PLATFORM && chance(25)) {
+                pick((boundaryIds.randomOrNull(random) ?: "ghost-boundary") to 9, "ghost-boundary" to 1)
+            } else {
+                null
+            },
         )
+    }
+
+    /** A boundary (RFC 0007 §7.6): up to three ALLOW statements, sometimes behind a guard. */
+    private fun boundary(id: String): CompiledPolicy {
+        val statements = List(random.nextInt(4)) {
+            Effect.ALLOW to pick(
+                RuleBehavior.MATCH to 35,
+                RuleBehavior.ACTION_MISS to 25,
+                RuleBehavior.CONDITION_MISS to 25,
+                RuleBehavior.THROW to 15,
+            )
+        }.toTypedArray()
+        return fixture.policy(id, *statements, guard = if (chance(70)) null else guards.random(random))
     }
 
     private fun platformBindings(ids: List<String>): List<Binding> =

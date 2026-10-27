@@ -130,6 +130,7 @@ internal class RequestRecord(val startNanos: Long, val time: Long, val trace: Tr
             null -> OutcomeSummary.Reason.IMPLICIT_DENY
             is StatementRef.ScopeRejected -> OutcomeSummary.Reason.SCOPE_REJECTED
             is StatementRef.Policy -> OutcomeSummary.Reason.EXPLICIT_DENY
+            is StatementRef.Boundary -> OutcomeSummary.Reason.BOUNDARY
         }
         is Decision.Indeterminate -> OutcomeSummary.Reason.INDETERMINATE
     }

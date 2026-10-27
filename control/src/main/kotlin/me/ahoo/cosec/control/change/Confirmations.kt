@@ -109,20 +109,21 @@ internal object NomatchConfirmations {
                     }
                 }
             }
-            PolicyDefinition(policy.id, policy.attachable, policy.condition, statements)
+            PolicyDefinition(policy.id, policy.attachable, policy.condition, statements, boundary = policy.boundary)
         }
         return PolicyDocument(
-            candidate.kind,
-            candidate.owner,
-            candidate.revision,
-            candidate.publishedAt,
-            policies,
-            candidate.bindings,
-            candidate.catalog,
-            candidate.provenance,
-            candidate.limits,
-            candidate.attributes,
-            candidate.rateLimits,
+            kind = candidate.kind,
+            owner = candidate.owner,
+            revision = candidate.revision,
+            publishedAt = candidate.publishedAt,
+            policies = policies,
+            bindings = candidate.bindings,
+            catalog = candidate.catalog,
+            boundary = candidate.boundary,
+            provenance = candidate.provenance,
+            limits = candidate.limits,
+            attributes = candidate.attributes,
+            rateLimits = candidate.rateLimits,
         ) to findings
     }
 
