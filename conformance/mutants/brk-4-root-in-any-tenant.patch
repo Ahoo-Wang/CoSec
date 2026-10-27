@@ -3,12 +3,12 @@
 # Tests: :cosec-engine:test --tests me.ahoo.cosec.engine.flat.* :conformance:test
 
 diff --git a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
-index 92f28f92..1071d991 100644
+index a0fd3965..4c6bcf95 100644
 --- a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
 +++ b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
-@@ -170,7 +170,8 @@ class CompiledDocument private constructor(
- 
-     internal fun policy(id: String): CompiledPolicy? = policies[id]
+@@ -199,7 +199,8 @@ class CompiledDocument private constructor(
+     /** The platform's boundary policy [id], or null. */
+     internal fun boundaryPolicy(id: String): CompiledPolicy? = boundaries[id]
  
 -    internal fun breakGlass(tenant: String, principal: String): Array<BoundEntry>? = breakGlass[tenant]?.get(principal)
 +    internal fun breakGlass(tenant: String, principal: String): Array<BoundEntry>? =
