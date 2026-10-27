@@ -46,6 +46,14 @@ internal class FlatPlanner(request: FlatRequest, view: SnapshotView) : FlatEvalu
         enumerate()
         pass = Effect.ALLOW
         enumerate()
+        // A permit's obligations read the rate limit rules too (RFC 0006 §8.2).
+        for (rules in listOfNotNull(view.platform.rateLimits, view.app?.rateLimits, view.tenant?.rateLimits)) {
+            for (rule in rules) {
+                if (rule.statement.matchesAction(authz.action) && rule.statement.admits(this)) {
+                    add(rule.externals)
+                }
+            }
+        }
         return found?.let { AttributePlan(it.toList()) } ?: AttributePlan.EMPTY
     }
 

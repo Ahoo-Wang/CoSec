@@ -13,7 +13,11 @@
 
 package me.ahoo.cosec.cache.snapshot
 
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiter
+import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiterTest
+import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.policy.PolicyData
 import me.ahoo.cosec.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.snapshot.SnapshotCompiler
@@ -24,12 +28,16 @@ import me.ahoo.cosec.snapshot.SnapshotSource
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import reactor.blockhound.BlockHound
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
 
 /**
  * No blocking on the event loop (AGENTS.md, RFC 0003 §6): BlockHound watches threads named like a non-blocking caller,
@@ -122,6 +130,29 @@ class SnapshotStoreBlockHoundTest {
                     onNonBlockingThread { source.peek("app") }.assert().isNotNull()
                 }
             }
+        }
+        violations.assert().isEmpty()
+    }
+
+    /** RFC 0006 §8.4: the suspending Redis rate limiter awaits Redis; the caller's thread never waits for it. */
+    @Test
+    fun theSuspendingRedisRateLimiterNeverBlocksTheCaller() {
+        val factory = ReactiveRedisRateLimiterTest.connectionFactory("localhost", 6379)
+        try {
+            val limiter =
+                ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), "cosec:test:rate:${newKeyPrefix()}")
+            // Warm the connection, so the watched call measures the request alone.
+            runBlocking { limiter.tryAcquire("rule", "global", RateLimitSpec(10.0)) }
+            violations.clear()
+            val pending = onNonBlockingThread {
+                val result = CompletableFuture<Boolean>()
+                val call: suspend () -> Boolean = { limiter.tryAcquire("rule", "global", RateLimitSpec(10.0)).allowed }
+                call.startCoroutine(Continuation(EmptyCoroutineContext) { result.complete(it.getOrThrow()) })
+                result
+            }
+            pending.get(TIMEOUT_SECONDS, TimeUnit.SECONDS).assert().isTrue()
+        } finally {
+            factory.destroy()
         }
         violations.assert().isEmpty()
     }

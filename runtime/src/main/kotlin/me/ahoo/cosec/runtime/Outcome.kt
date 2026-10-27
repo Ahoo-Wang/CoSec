@@ -46,6 +46,9 @@ internal sealed interface Basis {
 
     data class Decided(val decision: Decision) : Basis
 
+    /** [permit] stopped at rate limit rule [ruleId], whose bucket is exhausted (RFC 0006 §8.3). */
+    data class RateLimited(val permit: Decision.Permit, val ruleId: String) : Basis
+
     data class Unavailable(val reason: Unavailability) : Basis
 
     /** An exception nothing modelled: a defect of CoSec. */
