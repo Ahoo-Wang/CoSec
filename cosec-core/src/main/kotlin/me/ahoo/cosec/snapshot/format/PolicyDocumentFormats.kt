@@ -343,7 +343,11 @@ internal object PolicyDocumentFormats {
             listOf(
                 Field(
                     "id",
-                    StringType(pattern = "^[A-Za-z0-9_.-]+$", examples = listOf("login-per-ip", "orders.api")),
+                    StringType(
+                        pattern = "^[A-Za-z0-9_.-]+$",
+                        examples = listOf("login-per-ip", "orders.api"),
+                        counterExamples = listOf("", "login per ip", "a/b", "a:b"),
+                    ),
                     required = true,
                     description = "Unique in its document. An app's or tenant's rule counts in buckets of its own.",
                 ),

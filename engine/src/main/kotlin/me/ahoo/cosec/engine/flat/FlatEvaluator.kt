@@ -159,7 +159,12 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         }
         val key = rule.key ?: return Obligation.RateLimit(rule.id, CompiledRateLimit.SHARED_BUCKET, rule.limit, rule.strictFailure)
         return try {
-            captures = resource(rule.statement)
+            // The statement captures only for its own condition: a key reading a variable matches with captures here.
+            captures = if (key.kind == Attribute.Kind.RESOURCE_VAR) {
+                rule.statement.resources.firstNotNullOfOrNull { it.match(target) }
+            } else {
+                null
+            }
             val value = if (key.type == AttributeType.IP) ip(key)?.toString() else string(key)
             Obligation.RateLimit(rule.id, CompiledRateLimit.KEYED_BUCKET_PREFIX + value.orEmpty(), rule.limit, rule.strictFailure)
         } catch (error: Throwable) {
