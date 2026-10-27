@@ -44,6 +44,8 @@ import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
+import me.ahoo.cosec.route.RouteMap
+import me.ahoo.cosec.route.RouteResolution
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.attribute.AttributeRequest
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
@@ -104,6 +106,11 @@ class Pipeline(
      * unavailable: a strict rule refuses (503), any other is skipped.
      */
     private val rateLimiter: RateLimiter? = null,
+    /**
+     * The service's routes (RFC 0005 §5.3): a mapped request has its route's `service:verb` on a typed resource, any
+     * other request `http:<METHOD>` on its path. None by default: every request is in the `http` namespace.
+     */
+    private val routes: RouteMap = RouteMap.EMPTY,
 ) {
     private val memberships = MembershipResolver(membershipProvider, options.membershipTimeout)
     private val rateLimitFailures = RateLimitFailures()
@@ -245,8 +252,12 @@ class Pipeline(
             ?: return StatusMapping.invalidRequest(requestId, "path", traceId)
         val parameters = CoSecParameters.read(facts)
             ?: return StatusMapping.invalidRequest(requestId, "CoSec-* parameter", traceId)
-        val action = Action(HTTP, facts.method)
-        val resource = Resource(HTTP, path, emptyMap())
+        val (action, resource) = when (val route = routes.resolve(facts.method, path)) {
+            RouteResolution.Unmapped -> Action(HTTP, facts.method) to Resource(HTTP, path, emptyMap())
+            is RouteResolution.Mapped -> route.action to route.resource
+            // A capture that would change the resource id's segments: refused, never read as another resource.
+            is RouteResolution.Invalid -> return StatusMapping.invalidRequest(requestId, "path", traceId)
+        }
         val fetched = fetchedAttributes()
 
         val authn = authenticate(credentials(facts))

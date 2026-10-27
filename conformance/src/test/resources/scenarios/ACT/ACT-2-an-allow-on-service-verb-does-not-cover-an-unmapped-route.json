@@ -1,0 +1,68 @@
+{
+  "rules": [
+    "ACT-2"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "GET /reports/1 has no route: it stays http:GET, so the ALLOW on order:read does not apply.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read"
+            }
+          ]
+        },
+        {
+          "id": "no-admin",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:*",
+              "resource": "http:path:/admin/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        },
+        {
+          "id": "g:no-admin",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-admin"
+        }
+      ]
+    }
+  },
+  "routes": {
+    "service": "order",
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/orders/{orderId}",
+        "action": "order:read",
+        "resource": "order/{orderId}"
+      }
+    ]
+  },
+  "http": {
+    "method": "GET",
+    "path": "/reports/1"
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

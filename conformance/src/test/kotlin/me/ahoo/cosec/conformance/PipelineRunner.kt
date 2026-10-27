@@ -47,6 +47,9 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.route.RouteMap
+import me.ahoo.cosec.route.RouteMapCodec
+import me.ahoo.cosec.route.RouteMapException
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.attribute.AttributeDeclaration
@@ -144,7 +147,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node.only(
             "\$comment", "rules", "polarity", "level", "description", "documents", "http", "authentication",
             "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations", "attributeProviders",
-            "blacklist", "listeners", "rateLimiter",
+            "blacklist", "listeners", "rateLimiter", "routes",
         )
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
@@ -158,6 +161,12 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
                 )
             )
         } catch (error: DocumentException) {
+            return Outcome.NotCompiled(error.message.orEmpty())
+        }
+        // The service's route map, loaded as a host loads it: all or nothing (RFC 0005 §5.3).
+        val routes = try {
+            routes(node.get("routes"))
+        } catch (error: RouteMapException) {
             return Outcome.NotCompiled(error.message.orEmpty())
         }
         val cancelAt = node.get("cancel")?.text()?.also {
@@ -182,6 +191,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             attributes = attributes,
             listeners = listeners,
             rateLimiter = rateLimiter(node.get("rateLimiter")),
+            routes = routes,
         )
         val facts = facts(node.get("http") ?: EMPTY)
         try {
@@ -193,6 +203,10 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             listeners.cancel()
         }
     }
+
+    /** The scenario's route map, loaded as a host loads it; none without one. */
+    private fun routes(node: JsonNode?): RouteMap =
+        node?.let { RouteMapCodec.load(listOf("scenario" to it.toString().encodeToByteArray())) } ?: RouteMap.EMPTY
 
     /** The compiler, with the providers' attributes declared when the scenario registers any. */
     private fun compiler(attributes: AttributeProviders): SnapshotCompiler =
