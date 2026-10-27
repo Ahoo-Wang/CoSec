@@ -226,9 +226,16 @@ class ControllableStore : SnapshotDocumentStore {
         }
     }
 
+    /** Runs when a subscriber closes its subscription: the first thing a closing source does. */
+    @Volatile
+    var onUnsubscribe: (() -> Unit)? = null
+
     override fun subscribe(listener: SnapshotChangeListener): AutoCloseable {
         listeners.add(listener)
-        return AutoCloseable { listeners.remove(listener) }
+        return AutoCloseable {
+            listeners.remove(listener)
+            onUnsubscribe?.invoke()
+        }
     }
 }
 
