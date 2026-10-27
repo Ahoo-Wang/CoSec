@@ -35,6 +35,7 @@ class LoggingAuditEventSink(
             AuditDecision.EXPLICIT_DENY,
             AuditDecision.IMPLICIT_DENY,
             AuditDecision.TOO_MANY_REQUESTS,
+            AuditDecision.INDETERMINATE,
             -> logger.warn { CoSecJsonSerializer.writeValueAsString(event) }
 
             AuditDecision.ERROR -> logger.error { CoSecJsonSerializer.writeValueAsString(event) }

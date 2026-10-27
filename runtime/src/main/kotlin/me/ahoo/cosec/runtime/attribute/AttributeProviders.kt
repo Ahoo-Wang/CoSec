@@ -14,6 +14,7 @@
 package me.ahoo.cosec.runtime.attribute
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.engine.flat.AttributeStatus
 import me.ahoo.cosec.engine.flat.ExternalValues
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
@@ -128,4 +129,13 @@ internal class FetchedAttributes {
     }
 
     fun toExternalValues(): ExternalValues = ExternalValues(values, available)
+
+    /** The status of every path asked for, without its value: for decision events (RFC 0006 §9.2). */
+    fun statuses(): Map<String, AttributeStatus> = asked.associateWith {
+        when {
+            it !in available -> AttributeStatus.UNAVAILABLE
+            it in values -> AttributeStatus.PRESENT
+            else -> AttributeStatus.ABSENT
+        }
+    }
 }
