@@ -201,10 +201,14 @@ class CompiledDocument private constructor(
 
         /**
          * The platform document: `Anyone` bindings (7.x global policies), break-glass bindings and the shared policies.
-         * The blacklist rule and the root policy are added; every binding must name a policy defined here.
+         * The blacklist rule and the root policy are added, and so are the control-plane policies (RFC 0007 §7.3), which
+         * the platform's and the tenants' bindings may name; every binding must name a policy defined here.
          */
-        fun platform(policies: List<CompiledPolicy>, bindings: List<Binding>): CompiledDocument =
-            CompiledDocument(DocumentKind.PLATFORM, "", index(DocumentKind.PLATFORM, policies), bindings)
+        fun platform(policies: List<CompiledPolicy>, bindings: List<Binding>): CompiledDocument {
+            val index = index(DocumentKind.PLATFORM, policies)
+            BuiltinPolicies.control.forEach { index[it.id] = it }
+            return CompiledDocument(DocumentKind.PLATFORM, "", index, bindings)
+        }
 
         /** The document of [app]: its permission policies and role bindings (7.x app permissions and grants). */
         fun app(app: AppId, policies: List<CompiledPolicy>, bindings: List<Binding>): CompiledDocument =
@@ -214,7 +218,7 @@ class CompiledDocument private constructor(
         fun tenant(tenant: TenantId, policies: List<CompiledPolicy>, bindings: List<Binding>): CompiledDocument =
             CompiledDocument(DocumentKind.TENANT, tenant.value, index(DocumentKind.TENANT, policies), bindings)
 
-        private fun index(kind: DocumentKind, policies: List<CompiledPolicy>): Map<String, CompiledPolicy> {
+        private fun index(kind: DocumentKind, policies: List<CompiledPolicy>): HashMap<String, CompiledPolicy> {
             val index = HashMap<String, CompiledPolicy>(policies.size * 2)
             for (policy in policies) {
                 require(

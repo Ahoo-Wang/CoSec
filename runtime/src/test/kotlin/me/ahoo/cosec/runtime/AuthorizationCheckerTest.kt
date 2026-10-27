@@ -19,7 +19,9 @@ import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Resource
+import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.claims
@@ -45,9 +47,11 @@ class AuthorizationCheckerTest {
             (
                 """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","policies":[""" +
                     """{"id":"read","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/orders/**"}]},""" +
-                    """{"id":"order","statements":[{"effect":"allow","action":"order:read","resource":"order/{id}"}]}],""" +
+                    """{"id":"order","statements":[{"effect":"allow","action":"order:read","resource":"order/{id}"}]},""" +
+                    """{"id":"control","statements":[{"effect":"allow","action":"cosec:read","resource":"doc/**"}]}],""" +
                     """"bindings":[{"id":"g:read","subject":"*","app":"*","space":"*","policy":"read"},""" +
-                    """{"id":"g:order","subject":"*","app":"*","space":"*","policy":"order"}]}"""
+                    """{"id":"g:order","subject":"*","app":"*","space":"*","policy":"order"},""" +
+                    """{"id":"g:control","subject":"*","app":"cosec-control","space":"","policy":"control"}]}"""
                 ).encodeToByteArray(),
         ),
     )
@@ -103,6 +107,20 @@ class AuthorizationCheckerTest {
         context.tenant.tenantId.assert().isEqualTo(PipelineFixtures.TENANT.value)
         context.scope!!.appId.assert().isEmpty()
         context.scope!!.roles.assert().isEmpty()
+    }
+
+    @Test
+    fun decidesInTheDefaultSpaceOfAnotherApp() = runBlocking<Unit> {
+        val security = permitted()
+        val control = AppId("cosec-control")
+        val read = Action("cosec", "read")
+        val doc = Resource("doc", "tenant/a", emptyMap())
+        // Bound in the control app only: not in the request's own scope, but in the control app's default space.
+        checker.check(security, read, doc).assert().isFalse()
+        checker.decide(security, control, read, doc).assert().isInstanceOf(Decision.Permit::class.java)
+        checker.decide(security, control, Action("cosec", "write"), doc).assert().isEqualTo(Decision.Deny(null))
+        views.fail = true
+        checker.decide(security, control, read, doc).assert().isInstanceOf(Decision.Indeterminate::class.java)
     }
 
     @Test

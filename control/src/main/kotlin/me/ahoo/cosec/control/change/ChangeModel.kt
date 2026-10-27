@@ -155,11 +155,29 @@ data class ChangeRequest(
     val skipShadow: String? = null,
     /** The revision it published; set once [state] is [ChangeState.PUBLISHED]. */
     val publishedRevision: Long? = null,
+    /** What needs approval before it publishes (RFC 0007 §7.5): its author's last check found these. */
+    val escalations: List<Escalation> = emptyList(),
+    /** The approval it has; `null` until one is given, and again after anything it was given for changes. */
+    val approval: Approval? = null,
 ) {
     val errors: List<Finding> get() = findings.filter { it.severity == Severity.ERROR }
 }
 
 /** Where a document's staging slot is (RFC 0007 §5.5): the change holding it, `null` when it is free. */
+/**
+ * What one person cannot publish alone (RFC 0007 §7.5): a granted fragment the grant analysis could not prove contained
+ * ([reason] `NOT_COVERED`, `DENY_OVERLAP`, `CROSS_TENANT`), a change to a document it does not analyze
+ * (`NOT_ANALYZED`), or a break-glass binding (`BREAK_GLASS`, RFC 0007 §8). [subject] names the fragment or entry; an
+ * approval covers the escalations whose subjects it lists.
+ */
+data class Escalation(val subject: String, val reason: String, val detail: String = "")
+
+/**
+ * An approval (RFC 0007 §7.5): by [approver], at [at], of the change whose candidate digest was [candidate], covering
+ * the escalation subjects [covers]. It is valid for `cosec.control.approval.expire-after` from [at].
+ */
+data class Approval(val approver: Actor, val at: Instant, val candidate: String, val covers: List<String>)
+
 data class StageSlot(val holder: ChangeId?, val since: Instant?) {
     companion object {
         val FREE: StageSlot = StageSlot(null, null)
