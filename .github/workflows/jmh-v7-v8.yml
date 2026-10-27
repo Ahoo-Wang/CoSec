@@ -1,0 +1,191 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Manual 7.x vs 8.0 performance comparison, in one job on one runner, alternating 7.x, 8.0, 7.x, 8.0, ...
+# RFC 0008 §3.8: 8.0 must be at least as fast as 7.x in every scenario. The maintainer decided (2026-10-27) that this
+# run is that gate: the job FAILS when any scenario's median 8.0/7.x speed ratio is below the threshold, so the run
+# link is the evidence. Only ratios are meaningful on a shared runner.
+#
+# 7.x side: `v7-ref`'s cosec-core jmhJar plus docs/perf/e2e-slice/SecurityPipelineBenchmark-v7.0.1.kt (taken from
+# `v8-ref`), which is not part of any 7.x tag. 8.0 side: the e2e and engine jmhJars of `v8-ref`.
+# Scenario mapping and details: scripts/jmh-v7-v8/compare.py.
+name: JMH 7.x vs 8.0
+on:
+  workflow_dispatch:
+    inputs:
+      v7-ref:
+        description: '7.x tag, branch or SHA'
+        required: true
+        default: 'v7.0.2'
+      v8-ref:
+        description: '8.0 ref (branch, tag or SHA)'
+        required: true
+        default: 'main'
+      include:
+        description: 'Regex over the benchmark class names to run (pairs: SecurityPipelineBenchmark/PipelineBenchmark, SimpleAuthorizationBenchmark/FlatAuthorizationBenchmark)'
+        required: true
+        default: 'SecurityPipelineBenchmark|PipelineBenchmark|SimpleAuthorizationBenchmark|FlatAuthorizationBenchmark'
+      scenarios:
+        description: 'Scenarios (anonymous exists only for the pipeline pair)'
+        required: true
+        default: 'global,role,none,anonymous'
+      threshold:
+        description: 'Minimum median 8.0/7.x speed ratio in percent for PASS'
+        required: true
+        default: '100'
+      rounds:
+        description: 'Alternating rounds (each runs 7.x, then 8.0)'
+        required: true
+        default: '3'
+      forks:
+        description: 'JMH forks (-f)'
+        required: true
+        default: '2'
+      warmup:
+        description: 'JMH warm-up iterations (-wi)'
+        required: true
+        default: '5'
+      iterations:
+        description: 'JMH measurement iterations (-i)'
+        required: true
+        default: '5'
+      warmup-time:
+        description: 'JMH warm-up time per iteration (-w)'
+        required: true
+        default: '1s'
+      measurement-time:
+        description: 'JMH measurement time per iteration (-r)'
+        required: true
+        default: '2s'
+
+permissions:
+  contents: read
+
+jobs:
+  jmh-v7-v8:
+    name: JMH 7.x vs 8.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    # The 8.0 end-to-end benchmark loads its documents into Redis in setup, as its tests do.
+    services:
+      redis:
+        image: redis
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    env:
+      V7_REF: ${{ inputs.v7-ref }}
+      V8_REF: ${{ inputs.v8-ref }}
+      INCLUDE: ${{ inputs.include }}
+      SCENARIOS: ${{ inputs.scenarios }}
+      THRESHOLD: ${{ inputs.threshold }}
+      ROUNDS: ${{ inputs.rounds }}
+      FORKS: ${{ inputs.forks }}
+      WARMUP: ${{ inputs.warmup }}
+      ITERATIONS: ${{ inputs.iterations }}
+      WARMUP_TIME: ${{ inputs.warmup-time }}
+      MEASUREMENT_TIME: ${{ inputs.measurement-time }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Both sides compile for 17 (Gradle toolchain); the benchmark JVMs run on 25 (RFC 0008 §3.8). 17 is listed last so it
+      # is JAVA_HOME.
+      - name: Set up JDK 25 and 17
+        uses: actions/setup-java@v6
+        with:
+          java-version: |
+            25
+            17
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Check out both refs
+        run: |
+          for side in v7 v8; do
+            ref_var="${side^^}_REF"; ref="${!ref_var}"
+            git worktree add --detach "$RUNNER_TEMP/$side" "origin/$ref" 2>/dev/null || git worktree add --detach "$RUNNER_TEMP/$side" "$ref"
+            echo "$side: $ref = $(git -C "$RUNNER_TEMP/$side" rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+          # Keep the scripts independent of the refs under test.
+          mkdir -p "$RUNNER_TEMP/scripts" "$RUNNER_TEMP/results"
+          cp "$GITHUB_WORKSPACE"/scripts/jmh-v7-v8/* "$GITHUB_WORKSPACE"/scripts/jmh-ab/estimate.py "$RUNNER_TEMP/scripts/"
+
+      # 7.x has no pipeline benchmark: the 8.0 ref carries the one written for the 7.0.1 comparison.
+      - name: Add the pipeline benchmark to the 7.x tree
+        run: |
+          src=docs/perf/e2e-slice/SecurityPipelineBenchmark-v7.0.1.kt
+          [ -f "$RUNNER_TEMP/v8/$src" ] || cp "$GITHUB_WORKSPACE/$src" "$RUNNER_TEMP/v8/$src"
+          dest="$RUNNER_TEMP/v7/cosec-core/src/jmh/kotlin/me/ahoo/cosec/pipeline"
+          mkdir -p "$dest"
+          cp "$RUNNER_TEMP/v8/$src" "$dest/SecurityPipelineBenchmark.kt"
+
+      - name: Build the 7.x benchmark jar
+        working-directory: ${{ runner.temp }}/v7
+        run: ./gradlew :cosec-core:jmhJar --no-daemon
+
+      # `cosec-core` on 8.0 still carries the 7.x authorization path; it is not measured, the engine's is.
+      - name: Build the 8.0 benchmark jars
+        working-directory: ${{ runner.temp }}/v8
+        run: ./gradlew :e2e:jmhJar :engine:jmhJar --no-daemon
+
+      - name: Run settings
+        run: |
+          {
+            echo "### Settings"
+            echo "include \`$INCLUDE\`, scenarios \`$SCENARIOS\`, threshold $THRESHOLD %, $ROUNDS rounds, -f $FORKS -wi $WARMUP -i $ITERATIONS -w $WARMUP_TIME -r $MEASUREMENT_TIME, \`-prof gc\`, JDK 25"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Every @Param combination runs once per side and round. Narrow `scenarios` or `include`, or lower rounds/forks,
+      # when this exceeds the limit.
+      - name: Estimate run time
+        env:
+          V7_DIR: ${{ runner.temp }}/v7
+          V8_DIR: ${{ runner.temp }}/v8
+          RESULTS: ${{ runner.temp }}/results
+          SCRIPTS: ${{ runner.temp }}/scripts
+        run: |
+          export JAVA25="$JAVA_HOME_25_X64/bin/java"
+          "$SCRIPTS/run.sh" estimate 2> "$RESULTS/estimate.err" | tee -a "$GITHUB_STEP_SUMMARY"
+          minutes=$(sed -n 's/^minutes=//p' "$RESULTS/estimate.err")
+          if [ "${minutes:-0}" -gt 95 ]; then
+            echo "::error::estimated $minutes minutes exceeds the job limit; narrow include/scenarios or lower rounds/forks"
+            exit 1
+          fi
+
+      - name: Run alternating rounds
+        env:
+          V7_DIR: ${{ runner.temp }}/v7
+          V8_DIR: ${{ runner.temp }}/v8
+          RESULTS: ${{ runner.temp }}/results
+          SCRIPTS: ${{ runner.temp }}/scripts
+        run: |
+          export JAVA25="$JAVA_HOME_25_X64/bin/java"
+          "$SCRIPTS/run.sh" run
+
+      - name: Summarize
+        run: python3 -I "$RUNNER_TEMP/scripts/compare.py" "$RUNNER_TEMP/results" --threshold "$THRESHOLD" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload raw JMH JSON
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jmh-v7-v8-${{ github.run_id }}
+          path: ${{ runner.temp }}/results/*.json
