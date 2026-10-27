@@ -24,7 +24,8 @@ import statistics
 import sys
 from pathlib import Path
 
-ALLOC = "·gc.alloc.rate.norm"
+# JMH before 1.37 names it "·gc.alloc.rate.norm", later versions without the dot.
+ALLOC_KEYS = ("gc.alloc.rate.norm", "·gc.alloc.rate.norm")
 # Modes whose score grows with speed; for the others a ratio above 100 % is slower.
 HIGHER_IS_BETTER = {"thrpt"}
 
@@ -34,7 +35,8 @@ def load(path):
     out = {}
     for e in json.loads(path.read_text()):
         key = (e["benchmark"], tuple(sorted((e.get("params") or {}).items())))
-        alloc = (e.get("secondaryMetrics") or {}).get(ALLOC, {}).get("score")
+        secondary = e.get("secondaryMetrics") or {}
+        alloc = next((secondary[k].get("score") for k in ALLOC_KEYS if k in secondary), None)
         pm = e["primaryMetric"]
         out[key] = (e["mode"], pm["score"], pm["scoreUnit"], alloc)
     return out
@@ -108,7 +110,7 @@ def main():
     print(
         "\nRatios are head ÷ base from the same job and runner, rounds alternating base, head, base, head, …\n"
         "For `thrpt` a ratio below 100 % means head is slower; for `avgt`, `sample` and `ss` a ratio above 100 % does.\n"
-        "B/op is the mean `·gc.alloc.rate.norm` across rounds. **This is a first signal only**: the hard performance\n"
+        "B/op is the mean `gc.alloc.rate.norm` across rounds. **This is a first signal only**: the hard performance\n"
         "gate at switch S1 (RFC 0008 §3.8/§3.9) is measured on an idle machine."
     )
 
