@@ -17,6 +17,7 @@ import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ForeignFormatMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
+import me.ahoo.cosec.cache.control.ControlCacheSpecs
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -40,6 +41,11 @@ class CacheTtlPolicyTest {
         CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME to CoSecCacheSpecs.appPermission(codec(), policy = weakened).policy,
         CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME to CoSecCacheSpecs.rolePermission(codec(), policy = weakened).policy,
         CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME to CoSecCacheSpecs.policySnapshot(policy = weakened).policy,
+        // RFC 0007 §5.2: the control plane's records, indexes, back-references and leases.
+        CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME to ControlCacheSpecs.revisionRecord(policy = weakened).policy,
+        CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME to ControlCacheSpecs.revisionIndex(policy = weakened).policy,
+        CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME to ControlCacheSpecs.referenceIndex(policy = weakened).policy,
+        CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME to ControlCacheSpecs.lease(policy = weakened).policy,
     )
 
     private inline fun <reified V : Any> codec() = CoSecCacheSpecs.jacksonCodec<V>(CoSecJsonSerializer)
@@ -52,6 +58,20 @@ class CacheTtlPolicyTest {
             policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
             policy.foreignFormat.assert().isEqualTo(ForeignFormatMode.FAIL)
         }
+    }
+
+    @Test
+    fun controlCachesLiveUnderTheirOwnNamespaces() {
+        ControlCacheSpecs.revisionRecord().namespace.assert().isEqualTo("cosec:control:revision")
+        ControlCacheSpecs.revisionIndex("other:").namespace.assert().isEqualTo("other:control:revisions")
+        ControlCacheSpecs.referenceIndex().namespace.assert().isEqualTo("cosec:control:refs")
+        ControlCacheSpecs.lease().namespace.assert().isEqualTo("cosec:control:lease")
+        listOf(
+            CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME,
+            CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME,
+            CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
+            CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME,
+        ).forEach { CoSecCacheSpecs.pinnedPolicy(it, weakened).ttl.assert().isNull() }
     }
 
     @Test

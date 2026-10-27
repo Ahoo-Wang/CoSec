@@ -1,0 +1,67 @@
+{
+  "rules": [
+    "ATR-2"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "An ALLOW is skipped because its attribute is unavailable, and another ALLOW matches: the request is permitted.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "in-fence",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.geo.inFence",
+                  true
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:in-fence",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "in-fence"
+        },
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.inFence": "bool"
+      },
+      "fails": "geo is down"
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

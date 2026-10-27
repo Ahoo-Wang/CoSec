@@ -58,6 +58,8 @@ class ConditionChecker(
     val limits: ConditionLimits = ConditionLimits.DEFAULT,
     /** Resolves `time` zones. Region zones need the host's resolver ([ZoneResolver.withRegions]). */
     val zones: ZoneResolver = ZoneResolver.FIXED,
+    /** The external attributes the registered providers declare (RFC 0006 §5.4.1). */
+    val catalog: AttributeCatalog = AttributeCatalog.NONE,
 ) {
     fun check(condition: Condition): CheckResult {
         val run = Run()
@@ -300,7 +302,12 @@ class ConditionChecker(
         /** Paths take names (`subject.attributes.<name>`), so they are bounded like literals. */
         private fun attribute(path: String, at: String): Attribute? {
             string(path, at) ?: return null
-            return Attribute.parse(path) ?: null.also { error(at, "unknown attribute `$path`") }
+            Attribute.parse(path)?.let { return it }
+            if (Attribute.isExternalPath(path)) {
+                return catalog.external(path)
+                    ?: null.also { error(at, "external attribute `$path` is not declared by any registered AttributeProvider") }
+            }
+            return null.also { error(at, "unknown attribute `$path`") }
         }
 
         private fun strings(values: List<Literal>, path: String, attribute: Attribute): List<String>? {

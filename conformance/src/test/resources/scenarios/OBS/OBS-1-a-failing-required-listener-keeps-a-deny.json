@@ -1,0 +1,59 @@
+{
+  "rules": [
+    "OBS-1"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "A DENY matches and the REQUIRED audit listener fails: the 403 stays a 403 (Q18).",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "deny-all",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        },
+        {
+          "id": "g:deny-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "deny-all"
+        }
+      ]
+    }
+  },
+  "listeners": [
+    {
+      "name": "audit",
+      "delivery": "required",
+      "fails": "audit store down"
+    }
+  ],
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

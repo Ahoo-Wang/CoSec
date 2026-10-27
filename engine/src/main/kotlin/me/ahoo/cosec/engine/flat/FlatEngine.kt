@@ -37,6 +37,13 @@ interface FlatEngine {
      * [IllegalArgumentException] when [snapshot] holds an app or tenant document of another scope than the request's.
      */
     fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel = TraceLevel.OFF): FlatEvaluation
+
+    /**
+     * The external attributes evaluating [request] against [snapshot] may read (RFC 0006 §5.4.2): what the pipeline
+     * fetches before [evaluate]. Pure, like [evaluate]; [FlatRequest.external] is not read. Empty when no document of
+     * [snapshot] reads an external attribute.
+     */
+    fun plan(request: FlatRequest, snapshot: SnapshotView): AttributePlan = CoSecFlatEngine.plan(request, snapshot)
 }
 
 /**
@@ -60,6 +67,8 @@ class FlatRequest(
     val time: Long,
     /** The host's attributes. Must keep the [ConditionInput] contract: reads never throw. */
     val attributes: ConditionInput = AbsentAttributes,
+    /** The external attributes fetched for the [AttributePlan] (RFC 0006 §5.4); none by default. */
+    val external: ExternalValues = ExternalValues.NONE,
 )
 
 /** A host that has no attributes of its own: every read is absent. */
@@ -90,6 +99,14 @@ object CoSecFlatEngine : FlatEngine {
             return untraced(FlatEvaluator(request, snapshot).evaluate())
         }
         return FlatTracingEvaluator(request, snapshot, trace).evaluateTraced()
+    }
+
+    override fun plan(request: FlatRequest, snapshot: SnapshotView): AttributePlan {
+        snapshot.checkScope(request.scope)
+        if (!snapshot.readsExternal) {
+            return AttributePlan.EMPTY
+        }
+        return FlatPlanner(request, snapshot).plan()
     }
 
     internal fun untraced(decision: Decision): FlatEvaluation =

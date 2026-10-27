@@ -1,0 +1,43 @@
+{
+  "rules": [
+    "OBS-1"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "An ALLOW matches and the REQUIRED audit listener fails: the permit cannot be audited, 503.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "listeners": [
+    {
+      "name": "audit",
+      "delivery": "required",
+      "fails": "audit store down"
+    }
+  ],
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

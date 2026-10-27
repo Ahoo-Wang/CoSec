@@ -47,6 +47,10 @@
           },
           "type": "array"
         },
+        "provenance": {
+          "$ref": "#/definitions/provenance",
+          "description": "Where the revision came from (RFC 0007 §5.3); the control plane writes it on every publish."
+        },
         "publishedAt": {
           "examples": [
             "2026-10-26T00:00:00Z"
@@ -75,7 +79,7 @@
       "additionalProperties": false,
       "properties": {
         "attr": {
-          "description": "An attribute of the catalog (RFC 0005 §3.2).",
+          "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
           "examples": [
             "subject.id",
             "subject.authenticated",
@@ -106,7 +110,7 @@
               "additionalItems": false,
               "items": [
                 {
-                  "description": "An attribute of the catalog (RFC 0005 §3.2).",
+                  "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
                   "examples": [
                     "subject.id",
                     "subject.authenticated",
@@ -200,7 +204,7 @@
                       "type": "array"
                     },
                     {
-                      "description": "An attribute of the catalog (RFC 0005 §3.2).",
+                      "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
                       "examples": [
                         "subject.id",
                         "subject.authenticated",
@@ -240,7 +244,7 @@
               "additionalItems": false,
               "items": [
                 {
-                  "description": "An attribute of the catalog (RFC 0005 §3.2).",
+                  "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
                   "examples": [
                     "subject.id",
                     "subject.authenticated",
@@ -280,7 +284,7 @@
               "additionalItems": false,
               "items": [
                 {
-                  "description": "An attribute of the catalog (RFC 0005 §3.2).",
+                  "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
                   "examples": [
                     "subject.id",
                     "subject.authenticated",
@@ -332,7 +336,7 @@
           "additionalProperties": false,
           "properties": {
             "exists": {
-              "description": "An attribute of the catalog (RFC 0005 §3.2).",
+              "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
               "examples": [
                 "subject.id",
                 "subject.authenticated",
@@ -416,6 +420,10 @@
             "$ref": "#/definitions/policy"
           },
           "type": "array"
+        },
+        "provenance": {
+          "$ref": "#/definitions/provenance",
+          "description": "Where the revision came from (RFC 0007 §5.3); the control plane writes it on every publish."
         },
         "publishedAt": {
           "examples": [
@@ -558,6 +566,134 @@
       ],
       "type": "object"
     },
+    "provenance": {
+      "additionalProperties": false,
+      "description": "The control plane's record of how a revision was published; it decides nothing.",
+      "properties": {
+        "approvedBy": {
+          "description": "Absent or empty without an approval.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "principal": {
+                "examples": [
+                  "alice",
+                  "ops-1"
+                ],
+                "minLength": 1,
+                "type": "string"
+              },
+              "tenant": {
+                "examples": [
+                  "acme",
+                  "(platform)"
+                ],
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "tenant",
+              "principal"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "change": {
+          "examples": [
+            "0QH8K3"
+          ],
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "PUBLISH",
+            "ROLLBACK",
+            "BREAK_GLASS",
+            "EXPIRE",
+            "MIGRATE",
+            "BOOTSTRAP"
+          ],
+          "type": "string"
+        },
+        "parent": {
+          "additionalProperties": false,
+          "description": "The head this revision replaced; absent for the first revision.",
+          "properties": {
+            "digest": {
+              "description": "The store's digest of the parent: the address of its revision record.",
+              "examples": [
+                "9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6"
+              ],
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            "revision": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "revision",
+            "digest"
+          ],
+          "type": "object"
+        },
+        "publishedBy": {
+          "additionalProperties": false,
+          "properties": {
+            "principal": {
+              "examples": [
+                "alice",
+                "ops-1"
+              ],
+              "minLength": 1,
+              "type": "string"
+            },
+            "tenant": {
+              "examples": [
+                "acme",
+                "(platform)"
+              ],
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "tenant",
+            "principal"
+          ],
+          "type": "object"
+        },
+        "shadow": {
+          "additionalProperties": false,
+          "properties": {
+            "skipped": {
+              "type": "boolean"
+            },
+            "window": {
+              "examples": [
+                "0QH8M1"
+              ],
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "skipped"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "change",
+        "kind",
+        "publishedBy"
+      ],
+      "type": "object"
+    },
     "resource": {
       "anyOf": [
         {
@@ -623,6 +759,15 @@
         "name": {
           "examples": [
             "read-orders"
+          ],
+          "type": "string"
+        },
+        "onMissing": {
+          "default": "indeterminate",
+          "description": "What an external attribute (ext.*) the condition reads that cannot be fetched means (RFC 0006 §5.4.3). Only for a condition that reads one; a DENY may say nomatch only in the platform document.",
+          "enum": [
+            "indeterminate",
+            "nomatch"
           ],
           "type": "string"
         },

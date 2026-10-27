@@ -1,0 +1,39 @@
+{
+  "rules": [
+    "BLK-2"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The blacklist cannot be read: never \"not blocked\", so 503 though an ALLOW matches.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "blacklist": {
+    "fails": "blacklist is down"
+  },
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "rules": [
+    "ATR-1"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The provider answers a string for a bool attribute: unavailable, never absent and never a Permit.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "in-fence",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.geo.inFence",
+                  true
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:in-fence",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "in-fence"
+        }
+      ]
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.inFence": "bool"
+      },
+      "values": {
+        "ext.geo.inFence": "yes"
+      }
+    }
+  ],
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

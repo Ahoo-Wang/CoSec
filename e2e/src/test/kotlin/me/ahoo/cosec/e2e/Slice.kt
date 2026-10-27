@@ -30,9 +30,11 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
@@ -62,14 +64,23 @@ class Slice(
     redisUri: String = REDIS,
     options: SnapshotOptions = SnapshotOptions(revalidateInterval = Duration.ofMillis(200)),
     val keyPrefix: String = "e2e:${UUID.randomUUID()}",
+    /** The external attribute providers: the documents compile against their catalog, the pipeline fetches them. */
+    attributes: AttributeProviders = AttributeProviders.NONE,
+    /** The decision listeners; the slice closes them. */
+    private val listeners: DecisionListeners = DecisionListeners.NONE,
 ) : AutoCloseable {
     private val backend = RedisBackend.standalone(RedisURI.create(redisUri))
     private val runtime: CacheRuntime = CacheRuntime.builder().backend(backend).build()
     val cache: PolicySnapshotCache = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
     val store = RedisSnapshotDocumentStore(cache)
     val source: SnapshotSource<CompiledDocument, CompiledDocument> =
-        DocumentSnapshots.source(store, PolicyDocumentCompiler(), options)
-    val pipeline = Pipeline(TokenAuthenticator, SuspendingSnapshotSource(DocumentSnapshotViews(source)))
+        DocumentSnapshots.source(store, PolicyDocumentCompiler(attributes.catalog), options)
+    val pipeline = Pipeline(
+        TokenAuthenticator,
+        SuspendingSnapshotSource(DocumentSnapshotViews(source)),
+        attributes = attributes,
+        listeners = listeners,
+    )
     private val revisions = ConcurrentHashMap<SnapshotKey, Long>()
 
     /** Publishes the next revision of [key]: [body] is the document's sections after the header (RFC 0004 §7.1). */
@@ -83,6 +94,7 @@ class Slice(
     suspend fun evaluate(facts: HttpFacts): Outcome = pipeline.evaluate(facts)
 
     override fun close() {
+        listeners.cancel()
         source.close()
         runtime.close()
         backend.close()

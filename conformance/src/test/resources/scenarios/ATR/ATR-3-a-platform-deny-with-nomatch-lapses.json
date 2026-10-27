@@ -1,0 +1,68 @@
+{
+  "rules": [
+    "ATR-3"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The platform document's DENY says onMissing nomatch and its attribute is unavailable: the DENY lapses by design and the ALLOW permits.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "deny-in-fence",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.geo.inFence",
+                  true
+                ]
+              },
+              "onMissing": "nomatch"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        },
+        {
+          "id": "g:deny-in-fence",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "deny-in-fence"
+        }
+      ]
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.inFence": "bool"
+      },
+      "fails": "geo is down"
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

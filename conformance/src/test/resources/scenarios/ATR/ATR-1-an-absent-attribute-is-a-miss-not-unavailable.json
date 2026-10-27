@@ -1,0 +1,51 @@
+{
+  "rules": [
+    "ATR-1"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The provider answers without a value: the attribute is absent, the ALLOW does not match, the implicit deny is a 403.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "in-fence",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.geo.inFence",
+                  true
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:in-fence",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "in-fence"
+        }
+      ]
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.inFence": "bool"
+      },
+      "values": {}
+    }
+  ],
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

@@ -15,6 +15,7 @@ package me.ahoo.cosec.conformance
 
 import me.ahoo.cosec.CoSecException
 import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
@@ -54,14 +55,27 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
     private val compiler = PolicyDocumentCompiler()
     private val factory = JsonNodeFactory.instance
 
-    override fun compile(documents: ScenarioDocuments): CompiledSnapshot =
+    override fun compile(documents: ScenarioDocuments): CompiledSnapshot = compile(documents, compiler)
+
+    /** Compiles as this does, with the external attributes of [catalog] declared (RFC 0006 §5.4.1). */
+    fun with(catalog: AttributeCatalog): SnapshotCompiler =
+        PolicyDocumentCompiler(catalog).let { compiler -> SnapshotCompiler { compile(it, compiler) } }
+
+    private fun compile(documents: ScenarioDocuments, compiler: PolicyDocumentCompiler): CompiledSnapshot =
         CompiledSnapshot(
-            platform = compile(DocumentKind.PLATFORM, "", documents.platform),
-            apps = documents.apps.mapValues { (app, node) -> compile(DocumentKind.APP, app, node) },
-            tenants = documents.tenants.mapValues { (tenant, node) -> compile(DocumentKind.TENANT, tenant, node) },
+            platform = compile(compiler, DocumentKind.PLATFORM, "", documents.platform),
+            apps = documents.apps.mapValues { (app, node) -> compile(compiler, DocumentKind.APP, app, node) },
+            tenants = documents.tenants.mapValues { (tenant, node) ->
+                compile(compiler, DocumentKind.TENANT, tenant, node)
+            },
         )
 
-    private fun compile(kind: DocumentKind, owner: String, node: JsonNode?): CompiledDocument {
+    private fun compile(
+        compiler: PolicyDocumentCompiler,
+        kind: DocumentKind,
+        owner: String,
+        node: JsonNode?,
+    ): CompiledDocument {
         val name = if (kind == DocumentKind.PLATFORM) "platform" else "${kind.name.lowercase()} $owner"
         val body = (node?.deepCopy() ?: factory.objectNode()) as? ObjectNode
             ?: throw ScenarioFormatException("The $name document is not an object: $node")

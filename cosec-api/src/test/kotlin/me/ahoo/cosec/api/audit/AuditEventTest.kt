@@ -38,7 +38,7 @@ class AuditEventTest {
     fun auditDecisionValues() {
         val decisions = AuditDecision.entries.map { it.name }.toSet()
         decisions.assert().isEqualTo(
-            setOf("ALLOW", "EXPLICIT_DENY", "IMPLICIT_DENY", "TOO_MANY_REQUESTS", "ERROR"),
+            setOf("ALLOW", "EXPLICIT_DENY", "IMPLICIT_DENY", "TOO_MANY_REQUESTS", "ERROR", "INDETERMINATE"),
         )
     }
 
@@ -54,6 +54,10 @@ class AuditEventTest {
                 "TOO_MANY_REQUESTS",
                 "REGEX_TIMEOUT",
                 "ERROR",
+                "INDETERMINATE",
+                "SCOPE_REJECTED",
+                "RATE_LIMITER_UNAVAILABLE",
+                "TOKEN_REVOKED",
             ),
         )
     }

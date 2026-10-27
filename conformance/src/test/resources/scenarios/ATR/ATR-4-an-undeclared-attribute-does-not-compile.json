@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "ATR-4"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A policy reads ext.geo.inFence and no provider declares it: the document does not compile.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "in-fence",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.geo.inFence",
+                  true
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:in-fence",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "in-fence"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "not declared by any registered AttributeProvider"
+  }
+}
