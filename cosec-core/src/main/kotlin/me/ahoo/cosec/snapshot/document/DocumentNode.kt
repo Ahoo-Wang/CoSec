@@ -87,6 +87,14 @@ internal class DocumentNode(val json: JsonNode, val path: String) {
         return json.asLong()
     }
 
+    /** A finite number, integral or not. */
+    fun double(): Double {
+        if (!json.isNumber || !json.asDouble().isFinite()) {
+            fail("expected a number, found ${kind(json)}")
+        }
+        return json.asDouble()
+    }
+
     fun instant(): Instant =
         try {
             Instant.parse(text())

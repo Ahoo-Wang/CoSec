@@ -1,0 +1,71 @@
+{
+  "rules": [
+    "OBL-1"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A DENY matches and the rule's bucket is exhausted: the request is refused by the DENY (403), never counted, so never 429.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET",
+              "resource": "http:path:/orders/**"
+            }
+          ]
+        },
+        {
+          "id": "no-delete",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:DELETE",
+              "resource": "http:path:/orders/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        },
+        {
+          "id": "g:no-delete",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-delete"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "orders",
+          "action": "*",
+          "resource": "http:path:/orders/**",
+          "permitsPerSecond": 10
+        }
+      ]
+    }
+  },
+  "rateLimiter": {
+    "exhausted": [
+      "orders"
+    ]
+  },
+  "http": {
+    "method": "DELETE",
+    "path": "/orders/1"
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

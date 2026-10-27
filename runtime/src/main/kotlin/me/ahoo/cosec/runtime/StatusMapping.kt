@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.runtime.authn.AuthnResult
@@ -42,6 +43,8 @@ internal object StatusMapping {
         authn: AuthnResult,
         traceId: String?,
         security: RequestSecurity? = null,
+        /** The tightest rate limit a permit spent, for its `RateLimit-*` headers (RFC 0006 §8.3). */
+        rateLimit: RateLimitResult? = null,
     ): Outcome =
         when (decision) {
             is Decision.Permit -> Outcome(
@@ -49,7 +52,13 @@ internal object StatusMapping {
                 true,
                 requestId,
                 null,
-                requestIdHeader(requestId),
+                if (rateLimit == null) {
+                    requestIdHeader(
+                        requestId
+                    )
+                } else {
+                    requestIdHeader(requestId) + rateLimitHeaders(rateLimit)
+                },
                 Basis.Decided(decision),
                 checkNotNull(security) { "A permit must carry who may proceed." },
             )
@@ -57,6 +66,24 @@ internal object StatusMapping {
             is Decision.Indeterminate ->
                 unavailable(requestId, Unavailability.Indeterminate(decision.cause), traceId)
         }
+
+    /**
+     * 429 `too-many-requests`: [permit] stopped at rule [ruleId], whose bucket is exhausted (RFC 0006 §8.3). With the
+     * `RateLimit-*` headers of that rule and `Retry-After`.
+     */
+    fun tooManyRequests(
+        requestId: String,
+        permit: Decision.Permit,
+        ruleId: String,
+        result: RateLimitResult,
+        traceId: String?,
+    ): Outcome = problem(
+        ProblemType.TOO_MANY_REQUESTS,
+        requestId,
+        traceId,
+        Basis.RateLimited(permit, ruleId),
+        rateLimitHeaders(result),
+    )
 
     /** 503 `unavailable`: no decision could be made. Never with `Retry-After` (RFC 0006 Q1). */
     fun unavailable(requestId: String, reason: Unavailability, traceId: String?): Outcome =
@@ -81,15 +108,43 @@ internal object StatusMapping {
         AuthnResult.Anonymous, is AuthnResult.Unavailable -> ProblemType.UNAUTHORIZED
     }
 
-    private fun problem(type: ProblemType, requestId: String, traceId: String?, basis: Basis): Outcome = Outcome(
+    private fun problem(
+        type: ProblemType,
+        requestId: String,
+        traceId: String?,
+        basis: Basis,
+        extra: Map<String, String> = emptyMap(),
+    ): Outcome = Outcome(
         status = type.status,
         proceed = false,
         requestId = requestId,
         problem = Problem(type, requestId, traceId),
-        headers = mapOf(CoSecParameters.REQUEST_ID to requestId, CONTENT_TYPE to ProblemEncoder.MEDIA_TYPE),
+        headers = mapOf(CoSecParameters.REQUEST_ID to requestId, CONTENT_TYPE to ProblemEncoder.MEDIA_TYPE) + extra,
         basis = basis,
         security = null,
     )
+
+    /**
+     * `RateLimit-Limit`, `-Remaining` and `-Reset` of [result], and `Retry-After` when it was exhausted: the headers
+     * 7.x writes (`SecurityDecision.responseHeaders`), in seconds of at least 1.
+     */
+    private fun rateLimitHeaders(result: RateLimitResult): Map<String, String> {
+        val reset = result.resetAfter.toSeconds().coerceAtLeast(1).toString()
+        val headers = LinkedHashMap<String, String>(RATE_LIMIT_HEADERS)
+        headers[RATE_LIMIT_LIMIT] = result.limit.toString()
+        headers[RATE_LIMIT_REMAINING] = result.remaining.toString()
+        headers[RATE_LIMIT_RESET] = reset
+        if (!result.allowed) {
+            headers[RETRY_AFTER] = reset
+        }
+        return headers
+    }
+
+    const val RATE_LIMIT_LIMIT = "RateLimit-Limit"
+    const val RATE_LIMIT_REMAINING = "RateLimit-Remaining"
+    const val RATE_LIMIT_RESET = "RateLimit-Reset"
+    const val RETRY_AFTER = "Retry-After"
+    private const val RATE_LIMIT_HEADERS = 4
 
     private fun requestIdHeader(requestId: String): Map<String, String> = mapOf(CoSecParameters.REQUEST_ID to requestId)
 }

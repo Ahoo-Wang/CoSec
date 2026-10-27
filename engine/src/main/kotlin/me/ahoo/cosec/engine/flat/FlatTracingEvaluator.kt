@@ -49,7 +49,7 @@ internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, pr
         } else {
             pass = Effect.ALLOW
             enumerate()
-            allowDecision()
+            withObligations(allowDecision())
         }
         return FlatEvaluation(decision, FlatTrace(request.scope, candidates, expired, allUnresolved()))
     }
