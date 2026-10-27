@@ -1,0 +1,16 @@
+{
+  "id": "(bench)",
+  "name": "bench",
+  "category": "bench",
+  "description": "End-to-end baseline: lets anonymous requests to /bench/** through, like the JMH global scenario",
+  "type": "global",
+  "tenantId": "(platform)",
+  "statements": [
+    {
+      "name": "bench",
+      "action": [
+        "/bench/**"
+      ]
+    }
+  ]
+}

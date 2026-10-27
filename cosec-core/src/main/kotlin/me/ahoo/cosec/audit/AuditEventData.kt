@@ -23,6 +23,7 @@ import me.ahoo.cosec.api.audit.AuditPrincipal
 import me.ahoo.cosec.api.audit.AuditReasonCode
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.audit.AuditRole
+import me.ahoo.cosec.api.audit.AuditSnapshotVersion
 import me.ahoo.cosec.api.audit.AuditSource
 import me.ahoo.cosec.api.audit.AuditSourceType
 import me.ahoo.cosec.api.audit.AuditStatement
@@ -93,6 +94,12 @@ data class AuditTraceData(
     override val spanId: String,
 ) : AuditTrace
 
+data class AuditSnapshotVersionData(
+    override val platform: Long,
+    override val app: Long?,
+    override val tenant: Long?,
+) : AuditSnapshotVersion
+
 data class AuditEventData(
     override val eventId: String,
     override val timestamp: Instant,
@@ -101,4 +108,8 @@ data class AuditEventData(
     override val request: AuditRequestData,
     override val authorization: AuditAuthorizationData,
     override val trace: AuditTraceData?,
+    override val snapshotVersion: AuditSnapshotVersionData? = null,
+    override val binding: String? = null,
+    override val breakGlass: Boolean = false,
+    override val kind: String = "DECIDED",
 ) : AuditEvent

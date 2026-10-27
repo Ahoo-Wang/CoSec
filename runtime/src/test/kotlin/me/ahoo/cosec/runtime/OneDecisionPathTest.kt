@@ -42,6 +42,17 @@ class OneDecisionPathTest {
         .should().dependOnClassesThat().resideInAnyPackage(*DECISIONS)
         .because("adapters translate an Outcome; they never decide (RFC 0006 §6.3)")
 
+    /** §6.3: the bridges write `ProblemEncoder`'s bytes, never a body of their own. */
+    @ArchTest
+    val bridgesWriteOnlyEncodedProblems: ArchRule = noClasses()
+        .that().resideInAnyPackage(*ADAPTERS)
+        .and().haveSimpleNameStartingWith("Pipeline")
+        .or().haveSimpleNameStartingWith("ReactivePipelineBridge")
+        .should().dependOnClassesThat().resideInAnyPackage("tools.jackson..", "com.fasterxml.jackson..")
+        .orShould().dependOnClassesThat().haveFullyQualifiedName("org.springframework.http.ProblemDetail")
+        .orShould().dependOnClassesThat().haveFullyQualifiedName("me.ahoo.cosec.serialization.CoSecJsonSerializer")
+        .because("the problem body has one encoder, ProblemEncoder (RFC 0006 §6.2, §6.3)")
+
     private companion object {
         val ADAPTERS = arrayOf("me.ahoo.cosec.webflux..", "me.ahoo.cosec.servlet..", "me.ahoo.cosec.gateway..")
 

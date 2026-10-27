@@ -615,7 +615,10 @@
       "source": "RFC 0006 §9.3, §9.4",
       "statement": "No failure of a BEST_EFFORT listener changes the Outcome; a REQUIRED failure can only turn a Permit into 503.",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-6"
+      "guards": [
+        "runtime:ListenerIsolationTest"
+      ],
+      "pending": null
     },
     {
       "id": "CTL-1",
@@ -776,6 +779,16 @@
       "level": "pipeline",
       "guards": [
         "runtime:ExternalAttributesPipelineTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "OBS-2",
+      "source": "RFC 0006 §9.4.3 (Q20); RFC 0004 I9",
+      "statement": "A permit through a break-glass binding proceeds only when a REQUIRED listener recorded it; without one registered it is 503.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:BreakGlassAndShadowTest"
       ],
       "pending": null
     }

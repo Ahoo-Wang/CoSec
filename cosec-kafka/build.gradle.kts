@@ -15,4 +15,6 @@ dependencies {
     api(project(":cosec-api"))
     api("org.springframework.kafka:spring-kafka")
     implementation(project(":cosec-core"))
+    // KafkaAuditListener (RFC 0006 §9.5.3) is a decision listener of the coroutine pipeline.
+    api(project(":cosec-runtime"))
 }

@@ -34,6 +34,7 @@ import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
@@ -65,6 +66,8 @@ class Slice(
     val keyPrefix: String = "e2e:${UUID.randomUUID()}",
     /** The external attribute providers: the documents compile against their catalog, the pipeline fetches them. */
     attributes: AttributeProviders = AttributeProviders.NONE,
+    /** The decision listeners; the slice closes them. */
+    private val listeners: DecisionListeners = DecisionListeners.NONE,
 ) : AutoCloseable {
     private val backend = RedisBackend.standalone(RedisURI.create(redisUri))
     private val runtime: CacheRuntime = CacheRuntime.builder().backend(backend).build()
@@ -75,7 +78,8 @@ class Slice(
     val pipeline = Pipeline(
         TokenAuthenticator,
         SuspendingSnapshotSource(DocumentSnapshotViews(source)),
-        attributes = attributes
+        attributes = attributes,
+        listeners = listeners,
     )
     private val revisions = ConcurrentHashMap<SnapshotKey, Long>()
 
@@ -90,6 +94,7 @@ class Slice(
     suspend fun evaluate(facts: HttpFacts): Outcome = pipeline.evaluate(facts)
 
     override fun close() {
+        listeners.cancel()
         source.close()
         runtime.close()
         backend.close()
