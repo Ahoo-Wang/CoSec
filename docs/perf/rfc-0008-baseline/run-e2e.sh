@@ -10,15 +10,17 @@
 #      from the last sustained one; the highest sustained rate is the maximum throughput. Sustained = k6 dropped
 #      < 0.5 % of the iterations, failed requests < 0.1 %, and achieved rate >= 99 % of the target;
 #   3. ROUNDS runs of DURATION at 70 % of that maximum, recording p99.
-# Before every measured k6 run it waits until no JMH fork is running and the 1-minute load is below MAX_LOAD.
+# Before every measured k6 run it waits until no JMH fork is running, the 1-minute load is below MAX_LOAD and the
+# 5-minute load below MAX_LOAD5 (so a run does not start in a short lull between other work).
 # Needs Redis on localhost:6379; the gateway uses database REDIS_DB (15) so it stays out of the way of other users.
 #
 # Usage: docs/perf/rfc-0008-baseline/run-e2e.sh [output-dir]
-# Environment: SMOKE (start and check only), TAG (v7.0.1), JAVA (JDK 25 `java`), MAX_LOAD (1.5), START, STEP, FINE_STEP, STEP_DURATION, DURATION, ROUNDS.
+# Environment: SMOKE (start and check only), TAG (v7.0.1), JAVA (JDK 25 `java`), MAX_LOAD (1.5), MAX_LOAD5 (2.5), START, STEP, FINE_STEP, STEP_DURATION, DURATION, ROUNDS.
 set -euo pipefail
 
 TAG=${TAG:-v7.0.1}
 MAX_LOAD=${MAX_LOAD:-1.5}
+MAX_LOAD5=${MAX_LOAD5:-2.5}
 WARMUP_RATE=${WARMUP_RATE:-2000}
 START=${START:-5000}
 STEP=${STEP:-5000}
@@ -51,12 +53,14 @@ fi
 DIST=$SRC/cosec-gateway-server/build/install/cosec-gateway-server
 
 load1() { sysctl -n vm.loadavg 2>/dev/null | awk '{print $2}' || awk '{print $1}' /proc/loadavg; }
+load5() { sysctl -n vm.loadavg 2>/dev/null | awk '{print $3}' || awk '{print $2}' /proc/loadavg; }
 forks() { ps -axo command | awk '$1 ~ /\/java$/' | grep -c ForkedMain || true; }
 loadavg() { uptime | sed 's/.*load averages*: //'; }
 log() { echo "$(date -u +%FT%TZ) $*" | tee -a "$LOG"; }
 
 wait_idle() {
-  until [[ $(forks) -eq 0 ]] && awk -v l="$(load1)" -v m="$MAX_LOAD" 'BEGIN { exit !(l < m) }'; do
+  until [[ $(forks) -eq 0 ]] && awk -v l="$(load1)" -v m="$MAX_LOAD" -v l5="$(load5)" -v m5="$MAX_LOAD5" \
+    'BEGIN { exit !(l < m && l5 < m5) }'; do
     sleep 30
   done
 }
@@ -73,7 +77,7 @@ trap cleanup EXIT
   sw_vers 2>/dev/null || uname -a
 } | tee -a "$LOG"
 
-"$JAVA" "$HERE/e2e/Stub.java" "$STUB_PORT" >"$E2E/stub.log" 2>&1 &
+"$JAVA" -cp "$DIST/lib/*" "$HERE/e2e/Stub.java" "$STUB_PORT" >"$E2E/stub.log" 2>&1 &
 PIDS+=($!)
 
 # The distribution's own JVM flags (bin/cosec-gateway-server) minus JMX, GC logging and heap dumps.

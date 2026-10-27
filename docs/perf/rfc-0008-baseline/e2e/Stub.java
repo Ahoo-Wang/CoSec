@@ -11,30 +11,25 @@
  * limitations under the License.
  */
 
-import com.sun.net.httpserver.HttpServer;
-
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.Executors;
+import reactor.core.publisher.Mono;
+import reactor.netty.DisposableServer;
+import reactor.netty.http.server.HttpServer;
 
 /**
  * Stub upstream for the end-to-end baseline: answers every request with 200 and a fixed two-byte body, so the
- * gateway in front of it is the bottleneck. Run with `java Stub.java [port]` (JDK 21+).
+ * gateway in front of it is the bottleneck. Reactor Netty, from the gateway distribution's own classpath:
+ * `java -cp "<dist>/lib/*" Stub.java [port]`. (The JDK HttpServer reset the gateway's pooled connections above
+ * about 17,000 requests per second.)
  */
 public class Stub {
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         int port = args.length > 0 ? Integer.parseInt(args[0]) : 18081;
-        byte[] body = "ok".getBytes(StandardCharsets.US_ASCII);
-        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 4096);
-        server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
-        server.createContext("/", exchange -> {
-            exchange.getRequestBody().readAllBytes();
-            exchange.getResponseHeaders().set("Content-Type", "text/plain");
-            exchange.sendResponseHeaders(200, body.length);
-            exchange.getResponseBody().write(body);
-            exchange.close();
-        });
-        server.start();
+        DisposableServer server = HttpServer.create()
+            .host("127.0.0.1")
+            .port(port)
+            .handle((request, response) -> response.header("Content-Type", "text/plain").sendString(Mono.just("ok")))
+            .bindNow();
         System.out.println("stub listening on " + port);
+        server.onDispose().block();
     }
 }
