@@ -752,6 +752,47 @@
       "pending": null
     },
     {
+      "id": "CTL-10",
+      "source": "RFC 0007 §6.4, Q1",
+      "statement": "A staged change's shadow window closes only when the instances' samples that compared (not BASE_MISMATCH) reach the minimum after the minimum duration, or at the maximum duration as insufficient; a change still shadowing never publishes.",
+      "level": "control",
+      "guards": [
+        "control:ShadowWindowTest#two instances sample a window that closes from their reports, and the publisher acknowledges it",
+        "control:ShadowWindowTest#a window without enough samples closes at its longest as insufficient"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-11",
+      "source": "RFC 0007 §6.4",
+      "statement": "A window that saw WIDENED, NARROWED or BECAME_INDETERMINATE requests, or closed with insufficient samples, publishes only when the publisher acknowledges exactly its window and counts.",
+      "level": "control",
+      "guards": [
+        "control:ShadowWindowTest#two instances sample a window that closes from their reports, and the publisher acknowledges it"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-12",
+      "source": "RFC 0007 §6.3, §6.4",
+      "statement": "A candidate that an instance cannot compile or evaluate (CANDIDATE_ERROR) closes the window at once, and the change never publishes.",
+      "level": "control",
+      "guards": [
+        "control:ShadowWindowTest#a candidate an instance cannot compile closes the window at once and never publishes"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-13",
+      "source": "RFC 0007 §6.4, Q1, Q12",
+      "statement": "Creating or revoking a break-glass binding has no shadow window; any other change skips its window only with cosec:skip-shadow and a recorded reason.",
+      "level": "control",
+      "guards": [
+        "control:ShadowWindowTest#break-glass has no window, and skipping one needs a reason that is recorded"
+      ],
+      "pending": null
+    },
+    {
       "id": "GRT-1",
       "source": "RFC 0007 §7.4.2",
       "statement": "Every granted fragment is contained in one of the grantor's own ALLOWs and overlaps no non-Anyone DENY the grantor is subject to.",

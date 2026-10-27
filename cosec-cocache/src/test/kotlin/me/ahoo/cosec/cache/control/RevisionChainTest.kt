@@ -169,6 +169,13 @@ class RevisionChainTest {
             { me.ahoo.cosec.control.change.ChangeId("rc${ids.incrementAndGet()}") },
             // The change flow across instances, not authorization: every action is permitted.
             { _, _, _ -> me.ahoo.cosec.control.authz.ControlDecision.PERMIT },
+            options = me.ahoo.cosec.control.change.ChangeOptions(
+                shadow = me.ahoo.cosec.control.change.ShadowOptions(
+                    java.time.Duration.ZERO,
+                    0,
+                    java.time.Duration.ZERO
+                ),
+            ),
         )
         val one = changes(firstNode, first)
         val two = changes(secondNode, second)

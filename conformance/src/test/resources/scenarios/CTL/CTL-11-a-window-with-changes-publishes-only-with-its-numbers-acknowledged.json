@@ -1,0 +1,80 @@
+{
+  "rules": [
+    "CTL-11"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "The window saw NARROWED requests: publishing without an acknowledgement, or acknowledging other numbers, is refused (428); acknowledging the summary publishes.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "NARROWED": 2,
+          "SAME": 5
+        }
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "ack": {
+          "NARROWED": 1,
+          "SAME": 5
+        }
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "ack": "summary"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "READY",
+      "refused 428",
+      "refused 428",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

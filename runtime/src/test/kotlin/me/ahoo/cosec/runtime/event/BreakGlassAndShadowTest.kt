@@ -26,7 +26,6 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.decision.Cause
-import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.runtime.Basis
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.PipelineFixtures
@@ -34,9 +33,12 @@ import me.ahoo.cosec.runtime.Unavailability
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.runtime.shadow.Candidate
+import me.ahoo.cosec.runtime.shadow.CandidateSource
+import me.ahoo.cosec.runtime.shadow.ShadowOutcome
+import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.shadow.ShadowDiffKind
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
@@ -207,25 +209,32 @@ class BreakGlassAndShadowTest {
 
     // --- shadow ------------------------------------------------------------------------------------------------
 
-    private class Diffs : ShadowDecisionSink {
-        val diffs = CopyOnWriteArrayList<ShadowDecisionDiff>()
+    private val recorder = ShadowRecorder("instance-1")
 
-        override fun publish(diff: ShadowDecisionDiff) {
-            diffs += diff
+    /** The platform candidate of window `w`, made on [base] (the views install revision 7). */
+    private fun candidate(document: CompiledDocument, base: Long = 7) = CandidateSource { key ->
+        if (key == SnapshotKey.Platform) Candidate.Ready("w", base, document) else null
+    }
+
+    private fun counts(): Map<ShadowOutcome, Long> = runBlocking {
+        withTimeout(5.seconds) {
+            while (recorder.reports().isEmpty()) {
+                delay(5)
+            }
         }
+        recorder.reports().single().counts
     }
 
     @Test
     fun aSampledRequestIsEvaluatedAgainstTheCandidates() {
         val enforced = compile(""","policies":[$allowAll],"bindings":[$anyone]""")
-        val candidate = compile("")
-        val diffs = Diffs()
-        val shadow = ShadowListener("shadow", 1.0, { view -> SnapshotView(candidate, view.app, view.tenant) }, diffs)
+        val shadow = ShadowListener("shadow", 1.0, candidate(compile("")), recorder)
         evaluate(enforced, shadow).status.assert().isEqualTo(200)
-        val diff = eventually({ diffs.diffs }).single()
-        diff.kind.assert().isEqualTo(ShadowDiffKind.NARROWED)
-        diff.candidate.assert().isEqualTo(Decision.Deny(null))
-        diff.principal.assert().isEqualTo("cosec")
+        counts().assert().isEqualTo(mapOf(ShadowOutcome.NARROWED to 1L))
+        val sample = recorder.reports().single().samples.getValue(ShadowOutcome.NARROWED).single()
+        sample.principal.assert().isEqualTo("cosec")
+        sample.candidateBy.assert().isNull()
+        sample.enforcedBy!!.assert().startsWith("allow-all[0]")
     }
 
     @Test
@@ -237,10 +246,41 @@ class BreakGlassAndShadowTest {
                 """"condition":{"eq":["ext.geo.inFence",true]}}]}],"bindings":[$anyone]""",
             catalog,
         )
-        val diffs = Diffs()
-        val shadow = ShadowListener("shadow", 1.0, { view -> SnapshotView(candidate, view.app, view.tenant) }, diffs)
-        evaluate(enforced, shadow)
-        eventually({ diffs.diffs }).single().kind.assert().isEqualTo(ShadowDiffKind.CANDIDATE_INDETERMINATE)
+        evaluate(enforced, ShadowListener("shadow", 1.0, candidate(candidate), recorder))
+        counts().assert().isEqualTo(mapOf(ShadowOutcome.CANDIDATE_INDETERMINATE to 1L))
+    }
+
+    @Test
+    fun aCandidateOnAnotherBaseIsNotCompared() {
+        val enforced = compile(""","policies":[$allowAll],"bindings":[$anyone]""")
+        evaluate(enforced, ShadowListener("shadow", 1.0, candidate(compile(""), base = 6), recorder))
+        counts().assert().isEqualTo(mapOf(ShadowOutcome.BASE_MISMATCH to 1L))
+        recorder.reports().single().samples.assert().isEmpty()
+    }
+
+    @Test
+    fun aCandidateThatDoesNotCompileIsAnError() {
+        val enforced = compile(""","policies":[$allowAll],"bindings":[$anyone]""")
+        val failed = CandidateSource { key ->
+            if (key == SnapshotKey.Platform) {
+                Candidate.Failed(
+                    "w",
+                    IllegalStateException("x")
+                )
+            } else {
+                null
+            }
+        }
+        evaluate(enforced, ShadowListener("shadow", 1.0, failed, recorder)).status.assert().isEqualTo(200)
+        counts().assert().isEqualTo(mapOf(ShadowOutcome.CANDIDATE_ERROR to 1L))
+    }
+
+    @Test
+    fun theSameDecisionIsCountedWithoutASample() {
+        val enforced = compile(""","policies":[$allowAll],"bindings":[$anyone]""")
+        evaluate(enforced, ShadowListener("shadow", 1.0, candidate(enforced), recorder))
+        counts().assert().isEqualTo(mapOf(ShadowOutcome.SAME to 1L))
+        recorder.reports().single().samples.assert().isEmpty()
     }
 
     /** The replay handle keeps a view reachable: an unsampled request's event has none. */
@@ -248,10 +288,10 @@ class BreakGlassAndShadowTest {
     fun anUnsampledRequestCarriesNoReplay() {
         val enforced = compile(""","policies":[$allowAll],"bindings":[$anyone]""")
         val probe = Recording("probe", Delivery.BEST_EFFORT)
-        val shadow = ShadowListener("shadow", 0.0, { error("never asked") }, Diffs())
+        val shadow = ShadowListener("shadow", 0.0, { error("never asked") }, recorder)
         evaluate(enforced, shadow, probe)
         eventually({ probe.events }).single().replay.assert().isNull()
-        val sampled = ShadowListener("sampled", 1.0, { null }, Diffs())
+        val sampled = ShadowListener("sampled", 1.0, { null }, recorder)
         val sampledProbe = Recording("probe", Delivery.BEST_EFFORT)
         evaluate(enforced, sampled, sampledProbe)
         eventually({ sampledProbe.events }).single().replay!!.sampledBy.assert().containsExactly("sampled")

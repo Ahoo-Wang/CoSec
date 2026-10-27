@@ -1,0 +1,118 @@
+{
+  "rules": [
+    "CTL-10"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Three samples, but only 14 minutes; then 15 minutes, but BASE_MISMATCH reports are no samples: the window stays open, and a change still shadowing does not publish.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT15M",
+      "minSamples": 3,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "NARROWED": 3
+        }
+      }
+    },
+    {
+      "advance": "PT14M"
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c2"
+    },
+    {
+      "report": {
+        "change": "c2",
+        "instance": "i1",
+        "counts": {
+          "BASE_MISMATCH": 5,
+          "SAME": 2
+        }
+      }
+    },
+    {
+      "advance": "PT15M"
+    },
+    {
+      "shadowed": "c2"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "advanced",
+      "SHADOWING",
+      "refused 409",
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "advanced",
+      "SHADOWING"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 0,
+      "platform": 0
+    }
+  }
+}

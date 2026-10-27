@@ -47,7 +47,7 @@ class ChangeHarness(
     val clock: MutableClock = MutableClock(),
     val memory: InMemoryControlStore = InMemoryControlStore(clock),
     store: ControlStore = memory,
-    options: ChangeOptions = ChangeOptions(),
+    options: ChangeOptions = ChangeOptions(shadow = IMMEDIATE_WINDOW),
 ) {
     private val counter = AtomicInteger()
     val revisions = Revisions(store, clock)
@@ -55,6 +55,9 @@ class ChangeHarness(
 }
 
 val ACME: SnapshotKey = StoreFixtures.ACME
+
+/** A shadow window that may close as soon as it is looked at: for tests of the flow around it. */
+val IMMEDIATE_WINDOW = ShadowOptions(java.time.Duration.ZERO, 0, java.time.Duration.ZERO)
 val ALICE = StoreFixtures.ALICE
 
 val NO_MEMBERSHIPS = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
