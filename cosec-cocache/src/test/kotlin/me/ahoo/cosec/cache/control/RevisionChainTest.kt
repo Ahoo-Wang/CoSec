@@ -167,10 +167,15 @@ class RevisionChainTest {
             stores.getValue(node),
             revisions,
             { me.ahoo.cosec.control.change.ChangeId("rc${ids.incrementAndGet()}") },
+            // The change flow across instances, not authorization: every action is permitted.
+            { _, _, _ -> me.ahoo.cosec.control.authz.ControlDecision.PERMIT },
         )
         val one = changes(firstNode, first)
         val two = changes(secondNode, second)
-        val author = Actor(TenantId("acme"), PrincipalId("alice"))
+        val author = me.ahoo.cosec.control.authz.Operator(
+            Actor(TenantId("acme"), PrincipalId("alice")),
+            me.ahoo.cosec.model.Memberships(me.ahoo.cosec.model.Memberships.Source.CLAIMS, emptyMap(), emptyList()),
+        )
         val a = one.propose(
             author,
             key,
@@ -185,20 +190,21 @@ class RevisionChainTest {
             listOf(me.ahoo.cosec.control.change.Operation.PutPolicy(candidate("b").policies.single())),
             "b"
         )
-        one.stage(a.id)
+        one.stage(author, a.id)
         org.junit.jupiter.api.assertThrows<me.ahoo.cosec.control.change.ChangeRejectedException> {
             runBlocking {
                 two.stage(
+                    author,
                     b.id
                 )
             }
         }
         one.shadowed(a.id)
-        one.publish(a.id).publishedRevision.assert().isEqualTo(1)
+        one.publish(author, a.id).publishedRevision.assert().isEqualTo(1)
         // The slot is free; b's base is gone, so it conflicts instead of overwriting, and rebases onto revision 1.
-        two.skipShadow(b.id, "test")
-        two.publish(b.id).state.assert().isEqualTo(me.ahoo.cosec.control.change.ChangeState.CONFLICTED)
-        two.rebase(b.id).base.revision.assert().isEqualTo(1)
+        two.skipShadow(author, b.id, "test")
+        two.publish(author, b.id).state.assert().isEqualTo(me.ahoo.cosec.control.change.ChangeState.CONFLICTED)
+        two.rebase(author, b.id).base.revision.assert().isEqualTo(1)
         second.head(key)!!.document.policies.map { it.id.value }.assert().containsExactly("a")
     }
 

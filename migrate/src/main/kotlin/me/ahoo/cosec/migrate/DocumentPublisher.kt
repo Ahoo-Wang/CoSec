@@ -22,12 +22,31 @@ import me.ahoo.cosec.snapshot.document.PolicyDocument
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
 
-/** `publish` found 8.0 documents already in Redis, or lost a race for one: nothing of its own was overwritten. */
-class DocumentsExistException(val keys: List<SnapshotKey>, val written: List<SnapshotKey>) :
+/** `publish` stopped: [written] are the keys it wrote before, exactly; nothing else was written. */
+open class PublishException(message: String, val written: List<SnapshotKey>, cause: Throwable? = null) :
     IllegalStateException(
-        "8.0 documents already exist for $keys; publish never overwrites. " +
-            if (written.isEmpty()) "Nothing was written." else "Written before the conflict: $written."
+        message + if (written.isEmpty()) {
+            " Nothing was written."
+        } else {
+            " Written before it stopped: $written; " +
+                "run publish again with --resume to finish."
+        },
+        cause,
     )
+
+/** 8.0 documents already exist for [keys] (and, with resume, differ from the converted ones): never overwritten. */
+class DocumentsExistException(val keys: List<SnapshotKey>, written: List<SnapshotKey>, differ: Boolean = false) :
+    PublishException(
+        if (differ) {
+            "8.0 documents for $keys exist and differ from the converted ones; publish never overwrites."
+        } else {
+            "8.0 documents already exist for $keys; publish never overwrites (--resume skips identical ones)."
+        },
+        written,
+    )
+
+/** What [DocumentPublisher.publish] did: the keys it wrote, and those it found already published identically. */
+class PublishResult(val written: List<SnapshotKey>, val skipped: List<SnapshotKey>)
 
 /**
  * Writes converted documents into the 8.0 snapshot cache (RFC 0004 §8.2 `publish`), each only if it does not exist
@@ -37,40 +56,72 @@ class DocumentsExistException(val keys: List<SnapshotKey>, val written: List<Sna
  *
  * Every document is compiled first, and every app document's references are checked against the platform document,
  * as a publisher does before it writes (RFC 0004 §7.4): a document that would fail closed is never written.
+ *
+ * Writes are one per document, so a failure can leave a part written; the exception says exactly which keys. With
+ * `resume`, a document already in Redis is skipped when it is byte for byte the converted one (its revision and
+ * body), and refused otherwise, so a second run finishes the first.
  */
 class DocumentPublisher(
     private val cache: PolicySnapshotCache,
     private val compiler: PolicyDocumentCompiler = PolicyDocumentCompiler(),
 ) {
-    /** Publishes [documents], the platform document first; returns the keys written. */
-    fun publish(documents: Map<SnapshotKey, PolicyDocument>): List<SnapshotKey> {
+    /** Publishes [documents], the platform document first. */
+    fun publish(documents: Map<SnapshotKey, PolicyDocument>, resume: Boolean = false): PublishResult {
         val platform = requireNotNull(documents[SnapshotKey.Platform]) { "There is no platform document to publish." }
         documents.values.forEach { document ->
             compiler.compile(document)
             compiler.checkReferences(document, platform)
         }
         val ordered = documents.keys.sortedBy { ORDER.getValue(kindOf(it)) }
-        val existing = ordered.filter { cache[it] != null }
-        if (existing.isNotEmpty()) {
-            throw DocumentsExistException(existing, emptyList())
+        val stored = ordered.associateWith { key -> stored(documents.getValue(key)) }
+        val existing = ordered.mapNotNull { key -> cache[key]?.let { key to it } }.toMap()
+        checkExisting(existing, stored, resume)
+        return PublishResult(write(ordered.filterNot { it in existing }, stored), existing.keys.toList())
+    }
+
+    /** Refuses existing documents, unless [resume] and each is the converted one. */
+    private fun checkExisting(
+        existing: Map<SnapshotKey, SnapshotDocument>,
+        stored: Map<SnapshotKey, SnapshotDocument>,
+        resume: Boolean
+    ) {
+        if (existing.isNotEmpty() && !resume) {
+            throw DocumentsExistException(existing.keys.toList(), emptyList())
         }
+        val differing = existing.filter { (key, current) -> !same(current, stored.getValue(key)) }.keys
+        if (differing.isNotEmpty()) {
+            throw DocumentsExistException(differing.toList(), emptyList(), differ = true)
+        }
+    }
+
+    /** Writes [keys] in order, each only if absent; the keys written. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun write(keys: List<SnapshotKey>, stored: Map<SnapshotKey, SnapshotDocument>): List<SnapshotKey> {
         val async = cache.async()
         val written = ArrayList<SnapshotKey>()
-        for (key in ordered) {
-            val document = documents.getValue(key)
-            val stored = SnapshotDocument(
-                PolicyDocumentCodec.SCHEMA,
-                document.revision,
-                document.publishedAt,
-                PolicyDocumentCodec.encode(document),
-            )
-            when (async.putIfMatch(key, null, stored).join()) {
+        for (key in keys) {
+            val result = try {
+                async.putIfMatch(key, null, stored.getValue(key)).join()
+            } catch (error: Exception) {
+                throw PublishException("Writing $key failed: ${error.message}.", written.toList(), error)
+            }
+            when (result) {
                 is ConditionalPut.Written -> written += key
-                is ConditionalPut.Conflict -> throw DocumentsExistException(listOf(key), written)
+                is ConditionalPut.Conflict -> throw DocumentsExistException(listOf(key), written.toList())
             }
         }
         return written
     }
+
+    private fun stored(document: PolicyDocument) = SnapshotDocument(
+        PolicyDocumentCodec.SCHEMA,
+        document.revision,
+        document.publishedAt,
+        PolicyDocumentCodec.encode(document),
+    )
+
+    private fun same(a: SnapshotDocument, b: SnapshotDocument): Boolean =
+        a.schema == b.schema && a.revision == b.revision && a.bodyBytes().contentEquals(b.bodyBytes())
 
     private fun kindOf(key: SnapshotKey): DocumentKind = when (key) {
         is SnapshotKey.App -> DocumentKind.APP

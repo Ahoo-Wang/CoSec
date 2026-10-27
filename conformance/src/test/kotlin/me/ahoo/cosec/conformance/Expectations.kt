@@ -107,6 +107,19 @@ object Expectations {
             "heads",
             json.objectNode().apply { outcome.heads.forEach { (key, revision) -> put(key, Math.toIntExact(revision)) } }
         )
+        if (outcome.escalations.isNotEmpty()) {
+            set(
+                "escalations",
+                json.objectNode().apply {
+                    outcome.escalations.forEach { (id, reasons) ->
+                        set(
+                            id,
+                            json.arrayNode().apply { reasons.forEach(::add) }
+                        )
+                    }
+                }
+            )
+        }
     }
 
     /** The control plane's outcomes: grant analysis, publishing, the change flow. */

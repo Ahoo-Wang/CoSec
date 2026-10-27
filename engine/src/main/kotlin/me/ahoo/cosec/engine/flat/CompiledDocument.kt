@@ -226,7 +226,8 @@ class CompiledDocument private constructor(
 
         /**
          * The platform document: `Anyone` bindings (7.x global policies), break-glass bindings and the shared policies.
-         * The blacklist rule and the root policy are added; every binding must name a policy defined here.
+         * The blacklist rule and the root policy are added, and so are the control-plane policies (RFC 0007 §7.3), which
+         * the platform's and the tenants' bindings may name; every binding must name a policy defined here.
          * [boundaries] are its boundary policies and [defaultBoundary] the one a tenant gets unless it names another.
          */
         fun platform(
@@ -236,6 +237,7 @@ class CompiledDocument private constructor(
             defaultBoundary: String? = null,
         ): CompiledDocument {
             val index = index(DocumentKind.PLATFORM, policies)
+            BuiltinPolicies.control.forEach { index[it.id] = it }
             val boundaryIndex = HashMap<String, CompiledPolicy>(boundaries.size * 2)
             for (boundary in boundaries) {
                 require(boundary.id !in index && boundaryIndex.put(boundary.id, boundary) == null) {
@@ -275,7 +277,7 @@ class CompiledDocument private constructor(
                 boundary = boundary
             )
 
-        private fun index(kind: DocumentKind, policies: List<CompiledPolicy>): Map<String, CompiledPolicy> {
+        private fun index(kind: DocumentKind, policies: List<CompiledPolicy>): HashMap<String, CompiledPolicy> {
             val index = HashMap<String, CompiledPolicy>(policies.size * 2)
             for (policy in policies) {
                 require(

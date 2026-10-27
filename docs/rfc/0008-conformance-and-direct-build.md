@@ -324,7 +324,7 @@ JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字*
 |---|---|---|---|
 | 编译执行的授权吞吐 | `global`、`role`、`none`、`role-heavy` | 不低于 7.0 的 100 %；B/op 不高于 7.0 | RFC 0005 Q12、§9.3 |
 | Pipeline 吞吐 | `global`、`role`、`none`、`blocked`、`rate-limited`、`anonymous`（`PipelineBenchmark`） | 不低于 7.0 的 `SecurityPipeline` + 装饰器链的 100 %（交替三轮的平均，任一轮不低于 97 %）；B/op 不高于 | RFC 0006 §13.1、Q24（基准从"第 4 阶段"改为 7.0） |
-| 端到端 | Gateway 与 WebMvc 示例服务，k6 的 `constant-arrival-rate` 定速（2026-10-26 修订：原为 wrk2） | 最大吞吐不低于 7.0 的 100 %；70 % 负载下 p99 不高于 7.0 的 105 % | RFC 0006 §13.1 |
+| 端到端 | Gateway 与 WebMvc 示例服务，wrk2 定速 | 最大吞吐不低于 7.0 的 100 %；70 % 负载下 p99 不高于 7.0 的 105 % | RFC 0006 §13.1 |
 | 分配与策略规模无关 | `EngineBenchmark` 的 `bindings`、`statements` 参数 | 同一场景下 B/op 不随规模变化；10,000 条语句时吞吐不低于 10 条时的 50 % | RFC 0004 §12.1、RFC 0005 §9.3 |
 | 没有边界时零代价 | `boundary = none` | 与同一构建中去掉边界检查的对照相比，吞吐不低于 100 %、B/op 不高于 | RFC 0007 Q24 |
 | 编译 | `SnapshotCompileBenchmark`，8 MB 文档 | p99 ≤ 200 ms | RFC 0003 Q14 |
@@ -334,7 +334,7 @@ JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字*
   它们比较的是即将删除的中间形态。
 - 达不到预算时，与 RFC 0005 Q12 相同：切换 PR 停止，交回维护者决定。
 - **2026-10-26 修订（路线图审查）：尽早测量。** 预算不再只在切换时第一次测量。端到端切片（§4.4.3）一能运行，就按本节的方法测一次
-  Pipeline 吞吐（JMH）；RFC 0006 PR-7 之后再加 k6 的端到端测量（`constant-arrival-rate` 执行器，按 70 % 负载下的 p99 比较；2026-10-26 修订：维护者决定用 k6 取代 wrk2，wrk2 不在 Homebrew core）；之后每个扩展切片的 PR 重测一次，结果记在 `docs/perf/e2e-slice/`。
+  Pipeline 吞吐（JMH）；RFC 0006 PR-7 之后再加 wrk2 的端到端测量；之后每个扩展切片的 PR 重测一次，结果记在 `docs/perf/e2e-slice/`。
   这些测量不是合入门槛：任何一项低于预算时，测量的 PR 照常合入，但立即把数字交给维护者（不等到 S1），由维护者决定先优化还是继续。
   硬性门槛仍是 S1（§3.9）。理由：#1040 的路径模式解析与匹配测得是 Spring `PathPattern` 的 44–102 %，等到切换才发现差距，修复会落在关键路径的末端。
 
@@ -540,10 +540,7 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 
 **S1 必须装配真实的 `RevocationReader`（2026-10-26 修订，运行时第 1 轮审查）。** `TokenAuthenticator` 的默认 `RevocationReader.NONE` 什么也不吊销：
 忘记装配它的 starter 会静默地关掉吊销，而一切测试照常通过。S1 装配 CoCache 的读接口（`CoCacheTokenStore.reader`），并加一个经 starter 的测试：吊销的
-token（按 token 与按主体）得到 401 `token-revoked`（#1072）。
-
-**实例按平台的 `limits`/`attributes` 编译（N3，2026-10-26 修订，#1071）。** 控制面编译租户与应用文档时，以平台文档的 `limits` 与 `attributes` 为准；平台文档改变时，
-依赖它的文档要重新编译，并在暂存的变更中报告结果。S1 装配的启动编译与快照加载使用同一套输入，并有一个测试：改动平台的 `limits` 或 `attributes` 后，依赖它的实例文档被重新编译。
+token（按 token 与按主体）得到 401 `token-revoked`。
 
 **S1 与 S5 之间文档滞后于代码。** AGENTS.md 要求事实与代码在同一个 PR 中更新；S1–S4 对 S5 列出的页面暂不执行这一条，S5 一次写完。这样做的理由：
 `deploy-wiki.yml` 从 `main` 发布，S5 之前线上文档继续描述用户实际在用的 7.x，而 8.0 没有任何发布。S1–S4 让 S5 清单之外的文档出错时（例如 `pnpm build` 报出死链接），
@@ -600,14 +597,14 @@ token（按 token 与按主体）得到 401 `token-revoked`（#1072）。
 | RFC 0006 PR-4 | 外部属性与 `onMissing` |
 | RFC 0006 PR-5 | 限流义务，用 Redis 限流后端；被拒绝的请求不消耗配额 |
 | RFC 0006 PR-6 | 决策事件与监听器（REQUIRED 审计失败 → 503） |
-| RFC 0006 PR-7 | HTTP 一段（WebFlux、WebMvc），线上的 problem+json；k6 测量（2026-10-26 修订：原为 wrk2） |
+| RFC 0006 PR-7 | HTTP 一段（WebFlux、WebMvc），线上的 problem+json；wrk2 测量 |
 | RFC 0007 PR-4、PR-5 | 文档改经控制面发布（`ControlStore`、`apply`），数据面读到新修订 |
 | RFC 0007 PR-9 | 控制面的 HTTP 路由 |
 | S1 | starter 的自动配置取代测试中的装配 |
 
 **测量。** 切片 PR 加入 `src/jmh` 的基准：快照已在本地缓存中，按 §3.8"Pipeline 吞吐"一行的场景（`global`、`role`、`none`、`blocked`、`anonymous`；
 `rate-limited` 随 RFC 0006 PR-5 加入）测 `Pipeline.decide`，与 RFC 0008 PR-3 的 7.0 基线在同一台机器上交替比较（§3.8 的方法），结果写进
-`docs/perf/e2e-slice/README.md`。RFC 0006 PR-7 之后加 k6（`constant-arrival-rate` 执行器，70 % 负载下的 p99；2026-10-26 修订：维护者决定用 k6 取代 wrk2，wrk2 不在 Homebrew core）：对 `:e2e:bootTestRun` 启动的测试应用定速压测，对照物是从 `v7.0.1` 构建、路由与（经
+`docs/perf/e2e-slice/README.md`。RFC 0006 PR-7 之后加 wrk2：对 `:e2e:bootTestRun` 启动的测试应用定速压测，对照物是从 `v7.0.1` 构建、路由与（经
 `cosec-migrate convert` 转换的）数据相同的 7.0 服务；Gateway 一行仍以 `cosec-gateway-server` 在 S1 时测量。这些测量按 §3.8"尽早测量"一条处理：
 低于预算立即交给维护者，不阻止合入；S1 的门槛不变。
 
@@ -627,8 +624,8 @@ RFC 0006 PR-2 #1044 随后也已合入）；RFC 0008 PR-4 一行换成 S1–S5�
 | RFC 0005 PR-5 路由映射 | RFC 0005 PR-3 ✓ | 依赖已合入；按 §4.7 第 1 条在 #1040 的审查之后 |
 | RFC 0004 PR-4 文档与编译（改动） | RFC 0004 PR-2 ✓、PR-3 ✓（#1027）；RFC 0005 PR-4 ✓（#1051） | ✓ 已合入（#1052） |
 | RFC 0004 PR-4b 加载平台、应用、租户快照（2026-10-26 新增：`SnapshotSource` 推广为一个共享槽加多个 LRU 族，`runtime` 的 `DocumentSnapshotViews`） | RFC 0004 PR-4 ✓（#1052） | ✓ 已合入（#1053） |
-| RFC 0004 PR-5 `cosec-migrate`（改动） | RFC 0004 PR-4 ✓（#1052） | 打开中（#1067） |
-| RFC 0005 PR-6 翻译 7.x 匹配器（改动） | RFC 0005 PR-4；RFC 0004 PR-5 | 否 |
+| RFC 0004 PR-5 `cosec-migrate`（改动） | RFC 0004 PR-4 ✓（#1052） | ✓ 已合入（#1067） |
+| RFC 0005 PR-6 翻译 7.x 匹配器（改动） | RFC 0005 PR-4 ✓；RFC 0004 PR-5 ✓（#1067） | 打开中（#1069） |
 | RFC 0006 PR-2 Pipeline（改动） | RFC 0006 PR-1 ✓（#1025，审查修复 #1031 ✓）；RFC 0004 PR-1 ✓、PR-2 ✓ | ✓ 已合入（#1044） |
 | RFC 0006 PR-3 认证与成员关系 | RFC 0006 PR-2 ✓（#1044）；RFC 0004 PR-3 ✓ | **能**（按 §4.7 第 1 条在 #1044 的审查之后） |
 | RFC 0006 PR-6 决策事件与监听器 | RFC 0006 PR-2 ✓（#1044） | **能**（按 §4.7 第 1 条在 #1044 的审查之后） |

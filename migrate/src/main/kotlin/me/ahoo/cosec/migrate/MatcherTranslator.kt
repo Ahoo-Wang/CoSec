@@ -17,12 +17,10 @@ import me.ahoo.cosec.engine.flat.ResourceSource
 import tools.jackson.databind.JsonNode
 
 /**
- * Translates 7.x matcher JSON into the parts of an 8.0 statement, exactly or not at all (RFC 0005 §5.2, §7).
- *
- * This version translates the actions: `all`, `path` patterns with their methods and options, and `composite`s of
- * them. Of the conditions it translates only `all` (no condition); the condition AST translation of the others is
- * RFC 0005 PR-6, and until it lands every other condition is rejected with its location, as are `spel`, `ognl` and
- * custom conditions, which no version translates. Nothing is translated approximately.
+ * Translates 7.x actions into the `action` and `resource` of an 8.0 statement, exactly or not at all (RFC 0005 §5.2,
+ * §7.2): `all`, `path` patterns with their methods and options, and `composite`s of them. Path templates are not
+ * translated: a template's value is compared to the captured segment by a condition only after the pattern matched,
+ * which 7.x does not do (RFC 0005 §2 J9); they are rejected. Conditions are [ConditionTranslator]'s.
  *
  * Rejections go to [reject] with a location: the statement's location followed by a JSON path.
  */
@@ -157,6 +155,16 @@ internal class MatcherTranslator(private val reject: (RejectionKind, String, Str
         } else {
             strings(method, "$location.$METHOD") ?: return null
         }
+        // 7.x compares methods literally with the request's (AbstractActionMatcher): `*` is a method no request has,
+        // so it matches nothing; `http:*` would match every method. Only tokens translate (RFC 9110 §5.6.2).
+        methods.firstOrNull { !TOKEN.matches(it) }?.let { method ->
+            reject(
+                RejectionKind.ACTION_NOT_TRANSLATED,
+                "$location.$METHOD",
+                "method [$method] is no HTTP method: 7.x compares it literally, so it matches no request; remove it",
+            )
+            return null
+        }
         return methods.map { it.uppercase() }.distinct()
     }
 
@@ -168,51 +176,12 @@ internal class MatcherTranslator(private val reject: (RejectionKind, String, Str
         return null
     }
 
-    /**
-     * Whether the condition at [location] translates; true only for none and `all`. Every condition it cannot
-     * translate is rejected, each leaf of a `bool` on its own, so one run lists them all.
-     */
-    fun condition(node: JsonNode?, location: String): Boolean {
-        if (node == null || node.isNull) {
-            return true
-        }
-        if (!node.isObject || node.size() != 1) {
-            reject(RejectionKind.UNDECODABLE, location, "a condition is one typed object")
-            return false
-        }
-        val (type, config) = node.properties().first().let { it.key to it.value }
-        val at = "$location.$type"
-        val negated = config.isObject && config.get(NEGATE)?.asBoolean() == true
-        return when {
-            type == ALL_TYPE && !negated -> true
-            type == BOOL_TYPE && !negated && config.isObject -> bool(config, at)
-            else -> {
-                untranslated(type, negated, at)
-                false
-            }
-        }
+    /** The resource a 7.x `path` condition on request.path stands for: its pattern and options (RFC 0005 §7.1). */
+    fun pathResources(config: JsonNode, location: String): List<ResourceSource>? {
+        val pattern = config.get(PATTERN)?.takeIf { it.isString }?.asString()
+            ?: return rejected(RejectionKind.UNDECODABLE, "$location.path", "a path condition needs a pattern")?.resources
+        return path(listOf(pattern), config, "$location.path")?.resources
     }
-
-    /** Rejects a condition no version translates yet, or ever (expressions, custom matchers). */
-    private fun untranslated(type: String, negated: Boolean, location: String) = when (type) {
-        in EXPRESSION_TYPES -> reject(RejectionKind.EXPRESSION_CONDITION, location, "a [$type] expression")
-        in BUILTIN_CONDITION_TYPES -> reject(
-            RejectionKind.CONDITION_NOT_TRANSLATED,
-            location,
-            "a [$type] condition${if (negated) " (negated)" else ""}",
-        )
-
-        else -> reject(
-            RejectionKind.CUSTOM_CONDITION,
-            location,
-            "condition type [$type] is a custom ConditionMatcherFactory"
-        )
-    }
-
-    /** A `bool` translates when every member does; each member that does not is rejected on its own. */
-    private fun bool(config: JsonNode, location: String): Boolean = listOf(AND, OR).flatMap { key ->
-        config.get(key)?.values()?.mapIndexed { i, member -> condition(member, "$location.$key[$i]") }.orEmpty()
-    }.all { it }
 
     private fun rejected(kind: RejectionKind, location: String, message: String): Action? {
         reject(kind, location, message)
@@ -240,6 +209,9 @@ internal class MatcherTranslator(private val reject: (RejectionKind, String, Str
         private const val CASE_SENSITIVE = "caseSensitive"
         private const val DECODE_AND_PARSE_SEGMENTS = "decodeAndParseSegments"
         const val TEMPLATE = "#{"
+
+        /** An HTTP method is a token, and `*` alone is not a method. */
+        private val TOKEN = Regex("""[!#$%&'+.^_`|~0-9A-Za-z-]+""")
 
         val EXPRESSION_TYPES = setOf("spel", "ognl")
 

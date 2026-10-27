@@ -14,84 +14,214 @@
 package me.ahoo.cosec.conformance
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.control.authz.ControlAuthorizer
+import me.ahoo.cosec.control.authz.ControlDecision
+import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.store.InMemoryControlStore
+import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.Actor
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
+import me.ahoo.cosec.snapshot.document.ProvenanceKind
 import tools.jackson.databind.JsonNode
+import tools.jackson.databind.node.JsonNodeFactory
+import tools.jackson.databind.node.ObjectNode
+import java.time.Duration
+import java.time.Instant
 
 /**
- * The `control` runner for the change flow (RFC 0007 §6.1–§6.3): steps over an in-memory control plane, each a
- * proposal or a transition of a named change. Each step records what it left the change in, or `refused <status>`;
- * the outcome also has every change's error checks and the heads at the end.
+ * The `control` runner for the change flow (RFC 0007 §6.1–§6.3, §7.2–§7.5): steps over an in-memory control plane,
+ * each a proposal or a transition of a named change. Each step records what it left the change in, or
+ * `refused <status>`; the outcome also has every change's error checks, the heads at the end, and the reasons of the
+ * escalations of each change that has any.
  *
  * ```jsonc
- * "steps": [ { "propose": { "change": "c1", "document": "tenant:acme",
+ * "documents": { "platform": {...}, "apps": { "order": {...} }, "tenants": { "acme": {...} } },  // published first
+ * "operators": { "alice": { "tenant": "acme", "roles": ["admin"], "policies": [] } },
+ * "options":   { "fourEyes": true },
+ * "steps": [ { "propose": { "change": "c1", "by": "alice", "document": "tenant:acme",
  *                           "operations": [ { "putPolicy": { ...the document format's policy... } },
  *                                           { "putBinding": { ... } }, { "removePolicy": "id" }, { "removeBinding": "id" } ] } },
- *            { "skipShadow": "c1" }, { "stage": "c1" }, { "shadowed": "c1" }, { "publish": "c1" },
- *            { "abandon": "c1" }, { "rebase": "c1" } ],
- * "expect": { "steps": ["CHECKED", "READY", "PUBLISHED"], "errors": { "c1": [] }, "heads": { "tenant:acme": 1 } }
+ *            { "skipShadow": "c1" }, { "stage": { "change": "c1", "by": "alice" } }, { "shadowed": "c1" },
+ *            { "publish": "c1" }, { "abandon": "c1" }, { "rebase": "c1" },
+ *            { "approve": { "change": "c1", "by": "bob", "candidate": "own" | "other" } },
+ *            { "reject": { "change": "c1", "by": "bob" } }, { "advance": "PT73H" } ],
+ * "expect": { "steps": ["CHECKED", "READY", "PUBLISHED"], "errors": { "c1": [] }, "heads": { "tenant:acme": 1 },
+ *             "escalations": { "c1": ["NOT_COVERED"] } }
  * ```
  *
- * A proposal is made on the current head of its document.
+ * A proposal is made on the current head of its document. With `operators`, every step names who takes it (`by`),
+ * each is authenticated by a host pipeline and checked through the real pipeline and engine over the current heads
+ * (the built-in control-plane policies included); `documents` are published first as `bootstrap` would. Without
+ * `operators`, the scenario is about the flow alone: every action is permitted, and a step is taken by `alice` of
+ * `acme` on a tenant document and by a platform principal on the others, as the hard rule requires.
  */
 object ChangeRunner : ScenarioRunner {
-    private val author = Actor(TenantId("acme"), PrincipalId("alice"))
+    val NOW = Instant.parse("2026-11-01T00:00:00Z")
+    val NONE = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
+    val ALICE = Operator(Actor(TenantId("acme"), PrincipalId("alice")), NONE)
+    val PLATFORM = Operator(Actor(TenantId.PLATFORM, PrincipalId("cosec")), NONE)
 
     override fun run(scenario: Scenario): Outcome = runBlocking {
-        scenario.node.only("\$comment", "rules", "polarity", "level", "description", "steps", "expect")
-        val store = InMemoryControlStore()
-        val revisions = Revisions(store)
-        var next: ChangeId? = null
-        val changes = Changes(store, revisions, { next!! })
-        val results = ArrayList<String>()
-        val documents = LinkedHashSet<SnapshotKey>()
-        val named = LinkedHashMap<String, ChangeRequest>()
-        for (step in scenario.node.required("steps").values()) {
-            val (action, argument) = step.fields().entries.singleOrNull()
-                ?: throw ScenarioFormatException("A step is one action: $step")
-            results += try {
-                val change = when (action) {
-                    "propose" -> {
-                        argument.only("change", "document", "operations")
-                        val key = documentKey(argument.required("document").text())
-                        documents += key
-                        next = ChangeId(argument.required("change").text())
-                        val head = revisions.head(key)?.revision ?: 0
-                        changes.propose(author, key, head, argument.required("operations").values().map { operation(key, it) }, "scenario")
-                    }
-
-                    "skipShadow" -> changes.skipShadow(ChangeId(argument.text()), "scenario")
-                    "stage" -> changes.stage(ChangeId(argument.text()))
-                    "shadowed" -> changes.shadowed(ChangeId(argument.text()))
-                    "publish" -> changes.publish(ChangeId(argument.text()))
-                    "abandon" -> changes.abandon(ChangeId(argument.text()))
-                    "rebase" -> changes.rebase(ChangeId(argument.text()))
-                    else -> throw ScenarioFormatException("Unknown step $action")
-                }
-                named[change.id.value] = change
-                change.state.name
-            } catch (error: ChangeRejectedException) {
-                "refused ${error.status}"
-            }
-        }
-        val errors = named.keys.associateWith { id -> changes.get(ChangeId(id)).errors.map { it.check } }
-        val heads = documents.associate { it.toString() to (revisions.head(it)?.revision ?: 0) }
-        Outcome.Changed(results, errors, heads)
+        scenario.node.only("\$comment", "rules", "polarity", "level", "description", "documents", "operators", "options", "steps", "expect")
+        Run(scenario.node).also { it.start() }.steps()
     }
 
-    private fun operation(key: SnapshotKey, node: JsonNode): Operation {
+    /** One scenario's control plane, operators and steps. */
+    private class Run(private val node: JsonNode) {
+        private val clock = MutableClock(NOW)
+        private val store = InMemoryControlStore(clock)
+        val revisions = Revisions(store, clock)
+        private val engine = ControlEngine(revisions)
+        private val authorized = node.has("operators")
+        private val operators = node.get("operators")?.fields().orEmpty().entries.associate { (name, operator) ->
+            operator.only("tenant", "roles", "policies")
+            name to engine.operator(
+                TenantId(operator.required("tenant").text()),
+                name,
+                operator.get("roles")?.strings().orEmpty(),
+                operator.get("policies")?.strings().orEmpty(),
+            )
+        }
+        private var next: ChangeId? = null
+        private val changes = Changes(
+            store,
+            revisions,
+            { next!! },
+            if (authorized) engine.authorizer else ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT },
+            clock,
+            node.get("options")?.let {
+                it.only("fourEyes")
+                ChangeOptions(fourEyes = it.get("fourEyes")?.bool() ?: false)
+            } ?: ChangeOptions(),
+        )
+        private val documents = LinkedHashSet<SnapshotKey>()
+        private val named = LinkedHashMap<String, ChangeRequest>()
+
+        suspend fun start() {
+            node.get("documents")?.let { bootstrap(revisions, it) }
+        }
+
+        suspend fun steps(): Outcome {
+            val results = node.required("steps").values().map { step ->
+                val (action, argument) = step.fields().entries.singleOrNull()
+                    ?: throw ScenarioFormatException("A step is one action: $step")
+                if (action == "advance") {
+                    clock.now = clock.now.plus(Duration.parse(argument.text()))
+                    "advanced"
+                } else {
+                    try {
+                        step(action, argument).also { named[it.id.value] = it }.state.name
+                    } catch (error: ChangeRejectedException) {
+                        "refused ${error.status}"
+                    }
+                }
+            }
+            val errors = named.keys.associateWith { id -> changes.get(ChangeId(id)).errors.map { it.check } }
+            val escalations = named.keys.associateWith { id -> changes.get(ChangeId(id)).escalations.map { it.reason } }
+                .filterValues { it.isNotEmpty() }
+            val heads = documents.associate { it.toString() to (revisions.head(it)?.revision ?: 0) }
+            return Outcome.Changed(results, errors, heads, escalations)
+        }
+
+        private suspend fun step(action: String, argument: JsonNode): ChangeRequest = when (action) {
+            "propose" -> propose(argument)
+            "shadowed" -> changes.shadowed(ChangeId(argument.text()))
+            "approve" -> target(argument, "candidate").let { (id, op, node) ->
+                changes.approve(op, id, candidate(id, node))
+            }
+
+            else -> transition(action, argument)
+        }
+
+        private suspend fun transition(action: String, argument: JsonNode): ChangeRequest {
+            val (id, op) = target(argument)
+            return when (action) {
+                "skipShadow" -> changes.skipShadow(op, id, "scenario")
+                "stage" -> changes.stage(op, id)
+                "publish" -> changes.publish(op, id)
+                "abandon" -> changes.abandon(op, id)
+                "rebase" -> changes.rebase(op, id)
+                "reject" -> changes.reject(op, id, "scenario")
+                else -> throw ScenarioFormatException("Unknown step $action")
+            }
+        }
+
+        private suspend fun propose(argument: JsonNode): ChangeRequest {
+            argument.only("change", "by", "document", "operations")
+            val key = documentKey(argument.required("document").text())
+            documents += key
+            next = ChangeId(argument.required("change").text())
+            val head = revisions.head(key)?.revision ?: 0
+            val operations = argument.required("operations").values().map { operation(key, it) }
+            return changes.propose(by(argument, key), key, head, operations, "scenario")
+        }
+
+        private suspend fun candidate(id: ChangeId, node: JsonNode): String = when (val which = node.get("candidate")?.text() ?: "own") {
+            "own" -> changes.get(id).candidate.orEmpty()
+            "other" -> "0".repeat(DIGEST_LENGTH)
+            else -> throw ScenarioFormatException("candidate is own or other, not $which")
+        }
+
+        /** Who takes a step: its `by` with operators, otherwise whoever the hard rule lets act on [key]. */
+        private fun by(step: JsonNode, key: SnapshotKey): Operator {
+            val name = step.get("by")?.text()
+            if (authorized != (name != null)) {
+                throw ScenarioFormatException(
+                    "A step names who takes it exactly when the scenario has operators: $step"
+                )
+            }
+            if (name == null) {
+                return if (key is SnapshotKey.Tenant) ALICE else PLATFORM
+            }
+            return operators[name] ?: throw ScenarioFormatException("No operator $name")
+        }
+
+        /** A transition's change and operator: `"c1"`, or `{ "change": "c1", "by": "bob", ... }`. */
+        private suspend fun target(argument: JsonNode, vararg fields: String): Triple<ChangeId, Operator, JsonNode> {
+            if (!argument.isString) {
+                argument.only("change", "by", *fields)
+            }
+            val id = ChangeId(if (argument.isString) argument.text() else argument.required("change").text())
+            return Triple(id, by(argument, changes.get(id).key), argument)
+        }
+    }
+
+    /** Publishes the scenario's documents as `bootstrap` would (RFC 0007 §5.9): before any change, unchecked. */
+    suspend fun bootstrap(revisions: Revisions, documents: JsonNode) {
+        documents.only("platform", "apps", "tenants")
+        val all = listOfNotNull(documents.get("platform")?.let { SnapshotKey.Platform to it }) +
+            documents.get("apps")?.fields().orEmpty().entries.map { (app, it) -> SnapshotKey.App(app) to it } +
+            documents.get("tenants")?.fields().orEmpty().entries.map { (tenant, it) -> SnapshotKey.Tenant(tenant) to it }
+        for ((key, body) in all) {
+            val (kind, owner) = Revisions.ownerOf(key)
+            val document = JsonNodeFactory.instance.objectNode()
+                .put("schema", PolicyDocumentCodec.SCHEMA).put("revision", 1).put("publishedAt", NOW.toString())
+            document.setAll(body as? ObjectNode ?: throw ScenarioFormatException("The $key document is not an object"))
+            val decoded = PolicyDocumentCodec.decode(kind, owner, CoSecJsonSerializer.writeValueAsBytes(document))
+            revisions.publish(
+                key,
+                revisions.head(key),
+                decoded,
+                Publication("bootstrap", ProvenanceKind.BOOTSTRAP, PLATFORM.actor)
+            )
+        }
+    }
+
+    fun operation(key: SnapshotKey, node: JsonNode): Operation {
         val (kind, owner) = Revisions.ownerOf(key)
         val (name, value) = node.fields().entries.singleOrNull() ?: throw ScenarioFormatException("An operation is one entry: $node")
         return when (name) {
@@ -103,10 +233,12 @@ object ChangeRunner : ScenarioRunner {
         }
     }
 
-    private fun documentKey(text: String): SnapshotKey = when {
+    fun documentKey(text: String): SnapshotKey = when {
         text == "platform" -> SnapshotKey.Platform
         text.startsWith("app:") -> SnapshotKey.App(text.removePrefix("app:"))
         text.startsWith("tenant:") -> SnapshotKey.Tenant(text.removePrefix("tenant:"))
         else -> throw ScenarioFormatException("A document is platform, app:<id> or tenant:<id>, not $text")
     }
+
+    const val DIGEST_LENGTH = 64
 }

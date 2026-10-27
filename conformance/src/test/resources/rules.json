@@ -1,5 +1,5 @@
 {
-  "$comment": "The 8.0 rule registry (RFC 0008 §3.2). Ids are never reused: a rule whose meaning changes gets a new id and the old one is marked superseded. pending names the PR that implements the rule; the switch PR (RFC 0008 PR-4) needs every pending to be null. properties and guards name tests as module-directory:TestClass#test name; verifyRuleCoverage checks that they exist.",
+  "$comment": "The 8.0 rule registry (RFC 0008 §3.2). Ids are never reused: a rule whose meaning changes gets a new id and the old one is marked superseded. pending names the PR that implements the rule; the switch (RFC 0008 S1) needs every pending to be null. properties and guards name tests as module-directory:TestClass#test name; verifyRuleCoverage checks that they exist.",
   "rules": [
     {
       "id": "SCP-1",
@@ -349,7 +349,10 @@
       "source": "RFC 0007 §7.2",
       "statement": "A tenant's principals write only their own tenant's documents (a hard rule, not a policy).",
       "level": "control",
-      "pending": "RFC 0007 PR-6"
+      "pending": null,
+      "guards": [
+        "control:ControlAuthorizationTest#the hard rule stands whatever the policies say"
+      ]
     },
     {
       "id": "DOC-1",
@@ -404,7 +407,7 @@
       "source": "RFC 0003 §4.1; RFC 0008 §4.4 (review of #1006)",
       "statement": "Snapshot caches have ttl = null and throw on failed reads; an instance refuses to start when Redis's maxmemory-policy is not noeviction.",
       "level": "pipeline",
-      "pending": "RFC 0008 PR-4"
+      "pending": "RFC 0008 S1"
     },
     {
       "id": "CND-1",
@@ -692,6 +695,27 @@
       "pending": null
     },
     {
+      "id": "CTL-8",
+      "source": "RFC 0007 §7.1, §7.2",
+      "statement": "Every control-plane write is checked target by target with the control plane's own policies, through the same engine, before anything is recorded: cosec:write on each entry, cosec:grant on each scope a binding grants in, and the step's own action on the document. Anything but a permit refuses it: 403, or 503 when it cannot be decided.",
+      "level": "control",
+      "guards": [
+        "control:ControlAuthorizationTest#nobody writes without the right, and nothing is recorded",
+        "control:ControlAuthorizationTest#an undecidable check, a failed confirmation and a failing analysis all refuse"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-9",
+      "source": "RFC 0007 §6.1, §7.2, §7.5",
+      "statement": "Publishing checks the publisher again on the current heads: their authorization of every target and the grant analysis. What they cannot publish alone waits for approval, and nothing is written.",
+      "level": "control",
+      "guards": [
+        "control:ControlAuthorizationTest#publishing checks the publisher again on the current heads"
+      ],
+      "pending": null
+    },
+    {
       "id": "GRT-1",
       "source": "RFC 0007 §7.4.2",
       "statement": "Every granted fragment is contained in one of the grantor's own ALLOWs and overlaps no non-Anyone DENY the grantor is subject to.",
@@ -719,9 +743,50 @@
         "control:GrantPropertyTest#A5 the grant analysis is sound"
       ],
       "guards": [
-        "control:GrantAnalyzerTest"
+        "control:GrantAnalyzerTest",
+        "control:ControlAuthorizationTest#what the analysis cannot prove waits for another person's approval of its digest"
       ],
-      "pending": "RFC 0007 PR-6 (routing UNKNOWN fragments to approval in the publish flow)"
+      "pending": null
+    },
+    {
+      "id": "APR-1",
+      "source": "RFC 0007 §7.5",
+      "statement": "A change with escalations publishes only after a person other than its author, holding cosec:approve on the document, approves the candidate digest they saw.",
+      "level": "control",
+      "guards": [
+        "control:ControlAuthorizationTest#what the analysis cannot prove waits for another person's approval of its digest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "APR-2",
+      "source": "RFC 0007 §7.5, Q10",
+      "statement": "An approval is valid for cosec.control.approval.expire-after (72 hours); an expired one publishes nothing and the change awaits approval again.",
+      "level": "control",
+      "guards": [
+        "control:ControlAuthorizationTest#an expired approval publishes nothing and asks again"
+      ],
+      "pending": null
+    },
+    {
+      "id": "APR-3",
+      "source": "RFC 0007 §7.3, §7.5, Q10",
+      "statement": "A holder of cosec:approve on the document is the trust root: its own changes are not analyzed and need no second person, unless four-eyes is on, when what the analysis cannot prove needs another holder.",
+      "level": "control",
+      "guards": [
+        "control:ControlAuthorizationTest#the trust root publishes alone unless four-eyes is on"
+      ],
+      "pending": null
+    },
+    {
+      "id": "APR-4",
+      "source": "RFC 0007 §7.5, §8",
+      "statement": "A new or changed break-glass binding always needs a second person's approval, whoever proposes it.",
+      "level": "control",
+      "guards": [
+        "control:ControlAuthorizationTest#break-glass always needs a second person"
+      ],
+      "pending": null
     },
     {
       "id": "BDY-1",

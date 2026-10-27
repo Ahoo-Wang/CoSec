@@ -37,10 +37,10 @@ class ChangesTest {
 
     private suspend fun publish(key: SnapshotKey, vararg operations: Operation): ChangeRequest {
         val head = harness.revisions.head(key)?.revision ?: 0
-        val change = changes.propose(ALICE, key, head, operations.toList(), "test")
+        val change = changes.propose(operatorFor(key), key, head, operations.toList(), "test")
         change.errors.assert().describedAs("${change.findings}").isEmpty()
-        changes.skipShadow(change.id, "test")
-        return changes.publish(change.id)
+        changes.skipShadow(operatorFor(key), change.id, "test")
+        return changes.publish(operatorFor(key), change.id)
     }
 
     @Test
@@ -53,38 +53,38 @@ class ChangesTest {
         )
         val head = harness.revisions.head(ACME)!!.document
         val desired = StoreFixtures.candidate(ACME, listOf(allow("a", action = "order:list"), allow("c")))
-        val merge = changes.apply(ALICE, ACME, desired, ApplyMode.MERGE, "merge")
+        val merge = changes.apply(ALICE_OP, ACME, desired, ApplyMode.MERGE, "merge")
         merge.operations.map { it::class.simpleName }.assert().containsExactly("PutPolicy", "PutPolicy")
         (merge.operations[0] as Operation.PutPolicy).ifMatch.assert().isEqualTo(EntryDigest.of(head.policies[0]))
         (merge.operations[1] as Operation.PutPolicy).ifMatch.assert().isNull()
-        changes.abandon(merge.id)
-        val replace = changes.apply(ALICE, ACME, desired, ApplyMode.REPLACE, "replace")
+        changes.abandon(ALICE_OP, merge.id)
+        val replace = changes.apply(ALICE_OP, ACME, desired, ApplyMode.REPLACE, "replace")
         replace.operations.map { it::class.simpleName }.assert()
             .containsExactly("PutPolicy", "PutPolicy", "RemovePolicy", "RemoveBinding")
-        changes.skipShadow(replace.id, "test")
-        changes.publish(replace.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        changes.skipShadow(ALICE_OP, replace.id, "test")
+        changes.publish(ALICE_OP, replace.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         harness.revisions.head(ACME)!!.document.let { document ->
             document.policies.map { it.id.value }.assert().containsExactly("a", "c")
             document.bindings.assert().isEmpty()
         }
         // Applying what is there proposes nothing.
-        changes.apply(ALICE, ACME, desired, ApplyMode.REPLACE, "again").operations.assert().isEmpty()
+        changes.apply(ALICE_OP, ACME, desired, ApplyMode.REPLACE, "again").operations.assert().isEmpty()
     }
 
     @Test
     fun `a rollback restores an earlier revision as a checked change`() = runBlocking<Unit> {
         publish(ACME, Operation.PutPolicy(allow("old")))
         publish(ACME, Operation.RemovePolicy(PolicyId("old")), Operation.PutPolicy(allow("new")))
-        val rollback = changes.rollback(ALICE, ACME, 1, "back")
+        val rollback = changes.rollback(ALICE_OP, ACME, 1, "back")
         rollback.kind.assert().isEqualTo(ProvenanceKind.ROLLBACK)
         rollback.state.assert().isEqualTo(ChangeState.CHECKED)
-        changes.skipShadow(rollback.id, "test")
-        changes.publish(rollback.id).publishedRevision.assert().isEqualTo(3)
+        changes.skipShadow(ALICE_OP, rollback.id, "test")
+        changes.publish(ALICE_OP, rollback.id).publishedRevision.assert().isEqualTo(3)
         harness.revisions.head(ACME)!!.document.let {
             it.policies.map { policy -> policy.id.value }.assert().containsExactly("old")
             it.provenance!!.kind.assert().isEqualTo(ProvenanceKind.ROLLBACK)
         }
-        assertThrownBy<ChangeRejectedException> { runBlocking { changes.rollback(ALICE, ACME, 9, "nowhere") } }
+        assertThrownBy<ChangeRejectedException> { runBlocking { changes.rollback(ALICE_OP, ACME, 9, "nowhere") } }
             .extracting { (it as ChangeRejectedException).status }.isEqualTo(410)
     }
 
@@ -92,7 +92,7 @@ class ChangesTest {
     fun `names, size and shared ids are checked`() = runBlocking<Unit> {
         publish(SnapshotKey.Platform, Operation.PutPolicy(allow("shared")))
         val reserved = changes.propose(
-            ALICE,
+            ALICE_OP,
             ACME,
             0,
             listOf(Operation.PutPolicy(allow("cosec:mine")), Operation.PutBinding(bind("g:x", "cosec:mine"))),
@@ -103,7 +103,7 @@ class ChangesTest {
             "operations[1]"
         )
         changes.propose(
-            ALICE,
+            ALICE_OP,
             ACME,
             0,
             listOf(Operation.PutPolicy(allow("cosec:mine"))),
@@ -111,17 +111,23 @@ class ChangesTest {
             ProvenanceKind.MIGRATE
         )
             .errors.filter { it.check == "V2" }.assert().isEmpty()
-        changes.propose(ALICE, ACME, 0, listOf(Operation.PutPolicy(allow("shared"))), "shadowing")
+        changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("shared"))), "shadowing")
             .errors.map { it.check to it.path }.assert().containsExactly("V2" to "$.policies[0].id")
         val big = (1..30).map { Operation.PutPolicy(allow("p$it", resource = "order/${"x".repeat(40)}")) }
-        changes.propose(ALICE, ACME, 0, big, "big").errors.map { it.check to it.status }.assert().contains("V2" to 400)
+        changes.propose(
+            ALICE_OP,
+            ACME,
+            0,
+            big,
+            "big"
+        ).errors.map { it.check to it.status }.assert().contains("V2" to 400)
     }
 
     @Test
     fun `sections belong to their document kinds`() = runBlocking<Unit> {
         val catalog = Catalog(listOf(CatalogGroup("order", permissions = listOf(CatalogPermission("read")))))
         val wrong = changes.propose(
-            ALICE,
+            ALICE_OP,
             ACME,
             0,
             listOf(
@@ -142,7 +148,7 @@ class ChangesTest {
             SnapshotKey.App("order")
         )!!.document.catalog!!.groups.single().name.assert().isEqualTo("order")
         val absent = changes.propose(
-            ALICE,
+            ALICE_OP,
             ACME,
             0,
             listOf(Operation.RemovePolicy(PolicyId("nope")), Operation.RemoveBinding(BindingId("nope"))),
@@ -177,25 +183,31 @@ class ChangesTest {
             Operation.SetBoundary(PolicyId("fence"))
         )
         harness.revisions.head(SnapshotKey.Platform)!!.document.boundary!!.value.assert().isEqualTo("fence")
-        changes.propose(ALICE, ACME, 0, listOf(Operation.SetBoundary(PolicyId("plain"))), "not a boundary")
+        changes.propose(ALICE_OP, ACME, 0, listOf(Operation.SetBoundary(PolicyId("plain"))), "not a boundary")
             .errors.map { it.check to it.path }.assert().containsExactly("REFERENCES" to "$.boundary")
         publish(ACME, Operation.SetBoundary(PolicyId("fence")))
         harness.revisions.head(ACME)!!.document.boundary!!.value.assert().isEqualTo("fence")
         // The tenant names it: the platform can neither remove it nor stop naming it as the default and drop it.
         changes.propose(
-            ALICE,
+            PLATO,
             SnapshotKey.Platform,
             1,
             listOf(Operation.SetBoundary(null), Operation.RemovePolicy(PolicyId("fence"))),
             "drop"
         )
             .errors.map { it.check }.assert().containsExactly("REFERENCES")
-        changes.propose(ALICE, SnapshotKey.App("order"), 0, listOf(Operation.SetBoundary(PolicyId("fence"))), "app")
+        changes.propose(PLATO, SnapshotKey.App("order"), 0, listOf(Operation.SetBoundary(PolicyId("fence"))), "app")
             .errors.map { it.check }.assert().containsExactly("OPERATION")
         // Applying the head proposes nothing; a replace without the boundary removes it.
         val head = harness.revisions.head(ACME)!!.document
-        changes.apply(ALICE, ACME, head, ApplyMode.REPLACE, "same").operations.assert().isEmpty()
-        val cleared = changes.apply(ALICE, ACME, StoreFixtures.candidate(ACME, emptyList()), ApplyMode.REPLACE, "clear")
+        changes.apply(ALICE_OP, ACME, head, ApplyMode.REPLACE, "same").operations.assert().isEmpty()
+        val cleared = changes.apply(
+            ALICE_OP,
+            ACME,
+            StoreFixtures.candidate(ACME, emptyList()),
+            ApplyMode.REPLACE,
+            "clear"
+        )
         (cleared.operations.single() as Operation.SetBoundary).boundary.assert().isNull()
     }
 
@@ -212,12 +224,21 @@ class ChangesTest {
             Operation.SetBoundary(PolicyId("fence")),
             Operation.SetBoundary(null),
         )
-        val change = changes.propose(ALICE, ACME, 0, operations, "all of them")
+        val change = changes.propose(ALICE_OP, ACME, 0, operations, "all of them")
         val stored = ChangeRequestCodec.encode(change)
         val read = ChangeRequestCodec.decode(stored)
         ChangeRequestCodec.encode(read).assert().isEqualTo(stored)
         read.findings.assert().isEqualTo(change.findings)
         read.state.assert().isEqualTo(change.state)
+        val approved = change.copy(
+            escalations = listOf(
+                Escalation("a[0] order:read on order/{id} to binding x in (order, *)", "NOT_COVERED", "why")
+            ),
+            approval = Approval(PLATO.actor, StoreFixtures.START, "c".repeat(64), listOf("a[0]")),
+        )
+        val again = ChangeRequestCodec.decode(ChangeRequestCodec.encode(approved))
+        again.escalations.assert().isEqualTo(approved.escalations)
+        again.approval.assert().isEqualTo(approved.approval)
         val slot = StageSlot(change.id, StoreFixtures.START)
         ChangeRequestCodec.decodeSlot(ChangeRequestCodec.encode(slot)).assert().isEqualTo(slot)
         ChangeRequestCodec.decodeSlot(ChangeRequestCodec.encode(StageSlot.FREE)).assert().isEqualTo(StageSlot.FREE)
@@ -232,12 +253,12 @@ class ChangesTest {
 
     @Test
     fun `transitions only happen from the states that allow them`() = runBlocking<Unit> {
-        val change = changes.propose(ALICE, ACME, 0, listOf(Operation.PutPolicy(allow("a"))), "x")
-        assertThrownBy<ChangeRejectedException> { runBlocking { changes.publish(change.id) } }
+        val change = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("a"))), "x")
+        assertThrownBy<ChangeRejectedException> { runBlocking { changes.publish(ALICE_OP, change.id) } }
         assertThrownBy<ChangeRejectedException> { runBlocking { changes.shadowed(change.id) } }
-        assertThrownBy<IllegalArgumentException> { runBlocking { changes.skipShadow(change.id, " ") } }
-        changes.abandon(change.id)
-        assertThrownBy<ChangeRejectedException> { runBlocking { changes.abandon(change.id) } }
+        assertThrownBy<IllegalArgumentException> { runBlocking { changes.skipShadow(ALICE_OP, change.id, " ") } }
+        changes.abandon(ALICE_OP, change.id)
+        assertThrownBy<ChangeRejectedException> { runBlocking { changes.abandon(ALICE_OP, change.id) } }
         assertThrownBy<ChangeRejectedException> { runBlocking { changes.get(ChangeId("missing")) } }
             .extracting { (it as ChangeRejectedException).status }.isEqualTo(404)
         assertThrownBy<IllegalArgumentException> { ChangeId("a:b") }

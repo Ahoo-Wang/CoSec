@@ -24,6 +24,7 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
 import kotlin.io.path.isDirectory
 import kotlin.io.path.listDirectoryEntries
@@ -45,6 +46,9 @@ object ConvertedDirectory {
     const val TENANTS_DIRECTORY = "tenants"
     const val PROVENANCE_FILE = "provenance.json"
     const val REPORT_FILE = "report.json"
+
+    /** The translated rate limit rules, for the platform document's `rateLimits` (RFC 0006 PR-5). */
+    const val RATE_LIMITS_FILE = "rate-limits.json"
     private const val JSON = ".json"
 
     private val factory = JsonNodeFactory.instance
@@ -62,43 +66,88 @@ object ConvertedDirectory {
             val path = directory.resolve(file)
             Files.createDirectories(path.parent)
             val bytes = PolicyDocumentCodec.encode(document)
-            Files.write(path, bytes)
+            Files.write(path, bytes, StandardOpenOption.CREATE_NEW)
             outputs[file] = sha256(bytes)
+        }
+        if (conversion.rateLimits.isNotEmpty()) {
+            val rules = factory.arrayNode().also { array -> conversion.rateLimits.forEach { array.add(it.toJson()) } }
+            val bytes = pretty.writeValueAsBytes(rules)
+            Files.write(directory.resolve(RATE_LIMITS_FILE), bytes, StandardOpenOption.CREATE_NEW)
+            outputs[RATE_LIMITS_FILE] = sha256(bytes)
         }
         if (conversion.report.accepted) {
             val bytes = pretty.writeValueAsBytes(provenance(conversion.provenance))
-            Files.write(directory.resolve(PROVENANCE_FILE), bytes)
+            Files.write(directory.resolve(PROVENANCE_FILE), bytes, StandardOpenOption.CREATE_NEW)
             outputs[PROVENANCE_FILE] = sha256(bytes)
         }
-        Files.write(directory.resolve(REPORT_FILE), pretty.writeValueAsBytes(report(conversion.report, outputs)))
+        Files.write(
+            directory.resolve(REPORT_FILE),
+            pretty.writeValueAsBytes(report(conversion.report, outputs)),
+            StandardOpenOption.CREATE_NEW,
+        )
     }
 
     /**
-     * The documents in [directory], decoded strictly. Fails when the conversion there was rejected or a file does not
-     * decode as the document its name says.
+     * The documents in [directory], decoded strictly: exactly the files the accepted conversion's `report.json`
+     * lists, each with the SHA-256 recorded there. A file that changed, went missing or appeared since `convert`
+     * (an edit, or two ids that collided on a case-insensitive file system) fails the read, so `publish` writes
+     * only what `convert` produced.
      */
     fun read(directory: Path): Map<SnapshotKey, PolicyDocument> {
-        val platform = directory.resolve(PLATFORM_FILE)
-        require(Files.isRegularFile(platform)) {
-            "$platform is missing: publish reads the output of an accepted conversion (see $REPORT_FILE)."
+        val reportFile = directory.resolve(REPORT_FILE)
+        require(Files.isRegularFile(reportFile)) { "$reportFile is missing: publish reads the output of convert." }
+        val report = CoSecJsonSerializer.readTree(Files.readAllBytes(reportFile))
+        require(report.get("accepted")?.asBoolean() == true) {
+            "The conversion in $directory was rejected (see $REPORT_FILE): there is nothing to publish."
+        }
+        val recorded = report.get("outputSha256")?.properties()?.associate { it.key to it.value.asString() }.orEmpty()
+            .filterKeys(::isDocumentFile)
+        require(PLATFORM_FILE in recorded) { "$REPORT_FILE lists no $PLATFORM_FILE." }
+        val present = documentFiles(directory)
+        require(present == recorded.keys) {
+            "The documents in $directory are not the ones convert wrote: missing ${recorded.keys - present}, " +
+                "unexpected ${present - recorded.keys}."
         }
         val documents = LinkedHashMap<SnapshotKey, PolicyDocument>()
-        documents[SnapshotKey.Platform] = PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", Files.readAllBytes(platform))
-        for ((subdirectory, kind) in listOf(
-            APPS_DIRECTORY to DocumentKind.APP,
-            TENANTS_DIRECTORY to DocumentKind.TENANT
-        )) {
-            val path = directory.resolve(subdirectory)
-            if (!path.isDirectory()) {
-                continue
-            }
-            for (file in path.listDirectoryEntries("*$JSON").sortedBy { it.name }) {
-                val owner = URLDecoder.decode(file.name.removeSuffix(JSON), Charsets.UTF_8)
-                val key = if (kind == DocumentKind.APP) SnapshotKey.App(owner) else SnapshotKey.Tenant(owner)
-                documents[key] = PolicyDocumentCodec.decode(kind, owner, Files.readAllBytes(file))
-            }
+        for ((file, sha) in recorded.toSortedMap(compareBy<String> { it != PLATFORM_FILE }.thenBy { it })) {
+            val bytes = Files.readAllBytes(directory.resolve(file))
+            require(
+                sha256(bytes) == sha
+            ) { "$file changed since convert: its SHA-256 is not the one $REPORT_FILE records." }
+            val (key, kind, owner) = keyOf(file)
+            documents[key] = PolicyDocumentCodec.decode(kind, owner, bytes)
         }
         return documents
+    }
+
+    private fun isDocumentFile(file: String): Boolean =
+        file == PLATFORM_FILE || file.startsWith("$APPS_DIRECTORY/") || file.startsWith("$TENANTS_DIRECTORY/")
+
+    /** The document files in [directory], as relative paths. */
+    private fun documentFiles(directory: Path): Set<String> {
+        val files = HashSet<String>()
+        if (Files.isRegularFile(directory.resolve(PLATFORM_FILE))) {
+            files += PLATFORM_FILE
+        }
+        for (subdirectory in listOf(APPS_DIRECTORY, TENANTS_DIRECTORY)) {
+            val path = directory.resolve(subdirectory)
+            if (path.isDirectory()) {
+                path.listDirectoryEntries().forEach { files += "$subdirectory/${it.name}" }
+            }
+        }
+        return files
+    }
+
+    private fun keyOf(file: String): Triple<SnapshotKey, DocumentKind, String> {
+        if (file == PLATFORM_FILE) {
+            return Triple(SnapshotKey.Platform, DocumentKind.PLATFORM, "")
+        }
+        val owner = URLDecoder.decode(file.substringAfter('/').removeSuffix(JSON), Charsets.UTF_8)
+        return if (file.startsWith("$APPS_DIRECTORY/")) {
+            Triple(SnapshotKey.App(owner), DocumentKind.APP, owner)
+        } else {
+            Triple(SnapshotKey.Tenant(owner), DocumentKind.TENANT, owner)
+        }
     }
 
     fun fileOf(key: SnapshotKey): String = when (key) {

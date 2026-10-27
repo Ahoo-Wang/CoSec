@@ -26,8 +26,6 @@ class MatcherTranslatorTest {
 
     private fun action(json: String) = translator.action(CoSecJsonSerializer.readTree(json), "a")
 
-    private fun condition(json: String?) = translator.condition(json?.let { CoSecJsonSerializer.readTree(it) }, "c")
-
     @ParameterizedTest
     @CsvSource(
         delimiter = '|',
@@ -71,6 +69,10 @@ class MatcherTranslatorTest {
             """["/a",{"path":{"pattern":"/b","method":"GET"}}]|ACTION_NOT_TRANSLATED|a""",
             """[{"all":{"method":"GET"}},"/b"]|ACTION_NOT_TRANSLATED|a""",
             """{"custom":{}}|CUSTOM_ACTION|a""",
+            // Review M1: 7.x compares methods literally; `*` and blanks match no request, so they must not become http:*.
+            """{"path":{"pattern":"/orders/**","method":"*"}}|ACTION_NOT_TRANSLATED|a.path.method""",
+            """{"all":{"method":" "}}|ACTION_NOT_TRANSLATED|a.all.method""",
+            """{"path":{"pattern":"/a","method":["GET",""]}}|ACTION_NOT_TRANSLATED|a.path.method""",
             """{"composite":"/a"}|UNDECODABLE|a""",
             """{"path":{"method":"GET"}}|UNDECODABLE|a.path""",
             """{"path":{"pattern":[1]}}|UNDECODABLE|a.path.pattern""",
@@ -89,33 +91,5 @@ class MatcherTranslatorTest {
         action(json).assert().isNull()
         rejections.last().kind.assert().isEqualTo(kind)
         rejections.last().location.assert().isEqualTo(location)
-    }
-
-    @Test
-    fun `only no condition and all translate`() {
-        condition(null).assert().isTrue()
-        condition("null").assert().isTrue()
-        condition("""{"all":{}}""").assert().isTrue()
-        condition("""{"bool":{"and":[{"all":{}}],"or":[{"all":{}}]}}""").assert().isTrue()
-        rejections.assert().isEmpty()
-    }
-
-    @ParameterizedTest
-    @CsvSource(
-        delimiter = '|',
-        value = [
-            """{"all":{"negate":true}}|CONDITION_NOT_TRANSLATED|c.all""",
-            """{"bool":{"negate":true,"and":[{"all":{}}]}}|CONDITION_NOT_TRANSLATED|c.bool""",
-            """{"inTenant":{"value":"default"}}|CONDITION_NOT_TRANSLATED|c.inTenant""",
-            """{"bool":{"or":[{"all":{}},{"ognl":{"value":"true"}}]}}|EXPRESSION_CONDITION|c.bool.or[1].ognl""",
-            """{"mine":{}}|CUSTOM_CONDITION|c.mine""",
-            """{"a":{},"b":{}}|UNDECODABLE|c""",
-            """[]|UNDECODABLE|c""",
-        ],
-    )
-    fun `every other condition is rejected at its location`(json: String, kind: RejectionKind, location: String) {
-        condition(json).assert().isFalse()
-        rejections.single().kind.assert().isEqualTo(kind)
-        rejections.single().location.assert().isEqualTo(location)
     }
 }

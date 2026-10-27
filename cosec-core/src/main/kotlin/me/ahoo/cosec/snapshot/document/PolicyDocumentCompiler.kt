@@ -159,7 +159,7 @@ class PolicyDocumentCompiler(
             return
         }
         val defined = document.policies.mapTo(HashSet()) { it.id.value } + platform.policies.map { it.id.value } +
-            BuiltinPolicies.ROOT.value
+            BuiltinPolicies.ROOT.value + BuiltinPolicies.CONTROL.keys.map { it.value }
         val errors = document.bindings.withIndex().filter { (_, binding) -> binding.policy.value !in defined }
             .map { (i, binding) ->
                 CompileError(
