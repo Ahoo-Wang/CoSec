@@ -42,6 +42,8 @@ import tools.jackson.databind.node.ObjectNode
  * { "outcome": "none" }                                                // pipeline, the caller cancelled
  * { "fragments": [ { "policy": "p", "statement": 0, "action": "a:b", "resource": "r", "verdict": "YES" } ],
  *   "unprotect": ["policy:p"] }                                                          // control: grant analysis
+ * { "outcomes": ["Published"], "head": { "revision": 1, "parent": null, "parentRecord": null }, "records": 1,
+ *   "writes": ["record", "head"] }                                                       // control: publishing
  * ```
  *
  * `via` is `{ "binding": id, "document": "platform" | "app" | "tenant" }`, `{ "attached": policy }` or `"builtin"`; a
@@ -85,6 +87,28 @@ object Expectations {
         is Outcome.NotCompiled -> json.objectNode().put("decision", "NotCompiled").put("error", outcome.error)
         is Outcome.Analyzed -> analyzed(outcome)
         is Outcome.Granted -> granted(outcome)
+        is Outcome.Stored -> stored(outcome)
+    }
+
+    private fun stored(outcome: Outcome.Stored): JsonNode = json.objectNode().apply {
+        set("outcomes", json.arrayNode().apply { outcome.outcomes.forEach(::add) })
+        set(
+            "head",
+            json.objectNode().apply {
+                // As ints, as the scenario's JSON reads small numbers: an IntNode never equals a LongNode.
+                if (outcome.revision == null) {
+                    putNull(
+                        "revision"
+                    )
+                } else {
+                    put("revision", Math.toIntExact(outcome.revision))
+                }
+                if (outcome.parent == null) putNull("parent") else put("parent", Math.toIntExact(outcome.parent))
+                if (outcome.parentRecord == null) putNull("parentRecord") else put("parentRecord", outcome.parentRecord)
+            },
+        )
+        put("records", outcome.records)
+        set("writes", json.arrayNode().apply { outcome.writes.forEach(::add) })
     }
 
     private fun analyzed(outcome: Outcome.Analyzed): JsonNode = json.objectNode().apply {

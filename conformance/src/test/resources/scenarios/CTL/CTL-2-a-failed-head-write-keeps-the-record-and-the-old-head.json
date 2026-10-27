@@ -1,0 +1,39 @@
+{
+  "rules": [
+    "CTL-2"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The second publish's head write fails: its record was already written, so no content is lost, and the head stays at revision 1 without a parent.",
+  "publishes": [
+    {
+      "policies": [
+        "p"
+      ]
+    },
+    {
+      "policies": [
+        "q"
+      ],
+      "failHead": true
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Failed"
+    ],
+    "head": {
+      "revision": 1,
+      "parent": null,
+      "parentRecord": null
+    },
+    "records": 2,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head"
+    ]
+  }
+}

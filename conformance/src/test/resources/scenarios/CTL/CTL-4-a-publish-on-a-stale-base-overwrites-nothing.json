@@ -1,0 +1,47 @@
+{
+  "rules": [
+    "CTL-4"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "The third publish is based on the head before the second: putIfMatch on the base digest conflicts, the head stays the second, and the conflicted record is an orphan.",
+  "publishes": [
+    {
+      "policies": [
+        "p"
+      ]
+    },
+    {
+      "policies": [
+        "q"
+      ]
+    },
+    {
+      "policies": [
+        "r"
+      ],
+      "base": "stale"
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published",
+      "Conflicted"
+    ],
+    "head": {
+      "revision": 2,
+      "parent": 1,
+      "parentRecord": true
+    },
+    "records": 3,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head"
+    ]
+  }
+}

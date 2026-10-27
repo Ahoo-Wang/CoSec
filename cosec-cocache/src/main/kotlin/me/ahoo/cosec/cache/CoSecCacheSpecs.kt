@@ -82,8 +82,22 @@ object CoSecCacheSpecs {
      */
     val DEFAULT_SNAPSHOT_LOCAL_MAX_AGE: Duration = Duration.ofSeconds(30)
 
+    /** The control plane's revision records, revision indexes, back-references and leases (RFC 0007 §5.2). */
+    const val REVISION_RECORD_CACHE_NAME = "RevisionRecordCache"
+    const val REVISION_INDEX_CACHE_NAME = "RevisionIndexCache"
+    const val REFERENCE_INDEX_CACHE_NAME = "ReferenceIndexCache"
+    const val CONTROL_LEASE_CACHE_NAME = "ControlLeaseCache"
+
     /** Encoded key of the single global policy index entry, whatever key the caller passes. */
     const val GLOBAL_POLICY_INDEX_ENCODED_KEY = "policy"
+
+    /** The control plane's caches (RFC 0007 §5.2), created by `CoCacheControlStore.create`, not by the data plane. */
+    val CONTROL_CACHE_NAMES: Set<String> = setOf(
+        REVISION_RECORD_CACHE_NAME,
+        REVISION_INDEX_CACHE_NAME,
+        REFERENCE_INDEX_CACHE_NAME,
+        CONTROL_LEASE_CACHE_NAME,
+    )
 
     /** Names of the caches whose only copy is Redis. */
     val STORE_OF_RECORD_CACHE_NAMES: Set<String> = setOf(
@@ -92,6 +106,10 @@ object CoSecCacheSpecs {
         APP_PERMISSION_CACHE_NAME,
         ROLE_PERMISSION_CACHE_NAME,
         POLICY_SNAPSHOT_CACHE_NAME,
+        REVISION_RECORD_CACHE_NAME,
+        REVISION_INDEX_CACHE_NAME,
+        REFERENCE_INDEX_CACHE_NAME,
+        CONTROL_LEASE_CACHE_NAME,
     )
 
     private val NAMESPACES: Map<String, String> = mapOf(
@@ -104,6 +122,10 @@ object CoSecCacheSpecs {
         REVOKED_SUBJECT_CACHE_NAME to "token:subject:revoked",
         POLICY_SNAPSHOT_CACHE_NAME to "snapshot",
         MEMBERSHIP_CACHE_NAME to "membership",
+        REVISION_RECORD_CACHE_NAME to "control:revision",
+        REVISION_INDEX_CACHE_NAME to "control:revisions",
+        REFERENCE_INDEX_CACHE_NAME to "control:refs",
+        CONTROL_LEASE_CACHE_NAME to "control:lease",
     )
 
     /** The CoCache namespace of [cacheName]: `{keyPrefix}:policy` and so on. */

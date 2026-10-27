@@ -54,4 +54,14 @@ sealed interface Outcome {
 
     /** A control scenario of the grant analysis: the verdict for each fragment, and the protected entries changed. */
     class Granted(val analysis: GrantAnalysis) : Outcome
+
+    /** A control scenario of publishing: each publish's answer, the head afterwards, the records and the write order. */
+    class Stored(
+        val outcomes: List<String>,
+        val revision: Long?,
+        val parent: Long?,
+        val parentRecord: Boolean?,
+        val records: Int,
+        val writes: List<String>,
+    ) : Outcome
 }

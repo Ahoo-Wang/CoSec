@@ -1,0 +1,47 @@
+{
+  "rules": [
+    "CTL-5"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Tenant acme binds the platform policy shared; a platform candidate without shared is refused, nothing is written, and the platform head stays at revision 1.",
+  "publishes": [
+    {
+      "document": "platform",
+      "policies": [
+        "shared",
+        "other"
+      ]
+    },
+    {
+      "bindings": [
+        "shared"
+      ]
+    },
+    {
+      "document": "platform",
+      "policies": [
+        "other"
+      ]
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published",
+      "Referenced"
+    ],
+    "head": {
+      "revision": 1,
+      "parent": null,
+      "parentRecord": null
+    },
+    "records": 1,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head"
+    ]
+  }
+}
