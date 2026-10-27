@@ -107,6 +107,12 @@ class AuditEventsTest {
         audit(Decision.Deny(null)).authorization.source.type.assert().isEqualTo(AuditSourceType.NONE)
         audit(Decision.Deny(StatementRef.ScopeRejected(ScopeResolution.Rejected.Reason.APP_MISMATCH)))
             .authorization.reasonCode.assert().isEqualTo(AuditReasonCode.SCOPE_REJECTED)
+        // RFC 0007 §7.6: a boundary deny is an explicit deny whose reason only audit records.
+        audit(Decision.Deny(StatementRef.Boundary(PolicyId("fence"), PipelineFixtures.TENANT))).authorization.let {
+            it.decision.assert().isEqualTo(AuditDecision.EXPLICIT_DENY)
+            it.reasonCode.assert().isEqualTo(AuditReasonCode.BOUNDARY)
+            it.reason.assert().isEqualTo("BOUNDARY: fence")
+        }
         val revoked = authenticator(AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_REVOKED))
         audit(Decision.Deny(null), revoked).authorization.reasonCode.assert().isEqualTo(AuditReasonCode.TOKEN_REVOKED)
         val expired = authenticator(AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_EXPIRED))

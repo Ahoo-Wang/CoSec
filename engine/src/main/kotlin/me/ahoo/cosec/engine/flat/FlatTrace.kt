@@ -27,7 +27,8 @@ import me.ahoo.cosec.model.scope.Scope
  * Both levels list every statement of every candidate, those the candidate index left out included, with what ruled
  * them out. FULL stops evaluating where the untraced evaluation stops,
  * except that it finishes the pass that decided; the rest is [CandidateOutcome.NOT_EVALUATED]. EXHAUSTIVE evaluates the
- * ALLOW pass even when the DENY pass decided.
+ * ALLOW pass even when the DENY pass decided. A Permit is then held to the platform boundary, whose statements are in
+ * [boundary].
  */
 class FlatTrace(
     val scope: Scope,
@@ -39,6 +40,11 @@ class FlatTrace(
      * ambiguous ones.
      */
     val unresolved: List<Cause>,
+    /**
+     * The statements of the tenant's platform boundary (RFC 0007 §7.6), evaluated once an ALLOW permitted, until one
+     * matched; empty when no boundary applies or nothing was permitted.
+     */
+    val boundary: List<CandidateTrace> = emptyList(),
 )
 
 /** One statement of a candidate. [ref] says through which binding or attachment it applied. */
