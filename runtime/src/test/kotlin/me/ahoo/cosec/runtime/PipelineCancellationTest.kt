@@ -87,7 +87,7 @@ class PipelineCancellationTest {
             awaitCancellation()
         }
         cancelWhenSuspended(
-            pipeline(authenticator(authenticated(null)), engine, membershipProvider = provider),
+            pipeline(authenticator(authenticated(null)), engine) { it.copy(membershipProvider = provider) },
             suspended
         )
             .assertNoOutcome(engine)
@@ -109,7 +109,9 @@ class PipelineCancellationTest {
 
     @Test
     fun ownDeadlineIsAnOutcomeNotACancellation() = runTest {
-        val outcome = pipeline(Authenticator { awaitCancellation() }, options = PipelineOptions(timeout = DEADLINE))
+        val outcome = pipeline(
+            Authenticator { awaitCancellation() }
+        ) { it.copy(options = PipelineOptions(timeout = DEADLINE)) }
             .evaluate(facts())
         outcome.status.assert().isEqualTo(503)
         outcome.proceed.assert().isFalse()

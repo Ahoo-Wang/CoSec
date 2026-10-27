@@ -31,6 +31,7 @@ import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
@@ -66,12 +67,14 @@ class PipelineWebFilterTest {
 
     private fun pipeline(decision: Decision, authenticator: Authenticator = Authenticator { AuthnResult.Anonymous }) =
         Pipeline(
-            authenticator,
-            SuspendingSnapshotSource(Views),
-            engine = object : FlatEngine {
-                override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel) =
-                    FlatEvaluation(decision, null)
-            },
+            PipelineComponents(
+                authenticator,
+                SuspendingSnapshotSource(Views),
+                engine = object : FlatEngine {
+                    override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel) =
+                        FlatEvaluation(decision, null)
+                },
+            )
         )
 
     @Test

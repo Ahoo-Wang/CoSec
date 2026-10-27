@@ -37,6 +37,7 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
@@ -124,14 +125,16 @@ class ShadowWindowTest {
             ),
         ).also { opened += it }
         private val pipeline = Pipeline(
-            authenticator = Authenticator {
-                AuthnResult.Authenticated(
-                    AuthenticatedPrincipal(PrincipalId("bob"), TenantId("acme"), NO_MEMBERSHIPS),
-                    "token"
-                )
-            },
-            snapshots = SuspendingSnapshotSource(HeadViews()),
-            listeners = listeners,
+            PipelineComponents(
+                authenticator = Authenticator {
+                    AuthnResult.Authenticated(
+                        AuthenticatedPrincipal(PrincipalId("bob"), TenantId("acme"), NO_MEMBERSHIPS),
+                        "token"
+                    )
+                },
+                snapshots = SuspendingSnapshotSource(HeadViews()),
+                listeners = listeners,
+            )
         )
         val reporter = ShadowReporter(recorder, reports, { installed() }, clock)
 

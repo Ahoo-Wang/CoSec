@@ -56,7 +56,11 @@ val mavenLibrary = the<PublishingExtension>().publications.getByName("mavenLibra
 val verifyTestFixturesUnpublished = tasks.register("verifyTestFixturesUnpublished") {
     group = "verification"
     description = "Fails if the publication carries the test fixtures: a variant, an artifact or a POM entry."
-    val publication = mavenLibrary
+    // Resolved at configuration time as a value: the task itself must not hold the publication (configuration cache).
+    val artifactNames = provider {
+        mavenLibrary.artifacts.map { "${it.file.name} (classifier ${it.classifier})" }
+    }
+    inputs.property("publishedArtifacts", artifactNames)
     val metadata = tasks.named<GenerateModuleMetadata>("generateMetadataFileForMavenLibraryPublication")
         .flatMap { it.outputFile }
     val pom = tasks.named<GenerateMavenPom>("generatePomFileForMavenLibraryPublication").map { it.destination }
@@ -70,7 +74,7 @@ val verifyTestFixturesUnpublished = tasks.register("verifyTestFixturesUnpublishe
         }
         val pomText = pom.get().readText()
         check(!mentionsTestFixtures(pomText)) { "The published POM of ${project.path} names its test fixtures:\n$pomText" }
-        val artifacts = publication.artifacts.map { "${it.file.name} (classifier ${it.classifier})" }
+        val artifacts = artifactNames.get()
         check(artifacts.none(::mentionsTestFixtures)) {
             "The publication of ${project.path} carries test fixture artifacts: $artifacts"
         }
@@ -134,9 +138,10 @@ tasks.register<Test>("engineParity") {
     maxHeapSize = "2g"
     // Replaces the TRACE configuration every Test task gets: at TRACE, and with a stack trace per failing case, a million
     // cases log tens of gigabytes. Set at execution, after every configuration action has run.
+    val parityLogback = "${rootProject.rootDir}/config/logback-parity.xml"
     doFirst {
         jvmArgs = jvmArgs.orEmpty().filterNot { it.startsWith("-Dlogback.configurationFile=") } +
-            "-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-parity.xml"
+            "-Dlogback.configurationFile=$parityLogback"
     }
     // Nothing worth keeping is captured; the case count is printed to the console instead.
     reports.html.required.set(false)
@@ -165,8 +170,8 @@ val verifySchemas = tasks.register<JavaExec>("verifySchemas") {
     args(schemaDirectory.asFile.absolutePath, "--verify")
     inputs.dir(schemaDirectory)
     inputs.files(sourceSets["test"].runtimeClasspath)
-    outputs.upToDateWhen { true }
-    // An up-to-date check needs an output; an empty marker records the last successful run.
+    // An up-to-date check needs an output; an empty marker records the last successful run. The inputs above (the
+    // schema files and the classpath holding the descriptors) decide whether it runs again.
     val marker = layout.buildDirectory.file("verifySchemas/ok")
     outputs.file(marker)
     doLast { marker.get().asFile.apply { parentFile.mkdirs() }.writeText("") }
