@@ -1,0 +1,26 @@
+{
+  "rules": [
+    {
+      "id": "ANA-1",
+      "source": "RFC 0005 §4.1",
+      "statement": "When a condition is true, the request's value of an indexable attribute is among the condition's index keys, or the keys are unconstrained (A1).",
+      "level": "analysis",
+      "properties": [
+        "model:AnalysisPropertyTest#A1 index keys admit every request the condition matches",
+        "model:AdversarialAnalysisTest#A1 holds on adversarial values"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ANA-2",
+      "source": "RFC 0005 §4.2",
+      "statement": "When implies(c1, c2) = YES, no request satisfies c1 but not c2 (A2).",
+      "level": "analysis",
+      "properties": [
+        "model:AnalysisPropertyTest#A2 implies is sound",
+        "model:AdversarialAnalysisTest#A2 holds on adversarial values"
+      ],
+      "pending": null
+    }
+  ]
+}

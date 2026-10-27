@@ -1,0 +1,20 @@
+{
+  "rules": [
+    {
+      "id": "BDY-1",
+      "source": "RFC 0007 §7.6",
+      "statement": "A platform boundary can only turn a Permit into Deny or Indeterminate (P-B2); without boundaries it is the identity (P-B1).",
+      "level": "engine",
+      "properties": [
+        "engine:FlatEnginePropertyTest#P-B1 a boundary that allows everything is the identity",
+        "engine:FlatEnginePropertyTest#P-B2 a boundary never permits what is not permitted without it",
+        "engine:FlatEnginePropertyTest#P-B3 a boundary decision does not depend on the candidate order"
+      ],
+      "guards": [
+        "engine:BoundaryTest",
+        "cosec-core:PolicyDocumentCompilerTest#boundaries live in the platform, only allow, and are never bound"
+      ],
+      "pending": null
+    }
+  ]
+}

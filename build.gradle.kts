@@ -163,7 +163,7 @@ configure(pureProjects) {
 }
 
 /*
- * RFC 0008 §3.5: the property tests the rule registry (conformance/src/test/resources/rules.json) names, with
+ * RFC 0008 §3.5: the property tests the rule registry (conformance/src/test/resources/rules/<FAMILY>.json) names, with
  * -PpropertyIterations random cases each (default 1,000,000). Not part of check, which runs them with their own fixed
  * counts. A test reads the count from the system property cosec.property.iterations.
  */
@@ -172,14 +172,17 @@ val propertyStress = tasks.register("propertyStress") {
     description = "Runs the registered property tests with -PpropertyIterations random cases (default 1,000,000)."
 }
 
+val ruleRegistry = layout.projectDirectory.dir("conformance/src/test/resources/rules")
+
 @Suppress("UNCHECKED_CAST")
-val registeredProperties = (
-    groovy.json.JsonSlurper().parseText(
-        // A tracked file read, so the configuration cache is invalidated when the registry changes.
-        providers.fileContents(layout.projectDirectory.file("conformance/src/test/resources/rules.json"))
-            .asText.get()
-    ) as Map<String, Any?>
-    )["rules"] as List<Map<String, Any?>>
+val registeredProperties = ruleRegistry.asFile.listFiles().orEmpty()
+    .filter { it.name.endsWith(".json") && it.name != "_meta.json" }
+    .sortedBy { it.name }
+    .flatMap { family ->
+        // Tracked file reads, so the configuration cache is invalidated when the registry changes.
+        val text = providers.fileContents(ruleRegistry.file(family.name)).asText.get()
+        (groovy.json.JsonSlurper().parseText(text) as Map<String, Any?>)["rules"] as List<Map<String, Any?>>
+    }
 registeredProperties
     .flatMap { (it["properties"] as List<String>?).orEmpty() }
     // module:Class#test name
@@ -189,7 +192,7 @@ registeredProperties
         val test = target.the<SourceSetContainer>()["test"]
         val stress = target.tasks.register<Test>("propertyStress") {
             group = "verification"
-            description = "Runs the property tests rules.json names with -PpropertyIterations random cases."
+            description = "Runs the property tests the rule registry names with -PpropertyIterations random cases."
             testClassesDirs = test.output.classesDirs
             classpath = test.runtimeClasspath
             filter {
