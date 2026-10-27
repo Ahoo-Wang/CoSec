@@ -62,25 +62,30 @@ class ExternalAttributeDocumentTest {
             .assert().contains("ext.geo.other")
     }
 
-    /** RFC 0006 Q13: a DENY may lapse while its provider fails only in the platform document. */
-    @Test
-    fun aLapsingDenyOnlyInThePlatformDocument() {
-        errors(compiler, SnapshotKey.Tenant("acme"), policies("deny", "nomatch")).single()
-            .assert().contains("platform document")
-        errors(compiler, SnapshotKey.Platform, policies("deny", "nomatch")).assert().isEmpty()
-        errors(compiler, SnapshotKey.Tenant("acme"), policies("deny", "indeterminate")).assert().isEmpty()
-    }
+    private val confirmed = ""","onMissingConfirmed":{"by":{"tenant":"(platform)","principal":"plato"},"change":"c1"}"""
 
-    /** Review R3: the lapsing platform DENY compiles, with a warning naming it. */
+    private fun confirmedDeny() =
+        ""","policies":[{"id":"p","statements":[{"effect":"deny","action":"*",""" +
+            """"condition":{"eq":["ext.geo.inFence",true]},"onMissing":"nomatch"$confirmed}]}]"""
+
+    /** RFC 0007 §9.5 (N6, Q13): a DENY may lapse while its provider fails, in any document, only when confirmed. */
     @Test
-    fun aLapsingPlatformDenyIsWarnedAbout() {
-        val warnings = ArrayList<String>()
-        val warning = PolicyDocumentCompiler(catalog) { warnings += it }
-        errors(warning, SnapshotKey.Platform, policies("deny", "nomatch")).assert().isEmpty()
-        warnings.single().assert().contains("[p]").contains("statement 0").contains("nomatch")
-        errors(warning, SnapshotKey.Platform, policies("deny", "indeterminate")).assert().isEmpty()
-        errors(warning, SnapshotKey.Platform, policies("allow", "nomatch")).assert().isEmpty()
-        warnings.size.assert().isEqualTo(1)
+    fun aLapsingDenyNeedsItsConfirmation() {
+        errors(
+            compiler,
+            SnapshotKey.Tenant("acme"),
+            policies("deny", "nomatch")
+        ).single().assert().contains("confirmation")
+        errors(compiler, SnapshotKey.Platform, policies("deny", "nomatch")).single().assert().contains("confirmation")
+        errors(compiler, SnapshotKey.Tenant("acme"), confirmedDeny()).assert().isEmpty()
+        errors(compiler, SnapshotKey.Platform, confirmedDeny()).assert().isEmpty()
+        errors(compiler, SnapshotKey.Tenant("acme"), policies("deny", "indeterminate")).assert().isEmpty()
+        val decoded = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme", stored(confirmedDeny()).bodyBytes())
+        val confirmation = decoded.policies.single().statements.single().onMissingConfirmed!!
+        confirmation.principal.assert().isEqualTo("plato")
+        confirmation.change.assert().isEqualTo("c1")
+        PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme", PolicyDocumentCodec.encode(decoded))
+            .policies.single().statements.single().onMissingConfirmed.assert().isEqualTo(confirmation)
     }
 
     @Test

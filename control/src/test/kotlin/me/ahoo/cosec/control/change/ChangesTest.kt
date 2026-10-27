@@ -210,6 +210,10 @@ class ChangesTest {
             ),
         )
         ChangeRequestCodec.decode(ChangeRequestCodec.encode(shadowed)).shadow.assert().isEqualTo(shadowed.shadow)
+        val confirmed = change.copy(confirmations = listOf(Confirmation(PolicyId("p"), 2, "d".repeat(64))))
+        ChangeRequestCodec.decode(
+            ChangeRequestCodec.encode(confirmed)
+        ).confirmations.assert().isEqualTo(confirmed.confirmations)
         val slot = StageSlot(change.id, StoreFixtures.START)
         ChangeRequestCodec.decodeSlot(ChangeRequestCodec.encode(slot)).assert().isEqualTo(slot)
         ChangeRequestCodec.decodeSlot(ChangeRequestCodec.encode(StageSlot.FREE)).assert().isEqualTo(StageSlot.FREE)

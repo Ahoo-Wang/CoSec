@@ -136,6 +136,7 @@ object ControlActions {
     val SKIP_SHADOW: Action = Action(SERVICE, "skip-shadow")
     val APPROVE: Action = Action(SERVICE, "approve")
     val UNPROTECT: Action = Action(SERVICE, "unprotect")
+    val BREAKGLASS: Action = Action(SERVICE, "breakglass")
 }
 
 /**

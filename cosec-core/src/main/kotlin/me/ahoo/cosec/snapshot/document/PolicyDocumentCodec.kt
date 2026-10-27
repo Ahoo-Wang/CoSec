@@ -14,6 +14,7 @@
 package me.ahoo.cosec.snapshot.document
 
 import me.ahoo.cosec.engine.flat.OnMissing
+import me.ahoo.cosec.engine.flat.OnMissingConfirmation
 import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.AppId
@@ -82,7 +83,9 @@ object PolicyDocumentCodec {
     private val DOCUMENT_FIELDS = arrayOf("schema", "revision", "publishedAt", "provenance", "policies", "bindings")
     private val PROVENANCE_FIELDS = arrayOf("parent", "change", "kind", "publishedBy", "approvedBy", "shadow")
     private val POLICY_FIELDS = arrayOf("id", "attachable", "condition", "statements")
-    private val STATEMENT_FIELDS = arrayOf("name", "effect", "action", "resource", "condition", "onMissing")
+    private val STATEMENT_FIELDS =
+        arrayOf("name", "effect", "action", "resource", "condition", "onMissing", "onMissingConfirmed")
+    private val CONFIRMATION_FIELDS = arrayOf("by", "change")
     private val RESOURCE_FIELDS = arrayOf("pattern", "caseSensitive", "decodeAndParseSegments")
     private val BINDING_FIELDS = arrayOf("id", "subject", "app", "space", "policy", "expiresAt", "breakGlass")
 
@@ -217,7 +220,15 @@ object PolicyDocumentCodec {
             resources = node.field("resource")?.let(::resources).orEmpty(),
             condition = node.field("condition")?.let(ConditionJson::read),
             onMissing = node.field("onMissing")?.let(::onMissing),
+            onMissingConfirmed = node.field("onMissingConfirmed")?.let(::confirmation),
         )
+    }
+
+    /** RFC 0007 §9.5: who confirmed a `nomatch` DENY, and in which change. */
+    private fun confirmation(node: DocumentNode): OnMissingConfirmation {
+        node.requireObject(*CONFIRMATION_FIELDS)
+        val by = actor(node.required("by"))
+        return OnMissingConfirmation(by.tenant.value, by.principal.value, node.required("change").text())
     }
 
     private fun onMissing(node: DocumentNode): OnMissing = when (val text = node.text()) {
@@ -421,6 +432,11 @@ object PolicyDocumentCodec {
                     "onMissing",
                     if (it == OnMissing.NOMATCH) "nomatch" else "indeterminate"
                 )
+            }
+            statement.onMissingConfirmed?.let {
+                item.putObject("onMissingConfirmed")
+                    .put("change", it.change)
+                    .set("by", actor(Actor(TenantId(it.tenant), PrincipalId(it.principal))))
             }
         }
         return node

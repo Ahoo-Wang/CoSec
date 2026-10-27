@@ -56,20 +56,20 @@ internal object CandidateOrder {
         val subject = request.request.subject
         val tenant = request.scope.tenant.value
         val principal = if (subject.authenticated) subject.id else null
+        val app = view.app
         if (visit(platform.anyone, request, platform, visitor)) {
             return true
         }
         if (tenantDocument != null && visit(tenantDocument.anyone, request, platform, visitor)) {
             return true
         }
-        if (principal != null && principal(principal, request, platform, tenantDocument, visitor)) {
+        if (principal != null && principal(principal, request, platform, tenantDocument, visitor, app)) {
             return true
         }
-        val app = view.app
         if (app != null && roles(app, request, platform, visitor)) {
             return true
         }
-        if (tenantDocument != null && roles(tenantDocument, request, platform, visitor)) {
+        if (tenantDocument != null && roles(tenantDocument, request, platform, visitor, app)) {
             return true
         }
         return principal != null && visit(platform.breakGlass(tenant, principal), request, platform, visitor)
@@ -82,6 +82,7 @@ internal object CandidateOrder {
         platform: CompiledDocument,
         tenant: CompiledDocument?,
         visitor: CandidateVisitor,
+        app: CompiledDocument?,
     ): Boolean {
         if (attachments(request, platform, tenant, visitor)) {
             return true
@@ -90,7 +91,7 @@ internal object CandidateOrder {
         if (visit(platform.principal(tenantId, principal), request, platform, visitor)) {
             return true
         }
-        return tenant != null && visit(tenant.principal(tenantId, principal), request, platform, visitor)
+        return tenant != null && visit(tenant.principal(tenantId, principal), request, platform, visitor, app)
     }
 
     /**
@@ -128,21 +129,27 @@ internal object CandidateOrder {
         request: FlatRequest,
         platform: CompiledDocument,
         visitor: CandidateVisitor,
+        app: CompiledDocument? = null,
     ): Boolean {
         val roles = request.scope.roles
         for (i in roles.indices) {
-            if (visit(document.role(roles[i].value), request, platform, visitor)) {
+            if (visit(document.role(roles[i].value), request, platform, visitor, app)) {
                 return true
             }
         }
         return false
     }
 
+    /**
+     * [app] resolves a tenant role binding to that app's permission policy (RFC 0007 §9.3, N1): the binding is scoped to
+     * the app, so it is in scope only on a request whose view read that app's document.
+     */
     private fun visit(
         entries: Array<BoundEntry>?,
         request: FlatRequest,
         platform: CompiledDocument,
         visitor: CandidateVisitor,
+        app: CompiledDocument? = null,
     ): Boolean {
         if (entries == null) {
             return false
@@ -161,6 +168,7 @@ internal object CandidateOrder {
                 continue
             }
             val policy = entry.local ?: platform.policy(entry.policyId)
+                ?: app?.takeIf { it.owner == entry.app }?.policy(entry.policyId)
             if (policy == null) {
                 visitor.missing(entry.policyId)
             } else if (visitor.candidate(policy, entry.via)) {

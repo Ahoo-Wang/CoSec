@@ -37,10 +37,20 @@ class ExternalAttributesTest {
     private fun inFence(value: Boolean) = Condition.Eq("ext.geo.inFence", Literal.Bool(value))
 
     private fun policy(id: String, vararg statements: StatementSource, condition: Condition? = null) =
-        compiler.compile(PolicyId(id), condition, statements.toList(), denyNomatch = true)
+        compiler.compile(PolicyId(id), condition, statements.toList())
+
+    /** A confirmed one, for a DENY that lapses (RFC 0007 §9.5): without it, it does not compile. */
+    private val confirmed = OnMissingConfirmation("(platform)", "plato", "c1")
 
     private fun statement(effect: Effect, condition: Condition?, onMissing: OnMissing? = null, action: String = "*") =
-        StatementSource("s", effect, listOf(action), condition = condition, onMissing = onMissing)
+        StatementSource(
+            "s",
+            effect,
+            listOf(action),
+            condition = condition,
+            onMissing = onMissing,
+            onMissingConfirmed = confirmed.takeIf { effect == Effect.DENY && onMissing == OnMissing.NOMATCH },
+        )
 
     private fun view(vararg policies: CompiledPolicy): SnapshotView = SnapshotView(
         platform(*policies, bindings = policies.map { anyone("b:${it.policyId.value}", it.policyId.value) }),
@@ -192,14 +202,28 @@ class ExternalAttributesTest {
         error.errors.single().path.assert().isEqualTo("$.statements[0].onMissing")
     }
 
-    /** RFC 0006 Q13: only the platform document may let a DENY lapse while its provider fails. */
+    /** RFC 0007 §9.5 (N6, Q13): a DENY lapses while its provider fails only with the control plane's confirmation. */
     @Test
-    fun aDenyMayLapseOnlyWhereAllowed() {
+    fun aDenyMayLapseOnlyWhenConfirmed() {
         val lapsing = statement(Effect.DENY, inFence(false), OnMissing.NOMATCH)
-        assertThrows<CompileException> { compiler.compile(PolicyId("p"), null, listOf(lapsing)) }
-            .errors.single().message.assert().contains("platform document")
-        compiler.compile(PolicyId("p"), null, listOf(lapsing), denyNomatch = true).statements.single().onMissing
+        val unconfirmed =
+            StatementSource("s", Effect.DENY, listOf("*"), condition = inFence(false), onMissing = OnMissing.NOMATCH)
+        assertThrows<CompileException> { compiler.compile(PolicyId("p"), null, listOf(unconfirmed)) }
+            .errors.single().message.assert().contains("confirmation")
+        compiler.compile(PolicyId("p"), null, listOf(lapsing)).statements.single().onMissing
             .assert().isEqualTo(OnMissing.NOMATCH)
+        // Only a lapsing DENY carries one.
+        val stray =
+            StatementSource(
+                "s",
+                Effect.ALLOW,
+                listOf("*"),
+                condition = inFence(true),
+                onMissing = OnMissing.NOMATCH,
+                onMissingConfirmed = confirmed
+            )
+        assertThrows<CompileException> { compiler.compile(PolicyId("p"), null, listOf(stray)) }
+            .errors.single().path.assert().isEqualTo("$.statements[0].onMissingConfirmed")
         compiler.compile(PolicyId("p"), null, listOf(statement(Effect.ALLOW, inFence(true), OnMissing.NOMATCH)))
             .statements.single().onMissing.assert().isEqualTo(OnMissing.NOMATCH)
     }
