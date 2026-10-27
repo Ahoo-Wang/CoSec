@@ -55,6 +55,13 @@ sealed interface Outcome {
     /** A control scenario of the grant analysis: the verdict for each fragment, and the protected entries changed. */
     class Granted(val analysis: GrantAnalysis) : Outcome
 
+    /** A control scenario of the change flow: what each step left its change in, every change's errors, the heads. */
+    class Changed(
+        val steps: List<String>,
+        val errors: Map<String, List<String>>,
+        val heads: Map<String, Long>
+    ) : Outcome
+
     /** A control scenario of publishing: each publish's answer, the head afterwards, the records and the write order. */
     class Stored(
         val outcomes: List<String>,

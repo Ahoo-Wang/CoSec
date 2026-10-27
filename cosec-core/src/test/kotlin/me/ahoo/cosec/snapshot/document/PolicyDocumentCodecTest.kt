@@ -87,21 +87,32 @@ class PolicyDocumentCodecTest {
     /** RFC 0007 §7.6: the platform's default boundary, a tenant's own, and the boundary flag of a policy. */
     @Test
     fun `boundaries read and write back the same`() {
-        val platform = decode(""","boundaries":{"default":"b"},"policies":[{"id":"b","boundary":true,"statements":[]}]""")
+        val platform =
+            decode(""","boundaries":{"default":"b"},"policies":[{"id":"b","boundary":true,"statements":[]}]""")
         platform.boundary!!.value.assert().isEqualTo("b")
         platform.policies.single().boundary.assert().isTrue()
         val written = PolicyDocumentCodec.encode(platform)
-        PolicyDocumentCodec.encode(PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", written)).assert().isEqualTo(written)
+        PolicyDocumentCodec.encode(
+            PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", written)
+        ).assert().isEqualTo(written)
         decode(""","boundaries":{}""").boundary.assert().isNull()
         val tenant = decode(""","boundary":"b"""", DocumentKind.TENANT, "acme")
         tenant.boundary!!.value.assert().isEqualTo("b")
-        CoSecJsonSerializer.readTree(PolicyDocumentCodec.encode(tenant)).get("boundary").asString().assert().isEqualTo("b")
+        CoSecJsonSerializer.readTree(
+            PolicyDocumentCodec.encode(tenant)
+        ).get("boundary").asString().assert().isEqualTo("b")
         error(""","boundary":"b"""").assert().contains("unknown field boundary")
         error(""","boundaries":{"default":""}""").assert().contains("$.boundaries.default: must not be empty")
         error(""","boundaries":{"default":"b","other":1}""").assert().contains("$.boundaries: unknown field other")
         error(""","boundary":"b"""", DocumentKind.APP, "order").assert().contains("unknown field boundary")
-        error(""","boundaries":{"default":"b"}""", DocumentKind.TENANT, "acme").assert().contains("unknown field boundaries")
-        error(""","policies":[{"id":"p","boundary":"yes","statements":[]}]""").assert().contains("$.policies[0].boundary: expected a boolean")
+        error(
+            ""","boundaries":{"default":"b"}""",
+            DocumentKind.TENANT,
+            "acme"
+        ).assert().contains("unknown field boundaries")
+        error(
+            ""","policies":[{"id":"p","boundary":"yes","statements":[]}]"""
+        ).assert().contains("$.policies[0].boundary: expected a boolean")
     }
 
     /** RFC 0007 §5.3: the control plane's provenance reads and writes back the same, and decides nothing. */
@@ -158,6 +169,32 @@ class PolicyDocumentCodecTest {
     )
     fun `a provenance that is not exactly the format is an error at its path`(provenance: String, message: String) {
         error(""","provenance":$provenance""").assert().contains(message)
+    }
+
+    /** RFC 0007 §3.1 N3: the platform's limits and declared attributes read and write back the same. */
+    @Test
+    fun `the platform's limits and attributes read and write back the same`() {
+        val document = decode(
+            ""","limits":{"maxNodes":32,"maxCost":100},"attributes":[{"path":"ext.geo.region","type":"string"},{"path":"ext.risk.flagged","type":"bool"}]"""
+        )
+        document.limits!!.maxNodes.assert().isEqualTo(32)
+        document.limits!!.maxDepth.assert().isEqualTo(me.ahoo.cosec.model.condition.ConditionLimits.DEFAULT.maxDepth)
+        document.attributes!!.map { it.path to it.type.name }.assert()
+            .containsExactly("ext.geo.region" to "STRING", "ext.risk.flagged" to "BOOL")
+        val written = PolicyDocumentCodec.encode(document)
+        PolicyDocumentCodec.encode(
+            PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", written)
+        ).assert().isEqualTo(written)
+        error(""","limits":{"maxNodes":0}""").assert().contains("$.limits.maxNodes: a limit is a positive int")
+        error(""","limits":{"nodes":1}""").assert().contains("$.limits: unknown field nodes")
+        error(
+            ""","attributes":[{"path":"geo.region","type":"string"}]"""
+        ).assert().contains("$.attributes[0].path: an external attribute is ext.<provider>.<name>")
+        error(
+            ""","attributes":[{"path":"ext.geo.region","type":"time"}]"""
+        ).assert().contains("$.attributes[0].type: an external attribute is one of")
+        error(""","limits":{}""", DocumentKind.TENANT, "acme").assert().contains("unknown field limits")
+        error(""","attributes":[]""", DocumentKind.APP, "order").assert().contains("unknown field attributes")
     }
 
     /** DOC-2: `*` is Match.Any and only that; nothing can hold Match.Exactly("*"). */

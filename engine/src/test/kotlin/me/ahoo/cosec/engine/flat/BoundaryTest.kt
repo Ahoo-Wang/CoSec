@@ -86,7 +86,10 @@ class BoundaryTest {
         val wide = fixture.policy("wide", allow())
         val platform = platform(narrow, wide, default = "narrow")
         decide(platform).assert().isInstanceOf(Decision.Deny::class.java)
-        decide(platform, CompiledDocument.tenant(TenantId("acme"), emptyList(), emptyList(), "wide")).assert().isEqualTo(permit)
+        decide(
+            platform,
+            CompiledDocument.tenant(TenantId("acme"), emptyList(), emptyList(), "wide")
+        ).assert().isEqualTo(permit)
         decide(platform, CompiledDocument.tenant(TenantId("acme"), emptyList(), emptyList(), "gone"))
             .assert().isEqualTo(Decision.Indeterminate(Cause.MissingPolicies(setOf(PolicyId("gone")))))
     }
@@ -112,7 +115,9 @@ class BoundaryTest {
             "closed",
         )
         decide(platform).assert().isEqualTo(Decision.Deny(ref("d", 0, bound("g"))))
-        decide(CompiledDocument.platform(emptyList(), emptyList(), listOf(closed), "closed")).assert().isEqualTo(Decision.Deny(null))
+        decide(
+            CompiledDocument.platform(emptyList(), emptyList(), listOf(closed), "closed")
+        ).assert().isEqualTo(Decision.Deny(null))
     }
 
     @Test
@@ -120,7 +125,10 @@ class BoundaryTest {
         val boundary = fixture.policy("b", allow(RuleBehavior.CONDITION_MISS), allow(), allow())
         val view = SnapshotView(platform(boundary, default = "b"), null, tenant())
         val trace = CoSecFlatEngine.evaluate(flatRequest(), view, TraceLevel.FULL).trace!!
-        trace.boundary.map { it.outcome }.assert().containsExactly(CandidateOutcome.CONDITION_MISS, CandidateOutcome.MATCHED)
+        trace.boundary.map { it.outcome }.assert().containsExactly(
+            CandidateOutcome.CONDITION_MISS,
+            CandidateOutcome.MATCHED
+        )
         trace.boundary.first().via.assert().isEqualTo(BindingRef.Boundary(TenantId("acme")))
         CoSecFlatEngine.evaluate(flatRequest(), SnapshotView(platform(), null, tenant()), TraceLevel.FULL).trace!!
             .boundary.assert().isEmpty()
@@ -147,7 +155,11 @@ class BoundaryTest {
             CompiledDocument.platform(listOf(allowAll), emptyList(), listOf(fixture.policy("all", allow())))
         }.hasMessageContaining("Duplicate policy id")
         assertThrownBy<IllegalArgumentException> {
-            CompiledDocument.platform(emptyList(), emptyList(), listOf(fixture.policy(BuiltinPolicies.ROOT.value, allow())))
+            CompiledDocument.platform(
+                emptyList(),
+                emptyList(),
+                listOf(fixture.policy(BuiltinPolicies.ROOT.value, allow()))
+            )
         }
     }
 

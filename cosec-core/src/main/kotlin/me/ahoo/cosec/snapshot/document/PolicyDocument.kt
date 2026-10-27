@@ -17,7 +17,9 @@ import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
 import java.time.Instant
 
@@ -56,12 +58,26 @@ class PolicyDocument(
     val boundary: PolicyId? = null,
     /** Where the revision came from; written by the control plane, absent in documents it did not publish. */
     val provenance: Provenance? = null,
+    /**
+     * The platform's condition limits (RFC 0007 §3.1 N3, RFC 0005 §3.5): what every document compiles against, so the
+     * control plane and every instance agree. Null: [ConditionLimits.DEFAULT]. Platform only.
+     */
+    val limits: ConditionLimits? = null,
+    /**
+     * The external attributes the platform declares (RFC 0007 §3.1 N3, RFC 0006 §5.4.1): the catalog conditions of every
+     * document are checked against, with their types. Null: the instance's providers decide. Platform only.
+     */
+    val attributes: List<Attribute>? = null,
 ) {
     init {
         require(revision > 0) { "Revision must be positive, was $revision." }
         require((kind == DocumentKind.PLATFORM) == owner.isEmpty()) { "Only the platform document has no owner." }
         require(catalog == null || kind == DocumentKind.APP) { "Only an app document has a catalog." }
         require(boundary == null || kind != DocumentKind.APP) { "An app document names no boundary." }
+        require((limits == null && attributes == null) || kind == DocumentKind.PLATFORM) {
+            "Only the platform document has limits and attributes."
+        }
+        require(attributes == null || attributes.all { it.external }) { "Declared attributes are external." }
     }
 }
 

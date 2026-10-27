@@ -46,6 +46,8 @@ class CacheTtlPolicyTest {
         CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME to ControlCacheSpecs.revisionIndex(policy = weakened).policy,
         CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME to ControlCacheSpecs.referenceIndex(policy = weakened).policy,
         CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME to ControlCacheSpecs.lease(policy = weakened).policy,
+        CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME to ControlCacheSpecs.changeRequest(policy = weakened).policy,
+        CoSecCacheSpecs.STAGE_CACHE_NAME to ControlCacheSpecs.stage(policy = weakened).policy,
     )
 
     private inline fun <reified V : Any> codec() = CoSecCacheSpecs.jacksonCodec<V>(CoSecJsonSerializer)
@@ -66,11 +68,15 @@ class CacheTtlPolicyTest {
         ControlCacheSpecs.revisionIndex("other:").namespace.assert().isEqualTo("other:control:revisions")
         ControlCacheSpecs.referenceIndex().namespace.assert().isEqualTo("cosec:control:refs")
         ControlCacheSpecs.lease().namespace.assert().isEqualTo("cosec:control:lease")
+        ControlCacheSpecs.changeRequest().namespace.assert().isEqualTo("cosec:control:change")
+        ControlCacheSpecs.stage().namespace.assert().isEqualTo("cosec:control:stage")
         listOf(
             CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME,
             CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME,
             CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
             CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME,
+            CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME,
+            CoSecCacheSpecs.STAGE_CACHE_NAME,
         ).forEach { CoSecCacheSpecs.pinnedPolicy(it, weakened).ttl.assert().isNull() }
     }
 

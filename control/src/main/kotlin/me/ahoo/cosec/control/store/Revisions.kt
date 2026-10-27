@@ -179,6 +179,9 @@ class Revisions(
         policies = candidate.policies,
         bindings = candidate.bindings,
         catalog = candidate.catalog,
+        limits = candidate.limits,
+        attributes = candidate.attributes,
+        boundary = candidate.boundary,
         provenance = Provenance(
             parent = base?.let { ParentRevision(it.revision, it.digest.toString()) },
             change = publication.change,
@@ -348,7 +351,8 @@ class Revisions(
     /**
      * What [document] refers to in other documents: a binding to a policy it does not define names a platform
      * policy, and in a tenant document bound in one app, possibly that app's permission policy (RFC 0007 §3.1 N1).
-     * Both are indexed: the index may hold more than the true references, never less.
+     * Both are indexed: the index may hold more than the true references, never less. A tenant's boundary names a
+     * platform boundary policy (RFC 0007 §7.6).
      */
     private fun references(document: PolicyDocument): Set<Pair<SnapshotKey, PolicyId>> {
         if (document.kind == DocumentKind.PLATFORM) {
@@ -364,6 +368,7 @@ class Revisions(
                 references += SnapshotKey.App(app.value.value) to binding.policy
             }
         }
+        document.boundary?.let { references += SnapshotKey.Platform to it }
         return references
     }
 

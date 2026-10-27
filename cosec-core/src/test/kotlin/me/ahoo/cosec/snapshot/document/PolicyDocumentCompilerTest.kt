@@ -162,7 +162,13 @@ class PolicyDocumentCompilerTest {
         )
         fun decide(tenantBody: String, action: Action): Decision {
             val memberships = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
-            val scope = (ScopeResolver.resolve(ScopeSubject(TenantId("acme"), true, memberships), DeclaredScope("", ""), HostScope(null)) as ScopeResolution.Resolved).scope
+            val scope = (
+                ScopeResolver.resolve(
+                    ScopeSubject(TenantId("acme"), true, memberships),
+                    DeclaredScope("", ""),
+                    HostScope(null)
+                ) as ScopeResolution.Resolved
+                ).scope
             val authz = AuthzRequest(
                 Subject("alice", "acme", true, emptySet(), emptySet(), emptyMap(), false),
                 Scope.declared("acme", "", ""),
@@ -183,7 +189,10 @@ class PolicyDocumentCompilerTest {
     fun `boundaries live in the platform, only allow, and are never bound`() {
         errors(SnapshotKey.Tenant("acme"), ""","policies":[{"id":"b","boundary":true,"statements":[]}]""")
             .assert().containsExactly("$.policies[0].boundary: only the platform document holds boundaries")
-        errors(SnapshotKey.Platform, ""","policies":[{"id":"b","boundary":true,"attachable":true,"statements":[{"effect":"deny","action":"*"}]}]""")
+        errors(
+            SnapshotKey.Platform,
+            ""","policies":[{"id":"b","boundary":true,"attachable":true,"statements":[{"effect":"deny","action":"*"}]}]"""
+        )
             .assert().containsExactly(
                 "$.policies[0].attachable: a boundary cannot be attached",
                 "$.policies[0].statements[0].effect: a boundary only allows",
@@ -191,15 +200,65 @@ class PolicyDocumentCompilerTest {
         val many = (1..65).joinToString(",") { """{"effect":"allow","action":"*"}""" }
         errors(SnapshotKey.Platform, ""","policies":[{"id":"b","boundary":true,"statements":[$many]}]""")
             .assert().containsExactly("$.policies[0].statements: 65 statements, more than 64")
-        errors(SnapshotKey.Platform, ""","policies":[{"id":"b","boundary":true,"statements":[]}],"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"b"}]""")
+        errors(
+            SnapshotKey.Platform,
+            ""","policies":[{"id":"b","boundary":true,"statements":[]}],"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"b"}]"""
+        )
             .assert().containsExactly("$.bindings[0].policy: [b] is a boundary; boundaries are not bound")
         errors(SnapshotKey.Platform, ""","boundaries":{"default":"p"},"policies":[{"id":"p","statements":[]}]""")
             .assert().containsExactly("$.boundaries.default: [p] is not a boundary of this document")
         errors(SnapshotKey.Tenant("(platform)"), ""","boundary":"b"""")
             .assert().containsExactly("$.boundary: the platform tenant has no boundary")
-        assertThrownBy<SnapshotFormatException> { compiler.compile(SnapshotKey.App("order"), stored(""","boundary":"b"""")) }
-        assertThrownBy<SnapshotFormatException> { compiler.compile(SnapshotKey.Tenant("acme"), stored(""","boundaries":{"default":"b"}""")) }
-        assertThrownBy<SnapshotFormatException> { compiler.compile(SnapshotKey.Platform, stored(""","boundary":"b"""")) }
+        assertThrownBy<SnapshotFormatException> {
+            compiler.compile(
+                SnapshotKey.App("order"),
+                stored(""","boundary":"b"""")
+            )
+        }
+        assertThrownBy<SnapshotFormatException> {
+            compiler.compile(
+                SnapshotKey.Tenant("acme"),
+                stored(""","boundaries":{"default":"b"}""")
+            )
+        }
+        assertThrownBy<SnapshotFormatException> {
+            compiler.compile(
+                SnapshotKey.Platform,
+                stored(""","boundary":"b"""")
+            )
+        }
+    }
+
+    /** RFC 0007 §3.1 N3: documents compile with the platform's limits and attributes, each declared once. */
+    @Test
+    fun `the platform document sets what every document compiles against`() {
+        errors(
+            SnapshotKey.Platform,
+            ""","attributes":[{"path":"ext.geo.region","type":"string"},{"path":"ext.geo.region","type":"ip"}]"""
+        )
+            .assert().containsExactly("$.attributes[1].path: [ext.geo.region] is declared twice")
+        val platform = PolicyDocumentCodec.decode(
+            DocumentKind.PLATFORM,
+            "",
+            stored(
+                ""","limits":{"maxInValues":2},"attributes":[{"path":"ext.geo.region","type":"string"}]"""
+            ).bodyBytes(),
+        )
+        val tenant = { condition: String ->
+            PolicyDocumentCodec.decode(
+                DocumentKind.TENANT,
+                "acme",
+                stored(
+                    ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*","condition":$condition}]}]"""
+                ).bodyBytes(),
+            )
+        }
+        val reading = tenant("""{"eq":["ext.geo.region","eu"]}""")
+        PolicyDocumentCompiler.forPlatform(platform).compile(reading).owner.assert().isEqualTo("acme")
+        assertThrownBy<DocumentCompileException> { PolicyDocumentCompiler.forPlatform(null).compile(reading) }
+        val wide = tenant("""{"in":["scope.app",["a","b","c"]]}""")
+        PolicyDocumentCompiler.forPlatform(null).compile(wide).owner.assert().isEqualTo("acme")
+        assertThrownBy<DocumentCompileException> { PolicyDocumentCompiler.forPlatform(platform).compile(wide) }
     }
 
     /** DOC-3: a document that is not this version's format fails to decode; RFC 0003's keys are not read either. */

@@ -87,6 +87,7 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
             is Cause.AttributeUnavailable -> "attribute"
             is Cause.MatcherFailed -> "matcher"
             is Cause.RequiredListenerFailed -> "required_listener"
+            is Cause.BoundaryUnavailable -> "boundary"
             null -> "unknown"
         }
     }
