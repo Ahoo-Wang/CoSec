@@ -31,6 +31,17 @@ import me.ahoo.cosec.api.tenant.TenantCapable
  * @see TenantCapable
  * @see Authorization
  */
+/** The validated scope of a request (RFC 0004 §4.6): its app, its space, and the principal's roles there. */
+interface SecurityScope {
+    val appId: String
+
+    /** Empty for the default space. */
+    val spaceId: String
+
+    /** The principal's roles in [spaceId], in claim order. */
+    val roles: List<String>
+}
+
 interface SecurityContext : TenantCapable {
     /**
      * Key for storing/retrieving SecurityContext from request attributes.
@@ -52,6 +63,12 @@ interface SecurityContext : TenantCapable {
      * @see CoSecPrincipal
      */
     val principal: CoSecPrincipal
+
+    /**
+     * The scope the request was authorized in, as `ScopeResolver` validated it (RFC 0004 X6): read it rather than the
+     * `CoSec-App-Id` and `CoSec-Space-Id` headers, which are what the client declared. Null outside the 8.0 pipeline.
+     */
+    val scope: SecurityScope? get() = null
 
     /**
      * Gets an attribute value by key.

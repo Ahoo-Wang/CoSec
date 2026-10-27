@@ -6,6 +6,9 @@
       "$ref": "#/definitions/document"
     },
     {
+      "$ref": "#/definitions/platformDocument"
+    },
+    {
       "$ref": "#/definitions/appDocument"
     },
     {
@@ -498,6 +501,222 @@
       },
       "required": [
         "appPermission"
+      ],
+      "type": "object"
+    },
+    "platformBinding": {
+      "additionalProperties": false,
+      "description": "A binding of the platform document: a principal names its tenant.",
+      "properties": {
+        "app": {
+          "description": "An id, or `*` for any.",
+          "examples": [
+            "*",
+            "order-service"
+          ],
+          "minLength": 1,
+          "type": "string"
+        },
+        "breakGlass": {
+          "default": false,
+          "description": "A break-glass binding: platform document, platform-tenant principal, expiresAt.",
+          "type": "boolean"
+        },
+        "expiresAt": {
+          "description": "When the binding stops applying. Required for break-glass bindings.",
+          "examples": [
+            "2026-12-31T00:00:00Z"
+          ],
+          "format": "date-time",
+          "type": "string"
+        },
+        "id": {
+          "examples": [
+            "g:deny-ip",
+            "r:editor:read"
+          ],
+          "type": "string"
+        },
+        "policy": {
+          "examples": [
+            "deny-ip",
+            "perm:order-service/read",
+            "cosec:root"
+          ],
+          "type": "string"
+        },
+        "space": {
+          "description": "An id, or `*` for any.",
+          "examples": [
+            "*",
+            "",
+            "team-a"
+          ],
+          "type": "string"
+        },
+        "subject": {
+          "anyOf": [
+            {
+              "description": "Anyone, anonymous principals included.",
+              "enum": [
+                "*"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "principal": {
+                  "examples": [
+                    "cosec",
+                    "svc-batch"
+                  ],
+                  "type": "string"
+                },
+                "tenant": {
+                  "examples": [
+                    "(platform)",
+                    "acme"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "principal",
+                "tenant"
+              ],
+              "type": "object"
+            },
+            {
+              "$ref": "cosec-binding.schema.json#/definitions/roleSubject"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "subject",
+        "app",
+        "space",
+        "policy"
+      ],
+      "type": "object"
+    },
+    "platformDocument": {
+      "additionalProperties": false,
+      "description": "The platform document with what only it holds: the limits and attributes every document compiles against (RFC 0007 §3.1 N3).",
+      "properties": {
+        "attributes": {
+          "description": "The external attributes documents may read (RFC 0006 §5.4.1), with their types; paths unique. Platform only.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "examples": [
+                  "ext.geo.region",
+                  "ext.risk.score"
+                ],
+                "pattern": "^ext\\.[^.]+\\..+$",
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "string",
+                  "bool",
+                  "stringSet",
+                  "ip"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "type"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "bindings": {
+          "items": {
+            "$ref": "#/definitions/platformBinding"
+          },
+          "type": "array"
+        },
+        "limits": {
+          "additionalProperties": false,
+          "description": "The condition limits of every document (RFC 0005 §3.5); absent ones are the defaults. Platform only.",
+          "properties": {
+            "maxCidrBlocks": {
+              "default": 256,
+              "description": "Blocks of one `cidr`.",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxCost": {
+              "default": 256,
+              "description": "Weighted cost of one statement's condition.",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxDepth": {
+              "default": 8,
+              "description": "Depth of one condition.",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxInValues": {
+              "default": 1024,
+              "description": "Literals of one `in`.",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxLiteralBytes": {
+              "default": 1024,
+              "description": "UTF-8 bytes of one literal.",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "maxNodes": {
+              "default": 64,
+              "description": "Nodes of one condition.",
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "policies": {
+          "items": {
+            "$ref": "#/definitions/policy"
+          },
+          "type": "array"
+        },
+        "provenance": {
+          "$ref": "#/definitions/provenance",
+          "description": "Where the revision came from (RFC 0007 §5.3); the control plane writes it on every publish."
+        },
+        "publishedAt": {
+          "examples": [
+            "2026-10-26T00:00:00Z"
+          ],
+          "format": "date-time",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "schema": {
+          "const": 2,
+          "description": "The document format version.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema",
+        "revision",
+        "publishedAt"
       ],
       "type": "object"
     },

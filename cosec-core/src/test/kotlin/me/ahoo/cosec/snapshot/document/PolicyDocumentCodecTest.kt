@@ -140,6 +140,32 @@ class PolicyDocumentCodecTest {
         error(""","provenance":$provenance""").assert().contains(message)
     }
 
+    /** RFC 0007 §3.1 N3: the platform's limits and declared attributes read and write back the same. */
+    @Test
+    fun `the platform's limits and attributes read and write back the same`() {
+        val document = decode(
+            ""","limits":{"maxNodes":32,"maxCost":100},"attributes":[{"path":"ext.geo.region","type":"string"},{"path":"ext.risk.flagged","type":"bool"}]"""
+        )
+        document.limits!!.maxNodes.assert().isEqualTo(32)
+        document.limits!!.maxDepth.assert().isEqualTo(me.ahoo.cosec.model.condition.ConditionLimits.DEFAULT.maxDepth)
+        document.attributes!!.map { it.path to it.type.name }.assert()
+            .containsExactly("ext.geo.region" to "STRING", "ext.risk.flagged" to "BOOL")
+        val written = PolicyDocumentCodec.encode(document)
+        PolicyDocumentCodec.encode(
+            PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", written)
+        ).assert().isEqualTo(written)
+        error(""","limits":{"maxNodes":0}""").assert().contains("$.limits.maxNodes: a limit is a positive int")
+        error(""","limits":{"nodes":1}""").assert().contains("$.limits: unknown field nodes")
+        error(
+            ""","attributes":[{"path":"geo.region","type":"string"}]"""
+        ).assert().contains("$.attributes[0].path: an external attribute is ext.<provider>.<name>")
+        error(
+            ""","attributes":[{"path":"ext.geo.region","type":"time"}]"""
+        ).assert().contains("$.attributes[0].type: an external attribute is one of")
+        error(""","limits":{}""", DocumentKind.TENANT, "acme").assert().contains("unknown field limits")
+        error(""","attributes":[]""", DocumentKind.APP, "order").assert().contains("unknown field attributes")
+    }
+
     /** DOC-2: `*` is Match.Any and only that; nothing can hold Match.Exactly("*"). */
     @Test
     fun `the wildcard is only ever Any`() {

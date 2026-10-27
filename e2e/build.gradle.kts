@@ -18,6 +18,9 @@ dependencies {
     testImplementation(project(":cosec-runtime"))
     testImplementation(project(":cosec-cocache"))
     testImplementation("io.lettuce:lettuce-core")
+    // The adapter through the slice (RFC 0006 PR-7): the WebFlux filter, driven by WebTestClient.
+    testImplementation(project(":cosec-webflux"))
+    testImplementation("org.springframework:spring-test")
     // No blocking on the event loop (AGENTS.md): the warm path is checked on a watched thread.
     testImplementation("io.projectreactor.tools:blockhound")
 }

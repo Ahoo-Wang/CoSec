@@ -1,0 +1,76 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.runtime
+
+import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.Resource
+import me.ahoo.cosec.model.decision.Decision
+import kotlin.coroutines.cancellation.CancellationException
+
+private val log = KotlinLogging.logger {}
+
+/**
+ * Answers "may the current principal do this?" in code (RFC 0006 §7.6): in services, message consumers, or to decide
+ * which actions a UI shows. The same evaluation as the request, through [pipeline], for the principal and scope of a
+ * request the pipeline permitted; no obligation runs and no listener hears of it.
+ *
+ * Fails closed: only a permit is true. A context the pipeline did not make, an indeterminate decision and an error are
+ * false. `cosec-webflux` adds a `Mono<Boolean>` form and `cosec-webmvc` a blocking one.
+ */
+class AuthorizationChecker(private val pipeline: Pipeline) {
+    /**
+     * Whether the principal of [security] may perform [action] (`service:verb`, or `http:<METHOD>`) on [resource]:
+     * `type/id` (`order/42`), or a path (`/orders/42`) for an `http` resource (RFC 0005 §5.1).
+     */
+    suspend fun check(security: SecurityContext, action: String, resource: String): Boolean {
+        val request = (security as? PipelineSecurityContext)?.security ?: return false
+        val (namespace, verb) = action.split(':', limit = 2).takeIf { it.size == 2 } ?: return false
+        return check(request, Action(namespace, verb), resource(resource))
+    }
+
+    private fun resource(text: String): Resource {
+        if (text.startsWith('/')) {
+            return Resource(HTTP, text, emptyMap())
+        }
+        val slash = text.indexOf('/')
+        return if (slash < 0) {
+            Resource(text, "", emptyMap())
+        } else {
+            Resource(text.substring(0, slash), text.substring(slash + 1), emptyMap())
+        }
+    }
+
+    /** As [check], with the action and resource given as the engine reads them. */
+    @Suppress("TooGenericExceptionCaught")
+    suspend fun check(security: RequestSecurity, action: Action, resource: Resource): Boolean = try {
+        pipeline.check(security, action, resource) is Decision.Permit
+    } catch (e: CancellationException) {
+        if (!currentCoroutineContext().isActive) {
+            throw e
+        }
+        log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - denied." }
+        false
+    } catch (e: Exception) {
+        log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - denied." }
+        false
+    }
+
+    private companion object {
+        const val HTTP = "http"
+    }
+}
