@@ -37,8 +37,14 @@ import java.util.concurrent.CompletableFuture
  *   evaluation is indeterminate unless a DENY matches (RFC 0004 §7.4, `DOC-1`). A failed platform document is an empty
  *   one plus that cause, so the blacklist rule still decides a blocked request.
  * - A tenant id that cannot name a document (RFC 0004 §7.1) is unresolved in the same way: never another key.
+ * - With [platformRequired], an absent platform document is unresolved too, not empty. Once the control plane's
+ *   bootstrap has published a platform document, its absence means it was lost (for example, evicted from Redis), and
+ *   reading it as empty would silently drop every global DENY (RFC 0008 §4.4, #1053).
  */
-class DocumentSnapshotViews(private val source: SnapshotSource<CompiledDocument, CompiledDocument>) : SnapshotViews {
+class DocumentSnapshotViews(
+    private val source: SnapshotSource<CompiledDocument, CompiledDocument>,
+    private val platformRequired: Boolean = false,
+) : SnapshotViews {
     override fun peek(key: ViewKey): SnapshotView? {
         val keys = keysOf(key)
         return source.peekAll(keys.documents)?.let { view(key, keys, it) }
@@ -71,6 +77,9 @@ class DocumentSnapshotViews(private val source: SnapshotSource<CompiledDocument,
         val unresolved = ArrayList<Cause>(0)
         keys.invalidTenant?.let(unresolved::add)
         val platform = document(set.shared, DocumentKind.PLATFORM, unresolved) {
+            if (platformRequired) {
+                unresolved += Cause.SourceUnavailable(DocumentKind.PLATFORM, MissingPlatformException())
+            }
             CompiledDocument.platform(emptyList(), emptyList())
         }
         // Every key the view needs was asked for, so the set holds its entry.
@@ -116,3 +125,6 @@ class DocumentSnapshotViews(private val source: SnapshotSource<CompiledDocument,
 
     private fun empty(app: AppId) = CompiledDocument.app(app, emptyList(), emptyList())
 }
+
+/** No platform document is published where one is required ([DocumentSnapshotViews.platformRequired]). */
+class MissingPlatformException : IllegalStateException("No platform document is published; requests fail closed.")

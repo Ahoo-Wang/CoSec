@@ -353,11 +353,18 @@ class PolicyDocumentCompiler(
             // A platform that declares a path twice does not compile; until it does, the first declaration counts.
             val catalog = platform?.attributes?.let { AttributeCatalog.of(it.distinctBy { attribute -> attribute.path }) }
                 ?: AttributeCatalog.NONE
-            return PolicyDocumentCompiler(
-                PolicyCompiler(ConditionChecker(limits = limits, zones = JavaZones.RESOLVER, catalog = catalog)),
-                principalBindingLimit,
-            )
+            return of(limits, catalog, principalBindingLimit)
         }
+
+        /** A compiler that checks conditions against [limits] and the external attributes of [catalog]. */
+        fun of(
+            limits: ConditionLimits,
+            catalog: AttributeCatalog,
+            principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
+        ): PolicyDocumentCompiler = PolicyDocumentCompiler(
+            PolicyCompiler(ConditionChecker(limits = limits, zones = JavaZones.RESOLVER, catalog = catalog)),
+            principalBindingLimit,
+        )
 
         /** RFC 0004 Q2. */
         const val DEFAULT_PRINCIPAL_BINDING_LIMIT: Int = 1_000

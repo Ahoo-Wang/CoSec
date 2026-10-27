@@ -91,6 +91,14 @@ class RequestSecurity internal constructor(
 
     override fun toString(): String =
         "RequestSecurity(request=$requestId, principal=${principal?.id?.value}, tenant=${scope.tenant.value})"
+
+    companion object {
+        /**
+         * The security of the request [context] is the [securityContext] of, as an adapter exposes it; null for a
+         * context the pipeline did not build, which no route that needs a permitted request may trust.
+         */
+        fun of(context: SecurityContext?): RequestSecurity? = (context as? PipelineSecurityContext)?.security
+    }
 }
 
 /** [RequestSecurity] as the `SecurityContext` of `cosec-api`, with [scope] (RFC 0004 X6). */

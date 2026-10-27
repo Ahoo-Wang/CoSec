@@ -275,6 +275,36 @@ object CoSecCacheSpecs {
             .build()
 
     /**
+     * [customized], the [policySnapshot] spec after cache customizers and `cocache.*` properties, with what the snapshot
+     * cache keeps from [base] whatever they set (RFC 0008 §4.4): its storage layout, key encoder, codec, key filter and
+     * entry lifetime, one local max age (`cosec.authorization.snapshot.local-max-age`), and [storeOfRecord]. A loader
+     * is refused: Redis is the store of record, and only the snapshot source reads it.
+     */
+    fun pinPolicySnapshot(
+        customized: CacheSpec<SnapshotKey, SnapshotDocument>,
+        base: CacheSpec<SnapshotKey, SnapshotDocument>,
+    ): CacheSpec<SnapshotKey, SnapshotDocument> {
+        require(customized.loader == null && customized.asyncLoader == null) {
+            "The ${base.name} cache takes no loader: Redis is the store of record, and only the snapshot source reads it."
+        }
+        val builder = customized.toBuilder()
+            .namespace(base.namespace)
+            .keyPrefix(base.keyPrefix)
+            .keyEncoder(base.keyEncoder)
+            .codec(base.codec)
+            .policy(
+                customized.policy.toBuilder()
+                    .localMaxAge(base.policy.localMaxAge)
+                    .degradedLocalMaxAge(base.policy.degradedLocalMaxAge)
+                    .build()
+                    .storeOfRecord(),
+            )
+        builder.keyFilter = base.keyFilter
+        builder.ttlOf = base.ttlOf
+        return builder.build()
+    }
+
+    /**
      * Revocations are always written with an explicit lifetime. The cache keeps CoCache's degraded read mode on
      * purpose: tokens are still signature-verified and expire on their own, and failing closed would reject every
      * authenticated request during a Redis outage. An unreadable revocation still fails ([failOnForeignFormat]).
