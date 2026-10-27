@@ -1,0 +1,71 @@
+{
+  "rules": [
+    "CTL-6"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "With no other change staged, c2 takes the slot at once.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "fine",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read",
+                  "condition": {
+                    "eq": [
+                      "scope.space",
+                      "team-a"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c2"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "CHECKED",
+      "SHADOWING"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

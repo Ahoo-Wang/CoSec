@@ -54,6 +54,7 @@ class RevisionChainTest {
     private val keyPrefix = newKeyPrefix()
     private val key = SnapshotKey.Tenant("acme")
     private val nodes = ArrayList<SnapshotNode>()
+    private val stores = HashMap<SnapshotNode, CoCacheControlStore>()
 
     @AfterEach
     fun close() {
@@ -65,6 +66,7 @@ class RevisionChainTest {
     private fun instance(): Pair<SnapshotNode, Revisions> {
         val node = SnapshotNode(backend, keyPrefix).also { nodes += it }
         val store = CoCacheControlStore.create(node.runtime, node.cache, keyPrefix, node.store::notifyChanged)
+        stores[node] = store
         return node to Revisions(store)
     }
 
@@ -153,6 +155,51 @@ class RevisionChainTest {
         done.set(true)
         reader.join()
         errors.assert().isEmpty()
+    }
+
+    /** RFC 0007 §5.5, §6.1 on Redis: one staged change per document across instances, published through putIfMatch. */
+    @Test
+    fun `changes stage one at a time across instances and publish once`() = runBlocking<Unit> {
+        val (firstNode, first) = instance()
+        val (secondNode, second) = instance()
+        val ids = java.util.concurrent.atomic.AtomicInteger()
+        fun changes(node: SnapshotNode, revisions: Revisions) = me.ahoo.cosec.control.change.Changes(
+            stores.getValue(node),
+            revisions,
+            { me.ahoo.cosec.control.change.ChangeId("rc${ids.incrementAndGet()}") },
+        )
+        val one = changes(firstNode, first)
+        val two = changes(secondNode, second)
+        val author = Actor(TenantId("acme"), PrincipalId("alice"))
+        val a = one.propose(
+            author,
+            key,
+            0,
+            listOf(me.ahoo.cosec.control.change.Operation.PutPolicy(candidate("a").policies.single())),
+            "a"
+        )
+        val b = two.propose(
+            author,
+            key,
+            0,
+            listOf(me.ahoo.cosec.control.change.Operation.PutPolicy(candidate("b").policies.single())),
+            "b"
+        )
+        one.stage(a.id)
+        org.junit.jupiter.api.assertThrows<me.ahoo.cosec.control.change.ChangeRejectedException> {
+            runBlocking {
+                two.stage(
+                    b.id
+                )
+            }
+        }
+        one.shadowed(a.id)
+        one.publish(a.id).publishedRevision.assert().isEqualTo(1)
+        // The slot is free; b's base is gone, so it conflicts instead of overwriting, and rebases onto revision 1.
+        two.skipShadow(b.id, "test")
+        two.publish(b.id).state.assert().isEqualTo(me.ahoo.cosec.control.change.ChangeState.CONFLICTED)
+        two.rebase(b.id).base.revision.assert().isEqualTo(1)
+        second.head(key)!!.document.policies.map { it.id.value }.assert().containsExactly("a")
     }
 
     @Test
