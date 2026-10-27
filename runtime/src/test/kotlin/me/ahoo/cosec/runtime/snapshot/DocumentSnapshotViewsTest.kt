@@ -181,4 +181,57 @@ class DocumentSnapshotViewsTest {
             views.peek(ViewKey.of(scope, blocked = false))!!.unresolved.assert().hasSize(1)
         }
     }
+
+    @Test
+    fun `where the platform is required, an absent one fails closed`() {
+        publish(
+            SnapshotKey.Tenant("acme"),
+            ""","bindings":[{"id":"t","subject":"*","app":"*","space":"*","policy":"read"}]"""
+        )
+        source().use { source ->
+            DocumentSnapshotViews(source).load(ViewKey.BLOCKED).join().unresolved.assert().isEmpty()
+            val scope = scope("acme")
+            val view = DocumentSnapshotViews(
+                source,
+                platformRequired = true
+            ).load(ViewKey.of(scope, blocked = false)).join()
+            (view.unresolved.single() as Cause.SourceUnavailable).error.assert().isInstanceOf(
+                MissingPlatformException::class.java
+            )
+            decide(view, scope).assert().isInstanceOf(Decision.Indeterminate::class.java)
+        }
+    }
+
+    @Test
+    fun `instance documents compile against the platform's attributes, and again when they change`() {
+        val readInFence = ""","policies":[{"id":"fenced","statements":[{"effect":"allow","action":"order:read",""" +
+            """"condition":{"eq":["ext.geo.inFence",true]}}]}],"bindings":[{"id":"t","subject":"*","app":"*","space":"*","policy":"fenced"}]"""
+        publish(SnapshotKey.Platform, "")
+        publish(SnapshotKey.Tenant("acme"), readInFence)
+        val compiler = PlatformCompiler()
+        DocumentSnapshots.source(store, compiler, SnapshotOptions(revalidateInterval = Duration.ZERO)).use { source ->
+            compiler.bind(source)
+            val views = DocumentSnapshotViews(source, platformRequired = true)
+            val key = ViewKey.of(scope("acme"), blocked = false)
+            source.load().join()
+            // ext.geo.inFence is declared nowhere yet: the tenant document does not compile.
+            views.load(key).join().tenant.assert().isNull()
+            publish(SnapshotKey.Platform, ""","attributes":[{"path":"ext.geo.inFence","type":"bool"}]""")
+            source.reload(SnapshotKey.Platform).join()
+            awaitCompiled(views, key)
+            compiler.current.assert().isNotNull()
+            // Unchanged limits and attributes recompile nothing.
+            publish(SnapshotKey.Platform, ""","attributes":[{"path":"ext.geo.inFence","type":"bool"}]""")
+            source.reload(SnapshotKey.Platform).join()
+            views.load(key).join().tenant.assert().isNotNull()
+        }
+    }
+
+    private fun awaitCompiled(views: DocumentSnapshotViews, key: ViewKey) {
+        val deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos()
+        while (views.load(key).join().tenant == null) {
+            check(System.nanoTime() < deadline) { "The tenant document was not compiled again." }
+            Thread.sleep(10)
+        }
+    }
 }
