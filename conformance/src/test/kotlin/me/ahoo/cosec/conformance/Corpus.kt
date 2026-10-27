@@ -21,6 +21,8 @@ import java.time.Instant
 import kotlin.io.path.extension
 import kotlin.io.path.invariantSeparatorsPathString
 import kotlin.io.path.isRegularFile
+import kotlin.io.path.listDirectoryEntries
+import kotlin.io.path.name
 import kotlin.io.path.readText
 import kotlin.io.path.relativeTo
 
@@ -50,13 +52,28 @@ class Scenario(val name: String, val node: JsonNode) {
 }
 
 /**
- * The registry and the scenarios under one resource directory: `rules.json`, and `scenarios/<prefix>/<name>.json`.
+ * The registry and the scenarios under one resource directory: `rules/<FAMILY>.json` (with `rules/_meta.json` for
+ * what concerns the whole registry), and `scenarios/<prefix>/<name>.json`. One file per family, so that PRs adding
+ * rules to different families do not conflict.
  */
 class Corpus(private val resources: Path) {
+    /** Every rule, family files in name order, each file's rules in its order. */
     fun rules(): List<RuleEntry> {
-        val root = Json.read(resources.resolve(RULES))
-        root.only("\$comment", "rules")
-        return root.required("rules").values().map { it.rule() }
+        val directory = resources.resolve(RULES)
+        Json.read(directory.resolve(META)).only("\$comment")
+        val files = directory.listDirectoryEntries("*.json").filter { it.name != META }.sortedBy { it.name }
+        return files.flatMap { file ->
+            val family = file.name.removeSuffix(".json")
+            val root = Json.read(file)
+            root.only("rules")
+            root.required("rules").values().map { it.rule() }.onEach { rule ->
+                if (rule.id.substringBefore('-') != family) {
+                    throw ScenarioFormatException(
+                        "Rule ${rule.id} is in $RULES/${file.name}, not $RULES/${rule.id.substringBefore('-')}.json"
+                    )
+                }
+            }
+        }
     }
 
     fun scenarios(): List<Scenario> {
@@ -84,7 +101,8 @@ class Corpus(private val resources: Path) {
     }
 
     companion object {
-        const val RULES = "rules.json"
+        const val RULES = "rules"
+        const val META = "_meta.json"
         const val SCENARIOS = "scenarios"
 
         /** The corpus of this module, from its own directory (the working directory of its tests). */

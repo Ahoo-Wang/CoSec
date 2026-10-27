@@ -1,0 +1,44 @@
+{
+  "rules": [
+    {
+      "id": "APR-1",
+      "source": "RFC 0007 §7.5",
+      "statement": "A change with escalations publishes only after a person other than its author, holding cosec:approve on the document, approves the candidate digest they saw.",
+      "level": "control",
+      "guards": [
+        "control:ControlAuthorizationTest#what the analysis cannot prove waits for another person's approval of its digest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "APR-2",
+      "source": "RFC 0007 §7.5, Q10",
+      "statement": "An approval is valid for cosec.control.approval.expire-after (72 hours); an expired one publishes nothing and the change awaits approval again.",
+      "level": "control",
+      "guards": [
+        "control:ControlAuthorizationTest#an expired approval publishes nothing and asks again"
+      ],
+      "pending": null
+    },
+    {
+      "id": "APR-3",
+      "source": "RFC 0007 §7.3, §7.5, Q10",
+      "statement": "A holder of cosec:approve on the document is the trust root: its own changes are not analyzed and need no second person, unless four-eyes is on, when what the analysis cannot prove needs another holder.",
+      "level": "control",
+      "guards": [
+        "control:ControlAuthorizationTest#the trust root publishes alone unless four-eyes is on"
+      ],
+      "pending": null
+    },
+    {
+      "id": "APR-4",
+      "source": "RFC 0007 §7.5, §8",
+      "statement": "A new or changed break-glass binding always needs a second person's approval, whoever proposes it.",
+      "level": "control",
+      "guards": [
+        "control:BreakGlassControlTest#two people create it, each step recorded first"
+      ],
+      "pending": null
+    }
+  ]
+}

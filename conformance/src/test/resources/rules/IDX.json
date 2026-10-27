@@ -1,0 +1,16 @@
+{
+  "rules": [
+    {
+      "id": "IDX-1",
+      "source": "RFC 0005 §6.3",
+      "statement": "The candidates the index yields are a superset of the statements a brute-force match finds (I1, I2).",
+      "level": "engine",
+      "pending": null,
+      "properties": [
+        "engine:IndexPropertyTest#I1 the index never leaves out a statement that can match",
+        "engine:IndexPropertyTest#I1 the decision is that of a scan without the index, DENYs first",
+        "engine:IndexPropertyTest#I2 index parameters never change the decision"
+      ]
+    }
+  ]
+}

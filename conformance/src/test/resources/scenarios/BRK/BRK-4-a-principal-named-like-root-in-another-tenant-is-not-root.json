@@ -1,0 +1,34 @@
+{
+  "rules": [
+    "BRK-4"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The root binding is for cosec of the platform tenant; cosec of acme is another principal and gets nothing from it.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "root",
+          "subject": {
+            "principal": "cosec",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "cosec:root",
+          "breakGlass": true,
+          "expiresAt": "2026-12-31T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "tenant": "acme",
+    "id": "cosec"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

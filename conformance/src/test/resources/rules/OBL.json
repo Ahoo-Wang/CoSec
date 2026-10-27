@@ -1,0 +1,15 @@
+{
+  "rules": [
+    {
+      "id": "OBL-1",
+      "source": "RFC 0006 §8.2",
+      "statement": "Obligations run only with a Permit; denied requests consume no rate-limit quota (P15).",
+      "level": "pipeline",
+      "guards": [
+        "engine:RateLimitObligationTest",
+        "runtime:RateLimitObligationTest"
+      ],
+      "pending": null
+    }
+  ]
+}

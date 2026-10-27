@@ -1,0 +1,50 @@
+{
+  "rules": [
+    "TNT-1"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The platform binds alice of acme; alice of acme reads.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "p:alice",
+          "subject": {
+            "principal": "alice",
+            "tenant": "acme"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "tenant": "acme",
+    "id": "alice"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "read",
+      "statement": 0,
+      "via": {
+        "binding": "p:alice",
+        "document": "platform"
+      }
+    }
+  }
+}
