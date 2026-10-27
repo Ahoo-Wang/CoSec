@@ -67,11 +67,8 @@ class AuditEventsTest {
         val listeners = DecisionListeners(listOf(capture))
         try {
             runBlocking(TraceContext("trace-1", "span-1", true)) {
-                PipelineFixtures.pipeline(
-                    authenticator,
-                    StubEngine(decision),
-                    listeners = listeners
-                ).evaluate(facts(path))
+                PipelineFixtures.pipeline(authenticator, StubEngine(decision)) { it.copy(listeners = listeners) }
+                    .evaluate(facts(path))
             }
         } finally {
             listeners.cancel()

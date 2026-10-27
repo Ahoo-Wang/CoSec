@@ -49,6 +49,18 @@ val verifyRuleCoverage = tasks.register<JavaExec>("verifyRuleCoverage") {
     doLast { marker.get().asFile.apply { parentFile.mkdirs() }.writeText("") }
 }
 
+/*
+ * RFC 0008 §3.7: applies each patch of conformance/mutants to HEAD in a temporary git worktree and asserts that at
+ * least one of the tests it names fails. Manual (each mutant rebuilds), run before S1: -Pmutants=a,b runs only those.
+ */
+tasks.register<JavaExec>("mutationCheck") {
+    group = "verification"
+    description = "Fails when a mutant of conformance/mutants survives its tests, or no longer applies or compiles."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("me.ahoo.cosec.conformance.MutationCheckKt")
+    args(listOfNotNull(repositoryRoot.asFile.absolutePath, providers.gradleProperty("mutants").orNull))
+}
+
 tasks.named("check") {
     dependsOn(verifyRuleCoverage)
 }

@@ -17,6 +17,7 @@ import com.tngtech.archunit.base.DescribedPredicate
 import com.tngtech.archunit.core.domain.JavaCall.Predicates.target
 import com.tngtech.archunit.core.domain.JavaClasses
 import com.tngtech.archunit.core.domain.properties.HasName.Predicates.name
+import com.tngtech.archunit.core.domain.properties.HasName.Predicates.nameMatching
 import com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner
 import com.tngtech.archunit.core.importer.ClassFileImporter
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes
@@ -72,6 +73,29 @@ class ControlBoundaryTest {
             )
             .orShould().dependOnClassesThat().haveFullyQualifiedName("kotlinx.coroutines.GlobalScope")
             .because("the control plane neither blocks nor escapes its scope (RFC 0006 §7.1)")
+            .check(classes)
+    }
+
+    /**
+     * AOT (RFC 0007 §10, PR-9): a native image needs a hint for each class read reflectively. The control plane needs
+     * none: it reads and writes JSON as Jackson trees with hand-written codecs, and loads nothing by name. This keeps it
+     * so: a class bound with `readValue`, `treeToValue` or `convertValue`, a lookup by name or a `ServiceLoader` would
+     * need a hint the starter does not register, and would fail only in a native image.
+     */
+    @Test
+    fun nothingThatANativeImageWouldNeedAHintFor() {
+        noClasses()
+            .should().callMethodWhere(
+                target(
+                    DescribedPredicate.describe("reflective Jackson binding") {
+                        it.name in setOf("readValue", "treeToValue", "convertValue", "readerFor", "valueToTree")
+                    }
+                ).and(target(owner(nameMatching("tools\\.jackson\\.databind\\..*")))),
+            )
+            .orShould().callMethodWhere(target(owner(name("java.lang.Class"))).and(target(name("forName"))))
+            .orShould().dependOnClassesThat().haveFullyQualifiedName("java.util.ServiceLoader")
+            .orShould().dependOnClassesThat().resideInAPackage("kotlin.reflect.full..")
+            .because("the control plane needs no AOT hints (RFC 0007 §10)")
             .check(classes)
     }
 

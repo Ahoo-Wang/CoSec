@@ -705,7 +705,11 @@
       "source": "RFC 0007 Q22; RFC 0008 §3.2 (reviews of #996, #998)",
       "statement": "simulate, explain and analyze call the same Engine.evaluate as enforcement, and explanations are built by the enforcing flow.",
       "level": "control",
-      "pending": "RFC 0007 PR-9"
+      "pending": null,
+      "guards": [
+        "control:ControlPlaneTest#simulate decides with the enforcing flow and shows only what the caller may read",
+        "control:ControlPlaneTest#explain decides at the revisions an audit event recorded"
+      ]
     },
     {
       "id": "CTL-4",

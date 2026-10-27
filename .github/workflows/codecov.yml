@@ -42,12 +42,15 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
       - name: Build Code Coverage Report
-        run: ./gradlew codeCoverageReport --stacktrace
+        # Coverage must come from real test runs, never from build-cache hits.
+        run: ./gradlew codeCoverageReport --stacktrace --no-build-cache
 
       - name: Upload Code Coverage Report to Codecov
         uses: codecov/codecov-action@v7

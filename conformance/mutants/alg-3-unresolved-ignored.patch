@@ -1,0 +1,17 @@
+# Rule: ALG-3
+# Mutant: missing attachments and unavailable documents are not checked before the ALLOW pass
+# Tests: :cosec-engine:test --tests me.ahoo.cosec.engine.flat.* :conformance:test
+
+diff --git a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+index 5f88243f..02346c5f 100644
+--- a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
++++ b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+@@ -134,7 +134,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected
+             }
+             return Decision.Indeterminate(cause)
+         }
+-        return unresolved()?.let { Decision.Indeterminate(it) }
++        return null
+     }
+ 
+     /** Visits the candidates. Open for the property test that shuffles them (P8). */

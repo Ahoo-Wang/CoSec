@@ -174,7 +174,11 @@ val propertyStress = tasks.register("propertyStress") {
 
 @Suppress("UNCHECKED_CAST")
 val registeredProperties = (
-    groovy.json.JsonSlurper().parse(file("conformance/src/test/resources/rules.json")) as Map<String, Any?>
+    groovy.json.JsonSlurper().parseText(
+        // A tracked file read, so the configuration cache is invalidated when the registry changes.
+        providers.fileContents(layout.projectDirectory.file("conformance/src/test/resources/rules.json"))
+            .asText.get()
+    ) as Map<String, Any?>
     )["rules"] as List<Map<String, Any?>>
 registeredProperties
     .flatMap { (it["properties"] as List<String>?).orEmpty() }
@@ -198,9 +202,10 @@ registeredProperties
             outputs.upToDateWhen { false }
             maxHeapSize = "2g"
             // As for engineParity: TRACE logging over a million cases would write gigabytes.
+            val parityLogback = "${rootProject.rootDir}/config/logback-parity.xml"
             doFirst {
                 jvmArgs = jvmArgs.orEmpty().filterNot { it.startsWith("-Dlogback.configurationFile=") } +
-                    "-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-parity.xml"
+                    "-Dlogback.configurationFile=$parityLogback"
             }
         }
         propertyStress.configure { dependsOn(stress) }

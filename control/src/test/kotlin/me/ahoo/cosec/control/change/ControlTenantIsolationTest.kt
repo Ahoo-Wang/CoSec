@@ -38,6 +38,7 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
@@ -216,17 +217,19 @@ class ControlTenantIsolationTest {
     /** acme's principals' answers to a set of requests, through the pipeline and engine, on the current heads. */
     private fun decisions(): List<Int> = REQUESTS.map { (principal, method, path) ->
         val pipeline = Pipeline(
-            authenticator = Authenticator {
-                AuthnResult.Authenticated(
-                    AuthenticatedPrincipal(
-                        PrincipalId(principal),
-                        TenantId("acme"),
-                        MembershipClaims.parse(listOf("editor"), listOf("p0", "p1"))
-                    ),
-                    "token"
-                )
-            },
-            snapshots = SuspendingSnapshotSource(HeadViews()),
+            PipelineComponents(
+                authenticator = Authenticator {
+                    AuthnResult.Authenticated(
+                        AuthenticatedPrincipal(
+                            PrincipalId(principal),
+                            TenantId("acme"),
+                            MembershipClaims.parse(listOf("editor"), listOf("p0", "p1"))
+                        ),
+                        "token"
+                    )
+                },
+                snapshots = SuspendingSnapshotSource(HeadViews()),
+            )
         )
         runBlocking { pipeline.evaluate(facts(method, path)).status }
     }

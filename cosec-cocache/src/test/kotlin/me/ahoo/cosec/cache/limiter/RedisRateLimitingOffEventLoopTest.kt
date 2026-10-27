@@ -184,9 +184,11 @@ class SuspendingRedisRateLimitingTest {
             "cosec:test:rate:${java.util.UUID.randomUUID()}",
         )
         val pipeline = me.ahoo.cosec.runtime.Pipeline(
-            { me.ahoo.cosec.runtime.authn.AuthnResult.Anonymous },
-            me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource(views),
-            rateLimiter = limiter,
+            me.ahoo.cosec.runtime.PipelineComponents(
+                { me.ahoo.cosec.runtime.authn.AuthnResult.Anonymous },
+                me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource(views),
+                rateLimiter = limiter,
+            )
         )
         val facts = me.ahoo.cosec.runtime.http.HttpFacts(
             "GET",

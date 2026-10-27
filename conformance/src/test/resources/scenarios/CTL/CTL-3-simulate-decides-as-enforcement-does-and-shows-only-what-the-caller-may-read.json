@@ -1,0 +1,185 @@
+{
+  "rules": [
+    "CTL-3"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RFC 0007 §10.3, Q22: simulate resolves the scope, compiles the heads and calls the engine as enforcement does. bob may read orders (acme's own policy); the platform's DENY refuses delete, which alice sees without its statement and plato with it; a change's candidate is decided beside the heads.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "no-delete",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:delete",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "no-delete",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-delete"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops@team-a"
+      ]
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [
+            "ops@team-a"
+          ],
+          "app": "order",
+          "space": "team-a",
+          "action": "order:read",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [
+            "ops@team-a"
+          ],
+          "app": "order",
+          "space": "team-a",
+          "action": "order:delete",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "simulate": {
+        "by": "plato",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [
+            "ops@team-a"
+          ],
+          "app": "order",
+          "space": "team-a",
+          "action": "order:delete",
+          "resource": "order/1"
+        }
+      }
+    },
+    {
+      "propose": {
+        "change": "c1",
+        "by": "alice",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "removeBinding": "ops"
+          }
+        ]
+      }
+    },
+    {
+      "simulate": {
+        "by": "alice",
+        "request": {
+          "tenant": "acme",
+          "principal": "bob",
+          "roles": [
+            "ops@team-a"
+          ],
+          "app": "order",
+          "space": "team-a",
+          "action": "order:read",
+          "resource": "order/1"
+        },
+        "candidate": "c1"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "Permit by orders",
+      "Deny",
+      "Deny by no-delete",
+      "CHECKED",
+      "Permit by orders; candidate Deny"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

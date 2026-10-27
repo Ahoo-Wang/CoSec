@@ -271,7 +271,7 @@ class PipelineTest {
     @Test
     fun pipelineDeadlineIs503() = runTest {
         val options = PipelineOptions(timeout = 100.milliseconds, authenticationTimeout = 10.seconds)
-        val outcome = pipeline(Authenticator { awaitCancellation() }, options = options).evaluate(facts())
+        val outcome = pipeline(Authenticator { awaitCancellation() }) { it.copy(options = options) }.evaluate(facts())
         outcome.assertProblem(ProblemType.UNAVAILABLE)
         outcome.unavailability().assert().isEqualTo(Unavailability.DeadlineExceeded)
     }
@@ -293,7 +293,10 @@ class PipelineTest {
             principal.assert().isEqualTo(PRINCIPAL)
             provided
         }
-        pipeline(authenticator(authenticated(null)), engine, membershipProvider = provider).evaluate(facts())
+        pipeline(
+            authenticator(authenticated(null)),
+            engine
+        ) { it.copy(membershipProvider = provider) }.evaluate(facts())
             .proceed.assert().isTrue()
         engine.requests.single().memberships.assert().isSameAs(provided)
     }
@@ -315,7 +318,10 @@ class PipelineTest {
         )
         providers.forEach { provider ->
             val engine = StubEngine(PERMIT)
-            val outcome = pipeline(authenticator(authenticated(null)), engine, membershipProvider = provider)
+            val outcome = pipeline(
+                authenticator(authenticated(null)),
+                engine
+            ) { it.copy(membershipProvider = provider) }
                 .evaluate(facts())
             outcome.assertProblem(ProblemType.UNAVAILABLE)
             ((outcome.unavailability() as Unavailability.Indeterminate).cause).assert()
@@ -337,7 +343,10 @@ class PipelineTest {
             "test",
         )
         val engine = StubEngine(PERMIT)
-        val outcome = pipeline(authenticator(unusable), engine, membershipProvider = provider).evaluate(facts())
+        val outcome = pipeline(
+            authenticator(unusable),
+            engine
+        ) { it.copy(membershipProvider = provider) }.evaluate(facts())
         outcome.assertProblem(ProblemType.UNAVAILABLE)
         ((outcome.unavailability() as Unavailability.Indeterminate).cause).assert()
             .isInstanceOf(Cause.MembershipUnavailable::class.java)
@@ -409,7 +418,7 @@ class PipelineTest {
         pipeline(
             recording
         ).evaluate(facts(query = "authorization=query", cookies = mapOf("authorization" to listOf("cookie"))))
-        pipeline(recording, options = query).evaluate(
+        pipeline(recording) { it.copy(options = query) }.evaluate(
             facts(query = "authorization=query", cookies = mapOf("authorization" to listOf("cookie")))
         )
         pipeline(recording).evaluate(facts(headers = mapOf("x-api-key" to listOf("key"))))
