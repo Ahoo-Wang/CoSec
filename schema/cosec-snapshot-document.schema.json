@@ -61,6 +61,13 @@
           "format": "date-time",
           "type": "string"
         },
+        "rateLimits": {
+          "description": "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends.",
+          "items": {
+            "$ref": "#/definitions/rateLimit"
+          },
+          "type": "array"
+        },
         "revision": {
           "minimum": 1,
           "type": "integer"
@@ -673,6 +680,13 @@
           "format": "date-time",
           "type": "string"
         },
+        "rateLimits": {
+          "description": "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends.",
+          "items": {
+            "$ref": "#/definitions/rateLimit"
+          },
+          "type": "array"
+        },
         "revision": {
           "minimum": 1,
           "type": "integer"
@@ -888,6 +902,92 @@
       ],
       "type": "object"
     },
+    "rateLimit": {
+      "additionalProperties": false,
+      "description": "A rate limit rule (RFC 0006 §8): a permitted request it matches spends one permit; an exhausted one is 429.",
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/actionPattern"
+            },
+            {
+              "items": {
+                "$ref": "#/definitions/actionPattern"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          ]
+        },
+        "condition": {
+          "$ref": "#/definitions/condition",
+          "description": "Which requests count; matched as a DENY is."
+        },
+        "id": {
+          "description": "Unique in its document. An app's or tenant's rule counts in buckets of its own.",
+          "examples": [
+            "login-per-ip",
+            "orders.api"
+          ],
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "type": "string"
+        },
+        "key": {
+          "description": "The text or address attribute whose value names the bucket. Absent: one bucket; an absent value: the empty bucket.",
+          "examples": [
+            "environment.ip",
+            "subject.id",
+            "resource.var.orderId"
+          ],
+          "type": "string"
+        },
+        "onMissing": {
+          "default": "indeterminate",
+          "description": "An external attribute that cannot be fetched: indeterminate leaves it to strictFailure; nomatch skips the rule (platform document only).",
+          "enum": [
+            "indeterminate",
+            "nomatch"
+          ],
+          "type": "string"
+        },
+        "permitsPerSecond": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "resource": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/resource"
+            },
+            {
+              "items": {
+                "$ref": "#/definitions/resource"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          ],
+          "description": "Absent: any resource."
+        },
+        "strictFailure": {
+          "default": false,
+          "description": "Whether a rate limiter that cannot count refuses the request (503) instead of skipping the rule.",
+          "type": "boolean"
+        },
+        "windowSeconds": {
+          "default": 1,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "action",
+        "permitsPerSecond"
+      ],
+      "type": "object"
+    },
     "resource": {
       "anyOf": [
         {
@@ -1021,6 +1121,13 @@
           ],
           "format": "date-time",
           "type": "string"
+        },
+        "rateLimits": {
+          "description": "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends.",
+          "items": {
+            "$ref": "#/definitions/rateLimit"
+          },
+          "type": "array"
         },
         "revision": {
           "minimum": 1,

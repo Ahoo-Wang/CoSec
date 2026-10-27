@@ -44,6 +44,10 @@ class SnapshotView(
     }
 
     /** Whether a policy of these documents reads an external attribute: only then is there anything to plan. */
+    /** Whether a document has rate limit rules: only then does a permit have obligations (RFC 0006 §8.2). */
+    internal val limitsRates: Boolean =
+        platform.rateLimits.isNotEmpty() || app?.rateLimits?.isNotEmpty() == true || tenant?.rateLimits?.isNotEmpty() == true
+
     internal val readsExternal: Boolean =
         platform.readsExternal || app?.readsExternal == true || tenant?.readsExternal == true
 

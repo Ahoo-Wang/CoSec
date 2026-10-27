@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.snapshot.document
 
+import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Binding
@@ -68,6 +69,11 @@ class PolicyDocument(
      * document are checked against, with their types. Null: the instance's providers decide. Platform only.
      */
     val attributes: List<Attribute>? = null,
+    /**
+     * Its rate limit rules, in order (RFC 0006 §8.1): a permit's obligations. Every kind of document may have them; the
+     * rules of an app or a tenant document count in buckets of their own.
+     */
+    val rateLimits: List<RateLimitSource> = emptyList(),
 ) {
     init {
         require(revision > 0) { "Revision must be positive, was $revision." }

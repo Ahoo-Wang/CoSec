@@ -121,7 +121,7 @@ internal class RequestRecord(val startNanos: Long, val time: Long, val trace: Tr
             } else {
                 DecisionEvent.Kind.DECIDED
             }
-        is Basis.Decided -> DecisionEvent.Kind.DECIDED
+        is Basis.Decided, is Basis.RateLimited -> DecisionEvent.Kind.DECIDED
     }
 
     private fun reason(decision: Decision): OutcomeSummary.Reason = when (decision) {
@@ -145,6 +145,7 @@ internal class RequestRecord(val startNanos: Long, val time: Long, val trace: Tr
                 Unavailability.DeadlineExceeded -> OutcomeSummary.Reason.DEADLINE_EXCEEDED
             }
             is Basis.Decided -> reason(basis.decision)
+            is Basis.RateLimited -> OutcomeSummary.Reason.TOO_MANY_REQUESTS
         }
         val cause = when (val basis = outcome.basis) {
             is Basis.Unavailable -> (basis.reason as? Unavailability.Indeterminate)?.cause

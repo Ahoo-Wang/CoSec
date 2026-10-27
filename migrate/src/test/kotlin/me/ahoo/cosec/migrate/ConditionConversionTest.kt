@@ -186,7 +186,9 @@ class ConditionConversionTest {
         conversion.report.semanticChanges.single { it.change == "D1" }.shape.assert().contains("DENY direction")
         val out = temp.resolve("out")
         ConvertedDirectory.write(conversion, out)
-        val written = CoSecJsonSerializer.readTree(Files.readAllBytes(out.resolve(ConvertedDirectory.RATE_LIMITS_FILE)))
+        // In the platform document, which compiles with them (RFC 0006 §8.1).
+        val platform = CoSecJsonSerializer.readTree(Files.readAllBytes(out.resolve(ConvertedDirectory.PLATFORM_FILE)))
+        val written = platform.get("rateLimits")
         written.size().assert().isEqualTo(2)
         written.get(0).let { rule ->
             rule.get("id").asString().assert().isEqualTo("per-user")

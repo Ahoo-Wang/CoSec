@@ -42,11 +42,30 @@ class ChangeOptions(
      * analysis cannot prove needs another administrator.
      */
     val fourEyes: Boolean = false,
+    /** When a shadow window may close (`cosec.control.shadow.*`, RFC 0007 §6.4). */
+    val shadow: ShadowOptions = ShadowOptions(),
 ) {
     init {
         require(
             maxDocumentBytes > 0 && principalBindingLimit >= 0 && !expireAfter.isNegative && !approvalExpireAfter.isNegative
         ) { "Invalid change options." }
+    }
+}
+
+/**
+ * When a shadow window closes (RFC 0007 §6.4, Q1): once [minDuration] has passed and the instances have reported
+ * [minSamples] samples that compared (not `BASE_MISMATCH`); or at [maxDuration] with fewer, as insufficient evidence
+ * the publisher must acknowledge; or at once when an instance cannot compile or evaluate the candidate.
+ */
+class ShadowOptions(
+    val minDuration: java.time.Duration = java.time.Duration.ofMinutes(15),
+    val minSamples: Long = 1_000,
+    val maxDuration: java.time.Duration = java.time.Duration.ofHours(24),
+) {
+    init {
+        require(
+            !minDuration.isNegative && minSamples >= 0 && maxDuration >= minDuration
+        ) { "Invalid shadow window options." }
     }
 }
 

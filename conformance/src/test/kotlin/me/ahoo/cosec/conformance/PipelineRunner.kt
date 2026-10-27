@@ -28,6 +28,7 @@ import me.ahoo.cosec.apikey.ApiKeys
 import me.ahoo.cosec.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.membership.MembershipClaims
 import me.ahoo.cosec.membership.MembershipMarkedPrincipal
@@ -46,6 +47,9 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.route.RouteMap
+import me.ahoo.cosec.route.RouteMapCodec
+import me.ahoo.cosec.route.RouteMapException
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.attribute.AttributeDeclaration
@@ -69,6 +73,7 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
@@ -127,6 +132,8 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  * "blacklist":          { "blocks": ["principal", "ip", "device"] } | { "fails": "message" },
  * // Decision listeners (RFC 0006 §9): each answers, fails or never answers; REQUIRED ones within
  * // options.requiredTimeoutMillis (default 1000)
+ * // A rate limiter (RFC 0006 §8.4) that has permits for every rule but the exhausted ones, or that fails; absent: none
+ * "rateLimiter":        { "exhausted": ["rule-id"] } | { "fails": "message" },
  * "listeners":          [{ "name": "audit", "delivery": "required" | "best-effort", "fails": "message" | "hangs": true }],
  * "cancel":             "authentication" | "memberships" | "snapshot"    // the caller goes away while it waits there
  * ```
@@ -140,7 +147,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node.only(
             "\$comment", "rules", "polarity", "level", "description", "documents", "http", "authentication",
             "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations", "attributeProviders",
-            "blacklist", "listeners",
+            "blacklist", "listeners", "rateLimiter", "routes",
         )
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
@@ -154,6 +161,12 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
                 )
             )
         } catch (error: DocumentException) {
+            return Outcome.NotCompiled(error.message.orEmpty())
+        }
+        // The service's route map, loaded as a host loads it: all or nothing (RFC 0005 §5.3).
+        val routes = try {
+            routes(node.get("routes"))
+        } catch (error: RouteMapException) {
             return Outcome.NotCompiled(error.message.orEmpty())
         }
         val cancelAt = node.get("cancel")?.text()?.also {
@@ -177,6 +190,8 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             options = options(node.get("options") ?: EMPTY),
             attributes = attributes,
             listeners = listeners,
+            rateLimiter = rateLimiter(node.get("rateLimiter")),
+            routes = routes,
         )
         val facts = facts(node.get("http") ?: EMPTY)
         try {
@@ -188,6 +203,10 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             listeners.cancel()
         }
     }
+
+    /** The scenario's route map, loaded as a host loads it; none without one. */
+    private fun routes(node: JsonNode?): RouteMap =
+        node?.let { RouteMapCodec.load(listOf("scenario" to it.toString().encodeToByteArray())) } ?: RouteMap.EMPTY
 
     /** The compiler, with the providers' attributes declared when the scenario registers any. */
     private fun compiler(attributes: AttributeProviders): SnapshotCompiler =
@@ -441,6 +460,18 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         }
         val timeout = options.get("requiredTimeoutMillis")?.asLong()?.milliseconds ?: DEFAULT_REQUIRED_TIMEOUT
         return DecisionListeners(listeners, requiredTimeout = timeout)
+    }
+
+    private fun rateLimiter(node: JsonNode?): RateLimiter? {
+        node ?: return null
+        node.only("exhausted", "fails")
+        node.get("fails")?.let { fails -> return RateLimiter { _, _, _ -> throw IllegalStateException(fails.text()) } }
+        val exhausted = node.get("exhausted")?.strings().orEmpty().toSet()
+        return RateLimiter { ruleId, _, limit ->
+            val allowed = ruleId !in exhausted
+            val perWindow = (limit.permitsPerSecond * limit.windowSeconds).toLong()
+            RateLimitResult(allowed, perWindow, if (allowed) perWindow - 1 else 0, java.time.Duration.ofSeconds(1))
+        }
     }
 
     private fun attributeProviders(node: JsonNode): List<AttributeProvider> {

@@ -1,0 +1,74 @@
+{
+  "rules": [
+    "RTE-1"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "/orders/{orderId} and /orders/export may both match GET /orders/export.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read"
+            }
+          ]
+        },
+        {
+          "id": "no-admin",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:*",
+              "resource": "http:path:/admin/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        },
+        {
+          "id": "g:no-admin",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-admin"
+        }
+      ]
+    }
+  },
+  "routes": {
+    "service": "order",
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/orders/{orderId}",
+        "action": "order:read",
+        "resource": "order/{orderId}"
+      },
+      {
+        "method": "GET",
+        "path": "/orders/export",
+        "action": "order:export",
+        "resource": "order"
+      }
+    ]
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/42"
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "may match the same request"
+  }
+}

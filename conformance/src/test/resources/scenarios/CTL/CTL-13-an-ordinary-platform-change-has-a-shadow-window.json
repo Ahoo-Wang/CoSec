@@ -1,0 +1,51 @@
+{
+  "rules": [
+    "CTL-13"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The same platform document without a break-glass binding stages into a window.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT15M",
+      "minSamples": 3,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "platform": 0
+    }
+  }
+}

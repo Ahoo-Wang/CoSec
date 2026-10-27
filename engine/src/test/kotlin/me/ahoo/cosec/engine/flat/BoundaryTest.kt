@@ -32,7 +32,7 @@ class BoundaryTest {
     private val allowAll = fixture.policy("all", allow())
 
     private fun platform(vararg boundaries: CompiledPolicy, default: String? = null) =
-        CompiledDocument.platform(listOf(allowAll), listOf(anyone("g", "all")), boundaries.toList(), default)
+        CompiledDocument.platform(listOf(allowAll), listOf(anyone("g", "all")), emptyList(), boundaries.toList(), default)
 
     private fun decide(platform: CompiledDocument, tenant: CompiledDocument = tenant(), request: FlatRequest = flatRequest()): Decision {
         val view = SnapshotView(platform, null, tenant)
@@ -88,9 +88,9 @@ class BoundaryTest {
         decide(platform).assert().isInstanceOf(Decision.Deny::class.java)
         decide(
             platform,
-            CompiledDocument.tenant(TenantId("acme"), emptyList(), emptyList(), "wide")
+            CompiledDocument.tenant(TenantId("acme"), emptyList(), emptyList(), emptyList(), "wide")
         ).assert().isEqualTo(permit)
-        decide(platform, CompiledDocument.tenant(TenantId("acme"), emptyList(), emptyList(), "gone"))
+        decide(platform, CompiledDocument.tenant(TenantId("acme"), emptyList(), emptyList(), emptyList(), "gone"))
             .assert().isEqualTo(Decision.Indeterminate(Cause.MissingPolicies(setOf(PolicyId("gone")))))
     }
 
@@ -101,7 +101,7 @@ class BoundaryTest {
         decide(platform(closed, default = "closed"), tenant(tenant = TenantId.PLATFORM.value), platformTenant)
             .assert().isEqualTo(permit)
         assertThrownBy<IllegalArgumentException> {
-            CompiledDocument.tenant(TenantId.PLATFORM, emptyList(), emptyList(), "closed")
+            CompiledDocument.tenant(TenantId.PLATFORM, emptyList(), emptyList(), emptyList(), "closed")
         }
     }
 
@@ -110,13 +110,13 @@ class BoundaryTest {
         val closed = fixture.policy("closed", allow(RuleBehavior.THROW))
         val platform = CompiledDocument.platform(
             listOf(fixture.policy("d", deny())),
-            listOf(anyone("g", "d")),
+            listOf(anyone("g", "d")), emptyList(),
             listOf(closed),
             "closed",
         )
         decide(platform).assert().isEqualTo(Decision.Deny(ref("d", 0, bound("g"))))
         decide(
-            CompiledDocument.platform(emptyList(), emptyList(), listOf(closed), "closed")
+            CompiledDocument.platform(emptyList(), emptyList(), emptyList(), listOf(closed), "closed")
         ).assert().isEqualTo(Decision.Deny(null))
     }
 
@@ -137,27 +137,27 @@ class BoundaryTest {
     @Test
     fun `a boundary only allows, is never bound or attached, and the default is one`() {
         assertThrownBy<IllegalArgumentException> {
-            CompiledDocument.platform(emptyList(), emptyList(), listOf(fixture.policy("b", deny())))
+            CompiledDocument.platform(emptyList(), emptyList(), emptyList(), listOf(fixture.policy("b", deny())))
         }.hasMessageContaining("only allows")
         assertThrownBy<IllegalArgumentException> {
-            CompiledDocument.platform(emptyList(), emptyList(), listOf(fixture.policy("b", allow(), attachable = true)))
+            CompiledDocument.platform(emptyList(), emptyList(), emptyList(), listOf(fixture.policy("b", allow(), attachable = true)))
         }.hasMessageContaining("cannot be attached")
         assertThrownBy<IllegalArgumentException> {
-            CompiledDocument.platform(emptyList(), emptyList(), listOf(fixture.policy("b", *Array(65) { allow() })))
+            CompiledDocument.platform(emptyList(), emptyList(), emptyList(), listOf(fixture.policy("b", *Array(65) { allow() })))
         }.hasMessageContaining("more than 64")
         assertThrownBy<IllegalArgumentException> {
-            CompiledDocument.platform(emptyList(), listOf(anyone("g", "b")), listOf(fixture.policy("b", allow())))
+            CompiledDocument.platform(emptyList(), listOf(anyone("g", "b")), emptyList(), listOf(fixture.policy("b", allow())))
         }.hasMessageContaining("binds boundary policy b")
         assertThrownBy<IllegalArgumentException> {
-            CompiledDocument.platform(listOf(allowAll), emptyList(), emptyList(), "all")
+            CompiledDocument.platform(listOf(allowAll), emptyList(), emptyList(), emptyList(), "all")
         }.hasMessageContaining("is not a boundary policy")
         assertThrownBy<IllegalArgumentException> {
-            CompiledDocument.platform(listOf(allowAll), emptyList(), listOf(fixture.policy("all", allow())))
+            CompiledDocument.platform(listOf(allowAll), emptyList(), emptyList(), listOf(fixture.policy("all", allow())))
         }.hasMessageContaining("Duplicate policy id")
         assertThrownBy<IllegalArgumentException> {
             CompiledDocument.platform(
                 emptyList(),
-                emptyList(),
+                emptyList(), emptyList(),
                 listOf(fixture.policy(BuiltinPolicies.ROOT.value, allow()))
             )
         }
@@ -166,7 +166,7 @@ class BoundaryTest {
     @Test
     fun `a boundary cannot be attached through a principal's memberships`() {
         val boundary = fixture.policy("b", allow())
-        val platform = CompiledDocument.platform(emptyList(), emptyList(), listOf(boundary))
+        val platform = CompiledDocument.platform(emptyList(), emptyList(), emptyList(), listOf(boundary))
         decide(platform, request = flatRequest(attachments = listOf("b")))
             .assert().isEqualTo(Decision.Indeterminate(Cause.MissingPolicies(setOf(PolicyId("b")))))
     }

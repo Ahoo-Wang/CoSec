@@ -23,6 +23,7 @@ import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.api.spi.Envelope
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.cache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.control.change.ChangeId
@@ -34,6 +35,7 @@ import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.StoredDocument
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.snapshot.SnapshotDigest
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
@@ -61,6 +63,8 @@ class CoCacheControlStore(
     private val leases: Cache<String, String>,
     private val changes: Cache<ChangeId, ChangeRequest>,
     private val stages: Cache<SnapshotKey, StageSlot>,
+    /** The staged candidates the data plane's shadow listeners read (RFC 0007 §6.4). */
+    private val candidates: Cache<SnapshotKey, StoredCandidate>,
     /** Told after a head write, typically `RedisSnapshotDocumentStore.notifyChanged`, so this instance reloads at once. */
     private val onPublished: (SnapshotKey) -> Unit = {},
 ) : ControlStore {
@@ -134,6 +138,16 @@ class CoCacheControlStore(
 
     override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean =
         put(stages, key, expected, slot, digest(StageSlotCodec, slot)) is Put.Written
+
+    override suspend fun candidate(key: SnapshotKey): StoredCandidate? = read(candidates, key)?.first
+
+    override suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate?) {
+        if (candidate == null) {
+            candidates.async().invalidate(key).await()
+        } else {
+            candidates.async().put(key, candidate).await()
+        }
+    }
 
     override suspend fun acquireLease(name: String, holder: String, duration: Duration): Boolean {
         val result = leases.async().putIfMatch(name, null, holder, duration).await()
@@ -210,6 +224,7 @@ class CoCacheControlStore(
             leases = runtime.create(ControlCacheSpecs.lease(keyPrefix)),
             changes = runtime.create(ControlCacheSpecs.changeRequest(keyPrefix)),
             stages = runtime.create(ControlCacheSpecs.stage(keyPrefix)),
+            candidates = runtime.create(ShadowCacheSpecs.candidate(keyPrefix)),
             onPublished = onPublished,
         )
     }

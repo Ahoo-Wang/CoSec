@@ -165,6 +165,8 @@ data class ChangeRequest(
     val escalations: List<Escalation> = emptyList(),
     /** The approval it has; `null` until one is given, and again after anything it was given for changes. */
     val approval: Approval? = null,
+    /** Its shadow window (RFC 0007 §6.4): `null` until it stages, and when the window was skipped. */
+    val shadow: ShadowState? = null,
 ) {
     val errors: List<Finding> get() = findings.filter { it.severity == Severity.ERROR }
 }
@@ -183,6 +185,34 @@ data class Escalation(val subject: String, val reason: String, val detail: Strin
  * the escalation subjects [covers]. It is valid for `cosec.control.approval.expire-after` from [at].
  */
 data class Approval(val approver: Actor, val at: Instant, val candidate: String, val covers: List<String>)
+
+/**
+ * A change's shadow window (RFC 0007 §6.4): [window] names it in the candidate and in every instance's report; [closed]
+ * is what the reports summed to when it closed, and stays as the evidence the publisher acknowledges.
+ */
+data class ShadowState(val window: String, val startedAt: Instant, val closed: ShadowSummary? = null)
+
+/**
+ * The reports of a window summed over the instances (RFC 0007 §6.4): counts by outcome (`SAME`, `WIDENED`, ...), when
+ * it closed, whether it closed for lack of samples ([insufficient]), and whether an instance could not compile or
+ * evaluate the candidate ([blocked]): such a change never publishes.
+ */
+data class ShadowSummary(
+    val counts: Map<String, Long>,
+    val closedAt: Instant,
+    val insufficient: Boolean,
+    val blocked: Boolean
+) {
+    /** Whether publishing needs the publisher to acknowledge these numbers: anything changed, or too few samples. */
+    val needsAck: Boolean get() = insufficient || ACKNOWLEDGED.any { (counts[it] ?: 0) > 0 }
+
+    private companion object {
+        val ACKNOWLEDGED = listOf("WIDENED", "NARROWED", "BECAME_INDETERMINATE")
+    }
+}
+
+/** What a publisher acknowledges (RFC 0007 §6.4): the window and the counts they saw, which must be the summary's. */
+data class ShadowAck(val window: String, val counts: Map<String, Long>)
 
 data class StageSlot(val holder: ChangeId?, val since: Instant?) {
     companion object {

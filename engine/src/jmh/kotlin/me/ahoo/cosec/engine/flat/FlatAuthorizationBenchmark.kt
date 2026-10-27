@@ -111,6 +111,7 @@ open class FlatAuthorizationBenchmark {
         platform = CompiledDocument.platform(
             global + principal,
             global.map { Binding(BindingId("g-${it.id}"), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), it.policyId) },
+            emptyList(),
             boundaries,
             boundaries.firstOrNull()?.policyId?.value,
         )

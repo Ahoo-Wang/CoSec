@@ -53,7 +53,7 @@ internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, pr
         } else {
             pass = Effect.ALLOW
             enumerate()
-            allowDecision().let { if (view.bounded) withinBoundary(it) else it }
+            withObligations(allowDecision().let { if (view.bounded) withinBoundary(it) else it })
         }
         return FlatEvaluation(decision, FlatTrace(request.scope, candidates, expired, allUnresolved(), boundary))
     }

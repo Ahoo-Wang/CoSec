@@ -55,9 +55,12 @@ class CompiledDocument private constructor(
      * tenant's names a policy of the platform, looked up per request.
      */
     internal val boundary: String? = null,
+    /** Its rate limit rules, in document order (RFC 0006 §8.1): a permit's obligations come from them. */
+    val rateLimits: List<CompiledRateLimit> = emptyList(),
 ) {
-    /** Whether one of its policies reads an external attribute (RFC 0006 §5.4.2). */
-    internal val readsExternal: Boolean = policies.values.any { it.readsExternal }
+    /** Whether one of its policies or rate limit rules reads an external attribute (RFC 0006 §5.4.2). */
+    internal val readsExternal: Boolean =
+        policies.values.any { it.readsExternal } || rateLimits.any { it.externals.isNotEmpty() }
 
     /** `Anyone` bindings, by policy id, then binding id. */
     internal val anyone: Array<BoundEntry>
@@ -86,6 +89,10 @@ class CompiledDocument private constructor(
         val breakGlass = HashMap<String, HashMap<String, ArrayList<BoundEntry>>>()
         val principals = HashMap<String, HashMap<String, ArrayList<BoundEntry>>>()
         val roles = LinkedHashMap<String, ArrayList<BoundEntry>>()
+        val ruleIds = HashSet<String>()
+        for (rule in rateLimits) {
+            require(ruleIds.add(rule.id)) { "Duplicate rate limit rule ${rule.id} in the $kind document" }
+        }
         val ids = HashSet<String>()
         for (binding in bindings) {
             require(ids.add(binding.id.value)) { "Duplicate binding id ${binding.id.value} in the $kind document" }
@@ -233,6 +240,7 @@ class CompiledDocument private constructor(
         fun platform(
             policies: List<CompiledPolicy>,
             bindings: List<Binding>,
+            rateLimits: List<CompiledRateLimit> = emptyList(),
             boundaries: List<CompiledPolicy> = emptyList(),
             defaultBoundary: String? = null,
         ): CompiledDocument {
@@ -252,12 +260,17 @@ class CompiledDocument private constructor(
                     "Boundary ${boundary.id} holds ${boundary.allows.size} statements, more than $MAX_BOUNDARY_STATEMENTS"
                 }
             }
-            return CompiledDocument(DocumentKind.PLATFORM, "", index, bindings, boundaryIndex, defaultBoundary)
+            return CompiledDocument(DocumentKind.PLATFORM, "", index, bindings, boundaryIndex, defaultBoundary, rateLimits)
         }
 
         /** The document of [app]: its permission policies and role bindings (7.x app permissions and grants). */
-        fun app(app: AppId, policies: List<CompiledPolicy>, bindings: List<Binding>): CompiledDocument =
-            CompiledDocument(DocumentKind.APP, app.value, index(DocumentKind.APP, policies), bindings)
+        fun app(
+            app: AppId,
+            policies: List<CompiledPolicy>,
+            bindings: List<Binding>,
+            rateLimits: List<CompiledRateLimit> = emptyList(),
+        ): CompiledDocument =
+            CompiledDocument(DocumentKind.APP, app.value, index(DocumentKind.APP, policies), bindings, rateLimits = rateLimits)
 
         /**
          * The document of [tenant]: its own policies and bindings, and the platform [boundary] it is held to instead
@@ -267,6 +280,7 @@ class CompiledDocument private constructor(
             tenant: TenantId,
             policies: List<CompiledPolicy>,
             bindings: List<Binding>,
+            rateLimits: List<CompiledRateLimit> = emptyList(),
             boundary: String? = null,
         ): CompiledDocument =
             CompiledDocument(
@@ -274,7 +288,8 @@ class CompiledDocument private constructor(
                 tenant.value,
                 index(DocumentKind.TENANT, policies),
                 bindings,
-                boundary = boundary
+                boundary = boundary,
+                rateLimits = rateLimits,
             )
 
         private fun index(kind: DocumentKind, policies: List<CompiledPolicy>): HashMap<String, CompiledPolicy> {

@@ -32,6 +32,7 @@ import me.ahoo.cosec.audit.AuditTraceData
 import me.ahoo.cosec.audit.LoggingAuditEventSink
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.model.decision.BindingRef
+import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.runtime.authn.AuthnResult
@@ -100,13 +101,20 @@ object AuditEvents {
         val rejected = rejected(event.subject.rejected)
         return when (event.outcome.reason) {
             Reason.PERMIT -> AuditDecision.ALLOW to AuditReasonCode.ALLOW
+            Reason.TOO_MANY_REQUESTS -> AuditDecision.TOO_MANY_REQUESTS to AuditReasonCode.TOO_MANY_REQUESTS
             Reason.EXPLICIT_DENY -> AuditDecision.EXPLICIT_DENY to (rejected ?: AuditReasonCode.EXPLICIT_DENY)
             Reason.IMPLICIT_DENY -> AuditDecision.IMPLICIT_DENY to (rejected ?: AuditReasonCode.IMPLICIT_DENY)
             Reason.SCOPE_REJECTED -> AuditDecision.EXPLICIT_DENY to (rejected ?: AuditReasonCode.SCOPE_REJECTED)
             Reason.BOUNDARY -> AuditDecision.EXPLICIT_DENY to (rejected ?: AuditReasonCode.BOUNDARY)
             // A 400 is refused before any decision; kind says why.
             Reason.INVALID_REQUEST -> AuditDecision.EXPLICIT_DENY to AuditReasonCode.EXPLICIT_DENY
-            Reason.INDETERMINATE, Reason.AUTHENTICATOR_UNAVAILABLE, Reason.DEADLINE_EXCEEDED, Reason.CANCELLED ->
+            Reason.INDETERMINATE ->
+                if (event.outcome.cause is Cause.RateLimiterUnavailable) {
+                    AuditDecision.INDETERMINATE to AuditReasonCode.RATE_LIMITER_UNAVAILABLE
+                } else {
+                    AuditDecision.INDETERMINATE to AuditReasonCode.INDETERMINATE
+                }
+            Reason.AUTHENTICATOR_UNAVAILABLE, Reason.DEADLINE_EXCEEDED, Reason.CANCELLED ->
                 AuditDecision.INDETERMINATE to AuditReasonCode.INDETERMINATE
             Reason.ERROR -> AuditDecision.ERROR to AuditReasonCode.ERROR
         }

@@ -16,7 +16,11 @@ package me.ahoo.cosec.model.decision
 import me.ahoo.cosec.model.PolicyId
 
 sealed interface Decision {
-    data class Permit(val by: StatementRef.Policy) : Decision
+    /**
+     * [obligations] are what the pipeline must do before the request proceeds (RFC 0006 §8.2): only a permit has any,
+     * so a denied request never spends a rate limit permit (P15).
+     */
+    data class Permit(val by: StatementRef.Policy, val obligations: List<Obligation> = emptyList()) : Decision
 
     /** [by] is null for an implicit deny: no ALLOW matched. */
     data class Deny(val by: StatementRef?) : Decision
@@ -76,4 +80,32 @@ sealed interface Cause {
      * or timed out, or, for a break-glass permit, none is configured or none succeeded.
      */
     data class RequiredListenerFailed(val listeners: List<String>) : Cause
+
+    /**
+     * The rate limiter could not count rule [ruleId], whose `strictFailure` makes that a refusal (RFC 0006 §8.3, R3):
+     * its backend failed or timed out, or the rule's bucket could not be computed.
+     */
+    data class RateLimiterUnavailable(val ruleId: String) : Cause
+}
+
+/** What a permit obliges the pipeline to do before the request proceeds (RFC 0006 §8.2). */
+sealed interface Obligation {
+    /**
+     * Spend one permit of [limit] from [bucket] of rule [ruleId]. [bucket] is null when the rule's key could not be read
+     * (an external attribute that could not be fetched): [strictFailure] then decides, as for a failed backend.
+     */
+    data class RateLimit(
+        val ruleId: String,
+        val bucket: String?,
+        val limit: RateLimitSpec,
+        val strictFailure: Boolean,
+    ) : Obligation
+}
+
+/** A sliding-window quota: at most [permitsPerSecond] × [windowSeconds] permits per window of [windowSeconds]. */
+data class RateLimitSpec(val permitsPerSecond: Double, val windowSeconds: Long = 1) {
+    init {
+        require(permitsPerSecond > 0) { "permitsPerSecond must be positive, not $permitsPerSecond." }
+        require(windowSeconds >= 1) { "windowSeconds must be at least 1, not $windowSeconds." }
+    }
 }

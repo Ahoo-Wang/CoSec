@@ -176,6 +176,9 @@ RFC 正文与登记表不一致时按 AGENTS.md "以代码为准"的原则修 RF
 | `ANA-2` | `implies(c1, c2) = YES` 时不存在满足 `c1` 而不满足 `c2` 的请求（A2） | RFC 0005 §4.2 |
 | `ACT-1` | 路径模板代入的值永远不改变模式 | RFC 0005 §2 J9；GHSA-2293-jx8h-56m8 |
 | `ACT-2` | 未映射的路由落进 `http` 命名空间；`service:verb` 的 ALLOW 不覆盖未映射的路由 | RFC 0005 Q10 |
+| `RTE-1` | 两条路由可能匹配同一个请求（同一方法、路径不能证明不相交）时，路由映射不加载：一个请求只有一个动作和一个资源 | RFC 0005 §5.3（#1079） |
+| `RTE-2` | 含 `/`（解码后的 `%2F`）的捕获值从不成为类型化资源 id 的一段：请求以 400 拒绝 | RFC 0005 §5.3、§5.1（#1079） |
+| `RTE-3` | 格式错误的路由映射、或含任何一条格式错误路由的映射不加载：路由映射整体加载或整体失败 | RFC 0005 §5.3（#1079） |
 | `IDX-1` | 索引的候选集 ⊇ 暴力匹配的命中集（I1、I2） | RFC 0005 §6.3 |
 | `PIP-1` | 状态码只由 `StatusMapping` 给出，三个适配器对同一请求回答一致 | RFC 0006 §6.3 |
 | `PIP-2` | `Indeterminate` 一律 503；500 只留给未建模的异常 | RFC 0006 §6.1 |
@@ -324,7 +327,7 @@ JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字*
 |---|---|---|---|
 | 编译执行的授权吞吐 | `global`、`role`、`none`、`role-heavy` | 不低于 7.0 的 100 %；B/op 不高于 7.0 | RFC 0005 Q12、§9.3 |
 | Pipeline 吞吐 | `global`、`role`、`none`、`blocked`、`rate-limited`、`anonymous`（`PipelineBenchmark`） | 不低于 7.0 的 `SecurityPipeline` + 装饰器链的 100 %（交替三轮的平均，任一轮不低于 97 %）；B/op 不高于 | RFC 0006 §13.1、Q24（基准从"第 4 阶段"改为 7.0） |
-| 端到端 | Gateway 与 WebMvc 示例服务，wrk2 定速 | 最大吞吐不低于 7.0 的 100 %；70 % 负载下 p99 不高于 7.0 的 105 % | RFC 0006 §13.1 |
+| 端到端 | Gateway 与 WebMvc 示例服务，k6 的 `constant-arrival-rate` 定速（2026-10-26 修订：原为 wrk2） | 最大吞吐不低于 7.0 的 100 %；70 % 负载下 p99 不高于 7.0 的 105 % | RFC 0006 §13.1 |
 | 分配与策略规模无关 | `EngineBenchmark` 的 `bindings`、`statements` 参数 | 同一场景下 B/op 不随规模变化；10,000 条语句时吞吐不低于 10 条时的 50 % | RFC 0004 §12.1、RFC 0005 §9.3 |
 | 没有边界时零代价 | `boundary = none` | 与同一构建中去掉边界检查的对照相比，吞吐不低于 100 %、B/op 不高于 | RFC 0007 Q24 |
 | 编译 | `SnapshotCompileBenchmark`，8 MB 文档 | p99 ≤ 200 ms | RFC 0003 Q14 |
@@ -334,7 +337,7 @@ JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字*
   它们比较的是即将删除的中间形态。
 - 达不到预算时，与 RFC 0005 Q12 相同：切换 PR 停止，交回维护者决定。
 - **2026-10-26 修订（路线图审查）：尽早测量。** 预算不再只在切换时第一次测量。端到端切片（§4.4.3）一能运行，就按本节的方法测一次
-  Pipeline 吞吐（JMH）；RFC 0006 PR-7 之后再加 wrk2 的端到端测量；之后每个扩展切片的 PR 重测一次，结果记在 `docs/perf/e2e-slice/`。
+  Pipeline 吞吐（JMH）；RFC 0006 PR-7 之后再加 k6 的端到端测量（`constant-arrival-rate` 执行器，按 70 % 负载下的 p99 比较；2026-10-26 修订：维护者决定用 k6 取代 wrk2，wrk2 不在 Homebrew core）；之后每个扩展切片的 PR 重测一次，结果记在 `docs/perf/e2e-slice/`。
   这些测量不是合入门槛：任何一项低于预算时，测量的 PR 照常合入，但立即把数字交给维护者（不等到 S1），由维护者决定先优化还是继续。
   硬性门槛仍是 S1（§3.9）。理由：#1040 的路径模式解析与匹配测得是 Spring `PathPattern` 的 44–102 %，等到切换才发现差距，修复会落在关键路径的末端。
 
@@ -524,7 +527,7 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 
 | PR | 标题 | 范围 | 合入门槛 | 依赖 |
 |---|---|---|---|---|
-| **S1** | `refactor!: wire the 8.0 path in the starter` | starter 装配目标路径：`Pipeline`、认证器、成员关系、外部属性提供者、监听器、`SnapshotSource` 读 `Platform`/`App`/`Tenant` 三种文档、`controlSupport`；新的 `cosec.*` 属性（RFC 0004 §14.3、RFC 0006 X8、RFC 0007 X5）；路由映射；schema 标记。三个适配器只走新桥接。starter 中 7.x 的自动配置本身就是装配，S1 用新的取代并删除它们（含 L1、L2 的自动配置与 L5 的属性）；其他模块里 7.x 的库代码留在原处，照常编译和测试，但不再被装配。继承自原 RFC 0003 PR-5 与各轮审查的装配要求：启动时检查 `noeviction`（`SNP-3`）、引导之后缺失的平台文档 fail closed、固定快照缓存的编解码器与 key 过滤器并禁止 loader、`localMaxAge` 与 `cosec.authorization.snapshot.local-max-age` 协调成一个值、`LocalPolicyInitializer` 不再写库（删除 `init-repository`/`force-refresh`）、`explain`/`simulate` 装配到执法的同一条流程（`CTL-3`）、`WebAdapterParityTest` 加上 `SCP-4` 的场景。`cosec-gateway-server` 与 `k8s/cosec-gateway-config.yaml` 改用 8.0 的属性（§3.9 RC 前提第 7 条）；`aot-smoke` 作业（RC 前提第 5 条）；端到端切片改由 starter 装配（§4.4.3）。AGENTS.md 只在 Mental model 开头加一句过渡说明："starter 已装配 8.0 路径；以下各节在 S5 之前仍描述 7.x" | §3.9 第 1–5 条 | 其余全部实现 PR（§4.5） |
+| **S1** | `refactor!: wire the 8.0 path in the starter` | starter 装配目标路径：`Pipeline`、认证器、成员关系、外部属性提供者、监听器、`SnapshotSource` 读 `Platform`/`App`/`Tenant` 三种文档、`controlSupport`；新的 `cosec.*` 属性（RFC 0004 §14.3、RFC 0006 X8、RFC 0007 X5）；路由映射；schema 标记。三个适配器只走新桥接。starter 中 7.x 的自动配置本身就是装配，S1 用新的取代并删除它们（含 L1、L2 的自动配置与 L5 的属性）；其他模块里 7.x 的库代码留在原处，照常编译和测试，但不再被装配。继承自原 RFC 0003 PR-5 与各轮审查的装配要求：启动时检查 `noeviction`（`SNP-3`）、引导之后缺失的平台文档 fail closed（#1053 审查）、starter 的 `controlSupport` 引入 `cosec-control`，并有启动测试（#1064）、固定快照缓存的编解码器与 key 过滤器并禁止 loader、`localMaxAge` 与 `cosec.authorization.snapshot.local-max-age` 协调成一个值、`LocalPolicyInitializer` 不再写库（删除 `init-repository`/`force-refresh`）、`explain`/`simulate` 装配到执法的同一条流程（`CTL-3`）、`WebAdapterParityTest` 加上 `SCP-4` 的场景；WebFlux 与 WebMvc 从 `cosec.authorization.routes.location` 加载路由映射进 `Pipeline(routes = …)`（Gateway 不加载，RFC 0005 §5.3），actuator 的生成端点改用 `OpenAPIServiceGenerator`（#1079）。`cosec-gateway-server` 与 `k8s/cosec-gateway-config.yaml` 改用 8.0 的属性（§3.9 RC 前提第 7 条）；`aot-smoke` 作业（RC 前提第 5 条）；端到端切片改由 starter 装配（§4.4.3）。AGENTS.md 只在 Mental model 开头加一句过渡说明："starter 已装配 8.0 路径；以下各节在 S5 之前仍描述 7.x" | §3.9 第 1–5 条 | 其余全部实现 PR（§4.5） |
 | **S2** | `refactor(cocache)!: remove the 7.x storage and write paths` | 删除存储与写入一侧：每请求读仓库的路径（RFC 0003 PR-6 的清单）、`cosec-cocache` 中快照的比较、回放与测量工具及其任务、7.x 的写入与历史（RFC 0007 X1–X3：`SnapshotPublisher`、`RedisSnapshotPublisher`、`PolicyHistory`、`RedisPolicyRevisionStore`）、`SnapshotContent`/`SnapshotDocumentCodec` 中 7.0 格式的部分、L1 与 L2 的 `cosec-cocache` 部分 | 全部模块 `check` 通过 | S1 |
 | **S3** | `refactor!: remove the 7.x decision path` | 删除决策一侧：`cosec-core` 的 7.x 授权实现、按层引擎的适配层、7.0 形状的快照、决策比较与回放的测试夹具与任务、等价性质、7.x 的解释与影子；`engine/` 的按层引擎与 `model/` 中只为它存在的类型；RFC 0006 PR-10 中 `cosec-core` 与适配器的部分（装饰器链、`BlockingAware`、`SecurityPipeline`、L6 的旧构造器、观察模块中的 7.x 装饰器）；RFC 0004 PR-8 中 `cosec-core` 的部分（`RoleScope`、`RootPrincipalMatcher`、`root-enabled`）；L15（`PolicyTestKit` 按 Q11 重写）、L21 | 全部模块 `check` 通过 | S2 |
 | **S4** | `refactor(api)!: remove the 7.x contracts and matchers` | 删除契约与匹配器：RFC 0005 PR-9 的清单（OGNL、SpEL、全部内置匹配器与工厂、`ActionMatcherFactory`）、RFC 0004 PR-8 中 `cosec-api` 的部分（`AppRolePermission`、`RolePermission`、`ROOT_ID`/`isRoot`）、RFC 0006 PR-10 中 `cosec-api` 的部分（响应式授权契约、`ConditionMatcherFactory`、`MatcherFactoryRegistry`）、L7、L8、L9、L18；`schema/` 随格式描述的删除重新生成（`verifySchemas` 要求同一个 PR）；打开 RFC 0007 PR-11 的 ArchUnit 规则（快照只有一个写入者、公开签名不含 Reactor 类型，M12） | 全部模块 `check` 通过 | S3 |
@@ -540,7 +543,10 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 
 **S1 必须装配真实的 `RevocationReader`（2026-10-26 修订，运行时第 1 轮审查）。** `TokenAuthenticator` 的默认 `RevocationReader.NONE` 什么也不吊销：
 忘记装配它的 starter 会静默地关掉吊销，而一切测试照常通过。S1 装配 CoCache 的读接口（`CoCacheTokenStore.reader`），并加一个经 starter 的测试：吊销的
-token（按 token 与按主体）得到 401 `token-revoked`。
+token（按 token 与按主体）得到 401 `token-revoked`（#1072）。
+
+**实例按平台的 `limits`/`attributes` 编译（N3，2026-10-26 修订，#1071）。** 控制面编译租户与应用文档时，以平台文档的 `limits` 与 `attributes` 为准；平台文档改变时，
+依赖它的文档要重新编译，并在暂存的变更中报告结果。S1 装配的启动编译与快照加载使用同一套输入，并有一个测试：改动平台的 `limits` 或 `attributes` 后，依赖它的实例文档被重新编译。
 
 **S1 与 S5 之间文档滞后于代码。** AGENTS.md 要求事实与代码在同一个 PR 中更新；S1–S4 对 S5 列出的页面暂不执行这一条，S5 一次写完。这样做的理由：
 `deploy-wiki.yml` 从 `main` 发布，S5 之前线上文档继续描述用户实际在用的 7.x，而 8.0 没有任何发布。S1–S4 让 S5 清单之外的文档出错时（例如 `pnpm build` 报出死链接），
@@ -597,14 +603,14 @@ token（按 token 与按主体）得到 401 `token-revoked`。
 | RFC 0006 PR-4 | 外部属性与 `onMissing` |
 | RFC 0006 PR-5 | 限流义务，用 Redis 限流后端；被拒绝的请求不消耗配额 |
 | RFC 0006 PR-6 | 决策事件与监听器（REQUIRED 审计失败 → 503） |
-| RFC 0006 PR-7 | HTTP 一段（WebFlux、WebMvc），线上的 problem+json；wrk2 测量 |
+| RFC 0006 PR-7 | HTTP 一段（WebFlux、WebMvc），线上的 problem+json；k6 测量（2026-10-26 修订：原为 wrk2） |
 | RFC 0007 PR-4、PR-5 | 文档改经控制面发布（`ControlStore`、`apply`），数据面读到新修订 |
 | RFC 0007 PR-9 | 控制面的 HTTP 路由 |
 | S1 | starter 的自动配置取代测试中的装配 |
 
 **测量。** 切片 PR 加入 `src/jmh` 的基准：快照已在本地缓存中，按 §3.8"Pipeline 吞吐"一行的场景（`global`、`role`、`none`、`blocked`、`anonymous`；
 `rate-limited` 随 RFC 0006 PR-5 加入）测 `Pipeline.decide`，与 RFC 0008 PR-3 的 7.0 基线在同一台机器上交替比较（§3.8 的方法），结果写进
-`docs/perf/e2e-slice/README.md`。RFC 0006 PR-7 之后加 wrk2：对 `:e2e:bootTestRun` 启动的测试应用定速压测，对照物是从 `v7.0.1` 构建、路由与（经
+`docs/perf/e2e-slice/README.md`。RFC 0006 PR-7 之后加 k6（`constant-arrival-rate` 执行器，70 % 负载下的 p99；2026-10-26 修订：维护者决定用 k6 取代 wrk2，wrk2 不在 Homebrew core）：对 `:e2e:bootTestRun` 启动的测试应用定速压测，对照物是从 `v7.0.1` 构建、路由与（经
 `cosec-migrate convert` 转换的）数据相同的 7.0 服务；Gateway 一行仍以 `cosec-gateway-server` 在 S1 时测量。这些测量按 §3.8"尽早测量"一条处理：
 低于预算立即交给维护者，不阻止合入；S1 的门槛不变。
 

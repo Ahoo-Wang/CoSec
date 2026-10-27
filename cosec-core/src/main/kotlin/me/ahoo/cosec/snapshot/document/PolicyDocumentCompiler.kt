@@ -20,8 +20,10 @@ import me.ahoo.cosec.engine.flat.CompileError
 import me.ahoo.cosec.engine.flat.CompileException
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.CompiledPolicy
+import me.ahoo.cosec.engine.flat.CompiledRateLimit
 import me.ahoo.cosec.engine.flat.OnMissing
 import me.ahoo.cosec.engine.flat.PolicyCompiler
+import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.SubjectRef
@@ -122,6 +124,14 @@ class PolicyDocumentCompiler(
                 errors
             )
         }
+        val rateLimits = document.rateLimits.mapIndexedNotNull { i, rule ->
+            rateLimit(
+                document,
+                rule,
+                "$.rateLimits[$i]",
+                errors
+            )
+        }
         checkBindings(document, errors)
         checkBoundaries(document, errors)
         checkAttributes(document, errors)
@@ -133,15 +143,16 @@ class PolicyDocumentCompiler(
         return try {
             when (document.kind) {
                 DocumentKind.PLATFORM ->
-                    CompiledDocument.platform(policies, document.bindings, boundaries, document.boundary?.value)
+                    CompiledDocument.platform(policies, document.bindings, rateLimits, boundaries, document.boundary?.value)
 
-                DocumentKind.APP -> CompiledDocument.app(AppId(document.owner), compiled, document.bindings)
+                DocumentKind.APP -> CompiledDocument.app(AppId(document.owner), compiled, document.bindings, rateLimits)
                 DocumentKind.TENANT ->
                     CompiledDocument.tenant(
                         TenantId(document.owner),
                         compiled,
                         document.bindings,
-                        document.boundary?.value
+                        rateLimits,
+                        document.boundary?.value,
                     )
             }
         } catch (error: IllegalArgumentException) {
@@ -226,6 +237,19 @@ class PolicyDocumentCompiler(
                 )
             }
         }
+    }
+
+    /** A rate limit rule (RFC 0006 §8.1); its errors are reported at [path]. */
+    private fun rateLimit(
+        document: PolicyDocument,
+        rule: RateLimitSource,
+        path: String,
+        errors: MutableList<CompileError>,
+    ): CompiledRateLimit? = try {
+        policies.rateLimit(document.kind, document.owner, rule)
+    } catch (error: CompileException) {
+        error.errors.forEach { errors += CompileError(path + it.path.removePrefix("$"), it.message) }
+        null
     }
 
     private fun checkBindings(document: PolicyDocument, errors: MutableList<CompileError>) {

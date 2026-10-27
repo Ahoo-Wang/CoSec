@@ -114,6 +114,9 @@ class OutcomeSummary internal constructor(
 ) {
     enum class Reason {
         PERMIT,
+
+        /** A permit stopped by an exhausted rate limit rule: 429 (RFC 0006 §8.3). */
+        TOO_MANY_REQUESTS,
         EXPLICIT_DENY,
         IMPLICIT_DENY,
         SCOPE_REJECTED,

@@ -1,0 +1,68 @@
+{
+  "rules": [
+    "ACT-2"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "GET /orders/42 is mapped to order:read, which the ALLOW names.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read"
+            }
+          ]
+        },
+        {
+          "id": "no-admin",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:*",
+              "resource": "http:path:/admin/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        },
+        {
+          "id": "g:no-admin",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-admin"
+        }
+      ]
+    }
+  },
+  "routes": {
+    "service": "order",
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/orders/{orderId}",
+        "action": "order:read",
+        "resource": "order/{orderId}"
+      }
+    ]
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/42"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

@@ -240,6 +240,7 @@ object Expectations {
             is Cause.NotLoaded -> put("document", cause.document.name.lowercase())
             is Cause.MembershipUnavailable -> Unit
             is Cause.BoundaryUnavailable -> put("boundary", cause.boundary.value)
+            is Cause.RateLimiterUnavailable -> put("rule", cause.ruleId)
             is Cause.RequiredListenerFailed ->
                 set("listeners", json.arrayNode().apply { cause.listeners.forEach(::add) })
             is Cause.AttributeUnavailable -> {

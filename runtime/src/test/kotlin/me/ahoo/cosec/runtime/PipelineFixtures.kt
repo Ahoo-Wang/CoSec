@@ -141,6 +141,8 @@ object PipelineFixtures {
         options: PipelineOptions = PipelineOptions(),
         attributes: AttributeProviders = AttributeProviders.NONE,
         listeners: DecisionListeners = DecisionListeners.NONE,
+        rateLimiter: me.ahoo.cosec.runtime.ratelimit.RateLimiter? = null,
+        routes: me.ahoo.cosec.route.RouteMap = me.ahoo.cosec.route.RouteMap.EMPTY,
     ): Pipeline = Pipeline(
         authenticator = authenticator,
         snapshots = SuspendingSnapshotSource(views),
@@ -150,5 +152,7 @@ object PipelineFixtures {
         options = options,
         attributes = attributes,
         listeners = listeners,
+        rateLimiter = rateLimiter,
+        routes = routes,
     )
 }

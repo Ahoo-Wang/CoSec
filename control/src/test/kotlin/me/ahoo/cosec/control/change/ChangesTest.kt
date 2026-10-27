@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test
 
 /** The change flow of RFC 0007 §6.1, §6.2 and §6.7 case by case. */
 class ChangesTest {
-    private val harness = ChangeHarness(options = ChangeOptions(maxDocumentBytes = 2_000))
+    private val harness = ChangeHarness(options = ChangeOptions(maxDocumentBytes = 2_000, shadow = IMMEDIATE_WINDOW))
     private val changes = harness.changes
 
     private suspend fun publish(key: SnapshotKey, vararg operations: Operation): ChangeRequest {
@@ -239,6 +239,19 @@ class ChangesTest {
         val again = ChangeRequestCodec.decode(ChangeRequestCodec.encode(approved))
         again.escalations.assert().isEqualTo(approved.escalations)
         again.approval.assert().isEqualTo(approved.approval)
+        val shadowed = approved.copy(
+            shadow = ShadowState(
+                "c1@1",
+                StoreFixtures.START,
+                ShadowSummary(
+                    mapOf("NARROWED" to 2L, "SAME" to 0L),
+                    StoreFixtures.START,
+                    insufficient = true,
+                    blocked = false
+                )
+            ),
+        )
+        ChangeRequestCodec.decode(ChangeRequestCodec.encode(shadowed)).shadow.assert().isEqualTo(shadowed.shadow)
         val slot = StageSlot(change.id, StoreFixtures.START)
         ChangeRequestCodec.decodeSlot(ChangeRequestCodec.encode(slot)).assert().isEqualTo(slot)
         ChangeRequestCodec.decodeSlot(ChangeRequestCodec.encode(StageSlot.FREE)).assert().isEqualTo(StageSlot.FREE)

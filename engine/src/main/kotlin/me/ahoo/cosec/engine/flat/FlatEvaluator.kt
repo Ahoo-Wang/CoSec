@@ -22,12 +22,14 @@ import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.CheckedCondition
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.model.decision.Obligation
 import me.ahoo.cosec.model.decision.StatementRef
 
 /**
@@ -113,7 +115,71 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         pass = Effect.ALLOW
         enumerate()
         val permit = allowDecision()
-        return if (view.bounded) withinBoundary(permit) else permit
+        // The boundary first: a request it denies spends no rate limit permit.
+        return withObligations(if (view.bounded) withinBoundary(permit) else permit)
+    }
+
+    /**
+     * [decision] with its obligations, when it is a permit and a document of the view has rate limit rules (RFC 0006
+     * §8.2): every rule that matches the request, in document order (platform, app, tenant) and rule order, with the
+     * bucket its key reads. Matching is a statement's: action, resource and condition, each rule with its own captures.
+     *
+     * A rule whose condition or key reads an external attribute that could not be fetched has no bucket, and its
+     * `strictFailure` decides. Any other error makes it strict: it cannot be skipped, so the pipeline refuses (503).
+     */
+    protected fun withObligations(decision: Decision): Decision {
+        if (decision !is Decision.Permit || !view.limitsRates) {
+            return decision
+        }
+        var obligations: ArrayList<Obligation>? = null
+        for (rules in arrayOf(view.platform.rateLimits, view.app?.rateLimits, view.tenant?.rateLimits)) {
+            for (rule in rules ?: continue) {
+                val obligation = obligation(rule) ?: continue
+                (obligations ?: ArrayList<Obligation>().also { obligations = it }) += obligation
+            }
+        }
+        return obligations?.let { Decision.Permit(decision.by, it) } ?: decision
+    }
+
+    private fun obligation(rule: CompiledRateLimit): Obligation? {
+        val result = step(rule.policy, rule.statement)
+        if (result == ERROR || result == GUARD_FAILED) {
+            val missing = stepError is AttributeMissing
+            if (missing && rule.statement.onMissing == OnMissing.NOMATCH) {
+                return null
+            }
+            return Obligation.RateLimit(rule.id, null, rule.limit, rule.strictFailure || !missing)
+        }
+        if (result != MATCHED) {
+            return null
+        }
+        val key = rule.key ?: return Obligation.RateLimit(rule.id, CompiledRateLimit.SHARED_BUCKET, rule.limit, rule.strictFailure)
+        return bucket(rule, key)?.let { Obligation.RateLimit(rule.id, it, rule.limit, rule.strictFailure) }
+            ?: Obligation.RateLimit(rule.id, null, rule.limit, rule.strictFailure || bucketError !is AttributeMissing)
+    }
+
+    /** The error of the last [bucket] that returned null. */
+    private var bucketError: Throwable? = null
+
+    /** The bucket [key] names for this request; null when it cannot be read ([bucketError] says why). */
+    @Suppress("TooGenericExceptionCaught")
+    private fun bucket(rule: CompiledRateLimit, key: Attribute): String? = try {
+        // The statement captures only for its own condition: a key reading a variable matches with captures here.
+        captures = if (key.kind == Attribute.Kind.RESOURCE_VAR) {
+            rule.statement.resources.firstNotNullOfOrNull { it.match(target) }
+        } else {
+            null
+        }
+        val value = if (key.type == AttributeType.IP) ip(key)?.toString() else string(key)
+        CompiledRateLimit.KEYED_BUCKET_PREFIX + value.orEmpty()
+    } catch (error: Throwable) {
+        if (!catches(error)) {
+            throw error
+        }
+        bucketError = error
+        null
+    } finally {
+        captures = null
     }
 
     /**
