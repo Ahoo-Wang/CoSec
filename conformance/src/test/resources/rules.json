@@ -608,7 +608,11 @@
       "source": "RFC 0006 §8.2",
       "statement": "Obligations run only with a Permit; denied requests consume no rate-limit quota (P15).",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-5"
+      "guards": [
+        "engine:RateLimitObligationTest",
+        "runtime:RateLimitObligationTest"
+      ],
+      "pending": null
     },
     {
       "id": "OBS-1",
@@ -789,6 +793,26 @@
       "level": "pipeline",
       "guards": [
         "runtime:BreakGlassAndShadowTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "RTL-1",
+      "source": "RFC 0006 §8.3",
+      "statement": "A permit whose rate limit rule is exhausted is 429 too-many-requests, with Retry-After and the RateLimit headers; the later rules spend nothing.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:RateLimitObligationTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "RTL-2",
+      "source": "RFC 0006 §8.3 (R3, Q17)",
+      "statement": "A rate limit rule that cannot be counted refuses the request with 503 unavailable when it is strictFailure, and is skipped otherwise (the documented exception to fail closed).",
+      "level": "pipeline",
+      "guards": [
+        "runtime:RateLimitObligationTest"
       ],
       "pending": null
     }
