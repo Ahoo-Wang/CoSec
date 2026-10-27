@@ -1,0 +1,140 @@
+{
+  "rules": [
+    "TNT-3"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The same principal on its own tenant's document: the hard rule lets it through, and the policy permits it.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "gil",
+          "subject": {
+            "principal": "gil",
+            "tenant": "globex"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops@team-a"
+      ]
+    },
+    "bob": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "eve": {
+      "tenant": "acme"
+    },
+    "gil": {
+      "tenant": "globex"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "pia": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "gil",
+        "document": "tenant:globex",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "p",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:globex": 0
+    }
+  }
+}

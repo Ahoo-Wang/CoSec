@@ -1,0 +1,175 @@
+{
+  "rules": [
+    "GRT-2"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "alice holds orders only in team-a; granting viewers in every space cannot be proven contained (RFC 0007 §7.4.6 row 2): after the window the change awaits approval and cannot publish.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "gil",
+          "subject": {
+            "principal": "gil",
+            "tenant": "globex"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops@team-a"
+      ]
+    },
+    "bob": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "eve": {
+      "tenant": "acme"
+    },
+    "gil": {
+      "tenant": "globex"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "pia": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "alice",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "viewer-read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read",
+                  "resource": "order/{id}"
+                }
+              ]
+            }
+          },
+          {
+            "putBinding": {
+              "id": "viewer-read",
+              "subject": {
+                "role": "viewer"
+              },
+              "app": "order",
+              "space": "*",
+              "policy": "viewer-read"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": {
+        "change": "c1",
+        "by": "alice"
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "alice"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "AWAITING_APPROVAL",
+      "refused 409"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    },
+    "escalations": {
+      "c1": [
+        "NOT_COVERED"
+      ]
+    }
+  }
+}

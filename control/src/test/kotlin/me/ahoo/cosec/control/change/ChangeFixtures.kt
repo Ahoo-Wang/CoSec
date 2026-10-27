@@ -13,6 +13,9 @@
 
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.control.authz.ControlAuthorizer
+import me.ahoo.cosec.control.authz.ControlDecision
+import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
@@ -26,12 +29,16 @@ import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SubjectRef
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.snapshot.document.Actor
 import me.ahoo.cosec.snapshot.document.PolicyDefinition
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -44,11 +51,25 @@ class ChangeHarness(
 ) {
     private val counter = AtomicInteger()
     val revisions = Revisions(store, clock)
-    val changes = Changes(store, revisions, { ChangeId("c${counter.incrementAndGet()}") }, clock, options)
+    val changes = Changes(store, revisions, { ChangeId("c${counter.incrementAndGet()}") }, PERMIT_ALL, clock, options)
 }
 
 val ACME: SnapshotKey = StoreFixtures.ACME
 val ALICE = StoreFixtures.ALICE
+
+val NO_MEMBERSHIPS = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
+
+/** Permits every control-plane action: for tests of the change flow, where only the hard rule stands. */
+val PERMIT_ALL = ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }
+
+/** Alice of acme, as she proposes and publishes acme's document. */
+val ALICE_OP = Operator(ALICE, NO_MEMBERSHIPS)
+
+/** A principal of the platform tenant: the only one the hard rule lets write the platform and app documents. */
+val PLATO = Operator(Actor(TenantId.PLATFORM, PrincipalId("plato")), NO_MEMBERSHIPS)
+
+/** The operator the hard rule lets act on [key]. */
+fun operatorFor(key: SnapshotKey): Operator = if (key is SnapshotKey.Tenant) ALICE_OP else PLATO
 
 fun allow(id: String, action: String = "order:read", resource: String? = null, condition: Condition? = null) =
     PolicyDefinition(
