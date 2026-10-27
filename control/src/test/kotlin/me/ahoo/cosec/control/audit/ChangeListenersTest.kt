@@ -98,8 +98,10 @@ class ChangeListenersTest {
                 )
             }
         }
-        val hanging =
-            listeners(Recording("hanging", Delivery.REQUIRED) { awaitCancellation() }, requiredTimeout = 100.milliseconds)
+        val hanging = listeners(
+            Recording("hanging", Delivery.REQUIRED) { awaitCancellation() },
+            requiredTimeout = 100.milliseconds,
+        )
         assertThrownBy<ChangeAuditException> {
             runBlocking {
                 hanging.publish(
