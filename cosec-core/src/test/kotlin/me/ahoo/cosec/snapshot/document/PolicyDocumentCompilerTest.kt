@@ -215,7 +215,24 @@ class PolicyDocumentCompilerTest {
             SnapshotKey.Tenant("acme"),
             ""","bindings":[{"id":"b","subject":"*","app":"*","space":"*","policy":"perm:order/ship"}]"""
         )
-            .single().assert().startsWith("$.bindings[0].policy: [perm:order/ship] is another app's permission policy")
+            .single().assert().startsWith(
+                "$.bindings[0].policy: [perm:order/ship] is an app's permission policy: a tenant binds it only scoped to that app"
+            )
+        // RFC 0007 §9.3 (N1): a tenant grants an app's permission scoped to that app, and to no other.
+        compiler.compile(
+            SnapshotKey.Tenant("acme"),
+            stored(
+                ""","bindings":[{"id":"b","subject":{"role":"editor"},"app":"order","space":"*","policy":"perm:order/ship"}]"""
+            ),
+        )
+        errors(
+            SnapshotKey.Tenant("acme"),
+            ""","bindings":[{"id":"b","subject":{"role":"editor"},"app":"billing","space":"*","policy":"perm:order/ship"}]"""
+        ).single().assert().contains("only scoped to that app")
+        errors(
+            SnapshotKey.Platform,
+            ""","bindings":[{"id":"b","subject":"*","app":"order","space":"*","policy":"perm:order/ship"}]"""
+        ).single().assert().contains("another app's permission policy")
         errors(SnapshotKey.Platform, ""","policies":[{"id":"perm:order/ship","statements":[]}]""").single().assert()
             .startsWith("$.policies[0].id")
         errors(SnapshotKey.App("order"), ""","policies":[{"id":"ship","statements":[]}]""").single().assert()

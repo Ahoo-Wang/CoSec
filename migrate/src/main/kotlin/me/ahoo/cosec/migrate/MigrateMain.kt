@@ -23,9 +23,12 @@ import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.cache.CoSecCacheSpecs
+import me.ahoo.cosec.cache.control.CoCacheControlStore
 import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.model.PrincipalId
 import java.io.PrintStream
 import java.nio.file.Path
+import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeParseException
 import kotlin.system.exitProcess
@@ -38,8 +41,13 @@ import kotlin.system.exitProcess
  *         [--partition platform|by-owner] [--root-enabled] [--root-id cosec] [--root-expires-at 2026-12-31T00:00:00Z]
  * convert --from-files ./export --out ./converted [...]
  *         [--rate-limit-rules ./rate-limit.json]
- * publish --to-redis redis://localhost:6379 [--key-prefix cosec] --in ./converted [--resume]
+ * publish --to-redis redis://localhost:6379 [--key-prefix cosec] --in ./converted [--resume] [--break-glass-max-duration PT4H]
+ * bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] --platform-admin alice [--force]
+ * partition plan (--from-redis <uri> [--key-prefix cosec] | --from-files ./export) --out ./plan
  * ```
+ *
+ * `publish` and `bootstrap` write through the control plane's store, so each document's revision chain starts with
+ * what they write (RFC 0007 §5.9).
  *
  * Exit codes: 0 done; 1 the data was rejected or publishing failed (see `report.json` and the console); 2 usage.
  */
@@ -54,7 +62,9 @@ object MigrateMain {
           convert (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
                   [--partition platform|by-owner] [--root-enabled] [--root-id <id>] [--root-expires-at <instant>]
                   [--rate-limit-rules <file>]
-          publish --to-redis <uri> [--key-prefix <p>] --in <dir> [--resume]
+          publish --to-redis <uri> [--key-prefix <p>] --in <dir> [--resume] [--break-glass-max-duration <duration>]
+          bootstrap --to-redis <uri> [--key-prefix <p>] --platform-admin <principal> [--force]
+          partition plan (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
     """.trimIndent()
 
     @JvmStatic
@@ -64,9 +74,9 @@ object MigrateMain {
 
     @Suppress("TooGenericExceptionCaught")
     fun run(args: List<String>, out: PrintStream): Int {
-        val command = args.firstOrNull()
+        val command = args.firstOrNull().let { if (it == "partition" && args.getOrNull(1) == "plan") "partition plan" else it }
         val options = try {
-            Options.parse(args.drop(1))
+            Options.parse(args.drop(if (command == "partition plan") 2 else 1))
         } catch (error: IllegalArgumentException) {
             out.println(error.message)
             out.println(USAGE_TEXT)
@@ -76,6 +86,8 @@ object MigrateMain {
             when (command) {
                 "convert" -> convert(options, out)
                 "publish" -> publish(options, out)
+                "bootstrap" -> bootstrap(options, out)
+                "partition plan" -> partitionPlan(options, out)
                 else -> {
                     out.println(USAGE_TEXT)
                     USAGE
@@ -104,9 +116,9 @@ object MigrateMain {
         companion object {
             private val VALUED = setOf(
                 "from-redis", "from-files", "key-prefix", "out", "partition", "root-id", "root-expires-at", "to-redis", "in",
-                "rate-limit-rules",
+                "rate-limit-rules", "platform-admin", "break-glass-max-duration",
             )
-            private val FLAGS = setOf("root-enabled", "resume")
+            private val FLAGS = setOf("root-enabled", "resume", "force")
 
             fun parse(args: List<String>): Options {
                 val values = HashMap<String, String>()
@@ -225,19 +237,72 @@ object MigrateMain {
     }
 
     private fun publish(options: Options, out: PrintStream): Int {
+        options.required("to-redis")
         val input = Path.of(options.required("in"))
-        val redisUri = RedisURI.create(options.required("to-redis"))
-        val keyPrefix = options.value("key-prefix") ?: CoSec.COSEC
         val documents = ConvertedDirectory.read(input)
-        RedisBackend.standalone(redisUri).use { backend ->
-            CacheRuntime.builder().backend(backend).build().use { runtime ->
-                val cache = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
-                val result = DocumentPublisher(cache).publish(documents, resume = options.flag("resume"))
-                result.written.forEach { out.println("Published $it") }
-                result.skipped.forEach { out.println("Already published, identical: $it") }
+        val maxDuration = options.value("break-glass-max-duration")?.let {
+            try {
+                Duration.parse(it)
+            } catch (_: DateTimeParseException) {
+                throw UsageException("--break-glass-max-duration is an ISO-8601 duration, such as PT4H, not [$it].")
             }
+        } ?: DocumentPublisher.DEFAULT_BREAK_GLASS_MAX_DURATION
+        controlStore(options) { store ->
+            val result = DocumentPublisher(
+                store,
+                breakGlassMaxDuration = maxDuration
+            ).publish(documents, resume = options.flag("resume"))
+            result.written.forEach { out.println("Published $it") }
+            result.skipped.forEach { out.println("Already published, identical: $it") }
         }
         out.println("Published ${documents.size} document(s). The 7.x data is untouched.")
         return OK
+    }
+
+    private fun bootstrap(options: Options, out: PrintStream): Int {
+        val principal = PrincipalId(options.required("platform-admin"))
+        val revision = controlStore(options) { store -> Bootstrap(store).run(principal, options.flag("force")) }
+        out.println(
+            "Bound ${principal.value} of the platform tenant to cosec:platform-admin: ${Bootstrap.KEY} revision $revision."
+        )
+        return OK
+    }
+
+    private fun partitionPlan(options: Options, out: PrintStream): Int {
+        val fromRedis = options.value("from-redis")
+        val fromFiles = options.value("from-files")
+        if ((fromRedis == null) == (fromFiles == null)) {
+            throw UsageException("Give exactly one of --from-redis and --from-files.")
+        }
+        val source = if (fromRedis != null) {
+            readRedis(
+                fromRedis,
+                options.value("key-prefix") ?: CoSec.COSEC
+            )
+        } else {
+            ExportDirectory.read(Path.of(fromFiles!!))
+        }
+        val platform = Converter().convert(source, ConvertOptions(Partition.PLATFORM))
+        val byOwner = Converter().convert(source, ConvertOptions(Partition.BY_OWNER))
+        if (!platform.report.accepted || !byOwner.report.accepted) {
+            summarize(if (platform.report.accepted) byOwner.report else platform.report, out)
+            return FAILED
+        }
+        val written = PartitionPlan.write(PartitionPlan.of(platform, byOwner), Path.of(options.required("out")))
+        written.forEach { out.println("Planned $it") }
+        out.println("Planned ${written.size} tenant(s): submit each with apply (merge). Nothing was written to Redis.")
+        return OK
+    }
+
+    /** The control plane's store over the Redis of `--to-redis`, for [block]. */
+    private fun <T> controlStore(options: Options, block: (CoCacheControlStore) -> T): T {
+        val redisUri = RedisURI.create(options.required("to-redis"))
+        val keyPrefix = options.value("key-prefix") ?: CoSec.COSEC
+        return RedisBackend.standalone(redisUri).use { backend ->
+            CacheRuntime.builder().backend(backend).build().use { runtime ->
+                val heads = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+                block(CoCacheControlStore.create(runtime, heads, keyPrefix))
+            }
+        }
     }
 }

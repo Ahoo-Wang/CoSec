@@ -1,0 +1,72 @@
+{
+  "rules": [
+    "CTL-14"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RFC 0007 §3.1 N2, Q15: the platform publishes [shared]; a tenant policy of the same id would make that id ambiguous, so the control plane refuses it (422).",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "shared",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "shared",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "DRAFT"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": [
+        "V2"
+      ]
+    },
+    "heads": {
+      "platform": 1,
+      "tenant:acme": 0
+    }
+  }
+}

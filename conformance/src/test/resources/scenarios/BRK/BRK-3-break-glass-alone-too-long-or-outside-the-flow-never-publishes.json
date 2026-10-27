@@ -1,0 +1,225 @@
+{
+  "rules": [
+    "BRK-3"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "RFC 0007 §8: a break-glass binding in an ordinary change, or one living 5 hours (more than the 4-hour default), never checks clean; a valid request its own requester approves stays unapproved and does not publish.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "gil",
+          "subject": {
+            "principal": "gil",
+            "tenant": "globex"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops@team-a"
+      ]
+    },
+    "bob": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "eve": {
+      "tenant": "acme"
+    },
+    "gil": {
+      "tenant": "globex"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "pia": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "glass",
+              "subject": {
+                "principal": "plato",
+                "tenant": "(platform)"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "cosec:root",
+              "breakGlass": true,
+              "expiresAt": "2026-11-01T01:00:00Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "glass",
+              "subject": {
+                "principal": "plato",
+                "tenant": "(platform)"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "cosec:root",
+              "breakGlass": true,
+              "expiresAt": "2026-11-01T05:00:00Z"
+            }
+          }
+        ],
+        "kind": "BREAK_GLASS"
+      }
+    },
+    {
+      "propose": {
+        "change": "c3",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "glass",
+              "subject": {
+                "principal": "plato",
+                "tenant": "(platform)"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "cosec:root",
+              "breakGlass": true,
+              "expiresAt": "2026-11-01T01:00:00Z"
+            }
+          }
+        ],
+        "kind": "BREAK_GLASS"
+      }
+    },
+    {
+      "stage": {
+        "change": "c3",
+        "by": "plato"
+      }
+    },
+    {
+      "approve": {
+        "change": "c3",
+        "by": "plato"
+      }
+    },
+    {
+      "publish": {
+        "change": "c3",
+        "by": "plato"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "DRAFT",
+      "DRAFT",
+      "CHECKED",
+      "AWAITING_APPROVAL",
+      "refused 403",
+      "refused 409"
+    ],
+    "errors": {
+      "c1": [
+        "V5"
+      ],
+      "c2": [
+        "V5"
+      ],
+      "c3": []
+    },
+    "heads": {
+      "platform": 1
+    },
+    "escalations": {
+      "c3": [
+        "BREAK_GLASS"
+      ]
+    }
+  }
+}

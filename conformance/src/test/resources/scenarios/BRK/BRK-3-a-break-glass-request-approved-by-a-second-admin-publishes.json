@@ -1,0 +1,170 @@
+{
+  "rules": [
+    "BRK-3"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The same request within its lifetime, approved by pia, another platform administrator, publishes.",
+  "documents": {
+    "platform": {
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "gil",
+          "subject": {
+            "principal": "gil",
+            "tenant": "globex"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "orders",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:*",
+                "resource": "order/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "admins",
+            "subject": {
+              "role": "admin"
+            },
+            "app": "cosec-control",
+            "space": "",
+            "policy": "cosec:tenant-admin"
+          },
+          {
+            "id": "ops",
+            "subject": {
+              "role": "ops"
+            },
+            "app": "order",
+            "space": "*",
+            "policy": "orders"
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "alice": {
+      "tenant": "acme",
+      "roles": [
+        "admin",
+        "ops@team-a"
+      ]
+    },
+    "bob": {
+      "tenant": "acme",
+      "roles": [
+        "admin"
+      ]
+    },
+    "eve": {
+      "tenant": "acme"
+    },
+    "gil": {
+      "tenant": "globex"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "pia": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "glass",
+              "subject": {
+                "principal": "plato",
+                "tenant": "(platform)"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "cosec:root",
+              "breakGlass": true,
+              "expiresAt": "2026-11-01T01:00:00Z"
+            }
+          }
+        ],
+        "kind": "BREAK_GLASS"
+      }
+    },
+    {
+      "stage": {
+        "change": "c1",
+        "by": "plato"
+      }
+    },
+    {
+      "approve": {
+        "change": "c1",
+        "by": "pia"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "plato"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "AWAITING_APPROVAL",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "platform": 2
+    },
+    "escalations": {
+      "c1": [
+        "BREAK_GLASS"
+      ]
+    }
+  }
+}

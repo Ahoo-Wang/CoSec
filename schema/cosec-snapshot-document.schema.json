@@ -1090,12 +1090,56 @@
         },
         "onMissing": {
           "default": "indeterminate",
-          "description": "What an external attribute (ext.*) the condition reads that cannot be fetched means (RFC 0006 §5.4.3). Only for a condition that reads one; a DENY may say nomatch only in the platform document.",
+          "description": "What an external attribute (ext.*) the condition reads that cannot be fetched means (RFC 0006 §5.4.3). Only for a condition that reads one; a DENY that says nomatch needs onMissingConfirmed.",
           "enum": [
             "indeterminate",
             "nomatch"
           ],
           "type": "string"
+        },
+        "onMissingConfirmed": {
+          "additionalProperties": false,
+          "description": "Who confirmed that this DENY with onMissing: nomatch may lapse while its attributes cannot be fetched, and in which change (RFC 0007 §9.5). The control plane writes it.",
+          "properties": {
+            "by": {
+              "additionalProperties": false,
+              "properties": {
+                "principal": {
+                  "examples": [
+                    "alice",
+                    "ops-1"
+                  ],
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "tenant": {
+                  "examples": [
+                    "acme",
+                    "(platform)"
+                  ],
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "tenant",
+                "principal"
+              ],
+              "type": "object"
+            },
+            "change": {
+              "examples": [
+                "0QH8K3"
+              ],
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "by",
+            "change"
+          ],
+          "type": "object"
         },
         "resource": {
           "anyOf": [
