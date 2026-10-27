@@ -1,0 +1,63 @@
+{
+  "rules": [
+    "CTL-13"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "A change that only creates a break-glass binding stages without a window (RFC 0007 Q12) and goes straight to its second person: no candidate is shadowed.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT15M",
+      "minSamples": 3,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "glass",
+              "subject": {
+                "principal": "cosec",
+                "tenant": "(platform)"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "cosec:root",
+              "breakGlass": true,
+              "expiresAt": "2026-11-01T01:00:00Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "shadowed": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "AWAITING_APPROVAL",
+      "refused 409"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "platform": 0
+    },
+    "escalations": {
+      "c1": [
+        "BREAK_GLASS"
+      ]
+    }
+  }
+}

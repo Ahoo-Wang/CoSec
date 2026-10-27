@@ -37,6 +37,7 @@ import me.ahoo.cosec.runtime.Unavailability
 import me.ahoo.cosec.runtime.audit.AuditEvents
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
@@ -128,6 +129,20 @@ class ListenerIsolationTest {
                 }
             }
         }
+    }
+
+    /** RFC 0007 §6.4: a candidate source that fails or hangs costs the shadow its samples, never a request its outcome. */
+    @Test
+    fun aFailingOrHangingCandidateSourceNeverChangesTheOutcome() {
+        val recorder = ShadowRecorder("instance-1")
+        val failing = ShadowListener("failing-shadow", 1.0, { error("the candidates are down") }, recorder)
+        val hanging = ShadowListener("hanging-shadow", 1.0, { kotlinx.coroutines.awaitCancellation() }, recorder)
+        val recording = Recording()
+        val listeners = listeners(failing, hanging, recording)
+        evaluate(listeners).status.assert().isEqualTo(200)
+        evaluate(listeners, EXPLICIT_DENY).status.assert().isEqualTo(403)
+        recording.await(2)
+        recorder.reports().assert().isEmpty()
     }
 
     @Test

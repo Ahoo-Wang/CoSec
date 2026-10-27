@@ -61,6 +61,7 @@ class CoCacheControlStoreTest {
         leases = node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
         changes = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
         stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
+        candidates = node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
     )
 
     @Test
@@ -112,6 +113,7 @@ class CoCacheControlStoreTest {
                 node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
+                node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
                 { published += it },
             )
             store.putHead(key, null, document(1)).assert().isInstanceOf(HeadWrite.Written::class.java)

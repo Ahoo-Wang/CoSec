@@ -92,6 +92,13 @@ object CoSecCacheSpecs {
     const val CHANGE_REQUEST_CACHE_NAME = "ChangeRequestCache"
     const val STAGE_CACHE_NAME = "StageCache"
 
+    /** Staged candidates (RFC 0007 §6.4): written by the control plane, read by every instance's shadow listener. */
+    const val CANDIDATE_CACHE_NAME = "CandidateCache"
+
+    /** What each instance saw of each shadow window, and each instance's installed revisions (RFC 0007 §6.4, §6.5). */
+    const val SHADOW_REPORT_CACHE_NAME = "ShadowReportCache"
+    const val INSTANCE_STATUS_CACHE_NAME = "InstanceStatusCache"
+
     /** Encoded key of the single global policy index entry, whatever key the caller passes. */
     const val GLOBAL_POLICY_INDEX_ENCODED_KEY = "policy"
 
@@ -103,6 +110,7 @@ object CoSecCacheSpecs {
         CONTROL_LEASE_CACHE_NAME,
         CHANGE_REQUEST_CACHE_NAME,
         STAGE_CACHE_NAME,
+        CANDIDATE_CACHE_NAME,
     )
 
     /** Names of the caches whose only copy is Redis. */
@@ -118,6 +126,7 @@ object CoSecCacheSpecs {
         CONTROL_LEASE_CACHE_NAME,
         CHANGE_REQUEST_CACHE_NAME,
         STAGE_CACHE_NAME,
+        CANDIDATE_CACHE_NAME,
     )
 
     private val NAMESPACES: Map<String, String> = mapOf(
@@ -136,6 +145,9 @@ object CoSecCacheSpecs {
         CONTROL_LEASE_CACHE_NAME to "control:lease",
         CHANGE_REQUEST_CACHE_NAME to "control:change",
         STAGE_CACHE_NAME to "control:stage",
+        CANDIDATE_CACHE_NAME to "candidate",
+        SHADOW_REPORT_CACHE_NAME to "shadow:report",
+        INSTANCE_STATUS_CACHE_NAME to "shadow:status",
     )
 
     /** The CoCache namespace of [cacheName]: `{keyPrefix}:policy` and so on. */

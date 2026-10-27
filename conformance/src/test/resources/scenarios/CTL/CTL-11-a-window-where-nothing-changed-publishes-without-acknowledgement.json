@@ -1,0 +1,63 @@
+{
+  "rules": [
+    "CTL-11"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Every sample came out the same, and there were enough: nothing to acknowledge.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "SAME": 7,
+          "BY_CHANGED": 1
+        }
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "publish": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

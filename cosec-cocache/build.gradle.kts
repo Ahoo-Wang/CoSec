@@ -23,6 +23,8 @@ dependencies {
     // CoCacheControlStore implements the control plane's ControlStore (RFC 0007 §5.1). Compile-only, so an application
     // that reads snapshots without the control plane does not pull it in; the control plane brings it with it.
     compileOnly(project(":cosec-control"))
+    // The shadow window SPIs (RFC 0007 §6.4): candidates and reports; a data plane has cosec-runtime already.
+    compileOnly(project(":cosec-runtime"))
     testImplementation(project(":cosec-control"))
     testImplementation("me.ahoo.cocache:cocache-test")
     // MembershipCacheFailureTest resolves through the pipeline's MembershipResolver.

@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "control",
-  "description": "plato, a platform admin, adds a break-glass binding: always two people (RFC 0007 §8), so it awaits approval and plato cannot approve it himself.",
+  "description": "plato, a platform admin, adds a break-glass binding: always two people (RFC 0007 §8), so it awaits approval and plato cannot approve it himself. Creating break-glass has no shadow window (RFC 0007 Q12): staging goes straight to approval.",
   "documents": {
     "platform": {
       "bindings": [
@@ -135,9 +135,6 @@
       }
     },
     {
-      "shadowed": "c1"
-    },
-    {
       "approve": {
         "change": "c1",
         "by": "plato"
@@ -153,7 +150,6 @@
   "expect": {
     "steps": [
       "CHECKED",
-      "SHADOWING",
       "AWAITING_APPROVAL",
       "refused 403",
       "refused 409"
