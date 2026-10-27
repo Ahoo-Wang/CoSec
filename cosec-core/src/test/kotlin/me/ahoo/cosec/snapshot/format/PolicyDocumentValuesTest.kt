@@ -45,6 +45,7 @@ class PolicyDocumentValuesTest {
     private val parent = requireNotNull(provenance.field("parent")).type as ObjectType
     private val platformDocument = definitions.getValue("platformDocument") as ObjectType
     private val attribute = (requireNotNull(platformDocument.field("attributes")).type as ArrayType).items as ObjectType
+    private val rateLimit = definitions.getValue("rateLimit") as ObjectType
 
     private val placements = listOf(
         Placement("actionPattern", definitions.getValue("actionPattern") as StringType) {
@@ -63,6 +64,9 @@ class PolicyDocumentValuesTest {
         }),
         Placement("attributes.path", attribute.string("path"), header = {
             """"attributes":[{"path":${json(it)},"type":"string"}],"""
+        }),
+        Placement("rateLimits.id", rateLimit.string("id"), header = {
+            """"rateLimits":[{"id":${json(it)},"action":"*","permitsPerSecond":1}],"""
         }),
     )
 

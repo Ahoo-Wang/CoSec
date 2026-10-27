@@ -61,6 +61,7 @@ object CandidateDigest {
                 catalog = candidate.catalog,
                 limits = candidate.limits,
                 attributes = candidate.attributes,
+                rateLimits = candidate.rateLimits,
             ),
         ),
     )
@@ -195,6 +196,8 @@ object Operations {
             catalog = catalog,
             limits = limits,
             attributes = attributes,
+            // No operation changes a document's rate limit rules yet: the base's are kept as they are (RFC 0006 §8).
+            rateLimits = base?.rateLimits.orEmpty(),
         )
     }
 

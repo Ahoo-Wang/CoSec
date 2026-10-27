@@ -14,6 +14,8 @@
 package me.ahoo.cosec.snapshot.document
 
 import me.ahoo.cosec.engine.flat.OnMissing
+import me.ahoo.cosec.engine.flat.OnMissingConfirmation
+import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.AppId
@@ -32,6 +34,7 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotFormatException
@@ -79,10 +82,16 @@ object PolicyDocumentCodec {
         "stringSet" to AttributeType.STRING_SET,
         "ip" to AttributeType.IP,
     )
-    private val DOCUMENT_FIELDS = arrayOf("schema", "revision", "publishedAt", "provenance", "policies", "bindings")
+    private val DOCUMENT_FIELDS =
+        arrayOf("schema", "revision", "publishedAt", "provenance", "policies", "bindings", "rateLimits")
+    private val RATE_LIMIT_FIELDS = arrayOf(
+        "id", "action", "resource", "condition", "onMissing", "key", "permitsPerSecond", "windowSeconds", "strictFailure",
+    )
     private val PROVENANCE_FIELDS = arrayOf("parent", "change", "kind", "publishedBy", "approvedBy", "shadow")
     private val POLICY_FIELDS = arrayOf("id", "attachable", "condition", "statements")
-    private val STATEMENT_FIELDS = arrayOf("name", "effect", "action", "resource", "condition", "onMissing")
+    private val STATEMENT_FIELDS =
+        arrayOf("name", "effect", "action", "resource", "condition", "onMissing", "onMissingConfirmed")
+    private val CONFIRMATION_FIELDS = arrayOf("by", "change")
     private val RESOURCE_FIELDS = arrayOf("pattern", "caseSensitive", "decodeAndParseSegments")
     private val BINDING_FIELDS = arrayOf("id", "subject", "app", "space", "policy", "expiresAt", "breakGlass")
 
@@ -123,6 +132,34 @@ object PolicyDocumentCodec {
             provenance = root.field("provenance")?.let(::provenance),
             limits = root.field("limits")?.let(::limits),
             attributes = root.field("attributes")?.let(::attributes),
+            rateLimits = root.field("rateLimits")?.elements()?.map(::rateLimit).orEmpty(),
+        )
+    }
+
+    /** `{"id", "action", "resource", "condition", "onMissing", "key", "permitsPerSecond", "windowSeconds", "strictFailure"}`. */
+    private fun rateLimit(node: DocumentNode): RateLimitSource {
+        node.requireObject(*RATE_LIMIT_FIELDS)
+        val id = node.required("id").text()
+        val permitsPerSecond = node.required("permitsPerSecond")
+        val windowSeconds = node.field("windowSeconds")
+        val limit = try {
+            RateLimitSpec(permitsPerSecond.double(), windowSeconds?.long() ?: 1)
+        } catch (error: IllegalArgumentException) {
+            node.fail(error.message ?: "an invalid quota")
+        }
+        return RateLimitSource(
+            id = id,
+            statement = StatementSource(
+                name = id,
+                effect = Effect.DENY,
+                actions = node.required("action").strings(),
+                resources = node.field("resource")?.let(::resources).orEmpty(),
+                condition = node.field("condition")?.let(ConditionJson::read),
+                onMissing = node.field("onMissing")?.let(::onMissing),
+            ),
+            key = node.field("key")?.nonEmpty(),
+            limit = limit,
+            strictFailure = node.field("strictFailure")?.bool() ?: false,
         )
     }
 
@@ -217,7 +254,15 @@ object PolicyDocumentCodec {
             resources = node.field("resource")?.let(::resources).orEmpty(),
             condition = node.field("condition")?.let(ConditionJson::read),
             onMissing = node.field("onMissing")?.let(::onMissing),
+            onMissingConfirmed = node.field("onMissingConfirmed")?.let(::confirmation),
         )
+    }
+
+    /** RFC 0007 §9.5: who confirmed a `nomatch` DENY, and in which change. */
+    private fun confirmation(node: DocumentNode): OnMissingConfirmation {
+        node.requireObject(*CONFIRMATION_FIELDS)
+        val by = actor(node.required("by"))
+        return OnMissingConfirmation(by.tenant.value, by.principal.value, node.required("change").text())
     }
 
     private fun onMissing(node: DocumentNode): OnMissing = when (val text = node.text()) {
@@ -370,7 +415,24 @@ object PolicyDocumentCodec {
         document.policies.forEach { policies.add(policy(it)) }
         val bindings = root.putArray("bindings")
         document.bindings.forEach { bindings.add(binding(it, document.kind, document.owner)) }
+        if (document.rateLimits.isNotEmpty()) {
+            val rules = root.putArray("rateLimits")
+            document.rateLimits.forEach { rules.add(rateLimit(it)) }
+        }
         return root
+    }
+
+    private fun rateLimit(rule: RateLimitSource): ObjectNode {
+        val written = statement(rule.statement)
+        val node = factory.objectNode().put("id", rule.id)
+        listOf("action", "resource", "condition", "onMissing").forEach { field ->
+            written.get(field)?.let { node.set(field, it) }
+        }
+        rule.key?.let { node.put("key", it) }
+        node.put("permitsPerSecond", rule.limit.permitsPerSecond)
+        node.put("windowSeconds", rule.limit.windowSeconds)
+        if (rule.strictFailure) node.put("strictFailure", true)
+        return node
     }
 
     private fun provenance(provenance: Provenance): ObjectNode {
@@ -399,31 +461,41 @@ object PolicyDocumentCodec {
         policy.condition?.let { node.set("condition", ConditionJson.write(it)) }
         val statements = node.putArray("statements")
         for (statement in policy.statements) {
-            val item = statements.addObject()
-            if (statement.name.isNotEmpty()) item.put("name", statement.name)
-            item.put("effect", if (statement.effect == Effect.DENY) "deny" else "allow")
-            item.putArray("action").also { actions -> statement.actions.forEach(actions::add) }
-            if (statement.resources.isNotEmpty()) {
-                val resources = item.putArray("resource")
-                for (resource in statement.resources) {
-                    if (resource.hasOptions()) {
-                        resources.addObject().put("pattern", resource.pattern)
-                            .put("caseSensitive", resource.caseSensitive)
-                            .put("decodeAndParseSegments", resource.decodeAndParseSegments)
-                    } else {
-                        resources.add(resource.pattern)
-                    }
-                }
-            }
-            statement.condition?.let { item.set("condition", ConditionJson.write(it)) }
-            statement.onMissing?.let {
-                item.put(
-                    "onMissing",
-                    if (it == OnMissing.NOMATCH) "nomatch" else "indeterminate"
-                )
-            }
+            statements.add(statement(statement))
         }
         return node
+    }
+
+    private fun statement(statement: StatementSource): ObjectNode {
+        val item = factory.objectNode()
+        if (statement.name.isNotEmpty()) item.put("name", statement.name)
+        item.put("effect", if (statement.effect == Effect.DENY) "deny" else "allow")
+        item.putArray("action").also { actions -> statement.actions.forEach(actions::add) }
+        if (statement.resources.isNotEmpty()) {
+            val resources = item.putArray("resource")
+            for (resource in statement.resources) {
+                if (resource.hasOptions()) {
+                    resources.addObject().put("pattern", resource.pattern)
+                        .put("caseSensitive", resource.caseSensitive)
+                        .put("decodeAndParseSegments", resource.decodeAndParseSegments)
+                } else {
+                    resources.add(resource.pattern)
+                }
+            }
+        }
+        statement.condition?.let { item.set("condition", ConditionJson.write(it)) }
+        statement.onMissing?.let {
+            item.put(
+                "onMissing",
+                if (it == OnMissing.NOMATCH) "nomatch" else "indeterminate"
+            )
+        }
+        statement.onMissingConfirmed?.let {
+            item.putObject("onMissingConfirmed")
+                .put("change", it.change)
+                .set("by", actor(Actor(TenantId(it.tenant), PrincipalId(it.principal))))
+        }
+        return item
     }
 
     private fun binding(binding: Binding, kind: DocumentKind, owner: String): ObjectNode {

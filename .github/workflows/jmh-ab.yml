@@ -1,0 +1,148 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Manual JMH A/B comparison of two git refs, in one job on one runner, alternating base, head, base, head, ...
+# Only head/base RATIOS are meaningful: a shared runner's absolute numbers are not. This is a first signal for
+# routine comparisons. The hard performance gate at switch S1 (RFC 0008 §3.8/§3.9) is still measured on an idle
+# machine. See scripts/jmh-ab/README.md.
+name: JMH A/B
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: 'Base ref (branch, tag or SHA)'
+        required: true
+        default: 'main'
+      head:
+        description: 'Head ref (branch or SHA) compared against base'
+        required: true
+      module:
+        description: 'Gradle module with the benchmarks, e.g. cosec-engine, cosec-core, e2e'
+        required: true
+      include:
+        description: 'JMH include regex, e.g. HttpPathPatternBenchmark'
+        required: true
+      params:
+        description: 'Optional JMH params, space-separated key=a,b pairs, e.g. "size=10,100 mode=x"'
+        required: false
+        default: ''
+      rounds:
+        description: 'Alternating rounds (each runs base, then head)'
+        required: true
+        default: '3'
+      forks:
+        description: 'JMH forks (-f)'
+        required: true
+        default: '2'
+      warmup:
+        description: 'JMH warm-up iterations (-wi)'
+        required: true
+        default: '3'
+      iterations:
+        description: 'JMH measurement iterations (-i)'
+        required: true
+        default: '5'
+      warmup-time:
+        description: 'JMH warm-up time per iteration (-w)'
+        required: true
+        default: '1s'
+      measurement-time:
+        description: 'JMH measurement time per iteration (-r)'
+        required: true
+        default: '1s'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jmh-ab
+  cancel-in-progress: false
+
+jobs:
+  jmh-ab:
+    name: JMH A/B
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      BASE: ${{ inputs.base }}
+      HEAD: ${{ inputs.head }}
+      MODULE: ${{ inputs.module }}
+      INCLUDE: ${{ inputs.include }}
+      PARAMS: ${{ inputs.params }}
+      ROUNDS: ${{ inputs.rounds }}
+      FORKS: ${{ inputs.forks }}
+      WARMUP: ${{ inputs.warmup }}
+      ITERATIONS: ${{ inputs.iterations }}
+      WARMUP_TIME: ${{ inputs.warmup-time }}
+      MEASUREMENT_TIME: ${{ inputs.measurement-time }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # The code is compiled for 17 (Gradle toolchain); the benchmark JVMs run on 25. 17 is listed last so it is JAVA_HOME.
+      - name: Set up JDK 25 and 17
+        uses: actions/setup-java@v6
+        with:
+          java-version: |
+            25
+            17
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Check out both refs
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/base" "origin/$BASE" 2>/dev/null || git worktree add --detach "$RUNNER_TEMP/base" "$BASE"
+          git worktree add --detach "$RUNNER_TEMP/head" "origin/$HEAD" 2>/dev/null || git worktree add --detach "$RUNNER_TEMP/head" "$HEAD"
+          echo "base: $(git -C "$RUNNER_TEMP/base" rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "head: $(git -C "$RUNNER_TEMP/head" rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
+          # Keep the A/B script itself independent of the refs under test.
+          cp "$GITHUB_WORKSPACE/scripts/jmh-ab/compare.py" "$RUNNER_TEMP/compare.py"
+
+      - name: Build benchmark jars
+        run: |
+          for side in base head; do
+            (cd "$RUNNER_TEMP/$side" && ./gradlew ":$MODULE:jmhJar" --no-daemon)
+          done
+
+      - name: Run alternating rounds
+        run: |
+          set -euo pipefail
+          JAVA25="$JAVA_HOME_25_X64/bin/java"
+          mkdir -p "$RUNNER_TEMP/results"
+          args=(-f "$FORKS" -wi "$WARMUP" -i "$ITERATIONS" -w "$WARMUP_TIME" -r "$MEASUREMENT_TIME" -prof gc -rf json)
+          for p in $PARAMS; do args+=(-p "$p"); done
+          for round in $(seq 1 "$ROUNDS"); do
+            for side in base head; do
+              # Only the requested module's jmhJar was built; its directory name can differ from the project name.
+              jar=$(find "$RUNNER_TEMP/$side" -path '*/build/libs/*-jmh.jar' | head -n 1)
+              [ -n "$jar" ] || { echo "no jmh jar for $MODULE in $side"; exit 1; }
+              echo "::group::round $round: $side"
+              # The WARN-level logback config: without it forked JVMs log at DEBUG and skew the numbers.
+              "$JAVA25" -jar "$jar" "$INCLUDE" "${args[@]}" \
+                -rff "$RUNNER_TEMP/results/$side-$round.json" \
+                -jvmArgsAppend "-Dlogback.configurationFile=$RUNNER_TEMP/$side/config/logback-jmh.xml"
+              echo "::endgroup::"
+            done
+          done
+
+      - name: Summarize
+        run: python3 -I "$RUNNER_TEMP/compare.py" "$RUNNER_TEMP/results" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload raw JMH JSON
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jmh-ab-${{ github.run_id }}
+          path: ${{ runner.temp }}/results/*.json

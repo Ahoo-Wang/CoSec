@@ -20,6 +20,8 @@ plugins {
 dependencies {
     // 7.x data is read through 7.0's caches (CoSec7xReader); 8.0 documents are written through the snapshot cache.
     api(project(":cosec-cocache"))
+    // publish and bootstrap write through the control plane's store, so the revision chain starts with them (RFC 0007 §5.9).
+    implementation(project(":cosec-control"))
     implementation("io.lettuce:lettuce-core")
     // convert decodes 7.x path actions with Spring's PathPatternParser, which cosec-core leaves to the application
     // (approved by the maintainer, 2026-10-26).

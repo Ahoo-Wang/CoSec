@@ -239,7 +239,12 @@
       "source": "RFC 0007 §8",
       "statement": "Break-glass is created only through the control plane: two people, a bounded lifetime, and a REQUIRED audit written first.",
       "level": "control",
-      "pending": "RFC 0007 PR-8"
+      "pending": null,
+      "guards": [
+        "control:BreakGlassControlTest#two people create it, each step recorded first",
+        "control:BreakGlassControlTest#without a REQUIRED listener, or when it fails, nothing is created",
+        "control:BreakGlassControlTest#its lifetime is bounded, when requested and when published"
+      ]
     },
     {
       "id": "ALG-1",
@@ -353,6 +358,16 @@
       "guards": [
         "control:ControlAuthorizationTest#the hard rule stands whatever the policies say"
       ]
+    },
+    {
+      "id": "TNT-4",
+      "source": "RFC 0007 §9.3, Q14 (N1)",
+      "statement": "A tenant document may bind an app's permission policy only scoped to that app; the binding resolves the policy from that app's document in the same view, and anywhere else the document does not compile.",
+      "level": "engine",
+      "guards": [
+        "cosec-core:PolicyDocumentCompilerTest#permission policies live in their app's document"
+      ],
+      "pending": null
     },
     {
       "id": "DOC-1",
@@ -647,7 +662,11 @@
       "source": "RFC 0006 §8.2",
       "statement": "Obligations run only with a Permit; denied requests consume no rate-limit quota (P15).",
       "level": "pipeline",
-      "pending": "RFC 0006 PR-5"
+      "guards": [
+        "engine:RateLimitObligationTest",
+        "runtime:RateLimitObligationTest"
+      ],
+      "pending": null
     },
     {
       "id": "OBS-1",
@@ -793,6 +812,16 @@
       "pending": null
     },
     {
+      "id": "CTL-14",
+      "source": "RFC 0007 §3.1 N2, §9.2, Q15",
+      "statement": "The control plane refuses a tenant policy whose id the platform document already uses (422); the data plane would read such an id as ambiguous unless both contents are the same.",
+      "level": "control",
+      "guards": [
+        "control:PublishCompileTest"
+      ],
+      "pending": null
+    },
+    {
       "id": "GRT-1",
       "source": "RFC 0007 §7.4.2",
       "statement": "Every granted fragment is contained in one of the grantor's own ALLOWs and overlaps no non-Anyone DENY the grantor is subject to.",
@@ -861,7 +890,7 @@
       "statement": "A new or changed break-glass binding always needs a second person's approval, whoever proposes it.",
       "level": "control",
       "guards": [
-        "control:ControlAuthorizationTest#break-glass always needs a second person"
+        "control:BreakGlassControlTest#two people create it, each step recorded first"
       ],
       "pending": null
     },
@@ -892,7 +921,8 @@
         "engine:ExternalAttributesTest",
         "cosec-core:ExternalAttributeDocumentTest"
       ],
-      "pending": null
+      "pending": null,
+      "superseded": "ATR-6"
     },
     {
       "id": "ATR-4",
@@ -915,6 +945,17 @@
       "pending": null
     },
     {
+      "id": "ATR-6",
+      "source": "RFC 0007 §9.5, Q13 (N6)",
+      "statement": "A DENY with onMissing nomatch compiles, in any document, only with the confirmation the control plane records (onMissingConfirmed); it then lapses while its attribute cannot be fetched.",
+      "level": "pipeline",
+      "guards": [
+        "engine:ExternalAttributesTest",
+        "cosec-core:ExternalAttributeDocumentTest"
+      ],
+      "pending": null
+    },
+    {
       "id": "BLK-2",
       "source": "RFC 0006 §5.4.4",
       "statement": "A blacklist that cannot be read is never \"not blocked\": the request is Indeterminate (503) unless a DENY matches.",
@@ -931,6 +972,26 @@
       "level": "pipeline",
       "guards": [
         "runtime:BreakGlassAndShadowTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "RTL-1",
+      "source": "RFC 0006 §8.3",
+      "statement": "A permit whose rate limit rule is exhausted is 429 too-many-requests, with Retry-After and the RateLimit headers; the later rules spend nothing.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:RateLimitObligationTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "RTL-2",
+      "source": "RFC 0006 §8.3 (R3, Q17)",
+      "statement": "A rate limit rule that cannot be counted refuses the request with 503 unavailable when it is strictFailure, and is skipped otherwise (the documented exception to fail closed).",
+      "level": "pipeline",
+      "guards": [
+        "runtime:RateLimitObligationTest"
       ],
       "pending": null
     }

@@ -361,25 +361,6 @@ class ControlAuthorizationTest {
     }
 
     @Test
-    fun `break-glass always needs a second person`() = runBlocking<Unit> {
-        val glass = Binding(
-            BindingId("glass"),
-            SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("plato")),
-            BindingScope(Match.Any, Match.Any),
-            BuiltinPolicies.ROOT,
-            expiresAt = clock.now.plus(Duration.ofHours(1)).toEpochMilli(),
-            breakGlass = true,
-        )
-        val change = changes.propose(plato, SnapshotKey.Platform, 1, listOf(Operation.PutBinding(glass)), "incident")
-        change.escalations.map { it.reason }.assert().containsExactly("BREAK_GLASS")
-        // Creating break-glass has no shadow window (RFC 0007 Q12): staging goes straight on to approval.
-        changes.stage(plato, change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
-        changes.approve(pia, change.id, change.candidate!!)
-        changes.publish(plato, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
-        revisions.head(SnapshotKey.Platform)!!.document.provenance!!.approvedBy.assert().containsExactly(pia.actor)
-    }
-
-    @Test
     fun `resources name one document each`() {
         ControlResources.document(SnapshotKey.Platform).id.assert().isEqualTo("platform")
         ControlResources.entry(TENANT, "policy", "p").id.assert().isEqualTo("tenant/acme/policy/p")

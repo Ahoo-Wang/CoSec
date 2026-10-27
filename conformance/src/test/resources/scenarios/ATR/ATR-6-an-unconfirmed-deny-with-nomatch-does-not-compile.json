@@ -1,10 +1,10 @@
 {
   "rules": [
-    "ATR-3"
+    "ATR-6"
   ],
-  "polarity": "positive",
+  "polarity": "negative",
   "level": "pipeline",
-  "description": "A tenant document's DENY says onMissing nomatch: the document does not compile.",
+  "description": "A tenant document's DENY says onMissing nomatch without the control plane's confirmation: the document does not compile, as it would not in the platform document either (RFC 0007 N6).",
   "documents": {
     "tenants": {
       "acme": {
@@ -51,6 +51,6 @@
   ],
   "expect": {
     "decision": "NotCompiled",
-    "error": "platform document"
+    "error": "needs the control plane's confirmation"
   }
 }
