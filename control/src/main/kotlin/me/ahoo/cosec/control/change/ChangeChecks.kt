@@ -44,13 +44,22 @@ class ChangeOptions(
     val fourEyes: Boolean = false,
     /** When a shadow window may close (`cosec.control.shadow.*`, RFC 0007 §6.4). */
     val shadow: ShadowOptions = ShadowOptions(),
+    /**
+     * The longest a break-glass binding may live from the moment it publishes (`cosec.control.break-glass.max-duration`,
+     * RFC 0007 §8): 4 hours by default, never more than 24.
+     */
+    val breakGlassMaxDuration: java.time.Duration = java.time.Duration.ofHours(4),
 ) {
     init {
         require(
-            maxDocumentBytes > 0 && principalBindingLimit >= 0 && !expireAfter.isNegative && !approvalExpireAfter.isNegative
+            maxDocumentBytes > 0 && principalBindingLimit >= 0 && !expireAfter.isNegative && !approvalExpireAfter.isNegative &&
+                breakGlassMaxDuration > java.time.Duration.ZERO && breakGlassMaxDuration <= MAX_BREAK_GLASS
         ) { "Invalid change options." }
     }
 }
+
+/** RFC 0007 §8: a break-glass binding never lives longer than this, whatever is configured. */
+val MAX_BREAK_GLASS: java.time.Duration = java.time.Duration.ofHours(24)
 
 /**
  * When a shadow window closes (RFC 0007 §6.4, Q1): once [minDuration] has passed and the instances have reported

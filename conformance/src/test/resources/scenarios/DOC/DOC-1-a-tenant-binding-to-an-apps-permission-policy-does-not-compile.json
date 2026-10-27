@@ -5,7 +5,7 @@
   ],
   "polarity": "positive",
   "level": "engine",
-  "description": "The tenant document binds an app's permission policy, which only that app's document may bind.",
+  "description": "The tenant document binds an app's permission policy in every app: only scoped to that app may a tenant bind it (RFC 0007 N1); anywhere else the document does not compile.",
   "documents": {
     "platform": {},
     "tenants": {
@@ -26,6 +26,6 @@
   },
   "expect": {
     "decision": "NotCompiled",
-    "error": "another app's permission policy"
+    "error": "a tenant binds it only scoped to that app"
   }
 }

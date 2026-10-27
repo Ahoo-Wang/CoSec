@@ -37,7 +37,21 @@ class StatementSource(
     val condition: Condition? = null,
     /** What an external attribute the condition reads that cannot be fetched means; null for the default. */
     val onMissing: OnMissing? = null,
+    /**
+     * Who confirmed that this DENY may lapse while its attributes cannot be fetched (`onMissing: nomatch`, RFC 0007 §9.5,
+     * N6): the control plane writes it when it publishes a change carrying the confirmation. Null otherwise.
+     */
+    val onMissingConfirmed: OnMissingConfirmation? = null,
 )
+
+/** The control plane's record of a confirmed `nomatch` DENY (RFC 0007 §9.5): by whom, in which change. */
+data class OnMissingConfirmation(val tenant: String, val principal: String, val change: String) {
+    init {
+        require(tenant.isNotEmpty() && principal.isNotEmpty() && change.isNotEmpty()) {
+            "A nomatch confirmation names who confirmed it and the change."
+        }
+    }
+}
 
 /** A resource pattern and the options of `http:path:` patterns (RFC 0005 §5.2). */
 class ResourceSource(
@@ -68,20 +82,19 @@ class PolicyCompiler(
     private val options: IndexOptions = IndexOptions.DEFAULT,
 ) {
     /**
-     * Compiles a policy, or throws [CompileException] with every error. [denyNomatch] says whether a DENY may write
-     * `onMissing: nomatch`, which only the platform document may (RFC 0006 Q13).
+     * Compiles a policy, or throws [CompileException] with every error. A DENY with `onMissing: nomatch` needs its
+     * confirmation, in any document (RFC 0007 §9.5, N6).
      */
     fun compile(
         id: PolicyId,
         condition: Condition?,
         statements: List<StatementSource>,
         attachable: Boolean = false,
-        denyNomatch: Boolean = false,
     ): CompiledPolicy {
         val errors = ArrayList<CompileError>()
         val checked = condition?.let { policyCondition(it, "$.condition", errors) }
         val compiled = statements.mapIndexedNotNull { index, source ->
-            statement(index, source, "$.statements[$index]", errors, denyNomatch)
+            statement(index, source, "$.statements[$index]", errors)
         }
         if (errors.isNotEmpty()) {
             throw CompileException(id.value, errors)
@@ -103,10 +116,9 @@ class PolicyCompiler(
         policyId: PolicyId,
         index: Int,
         source: StatementSource,
-        denyNomatch: Boolean = false
     ): CompiledStatement {
         val errors = ArrayList<CompileError>()
-        return statement(index, source, "$.statements[$index]", errors, denyNomatch)
+        return statement(index, source, "$.statements[$index]", errors)
             ?: throw CompileException(policyId.value, errors)
     }
 
@@ -125,7 +137,8 @@ class PolicyCompiler(
         val strict = with(source.statement) {
             StatementSource(name, Effect.DENY, actions, resources, condition, onMissing)
         }
-        val statement = statement(0, strict, "$", errors, denyNomatch = kind == DocumentKind.PLATFORM)
+        // A rate limit rule has no confirmation flow: as before RFC 0007 N6, only the platform may let one lapse.
+        val statement = statement(0, strict, "$", errors, unconfirmedLapse = kind == DocumentKind.PLATFORM)
         val key = source.key?.let { path -> key(path, statement, errors) }
         if (errors.isNotEmpty()) {
             throw CompileException(source.id, errors)
@@ -169,7 +182,7 @@ class PolicyCompiler(
         source: StatementSource,
         path: String,
         errors: MutableList<CompileError>,
-        denyNomatch: Boolean,
+        unconfirmedLapse: Boolean = false,
     ): CompiledStatement? {
         val before = errors.size
         if (source.actions.isEmpty()) {
@@ -190,7 +203,7 @@ class PolicyCompiler(
         if (condition != null) {
             checkVariables(condition, resources, path, errors)
         }
-        checkOnMissing(source, condition, path, errors, denyNomatch)
+        checkOnMissing(source, condition, path, errors, unconfirmedLapse)
         if (errors.size > before) {
             return null
         }
@@ -223,25 +236,30 @@ class PolicyCompiler(
 
     /**
      * `onMissing` applies to external attributes only, so a statement whose condition reads none cannot write it: it
-     * would do nothing (RFC 0005 §3.4). A DENY may write `nomatch` only where [denyNomatch] allows it (RFC 0006 Q13).
+     * would do nothing (RFC 0005 §3.4). A DENY that writes `nomatch` lapses while its provider fails, so it needs the
+     * confirmation the control plane records (RFC 0007 §9.5, N6, Q13), in any document; nothing else may write one.
      */
     private fun checkOnMissing(
         source: StatementSource,
         condition: CheckedCondition?,
         path: String,
         errors: MutableList<CompileError>,
-        denyNomatch: Boolean,
+        unconfirmedLapse: Boolean,
     ) {
         val onMissing = source.onMissing ?: return
         if (condition == null || ConditionAttributes.of(condition).none(Attribute::external)) {
             errors += CompileError("$path.onMissing", "onMissing applies to external attributes only, and the condition reads none")
             return
         }
-        if (onMissing == OnMissing.NOMATCH && source.effect === Effect.DENY && !denyNomatch) {
+        val lapsingDeny = onMissing == OnMissing.NOMATCH && source.effect === Effect.DENY
+        if (lapsingDeny && source.onMissingConfirmed == null && !unconfirmedLapse) {
             errors += CompileError(
                 "$path.onMissing",
-                "a DENY may write onMissing: nomatch only in the platform document: it lapses while its provider fails",
+                "a DENY with onMissing: nomatch lapses while its provider fails: it needs the control plane's confirmation",
             )
+        }
+        if (source.onMissingConfirmed != null && (onMissing != OnMissing.NOMATCH || source.effect !== Effect.DENY)) {
+            errors += CompileError("$path.onMissingConfirmed", "only a DENY with onMissing: nomatch carries a confirmation")
         }
     }
 
