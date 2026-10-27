@@ -286,6 +286,45 @@ class ConverterTest {
     }
 
     @Test
+    fun `by owner keeps a policy with DENY statements in the platform, attachable by every tenant`() {
+        val conversion = convert(
+            source(listOf("d" to policy("d", statements = listOf(statement(effect = "deny")), tenantId = "acme"))),
+            Partition.BY_OWNER,
+        )
+        conversion.report.rejections.assert().isEmpty()
+        conversion.documents.keys.assert().containsExactly(SnapshotKey.Platform)
+        conversion.documents.getValue(SnapshotKey.Platform).policies.single().attachable.assert().isTrue()
+        conversion.report.warnings.single().message.assert().contains("keep its DENY")
+        conversion.report.semanticChanges.none { it.change == "C5" }.assert().isTrue()
+    }
+
+    @Test
+    fun `ids that differ only in case are rejected, since their files would collide`() {
+        val apps = listOf(
+            app("Order", appPermission("Order", permission("read")), "r" to """["read"]"""),
+            app("order", appPermission("order", permission("write")), "w" to """["write"]"""),
+        )
+        val rejection = convert(source(apps = apps)).report.rejections.single()
+        rejection.kind.assert().isEqualTo(RejectionKind.DUPLICATE_ID)
+        rejection.location.assert().isEqualTo("app:order")
+        val tenants = convert(
+            source(listOf("a" to policy("a", tenantId = "Acme"), "b" to policy("b", tenantId = "acme"))),
+            Partition.BY_OWNER,
+        ).report.rejections.single()
+        tenants.location.assert().isEqualTo("policy:b")
+    }
+
+    @Test
+    fun `an ALLOW on method star, which matched no request in 7x, is rejected rather than widened`() {
+        val action = """{"path":{"pattern":"/orders/**","method":"*"}}"""
+        val conversion = convert(source(listOf("p" to policy("p", statements = listOf(statement(action))))))
+        conversion.documents.assert().isEmpty()
+        conversion.report.rejections.map { it.location }.assert().contains(
+            "policy:p#$.statements[0].action.path.method"
+        )
+    }
+
+    @Test
     fun `grants of an app without an app permission are dropped with a warning`() {
         val conversion = convert(source(apps = listOf(app("ghost", null, "admin" to """["*"]"""))))
         conversion.report.rejections.assert().isEmpty()

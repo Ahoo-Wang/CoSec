@@ -201,7 +201,7 @@ internal class PartTranslation(
             is LiteralRegex.Prefix -> {
                 // `.` stops at line terminators, a prefix does not: wider, so only where a wider condition is safe, and
                 // only without letters, whose folding would make it narrower too.
-                if (!deny || shape.prefix.any { it.isLetter() }) {
+                if (!deny || hasCaseMapping(shape.prefix)) {
                     return translator.rejected(
                         RejectionKind.CONDITION_NOT_TRANSLATED,
                         location,
@@ -288,14 +288,14 @@ internal class PartTranslation(
             )
             return true
         }
-        if (value.none { it.isLetter() }) {
+        if (!hasCaseMapping(value)) {
             return true
         }
         translator.rejected<Unit>(
             RejectionKind.CONDITION_NOT_TRANSLATED,
             location,
-            "ignoreCase in the DENY direction: 7.x also folds non-ASCII letters (U+212A KELVIN SIGN equals k), 8.0 " +
-                "only ASCII, so the DENY would stop matching some spellings; list the spellings with in instead",
+            "ignoreCase in the DENY direction: 7.x also folds characters beyond ASCII (U+212A KELVIN SIGN equals k, " +
+                "Ⓐ equals ⓐ), 8.0 only ASCII, so the DENY would stop matching some spellings; list them with in instead",
         )
         return false
     }
@@ -310,6 +310,14 @@ internal class PartTranslation(
 
     private companion object {
         const val ANONYMOUS_ID = "(0)"
+
+        /**
+         * Whether a character of [value] has any case mapping, and so a spelling 7.x folds to it. Not only letters
+         * do: circled letters (Ⓐ, So) and Roman numerals (Ⅰ, Nl) have case mappings too.
+         */
+        fun hasCaseMapping(value: String): Boolean = value.codePoints().anyMatch { c ->
+            Character.toUpperCase(c) != c || Character.toLowerCase(c) != c || Character.toTitleCase(c) != c
+        }
         val HOST_CHARS = ('a'..'z') + ('A'..'Z') + ('0'..'9') + '-'
         val TEMPLATES: List<Pair<Regex, (MatchResult) -> String>> = listOf(
             Regex("""#\{principal\.id}""") to { _ -> "subject.id" },

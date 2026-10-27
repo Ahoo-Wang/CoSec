@@ -143,6 +143,10 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
     val globalDenies = ArrayList<String>()
     val rateLimits = ArrayList<ConvertedRateLimit>()
 
+    /** App and tenant ids by their case-folded form: each names a file, and file systems may ignore case. */
+    val appCases = HashMap<String, String>()
+    val tenantCases = HashMap<String, String>()
+
     fun reject(kind: RejectionKind, location: String, message: String) {
         rejections += Rejection(kind, location, message)
     }
@@ -304,6 +308,24 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         return if (translated.none { it == null }) policy else null
     }
 
+    /**
+     * Whether [id] differs from every other app (or tenant) id in more than case. Two that differ only in case name
+     * one file on a case-insensitive file system (macOS, Windows), where one document would replace the other.
+     */
+    private fun distinctInCase(id: String, seen: MutableMap<String, String>, location: String, kind: String): Boolean {
+        val folded = id.uppercase().lowercase()
+        val other = seen.putIfAbsent(folded, id)
+        if (other == null || other == id) {
+            return true
+        }
+        reject(
+            RejectionKind.DUPLICATE_ID,
+            location,
+            "$kind id [$id] differs from [$other] only in case: their converted files would collide; rename one",
+        )
+        return false
+    }
+
     /** Whether [tree] names an id other than the [id] its key or position names. */
     private fun namesAnotherId(tree: JsonNode, id: String): Boolean {
         val content = tree.get(ID)?.takeUnless { it.isNull } ?: return false
@@ -319,12 +341,25 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         if (tenantId == TenantId.PLATFORM.value) {
             return SnapshotKey.Platform
         }
+        if (tree.get(STATEMENTS)?.values()?.any(::isDeny) == true) {
+            // Principals of other tenants may attach it in 7.x: in their own tenant's document only, they would lose
+            // its DENY statements. It stays attachable to everyone.
+            warnings += Warning(
+                location,
+                "policy [$id] of tenant [$tenantId] holds DENY statements: kept in the platform document, so " +
+                    "principals of other tenants that attach it keep its DENY (--partition by-owner)",
+            )
+            return SnapshotKey.Platform
+        }
         if (!SnapshotKey.Tenant.isValidTenantId(tenantId)) {
             reject(
                 RejectionKind.OWNER_TENANT,
                 location,
                 "policy [$id] has tenantId [$tenantId], which names no tenant document (--partition by-owner)",
             )
+            return null
+        }
+        if (!distinctInCase(tenantId, tenantCases, location, "tenant")) {
             return null
         }
         val key = SnapshotKey.Tenant(tenantId)
@@ -356,6 +391,9 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
     private fun convertApp(app: Source7x.App) {
         count("apps")
         val appId = app.appId
+        if (!distinctInCase(appId, appCases, app.location, "app")) {
+            return
+        }
         val tree = appPermissionTree(app) ?: return
         val location = app.appPermission?.location ?: return
         val decoded = decode(location, "the app permission of [$appId]") {

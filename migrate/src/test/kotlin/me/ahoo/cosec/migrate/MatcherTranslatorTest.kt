@@ -69,6 +69,10 @@ class MatcherTranslatorTest {
             """["/a",{"path":{"pattern":"/b","method":"GET"}}]|ACTION_NOT_TRANSLATED|a""",
             """[{"all":{"method":"GET"}},"/b"]|ACTION_NOT_TRANSLATED|a""",
             """{"custom":{}}|CUSTOM_ACTION|a""",
+            // Review M1: 7.x compares methods literally; `*` and blanks match no request, so they must not become http:*.
+            """{"path":{"pattern":"/orders/**","method":"*"}}|ACTION_NOT_TRANSLATED|a.path.method""",
+            """{"all":{"method":" "}}|ACTION_NOT_TRANSLATED|a.all.method""",
+            """{"path":{"pattern":"/a","method":["GET",""]}}|ACTION_NOT_TRANSLATED|a.path.method""",
             """{"composite":"/a"}|UNDECODABLE|a""",
             """{"path":{"method":"GET"}}|UNDECODABLE|a.path""",
             """{"path":{"pattern":[1]}}|UNDECODABLE|a.path.pattern""",

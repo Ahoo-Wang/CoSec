@@ -155,6 +155,16 @@ internal class MatcherTranslator(private val reject: (RejectionKind, String, Str
         } else {
             strings(method, "$location.$METHOD") ?: return null
         }
+        // 7.x compares methods literally with the request's (AbstractActionMatcher): `*` is a method no request has,
+        // so it matches nothing; `http:*` would match every method. Only tokens translate (RFC 9110 §5.6.2).
+        methods.firstOrNull { !TOKEN.matches(it) }?.let { method ->
+            reject(
+                RejectionKind.ACTION_NOT_TRANSLATED,
+                "$location.$METHOD",
+                "method [$method] is no HTTP method: 7.x compares it literally, so it matches no request; remove it",
+            )
+            return null
+        }
         return methods.map { it.uppercase() }.distinct()
     }
 
@@ -199,6 +209,9 @@ internal class MatcherTranslator(private val reject: (RejectionKind, String, Str
         private const val CASE_SENSITIVE = "caseSensitive"
         private const val DECODE_AND_PARSE_SEGMENTS = "decodeAndParseSegments"
         const val TEMPLATE = "#{"
+
+        /** An HTTP method is a token, and `*` alone is not a method. */
+        private val TOKEN = Regex("""[!#$%&'+.^_`|~0-9A-Za-z-]+""")
 
         val EXPRESSION_TYPES = setOf("spel", "ognl")
 

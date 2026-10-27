@@ -308,6 +308,103 @@ class RedisMigrationTest {
     }
 
     @Test
+    fun `resume finishes a partial publish and refuses a document that differs`() {
+        write7x()
+        val out = temp.resolve("converted")
+        run(
+            "convert",
+            "--from-redis",
+            REDIS,
+            "--key-prefix",
+            keyPrefix,
+            "--out",
+            out.toString()
+        ).first.assert().isEqualTo(MigrateMain.OK)
+        val documents = ConvertedDirectory.read(out)
+        val cache = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+        // A first run that stopped after the platform document.
+        DocumentPublisher(cache).publish(mapOf(SnapshotKey.Platform to documents.getValue(SnapshotKey.Platform)))
+        val (refused, refusedOutput) = run(
+            "publish",
+            "--to-redis",
+            REDIS,
+            "--key-prefix",
+            keyPrefix,
+            "--in",
+            out.toString()
+        )
+        refused.assert().isEqualTo(MigrateMain.FAILED)
+        refusedOutput.assert().contains("--resume")
+        val (resumed, resumedOutput) = run(
+            "publish",
+            "--to-redis",
+            REDIS,
+            "--key-prefix",
+            keyPrefix,
+            "--in",
+            out.toString(),
+            "--resume"
+        )
+        resumed.assert().describedAs(resumedOutput).isEqualTo(MigrateMain.OK)
+        resumedOutput.assert().contains("Already published, identical: platform").contains("Published app:order")
+        // Everything is published now: a resume writes nothing.
+        DocumentPublisher(cache).publish(documents, resume = true).let {
+            it.written.assert().isEmpty()
+            it.skipped.assert().containsExactly(SnapshotKey.Platform, SnapshotKey.App("order"))
+        }
+    }
+
+    @Test
+    fun `resume refuses a document in Redis that is not the converted one`() {
+        write7x()
+        val out = temp.resolve("converted")
+        run(
+            "convert",
+            "--from-redis",
+            REDIS,
+            "--key-prefix",
+            keyPrefix,
+            "--out",
+            out.toString()
+        ).first.assert().isEqualTo(MigrateMain.OK)
+        run(
+            "publish",
+            "--to-redis",
+            REDIS,
+            "--key-prefix",
+            keyPrefix,
+            "--in",
+            out.toString()
+        ).first.assert().isEqualTo(MigrateMain.OK)
+        val other = temp.resolve("other")
+        val newer = Converter().convert(
+            Fixtures7x.source(listOf("x" to policy("x"))),
+            ConvertOptions(publishedAt = java.time.Instant.parse("2030-01-01T00:00:00Z")),
+        )
+        ConvertedDirectory.write(newer, other)
+        val (differ, differOutput) = run(
+            "publish",
+            "--to-redis",
+            REDIS,
+            "--key-prefix",
+            keyPrefix,
+            "--in",
+            other.toString(),
+            "--resume"
+        )
+        differ.assert().isEqualTo(MigrateMain.FAILED)
+        differOutput.assert().contains("differ from the converted ones").contains("Nothing was written")
+    }
+
+    @Test
+    fun `a failure partway reports exactly what was written`() {
+        val error = PublishException("Writing app:b failed: down.", listOf(SnapshotKey.Platform))
+        error.message.assert().contains("Written before it stopped: [platform]").contains("--resume")
+        DocumentsExistException(listOf(SnapshotKey.App("b")), listOf(SnapshotKey.Platform)).written.assert()
+            .containsExactly(SnapshotKey.Platform)
+    }
+
+    @Test
     fun `data without the 7 marker is rejected`() {
         write7x(marker = "6")
         val out = temp.resolve("rejected")

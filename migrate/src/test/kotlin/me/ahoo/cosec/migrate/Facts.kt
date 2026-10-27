@@ -147,6 +147,8 @@ data class Facts(
             "K", "k", "K", "ſ", "s", "S", "İ", "i", "I", "/orders/1", "/Orders/1", "/orders", "/orders/1/items",
             "line\nbreak", "admin\n", "αβγ", "a.b", "a|b", "b", "GET", "get", "team", "owner-1", "*", "#{principal.id}",
             "alice", "/orders/**",
+            // Not letters, but with case mappings that 7.x folds.
+            "\u24B6", "\u24D0", "\u2160", "\u2170", "\u2170x",
         )
         private val ORIGINS = listOf(
             null, "https://example.com", "https://api.example.com", "https://API.Example.COM", "https://badexample.com",
