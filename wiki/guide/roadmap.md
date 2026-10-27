@@ -42,7 +42,7 @@ migrate when 8.0 is assembled.
 ## Milestones
 
 In dependency order, without dates. They follow the dependency table and critical path in RFC 0008 §4.5. Status is
-as of `main` on 2026-10-26. This page changes only when a milestone starts or ends (RFC 0008 §4.7); per-PR status is in
+as of `main` on 2026-10-27. This page changes only when a milestone starts or ends (RFC 0008 §4.7); per-PR status is in
 [`docs/roadmap.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/roadmap.md).
 
 ```mermaid
@@ -60,10 +60,10 @@ flowchart LR
 
 | Milestone | What you get | Done when | Status |
 |---|---|---|---|
-| **M1** Engine on the target model | Bindings, memberships, the condition AST and `service:verb` actions compiled into snapshot documents; route maps; `cosec-migrate` to convert 7.x data (RFC 0005 PR-4–PR-6, RFC 0004 PR-4, PR-5) | Snapshot documents compile and are evaluated by the flat engine; `cosec-migrate convert` produces them from 7.x data | In progress: model, flat algorithm, condition AST and action matching merged |
-| **M2** Coroutine pipeline | Suspend-based authentication and memberships, external attributes, obligations, decision listeners, 503 and problem+json, all three web adapters on the new pipeline (RFC 0006 PR-2–PR-7) | The three adapters answer identically through the new pipeline | In progress: `runtime/` module merged |
-| **M3** Control plane | Revisions, conditional publishing, validation, grant analysis, shadow windows, break-glass, tenant self-service, change audit, HTTP API (RFC 0007 PR-3–PR-9) | Every write goes through the control plane library and its HTTP routes | In progress: `control/` module and JSON schema generation merged |
-| **M4** Conformance suite, baseline and end-to-end slice | A rule registry with positive and negative scenarios for every normative rule, property and mutation checks, and a 7.0 performance baseline (RFC 0008 PR-1–PR-3). An end-to-end slice wires snapshots, the flat engine, the coroutine pipeline and WebFlux over real CoCache and Redis, and measures the performance budgets as soon as it runs (RFC 0008 §4.4.3). The dotted arrows: the slice needs part of M1 and M2 | Every merged rule has both scenarios; the 7.0 baseline is recorded; the slice runs and its first measurement is recorded | In progress: conformance suite merged, 7.0 baseline under way |
+| **M1** Engine on the target model | Bindings, memberships, the condition AST and `service:verb` actions compiled into snapshot documents; route maps; `cosec-migrate` to convert 7.x data (RFC 0005 PR-4–PR-6, RFC 0004 PR-4, PR-5) | Snapshot documents compile and are evaluated by the flat engine; `cosec-migrate convert` produces them from 7.x data | In progress: model, flat algorithm, condition AST, action matching and `cosec-migrate convert` merged; only the 7.x matcher to AST translation remains |
+| **M2** Coroutine pipeline | Suspend-based authentication and memberships, external attributes, obligations, decision listeners, 503 and problem+json, all three web adapters on the new pipeline (RFC 0006 PR-2–PR-7) | The three adapters answer identically through the new pipeline | In progress: authentication, memberships, external attributes, listeners and all three adapters on the new pipeline merged; obligations and rate limits remain |
+| **M3** Control plane | Revisions, conditional publishing, validation, grant analysis, shadow windows, break-glass, tenant self-service, change audit, HTTP API (RFC 0007 PR-3–PR-9) | Every write goes through the control plane library and its HTTP routes | In progress: storage, revisions and the change flow (validate, compile, stage, publish) merged; boundaries, authorization wiring, shadow windows, break-glass and HTTP remain |
+| **M4** Conformance suite, baseline and end-to-end slice | A rule registry with positive and negative scenarios for every normative rule, property and mutation checks, and a 7.0 performance baseline (RFC 0008 PR-1–PR-3). An end-to-end slice wires snapshots, the flat engine, the coroutine pipeline and WebFlux over real CoCache and Redis, and measures the performance budgets as soon as it runs (RFC 0008 §4.4.3). The dotted arrows: the slice needs part of M1 and M2 | Every merged rule has both scenarios; the 7.0 baseline is recorded; the slice runs and its first measurement is recorded | In progress: conformance suite, end-to-end slice and the 7.0 JMH baseline merged; the k6 end-to-end measurement remains |
 | **M5** Switch | Five PRs in order (RFC 0008 §4.4): S1 wires the 8.0 path in the starter and moves `cosec-gateway-server` to it; S2–S4 remove the 7.x path module by module; S5 writes the docs and [Upgrading](../operations/upgrading.md) | S1 merges only when all of RFC 0008 §3.9 holds (suite green, no pending rule, properties and mutants pass, budgets met); there is no way back after S1. S2–S5 merge in order, each reviewed twice | Not started |
 | **M6** Legacy cleanup | Code, build settings and doc history that exist only for older versions removed (RFC 0008 §4.6, PR-5, PR-6) | The §4.6.1 inventory is empty except "keep" items and its guards run in `check` | Not started |
 | **M7** RC readiness | A candidate the maintainer can release | Every PR has two review rounds; the `cosec-gateway-server` AOT cache smoke test passes in CI; an RC security review of the integrated system (tenant isolation, control-plane privilege escalation and grant analysis, break-glass, snapshot and cache poisoning, problem+json disclosure, denial of service) is done and its findings are fixed; the maintainer decides between an RC and GA | Not started |
@@ -81,10 +81,14 @@ flowchart LR
 
 - `7.x` gets security and critical fixes until 6 months after 8.0 GA; `release/6.1.x` gets security fixes only
   ([`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md)).
+- The latest fix is
+  [7.0.2](https://github.com/Ahoo-Wang/CoSec/releases/tag/v7.0.2): the policy decoder now rejects malformed policies
+  (unknown fields, scalars where a list belongs, duplicate keys) instead of compiling them to something broader.
+  Read its upgrade note first: policies already stored in Redis may fail requests until you republish them.
 - The latest advisory is
   [GHSA-2293-jx8h-56m8](https://github.com/Ahoo-Wang/CoSec/security/advisories/GHSA-2293-jx8h-56m8), fixed in
   7.0.1 and 6.1.2.
-- What to do now: stay on the latest 7.0.x. To follow the design, read the RFCs. There is nothing to migrate yet.
+- What to do now: upgrade to 7.0.2, the latest 7.0.x. To follow the design, read the RFCs. There is nothing to migrate yet.
 
 ## How to follow
 
