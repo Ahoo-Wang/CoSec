@@ -14,8 +14,8 @@
 package me.ahoo.cosec.runtime.ratelimit
 
 import com.google.common.cache.Cache
-import io.github.oshai.kotlinlogging.KotlinLogging
 import com.google.common.cache.CacheBuilder
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.limiter.RateLimit
 import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.model.decision.Obligation

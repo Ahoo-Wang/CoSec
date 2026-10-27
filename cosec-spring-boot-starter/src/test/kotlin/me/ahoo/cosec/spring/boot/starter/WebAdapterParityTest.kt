@@ -23,6 +23,7 @@ import me.ahoo.cosec.engine.flat.FlatEvaluation
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
+import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
@@ -32,9 +33,7 @@ import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.runtime.PipelineOptions
-import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.cosec.runtime.attribute.AttributeDeclaration
 import me.ahoo.cosec.runtime.attribute.AttributeProvider
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
@@ -48,6 +47,7 @@ import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.TraceContext
+import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
@@ -458,7 +458,12 @@ class WebAdapterParityTest {
                 type = "unavailable"
             ),
             Scenario("a defect is 500", path = "/boom", status = 500, type = "internal-error"),
-            Scenario("an exhausted rate limit is 429", path = "/public/limited/page", status = 429, type = "too-many-requests"),
+            Scenario(
+                "an exhausted rate limit is 429",
+                path = "/public/limited/page",
+                status = 429,
+                type = "too-many-requests"
+            ),
         )
     }
 

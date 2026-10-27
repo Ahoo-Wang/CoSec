@@ -99,7 +99,15 @@ class RateLimitObligationTest {
             rateLimiter = limiter,
         )
         val facts = PipelineFixtures.facts("/orders/1").let {
-            me.ahoo.cosec.runtime.http.HttpFacts(method, it.rawPath, it.rawQuery, it.headers, it.cookies, it.remoteAddress, it.host)
+            me.ahoo.cosec.runtime.http.HttpFacts(
+                method,
+                it.rawPath,
+                it.rawQuery,
+                it.headers,
+                it.cookies,
+                it.remoteAddress,
+                it.host
+            )
         }
         return List(times) { runBlocking { pipeline.evaluate(facts) } }
     }
@@ -140,7 +148,13 @@ class RateLimitObligationTest {
         outcomes.map { it.status }.assert().containsExactly(200, 200, 429)
         // The tightest: two has 1 then 0 left, many 99 then 98.
         outcomes[0].headers["RateLimit-Limit"].assert().isEqualTo("2")
-        recording.asked.assert().containsExactly("two/global", "many/g:alice", "two/global", "many/g:alice", "two/global")
+        recording.asked.assert().containsExactly(
+            "two/global",
+            "many/g:alice",
+            "two/global",
+            "many/g:alice",
+            "two/global"
+        )
     }
 
     @Test

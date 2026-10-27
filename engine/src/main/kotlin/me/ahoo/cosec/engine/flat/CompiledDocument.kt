@@ -237,7 +237,13 @@ class CompiledDocument private constructor(
             bindings: List<Binding>,
             rateLimits: List<CompiledRateLimit> = emptyList(),
         ): CompiledDocument =
-            CompiledDocument(DocumentKind.TENANT, tenant.value, index(DocumentKind.TENANT, policies), bindings, rateLimits)
+            CompiledDocument(
+                DocumentKind.TENANT,
+                tenant.value,
+                index(DocumentKind.TENANT, policies),
+                bindings,
+                rateLimits
+            )
 
         private fun index(kind: DocumentKind, policies: List<CompiledPolicy>): HashMap<String, CompiledPolicy> {
             val index = HashMap<String, CompiledPolicy>(policies.size * 2)

@@ -17,7 +17,6 @@ import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.InvalidPatternException
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.Effect
-import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.CheckResult
@@ -25,6 +24,7 @@ import me.ahoo.cosec.model.condition.CheckedCondition
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.IndexKeys
+import me.ahoo.cosec.model.decision.DocumentKind
 
 /** A statement as a document writes it (RFC 0005 §5.1), before it is compiled. */
 class StatementSource(

@@ -104,7 +104,12 @@ class RateLimitObligationTest {
     @Test
     fun `app and tenant rules count in buckets of their own, after the platform's`() {
         val platform = permitting(rule("r"))
-        val app = CompiledDocument.app(AppId("app"), emptyList(), emptyList(), listOf(rule("r", kind = DocumentKind.APP, owner = "app")))
+        val app = CompiledDocument.app(
+            AppId("app"),
+            emptyList(),
+            emptyList(),
+            listOf(rule("r", kind = DocumentKind.APP, owner = "app"))
+        )
         val acme = CompiledDocument.tenant(
             TenantId("acme"),
             emptyList(),
@@ -131,7 +136,14 @@ class RateLimitObligationTest {
             )
         )
         val fetched = flatRequest().let {
-            FlatRequest(it.request, it.scope, it.memberships, it.time, it.attributes, ExternalValues(mapOf(geo.path to "eu"), setOf(geo.path)))
+            FlatRequest(
+                it.request,
+                it.scope,
+                it.memberships,
+                it.time,
+                it.attributes,
+                ExternalValues(mapOf(geo.path to "eu"), setOf(geo.path))
+            )
         }
         obligations(SnapshotView(platform, null, tenant()), fetched).assert().isEqualTo(
             listOf(
@@ -141,7 +153,10 @@ class RateLimitObligationTest {
             )
         )
         // The plan fetches what the rules read.
-        CoSecFlatEngine.plan(flatRequest(), SnapshotView(platform, null, tenant())).attributes.assert().containsExactly(geo)
+        CoSecFlatEngine.plan(
+            flatRequest(),
+            SnapshotView(platform, null, tenant())
+        ).attributes.assert().containsExactly(geo)
     }
 
     @Test
@@ -149,9 +164,23 @@ class RateLimitObligationTest {
         assertThrownBy<CompileException> { rule("bad id") }
         assertThrownBy<CompileException> { rule("unknown", key = "nothing.here") }
         assertThrownBy<CompileException> { rule("bool", key = "subject.authenticated") }
-        assertThrownBy<CompileException> { rule("uncaptured", key = "resource.var.id", resource = "http:path:/orders/**") }
+        assertThrownBy<CompileException> {
+            rule(
+                "uncaptured",
+                key = "resource.var.id",
+                resource = "http:path:/orders/**"
+            )
+        }
         assertThrownBy<CompileException> { rule("bare", resource = "order") }
-        assertThrownBy<CompileException> { rule("lapsing", condition = Condition.Eq("ext.geo.zone", Literal.Str("eu")), onMissing = OnMissing.NOMATCH, kind = DocumentKind.TENANT, owner = "acme") }
+        assertThrownBy<CompileException> {
+            rule(
+                "lapsing",
+                condition = Condition.Eq("ext.geo.zone", Literal.Str("eu")),
+                onMissing = OnMissing.NOMATCH,
+                kind = DocumentKind.TENANT,
+                owner = "acme"
+            )
+        }
         assertThrownBy<IllegalArgumentException> { permitting(rule("twice"), rule("twice")) }
     }
 }

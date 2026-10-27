@@ -22,15 +22,14 @@ import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.CheckedCondition
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
-import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.decision.Obligation
-import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 
 /**
@@ -129,13 +128,8 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             return decision
         }
         var obligations: ArrayList<Obligation>? = null
-        for (document in RATE_LIMITED) {
-            val rules = when (document) {
-                DocumentKind.PLATFORM -> view.platform.rateLimits
-                DocumentKind.APP -> view.app?.rateLimits
-                DocumentKind.TENANT -> view.tenant?.rateLimits
-            } ?: continue
-            for (rule in rules) {
+        for (rules in arrayOf(view.platform.rateLimits, view.app?.rateLimits, view.tenant?.rateLimits)) {
+            for (rule in rules ?: continue) {
                 val obligation = obligation(rule) ?: continue
                 (obligations ?: ArrayList<Obligation>().also { obligations = it }) += obligation
             }
@@ -143,12 +137,10 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         return obligations?.let { Decision.Permit(decision.by, it) } ?: decision
     }
 
-    @Suppress("TooGenericExceptionCaught")
     private fun obligation(rule: CompiledRateLimit): Obligation? {
         val result = step(rule.policy, rule.statement)
         if (result == ERROR || result == GUARD_FAILED) {
-            val error = stepError!!
-            val missing = error is AttributeMissing
+            val missing = stepError is AttributeMissing
             if (missing && rule.statement.onMissing == OnMissing.NOMATCH) {
                 return null
             }
@@ -158,23 +150,32 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             return null
         }
         val key = rule.key ?: return Obligation.RateLimit(rule.id, CompiledRateLimit.SHARED_BUCKET, rule.limit, rule.strictFailure)
-        return try {
-            // The statement captures only for its own condition: a key reading a variable matches with captures here.
-            captures = if (key.kind == Attribute.Kind.RESOURCE_VAR) {
-                rule.statement.resources.firstNotNullOfOrNull { it.match(target) }
-            } else {
-                null
-            }
-            val value = if (key.type == AttributeType.IP) ip(key)?.toString() else string(key)
-            Obligation.RateLimit(rule.id, CompiledRateLimit.KEYED_BUCKET_PREFIX + value.orEmpty(), rule.limit, rule.strictFailure)
-        } catch (error: Throwable) {
-            if (!catches(error)) {
-                throw error
-            }
-            Obligation.RateLimit(rule.id, null, rule.limit, rule.strictFailure || error !is AttributeMissing)
-        } finally {
-            captures = null
+        return bucket(rule, key)?.let { Obligation.RateLimit(rule.id, it, rule.limit, rule.strictFailure) }
+            ?: Obligation.RateLimit(rule.id, null, rule.limit, rule.strictFailure || bucketError !is AttributeMissing)
+    }
+
+    /** The error of the last [bucket] that returned null. */
+    private var bucketError: Throwable? = null
+
+    /** The bucket [key] names for this request; null when it cannot be read ([bucketError] says why). */
+    @Suppress("TooGenericExceptionCaught")
+    private fun bucket(rule: CompiledRateLimit, key: Attribute): String? = try {
+        // The statement captures only for its own condition: a key reading a variable matches with captures here.
+        captures = if (key.kind == Attribute.Kind.RESOURCE_VAR) {
+            rule.statement.resources.firstNotNullOfOrNull { it.match(target) }
+        } else {
+            null
         }
+        val value = if (key.type == AttributeType.IP) ip(key)?.toString() else string(key)
+        CompiledRateLimit.KEYED_BUCKET_PREFIX + value.orEmpty()
+    } catch (error: Throwable) {
+        if (!catches(error)) {
+            throw error
+        }
+        bucketError = error
+        null
+    } finally {
+        captures = null
     }
 
     /**
@@ -676,6 +677,5 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         private const val PATH_MALFORMED = 2
 
         private val EMPTY = IntArray(0)
-        private val RATE_LIMITED = arrayOf(DocumentKind.PLATFORM, DocumentKind.APP, DocumentKind.TENANT)
     }
 }

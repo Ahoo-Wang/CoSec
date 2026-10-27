@@ -120,7 +120,14 @@ class PolicyDocumentCompiler(
                 errors
             )
         }
-        val rateLimits = document.rateLimits.mapIndexedNotNull { i, rule -> rateLimit(document, rule, "$.rateLimits[$i]", errors) }
+        val rateLimits = document.rateLimits.mapIndexedNotNull { i, rule ->
+            rateLimit(
+                document,
+                rule,
+                "$.rateLimits[$i]",
+                errors
+            )
+        }
         checkBindings(document, errors)
         checkAttributes(document, errors)
         if (errors.isNotEmpty()) {

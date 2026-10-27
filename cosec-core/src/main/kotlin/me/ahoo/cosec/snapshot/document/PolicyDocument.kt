@@ -13,11 +13,11 @@
 
 package me.ahoo.cosec.snapshot.document
 
+import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.ConditionLimits

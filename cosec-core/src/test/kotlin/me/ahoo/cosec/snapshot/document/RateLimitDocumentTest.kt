@@ -47,27 +47,45 @@ class RateLimitDocumentTest {
         val again = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme", PolicyDocumentCodec.encode(decoded))
         PolicyDocumentCodec.encode(again).assert().isEqualTo(PolicyDocumentCodec.encode(decoded))
         // Defaults: one window of a second, lenient.
-        val minimal = PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", body("""{"id":"m","action":"*","permitsPerSecond":3}"""))
+        val minimal = PolicyDocumentCodec.decode(
+            DocumentKind.PLATFORM,
+            "",
+            body("""{"id":"m","action":"*","permitsPerSecond":3}""")
+        )
         minimal.rateLimits.single().limit.assert().isEqualTo(RateLimitSpec(3.0, 1))
         minimal.rateLimits.single().strictFailure.assert().isFalse()
     }
 
     @Test
     fun anAppOrTenantRuleCountsInItsOwnBuckets() {
-        compiler.compile(SnapshotKey.Tenant("acme"), stored(rule)).rateLimits.single().id.assert().isEqualTo("tenant:acme/login")
+        compiler.compile(
+            SnapshotKey.Tenant("acme"),
+            stored(rule)
+        ).rateLimits.single().id.assert().isEqualTo("tenant:acme/login")
         compiler.compile(SnapshotKey.Platform, stored(rule)).rateLimits.single().id.assert().isEqualTo("login")
     }
 
     @Test
     fun aMalformedRuleDoesNotDecodeOrCompile() {
         assertThrows<SnapshotFormatException> {
-            PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", body("""{"id":"x","action":"*","permitsPerSecond":0}"""))
+            PolicyDocumentCodec.decode(
+                DocumentKind.PLATFORM,
+                "",
+                body("""{"id":"x","action":"*","permitsPerSecond":0}""")
+            )
         }
         assertThrows<SnapshotFormatException> {
-            PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", body("""{"id":"x","action":"*","permitsPerSecond":1,"bucket":"a"}"""))
+            PolicyDocumentCodec.decode(
+                DocumentKind.PLATFORM,
+                "",
+                body("""{"id":"x","action":"*","permitsPerSecond":1,"bucket":"a"}""")
+            )
         }
         val error = assertThrows<DocumentCompileException> {
-            compiler.compile(SnapshotKey.Platform, stored("""{"id":"x","action":"*","permitsPerSecond":1,"key":"subject.authenticated"}"""))
+            compiler.compile(
+                SnapshotKey.Platform,
+                stored("""{"id":"x","action":"*","permitsPerSecond":1,"key":"subject.authenticated"}""")
+            )
         }
         error.errors.single().path.assert().isEqualTo("$.rateLimits[0].key")
     }

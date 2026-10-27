@@ -24,6 +24,7 @@ import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.FlatEngine
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.membership.MembershipProvider
 import me.ahoo.cosec.membership.MembershipUnavailableException
 import me.ahoo.cosec.model.Action
@@ -35,9 +36,8 @@ import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
-import me.ahoo.cosec.model.decision.Obligation
-import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.model.decision.Obligation
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.Scope
@@ -53,14 +53,14 @@ import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.authn.Credentials
 import me.ahoo.cosec.runtime.event.DecisionListeners
-import me.ahoo.cosec.runtime.ratelimit.RateLimitFailures
-import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.event.TraceContext
 import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.runtime.http.QueryParameters
+import me.ahoo.cosec.runtime.ratelimit.RateLimitFailures
+import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosid.StringIdGenerator
 import java.time.Clock
@@ -303,7 +303,17 @@ class Pipeline(
         val request = FlatRequest(authz, scope, memberships, clock.millis())
         val decision = evaluate(request, view, fetched, record)
         breakGlass(requestId, traceId, decision, view, record)?.let { return it }
-        val security = security(requestId, principal, request, decision)
+        return decided(requestId, traceId, decision, authn, security(requestId, principal, request, decision))
+    }
+
+    /** The outcome of [decision]: a permit's obligations run first (§8.3). */
+    private suspend fun decided(
+        requestId: String,
+        traceId: String?,
+        decision: Decision,
+        authn: AuthnResult,
+        security: RequestSecurity?,
+    ): Outcome {
         if (decision is Decision.Permit && decision.obligations.isNotEmpty()) {
             return obligations(requestId, traceId, decision, authn, security!!)
         }
@@ -333,7 +343,13 @@ class Pipeline(
                 result == null && obligation.strictFailure ->
                     return unavailable(requestId, traceId, Cause.RateLimiterUnavailable(obligation.ruleId))
                 result == null -> continue
-                !result.allowed -> return StatusMapping.tooManyRequests(requestId, permit, obligation.ruleId, result, traceId)
+                !result.allowed -> return StatusMapping.tooManyRequests(
+                    requestId,
+                    permit,
+                    obligation.ruleId,
+                    result,
+                    traceId
+                )
                 tightest == null || result.remaining < tightest.remaining -> tightest = result
             }
         }

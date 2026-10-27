@@ -52,7 +52,13 @@ internal object StatusMapping {
                 true,
                 requestId,
                 null,
-                if (rateLimit == null) requestIdHeader(requestId) else requestIdHeader(requestId) + rateLimitHeaders(rateLimit),
+                if (rateLimit == null) {
+                    requestIdHeader(
+                        requestId
+                    )
+                } else {
+                    requestIdHeader(requestId) + rateLimitHeaders(rateLimit)
+                },
                 Basis.Decided(decision),
                 checkNotNull(security) { "A permit must carry who may proceed." },
             )
