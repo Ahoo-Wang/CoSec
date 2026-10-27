@@ -69,6 +69,17 @@ jobs:
     name: JMH A/B
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    # The e2e and cocache benchmarks read snapshots from Redis, as their tests do.
+    services:
+      redis:
+        image: redis
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
     env:
       BASE: ${{ inputs.base }}
       HEAD: ${{ inputs.head }}

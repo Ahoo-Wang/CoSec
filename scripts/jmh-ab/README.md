@@ -48,7 +48,7 @@ The job summary has one row per benchmark and param combination:
 
 - `R1…Rn`: head ÷ base score in each round. Values that scatter widely across rounds mean a noisy runner; rerun.
 - `Mean`, `Min`, `Max` of those ratios.
-- `B/op base`, `B/op head`: mean `·gc.alloc.rate.norm`. Allocation is deterministic, so it is the most trustworthy
+- `B/op base`, `B/op head`: mean `gc.alloc.rate.norm` (`·gc.alloc.rate.norm` before JMH 1.37). Allocation is deterministic, so it is the most trustworthy
   column: a change here is real even when timing is noisy.
 
 For `thrpt` benchmarks a ratio below 100 % means head is slower; for `avgt`, `sample` and `ss` a ratio above 100 %
