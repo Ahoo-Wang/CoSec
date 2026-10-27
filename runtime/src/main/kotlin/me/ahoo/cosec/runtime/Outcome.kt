@@ -34,7 +34,7 @@ class Outcome internal constructor(
     /** Why: for audit and tests (RFC 0006 §9.2). Never written to the response. */
     internal val basis: Basis,
     /** Who may proceed, and in what scope: non-null exactly when [proceed]. Adapters expose it as a `SecurityContext`. */
-    val security: RequestSecurity? = null,
+    val security: RequestSecurity?,
 ) {
     override fun toString(): String = "Outcome(status=$status, proceed=$proceed, requestId=$requestId, basis=$basis)"
 }

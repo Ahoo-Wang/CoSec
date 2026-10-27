@@ -88,6 +88,7 @@ internal object StatusMapping {
         problem = Problem(type, requestId, traceId),
         headers = mapOf(CoSecParameters.REQUEST_ID to requestId, CONTENT_TYPE to ProblemEncoder.MEDIA_TYPE),
         basis = basis,
+        security = null,
     )
 
     private fun requestIdHeader(requestId: String): Map<String, String> = mapOf(CoSecParameters.REQUEST_ID to requestId)

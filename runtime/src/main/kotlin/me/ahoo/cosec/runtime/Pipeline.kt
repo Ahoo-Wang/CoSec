@@ -183,7 +183,9 @@ class Pipeline(
     internal suspend fun check(security: RequestSecurity, action: Action, resource: Resource): Decision {
         val view = when (val loaded = call(null) { snapshots.view(security.scope, false) }) {
             is Fetched.Value -> loaded.value
-            is Fetched.Failed -> return Decision.Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, loaded.error))
+            is Fetched.Failed -> return Decision.Indeterminate(
+                Cause.SourceUnavailable(DocumentKind.PLATFORM, loaded.error)
+            )
         }
         val authz = with(security.request) { AuthzRequest(subject, scope, action, resource, environment) }
         val request = FlatRequest(authz, security.scope, security.memberships, clock.millis())
@@ -234,9 +236,8 @@ class Pipeline(
             AttributeRequest(authzSubject, null, action, resource, facts.remoteAddress, requestId, parameters.deviceId)
         }
         val membershipsFetched = membershipsWithStageA(principal, stageA, fetched)
-        val memberships = when (membershipsFetched) {
-            is Fetched.Value -> membershipsFetched.value
-            is Fetched.Failed -> return unavailable(requestId, traceId, Cause.MembershipUnavailable(membershipsFetched.error))
+        val memberships = membershipsFetched.valueOr {
+            return unavailable(requestId, traceId, Cause.MembershipUnavailable(it))
         }
 
         val subject = ScopeSubject(tenant, principal != null, memberships)
@@ -252,13 +253,8 @@ class Pipeline(
         // The tenant is the scope's from here on: ScopeResolver makes it the principal's tenant (the default one when
         // anonymous), the view loads that tenant's document, and the engine refuses a view of another tenant.
         val blacklist = blacklist(fetched)
-        val view = when (val loaded = view(scope, blacklist)) {
-            is Fetched.Value -> loaded.value
-            is Fetched.Failed -> return unavailable(
-                requestId,
-                traceId,
-                Cause.SourceUnavailable(DocumentKind.PLATFORM, loaded.error)
-            )
+        val view = view(scope, blacklist).valueOr {
+            return unavailable(requestId, traceId, Cause.SourceUnavailable(DocumentKind.PLATFORM, it))
         }
         record?.resolved(scope, view)
 
@@ -274,10 +270,22 @@ class Pipeline(
                 blocked = blacklist.blocked,
             ),
         )
-        val decision = evaluate(FlatRequest(authz, scope, memberships, clock.millis()), view, fetched, record)
-        val security = if (decision is Decision.Permit) RequestSecurity(requestId, principal, scope, memberships, authz) else null
+        val request = FlatRequest(authz, scope, memberships, clock.millis())
+        val decision = evaluate(request, view, fetched, record)
         return breakGlass(requestId, traceId, decision, view, record)
-            ?: StatusMapping.decided(requestId, decision, authn, traceId, security)
+            ?: StatusMapping.decided(requestId, decision, authn, traceId, security(requestId, principal, request, decision))
+    }
+
+    /** Who may proceed, for a permit only (§7.6). */
+    private fun security(
+        requestId: String,
+        principal: AuthenticatedPrincipal?,
+        request: FlatRequest,
+        decision: Decision,
+    ): RequestSecurity? = if (decision is Decision.Permit) {
+        RequestSecurity(requestId, principal, request.scope, request.memberships, request.request)
+    } else {
+        null
     }
 
     /** Where this request's external attributes go; null without providers. */
@@ -554,6 +562,11 @@ class Pipeline(
             facts.rawQuery,
             AUTHORIZATION_NAMES
         )?.get(AUTHORIZATION)?.firstOrNull { it.isNotBlank() }
+    }
+
+    private inline fun <T : Any> Fetched<T>.valueOr(failed: (Throwable) -> T): T = when (this) {
+        is Fetched.Value -> value
+        is Fetched.Failed -> failed(error)
     }
 
     /** What an SPI call gave: a value, or why not. Internal to the pipeline, so failures stay values (§7.4). */

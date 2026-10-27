@@ -23,7 +23,6 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.request.RemoteIpResolver
-import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Outcome
@@ -76,10 +75,9 @@ class PipelineServletFilter(
     private val pipeline: Pipeline,
     private val contributors: List<BridgeContextContributor> = emptyList(),
     private val remoteIpResolver: RemoteIpResolver<HttpServletRequest> = ServletRemoteIpResolver,
-    hostApp: AppId? = null,
+    /** The app this host serves (RFC 0004 §4.6); [ServletHttpFactsReader.NO_HOST] when the request declares it. */
+    private val host: HostScope = ServletHttpFactsReader.NO_HOST,
 ) : Filter {
-    private val host = HostScope(hostApp)
-
     override fun doFilter(request: ServletRequest, response: ServletResponse, chain: FilterChain) {
         val servletRequest = request as HttpServletRequest
         val servletResponse = response as HttpServletResponse

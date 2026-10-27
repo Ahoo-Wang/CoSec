@@ -15,7 +15,6 @@ package me.ahoo.cosec.gateway
 
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.context.request.RemoteIpResolver
-import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
@@ -41,12 +40,10 @@ class PipelineGatewayFilter(
     pipeline: Pipeline,
     contributors: List<BridgeContextContributor> = emptyList(),
     private val remoteIpResolver: RemoteIpResolver<ServerWebExchange> = ReactiveRemoteIpResolver,
-    hostApp: AppId? = null,
-) : ReactivePipelineBridge(pipeline, contributors, remoteIpResolver, hostApp),
+    private val host: HostScope = HttpFactsReader.NO_HOST,
+) : ReactivePipelineBridge(pipeline, contributors, remoteIpResolver, host),
     GlobalFilter,
     Ordered {
-    private val host = HostScope(hostApp)
-
     override fun read(exchange: ServerWebExchange): HttpFacts {
         val route = exchange.getAttribute<Route>(GATEWAY_ROUTE_ATTR)
             ?: return HttpFactsReader.read(exchange, remoteIpResolver, host)

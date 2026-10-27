@@ -17,7 +17,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactor.mono
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.context.request.RemoteIpResolver
-import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Outcome
@@ -79,11 +78,9 @@ abstract class ReactivePipelineBridge(
     val pipeline: Pipeline,
     private val contributors: List<BridgeContextContributor> = emptyList(),
     private val remoteIpResolver: RemoteIpResolver<ServerWebExchange> = ReactiveRemoteIpResolver,
-    /** The app this host serves (RFC 0004 §4.6); null when the request declares it. */
-    hostApp: AppId? = null,
+    /** The app this host serves (RFC 0004 §4.6); [HttpFactsReader.NO_HOST] when the request declares it. */
+    private val host: HostScope = HttpFactsReader.NO_HOST,
 ) {
-    private val host = HostScope(hostApp)
-
     /** The host and request attributes of [exchange]; the gateway adds its route's. */
     protected open fun read(exchange: ServerWebExchange): HttpFacts =
         HttpFactsReader.read(exchange, remoteIpResolver, host)
@@ -127,8 +124,8 @@ class PipelineWebFilter(
     pipeline: Pipeline,
     contributors: List<BridgeContextContributor> = emptyList(),
     remoteIpResolver: RemoteIpResolver<ServerWebExchange> = ReactiveRemoteIpResolver,
-    hostApp: AppId? = null,
-) : ReactivePipelineBridge(pipeline, contributors, remoteIpResolver, hostApp),
+    host: HostScope = HttpFactsReader.NO_HOST,
+) : ReactivePipelineBridge(pipeline, contributors, remoteIpResolver, host),
     WebFilter,
     Ordered {
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> =
