@@ -500,6 +500,10 @@ class Pipeline(components: PipelineComponents) {
      * stays unavailable.
      */
     private suspend fun fetchStageB(request: FlatRequest, view: SnapshotView, fetched: FetchedAttributes) {
+        if (!attributes.hasStageB) {
+            // Only stage-A providers, the blacklist say, and stage A asked them for everything: no plan to make.
+            return
+        }
         if (request.request.environment.blocked) {
             // The blacklist rule decides; nothing else would be read.
             return
