@@ -1,0 +1,43 @@
+{
+  "rules": [
+    "OBS-1"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "An ALLOW matches and a BEST_EFFORT listener fails: the request proceeds.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "listeners": [
+    {
+      "name": "metrics",
+      "delivery": "best-effort",
+      "fails": "registry down"
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

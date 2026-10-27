@@ -33,6 +33,7 @@ import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -139,6 +140,7 @@ object PipelineFixtures {
         membershipProvider: me.ahoo.cosec.membership.MembershipProvider? = null,
         options: PipelineOptions = PipelineOptions(),
         attributes: AttributeProviders = AttributeProviders.NONE,
+        listeners: DecisionListeners = DecisionListeners.NONE,
     ): Pipeline = Pipeline(
         authenticator = authenticator,
         snapshots = SuspendingSnapshotSource(views),
@@ -147,5 +149,6 @@ object PipelineFixtures {
         idGenerator = ids,
         options = options,
         attributes = attributes,
+        listeners = listeners,
     )
 }

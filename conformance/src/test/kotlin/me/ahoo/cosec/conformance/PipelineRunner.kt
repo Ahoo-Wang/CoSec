@@ -62,6 +62,10 @@ import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.authn.CompositeAuthenticator
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
+import me.ahoo.cosec.runtime.event.DecisionEvent
+import me.ahoo.cosec.runtime.event.DecisionListener
+import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -82,6 +86,7 @@ import java.time.ZoneOffset
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
 
 /**
@@ -113,13 +118,16 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  * "membershipProvider": { "roles": { "<space>": [...] }, "attachments": [...] } | { "fails": "message" } | { "hangs": true },
  * "snapshot":           { "fails": "message" } | { "hangs": true },      // otherwise every document is installed
  * "options":            { "timeoutMillis": 5000, "authenticationTimeoutMillis": 1000, "membershipTimeoutMillis": 500,
- *                         "attributeTimeoutMillis": 300 },
+ *                         "attributeTimeoutMillis": 300, "requiredTimeoutMillis": 1000 },
  * // External attributes (RFC 0006 §5.4): providers that declare them, which the documents are compiled against
  * "attributeProviders": [{ "stage": "B", "declares": { "ext.geo.inFence": "bool" | "string" | "stringSet" | "ip" },
  *                          "values": { "ext.geo.inFence": true } | "fails": "message" | "hangs": true }],
  * // The real BlacklistAttributeProvider over an in-memory list holding the request's own principal, address
  * // (10.0.0.1) or device, as named; or over a list that fails
  * "blacklist":          { "blocks": ["principal", "ip", "device"] } | { "fails": "message" },
+ * // Decision listeners (RFC 0006 §9): each answers, fails or never answers; REQUIRED ones within
+ * // options.requiredTimeoutMillis (default 1000)
+ * "listeners":          [{ "name": "audit", "delivery": "required" | "best-effort", "fails": "message" | "hangs": true }],
  * "cancel":             "authentication" | "memberships" | "snapshot"    // the caller goes away while it waits there
  * ```
  *
@@ -132,18 +140,13 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node.only(
             "\$comment", "rules", "polarity", "level", "description", "documents", "http", "authentication",
             "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations", "attributeProviders",
-            "blacklist",
+            "blacklist", "listeners",
         )
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
         documents.only("platform", "apps", "tenants", "unavailable")
-        val compiler = if (compiler === DocumentSnapshotCompiler && !attributes.isEmpty) {
-            DocumentSnapshotCompiler.with(attributes.catalog)
-        } else {
-            compiler
-        }
         val snapshot = try {
-            compiler.compile(
+            compiler(attributes).compile(
                 ScenarioDocuments(
                     platform = documents.get("platform"),
                     apps = documents.get("apps")?.fields().orEmpty(),
@@ -161,6 +164,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             if (point == cancelAt) reached.complete(Unit)
         }
 
+        val listeners = listeners(node.get("listeners"), node.get("options") ?: EMPTY)
         val authentication = node.get("authentication") ?: EMPTY
         val provider = node.get("membershipProvider")?.let { provider(authentication, it) { reach("memberships") } }
         val pipeline = Pipeline(
@@ -172,13 +176,26 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             idGenerator = StringIdGenerator { REQUEST_ID },
             options = options(node.get("options") ?: EMPTY),
             attributes = attributes,
+            listeners = listeners,
         )
         val facts = facts(node.get("http") ?: EMPTY)
-        if (cancelAt != null) {
-            return cancelled(pipeline, facts, reached)
+        try {
+            if (cancelAt != null) {
+                return cancelled(pipeline, facts, reached)
+            }
+            return answered(runBlocking { pipeline.evaluate(facts) })
+        } finally {
+            listeners.cancel()
         }
-        return answered(runBlocking { pipeline.evaluate(facts) })
     }
+
+    /** The compiler, with the providers' attributes declared when the scenario registers any. */
+    private fun compiler(attributes: AttributeProviders): SnapshotCompiler =
+        if (compiler === DocumentSnapshotCompiler && !attributes.isEmpty) {
+            DocumentSnapshotCompiler.with(attributes.catalog)
+        } else {
+            compiler
+        }
 
     /** Evaluates, and cancels the caller once the pipeline waits at the scenario's point. */
     private fun cancelled(
@@ -385,7 +402,13 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     }
 
     private fun options(node: JsonNode): PipelineOptions {
-        node.only("timeoutMillis", "authenticationTimeoutMillis", "membershipTimeoutMillis", "attributeTimeoutMillis")
+        node.only(
+            "timeoutMillis",
+            "authenticationTimeoutMillis",
+            "membershipTimeoutMillis",
+            "attributeTimeoutMillis",
+            "requiredTimeoutMillis",
+        )
         val defaults = PipelineOptions()
         fun millis(field: String) = node.get(field)?.let { it.asLong().milliseconds }
         return PipelineOptions(
@@ -394,6 +417,30 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             membershipTimeout = millis("membershipTimeoutMillis") ?: defaults.membershipTimeout,
             attributeTimeout = millis("attributeTimeoutMillis") ?: defaults.attributeTimeout,
         )
+    }
+
+    private fun listeners(node: JsonNode?, options: JsonNode): DecisionListeners {
+        val listeners = node?.values().orEmpty().map { listener ->
+            listener.only("name", "delivery", "fails", "hangs")
+            val delivery = when (val delivery = listener.get("delivery")?.text() ?: "best-effort") {
+                "required" -> Delivery.REQUIRED
+                "best-effort" -> Delivery.BEST_EFFORT
+                else -> throw ScenarioFormatException("A delivery is required or best-effort, not $delivery")
+            }
+            val fails = listener.get("fails")?.text()
+            val hangs = listener.get("hangs")?.bool() == true
+            object : DecisionListener {
+                override val name = listener.required("name").text()
+                override val delivery = delivery
+
+                override suspend fun onDecision(event: DecisionEvent) {
+                    fails?.let { throw IllegalStateException(it) }
+                    if (hangs) awaitCancellation()
+                }
+            }
+        }
+        val timeout = options.get("requiredTimeoutMillis")?.asLong()?.milliseconds ?: DEFAULT_REQUIRED_TIMEOUT
+        return DecisionListeners(listeners, requiredTimeout = timeout)
     }
 
     private fun attributeProviders(node: JsonNode): List<AttributeProvider> {
@@ -476,6 +523,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     private companion object {
         const val REQUEST_ID = "scenario-request"
         const val REMOTE_ADDRESS = "10.0.0.1"
+        val DEFAULT_REQUIRED_TIMEOUT = 1.seconds
 
         /** The device a `blacklist` that blocks `device` names; a request sends it as `CoSec-Device-Id`. */
         const val DEVICE_ID = "device-1"

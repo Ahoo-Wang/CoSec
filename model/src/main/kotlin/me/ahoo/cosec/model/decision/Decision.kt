@@ -64,4 +64,10 @@ sealed interface Cause {
 
     /** The principal's memberships could not be resolved (RFC 0004 §4.5.2). */
     data class MembershipUnavailable(val error: Throwable) : Cause
+
+    /**
+     * A permit could not be written to the REQUIRED decision listeners named in [listeners] (RFC 0006 §9.4): one failed
+     * or timed out, or, for a break-glass permit, none is configured or none succeeded.
+     */
+    data class RequiredListenerFailed(val listeners: List<String>) : Cause
 }
