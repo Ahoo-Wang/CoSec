@@ -182,13 +182,14 @@ class WebAdapterParityTest {
     private val views = object : SnapshotViews {
         override fun peek(key: ViewKey): SnapshotView {
             val tenant = key.tenant ?: return SnapshotView(platform, null, null)
-            val broken = tenant.value == "broken"
-            return SnapshotView(
-                platform,
-                key.app?.let { if (it.value == "order") app else CompiledDocument.app(it, emptyList(), emptyList()) },
-                if (broken) null else CompiledDocument.tenant(tenant, emptyList(), emptyList()),
-                if (broken) listOf(Cause.SourceUnavailable(DocumentKind.TENANT, IllegalStateException("down"))) else emptyList(),
-            )
+            if (tenant.value == "broken") {
+                val down = Cause.SourceUnavailable(DocumentKind.TENANT, IllegalStateException("down"))
+                return SnapshotView(platform, null, null, listOf(down))
+            }
+            val appDocument = key.app?.let {
+                if (it.value == "order") app else CompiledDocument.app(it, emptyList(), emptyList())
+            }
+            return SnapshotView(platform, appDocument, CompiledDocument.tenant(tenant, emptyList(), emptyList()))
         }
 
         override fun load(key: ViewKey): CompletableFuture<SnapshotView> = CompletableFuture.completedFuture(peek(key))
@@ -210,11 +211,16 @@ class WebAdapterParityTest {
                 } else {
                     Memberships(
                         Memberships.Source.CLAIMS,
-                        mapOf(SpaceId.DEFAULT to roles.split(',').filter { it.isNotEmpty() }.mapTo(LinkedHashSet(), ::RoleId)),
+                        mapOf(
+                            SpaceId.DEFAULT to roles.split(',').filter { it.isNotEmpty() }.mapTo(LinkedHashSet(), ::RoleId)
+                        ),
                         emptyList(),
                     )
                 }
-                AuthnResult.Authenticated(AuthenticatedPrincipal(PrincipalId(who), TenantId(tenant), memberships), "token")
+                AuthnResult.Authenticated(
+                    AuthenticatedPrincipal(PrincipalId(who), TenantId(tenant), memberships),
+                    "token"
+                )
             }
         }
     }
@@ -316,37 +322,126 @@ class WebAdapterParityTest {
 
     // --- the scenarios -------------------------------------------------------------------------------------------
 
+    /** One scenario per problem type of §6.1 and per cause of a 503, and the permits. */
+    @Suppress("LongMethod")
     fun scenarios(): List<Scenario> {
         val app = mapOf("CoSec-App-Id" to "order")
         fun token(value: String) = app + ("Authorization" to "Bearer $value")
         return listOf(
             Scenario("a global ALLOW permits an anonymous request", path = "/public/page", status = 200, type = null),
-            Scenario("a role grant permits", path = "/orders/1", headers = token("alice@acme:clerk"), status = 200, type = null),
-            Scenario("a request id from the client is answered", path = "/public/page",
-                headers = mapOf("CoSec-Request-Id" to "client-\"id\""), status = 200, type = null),
+            Scenario(
+                "a role grant permits",
+                path = "/orders/1",
+                headers = token("alice@acme:clerk"),
+                status = 200,
+                type = null
+            ),
+            Scenario(
+                "a request id from the client is answered",
+                path = "/public/page",
+                headers = mapOf("CoSec-Request-Id" to "client-\"id\""),
+                status = 200,
+                type = null
+            ),
             Scenario("an ambiguous path is 400", path = "/public/%2e%2e/admin", status = 400, type = "invalid-request"),
-            Scenario("an ambiguous CoSec parameter is 400", path = "/public/page?CoSec-App-Id=other",
-                headers = app, status = 400, type = "invalid-request"),
-            Scenario("an anonymous deny is 401", path = "/orders/1", headers = app, status = 401, type = "unauthorized"),
-            Scenario("an expired token is 401", path = "/orders/1", headers = token("expired"), status = 401, type = "token-expired"),
-            Scenario("an invalid token is 401", path = "/orders/1", headers = token("invalid"), status = 401, type = "token-invalid"),
-            Scenario("a revoked token is 401", path = "/orders/1", headers = token("revoked"), status = 401, type = "token-revoked"),
-            Scenario("an explicit deny is 403", method = "DELETE", path = "/orders/1", headers = token("alice@acme:clerk"),
-                status = 403, type = "forbidden"),
-            Scenario("an implicit deny is the same 403", path = "/unknown", headers = token("alice@acme:clerk"),
-                status = 403, type = "forbidden"),
-            Scenario("a space without a role is rejected", path = "/orders/1",
-                headers = token("alice@acme:clerk") + ("CoSec-Space-Id" to "team-x"), status = 403, type = "scope-rejected"),
-            Scenario("an unavailable authenticator is 503", path = "/orders/1", headers = token("down"),
-                status = 503, type = "unavailable"),
-            Scenario("unavailable memberships are 503", path = "/orders/1", headers = token("bob@acme:provider"),
-                status = 503, type = "unavailable"),
-            Scenario("an unavailable document is 503", path = "/orders/1", headers = token("carol@broken:clerk"),
-                status = 503, type = "unavailable"),
-            Scenario("an unavailable external attribute is 503", path = "/geo/here", status = 503, type = "unavailable"),
-            Scenario("the deadline is 503", path = "/orders/1", headers = token("slow"), status = 503, type = "unavailable"),
-            Scenario("a failing REQUIRED listener makes a permit 503", path = "/public/page", pipeline = "failing-audit",
-                status = 503, type = "unavailable"),
+            Scenario(
+                "an ambiguous CoSec parameter is 400",
+                path = "/public/page?CoSec-App-Id=other",
+                headers = app,
+                status = 400,
+                type = "invalid-request"
+            ),
+            Scenario(
+                "an anonymous deny is 401",
+                path = "/orders/1",
+                headers = app,
+                status = 401,
+                type = "unauthorized"
+            ),
+            Scenario(
+                "an expired token is 401",
+                path = "/orders/1",
+                headers = token("expired"),
+                status = 401,
+                type = "token-expired"
+            ),
+            Scenario(
+                "an invalid token is 401",
+                path = "/orders/1",
+                headers = token("invalid"),
+                status = 401,
+                type = "token-invalid"
+            ),
+            Scenario(
+                "a revoked token is 401",
+                path = "/orders/1",
+                headers = token("revoked"),
+                status = 401,
+                type = "token-revoked"
+            ),
+            Scenario(
+                "an explicit deny is 403",
+                method = "DELETE",
+                path = "/orders/1",
+                headers = token("alice@acme:clerk"),
+                status = 403,
+                type = "forbidden"
+            ),
+            Scenario(
+                "an implicit deny is the same 403",
+                path = "/unknown",
+                headers = token("alice@acme:clerk"),
+                status = 403,
+                type = "forbidden"
+            ),
+            Scenario(
+                "a space without a role is rejected",
+                path = "/orders/1",
+                headers = token("alice@acme:clerk") + ("CoSec-Space-Id" to "team-x"),
+                status = 403,
+                type = "scope-rejected"
+            ),
+            Scenario(
+                "an unavailable authenticator is 503",
+                path = "/orders/1",
+                headers = token("down"),
+                status = 503,
+                type = "unavailable"
+            ),
+            Scenario(
+                "unavailable memberships are 503",
+                path = "/orders/1",
+                headers = token("bob@acme:provider"),
+                status = 503,
+                type = "unavailable"
+            ),
+            Scenario(
+                "an unavailable document is 503",
+                path = "/orders/1",
+                headers = token("carol@broken:clerk"),
+                status = 503,
+                type = "unavailable"
+            ),
+            Scenario(
+                "an unavailable external attribute is 503",
+                path = "/geo/here",
+                status = 503,
+                type = "unavailable"
+            ),
+            Scenario(
+                "the deadline is 503",
+                path = "/orders/1",
+                headers = token("slow"),
+                status = 503,
+                type = "unavailable"
+            ),
+            Scenario(
+                "a failing REQUIRED listener makes a permit 503",
+                path = "/public/page",
+                pipeline = "failing-audit",
+                status = 503,
+                type = "unavailable"
+            ),
             Scenario("a defect is 500", path = "/boom", status = 500, type = "internal-error"),
         )
     }
@@ -385,15 +480,32 @@ class WebAdapterParityTest {
             return
         }
         val headers = scenario.headers + ("CoSec-Request-Id" to "parity-${scenario.name.hashCode()}")
-        val fixed = Scenario(scenario.name, scenario.method, scenario.path, headers, scenario.pipeline, scenario.status, scenario.type)
+        val fixed =
+            Scenario(
+                scenario.name,
+                scenario.method,
+                scenario.path,
+                headers,
+                scenario.pipeline,
+                scenario.status,
+                scenario.type
+            )
         events.clear()
         webflux(fixed)
         gateway(fixed)
         servlet(fixed)
         events.size.assert().isEqualTo(3)
         val keys = events.map {
-            listOf(it.requestId, it.trace?.traceId, it.subject.tenant, it.subject.id, it.subject.authenticated,
-                it.scope?.app?.value, it.scope?.space?.value, it.outcome.status)
+            listOf(
+                it.requestId,
+                it.trace?.traceId,
+                it.subject.tenant,
+                it.subject.id,
+                it.subject.authenticated,
+                it.scope?.app?.value,
+                it.scope?.space?.value,
+                it.outcome.status
+            )
         }
         keys.distinct().size.assert().isEqualTo(1)
     }
