@@ -315,7 +315,9 @@ class WebAdapterParityTest {
         }
         return Written(
             status = response.status,
-            headers = response.headerNames.associateTo(java.util.TreeMap()) { it.lowercase() to response.getHeaders(it).toList() },
+            headers = response.headerNames.associateTo(
+                java.util.TreeMap()
+            ) { it.lowercase() to response.getHeaders(it).toList() },
             bytes = response.contentAsByteArray.toList(),
             proceeded = chain.request != null,
             principal = proceeded?.let { "${it.principal.id}@${it.tenant.tenantId}" },

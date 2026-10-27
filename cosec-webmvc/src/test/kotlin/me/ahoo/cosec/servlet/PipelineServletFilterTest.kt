@@ -89,7 +89,13 @@ class PipelineServletFilterTest {
         val context = bound!!
         val onEventLoop = java.util.concurrent.CompletableFuture<Throwable?>()
         reactor.core.scheduler.Schedulers.parallel().schedule {
-            onEventLoop.complete(runCatching { AuthorizationChecker(pipeline).checkBlocking(context, "http:GET", "/o") }.exceptionOrNull())
+            onEventLoop.complete(
+                runCatching {
+                    AuthorizationChecker(
+                        pipeline
+                    ).checkBlocking(context, "http:GET", "/o")
+                }.exceptionOrNull()
+            )
         }
         onEventLoop.get().assert().isInstanceOf(IllegalStateException::class.java)
     }

@@ -20,7 +20,6 @@ import jakarta.servlet.ServletResponse
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.runBlocking
-import reactor.core.scheduler.Schedulers
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.request.RemoteIpResolver
@@ -34,6 +33,7 @@ import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
+import reactor.core.scheduler.Schedulers
 import java.util.Collections
 
 /** Reads a servlet request into the facts the pipeline decides on (RFC 0006 §5.3.1), once. */

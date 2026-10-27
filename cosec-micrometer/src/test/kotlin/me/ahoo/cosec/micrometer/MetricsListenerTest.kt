@@ -108,7 +108,6 @@ class MetricsListenerTest {
         }
     }
 
-
     @Test
     fun recordsTheResultSourceAndCause() {
         val bound = StatementRef.Policy(PolicyId("p"), 0, "s", BindingRef.Bound(BindingId("g"), DocumentKind.PLATFORM))

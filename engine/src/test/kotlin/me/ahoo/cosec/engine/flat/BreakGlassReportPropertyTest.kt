@@ -43,16 +43,22 @@ class BreakGlassReportPropertyTest {
             val bindings = ArrayList<Binding>()
             policies.forEach { policy ->
                 when (random.nextInt(3)) {
-                    0 -> bindings += anyone("g:${policy.id.value}", policy.id.value)
-                    1 -> bindings += principal("u:${policy.id.value}", policy.id.value, tenant = "(platform)", principal = "cosec")
+                    0 -> bindings += anyone("g:${policy.id}", policy.id)
+                    1 -> bindings += principal("u:${policy.id}", policy.id, tenant = "(platform)", principal = "cosec")
                     else -> Unit
                 }
             }
             val withRoot = bindings + root()
             val request = flatRequest(tenant = "(platform)", principal = "cosec")
             val tenant = tenant(tenant = "(platform)")
-            val decision = CoSecFlatEngine.evaluate(request, SnapshotView(platform(*policies.toTypedArray(), bindings = withRoot), null, tenant)).decision
-            val without = CoSecFlatEngine.evaluate(request, SnapshotView(platform(*policies.toTypedArray(), bindings = bindings), null, tenant)).decision
+            val decision = CoSecFlatEngine.evaluate(
+                request,
+                SnapshotView(platform(*policies.toTypedArray(), bindings = withRoot), null, tenant)
+            ).decision
+            val without = CoSecFlatEngine.evaluate(
+                request,
+                SnapshotView(platform(*policies.toTypedArray(), bindings = bindings), null, tenant)
+            ).decision
             val reportedBreakGlass = decision is Decision.Permit && decision.by.policy == BuiltinPolicies.ROOT
             val describe = "seed=$seed iteration=$iteration decision=$decision without=$without"
             if (without is Decision.Permit) {
@@ -68,6 +74,7 @@ class BreakGlassReportPropertyTest {
     private companion object {
         const val SEED = 20261026L
         const val ITERATIONS = 2_000
-        val BEHAVIORS = listOf(RuleBehavior.MATCH, RuleBehavior.ACTION_MISS, RuleBehavior.CONDITION_MISS, RuleBehavior.THROW)
+        val BEHAVIORS =
+            listOf(RuleBehavior.MATCH, RuleBehavior.ACTION_MISS, RuleBehavior.CONDITION_MISS, RuleBehavior.THROW)
     }
 }

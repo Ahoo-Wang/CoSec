@@ -169,7 +169,9 @@ class Pipeline(
         val event = record.event(eventId(), requestId, facts, outcome)
         val failed = if (outcome.proceed) {
             val remaining = options.timeout - (System.nanoTime() - record.startNanos).nanoseconds
-            val delivered = if (remaining.isPositive()) withLazyTimeoutOrNull(remaining) { listeners.required(event) } else null
+            val delivered = remaining.takeIf { it.isPositive() }?.let { left ->
+                withLazyTimeoutOrNull(left) { listeners.required(event) }
+            }
             delivered ?: return StatusMapping.unavailable(requestId, Unavailability.DeadlineExceeded, traceId)
         } else {
             listeners.required(event)
