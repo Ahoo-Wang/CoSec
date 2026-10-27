@@ -44,16 +44,17 @@ enum class BlacklistKind(val attribute: String) {
 
 /** A [BlacklistSource] in memory, for tests and small deployments. */
 class InMemoryBlacklistSource : BlacklistSource {
-    private val entries = ConcurrentHashMap.newKeySet<Pair<BlacklistKind, String>>()
+    // One set per kind: a lookup allocates nothing, where a (kind, value) key would on every request.
+    private val entries = BlacklistKind.entries.map { ConcurrentHashMap.newKeySet<String>() }
 
-    override suspend fun contains(kind: BlacklistKind, value: String): Boolean = (kind to value) in entries
+    override suspend fun contains(kind: BlacklistKind, value: String): Boolean = value in entries[kind.ordinal]
 
     fun block(kind: BlacklistKind, value: String) {
-        entries += kind to value
+        entries[kind.ordinal] += value
     }
 
     fun unblock(kind: BlacklistKind, value: String) {
-        entries -= kind to value
+        entries[kind.ordinal] -= value
     }
 }
 
