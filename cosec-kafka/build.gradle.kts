@@ -17,4 +17,7 @@ dependencies {
     implementation(project(":cosec-core"))
     // KafkaAuditListener (RFC 0006 §9.5.3) is a decision listener of the coroutine pipeline.
     api(project(":cosec-runtime"))
+    // KafkaChangeListener (RFC 0007 §10.5) records the control plane's change events; the control plane brings it.
+    compileOnly(project(":cosec-control"))
+    testImplementation(project(":cosec-control"))
 }

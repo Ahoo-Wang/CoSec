@@ -36,6 +36,7 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.PolicyDocument
+import me.ahoo.cosec.snapshot.document.ProvenanceKind
 import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -78,8 +79,19 @@ class ChangeAuthority(
         TenantIsolation.allows(operator, key) && decide(operator, action, ControlResources.document(key)) == ControlDecision.PERMIT
 
     /** Every target of [operations] on [key] (RFC 0007 §7.1), after the hard rule. */
-    suspend fun authorize(operator: Operator, key: SnapshotKey, operations: List<Operation>) {
+    suspend fun authorize(
+        operator: Operator,
+        key: SnapshotKey,
+        operations: List<Operation>,
+        kind: ProvenanceKind = ProvenanceKind.PUBLISH
+    ) {
         isolate(operator, key)
+        if (kind == ProvenanceKind.BREAK_GLASS) {
+            // RFC 0007 §8: requesting and revoking break-glass is the platform's, by cosec:breakglass alone. Such a
+            // change carries break-glass bindings only, or it never checks clean (BreakGlassRules).
+            require(operator, ControlActions.BREAKGLASS, ControlResources.document(key))
+            return
+        }
         for (operation in operations) {
             when (operation) {
                 is Operation.PutPolicy -> require(

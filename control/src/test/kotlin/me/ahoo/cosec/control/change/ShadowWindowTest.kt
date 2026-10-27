@@ -89,6 +89,17 @@ class ShadowWindowTest {
         clock,
         ChangeOptions(shadow = options),
         reports = reports,
+        // Break-glass is recorded by a REQUIRED listener first (RFC 0007 §8).
+        listeners = me.ahoo.cosec.control.audit.ChangeListeners(
+            listOf(
+                object : me.ahoo.cosec.control.audit.ChangeListener {
+                    override val name = "audit"
+                    override val delivery = me.ahoo.cosec.runtime.event.Delivery.REQUIRED
+
+                    override suspend fun onChange(event: me.ahoo.cosec.control.audit.ChangeEvent) = Unit
+                },
+            ),
+        ),
     )
 
     @AfterEach

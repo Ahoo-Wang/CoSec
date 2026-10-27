@@ -296,7 +296,7 @@ class ExternalAttributesPipelineTest {
     }
 
     @Test
-    fun aDenyWithNomatchLapsesInThePlatformDocument() {
+    fun aConfirmedDenyWithNomatchLapses() {
         val (outcome, _) = evaluate(
             listOf(Geo { error("geo down") }),
             allow() + deny(condition = inFence(), onMissing = "nomatch")
@@ -374,9 +374,15 @@ class ExternalAttributesPipelineTest {
     private class Policy(val id: String, effect: String, action: String, condition: String?, onMissing: String?) {
         val json = """{"id":"$id","statements":[{"effect":"$effect","action":"$action"""" +
             (condition?.let { ""","condition":$it""" } ?: "") +
-            (onMissing?.let { ""","onMissing":"$it"""" } ?: "") + "}]}"
+            (onMissing?.let { ""","onMissing":"$it"""" } ?: "") +
+            // RFC 0007 §9.5: a lapsing DENY carries the control plane's confirmation, or it does not compile.
+            (if (effect == "deny" && onMissing == "nomatch") CONFIRMED else "") + "}]}"
 
         operator fun plus(other: Policy): Policies = Policies(listOf(this, other))
+
+        private companion object {
+            const val CONFIRMED = ""","onMissingConfirmed":{"by":{"tenant":"(platform)","principal":"plato"},"change":"c1"}"""
+        }
     }
 
     private class Policies(val policies: List<Policy>) {
