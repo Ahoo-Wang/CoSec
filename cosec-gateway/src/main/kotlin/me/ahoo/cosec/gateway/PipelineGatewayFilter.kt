@@ -47,7 +47,12 @@ class PipelineGatewayFilter(
     override fun read(exchange: ServerWebExchange): HttpFacts {
         val route = exchange.getAttribute<Route>(GATEWAY_ROUTE_ATTR)
             ?: return HttpFactsReader.read(exchange, remoteIpResolver, host)
-        return HttpFactsReader.read(exchange, remoteIpResolver, host, mapOf(AuditRequest.ROUTE_ID_ATTRIBUTE_KEY to route.id))
+        return HttpFactsReader.read(
+            exchange,
+            remoteIpResolver,
+            host,
+            mapOf(AuditRequest.ROUTE_ID_ATTRIBUTE_KEY to route.id)
+        )
     }
 
     override fun filter(exchange: ServerWebExchange, chain: GatewayFilterChain): Mono<Void> =
