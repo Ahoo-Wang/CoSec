@@ -79,7 +79,7 @@ class PipelineResumeTest {
         }
         assertResumedOn(
             RESUME,
-            pipeline(authenticator(authenticated(null)), engine, membershipProvider = provider),
+            pipeline(authenticator(authenticated(null)), engine) { it.copy(membershipProvider = provider) },
             engine
         )
     }

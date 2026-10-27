@@ -51,6 +51,7 @@ import me.ahoo.cosec.route.RouteMap
 import me.ahoo.cosec.route.RouteMapCodec
 import me.ahoo.cosec.route.RouteMapException
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.attribute.AttributeDeclaration
 import me.ahoo.cosec.runtime.attribute.AttributeProvider
@@ -181,17 +182,19 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         val authentication = node.get("authentication") ?: EMPTY
         val provider = node.get("membershipProvider")?.let { provider(authentication, it) { reach("memberships") } }
         val pipeline = Pipeline(
-            authenticator = authenticator(authentication, node.get("revocations")) { reach("authentication") },
-            snapshots = SuspendingSnapshotSource(
-                views(snapshot, documents, node.get("snapshot")) { reach("snapshot") }
-            ),
-            membershipProvider = provider,
-            idGenerator = StringIdGenerator { REQUEST_ID },
-            options = options(node.get("options") ?: EMPTY),
-            attributes = attributes,
-            listeners = listeners,
-            rateLimiter = rateLimiter(node.get("rateLimiter")),
-            routes = routes,
+            PipelineComponents(
+                authenticator = authenticator(authentication, node.get("revocations")) { reach("authentication") },
+                snapshots = SuspendingSnapshotSource(
+                    views(snapshot, documents, node.get("snapshot")) { reach("snapshot") }
+                ),
+                membershipProvider = provider,
+                idGenerator = StringIdGenerator { REQUEST_ID },
+                options = options(node.get("options") ?: EMPTY),
+                attributes = attributes,
+                listeners = listeners,
+                rateLimiter = rateLimiter(node.get("rateLimiter")),
+                routes = routes,
+            )
         )
         val facts = facts(node.get("http") ?: EMPTY)
         try {
