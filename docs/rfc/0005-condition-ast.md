@@ -350,6 +350,11 @@ class Resource(val type: String, val id: String, val attributes: Map<String, Str
 - **Gateway** 不做映射：网关看到的是外部路由，一律用 `http` 命名空间。
 - `OpenAPIPolicyGenerator`、`OpenAPIAppPermissionGenerator` 改为生成 `service:verb` 的权限策略和 `Catalog`，并同时生成路由映射。
 
+> **实现说明（2026-10-27，#1079）**：路由映射在 `cosec-core`（`me.ahoo.cosec.route`），宿主一次加载全部映射，任何一个错误都整体失败，错误带位置与 JSON 路径（`RTE-3`）。
+> 同一方法的两条路由只要有路径能同时匹配就拒绝，动作相同也一样（`RTE-1`）；只由字面量与 `{var}` 段组成的路径用精确规则判定不相交，其余用 `PatternContainment` 的可靠判定。
+> 捕获值含 `/`（解码后的 `%2F`）在认证之前返回 400 `invalid-request`（`RTE-2`）。生成器是 `OpenAPIServiceGenerator`（路由映射与应用文档）；7.x 的生成器留到
+> S1 把 actuator 的生成端点改接新生成器、S4 删除。`cosec.authorization.routes.location` 的装配属于 S1。
+
 ### 5.4 代码内检查
 
 `AuthorizationChecker.check(context, CheckRequest(path, method))` 改为 `check(context, action, resource)`；原签名保留为 `http` 命名空间的便捷方法。
@@ -571,8 +576,8 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 | PR-2 | `feat(model): extract index keys and decide condition containment` | §4.1、§4.2；A1、A2 | PR-1 | **能** |
 | PR-3 | `feat(engine): match actions and resources without Spring` | §5.1、§5.2：`Action`/`Resource` 模式、`HttpPathPattern`；与 `PathPattern` 的对照测试（`cosec-core`） | PR-1 | **能** |
 | PR-4 | `feat(engine): compile statements and index candidates` | §6：`CompiledStatement`、索引、捕获结果、引擎接入；I1、I2；`EngineBenchmark` 的新参数 | PR-2、PR-3；RFC 0004 PR-2 | RFC 0004 PR-2 合入后 |
-| PR-5 | `feat(openapi): generate route maps and service actions` | §5.3：路由映射生成、宿主侧加载与查找、生成器改为 `service:verb`；§5.4 | PR-3 | **能** |
-| PR-6 | `feat(migrate): translate 7.x matchers into the condition AST`（打开中，#1069）（**2026-10-26 改动**：不做 `legacy` 节点，自定义条件匹配器转换时拒绝；见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | §7 全部，包括限流规则；`legacy` 节点（Q2）；报告 | PR-4；RFC 0004 PR-5 | RFC 0004 PR-5 合入后 |
+| PR-5 | `feat(openapi): generate route maps and service actions`（已合入，#1079） | §5.3：路由映射生成、宿主侧加载与查找、生成器改为 `service:verb`；§5.4 | PR-3 | **能** |
+| PR-6 | `feat(migrate): translate 7.x matchers into the condition AST`（已合入，#1069）（**2026-10-26 改动**：不做 `legacy` 节点，自定义条件匹配器转换时拒绝；见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | §7 全部，包括限流规则；`legacy` 节点（Q2）；报告 | PR-4；RFC 0004 PR-5 | RFC 0004 PR-5 合入后 |
 | ~~PR-7~~ | ~~`test: classify AST migration differences in replay`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | D1–D3、正例与反例、翻译对照语料 | PR-6；RFC 0004 PR-6 | RFC 0004 PR-6 合入后 |
 | — | ~~**门槛 B**~~ **已取消（2026-10-26）** | 维护者本地回放 | PR-7；RFC 0004 PR-7（基准是切换后的实现） | — |
 | ~~PR-8~~ | ~~`refactor!: evaluate compiled conditions and actions`~~ **并入 RFC 0008 的切换 PR（2026-10-26）**，100 % 吞吐要求不变 | 切换（前提：§9.3 对 7.0 的 100 % 吞吐要求已满足，否则停止并交回维护者）：文档 `schema: 3`（AST），schema 标记更新（RFC 0004 §8.5）；starter 装配路由映射；`AuthorizationChecker` 的新签名；文档；JMH | 门槛 B | **不能** |

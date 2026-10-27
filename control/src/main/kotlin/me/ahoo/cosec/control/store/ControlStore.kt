@@ -17,6 +17,8 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.runtime.shadow.CandidateStore
+import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.snapshot.SnapshotDigest
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
@@ -26,7 +28,7 @@ import java.time.Instant
 /**
  * Where the control plane keeps the documents it publishes and what it needs to publish them safely (RFC 0007 §5.2):
  * the heads the data plane reads, the revision records they are built from, the revision index of each document, the
- * back-reference index of cross-document references, the change requests and each document's staging slot. `CoCacheControlStore` in `cosec-cocache` is the Redis
+ * back-reference index of cross-document references, the change requests, each document's staging slot and the candidate it stages. `CoCacheControlStore` in `cosec-cocache` is the Redis
  * implementation; [InMemoryControlStore] is for tests and single-instance development.
  *
  * Every write is conditional on the digest it was based on: nothing is overwritten that the caller has not read. Reads
@@ -36,7 +38,7 @@ import java.time.Instant
  * Digests are the store's own ([digestOf]); the head's digest is also the address of its revision record, which is
  * what a document's `provenance.parent` points to (RFC 0007 §5.3).
  */
-interface ControlStore {
+interface ControlStore : CandidateStore {
     /** The digest this store computes for [document]: the same for the head and for its revision record. */
     fun digestOf(document: SnapshotDocument): SnapshotDigest
 
@@ -93,6 +95,12 @@ interface ControlStore {
 
     /** Replaces the staging slot of [key] if it is still at [expected]; `false` when it changed in between. */
     suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean
+
+    /**
+     * Writes the candidate of [key] to the `candidate:` namespace the data plane's shadow listeners read (RFC 0007 §6.4),
+     * or removes it with `null`. Unconditional: the staging slot already makes its holder the only writer.
+     */
+    suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate?)
 
     /**
      * Takes the lease [name] for [holder] for [duration] if nobody holds it, so that one control-plane instance runs a

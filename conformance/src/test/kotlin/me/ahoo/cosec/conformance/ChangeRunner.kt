@@ -23,6 +23,8 @@ import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.control.change.ShadowAck
+import me.ahoo.cosec.control.change.ShadowOptions
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
@@ -31,6 +33,9 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
+import me.ahoo.cosec.runtime.shadow.ShadowOutcome
+import me.ahoo.cosec.runtime.shadow.ShadowReport
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.Actor
@@ -51,14 +56,16 @@ import java.time.Instant
  * ```jsonc
  * "documents": { "platform": {...}, "apps": { "order": {...} }, "tenants": { "acme": {...} } },  // published first
  * "operators": { "alice": { "tenant": "acme", "roles": ["admin"], "policies": [] } },
- * "options":   { "fourEyes": true },
+ * "options":   { "fourEyes": true, "shadow": { "minDuration": "PT15M", "minSamples": 3, "maxDuration": "PT1H" } },
  * "steps": [ { "propose": { "change": "c1", "by": "alice", "document": "tenant:acme",
  *                           "operations": [ { "putPolicy": { ...the document format's policy... } },
  *                                           { "putBinding": { ... } }, { "removePolicy": "id" }, { "removeBinding": "id" } ] } },
  *            { "skipShadow": "c1" }, { "stage": { "change": "c1", "by": "alice" } }, { "shadowed": "c1" },
  *            { "publish": "c1" }, { "abandon": "c1" }, { "rebase": "c1" },
  *            { "approve": { "change": "c1", "by": "bob", "candidate": "own" | "other" } },
- *            { "reject": { "change": "c1", "by": "bob" } }, { "advance": "PT73H" } ],
+ *            { "reject": { "change": "c1", "by": "bob" } }, { "advance": "PT73H" },
+ *            { "report": { "change": "c1", "instance": "i1", "counts": { "NARROWED": 2 } } },
+ *            { "publish": { "change": "c1", "ack": "summary" | { "NARROWED": 1 } } } ],
  * "expect": { "steps": ["CHECKED", "READY", "PUBLISHED"], "errors": { "c1": [] }, "heads": { "tenant:acme": 1 },
  *             "escalations": { "c1": ["NOT_COVERED"] } }
  * ```
@@ -68,6 +75,9 @@ import java.time.Instant
  * (the built-in control-plane policies included); `documents` are published first as `bootstrap` would. Without
  * `operators`, the scenario is about the flow alone: every action is permitted, and a step is taken by `alice` of
  * `acme` on a tenant document and by a platform principal on the others, as the hard rule requires.
+ *
+ * Shadow windows (RFC 0007 §6.4) close as soon as `shadowed` looks at them unless `options.shadow` sets their bounds;
+ * a `report` step writes an instance's cumulative report of a change's current window, as its reporter would.
  */
 object ChangeRunner : ScenarioRunner {
     val NOW = Instant.parse("2026-11-01T00:00:00Z")
@@ -97,19 +107,30 @@ object ChangeRunner : ScenarioRunner {
             )
         }
         private var next: ChangeId? = null
+        private val reports = InMemoryShadowReports(clock)
         private val changes = Changes(
             store,
             revisions,
             { next!! },
             if (authorized) engine.authorizer else ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT },
             clock,
-            node.get("options")?.let {
-                it.only("fourEyes")
-                ChangeOptions(fourEyes = it.get("fourEyes")?.bool() ?: false)
-            } ?: ChangeOptions(),
+            ChangeOptions(fourEyes = node.get("options")?.get("fourEyes")?.bool() ?: false, shadow = shadowOptions()),
+            reports = reports,
         )
         private val documents = LinkedHashSet<SnapshotKey>()
         private val named = LinkedHashMap<String, ChangeRequest>()
+
+        /** A window closes as soon as it is looked at, unless the scenario sets `options.shadow`. */
+        private fun shadowOptions(): ShadowOptions {
+            node.get("options")?.only("fourEyes", "shadow")
+            val shadow = node.get("options")?.get("shadow") ?: return ShadowOptions(Duration.ZERO, 0, Duration.ZERO)
+            shadow.only("minDuration", "minSamples", "maxDuration")
+            return ShadowOptions(
+                Duration.parse(shadow.required("minDuration").text()),
+                shadow.required("minSamples").asLong(),
+                Duration.parse(shadow.required("maxDuration").text()),
+            )
+        }
 
         suspend fun start() {
             node.get("documents")?.let { bootstrap(revisions, it) }
@@ -122,6 +143,8 @@ object ChangeRunner : ScenarioRunner {
                 if (action == "advance") {
                     clock.now = clock.now.plus(Duration.parse(argument.text()))
                     "advanced"
+                } else if (action == "report") {
+                    report(argument)
                 } else {
                     try {
                         step(action, argument).also { named[it.id.value] = it }.state.name
@@ -148,15 +171,55 @@ object ChangeRunner : ScenarioRunner {
         }
 
         private suspend fun transition(action: String, argument: JsonNode): ChangeRequest {
-            val (id, op) = target(argument)
+            val (id, op) = if (action == "publish") target(argument, "ack") else target(argument)
             return when (action) {
                 "skipShadow" -> changes.skipShadow(op, id, "scenario")
                 "stage" -> changes.stage(op, id)
-                "publish" -> changes.publish(op, id)
+                "publish" -> changes.publish(op, id, ack(id, argument))
                 "abandon" -> changes.abandon(op, id)
                 "rebase" -> changes.rebase(op, id)
                 "reject" -> changes.reject(op, id, "scenario")
                 else -> throw ScenarioFormatException("Unknown step $action")
+            }
+        }
+
+        /**
+         * An instance's cumulative report of a change's window: `{ "change": "c1", "instance": "i1",
+         * "counts": { "NARROWED": 2 } }`, as its reporter would write it.
+         */
+        private suspend fun report(argument: JsonNode): String {
+            argument.only("change", "instance", "counts")
+            val window = changes.get(ChangeId(argument.required("change").text())).shadow?.window
+                ?: throw ScenarioFormatException("A report is of a staged change: $argument")
+            val counts = argument.required(
+                "counts"
+            ).fields().entries.associate { (outcome, count) -> ShadowOutcome.valueOf(outcome) to count.asLong() }
+            reports.write(
+                ShadowReport(
+                    window,
+                    argument.required("instance").text(),
+                    counts,
+                    emptyMap(),
+                    emptySet(),
+                    clock.now,
+                    clock.now
+                )
+            )
+            return "reported"
+        }
+
+        /** A publish's `ack`: `"summary"` acknowledges the window's summary, `{ "NARROWED": 1 }` other counts. */
+        private suspend fun ack(id: ChangeId, argument: JsonNode): ShadowAck? {
+            val ack = if (argument.isString) null else argument.get("ack") ?: return null
+            ack ?: return null
+            val window = changes.get(id).shadow ?: throw ScenarioFormatException("Only a shadowed change is acknowledged: $argument")
+            return if (ack.isString && ack.text() == "summary") {
+                ShadowAck(window.window, window.closed?.counts.orEmpty())
+            } else {
+                ShadowAck(
+                    window.window,
+                    ack.fields().entries.associate { (outcome, count) -> outcome to count.asLong() }
+                )
             }
         }
 
