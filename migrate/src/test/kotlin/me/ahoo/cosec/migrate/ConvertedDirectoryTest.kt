@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.migrate.Fixtures7x.app
 import me.ahoo.cosec.migrate.Fixtures7x.appPermission
 import me.ahoo.cosec.migrate.Fixtures7x.permission
 import me.ahoo.cosec.migrate.Fixtures7x.policy
@@ -87,6 +88,38 @@ class ConvertedDirectoryTest {
         rejection.get("location").asString().assert().isEqualTo("policy:perm:x")
         rejection.get("advice").asString().assert().isNotBlank()
         assertThrows<IllegalArgumentException> { ConvertedDirectory.read(out) }
+    }
+
+    @Test
+    fun `publish reads exactly the files convert wrote, unchanged`() {
+        val conversion = Converter().convert(
+            source(
+                listOf("c" to policy("c")),
+                apps = listOf(app("a", appPermission("a", permission("p")), "r" to """["p"]"""))
+            )
+        )
+        val out = temp.resolve("verified")
+        ConvertedDirectory.write(conversion, out)
+        ConvertedDirectory.read(out).keys.assert().containsExactly(SnapshotKey.Platform, SnapshotKey.App("a"))
+        // An edited document.
+        val app = out.resolve("apps/a.json")
+        val original = Files.readAllBytes(app)
+        Files.write(app, original + " ".toByteArray())
+        assertThrows<IllegalArgumentException> {
+            ConvertedDirectory.read(out)
+        }.message.assert().contains("changed since convert")
+        Files.write(app, original)
+        // A document convert did not write.
+        Files.writeString(out.resolve("apps/b.json"), "{}")
+        assertThrows<IllegalArgumentException> {
+            ConvertedDirectory.read(out)
+        }.message.assert().contains("unexpected [apps/b.json]")
+        Files.delete(out.resolve("apps/b.json"))
+        // A document that went missing.
+        Files.delete(app)
+        assertThrows<IllegalArgumentException> {
+            ConvertedDirectory.read(out)
+        }.message.assert().contains("missing [apps/a.json]")
     }
 
     @Test

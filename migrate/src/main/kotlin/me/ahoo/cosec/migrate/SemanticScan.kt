@@ -23,14 +23,14 @@ import me.ahoo.cosec.migrate.MatcherTranslator.Companion.TEMPLATE
 import tools.jackson.databind.JsonNode
 
 /**
- * Finds the 7.x configuration shapes whose decisions change in 8.0 by design (RFC 0008 Q3): `verify` is not offered,
+ * Finds the 7.x configuration shapes whose decisions change in 8.0 by design (RFC 0008 Q3, C1–C6): `verify` is not offered,
  * so the report lists where the data has each shape, and `upgrading.md` explains each change. It reads the 7.x JSON
  * only; nothing here affects what is converted.
  */
 internal class SemanticScan(private val record: (SemanticChange) -> Unit) {
     /**
-     * A 7.x statement: its effect, action and condition, under a policy (or app) condition. Records D1–D3 in both
-     * conditions, C1a for an ALLOW that can fail and C1b for every DENY.
+     * A 7.x statement: its effect, action and condition, under a policy (or app) condition. Records C1a for an ALLOW
+     * that can fail and C1b for every DENY. D1–D3 are recorded by [ConditionTranslator], which knows the direction.
      */
     fun statement(
         deny: Boolean,
@@ -39,7 +39,6 @@ internal class SemanticScan(private val record: (SemanticChange) -> Unit) {
         policyCondition: JsonNode?,
         location: String
     ) {
-        conditionShapes(condition, deny, "$location.condition")
         val canFail = canFail(condition) || canFail(policyCondition) || templated(action)
         if (deny) {
             record(
@@ -62,7 +61,7 @@ internal class SemanticScan(private val record: (SemanticChange) -> Unit) {
     }
 
     /** A policy or app condition other than `all`: evaluated only when one of its statements is a candidate. */
-    fun policyCondition(condition: JsonNode?, statementsDeny: List<Boolean>, location: String) {
+    fun policyCondition(condition: JsonNode?, location: String) {
         if (condition == null || condition.isNull || isAll(condition)) {
             return
         }
@@ -74,53 +73,6 @@ internal class SemanticScan(private val record: (SemanticChange) -> Unit) {
                     "makes its DENY statements fail and its ALLOW statements not match (7.x: 500 for the layer)",
             ),
         )
-        // A policy condition takes the direction of each statement it guards.
-        statementsDeny.distinct().forEach { deny -> conditionShapes(condition, deny, location) }
-    }
-
-    /** D1–D3 inside [condition], whose direction is DENY when [deny] (RFC 0005 §7.1, "direction"). */
-    private fun conditionShapes(condition: JsonNode?, deny: Boolean, location: String) {
-        if (condition == null || !condition.isObject || condition.size() != 1) {
-            return
-        }
-        val (type, config) = condition.properties().first().let { it.key to it.value }
-        val at = "$location.$type"
-        val direction = deny != negated(config)
-        when (type) {
-            BOOL_TYPE -> listOf(AND, OR).forEach { key ->
-                config.get(
-                    key
-                )?.values()?.forEachIndexed { i, member -> conditionShapes(member, direction, "$at.$key[$i]") }
-            }
-
-            "inRole" -> record(
-                SemanticChange(
-                    "D1",
-                    at,
-                    "inRole [${config.get("value")?.asString()}] in the ${if (direction) "DENY" else "ALLOW"} direction: " +
-                        if (direction) "8.0 matches the role in any space" else "8.0 matches only a role of the requested space",
-                ),
-            )
-
-            "eq" -> eqShape(config.get("value"), at)
-            "regular" -> record(
-                SemanticChange("D3", at, "regular expression: 8.0 compares exactly, so its timeout errors disappear"),
-            )
-        }
-    }
-
-    /** An `eq` against the empty string or a template: absent no longer equals empty (D2). */
-    private fun eqShape(value: JsonNode?, location: String) {
-        val text = value?.takeIf { it.isString }?.asString() ?: return
-        if (text.isEmpty() || text.contains(TEMPLATE)) {
-            record(
-                SemanticChange(
-                    "D2",
-                    location,
-                    "eq against [$text]: an absent attribute no longer equals the empty string"
-                )
-            )
-        }
     }
 
     /** A grant in a space other than the default: the declared space must now be one of the principal's (C3). */

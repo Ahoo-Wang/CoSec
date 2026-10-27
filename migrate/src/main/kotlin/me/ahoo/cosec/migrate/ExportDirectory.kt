@@ -37,6 +37,9 @@ object ExportDirectory {
     const val GLOBAL_POLICIES_FILE = "global-policies.json"
     const val APP_ROLE_PERMISSIONS_FILE = "app-role-permissions.json"
 
+    /** Optional: the deployment's rate limit rules, as `LocalRateLimitRuleLoader` reads them. */
+    const val RATE_LIMIT_RULES_FILE = "rate-limit-rules.json"
+
     private val reader = CoSecJsonSerializer.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
     private val writer = CoSecJsonSerializer.writer()
 
@@ -56,7 +59,27 @@ object ExportDirectory {
             APP_ROLE_PERMISSIONS_FILE,
             input
         ).mapIndexed { i, entry -> app(entry, "$APP_ROLE_PERMISSIONS_FILE[$i]") }
-        return Source7x(policies, globalIndex, apps, null, GLOBAL_POLICIES_FILE, Source7x.sha256(input))
+        val rules = directory.resolve(
+            RATE_LIMIT_RULES_FILE
+        ).takeIf { Files.isRegularFile(it) }?.let { rateLimitRules(it, input) }.orEmpty()
+        return Source7x(policies, globalIndex, apps, null, GLOBAL_POLICIES_FILE, Source7x.sha256(input), rules)
+    }
+
+    /** The rules in [file]: one rule object or an array of them, each with its `id`. */
+    fun rateLimitRules(file: Path, input: MutableMap<String, ByteArray> = HashMap()): List<Source7x.Entry> {
+        val bytes = Files.readAllBytes(file)
+        input[file.fileName.toString()] = bytes
+        val node = try {
+            reader.readTree(bytes)
+        } catch (error: JacksonException) {
+            throw IllegalArgumentException("$file is not valid JSON: ${error.originalMessage}", error)
+        }
+        val rules = if (node.isArray) node.values().toList() else listOf(node)
+        return rules.mapIndexed { i, rule ->
+            val id = rule.get("id")?.takeIf { it.isString }?.asString()
+            require(id != null) { "${file.fileName}[$i] has no string id." }
+            Source7x.Entry(id, "${file.fileName}[$i]", writer.writeValueAsBytes(rule))
+        }
     }
 
     private fun app(entry: JsonNode, location: String): Source7x.App {

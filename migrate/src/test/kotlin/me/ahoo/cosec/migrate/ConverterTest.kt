@@ -168,7 +168,7 @@ class ConverterTest {
                 "conditions" to policy(
                     "conditions",
                     statements = listOf(
-                        statement(condition = """{"inRole":{"value":"admin"}}"""),
+                        statement(condition = """{"contains":{"part":"request.path","value":"admin"}}"""),
                         statement(condition = """{"spel":{"value":"true"}}"""),
                         statement(condition = """{"noSuchMatcher":{}}"""),
                     ),
@@ -206,7 +206,7 @@ class ConverterTest {
         located(RejectionKind.UNDEFINED_PERMISSION).assert().containsExactly("app:role:permission:order:clerk")
         located(RejectionKind.SCHEMA_MARKER).assert().containsExactly("meta:schema")
         located(RejectionKind.CONDITION_NOT_TRANSLATED).assert()
-            .containsExactly("policy:conditions#$.statements[0].condition.inRole")
+            .containsExactly("policy:conditions#$.statements[0].condition.contains")
         located(RejectionKind.EXPRESSION_CONDITION).assert()
             .containsExactly("policy:conditions#$.statements[1].condition.spel")
         located(RejectionKind.CUSTOM_CONDITION).assert()
@@ -286,6 +286,45 @@ class ConverterTest {
     }
 
     @Test
+    fun `by owner keeps a policy with DENY statements in the platform, attachable by every tenant`() {
+        val conversion = convert(
+            source(listOf("d" to policy("d", statements = listOf(statement(effect = "deny")), tenantId = "acme"))),
+            Partition.BY_OWNER,
+        )
+        conversion.report.rejections.assert().isEmpty()
+        conversion.documents.keys.assert().containsExactly(SnapshotKey.Platform)
+        conversion.documents.getValue(SnapshotKey.Platform).policies.single().attachable.assert().isTrue()
+        conversion.report.warnings.single().message.assert().contains("keep its DENY")
+        conversion.report.semanticChanges.none { it.change == "C5" }.assert().isTrue()
+    }
+
+    @Test
+    fun `ids that differ only in case are rejected, since their files would collide`() {
+        val apps = listOf(
+            app("Order", appPermission("Order", permission("read")), "r" to """["read"]"""),
+            app("order", appPermission("order", permission("write")), "w" to """["write"]"""),
+        )
+        val rejection = convert(source(apps = apps)).report.rejections.single()
+        rejection.kind.assert().isEqualTo(RejectionKind.DUPLICATE_ID)
+        rejection.location.assert().isEqualTo("app:order")
+        val tenants = convert(
+            source(listOf("a" to policy("a", tenantId = "Acme"), "b" to policy("b", tenantId = "acme"))),
+            Partition.BY_OWNER,
+        ).report.rejections.single()
+        tenants.location.assert().isEqualTo("policy:b")
+    }
+
+    @Test
+    fun `an ALLOW on method star, which matched no request in 7x, is rejected rather than widened`() {
+        val action = """{"path":{"pattern":"/orders/**","method":"*"}}"""
+        val conversion = convert(source(listOf("p" to policy("p", statements = listOf(statement(action))))))
+        conversion.documents.assert().isEmpty()
+        conversion.report.rejections.map { it.location }.assert().contains(
+            "policy:p#$.statements[0].action.path.method"
+        )
+    }
+
+    @Test
     fun `grants of an app without an app permission are dropped with a warning`() {
         val conversion = convert(source(apps = listOf(app("ghost", null, "admin" to """["*"]"""))))
         conversion.report.rejections.assert().isEmpty()
@@ -301,7 +340,7 @@ class ConverterTest {
     }
 
     @Test
-    fun `condition shapes of D1 to D3 and C1a and C1c are reported even while conditions are rejected`() {
+    fun `condition shapes of D1 to D3 and C1a and C1c are reported with their location`() {
         val report = convert(
             source(
                 listOf(
@@ -310,7 +349,7 @@ class ConverterTest {
                         condition = """{"authenticated":{}}""",
                         statements = listOf(
                             statement(condition = """{"bool":{"and":[{"inRole":{"value":"admin","negate":true}}]}}""", effect = "deny"),
-                            statement(condition = """{"eq":{"part":"request.attributes.owner","value":""}}"""),
+                            statement(condition = """{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}"""),
                             statement(condition = """{"regular":{"part":"request.path","pattern":"^/a$"}}"""),
                             statement(condition = """{"spel":{"value":"true"}}"""),
                         ),
@@ -323,9 +362,13 @@ class ConverterTest {
         report.semanticChanges.single { it.change == "D1" }.shape.assert().contains("ALLOW direction")
         changes.getValue("D2").single().assert().isEqualTo("policy:p#$.statements[1].condition.eq")
         changes.getValue("D3").single().assert().isEqualTo("policy:p#$.statements[2].condition.regular")
-        changes.getValue(
-            "C1a"
-        ).assert().containsExactlyInAnyOrder("policy:p#$.statements[2]", "policy:p#$.statements[3]")
+        // A template, a regular expression and an expression can each fail in 7.x.
+        changes.getValue("C1a").assert()
+            .containsExactlyInAnyOrder(
+                "policy:p#$.statements[1]",
+                "policy:p#$.statements[2]",
+                "policy:p#$.statements[3]"
+            )
         changes.getValue("C1c").single().assert().isEqualTo("policy:p#$.condition")
     }
 

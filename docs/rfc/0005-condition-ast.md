@@ -479,6 +479,21 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 其余按 §7.1 的 part 对照表），`key` 引用的属性不存在时与 7.x 相同：落进同一个空值桶。规则仍由 `RateLimitRuleProvider` 提供、由 `RateLimitingAuthorization` 执行（第 5 阶段成为义务）。
 `schema/rate-limit-rule.schema.json` 随之更新。
 
+> **2026-10-26 实现说明（PR-6，#1069）**：
+>
+> - **方向。** 每个条件都按方向翻译：语句是 DENY，或者是限流规则，就从"DENY 方向"出发；每个 `negate` 翻转一次。在 ALLOW 方向，翻译只许比 7.x 窄；在 DENY 方向只许比 7.x 宽；
+>   做不到就拒绝并报告位置。所以翻译永远不会放行 7.x 拒绝的请求。策略级条件（含应用条件）在 DENY、ALLOW 两个方向下翻译结果不同时，下推到每条语句。
+> - **不存在的属性。** 7.x 把不存在的 part 读成 `""`，把匿名主体的 id 读成 `(0)`。转换时直接在这个值上求 7.x 的谓词，为真就加上 `not(exists)`。
+>   这样不存在的情形精确翻译，`eq` 的值为 `""` 不再是差异。
+> - **大小写。** 8.0 的 `ignoreCase` 只折叠 ASCII。7.x 的 `equals`/`startsWith` 带 `ignoreCase`，以及 `regular`（Java 的 `CASE_INSENSITIVE`）还会折叠其他字符，
+>   例如 U+212A KELVIN SIGN 等于 `k`，这一点由一致性测试发现。因此值里含字母时：ALLOW 方向按收窄处理并记录 `ASCII-CASE`，DENY 方向拒绝。
+> - **`regular`。** `^字面量.*` 只在 DENY 方向、且不含字母时翻译成 `prefix`：`.*` 不匹配行终止符，而 `prefix` 匹配。
+> - **`eq` 的模板值。** ALLOW 方向按 D2 收窄；DENY 方向把 7.x 读法的情形（不存在等于空串、匿名主体的 `(0)`）加回，保持精确，不让 DENY 变窄。
+> - **路径条件。** `path` 条件（part 为 `request.path`）在语句的动作为 `all` 时成为语句的资源。如果其余条件读路径变量，就拒绝：7.x 的路径条件不捕获变量，移成资源后会多匹配。
+> - **仍然拒绝的。** `request.remoteIp` 的字符串比较（改用 `cidr`）、`contains`、动作中的路径模板（主体 id 含模式字符时 8.0 会多匹配），以及 `spel`、`ognl` 和自定义匹配器。
+> - **限流规则。** 按 DENY 方向翻译，写进 `rate-limits.json`，由 RFC 0006 PR-5 放进平台文档。
+> - **一致性测试。** `ConditionTranslatorTest` 在语料的每一行上，用随机与固定的对抗输入同时求 7.x 匹配器和翻译后的 AST：标为相同的行逐例相同，其余各行按方向不放宽。
+
 ### 7.4 转换报告新增的内容
 
 每种 7.x 匹配器类型的数量、翻译成功数、拒绝数和拒绝位置；拒绝的 OGNL/SpEL 表达式原文（只在本地报告里）；每条语句翻译后的节点数和成本分布（用来校准 §3.5 的上限）；
@@ -557,7 +572,7 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 | PR-3 | `feat(engine): match actions and resources without Spring` | §5.1、§5.2：`Action`/`Resource` 模式、`HttpPathPattern`；与 `PathPattern` 的对照测试（`cosec-core`） | PR-1 | **能** |
 | PR-4 | `feat(engine): compile statements and index candidates` | §6：`CompiledStatement`、索引、捕获结果、引擎接入；I1、I2；`EngineBenchmark` 的新参数 | PR-2、PR-3；RFC 0004 PR-2 | RFC 0004 PR-2 合入后 |
 | PR-5 | `feat(openapi): generate route maps and service actions` | §5.3：路由映射生成、宿主侧加载与查找、生成器改为 `service:verb`；§5.4 | PR-3 | **能** |
-| PR-6 | `feat(migrate): translate 7.x matchers into the condition AST`（**2026-10-26 改动**：不做 `legacy` 节点，自定义条件匹配器转换时拒绝；见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | §7 全部，包括限流规则；`legacy` 节点（Q2）；报告 | PR-4；RFC 0004 PR-5 | RFC 0004 PR-5 合入后 |
+| PR-6 | `feat(migrate): translate 7.x matchers into the condition AST`（打开中，#1069）（**2026-10-26 改动**：不做 `legacy` 节点，自定义条件匹配器转换时拒绝；见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | §7 全部，包括限流规则；`legacy` 节点（Q2）；报告 | PR-4；RFC 0004 PR-5 | RFC 0004 PR-5 合入后 |
 | ~~PR-7~~ | ~~`test: classify AST migration differences in replay`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | D1–D3、正例与反例、翻译对照语料 | PR-6；RFC 0004 PR-6 | RFC 0004 PR-6 合入后 |
 | — | ~~**门槛 B**~~ **已取消（2026-10-26）** | 维护者本地回放 | PR-7；RFC 0004 PR-7（基准是切换后的实现） | — |
 | ~~PR-8~~ | ~~`refactor!: evaluate compiled conditions and actions`~~ **并入 RFC 0008 的切换 PR（2026-10-26）**，100 % 吞吐要求不变 | 切换（前提：§9.3 对 7.0 的 100 % 吞吐要求已满足，否则停止并交回维护者）：文档 `schema: 3`（AST），schema 标记更新（RFC 0004 §8.5）；starter 装配路由映射；`AuthorizationChecker` 的新签名；文档；JMH | 门槛 B | **不能** |

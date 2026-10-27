@@ -120,7 +120,16 @@ class RedisMigrationTest {
             policy(
                 "g",
                 "global",
-                listOf(statement("\"/health\""), statement("\"/admin/**\"", "deny"))
+                listOf(
+                    statement("\"/health\""),
+                    statement("\"/admin/**\"", "deny"),
+                    statement("\"/me/**\"", condition = """{"authenticated":{}}"""),
+                    statement(
+                        "\"/orders/**\"",
+                        "deny",
+                        condition = """{"eq":{"part":"context.principal.id","value":"mallory"}}"""
+                    ),
+                ),
             ).encodeToByteArray()
         )
         policies.put(
@@ -135,11 +144,20 @@ class RedisMigrationTest {
         runtime.createGlobalPolicyIndex(
             CoSecCacheSpecs.globalPolicyIndex(keyPrefix)
         ).add(GlobalPolicyIndexCache.CACHE_KEY, setOf("g"))
-        raw(
-            CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME
-        ).put("order", appPermission("order", permission("read", "\"/orders/**\"")).encodeToByteArray())
+        val audit = """{"bool":{"and":[{"path":{"part":"request.path","pattern":"/audit/**"}},{"inRole":{"value":"auditor"}}]}}"""
+        val expired = """{"time":{"notAfter":"2020-01-01T00:00:00Z"}}"""
+        raw(CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME).put(
+            "order",
+            appPermission(
+                "order",
+                permission("read", "\"/orders/**\""),
+                permission("audit", condition = audit),
+                permission("expired", "\"/expired/**\"", condition = expired),
+                condition = """{"authenticated":{}}""",
+            ).encodeToByteArray(),
+        )
         val grants = raw(CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME)
-        grants.put("order:clerk", """["read"]""".encodeToByteArray())
+        grants.put("order:clerk", """["read","audit","expired"]""".encodeToByteArray())
         grants.put("order:admin@team", """["*"]""".encodeToByteArray())
     }
 
@@ -258,6 +276,8 @@ class RedisMigrationTest {
                 Principals(
                     mapOf(
                         "clerk" to mapOf(SpaceId.DEFAULT to setOf("clerk")),
+                        "mallory" to mapOf(SpaceId.DEFAULT to setOf("clerk")),
+                        "auditor" to mapOf(SpaceId.DEFAULT to setOf("clerk", "auditor")),
                         "admin" to mapOf(SpaceId("team") to setOf("admin")),
                     ),
                 ),
@@ -276,7 +296,112 @@ class RedisMigrationTest {
             // `*` granted to admin in space team only.
             status("POST", "/orders/1", "admin", "team").assert().isEqualTo(200)
             status("POST", "/orders/1", "admin").assert().isEqualTo(403)
+            // Conditions: authenticated, a principal's DENY over a grant, a path condition turned into the resource
+            // beside an inRole read in the requested space, and a time window that has closed.
+            status("GET", "/me/1", "clerk").assert().isEqualTo(200)
+            status("GET", "/me/1", null).assert().isEqualTo(401)
+            status("GET", "/orders/1", "mallory").assert().isEqualTo(403)
+            status("GET", "/audit/1", "clerk").assert().isEqualTo(403)
+            status("GET", "/audit/1", "auditor").assert().isEqualTo(200)
+            status("GET", "/expired/1", "clerk").assert().isEqualTo(403)
         }
+    }
+
+    @Test
+    fun `resume finishes a partial publish and refuses a document that differs`() {
+        write7x()
+        val out = temp.resolve("converted")
+        run(
+            "convert",
+            "--from-redis",
+            REDIS,
+            "--key-prefix",
+            keyPrefix,
+            "--out",
+            out.toString()
+        ).first.assert().isEqualTo(MigrateMain.OK)
+        val documents = ConvertedDirectory.read(out)
+        val cache = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+        // A first run that stopped after the platform document.
+        DocumentPublisher(cache).publish(mapOf(SnapshotKey.Platform to documents.getValue(SnapshotKey.Platform)))
+        val (refused, refusedOutput) = run(
+            "publish",
+            "--to-redis",
+            REDIS,
+            "--key-prefix",
+            keyPrefix,
+            "--in",
+            out.toString()
+        )
+        refused.assert().isEqualTo(MigrateMain.FAILED)
+        refusedOutput.assert().contains("--resume")
+        val (resumed, resumedOutput) = run(
+            "publish",
+            "--to-redis",
+            REDIS,
+            "--key-prefix",
+            keyPrefix,
+            "--in",
+            out.toString(),
+            "--resume"
+        )
+        resumed.assert().describedAs(resumedOutput).isEqualTo(MigrateMain.OK)
+        resumedOutput.assert().contains("Already published, identical: platform").contains("Published app:order")
+        // Everything is published now: a resume writes nothing.
+        DocumentPublisher(cache).publish(documents, resume = true).let {
+            it.written.assert().isEmpty()
+            it.skipped.assert().containsExactly(SnapshotKey.Platform, SnapshotKey.App("order"))
+        }
+    }
+
+    @Test
+    fun `resume refuses a document in Redis that is not the converted one`() {
+        write7x()
+        val out = temp.resolve("converted")
+        run(
+            "convert",
+            "--from-redis",
+            REDIS,
+            "--key-prefix",
+            keyPrefix,
+            "--out",
+            out.toString()
+        ).first.assert().isEqualTo(MigrateMain.OK)
+        run(
+            "publish",
+            "--to-redis",
+            REDIS,
+            "--key-prefix",
+            keyPrefix,
+            "--in",
+            out.toString()
+        ).first.assert().isEqualTo(MigrateMain.OK)
+        val other = temp.resolve("other")
+        val newer = Converter().convert(
+            Fixtures7x.source(listOf("x" to policy("x"))),
+            ConvertOptions(publishedAt = java.time.Instant.parse("2030-01-01T00:00:00Z")),
+        )
+        ConvertedDirectory.write(newer, other)
+        val (differ, differOutput) = run(
+            "publish",
+            "--to-redis",
+            REDIS,
+            "--key-prefix",
+            keyPrefix,
+            "--in",
+            other.toString(),
+            "--resume"
+        )
+        differ.assert().isEqualTo(MigrateMain.FAILED)
+        differOutput.assert().contains("differ from the converted ones").contains("Nothing was written")
+    }
+
+    @Test
+    fun `a failure partway reports exactly what was written`() {
+        val error = PublishException("Writing app:b failed: down.", listOf(SnapshotKey.Platform))
+        error.message.assert().contains("Written before it stopped: [platform]").contains("--resume")
+        DocumentsExistException(listOf(SnapshotKey.App("b")), listOf(SnapshotKey.Platform)).written.assert()
+            .containsExactly(SnapshotKey.Platform)
     }
 
     @Test

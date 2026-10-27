@@ -37,7 +37,8 @@ import kotlin.system.exitProcess
  * convert --from-redis redis://localhost:6379 [--key-prefix cosec] --out ./converted
  *         [--partition platform|by-owner] [--root-enabled] [--root-id cosec] [--root-expires-at 2026-12-31T00:00:00Z]
  * convert --from-files ./export --out ./converted [...]
- * publish --to-redis redis://localhost:6379 [--key-prefix cosec] --in ./converted
+ *         [--rate-limit-rules ./rate-limit.json]
+ * publish --to-redis redis://localhost:6379 [--key-prefix cosec] --in ./converted [--resume]
  * ```
  *
  * Exit codes: 0 done; 1 the data was rejected or publishing failed (see `report.json` and the console); 2 usage.
@@ -52,7 +53,8 @@ object MigrateMain {
         Usage:
           convert (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
                   [--partition platform|by-owner] [--root-enabled] [--root-id <id>] [--root-expires-at <instant>]
-          publish --to-redis <uri> [--key-prefix <p>] --in <dir>
+                  [--rate-limit-rules <file>]
+          publish --to-redis <uri> [--key-prefix <p>] --in <dir> [--resume]
     """.trimIndent()
 
     @JvmStatic
@@ -102,8 +104,9 @@ object MigrateMain {
         companion object {
             private val VALUED = setOf(
                 "from-redis", "from-files", "key-prefix", "out", "partition", "root-id", "root-expires-at", "to-redis", "in",
+                "rate-limit-rules",
             )
-            private val FLAGS = setOf("root-enabled")
+            private val FLAGS = setOf("root-enabled", "resume")
 
             fun parse(args: List<String>): Options {
                 val values = HashMap<String, String>()
@@ -138,11 +141,12 @@ object MigrateMain {
         val partition = partitionOf(options)
         val root = rootOf(options)
         val outDirectory = Path.of(options.required("out"))
-        val source = if (fromRedis != null) {
+        val read = if (fromRedis != null) {
             readRedis(fromRedis, options.value("key-prefix") ?: CoSec.COSEC)
         } else {
             ExportDirectory.read(Path.of(fromFiles!!))
         }
+        val source = options.value("rate-limit-rules")?.let { file -> read.withRateLimitRules(ExportDirectory.rateLimitRules(Path.of(file))) } ?: read
         val conversion = Converter().convert(source, ConvertOptions(partition, root))
         ConvertedDirectory.write(conversion, outDirectory)
         summarize(conversion.report, out)
@@ -228,8 +232,9 @@ object MigrateMain {
         RedisBackend.standalone(redisUri).use { backend ->
             CacheRuntime.builder().backend(backend).build().use { runtime ->
                 val cache = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
-                val written = DocumentPublisher(cache).publish(documents)
-                written.forEach { out.println("Published $it") }
+                val result = DocumentPublisher(cache).publish(documents, resume = options.flag("resume"))
+                result.written.forEach { out.println("Published $it") }
+                result.skipped.forEach { out.println("Already published, identical: $it") }
             }
         }
         out.println("Published ${documents.size} document(s). The 7.x data is untouched.")
