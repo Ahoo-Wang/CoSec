@@ -73,8 +73,12 @@ class KafkaAuditListenerTest {
 
     private val permit = Decision.Permit(StatementRef.Policy(PolicyId("p"), 0, "s", BindingRef.Attached(PolicyId("p"))))
 
-    private fun evaluate(listener: KafkaAuditListener, decision: Decision = permit): Outcome {
-        val listeners = DecisionListeners(listOf(listener))
+    private fun evaluate(
+        listener: KafkaAuditListener,
+        decision: Decision = permit,
+        requiredTimeout: kotlin.time.Duration = kotlin.time.Duration.parse("1s"),
+    ): Outcome {
+        val listeners = DecisionListeners(listOf(listener), requiredTimeout = requiredTimeout)
         opened += listeners
         opened += AutoCloseable { listener.destroy() }
         val engine = object : FlatEngine {
@@ -136,6 +140,33 @@ class KafkaAuditListenerTest {
         }
         evaluate(KafkaAuditListener(kafka, "audit")).status.assert().isEqualTo(200)
         sent.get(5, java.util.concurrent.TimeUnit.SECONDS)
+    }
+
+    /** Review: a broker that hangs never piles REQUIRED sends up without bound; a full queue fails at once. */
+    @Test
+    fun aFullSendQueueFailsTheRequiredDeliveryAtOnce() {
+        val release = java.util.concurrent.CountDownLatch(1)
+        val sends = java.util.concurrent.atomic.AtomicInteger()
+        val kafka = mockk<KafkaOperations<String, String>> {
+            every { send(any<String>(), any<String>(), any<String>()) } answers {
+                sends.incrementAndGet()
+                release.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                CompletableFuture.completedFuture(mockk<SendResult<String, String>>())
+            }
+        }
+        val listener = KafkaAuditListener(kafka, "audit", Delivery.REQUIRED, queueCapacity = 1)
+        val timeout = kotlin.time.Duration.parse("500ms")
+        // The first send blocks the sender thread; the second waits in the queue of one.
+        evaluate(listener, requiredTimeout = timeout).status.assert().isEqualTo(503)
+        evaluate(listener, requiredTimeout = timeout).status.assert().isEqualTo(503)
+        val started = System.nanoTime()
+        evaluate(listener, requiredTimeout = timeout).status.assert().isEqualTo(503)
+        // The third did not wait for its timeout: the queue was full.
+        (System.nanoTime() - started).assert().isLessThan(timeout.inWholeNanoseconds / 2)
+        release.countDown()
+        // The cancelled, queued send is dropped, not made.
+        Thread.sleep(300)
+        sends.get().assert().isEqualTo(1)
     }
 
     @Test

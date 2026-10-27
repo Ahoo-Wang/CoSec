@@ -134,6 +134,15 @@ class BreakGlassAndShadowTest {
         evaluate(breakGlass, Recording("metrics", Delivery.BEST_EFFORT)).status.assert().isEqualTo(503)
     }
 
+    /** Review R1: a 7.x audit sink cannot acknowledge a write, so it never counts as the REQUIRED audit. */
+    @Test
+    fun aBreakGlassPermitAuditedOnlyByASinkIs503() {
+        val sink = me.ahoo.cosec.api.audit.AuditEventSink { }
+        val audit = me.ahoo.cosec.runtime.audit.AuditListener.of(sink, "audit")
+        audit.delivery.assert().isEqualTo(Delivery.BEST_EFFORT)
+        evaluate(breakGlass, audit).status.assert().isEqualTo(503)
+    }
+
     @Test
     fun aBreakGlassPermitWrittenToARequiredListenerProceeds() {
         val audit = Recording("audit", Delivery.REQUIRED)

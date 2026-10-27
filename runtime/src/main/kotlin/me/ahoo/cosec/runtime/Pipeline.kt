@@ -63,6 +63,7 @@ import java.time.Clock
 import java.util.concurrent.TimeoutException
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.nanoseconds
 import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 private val log = KotlinLogging.logger {}
@@ -130,11 +131,10 @@ class Pipeline(
     ): Outcome = try {
         // A ...OrNull timeout, never withTimeout: its TimeoutCancellationException would look like an external
         // cancellation below and vanish instead of answering 503 (RFC 0006 K13). Lazy: a request that never
-        // suspends arms no timer. REQUIRED listeners share the deadline (§9.4.2).
-        withLazyTimeoutOrNull(options.timeout) {
-            val outcome = decide(facts, requestId, traceId, record)
-            if (record == null) outcome else required(facts, requestId, traceId, outcome, record)
-        } ?: StatusMapping.unavailable(requestId, Unavailability.DeadlineExceeded, traceId)
+        // suspends arms no timer.
+        val decided = withLazyTimeoutOrNull(options.timeout) { decide(facts, requestId, traceId, record) }
+            ?: StatusMapping.unavailable(requestId, Unavailability.DeadlineExceeded, traceId)
+        if (record == null) decided else required(facts, requestId, traceId, decided, record)
     } catch (e: CancellationException) {
         if (!currentCoroutineContext().isActive) {
             throw e
@@ -150,6 +150,11 @@ class Pipeline(
     /**
      * The REQUIRED listeners (§9.4.2): they see the outcome so far, and a failure turns only a permit into 503; any
      * other outcome keeps its status, and the failure is logged and counted.
+     *
+     * A permit's delivery shares the pipeline deadline: a store that does not answer in what remains of it is a 503,
+     * never a request held past `cosec.pipeline.timeout`. Any other outcome is not held to it: its status cannot change,
+     * so a slow listener only costs time, bounded by each listener's own timeout (review R2: a slow audit made a 401 a
+     * 503 before).
      */
     private suspend fun required(
         facts: HttpFacts,
@@ -162,7 +167,13 @@ class Pipeline(
             return outcome
         }
         val event = record.event(eventId(), requestId, facts, outcome)
-        val failed = listeners.required(event)
+        val failed = if (outcome.proceed) {
+            val remaining = options.timeout - (System.nanoTime() - record.startNanos).nanoseconds
+            val delivered = if (remaining.isPositive()) withLazyTimeoutOrNull(remaining) { listeners.required(event) } else null
+            delivered ?: return StatusMapping.unavailable(requestId, Unavailability.DeadlineExceeded, traceId)
+        } else {
+            listeners.required(event)
+        }
         if (failed.isEmpty()) {
             return outcome
         }
@@ -540,8 +551,13 @@ class Pipeline(
     private fun unavailable(requestId: String, traceId: String?, cause: Cause): Outcome =
         StatusMapping.unavailable(requestId, Unavailability.Indeterminate(cause), traceId)
 
+    /**
+     * The client's `CoSec-Request-Id` when it is a plain id ([RequestIds.isAcceptable]), else a new one. The id is
+     * echoed into the response, logs and audit: an arbitrary value would let a client forge log lines or pose as
+     * another request's correlation id.
+     */
     private fun requestId(facts: HttpFacts): String {
-        val given = facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull { it.isNotBlank() }
+        val given = facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull(RequestIds::isAcceptable)
         return given ?: idGenerator?.generateAsString() ?: RandomRequestIds.next()
     }
 

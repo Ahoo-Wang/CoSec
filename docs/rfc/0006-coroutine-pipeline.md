@@ -572,7 +572,8 @@ CoSec-Request-Id: 0TEC7Hw00001zR0
 - **响应体不泄露细节**：策略 id、语句名、绑定、`Cause` 的类型与内容、异常信息与原因链、外部属性的名称与值都不出现在响应中。细节只进审计
   （`DecisionEvent`，§9.2）与 `explain`，以 `requestId` 关联。
 - **`requestId` 来自客户端**：它可以由请求头 `CoSec-Request-Id` 给出，所以编码器按 RFC 8259 转义 `"`、`\` 与全部控制字符，并把非 ASCII 字符写成 `\uXXXX`；
-  响应体永远是合法的 JSON，客户端给的值不能注入成员。
+  响应体永远是合法的 JSON，客户端给的值不能注入成员。2026-10-26 修订（运行时第 1 轮审查）：Pipeline 只接受形如 `[A-Za-z0-9._-]{1,64}` 的
+  `CoSec-Request-Id`（`RequestIds.isAcceptable`），其余一律换成新生成的 id：这个值会回写到响应头、日志与审计，任意的值能伪造日志行，或者冒充别的请求的关联 id。
 - **一个编码器**：problem 是 `Outcome` 的一部分，由 `StatusMapping` 构造（`Outcome.problem`，放行时为 null）。`runtime/` 提供唯一的手写编码器
   （`ProblemEncoder`，输出 `ByteArray`），三个适配器只写它的结果。这条路径不用 Jackson，也不用 Spring 的 `ProblemDetail`：没有反射，不需要 AOT 提示
   （RFC 0001 §3.10），也不会因为宿主的 `ObjectMapper` 配置而改变字节。
@@ -833,6 +834,8 @@ class DecisionEvent(
 
 - 监听器在注册时声明。内置的只有 `KafkaAuditListener` 可以配置为 REQUIRED（`cosec.audit.kafka.delivery=required`）：它 `await` broker 的确认，
   建议配 `acks=all`。日志审计（`LoggingAuditListener`）只能是 BEST_EFFORT：日志框架的异步 appender 会静默丢弃，声明为 REQUIRED 是假的保证。
+- 2026-10-26 修订（第 1 轮审查 R1）：`AuditListener.of(sink)` 包装的 7.x `AuditEventSink` 也只能是 BEST_EFFORT：`publish` 在写入之前返回、不报告失败，
+  作为 REQUIRED 它永远"成功"，break-glass 的 Permit 就会在没有审计记录的情况下放行。`AuditListener` 不再接受 `delivery` 参数。
 - 应用可以实现自己的 REQUIRED 监听器（例如写数据库），契约同 §7.7：不阻塞调用线程，并且应当幂等（以 `event.id` 去重），因为超时后写入可能已经成功。
 
 #### 9.4.2 失败时
@@ -849,7 +852,7 @@ class DecisionEvent(
   AGENTS.md 的"denied requests never use up quotas"指的是**授权**拒绝（引擎的 Deny），在本阶段由类型保证（§8.2）；审计失败是执法之后的故障，
   多扣许可的方向是更严，不会放行。`wiki/policies/rate-limiting.md` 写明这一例外。另一种顺序（先审计后义务）会让审计记下 `ALLOW` 而请求实际是 429，
   或者为 429 再写第二条事件，两者都更糟。
-- REQUIRED 失败与整体超时共用 `cosec.pipeline.timeout`：审计后端的长时间卡顿最终表现为 503，而不是挂住请求。
+- REQUIRED 失败与整体超时共用 `cosec.pipeline.timeout`：审计后端的长时间卡顿最终表现为 503，而不是挂住请求。2026-10-26 修订（第 1 轮审查 R2）：只对 Permit 如此，与上表一致；其余结果的 REQUIRED 投递不受整体超时约束，只受每个监听器的 `cosec.audit.required.timeout`，超时记 ERROR 日志、计入 `cosec.audit.required.failures`，状态码不变（一次缓慢的审计曾把 401 变成 503）。
 
 #### 9.4.3 break-glass
 

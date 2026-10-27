@@ -538,6 +538,10 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 **S1 是不可回退点。** S1 合入后，starter 不再能装配 7.x 路径，`main` 上没有开关或属性可以回到它；回退的唯一办法是 revert S1。所以 §3.9 第 1–5 条的全部证据
 （一致性套件、性质、变异体、预算）在 S1 之前齐备，S2–S4 只需要 `check` 通过。
 
+**S1 必须装配真实的 `RevocationReader`（2026-10-26 修订，运行时第 1 轮审查）。** `TokenAuthenticator` 的默认 `RevocationReader.NONE` 什么也不吊销：
+忘记装配它的 starter 会静默地关掉吊销，而一切测试照常通过。S1 装配 CoCache 的读接口（`CoCacheTokenStore.reader`），并加一个经 starter 的测试：吊销的
+token（按 token 与按主体）得到 401 `token-revoked`。
+
 **S1 与 S5 之间文档滞后于代码。** AGENTS.md 要求事实与代码在同一个 PR 中更新；S1–S4 对 S5 列出的页面暂不执行这一条，S5 一次写完。这样做的理由：
 `deploy-wiki.yml` 从 `main` 发布，S5 之前线上文档继续描述用户实际在用的 7.x，而 8.0 没有任何发布。S1–S4 让 S5 清单之外的文档出错时（例如 `pnpm build` 报出死链接），
 在同一个 PR 中修复。S5 在 S1 合入后即可开始写（文件与 S2–S4 不重叠），在 S4 之后合入，最终的删除清单以 S4 为准。RC 前清理（§4.6）的 PR 在 S5 之后。
