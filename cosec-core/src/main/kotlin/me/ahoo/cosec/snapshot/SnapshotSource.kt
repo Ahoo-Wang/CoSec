@@ -131,6 +131,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     private val metrics: SnapshotMetrics = GuardedSnapshotMetrics(metrics)
 
+    /** How long [close] waits for this source's threads; shorter only in tests of the timeout. */
+    internal var closeTimeout: Duration = CLOSE_TIMEOUT
+
     /** Set on the threads this source starts: [close] does not wait for the thread it runs on. */
     private val onOwnThread = ThreadLocal<Boolean>()
     private val ownsCompileExecutor = compileExecutor == null
@@ -343,7 +346,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     }
 
     /**
-     * Waits, at most [CLOSE_TIMEOUT], until the threads this source started have finished what was already queued on
+     * Waits, at most [closeTimeout], until the threads this source started have finished what was already queued on
      * them: once [close] returns, a closed source does no more work and leaves no thread behind. Without the wait, a
      * host that closes and replaces sources faster than queued work drains piles their threads up (RFC 0008 §3.5's
      * property stress reached the per-process thread limit). Not on one of those threads, which would wait for itself.
@@ -357,12 +360,12 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             add(housekeeping)
             if (ownsCompileExecutor) add(compileExecutor as ExecutorService)
         }
-        val deadline = System.nanoTime() + CLOSE_TIMEOUT.toNanos()
+        val deadline = System.nanoTime() + closeTimeout.toNanos()
         try {
             for (executor in owned) {
                 val remaining = (deadline - System.nanoTime()).coerceAtLeast(0)
                 if (!executor.awaitTermination(remaining, TimeUnit.NANOSECONDS)) {
-                    log.warn { "The snapshot source's threads did not finish within $CLOSE_TIMEOUT of closing." }
+                    log.warn { "The snapshot source's threads did not finish within $closeTimeout of closing." }
                     return
                 }
             }

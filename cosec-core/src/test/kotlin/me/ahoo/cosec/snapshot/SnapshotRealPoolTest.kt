@@ -139,7 +139,52 @@ class SnapshotRealPoolTest {
         closed.get(10, TimeUnit.SECONDS).assert().isLessThan(SnapshotSource.CLOSE_TIMEOUT)
     }
 
+    /** Work that outlives the close timeout: close logs it and returns, leaving the source's threads to finish. */
+    @Test
+    fun closeGivesUpAfterItsTimeout() {
+        val compiler = FakeCompiler().apply { gate = CountDownLatch(1) }
+        val source = testSource(store, compiler, compileExecutor = null)
+        source.closeTimeout = Duration.ofMillis(SHORT_TIMEOUT_MILLIS)
+        source.load()
+        await { compiler.threads.isNotEmpty() }
+        source.close()
+        source.threadsTerminated.assert().isFalse()
+        compiler.gate!!.countDown()
+        await { source.threadsTerminated }
+    }
+
+    /** An interrupted closer stops waiting at once and keeps its interrupt flag. */
+    @Test
+    fun anInterruptedCloseKeepsTheInterrupt() {
+        val compiler = FakeCompiler().apply { gate = CountDownLatch(1) }
+        val source = testSource(store, compiler, compileExecutor = null)
+        source.load()
+        await { compiler.threads.isNotEmpty() }
+        Thread.currentThread().interrupt()
+        source.close()
+        Thread.interrupted().assert().isTrue()
+        source.threadsTerminated.assert().isFalse()
+        compiler.gate!!.countDown()
+        await { source.threadsTerminated }
+    }
+
+    /** With the compile pool and scheduler given to it, close waits only for the housekeeping it owns. */
+    @Test
+    fun closeWaitsOnlyForThePoolsItOwns() {
+        val scheduler = java.util.concurrent.ScheduledThreadPoolExecutor(1)
+        try {
+            val source = testSource(store, scheduler = scheduler)
+            source.load().get(10, TimeUnit.SECONDS)
+            source.close()
+            source.threadsTerminated.assert().isTrue()
+            scheduler.isShutdown.assert().isFalse()
+        } finally {
+            scheduler.shutdownNow()
+        }
+    }
+
     private companion object {
         const val CLOSE_SIGNAL_MILLIS = 300L
+        const val SHORT_TIMEOUT_MILLIS = 50L
     }
 }
