@@ -59,6 +59,8 @@ class CoCacheControlStoreTest {
         indexes = node.runtime.create(ControlCacheSpecs.revisionIndex(node.keyPrefix)),
         references = node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
         leases = node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
+        changes = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
+        stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
     )
 
     @Test
@@ -108,6 +110,8 @@ class CoCacheControlStoreTest {
                 node.runtime.create(ControlCacheSpecs.revisionIndex(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
+                node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
+                node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
                 { published += it },
             )
             store.putHead(key, null, document(1)).assert().isInstanceOf(HeadWrite.Written::class.java)

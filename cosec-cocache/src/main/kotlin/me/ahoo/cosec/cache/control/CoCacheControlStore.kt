@@ -25,6 +25,9 @@ import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
+import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.RevisionIndex
@@ -56,6 +59,8 @@ class CoCacheControlStore(
     private val indexes: Cache<SnapshotKey, RevisionIndex>,
     private val references: Cache<ReferenceKey, Set<SnapshotKey>>,
     private val leases: Cache<String, String>,
+    private val changes: Cache<ChangeId, ChangeRequest>,
+    private val stages: Cache<SnapshotKey, StageSlot>,
     /** Told after a head write, typically `RedisSnapshotDocumentStore.notifyChanged`, so this instance reloads at once. */
     private val onPublished: (SnapshotKey) -> Unit = {},
 ) : ControlStore {
@@ -117,6 +122,18 @@ class CoCacheControlStore(
         referrers,
         digest(SnapshotKeySetCodec, referrers)
     ) is Put.Written
+
+    override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
+        read(changes, id)?.let { (value, digest) -> Versioned(value, digest) }
+
+    override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean =
+        put(changes, change.id, expected, change, digest(ChangeRequestCacheCodec, change)) is Put.Written
+
+    override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? =
+        read(stages, key)?.let { (value, digest) -> Versioned(value, digest) }
+
+    override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean =
+        put(stages, key, expected, slot, digest(StageSlotCodec, slot)) is Put.Written
 
     override suspend fun acquireLease(name: String, holder: String, duration: Duration): Boolean {
         val result = leases.async().putIfMatch(name, null, holder, duration).await()
@@ -191,6 +208,8 @@ class CoCacheControlStore(
             indexes = runtime.create(ControlCacheSpecs.revisionIndex(keyPrefix)),
             references = runtime.create(ControlCacheSpecs.referenceIndex(keyPrefix)),
             leases = runtime.create(ControlCacheSpecs.lease(keyPrefix)),
+            changes = runtime.create(ControlCacheSpecs.changeRequest(keyPrefix)),
+            stages = runtime.create(ControlCacheSpecs.stage(keyPrefix)),
             onPublished = onPublished,
         )
     }
