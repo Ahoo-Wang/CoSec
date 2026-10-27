@@ -34,14 +34,16 @@ internal interface CandidateVisitor {
  * The applicable policies of a request (RFC 0004 §6.4 `bindingsFor`), in the candidate order of §6.3:
  *
  * 0. the blacklist rule;
- * 1. break-glass bindings of the principal, by binding id;
- * 2. platform `Anyone` bindings, then 3. tenant ones, by policy id;
- * 4. attachments in claim order, then principal bindings of the platform and the tenant, by binding id;
- * 5. role bindings of the app document, then of the tenant document: by the scope's roles in claim order, and within a
- *    role in document (grant) order.
+ * 1. platform `Anyone` bindings, then 2. tenant ones, by policy id;
+ * 3. attachments in claim order, then principal bindings of the platform and the tenant, by binding id;
+ * 4. role bindings of the app document, then of the tenant document: by the scope's roles in claim order, and within a
+ *    role in document (grant) order;
+ * 5. break-glass bindings of the principal, by binding id, last.
  *
  * The order never changes the decision, only which statement is reported when several match; without errors it is the
- * statement 7.x reports, as the 7.x layers are in this order. Visits allocate nothing: the arrays are the index's own.
+ * statement 7.x reports, as the 7.x layers are in this order. Break-glass comes last (review A2 of #1070): it bypasses a
+ * *missing* ALLOW (RFC 0004 §4.8), so it reports a permit only when nothing else permits, and a request another binding
+ * permits is never a use of break-glass, which would need a REQUIRED audit (RFC 0006 §9.4.3). Visits allocate nothing: the arrays are the index's own.
  * An anonymous principal has no principal bindings, break-glass bindings or attachments.
  */
 internal object CandidateOrder {
@@ -54,9 +56,6 @@ internal object CandidateOrder {
         val subject = request.request.subject
         val tenant = request.scope.tenant.value
         val principal = if (subject.authenticated) subject.id else null
-        if (principal != null && visit(platform.breakGlass(tenant, principal), request, platform, visitor)) {
-            return true
-        }
         if (visit(platform.anyone, request, platform, visitor)) {
             return true
         }
@@ -70,7 +69,10 @@ internal object CandidateOrder {
         if (app != null && roles(app, request, platform, visitor)) {
             return true
         }
-        return tenantDocument != null && roles(tenantDocument, request, platform, visitor)
+        if (tenantDocument != null && roles(tenantDocument, request, platform, visitor)) {
+            return true
+        }
+        return principal != null && visit(platform.breakGlass(tenant, principal), request, platform, visitor)
     }
 
     /** Attachments, then the principal bindings of the platform and the tenant. */

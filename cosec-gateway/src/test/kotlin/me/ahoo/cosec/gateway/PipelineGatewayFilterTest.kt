@@ -79,12 +79,19 @@ class PipelineGatewayFilterTest {
         )
         val route = Route.async().id("orders").uri(URI.create("http://orders")).predicate { true }.build()
         exchange.attributes[GATEWAY_ROUTE_ATTR] = route
-        var downstream: String? = null
+        var downstream: List<String>? = null
         PipelineGatewayFilter(pipeline).filter(exchange) { next ->
-            downstream = next.request.headers.getFirst("CoSec-Request-Id")
+            downstream = next.request.headers["CoSec-Request-Id"]
             Mono.empty()
         }.block(Duration.ofSeconds(5))
-        downstream.assert().isEqualTo("r-1")
+        downstream.assert().isEqualTo(listOf("r-1"))
+        // An id the pipeline does not accept is replaced, and the backend sees only the replacement.
+        val forged = MockServerWebExchange.from(MockServerHttpRequest.get("/orders").header("CoSec-Request-Id", "a b"))
+        PipelineGatewayFilter(pipeline).filter(forged) { next ->
+            downstream = next.request.headers["CoSec-Request-Id"]
+            Mono.empty()
+        }.block(Duration.ofSeconds(5))
+        downstream!!.single().assert().isNotEqualTo("a b")
         PipelineGatewayFilterProbe.read(PipelineGatewayFilter(pipeline), exchange).assert().isEqualTo("orders")
     }
 }

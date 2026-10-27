@@ -75,9 +75,11 @@ class TokenAuthenticatorTest {
         principal: () -> TokenPrincipal,
         revocations: RevocationReader = RevocationReader.NONE,
         token: String? = "t",
+        skew: java.time.Duration = TokenAuthenticator.DEFAULT_REVOCATION_SKEW,
     ): AuthnResult = TokenAuthenticator(
         Verifier(mapOf("t" to principal)),
-        revocations
+        revocations,
+        revocationSkew = skew,
     ).authenticate(Credentials(token, null))
 
     private suspend fun failure(block: suspend () -> Unit): IllegalStateException = try {
@@ -170,9 +172,27 @@ class TokenAuthenticatorTest {
             .assert().isEqualTo(AuthnResult.RejectReason.TOKEN_REVOKED)
         authenticate({ token(inTenant("acme"), issuedAt = null) }, revoked).reason()
             .assert().isEqualTo(AuthnResult.RejectReason.TOKEN_REVOKED)
-        authenticate({ token(inTenant("acme"), issuedAt = issuedAt.plusSeconds(2)) }, revoked)
+        // Issued after the revocation, beyond the skew allowance.
+        authenticate({ token(inTenant("acme"), issuedAt = issuedAt.plusSeconds(7)) }, revoked)
             .assert().isInstanceOf(AuthnResult.Authenticated::class.java)
         authenticate({ token(inTenant("other")) }, revoked).assert().isInstanceOf(AuthnResult.Authenticated::class.java)
+    }
+
+    /**
+     * Review: an issuer whose clock runs ahead stamps a token issued before the revocation with a later `iat`; within
+     * the skew allowance it is revoked all the same.
+     */
+    @Test
+    fun aTokenStampedWithinTheSkewOfARevocationIsRejected() = runTest {
+        val alice = TenantId("acme") to PrincipalId("alice")
+        val revoked = Revocations(subjects = mapOf(alice to issuedAt))
+        val ahead = { token(inTenant("acme"), issuedAt = issuedAt.plusSeconds(3)) }
+        authenticate(ahead, revoked).reason().assert().isEqualTo(AuthnResult.RejectReason.TOKEN_REVOKED)
+        authenticate(ahead, revoked, skew = java.time.Duration.ZERO)
+            .assert().isInstanceOf(AuthnResult.Authenticated::class.java)
+        org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
+            TokenAuthenticator(Verifier(emptyMap()), revocationSkew = java.time.Duration.ofSeconds(-1))
+        }
     }
 
     /** Anything else the verifier or the reader throws reaches the pipeline, which answers 503. */
