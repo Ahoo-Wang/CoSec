@@ -19,6 +19,9 @@ import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.BlacklistKind
 import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
+import me.ahoo.cosec.runtime.event.DecisionEvent
+import me.ahoo.cosec.runtime.event.DecisionListener
+import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.SnapshotOptions
@@ -44,14 +47,16 @@ import kotlin.coroutines.startCoroutine
  * permission policies granted to `viewer` (twenty) and `admin` (`*`). Scenarios: `global`, a global ALLOW permits;
  * `role`, the `*` grant permits; `none`, nothing does (403); `anonymous`, no token, a global ALLOW permits. With the
  * in-memory blacklist in stage A (RFC 0006 §5.4.4): `blacklist`, the `global` request, which it does not name;
- * `blocked`, the same request from a blocked address (403). `rate-limited` joins with PR-5.
+ * `blocked`, the same request from a blocked address (403). With one BEST_EFFORT decision listener that does nothing
+ * (RFC 0006 §9.3): `listener`, the `global` request, so the cost is the event and its queue. `rate-limited` joins with
+ * PR-5.
  *
  * Each operation starts the request as an adapter would and finishes it on the calling thread: a warm request never
  * suspends (`SliceBlockHoundTest`); one that did would be waited for, and counted.
  */
 @State(Scope.Benchmark)
 open class PipelineBenchmark {
-    @Param("global", "role", "none", "anonymous", "blacklist", "blocked")
+    @Param("global", "role", "none", "anonymous", "blacklist", "blocked", "listener")
     lateinit var scenario: String
 
     private lateinit var slice: Slice
@@ -69,13 +74,14 @@ open class PipelineBenchmark {
         } else {
             AttributeProviders.NONE
         }
-        slice = Slice(options = SnapshotOptions(), attributes = attributes)
+        val listeners = if (scenario == "listener") DecisionListeners(listOf(NoOpListener)) else DecisionListeners.NONE
+        slice = Slice(options = SnapshotOptions(), attributes = attributes, listeners = listeners)
         slice.publish(SnapshotKey.Platform, platform())
         slice.publish(SnapshotKey.App("app"), app())
         slice.publish(SnapshotKey.Tenant("acme"), "")
         val token = "user@acme:viewer,admin|principal-a,principal-b".takeUnless { scenario == "anonymous" }
         val path = when (scenario) {
-            "global", "anonymous", "blacklist", "blocked" -> "/public/resource3/page"
+            "global", "anonymous", "blacklist", "blocked", "listener" -> "/public/resource3/page"
             "role" -> "/orders/op49/detail"
             "none" -> "/unknown/path"
             else -> error("Unknown scenario $scenario")
@@ -127,6 +133,13 @@ open class PipelineBenchmark {
         val bindings = viewer.map { """{"id":"viewer/$it","subject":{"role":"viewer"},"app":"app","space":"*","policy":"perm:app/$it"}""" } +
             """{"id":"admin/*","subject":{"role":"admin"},"app":"app","space":"*","policy":"perm:app/*"}"""
         return ""","policies":[${policies.joinToString(",")}],"bindings":[${bindings.joinToString(",")}]"""
+    }
+
+    /** Takes every event and does nothing with it: what remains is the pipeline's own cost of events. */
+    private object NoOpListener : DecisionListener {
+        override val name = "no-op"
+
+        override suspend fun onDecision(event: DecisionEvent) = Unit
     }
 
     private companion object {

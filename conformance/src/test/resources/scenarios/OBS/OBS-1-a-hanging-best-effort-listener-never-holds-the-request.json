@@ -1,0 +1,46 @@
+{
+  "rules": [
+    "OBS-1"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "An ALLOW matches and a BEST_EFFORT listener never answers: the request proceeds at once.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "listeners": [
+    {
+      "name": "kafka",
+      "delivery": "best-effort",
+      "hangs": true
+    }
+  ],
+  "options": {
+    "timeoutMillis": 500
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

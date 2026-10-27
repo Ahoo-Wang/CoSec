@@ -33,6 +33,8 @@ class SnapshotView(
     val app: CompiledDocument?,
     val tenant: CompiledDocument?,
     val unresolved: List<Cause> = emptyList(),
+    /** The revisions of the documents, for decision events (RFC 0004 §7.2); null when the caller does not know them. */
+    val version: ViewVersion? = null,
 ) {
     init {
         require(platform.kind == DocumentKind.PLATFORM) { "Not a platform document: ${platform.kind}" }
@@ -70,3 +72,9 @@ class SnapshotView(
         val NOT_LOADED_APP = Cause.NotLoaded(DocumentKind.APP)
     }
 }
+
+/**
+ * The revisions of the documents one view composes (RFC 0004 §7.2, RFC 0003 Q20): [app] and [tenant] are null when
+ * the view has no such document, 0 for one that is not stored.
+ */
+data class ViewVersion(val platform: Long, val app: Long?, val tenant: Long?)

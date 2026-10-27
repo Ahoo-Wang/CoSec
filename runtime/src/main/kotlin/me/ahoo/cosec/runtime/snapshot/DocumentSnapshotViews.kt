@@ -15,6 +15,7 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.flat.ViewVersion
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
@@ -79,7 +80,19 @@ class DocumentSnapshotViews(private val source: SnapshotSource<CompiledDocument,
         val app = key.app?.let { id ->
             document(set.entry(SnapshotKey.App(id.value))!!, DocumentKind.APP, unresolved) { empty(id) }
         }
-        return SnapshotView(platform ?: CompiledDocument.platform(emptyList(), emptyList()), app, tenant, unresolved)
+        val tenantKey = key.tenant?.takeIf { keys.invalidTenant == null }?.let { SnapshotKey.Tenant(it.value) }
+        val version = ViewVersion(
+            set.shared.revision,
+            key.app?.let { set.entry(SnapshotKey.App(it.value))!!.revision },
+            tenantKey?.let { set.entry(it)!!.revision },
+        )
+        return SnapshotView(
+            platform ?: CompiledDocument.platform(emptyList(), emptyList()),
+            app,
+            tenant,
+            unresolved,
+            version
+        )
     }
 
     /** The compiled document of [entry]; [absent] when none is stored; null, with the cause added, when it failed. */
