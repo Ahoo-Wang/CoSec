@@ -1,0 +1,51 @@
+{
+  "rules": [
+    "ATR-1"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The only ALLOW reads ext.geo.inFence and its provider fails: never a Permit.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "in-fence",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.geo.inFence",
+                  true
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:in-fence",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "in-fence"
+        }
+      ]
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.inFence": "bool"
+      },
+      "fails": "geo is down"
+    }
+  ],
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "rules": [
+    "BLK-1"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The blacklist holds another principal's device only: the policies decide.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "blacklist": {
+    "blocks": [
+      "device"
+    ]
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

@@ -26,11 +26,9 @@ import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.cache.AppPermissionCache
 import me.ahoo.cosec.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.GlobalPolicyIndexCache
 import me.ahoo.cosec.cache.PolicyCache
 import me.ahoo.cosec.cache.RolePermissionCache
 import me.ahoo.cosec.cache.createCache
-import me.ahoo.cosec.cache.createGlobalPolicyIndex
 import me.ahoo.cosec.migrate.CoSec7xReader
 import me.ahoo.cosec.migrate.Source7x
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
@@ -94,8 +92,6 @@ class CoSec7xSnapshotReader(
 
     private val policyCache: PolicyCache =
         typedRuntime.createCache(CoSecCacheSpecs.policy(CoSecCacheSpecs.jacksonCodec(mapper), keyPrefix))
-    private val globalPolicyIndexCache: GlobalPolicyIndexCache =
-        typedRuntime.createGlobalPolicyIndex(CoSecCacheSpecs.globalPolicyIndex(keyPrefix))
     private val appPermissionCache: AppPermissionCache =
         typedRuntime.createCache(CoSecCacheSpecs.appPermission(CoSecCacheSpecs.jacksonCodec(mapper), keyPrefix))
     private val rolePermissionCache: RolePermissionCache =

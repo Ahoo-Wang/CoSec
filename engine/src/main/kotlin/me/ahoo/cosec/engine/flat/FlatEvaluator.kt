@@ -70,6 +70,9 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     private var errorInGuard = false
     private var error: Throwable? = null
 
+    /** The first ALLOW skipped because an external attribute was missing (RFC 0006 K12). */
+    private var skipped: Cause? = null
+
     private var missing: MutableSet<PolicyId>? = null
     private var ambiguous: MutableSet<PolicyId>? = null
 
@@ -107,15 +110,30 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         }
         pass = Effect.ALLOW
         enumerate()
-        return matched ?: CoSecFlatEngine.IMPLICIT_DENY
+        return allowDecision()
     }
+
+    /**
+     * The ALLOW pass's decision: its match, else `Indeterminate` when an ALLOW was skipped for a missing external
+     * attribute (it might have permitted: a 503 to retry, not a 403), else the implicit deny.
+     */
+    protected fun allowDecision(): Decision =
+        matched ?: skipped?.let { Decision.Indeterminate(it) } ?: CoSecFlatEngine.IMPLICIT_DENY
 
     /** Runs the DENY pass and returns its decision, or null when the ALLOW pass decides. */
     protected fun denyPass(): Decision? {
         pass = Effect.DENY
         enumerate()
         matched?.let { return it }
-        errorAt?.let { return Decision.Indeterminate(Cause.MatcherFailed(it, errorInGuard, error!!)) }
+        errorAt?.let { at ->
+            val error = error!!
+            val cause = if (error is AttributeMissing) {
+                Cause.AttributeUnavailable(setOf(error.path), at)
+            } else {
+                Cause.MatcherFailed(at, errorInGuard, error)
+            }
+            return Decision.Indeterminate(cause)
+        }
         return unresolved()?.let { Decision.Indeterminate(it) }
     }
 
@@ -173,10 +191,12 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
                 return DECIDED
             }
 
-            ERROR -> if (pass === Effect.DENY) failed(policy, statement, via, stepError!!, guard = false)
+            ERROR -> erred(policy, statement, via, stepError!!, guard = false)
             GUARD_FAILED -> {
-                if (pass === Effect.DENY) failed(policy, statement, via, stepError!!, guard = true)
-                return NEXT_POLICY
+                val error = stepError!!
+                erred(policy, statement, via, error, guard = true)
+                // A missing attribute that this statement treats as no match says nothing about the policy's others.
+                return if (error is AttributeMissing && statement.onMissing == OnMissing.NOMATCH) NEXT_STATEMENT else NEXT_POLICY
             }
 
             GUARD_MISS -> return NEXT_POLICY
@@ -388,6 +408,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             Attribute.Kind.RESOURCE_ID -> authz.resource.id
             Attribute.Kind.RESOURCE_ATTRIBUTE -> authz.resource.attributes[attribute.name]
             Attribute.Kind.RESOURCE_VAR -> captures?.get(attribute.name)
+            Attribute.Kind.EXTERNAL -> request.external.read(attribute) as String?
             else -> host.string(attribute)
         }
 
@@ -395,6 +416,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         when (attribute.kind) {
             Attribute.Kind.SUBJECT_AUTHENTICATED -> authz.subject.authenticated
             Attribute.Kind.ENVIRONMENT_BLOCKED -> authz.environment.blocked
+            Attribute.Kind.EXTERNAL -> request.external.read(attribute) as Boolean?
             else -> host.bool(attribute)
         }
 
@@ -405,10 +427,16 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             Attribute.Kind.SCOPE_ROLES -> scopeRoles ?: request.scope.roles.mapTo(HashSet()) { it.value }
                 .also { scopeRoles = it }
 
+            @Suppress("UNCHECKED_CAST")
+            Attribute.Kind.EXTERNAL
+            -> request.external.read(attribute) as Set<String>?
             else -> host.stringSet(attribute)
         }
 
     override fun ip(attribute: Attribute): IpAddress? {
+        if (attribute.kind == Attribute.Kind.EXTERNAL) {
+            return request.external.read(attribute) as IpAddress?
+        }
         if (attribute.kind != Attribute.Kind.ENVIRONMENT_IP) {
             return host.ip(attribute)
         }
@@ -515,6 +543,29 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     protected fun decide(policy: CompiledPolicy, statement: CompiledStatement, via: BindingRef): Decision {
         val ref = ref(policy, statement, via)
         return if (pass === Effect.DENY) Decision.Deny(ref) else Decision.Permit(ref)
+    }
+
+    /**
+     * [statement], or the policy condition reached through it, failed with [error]. A missing external attribute is
+     * decided by the statement's [OnMissing] (RFC 0006 §5.4.3): `nomatch` is a miss; otherwise a DENY errs, and an
+     * ALLOW is skipped and remembered. Any other error of a DENY is kept; of an ALLOW, it is no match (C1a).
+     */
+    protected fun erred(
+        policy: CompiledPolicy,
+        statement: CompiledStatement,
+        via: BindingRef,
+        error: Throwable,
+        guard: Boolean
+    ) {
+        val missing = error is AttributeMissing
+        if (missing && statement.onMissing == OnMissing.NOMATCH) {
+            return
+        }
+        if (pass === Effect.DENY) {
+            failed(policy, statement, via, error, guard)
+        } else if (missing && skipped == null) {
+            skipped = Cause.AttributeUnavailable(setOf((error as AttributeMissing).path), ref(policy, statement, via))
+        }
     }
 
     /** A DENY statement, or the condition reached through it, failed. Keeps the first. */

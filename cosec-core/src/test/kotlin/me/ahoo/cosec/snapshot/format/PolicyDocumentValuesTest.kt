@@ -33,7 +33,16 @@ class PolicyDocumentValuesTest {
     private val definitions = PolicyDocumentFormats.documentDefinitions
     private val time = definitions.getValue("time") as ObjectType
 
-    private class Placement(val name: String, val type: StringType, val statement: (String) -> String)
+    /** A value placed into a statement, or (with [header]) into the document's header fields. */
+    private class Placement(
+        val name: String,
+        val type: StringType,
+        val header: (String) -> String = { "" },
+        val statement: (String) -> String = { """{"effect":"allow","action":"*"}""" },
+    )
+
+    private val provenance = definitions.getValue("provenance") as ObjectType
+    private val parent = requireNotNull(provenance.field("parent")).type as ObjectType
 
     private val placements = listOf(
         Placement("actionPattern", definitions.getValue("actionPattern") as StringType) {
@@ -46,6 +55,10 @@ class PolicyDocumentValuesTest {
         Placement("time.notAfter", time.string("notAfter")) { statement(time = mapOf("notAfter" to it)) },
         Placement("time.from", time.string("from")) { statement(time = mapOf("from" to it, "to" to "23:59")) },
         Placement("time.to", time.string("to")) { statement(time = mapOf("from" to "00:00", "to" to it)) },
+        Placement("provenance.parent.digest", parent.string("digest"), header = {
+            """"provenance":{"parent":{"revision":1,"digest":${json(it)}},"change":"c","kind":"PUBLISH",""" +
+                """"publishedBy":{"tenant":"t","principal":"p"}},"""
+        }),
     )
 
     private fun ObjectType.string(name: String): StringType = requireNotNull(field(name)).type as StringType
@@ -60,9 +73,12 @@ class PolicyDocumentValuesTest {
             time?.let { """"condition":{"time":${json(it)}}""" },
         ).joinToString(",", "{", "}")
 
-    /** Null when the platform document holding [statement] compiles; otherwise why not. */
-    private fun compileError(statement: String): Exception? {
-        val body = """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z",""" +
+    private fun compileError(placement: Placement, value: String): Exception? =
+        compileError(placement.statement(value), placement.header(value))
+
+    /** Null when the platform document holding [statement] (and [header] fields) compiles; otherwise why not. */
+    private fun compileError(statement: String, header: String = ""): Exception? {
+        val body = """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z",$header""" +
             """"policies":[{"id":"p","statements":[$statement]}],""" +
             """"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"p"}]}"""
         val document = SnapshotDocument(2, 1, Instant.parse("2026-10-26T00:00:00Z"), body.encodeToByteArray())
@@ -88,9 +104,9 @@ class PolicyDocumentValuesTest {
     fun examplesCompileAndCounterExamplesDoNot() {
         val failures = placements.flatMap { placement ->
             placement.type.examples.mapNotNull { example ->
-                compileError(placement.statement(example))?.let { "${placement.name}: example [$example] fails: $it" }
+                compileError(placement, example)?.let { "${placement.name}: example [$example] fails: $it" }
             } + placement.type.counterExamples.mapNotNull { invalid ->
-                if (compileError(placement.statement(invalid)) == null) "${placement.name}: [$invalid] compiles" else null
+                if (compileError(placement, invalid) == null) "${placement.name}: [$invalid] compiles" else null
             }
         }
         failures.assert().describedAs(failures.joinToString("\n")).isEmpty()
