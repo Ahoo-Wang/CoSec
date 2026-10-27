@@ -360,6 +360,39 @@ class ControlAuthorizationTest {
         removal.escalations.assert().isEmpty()
     }
 
+    /** RFC 0007 §7.6: only the platform sets a boundary, and anyone but the trust root needs a second person. */
+    @Test
+    fun `a boundary is the platform's to set`() = runBlocking<Unit> {
+        val fence = PolicyDefinition(
+            PolicyId("fence"),
+            false,
+            null,
+            listOf(StatementSource("", Effect.ALLOW, listOf("order:*"), emptyList())),
+            boundary = true,
+        )
+        val setter = PolicyDefinition(
+            PolicyId("boundary-setter"),
+            false,
+            null,
+            listOf(
+                StatementSource("", Effect.ALLOW, listOf("cosec:boundary"), listOf(ResourceSource("doc/tenant/**")))
+            ),
+        )
+        bootstrap(
+            SnapshotKey.Platform,
+            listOf(fence, setter),
+            revisions.head(SnapshotKey.Platform)!!.document.bindings +
+                control("bea", SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("bea")), PolicyId("boundary-setter")),
+        )
+        val set = listOf(Operation.SetBoundary(PolicyId("fence")))
+        // A tenant admin cannot loosen or tighten its own tenant's boundary.
+        refused { changes.propose(alice, TENANT, head(), set, "mine") }.assert().isEqualTo(403)
+        val bea = engine.operator(TenantId.PLATFORM, "bea")
+        changes.propose(bea, TENANT, head(), set, "fence acme").escalations.map { it.reason }.assert()
+            .containsExactly("NOT_ANALYZED")
+        changes.propose(plato, TENANT, head(), set, "trust root").escalations.assert().isEmpty()
+    }
+
     @Test
     fun `resources name one document each`() {
         ControlResources.document(SnapshotKey.Platform).id.assert().isEqualTo("platform")

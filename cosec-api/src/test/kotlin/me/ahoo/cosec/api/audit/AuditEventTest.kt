@@ -58,6 +58,7 @@ class AuditEventTest {
                 "SCOPE_REJECTED",
                 "RATE_LIMITER_UNAVAILABLE",
                 "TOKEN_REVOKED",
+                "BOUNDARY",
             ),
         )
     }

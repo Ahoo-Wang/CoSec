@@ -176,7 +176,8 @@ object ChangeRequestCodec {
                 .set("binding", PolicyDocumentCodec.bindingTree(operation.binding, kind, owner))
 
             is Operation.RemoveBinding -> item.put("op", "removeBinding").put("id", operation.id.value)
-            is Operation.PutCatalog, is Operation.SetLimits, is Operation.SetAttributes -> sectionTree(item, operation)
+            is Operation.PutCatalog, is Operation.SetLimits, is Operation.SetAttributes, is Operation.SetBoundary ->
+                sectionTree(item, operation)
         }
         ifMatchOf(operation)?.let { item.put("ifMatch", it) }
         return item
@@ -193,6 +194,9 @@ object ChangeRequestCodec {
             ).also { operation.limits?.let { item.set("limits", limitsTree(it)) } }
             is Operation.SetAttributes -> item.put("op", "setAttributes")
                 .also { operation.attributes?.let { item.set("attributes", attributesTree(it)) } }
+
+            is Operation.SetBoundary -> item.put("op", "setBoundary")
+                .also { operation.boundary?.let { item.put("boundary", it.value) } }
 
             else -> error("Not a section operation: $operation")
         }
@@ -305,6 +309,7 @@ object ChangeRequestCodec {
                 },
             )
 
+            "setBoundary" -> Operation.SetBoundary(node.get("boundary")?.let { PolicyId(it.text()) })
             "setAttributes" -> Operation.SetAttributes(
                 node.get("attributes")?.values()?.map {
                     val type = PolicyDocumentCodec.ATTRIBUTE_TYPES[it.need("type").text()]

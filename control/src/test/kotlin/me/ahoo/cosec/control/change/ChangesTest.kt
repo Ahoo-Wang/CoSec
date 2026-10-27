@@ -24,6 +24,7 @@ import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.Catalog
 import me.ahoo.cosec.snapshot.document.CatalogGroup
 import me.ahoo.cosec.snapshot.document.CatalogPermission
+import me.ahoo.cosec.snapshot.document.PolicyDefinition
 import me.ahoo.cosec.snapshot.document.ProvenanceKind
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -171,6 +172,45 @@ class ChangesTest {
         )
     }
 
+    /** RFC 0007 §7.6: a boundary is set like a section, resolves in the platform, and holds the policy it names. */
+    @Test
+    fun `boundaries are set, resolved and kept`() = runBlocking<Unit> {
+        val fence = PolicyDefinition(PolicyId("fence"), false, null, allow("x").statements, boundary = true)
+        publish(
+            SnapshotKey.Platform,
+            Operation.PutPolicy(fence),
+            Operation.PutPolicy(allow("plain")),
+            Operation.SetBoundary(PolicyId("fence"))
+        )
+        harness.revisions.head(SnapshotKey.Platform)!!.document.boundary!!.value.assert().isEqualTo("fence")
+        changes.propose(ALICE_OP, ACME, 0, listOf(Operation.SetBoundary(PolicyId("plain"))), "not a boundary")
+            .errors.map { it.check to it.path }.assert().containsExactly("REFERENCES" to "$.boundary")
+        publish(ACME, Operation.SetBoundary(PolicyId("fence")))
+        harness.revisions.head(ACME)!!.document.boundary!!.value.assert().isEqualTo("fence")
+        // The tenant names it: the platform can neither remove it nor stop naming it as the default and drop it.
+        changes.propose(
+            PLATO,
+            SnapshotKey.Platform,
+            1,
+            listOf(Operation.SetBoundary(null), Operation.RemovePolicy(PolicyId("fence"))),
+            "drop"
+        )
+            .errors.map { it.check }.assert().containsExactly("REFERENCES")
+        changes.propose(PLATO, SnapshotKey.App("order"), 0, listOf(Operation.SetBoundary(PolicyId("fence"))), "app")
+            .errors.map { it.check }.assert().containsExactly("OPERATION")
+        // Applying the head proposes nothing; a replace without the boundary removes it.
+        val head = harness.revisions.head(ACME)!!.document
+        changes.apply(ALICE_OP, ACME, head, ApplyMode.REPLACE, "same").operations.assert().isEmpty()
+        val cleared = changes.apply(
+            ALICE_OP,
+            ACME,
+            StoreFixtures.candidate(ACME, emptyList()),
+            ApplyMode.REPLACE,
+            "clear"
+        )
+        (cleared.operations.single() as Operation.SetBoundary).boundary.assert().isNull()
+    }
+
     @Test
     fun `a change reads back as it was stored`() = runBlocking<Unit> {
         val operations = listOf(
@@ -181,6 +221,8 @@ class ChangesTest {
             Operation.PutCatalog(null),
             Operation.SetLimits(ConditionLimits(maxCost = 100)),
             Operation.SetAttributes(listOf(Attribute.external("ext.geo.region", AttributeType.IP))),
+            Operation.SetBoundary(PolicyId("fence")),
+            Operation.SetBoundary(null),
         )
         val change = changes.propose(ALICE_OP, ACME, 0, operations, "all of them")
         val stored = ChangeRequestCodec.encode(change)

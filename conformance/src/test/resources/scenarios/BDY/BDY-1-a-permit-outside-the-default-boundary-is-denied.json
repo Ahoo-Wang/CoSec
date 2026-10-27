@@ -1,0 +1,65 @@
+{
+  "rules": [
+    "BDY-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "Anyone may do anything, but the platform's default boundary holds tenants to order actions: user:read becomes a Deny by the boundary.",
+  "documents": {
+    "platform": {
+      "boundaries": {
+        "default": "orders-only"
+      },
+      "policies": [
+        {
+          "id": "all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "orders-only",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*"
+            }
+          ]
+        },
+        {
+          "id": "anything",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "all"
+        }
+      ]
+    }
+  },
+  "request": {
+    "action": "user:read"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "boundary": "orders-only",
+      "tenant": "acme"
+    }
+  }
+}

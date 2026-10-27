@@ -60,6 +60,12 @@ sealed interface Cause {
     data class NotLoaded(val document: DocumentKind) : Cause
 
     /**
+     * A statement of the platform boundary [boundary] failed for a request an ALLOW permitted, and none matched
+     * (RFC 0007 §7.6): whether the request is within the boundary cannot be told.
+     */
+    data class BoundaryUnavailable(val boundary: PolicyId, val error: Throwable) : Cause
+
+    /**
      * External attributes a statement needed could not be fetched (RFC 0006 §5.4.3): their provider failed, timed out,
      * or they were not in the attribute plan. [at] is the first statement that needed them, or null when no statement
      * did, such as an unreadable blacklist (§5.4.4).

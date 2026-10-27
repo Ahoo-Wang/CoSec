@@ -247,18 +247,33 @@ internal object PolicyDocumentFormats {
     )
 
     val documentDefinitions: Map<String, FormatType> = mapOf(
-        "document" to ObjectType(
-            documentHeader + documentSections,
-            description = "A platform or tenant document (RFC 0004 §7.1).",
-        ),
         "platformDocument" to ObjectType(
-            documentHeader + platformSections + listOf(
+            documentHeader + Field(
+                "boundaries",
+                ObjectType(
+                    listOf(
+                        Field(
+                            "default",
+                            StringType(minLength = 1, examples = listOf("boundary-standard")),
+                            description = "The boundary policy that holds every tenant that names none (RFC 0007 §7.6).",
+                        ),
+                    ),
+                ),
+            ) + platformSections + listOf(
                 Field("policies", ArrayType(ref(SNAPSHOT_DOCUMENT, "policy"))),
                 Field("bindings", ArrayType(ref(SNAPSHOT_DOCUMENT, "platformBinding"))),
                 rateLimits,
             ),
-            description = "The platform document with what only it holds: the limits and attributes every document " +
-                "compiles against (RFC 0007 §3.1 N3).",
+            description = "The platform document (RFC 0004 §7.1) with what only it holds: boundaries, and the limits " +
+                "and attributes every document compiles against (RFC 0007 §7.6, §3.1 N3). A principal names its tenant.",
+        ),
+        "tenantDocument" to ObjectType(
+            documentHeader + Field(
+                "boundary",
+                StringType(minLength = 1, examples = listOf("boundary-restricted")),
+                description = "The platform boundary policy that holds this tenant instead of the default; only the platform writes it.",
+            ) + documentSections,
+            description = "A tenant document (RFC 0004 §7.1): the tenant's own policies and bindings.",
         ),
         "platformBinding" to platformBinding(),
         "appDocument" to ObjectType(
@@ -310,6 +325,13 @@ internal object PolicyDocumentFormats {
             listOf(
                 Field("id", StringType(examples = listOf("deny-ip", "perm:order-service/read")), required = true),
                 Field("attachable", BooleanType(), description = "Whether a principal may attach it.", default = false),
+                Field(
+                    "boundary",
+                    BooleanType(),
+                    description = "A platform boundary (RFC 0007 §7.6): in the platform document only, at most 64 ALLOW " +
+                        "statements, never bound or attached.",
+                    default = false,
+                ),
                 Field("condition", astCondition, description = "The policy condition; it cannot read captured variables."),
                 Field("statements", ArrayType(ref(SNAPSHOT_DOCUMENT, "statement")), required = true),
             ),
