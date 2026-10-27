@@ -28,6 +28,9 @@ import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.model.condition.AttributeType
+import me.ahoo.cosec.model.decision.Obligation
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 
 /**
@@ -110,7 +113,63 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         }
         pass = Effect.ALLOW
         enumerate()
-        return allowDecision()
+        return withObligations(allowDecision())
+    }
+
+    /**
+     * [decision] with its obligations, when it is a permit and a document of the view has rate limit rules (RFC 0006
+     * §8.2): every rule that matches the request, in document order (platform, app, tenant) and rule order, with the
+     * bucket its key reads. Matching is a statement's: action, resource and condition, each rule with its own captures.
+     *
+     * A rule whose condition or key reads an external attribute that could not be fetched has no bucket, and its
+     * `strictFailure` decides. Any other error makes it strict: it cannot be skipped, so the pipeline refuses (503).
+     */
+    protected fun withObligations(decision: Decision): Decision {
+        if (decision !is Decision.Permit || !view.limitsRates) {
+            return decision
+        }
+        var obligations: ArrayList<Obligation>? = null
+        for (document in RATE_LIMITED) {
+            val rules = when (document) {
+                DocumentKind.PLATFORM -> view.platform.rateLimits
+                DocumentKind.APP -> view.app?.rateLimits
+                DocumentKind.TENANT -> view.tenant?.rateLimits
+            } ?: continue
+            for (rule in rules) {
+                val obligation = obligation(rule) ?: continue
+                (obligations ?: ArrayList<Obligation>().also { obligations = it }) += obligation
+            }
+        }
+        return obligations?.let { Decision.Permit(decision.by, it) } ?: decision
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun obligation(rule: CompiledRateLimit): Obligation? {
+        val result = step(rule.policy, rule.statement)
+        if (result == ERROR || result == GUARD_FAILED) {
+            val error = stepError!!
+            val missing = error is AttributeMissing
+            if (missing && rule.statement.onMissing == OnMissing.NOMATCH) {
+                return null
+            }
+            return Obligation.RateLimit(rule.id, null, rule.limit, rule.strictFailure || !missing)
+        }
+        if (result != MATCHED) {
+            return null
+        }
+        val key = rule.key ?: return Obligation.RateLimit(rule.id, CompiledRateLimit.SHARED_BUCKET, rule.limit, rule.strictFailure)
+        return try {
+            captures = resource(rule.statement)
+            val value = if (key.type == AttributeType.IP) ip(key)?.toString() else string(key)
+            Obligation.RateLimit(rule.id, CompiledRateLimit.KEYED_BUCKET_PREFIX + value.orEmpty(), rule.limit, rule.strictFailure)
+        } catch (error: Throwable) {
+            if (!catches(error)) {
+                throw error
+            }
+            Obligation.RateLimit(rule.id, null, rule.limit, rule.strictFailure || error !is AttributeMissing)
+        } finally {
+            captures = null
+        }
     }
 
     /**
@@ -612,5 +671,6 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         private const val PATH_MALFORMED = 2
 
         private val EMPTY = IntArray(0)
+        private val RATE_LIMITED = arrayOf(DocumentKind.PLATFORM, DocumentKind.APP, DocumentKind.TENANT)
     }
 }

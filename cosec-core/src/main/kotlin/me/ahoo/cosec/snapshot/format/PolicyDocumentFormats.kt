@@ -234,9 +234,16 @@ internal object PolicyDocumentFormats {
         )
     }
 
+    private val rateLimits = Field(
+        "rateLimits",
+        ArrayType(ref(SNAPSHOT_DOCUMENT, "rateLimit")),
+        description = "Rate limit rules, in order (RFC 0006 §8.1): what a permitted request spends.",
+    )
+
     private val documentSections = listOf(
         Field("policies", ArrayType(ref(SNAPSHOT_DOCUMENT, "policy"))),
         Field("bindings", ArrayType(ref(BINDING))),
+        rateLimits,
     )
 
     val documentDefinitions: Map<String, FormatType> = mapOf(
@@ -248,6 +255,7 @@ internal object PolicyDocumentFormats {
             documentHeader + platformSections + listOf(
                 Field("policies", ArrayType(ref(SNAPSHOT_DOCUMENT, "policy"))),
                 Field("bindings", ArrayType(ref(SNAPSHOT_DOCUMENT, "platformBinding"))),
+                rateLimits,
             ),
             description = "The platform document with what only it holds: the limits and attributes every document " +
                 "compiles against (RFC 0007 §3.1 N3).",
@@ -330,6 +338,50 @@ internal object PolicyDocumentFormats {
                     default = "indeterminate",
                 ),
             ),
+        ),
+        "rateLimit" to ObjectType(
+            listOf(
+                Field(
+                    "id",
+                    StringType(pattern = "^[A-Za-z0-9_.-]+$", examples = listOf("login-per-ip", "orders.api")),
+                    required = true,
+                    description = "Unique in its document. An app's or tenant's rule counts in buckets of its own.",
+                ),
+                Field(
+                    "action",
+                    AnyOf(listOf(ref(SNAPSHOT_DOCUMENT, "actionPattern"), ArrayType(ref(SNAPSHOT_DOCUMENT, "actionPattern"), minItems = 1))),
+                    required = true,
+                ),
+                Field(
+                    "resource",
+                    AnyOf(listOf(ref(SNAPSHOT_DOCUMENT, "resource"), ArrayType(ref(SNAPSHOT_DOCUMENT, "resource"), minItems = 1))),
+                    description = "Absent: any resource.",
+                ),
+                Field("condition", astCondition, description = "Which requests count; matched as a DENY is."),
+                Field(
+                    "onMissing",
+                    StringType(enum = listOf("indeterminate", "nomatch")),
+                    description = "An external attribute that cannot be fetched: indeterminate leaves it to strictFailure; " +
+                        "nomatch skips the rule (platform document only).",
+                    default = "indeterminate",
+                ),
+                Field(
+                    "key",
+                    StringType(examples = listOf("environment.ip", "subject.id", "resource.var.orderId")),
+                    description = "The text or address attribute whose value names the bucket. Absent: one bucket; " +
+                        "an absent value: the empty bucket.",
+                ),
+                Field("permitsPerSecond", NumberType(exclusiveMinimum = 0), required = true),
+                Field("windowSeconds", IntegerType(minimum = 1), default = 1),
+                Field(
+                    "strictFailure",
+                    BooleanType(),
+                    description = "Whether a rate limiter that cannot count refuses the request (503) instead of skipping the rule.",
+                    default = false,
+                ),
+            ),
+            description = "A rate limit rule (RFC 0006 §8): a permitted request it matches spends one permit; an " +
+                "exhausted one is 429.",
         ),
         "actionPattern" to StringType(
             pattern = FormatPatterns.ACTION_PATTERN,
