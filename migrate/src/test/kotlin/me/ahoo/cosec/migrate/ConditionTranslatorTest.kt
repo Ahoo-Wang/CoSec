@@ -171,6 +171,29 @@ class ConditionTranslatorTest {
     }
 
     @Test
+    fun `a template becomes an attribute reference that matches only the principal's own id`() {
+        Matchers7x.use {
+            for (deny in listOf(false, true)) {
+                val translated = translate(
+                    """{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}""",
+                    deny
+                ) as Translated.Ast
+                // No expression language reaches 8.0: SpEL only reads the 7.x value when converting.
+                val text = render(translated)
+                text.assert().contains("attr:subject.id").doesNotContain("#{")
+                val ast = Matchers7x.evaluator(translated)
+                val base = FIXED.first()
+                for (id in Facts.PRINCIPAL_IDS) {
+                    for (owner in Facts.PRINCIPAL_IDS) {
+                        val facts = base.copy(principalId = id, requestAttributes = mapOf("owner" to owner))
+                        ast(facts).assert().describedAs("deny=$deny id=$id owner=$owner").isEqualTo(id == owner)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     fun `constant conditions fold away`() {
         translate("""{"all":{}}""", false).assert().isEqualTo(Translated.Always)
         translate("""{"all":{"negate":true}}""", false).assert().isEqualTo(Translated.Never)

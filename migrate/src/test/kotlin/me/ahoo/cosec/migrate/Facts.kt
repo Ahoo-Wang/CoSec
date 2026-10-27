@@ -145,12 +145,16 @@ data class Facts(
         private val STRINGS = listOf(
             "", "a", "A", "admin", "Admin", "ADMIN", "adm", "admin2", "(0)", "(platform)", "acme", "x", "é", "É",
             "K", "k", "K", "ſ", "s", "S", "İ", "i", "I", "/orders/1", "/Orders/1", "/orders", "/orders/1/items",
-            "line\nbreak", "admin\n", "αβγ", "a.b", "a|b", "b", "GET", "get", "team", "owner-1",
+            "line\nbreak", "admin\n", "αβγ", "a.b", "a|b", "b", "GET", "get", "team", "owner-1", "*", "#{principal.id}",
+            "alice", "/orders/**",
         )
         private val ORIGINS = listOf(
             null, "https://example.com", "https://api.example.com", "https://API.Example.COM", "https://badexample.com",
             "https://example.com.evil.org", "null", "https://a.b.example.com:8443/x", "http://localhost",
         )
+
+        /** Adversarial ids too: pattern and template syntax must stay data. */
+        val PRINCIPAL_IDS = listOf("alice", "owner-1", "(0)x", "a", "*", "#{principal.id}", "/orders/**")
         private val ROLES = listOf("admin", "viewer", "admin@team", "viewer@team", "admin@other", "Key")
 
         /** Times around the boundaries the time corpus uses, and a few anywhere. */
@@ -179,7 +183,7 @@ data class Facts(
                 resourceAttributes = map(listOf("owner")),
                 pathVariables = map(listOf("id")),
                 authenticated = authenticated,
-                principalId = if (authenticated) listOf("alice", "owner-1", "(0)x", "a").random(random) else "(0)",
+                principalId = if (authenticated) PRINCIPAL_IDS.random(random) else "(0)",
                 tenantId = listOf("(0)", "(platform)", "acme").random(random),
                 roles = ROLES.filter { random.nextInt(3) == 0 }.toSet(),
                 principalAttributes = map(listOf("owner", "dept")),

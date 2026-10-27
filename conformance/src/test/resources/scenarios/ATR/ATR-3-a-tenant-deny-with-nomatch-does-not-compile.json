@@ -1,0 +1,56 @@
+{
+  "rules": [
+    "ATR-3"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A tenant document's DENY says onMissing nomatch: the document does not compile.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "deny-in-fence",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "*",
+                "condition": {
+                  "eq": [
+                    "ext.geo.inFence",
+                    true
+                  ]
+                },
+                "onMissing": "nomatch"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "g:deny-in-fence",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "deny-in-fence"
+          }
+        ]
+      }
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.inFence": "bool"
+      },
+      "values": {
+        "ext.geo.inFence": true
+      }
+    }
+  ],
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "platform document"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "rules": [
+    "BLK-1"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The blacklist holds the request's device: the builtin rule denies though an ALLOW matches.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "blacklist": {
+    "blocks": [
+      "device"
+    ]
+  },
+  "http": {
+    "headers": {
+      "CoSec-Device-Id": "device-1"
+    }
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

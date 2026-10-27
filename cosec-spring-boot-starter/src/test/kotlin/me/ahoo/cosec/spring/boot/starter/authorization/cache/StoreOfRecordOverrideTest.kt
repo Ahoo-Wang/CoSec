@@ -66,10 +66,12 @@ class StoreOfRecordOverrideTest {
     }
 
     /**
-     * The store-of-record caches the starter creates. The snapshot cache is not wired before RFC 0003 PR-5, and
-     * CoCache refuses properties for caches nobody declares; StrictCacheFailureTest assembles it.
+     * The store-of-record caches the starter creates. The snapshot cache is not wired before RFC 0003 PR-5, nor the
+     * control plane's before the switch (RFC 0008 S1), and CoCache refuses properties for caches nobody declares;
+     * StrictCacheFailureTest assembles the snapshot cache, `CacheTtlPolicyTest` covers the control ones.
      */
-    private val wired = CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES - CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME
+    private val wired = CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES - CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME -
+        CoSecCacheSpecs.CONTROL_CACHE_NAMES
 
     private val revocationCaches = listOf(
         CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,

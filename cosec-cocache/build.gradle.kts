@@ -20,6 +20,10 @@ dependencies {
     // The non-blocking reads behind the suspend SPIs of RFC 0006 (RevocationReader, MembershipProvider) await
     // CoCache's async view.
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
+    // CoCacheControlStore implements the control plane's ControlStore (RFC 0007 §5.1). Compile-only, so an application
+    // that reads snapshots without the control plane does not pull it in; the control plane brings it with it.
+    compileOnly(project(":cosec-control"))
+    testImplementation(project(":cosec-control"))
     testImplementation("me.ahoo.cocache:cocache-test")
     // MembershipCacheFailureTest resolves through the pipeline's MembershipResolver.
     testImplementation(project(":cosec-runtime"))

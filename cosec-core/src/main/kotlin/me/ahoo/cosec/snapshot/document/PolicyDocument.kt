@@ -27,6 +27,7 @@ import java.time.Instant
  *
  * ```jsonc
  * { "schema": 2, "revision": 42, "publishedAt": "2026-11-01T08:00:00Z",
+ *   "provenance": { "parent": { "revision": 41, "digest": "9f2c…" }, "change": "0QH8K3…", "kind": "PUBLISH", ... },
  *   "catalog": { "groups": [ ... ] },                        // app documents only
  *   "policies": [ { "id": "deny-ip", "attachable": false, "condition": { ... },
  *                   "statements": [ { "name": "s", "effect": "deny", "action": ["http:*"],
@@ -48,6 +49,8 @@ class PolicyDocument(
     val bindings: List<Binding>,
     /** An app document's catalog; null for the other kinds. */
     val catalog: Catalog? = null,
+    /** Where the revision came from; written by the control plane, absent in documents it did not publish. */
+    val provenance: Provenance? = null,
 ) {
     init {
         require(revision > 0) { "Revision must be positive, was $revision." }

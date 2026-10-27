@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.snapshot.document
 
+import me.ahoo.cosec.engine.flat.OnMissing
 import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.AppId
@@ -58,9 +59,10 @@ object PolicyDocumentCodec {
     private val reader: ObjectReader = CoSecJsonSerializer.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
     private val factory = JsonNodeFactory.instance
 
-    private val DOCUMENT_FIELDS = arrayOf("schema", "revision", "publishedAt", "policies", "bindings")
+    private val DOCUMENT_FIELDS = arrayOf("schema", "revision", "publishedAt", "provenance", "policies", "bindings")
+    private val PROVENANCE_FIELDS = arrayOf("parent", "change", "kind", "publishedBy", "approvedBy", "shadow")
     private val POLICY_FIELDS = arrayOf("id", "attachable", "condition", "statements")
-    private val STATEMENT_FIELDS = arrayOf("name", "effect", "action", "resource", "condition")
+    private val STATEMENT_FIELDS = arrayOf("name", "effect", "action", "resource", "condition", "onMissing")
     private val RESOURCE_FIELDS = arrayOf("pattern", "caseSensitive", "decodeAndParseSegments")
     private val BINDING_FIELDS = arrayOf("id", "subject", "app", "space", "policy", "expiresAt", "breakGlass")
 
@@ -94,8 +96,41 @@ object PolicyDocumentCodec {
             policies = root.field("policies")?.elements()?.map(::policy).orEmpty(),
             bindings = root.field("bindings")?.elements()?.map { binding(it, kind, owner) }.orEmpty(),
             catalog = root.field("catalog")?.let(::catalog),
+            provenance = root.field("provenance")?.let(::provenance),
         )
     }
+
+    private fun provenance(node: DocumentNode): Provenance {
+        node.requireObject(*PROVENANCE_FIELDS)
+        val kind = node.required("kind")
+        return Provenance(
+            parent = node.field("parent")?.let { parent ->
+                parent.requireObject("revision", "digest")
+                val revision = parent.required("revision")
+                val digest = parent.required("digest")
+                ParentRevision(
+                    revision.long().takeIf { it > 0 } ?: revision.fail("must be positive"),
+                    digest.text().takeIf { ParentRevision.DIGEST.matches(it) } ?: digest.fail("is 40 lowercase hex digits"),
+                )
+            },
+            change = node.required("change").nonEmpty(),
+            kind = ProvenanceKind.entries.firstOrNull { it.name == kind.text() }
+                ?: kind.fail("a kind is one of ${ProvenanceKind.entries}, not [${kind.text()}]"),
+            publishedBy = actor(node.required("publishedBy")),
+            approvedBy = node.field("approvedBy")?.elements()?.map(::actor).orEmpty(),
+            shadow = node.field("shadow")?.let { shadow ->
+                shadow.requireObject("window", "skipped")
+                ShadowWindow(shadow.field("window")?.nonEmpty(), shadow.required("skipped").bool())
+            },
+        )
+    }
+
+    private fun actor(node: DocumentNode): Actor {
+        node.requireObject("tenant", "principal")
+        return Actor(TenantId(node.required("tenant").nonEmpty()), PrincipalId(node.required("principal").nonEmpty()))
+    }
+
+    private fun DocumentNode.nonEmpty(): String = text().ifEmpty { fail("must not be empty") }
 
     private fun policy(node: DocumentNode): PolicyDefinition {
         node.requireObject(*POLICY_FIELDS)
@@ -120,7 +155,14 @@ object PolicyDocumentCodec {
             actions = node.required("action").strings(),
             resources = node.field("resource")?.let(::resources).orEmpty(),
             condition = node.field("condition")?.let(ConditionJson::read),
+            onMissing = node.field("onMissing")?.let(::onMissing),
         )
+    }
+
+    private fun onMissing(node: DocumentNode): OnMissing = when (val text = node.text()) {
+        "indeterminate" -> OnMissing.INDETERMINATE
+        "nomatch" -> OnMissing.NOMATCH
+        else -> node.fail("onMissing is indeterminate or nomatch, not [$text]")
     }
 
     /** A pattern or an object with options, or an array of them. */
@@ -230,6 +272,7 @@ object PolicyDocumentCodec {
         root.put("schema", SCHEMA)
         root.put("revision", document.revision)
         root.put("publishedAt", document.publishedAt.toString())
+        document.provenance?.let { root.set("provenance", provenance(it)) }
         document.catalog?.let { root.set("catalog", catalog(it)) }
         val policies = root.putArray("policies")
         document.policies.forEach { policies.add(policy(it)) }
@@ -237,6 +280,26 @@ object PolicyDocumentCodec {
         document.bindings.forEach { bindings.add(binding(it, document.kind, document.owner)) }
         return root
     }
+
+    private fun provenance(provenance: Provenance): ObjectNode {
+        val node = factory.objectNode()
+        provenance.parent?.let { node.putObject("parent").put("revision", it.revision).put("digest", it.digest) }
+        node.put("change", provenance.change)
+        node.put("kind", provenance.kind.name)
+        node.set("publishedBy", actor(provenance.publishedBy))
+        if (provenance.approvedBy.isNotEmpty()) {
+            node.putArray("approvedBy").also { approvers -> provenance.approvedBy.forEach { approvers.add(actor(it)) } }
+        }
+        provenance.shadow?.let { shadow ->
+            val item = node.putObject("shadow")
+            shadow.window?.let { item.put("window", it) }
+            item.put("skipped", shadow.skipped)
+        }
+        return node
+    }
+
+    private fun actor(actor: Actor): ObjectNode =
+        factory.objectNode().put("tenant", actor.tenant.value).put("principal", actor.principal.value)
 
     private fun policy(policy: PolicyDefinition): ObjectNode {
         val node = factory.objectNode().put("id", policy.id.value)
@@ -261,6 +324,12 @@ object PolicyDocumentCodec {
                 }
             }
             statement.condition?.let { item.set("condition", ConditionJson.write(it)) }
+            statement.onMissing?.let {
+                item.put(
+                    "onMissing",
+                    if (it == OnMissing.NOMATCH) "nomatch" else "indeterminate"
+                )
+            }
         }
         return node
     }

@@ -16,6 +16,11 @@ package me.ahoo.cosec.e2e
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.ProblemEncoder
+import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
+import me.ahoo.cosec.runtime.attribute.BlacklistKind
+import me.ahoo.cosec.runtime.attribute.BlacklistSource
+import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.SnapshotOptions
@@ -132,6 +137,33 @@ class SliceTest {
         outcome.slug().assert().isEqualTo("unavailable")
         // Another tenant is not affected.
         evaluate("GET", "/orders/1", "alice@acme:clerk").proceed.assert().isTrue()
+    }
+
+    /** RFC 0006 §5.4.4: the blacklist in stage A, and its failure, through the assembled path. */
+    @Test
+    fun `a blocked address is denied and a blacklist that fails is unavailable`() {
+        val blacklist = InMemoryBlacklistSource()
+        Slice(attributes = AttributeProviders(listOf(BlacklistAttributeProvider(blacklist)))).use { own ->
+            own.publish(SnapshotKey.Platform, platform)
+            own.publish(SnapshotKey.App("order"), app)
+            own.publish(SnapshotKey.Tenant("acme"), acme)
+            val read = request("GET", "/orders/1", "alice@acme:clerk", "order")
+            runBlocking { own.evaluate(read) }.proceed.assert().isTrue()
+            blacklist.block(BlacklistKind.IP, "10.0.0.1")
+            runBlocking { own.evaluate(read) }.status.assert().isEqualTo(403)
+        }
+        val failing = BlacklistSource { _, _ -> error("The blacklist is down") }
+        Slice(attributes = AttributeProviders(listOf(BlacklistAttributeProvider(failing)))).use { own ->
+            own.publish(SnapshotKey.Platform, platform)
+            own.publish(SnapshotKey.App("order"), app)
+            own.publish(SnapshotKey.Tenant("acme"), acme)
+            val outcome = runBlocking { own.evaluate(request("GET", "/orders/1", "alice@acme:clerk", "order")) }
+            outcome.status.assert().isEqualTo(503)
+            outcome.slug().assert().isEqualTo("unavailable")
+            // A matching DENY still decides.
+            runBlocking { own.evaluate(request("DELETE", "/orders/1", "alice@acme:clerk", "order")) }.status
+                .assert().isEqualTo(403)
+        }
     }
 
     @Test
