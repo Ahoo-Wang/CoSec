@@ -148,21 +148,26 @@ object AuditEvents {
 /**
  * A [DecisionListener] over an [AuditEventSink] (RFC 0006 §9.5.3): maps each event with [AuditEvents.from], so a sink
  * written for 7.x needs no mapping of its own.
+ *
+ * Always BEST_EFFORT: `AuditEventSink.publish` returns before anything is written and reports no failure, so it can
+ * never acknowledge a write. As a REQUIRED listener it would always "succeed", and a break-glass permit would proceed
+ * with no audit record (§9.4.1, §9.4.3). A REQUIRED audit awaits its store, as `KafkaAuditListener` does, or is a
+ * [DecisionListener] of its own.
  */
 class AuditListener private constructor(
     override val name: String,
-    override val delivery: Delivery,
     private val sink: AuditEventSink,
 ) : DecisionListener {
+    override val delivery: Delivery get() = Delivery.BEST_EFFORT
+
     override suspend fun onDecision(event: DecisionEvent) {
         sink.publish(AuditEvents.from(event))
     }
 
-    override fun toString(): String = "AuditListener($name, $delivery)"
+    override fun toString(): String = "AuditListener($name)"
 
     companion object {
-        fun of(sink: AuditEventSink, name: String, delivery: Delivery = Delivery.BEST_EFFORT): AuditListener =
-            AuditListener(name, delivery, sink)
+        fun of(sink: AuditEventSink, name: String): AuditListener = AuditListener(name, sink)
     }
 }
 

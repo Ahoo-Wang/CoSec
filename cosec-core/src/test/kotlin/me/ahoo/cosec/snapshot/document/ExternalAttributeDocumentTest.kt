@@ -71,6 +71,18 @@ class ExternalAttributeDocumentTest {
         errors(compiler, SnapshotKey.Tenant("acme"), policies("deny", "indeterminate")).assert().isEmpty()
     }
 
+    /** Review R3: the lapsing platform DENY compiles, with a warning naming it. */
+    @Test
+    fun aLapsingPlatformDenyIsWarnedAbout() {
+        val warnings = ArrayList<String>()
+        val warning = PolicyDocumentCompiler(catalog) { warnings += it }
+        errors(warning, SnapshotKey.Platform, policies("deny", "nomatch")).assert().isEmpty()
+        warnings.single().assert().contains("[p]").contains("statement 0").contains("nomatch")
+        errors(warning, SnapshotKey.Platform, policies("deny", "indeterminate")).assert().isEmpty()
+        errors(warning, SnapshotKey.Platform, policies("allow", "nomatch")).assert().isEmpty()
+        warnings.size.assert().isEqualTo(1)
+    }
+
     @Test
     fun onMissingIsReadAndWrittenBack() {
         val decoded = PolicyDocumentCodec.decode(

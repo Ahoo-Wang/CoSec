@@ -532,11 +532,15 @@ RFC 0002 §4.3 证明了：没有错误的输入上，层顺序与扁平顺序�
 | 次序 | 来源 | 7.x 对应 | 内部顺序 |
 |---|---|---|---|
 | 0 | 内置黑名单规则 | 黑名单检查 | — |
-| 1 | break-glass 绑定 | root | 按绑定 id |
-| 2 | 平台层 `Anyone` 绑定 | 全局层 | 按策略 id（RFC 0003 Q13） |
-| 3 | 租户层 `Anyone` 绑定 | （无） | 按策略 id |
-| 4 | 附加的策略，以及快照里的 `Principal` 绑定（root 除外） | 主体层 | 附加按声明顺序；绑定按绑定 id |
-| 5 | 角色绑定：平台层的 `App(appId)`，再到租户层 | 角色层 | 按 `scope.roles` 的顺序（声明顺序），同一角色内按授予顺序 |
+| 1 | 平台层 `Anyone` 绑定 | 全局层 | 按策略 id（RFC 0003 Q13） |
+| 2 | 租户层 `Anyone` 绑定 | （无） | 按策略 id |
+| 3 | 附加的策略，以及快照里的 `Principal` 绑定（root 除外） | 主体层 | 附加按声明顺序；绑定按绑定 id |
+| 4 | 角色绑定：平台层的 `App(appId)`，再到租户层 | 角色层 | 按 `scope.roles` 的顺序（声明顺序），同一角色内按授予顺序 |
+| 5 | break-glass 绑定 | root | 按绑定 id |
+
+2026-10-26 修订（#1070 第 1 轮审查 A2）：break-glass 绑定从第 1 位移到最后。它绕过的是"缺少的 ALLOW"（§4.8），所以只在别的 ALLOW 都不命中时才被记为放行的来源；
+放在前面时，一个普通绑定也放行的请求会被记成 break-glass 的使用，没有 REQUIRED 监听器时变成 503（RFC 0006 §9.4.3），有时则写下一条假的 break-glass 审计。
+与 7.x 的 root 先于各层不同，这只改变"记哪一条"，不改变决策。
 
 每个策略内按语句下标。于是没有错误时，第一条命中的 DENY（或在没有 DENY 命中时第一条命中的 ALLOW）与 7.x 按（层，组，规则）顺序的第一条
 是同一条，经来源映射（§8.2）后门槛直接比较。
@@ -743,6 +747,16 @@ java -jar cosec-migrate.jar verify --in ./converted --requests ./audit.jsonl [--
 
 GA 版本的 `convert` 一次完成两篇的转换：先按本文转换模型，再按 RFC 0005 §7 把每条语句的匹配器翻译成 AST，翻译不了的按 RFC 0005 的规则拒绝。
 用户不会见到中间格式。
+
+> **2026-10-26 实现说明（PR-5，#1067）**：
+> - **翻译的范围。** PR-5 只翻译动作（§5.2 的 `http` 命名空间：`all`、`path` 模式及其方法与选项、`composite`）与 `all` 条件。其余条件按 RFC 0005 §7.1 由 RFC 0005 PR-6 翻译；在那之前转换时拒绝并报告位置（`CONDITION_NOT_TRANSLATED`）。`spel`、`ognl`（`EXPRESSION_CONDITION`）与自定义条件（`CUSTOM_CONDITION`，RFC 0008 Q4）在任何版本都拒绝。路径模板与非 `/` 的分隔符同样留给 PR-6。
+> - **解码。** 每个 7.x 策略与应用权限先用 7.x 的反序列化器解码，7.x 读不了的数据拒绝（`UNDECODABLE`），不会被转换成会放行的语句。
+> - **报告。** `report.json` 的 `semanticChanges` 列出受 C1a–C6、D1–D3 影响的每一处 7.x 配置形态（RFC 0008 Q3）。
+> - **root。** 用 `--root-enabled`、`--root-id` 声明 root 已开启，必须同时给出 `--root-expires-at`。
+> - **`--from-files`。** 读 `policies.json`、`global-policies.json`、`app-role-permissions.json`。
+> - **`publish`。** 每个文档都是"仅当不存在"的条件写入，已有任何 8.0 文档时什么也不写。它不写 schema 标记：标记属于切换 S1，写了会让仍在运行的 7.x 实例重启失败。
+> - **命令行。** 参数解析不引入新依赖。
+> - **类路径。** 7.x 的 `path` 匹配器依赖 `spring-web`，`cosec-migrate` 把它声明为运行时依赖（维护者 2026-10-26 批准）；类路径缺少某个匹配器的类时，用到它的条目以"类路径缺少类"为由拒绝。
 
 ### 8.7 用户怎么验证
 

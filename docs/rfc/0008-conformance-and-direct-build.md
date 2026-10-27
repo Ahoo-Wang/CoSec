@@ -324,7 +324,7 @@ JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字*
 |---|---|---|---|
 | 编译执行的授权吞吐 | `global`、`role`、`none`、`role-heavy` | 不低于 7.0 的 100 %；B/op 不高于 7.0 | RFC 0005 Q12、§9.3 |
 | Pipeline 吞吐 | `global`、`role`、`none`、`blocked`、`rate-limited`、`anonymous`（`PipelineBenchmark`） | 不低于 7.0 的 `SecurityPipeline` + 装饰器链的 100 %（交替三轮的平均，任一轮不低于 97 %）；B/op 不高于 | RFC 0006 §13.1、Q24（基准从"第 4 阶段"改为 7.0） |
-| 端到端 | Gateway 与 WebMvc 示例服务，wrk2 定速 | 最大吞吐不低于 7.0 的 100 %；70 % 负载下 p99 不高于 7.0 的 105 % | RFC 0006 §13.1 |
+| 端到端 | Gateway 与 WebMvc 示例服务，k6 的 `constant-arrival-rate` 定速（2026-10-26 修订：原为 wrk2） | 最大吞吐不低于 7.0 的 100 %；70 % 负载下 p99 不高于 7.0 的 105 % | RFC 0006 §13.1 |
 | 分配与策略规模无关 | `EngineBenchmark` 的 `bindings`、`statements` 参数 | 同一场景下 B/op 不随规模变化；10,000 条语句时吞吐不低于 10 条时的 50 % | RFC 0004 §12.1、RFC 0005 §9.3 |
 | 没有边界时零代价 | `boundary = none` | 与同一构建中去掉边界检查的对照相比，吞吐不低于 100 %、B/op 不高于 | RFC 0007 Q24 |
 | 编译 | `SnapshotCompileBenchmark`，8 MB 文档 | p99 ≤ 200 ms | RFC 0003 Q14 |
@@ -334,7 +334,7 @@ JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字*
   它们比较的是即将删除的中间形态。
 - 达不到预算时，与 RFC 0005 Q12 相同：切换 PR 停止，交回维护者决定。
 - **2026-10-26 修订（路线图审查）：尽早测量。** 预算不再只在切换时第一次测量。端到端切片（§4.4.3）一能运行，就按本节的方法测一次
-  Pipeline 吞吐（JMH）；RFC 0006 PR-7 之后再加 wrk2 的端到端测量；之后每个扩展切片的 PR 重测一次，结果记在 `docs/perf/e2e-slice/`。
+  Pipeline 吞吐（JMH）；RFC 0006 PR-7 之后再加 k6 的端到端测量（`constant-arrival-rate` 执行器，按 70 % 负载下的 p99 比较；2026-10-26 修订：维护者决定用 k6 取代 wrk2，wrk2 不在 Homebrew core）；之后每个扩展切片的 PR 重测一次，结果记在 `docs/perf/e2e-slice/`。
   这些测量不是合入门槛：任何一项低于预算时，测量的 PR 照常合入，但立即把数字交给维护者（不等到 S1），由维护者决定先优化还是继续。
   硬性门槛仍是 S1（§3.9）。理由：#1040 的路径模式解析与匹配测得是 Spring `PathPattern` 的 44–102 %，等到切换才发现差距，修复会落在关键路径的末端。
 
@@ -454,7 +454,7 @@ JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字*
 | 7.0 形状的快照 | `cosec-core/.../authorization/engine/`：`PolicySnapshotCompiler.kt`、`CompiledSnapshot.kt`（`CompiledPolicies`、`CompiledApp`）、`SnapshotPolicySetLoader.kt`；`cosec-core/.../snapshot/SnapshotKey.kt` 中的 `Policies` 与 7.0 内容的 `App`（RFC 0004 的 `Platform`/`App`/`Tenant` 取代）；`cosec-cocache/.../cache/snapshot/SnapshotContent.kt` 与 `SnapshotDocumentCodec.kt` 中 7.0 格式的部分。RFC 0004 PR-4 起两种格式并存，切换时一并删除 schema 1：`SnapshotDocument.CURRENT_SCHEMA` 与 `SCHEMAS`（只留 `DOCUMENT_SCHEMA = 2`）、`SnapshotDocumentCodec` 对 schema 1 的接受、`SnapshotKey.Policies` 与 `SnapshotKind.POLICIES`、`SnapshotKeyEncoder.POLICIES`、格式描述 `cosec-snapshot-document` 中的 `policiesDocument` 与 `legacyAppDocument`（连同 `cosec-policy`、`condition`、`action`、`cosec-app-permission` 等 7.x 描述，由 8.0 的描述接替这些文件名，RFC 0007 §10.4）、`SnapshotSource` 中拒绝 `Platform`/`Tenant` 的分支（由 RFC 0004 PR-4 之后的三文档源取代） | RFC 0003 的中间文档 |
 | 按层引擎 | `engine/src/main/kotlin/me/ahoo/cosec/engine/`：`Engine.kt`、`CoSecEngine.kt`、`Evaluator.kt`、`TracingEvaluator.kt`、`PolicySet.kt`（其中的 `Rule`/`Guard`/`RuleMatch` 在 RFC 0005 PR-4 之后不再被 `flat/` 使用）、`Trace.kt`；`model/`：`LayerKind.kt`、`Decision.kt`（按层的 `StatementRef`/`Decision`/`Cause`）、`AuthzRequest.kt` 中的 `HostFacts`；测试 `engine/.../EnginePropertyTest.kt` | RFC 0002 §4 的按层顺序只为与 7.0 逐条等价 |
 | 决策比较与回放 | `cosec-core/src/testFixtures/kotlin/me/ahoo/cosec/parity/`：`DecisionParity.kt`、`DecisionReplay.kt`、`PolicySetParity.kt`、`ReplayInputs.kt`、`ReplayMain.kt`、`ReplayReport.kt`（含 `ReplayGate`）、`ReplaySide.kt`、`RepositorySnapshotAuthorization.kt`、`SnapshotAuthorizationFixture.kt`；`.../testkit/PolicyTestKitParity.kt`；`cosec-core/src/testFixtures/resources/cosec-replay/`；`cosec-core/build.gradle.kts` 中的 `engineReplay`、`engineParity` 任务（测试夹具源码集与 `verifyTestFixturesUnpublished` 在没有其他使用者时一并删除） | RFC 0002 PR-4（#997） |
-| 快照的比较、回放与测量工具 | `cosec-cocache/src/test/kotlin/me/ahoo/cosec/cache/snapshot/`：`SnapshotReplay.kt`、`SnapshotDecisionParityPropertyTest.kt`、`SnapshotMeasure.kt`、`SnapshotConvert.kt`；`cosec-cocache/.../cache/SnapshotRepositoryParityTest.kt`；`cosec-cocache/build.gradle.kts` 中的 `snapshotReplay`、`snapshotParity`、`snapshotMeasure`、`snapshotConvert` 任务。`CoSec7xReader.kt` 不删，由 RFC 0004 PR-5 搬进 `migrate/` | RFC 0003 PR-4（#1030） |
+| 快照的比较、回放与测量工具 | `cosec-cocache/src/test/kotlin/me/ahoo/cosec/cache/snapshot/`：`SnapshotReplay.kt`、`SnapshotDecisionParityPropertyTest.kt`、`SnapshotMeasure.kt`、`SnapshotConvert.kt`；`cosec-cocache/.../cache/SnapshotRepositoryParityTest.kt`；`cosec-cocache/build.gradle.kts` 中的 `snapshotReplay`、`snapshotParity`、`snapshotMeasure`、`snapshotConvert` 任务。`CoSec7xReader` 读取 7.x 原始数据的部分已由 RFC 0004 PR-5 搬进 `migrate/`（#1067）；生成 7.0 形状快照的部分留在测试源码集，改名 `CoSec7xSnapshotReader.kt`（及其测试），随本行删除 | RFC 0003 PR-4（#1030） |
 | 等价性质 | `cosec-core/src/test/.../authorization/engine/EngineParityPropertyTest.kt`、`SnapshotPolicySetPropertyTest.kt`；`.../explain/ExplainerConsistencyTest.kt`；`.../parity/DecisionParityTest.kt`、`DecisionReplayTest.kt`；`.../testkit/PolicyTestKitParityTest.kt` | P3、P5 与比较器自身的测试 |
 | 每请求读仓库的路径 | `cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/`：`RedisPolicyRepository.kt`、`RedisAppRolePermissionRepository.kt`、`CacheFutures.kt` 以及四个缓存与它们的属性（RFC 0003 PR-6 的清单） | 7.x 路径 |
 | 7.x 的写入与历史 | `cosec-core/.../snapshot/SnapshotPublisher.kt`、`cosec-cocache/.../cache/snapshot/RedisSnapshotPublisher.kt`（条件写入的做法由 `CoCacheControlStore` 复用，§4.3）、`cosec-core/.../policy/history/PolicyHistory.kt`、`cosec-cocache/.../cache/RedisPolicyRevisionStore.kt`、`cosec-core/.../policy/LocalPolicyInitializer.kt` 与 `cosec-spring-boot-starter/.../policy/LocalPolicyInitializerLifecycle.kt` 的写库模式 | RFC 0007 Q17、Q25 |
@@ -524,7 +524,7 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 
 | PR | 标题 | 范围 | 合入门槛 | 依赖 |
 |---|---|---|---|---|
-| **S1** | `refactor!: wire the 8.0 path in the starter` | starter 装配目标路径：`Pipeline`、认证器、成员关系、外部属性提供者、监听器、`SnapshotSource` 读 `Platform`/`App`/`Tenant` 三种文档、`controlSupport`；新的 `cosec.*` 属性（RFC 0004 §14.3、RFC 0006 X8、RFC 0007 X5）；路由映射；schema 标记。三个适配器只走新桥接。starter 中 7.x 的自动配置本身就是装配，S1 用新的取代并删除它们（含 L1、L2 的自动配置与 L5 的属性）；其他模块里 7.x 的库代码留在原处，照常编译和测试，但不再被装配。继承自原 RFC 0003 PR-5 与各轮审查的装配要求：启动时检查 `noeviction`（`SNP-3`）、引导之后缺失的平台文档 fail closed、固定快照缓存的编解码器与 key 过滤器并禁止 loader、`localMaxAge` 与 `cosec.authorization.snapshot.local-max-age` 协调成一个值、`LocalPolicyInitializer` 不再写库（删除 `init-repository`/`force-refresh`）、`explain`/`simulate` 装配到执法的同一条流程（`CTL-3`）、`WebAdapterParityTest` 加上 `SCP-4` 的场景。starter 的 `controlSupport` 变体必须引入 `cosec-control`（`cosec-cocache` 只以 `compileOnly` 依赖它，2026-10-26，#1064），并有一个测试在 `controlSupport` 下启动 starter、装配出 `CoCacheControlStore`。数据面采用 `Platform` 文档的 `limits` 与 `attributes`（RFC 0007 §3.1 N3，2026-10-27，#1071）：实例用平台的限额与属性目录编译每份文档（`PolicyDocumentCompiler.forPlatform`），启动时检查每个声明的外部属性都有已注册的 `AttributeProvider`；平台文档的这两节变化时，依赖它的 `App`/`Tenant` 文档在新的平台修订下重新编译，编译失败的文档按 fail closed 处理（与控制面在发布前的检查一致）。`cosec-gateway-server` 与 `k8s/cosec-gateway-config.yaml` 改用 8.0 的属性（§3.9 RC 前提第 7 条）；`aot-smoke` 作业（RC 前提第 5 条）；端到端切片改由 starter 装配（§4.4.3）。AGENTS.md 只在 Mental model 开头加一句过渡说明："starter 已装配 8.0 路径；以下各节在 S5 之前仍描述 7.x" | §3.9 第 1–5 条 | 其余全部实现 PR（§4.5） |
+| **S1** | `refactor!: wire the 8.0 path in the starter` | starter 装配目标路径：`Pipeline`、认证器、成员关系、外部属性提供者、监听器、`SnapshotSource` 读 `Platform`/`App`/`Tenant` 三种文档、`controlSupport`；新的 `cosec.*` 属性（RFC 0004 §14.3、RFC 0006 X8、RFC 0007 X5）；路由映射；schema 标记。三个适配器只走新桥接。starter 中 7.x 的自动配置本身就是装配，S1 用新的取代并删除它们（含 L1、L2 的自动配置与 L5 的属性）；其他模块里 7.x 的库代码留在原处，照常编译和测试，但不再被装配。继承自原 RFC 0003 PR-5 与各轮审查的装配要求：启动时检查 `noeviction`（`SNP-3`）、引导之后缺失的平台文档 fail closed（#1053 审查）、starter 的 `controlSupport` 引入 `cosec-control`，并有启动测试（#1064）、固定快照缓存的编解码器与 key 过滤器并禁止 loader、`localMaxAge` 与 `cosec.authorization.snapshot.local-max-age` 协调成一个值、`LocalPolicyInitializer` 不再写库（删除 `init-repository`/`force-refresh`）、`explain`/`simulate` 装配到执法的同一条流程（`CTL-3`）、`WebAdapterParityTest` 加上 `SCP-4` 的场景。数据面采用 `Platform` 文档的 `limits` 与 `attributes`（RFC 0007 §3.1 N3，2026-10-27，#1071）：实例用平台的限额与属性目录编译每份文档（`PolicyDocumentCompiler.forPlatform`），启动时检查每个声明的外部属性都有已注册的 `AttributeProvider`；平台文档的这两节变化时，依赖它的 `App`/`Tenant` 文档在新的平台修订下重新编译，编译失败的文档按 fail closed 处理（与控制面在发布前的检查一致）。`cosec-gateway-server` 与 `k8s/cosec-gateway-config.yaml` 改用 8.0 的属性（§3.9 RC 前提第 7 条）；`aot-smoke` 作业（RC 前提第 5 条）；端到端切片改由 starter 装配（§4.4.3）。AGENTS.md 只在 Mental model 开头加一句过渡说明："starter 已装配 8.0 路径；以下各节在 S5 之前仍描述 7.x" | §3.9 第 1–5 条 | 其余全部实现 PR（§4.5） |
 | **S2** | `refactor(cocache)!: remove the 7.x storage and write paths` | 删除存储与写入一侧：每请求读仓库的路径（RFC 0003 PR-6 的清单）、`cosec-cocache` 中快照的比较、回放与测量工具及其任务、7.x 的写入与历史（RFC 0007 X1–X3：`SnapshotPublisher`、`RedisSnapshotPublisher`、`PolicyHistory`、`RedisPolicyRevisionStore`）、`SnapshotContent`/`SnapshotDocumentCodec` 中 7.0 格式的部分、L1 与 L2 的 `cosec-cocache` 部分 | 全部模块 `check` 通过 | S1 |
 | **S3** | `refactor!: remove the 7.x decision path` | 删除决策一侧：`cosec-core` 的 7.x 授权实现、按层引擎的适配层、7.0 形状的快照、决策比较与回放的测试夹具与任务、等价性质、7.x 的解释与影子；`engine/` 的按层引擎与 `model/` 中只为它存在的类型；RFC 0006 PR-10 中 `cosec-core` 与适配器的部分（装饰器链、`BlockingAware`、`SecurityPipeline`、L6 的旧构造器、观察模块中的 7.x 装饰器）；RFC 0004 PR-8 中 `cosec-core` 的部分（`RoleScope`、`RootPrincipalMatcher`、`root-enabled`）；L15（`PolicyTestKit` 按 Q11 重写）、L21 | 全部模块 `check` 通过 | S2 |
 | **S4** | `refactor(api)!: remove the 7.x contracts and matchers` | 删除契约与匹配器：RFC 0005 PR-9 的清单（OGNL、SpEL、全部内置匹配器与工厂、`ActionMatcherFactory`）、RFC 0004 PR-8 中 `cosec-api` 的部分（`AppRolePermission`、`RolePermission`、`ROOT_ID`/`isRoot`）、RFC 0006 PR-10 中 `cosec-api` 的部分（响应式授权契约、`ConditionMatcherFactory`、`MatcherFactoryRegistry`）、L7、L8、L9、L18；`schema/` 随格式描述的删除重新生成（`verifySchemas` 要求同一个 PR）；打开 RFC 0007 PR-11 的 ArchUnit 规则（快照只有一个写入者、公开签名不含 Reactor 类型，M12） | 全部模块 `check` 通过 | S3 |
@@ -537,6 +537,13 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 
 **S1 是不可回退点。** S1 合入后，starter 不再能装配 7.x 路径，`main` 上没有开关或属性可以回到它；回退的唯一办法是 revert S1。所以 §3.9 第 1–5 条的全部证据
 （一致性套件、性质、变异体、预算）在 S1 之前齐备，S2–S4 只需要 `check` 通过。
+
+**S1 必须装配真实的 `RevocationReader`（2026-10-26 修订，运行时第 1 轮审查）。** `TokenAuthenticator` 的默认 `RevocationReader.NONE` 什么也不吊销：
+忘记装配它的 starter 会静默地关掉吊销，而一切测试照常通过。S1 装配 CoCache 的读接口（`CoCacheTokenStore.reader`），并加一个经 starter 的测试：吊销的
+token（按 token 与按主体）得到 401 `token-revoked`（#1072）。
+
+**实例按平台的 `limits`/`attributes` 编译（N3，2026-10-26 修订，#1071）。** 控制面编译租户与应用文档时，以平台文档的 `limits` 与 `attributes` 为准；平台文档改变时，
+依赖它的文档要重新编译，并在暂存的变更中报告结果。S1 装配的启动编译与快照加载使用同一套输入，并有一个测试：改动平台的 `limits` 或 `attributes` 后，依赖它的实例文档被重新编译。
 
 **S1 与 S5 之间文档滞后于代码。** AGENTS.md 要求事实与代码在同一个 PR 中更新；S1–S4 对 S5 列出的页面暂不执行这一条，S5 一次写完。这样做的理由：
 `deploy-wiki.yml` 从 `main` 发布，S5 之前线上文档继续描述用户实际在用的 7.x，而 8.0 没有任何发布。S1–S4 让 S5 清单之外的文档出错时（例如 `pnpm build` 报出死链接），
@@ -593,14 +600,14 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 | RFC 0006 PR-4 | 外部属性与 `onMissing` |
 | RFC 0006 PR-5 | 限流义务，用 Redis 限流后端；被拒绝的请求不消耗配额 |
 | RFC 0006 PR-6 | 决策事件与监听器（REQUIRED 审计失败 → 503） |
-| RFC 0006 PR-7 | HTTP 一段（WebFlux、WebMvc），线上的 problem+json；wrk2 测量 |
+| RFC 0006 PR-7 | HTTP 一段（WebFlux、WebMvc），线上的 problem+json；k6 测量（2026-10-26 修订：原为 wrk2） |
 | RFC 0007 PR-4、PR-5 | 文档改经控制面发布（`ControlStore`、`apply`），数据面读到新修订 |
 | RFC 0007 PR-9 | 控制面的 HTTP 路由 |
 | S1 | starter 的自动配置取代测试中的装配 |
 
 **测量。** 切片 PR 加入 `src/jmh` 的基准：快照已在本地缓存中，按 §3.8"Pipeline 吞吐"一行的场景（`global`、`role`、`none`、`blocked`、`anonymous`；
 `rate-limited` 随 RFC 0006 PR-5 加入）测 `Pipeline.decide`，与 RFC 0008 PR-3 的 7.0 基线在同一台机器上交替比较（§3.8 的方法），结果写进
-`docs/perf/e2e-slice/README.md`。RFC 0006 PR-7 之后加 wrk2：对 `:e2e:bootTestRun` 启动的测试应用定速压测，对照物是从 `v7.0.1` 构建、路由与（经
+`docs/perf/e2e-slice/README.md`。RFC 0006 PR-7 之后加 k6（`constant-arrival-rate` 执行器，70 % 负载下的 p99；2026-10-26 修订：维护者决定用 k6 取代 wrk2，wrk2 不在 Homebrew core）：对 `:e2e:bootTestRun` 启动的测试应用定速压测，对照物是从 `v7.0.1` 构建、路由与（经
 `cosec-migrate convert` 转换的）数据相同的 7.0 服务；Gateway 一行仍以 `cosec-gateway-server` 在 S1 时测量。这些测量按 §3.8"尽早测量"一条处理：
 低于预算立即交给维护者，不阻止合入；S1 的门槛不变。
 
@@ -620,7 +627,7 @@ RFC 0006 PR-2 #1044 随后也已合入）；RFC 0008 PR-4 一行换成 S1–S5�
 | RFC 0005 PR-5 路由映射 | RFC 0005 PR-3 ✓ | 依赖已合入；按 §4.7 第 1 条在 #1040 的审查之后 |
 | RFC 0004 PR-4 文档与编译（改动） | RFC 0004 PR-2 ✓、PR-3 ✓（#1027）；RFC 0005 PR-4 ✓（#1051） | ✓ 已合入（#1052） |
 | RFC 0004 PR-4b 加载平台、应用、租户快照（2026-10-26 新增：`SnapshotSource` 推广为一个共享槽加多个 LRU 族，`runtime` 的 `DocumentSnapshotViews`） | RFC 0004 PR-4 ✓（#1052） | ✓ 已合入（#1053） |
-| RFC 0004 PR-5 `cosec-migrate`（改动） | RFC 0004 PR-4 | 否 |
+| RFC 0004 PR-5 `cosec-migrate`（改动） | RFC 0004 PR-4 ✓（#1052） | 打开中（#1067） |
 | RFC 0005 PR-6 翻译 7.x 匹配器（改动） | RFC 0005 PR-4；RFC 0004 PR-5 | 否 |
 | RFC 0006 PR-2 Pipeline（改动） | RFC 0006 PR-1 ✓（#1025，审查修复 #1031 ✓）；RFC 0004 PR-1 ✓、PR-2 ✓ | ✓ 已合入（#1044） |
 | RFC 0006 PR-3 认证与成员关系 | RFC 0006 PR-2 ✓（#1044）；RFC 0004 PR-3 ✓ | **能**（按 §4.7 第 1 条在 #1044 的审查之后） |

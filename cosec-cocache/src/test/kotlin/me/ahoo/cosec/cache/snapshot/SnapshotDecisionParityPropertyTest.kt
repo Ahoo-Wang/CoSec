@@ -22,6 +22,7 @@ import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.CoSecTestCaches
 import me.ahoo.cosec.explain.ExplainLayer
+import me.ahoo.cosec.migrate.CoSec7xReader
 import me.ahoo.cosec.parity.AuthorizationFactory
 import me.ahoo.cosec.parity.DecisionParity
 import me.ahoo.cosec.parity.FailureView
@@ -42,7 +43,7 @@ import java.util.concurrent.ForkJoinPool
  * gate compares them (failures by their innermost cause, §8.1).
  *
  * The snapshot side takes the path real data takes: the 7.x data is stored as JSON in 7.0's layout, undecodable entries
- * included, [CoSec7xReader] converts it, [RedisSnapshotPublisher] publishes it, and the snapshot source reads it back
+ * included, [CoSec7xSnapshotReader] converts it, [RedisSnapshotPublisher] publishes it, and the snapshot source reads it back
  * through [RedisSnapshotDocumentStore] and compiles it. Both sides run on CoCache's in-memory backend.
  *
  * `check` runs [ITERATIONS] cases from a fixed seed on one thread; `./gradlew :cosec-cocache:snapshotParity` runs a
@@ -98,7 +99,7 @@ class SnapshotDecisionParityPropertyTest {
         return CoSecTestCaches(backend).use { caches ->
             Raw7xWriter(backend, caches.keyPrefix).use { it.store(data) }
             SnapshotNode(backend, caches.keyPrefix).use { node ->
-                val conversion = CoSec7xReader(backend, caches.keyPrefix).use { it.read(keysOf(data)) }
+                val conversion = CoSec7xSnapshotReader(backend, caches.keyPrefix).use { it.read(keysOf(data)) }
                 conversion.problems.assert().isEmpty()
                 conversion.contents.forEach { node.publisher.replace(it).block() }
                 SnapshotAuthorizationFixture(node.store, options = OPTIONS).use { snapshot ->
