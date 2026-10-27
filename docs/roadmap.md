@@ -3,7 +3,7 @@
 > 目标架构见 [RFC 0001](rfc/0001-target-architecture.md)，各阶段的细化设计见各自的 RFC。本文只记录**进度**：每个阶段走到了哪一步、
 > 还差什么、在等谁的决定。决策和理由以 RFC 为准；本文与 RFC 不一致时，以 RFC 为准并修正本文。
 >
-> 更新于 2026-10-27，基线 `main` @ `c49eeea9`（#1072）。
+> 更新于 2026-10-27，基线 `main` @ `3f91b5e7`（#1079）。
 >
 > 面向用户的路线图见 [CoSec 8.0 路线图](https://cosec.ahoo.me/zh/guide/roadmap)（[`wiki/zh/guide/roadmap.md`](../wiki/zh/guide/roadmap.md)）。
 
@@ -20,9 +20,9 @@
 | 1 | 安全修复与依赖升级（D1–D7、CoCache 6.6、CosId 4.0） | RFC 0001 §6 | 已合入，随 7.0.0 发布 | ✅ 完成 |
 | 2 | 纯函数决策引擎：`model/`、`engine/` | [RFC 0002](rfc/0002-pure-engine.md)，已确认 | PR-1 至 PR-5 已合入；PR-6 取消（并入切换） | ✅ 剩余工作并入切换 |
 | 3 | 策略快照分发 | [RFC 0003](rfc/0003-policy-snapshot.md)，已确认 | PR-1 至 PR-4 已合入；PR-5 取消，PR-6 并入切换 | ✅ 剩余工作并入切换 |
-| 4 | 统一模型：`Binding`、平台层/租户层、条件 AST、`service:verb`、编译执行、转换工具 | [RFC 0004](rfc/0004-unified-model.md) / [RFC 0005](rfc/0005-condition-ast.md)，已确认（2026-10-22） | RFC 0004 PR-1 至 PR-3、RFC 0005 PR-1 至 PR-4 已合入（PR-4 #1051）；RFC 0004 PR-4 已合入（#1052）；RFC 0004 PR-4b 已合入（#1053）；RFC 0004 PR-5（`cosec-migrate` 的 `convert`）已合入（#1067）；RFC 0005 PR-6（条件翻译）打开中（#1069）；RFC 0005 PR-5 可以开工 | 🟡 进行中 |
-| 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | [RFC 0006](rfc/0006-coroutine-pipeline.md)，已确认（2026-10-25） | PR-1 已合入（第 1 轮审查修复 #1031 已合入）；PR-2 已合入（#1044）；PR-3 已合入（#1054、#1055、#1057）；PR-4 已合入（#1066）；PR-6 已合入（#1068）；PR-7（适配器桥接）已合入（#1070）；PR-3 至 PR-7 的第 1 轮审查修复已合入（#1072）；PR-5（义务）进行中，等 #1069 | 🟡 进行中 |
-| 6 | 控制面 `cosec-control` | [RFC 0007](rfc/0007-control-plane.md)，已确认（2026-10-26，#1028） | PR-1（#1032）、PR-2（#1038）、PR-6a（授出分析，#1059）、PR-4（修订与发布，#1064）、PR-5（校验、编译与暂存，#1071）、PR-6（写操作的授权与审批，#1076）已合入；PR-3（边界）尚无 PR | 🟡 进行中 |
+| 4 | 统一模型：`Binding`、平台层/租户层、条件 AST、`service:verb`、编译执行、转换工具 | [RFC 0004](rfc/0004-unified-model.md) / [RFC 0005](rfc/0005-condition-ast.md)，已确认（2026-10-22） | RFC 0004 PR-1 至 PR-3、RFC 0005 PR-1 至 PR-4 已合入（PR-4 #1051）；RFC 0004 PR-4 已合入（#1052）；RFC 0004 PR-4b 已合入（#1053）；RFC 0004 PR-5（`cosec-migrate` 的 `convert`）已合入（#1067）；RFC 0005 PR-6（条件翻译）已合入（#1069）；RFC 0005 PR-5（路由映射）已合入（#1079）。实现部分完成，余下的只有切换步骤（S1–S5） | ✅ 实现完成 |
+| 5 | Pipeline 重组：协程、`AttributeProvider`、义务、503 | [RFC 0006](rfc/0006-coroutine-pipeline.md)，已确认（2026-10-25） | PR-1 已合入（第 1 轮审查修复 #1031 已合入）；PR-2 已合入（#1044）；PR-3 已合入（#1054、#1055、#1057）；PR-4 已合入（#1066）；PR-6 已合入（#1068）；PR-7（适配器桥接）已合入（#1070）；PR-3 至 PR-7 的第 1 轮审查修复已合入（#1072）；PR-5（限流义务）打开中（#1078） | 🟡 进行中 |
+| 6 | 控制面 `cosec-control` | [RFC 0007](rfc/0007-control-plane.md)，已确认（2026-10-26，#1028） | PR-1（#1032）、PR-2（#1038）、PR-6a（授出分析，#1059）、PR-4（修订与发布，#1064）、PR-5（校验、编译与暂存，#1071）、PR-6（写操作的授权与审批，#1076）已合入；PR-3（边界）打开中（#1075，等 Q24 的 JMH）；PR-7（影子窗口）打开中（#1080）；PR-8 在 #1080 合入后开工 | 🟡 进行中 |
 | — | 规范一致性套件、端到端切片与切换 S1–S5 | [RFC 0008](rfc/0008-conformance-and-direct-build.md)，已确认（2026-10-26），路线图审查修订（2026-10-26） | PR-1（套件）已合入（#1045）；PR-3（7.0 基线）已合入（#1065）；PR-2 可以开工 | 🟡 进行中 |
 
 **发布策略**（RFC 0001 §6，2026-10-21）：目标架构全部达成、每个 PR 做完两轮审查之前，8.0 不发布任何版本，没有里程碑版和 RC。
@@ -94,9 +94,11 @@ key 过滤器、协调 `localMaxAge`）转入切换 PR（RFC 0008 §4.4）。
 | RFC 0005 PR-4 | 编译语句与候选索引，扁平引擎改为评估编译后的语句；I1、I2、`ALG-7` 的性质；对 7.0 的吞吐预算 | #1051 | — | — |
 | RFC 0004 PR-4 | `schema: 2` 的平台、应用、租户文档与编解码、文档编译与编译期检查、两层同名按内容解析（RFC 0007 N2）、格式描述、`DOC-*`/`TNT-2` 等场景 | #1052 | — | — |
 | RFC 0004 PR-4b | `SnapshotSource` 推广为一个共享槽加多个 LRU 族，加载平台、应用、租户文档并实现 `SnapshotViews`；`SNP-1`、`SNP-2` 的守护 | 已合入（#1053） | — | — |
-| RFC 0004 PR-5 | `cosec-migrate`：`convert`、`publish`、拒绝项、来源映射与报告（含受语义改动影响的 7.x 配置形态）；翻译动作，条件的翻译留给 RFC 0005 PR-6 | #1067 | — | — |
+| RFC 0004 PR-5 | `cosec-migrate`：`convert`、`publish`、拒绝项、来源映射与报告（含受语义改动影响的 7.x 配置形态）；翻译动作，条件的翻译留给 RFC 0005 PR-6 | #1067 | ✅（只读审查，修复并入 #1069） | — |
+| RFC 0005 PR-6 | 把 7.x 条件按方向翻译成 AST（不放宽 ALLOW、不收窄 DENY，做不到即拒绝）、限流规则翻译；`migrate/` 运行时依赖 `spring-web`、`spring-expression`（维护者批准）；审查修复：`"method": "*"` 拒绝、只差大小写的 id 拒绝、`CREATE_NEW` 与发布前 SHA-256 校验、`--resume`、带大小写映射的字符不让 DENY 收窄、含 DENY 的策略不随 by-owner 移走 | #1069 | ✅ 修复在 #1069 内 | — |
+| RFC 0005 PR-5 | 路由映射（`cosec-core` 的 `me.ahoo.cosec.route`，整体加载或整体失败）、`OpenAPIServiceGenerator`、Pipeline 的 `routes` 参数；未映射的请求保持 `http:<METHOD>`，捕获值含 `/` 返回 400；`ACT-2` 不再 pending，新规则 `RTE-1`–`RTE-3` | #1079 | — | — |
 
-后续：RFC 0005 PR-5（路由映射）；RFC 0005 PR-6（把 7.x 条件翻译成 AST，改动；在 RFC 0004 PR-5 之上扩展 `MatcherTranslator`）。
+第 4 阶段的实现 PR 全部合入；剩下的是切换步骤与审查轮次。
 依赖见 RFC 0008 §4.5。
 
 ---
@@ -108,7 +110,7 @@ PR-9、PR-10 并入切换；PR-2 增加"同一 `CoSec-*` 参数的 Header 与 qu
 2026-10-26 起：CoSec 写的错误响应改为 RFC 9457 problem+json，显式与隐式拒绝在响应中合并（RFC 0006 Q27）；PR-2 实现，PR-7 写回，切换 PR 写文档。
 PR-2（#1044）：`HttpFacts` 与 `SCP-4`、`PathNormalizer`、`Authenticator` SPI、`Outcome` 与 `StatusMapping`（problem 词汇）、手写的 `ProblemEncoder`、
 `problem` 格式描述与 `schema/problem.schema.json`、`Pipeline.decide` 骨架（整体超时、取消规则、`resumeOffIo` 与 T1–T3）、`SuspendingSnapshotSource`，全部用测试替身；
-快照视图的来源是新的 `SnapshotViews` 接口，由 RFC 0004 PR-4 的文档源实现。PR-3（#1054，已合入）：`MembershipProvider` 改为 `suspend`（Q11），成员关系解析搬进 `runtime/` 的挂起 `MembershipResolver`，`TokenAuthenticator` 校验令牌、按令牌与按主体吊销（`MEM-4`）并给出 `token-*`（`PIP-6`），吊销的读接口是新的 `RevocationReader`（`TokenStore` 的同步方法留给 7.x 路径到切换为止）；PR-3b（#1055，已合入）：`CoCacheRevocationReader`（`CoCacheTokenStore.reader`，CoCache 异步视图上的非阻塞吊销读，保留文档化的降级）、`CoCacheMembershipProvider` 与 `MembershipLoader`（带 TTL 的成员关系缓存，读写失败抛出，`MembershipCacheFailureTest`）、新规则 `PIP-7`；PR-3c（#1057，已合入）：`ApiKeyReader`（`ApiKeyStore` 的挂起读接口）与 `RedisApiKeyReader`（响应式客户端，不阻塞）、`ApiKeyAuthenticator`、`CompositeAuthenticator`（带 API Key 的请求只按 Key 判断）、新规则 `PIP-8`。PR-4（#1066，已合入）：外部属性 `ext.<provider>.<name>` 与属性目录（未注册即编译错误）、`onMissing`（DENY 的 `nomatch` 只限平台文档）、纯函数 `Engine.plan`、阶段 A（与成员关系并发）与阶段 B（按提供者并发、各自超时）的预取，`BlacklistAttributeProvider`/`BlacklistSource`（读失败不当作"未拉黑"，没有 DENY 命中即 503）与 `Ip2RegionAttributeProvider`；性质 P9′、P14，新规则 `ATR-2` 至 `ATR-5`、`BLK-2`，`ATR-1` 不再 pending。PR-6（#1068，已合入）：`DecisionEvent`（每个结果都有事件，含 400、认证不可用、取消与缺陷；不含外部属性的值、请求头与 token）、`DecisionListener` 与投递（REQUIRED 在超时内并发、失败只把 Permit 变成 503；BEST_EFFORT 各自有界队列、不在请求线程上、满了丢弃）、break-glass 的 Permit 必须有 REQUIRED 监听器记录（Q20）、`ShadowListener`（只在采样命中时创建 `ReplayHandle`）、`AuditEvents.from` 与 `LoggingAuditListener`、`KafkaAuditListener`、`MetricsListener`、`TracingListener`，以及 `BridgeContextContributor` 的 OTel 与 MDC 实现；`OBS-1` 不再 pending，新规则 `OBS-2`。PR-7（#1070，已合入；第 1 轮审查修复 #1072，同时修复 PR-3 至 PR-6 的审查发现，并让 S1 必须装配真实的 `RevocationReader`）：三个适配器经 `mono {}`（WebFlux、Gateway）与 `runBlocking`（WebMvc，只在 Servlet 线程上）桥接到协程 Pipeline（`PipelineWebFilter`、`PipelineGatewayFilter`、`PipelineServletFilter`，与 7.x 的过滤器并存到 S1 装配、S3/S4 删除），`HttpFactsReader`，只写 `Outcome` 的状态、响应头与 `ProblemEncoder` 的字节（400 也带 `CoSec-Request-Id`，追踪生效时响应体带 `traceId`），`SecurityContext.scope`，挂起的 `AuthorizationChecker` 与 `checkMono`/`checkBlocking`；`WebAdapterParityTest` 只对新 Pipeline 运行，三个适配器在 §6.1 的每一个 `type` 上逐字节相同，`PipelineBlockHoundTest`，端到端切片加 WebFlux 适配器测试。2026-10-26 修订（路线图审查）：PR-3 至 PR-7 合入时各自把自己的一段接进端到端切片（RFC 0008 §4.4.3）；PR-9 的 starter 装配落在 S1。PR-5（限流义务）进行中，等 RFC 0005 PR-6（#1069）合入。
+快照视图的来源是新的 `SnapshotViews` 接口，由 RFC 0004 PR-4 的文档源实现。PR-3（#1054，已合入）：`MembershipProvider` 改为 `suspend`（Q11），成员关系解析搬进 `runtime/` 的挂起 `MembershipResolver`，`TokenAuthenticator` 校验令牌、按令牌与按主体吊销（`MEM-4`）并给出 `token-*`（`PIP-6`），吊销的读接口是新的 `RevocationReader`（`TokenStore` 的同步方法留给 7.x 路径到切换为止）；PR-3b（#1055，已合入）：`CoCacheRevocationReader`（`CoCacheTokenStore.reader`，CoCache 异步视图上的非阻塞吊销读，保留文档化的降级）、`CoCacheMembershipProvider` 与 `MembershipLoader`（带 TTL 的成员关系缓存，读写失败抛出，`MembershipCacheFailureTest`）、新规则 `PIP-7`；PR-3c（#1057，已合入）：`ApiKeyReader`（`ApiKeyStore` 的挂起读接口）与 `RedisApiKeyReader`（响应式客户端，不阻塞）、`ApiKeyAuthenticator`、`CompositeAuthenticator`（带 API Key 的请求只按 Key 判断）、新规则 `PIP-8`。PR-4（#1066，已合入）：外部属性 `ext.<provider>.<name>` 与属性目录（未注册即编译错误）、`onMissing`（DENY 的 `nomatch` 只限平台文档）、纯函数 `Engine.plan`、阶段 A（与成员关系并发）与阶段 B（按提供者并发、各自超时）的预取，`BlacklistAttributeProvider`/`BlacklistSource`（读失败不当作"未拉黑"，没有 DENY 命中即 503）与 `Ip2RegionAttributeProvider`；性质 P9′、P14，新规则 `ATR-2` 至 `ATR-5`、`BLK-2`，`ATR-1` 不再 pending。PR-6（#1068，已合入）：`DecisionEvent`（每个结果都有事件，含 400、认证不可用、取消与缺陷；不含外部属性的值、请求头与 token）、`DecisionListener` 与投递（REQUIRED 在超时内并发、失败只把 Permit 变成 503；BEST_EFFORT 各自有界队列、不在请求线程上、满了丢弃）、break-glass 的 Permit 必须有 REQUIRED 监听器记录（Q20）、`ShadowListener`（只在采样命中时创建 `ReplayHandle`）、`AuditEvents.from` 与 `LoggingAuditListener`、`KafkaAuditListener`、`MetricsListener`、`TracingListener`，以及 `BridgeContextContributor` 的 OTel 与 MDC 实现；`OBS-1` 不再 pending，新规则 `OBS-2`。PR-7（#1070，已合入；第 1 轮审查修复 #1072，同时修复 PR-3 至 PR-6 的审查发现，并让 S1 必须装配真实的 `RevocationReader`）：三个适配器经 `mono {}`（WebFlux、Gateway）与 `runBlocking`（WebMvc，只在 Servlet 线程上）桥接到协程 Pipeline（`PipelineWebFilter`、`PipelineGatewayFilter`、`PipelineServletFilter`，与 7.x 的过滤器并存到 S1 装配、S3/S4 删除），`HttpFactsReader`，只写 `Outcome` 的状态、响应头与 `ProblemEncoder` 的字节（400 也带 `CoSec-Request-Id`，追踪生效时响应体带 `traceId`），`SecurityContext.scope`，挂起的 `AuthorizationChecker` 与 `checkMono`/`checkBlocking`；`WebAdapterParityTest` 只对新 Pipeline 运行，三个适配器在 §6.1 的每一个 `type` 上逐字节相同，`PipelineBlockHoundTest`，端到端切片加 WebFlux 适配器测试。2026-10-26 修订（路线图审查）：PR-3 至 PR-7 合入时各自把自己的一段接进端到端切片（RFC 0008 §4.4.3）；PR-9 的 starter 装配落在 S1。PR-5（限流义务）打开中（#1078）：`Permit.obligations` 只随 Permit 计算（P15），平台 → 应用 → 租户的顺序；平台规则保留 7.x 的 Redis 桶，应用与租户规则带命名空间（`app:<app>/<id>`、`tenant:<tenant>/<id>`）；三种文档都有可选的 `rateLimits` 一节（`schema` 版本不变，RFC 0008 Q5）；第一个耗尽的规则返回 429，`strictFailure` 规则计数失败返回 503；`ReactiveRedisRateLimiter` 不经 `boundedElastic`；转换工具把规则写进平台文档的 `rateLimits`。
 
 ---
 
@@ -119,7 +121,7 @@ RFC 0007 已于 2026-10-26 确认（#1028）。PR-2（由文档格式描述生�
 PR-9 只做库与 HTTP，starter 装配移进切换（RFC 0008 §4.1）。
 2026-10-26 修订（路线图审查）：PR-6 的分析部分（`GrantAnalyzer`、模式包含 N7、RFC 0007 §7.4）拆成 **PR-6a** 现在开工，依赖 RFC 0005 PR-2（#1036）、PR-3（#1040）都已合入；接线留在 PR-6（RFC 0008 §4.5）。
 
-PR-5（#1071，`feat(control): validate, compile and stage changes`）：变更请求与状态机、带 `ifMatch` 的条目级操作、校验 V1–V3、按平台的 `limits` 与 `attributes` 严格编译（N3）、每个文档一个暂存槽、变基、发布前重查、声明式 `apply` 与回滚；`ChangeRequest` 与 `Stage` 缓存，`PublishCompileTest`、`ControlFailClosedTest`，`CTL-1`、`CTL-6`、`CTL-7` 场景。PR-4 已合入（#1064）。PR-6 已合入（#1076，见下）。PR-3（边界）尚无 PR。
+PR-5（#1071，`feat(control): validate, compile and stage changes`）：变更请求与状态机、带 `ifMatch` 的条目级操作、校验 V1–V3、按平台的 `limits` 与 `attributes` 严格编译（N3）、每个文档一个暂存槽、变基、发布前重查、声明式 `apply` 与回滚；`ChangeRequest` 与 `Stage` 缓存，`PublishCompileTest`、`ControlFailClosedTest`，`CTL-1`、`CTL-6`、`CTL-7` 场景。PR-4 已合入（#1064）。PR-6 已合入（#1076，见下）。PR-3（边界）打开中（#1075，等 Q24 的 JMH）：另修了 #1076 遗漏的边界设置授权（`cosec:boundary` 只在平台；任何边界改动都要第二个人审批）。PR-7（影子窗口）打开中（#1080）。
 
 PR-6a（`feat(engine,control): analyze grants against the grantor's own rights`）：`engine/` 的模式包含与不相交判断（N7，`PatternContainment`，A7）、
 `control/` 的 `GrantAnalyzer`（§7.4.1 拆片段、§7.4.3 算法、§7.4.4 收窄与 `protected`）、A5、A6、A8、§7.4.6 每一行的单元测试与 `GRT-*` 场景（`control` 级 runner 断言分析结果）。
@@ -175,13 +177,15 @@ PR-1 的登记表（`conformance/src/test/resources/rules.json`）有 64 条规�
 
 | PR | 内容 | 备注 |
 |---|---|---|
-| #1069 | `feat(migrate)`：把 7.x 条件翻译成条件 AST（RFC 0005 PR-6） | 在 #1067 之上；`convert` 因此能解码 7.x 的路径动作与 `#{...}` 值 |
-| #1073 | `docs(perf)`：经切片测量黑名单与决策监听器 | 只改 `docs/perf/`；低于预算时数字交给维护者（RFC 0008 §3.8） |
+| #1075 | `feat(engine,core)`：平台边界（RFC 0007 PR-3） | Q24 的零开销门槛（`boundary = none` 不低于基线的 100 %）待空闲机器上的 JMH 判定，判定前不合入 |
+| #1078 | `feat(engine,runtime)`：限流作为义务（RFC 0006 PR-5） | 与 #1079 冲突，正在合并 |
+| #1080 | `feat(runtime,control)`：候选文档上的影子窗口（RFC 0007 PR-7） | 自动合并已开 |
 
 没有 PR 的进行中的工作：
 
-- RFC 0006 PR-5（限流义务）：等 #1069 合入后开 PR。
-- RFC 0007 PR-3（边界）：尚无 PR（#1071、#1076 已合入）。
+- RFC 0007 PR-8（break-glass、租户自助、变更审计、`cosec-migrate bootstrap`）：#1080 合入后开工。
+- RFC 0008 PR-2（安全不变量的变异检查）：进行中。
+- 7.0 端到端基线（k6）：在空闲机器上测量，结果作为 #1065 的后续 PR。
 
 （#866 是 Renovate 的 pnpm 升级，不属于路线图。）
 
@@ -203,14 +207,15 @@ PR-1 的登记表（`conformance/src/test/resources/rules.json`）有 64 条规�
 | **`migrate/` 的运行时依赖** `spring-web` 与 `spring-expression`：批准，使 `convert` 能解码 7.x 的路径动作与 `#{...}` 值 | 2026-10-26 | #1067、#1069 |
 | **提交信息**用英文，不加 Co-authored-by 尾注 | 2026-10-26 | 仅记在本文 |
 | **`main` 的分支保护**要求合入前分支是最新的 | 2026-10-26 | [RFC 0008 §4.7](rfc/0008-conformance-and-direct-build.md) |
+| **共享文档只由协调者修改**：`docs/roadmap.md`、`docs/rfc/*.md` 与 wiki 路线图（中英文）。实现 PR 不改它们，把需要的更新写在 PR 描述的 "For the coordinator: shared-doc updates" 一节，协调者每批合入后统一更新。与改动直接相关的文档（`docs/perf/`、模块的 wiki 页面、`skills/`、`schema/`）仍随改动的 PR | 2026-10-27 | 仅记在本文 |
+| **合并冲突逐块解决**，共享文档从不整文件取一边（#1076 曾因此回退 RFC 0008 与路线图，#1077 恢复） | 2026-10-27 | 仅记在本文 |
 
 ## 10. 尚未派发的下一步
 
 可以立即开工（按 RFC 0008 §4.5 的依赖顺序）：
 
-- RFC 0008 PR-2（变异检查）。
-- RFC 0005 PR-5（路由映射）。
-- RFC 0007 PR-3（边界）；RFC 0006 PR-5（等 #1069）。
+- RFC 0007 PR-9（库与 HTTP，依赖 PR-5 至 PR-8）。
+- 审查轮次：RFC 0005 PR-5（#1079）、RFC 0006 PR-5（#1078）、RFC 0007 PR-4 至 PR-7 的第 1 轮；之前合入、只做过第 1 轮的 PR 的第 2 轮。
 - 端到端的 k6 测量（RFC 0008 §4.4.3），对照 7.0 基线。
 - S1 的前置：RFC 0008 §4.4 S1 的要求（含 `controlSupport` 的启动测试、真实的 `RevocationReader`、N3）已列全，依赖全部实现 PR。
 - 核对已合入 PR 的两轮审查（RFC 0008 §4.7：同一领域先审查，再开新功能 PR）；各表中"—"表示尚无已合入的修复 PR。
