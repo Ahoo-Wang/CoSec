@@ -27,6 +27,7 @@ import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
 import me.ahoo.cosec.token.TokenStore
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -44,6 +45,7 @@ import tools.jackson.databind.ObjectMapper
 @ConditionalOnCoSecEnabled
 @ConditionalOnJwtEnabled
 @ConditionalOnClass(name = ["me.ahoo.cosec.cache.RevokedTokenCache"])
+@ConditionalOnBean(CacheRuntime::class)
 @EnableConfigurationProperties(
     CacheProperties::class,
 )

@@ -47,17 +47,7 @@ cosec:
     secret: ${COSEC_JWT_SECRET}
   ip2region:
     enabled: false
-  authorization:
-    local-policy:
-      enabled: true
-      init-repository: true
-    cache:
-      policy:
-        maximum-size: 100000
-      role:
-        maximum-size: 100000
 
 logging:
   level:
     root: info
-    me.ahoo.cosec.authorization.SimpleAuthorization: debug

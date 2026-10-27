@@ -36,7 +36,7 @@ class CoSecTokenRevocationCacheAutoConfigurationTest {
     private val contextRunner = ApplicationContextRunner()
 
     @Test
-    fun contextLoadsWhenDisabled() {
+    fun withoutCoCacheTheStoreRevokesNothing() {
         contextRunner
             .withPropertyValues(
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
@@ -54,11 +54,11 @@ class CoSecTokenRevocationCacheAutoConfigurationTest {
     }
 
     @Test
-    fun contextLoadsWhenEnabled() {
+    fun withCoCacheRevocationIsAlwaysOn() {
+        // whatever cosec.jwt.token-revocation.enabled says: the caches come with cacheSupport (RFC 0008 S1b)
         contextRunner
             .withPropertyValues(
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
-                "${JwtProperties.PREFIX}.token-revocation.enabled=true",
             )
             .withUserConfiguration(
                 JacksonAutoConfiguration::class.java,

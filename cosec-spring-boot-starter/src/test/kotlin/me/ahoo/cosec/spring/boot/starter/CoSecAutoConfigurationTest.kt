@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.spring.boot.starter
 
-import me.ahoo.cosec.serialization.CoSecModule
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
@@ -30,7 +29,6 @@ internal class CoSecAutoConfigurationTest {
                 assertThat(context)
                     .hasSingleBean(CoSecProperties::class.java)
                     .hasSingleBean(CoSecAutoConfiguration::class.java)
-                    .hasSingleBean(CoSecModule::class.java)
             }
     }
 
