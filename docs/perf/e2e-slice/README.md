@@ -194,3 +194,39 @@ That part is not measured separately here.
   need it. Measure again with this benchmark on an idle machine.
 
 **Command:** as above, with the jar built from `main` at `dd0e7f27`. The 7.0.1 side is unchanged.
+
+## The BEST_EFFORT hand-off and the blacklist, cut
+
+A follow-up to the section above changed four things:
+
+- **BEST_EFFORT delivery.** A listener's consumer is woken once per batch, not once per event. Each listener has a
+  lock-free bounded queue. An event wakes the consumer only while it is parked with nothing queued, or when the queue
+  reaches half its capacity. After a batch, the consumer waits up to 1 ms for more before it parks. A BEST_EFFORT event
+  can therefore start up to 1 ms later than before; queue capacity, drops, per-listener isolation and `close()` are
+  unchanged.
+- **The publish event.** It is built only when a BEST_EFFORT listener will read it. REQUIRED listeners get their own
+  event earlier, as before.
+- **Stage A.** It no longer opens a `coroutineScope` and an `async` when the memberships come from claims, because those
+  never suspend. Stage B is not planned when every provider is stage A, as the blacklist is: stage A has already asked
+  for everything.
+- **`InMemoryBlacklistSource`.** It looks up a set per kind instead of allocating a `(kind, value)` pair per lookup.
+
+Measured with the CI A/B workflow ([`scripts/jmh-ab`](../../../scripts/jmh-ab/README.md)), not on an idle machine. Three
+alternating rounds on one GitHub runner, `PipelineBenchmark.evaluate`, `main` against the change:
+
+| Scenario | head ÷ base (rounds 1 / 2 / 3) | / `global`, base → head | B/op base → head |
+|---|---|---|---|
+| `global` | 98.1 % / 96.1 % / 100.6 % | – | 5,105 → 5,105 |
+| `blacklist` | 105.1 % / 108.0 % / 106.0 % | 75–78 % → 80–84 % | 7,409 → 7,076 |
+| `blocked` | 101.2 % / 103.7 % / 106.5 % | 111–115 % → 118–122 % | 7,265 → 6,732 |
+| `listener` | 142.9 % / 138.4 % / 138.0 % | 62–64 % → 88–92 % | 5,543 → 5,514 |
+
+- **`listener`** is now about 10 % below `global`, where it was about 40 %. What is left is the event itself (about
+  400 B/op) and an enqueue per request.
+- **`blacklist`** still costs about 17 % of `global` and 2 kB per request. Most of it is generic to stage-A providers:
+  - the provider call's lazy timeout, which still opens a `coroutineScope` and an `async`;
+  - the provider's three suspending lookups and its result map;
+  - `FetchedAttributes` and the `ExternalValues` passed to the engine.
+
+  The next step would be a cheaper lazy timeout for an SPI call that answers without suspending. It would help every
+  SPI call, not only the blacklist.
