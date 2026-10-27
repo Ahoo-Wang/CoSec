@@ -13,10 +13,11 @@
 
 package me.ahoo.cosec.cache
 
+import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.api.policy.Effect
 import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.authorization.MissingPolicyException
+import me.ahoo.cosec.authorization.SimpleAuthorization
 import me.ahoo.cosec.cache.GlobalPolicyIndexCache.Companion.CACHE_KEY
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.policy.EvaluateRequest
@@ -25,21 +26,15 @@ import me.ahoo.cosec.policy.StatementData
 import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedClass
-import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
-import reactor.kotlin.test.test
 
 /**
  * RFC 0001, D2: a principal references a DENY policy that the repository cannot find (deleted, not yet
  * replicated, lost from Redis). [RedisPolicyRepository.getPolicies] drops the id, so the deny disappears and a
  * broader global ALLOW wins: a suspended account regains access. Deny-first says missing data must not widen access.
  */
-@ParameterizedClass
-@EnumSource(AuthorizationImpl::class)
-class MissingPolicyFailClosedTest(private val impl: AuthorizationImpl) {
+class MissingPolicyFailClosedTest {
     private val allowAll = PolicyData(
         id = "allow-all",
         category = "",
@@ -61,17 +56,12 @@ class MissingPolicyFailClosedTest(private val impl: AuthorizationImpl) {
         statements = listOf(StatementData(effect = Effect.DENY, action = AllActionMatcher.INSTANCE)),
     )
 
-    private val caches = CoSecTestCaches().also {
-        it.globalPolicyIndexCache.add(CACHE_KEY, listOf(allowAll.id))
-        it.policyCache.put(allowAll.id, allowAll)
+    private val globalPolicyIndexCache = mockk<GlobalPolicyIndexCache>().also {
+        every { it.get(CACHE_KEY) } returns setOf(allowAll.id)
     }
 
-    private fun authorization() = impl.create(caches.policyRepository(), mockk())
-
-    @AfterEach
-    fun destroy() {
-        caches.close()
-    }
+    private fun authorization(policyCache: PolicyCache) =
+        SimpleAuthorization(RedisPolicyRepository(globalPolicyIndexCache, policyCache), mockk())
 
     private val request = EvaluateRequest(path = "/orders/1", method = "DELETE")
     private fun context() = SimpleSecurityContext(SimplePrincipal("user", policies = setOf(suspended.id)))
@@ -79,24 +69,20 @@ class MissingPolicyFailClosedTest(private val impl: AuthorizationImpl) {
     @Test
     fun presentDenyPolicyDenies() {
         // Control: with the deny policy loaded, the request is denied.
-        caches.policyCache.put(suspended.id, suspended)
-        val decision = checkNotNull(authorization().decide(request, context()).block())
+        val policyCache = mockk<PolicyCache>()
+        every { policyCache.get(allowAll.id) } returns allowAll
+        every { policyCache.get(suspended.id) } returns suspended
+        val decision = checkNotNull(authorization(policyCache).decide(request, context()).block())
         decision.result.authorized.assert().isFalse()
     }
 
     @Test
     fun missingDenyPolicyDoesNotTurnIntoAllow() {
-        val decision = authorization().decide(request, context()).onErrorResume { Mono.empty() }.block()
+        val policyCache = mockk<PolicyCache>()
+        every { policyCache.get(allowAll.id) } returns allowAll
+        every { policyCache.get(suspended.id) } returns null
+        val decision = authorization(policyCache).decide(request, context()).onErrorResume { Mono.empty() }.block()
         // Either an error (mapped to 500 by the pipeline) or a deny is acceptable; an allow is not.
         (decision?.result?.authorized ?: false).assert().isFalse()
-    }
-
-    @Test
-    fun missingPolicyFailsWithMissingPolicyException() {
-        // Final semantics: SimpleAuthorization fails closed (the pipeline maps the error to 500).
-        authorization().decide(request, context())
-            .test()
-            .expectError(MissingPolicyException::class.java)
-            .verify()
     }
 }

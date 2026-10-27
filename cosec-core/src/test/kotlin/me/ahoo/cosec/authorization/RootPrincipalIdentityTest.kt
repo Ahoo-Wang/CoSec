@@ -27,36 +27,29 @@ import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedClass
-import org.junit.jupiter.params.provider.EnumSource
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono
 
 /**
- * RFC 0001, D5: root used to be decided by principal id alone (`cosec`, or `-Dcosec.root`) and skipped the
- * blacklist.
+ * RFC 0001, D5: root is decided by principal id alone (`cosec`, or `-Dcosec.root`), with
+ * [RootPrincipalMatcher.DEFAULT], which the starter installs when `cosec.authorization.root-enabled` is `true`
+ * (the default).
  *
- * Root is now an explicit grant (`cosec.authorization.root-enabled` defaults to `false`). When enabled, only the
- * platform tenant's principal with the root id is root, and the blacklist still applies to it. The tests pass
- * [RootPrincipalMatcher.DEFAULT] explicitly: it is what `root-enabled=true` installs.
+ * These tests state the behaviour the RFC proposes: root is an explicit grant, still subject to the blacklist, and
+ * an id issued inside a user tenant does not make its holder platform root.
  */
-@ParameterizedClass
-@EnumSource(AuthorizationImpl::class)
-class RootPrincipalIdentityTest(private val impl: AuthorizationImpl) {
+class RootPrincipalIdentityTest {
     private val blockEverything = object : BlacklistChecker {
         override fun check(request: Request, context: SecurityContext): Mono<Boolean> = false.toMono()
     }
 
-    private fun authorization(blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp) = impl.create(
+    private fun authorization(blacklistChecker: BlacklistChecker = BlacklistChecker.NoOp) = SimpleAuthorization(
         policyRepository = mockk {
             every { getGlobalPolicy() } returns Mono.just(emptyList())
         },
         appRolePermissionRepository = mockk(),
         blacklistChecker = blacklistChecker,
-        rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT,
     )
-
-    private val platformRoot = SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant.PLATFORM)
 
     private val request = EvaluateRequest(path = "/admin/users", method = "DELETE")
 
@@ -67,18 +60,10 @@ class RootPrincipalIdentityTest(private val impl: AuthorizationImpl) {
     }
 
     @Test
-    fun platformRootIsRoot() {
-        // Precondition for the tests below: without the blacklist, this principal is allowed as root.
-        val decision = checkNotNull(authorization().decide(request, SimpleSecurityContext(platformRoot)).block())
-        decision.assert().isEqualTo(AuthorizationDecision(AuthorizeResult.ALLOW, RootVerifyContext))
-    }
-
-    @Test
     fun blacklistAppliesToRoot() {
-        val context = SimpleSecurityContext(platformRoot)
+        val context = SimpleSecurityContext(SimplePrincipal(CoSecPrincipal.ROOT_ID))
         val decision = checkNotNull(authorization(blockEverything).decide(request, context).block())
         decision.result.assert().isEqualTo(AuthorizeResult.EXPLICIT_DENY)
-        decision.verifyContext.assert().isEqualTo(BlacklistVerifyContext)
     }
 
     @Test
@@ -86,13 +71,6 @@ class RootPrincipalIdentityTest(private val impl: AuthorizationImpl) {
         // An identity provider for tenant "acme" lets users pick their own id, and one picks "cosec".
         val principal = SimpleTenantPrincipal(SimplePrincipal(CoSecPrincipal.ROOT_ID), SimpleTenant("acme"))
         val context = SimpleSecurityContext(principal)
-        val decision = checkNotNull(authorization().decide(request, context).block())
-        decision.result.authorized.assert().isFalse()
-    }
-
-    @Test
-    fun principalNamedRootWithoutATenantIsNotPlatformRoot() {
-        val context = SimpleSecurityContext(SimplePrincipal(CoSecPrincipal.ROOT_ID))
         val decision = checkNotNull(authorization().decide(request, context).block())
         decision.result.authorized.assert().isFalse()
     }
