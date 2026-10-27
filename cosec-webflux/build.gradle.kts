@@ -14,6 +14,9 @@
 dependencies {
     api(project(":cosec-core"))
     api(project(":cosec-jwt"))
+    // The bridge to the coroutine pipeline (RFC 0006 §7.3): mono {} from kotlinx-coroutines-reactor.
+    api(project(":cosec-runtime"))
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     api("org.springframework:spring-context")
     api("org.springframework:spring-webflux")
     testImplementation("me.ahoo.cosid:cosid-test")
