@@ -43,15 +43,15 @@ on:
       forks:
         description: 'JMH forks (-f)'
         required: true
-        default: '2'
+        default: '1'
       warmup:
         description: 'JMH warm-up iterations (-wi)'
         required: true
-        default: '3'
+        default: '2'
       iterations:
         description: 'JMH measurement iterations (-i)'
         required: true
-        default: '5'
+        default: '3'
       warmup-time:
         description: 'JMH warm-up time per iteration (-w)'
         required: true
@@ -64,15 +64,11 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: jmh-ab
-  cancel-in-progress: false
-
 jobs:
   jmh-ab:
     name: JMH A/B
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 90
     env:
       BASE: ${{ inputs.base }}
       HEAD: ${{ inputs.head }}
@@ -108,13 +104,27 @@ jobs:
           echo "base: $(git -C "$RUNNER_TEMP/base" rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "head: $(git -C "$RUNNER_TEMP/head" rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
           # Keep the A/B script itself independent of the refs under test.
-          cp "$GITHUB_WORKSPACE/scripts/jmh-ab/compare.py" "$RUNNER_TEMP/compare.py"
+          cp "$GITHUB_WORKSPACE"/scripts/jmh-ab/*.py "$RUNNER_TEMP/"
 
       - name: Build benchmark jars
         run: |
           for side in base head; do
             (cd "$RUNNER_TEMP/$side" && ./gradlew ":$MODULE:jmhJar" --no-daemon)
           done
+
+      # Every @Param combination of every matching benchmark runs once per side and round, so a class with several
+      # params multiplies quickly. Narrow `include` and `params` when this prints more than ~60 minutes.
+      - name: Estimate run time
+        run: |
+          est=$(find "$RUNNER_TEMP/head" -path '*/build/libs/*-jmh.jar' | head -n 1)
+          "$JAVA_HOME_25_X64/bin/java" -jar "$est" "$INCLUDE" -lp 2>&1 \
+            | python3 -I "$RUNNER_TEMP/estimate.py" "$ROUNDS" "$FORKS" "$WARMUP" "$ITERATIONS" \
+                "${WARMUP_TIME%s}" "${MEASUREMENT_TIME%s}" $PARAMS 2> "$RUNNER_TEMP/estimate.err" | tee -a "$GITHUB_STEP_SUMMARY"
+          minutes=$(sed -n 's/^minutes=//p' "$RUNNER_TEMP/estimate.err")
+          if [ "${minutes:-0}" -gt 80 ]; then
+            echo "::error::estimated $minutes minutes exceeds the 90 minute job limit; narrow include/params or lower rounds/forks"
+            exit 1
+          fi
 
       - name: Run alternating rounds
         run: |
