@@ -34,6 +34,8 @@ class PipelineOptions(
      * §5.4.2). Then its attributes are unavailable.
      */
     val attributeTimeout: Duration = 300.milliseconds,
+    /** One `RateLimiter` call (`cosec.authorization.rate-limit.timeout`, RFC 0006 §8.3); then the rule's `strictFailure` decides. */
+    val rateLimitTimeout: Duration = 500.milliseconds,
     /** Whether the token may come from the `authorization` query parameter; off, as tokens in URLs leak into logs. */
     val allowQueryToken: Boolean = false,
     /** The header an API key comes in. */
@@ -46,6 +48,7 @@ class PipelineOptions(
             "The authentication timeout must be positive, not $authenticationTimeout."
         }
         require(membershipTimeout.isPositive()) { "The membership timeout must be positive, not $membershipTimeout." }
+        require(rateLimitTimeout.isPositive()) { "The rate limit timeout must be positive, not $rateLimitTimeout." }
         require(attributeTimeout.isPositive()) { "The attribute timeout must be positive, not $attributeTimeout." }
         require(apiKeyHeader.isNotBlank()) { "The API key header must not be blank." }
     }

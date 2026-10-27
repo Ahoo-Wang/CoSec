@@ -61,6 +61,10 @@ class ConditionChecker(
     /** The external attributes the registered providers declare (RFC 0006 §5.4.1). */
     val catalog: AttributeCatalog = AttributeCatalog.NONE,
 ) {
+    /** The attribute [path] names, a declared external one included; null when there is none. */
+    fun attribute(path: String): Attribute? =
+        Attribute.parse(path) ?: if (Attribute.isExternalPath(path)) catalog.external(path) else null
+
     fun check(condition: Condition): CheckResult {
         val run = Run()
         val checked = run.check(condition, ROOT, 1)

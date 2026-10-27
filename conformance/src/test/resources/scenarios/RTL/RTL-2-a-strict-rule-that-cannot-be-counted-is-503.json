@@ -1,0 +1,69 @@
+{
+  "rules": [
+    "RTL-2"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "An ALLOW permits and the limiter fails; the rule is strictFailure: 503.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET",
+              "resource": "http:path:/orders/**"
+            }
+          ]
+        },
+        {
+          "id": "no-delete",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:DELETE",
+              "resource": "http:path:/orders/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        },
+        {
+          "id": "g:no-delete",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-delete"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "strict",
+          "action": "*",
+          "resource": "http:path:/orders/**",
+          "permitsPerSecond": 10,
+          "strictFailure": true
+        }
+      ]
+    }
+  },
+  "rateLimiter": {
+    "fails": "Redis is down"
+  },
+  "http": {
+    "path": "/orders/1"
+  },
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

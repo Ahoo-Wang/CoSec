@@ -1,0 +1,70 @@
+{
+  "rules": [
+    "RTL-1"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "An ALLOW permits and the rule's bucket is exhausted: 429 too-many-requests.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET",
+              "resource": "http:path:/orders/**"
+            }
+          ]
+        },
+        {
+          "id": "no-delete",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:DELETE",
+              "resource": "http:path:/orders/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        },
+        {
+          "id": "g:no-delete",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-delete"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "orders",
+          "action": "*",
+          "resource": "http:path:/orders/**",
+          "permitsPerSecond": 10
+        }
+      ]
+    }
+  },
+  "rateLimiter": {
+    "exhausted": [
+      "orders"
+    ]
+  },
+  "http": {
+    "path": "/orders/1"
+  },
+  "expect": {
+    "status": 429,
+    "type": "too-many-requests"
+  }
+}
