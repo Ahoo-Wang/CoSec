@@ -147,6 +147,38 @@ class PolicyDocumentCompilerTest {
         ).assert().isEqualTo(Decision.Deny(null))
     }
 
+    /** RFC 0007 §3.1 N3: documents compile with the platform's limits and attributes, each declared once. */
+    @Test
+    fun `the platform document sets what every document compiles against`() {
+        errors(
+            SnapshotKey.Platform,
+            ""","attributes":[{"path":"ext.geo.region","type":"string"},{"path":"ext.geo.region","type":"ip"}]"""
+        )
+            .assert().containsExactly("$.attributes[1].path: [ext.geo.region] is declared twice")
+        val platform = PolicyDocumentCodec.decode(
+            DocumentKind.PLATFORM,
+            "",
+            stored(
+                ""","limits":{"maxInValues":2},"attributes":[{"path":"ext.geo.region","type":"string"}]"""
+            ).bodyBytes(),
+        )
+        val tenant = { condition: String ->
+            PolicyDocumentCodec.decode(
+                DocumentKind.TENANT,
+                "acme",
+                stored(
+                    ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*","condition":$condition}]}]"""
+                ).bodyBytes(),
+            )
+        }
+        val reading = tenant("""{"eq":["ext.geo.region","eu"]}""")
+        PolicyDocumentCompiler.forPlatform(platform).compile(reading).owner.assert().isEqualTo("acme")
+        assertThrownBy<DocumentCompileException> { PolicyDocumentCompiler.forPlatform(null).compile(reading) }
+        val wide = tenant("""{"in":["scope.app",["a","b","c"]]}""")
+        PolicyDocumentCompiler.forPlatform(null).compile(wide).owner.assert().isEqualTo("acme")
+        assertThrownBy<DocumentCompileException> { PolicyDocumentCompiler.forPlatform(platform).compile(wide) }
+    }
+
     /** DOC-3: a document that is not this version's format fails to decode; RFC 0003's keys are not read either. */
     @Test
     fun `only this format and these keys compile`() {

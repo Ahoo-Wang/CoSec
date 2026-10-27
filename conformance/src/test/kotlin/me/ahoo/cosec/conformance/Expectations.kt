@@ -86,8 +86,34 @@ object Expectations {
         Outcome.Cancelled -> json.objectNode().put("outcome", "none")
         is Outcome.NotCompiled -> json.objectNode().put("decision", "NotCompiled").put("error", outcome.error)
         is Outcome.Analyzed -> analyzed(outcome)
+        is Outcome.Granted, is Outcome.Stored, is Outcome.Changed -> control(outcome)
+    }
+
+    private fun changed(outcome: Outcome.Changed): JsonNode = json.objectNode().apply {
+        set("steps", json.arrayNode().apply { outcome.steps.forEach(::add) })
+        set(
+            "errors",
+            json.objectNode().apply {
+                outcome.errors.forEach { (id, checks) ->
+                    set(
+                        id,
+                        json.arrayNode().apply { checks.forEach(::add) }
+                    )
+                }
+            }
+        )
+        set(
+            "heads",
+            json.objectNode().apply { outcome.heads.forEach { (key, revision) -> put(key, Math.toIntExact(revision)) } }
+        )
+    }
+
+    /** The control plane's outcomes: grant analysis, publishing, the change flow. */
+    private fun control(outcome: Outcome): JsonNode = when (outcome) {
         is Outcome.Granted -> granted(outcome)
         is Outcome.Stored -> stored(outcome)
+        is Outcome.Changed -> changed(outcome)
+        else -> error("Not a control outcome: $outcome")
     }
 
     private fun stored(outcome: Outcome.Stored): JsonNode = json.objectNode().apply {

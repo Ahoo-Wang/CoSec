@@ -28,6 +28,7 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.ConditionChecker
+import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.snapshot.SnapshotCompiler
 import me.ahoo.cosec.snapshot.SnapshotDocument
@@ -118,6 +119,7 @@ class PolicyDocumentCompiler(
             )
         }
         checkBindings(document, errors)
+        checkAttributes(document, errors)
         if (errors.isNotEmpty()) {
             throw DocumentCompileException(name, errors)
         }
@@ -240,6 +242,16 @@ class PolicyDocumentCompiler(
         }
     }
 
+    /** Each external attribute is declared once (RFC 0007 §3.1 N3). */
+    private fun checkAttributes(document: PolicyDocument, errors: MutableList<CompileError>) {
+        val paths = HashSet<String>()
+        document.attributes?.forEachIndexed { i, attribute ->
+            if (!paths.add(attribute.path)) {
+                errors += CompileError("$.attributes[$i].path", "[${attribute.path}] is declared twice")
+            }
+        }
+    }
+
     private fun describe(document: PolicyDocument): String = when (document.kind) {
         DocumentKind.PLATFORM -> "platform"
         DocumentKind.APP -> "app ${document.owner}"
@@ -247,6 +259,25 @@ class PolicyDocumentCompiler(
     }
 
     companion object {
+        /**
+         * The compiler every document compiles with when [platform] is the platform document (RFC 0007 §3.1 N3): its
+         * condition limits and its declared external attributes, or the defaults where it declares none. The control
+         * plane compiles candidates with it, so what it accepts is what an instance reading the same platform accepts.
+         */
+        fun forPlatform(
+            platform: PolicyDocument?,
+            principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
+        ): PolicyDocumentCompiler {
+            val limits = platform?.limits ?: ConditionLimits.DEFAULT
+            // A platform that declares a path twice does not compile; until it does, the first declaration counts.
+            val catalog = platform?.attributes?.let { AttributeCatalog.of(it.distinctBy { attribute -> attribute.path }) }
+                ?: AttributeCatalog.NONE
+            return PolicyDocumentCompiler(
+                PolicyCompiler(ConditionChecker(limits = limits, zones = JavaZones.RESOLVER, catalog = catalog)),
+                principalBindingLimit,
+            )
+        }
+
         /** RFC 0004 Q2. */
         const val DEFAULT_PRINCIPAL_BINDING_LIMIT: Int = 1_000
 

@@ -179,6 +179,8 @@ class Revisions(
         policies = candidate.policies,
         bindings = candidate.bindings,
         catalog = candidate.catalog,
+        limits = candidate.limits,
+        attributes = candidate.attributes,
         provenance = Provenance(
             parent = base?.let { ParentRevision(it.revision, it.digest.toString()) },
             change = publication.change,

@@ -16,12 +16,13 @@ package me.ahoo.cosec.cache
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cosec.api.permission.AppPermission
 import me.ahoo.cosec.authorization.RoleScope
-import me.ahoo.cosec.cache.snapshot.CoSec7xReader
+import me.ahoo.cosec.cache.snapshot.CoSec7xSnapshotReader
 import me.ahoo.cosec.cache.snapshot.Raw7xWriter
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotPublisher
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cache.snapshot.SnapshotNode
+import me.ahoo.cosec.migrate.CoSec7xReader
 import me.ahoo.cosec.model.LayerKind
 import me.ahoo.cosec.parity.LegacyCases
 import me.ahoo.cosec.parity.LegacyData
@@ -42,7 +43,7 @@ import org.junit.jupiter.api.Test
  *
  * [snapshotStoreAndRedisRepositoriesBuildTheSamePolicySet] takes the snapshot side through the real write and read
  * path instead of documents built from the generated data: the 7.x data is stored as JSON, entries no instance can
- * decode included, then [CoSec7xReader] converts it, [RedisSnapshotPublisher] publishes it, and
+ * decode included, then [CoSec7xSnapshotReader] converts it, [RedisSnapshotPublisher] publishes it, and
  * [RedisSnapshotDocumentStore] with [SnapshotDocumentCodec] reads it back.
  */
 class SnapshotRepositoryParityTest {
@@ -115,7 +116,7 @@ class SnapshotRepositoryParityTest {
                     case.context(),
                 )
                 SnapshotNode(backend, caches.keyPrefix).use { node ->
-                    val conversion = CoSec7xReader(backend, caches.keyPrefix).use { it.read(keysOf(case.data)) }
+                    val conversion = CoSec7xSnapshotReader(backend, caches.keyPrefix).use { it.read(keysOf(case.data)) }
                     conversion.problems.assert().describedAs("iteration $iteration").isEmpty()
                     conversion.contents.forEach { node.publisher.replace(it).block() }
                     val actual = PolicySetParity.ofSnapshot(case.request, case.context()) { key ->

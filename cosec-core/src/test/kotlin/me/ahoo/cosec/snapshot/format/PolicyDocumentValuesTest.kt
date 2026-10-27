@@ -43,6 +43,8 @@ class PolicyDocumentValuesTest {
 
     private val provenance = definitions.getValue("provenance") as ObjectType
     private val parent = requireNotNull(provenance.field("parent")).type as ObjectType
+    private val platformDocument = definitions.getValue("platformDocument") as ObjectType
+    private val attribute = (requireNotNull(platformDocument.field("attributes")).type as ArrayType).items as ObjectType
 
     private val placements = listOf(
         Placement("actionPattern", definitions.getValue("actionPattern") as StringType) {
@@ -58,6 +60,9 @@ class PolicyDocumentValuesTest {
         Placement("provenance.parent.digest", parent.string("digest"), header = {
             """"provenance":{"parent":{"revision":1,"digest":${json(it)}},"change":"c","kind":"PUBLISH",""" +
                 """"publishedBy":{"tenant":"t","principal":"p"}},"""
+        }),
+        Placement("attributes.path", attribute.string("path"), header = {
+            """"attributes":[{"path":${json(it)},"type":"string"}],"""
         }),
     )
 

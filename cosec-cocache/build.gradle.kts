@@ -28,6 +28,8 @@ dependencies {
     // MembershipCacheFailureTest resolves through the pipeline's MembershipResolver.
     testImplementation(project(":cosec-runtime"))
     testImplementation("io.lettuce:lettuce-core")
+    // The phase-3 snapshot tools read 7.x data through cosec-migrate's reader (removed at switch S2).
+    testImplementation(project(":cosec-migrate"))
     testImplementation("me.ahoo.cosid:cosid-core")
     testImplementation("me.ahoo.cosid:cosid-test")
     testImplementation("io.projectreactor:reactor-test")

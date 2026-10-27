@@ -13,6 +13,9 @@
 
 package me.ahoo.cosec.control.store
 
+import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.snapshot.SnapshotDigest
 import me.ahoo.cosec.snapshot.SnapshotDocument
@@ -35,6 +38,9 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     private val indexes = HashMap<SnapshotKey, RevisionIndex>()
     private val references = HashMap<Pair<SnapshotKey, PolicyId>, Set<SnapshotKey>>()
     private val leases = HashMap<String, Pair<String, Instant>>()
+    private val changes = HashMap<ChangeId, Pair<ChangeRequest, Long>>()
+    private val stages = HashMap<SnapshotKey, Pair<StageSlot, Long>>()
+    private var writes = 0L
 
     override fun digestOf(document: SnapshotDocument): SnapshotDigest = digest(document.bodyBytes())
 
@@ -93,6 +99,32 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         if (referrers.isEmpty()) references.remove(target to policy) else references[target to policy] = referrers
         true
     }
+
+    override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
+        synchronized(lock) { changes[id]?.let { (change, version) -> Versioned(change, version(version)) } }
+
+    override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean = synchronized(lock) {
+        if (changes[change.id]?.let { version(it.second) } != expected) {
+            return false
+        }
+        changes[change.id] = change to ++writes
+        true
+    }
+
+    override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? =
+        synchronized(lock) { stages[key]?.let { (slot, version) -> Versioned(slot, version(version)) } }
+
+    override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean =
+        synchronized(lock) {
+            if (stages[key]?.let { version(it.second) } != expected) {
+                return false
+            }
+            stages[key] = slot to ++writes
+            true
+        }
+
+    /** A version as a digest: every write of a change or slot gets a new one. */
+    private fun version(version: Long): SnapshotDigest = digest(version.toString().encodeToByteArray())
 
     override suspend fun acquireLease(name: String, holder: String, duration: Duration): Boolean = synchronized(lock) {
         val now = clock.instant()

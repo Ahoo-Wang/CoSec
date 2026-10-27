@@ -1,0 +1,85 @@
+{
+  "rules": [
+    "CTL-1"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "The second change adds a policy whose condition reads an attribute outside the catalog: it stays a draft with a compile error, cannot be published, and the head stays at revision 1.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "broken",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read",
+                  "condition": {
+                    "eq": [
+                      "no.such.attribute",
+                      "x"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c2"
+    },
+    {
+      "publish": "c2"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "DRAFT",
+      "refused 409",
+      "refused 409"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": [
+        "COMPILE"
+      ]
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

@@ -151,6 +151,9 @@ object StoreRunner : ScenarioRunner {
 
 /** The `control` level: grant-analysis scenarios name a `candidate`, publishing scenarios their `publishes`. */
 object ControlRunner : ScenarioRunner {
-    override fun run(scenario: Scenario): Outcome =
-        if (scenario.node.has("publishes")) StoreRunner.run(scenario) else GrantRunner.run(scenario)
+    override fun run(scenario: Scenario): Outcome = when {
+        scenario.node.has("publishes") -> StoreRunner.run(scenario)
+        scenario.node.has("steps") -> ChangeRunner.run(scenario)
+        else -> GrantRunner.run(scenario)
+    }
 }

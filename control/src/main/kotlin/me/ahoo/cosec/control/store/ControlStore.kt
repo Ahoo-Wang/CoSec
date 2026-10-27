@@ -13,6 +13,9 @@
 
 package me.ahoo.cosec.control.store
 
+import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.snapshot.SnapshotDigest
 import me.ahoo.cosec.snapshot.SnapshotDocument
@@ -22,8 +25,8 @@ import java.time.Instant
 
 /**
  * Where the control plane keeps the documents it publishes and what it needs to publish them safely (RFC 0007 §5.2):
- * the heads the data plane reads, the revision records they are built from, the revision index of each document, and
- * the back-reference index of cross-document references. `CoCacheControlStore` in `cosec-cocache` is the Redis
+ * the heads the data plane reads, the revision records they are built from, the revision index of each document, the
+ * back-reference index of cross-document references, the change requests and each document's staging slot. `CoCacheControlStore` in `cosec-cocache` is the Redis
  * implementation; [InMemoryControlStore] is for tests and single-instance development.
  *
  * Every write is conditional on the digest it was based on: nothing is overwritten that the caller has not read. Reads
@@ -75,6 +78,21 @@ interface ControlStore {
         expected: SnapshotDigest?,
         referrers: Set<SnapshotKey>,
     ): Boolean
+
+    /** The change request [id], with the digest a [putChange] must name, or `null` when there is none. */
+    suspend fun change(id: ChangeId): Versioned<ChangeRequest>?
+
+    /**
+     * Writes the change request if the store still holds [expected] (`null`: only if there is none): every state
+     * transition is one such write (RFC 0007 §6.1). `false` when it changed in between.
+     */
+    suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean
+
+    /** The staging slot of [key] (RFC 0007 §5.5), with the digest a [putStage] must name; `null` when never taken. */
+    suspend fun stage(key: SnapshotKey): Versioned<StageSlot>?
+
+    /** Replaces the staging slot of [key] if it is still at [expected]; `false` when it changed in between. */
+    suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean
 
     /**
      * Takes the lease [name] for [holder] for [duration] if nobody holds it, so that one control-plane instance runs a

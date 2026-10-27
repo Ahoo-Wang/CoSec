@@ -23,6 +23,7 @@ import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.migrate.CoSec7xReader
 import me.ahoo.cosec.model.LayerKind
 import me.ahoo.cosec.parity.PolicySetParity
 import me.ahoo.cosec.parity.appPermissionJson
@@ -36,7 +37,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
-class CoSec7xReaderTest {
+class CoSec7xSnapshotReaderTest {
     private val backend = InMemoryBackend()
     private val keyPrefix = newKeyPrefix()
 
@@ -47,8 +48,8 @@ class CoSec7xReaderTest {
     /** A condition no instance can decode, as one registered only on a newer writer. */
     private val unknown = """{"noSuchMatcher":{}}"""
 
-    private fun read(keys: CoSec7xReader.Keys): CoSec7xReader.Conversion =
-        CoSec7xReader(backend, keyPrefix).use { it.read(keys) }
+    private fun read(keys: CoSec7xReader.Keys): CoSec7xSnapshotReader.Conversion =
+        CoSec7xSnapshotReader(backend, keyPrefix).use { it.read(keys) }
 
     private fun keys(policies: Set<String> = emptySet(), apps: Set<String> = emptySet(), grants: Set<AppSpacedRoleId> = emptySet()) =
         CoSec7xReader.Keys(policies, apps, grants)
@@ -196,7 +197,7 @@ class CoSec7xReaderTest {
                 CoSecCacheSpecs.cacheNamespace(prefix, CoSecCacheSpecs.POLICY_CACHE_NAME) + ":p",
                 "{}".encodeToByteArray()
             )
-            CoSec7xReader(redis, prefix).use { reader ->
+            CoSec7xSnapshotReader(redis, prefix).use { reader ->
                 assertThrows<CacheReadException> { reader.read(CoSec7xReader.Keys(setOf("p"), emptySet(), emptySet())) }
             }
         }
@@ -217,7 +218,7 @@ class CoSec7xReaderTest {
             val client = RedisClient.create(RedisURI.create("redis://localhost:6379"))
             try {
                 client.connect().use { connection ->
-                    val keys = CoSec7xReader.keys(prefix) { pattern ->
+                    val keys = CoSec7xSnapshotReader.keys(prefix) { pattern ->
                         sequence {
                             val args = ScanArgs.Builder.matches(pattern).limit(1000)
                             var cursor = connection.sync().scan(ScanCursor.INITIAL, args)
@@ -244,9 +245,9 @@ class CoSec7xReaderTest {
     @Test
     fun parsesGrantKeysAs7xWritesThem() {
         listOf(AppSpacedRoleId("a", "r"), AppSpacedRoleId("a", "r", "s")).forEach {
-            CoSec7xReader.parseGrantKey(it.toString()).assert().isEqualTo(it)
+            CoSec7xSnapshotReader.parseGrantKey(it.toString()).assert().isEqualTo(it)
         }
-        assertThrows<IllegalArgumentException> { CoSec7xReader.parseGrantKey("no-app") }
+        assertThrows<IllegalArgumentException> { CoSec7xSnapshotReader.parseGrantKey("no-app") }
     }
 
     @Test

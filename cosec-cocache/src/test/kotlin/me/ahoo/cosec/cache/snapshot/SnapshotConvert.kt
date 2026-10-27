@@ -30,7 +30,7 @@ import kotlin.system.exitProcess
 /**
  * `./gradlew :cosec-cocache:snapshotConvert -PredisUrl=redis://localhost:6379 -PkeyPrefix=cosec [-PdryRun=true]
  * [-Pinstances=N] [-PrevalidateInterval=10s]` (RFC 0003 §4.7): reads the 7.x data under the key prefix with
- * [CoSec7xReader], prints what it found, and unless the run is dry or the data has problems, publishes the documents
+ * [CoSec7xSnapshotReader], prints what it found, and unless the run is dry or the data has problems, publishes the documents
  * next to the 7.x keys, which it never deletes. Standalone Redis only. For development deployments of `main`, the gate
  * and sizing; not a user-facing migration.
  *
@@ -59,19 +59,21 @@ object SnapshotConvert {
     }
 
     /** Reads the 7.x data under [keyPrefix]; never writes. */
-    internal fun read(uri: RedisURI, keyPrefix: String): CoSec7xReader.Conversion =
+    internal fun read(uri: RedisURI, keyPrefix: String): CoSec7xSnapshotReader.Conversion =
         RedisClient.create(uri).use { client ->
             client.connect().use { connection ->
                 RedisBackend.standalone(uri).use { backend ->
-                    CoSec7xReader(backend, keyPrefix).use { reader ->
-                        reader.read(CoSec7xReader.keys(keyPrefix) { pattern -> scan(connection.sync(), pattern) })
+                    CoSec7xSnapshotReader(backend, keyPrefix).use { reader ->
+                        reader.read(
+                            CoSec7xSnapshotReader.keys(keyPrefix) { pattern -> scan(connection.sync(), pattern) }
+                        )
                     }
                 }
             }
         }
 
     /** Prints what was found; exits when the conversion has problems. */
-    private fun report(conversion: CoSec7xReader.Conversion, load: RevalidationLoad) {
+    private fun report(conversion: CoSec7xSnapshotReader.Conversion, load: RevalidationLoad) {
         conversion.warnings.forEach { println("WARN  $it") }
         conversion.problems.forEach { println("ERROR $it") }
         println("input sha256: ${conversion.inputSha256}")
@@ -86,7 +88,7 @@ object SnapshotConvert {
         println(load.describe(documents.values))
     }
 
-    private fun publish(uri: RedisURI, keyPrefix: String, conversion: CoSec7xReader.Conversion) {
+    private fun publish(uri: RedisURI, keyPrefix: String, conversion: CoSec7xSnapshotReader.Conversion) {
         val spec = CoSecCacheSpecs.policySnapshot(keyPrefix)
         RedisBackend.standalone(uri).use { backend ->
             CacheRuntime.builder().backend(backend).build().use { runtime ->

@@ -748,6 +748,16 @@ java -jar cosec-migrate.jar verify --in ./converted --requests ./audit.jsonl [--
 GA 版本的 `convert` 一次完成两篇的转换：先按本文转换模型，再按 RFC 0005 §7 把每条语句的匹配器翻译成 AST，翻译不了的按 RFC 0005 的规则拒绝。
 用户不会见到中间格式。
 
+> **2026-10-26 实现说明（PR-5，#1067）**：
+> - **翻译的范围。** PR-5 只翻译动作（§5.2 的 `http` 命名空间：`all`、`path` 模式及其方法与选项、`composite`）与 `all` 条件。其余条件按 RFC 0005 §7.1 由 RFC 0005 PR-6 翻译；在那之前转换时拒绝并报告位置（`CONDITION_NOT_TRANSLATED`）。`spel`、`ognl`（`EXPRESSION_CONDITION`）与自定义条件（`CUSTOM_CONDITION`，RFC 0008 Q4）在任何版本都拒绝。路径模板与非 `/` 的分隔符同样留给 PR-6。
+> - **解码。** 每个 7.x 策略与应用权限先用 7.x 的反序列化器解码，7.x 读不了的数据拒绝（`UNDECODABLE`），不会被转换成会放行的语句。
+> - **报告。** `report.json` 的 `semanticChanges` 列出受 C1a–C6、D1–D3 影响的每一处 7.x 配置形态（RFC 0008 Q3）。
+> - **root。** 用 `--root-enabled`、`--root-id` 声明 root 已开启，必须同时给出 `--root-expires-at`。
+> - **`--from-files`。** 读 `policies.json`、`global-policies.json`、`app-role-permissions.json`。
+> - **`publish`。** 每个文档都是"仅当不存在"的条件写入，已有任何 8.0 文档时什么也不写。它不写 schema 标记：标记属于切换 S1，写了会让仍在运行的 7.x 实例重启失败。
+> - **命令行。** 参数解析不引入新依赖。
+> - **类路径。** 7.x 的 `path` 匹配器依赖 `spring-web`，`cosec-migrate` 把它声明为运行时依赖（维护者 2026-10-26 批准）；类路径缺少某个匹配器的类时，用到它的条目以"类路径缺少类"为由拒绝。
+
 ### 8.7 用户怎么验证
 
 > **2026-10-26**：`verify` 在 8.0.0 中不提供（[RFC 0008](0008-conformance-and-direct-build.md) §6 Q3）：它依赖只为门槛 A 存在的分类器。`convert` 的报告列出受语义改动影响的 7.x 配置形态。以下原文保留，仅供追溯。
