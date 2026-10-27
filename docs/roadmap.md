@@ -199,6 +199,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 - 三个过时变异体的改写，以及 `cosec-core` 百万例运行的原生线程耗尽（本地观察到，通过阅读代码修复；S1b 的阻塞项）：草稿 PR #1103（分支 `claude/evidence-mutants-threads`，剩余事项见 PR 描述）。百万例运行只在 CI 的 `property-stress.yml`（#1099）上进行。
 - S1b 草稿 #1104：已登记 8.0 的自动配置并删除 starter 中 7.x 的自动配置，剩余事项见 PR 描述。
+- #1097（S1a）第 1 轮审查与 #1095 第 2 轮审查已完成（只读，2026-10-27），没有外部可利用的问题。必须在 S1b 合入前修复的三个中等问题：S1 控制面在重新加载失败时按旧版本文档做检查（`SourceConfirmation.confirm`）；S2 `CONFIG GET` 失败时 `SNP-3` 静默放过；S3 数据面没有装配影子记录器与上报器。这三项与 S5（`simulate`/`explain` 未完全走执法流程）、S7（WebMvc 控制路由先读整个请求体；网关宿主上没有 `PipelineWebFilter`）以及无条件开启吊销，都并入 S1b（#1104）。
+- 待派发（下一个会话）：control/conformance/wiki 的审查跟进 PR：R1 影子报告按实例分 key 与 `wiki/operations/storage.md` 的 ACL 说明；S4 N3 重新编译包括加载中的槽位；S6 `RuleCoverage` 的守护规则白名单；R2 K3 记录非字符串属性；R6 不确定时答 503 而不是 404；R3 `RequestSecurity.asPrincipal` 改为内部；R4/R5 回滚与 break-glass 绑定策略。不碰 starter。
 - `jmh-v7-v8.yml`：在 CI 上对比 v7 与 v8 性能的手动工作流，PR 待开。
 
 （#866、#1082 是 Renovate 的 pnpm 升级，不属于路线图。）
