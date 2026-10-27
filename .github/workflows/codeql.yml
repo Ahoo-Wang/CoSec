@@ -65,7 +65,7 @@ jobs:
       # heap and limit parallel compilations so concurrent extractions fit in the runner's memory.
       - name: Build
         run: >-
-          ./gradlew --no-daemon --no-build-cache --max-workers=2
+          ./gradlew --no-daemon --no-build-cache --no-parallel --no-configuration-cache --max-workers=2
           -Dorg.gradle.jvmargs=-Xmx2g
           -Pkotlin.daemon.jvmargs=-Xmx6g
           clean classes testClasses -x detekt
