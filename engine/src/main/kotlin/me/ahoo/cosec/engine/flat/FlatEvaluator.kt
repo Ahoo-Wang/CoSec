@@ -112,7 +112,8 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         }
         pass = Effect.ALLOW
         enumerate()
-        return withinBoundary(allowDecision())
+        val permit = allowDecision()
+        return if (view.bounded) withinBoundary(permit) else permit
     }
 
     /**

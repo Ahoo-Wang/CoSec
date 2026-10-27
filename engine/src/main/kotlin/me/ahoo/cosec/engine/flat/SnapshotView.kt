@@ -48,6 +48,12 @@ class SnapshotView(
         platform.readsExternal || app?.readsExternal == true || tenant?.readsExternal == true
 
     /**
+     * Whether a boundary could hold the request (RFC 0007 §7.6): a tenant's own or the platform's default. Without
+     * one the engine skips the check entirely, so `boundary = none` costs one field read per Permit.
+     */
+    internal val bounded: Boolean = platform.boundary != null || tenant?.boundary != null
+
+    /**
      * A principal reads only its own tenant's document, and the app document of its own app. A request without an app
      * reads none: its role bindings would otherwise depend on whether the caller happened to load one.
      */
