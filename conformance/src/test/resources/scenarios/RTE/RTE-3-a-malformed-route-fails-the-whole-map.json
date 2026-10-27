@@ -1,0 +1,73 @@
+{
+  "rules": [
+    "RTE-3"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "One route of three has no action: none loads.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read"
+            }
+          ]
+        },
+        {
+          "id": "no-admin",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:*",
+              "resource": "http:path:/admin/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        },
+        {
+          "id": "g:no-admin",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-admin"
+        }
+      ]
+    }
+  },
+  "routes": {
+    "service": "order",
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/orders/{orderId}",
+        "action": "order:read",
+        "resource": "order/{orderId}"
+      },
+      {
+        "method": "POST",
+        "path": "/orders",
+        "resource": "order"
+      }
+    ]
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/42"
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "action"
+  }
+}
