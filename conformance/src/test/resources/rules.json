@@ -248,6 +248,17 @@
       ]
     },
     {
+      "id": "BRK-5",
+      "source": "RFC 0007 §8; round-1 review K1",
+      "statement": "A change's kind is set by its entry point: a proposal is PUBLISH or BREAK_GLASS, never ROLLBACK, EXPIRE, MIGRATE or BOOTSTRAP, and a change that creates or alters a break-glass binding needs cosec:breakglass and a REQUIRED audit whatever its kind.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlReviewFixesTest#a change's kind is never its input's",
+        "control:ControlReviewFixesTest#creating or altering break-glass needs cosec breakglass and a REQUIRED audit, whatever the kind"
+      ]
+    },
+    {
       "id": "ALG-1",
       "source": "RFC 0004 §6.1",
       "statement": "Any applicable DENY that matches makes the decision Deny, whatever errors, missing or unavailable inputs exist elsewhere (C1b).",
@@ -830,6 +841,17 @@
         "control:PublishCompileTest"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-15",
+      "source": "RFC 0007 §10.2; round-1 review K2",
+      "statement": "Every step that names a change answers a caller who may not read its document exactly as it answers for a change that does not exist (404), before the change's state is looked at.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlReviewFixesTest#a change another tenant may not read is the same 404 at every step, before its state",
+        "control:ControlHttpTest#a body kind is refused, and another tenant's change answers like a missing one"
+      ]
     },
     {
       "id": "GRT-1",

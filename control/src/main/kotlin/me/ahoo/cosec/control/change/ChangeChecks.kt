@@ -159,10 +159,12 @@ class ChangeChecks(private val options: ChangeOptions = ChangeOptions()) {
         return CheckResult(findings, checkedWith)
     }
 
+    /**
+     * No change uses a reserved prefix: cosec-migrate writes its reserved ids through Revisions, never through a change,
+     * so a change's kind exempts nothing (review K1).
+     */
+    @Suppress("UnusedParameter")
     private fun reservedNames(operations: List<Operation>, kind: ProvenanceKind, findings: MutableList<Finding>) {
-        if (kind == ProvenanceKind.MIGRATE || kind == ProvenanceKind.BOOTSTRAP) {
-            return
-        }
         for ((i, operation) in operations.withIndex()) {
             val id = when (operation) {
                 is Operation.PutPolicy -> operation.policy.id.value

@@ -102,15 +102,17 @@ class ChangesTest {
             "operations[0]",
             "operations[1]"
         )
-        changes.propose(
-            ALICE_OP,
-            ACME,
-            0,
-            listOf(Operation.PutPolicy(allow("cosec:mine"))),
-            "migrated",
-            ProvenanceKind.MIGRATE
-        )
-            .errors.filter { it.check == "V2" }.assert().isEmpty()
+        // Claiming to be a migration exempts nothing: a change is never of kind MIGRATE (review K1).
+        runCatching {
+            changes.propose(
+                ALICE_OP,
+                ACME,
+                0,
+                listOf(Operation.PutPolicy(allow("cosec:mine"))),
+                "migrated",
+                ProvenanceKind.MIGRATE
+            )
+        }.exceptionOrNull().let { (it as ChangeRejectedException).status }.assert().isEqualTo(400)
         changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("shared"))), "shadowing")
             .errors.map { it.check to it.path }.assert().containsExactly("V2" to "$.policies[0].id")
         val big = (1..30).map { Operation.PutPolicy(allow("p$it", resource = "order/${"x".repeat(40)}")) }
@@ -170,6 +172,34 @@ class ChangesTest {
         platform.attributes!!.map { it.path to it.type }.assert().containsExactly(
             "ext.geo.region" to AttributeType.STRING
         )
+    }
+
+    /** What the approver held is kept, so that publish can check it again (review K3). */
+    @Test
+    fun `an approval reads back with what its approver held`() = runBlocking<Unit> {
+        val change = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("a"))), "x")
+        val memberships = me.ahoo.cosec.model.Memberships(
+            me.ahoo.cosec.model.Memberships.Source.CLAIMS,
+            mapOf(
+                me.ahoo.cosec.model.SpaceId.DEFAULT to setOf(me.ahoo.cosec.model.RoleId("admin")),
+                me.ahoo.cosec.model.SpaceId("team-a") to setOf(me.ahoo.cosec.model.RoleId("ops")),
+            ),
+            listOf(PolicyId("attached")),
+        )
+        val approval = Approval(
+            PLATO.actor,
+            StoreFixtures.START,
+            "c".repeat(64),
+            listOf("a[0]"),
+            memberships,
+            mapOf("department" to "ops")
+        )
+        val read = ChangeRequestCodec.decode(ChangeRequestCodec.encode(change.copy(approval = approval))).approval!!
+        read.copy(memberships = null).assert().isEqualTo(approval.copy(memberships = null))
+        val held = read.memberships!!
+        held.source.assert().isEqualTo(memberships.source)
+        held.roles.assert().isEqualTo(memberships.roles)
+        held.attachments.assert().isEqualTo(memberships.attachments)
     }
 
     /** RFC 0007 §7.6: a boundary is set like a section, resolves in the platform, and holds the policy it names. */
