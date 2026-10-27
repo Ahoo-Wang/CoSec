@@ -24,6 +24,7 @@ import me.ahoo.cosec.model.condition.CheckedCondition
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.IndexKeys
+import me.ahoo.cosec.model.decision.DocumentKind
 
 /** A statement as a document writes it (RFC 0005 §5.1), before it is compiled. */
 class StatementSource(
@@ -121,6 +122,51 @@ class PolicyCompiler(
             ?: throw CompileException(policyId.value, errors)
     }
 
+    /**
+     * Compiles a rate limit rule of the [kind] document of [owner] (RFC 0006 §8.1), or throws [CompileException].
+     *
+     * Its statement compiles as a DENY's does: a rule that matched less than it says would let requests escape their
+     * limit, so a bare resource type does not compile, and only the platform may write `onMissing: nomatch`. Its key
+     * names a text or address attribute; a `resource.var.<name>` key must be captured by every resource pattern.
+     */
+    fun rateLimit(kind: DocumentKind, owner: String, source: RateLimitSource): CompiledRateLimit {
+        val errors = ArrayList<CompileError>()
+        if (!CompiledRateLimit.isValidId(source.id)) {
+            errors += CompileError("$.id", "a rate limit rule id is letters, digits, '.', '_' and '-', not [${source.id}]")
+        }
+        val strict = with(source.statement) {
+            StatementSource(name, Effect.DENY, actions, resources, condition, onMissing)
+        }
+        // A rate limit rule has no confirmation flow: as before RFC 0007 N6, only the platform may let one lapse.
+        val statement = statement(0, strict, "$", errors, unconfirmedLapse = kind == DocumentKind.PLATFORM)
+        val key = source.key?.let { path -> key(path, statement, errors) }
+        if (errors.isNotEmpty()) {
+            throw CompileException(source.id, errors)
+        }
+        val id = CompiledRateLimit.counterId(kind, owner, source.id)
+        val policy = CompiledPolicy(CompiledRateLimit.policyId(id), null, listOf(statement!!), false, options)
+        return CompiledRateLimit(id, policy, statement, key, source.limit, source.strictFailure)
+    }
+
+    private fun key(path: String, statement: CompiledStatement?, errors: MutableList<CompileError>): Attribute? {
+        val attribute = checker.attribute(path)
+        if (attribute == null) {
+            errors += CompileError("$.key", "unknown attribute `$path`")
+            return null
+        }
+        if (attribute.type !in CompiledRateLimit.KEY_TYPES) {
+            errors += CompileError("$.key", "a key names a text or address attribute; `$path` is ${attribute.type}")
+            return null
+        }
+        if (attribute.kind == Attribute.Kind.RESOURCE_VAR && statement != null &&
+            statement.resources.any { attribute.name !in it.variableNames }
+        ) {
+            errors += CompileError("$.key", "the key reads $attribute, which a resource pattern does not capture")
+            return null
+        }
+        return attribute
+    }
+
     private fun policyCondition(condition: Condition, path: String, errors: MutableList<CompileError>): CheckedCondition? {
         val checked = check(condition, path, errors) ?: return null
         val variable = ConditionAttributes.of(checked).firstOrNull { it.kind == Attribute.Kind.RESOURCE_VAR }
@@ -136,6 +182,7 @@ class PolicyCompiler(
         source: StatementSource,
         path: String,
         errors: MutableList<CompileError>,
+        unconfirmedLapse: Boolean = false,
     ): CompiledStatement? {
         val before = errors.size
         if (source.actions.isEmpty()) {
@@ -156,7 +203,7 @@ class PolicyCompiler(
         if (condition != null) {
             checkVariables(condition, resources, path, errors)
         }
-        checkOnMissing(source, condition, path, errors)
+        checkOnMissing(source, condition, path, errors, unconfirmedLapse)
         if (errors.size > before) {
             return null
         }
@@ -197,13 +244,15 @@ class PolicyCompiler(
         condition: CheckedCondition?,
         path: String,
         errors: MutableList<CompileError>,
+        unconfirmedLapse: Boolean,
     ) {
         val onMissing = source.onMissing ?: return
         if (condition == null || ConditionAttributes.of(condition).none(Attribute::external)) {
             errors += CompileError("$path.onMissing", "onMissing applies to external attributes only, and the condition reads none")
             return
         }
-        if (onMissing == OnMissing.NOMATCH && source.effect === Effect.DENY && source.onMissingConfirmed == null) {
+        val lapsingDeny = onMissing == OnMissing.NOMATCH && source.effect === Effect.DENY
+        if (lapsingDeny && source.onMissingConfirmed == null && !unconfirmedLapse) {
             errors += CompileError(
                 "$path.onMissing",
                 "a DENY with onMissing: nomatch lapses while its provider fails: it needs the control plane's confirmation",

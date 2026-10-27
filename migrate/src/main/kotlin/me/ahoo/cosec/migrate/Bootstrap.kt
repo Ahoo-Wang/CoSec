@@ -75,6 +75,7 @@ class Bootstrap(
             clock.instant(),
             current?.policies.orEmpty(),
             current?.bindings.orEmpty().filterNot { it.id == binding.id } + binding,
+            rateLimits = current?.rateLimits.orEmpty(),
         )
         compiler.compile(candidate)
         if (current != null && CandidateDigest.of(current) == CandidateDigest.of(candidate)) {

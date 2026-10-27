@@ -122,6 +122,7 @@ internal object NomatchConfirmations {
             candidate.provenance,
             candidate.limits,
             candidate.attributes,
+            candidate.rateLimits,
         ) to findings
     }
 

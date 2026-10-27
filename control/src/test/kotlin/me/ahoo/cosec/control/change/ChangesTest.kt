@@ -238,4 +238,28 @@ class ChangesTest {
             .extracting { (it as ChangeRejectedException).status }.isEqualTo(404)
         assertThrownBy<IllegalArgumentException> { ChangeId("a:b") }
     }
+
+    /** Changes keep a document's rate limit rules (RFC 0006 §8): no operation changes them yet, so nothing drops them. */
+    @Test
+    fun `publishing a change keeps the document's rate limit rules`() = runBlocking<Unit> {
+        val rule = me.ahoo.cosec.engine.flat.RateLimitSource(
+            "orders",
+            me.ahoo.cosec.engine.flat.StatementSource("", me.ahoo.cosec.model.Effect.ALLOW, listOf("order:read")),
+            null,
+            me.ahoo.cosec.model.decision.RateLimitSpec(10.0),
+        )
+        val (kind, owner) = me.ahoo.cosec.control.store.Revisions.ownerOf(ACME)
+        val limited = me.ahoo.cosec.snapshot.document.PolicyDocument(
+            kind,
+            owner,
+            1,
+            StoreFixtures.START,
+            emptyList(),
+            emptyList(),
+            rateLimits = listOf(rule)
+        )
+        harness.revisions.publish(ACME, null, limited, StoreFixtures.publication())
+        publish(ACME, Operation.PutPolicy(allow("a"))).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        harness.revisions.head(ACME)!!.document.rateLimits.map { it.id }.assert().containsExactly("orders")
+    }
 }

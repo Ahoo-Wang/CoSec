@@ -1,0 +1,68 @@
+{
+  "rules": [
+    "RTL-2"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "An ALLOW permits and the limiter fails; the rule is not strictFailure: it is skipped and the request proceeds.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET",
+              "resource": "http:path:/orders/**"
+            }
+          ]
+        },
+        {
+          "id": "no-delete",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:DELETE",
+              "resource": "http:path:/orders/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        },
+        {
+          "id": "g:no-delete",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-delete"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "orders",
+          "action": "*",
+          "resource": "http:path:/orders/**",
+          "permitsPerSecond": 10
+        }
+      ]
+    }
+  },
+  "rateLimiter": {
+    "fails": "Redis is down"
+  },
+  "http": {
+    "path": "/orders/1"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

@@ -724,16 +724,16 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
                 is SnapshotKey.Tenant -> DocumentKind.TENANT to key.tenantId
                 else -> DocumentKind.PLATFORM to ""
             }
-            val document =
-                PolicyDocument(
-                    kind,
-                    owner,
-                    REVISION,
-                    options.publishedAt,
-                    keyPolicies,
-                    bindings[key].orEmpty(),
-                    catalogs[key]
-                )
+            val document = PolicyDocument(
+                kind,
+                owner,
+                REVISION,
+                options.publishedAt,
+                keyPolicies,
+                bindings[key].orEmpty(),
+                catalogs[key],
+                rateLimits = rateLimits.of(key),
+            )
             // Every policy compiled on its own; the whole document must too (ids, bindings, break-glass rules).
             compiler.compile(document)
             documents[key] = document

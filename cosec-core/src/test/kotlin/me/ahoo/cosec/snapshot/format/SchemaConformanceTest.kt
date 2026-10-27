@@ -286,8 +286,13 @@ class SchemaConformanceTest {
      * file into another, which both the schema and the codec accept.
      */
     private fun isAnotherVariant(file: SchemaFile, mutation: Mutation): Boolean =
-        file == DocumentFormats.snapshotDocumentSchema && mutation.topLevel && mutation.field == "schema" &&
-            codecError(file, mutation.document) == null
+        file == DocumentFormats.snapshotDocumentSchema && (
+            mutation.topLevel && mutation.field == "schema" && codecError(file, mutation.document) == null ||
+                // A platform document without its own fields (limits, attributes) is also a valid tenant document,
+                // whose principals need not name their tenant: the schema cannot tell the kinds apart.
+                mutation.kind == MutationKind.DROP_REQUIRED && "$mutation".endsWith("#platformBinding.tenant)") &&
+                !mutation.document.has("limits") && !mutation.document.has("attributes")
+            )
 
     /**
      * Makes ids unique where a codec rejects duplicates, and has an app document's principals name their tenant, which
