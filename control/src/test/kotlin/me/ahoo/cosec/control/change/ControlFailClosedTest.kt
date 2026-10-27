@@ -53,8 +53,8 @@ class ControlFailClosedTest {
     private val changes = harness.changes
 
     private suspend fun ready(vararg operations: Operation, base: Long = 0): ChangeRequest {
-        val change = changes.propose(ALICE, ACME, base, operations.toList(), "test")
-        return changes.skipShadow(change.id, "test")
+        val change = changes.propose(ALICE_OP, ACME, base, operations.toList(), "test")
+        return changes.skipShadow(ALICE_OP, change.id, "test")
     }
 
     private suspend fun head() = harness.revisions.head(ACME)
@@ -62,43 +62,43 @@ class ControlFailClosedTest {
     @Test
     fun `a moved base conflicts and publishes nothing, a rebase checks again`() = runBlocking<Unit> {
         val first = ready(Operation.PutPolicy(allow("first")))
-        val second = changes.propose(ALICE, ACME, 0, listOf(Operation.PutPolicy(allow("second"))), "late")
-        changes.publish(first.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        val second = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("second"))), "late")
+        changes.publish(ALICE_OP, first.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         // The slot is free again, so the second can stage; it publishes on a base that is gone.
-        changes.skipShadow(second.id, "test")
-        val conflicted = changes.publish(second.id)
+        changes.skipShadow(ALICE_OP, second.id, "test")
+        val conflicted = changes.publish(ALICE_OP, second.id)
         conflicted.state.assert().isEqualTo(ChangeState.CONFLICTED)
         head()!!.document.policies.map { it.id.value }.assert().containsExactly("first")
-        val rebased = changes.rebase(second.id)
+        val rebased = changes.rebase(ALICE_OP, second.id)
         rebased.state.assert().isEqualTo(ChangeState.CHECKED)
         rebased.base.revision.assert().isEqualTo(1)
         rebased.candidate.assert().isNotEqualTo(second.candidate)
-        changes.skipShadow(second.id, "test")
-        changes.publish(second.id).publishedRevision.assert().isEqualTo(2)
+        changes.skipShadow(ALICE_OP, second.id, "test")
+        changes.publish(ALICE_OP, second.id).publishedRevision.assert().isEqualTo(2)
         head()!!.document.policies.map { it.id.value }.assert().containsExactly("first", "second")
     }
 
     @Test
     fun `proposing on a revision that is not the head is refused`() = runBlocking<Unit> {
-        changes.publish(ready(Operation.PutPolicy(allow("a"))).id)
+        changes.publish(ALICE_OP, ready(Operation.PutPolicy(allow("a"))).id)
         assertThrownBy<ChangeRejectedException> {
-            runBlocking { changes.propose(ALICE, ACME, 0, listOf(Operation.PutPolicy(allow("b"))), "stale") }
+            runBlocking { changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("b"))), "stale") }
         }.extracting { (it as ChangeRejectedException).status }.isEqualTo(409)
     }
 
     @Test
     fun `an ifMatch that no longer holds fails the rebase instead of overwriting`() = runBlocking<Unit> {
-        changes.publish(ready(Operation.PutPolicy(allow("p", action = "order:read"))).id)
+        changes.publish(ALICE_OP, ready(Operation.PutPolicy(allow("p", action = "order:read"))).id)
         val seen = EntryDigest.of(head()!!.document.policies.single())
         val mine = changes.propose(
-            ALICE,
+            ALICE_OP,
             ACME,
             1,
             listOf(Operation.PutPolicy(allow("p", action = "order:list"), seen)),
             "mine"
         )
-        changes.publish(ready(Operation.PutPolicy(allow("p", action = "order:ship"), seen), base = 1).id)
-        val rebased = changes.rebase(mine.id)
+        changes.publish(ALICE_OP, ready(Operation.PutPolicy(allow("p", action = "order:ship"), seen), base = 1).id)
+        val rebased = changes.rebase(ALICE_OP, mine.id)
         rebased.state.assert().isEqualTo(ChangeState.DRAFT)
         rebased.errors.single().status.assert().isEqualTo(412)
         head()!!.document.policies.single().statements.single().actions.assert().containsExactly("order:ship")
@@ -108,18 +108,18 @@ class ControlFailClosedTest {
     fun `a failing store publishes nothing and keeps the change ready`() = runBlocking<Unit> {
         val change = ready(Operation.PutPolicy(allow("a")))
         failHead = true
-        assertThrownBy<IllegalStateException> { runBlocking { changes.publish(change.id) } }
+        assertThrownBy<IllegalStateException> { runBlocking { changes.publish(ALICE_OP, change.id) } }
         failHead = false
         head().assert().isNull()
         changes.get(change.id).state.assert().isEqualTo(ChangeState.READY)
-        changes.publish(change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        changes.publish(ALICE_OP, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
     }
 
     @Test
     fun `a change that cannot be recorded is never checked or staged`() = runBlocking<Unit> {
         failChanges = true
         assertThrownBy<IllegalStateException> {
-            runBlocking { changes.propose(ALICE, ACME, 0, listOf(Operation.PutPolicy(allow("a"))), "lost") }
+            runBlocking { changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("a"))), "lost") }
         }
         failChanges = false
         memory.stage(ACME).assert().isNull()
@@ -129,13 +129,13 @@ class ControlFailClosedTest {
     @Test
     fun `one staged change per document`() = runBlocking<Unit> {
         val first = ready(Operation.PutPolicy(allow("a")))
-        val second = changes.propose(ALICE, ACME, 0, listOf(Operation.PutPolicy(allow("b"))), "second")
-        assertThrownBy<ChangeRejectedException> { runBlocking { changes.stage(second.id) } }
+        val second = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("b"))), "second")
+        assertThrownBy<ChangeRejectedException> { runBlocking { changes.stage(ALICE_OP, second.id) } }
             .extracting { (it as ChangeRejectedException).status }.isEqualTo(409)
-        changes.abandon(first.id).state.assert().isEqualTo(ChangeState.ABANDONED)
-        changes.stage(second.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        changes.abandon(ALICE_OP, first.id).state.assert().isEqualTo(ChangeState.ABANDONED)
+        changes.stage(ALICE_OP, second.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         changes.shadowed(second.id).state.assert().isEqualTo(ChangeState.READY)
-        changes.publish(second.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        changes.publish(ALICE_OP, second.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         memory.stage(ACME)!!.value.holder.assert().isNull()
     }
 
@@ -144,9 +144,9 @@ class ControlFailClosedTest {
         val stale = ready(Operation.PutPolicy(allow("a")))
         clock.now = clock.now.plus(ChangeOptions().expireAfter).plusSeconds(1)
         changes.get(stale.id).state.assert().isEqualTo(ChangeState.EXPIRED)
-        assertThrownBy<ChangeRejectedException> { runBlocking { changes.publish(stale.id) } }
-        val next = changes.propose(ALICE, ACME, 0, listOf(Operation.PutPolicy(allow("b"))), "next")
-        changes.stage(next.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        assertThrownBy<ChangeRejectedException> { runBlocking { changes.publish(ALICE_OP, stale.id) } }
+        val next = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("b"))), "next")
+        changes.stage(ALICE_OP, next.id).state.assert().isEqualTo(ChangeState.SHADOWING)
         head().assert().isNull()
     }
 }

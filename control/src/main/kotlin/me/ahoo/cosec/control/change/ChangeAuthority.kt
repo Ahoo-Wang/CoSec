@@ -1,0 +1,261 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.control.change
+
+import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.control.authz.ControlActions
+import me.ahoo.cosec.control.authz.ControlAuthorizer
+import me.ahoo.cosec.control.authz.ControlDecision
+import me.ahoo.cosec.control.authz.ControlResources
+import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
+import me.ahoo.cosec.control.authz.TenantIsolation
+import me.ahoo.cosec.control.grant.GrantAnalyzer
+import me.ahoo.cosec.control.grant.GrantChange
+import me.ahoo.cosec.control.grant.GrantDocuments
+import me.ahoo.cosec.control.grant.GrantVerdict
+import me.ahoo.cosec.control.grant.Grantor
+import me.ahoo.cosec.control.grant.ProtectedEntry
+import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.Resource
+import me.ahoo.cosec.model.SubjectRef
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.snapshot.document.PolicyDocument
+import java.time.Instant
+import kotlin.coroutines.cancellation.CancellationException
+
+/**
+ * Who may do what to a change (RFC 0007 §7.2–§7.5), for [Changes]. Every step is checked in order, and anything but a
+ * permit stops it before it writes:
+ *
+ * 1. the hard rule ([TenantIsolation]): a 403 that no policy can lift;
+ * 2. each target with the [authorizer]: `cosec:write` on each entry an operation touches, `cosec:grant` on the scope
+ *    of each binding it puts, `cosec:unprotect` on each protected entry it changes, and the step's own action on the
+ *    document. A deny is a 403, an indeterminate decision or an error a 503;
+ * 3. for a candidate that checks clean, the grant analysis ([GrantAnalyzer]) of what it grants, as the operator, against
+ *    the current heads. What it cannot prove contained is an [Escalation]: approval, never "probably fine" (GRT-2).
+ *    Removing and narrowing grant nothing and need no approval; an analysis that fails is a 503.
+ *
+ * An operator holding `cosec:approve` on the document is the trust root (§7.3): its changes are not analyzed, unless
+ * [ChangeOptions.fourEyes] is on. A new or changed break-glass binding always needs a second person (§8).
+ */
+class ChangeAuthority(
+    private val authorizer: ControlAuthorizer,
+    private val options: ChangeOptions = ChangeOptions(),
+    private val analyzer: GrantAnalyzer = GrantAnalyzer(),
+    private val controlApp: AppId = PipelineControlAuthorizer.CONTROL_APP,
+) {
+    /** The hard rule: a 403 when [operator] may not act on [key] at all. */
+    fun isolate(operator: Operator, key: SnapshotKey) {
+        if (!TenantIsolation.allows(operator, key)) {
+            throw ChangeRejectedException(FORBIDDEN, "$operator may not act on [$key]")
+        }
+    }
+
+    /** [action] on [key] itself, after the hard rule. */
+    suspend fun require(operator: Operator, key: SnapshotKey, action: Action) {
+        isolate(operator, key)
+        require(operator, action, ControlResources.document(key))
+    }
+
+    /** Whether [operator] holds [action] on [key]; only a permit is true, and the hard rule comes first. */
+    suspend fun holds(operator: Operator, key: SnapshotKey, action: Action): Boolean =
+        TenantIsolation.allows(operator, key) && decide(operator, action, ControlResources.document(key)) == ControlDecision.PERMIT
+
+    /** Every target of [operations] on [key] (RFC 0007 §7.1), after the hard rule. */
+    suspend fun authorize(operator: Operator, key: SnapshotKey, operations: List<Operation>) {
+        isolate(operator, key)
+        for (operation in operations) {
+            when (operation) {
+                is Operation.PutPolicy -> require(
+                    operator,
+                    ControlActions.WRITE,
+                    entry(key, POLICY, operation.policy.id.value)
+                )
+                is Operation.RemovePolicy -> require(
+                    operator,
+                    ControlActions.WRITE,
+                    entry(key, POLICY, operation.id.value)
+                )
+                is Operation.PutBinding -> {
+                    require(operator, ControlActions.WRITE, entry(key, BINDING, operation.binding.id.value))
+                    require(operator, ControlActions.GRANT, scopeOf(key, operation.binding))
+                }
+
+                is Operation.RemoveBinding -> require(
+                    operator,
+                    ControlActions.WRITE,
+                    entry(key, BINDING, operation.id.value)
+                )
+                is Operation.PutCatalog -> require(operator, ControlActions.WRITE, section(key, "catalog"))
+                is Operation.SetLimits -> require(operator, ControlActions.WRITE, section(key, "limits"))
+                is Operation.SetAttributes -> require(operator, ControlActions.WRITE, section(key, "attributes"))
+            }
+        }
+    }
+
+    /**
+     * What [operator] cannot publish alone when [candidate] replaces [base] as [key] (RFC 0007 §7.4, §7.5), read
+     * against the current heads [head] gives. Also requires `cosec:unprotect` on every protected entry it changes.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    suspend fun escalations(
+        operator: Operator,
+        key: SnapshotKey,
+        operations: List<Operation>,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        head: suspend (SnapshotKey) -> PolicyDocument?,
+        now: Instant,
+    ): List<Escalation> {
+        val escalations = ArrayList<Escalation>()
+        breakGlass(base, candidate, escalations)
+        val trustRoot = holds(operator, key, ControlActions.APPROVE)
+        if (trustRoot && !options.fourEyes) {
+            return escalations
+        }
+        if (key !is SnapshotKey.Tenant) {
+            // The analysis reads tenant documents (§7.4.1); a platform or app change by anyone but the trust root, or
+            // by it under four-eyes, needs a second person for whatever it puts.
+            if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding }) {
+                escalations += Escalation("document $key", NOT_ANALYZED, "only the trust root publishes it alone")
+            }
+            return escalations
+        }
+        val analysis = try {
+            val tenant = TenantId(key.tenantId)
+            val apps = (candidate.bindings.mapNotNull { (it.scope.app as? Match.Exactly)?.value } + controlApp).toSet()
+            val snapshot = GrantDocuments.snapshot(
+                platform = head(SnapshotKey.Platform),
+                apps = apps.associateWith { head(SnapshotKey.App(it.value)) },
+                tenants = mapOf(tenant to base),
+                now = now.toEpochMilli(),
+            )
+            val grantor = Grantor(operator.tenant, operator.actor.principal, operator.memberships, operator.attributes)
+            analyzer.analyze(grantor, snapshot, GrantChange(tenant, GrantDocuments.of(candidate)), trustRoot = false)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ChangeRejectedException(UNAVAILABLE, "the grant analysis of [$key] failed: ${e.message}", e)
+        }
+        for (entry in analysis.unprotect) {
+            val resource = when (entry) {
+                is ProtectedEntry.Policy -> entry(key, POLICY, entry.id.value)
+                is ProtectedEntry.Binding -> entry(key, BINDING, entry.id.value)
+            }
+            require(operator, ControlActions.UNPROTECT, resource)
+        }
+        analysis.verdicts.forEach { (fragment, verdict) ->
+            if (verdict is GrantVerdict.Unknown) {
+                escalations += Escalation(fragment.toString(), verdict.reason.name, verdict.toString())
+            }
+        }
+        return escalations
+    }
+
+    /**
+     * Why [approval] does not let [publisher] publish [change] now, needing [required]; null when it does or none is
+     * needed. Bound to the candidate digest, valid for [ChangeOptions.approvalExpireAfter], given by neither the author
+     * nor the publisher, and covering everything [required] names.
+     */
+    fun approvalProblem(change: ChangeRequest, required: List<Escalation>, publisher: Operator, now: Instant): String? {
+        if (required.isEmpty()) {
+            return null
+        }
+        val approval = change.approval ?: return "it needs an approval"
+        return when {
+            approval.candidate != change.candidate -> "the approval is for another candidate"
+            now.isAfter(approval.at.plus(options.approvalExpireAfter)) -> "the approval expired"
+            approval.approver == change.author || approval.approver == publisher.actor ->
+                "the approval is the author's or the publisher's own"
+            !approval.covers.containsAll(required.map { it.subject }) -> "the approval does not cover what it now needs"
+            else -> null
+        }
+    }
+
+    private suspend fun require(operator: Operator, action: Action, resource: Resource) {
+        when (decide(operator, action, resource)) {
+            ControlDecision.PERMIT -> Unit
+            ControlDecision.DENY -> throw ChangeRejectedException(
+                FORBIDDEN,
+                "$operator may not ${action.namespace}:${action.verb} ${resource.type}/${resource.id}"
+            )
+
+            ControlDecision.INDETERMINATE -> throw ChangeRejectedException(
+                UNAVAILABLE,
+                "${action.namespace}:${action.verb} on ${resource.type}/${resource.id} could not be decided"
+            )
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun decide(operator: Operator, action: Action, resource: Resource): ControlDecision = try {
+        authorizer.decide(operator, action, resource)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log.warn(e) { "${action.namespace}:${action.verb} on ${resource.type}/${resource.id} failed - indeterminate." }
+        ControlDecision.INDETERMINATE
+    }
+
+    private fun entry(key: SnapshotKey, kind: String, id: String): Resource = try {
+        ControlResources.entry(key, kind, id)
+    } catch (e: IllegalArgumentException) {
+        throw ChangeRejectedException(FORBIDDEN, e.message.orEmpty(), e)
+    }
+
+    private fun section(key: SnapshotKey, name: String): Resource = entry(key, name, "")
+
+    /** The scope a binding of [key] grants in: its own tenant's for a tenant document, its subject's otherwise. */
+    private fun scopeOf(key: SnapshotKey, binding: Binding): Resource {
+        val tenant = when (key) {
+            is SnapshotKey.Tenant -> TenantId(key.tenantId)
+            else -> when (val subject = binding.subject) {
+                is SubjectRef.Principal -> subject.tenant
+                is SubjectRef.Role -> subject.tenant
+                SubjectRef.Anyone -> null
+            }
+        }
+        return try {
+            ControlResources.scope(tenant, binding.scope.app, binding.scope.space)
+        } catch (e: IllegalArgumentException) {
+            throw ChangeRejectedException(FORBIDDEN, e.message.orEmpty(), e)
+        }
+    }
+
+    private fun breakGlass(base: PolicyDocument?, candidate: PolicyDocument, into: MutableList<Escalation>) {
+        val before = base?.bindings.orEmpty().associateBy { it.id }
+        val digest = { binding: Binding -> EntryDigest.of(binding, candidate.kind, candidate.owner) }
+        for (binding in candidate.bindings.filter { it.breakGlass }) {
+            val previous = before[binding.id]
+            if (previous == null || digest(previous) != digest(binding)) {
+                into += Escalation("break-glass binding ${binding.id.value}", BREAK_GLASS, "always two people (RFC 0007 §8)")
+            }
+        }
+    }
+
+    private companion object {
+        private val log = KotlinLogging.logger {}
+        const val FORBIDDEN = 403
+        const val UNAVAILABLE = 503
+        const val POLICY = "policy"
+        const val BINDING = "binding"
+        const val NOT_ANALYZED = "NOT_ANALYZED"
+        const val BREAK_GLASS = "BREAK_GLASS"
+    }
+}

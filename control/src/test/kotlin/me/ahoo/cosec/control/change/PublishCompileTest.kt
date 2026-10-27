@@ -34,22 +34,22 @@ class PublishCompileTest {
 
     private suspend fun published(key: SnapshotKey, vararg operations: Operation): ChangeRequest {
         val head = harness.revisions.head(key)?.revision ?: 0
-        val change = changes.propose(ALICE, key, head, operations.toList(), "test")
+        val change = changes.propose(operatorFor(key), key, head, operations.toList(), "test")
         change.errors.assert().describedAs("${change.findings}").isEmpty()
-        changes.skipShadow(change.id, "test")
-        return changes.publish(change.id).also { it.state.assert().isEqualTo(ChangeState.PUBLISHED) }
+        changes.skipShadow(operatorFor(key), change.id, "test")
+        return changes.publish(operatorFor(key), change.id).also { it.state.assert().isEqualTo(ChangeState.PUBLISHED) }
     }
 
     @Test
     fun `a candidate with a broken entry stays a draft and never reaches the head`() = runBlocking<Unit> {
         published(ACME, Operation.PutPolicy(allow("ok")))
-        val change = changes.propose(ALICE, ACME, 1, listOf(Operation.PutPolicy(broken("bad"))), "broken")
+        val change = changes.propose(ALICE_OP, ACME, 1, listOf(Operation.PutPolicy(broken("bad"))), "broken")
         change.state.assert().isEqualTo(ChangeState.DRAFT)
         change.errors.single().check.assert().isEqualTo("COMPILE")
         change.errors.single().path.assert().isEqualTo("$.policies[1].statements[0].condition.eq[0]")
         change.errors.single().status.assert().isEqualTo(422)
-        assertThrownBy<ChangeRejectedException> { runBlocking { changes.skipShadow(change.id, "x") } }
-        assertThrownBy<ChangeRejectedException> { runBlocking { changes.publish(change.id) } }
+        assertThrownBy<ChangeRejectedException> { runBlocking { changes.skipShadow(ALICE_OP, change.id, "x") } }
+        assertThrownBy<ChangeRejectedException> { runBlocking { changes.publish(ALICE_OP, change.id) } }
         harness.revisions.head(ACME)!!.revision.assert().isEqualTo(1)
     }
 
@@ -57,7 +57,13 @@ class PublishCompileTest {
     fun `references must resolve in the candidate or the platform`() = runBlocking<Unit> {
         published(SnapshotKey.Platform, Operation.PutPolicy(allow("shared")))
         published(ACME, Operation.PutBinding(bind("a", "shared")))
-        val dangling = changes.propose(ALICE, ACME, 1, listOf(Operation.PutBinding(bind("c", "nowhere"))), "dangling")
+        val dangling = changes.propose(
+            ALICE_OP,
+            ACME,
+            1,
+            listOf(Operation.PutBinding(bind("c", "nowhere"))),
+            "dangling"
+        )
         dangling.errors.map { it.check to it.path }.assert().containsExactly("REFERENCES" to "$.bindings[1].policy")
         harness.revisions.head(ACME)!!.revision.assert().isEqualTo(1)
     }
@@ -66,7 +72,7 @@ class PublishCompileTest {
     fun `conditions compile against the platform's attributes and limits`() = runBlocking<Unit> {
         val reading = allow("risk", condition = Condition.Eq("ext.risk.level", Literal.Str("low")))
         changes.propose(
-            ALICE,
+            ALICE_OP,
             ACME,
             0,
             listOf(Operation.PutPolicy(reading)),
@@ -77,7 +83,7 @@ class PublishCompileTest {
             Operation.SetAttributes(listOf(Attribute.external("ext.risk.level", AttributeType.STRING)))
         )
         changes.propose(
-            ALICE,
+            ALICE_OP,
             ACME,
             0,
             listOf(Operation.PutPolicy(reading)),
@@ -89,21 +95,21 @@ class PublishCompileTest {
             condition = Condition.In("scope.app", listOf(Literal.Str("a"), Literal.Str("b"), Literal.Str("c")))
         )
         changes.propose(
-            ALICE,
+            ALICE_OP,
             ACME,
             0,
             listOf(Operation.PutPolicy(wide)),
             "fits"
         ).state.assert().isEqualTo(ChangeState.CHECKED)
         val tight = ConditionLimits(maxInValues = 2)
-        val platform = changes.propose(ALICE, SnapshotKey.Platform, 1, listOf(Operation.SetLimits(tight)), "tighten")
+        val platform = changes.propose(PLATO, SnapshotKey.Platform, 1, listOf(Operation.SetLimits(tight)), "tighten")
         // The other documents are not compiled again: a warning, not an error.
         platform.state.assert().isEqualTo(ChangeState.CHECKED)
         platform.findings.single().severity.assert().isEqualTo(Severity.WARNING)
-        changes.skipShadow(platform.id, "test")
-        changes.publish(platform.id)
+        changes.skipShadow(PLATO, platform.id, "test")
+        changes.publish(PLATO, platform.id)
         changes.propose(
-            ALICE,
+            ALICE_OP,
             ACME,
             0,
             listOf(Operation.PutPolicy(wide)),
@@ -118,11 +124,11 @@ class PublishCompileTest {
             Operation.SetAttributes(listOf(Attribute.external("ext.risk.level", AttributeType.STRING)))
         )
         val reading = allow("risk", condition = Condition.Eq("ext.risk.level", Literal.Str("low")))
-        val change = changes.propose(ALICE, ACME, 0, listOf(Operation.PutPolicy(reading)), "declared")
-        changes.skipShadow(change.id, "test")
+        val change = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(reading)), "declared")
+        changes.skipShadow(ALICE_OP, change.id, "test")
         // The platform drops the attribute before the tenant change publishes.
         published(SnapshotKey.Platform, Operation.SetAttributes(null))
-        val outcome = changes.publish(change.id)
+        val outcome = changes.publish(ALICE_OP, change.id)
         outcome.state.assert().isEqualTo(ChangeState.DRAFT)
         outcome.errors.map { it.check }.assert().containsExactly("COMPILE")
         harness.revisions.head(ACME).assert().isNull()
@@ -133,7 +139,7 @@ class PublishCompileTest {
         published(SnapshotKey.Platform, Operation.PutPolicy(allow("shared")), Operation.PutPolicy(allow("other")))
         published(ACME, Operation.PutBinding(bind("a", "shared")))
         val removal = changes.propose(
-            ALICE,
+            PLATO,
             SnapshotKey.Platform,
             1,
             listOf(Operation.RemovePolicy(me.ahoo.cosec.model.PolicyId("shared"))),

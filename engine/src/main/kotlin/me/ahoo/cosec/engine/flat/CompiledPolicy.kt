@@ -19,6 +19,7 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.CheckedCondition
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
+import me.ahoo.cosec.model.condition.Operand
 import me.ahoo.cosec.model.decision.BindingRef
 
 /**
@@ -142,5 +143,56 @@ object BuiltinPolicies {
     )
     internal val root = compiler.compile(ROOT, null, listOf(StatementSource("root", Effect.ALLOW, listOf("*"))))
 
-    internal fun isBuiltin(id: String): Boolean = id == BLACKLIST.value || id == ROOT.value
+    /** Every control-plane action on every document and scope (RFC 0007 §7.3); bound by `bootstrap`, then by admins. */
+    val PLATFORM_ADMIN: PolicyId = PolicyId("cosec:platform-admin")
+
+    /** A tenant's own documents and scopes, for administering them; bound by a platform administrator in the tenant. */
+    val TENANT_ADMIN: PolicyId = PolicyId("cosec:tenant-admin")
+
+    /** As [TENANT_ADMIN], read-only. */
+    val TENANT_VIEWER: PolicyId = PolicyId("cosec:tenant-viewer")
+
+    private val TENANT_ADMIN_VERBS = listOf(
+        "read",
+        "write",
+        "grant",
+        "publish",
+        "simulate",
+        "explain",
+        "analyze",
+        "shadow-read"
+    )
+    private val TENANT_VIEWER_VERBS = listOf("read", "simulate", "explain", "analyze", "shadow-read")
+
+    /**
+     * The statements of the built-in control-plane policies (RFC 0007 §7.3), as written: the grant analysis reads them
+     * the way it reads any policy. Like [ROOT], every platform document has them and no document can define them.
+     */
+    val CONTROL: Map<PolicyId, List<StatementSource>> = mapOf(
+        PLATFORM_ADMIN to listOf(
+            StatementSource("platform-admin", Effect.ALLOW, listOf("cosec:*"), listOf(ResourceSource("doc/**"), ResourceSource("scope/**"))),
+        ),
+        TENANT_ADMIN to listOf(tenantStatement("tenant-admin", TENANT_ADMIN_VERBS)),
+        TENANT_VIEWER to listOf(tenantStatement("tenant-viewer", TENANT_VIEWER_VERBS)),
+    )
+
+    internal val control: List<CompiledPolicy> = CONTROL.map { (id, statements) ->
+        compiler.compile(
+            id,
+            null,
+            statements
+        )
+    }
+
+    private fun tenantStatement(name: String, verbs: List<String>) = StatementSource(
+        name,
+        Effect.ALLOW,
+        verbs.map { "cosec:$it" },
+        listOf(ResourceSource("doc/tenant/{t}/**"), ResourceSource("scope/{t}/**")),
+        Condition.Eq("resource.var.t", Operand.Attr("subject.tenant")),
+    )
+
+    internal fun isBuiltin(id: String): Boolean = id == BLACKLIST.value || id == ROOT.value || CONTROL.keys.any {
+        it.value == id
+    }
 }

@@ -17,14 +17,21 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.SecurityScope
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.tenant.Tenant
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.scope.DeclaredScope
+import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
+import me.ahoo.cosec.model.scope.ScopeResolution
+import me.ahoo.cosec.model.scope.ScopeResolver
+import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
 import java.util.concurrent.ConcurrentHashMap
+import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /**
  * Who a permitted request is, and in what scope (RFC 0006 §7.6): the principal as authenticated (null when anonymous),
@@ -35,12 +42,27 @@ class RequestSecurity internal constructor(
     val requestId: String,
     val principal: AuthenticatedPrincipal?,
     val scope: Scope,
-    internal val memberships: Memberships,
+    /** The principal's memberships for this request (RFC 0004 §4.5): the control plane analyzes grants with them. */
+    val memberships: Memberships,
     /** The request the permit was decided for: the checker reuses its subject and environment. */
     internal val request: AuthzRequest,
 ) {
     /** The application-facing view, read-only but for the 7.x attribute map, which nothing in the pipeline reads. */
     val securityContext: SecurityContext by lazy(LazyThreadSafetyMode.PUBLICATION) { PipelineSecurityContext(this) }
+
+    /**
+     * The same principal in the default space of [app] of its tenant, resolved as [ScopeResolver] resolves a host app;
+     * null for an anonymous request.
+     */
+    internal fun inApp(app: AppId): RequestSecurity? {
+        val authenticated = principal ?: return null
+        val member = ScopeSubject(scope.tenant, true, memberships)
+        val resolved = ScopeResolver.resolve(member, DeclaredScope("", ""), HostScope(app))
+        val scope = (resolved as? ScopeResolution.Resolved)?.scope ?: return null
+        val declared = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value)
+        val request = with(request) { AuthzRequest(subject, declared, action, resource, environment) }
+        return RequestSecurity(requestId, authenticated, scope, memberships, request)
+    }
 
     override fun toString(): String =
         "RequestSecurity(request=$requestId, principal=${principal?.id?.value}, tenant=${scope.tenant.value})"

@@ -59,7 +59,9 @@ sealed interface Outcome {
     class Changed(
         val steps: List<String>,
         val errors: Map<String, List<String>>,
-        val heads: Map<String, Long>
+        val heads: Map<String, Long>,
+        /** The reasons of each change's escalations (RFC 0007 §7.5), for the changes that have any. */
+        val escalations: Map<String, List<String>> = emptyMap(),
     ) : Outcome
 
     /** A control scenario of publishing: each publish's answer, the head afterwards, the records and the write order. */

@@ -18,8 +18,11 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Resource
+import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.model.decision.DocumentKind
 import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
@@ -68,6 +71,29 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
     } catch (e: Exception) {
         log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - denied." }
         false
+    }
+
+    /**
+     * The decision on [action] over [resource] for the principal of [security] in the default space of [app] of its
+     * tenant: how the control plane checks its own actions, in `(cosec.control.app-id, default space)` (RFC 0007 §7.2).
+     * Three-valued, so that the caller can tell a deny from an outage; it fails closed like [check]. An anonymous
+     * request is denied.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    suspend fun decide(security: RequestSecurity, app: AppId, action: Action, resource: Resource): Decision {
+        val scoped = security.inApp(app) ?: return Decision.Deny(null)
+        return try {
+            pipeline.check(scoped, action, resource)
+        } catch (e: CancellationException) {
+            if (!currentCoroutineContext().isActive) {
+                throw e
+            }
+            log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - indeterminate." }
+            Decision.Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, e))
+        } catch (e: Exception) {
+            log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - indeterminate." }
+            Decision.Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, e))
+        }
     }
 
     private companion object {

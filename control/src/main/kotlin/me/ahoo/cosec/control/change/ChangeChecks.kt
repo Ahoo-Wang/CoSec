@@ -14,6 +14,7 @@
 package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.control.store.Head
+import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -26,7 +27,7 @@ import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
 import me.ahoo.cosec.snapshot.document.ProvenanceKind
 
-/** The limits of what a change may publish (RFC 0007 §6.2 V2). */
+/** The limits of what a change may publish (RFC 0007 §6.2 V2), and how changes expire and are approved. */
 class ChangeOptions(
     /** RFC 0003 Q14. */
     val maxDocumentBytes: Int = 8 * 1024 * 1024,
@@ -34,10 +35,17 @@ class ChangeOptions(
     val principalBindingLimit: Int = PolicyDocumentCompiler.DEFAULT_PRINCIPAL_BINDING_LIMIT,
     /** How long a change may stay unpublished before it expires (`cosec.control.changes.expire-after`). */
     val expireAfter: java.time.Duration = java.time.Duration.ofDays(7),
+    /** How long an approval is valid (`cosec.control.approval.expire-after`, RFC 0007 §7.5). */
+    val approvalExpireAfter: java.time.Duration = java.time.Duration.ofHours(72),
+    /**
+     * `cosec.control.approval.four-eyes` (RFC 0007 Q10): the trust root's own changes are analyzed too, and what the
+     * analysis cannot prove needs another administrator.
+     */
+    val fourEyes: Boolean = false,
 ) {
     init {
         require(
-            maxDocumentBytes > 0 && principalBindingLimit >= 0 && !expireAfter.isNegative
+            maxDocumentBytes > 0 && principalBindingLimit >= 0 && !expireAfter.isNegative && !approvalExpireAfter.isNegative
         ) { "Invalid change options." }
     }
 }
@@ -150,7 +158,9 @@ class ChangeChecks(private val options: ChangeOptions = ChangeOptions()) {
         checkedWith: MutableMap<SnapshotKey, SnapshotDigest?>,
         findings: MutableList<Finding>,
     ) {
-        val defined = candidate.policies.map { it.id.value }.toSet() + platform?.policies?.map { it.id.value }.orEmpty() + ROOT
+        val defined = candidate.policies.map {
+            it.id.value
+        }.toSet() + platform?.policies?.map { it.id.value }.orEmpty() + BUILTIN
         val apps = HashMap<String, Set<String>>()
         for ((i, binding) in candidate.bindings.withIndex()) {
             val policy = binding.policy.value
@@ -211,7 +221,7 @@ class ChangeChecks(private val options: ChangeOptions = ChangeOptions()) {
     private companion object {
         const val BAD_REQUEST = 400
         const val UNPROCESSABLE = 422
-        const val ROOT = "cosec:root"
+        val BUILTIN = BuiltinPolicies.CONTROL.keys.map { it.value } + BuiltinPolicies.ROOT.value
         val RESERVED = listOf("cosec:", "g:", "r:")
     }
 }

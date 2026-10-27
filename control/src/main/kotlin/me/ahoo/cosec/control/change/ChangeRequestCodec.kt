@@ -72,9 +72,7 @@ object ChangeRequestCodec {
         }
         val operations = root.putArray("operations")
         change.operations.forEach { operations.add(operationTree(it, kind, owner)) }
-        root.putObject(
-            "author"
-        ).put("tenant", change.author.tenant.value).put("principal", change.author.principal.value)
+        root.set("author", actorTree(change.author))
         root.put("note", change.note)
         root.put("kind", change.kind.name)
         root.put("state", change.state.name)
@@ -90,7 +88,27 @@ object ChangeRequestCodec {
         root.put("updatedAt", change.updatedAt.toString())
         change.skipShadow?.let { root.put("skipShadow", it) }
         change.publishedRevision?.let { root.put("publishedRevision", it) }
+        if (change.escalations.isNotEmpty()) {
+            val escalations = root.putArray("escalations")
+            change.escalations.forEach {
+                escalations.addObject().put("subject", it.subject).put("reason", it.reason).put("detail", it.detail)
+            }
+        }
+        change.approval?.let { approval ->
+            val node = root.putObject("approval")
+            node.set("approver", actorTree(approval.approver))
+            node.put("at", approval.at.toString()).put("candidate", approval.candidate)
+            node.putArray("covers").apply { approval.covers.forEach { add(it) } }
+        }
         return root
+    }
+
+    private fun actorTree(actor: Actor): ObjectNode =
+        factory.objectNode().put("tenant", actor.tenant.value).put("principal", actor.principal.value)
+
+    private fun actor(node: JsonNode): Actor {
+        node.only("tenant", "principal")
+        return Actor(TenantId(node.need("tenant").text()), PrincipalId(node.need("principal").text()))
     }
 
     private fun operationTree(operation: Operation, kind: DocumentKind, owner: String): ObjectNode {
@@ -150,18 +168,17 @@ object ChangeRequestCodec {
     private fun change(node: JsonNode): ChangeRequest {
         node.only(
             "id", "key", "base", "operations", "author", "note", "kind", "state", "findings", "candidate", "checkedWith",
-            "createdAt", "updatedAt", "skipShadow", "publishedRevision",
+            "createdAt", "updatedAt", "skipShadow", "publishedRevision", "escalations", "approval",
         )
         val key = documentKey(node.need("key").text())
         val (kind, owner) = Revisions.ownerOf(key)
         val base = node.need("base").also { it.only("revision", "digest") }
-        val author = node.need("author").also { it.only("tenant", "principal") }
         return ChangeRequest(
             id = ChangeId(node.need("id").text()),
             key = key,
             base = Base(base.need("revision").asLong(), base.get("digest")?.let { digest(it.text()) }),
             operations = node.need("operations").values().map { operation(it, kind, owner) },
-            author = Actor(TenantId(author.need("tenant").text()), PrincipalId(author.need("principal").text())),
+            author = actor(node.need("author")),
             note = node.need("note").text(),
             kind = ProvenanceKind.valueOf(node.need("kind").text()),
             state = ChangeState.valueOf(node.need("state").text()),
@@ -183,6 +200,19 @@ object ChangeRequestCodec {
             updatedAt = Instant.parse(node.need("updatedAt").text()),
             skipShadow = node.get("skipShadow")?.text(),
             publishedRevision = node.get("publishedRevision")?.asLong(),
+            escalations = node.get("escalations")?.values()?.map {
+                it.only("subject", "reason", "detail")
+                Escalation(it.need("subject").text(), it.need("reason").text(), it.need("detail").text())
+            }.orEmpty(),
+            approval = node.get("approval")?.let {
+                it.only("approver", "at", "candidate", "covers")
+                Approval(
+                    actor(it.need("approver")),
+                    Instant.parse(it.need("at").text()),
+                    it.need("candidate").text(),
+                    it.need("covers").values().map { covered -> covered.text() },
+                )
+            },
         )
     }
 
