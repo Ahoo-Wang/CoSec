@@ -1,0 +1,53 @@
+{
+  "rules": [
+    "ATR-1"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The provider answers: the ALLOW reading ext.geo.inFence permits.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "in-fence",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.geo.inFence",
+                  true
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:in-fence",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "in-fence"
+        }
+      ]
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.inFence": "bool"
+      },
+      "values": {
+        "ext.geo.inFence": true
+      }
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

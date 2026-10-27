@@ -55,6 +55,13 @@ sealed interface Cause {
     /** A document the request needs was not given to the engine. */
     data class NotLoaded(val document: DocumentKind) : Cause
 
+    /**
+     * External attributes a statement needed could not be fetched (RFC 0006 §5.4.3): their provider failed, timed out,
+     * or they were not in the attribute plan. [at] is the first statement that needed them, or null when no statement
+     * did, such as an unreadable blacklist (§5.4.4).
+     */
+    data class AttributeUnavailable(val attributes: Set<String>, val at: StatementRef.Policy?) : Cause
+
     /** The principal's memberships could not be resolved (RFC 0004 §4.5.2). */
     data class MembershipUnavailable(val error: Throwable) : Cause
 }

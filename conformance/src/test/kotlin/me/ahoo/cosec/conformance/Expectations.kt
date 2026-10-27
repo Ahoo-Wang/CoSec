@@ -194,6 +194,10 @@ object Expectations {
             is Cause.SourceUnavailable -> put("document", cause.document.name.lowercase())
             is Cause.NotLoaded -> put("document", cause.document.name.lowercase())
             is Cause.MembershipUnavailable -> Unit
+            is Cause.AttributeUnavailable -> {
+                set("attributes", json.arrayNode().apply { cause.attributes.sorted().forEach(::add) })
+                cause.at?.let { set("at", ref(it)) }
+            }
         }
     }
 

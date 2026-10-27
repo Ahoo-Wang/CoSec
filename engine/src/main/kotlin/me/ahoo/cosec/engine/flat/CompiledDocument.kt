@@ -45,6 +45,9 @@ class CompiledDocument private constructor(
     private val policies: Map<String, CompiledPolicy>,
     bindings: List<Binding>,
 ) {
+    /** Whether one of its policies reads an external attribute (RFC 0006 §5.4.2). */
+    internal val readsExternal: Boolean = policies.values.any { it.readsExternal }
+
     /** `Anyone` bindings, by policy id, then binding id. */
     internal val anyone: Array<BoundEntry>
 

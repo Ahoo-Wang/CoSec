@@ -14,7 +14,14 @@
 package me.ahoo.cosec.e2e
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.runtime.Outcome
+import me.ahoo.cosec.runtime.attribute.AttributeDeclaration
+import me.ahoo.cosec.runtime.attribute.AttributeProvider
+import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.attribute.AttributeRequest
+import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
+import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -47,22 +54,45 @@ class SliceBlockHoundTest {
                 SnapshotKey.Platform,
                 ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*"}]}],"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"p"}]"""
             )
-            slice.publish(SnapshotKey.Tenant("acme"), "")
-            val request = request("GET", "/orders/1", "alice@acme")
-            // Warm the source: the documents are compiled and installed before the measured call.
-            runBlocking { slice.evaluate(request) }.proceed.assert().isTrue()
-            violations.clear()
-            val outcome = onNonBlockingThread {
-                val result = CompletableFuture<Outcome>()
-                val evaluate: suspend () -> Outcome = { slice.evaluate(request) }
-                evaluate.startCoroutine(Continuation(EmptyCoroutineContext) { result.complete(it.getOrThrow()) })
-                // Completed before startCoroutine returned: nothing suspended, nothing was dispatched.
-                check(result.isDone) { "The warm request suspended." }
-                result.join()
-            }
-            outcome.proceed.assert().isTrue()
-            violations.assert().isEmpty()
+            assertWarmRequestNeitherBlocksNorSuspends(slice)
         }
+    }
+
+    /** T1 (RFC 0006 §7.2): providers that answer at once add no suspension, in stage A and in stage B. */
+    @Test
+    fun `a warm request with the blacklist and an external attribute neither blocks nor suspends`() {
+        val inFence = object : AttributeProvider {
+            override val attributes = listOf(AttributeDeclaration("ext.geo.inFence", AttributeType.BOOL))
+
+            override suspend fun fetch(request: AttributeRequest, names: Set<String>) = mapOf("ext.geo.inFence" to true)
+        }
+        val providers = AttributeProviders(listOf(BlacklistAttributeProvider(InMemoryBlacklistSource()), inFence))
+        Slice(attributes = providers).use { slice ->
+            slice.publish(
+                SnapshotKey.Platform,
+                ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*","condition":{"eq":["ext.geo.inFence",true]}}]}],""" +
+                    """"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"p"}]"""
+            )
+            assertWarmRequestNeitherBlocksNorSuspends(slice)
+        }
+    }
+
+    private fun assertWarmRequestNeitherBlocksNorSuspends(slice: Slice) {
+        slice.publish(SnapshotKey.Tenant("acme"), "")
+        val request = request("GET", "/orders/1", "alice@acme")
+        // Warm the source: the documents are compiled and installed before the measured call.
+        runBlocking { slice.evaluate(request) }.proceed.assert().isTrue()
+        violations.clear()
+        val outcome = onNonBlockingThread {
+            val result = CompletableFuture<Outcome>()
+            val evaluate: suspend () -> Outcome = { slice.evaluate(request) }
+            evaluate.startCoroutine(Continuation(EmptyCoroutineContext) { result.complete(it.getOrThrow()) })
+            // Completed before startCoroutine returned: nothing suspended, nothing was dispatched.
+            check(result.isDone) { "The warm request suspended." }
+            result.join()
+        }
+        outcome.proceed.assert().isTrue()
+        violations.assert().isEmpty()
     }
 
     @Suppress("TooGenericExceptionCaught")
