@@ -173,6 +173,34 @@ class ChangesTest {
         )
     }
 
+    /** What the approver held is kept, so that publish can check it again (review K3). */
+    @Test
+    fun `an approval reads back with what its approver held`() = runBlocking<Unit> {
+        val change = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("a"))), "x")
+        val memberships = me.ahoo.cosec.model.Memberships(
+            me.ahoo.cosec.model.Memberships.Source.CLAIMS,
+            mapOf(
+                me.ahoo.cosec.model.SpaceId.DEFAULT to setOf(me.ahoo.cosec.model.RoleId("admin")),
+                me.ahoo.cosec.model.SpaceId("team-a") to setOf(me.ahoo.cosec.model.RoleId("ops")),
+            ),
+            listOf(PolicyId("attached")),
+        )
+        val approval = Approval(
+            PLATO.actor,
+            StoreFixtures.START,
+            "c".repeat(64),
+            listOf("a[0]"),
+            memberships,
+            mapOf("department" to "ops")
+        )
+        val read = ChangeRequestCodec.decode(ChangeRequestCodec.encode(change.copy(approval = approval))).approval!!
+        read.copy(memberships = null).assert().isEqualTo(approval.copy(memberships = null))
+        val held = read.memberships!!
+        held.source.assert().isEqualTo(memberships.source)
+        held.roles.assert().isEqualTo(memberships.roles)
+        held.attachments.assert().isEqualTo(memberships.attachments)
+    }
+
     @Test
     fun `a change reads back as it was stored`() = runBlocking<Unit> {
         val operations = listOf(

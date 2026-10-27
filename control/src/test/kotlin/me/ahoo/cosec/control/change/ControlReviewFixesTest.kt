@@ -257,5 +257,34 @@ class ControlReviewFixesTest {
         revisions.head(app).assert().isNull()
     }
 
+    @Test
+    fun `an approval that cannot be checked again does not count`() = runBlocking<Unit> {
+        val authority = ChangeAuthority(engine.authorizer)
+        val change = changes.propose(
+            walt,
+            SnapshotKey.Platform,
+            1,
+            listOf(Operation.PutPolicy(writer.copyAs("x"))),
+            "x"
+        )
+        val needed = listOf(Escalation("document platform", "NOT_ANALYZED"))
+        authority.approverProblem(change, emptyList(), walt).assert().isNull()
+        authority.approverProblem(change, needed, walt).assert().isEqualTo("it needs an approval")
+        val unrecorded = change.copy(
+            approval = Approval(pia.actor, clock.now, change.candidate!!, listOf("document platform"))
+        )
+        authority.approverProblem(
+            unrecorded,
+            needed,
+            walt
+        ).assert().isEqualTo("the approval does not say what its approver held")
+        val recorded = unrecorded.copy(approval = unrecorded.approval!!.copy(memberships = pia.memberships))
+        authority.approverProblem(recorded, needed, walt).assert().isNull()
+        // A publisher without the request it came in through gives nothing to check the approver in.
+        val detached = me.ahoo.cosec.control.authz.Operator(walt.actor, walt.memberships)
+        authority.approverProblem(recorded, needed, detached).assert()
+            .isEqualTo("the approver's right to approve cannot be checked again")
+    }
+
     private fun PolicyDefinition.copyAs(id: String) = PolicyDefinition(PolicyId(id), attachable, condition, statements)
 }
