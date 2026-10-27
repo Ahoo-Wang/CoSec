@@ -20,6 +20,7 @@ import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
@@ -62,6 +63,30 @@ class RequestSecurity internal constructor(
         val declared = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value)
         val request = with(request) { AuthzRequest(subject, declared, action, resource, environment) }
         return RequestSecurity(requestId, authenticated, scope, memberships, request)
+    }
+
+    /**
+     * This request as [principal] with [memberships], in the default scope of [principal]'s tenant; null when that
+     * scope does not resolve. For checking again what a principal recorded earlier may do, such as the approver of a
+     * control-plane change when it publishes (RFC 0007 §7.5): it reads the current documents, and the environment of
+     * this request, not the one the principal had.
+     */
+    fun asPrincipal(principal: AuthenticatedPrincipal, memberships: Memberships): RequestSecurity? {
+        val member = ScopeSubject(principal.tenant, true, memberships)
+        val resolved = ScopeResolver.resolve(member, DeclaredScope("", ""), HostScope(null))
+        val scope = (resolved as? ScopeResolution.Resolved)?.scope ?: return null
+        val subject = Subject(
+            id = principal.id.value,
+            tenantId = principal.tenant.value,
+            authenticated = true,
+            roles = emptySet(),
+            policies = emptySet(),
+            attributes = principal.attributes,
+            root = false,
+        )
+        val declared = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value)
+        val request = with(request) { AuthzRequest(subject, declared, action, resource, environment) }
+        return RequestSecurity(requestId, principal, scope, memberships, request)
     }
 
     override fun toString(): String =

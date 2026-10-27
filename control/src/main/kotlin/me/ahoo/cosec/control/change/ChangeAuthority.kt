@@ -34,6 +34,8 @@ import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.runtime.authn.MembershipSource
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.PolicyDocument
 import me.ahoo.cosec.snapshot.document.ProvenanceKind
@@ -64,7 +66,8 @@ class ChangeAuthority(
     /** The hard rule: a 403 when [operator] may not act on [key] at all. */
     fun isolate(operator: Operator, key: SnapshotKey) {
         if (!TenantIsolation.allows(operator, key)) {
-            throw ChangeRejectedException(FORBIDDEN, "$operator may not act on [$key]")
+            // The document is not named: a refusal must not tell another tenant which documents exist (review K2).
+            throw ChangeRejectedException(FORBIDDEN, "$operator may not act on this document")
         }
     }
 
@@ -78,12 +81,17 @@ class ChangeAuthority(
     suspend fun holds(operator: Operator, key: SnapshotKey, action: Action): Boolean =
         TenantIsolation.allows(operator, key) && decide(operator, action, ControlResources.document(key)) == ControlDecision.PERMIT
 
-    /** Every target of [operations] on [key] (RFC 0007 §7.1), after the hard rule. */
+    /**
+     * Every target of [operations] on [key] (RFC 0007 §7.1), after the hard rule. [breakGlass] says whether they create
+     * or alter a break-glass binding ([BreakGlassRules.touches]): whatever the change's kind, that needs
+     * `cosec:breakglass` on the document (review K1).
+     */
     suspend fun authorize(
         operator: Operator,
         key: SnapshotKey,
         operations: List<Operation>,
-        kind: ProvenanceKind = ProvenanceKind.PUBLISH
+        kind: ProvenanceKind = ProvenanceKind.PUBLISH,
+        breakGlass: Boolean = kind == ProvenanceKind.BREAK_GLASS,
     ) {
         isolate(operator, key)
         if (kind == ProvenanceKind.BREAK_GLASS) {
@@ -91,6 +99,9 @@ class ChangeAuthority(
             // change carries break-glass bindings only, or it never checks clean (BreakGlassRules).
             require(operator, ControlActions.BREAKGLASS, ControlResources.document(key))
             return
+        }
+        if (breakGlass) {
+            require(operator, ControlActions.BREAKGLASS, ControlResources.document(key))
         }
         for (operation in operations) {
             when (operation) {
@@ -202,6 +213,34 @@ class ChangeAuthority(
                 "the approval is the author's or the publisher's own"
             !approval.covers.containsAll(required.map { it.subject }) -> "the approval does not cover what it now needs"
             else -> null
+        }
+    }
+
+    /**
+     * Why the approver of [change] no longer counts when [publisher] publishes it, needing [required]; null when it
+     * does, or none is needed (review K3). The approver is checked again as they approved (their memberships and
+     * attributes), against the current documents, in [publisher]'s request: an approver who has since lost
+     * `cosec:approve` on the document, or whose right cannot be decided, sends the change back for approval.
+     */
+    suspend fun approverProblem(change: ChangeRequest, required: List<Escalation>, publisher: Operator): String? {
+        if (required.isEmpty()) {
+            return null
+        }
+        val approval = change.approval ?: return "it needs an approval"
+        val memberships = approval.memberships ?: return "the approval does not say what its approver held"
+        val principal = AuthenticatedPrincipal(
+            approval.approver.principal,
+            approval.approver.tenant,
+            MembershipSource.Provider,
+            approval.attributes,
+        )
+        val security = publisher.security?.asPrincipal(principal, memberships)
+            ?: return "the approver's right to approve cannot be checked again"
+        val approver = Operator(approval.approver, memberships, approval.attributes, security)
+        return if (holds(approver, change.key, ControlActions.APPROVE)) {
+            null
+        } else {
+            "the approver no longer holds cosec:approve on the document"
         }
     }
 

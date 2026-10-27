@@ -38,6 +38,17 @@
         "control:BreakGlassControlTest#without a REQUIRED listener, or when it fails, nothing is created",
         "control:BreakGlassControlTest#its lifetime is bounded, when requested and when published"
       ]
+    },
+    {
+      "id": "BRK-5",
+      "source": "RFC 0007 §8; round-1 review K1",
+      "statement": "A change's kind is set by its entry point: a proposal is PUBLISH or BREAK_GLASS, never ROLLBACK, EXPIRE, MIGRATE or BOOTSTRAP, and a change that creates or alters a break-glass binding needs cosec:breakglass and a REQUIRED audit whatever its kind.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlReviewFixesTest#a change's kind is never its input's",
+        "control:ControlReviewFixesTest#creating or altering break-glass needs cosec breakglass and a REQUIRED audit, whatever the kind"
+      ]
     }
   ]
 }
