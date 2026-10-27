@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "control",
-  "description": "pia approves plato's break-glass binding; it publishes.",
+  "description": "pia approves plato's break-glass binding; it publishes. Creating break-glass has no shadow window (RFC 0007 Q12): staging goes straight to approval.",
   "documents": {
     "platform": {
       "bindings": [
@@ -135,9 +135,6 @@
       }
     },
     {
-      "shadowed": "c1"
-    },
-    {
       "approve": {
         "change": "c1",
         "by": "pia"
@@ -153,7 +150,6 @@
   "expect": {
     "steps": [
       "CHECKED",
-      "SHADOWING",
       "AWAITING_APPROVAL",
       "READY",
       "PUBLISHED"

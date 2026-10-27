@@ -48,6 +48,8 @@ class CacheTtlPolicyTest {
         CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME to ControlCacheSpecs.lease(policy = weakened).policy,
         CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME to ControlCacheSpecs.changeRequest(policy = weakened).policy,
         CoSecCacheSpecs.STAGE_CACHE_NAME to ControlCacheSpecs.stage(policy = weakened).policy,
+        // RFC 0007 §6.4: a staged candidate is the control plane's only copy while its change stages.
+        CoSecCacheSpecs.CANDIDATE_CACHE_NAME to me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(policy = weakened).policy,
     )
 
     private inline fun <reified V : Any> codec() = CoSecCacheSpecs.jacksonCodec<V>(CoSecJsonSerializer)
@@ -78,6 +80,19 @@ class CacheTtlPolicyTest {
             CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME,
             CoSecCacheSpecs.STAGE_CACHE_NAME,
         ).forEach { CoSecCacheSpecs.pinnedPolicy(it, weakened).ttl.assert().isNull() }
+    }
+
+    /** RFC 0007 §6.4, §6.5: candidates are kept like policies; reports and statuses expire, but never read a failure as empty. */
+    @Test
+    fun shadowCachesLiveUnderTheirNamespacesAndFailClosed() {
+        val shadow = me.ahoo.cosec.cache.shadow.ShadowCacheSpecs
+        shadow.candidate().namespace.assert().isEqualTo("cosec:candidate")
+        shadow.reports().namespace.assert().isEqualTo("cosec:shadow:report")
+        shadow.statuses().namespace.assert().isEqualTo("cosec:shadow:status")
+        shadow.reports(policy = weakened).policy.ttl.assert().isEqualTo(shadow.REPORT_TTL)
+        shadow.statuses(policy = weakened).policy.ttl.assert().isEqualTo(shadow.STATUS_TTL)
+        shadow.reports(policy = weakened).policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+        shadow.statuses(policy = weakened).policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
     }
 
     @Test

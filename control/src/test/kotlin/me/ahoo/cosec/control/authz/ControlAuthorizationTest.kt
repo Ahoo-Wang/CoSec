@@ -20,6 +20,7 @@ import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Changes
+import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.store.ControlStore
@@ -72,7 +73,7 @@ class ControlAuthorizationTest {
     private val ids = AtomicInteger()
 
     private fun changes(
-        options: ChangeOptions = ChangeOptions(),
+        options: ChangeOptions = ChangeOptions(shadow = IMMEDIATE_WINDOW),
         authorizer: ControlAuthorizer = engine.authorizer
     ) = Changes(store, revisions, { ChangeId("c${ids.incrementAndGet()}") }, authorizer, clock, options)
 
@@ -306,7 +307,7 @@ class ControlAuthorizationTest {
         windowClosed(alone, plato).state.assert().isEqualTo(ChangeState.READY)
         changes.publish(plato, alone.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
 
-        val fourEyes = changes(ChangeOptions(fourEyes = true))
+        val fourEyes = changes(ChangeOptions(fourEyes = true, shadow = IMMEDIATE_WINDOW))
         val change = fourEyes.propose(plato, TENANT, 2, grant("team-a", "deleter", "order:delete"), "more")
         change.escalations.assert().isNotEmpty()
         fourEyes.stage(plato, change.id)
@@ -371,7 +372,8 @@ class ControlAuthorizationTest {
         )
         val change = changes.propose(plato, SnapshotKey.Platform, 1, listOf(Operation.PutBinding(glass)), "incident")
         change.escalations.map { it.reason }.assert().containsExactly("BREAK_GLASS")
-        windowClosed(change, plato).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        // Creating break-glass has no shadow window (RFC 0007 Q12): staging goes straight on to approval.
+        changes.stage(plato, change.id).state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         changes.approve(pia, change.id, change.candidate!!)
         changes.publish(plato, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         revisions.head(SnapshotKey.Platform)!!.document.provenance!!.approvedBy.assert().containsExactly(pia.actor)
