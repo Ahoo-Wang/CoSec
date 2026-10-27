@@ -22,6 +22,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.apikey.ApiKeyStore
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
+import me.ahoo.cosec.gateway.PipelineGatewayFilter
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.route.RouteMap
 import me.ahoo.cosec.runtime.AuthorizationChecker
@@ -46,6 +47,7 @@ import me.ahoo.cosec.spring.boot.starter.control.CoSecControlRoutesAutoConfigura
 import me.ahoo.cosec.spring.boot.starter.control.ControlProperties
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
+import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -53,6 +55,7 @@ import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.kafka.core.KafkaOperations
@@ -187,6 +190,32 @@ class CoSecPipelineAutoConfigurationTest {
             )
             .withPropertyValues("cosec.authorization.routes.location=", "cosec.authorization.scope.app-id=order")
             .run { context -> context.getBean(FilterRegistrationBean::class.java).filter.assert().isNotNull() }
+    }
+
+    @Test
+    fun `a WebFlux host gets the pipeline web filter, a gateway host the gateway filter`() {
+        val web = AutoConfigurations.of(
+            CoSecSnapshotAutoConfiguration::class.java,
+            CoSecPipelineAutoConfiguration::class.java,
+            CoSecPipelineWebAutoConfiguration::class.java,
+        )
+        ReactiveWebApplicationContextRunner()
+            .withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER))
+            .withConfiguration(web)
+            .withPropertyValues(
+                "cosec.authorization.routes.location=",
+                "cosec.authorization.remote-ip.max-trusted-index=0"
+            )
+            .run { context ->
+                context.getBeansOfType(PipelineWebFilter::class.java).assert().hasSize(1)
+                context.getBeansOfType(PipelineGatewayFilter::class.java).assert().isEmpty()
+            }
+        ReactiveWebApplicationContextRunner()
+            .withConfiguration(web)
+            .run { context ->
+                context.getBeansOfType(PipelineGatewayFilter::class.java).assert().hasSize(1)
+                context.getBeansOfType(PipelineWebFilter::class.java).assert().isEmpty()
+            }
     }
 
     @Test
