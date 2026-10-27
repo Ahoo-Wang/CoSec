@@ -1,0 +1,11 @@
+{
+  "rules": [
+    {
+      "id": "BDY-1",
+      "source": "RFC 0007 §7.6",
+      "statement": "A platform boundary can only turn a Permit into Deny or Indeterminate (P-B2); without boundaries it is the identity (P-B1).",
+      "level": "engine",
+      "pending": "RFC 0007 PR-3"
+    }
+  ]
+}

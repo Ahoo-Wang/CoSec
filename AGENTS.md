@@ -115,7 +115,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | Architecture, invariants, performance numbers | `wiki/architecture/overview.md` |
 | Extension points | `wiki/architecture/extending.md`, `skills/cosec-custom-matcher` |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
-| A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `conformance/src/test/resources/rules.json` and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |
+| A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `conformance/src/test/resources/rules/<FAMILY>.json` and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |
 | Breaking change (public API, `cosec.*` property, authorization semantics) | `wiki/operations/upgrading.md`: what breaks and how to migrate |
 
 Docs: link to files, never line numbers; verify claims against code, not other docs. Mermaid labels use

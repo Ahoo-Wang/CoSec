@@ -1,0 +1,43 @@
+{
+  "rules": [
+    {
+      "id": "BRK-1",
+      "source": "RFC 0004 §4.8",
+      "statement": "A break-glass principal is bound by every DENY (C2).",
+      "level": "engine",
+      "guards": [
+        "engine:FlatEngineTest#root is a break-glass binding that permits everything but every deny"
+      ],
+      "pending": null
+    },
+    {
+      "id": "BRK-2",
+      "source": "RFC 0004 §4.8",
+      "statement": "Break-glass bindings exist only in the platform document, bind only a principal, and must have expiresAt.",
+      "level": "engine",
+      "guards": [
+        "engine:CompiledDocumentTest#break-glass bindings are expiring principal bindings of the platform"
+      ],
+      "pending": null
+    },
+    {
+      "id": "BRK-4",
+      "source": "RFC 0004 §4.8 (#1029 review)",
+      "statement": "The break-glass root binding applies only to principals of the platform tenant; a root binding of any other tenant does not compile.",
+      "level": "engine",
+      "pending": null
+    },
+    {
+      "id": "BRK-3",
+      "source": "RFC 0007 §8",
+      "statement": "Break-glass is created only through the control plane: two people, a bounded lifetime, and a REQUIRED audit written first.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:BreakGlassControlTest#two people create it, each step recorded first",
+        "control:BreakGlassControlTest#without a REQUIRED listener, or when it fails, nothing is created",
+        "control:BreakGlassControlTest#its lifetime is bounded, when requested and when published"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "rules": [
+    {
+      "id": "BLK-1",
+      "source": "RFC 0004 §4.7, §7.4",
+      "statement": "A blocked principal is always denied, by the builtin blacklist rule, and the decision needs the platform document only.",
+      "level": "engine",
+      "guards": [
+        "engine:FlatEngineTest#a blocked request is denied by the blacklist whatever else is unresolved"
+      ],
+      "pending": null
+    },
+    {
+      "id": "BLK-2",
+      "source": "RFC 0006 §5.4.4",
+      "statement": "A blacklist that cannot be read is never \"not blocked\": the request is Indeterminate (503) unless a DENY matches.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:ExternalAttributesPipelineTest"
+      ],
+      "pending": null
+    }
+  ]
+}

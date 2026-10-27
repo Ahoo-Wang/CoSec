@@ -1,0 +1,28 @@
+{
+  "rules": [
+    {
+      "id": "DOC-1",
+      "source": "RFC 0004 §7.4; RFC 0003 §4.4",
+      "statement": "Dangling and cross-tenant references do not compile; a request that reaches a Broken entry on the data plane fails closed (F4, F5).",
+      "level": "engine",
+      "pending": null
+    },
+    {
+      "id": "DOC-2",
+      "source": "RFC 0008 §3.2 (review of #1015)",
+      "statement": "The codecs neither encode nor decode Match.Exactly(\"*\"): * only ever means Match.Any.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "cosec-core:PolicyDocumentCodecTest#the wildcard is only ever Any"
+      ]
+    },
+    {
+      "id": "DOC-3",
+      "source": "RFC 0004 §7.1; RFC 0003 F3",
+      "statement": "A document whose schema is not this version's format fails to decode, as does one that is not exactly this format (an unknown field, a second operator, a value of the wrong JSON type), and the requests that need it fail closed.",
+      "level": "engine",
+      "pending": null
+    }
+  ]
+}
