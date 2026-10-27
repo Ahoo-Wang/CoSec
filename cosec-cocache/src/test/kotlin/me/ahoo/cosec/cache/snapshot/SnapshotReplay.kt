@@ -22,6 +22,7 @@ import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.blacklist.BlacklistChecker
 import me.ahoo.cosec.cache.AppSpacedRoleId
+import me.ahoo.cosec.migrate.CoSec7xReader
 import me.ahoo.cosec.parity.AuthorizationFactory
 import me.ahoo.cosec.parity.FailureView
 import me.ahoo.cosec.parity.REPLAY_OK
@@ -39,7 +40,7 @@ import kotlin.system.exitProcess
 
 /**
  * The candidate of the RFC 0003 gate (§8.2): the snapshot read path, fed the export the way a deployment's data would
- * reach it. The exported JSON is stored in 7.0's Redis layout, [CoSec7xReader] converts it, [RedisSnapshotPublisher]
+ * reach it. The exported JSON is stored in 7.0's Redis layout, [CoSec7xSnapshotReader] converts it, [RedisSnapshotPublisher]
  * publishes the documents, and [SnapshotAuthorizationFixture] reads them through [RedisSnapshotDocumentStore] and the
  * snapshot compiler.
  *
@@ -86,8 +87,8 @@ class SnapshotReplaySide(
         }
     }
 
-    /** The export stored as 7.x data, then read back by [CoSec7xReader]. */
-    private fun convert(backend: InMemoryBackend, export: ReplayExport): CoSec7xReader.Conversion {
+    /** The export stored as 7.x data, then read back by [CoSec7xSnapshotReader]. */
+    private fun convert(backend: InMemoryBackend, export: ReplayExport): CoSec7xSnapshotReader.Conversion {
         val grants = HashSet<AppSpacedRoleId>()
         Raw7xWriter(backend, KEY_PREFIX).use { writer ->
             export.policies.forEach { writer.policy(it.id, CoSecJsonSerializer.writeValueAsString(it.json)) }
@@ -110,7 +111,7 @@ class SnapshotReplaySide(
             export.apps.filter { it.appPermission != null }.mapTo(HashSet()) { it.appId },
             grants,
         )
-        return CoSec7xReader(backend, KEY_PREFIX).use { it.read(keys) }
+        return CoSec7xSnapshotReader(backend, KEY_PREFIX).use { it.read(keys) }
     }
 
     private class ReplayedSnapshot(

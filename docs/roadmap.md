@@ -92,8 +92,9 @@ key 过滤器、协调 `localMaxAge`）转入切换 PR（RFC 0008 §4.4）。
 | RFC 0005 PR-4 | 编译语句与候选索引，扁平引擎改为评估编译后的语句；I1、I2、`ALG-7` 的性质；对 7.0 的吞吐预算 | #1051 | — | — |
 | RFC 0004 PR-4 | `schema: 2` 的平台、应用、租户文档与编解码、文档编译与编译期检查、两层同名按内容解析（RFC 0007 N2）、格式描述、`DOC-*`/`TNT-2` 等场景 | #1052 | — | — |
 | RFC 0004 PR-4b | `SnapshotSource` 推广为一个共享槽加多个 LRU 族，加载平台、应用、租户文档并实现 `SnapshotViews`；`SNP-1`、`SNP-2` 的守护 | 已合入（#1053） | — | — |
+| RFC 0004 PR-5 | `cosec-migrate`：`convert`、`publish`、拒绝项、来源映射与报告（含受语义改动影响的 7.x 配置形态）；翻译动作，条件的翻译留给 RFC 0005 PR-6 | 打开中（#1067） | — | — |
 
-后续：RFC 0004 PR-4 的后续（三文档的 `SnapshotSource`）；RFC 0005 PR-5（路由映射）；RFC 0004 PR-5（`cosec-migrate`，改动）；RFC 0005 PR-6（翻译 7.x 匹配器，改动）。
+后续：RFC 0005 PR-5（路由映射）；RFC 0005 PR-6（把 7.x 条件翻译成 AST，改动；在 RFC 0004 PR-5 之上扩展 `MatcherTranslator`）。
 依赖见 RFC 0008 §4.5。
 
 ---
