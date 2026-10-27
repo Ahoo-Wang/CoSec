@@ -88,6 +88,13 @@ object ChangeRequestCodec {
         root.put("updatedAt", change.updatedAt.toString())
         change.skipShadow?.let { root.put("skipShadow", it) }
         change.publishedRevision?.let { root.put("publishedRevision", it) }
+        approvalTree(root, change)
+        change.shadow?.let { root.set("shadow", shadowTree(it)) }
+        return root
+    }
+
+    /** The escalations and the approval of [change] (RFC 0007 §7.5); neither is written while there is none. */
+    private fun approvalTree(root: ObjectNode, change: ChangeRequest) {
         if (change.escalations.isNotEmpty()) {
             val escalations = root.putArray("escalations")
             change.escalations.forEach {
@@ -100,7 +107,36 @@ object ChangeRequestCodec {
             node.put("at", approval.at.toString()).put("candidate", approval.candidate)
             node.putArray("covers").apply { approval.covers.forEach { add(it) } }
         }
-        return root
+    }
+
+    private fun shadowTree(shadow: ShadowState): ObjectNode {
+        val node = factory.objectNode().put("window", shadow.window).put("startedAt", shadow.startedAt.toString())
+        shadow.closed?.let { closed ->
+            val summary = node.putObject("closed")
+                .put("closedAt", closed.closedAt.toString())
+                .put("insufficient", closed.insufficient)
+                .put("blocked", closed.blocked)
+            val counts = summary.putObject("counts")
+            closed.counts.toSortedMap().forEach { (outcome, count) -> counts.put(outcome, count) }
+        }
+        return node
+    }
+
+    private fun shadow(node: JsonNode): ShadowState {
+        node.only("window", "startedAt", "closed")
+        return ShadowState(
+            node.need("window").text(),
+            Instant.parse(node.need("startedAt").text()),
+            node.get("closed")?.let { closed ->
+                closed.only("counts", "closedAt", "insufficient", "blocked")
+                ShadowSummary(
+                    closed.need("counts").properties().associate { (outcome, count) -> outcome to count.asLong() },
+                    Instant.parse(closed.need("closedAt").text()),
+                    closed.need("insufficient").asBoolean(),
+                    closed.need("blocked").asBoolean(),
+                )
+            },
+        )
     }
 
     private fun actorTree(actor: Actor): ObjectNode =
@@ -168,7 +204,7 @@ object ChangeRequestCodec {
     private fun change(node: JsonNode): ChangeRequest {
         node.only(
             "id", "key", "base", "operations", "author", "note", "kind", "state", "findings", "candidate", "checkedWith",
-            "createdAt", "updatedAt", "skipShadow", "publishedRevision", "escalations", "approval",
+            "createdAt", "updatedAt", "skipShadow", "publishedRevision", "escalations", "approval", "shadow",
         )
         val key = documentKey(node.need("key").text())
         val (kind, owner) = Revisions.ownerOf(key)
@@ -204,6 +240,7 @@ object ChangeRequestCodec {
                 it.only("subject", "reason", "detail")
                 Escalation(it.need("subject").text(), it.need("reason").text(), it.need("detail").text())
             }.orEmpty(),
+            shadow = node.get("shadow")?.let(::shadow),
             approval = node.get("approval")?.let {
                 it.only("approver", "at", "candidate", "covers")
                 Approval(

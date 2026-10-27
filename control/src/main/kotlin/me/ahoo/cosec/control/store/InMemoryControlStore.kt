@@ -17,6 +17,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.snapshot.SnapshotDigest
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
@@ -40,6 +41,7 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     private val leases = HashMap<String, Pair<String, Instant>>()
     private val changes = HashMap<ChangeId, Pair<ChangeRequest, Long>>()
     private val stages = HashMap<SnapshotKey, Pair<StageSlot, Long>>()
+    private val candidates = HashMap<SnapshotKey, StoredCandidate>()
     private var writes = 0L
 
     override fun digestOf(document: SnapshotDocument): SnapshotDigest = digest(document.bodyBytes())
@@ -109,6 +111,14 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         }
         changes[change.id] = change to ++writes
         true
+    }
+
+    override suspend fun candidate(key: SnapshotKey): StoredCandidate? = synchronized(lock) { candidates[key] }
+
+    override suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate?) {
+        synchronized(lock) {
+            if (candidate == null) candidates.remove(key) else candidates[key] = candidate
+        }
     }
 
     override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? =

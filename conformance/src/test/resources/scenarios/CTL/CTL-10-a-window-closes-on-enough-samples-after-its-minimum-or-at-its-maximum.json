@@ -1,0 +1,133 @@
+{
+  "rules": [
+    "CTL-10"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Bounds 15 min, 3 samples, 1 h. c1 has its 3 samples (two instances) once 15 minutes have passed: it closes. c2, after c1 published, gets one sample and closes only at the hour, as insufficient.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT15M",
+      "minSamples": 3,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "NARROWED": 2
+        }
+      }
+    },
+    {
+      "advance": "PT15M"
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i2",
+        "counts": {
+          "SAME": 1
+        }
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "ack": "summary"
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "removePolicy": "read"
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c2"
+    },
+    {
+      "report": {
+        "change": "c2",
+        "instance": "i1",
+        "counts": {
+          "NARROWED": 1
+        }
+      }
+    },
+    {
+      "advance": "PT59M"
+    },
+    {
+      "shadowed": "c2"
+    },
+    {
+      "advance": "PT1M"
+    },
+    {
+      "shadowed": "c2"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "advanced",
+      "SHADOWING",
+      "reported",
+      "READY",
+      "PUBLISHED",
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "advanced",
+      "SHADOWING",
+      "advanced",
+      "READY"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}
