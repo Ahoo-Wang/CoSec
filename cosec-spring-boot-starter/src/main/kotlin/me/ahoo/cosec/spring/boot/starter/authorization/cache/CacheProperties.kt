@@ -34,6 +34,7 @@ class CacheProperties(
         const val PREFIX: String = CoSec.COSEC_PREFIX + "authorization.cache"
     }
 }
+
 /**
  * Local (in-process) cache settings. Unset values ([UNSET]) keep CoCache's defaults: 10,000 entries and a local copy
  * that lives at most 5 minutes (`localMaxAge`).

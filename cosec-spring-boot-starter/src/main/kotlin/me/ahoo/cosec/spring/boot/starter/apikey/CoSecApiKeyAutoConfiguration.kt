@@ -12,9 +12,9 @@
  */
 package me.ahoo.cosec.spring.boot.starter.apikey
 
+import me.ahoo.cosec.apikey.ApiKeyReader
 import me.ahoo.cosec.apikey.ApiKeyStore
 import me.ahoo.cosec.apikey.InMemoryApiKeyStore
-import me.ahoo.cosec.apikey.ApiKeyReader
 import me.ahoo.cosec.cache.RedisApiKeyReader
 import me.ahoo.cosec.cache.RedisApiKeyStore
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled

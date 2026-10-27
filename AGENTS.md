@@ -56,6 +56,10 @@ A change is done when `check` passes for every module it touches and for its dep
 
 ## Mental model
 
+> **Transition (RFC 0008 S1b):** the starter wires the 8.0 path (`Pipeline`, policy snapshot, control plane); the
+> 7.x auto-configuration is gone. The sections below still describe 7.x until S5 rewrites them, and the 7.x library
+> code they name compiles but is no longer wired (S2–S4 delete it).
+
 Read [`wiki/architecture/overview.md`](wiki/architecture/overview.md) before touching authorization, web
 adapters or caching. The parts that take several files to see:
 
