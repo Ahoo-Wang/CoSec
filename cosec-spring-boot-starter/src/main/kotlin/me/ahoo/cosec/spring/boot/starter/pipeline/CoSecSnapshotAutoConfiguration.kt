@@ -169,7 +169,12 @@ internal object EvictionPolicyCheck {
             "maxmemory-policy is $evicting, not $NOEVICTION (${RuntimeAuthorizationProperties.PREFIX}.snapshot.eviction-check)."
         when (mode) {
             RuntimeAuthorizationProperties.EvictionCheck.FAIL -> throw IllegalStateException(message)
-            RuntimeAuthorizationProperties.EvictionCheck.WARN -> log.error { message }
+            RuntimeAuthorizationProperties.EvictionCheck.WARN -> log.warn {
+                "!!! $message Starting anyway (eviction-check=warn). If Redis evicts an app or tenant document, an " +
+                    "instance that loads it next reads it as absent: its DENY statements silently stop applying. " +
+                    "An evicted platform document still fails every request closed. Set maxmemory-policy to " +
+                    "$NOEVICTION, or make sure the policy snapshot can never be evicted."
+            }
         }
     }
 }

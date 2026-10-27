@@ -116,6 +116,18 @@ class RuleCoverageTest {
     }
 
     @Test
+    fun `a startup rule needs a test rather than scenarios, and no scenario runs at that level`() {
+        RuleCoverage.check(listOf(rule("SNP-3", level = "startup")), emptyList(), tests).errors.assert()
+            .containsExactly("Startup rule SNP-3 names no test")
+        RuleCoverage.check(
+            listOf(rule("SNP-3", level = "startup", guards = listOf("engine:SomePropertyTest"))),
+            listOf(scenario("s", "positive", "SNP-3", level = "startup")),
+            tests
+        )
+            .errors.assert().containsExactly("Scenario s has unknown level startup")
+    }
+
+    @Test
     fun `ids are unique, well formed and of a known level`() {
         val rules =
             listOf(
