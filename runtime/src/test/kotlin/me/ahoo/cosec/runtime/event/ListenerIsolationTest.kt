@@ -105,7 +105,10 @@ class ListenerIsolationTest {
         authenticator: Authenticator = authenticator(authenticated()),
         path: String = "/orders",
     ): Outcome = runBlocking {
-        PipelineFixtures.pipeline(authenticator, StubEngine(decision), listeners = listeners).evaluate(facts(path))
+        PipelineFixtures.pipeline(
+            authenticator,
+            StubEngine(decision)
+        ) { it.copy(listeners = listeners) }.evaluate(facts(path))
     }
 
     private val Outcome.cause: Cause
@@ -158,11 +161,11 @@ class ListenerIsolationTest {
     fun aBestEffortListenerNeverRunsOnTheRequestThread() {
         val recording = Recording()
         val listeners = listeners(recording)
-        val pipeline = PipelineFixtures.pipeline(
-            authenticator(authenticated()),
-            StubEngine(PERMIT),
-            listeners = listeners
-        )
+        val pipeline =
+            PipelineFixtures.pipeline(
+                authenticator(authenticated()),
+                StubEngine(PERMIT)
+            ) { it.copy(listeners = listeners) }
         val (outcome, finishedOn) = startOn(eventLoop, EmptyCoroutineContext) { pipeline.evaluate(facts()) }
         outcome.proceed.assert().isTrue()
         finishedOn.name.assert().isEqualTo(EVENT_LOOP)
@@ -219,7 +222,10 @@ class ListenerIsolationTest {
         val listeners = DecisionListeners(listOf(slow), requiredTimeout = 5.seconds).also { opened += it }
         val options = me.ahoo.cosec.runtime.PipelineOptions(timeout = 100.milliseconds)
         fun evaluate(decision: Decision, authenticator: Authenticator) = runBlocking {
-            PipelineFixtures.pipeline(authenticator, StubEngine(decision), options = options, listeners = listeners)
+            PipelineFixtures.pipeline(
+                authenticator,
+                StubEngine(decision)
+            ) { it.copy(options = options, listeners = listeners) }
                 .evaluate(facts())
         }
         evaluate(Decision.Deny(null), Authenticator { AuthnResult.Anonymous }).status.assert().isEqualTo(401)
@@ -256,12 +262,9 @@ class ListenerIsolationTest {
         evaluate(listeners, path = "/a/%2e%2e/b")
         evaluate(listeners, authenticator = Authenticator { AuthnResult.Unavailable(IllegalStateException("down")) })
         runBlocking {
-            PipelineFixtures.pipeline(
-                authenticator(authenticated()),
-                StubEngine { error("a defect") },
-                listeners = listeners
-            )
-                .evaluate(facts())
+            PipelineFixtures.pipeline(authenticator(authenticated()), StubEngine { error("a defect") }) {
+                it.copy(listeners = listeners)
+            }.evaluate(facts())
         }.status.assert().isEqualTo(500)
         evaluate(listeners, decision = Decision.Deny(null), authenticator = Authenticator { AuthnResult.Anonymous })
         recording.await(4).map { it.kind }.assert().containsExactly(
@@ -286,7 +289,7 @@ class ListenerIsolationTest {
             reached.complete(Unit)
             awaitCancellation()
         }
-        val pipeline = PipelineFixtures.pipeline(hanging, StubEngine(PERMIT), listeners = listeners)
+        val pipeline = PipelineFixtures.pipeline(hanging, StubEngine(PERMIT)) { it.copy(listeners = listeners) }
         var outcome: Outcome? = null
         val caller = launch { outcome = pipeline.evaluate(facts()) }
         reached.await()
@@ -303,7 +306,10 @@ class ListenerIsolationTest {
         val recording = Recording()
         val listeners = listeners(recording)
         runBlocking {
-            PipelineFixtures.pipeline(authenticator(authenticated()), StubEngine(PERMIT), listeners = listeners)
+            PipelineFixtures.pipeline(
+                authenticator(authenticated()),
+                StubEngine(PERMIT)
+            ) { it.copy(listeners = listeners) }
                 .evaluate(
                     facts(
                         headers = mapOf("Authorization" to listOf("Bearer secret-token"), "X-Secret" to listOf("hush"))

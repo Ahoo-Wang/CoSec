@@ -30,6 +30,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
@@ -76,10 +77,12 @@ class Slice(
     val source: SnapshotSource<CompiledDocument, CompiledDocument> =
         DocumentSnapshots.source(store, PolicyDocumentCompiler(attributes.catalog), options)
     val pipeline = Pipeline(
-        TokenAuthenticator,
-        SuspendingSnapshotSource(DocumentSnapshotViews(source)),
-        attributes = attributes,
-        listeners = listeners,
+        PipelineComponents(
+            TokenAuthenticator,
+            SuspendingSnapshotSource(DocumentSnapshotViews(source)),
+            attributes = attributes,
+            listeners = listeners,
+        )
     )
     private val revisions = ConcurrentHashMap<SnapshotKey, Long>()
 

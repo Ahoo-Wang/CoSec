@@ -33,6 +33,7 @@ import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.attribute.AttributeDeclaration
 import me.ahoo.cosec.runtime.attribute.AttributeProvider
@@ -247,15 +248,17 @@ class WebAdapterParityTest {
     }
 
     private fun pipeline(listeners: DecisionListeners) = Pipeline(
-        authenticator = authenticator,
-        snapshots = SuspendingSnapshotSource(views),
-        membershipProvider = { _, _ -> error("The directory is down") },
-        engine = engine,
-        idGenerator = { "parity-request" },
-        options = PipelineOptions(timeout = 200.milliseconds, authenticationTimeout = 1.seconds),
-        attributes = attributes,
-        listeners = listeners,
-        rateLimiter = rateLimiter,
+        PipelineComponents(
+            authenticator = authenticator,
+            snapshots = SuspendingSnapshotSource(views),
+            membershipProvider = { _, _ -> error("The directory is down") },
+            engine = engine,
+            idGenerator = { "parity-request" },
+            options = PipelineOptions(timeout = 200.milliseconds, authenticationTimeout = 1.seconds),
+            attributes = attributes,
+            listeners = listeners,
+            rateLimiter = rateLimiter,
+        )
     )
 
     private val pipelines = mapOf(
