@@ -13,14 +13,24 @@
 
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cocache.api.ConditionalPut
-import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
+import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.control.change.CandidateDigest
+import me.ahoo.cosec.control.store.ControlStore
+import me.ahoo.cosec.control.store.Publication
+import me.ahoo.cosec.control.store.PublishOutcome
+import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.snapshot.document.Actor
 import me.ahoo.cosec.snapshot.document.PolicyDocument
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
+import me.ahoo.cosec.snapshot.document.ProvenanceKind
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import kotlin.coroutines.cancellation.CancellationException
 
 /** `publish` stopped: [written] are the keys it wrote before, exactly; nothing else was written. */
 open class PublishException(message: String, val written: List<SnapshotKey>, cause: Throwable? = null) :
@@ -49,79 +59,94 @@ class DocumentsExistException(val keys: List<SnapshotKey>, written: List<Snapsho
 class PublishResult(val written: List<SnapshotKey>, val skipped: List<SnapshotKey>)
 
 /**
- * Writes converted documents into the 8.0 snapshot cache (RFC 0004 §8.2 `publish`), each only if it does not exist
- * yet (a conditional write with no expected digest), so an existing 8.0 deployment is never overwritten. It does not
- * touch the 7.x keys: rolling back is not switching. The 8.0 schema marker belongs to the switch (RFC 0008 S1), so
- * publish does not write it.
+ * Writes converted documents as their first revisions (RFC 0004 §8.2 `publish`, RFC 0007 §5.9) through the control
+ * plane's [ControlStore], so the revision chain starts with them: a revision record, then the head, each only if the
+ * document does not exist yet, so an existing 8.0 deployment is never overwritten. It does not touch the 7.x keys:
+ * rolling back is not switching. The 8.0 schema marker belongs to the switch (RFC 0008 S1), so publish does not write it.
  *
- * Every document is compiled first, and every app document's references are checked against the platform document,
- * as a publisher does before it writes (RFC 0004 §7.4): a document that would fail closed is never written.
+ * Every document is compiled first, every app document's references are checked against the platform document, and
+ * every break-glass binding must expire within [breakGlassMaxDuration] of now, as the control plane requires of one
+ * (RFC 0007 §8): a long-lived root is what break-glass replaces, so such a binding is refused, not written.
  *
  * Writes are one per document, so a failure can leave a part written; the exception says exactly which keys. With
- * `resume`, a document already in Redis is skipped when it is byte for byte the converted one (its revision and
- * body), and refused otherwise, so a second run finishes the first.
+ * `resume`, a document already published is skipped when its content is the converted one, and refused otherwise, so a
+ * second run finishes the first.
  */
 class DocumentPublisher(
-    private val cache: PolicySnapshotCache,
+    private val store: ControlStore,
     private val compiler: PolicyDocumentCompiler = PolicyDocumentCompiler(),
+    private val clock: Clock = Clock.systemUTC(),
+    private val breakGlassMaxDuration: Duration = DEFAULT_BREAK_GLASS_MAX_DURATION,
 ) {
+    private val revisions = Revisions(store, clock)
+
     /** Publishes [documents], the platform document first. */
-    fun publish(documents: Map<SnapshotKey, PolicyDocument>, resume: Boolean = false): PublishResult {
+    fun publish(documents: Map<SnapshotKey, PolicyDocument>, resume: Boolean = false): PublishResult = runBlocking {
         val platform = requireNotNull(documents[SnapshotKey.Platform]) { "There is no platform document to publish." }
         documents.values.forEach { document ->
             compiler.compile(document)
             compiler.checkReferences(document, platform)
         }
+        checkBreakGlass(platform)
         val ordered = documents.keys.sortedBy { ORDER.getValue(kindOf(it)) }
-        val stored = ordered.associateWith { key -> stored(documents.getValue(key)) }
-        val existing = ordered.mapNotNull { key -> cache[key]?.let { key to it } }.toMap()
-        checkExisting(existing, stored, resume)
-        return PublishResult(write(ordered.filterNot { it in existing }, stored), existing.keys.toList())
+        val existing = ordered.mapNotNull { key -> revisions.head(key)?.let { key to it.document } }.toMap()
+        checkExisting(existing, documents, resume)
+        PublishResult(write(ordered.filterNot { it in existing }, documents), existing.keys.toList())
     }
 
-    /** Refuses existing documents, unless [resume] and each is the converted one. */
-    private fun checkExisting(
-        existing: Map<SnapshotKey, SnapshotDocument>,
-        stored: Map<SnapshotKey, SnapshotDocument>,
-        resume: Boolean
-    ) {
+    private fun checkBreakGlass(platform: PolicyDocument) {
+        val now = clock.instant()
+        val tooLong = platform.bindings.filter { it.breakGlass }.filter { binding ->
+            val expiresAt = binding.expiresAt?.let(Instant::ofEpochMilli)
+            expiresAt == null || Duration.between(now, expiresAt) > breakGlassMaxDuration
+        }
+        if (tooLong.isNotEmpty()) {
+            throw PublishException(
+                "Break-glass binding(s) ${tooLong.map { it.id.value }} expire more than $breakGlassMaxDuration from now " +
+                    "(RFC 0007 §8): convert without root, and request break-glass through the control plane after the switch.",
+                emptyList(),
+            )
+        }
+    }
+
+    private fun checkExisting(existing: Map<SnapshotKey, PolicyDocument>, converted: Map<SnapshotKey, PolicyDocument>, resume: Boolean) {
         if (existing.isNotEmpty() && !resume) {
             throw DocumentsExistException(existing.keys.toList(), emptyList())
         }
-        val differing = existing.filter { (key, current) -> !same(current, stored.getValue(key)) }.keys
+        val differing = existing.filter { (key, current) -> CandidateDigest.of(current) != CandidateDigest.of(converted.getValue(key)) }.keys
         if (differing.isNotEmpty()) {
             throw DocumentsExistException(differing.toList(), emptyList(), differ = true)
         }
     }
 
     /** Writes [keys] in order, each only if absent; the keys written. */
-    @Suppress("TooGenericExceptionCaught")
-    private fun write(keys: List<SnapshotKey>, stored: Map<SnapshotKey, SnapshotDocument>): List<SnapshotKey> {
-        val async = cache.async()
+    private suspend fun write(keys: List<SnapshotKey>, documents: Map<SnapshotKey, PolicyDocument>): List<SnapshotKey> {
         val written = ArrayList<SnapshotKey>()
         for (key in keys) {
-            val result = try {
-                async.putIfMatch(key, null, stored.getValue(key)).join()
-            } catch (error: Exception) {
-                throw PublishException("Writing $key failed: ${error.message}.", written.toList(), error)
-            }
-            when (result) {
-                is ConditionalPut.Written -> written += key
-                is ConditionalPut.Conflict -> throw DocumentsExistException(listOf(key), written.toList())
+            when (val outcome = publish(key, documents.getValue(key), written)) {
+                is PublishOutcome.Published -> written += key
+                is PublishOutcome.Conflicted -> throw DocumentsExistException(listOf(key), written.toList())
+                is PublishOutcome.Referenced -> throw PublishException(
+                    "$key is referred to: ${outcome.referrers}.",
+                    written.toList()
+                )
             }
         }
         return written
     }
 
-    private fun stored(document: PolicyDocument) = SnapshotDocument(
-        PolicyDocumentCodec.SCHEMA,
-        document.revision,
-        document.publishedAt,
-        PolicyDocumentCodec.encode(document),
-    )
-
-    private fun same(a: SnapshotDocument, b: SnapshotDocument): Boolean =
-        a.schema == b.schema && a.revision == b.revision && a.bodyBytes().contentEquals(b.bodyBytes())
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun publish(
+        key: SnapshotKey,
+        document: PolicyDocument,
+        written: List<SnapshotKey>
+    ): PublishOutcome = try {
+        revisions.publish(key, null, document, PUBLICATION)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        throw PublishException("Writing $key failed: ${error.message}.", written.toList(), error)
+    }
 
     private fun kindOf(key: SnapshotKey): DocumentKind = when (key) {
         is SnapshotKey.App -> DocumentKind.APP
@@ -129,7 +154,14 @@ class DocumentPublisher(
         else -> DocumentKind.PLATFORM
     }
 
-    private companion object {
-        val ORDER = mapOf(DocumentKind.PLATFORM to 0, DocumentKind.APP to 1, DocumentKind.TENANT to 2)
+    companion object {
+        /** `cosec.control.break-glass.max-duration` by default (RFC 0007 §8). */
+        val DEFAULT_BREAK_GLASS_MAX_DURATION: Duration = Duration.ofHours(4)
+
+        /** Who writes what `cosec-migrate` writes: recorded in each revision's provenance. */
+        val MIGRATE_ACTOR: Actor = Actor(TenantId.PLATFORM, PrincipalId("cosec-migrate"))
+
+        private val PUBLICATION = Publication("migrate", ProvenanceKind.MIGRATE, MIGRATE_ACTOR)
+        private val ORDER = mapOf(DocumentKind.PLATFORM to 0, DocumentKind.APP to 1, DocumentKind.TENANT to 2)
     }
 }

@@ -1,10 +1,10 @@
 {
   "rules": [
-    "ATR-3"
+    "ATR-6"
   ],
-  "polarity": "negative",
+  "polarity": "positive",
   "level": "pipeline",
-  "description": "The platform document's DENY says onMissing nomatch and its attribute is unavailable: the DENY lapses by design and the ALLOW permits.",
+  "description": "The platform document's DENY says onMissing nomatch, confirmed through the control plane (RFC 0007 §9.5), and its attribute is unavailable: the DENY lapses by design and the ALLOW permits.",
   "documents": {
     "platform": {
       "policies": [
@@ -29,7 +29,14 @@
                   true
                 ]
               },
-              "onMissing": "nomatch"
+              "onMissing": "nomatch",
+              "onMissingConfirmed": {
+                "by": {
+                  "tenant": "(platform)",
+                  "principal": "plato"
+                },
+                "change": "c1"
+              }
             }
           ]
         }
