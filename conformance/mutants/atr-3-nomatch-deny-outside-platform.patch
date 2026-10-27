@@ -3,15 +3,15 @@
 # Tests: :cosec-engine:test --tests me.ahoo.cosec.engine.flat.* :cosec-core:test --tests me.ahoo.cosec.snapshot.* :conformance:test
 
 diff --git a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
-index dd422ed7..e16bedf3 100644
+index 45de40a9..3556b795 100644
 --- a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
 +++ b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
-@@ -192,7 +192,7 @@ class PolicyCompiler(
-             errors += CompileError("$path.onMissing", "onMissing applies to external attributes only, and the condition reads none")
+@@ -252,7 +252,7 @@ class PolicyCompiler(
              return
          }
--        if (onMissing == OnMissing.NOMATCH && source.effect === Effect.DENY && !denyNomatch) {
-+        if (onMissing == OnMissing.NOMATCH && source.effect === Effect.DENY && !denyNomatch && false) {
+         val lapsingDeny = onMissing == OnMissing.NOMATCH && source.effect === Effect.DENY
+-        if (lapsingDeny && source.onMissingConfirmed == null && !unconfirmedLapse) {
++        if (lapsingDeny && source.onMissingConfirmed == null && !unconfirmedLapse && false) {
              errors += CompileError(
                  "$path.onMissing",
-                 "a DENY may write onMissing: nomatch only in the platform document: it lapses while its provider fails",
+                 "a DENY with onMissing: nomatch lapses while its provider fails: it needs the control plane's confirmation",
