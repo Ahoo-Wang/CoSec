@@ -1,0 +1,159 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Manual property stress (RFC 0008 §3.5/§3.9): the property tests the rule registry names, with `iterations` random
+# cases each (default 1,000,000), one job per module that registers the `propertyStress` task. Run it here, never
+# on a developer machine: a million cases per property takes far too long and loads the machine. The modules come
+# from conformance/src/test/resources/rules/*.json of the tested ref, the same source build.gradle.kts registers
+# the tasks from, so a new registered property needs no change to this file.
+name: Property stress
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag or SHA to test'
+        required: true
+        default: 'main'
+      iterations:
+        description: 'Random cases per property (-PpropertyIterations)'
+        required: true
+        default: '1000000'
+      modules:
+        description: 'Optional comma-separated module filter, e.g. engine,model (directory or Gradle name); empty = all'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      sha: ${{ steps.plan.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Derive the module matrix
+        id: plan
+        env:
+          MODULES: ${{ inputs.modules }}
+          ITERATIONS: ${{ inputs.iterations }}
+        run: |
+          python3 -I - <<'PY'
+          import glob, json, os, re, sys
+          if not re.fullmatch(r"[1-9][0-9]{0,11}", os.environ["ITERATIONS"]):
+              sys.exit("::error::iterations must be a positive integer")
+          dirs = set()
+          for path in glob.glob("conformance/src/test/resources/rules/*.json"):
+              if path.endswith("_meta.json"):
+                  continue
+              for rule in json.load(open(path))["rules"]:
+                  for prop in rule.get("properties", []):
+                      dirs.add(prop.split(":")[0])  # module:Class#test
+          # Same naming as settings.gradle.kts: directories are the project name, or without the cosec- prefix.
+          mods = {d: ":" + (d if d.startswith("cosec-") else "cosec-" + d) for d in dirs}
+          want = {m.strip().lstrip(":") for m in os.environ["MODULES"].split(",") if m.strip()}
+          if want:
+              unknown = {w for w in want if w.lstrip(":") not in {*mods, *(v.lstrip(":") for v in mods.values())}}
+              if unknown:
+                  sys.exit("::error::unknown modules (no registered property tests): " + ", ".join(sorted(unknown)))
+              mods = {d: p for d, p in mods.items() if d in want or p.lstrip(":") in want}
+          include = [{"dir": d, "project": p} for d, p in sorted(mods.items())]
+          if not include:
+              sys.exit("::error::no module registers propertyStress")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write("matrix=" + json.dumps({"include": include}) + "\n")
+              out.write("sha=" + os.popen("git rev-parse HEAD").read().strip() + "\n")
+          PY
+
+  stress:
+    name: ${{ matrix.project }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      # One module failing must not hide the others.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    # None of the registered property tests talks to Redis (they use in-memory fakes), so there is no Redis service.
+    env:
+      ITERATIONS: ${{ inputs.iterations }}
+      PROJECT: ${{ matrix.project }}
+      MODULE_DIR: ${{ matrix.dir }}
+      SHA: ${{ needs.plan.outputs.sha }}
+      DUMP_DIR: ${{ github.workspace }}/stress-dumps
+      # The test JVM gets 2g from the task; this covers the Gradle daemon and compiler.
+      GRADLE_OPTS: '-Xmx3g -Dorg.gradle.workers.max=2'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Run property stress
+        run: |
+          mkdir -p "$DUMP_DIR"
+          # Heap dump if a test JVM dies of OOM; a thread dump of every JVM every 20 minutes, so a hang is diagnosable.
+          export JAVA_TOOL_OPTIONS="-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=$DUMP_DIR"
+          ( while sleep 1200; do
+              for pid in $(jps -q); do jcmd "$pid" Thread.print > "$DUMP_DIR/threads-$pid-$(date +%s).txt" 2>&1 || true; done
+            done ) &
+          ./gradlew "$PROJECT:propertyStress" "-PpropertyIterations=$ITERATIONS" --no-daemon --no-build-cache --stacktrace
+
+      - name: Summary
+        if: always()
+        env:
+          STATUS: ${{ job.status }}
+          REF: ${{ inputs.ref }}
+        run: |
+          {
+            echo "### Property stress: \`$PROJECT\`"
+            echo
+            echo "| Module | Iterations | Result | Commit |"
+            echo "|---|---|---|---|"
+            echo "| \`$PROJECT\` | $ITERATIONS | $STATUS | \`$SHA\` (ref \`$REF\`) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: property-stress-${{ matrix.dir }}-${{ github.run_id }}
+          path: |
+            ${{ matrix.dir }}/build/reports/tests/propertyStress
+            ${{ matrix.dir }}/build/test-results/propertyStress
+          if-no-files-found: warn
+
+      - name: Upload heap and thread dumps
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: property-stress-dumps-${{ matrix.dir }}-${{ github.run_id }}
+          path: stress-dumps
+          if-no-files-found: ignore
