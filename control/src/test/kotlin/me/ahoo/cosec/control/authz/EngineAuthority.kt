@@ -71,7 +71,16 @@ class EngineAuthority(private val revisions: Revisions) {
         roles: List<String> = emptyList(),
         policies: List<String> = emptyList(),
         attributes: Map<String, String> = emptyMap(),
-    ): Operator {
+    ): Operator = Operator.of(security(tenant, id, roles, policies, attributes))!!
+
+    /** The request the host pipeline permitted for that principal: what the control API's routes take. */
+    fun security(
+        tenant: TenantId,
+        id: String,
+        roles: List<String> = emptyList(),
+        policies: List<String> = emptyList(),
+        attributes: Map<String, String> = emptyMap(),
+    ): me.ahoo.cosec.runtime.RequestSecurity {
         val principal =
             AuthenticatedPrincipal(PrincipalId(id), tenant, MembershipClaims.parse(roles, policies), attributes)
         val host = Pipeline(
@@ -81,7 +90,7 @@ class EngineAuthority(private val revisions: Revisions) {
         )
         val outcome = runBlocking { host.evaluate(FACTS) }
         check(outcome.proceed) { "The host pipeline did not permit the control API: ${outcome.status}" }
-        return Operator.of(outcome.security!!)!!
+        return outcome.security!!
     }
 
     /** Compiles the current heads on every load, as a source that confirms every document before a check would. */

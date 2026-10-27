@@ -130,6 +130,10 @@ class PipelineControlAuthorizer(
 object ControlActions {
     const val SERVICE: String = "cosec"
     val READ: Action = Action(SERVICE, "read")
+    val SIMULATE: Action = Action(SERVICE, "simulate")
+    val EXPLAIN: Action = Action(SERVICE, "explain")
+    val ANALYZE: Action = Action(SERVICE, "analyze")
+    val SHADOW_READ: Action = Action(SERVICE, "shadow-read")
     val WRITE: Action = Action(SERVICE, "write")
     val GRANT: Action = Action(SERVICE, "grant")
     val PUBLISH: Action = Action(SERVICE, "publish")

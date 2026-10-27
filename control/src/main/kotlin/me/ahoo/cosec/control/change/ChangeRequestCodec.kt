@@ -271,6 +271,16 @@ object ChangeRequestCodec {
         )
     }
 
+    /** An operation as the control API's request bodies write it: the stored form (RFC 0007 §10.2). */
+    fun operation(key: SnapshotKey, node: JsonNode): Operation = guarded {
+        val (kind, owner) = Revisions.ownerOf(key)
+        node.only("op", "policy", "id", "binding", "catalog", "limits", "attributes", "ifMatch")
+        operation(node, kind, owner)
+    }
+
+    /** `platform`, `app:<id>` or `tenant:<id>`, as the control API's paths write a document. */
+    fun documentKeyOf(text: String): SnapshotKey = guarded { documentKey(text) }
+
     private fun operation(node: JsonNode, kind: me.ahoo.cosec.model.decision.DocumentKind, owner: String): Operation {
         val ifMatch = node.get("ifMatch")?.text()
         return when (val op = node.need("op").text()) {
