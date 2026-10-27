@@ -204,6 +204,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 - `jmh-v7-v8.yml`：在 CI 上对比 v7 与 v8 性能的手动工作流（#1105，已开启自动合并）；场景是 7.x 与 8.0 都有的 pipeline（global、role、none、anonymous）与授权（global、role、none），每个场景 v8/v7 的中位数比例不低于 100 % 即通过。合入后才能第一次触发。
 - #1101 已合入（`main` 的 detekt 失败已修复）。#1103 在补 `codecov/patch`（`close()` 新分支的测试），自动合并已开启。
 - #1106（草稿）：7.0 基线会话留在本机的 k6 脚本修改，已推送保存；k6 不再是门槛，可能关闭。
+- #1107（草稿）：协调会话本机留下的 5 个 7.x 探查测试，已推送保存；不合入，可移植的用例改写成一致性场景后关闭。
+- 收尾状态（2026-10-27）：本机代码全部已推送；#1103（已补 `close()` 的覆盖测试）、#1105、本 PR 开着自动合并，CI 通过后合入；#1104（S1b）、#1106、#1107 保持草稿。下次继续：先派发 control/conformance/wiki 的审查跟进 PR，再在 `main` 上触发 `property-stress.yml` 与 `jmh-v7-v8.yml`，运行链接附到 #1104，请维护者确认 S1b。
 
 （#866、#1082 是 Renovate 的 pnpm 升级，不属于路线图。）
 
