@@ -36,7 +36,13 @@ internal object StatusMapping {
      * anonymous principal and 403 for an authenticated one (RFC 0004 §4.6); when the credentials were rejected, the
      * client's remedy is new credentials, so the problem names why, whatever denied.
      */
-    fun decided(requestId: String, decision: Decision, authn: AuthnResult, traceId: String?): Outcome =
+    fun decided(
+        requestId: String,
+        decision: Decision,
+        authn: AuthnResult,
+        traceId: String?,
+        security: RequestSecurity? = null,
+    ): Outcome =
         when (decision) {
             is Decision.Permit -> Outcome(
                 OK,
@@ -44,7 +50,8 @@ internal object StatusMapping {
                 requestId,
                 null,
                 requestIdHeader(requestId),
-                Basis.Decided(decision)
+                Basis.Decided(decision),
+                checkNotNull(security) { "A permit must carry who may proceed." },
             )
             is Decision.Deny -> problem(denied(decision, authn), requestId, traceId, Basis.Decided(decision))
             is Decision.Indeterminate ->

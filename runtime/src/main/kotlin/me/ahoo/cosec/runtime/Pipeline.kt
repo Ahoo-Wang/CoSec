@@ -103,12 +103,15 @@ class Pipeline(
      */
     suspend fun evaluate(facts: HttpFacts): Outcome {
         val requestId = requestId(facts)
+        // The trace the bridge captured (§7.5): its id goes into problem bodies and decision events.
+        val trace = currentCoroutineContext()[TraceContext]
+        val traceId = trace?.traceId
         if (listeners.isEmpty) {
-            return evaluate(facts, requestId, null)
+            return evaluate(facts, requestId, traceId, null)
         }
-        val record = RequestRecord(System.nanoTime(), clock.millis(), currentCoroutineContext()[TraceContext])
+        val record = RequestRecord(System.nanoTime(), clock.millis(), trace)
         val outcome = try {
-            evaluate(facts, requestId, record)
+            evaluate(facts, requestId, traceId, record)
         } catch (e: CancellationException) {
             // Only an external cancellation gets here: a CANCELLED event, and still no outcome (§7.4).
             listeners.publish(record.event(eventId(), requestId, facts, null))
@@ -119,24 +122,29 @@ class Pipeline(
     }
 
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun evaluate(facts: HttpFacts, requestId: String, record: RequestRecord?): Outcome = try {
+    private suspend fun evaluate(
+        facts: HttpFacts,
+        requestId: String,
+        traceId: String?,
+        record: RequestRecord?,
+    ): Outcome = try {
         // A ...OrNull timeout, never withTimeout: its TimeoutCancellationException would look like an external
         // cancellation below and vanish instead of answering 503 (RFC 0006 K13). Lazy: a request that never
         // suspends arms no timer. REQUIRED listeners share the deadline (§9.4.2).
         withLazyTimeoutOrNull(options.timeout) {
-            val outcome = decide(facts, requestId, record)
-            if (record == null) outcome else required(facts, requestId, outcome, record)
-        } ?: StatusMapping.unavailable(requestId, Unavailability.DeadlineExceeded, null)
+            val outcome = decide(facts, requestId, traceId, record)
+            if (record == null) outcome else required(facts, requestId, traceId, outcome, record)
+        } ?: StatusMapping.unavailable(requestId, Unavailability.DeadlineExceeded, traceId)
     } catch (e: CancellationException) {
         if (!currentCoroutineContext().isActive) {
             throw e
         }
         // Nobody cancelled this request: something threw a CancellationException of its own.
         log.error(e) { "Request [$requestId] failed with a stray cancellation." }
-        StatusMapping.error(requestId, e, null)
+        StatusMapping.error(requestId, e, traceId)
     } catch (e: Exception) {
         log.error(e) { "Request [$requestId] failed with an unmodelled exception." }
-        StatusMapping.error(requestId, e, null)
+        StatusMapping.error(requestId, e, traceId)
     }
 
     /**
@@ -146,6 +154,7 @@ class Pipeline(
     private suspend fun required(
         facts: HttpFacts,
         requestId: String,
+        traceId: String?,
         outcome: Outcome,
         record: RequestRecord
     ): Outcome {
@@ -162,7 +171,23 @@ class Pipeline(
             listeners.requiredFailedOnNonPermit(event, failed)
             return outcome
         }
-        return unavailable(requestId, Cause.RequiredListenerFailed(failed))
+        return unavailable(requestId, traceId, Cause.RequiredListenerFailed(failed))
+    }
+
+    /**
+     * The decision for [action] on [resource] as [security] (RFC 0006 §7.6): the second half of [decide] (snapshot
+     * view, attribute plan, engine) for the principal and scope of a permitted request. A query, not a request: no
+     * obligation runs, no listener hears of it, and nothing fails open: an unreadable view or an error is not a permit.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    internal suspend fun check(security: RequestSecurity, action: Action, resource: Resource): Decision {
+        val view = when (val loaded = call(null) { snapshots.view(security.scope, false) }) {
+            is Fetched.Value -> loaded.value
+            is Fetched.Failed -> return Decision.Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, loaded.error))
+        }
+        val authz = with(security.request) { AuthzRequest(subject, scope, action, resource, environment) }
+        val request = FlatRequest(authz, security.scope, security.memberships, clock.millis())
+        return evaluate(request, view, fetchedAttributes(), null)
     }
 
     /** What a shadow listener needs, only when one samples this request (§9.5.4). */
@@ -183,11 +208,11 @@ class Pipeline(
 
     private fun eventId(): String = idGenerator?.generateAsString() ?: RandomRequestIds.next()
 
-    private suspend fun decide(facts: HttpFacts, requestId: String, record: RequestRecord?): Outcome {
+    private suspend fun decide(facts: HttpFacts, requestId: String, traceId: String?, record: RequestRecord?): Outcome {
         val path = PathNormalizer.normalize(facts.rawPath)
-            ?: return StatusMapping.invalidRequest(requestId, "path", null)
+            ?: return StatusMapping.invalidRequest(requestId, "path", traceId)
         val parameters = CoSecParameters.read(facts)
-            ?: return StatusMapping.invalidRequest(requestId, "CoSec-* parameter", null)
+            ?: return StatusMapping.invalidRequest(requestId, "CoSec-* parameter", traceId)
         val action = Action(HTTP, facts.method)
         val resource = Resource(HTTP, path, emptyMap())
         val fetched = fetchedAttributes()
@@ -195,7 +220,7 @@ class Pipeline(
         val authn = authenticate(credentials(facts))
         record?.authenticated(path, parameters.deviceId, authn, action, resource, fetched)
         if (authn is AuthnResult.Unavailable) {
-            return StatusMapping.unavailable(requestId, Unavailability.AuthenticatorUnavailable(authn.cause), null)
+            return StatusMapping.unavailable(requestId, Unavailability.AuthenticatorUnavailable(authn.cause), traceId)
         }
         // A rejected credential is evaluated as anonymous (RFC 0006 K2).
         val principal = (authn as? AuthnResult.Authenticated)?.principal
@@ -211,7 +236,7 @@ class Pipeline(
         val membershipsFetched = membershipsWithStageA(principal, stageA, fetched)
         val memberships = when (membershipsFetched) {
             is Fetched.Value -> membershipsFetched.value
-            is Fetched.Failed -> return unavailable(requestId, Cause.MembershipUnavailable(membershipsFetched.error))
+            is Fetched.Failed -> return unavailable(requestId, traceId, Cause.MembershipUnavailable(membershipsFetched.error))
         }
 
         val subject = ScopeSubject(tenant, principal != null, memberships)
@@ -220,7 +245,7 @@ class Pipeline(
             is ScopeResolution.Resolved -> resolution.scope
             is ScopeResolution.Rejected -> {
                 val denied = Decision.Deny(StatementRef.ScopeRejected(resolution.reason))
-                return StatusMapping.decided(requestId, denied, authn, null)
+                return StatusMapping.decided(requestId, denied, authn, traceId)
             }
         }
 
@@ -231,6 +256,7 @@ class Pipeline(
             is Fetched.Value -> loaded.value
             is Fetched.Failed -> return unavailable(
                 requestId,
+                traceId,
                 Cause.SourceUnavailable(DocumentKind.PLATFORM, loaded.error)
             )
         }
@@ -249,7 +275,9 @@ class Pipeline(
             ),
         )
         val decision = evaluate(FlatRequest(authz, scope, memberships, clock.millis()), view, fetched, record)
-        return breakGlass(requestId, decision, view, record) ?: StatusMapping.decided(requestId, decision, authn, null)
+        val security = if (decision is Decision.Permit) RequestSecurity(requestId, principal, scope, memberships, authz) else null
+        return breakGlass(requestId, traceId, decision, view, record)
+            ?: StatusMapping.decided(requestId, decision, authn, traceId, security)
     }
 
     /** Where this request's external attributes go; null without providers. */
@@ -261,6 +289,7 @@ class Pipeline(
      */
     private fun breakGlass(
         requestId: String,
+        traceId: String?,
         decision: Decision,
         view: SnapshotView,
         record: RequestRecord?
@@ -270,7 +299,7 @@ class Pipeline(
         }
         if (record == null || listeners.required.isEmpty()) {
             log.error { "Request [$requestId] permitted through break-glass, but no REQUIRED listener is registered." }
-            return unavailable(requestId, Cause.RequiredListenerFailed(emptyList()))
+            return unavailable(requestId, traceId, Cause.RequiredListenerFailed(emptyList()))
         }
         record.breakGlass = true
         return null
@@ -500,8 +529,8 @@ class Pipeline(
         Fetched.Failed(e)
     }
 
-    private fun unavailable(requestId: String, cause: Cause): Outcome =
-        StatusMapping.unavailable(requestId, Unavailability.Indeterminate(cause), null)
+    private fun unavailable(requestId: String, traceId: String?, cause: Cause): Outcome =
+        StatusMapping.unavailable(requestId, Unavailability.Indeterminate(cause), traceId)
 
     private fun requestId(facts: HttpFacts): String {
         val given = facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull { it.isNotBlank() }
