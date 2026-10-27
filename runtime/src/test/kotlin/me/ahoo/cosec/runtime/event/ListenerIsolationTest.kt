@@ -197,6 +197,23 @@ class ListenerIsolationTest {
         listeners.requiredFailuresOnNonPermits.assert().isEqualTo(2)
     }
 
+    /** Review R2: a slow REQUIRED listener costs a deny time, never its status; a permit still keeps the deadline. */
+    @Test
+    fun aSlowRequiredListenerKeepsADenyAndHoldsAPermitToTheDeadline() {
+        val slow = Failing("audit", Delivery.REQUIRED) { kotlinx.coroutines.delay(500) }
+        val listeners = DecisionListeners(listOf(slow), requiredTimeout = 5.seconds).also { opened += it }
+        val options = me.ahoo.cosec.runtime.PipelineOptions(timeout = 100.milliseconds)
+        fun evaluate(decision: Decision, authenticator: Authenticator) = runBlocking {
+            PipelineFixtures.pipeline(authenticator, StubEngine(decision), options = options, listeners = listeners)
+                .evaluate(facts())
+        }
+        evaluate(Decision.Deny(null), Authenticator { AuthnResult.Anonymous }).status.assert().isEqualTo(401)
+        val permit = evaluate(PERMIT, authenticator(authenticated()))
+        permit.status.assert().isEqualTo(503)
+        ((permit.basis as Basis.Unavailable).reason).assert().isEqualTo(Unavailability.DeadlineExceeded)
+        listeners.stats.single().failures.assert().isZero()
+    }
+
     @Test
     fun requiredListenersSeeTheOutcomeBeforeThemAndBestEffortOnesTheFinalOne() {
         val required = Recording("audit", Delivery.REQUIRED)
