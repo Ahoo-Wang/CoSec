@@ -180,7 +180,7 @@ PR-9（#1091，`feat(control): expose the control plane as a library and over HT
 
 **一致性登记表新增 `startup` 级别**（#1097）：与 `build` 一样，`startup` 规则由它们所列的测试守护，没有场景在该级别运行（`RuleCoverageTest` 有对应测试）。`SNP-3` 改为 `startup` 并不再 `pending`，守护为 `CacheTtlPolicyTest` ×2 与 `CoSecPipelineAutoConfigurationTest` 中"Redis 可能淘汰"的用例；`SCP-4` 增加守护 `WebAdapterParityTest#the three adapters answer byte for byte alike`。仍为 `pending` 的 4 条：`SNP-1`、`SNP-2`（快照时序，已有测试与性质守护，应归入一个时序级别）、`ACT-1`（写着 RFC 0005 PR-4）、`PIP-1`（写着 RFC 0006 PR-7），后两条指向已合入的 PR；#1097 的作者打算在 S1b 一并处理，除非维护者另有决定。
 
-**S1b 的阻塞项**（2026-10-27）：(1) 三个过时的变异体（`atr-3`、`brk-4`、`pip-2`，#1075 改了它们打补丁的代码）已在分支 `claude/evidence-mutants-threads` 上改写，都能重新应用，PR 待开；(2) `cosec-core` 的百万例运行把原生线程耗尽（在本地观察到）。读代码找到的原因：`SnapshotSource.close()` 不等自己的线程，关闭后排队的工作仍在跑。同一分支上的修复让 `close()` 最多等 5 秒；新测试还要改到去掉修复就失败，PR 才开；百万例运行只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml`（#1099）上进行，不在本机跑；(3) 空闲机器上的 JMH（含 `boundary = none`）待测；(4) S1b 合入后在 8.0 上跑 k6，对照 7.0 基线。§3.9 第 1–5 条的证据在 S1b 自己的 head 上重跑：百万例运行改为 `property-stress.yml` 的 CI 运行（运行链接附在 S1b 的 PR 上），其余是 `:conformance:mutationCheck`、空闲机器 JMH、k6。
+**S1b 的阻塞项**（2026-10-27）：(1) 三个过时的变异体（`atr-3`、`brk-4`、`pip-2`，#1075 改了它们打补丁的代码）已在分支 `claude/evidence-mutants-threads` 上改写，都能重新应用，PR 待开；(2) `cosec-core` 的百万例运行把原生线程耗尽（在本地观察到）。读代码找到的原因：`SnapshotSource.close()` 不等自己的线程，关闭后排队的工作仍在跑。同一分支上的修复让 `close()` 最多等 5 秒，草稿 PR #1103；新测试还要改到去掉修复就失败，才转为可审查；百万例运行只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml`（#1099）上进行，不在本机跑；(3) 空闲机器上的 JMH（含 `boundary = none`）待测；(4) S1b 合入后在 8.0 上跑 k6，对照 7.0 基线。§3.9 第 1–5 条的证据在 S1b 自己的 head 上重跑：百万例运行改为 `property-stress.yml` 的 CI 运行（运行链接附在 S1b 的 PR 上），其余是 `:conformance:mutationCheck`、空闲机器 JMH、k6。
 
 取消的 PR：RFC 0002 PR-6、RFC 0003 PR-5、RFC 0004 PR-6、RFC 0005 PR-7、RFC 0006 PR-8、RFC 0007 PR-10，以及第 2、3 阶段的门槛与门槛 A–D。
 并入切换的 PR：RFC 0003 PR-6、RFC 0004 PR-7/PR-8、RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11（分到 S1–S5 的哪一个，见 RFC 0008 §4.4.2）。
@@ -197,7 +197,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 没有 PR 的进行中的工作：
 
-- 三个过时变异体的改写，以及 `cosec-core` 百万例运行的原生线程耗尽（本地观察到，通过阅读代码修复；S1b 的阻塞项）：分支 `claude/evidence-mutants-threads`，PR 待开。百万例运行只在 CI 的 `property-stress.yml`（#1099）上进行。
+- 三个过时变异体的改写，以及 `cosec-core` 百万例运行的原生线程耗尽（本地观察到，通过阅读代码修复；S1b 的阻塞项）：草稿 PR #1103（分支 `claude/evidence-mutants-threads`，剩余事项见 PR 描述）。百万例运行只在 CI 的 `property-stress.yml`（#1099）上进行。
 - 7.0 端到端基线（k6）：在空闲机器上测量，结果作为 #1065 的后续 PR；8.0 的 k6 在 S1b 之后。
 
 （#866、#1082 是 Renovate 的 pnpm 升级，不属于路线图。）
