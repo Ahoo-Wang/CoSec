@@ -14,15 +14,22 @@
 package me.ahoo.cosec.e2e
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.runtime.Outcome
+import me.ahoo.cosec.runtime.attribute.AttributeDeclaration
+import me.ahoo.cosec.runtime.attribute.AttributeProvider
+import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.attribute.AttributeRequest
+import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
+import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
+import me.ahoo.cosec.runtime.event.DecisionEvent
+import me.ahoo.cosec.runtime.event.DecisionListener
+import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import reactor.blockhound.BlockHound
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.startCoroutine
@@ -35,9 +42,9 @@ import kotlin.coroutines.startCoroutine
 class SliceBlockHoundTest {
     @Test
     fun `blockhound watches the test threads`() {
-        violations.clear()
-        onNonBlockingThread { runCatching { Thread.sleep(1) } }
-        violations.assert().isNotEmpty()
+        BlockHoundWatch.clear()
+        BlockHoundWatch.onNonBlockingThread { runCatching { Thread.sleep(1) } }
+        BlockHoundWatch.violations.assert().isNotEmpty()
     }
 
     @Test
@@ -47,54 +54,68 @@ class SliceBlockHoundTest {
                 SnapshotKey.Platform,
                 ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*"}]}],"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"p"}]"""
             )
-            slice.publish(SnapshotKey.Tenant("acme"), "")
-            val request = request("GET", "/orders/1", "alice@acme")
-            // Warm the source: the documents are compiled and installed before the measured call.
-            runBlocking { slice.evaluate(request) }.proceed.assert().isTrue()
-            violations.clear()
-            val outcome = onNonBlockingThread {
-                val result = CompletableFuture<Outcome>()
-                val evaluate: suspend () -> Outcome = { slice.evaluate(request) }
-                evaluate.startCoroutine(Continuation(EmptyCoroutineContext) { result.complete(it.getOrThrow()) })
-                // Completed before startCoroutine returned: nothing suspended, nothing was dispatched.
-                check(result.isDone) { "The warm request suspended." }
-                result.join()
-            }
-            outcome.proceed.assert().isTrue()
-            violations.assert().isEmpty()
+            assertWarmRequestNeitherBlocksNorSuspends(slice)
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
-    private fun <T> onNonBlockingThread(block: () -> T): T {
-        val result = CompletableFuture<T>()
-        Thread({
-            try {
-                result.complete(block())
-            } catch (error: Throwable) {
-                result.completeExceptionally(error)
-            }
-        }, "$THREAD_PREFIX-${threads.incrementAndGet()}").start()
-        return result.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    /** T1 (RFC 0006 §7.2): providers that answer at once add no suspension, in stage A and in stage B. */
+    @Test
+    fun `a warm request with the blacklist and an external attribute neither blocks nor suspends`() {
+        val inFence = object : AttributeProvider {
+            override val attributes = listOf(AttributeDeclaration("ext.geo.inFence", AttributeType.BOOL))
+
+            override suspend fun fetch(request: AttributeRequest, names: Set<String>) = mapOf("ext.geo.inFence" to true)
+        }
+        val providers = AttributeProviders(listOf(BlacklistAttributeProvider(InMemoryBlacklistSource()), inFence))
+        Slice(attributes = providers).use { slice ->
+            slice.publish(
+                SnapshotKey.Platform,
+                ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*","condition":{"eq":["ext.geo.inFence",true]}}]}],""" +
+                    """"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"p"}]"""
+            )
+            assertWarmRequestNeitherBlocksNorSuspends(slice)
+        }
     }
 
-    companion object {
-        private const val THREAD_PREFIX = "cosec-e2e-non-blocking"
-        private const val TIMEOUT_SECONDS = 30L
-        private const val STACK_DEPTH = 40
-        private val threads = AtomicInteger()
-        private val violations = CopyOnWriteArrayList<String>()
+    /** RFC 0006 §9.3: a BEST_EFFORT listener's event is offered without suspending, and handled elsewhere. */
+    @Test
+    fun `a warm request with a best-effort listener neither blocks nor suspends`() {
+        val handled = CompletableFuture<String>()
+        val listener = object : DecisionListener {
+            override val name = "probe"
 
-        init {
-            BlockHound.builder()
-                .nonBlockingThreadPredicate { current -> current.or { it.name.startsWith(THREAD_PREFIX) } }
-                .allowBlockingCallsInside("ch.qos.logback.core.OutputStreamAppender", "writeBytes")
-                .allowBlockingCallsInside("java.util.concurrent.ScheduledThreadPoolExecutor\$DelayedWorkQueue", "offer")
-                .blockingMethodCallback { method ->
-                    violations += "${Thread.currentThread().name}: $method\n" +
-                        Throwable().stackTrace.take(STACK_DEPTH).joinToString("\n") { "    at $it" }
-                }
-                .install()
+            override suspend fun onDecision(event: DecisionEvent) {
+                handled.complete(Thread.currentThread().name)
+            }
         }
+        Slice(listeners = DecisionListeners(listOf(listener))).use { slice ->
+            slice.publish(
+                SnapshotKey.Platform,
+                ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*"}]}],"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"p"}]"""
+            )
+            assertWarmRequestNeitherBlocksNorSuspends(slice)
+            handled.get(
+                BlockHoundWatch.TIMEOUT_SECONDS,
+                TimeUnit.SECONDS
+            ).assert().doesNotStartWith(BlockHoundWatch.THREAD_PREFIX)
+        }
+    }
+
+    private fun assertWarmRequestNeitherBlocksNorSuspends(slice: Slice) {
+        slice.publish(SnapshotKey.Tenant("acme"), "")
+        val request = request("GET", "/orders/1", "alice@acme")
+        // Warm the source: the documents are compiled and installed before the measured call.
+        runBlocking { slice.evaluate(request) }.proceed.assert().isTrue()
+        BlockHoundWatch.clear()
+        val outcome = BlockHoundWatch.onNonBlockingThread {
+            val result = CompletableFuture<Outcome>()
+            val evaluate: suspend () -> Outcome = { slice.evaluate(request) }
+            evaluate.startCoroutine(Continuation(EmptyCoroutineContext) { result.complete(it.getOrThrow()) })
+            // Completed before startCoroutine returned: nothing suspended, nothing was dispatched.
+            check(result.isDone) { "The warm request suspended." }
+            result.join()
+        }
+        outcome.proceed.assert().isTrue()
+        BlockHoundWatch.violations.assert().isEmpty()
     }
 }

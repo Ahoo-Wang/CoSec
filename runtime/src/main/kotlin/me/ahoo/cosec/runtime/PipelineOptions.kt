@@ -29,6 +29,11 @@ class PipelineOptions(
     val authenticationTimeout: Duration = 1.seconds,
     /** One `MembershipProvider` call (`cosec.authorization.membership.timeout`, RFC 0004). Then 503. */
     val membershipTimeout: Duration = 500.milliseconds,
+    /**
+     * One `AttributeProvider` call that sets no timeout of its own (`cosec.authorization.attributes.timeout`, RFC 0006
+     * §5.4.2). Then its attributes are unavailable.
+     */
+    val attributeTimeout: Duration = 300.milliseconds,
     /** Whether the token may come from the `authorization` query parameter; off, as tokens in URLs leak into logs. */
     val allowQueryToken: Boolean = false,
     /** The header an API key comes in. */
@@ -41,6 +46,7 @@ class PipelineOptions(
             "The authentication timeout must be positive, not $authenticationTimeout."
         }
         require(membershipTimeout.isPositive()) { "The membership timeout must be positive, not $membershipTimeout." }
+        require(attributeTimeout.isPositive()) { "The attribute timeout must be positive, not $attributeTimeout." }
         require(apiKeyHeader.isNotBlank()) { "The API key header must not be blank." }
     }
 }

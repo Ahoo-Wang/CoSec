@@ -104,6 +104,62 @@ class PolicyDocumentCodecTest {
         error(""","policies":[{"id":"p","boundary":"yes","statements":[]}]""").assert().contains("$.policies[0].boundary: expected a boolean")
     }
 
+    /** RFC 0007 §5.3: the control plane's provenance reads and writes back the same, and decides nothing. */
+    @Test
+    fun `a provenance reads and writes back the same`() {
+        val digest = "9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6"
+        val document = decode(
+            ""","provenance":{"parent":{"revision":2,"digest":"$digest"},"change":"0QH8K3","kind":"ROLLBACK",""" +
+                """"publishedBy":{"tenant":"acme","principal":"alice"},"approvedBy":[{"tenant":"(platform)","principal":"ops-1"}],""" +
+                """"shadow":{"window":"0QH8M1","skipped":false}}"""
+        )
+        document.provenance.assert().isEqualTo(
+            Provenance(
+                parent = ParentRevision(2, digest),
+                change = "0QH8K3",
+                kind = ProvenanceKind.ROLLBACK,
+                publishedBy = Actor(TenantId("acme"), me.ahoo.cosec.model.PrincipalId("alice")),
+                approvedBy = listOf(Actor(TenantId("(platform)"), me.ahoo.cosec.model.PrincipalId("ops-1"))),
+                shadow = ShadowWindow("0QH8M1", skipped = false),
+            )
+        )
+        val written = PolicyDocumentCodec.encode(document)
+        PolicyDocumentCodec.encode(
+            PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", written)
+        ).assert().isEqualTo(written)
+        val first =
+            decode(
+                ""","provenance":{"change":"c","kind":"BOOTSTRAP","publishedBy":{"tenant":"(platform)","principal":"p"}}"""
+            )
+        first.provenance!!.parent.assert().isNull()
+        first.provenance.approvedBy.assert().isEmpty()
+        CoSecJsonSerializer.readTree(
+            PolicyDocumentCodec.encode(first)
+        ).get("provenance").has("approvedBy").assert().isFalse()
+        // The compiled snapshot does not depend on it.
+        PolicyDocumentCompiler().compile(document).owner.assert().isEqualTo("")
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        delimiter = '|',
+        value = [
+            """{"kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"}}|$.provenance: [change] is required""",
+            """{"change":"","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"}}|$.provenance.change: must not be empty""",
+            """{"change":"c","kind":"publish","publishedBy":{"tenant":"t","principal":"p"}}|$.provenance.kind: a kind is one of""",
+            """{"change":"c","kind":"PUBLISH"}|$.provenance: [publishedBy] is required""",
+            """{"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t"}}|$.provenance.publishedBy: [principal] is required""",
+            """{"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":""}}|$.provenance.publishedBy.principal: must not be empty""",
+            """{"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"},"by":1}|$.provenance: unknown field by""",
+            """{"parent":{"revision":0,"digest":"9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6"},"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"}}|$.provenance.parent.revision: must be positive""",
+            """{"parent":{"revision":1,"digest":"9F2C"},"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"}}|$.provenance.parent.digest: is 40 lowercase hex digits""",
+            """{"change":"c","kind":"PUBLISH","publishedBy":{"tenant":"t","principal":"p"},"shadow":{"window":"w"}}|$.provenance.shadow: [skipped] is required""",
+        ],
+    )
+    fun `a provenance that is not exactly the format is an error at its path`(provenance: String, message: String) {
+        error(""","provenance":$provenance""").assert().contains(message)
+    }
+
     /** DOC-2: `*` is Match.Any and only that; nothing can hold Match.Exactly("*"). */
     @Test
     fun `the wildcard is only ever Any`() {

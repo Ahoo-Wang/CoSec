@@ -46,7 +46,13 @@ class CompiledStatement internal constructor(
     /** The index attributes [condition] constrains, and [keys] their keys. */
     private val keyAttributes: Array<Attribute>,
     internal val keys: Array<IndexKeys>,
+    /** What an external attribute [condition] reads that cannot be fetched means (RFC 0006 §5.4.3). */
+    val onMissing: OnMissing = OnMissing.INDETERMINATE,
 ) {
+    /** The external attributes [condition] reads, distinct: what the attribute plan must fetch for it. */
+    internal val externals: Array<Attribute> =
+        condition?.let { ConditionAttributes.of(it).filter(Attribute::external).distinct().toTypedArray() } ?: NO_ATTRIBUTES
+
     /** Whether [condition] reads a captured variable: only then does matching the resource keep the captures. */
     internal val captures: Boolean = condition != null && ConditionAttributes.of(condition).any {
         it.kind == Attribute.Kind.RESOURCE_VAR
@@ -92,11 +98,33 @@ class CompiledStatement internal constructor(
                 resource.toString()
             }
         }
-        append('|').append(condition?.canonical ?: "")
+        append('|').append(condition?.canonical ?: "").append('|').append(onMissing)
     }
 
     override fun toString(): String = "$effect $name ${actionPatterns}${resourcePatterns}${condition ?: ""}"
 }
+
+/**
+ * What a statement means when an external attribute its condition reads cannot be fetched (RFC 0006 §5.4.3): its
+ * provider failed or timed out, or the attribute was not in the plan. Attributes that are merely absent are not missing
+ * (RFC 0005 §3.4).
+ */
+enum class OnMissing {
+    /**
+     * The default. A DENY errs: unless another DENY matches, the decision is `Indeterminate(AttributeUnavailable)`. An
+     * ALLOW is skipped, and if nothing permits, the decision is `Indeterminate(AttributeUnavailable)` rather than the
+     * implicit deny: never a Permit, only a 503 instead of a 401 or 403.
+     */
+    INDETERMINATE,
+
+    /**
+     * The statement does not match. On a DENY that makes the DENY lapse while a dependency fails, so only the platform
+     * document may write it (RFC 0006 Q13).
+     */
+    NOMATCH,
+}
+
+internal val NO_ATTRIBUTES: Array<Attribute> = emptyArray()
 
 /**
  * How [CompiledPolicy] indexes its statements (RFC 0005 §6.2). The decision never depends on them (I2); only how many

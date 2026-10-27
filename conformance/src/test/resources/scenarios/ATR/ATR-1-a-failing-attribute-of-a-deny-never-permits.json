@@ -1,0 +1,67 @@
+{
+  "rules": [
+    "ATR-1"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "An ALLOW matches, and a DENY reads ext.geo.inFence, whose provider fails: the DENY may have matched, so never a Permit.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "deny-in-fence",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.geo.inFence",
+                  true
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        },
+        {
+          "id": "g:deny-in-fence",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "deny-in-fence"
+        }
+      ]
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.inFence": "bool"
+      },
+      "fails": "geo is down"
+    }
+  ],
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

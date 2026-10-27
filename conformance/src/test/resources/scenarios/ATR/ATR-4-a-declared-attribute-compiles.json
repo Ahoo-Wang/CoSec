@@ -1,0 +1,53 @@
+{
+  "rules": [
+    "ATR-4"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "A provider declares ext.geo.inFence: the document compiles and the attribute decides.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "in-fence",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "ext.geo.inFence",
+                  true
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:in-fence",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "in-fence"
+        }
+      ]
+    }
+  },
+  "attributeProviders": [
+    {
+      "stage": "B",
+      "declares": {
+        "ext.geo.inFence": "bool"
+      },
+      "values": {
+        "ext.geo.inFence": true
+      }
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

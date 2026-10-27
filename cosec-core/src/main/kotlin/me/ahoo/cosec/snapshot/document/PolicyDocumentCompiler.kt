@@ -24,6 +24,7 @@ import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.snapshot.SnapshotCompiler
@@ -66,6 +67,15 @@ class PolicyDocumentCompiler(
     private val policies: PolicyCompiler = PolicyCompiler(ConditionChecker(zones = JavaZones.RESOLVER)),
     val principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
 ) : SnapshotCompiler<CompiledDocument> {
+    /**
+     * Compiles conditions against [catalog] too: the external attributes the registered `AttributeProvider`s declare
+     * (RFC 0006 §5.4.1). A statement reading an `ext.` path no provider declares does not compile.
+     */
+    constructor(catalog: AttributeCatalog, principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT) : this(
+        PolicyCompiler(ConditionChecker(zones = JavaZones.RESOLVER, catalog = catalog)),
+        principalBindingLimit,
+    )
+
     init {
         require(principalBindingLimit >= 0) { "The principal binding limit must not be negative." }
     }
@@ -167,7 +177,14 @@ class PolicyDocumentCompiler(
             }
         }
         return try {
-            policies.compile(policy.id, policy.condition, policy.statements, policy.attachable)
+            // Only the platform document may let a DENY lapse while its provider fails (RFC 0006 Q13).
+            policies.compile(
+                policy.id,
+                policy.condition,
+                policy.statements,
+                policy.attachable,
+                denyNomatch = document.kind == DocumentKind.PLATFORM,
+            )
         } catch (error: CompileException) {
             error.errors.forEach { errors += CompileError(path + it.path.removePrefix("$"), it.message) }
             null

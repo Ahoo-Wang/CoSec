@@ -1,0 +1,46 @@
+{
+  "rules": [
+    "CTL-4"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The same three publishes, the third on the current head: putIfMatch on its digest succeeds and the head moves to revision 3.",
+  "publishes": [
+    {
+      "policies": [
+        "p"
+      ]
+    },
+    {
+      "policies": [
+        "q"
+      ]
+    },
+    {
+      "policies": [
+        "r"
+      ]
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published",
+      "Published"
+    ],
+    "head": {
+      "revision": 3,
+      "parent": 2,
+      "parentRecord": true
+    },
+    "records": 3,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head"
+    ]
+  }
+}

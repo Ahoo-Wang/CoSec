@@ -1,0 +1,38 @@
+{
+  "rules": [
+    "CTL-2"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Two publishes: each record is written before its head, and the second head names the first as its parent, whose record exists.",
+  "publishes": [
+    {
+      "policies": [
+        "p"
+      ]
+    },
+    {
+      "policies": [
+        "q"
+      ]
+    }
+  ],
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published"
+    ],
+    "head": {
+      "revision": 2,
+      "parent": 1,
+      "parentRecord": true
+    },
+    "records": 2,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head"
+    ]
+  }
+}

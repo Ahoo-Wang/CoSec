@@ -14,6 +14,8 @@
 dependencies {
     api(project(":cosec-core"))
     api(project(":cosec-jwt"))
+    // The bridge to the coroutine pipeline (RFC 0006 §7.3): runBlocking on the servlet thread.
+    api(project(":cosec-runtime"))
     api("org.springframework:spring-context")
     api("org.springframework:spring-web")
     api("jakarta.servlet:jakarta.servlet-api")

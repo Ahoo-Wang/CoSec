@@ -53,7 +53,7 @@ internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, pr
         } else {
             pass = Effect.ALLOW
             enumerate()
-            withinBoundary(matched ?: CoSecFlatEngine.IMPLICIT_DENY)
+            withinBoundary(allowDecision())
         }
         return FlatEvaluation(decision, FlatTrace(request.scope, candidates, expired, allUnresolved(), boundary))
     }
@@ -119,7 +119,7 @@ internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, pr
             MATCHED -> if (!traceOnly) matched = decide(policy, statement, via)
             ERROR, GUARD_FAILED -> {
                 error = stepError
-                if (pass === Effect.DENY && !traceOnly) failed(policy, statement, via, error!!, result == GUARD_FAILED)
+                if (!traceOnly) erred(policy, statement, via, error!!, result == GUARD_FAILED)
             }
         }
         record(policy, statement, via, OUTCOMES[result], error, traceOnly)

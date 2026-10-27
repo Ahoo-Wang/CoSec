@@ -13,5 +13,7 @@
 
 dependencies {
     implementation(project(":cosec-core"))
+    // Ip2RegionAttributeProvider (RFC 0006 §5.4.5) implements the runtime's AttributeProvider.
+    implementation(project(":cosec-runtime"))
     api("org.lionsoul:ip2region")
 }
