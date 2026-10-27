@@ -29,6 +29,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -65,8 +66,12 @@ class ChangeListenersTest {
         null,
     )
 
-    private fun listeners(vararg listeners: ChangeListener) =
-        ChangeListeners(listeners.toList(), requiredTimeout = 100.milliseconds).also { opened += it }
+    /**
+     * Only a test that waits for a listener to time out needs a short [requiredTimeout]: under it, a cold JVM's first
+     * call to a listener that answers at once could miss it.
+     */
+    private fun listeners(vararg listeners: ChangeListener, requiredTimeout: Duration = 5.seconds) =
+        ChangeListeners(listeners.toList(), requiredTimeout = requiredTimeout).also { opened += it }
 
     private fun <T> eventually(read: () -> List<T>, count: Int = 1): List<T> = runBlocking {
         withTimeout(5.seconds) {
@@ -93,7 +98,8 @@ class ChangeListenersTest {
                 )
             }
         }
-        val hanging = listeners(Recording("hanging", Delivery.REQUIRED) { awaitCancellation() })
+        val hanging =
+            listeners(Recording("hanging", Delivery.REQUIRED) { awaitCancellation() }, requiredTimeout = 100.milliseconds)
         assertThrownBy<ChangeAuditException> {
             runBlocking {
                 hanging.publish(
