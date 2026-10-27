@@ -1,5 +1,5 @@
 {
-  "$comment": "The 8.0 rule registry (RFC 0008 §3.2). Ids are never reused: a rule whose meaning changes gets a new id and the old one is marked superseded. pending names the PR that implements the rule; the switch (RFC 0008 S1) needs every pending to be null. properties and guards name tests as module-directory:TestClass#test name; verifyRuleCoverage checks that they exist.",
+  "$comment": "The 8.0 rule registry (RFC 0008 §3.2). Ids are never reused: a rule whose meaning changes gets a new id and the old one is marked superseded. pending names the PR that implements the rule; the switch (RFC 0008 S1) needs every pending to be null. properties and guards name tests as module-directory:TestClass#test name; verifyRuleCoverage checks that they exist. A build or startup rule is covered by those tests instead of scenarios.",
   "rules": [
     {
       "id": "SCP-1",
@@ -38,7 +38,8 @@
       "level": "pipeline",
       "guards": [
         "runtime:CoSecParametersTest#differentHeaderAndQueryValuesAreAmbiguous",
-        "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest"
+        "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest",
+        "cosec-spring-boot-starter:WebAdapterParityTest#the three adapters answer byte for byte alike"
       ],
       "pending": null
     },
@@ -421,8 +422,13 @@
       "id": "SNP-3",
       "source": "RFC 0003 §4.1; RFC 0008 §4.4 (review of #1006)",
       "statement": "Snapshot caches have ttl = null and throw on failed reads; an instance refuses to start when Redis's maxmemory-policy is not noeviction.",
-      "level": "pipeline",
-      "pending": "RFC 0008 S1"
+      "level": "startup",
+      "guards": [
+        "cosec-cocache:CacheTtlPolicyTest#snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort",
+        "cosec-cocache:CacheTtlPolicyTest#snapshotCacheKeepsItsPinsWhateverCustomizersSet",
+        "cosec-spring-boot-starter:CoSecPipelineAutoConfigurationTest#Redis that may evict snapshots fails startup unless told to warn"
+      ],
+      "pending": null
     },
     {
       "id": "CND-1",

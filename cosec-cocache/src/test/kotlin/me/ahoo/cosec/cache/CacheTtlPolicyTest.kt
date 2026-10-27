@@ -13,14 +13,19 @@
 
 package me.ahoo.cosec.cache
 
+import io.mockk.mockk
+import me.ahoo.cocache.api.CacheLoader
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ForeignFormatMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.control.ControlCacheSpecs
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.snapshot.SnapshotDocument
+import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 
 /**
@@ -118,6 +123,26 @@ class CacheTtlPolicyTest {
             it.policy.localMaxAge.assert().isEqualTo(Duration.ofSeconds(5))
         }
         CoSecCacheSpecs.pinnedPolicy(CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME, weakened).ttl.assert().isNull()
+    }
+
+    /** RFC 0008 §4.4: customizers and `cocache.*` properties cannot move what the snapshot cache pins. */
+    @Test
+    fun snapshotCacheKeepsItsPinsWhateverCustomizersSet() {
+        val base = CoSecCacheSpecs.policySnapshot("pinned:", localMaxAge = Duration.ofSeconds(7))
+        val customized = base.toBuilder()
+            .keyPrefix("elsewhere:")
+            .policy(weakened.toBuilder().localMaxAge(Duration.ofHours(1)).build())
+            .build()
+        val pinned = CoSecCacheSpecs.pinPolicySnapshot(customized, base)
+        pinned.keyPrefix.assert().isEmpty()
+        pinned.namespace.assert().isEqualTo("pinned:snapshot")
+        pinned.codec.assert().isSameAs(base.codec)
+        pinned.keyEncoder.assert().isSameAs(base.keyEncoder)
+        pinned.policy.localMaxAge.assert().isEqualTo(Duration.ofSeconds(7))
+        pinned.policy.ttl.assert().isNull()
+        pinned.policy.readFailure.assert().isEqualTo(ReadFailureMode.THROW)
+        val loading = base.toBuilder().loader(mockk<CacheLoader<SnapshotKey, SnapshotDocument>>()).build()
+        assertThrows<IllegalArgumentException> { CoSecCacheSpecs.pinPolicySnapshot(loading, base) }
     }
 
     @Test
