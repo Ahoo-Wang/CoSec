@@ -90,6 +90,13 @@ object ChangeRequestCodec {
         change.publishedRevision?.let { root.put("publishedRevision", it) }
         approvalTree(root, change)
         change.shadow?.let { root.set("shadow", shadowTree(it)) }
+        if (change.confirmations.isNotEmpty()) {
+            val confirmations = root.putArray("confirmations")
+            change.confirmations.forEach {
+                confirmations.addObject().put("policy", it.policy.value).put("statement", it.statement)
+                    .put("digest", it.digest).put("kind", it.kind)
+            }
+        }
         return root
     }
 
@@ -120,6 +127,16 @@ object ChangeRequestCodec {
             closed.counts.toSortedMap().forEach { (outcome, count) -> counts.put(outcome, count) }
         }
         return node
+    }
+
+    private fun confirmation(node: JsonNode): Confirmation {
+        node.only("policy", "statement", "digest", "kind")
+        return Confirmation(
+            PolicyId(node.need("policy").text()),
+            node.need("statement").asInt(),
+            node.need("digest").text(),
+            node.need("kind").text()
+        )
     }
 
     private fun shadow(node: JsonNode): ShadowState {
@@ -208,7 +225,7 @@ object ChangeRequestCodec {
     private fun change(node: JsonNode): ChangeRequest {
         node.only(
             "id", "key", "base", "operations", "author", "note", "kind", "state", "findings", "candidate", "checkedWith",
-            "createdAt", "updatedAt", "skipShadow", "publishedRevision", "escalations", "approval", "shadow",
+            "createdAt", "updatedAt", "skipShadow", "publishedRevision", "escalations", "approval", "shadow", "confirmations",
         )
         val key = documentKey(node.need("key").text())
         val (kind, owner) = Revisions.ownerOf(key)
@@ -245,6 +262,7 @@ object ChangeRequestCodec {
                 Escalation(it.need("subject").text(), it.need("reason").text(), it.need("detail").text())
             }.orEmpty(),
             shadow = node.get("shadow")?.let(::shadow),
+            confirmations = node.get("confirmations")?.values()?.map(::confirmation).orEmpty(),
             approval = node.get("approval")?.let {
                 it.only("approver", "at", "candidate", "covers")
                 Approval(

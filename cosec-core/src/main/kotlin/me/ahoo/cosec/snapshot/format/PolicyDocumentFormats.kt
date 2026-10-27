@@ -355,9 +355,20 @@ internal object PolicyDocumentFormats {
                     "onMissing",
                     StringType(enum = listOf("indeterminate", "nomatch")),
                     description = "What an external attribute (ext.*) the condition reads that cannot be fetched means " +
-                        "(RFC 0006 §5.4.3). Only for a condition that reads one; a DENY may say nomatch only in the " +
-                        "platform document.",
+                        "(RFC 0006 §5.4.3). Only for a condition that reads one; a DENY that says nomatch needs " +
+                        "onMissingConfirmed.",
                     default = "indeterminate",
+                ),
+                Field(
+                    "onMissingConfirmed",
+                    ObjectType(
+                        listOf(
+                            Field("by", actor, required = true),
+                            Field("change", StringType(minLength = 1, examples = listOf("0QH8K3")), required = true),
+                        ),
+                    ),
+                    description = "Who confirmed that this DENY with onMissing: nomatch may lapse while its attributes " +
+                        "cannot be fetched, and in which change (RFC 0007 §9.5). The control plane writes it.",
                 ),
             ),
         ),

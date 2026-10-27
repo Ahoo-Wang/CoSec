@@ -252,6 +252,10 @@ class ChangesTest {
             ),
         )
         ChangeRequestCodec.decode(ChangeRequestCodec.encode(shadowed)).shadow.assert().isEqualTo(shadowed.shadow)
+        val confirmed = change.copy(confirmations = listOf(Confirmation(PolicyId("p"), 2, "d".repeat(64))))
+        ChangeRequestCodec.decode(
+            ChangeRequestCodec.encode(confirmed)
+        ).confirmations.assert().isEqualTo(confirmed.confirmations)
         val slot = StageSlot(change.id, StoreFixtures.START)
         ChangeRequestCodec.decodeSlot(ChangeRequestCodec.encode(slot)).assert().isEqualTo(slot)
         ChangeRequestCodec.decodeSlot(ChangeRequestCodec.encode(StageSlot.FREE)).assert().isEqualTo(StageSlot.FREE)
@@ -275,5 +279,29 @@ class ChangesTest {
         assertThrownBy<ChangeRejectedException> { runBlocking { changes.get(ChangeId("missing")) } }
             .extracting { (it as ChangeRejectedException).status }.isEqualTo(404)
         assertThrownBy<IllegalArgumentException> { ChangeId("a:b") }
+    }
+
+    /** Changes keep a document's rate limit rules (RFC 0006 §8): no operation changes them yet, so nothing drops them. */
+    @Test
+    fun `publishing a change keeps the document's rate limit rules`() = runBlocking<Unit> {
+        val rule = me.ahoo.cosec.engine.flat.RateLimitSource(
+            "orders",
+            me.ahoo.cosec.engine.flat.StatementSource("", me.ahoo.cosec.model.Effect.ALLOW, listOf("order:read")),
+            null,
+            me.ahoo.cosec.model.decision.RateLimitSpec(10.0),
+        )
+        val (kind, owner) = me.ahoo.cosec.control.store.Revisions.ownerOf(ACME)
+        val limited = me.ahoo.cosec.snapshot.document.PolicyDocument(
+            kind,
+            owner,
+            1,
+            StoreFixtures.START,
+            emptyList(),
+            emptyList(),
+            rateLimits = listOf(rule)
+        )
+        harness.revisions.publish(ACME, null, limited, StoreFixtures.publication())
+        publish(ACME, Operation.PutPolicy(allow("a"))).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        harness.revisions.head(ACME)!!.document.rateLimits.map { it.id }.assert().containsExactly("orders")
     }
 }

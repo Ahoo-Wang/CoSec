@@ -1,0 +1,70 @@
+{
+  "rules": [
+    "CTL-14"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The same tenant policy under an id the platform does not use checks clean.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "shared",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "own",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "platform": 1,
+      "tenant:acme": 0
+    }
+  }
+}

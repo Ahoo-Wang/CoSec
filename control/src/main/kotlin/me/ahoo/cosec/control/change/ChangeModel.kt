@@ -167,6 +167,8 @@ data class ChangeRequest(
     val approval: Approval? = null,
     /** Its shadow window (RFC 0007 §6.4): `null` until it stages, and when the window was skipped. */
     val shadow: ShadowState? = null,
+    /** What its author confirmed (RFC 0007 §9.5): `deny-nomatch` statements, by digest. */
+    val confirmations: List<Confirmation> = emptyList(),
 ) {
     val errors: List<Finding> get() = findings.filter { it.severity == Severity.ERROR }
 }

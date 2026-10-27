@@ -62,6 +62,7 @@ object CandidateDigest {
                 limits = candidate.limits,
                 attributes = candidate.attributes,
                 boundary = candidate.boundary,
+                rateLimits = candidate.rateLimits,
             ),
         ),
     )
@@ -204,6 +205,8 @@ object Operations {
             limits = limits,
             attributes = attributes,
             boundary = boundary,
+            // No operation changes a document's rate limit rules yet: the base's are kept as they are (RFC 0006 §8).
+            rateLimits = base?.rateLimits.orEmpty(),
         )
     }
 

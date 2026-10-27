@@ -14,6 +14,9 @@
 package me.ahoo.cosec.conformance
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.control.audit.ChangeEvent
+import me.ahoo.cosec.control.audit.ChangeListener
+import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
@@ -33,6 +36,7 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowReport
@@ -57,7 +61,7 @@ import java.time.Instant
  * "documents": { "platform": {...}, "apps": { "order": {...} }, "tenants": { "acme": {...} } },  // published first
  * "operators": { "alice": { "tenant": "acme", "roles": ["admin"], "policies": [] } },
  * "options":   { "fourEyes": true, "shadow": { "minDuration": "PT15M", "minSamples": 3, "maxDuration": "PT1H" } },
- * "steps": [ { "propose": { "change": "c1", "by": "alice", "document": "tenant:acme",
+ * "steps": [ { "propose": { "change": "c1", "by": "alice", "document": "tenant:acme", "kind": "BREAK_GLASS",
  *                           "operations": [ { "putPolicy": { ...the document format's policy... } },
  *                                           { "putBinding": { ... } }, { "removePolicy": "id" }, { "removeBinding": "id" } ] } },
  *            { "skipShadow": "c1" }, { "stage": { "change": "c1", "by": "alice" } }, { "shadowed": "c1" },
@@ -116,6 +120,8 @@ object ChangeRunner : ScenarioRunner {
             clock,
             ChangeOptions(fourEyes = node.get("options")?.get("fourEyes")?.bool() ?: false, shadow = shadowOptions()),
             reports = reports,
+            // Break-glass is recorded by a REQUIRED listener before it is created (RFC 0007 §8).
+            listeners = ChangeListeners(listOf(RecordingAudit)),
         )
         private val documents = LinkedHashSet<SnapshotKey>()
         private val named = LinkedHashMap<String, ChangeRequest>()
@@ -224,13 +230,14 @@ object ChangeRunner : ScenarioRunner {
         }
 
         private suspend fun propose(argument: JsonNode): ChangeRequest {
-            argument.only("change", "by", "document", "operations")
+            argument.only("change", "by", "document", "operations", "kind")
             val key = documentKey(argument.required("document").text())
             documents += key
             next = ChangeId(argument.required("change").text())
             val head = revisions.head(key)?.revision ?: 0
             val operations = argument.required("operations").values().map { operation(key, it) }
-            return changes.propose(by(argument, key), key, head, operations, "scenario")
+            val kind = argument.get("kind")?.text()?.let(ProvenanceKind::valueOf) ?: ProvenanceKind.PUBLISH
+            return changes.propose(by(argument, key), key, head, operations, "scenario", kind)
         }
 
         private suspend fun candidate(id: ChangeId, node: JsonNode): String = when (val which = node.get("candidate")?.text() ?: "own") {
@@ -304,4 +311,12 @@ object ChangeRunner : ScenarioRunner {
     }
 
     const val DIGEST_LENGTH = 64
+
+    /** A REQUIRED change listener that records everything. */
+    private object RecordingAudit : ChangeListener {
+        override val name: String = "audit"
+        override val delivery: Delivery = Delivery.REQUIRED
+
+        override suspend fun onChange(event: ChangeEvent) = Unit
+    }
 }

@@ -182,6 +182,7 @@ class Revisions(
         limits = candidate.limits,
         attributes = candidate.attributes,
         boundary = candidate.boundary,
+        rateLimits = candidate.rateLimits,
         provenance = Provenance(
             parent = base?.let { ParentRevision(it.revision, it.digest.toString()) },
             change = publication.change,
