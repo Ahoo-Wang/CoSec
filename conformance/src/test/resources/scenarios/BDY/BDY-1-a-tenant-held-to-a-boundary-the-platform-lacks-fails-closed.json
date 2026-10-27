@@ -1,0 +1,72 @@
+{
+  "rules": [
+    "BDY-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The tenant document names a boundary the platform does not define: the Permit becomes Indeterminate, never a Permit.",
+  "documents": {
+    "platform": {
+      "boundaries": {
+        "default": "orders-only"
+      },
+      "policies": [
+        {
+          "id": "all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "orders-only",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*"
+            }
+          ]
+        },
+        {
+          "id": "anything",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "all"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "boundary": "gone"
+      }
+    }
+  },
+  "request": {
+    "action": "order:read"
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MissingPolicies",
+      "policies": [
+        "gone"
+      ]
+    }
+  }
+}

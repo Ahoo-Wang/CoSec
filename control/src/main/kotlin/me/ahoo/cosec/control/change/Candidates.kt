@@ -61,6 +61,7 @@ object CandidateDigest {
                 catalog = candidate.catalog,
                 limits = candidate.limits,
                 attributes = candidate.attributes,
+                boundary = candidate.boundary,
                 rateLimits = candidate.rateLimits,
             ),
         ),
@@ -91,6 +92,7 @@ object Operations {
         private var catalog = base?.catalog
         private var limits = base?.limits
         private var attributes = base?.attributes
+        private var boundary = base?.boundary
         val findings = ArrayList<Finding>()
 
         init {
@@ -152,6 +154,12 @@ object Operations {
                 ) {
                     attributes = operation.attributes
                 }
+
+                is Operation.SetBoundary -> if (kind == DocumentKind.APP) {
+                    findings += Finding("OPERATION", path, "an app document names no boundary", UNPROCESSABLE)
+                } else {
+                    boundary = operation.boundary
+                }
             }
         }
 
@@ -196,6 +204,7 @@ object Operations {
             catalog = catalog,
             limits = limits,
             attributes = attributes,
+            boundary = boundary,
             // No operation changes a document's rate limit rules yet: the base's are kept as they are (RFC 0006 §8).
             rateLimits = base?.rateLimits.orEmpty(),
         )
@@ -231,6 +240,18 @@ object Operations {
         return operations
     }
 
+    /** The boundary operation, for the documents that name one (RFC 0007 §7.6). */
+    private fun boundary(kind: DocumentKind, base: PolicyDocument?, desired: PolicyDocument, all: Boolean): Operation? {
+        val wanted = all || desired.boundary != null
+        return if (kind != DocumentKind.APP && wanted && base?.boundary != desired.boundary) {
+            Operation.SetBoundary(
+                desired.boundary
+            )
+        } else {
+            null
+        }
+    }
+
     /** The section operations: a section [desired] sets, or with [all] any it does not match, is set. */
     private fun sections(
         kind: DocumentKind,
@@ -243,6 +264,7 @@ object Operations {
         if (kind == DocumentKind.APP && catalog && !sameCatalog(base, desired)) {
             operations += Operation.PutCatalog(desired.catalog)
         }
+        boundary(kind, base, desired, all)?.let { operations += it }
         if (kind != DocumentKind.PLATFORM) {
             return operations
         }

@@ -128,6 +128,7 @@ class ChangeAuthority(
                 is Operation.PutCatalog -> require(operator, ControlActions.WRITE, section(key, "catalog"))
                 is Operation.SetLimits -> require(operator, ControlActions.WRITE, section(key, "limits"))
                 is Operation.SetAttributes -> require(operator, ControlActions.WRITE, section(key, "attributes"))
+                is Operation.SetBoundary -> require(operator, ControlActions.BOUNDARY, boundaryOf(key))
             }
         }
     }
@@ -159,6 +160,10 @@ class ChangeAuthority(
                 escalations += Escalation("document $key", NOT_ANALYZED, "only the trust root publishes it alone")
             }
             return escalations
+        }
+        if (operations.any { it is Operation.SetBoundary }) {
+            // Removing or replacing a boundary can widen every permit of the tenant; the analysis does not see it.
+            escalations += Escalation("boundary of $key", NOT_ANALYZED, "only the trust root changes it alone")
         }
         val analysis = try {
             val tenant = TenantId(key.tenantId)
@@ -271,6 +276,10 @@ class ChangeAuthority(
     }
 
     private fun section(key: SnapshotKey, name: String): Resource = entry(key, name, "")
+
+    /** `doc/tenant/<t>/boundary` for a tenant's boundary, `doc/platform` for the default (RFC 0007 §7.1). */
+    private fun boundaryOf(key: SnapshotKey): Resource =
+        if (key is SnapshotKey.Platform) ControlResources.document(key) else section(key, "boundary")
 
     /** The scope a binding of [key] grants in: its own tenant's for a tenant document, its subject's otherwise. */
     private fun scopeOf(key: SnapshotKey, binding: Binding): Resource {

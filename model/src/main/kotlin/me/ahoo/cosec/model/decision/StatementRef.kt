@@ -15,6 +15,7 @@ package me.ahoo.cosec.model.decision
 
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.ScopeResolution
 
 /*
@@ -34,6 +35,13 @@ sealed interface StatementRef {
 
     /** `ScopeResolver` rejected the declared scope (RFC 0004 §4.6). The engine never sees such a request. */
     data class ScopeRejected(val reason: ScopeResolution.Rejected.Reason) : StatementRef
+
+    /**
+     * The platform boundary [boundary] of tenant [tenant] (RFC 0007 §7.6) holds no statement that matches a request
+     * an ALLOW permitted: the Permit became a Deny. Clients see `unauthorized` or `forbidden`; only the audit tells it
+     * was the boundary (RFC 0006 Q27).
+     */
+    data class Boundary(val boundary: PolicyId, val tenant: TenantId) : StatementRef
 }
 
 /** How a policy came to apply to a request. */
@@ -46,6 +54,9 @@ sealed interface BindingRef {
 
     /** Part of every snapshot: the blacklist rule (RFC 0004 §4.7). */
     data object Builtin : BindingRef
+
+    /** A statement of the platform boundary that applies to [tenant] (RFC 0007 §7.6), as the trace names it. */
+    data class Boundary(val tenant: TenantId) : BindingRef
 }
 
 /**

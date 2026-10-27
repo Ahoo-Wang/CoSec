@@ -120,6 +120,9 @@ class OutcomeSummary internal constructor(
         EXPLICIT_DENY,
         IMPLICIT_DENY,
         SCOPE_REJECTED,
+
+        /** A Permit outside the tenant's platform boundary (RFC 0007 §7.6). */
+        BOUNDARY,
         INDETERMINATE,
         AUTHENTICATOR_UNAVAILABLE,
         DEADLINE_EXCEEDED,
