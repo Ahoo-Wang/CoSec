@@ -491,7 +491,7 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 > - **`eq` 的模板值。** ALLOW 方向按 D2 收窄；DENY 方向把 7.x 读法的情形（不存在等于空串、匿名主体的 `(0)`）加回，保持精确，不让 DENY 变窄。
 > - **路径条件。** `path` 条件（part 为 `request.path`）在语句的动作为 `all` 时成为语句的资源。如果其余条件读路径变量，就拒绝：7.x 的路径条件不捕获变量，移成资源后会多匹配。
 > - **仍然拒绝的。** `request.remoteIp` 的字符串比较（改用 `cidr`）、`contains`、动作中的路径模板（主体 id 含模式字符时 8.0 会多匹配），以及 `spel`、`ognl` 和自定义匹配器。
-> - **限流规则。** 按 DENY 方向翻译，写进平台文档的 `rateLimits`（RFC 0006 PR-5；此前写进 `rate-limits.json`）。
+> - **限流规则。** 按 DENY 方向翻译，写进 `rate-limits.json`，由 RFC 0006 PR-5 放进平台文档。
 > - **一致性测试。** `ConditionTranslatorTest` 在语料的每一行上，用随机与固定的对抗输入同时求 7.x 匹配器和翻译后的 AST：标为相同的行逐例相同，其余各行按方向不放宽。
 
 ### 7.4 转换报告新增的内容
