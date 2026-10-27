@@ -50,6 +50,7 @@ import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.authn.Credentials
+import me.ahoo.cosec.runtime.authn.MembershipSource
 import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.event.TraceContext
 import me.ahoo.cosec.runtime.http.CoSecParameters
@@ -109,10 +110,15 @@ class Pipeline(components: PipelineComponents) {
             evaluate(facts, requestId, traceId, record)
         } catch (e: CancellationException) {
             // Only an external cancellation gets here: a CANCELLED event, and still no outcome (§7.4).
-            listeners.publish(record.event(eventId(), requestId, facts, null))
+            if (listeners.hasBestEffort) {
+                listeners.publish(record.event(eventId(), requestId, facts, null))
+            }
             throw e
         }
-        listeners.publish(record.event(eventId(), requestId, facts, outcome, replay(record)))
+        // REQUIRED listeners had their event in [required]; without a BEST_EFFORT one, nobody would read this one.
+        if (listeners.hasBestEffort) {
+            listeners.publish(record.event(eventId(), requestId, facts, outcome, replay(record)))
+        }
         return outcome
     }
 
@@ -446,6 +452,12 @@ class Pipeline(components: PipelineComponents) {
         if (request == null || fetched == null) {
             return memberships(principal)
         }
+        if (principal?.membershipSource !is MembershipSource.Provider) {
+            // Claims, or nothing to ask: the memberships never suspend, so there is nothing to overlap stage A with.
+            val memberships = memberships(principal)
+            fetchStageA(request, fetched)
+            return memberships
+        }
         return coroutineScope {
             val stageA = async(start = CoroutineStart.UNDISPATCHED) { fetchStageA(request, fetched) }
             val memberships = memberships(principal)
@@ -488,6 +500,10 @@ class Pipeline(components: PipelineComponents) {
      * stays unavailable.
      */
     private suspend fun fetchStageB(request: FlatRequest, view: SnapshotView, fetched: FetchedAttributes) {
+        if (!attributes.hasStageB) {
+            // Only stage-A providers, the blacklist say, and stage A asked them for everything: no plan to make.
+            return
+        }
         if (request.request.environment.blocked) {
             // The blacklist rule decides; nothing else would be read.
             return

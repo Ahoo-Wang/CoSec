@@ -1,5 +1,5 @@
 {
-  "$comment": "The 8.0 rule registry (RFC 0008 §3.2). Ids are never reused: a rule whose meaning changes gets a new id and the old one is marked superseded. pending names the PR that implements the rule; the switch (RFC 0008 S1) needs every pending to be null. properties and guards name tests as module-directory:TestClass#test name; verifyRuleCoverage checks that they exist.",
+  "$comment": "The 8.0 rule registry (RFC 0008 §3.2). Ids are never reused: a rule whose meaning changes gets a new id and the old one is marked superseded. pending names the PR that implements the rule; the switch (RFC 0008 S1) needs every pending to be null. properties and guards name tests as module-directory:TestClass#test name; verifyRuleCoverage checks that they exist. A build or startup rule is covered by those tests instead of scenarios.",
   "rules": [
     {
       "id": "SCP-1",
@@ -38,7 +38,8 @@
       "level": "pipeline",
       "guards": [
         "runtime:CoSecParametersTest#differentHeaderAndQueryValuesAreAmbiguous",
-        "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest"
+        "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest",
+        "cosec-spring-boot-starter:WebAdapterParityTest#the three adapters answer byte for byte alike"
       ],
       "pending": null
     },
@@ -247,6 +248,17 @@
       ]
     },
     {
+      "id": "BRK-5",
+      "source": "RFC 0007 §8; round-1 review K1",
+      "statement": "A change's kind is set by its entry point: a proposal is PUBLISH or BREAK_GLASS, never ROLLBACK, EXPIRE, MIGRATE or BOOTSTRAP, and a change that creates or alters a break-glass binding needs cosec:breakglass and a REQUIRED audit whatever its kind.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlReviewFixesTest#a change's kind is never its input's",
+        "control:ControlReviewFixesTest#creating or altering break-glass needs cosec breakglass and a REQUIRED audit, whatever the kind"
+      ]
+    },
+    {
       "id": "ALG-1",
       "source": "RFC 0004 §6.1",
       "statement": "Any applicable DENY that matches makes the decision Deny, whatever errors, missing or unavailable inputs exist elsewhere (C1b).",
@@ -421,8 +433,13 @@
       "id": "SNP-3",
       "source": "RFC 0003 §4.1; RFC 0008 §4.4 (review of #1006)",
       "statement": "Snapshot caches have ttl = null and throw on failed reads; an instance refuses to start when Redis's maxmemory-policy is not noeviction.",
-      "level": "pipeline",
-      "pending": "RFC 0008 S1"
+      "level": "startup",
+      "guards": [
+        "cosec-cocache:CacheTtlPolicyTest#snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort",
+        "cosec-cocache:CacheTtlPolicyTest#snapshotCacheKeepsItsPinsWhateverCustomizersSet",
+        "cosec-spring-boot-starter:CoSecPipelineAutoConfigurationTest#Redis that may evict snapshots fails startup unless told to warn"
+      ],
+      "pending": null
     },
     {
       "id": "CND-1",
@@ -824,6 +841,17 @@
         "control:PublishCompileTest"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-15",
+      "source": "RFC 0007 §10.2; round-1 review K2",
+      "statement": "Every step that names a change answers a caller who may not read its document exactly as it answers for a change that does not exist (404), before the change's state is looked at.",
+      "level": "control",
+      "pending": null,
+      "guards": [
+        "control:ControlReviewFixesTest#a change another tenant may not read is the same 404 at every step, before its state",
+        "control:ControlHttpTest#a body kind is refused, and another tenant's change answers like a missing one"
+      ]
     },
     {
       "id": "GRT-1",

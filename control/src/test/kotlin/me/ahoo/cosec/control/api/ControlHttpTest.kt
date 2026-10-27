@@ -117,6 +117,33 @@ class ControlHttpTest {
         call("POST", "/analyze", """{"query":$query}""").second.get("allows").size().assert().isEqualTo(1)
     }
 
+    /** Review K1 and K2: a change's kind is not the request's, and a change of another tenant is a missing one. */
+    @Test
+    fun `a body kind is refused, and another tenant's change answers like a missing one`() {
+        val proposal = """{"document":"tenant:acme","base":1,"note":"more",""" +
+            """"operations":[{"op":"putPolicy","policy":{"id":"more","statements":[{"effect":"allow","action":"order:read"}]}}]"""
+        val (refused, problem) = call("POST", "/changes", "$proposal,\"kind\":\"MIGRATE\"}")
+        refused.assert().isEqualTo(400)
+        problem.get("detail").asString().assert().contains("kind")
+        val id = call("POST", "/changes", "$proposal}").second.get("id").asString()
+        val mallory = fixture.engine.security(ControlPlaneTest.GLOBEX, "mallory", roles = listOf("admin"))
+        val steps = mapOf(
+            "rebase" to null,
+            "shadow" to null,
+            "skip-shadow" to """{"reason":"x"}""",
+            "approve" to """{"candidate":"x"}""",
+            "reject" to """{"reason":"x"}""",
+            "abandon" to null,
+            "publish" to null,
+        )
+        for ((verb, body) in steps) {
+            val theirs = call("POST", "/changes/$id:$verb", body, security = mallory)
+            val missing = call("POST", "/changes/c999:$verb", body, security = mallory)
+            theirs.first.assert().describedAs(verb).isEqualTo(404)
+            theirs.assert().describedAs(verb).isEqualTo(missing)
+        }
+    }
+
     @Test
     fun `malformed requests and unknown routes`() {
         call("POST", "/changes", "{not json").first.assert().isEqualTo(400)

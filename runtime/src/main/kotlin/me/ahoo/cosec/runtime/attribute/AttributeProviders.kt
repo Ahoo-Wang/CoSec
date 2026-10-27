@@ -43,6 +43,12 @@ class AttributeProviders(providers: List<AttributeProvider>) {
     /** The providers that declare stage-A attributes, with only those; fetched on every request. */
     internal val stageA: List<Registered>
 
+    /**
+     * Whether some attribute is declared in stage B. Stage A fetches all of its own on every request, so without one
+     * stage B could fetch nothing, and the pipeline does not plan it.
+     */
+    internal val hasStageB: Boolean
+
     /** The catalog of every declared attribute, for `PolicyDocumentCompiler(catalog)`. */
     val catalog: AttributeCatalog
 
@@ -70,6 +76,7 @@ class AttributeProviders(providers: List<AttributeProvider>) {
         }
         this.byPath = byPath
         this.stageA = stageA
+        hasStageB = byPath.size > stageA.sumOf { it.names.size }
         val attributes = byPath.mapValues { (path, registered) -> registered.attributes.getValue(path) }
         catalog = if (attributes.isEmpty()) AttributeCatalog.NONE else AttributeCatalog { attributes[it] }
     }

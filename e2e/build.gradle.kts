@@ -17,6 +17,10 @@
 dependencies {
     testImplementation(project(":cosec-runtime"))
     testImplementation(project(":cosec-cocache"))
+    // The slice is the starter's 8.0 wiring (RFC 0008 S1): its snapshot and pipeline auto-configuration over CoCache.
+    testImplementation(project(":cosec-spring-boot-starter"))
+    testImplementation("org.springframework.boot:spring-boot-data-redis")
+    testImplementation("me.ahoo.cocache:cocache-spring-boot-starter")
     testImplementation("io.lettuce:lettuce-core")
     // The adapter through the slice (RFC 0006 PR-7): the WebFlux filter, driven by WebTestClient.
     testImplementation(project(":cosec-webflux"))

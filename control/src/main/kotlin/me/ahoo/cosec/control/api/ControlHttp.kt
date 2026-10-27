@@ -35,7 +35,6 @@ import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotFormatException
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
-import me.ahoo.cosec.snapshot.document.ProvenanceKind
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -216,7 +215,10 @@ class ControlHttp(private val plane: ControlPlane) {
                 val key = ChangeRequestCodec.documentKeyOf(it.need("document").text())
                 val operations = it.need("operations").values().map { op -> ChangeRequestCodec.operation(key, op) }
                 val confirmations = it.get("confirmations")?.values()?.map(::confirmation).orEmpty()
-                val kind = it.get("kind")?.let { k -> ProvenanceKind.valueOf(k.text()) } ?: ProvenanceKind.PUBLISH
+                // A change's kind is its entry point's, never the request's (review K1): break-glass is /break-glass.
+                require(
+                    !it.has("kind")
+                ) { "a change has no kind: propose it here, or request break-glass at /break-glass" }
                 changeResponse(
                     plane.propose(
                         operator,
@@ -225,7 +227,6 @@ class ControlHttp(private val plane: ControlPlane) {
                         operations,
                         it.get("note")?.text().orEmpty(),
                         confirmations,
-                        kind
                     ),
                     CREATED
                 )

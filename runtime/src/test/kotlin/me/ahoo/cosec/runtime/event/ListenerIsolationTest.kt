@@ -183,6 +183,32 @@ class ListenerIsolationTest {
         release.complete(Unit)
     }
 
+    /** Batched wake-ups lose nothing: a burst past half the capacity arrives whole and in order. */
+    @Test
+    fun aBurstWithinTheCapacityArrivesWholeAndInOrder() {
+        val recording = Recording()
+        val listeners = listeners(recording, queueCapacity = 64)
+        val paths = (1..40).map { "/orders/$it" }
+        paths.forEach { evaluate(listeners, path = it) }
+        recording.await(paths.size).map { it.request.path }.assert().isEqualTo(paths)
+        listeners.stats.single().dropped.assert().isEqualTo(0)
+    }
+
+    /** close() takes nothing more and still delivers what was queued: a consumer busy with an event finishes the rest. */
+    @Test
+    fun closeDeliversWhatIsQueuedAndTakesNothingMore() {
+        val release = CompletableDeferred<Unit>()
+        val recording = Recording { release.await() }
+        val listeners = listeners(recording)
+        repeat(3) { evaluate(listeners) }
+        listeners.close()
+        evaluate(listeners).status.assert().isEqualTo(200)
+        release.complete(Unit)
+        // Dropped when published, so it can never arrive: the three before it all do.
+        listeners.stats.single().dropped.assert().isEqualTo(1)
+        recording.await(3).size.assert().isEqualTo(3)
+    }
+
     // --- REQUIRED ----------------------------------------------------------------------------------------------
 
     @Test
