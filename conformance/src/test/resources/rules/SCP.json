@@ -37,7 +37,8 @@
       "level": "pipeline",
       "guards": [
         "runtime:CoSecParametersTest#differentHeaderAndQueryValuesAreAmbiguous",
-        "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest"
+        "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest",
+        "cosec-spring-boot-starter:WebAdapterParityTest#the three adapters answer byte for byte alike"
       ],
       "pending": null
     },

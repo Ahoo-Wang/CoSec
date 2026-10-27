@@ -28,8 +28,13 @@
       "id": "SNP-3",
       "source": "RFC 0003 §4.1; RFC 0008 §4.4 (review of #1006)",
       "statement": "Snapshot caches have ttl = null and throw on failed reads; an instance refuses to start when Redis's maxmemory-policy is not noeviction.",
-      "level": "pipeline",
-      "pending": "RFC 0008 S1"
+      "level": "startup",
+      "guards": [
+        "cosec-cocache:CacheTtlPolicyTest#snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort",
+        "cosec-cocache:CacheTtlPolicyTest#snapshotCacheKeepsItsPinsWhateverCustomizersSet",
+        "cosec-spring-boot-starter:CoSecPipelineAutoConfigurationTest#Redis that may evict snapshots fails startup unless told to warn"
+      ],
+      "pending": null
     }
   ]
 }

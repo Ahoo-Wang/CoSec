@@ -178,6 +178,17 @@ class SliceTest {
         body.has("policy").assert().isFalse()
     }
 
+    /** #1053 review: once a platform document is required, its absence fails requests closed, never reads as empty. */
+    @Test
+    fun `without a platform document every request is unavailable`() {
+        Slice().use { own ->
+            own.publish(SnapshotKey.Tenant("acme"), acme)
+            val outcome = runBlocking { own.evaluate(request("GET", "/orders/1", "alice@acme:clerk", "order")) }
+            outcome.status.assert().isEqualTo(503)
+            outcome.slug().assert().isEqualTo("unavailable")
+        }
+    }
+
     @Test
     fun `a new revision decides within the staleness bound`() {
         Slice().use { own ->
