@@ -1,0 +1,68 @@
+{
+  "rules": [
+    "ACT-2"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "GET /admin/x has no route: the DENY on http:* applies, the route map takes nothing away from it.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read"
+            }
+          ]
+        },
+        {
+          "id": "no-admin",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:*",
+              "resource": "http:path:/admin/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        },
+        {
+          "id": "g:no-admin",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-admin"
+        }
+      ]
+    }
+  },
+  "routes": {
+    "service": "order",
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/orders/{orderId}",
+        "action": "order:read",
+        "resource": "order/{orderId}"
+      }
+    ]
+  },
+  "http": {
+    "method": "GET",
+    "path": "/admin/x"
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}
