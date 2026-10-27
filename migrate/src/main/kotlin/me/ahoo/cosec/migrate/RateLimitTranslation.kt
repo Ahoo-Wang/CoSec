@@ -13,22 +13,18 @@
 
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.limiter.RateLimitRule
-import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.document.PolicyDefinition
-import me.ahoo.cosec.snapshot.document.PolicyDocument
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
+import me.ahoo.cosec.snapshot.SnapshotKey
 import tools.jackson.databind.JsonNode
-import tools.jackson.databind.node.ObjectNode
-import java.time.Instant
 
 /**
  * A 7.x rate limit rule translated (RFC 0005 §7.3): its action and condition as an 8.0 statement, its key as an
- * attribute path. Rules move into the platform document's `rateLimits` with RFC 0006 PR-5 (§8.1); until then
- * `convert` writes them to `rate-limits.json`.
+ * attribute path. `convert` writes them into the platform document's `rateLimits` (RFC 0006 §8.1), where they keep
+ * their ids, so the Redis buckets of 7.x carry on.
  */
 class ConvertedRateLimit(
     val id: String,
@@ -39,27 +35,14 @@ class ConvertedRateLimit(
     val windowSeconds: Long,
     val strictFailure: Boolean,
 ) {
-    /** `{"id", "action", "resource", "condition", "key", "permitsPerSecond", "windowSeconds", "strictFailure"}`. */
-    fun toJson(): ObjectNode {
-        // The statement as the document codec writes it: one format for actions, resources and conditions.
-        val document = PolicyDocument(
-            DocumentKind.PLATFORM,
-            "",
-            1,
-            Instant.EPOCH,
-            listOf(PolicyDefinition(PolicyId(id), attachable = false, condition = null, listOf(statement))),
-            emptyList(),
-        )
-        val written = PolicyDocumentCodec.tree(document).get("policies").get(0).get("statements").get(0) as ObjectNode
-        val node = CoSecJsonSerializer.createObjectNode().put("id", id)
-        listOf("action", "resource", "condition").forEach { field -> written.get(field)?.let { node.set(field, it) } }
-        key?.let { node.put("key", it) }
-        return node.put(
-            "permitsPerSecond",
-            permitsPerSecond
-        ).put("windowSeconds", windowSeconds).put("strictFailure", strictFailure)
-    }
+    /** As the platform document holds it. */
+    fun toSource(): RateLimitSource =
+        RateLimitSource(id, statement, key, RateLimitSpec(permitsPerSecond, windowSeconds), strictFailure)
 }
+
+/** The rules of the document of [key]: the 7.x rules are global, so the platform's, in their 7.x buckets (§8.1). */
+internal fun List<ConvertedRateLimit>.of(key: SnapshotKey): List<RateLimitSource> =
+    if (key == SnapshotKey.Platform) map(ConvertedRateLimit::toSource) else emptyList()
 
 /** Translates rate limit rules with the statement translation, reading their conditions in the DENY direction. */
 internal class RateLimitTranslation(
@@ -105,8 +88,8 @@ internal class RateLimitTranslation(
             SemanticChange(
                 "RATE-LIMIT",
                 entry.location,
-                "rate limit rule [${entry.id}] translated into rate-limits.json; it moves into the platform document " +
-                    "with RFC 0006 PR-5 and is applied as an obligation of a Permit",
+                "rate limit rule [${entry.id}] translated into the platform document's rateLimits; it is applied as an " +
+                    "obligation of a Permit (RFC 0006 §8)",
             ),
         )
         return ConvertedRateLimit(
