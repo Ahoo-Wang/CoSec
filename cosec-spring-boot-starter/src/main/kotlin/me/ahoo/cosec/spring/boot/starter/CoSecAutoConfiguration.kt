@@ -12,35 +12,11 @@
  */
 package me.ahoo.cosec.spring.boot.starter
 
-import me.ahoo.cosec.serialization.CoSecModule
-import me.ahoo.cosec.spring.boot.starter.policy.MatcherFactoryRegister
 import org.springframework.boot.autoconfigure.AutoConfiguration
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
-import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
-import org.springframework.context.ApplicationContext
-import org.springframework.context.annotation.Bean
 
-/**
- * Auto-configuration for CoSec security framework.
- *
- * This class provides the main Spring Boot auto-configuration for CoSec,
- * including:
- * - JSON serialization module registration
- * - Matcher factory registration
- *
- * @see CoSecProperties
- */
+/** `cosec.enabled`: switches every CoSec auto-configuration off. */
 @ConditionalOnCoSecEnabled
-@AutoConfiguration(before = [JacksonAutoConfiguration::class])
+@AutoConfiguration
 @EnableConfigurationProperties(CoSecProperties::class)
-class CoSecAutoConfiguration {
-    @Bean
-    @ConditionalOnMissingBean
-    fun coSecModule(): CoSecModule = CoSecModule()
-
-    @Bean
-    fun matcherFactoryRegister(applicationContext: ApplicationContext): MatcherFactoryRegister = MatcherFactoryRegister(
-        applicationContext
-    )
-}
+class CoSecAutoConfiguration

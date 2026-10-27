@@ -21,8 +21,6 @@ import me.ahoo.cocache.core.proxy.CacheProxies
 import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
 import me.ahoo.cocache.spring.boot.CoCacheProperties
 import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.GlobalPolicyIndexCache
-import me.ahoo.cosec.cache.createGlobalPolicyIndex
 import org.springframework.beans.factory.ObjectProvider
 
 /**
@@ -46,9 +44,6 @@ class CoSecCacheAssembler(
 ) {
     fun <C : Cache<K, V>, K : Any, V : Any> create(type: Class<C>, spec: CacheSpec<K, V>): C =
         CacheProxies.create(type, runtime.create(assemble(spec)))
-
-    fun createGlobalPolicyIndex(spec: SetCacheSpec<String, String>): GlobalPolicyIndexCache =
-        runtime.createGlobalPolicyIndex(assemble(spec))
 
     fun <K : Any, V : Any> assemble(spec: CacheSpec<K, V>): CacheSpec<K, V> {
         val builder = spec.toBuilder()

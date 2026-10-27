@@ -23,8 +23,6 @@ import me.ahoo.cosec.cache.RevokedSubjectCache
 import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.CoSecSchemaCheck
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.awaitSchemaCheck
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
 import me.ahoo.cosec.token.TokenStore
 import org.springframework.beans.factory.ObjectProvider
@@ -36,9 +34,8 @@ import org.springframework.context.annotation.Bean
 import tools.jackson.databind.ObjectMapper
 
 /**
- * CoSec Token Revocation Cache AutoConfiguration.
- *
- * @author ahoo wang
+ * The revoked token and subject caches, whenever `cosec-cocache` is present (the starter's `cacheSupport`): the
+ * pipeline's revocation reader and logout's [TokenStore] read and write them.
  */
 @AutoConfiguration(
     before = [CoSecJwtAutoConfiguration::class],
@@ -46,7 +43,6 @@ import tools.jackson.databind.ObjectMapper
 )
 @ConditionalOnCoSecEnabled
 @ConditionalOnJwtEnabled
-@ConditionalOnTokenRevocationEnabled
 @ConditionalOnClass(name = ["me.ahoo.cosec.cache.RevokedTokenCache"])
 @EnableConfigurationProperties(
     CacheProperties::class,
@@ -75,12 +71,10 @@ class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: Ca
     @ConditionalOnMissingBean
     fun revokedTokenCache(
         runtime: CacheRuntime,
-        schemaCheck: ObjectProvider<CoSecSchemaCheck>,
         objectMapper: ObjectMapper,
         customizers: ObjectProvider<CacheSpecCustomizer>,
         cocacheProperties: ObjectProvider<CoCacheProperties>,
     ): RevokedTokenCache {
-        schemaCheck.awaitSchemaCheck()
         val spec = CoSecCacheSpecs.revokedToken(
             CoSecCacheSpecs.jacksonCodec<Boolean>(objectMapper),
             cacheProperties.keyPrefix,
@@ -96,12 +90,10 @@ class CoSecTokenRevocationCacheAutoConfiguration(private val cacheProperties: Ca
     @ConditionalOnMissingBean
     fun revokedSubjectCache(
         runtime: CacheRuntime,
-        schemaCheck: ObjectProvider<CoSecSchemaCheck>,
         objectMapper: ObjectMapper,
         customizers: ObjectProvider<CacheSpecCustomizer>,
         cocacheProperties: ObjectProvider<CoCacheProperties>,
     ): RevokedSubjectCache {
-        schemaCheck.awaitSchemaCheck()
         val spec = CoSecCacheSpecs.revokedSubject(
             CoSecCacheSpecs.jacksonCodec<Long>(objectMapper),
             cacheProperties.keyPrefix,

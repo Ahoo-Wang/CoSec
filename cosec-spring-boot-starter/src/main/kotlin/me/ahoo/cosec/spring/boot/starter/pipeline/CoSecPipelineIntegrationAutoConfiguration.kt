@@ -28,13 +28,17 @@ import me.ahoo.cosec.runtime.event.MdcContextContributor
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.starter.audit.AuditProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
+import me.ahoo.cosec.spring.boot.starter.ip2region.Ip2RegionProperties
+import me.ahoo.cosec.spring.boot.starter.micrometer.MetricsProperties
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
@@ -52,6 +56,12 @@ import org.springframework.kafka.core.KafkaOperations
     ],
 )
 @ConditionalOnCoSecEnabled
+@EnableConfigurationProperties(
+    AuditProperties::class,
+    KafkaAuditProperties::class,
+    MetricsProperties::class,
+    Ip2RegionProperties::class,
+)
 class CoSecPipelineIntegrationAutoConfiguration {
     /** MDC for every host: the request's logging context reaches the threads the pipeline resumes on. */
     @Bean
@@ -90,7 +100,12 @@ class CoSecPipelineIntegrationAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["me.ahoo.cosec.kafka.KafkaAuditListener"])
     @ConditionalOnBean(KafkaOperations::class)
-    @ConditionalOnProperty(value = ["cosec.audit.enabled"], havingValue = "true", matchIfMissing = true)
+    @ConditionalOnProperty(value = [AuditProperties.ENABLED_KEY], havingValue = "true", matchIfMissing = true)
+    @ConditionalOnProperty(
+        value = [KafkaAuditProperties.PREFIX + ".enabled"],
+        havingValue = "true",
+        matchIfMissing = true
+    )
     class Kafka {
         @Bean
         @ConditionalOnMissingBean
@@ -107,6 +122,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["me.ahoo.cosec.micrometer.MetricsListener"])
     @ConditionalOnBean(MeterRegistry::class)
+    @ConditionalOnProperty(value = [MetricsProperties.ENABLED_KEY], havingValue = "true", matchIfMissing = true)
     class Metrics {
         @Bean
         @ConditionalOnMissingBean

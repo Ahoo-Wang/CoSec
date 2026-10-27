@@ -48,6 +48,7 @@ class PipelineProperties {
 @ConfigurationProperties(prefix = RuntimeAuthorizationProperties.PREFIX)
 class RuntimeAuthorizationProperties {
     val scope = Scope()
+    val remoteIp = RemoteIp()
     val membership = Timed(Duration.ofMillis(500))
     val attributes = Timed(Duration.ofMillis(300))
     val rateLimit = Timed(Duration.ofMillis(500))
@@ -57,6 +58,14 @@ class RuntimeAuthorizationProperties {
     class Scope {
         /** The app this host serves (RFC 0004 §4.6); unset when requests declare their app. */
         var appId: String? = null
+    }
+
+    class RemoteIp {
+        /**
+         * How many proxy hops of `X-Forwarded-For` to trust: `0` ignores the header (a directly exposed host), `N` takes
+         * the entry the closest of N trusted proxies appended.
+         */
+        var maxTrustedIndex: Int = 1
     }
 
     class Timed(var timeout: Duration)
