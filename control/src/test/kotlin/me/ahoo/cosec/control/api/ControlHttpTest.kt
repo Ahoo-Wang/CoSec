@@ -14,10 +14,22 @@
 package me.ahoo.cosec.control.api
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.BindingScope
+import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
@@ -155,5 +167,133 @@ class ControlHttpTest {
             query = mapOf("reason" to "done")
         ).first.assert().isIn(200, 201, 409, 422)
         call("POST", "/break-glass/c9:approve", """{"candidate":"x"}""", security = plato).first.assert().isEqualTo(404)
+    }
+
+    @Test
+    fun `every change step has a route`() {
+        val proposal = """{"document":"tenant:acme","base":1,"kind":"PUBLISH","confirmations":[],""" +
+            """"operations":[{"op":"putPolicy","policy":{"id":"steps","statements":[{"effect":"allow","action":"order:read"}]}}]}"""
+        fun propose() = call("POST", "/changes", proposal, security = plato).second.get("id").asString()
+        val id = propose()
+        call("POST", "/changes/$id:rebase", security = plato).first.assert().isIn(200, 409)
+        call("POST", "/changes/$id:reject", """{"reason":"no"}""", security = plato).first.assert().isEqualTo(409)
+        val other = propose()
+        call("POST", "/changes/$other:approve", """{"candidate":"x"}""", security = plato).first.assert().isEqualTo(409)
+        call(
+            "POST",
+            "/changes/$other:abandon",
+            security = plato
+        ).second.get("state").asString().assert().isEqualTo("ABANDONED")
+        val acked = propose()
+        call(
+            "POST",
+            "/changes/$acked:skip-shadow",
+            """{"reason":"test"}""",
+            security = plato
+        ).first.assert().isEqualTo(200)
+        call(
+            "POST",
+            "/changes/$acked:publish",
+            """{"ack":{"window":"w","counts":{"AGREE":1}}}""",
+            security = plato
+        ).first.assert().isIn(200, 409, 412, 422)
+        call(
+            "POST",
+            "/changes",
+            """{"document":"tenant:acme","base":1,"operations":[],"confirmations":[{"policy":"p","statement":0,"digest":"d"}]}""",
+            security = plato,
+        ).first.assert().isLessThan(500)
+        call("GET", "/changes/$id:rebase").first.assert().isEqualTo(400)
+        call("GET", "/changes/a/b").first.assert().isEqualTo(404)
+        call(
+            "POST",
+            "/break-glass/$id:approve",
+            """{"candidate":"x"}""",
+            security = plato
+        ).first.assert().isEqualTo(409)
+        call("POST", "/break-glass/a/b", security = plato).first.assert().isEqualTo(404)
+        call("PUT", "/documents/tenant:acme:apply").first.assert().isEqualTo(400)
+        call("POST", "/documents/tenant:acme:explode").first.assert().isEqualTo(404)
+        call("GET", "/documents/tenant:acme/elsewhere").first.assert().isEqualTo(404)
+    }
+
+    @Test
+    fun `simulate a candidate, resources of every shape, and analyze over HTTP`() {
+        val change = call(
+            "POST",
+            "/changes",
+            """{"document":"tenant:acme","base":1,"operations":[{"op":"removeBinding","id":"ops"}]}""",
+        ).second.get("id").asString()
+        val request = """{"tenant":"acme","principal":"bob","roles":["ops@team-a"],"policies":[],"app":"order",""" +
+            """"space":"team-a","remoteIp":"10.0.0.1","action":"order:read","resource":"order/1"}"""
+        val simulated = call("POST", "/simulate", """{"request":$request,"candidate":"$change"}""").second
+        simulated.get("candidate").get("decision").asString().assert().isEqualTo("Deny")
+        simulated.get("differs").asBoolean().assert().isTrue()
+        for (resource in listOf("/orders/1", "order")) {
+            val shaped = request.replace("\"order/1\"", "\"$resource\"")
+            call("POST", "/simulate", """{"request":$shaped}""").first.assert().isEqualTo(200)
+        }
+        call("POST", "/explain", """{"request":$request}""").first.assert().isEqualTo(200)
+        call(
+            "POST",
+            "/analyze",
+            """{"query":{"tenant":"acme","action":"order","resource":"order/1"}}"""
+        ).first.assert().isEqualTo(400)
+        call(
+            "POST",
+            "/analyze",
+            """{"query":{"tenant":"acme","action":"order:read","resource":"/orders/1"}}"""
+        ).first.assert().isEqualTo(200)
+    }
+
+    @Test
+    fun `a failure the API does not expect is a 500 without detail`() {
+        val failing = ControlHttp(
+            object : ControlPlane by fixture.plane {
+                override suspend fun read(operator: Operator, key: SnapshotKey, revision: Long?) = error("boom")
+            },
+        )
+        val response = runBlocking {
+            failing.handle(ControlHttpRequest("GET", "/documents/tenant:acme"), alice)
+        }
+        response.status.assert().isEqualTo(500)
+        response.toString().assert().doesNotContain("boom")
+    }
+
+    /** alice grants viewers orders in every app, which she does not hold herself: it waits for plato's approval. */
+    private fun escalated(base: Long, binding: String): Pair<String, String> {
+        val tree = PolicyDocumentCodec.bindingTree(
+            Binding(
+                BindingId(binding),
+                SubjectRef.Role(ControlPlaneTest.ACME, RoleId("viewer")),
+                BindingScope(Match.Any, Match.Any),
+                PolicyId("orders")
+            ),
+            DocumentKind.TENANT,
+            "acme",
+        )
+        val change = call(
+            "POST",
+            "/changes",
+            """{"document":"tenant:acme","base":$base,"operations":[{"op":"putBinding","binding":$tree}]}"""
+        ).second
+        val id = change.get("id").asString()
+        call("POST", "/changes/$id:shadow").first.assert().isEqualTo(200)
+        runBlocking { fixture.changes.shadowed(ChangeId(id)) }.state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
+        return id to change.get("candidate").asString()
+    }
+
+    @Test
+    fun `approval and rejection over HTTP`() {
+        val (rejected, _) = escalated(1, "viewers")
+        call("POST", "/changes/$rejected:reject", """{"reason":"too wide"}""", security = plato)
+            .second.get("state").asString().assert().isEqualTo("REJECTED")
+        val (approved, candidate) = escalated(1, "viewers")
+        call("POST", "/changes/$approved:approve", """{"candidate":"$candidate"}""", security = plato)
+            .second.get("state").asString().assert().isEqualTo("READY")
+        call("POST", "/changes/$approved:publish").second.get("state").asString().assert().isEqualTo("PUBLISHED")
+        val (glass, glassCandidate) = escalated(2, "readers")
+        call("POST", "/break-glass/$glass:approve", """{"candidate":"$glassCandidate"}""", security = plato)
+            .second.get("state").asString().assert().isEqualTo("READY")
     }
 }

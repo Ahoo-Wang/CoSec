@@ -16,10 +16,12 @@ package me.ahoo.cosec.control.api
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.control.authz.EngineAuthority
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
+import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
 import me.ahoo.cosec.control.change.Operation
@@ -245,6 +247,50 @@ class ControlPlaneTest {
         forPlato.hidden.assert().isEqualTo(0)
         refused { plane.analyze(mallory, query) }.assert().isEqualTo(403)
         plane.analyze(alice, query.copy(app = "billing")).allows.assert().isEmpty()
+    }
+
+    @Test
+    fun `simulate refuses a candidate the request does not read, and explain rejects what the pipeline rejects`() =
+        runBlocking<Unit> {
+            val billing = plane.propose(
+                plato,
+                SnapshotKey.App("billing"),
+                0,
+                listOf(Operation.PutPolicy(allow("x"))),
+                "billing"
+            )
+            refused { plane.simulate(plato, bob("read"), billing.id) }.assert().isEqualTo(400)
+            plane.explain(alice, bob("read").copy(roles = emptyList())).decision.decision.assert().isEqualTo("Rejected")
+            plane.explain(plato, bob("read"), SnapshotVersion(1, 0, 1)).decision.decision.assert().isEqualTo("Permit")
+        }
+
+    @Test
+    fun `a binding to a policy in no readable document is counted as opaque`() = runBlocking<Unit> {
+        val query = AccessQuery(
+            ACME,
+            PipelineControlAuthorizer.CONTROL_APP.value,
+            SpaceId.DEFAULT.value,
+            Action("cosec", "read"),
+            Resource("cosec", "tenant/acme", emptyMap()),
+        )
+        plane.analyze(plato, query).opaque.assert().isGreaterThan(0)
+        plane.analyze(plato, query.copy(app = null, space = null)).hidden.assert().isEqualTo(0)
+    }
+
+    @Test
+    fun `the change steps go through the workflow`() = runBlocking<Unit> {
+        fun put(id: String) = listOf(Operation.PutPolicy(allow(id)))
+        val rejected = plane.propose(plato, TENANT, 1, put("a"), "a")
+        plane.rebase(plato, rejected.id).id.assert().isEqualTo(rejected.id)
+        refused { plane.reject(plato, rejected.id, "no") }.assert().isEqualTo(409)
+        val abandoned = plane.propose(plato, TENANT, 1, put("b"), "b")
+        plane.abandon(plato, abandoned.id).state.assert().isEqualTo(ChangeState.ABANDONED)
+        val skipped = plane.propose(plato, TENANT, 1, put("c"), "c")
+        plane.skipShadow(plato, skipped.id, "test")
+        refused { plane.approve(plato, skipped.id, "stale") }.assert().isIn(403, 409, 412)
+        plane.publish(plato, skipped.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        plane.rollback(plato, TENANT, 1, "back").key.assert().isEqualTo(TENANT)
+        plane.apply(plato, TENANT, plane.read(plato, TENANT), ApplyMode.MERGE, "same").key.assert().isEqualTo(TENANT)
     }
 
     companion object {
