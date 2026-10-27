@@ -37,5 +37,13 @@ class RevocationReaderTest {
         SubjectRevocation.revokes(revokedBefore, revokedBefore.minusMillis(1)).assert().isTrue()
         SubjectRevocation.revokes(revokedBefore, revokedBefore).assert().isFalse()
         SubjectRevocation.revokes(revokedBefore, revokedBefore.plusSeconds(1)).assert().isFalse()
+        // Review: a token stamped by an issuer whose clock runs ahead is revoked within the skew.
+        val skew = java.time.Duration.ofSeconds(5)
+        SubjectRevocation.revokes(revokedBefore, revokedBefore.plusSeconds(4), skew).assert().isTrue()
+        SubjectRevocation.revokes(revokedBefore, revokedBefore.plusSeconds(5), skew).assert().isFalse()
+        SubjectRevocation.revokes(null, revokedBefore, skew).assert().isFalse()
+        org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
+            SubjectRevocation.revokes(revokedBefore, revokedBefore, skew.negated())
+        }
     }
 }

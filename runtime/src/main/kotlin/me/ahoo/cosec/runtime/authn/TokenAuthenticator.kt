@@ -26,6 +26,7 @@ import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.token.TokenRevokedException
 import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.TokenVerifier
+import java.time.Duration
 
 /**
  * Authenticates the request's token (RFC 0006 §5.3.2): [verifier] checks it, which is CPU work and never suspends,
@@ -47,7 +48,16 @@ class TokenAuthenticator(
     private val revocations: RevocationReader = RevocationReader.NONE,
     /** How audit names this way of authenticating. */
     private val method: String = METHOD,
+    /**
+     * How far ahead of the revoking clock a token issuer's clock may run (`cosec.authentication.revocation.skew`): a
+     * subject revocation also revokes tokens issued up to this long after it ([SubjectRevocation.revokes]).
+     */
+    private val revocationSkew: Duration = DEFAULT_REVOCATION_SKEW,
 ) : Authenticator {
+    init {
+        require(!revocationSkew.isNegative) { "The revocation skew must not be negative, not $revocationSkew." }
+    }
+
     override suspend fun authenticate(credentials: Credentials): AuthnResult {
         val token = credentials.token ?: return AuthnResult.Anonymous
         val principal = try {
@@ -65,7 +75,7 @@ class TokenAuthenticator(
         val tenant = MembershipClaims.tenantOf(principal)
         val id = PrincipalId(principal.id)
         val issuedAt = principal.findInDelegationChain<IssuedAtCapable>()?.issuedAt
-        if (SubjectRevocation.revokes(revocations.subjectRevokedBefore(tenant, id), issuedAt)) {
+        if (SubjectRevocation.revokes(revocations.subjectRevokedBefore(tenant, id), issuedAt, revocationSkew)) {
             return REVOKED
         }
         return AuthnResult.Authenticated(
@@ -76,6 +86,12 @@ class TokenAuthenticator(
 
     companion object {
         const val METHOD = "token"
+
+        /**
+         * Five seconds: clocks kept by NTP agree within milliseconds, so this covers an issuer drifting well beyond
+         * that, while a principal who signs in again just after a revocation waits at most five seconds.
+         */
+        val DEFAULT_REVOCATION_SKEW: Duration = Duration.ofSeconds(5)
 
         private val EXPIRED = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_EXPIRED)
         private val REVOKED = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_REVOKED)

@@ -13,14 +13,17 @@
 
 package me.ahoo.cosec.snapshot.document
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.CoSecException
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.CompileError
 import me.ahoo.cosec.engine.flat.CompileException
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.CompiledPolicy
+import me.ahoo.cosec.engine.flat.OnMissing
 import me.ahoo.cosec.engine.flat.PolicyCompiler
 import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.AttributeCatalog
@@ -38,6 +41,8 @@ class DocumentCompileException(val document: String, val errors: List<CompileErr
         "The $document document does not compile: " + errors.joinToString("; ") { "${it.path}: ${it.message}" },
         cause,
     )
+
+private val log = KotlinLogging.logger {}
 
 /**
  * Compiles platform, app and tenant documents ([PolicyDocument]) into the engine's [CompiledDocument]s (RFC 0004 §7,
@@ -62,14 +67,21 @@ class DocumentCompileException(val document: String, val errors: List<CompileErr
 class PolicyDocumentCompiler(
     private val policies: PolicyCompiler = PolicyCompiler(ConditionChecker(zones = JavaZones.RESOLVER)),
     val principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
+    /** Where warnings go: a document that compiles but deserves a look (RFC 0006 Q13). */
+    private val warn: (String) -> Unit = { message -> log.warn { message } },
 ) : SnapshotCompiler<CompiledDocument> {
     /**
      * Compiles conditions against [catalog] too: the external attributes the registered `AttributeProvider`s declare
      * (RFC 0006 §5.4.1). A statement reading an `ext.` path no provider declares does not compile.
      */
-    constructor(catalog: AttributeCatalog, principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT) : this(
+    constructor(
+        catalog: AttributeCatalog,
+        principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
+        warn: (String) -> Unit = { message -> log.warn { message } },
+    ) : this(
         PolicyCompiler(ConditionChecker(zones = JavaZones.RESOLVER, catalog = catalog)),
         principalBindingLimit,
+        warn,
     )
 
     init {
@@ -167,6 +179,7 @@ class PolicyDocumentCompiler(
                 errors += CompileError("$path.id", "[$PERMISSION_PREFIX] names an app's permission policy, defined only in that app's document")
             }
         }
+        warnLapsingDenies(document, policy)
         return try {
             // Only the platform document may let a DENY lapse while its provider fails (RFC 0006 Q13).
             policies.compile(
@@ -179,6 +192,24 @@ class PolicyDocumentCompiler(
         } catch (error: CompileException) {
             error.errors.forEach { errors += CompileError(path + it.path.removePrefix("$"), it.message) }
             null
+        }
+    }
+
+    /**
+     * A platform DENY with `onMissing: nomatch` stops denying while its provider fails (RFC 0006 §5.4.3, Q13): allowed,
+     * but worth a warning on every compile until the control plane asks for an explicit confirmation (phase 6).
+     */
+    private fun warnLapsingDenies(document: PolicyDocument, policy: PolicyDefinition) {
+        if (document.kind != DocumentKind.PLATFORM) {
+            return
+        }
+        for ((index, statement) in policy.statements.withIndex()) {
+            if (statement.effect == Effect.DENY && statement.onMissing == OnMissing.NOMATCH) {
+                warn(
+                    "Platform policy [${policy.id.value}] statement $index [${statement.name}] is a DENY with " +
+                        "onMissing: nomatch: it does not deny while its external attributes cannot be fetched."
+                )
+            }
         }
     }
 

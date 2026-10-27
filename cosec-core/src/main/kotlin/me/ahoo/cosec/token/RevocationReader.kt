@@ -15,6 +15,7 @@ package me.ahoo.cosec.token
 
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -53,6 +54,16 @@ object SubjectRevocation {
      * JWT `iat` has whole seconds, which rounds a token's age up: a token issued in the same second as the revocation,
      * even just after it, is revoked as well.
      */
-    fun revokes(revokedBefore: Instant?, issuedAt: Instant?): Boolean =
-        revokedBefore != null && (issuedAt == null || issuedAt.isBefore(revokedBefore))
+    fun revokes(revokedBefore: Instant?, issuedAt: Instant?): Boolean = revokes(revokedBefore, issuedAt, Duration.ZERO)
+
+    /**
+     * As [revokes], also revoking tokens issued up to [skew] after [revokedBefore]: an issuer whose clock runs ahead of
+     * the one that recorded the revocation stamps a token issued before the revocation with a later `iat`. Revoking a
+     * little too much is the fail-safe direction: a principal who signs in again within [skew] of the revocation must
+     * sign in once more.
+     */
+    fun revokes(revokedBefore: Instant?, issuedAt: Instant?, skew: Duration): Boolean {
+        require(!skew.isNegative) { "The revocation skew must not be negative, not $skew." }
+        return revokedBefore != null && (issuedAt == null || issuedAt.isBefore(revokedBefore.plus(skew)))
+    }
 }

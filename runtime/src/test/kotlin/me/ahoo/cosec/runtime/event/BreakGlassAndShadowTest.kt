@@ -134,6 +134,15 @@ class BreakGlassAndShadowTest {
         evaluate(breakGlass, Recording("metrics", Delivery.BEST_EFFORT)).status.assert().isEqualTo(503)
     }
 
+    /** Review R1: a 7.x audit sink cannot acknowledge a write, so it never counts as the REQUIRED audit. */
+    @Test
+    fun aBreakGlassPermitAuditedOnlyByASinkIs503() {
+        val sink = me.ahoo.cosec.api.audit.AuditEventSink { }
+        val audit = me.ahoo.cosec.runtime.audit.AuditListener.of(sink, "audit")
+        audit.delivery.assert().isEqualTo(Delivery.BEST_EFFORT)
+        evaluate(breakGlass, audit).status.assert().isEqualTo(503)
+    }
+
     @Test
     fun aBreakGlassPermitWrittenToARequiredListenerProceeds() {
         val audit = Recording("audit", Delivery.REQUIRED)
@@ -152,6 +161,40 @@ class BreakGlassAndShadowTest {
             override suspend fun onDecision(event: DecisionEvent) = error("audit store down")
         }
         evaluate(breakGlass, failing).status.assert().isEqualTo(503)
+    }
+
+    /** Review A1 of #1070: a check writes no audit, so a check only break-glass permits is refused. */
+    @Test
+    fun aCheckThatOnlyBreakGlassPermitsIsRefused() {
+        val audit = Recording("audit", Delivery.REQUIRED)
+        val registered = DecisionListeners(listOf(audit)).also { opened += it }
+        val pipeline = PipelineFixtures.pipeline(
+            authenticator = operator,
+            engine = CoSecFlatEngine,
+            views = Views(breakGlass),
+            listeners = registered,
+        )
+        val outcome = runBlocking { pipeline.evaluate(PipelineFixtures.facts()) }
+        outcome.status.assert().isEqualTo(200)
+        audit.events.size.assert().isEqualTo(1)
+        val checker = me.ahoo.cosec.runtime.AuthorizationChecker(pipeline)
+        runBlocking { checker.check(outcome.security!!.securityContext, "order:delete", "order/1") }.assert().isFalse()
+        audit.events.size.assert().isEqualTo(1)
+    }
+
+    /** Review A2 of #1070: when another binding permits too, the request is not a use of break-glass. */
+    @Test
+    fun aRequestAnotherBindingPermitsIsNotBreakGlass() {
+        val both = compile(
+            ""","policies":[$allowAll],"bindings":[$anyone,{"id":"root","subject":{"principal":"cosec",""" +
+                """"tenant":"(platform)"},"app":"*","space":"*","policy":"cosec:root","breakGlass":true,""" +
+                """"expiresAt":"2099-12-31T00:00:00Z"}]"""
+        )
+        // No REQUIRED listener: a break-glass report would be a 503.
+        evaluate(both).status.assert().isEqualTo(200)
+        val audit = Recording("audit", Delivery.REQUIRED)
+        evaluate(both, audit).status.assert().isEqualTo(200)
+        audit.events.single().breakGlass.assert().isFalse()
     }
 
     @Test

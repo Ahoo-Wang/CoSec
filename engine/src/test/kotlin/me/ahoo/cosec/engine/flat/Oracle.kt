@@ -121,7 +121,6 @@ object Oracle {
         val anyone = { b: Binding -> b.subject == SubjectRef.Anyone }
         val principal = { b: Binding -> b.subject is SubjectRef.Principal && !b.breakGlass }
         with(Builder(case)) {
-            add(platform, DocumentKind.PLATFORM, applying(platform) { it.breakGlass }.sortedWith(byId))
             add(platform, DocumentKind.PLATFORM, applying(platform, anyone).sortedWith(byPolicy))
             tenant?.let { add(it, DocumentKind.TENANT, applying(it, anyone).sortedWith(byPolicy)) }
             if (request.request.subject.authenticated) {
@@ -136,6 +135,8 @@ object Oracle {
                     add(document, kind, applying(document) { (it.subject as? SubjectRef.Role)?.id == role })
                 }
             }
+            // Last: break-glass permits only when nothing else does (review A2 of #1070).
+            add(platform, DocumentKind.PLATFORM, applying(platform) { it.breakGlass }.sortedWith(byId))
             return Enumeration(candidates, expired, missing, ambiguous)
         }
     }

@@ -33,6 +33,7 @@ import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.servlet.ServletRequests.setSecurityContext
+import reactor.core.scheduler.Schedulers
 import java.util.Collections
 
 /** Reads a servlet request into the facts the pipeline decides on (RFC 0006 §5.3.1), once. */
@@ -111,6 +112,13 @@ class PipelineServletFilter(
     }
 }
 
-/** [AuthorizationChecker.check] for servlet code (RFC 0006 §7.6): blocks the calling request thread. */
-fun AuthorizationChecker.checkBlocking(security: SecurityContext, action: String, resource: String): Boolean =
-    runBlocking { check(security, action, resource) }
+/**
+ * [AuthorizationChecker.check] for servlet code (RFC 0006 §7.6): blocks the calling request thread. Refuses to run on
+ * a non-blocking thread, such as a Netty event loop: use `checkMono` from `cosec-webflux` there.
+ */
+fun AuthorizationChecker.checkBlocking(security: SecurityContext, action: String, resource: String): Boolean {
+    check(!Schedulers.isInNonBlockingThread()) {
+        "checkBlocking would block the non-blocking thread [${Thread.currentThread().name}]; use checkMono."
+    }
+    return runBlocking { check(security, action, resource) }
+}
