@@ -1,0 +1,73 @@
+{
+  "rules": [
+    "CTL-12"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "One instance reports CANDIDATE_ERROR: the window closes at once, before its minimum, and the change never publishes, acknowledged or not; it must be fixed and rebased.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT15M",
+      "minSamples": 3,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "CANDIDATE_ERROR": 1,
+          "SAME": 2
+        }
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "ack": "summary"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "READY",
+      "refused 409"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}
