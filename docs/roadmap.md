@@ -180,7 +180,7 @@ PR-9（#1091，`feat(control): expose the control plane as a library and over HT
 
 **一致性登记表新增 `startup` 级别**（#1097）：与 `build` 一样，`startup` 规则由它们所列的测试守护，没有场景在该级别运行（`RuleCoverageTest` 有对应测试）。`SNP-3` 改为 `startup` 并不再 `pending`，守护为 `CacheTtlPolicyTest` ×2 与 `CoSecPipelineAutoConfigurationTest` 中"Redis 可能淘汰"的用例；`SCP-4` 增加守护 `WebAdapterParityTest#the three adapters answer byte for byte alike`。仍为 `pending` 的 4 条：`SNP-1`、`SNP-2`（快照时序，已有测试与性质守护，应归入一个时序级别）、`ACT-1`（写着 RFC 0005 PR-4）、`PIP-1`（写着 RFC 0006 PR-7），后两条指向已合入的 PR；#1097 的作者打算在 S1b 一并处理，除非维护者另有决定。
 
-**S1b 的阻塞项**（2026-10-27）：(1) 三个过时的变异体（`atr-3`、`brk-4`、`pip-2`，#1075 改了它们打补丁的代码）已在分支 `claude/evidence-mutants-threads` 上改写，都能重新应用，PR 待开；(2) `cosec-core` 的百万例运行把原生线程耗尽（在本地观察到）。读代码找到的原因：`SnapshotSource.close()` 不等自己的线程，关闭后排队的工作仍在跑。同一分支上的修复让 `close()` 最多等 5 秒，草稿 PR #1103；新测试还要改到去掉修复就失败，才转为可审查；百万例运行只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml`（#1099）上进行，不在本机跑；(3) 空闲机器上的 JMH（含 `boundary = none`）待测；(4) S1b 合入后在 8.0 上跑 k6，对照 7.0 基线。§3.9 第 1–5 条的证据在 S1b 自己的 head 上重跑：百万例运行改为 `property-stress.yml` 的 CI 运行（运行链接附在 S1b 的 PR 上），其余是 `:conformance:mutationCheck`、空闲机器 JMH、k6。
+**S1b 的阻塞项**（2026-10-27）：(1) 三个过时的变异体（`atr-3`、`brk-4`、`pip-2`，#1075 改了它们打补丁的代码）已改写，都能重新应用（#1103，已转为可审查并开启自动合并）；(2) `cosec-core` 的百万例运行把原生线程耗尽（在本地观察到）。读代码找到的原因：`SnapshotSource.close()` 不等自己的线程，关闭后排队的工作仍在跑。#1103 的修复让 `close()` 最多等 5 秒，并有去掉修复就失败的确定性测试；百万例运行只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml`（#1099）上进行，不在本机跑；(3) 性能：在 CI 上对比 v7 与 v8（新的手动工作流 `jmh-v7-v8.yml`，同一台 runner 上交替运行 7.0.x 与 8.0），每个场景 v8 不低于 v7 即通过；空闲机器上的 JMH 与 k6 不再是门槛（2026-10-27 维护者决定）。§3.9 第 1–5 条的证据在 S1b 自己的 head 上重跑：`property-stress.yml` 的百万例运行、`:conformance:mutationCheck`、`jmh-v7-v8.yml` 的对比，运行链接附在 S1b 的 PR 上。S1b 的草稿 PR 是 #1104。
 
 取消的 PR：RFC 0002 PR-6、RFC 0003 PR-5、RFC 0004 PR-6、RFC 0005 PR-7、RFC 0006 PR-8、RFC 0007 PR-10，以及第 2、3 阶段的门槛与门槛 A–D。
 并入切换的 PR：RFC 0003 PR-6、RFC 0004 PR-7/PR-8、RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11（分到 S1–S5 的哪一个，见 RFC 0008 §4.4.2）。
@@ -198,7 +198,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 没有 PR 的进行中的工作：
 
 - 三个过时变异体的改写，以及 `cosec-core` 百万例运行的原生线程耗尽（本地观察到，通过阅读代码修复；S1b 的阻塞项）：草稿 PR #1103（分支 `claude/evidence-mutants-threads`，剩余事项见 PR 描述）。百万例运行只在 CI 的 `property-stress.yml`（#1099）上进行。
-- 7.0 端到端基线（k6）：在空闲机器上测量，结果作为 #1065 的后续 PR；8.0 的 k6 在 S1b 之后。
+- S1b 草稿 #1104：已登记 8.0 的自动配置并删除 starter 中 7.x 的自动配置，剩余事项见 PR 描述。
+- `jmh-v7-v8.yml`：在 CI 上对比 v7 与 v8 性能的手动工作流，PR 待开。
 
 （#866、#1082 是 Renovate 的 pnpm 升级，不属于路线图。）
 
@@ -225,6 +226,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **S1 拆成 S1a 与 S1b**：S1a 加法、不登记、可 revert；S1b 注册并删除 7.x，是不可回退点，带 §3.9 的证据 | 2026-10-27 | [RFC 0008 §4.4.1](rfc/0008-conformance-and-direct-build.md) |
 | **`cosec.authorization.snapshot.eviction-check=fail\|warn` 两个值都保留，默认 `fail`**：`warn` 给禁用 `CONFIG GET` 的托管 Redis（如 ElastiCache），启动时打印以 `!!!` 开头的 WARN，说明被淘汰的应用或租户文档读起来是缺失，它的 DENY 会悄悄失效；平台文档缺失 fail closed 不受此影响。S1b 的文档要写进 configuration 与 troubleshooting | 2026-10-27 | #1097 |
 | **空的 `cosec.authorization.routes.location` 表示有意不用路由映射**；默认位置缺失仍使启动失败。**`cosec.authorization.snapshot.key-prefix`**（默认 `cosec`）是对 RFC 属性列表的补充 | 2026-10-27 | #1097 |
+| **性能门槛改为 CI 上的 v7/v8 对比**：S1b 的性能证据是 CI 工作流 `jmh-v7-v8.yml` 的运行（同一台 runner 上交替运行 7.0.x 与 8.0），每个场景 v8 不低于 v7 即通过；不再要求空闲机器上的 JMH 与 k6。百万例 `propertyStress` 是正确性证据，保留，在 CI 上跑 | 2026-10-27 | [RFC 0008 §3.8](rfc/0008-conformance-and-direct-build.md) |
 | **不在本机跑压力测试**：S1b 的百万例 `propertyStress` 只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml` 上运行（`gh workflow run property-stress.yml -f ref=<branch>`，#1099），运行链接附在 S1b 的 PR 上，这是 §3.9 的证据 | 2026-10-27 | #1099、`AGENTS.md` 的 Feedback loop |
 | **迭代效率**：本地只跑改动模块的测试与 detekt，完整的多模块 `check` 由 CI 跑（合入仍要求 CI 全绿）；空闲机器只留给 JMH；常规的性能前后对比用 CI 的 JMH A/B 工作流（`jmh-ab.yml`，#1084），S1 的门槛仍在空闲机器上测；Gradle 构建缓存、配置缓存与并行构建（#1085）；机械性任务用较便宜的模型 | 2026-10-27 | 仅记在本文；`AGENTS.md` 的 Feedback loop |
 | **合并冲突逐块解决**，共享文档从不整文件取一边（#1076 曾因此回退 RFC 0008 与路线图，#1077 恢复） | 2026-10-27 | 仅记在本文 |
@@ -233,7 +235,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 可以立即开工（按 RFC 0008 §4.5 的依赖顺序）：
 
-- S1b 的前置：改写三个过时的变异体；修复百万例运行的原生线程耗尽（通过阅读代码，不在本机复现）；空闲机器上的 JMH（含 `boundary = none`）；随后 S1b 本身（`refactor!`，注册 8.0 的自动配置、删除 7.x 的自动配置，带 §3.9 的证据）。S1b 同时处理 `pending` 的 `SNP-1`、`SNP-2`、`ACT-1`、`PIP-1`，并在 AGENTS.md 的 Mental model 开头加过渡说明。S1b 的后续项：补上 BDY-1（平台边界）缺的变异体。
+- S1b 的前置：#1103 合入（变异体与线程修复）；在 CI 上跑 `property-stress.yml` 与 `jmh-v7-v8.yml`（v8 ≥ v7）；随后 S1b 本身（草稿 #1104）（`refactor!`，注册 8.0 的自动配置、删除 7.x 的自动配置，带 §3.9 的证据）。S1b 同时处理 `pending` 的 `SNP-1`、`SNP-2`、`ACT-1`、`PIP-1`，并在 AGENTS.md 的 Mental model 开头加过渡说明。S1b 的后续项：补上 BDY-1（平台边界）缺的变异体。
 - 端到端的 k6 测量（RFC 0008 §4.4.3），对照 7.0 基线；8.0 的 k6 在 S1b 之后。
 - 阶段 A 提供者路径的懒超时（`coroutineScope` 加 `async`，#1096 的遗留）：动 K13 的超时语义，单独一个 PR。
 - 核对已合入 PR 的两轮审查（RFC 0008 §4.7：同一领域先审查，再开新功能 PR）：RFC 0005 PR-5（#1079）、RFC 0006 PR-5（#1078）的第 1 轮，RFC 0007 PR-3 至 PR-9 的第 1 轮（#1095 已修复 PR-4 至 PR-9 的第 1 轮发现，其中 K1 为高危），之前合入、只做过第 1 轮的 PR 的第 2 轮，#1097 的审查；各表中"—"表示尚无已合入的修复 PR。
