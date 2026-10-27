@@ -87,7 +87,7 @@ internal class PartTranslation(
         val mapped = Parts.of(part) ?: return translator.rejected(RejectionKind.CONDITION_NOT_TRANSLATED, location, Parts.reason(part))
         return when (type) {
             "eq" -> eq(mapped)
-            "in" -> `in`(mapped)
+            "in" -> inList(mapped)
             "startsWith" -> startsWith(mapped)
             "endsWith" -> endsWith(mapped)
             "regular" -> regular(mapped)
@@ -111,11 +111,22 @@ internal class PartTranslation(
         return absent(mapped, base) { it.equals(value, ignoreCase) }
     }
 
-    private fun `in`(mapped: Parts.Mapped): Translated? {
+    private fun inList(mapped: Parts.Mapped): Translated? {
         val values = config.get("value")?.takeIf { node -> node.isArray && node.values().all { it.isString } }
             ?.values()?.map { it.asString() }?.distinct()
             ?: return translator.rejected(RejectionKind.UNDECODABLE, location, "in needs an array of strings")
-        val base = if (values.isEmpty()) Translated.Never else Translated.Ast(Condition.In(mapped.attribute, values.map { Literal.Str(it) }))
+        val base = if (values.isEmpty()) {
+            Translated.Never
+        } else {
+            Translated.Ast(
+                Condition.In(
+                    mapped.attribute,
+                    values.map {
+                        Literal.Str(it)
+                    }
+                )
+            )
+        }
         return absent(mapped, base) { it in values }
     }
 
@@ -164,7 +175,11 @@ internal class PartTranslation(
         val regex = try {
             Regex(pattern, RegexOption.IGNORE_CASE)
         } catch (_: IllegalArgumentException) {
-            return translator.rejected(RejectionKind.UNDECODABLE, location, "pattern [$pattern] is not a regular expression")
+            return translator.rejected(
+                RejectionKind.UNDECODABLE,
+                location,
+                "pattern [$pattern] is not a regular expression"
+            )
         }
         val shape = LiteralRegex.parse(pattern) ?: return translator.rejected(
             RejectionKind.CONDITION_NOT_TRANSLATED,
@@ -174,7 +189,13 @@ internal class PartTranslation(
         val base = when (shape) {
             is LiteralRegex.Exact -> {
                 if (!shape.choices.all { caseFoldable(it, folds = true) }) return null
-                Translated.or(shape.choices.map { Translated.Ast(Condition.Eq(mapped.attribute, Literal.Str(it), ignoreCase = true)) })
+                Translated.or(
+                    shape.choices.map {
+                        Translated.Ast(
+                            Condition.Eq(mapped.attribute, Literal.Str(it), ignoreCase = true)
+                        )
+                    }
+                )
             }
 
             is LiteralRegex.Prefix -> {
@@ -188,7 +209,13 @@ internal class PartTranslation(
                             "rewrite it as startsWith",
                     )
                 }
-                if (shape.prefix.isEmpty()) Translated.Always else Translated.Ast(Condition.Prefix(mapped.attribute, Literal.Str(shape.prefix)))
+                if (shape.prefix.isEmpty()) {
+                    Translated.Always
+                } else {
+                    Translated.Ast(
+                        Condition.Prefix(mapped.attribute, Literal.Str(shape.prefix))
+                    )
+                }
             }
         }
         translator.note("D3", location, "regular [$pattern]: compared exactly in 8.0, so its timeout errors disappear")
@@ -201,7 +228,11 @@ internal class PartTranslation(
      * present values is enough (narrower: D2); in the DENY direction the 7.x cases are added back, so it is exact.
      */
     private fun template(mapped: Parts.Mapped, value: String): Translated? {
-        val right = TEMPLATES.firstNotNullOfOrNull { (regex, attribute) -> regex.matchEntire(value)?.let { attribute(it) } }
+        val right = TEMPLATES.firstNotNullOfOrNull { (regex, attribute) ->
+            regex.matchEntire(
+                value
+            )?.let { attribute(it) }
+        }
         if (right == null || ignoreCase || part == Parts.PRINCIPAL_ID) {
             return translator.rejected(
                 RejectionKind.CONDITION_NOT_TRANSLATED,
@@ -212,10 +243,18 @@ internal class PartTranslation(
         }
         val base = Condition.Eq(mapped.attribute, ConditionTranslator.attr(right))
         if (!deny) {
-            translator.note("D2", location, "eq against [$value] in the ALLOW direction: an absent part no longer equals an empty value")
+            translator.note(
+                "D2",
+                location,
+                "eq against [$value] in the ALLOW direction: an absent part no longer equals an empty value"
+            )
             return Translated.Ast(base)
         }
-        translator.note("D2", location, "eq against [$value] in the DENY direction: 7.x's reading of absent values is kept")
+        translator.note(
+            "D2",
+            location,
+            "eq against [$value] in the DENY direction: 7.x's reading of absent values is kept"
+        )
         val alternatives = mutableListOf<Condition>(base)
         if (right.startsWith("subject.attributes.")) {
             alternatives += Condition.And(listOf(Condition.Not(Condition.Exists(mapped.attribute)), Condition.Eq(right, Literal.Str(""))))
@@ -242,7 +281,11 @@ internal class PartTranslation(
             return true
         }
         if (!deny) {
-            translator.note("ASCII-CASE", location, "ignoreCase folds ASCII letters only in 8.0: the ALLOW matches fewer spellings")
+            translator.note(
+                "ASCII-CASE",
+                location,
+                "ignoreCase folds ASCII letters only in 8.0: the ALLOW matches fewer spellings"
+            )
             return true
         }
         if (value.none { it.isLetter() }) {

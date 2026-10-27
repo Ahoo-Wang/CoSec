@@ -45,7 +45,15 @@ class ConditionConversionTest {
 
     @Test
     fun `a path condition on request path becomes the resource of an all action`() {
-        val whole = platformPolicy(policy("p", statements = listOf(statement(condition = """{"path":{"part":"request.path","pattern":"/a/{id}"}}"""))))
+        val whole =
+            platformPolicy(
+                policy(
+                    "p",
+                    statements = listOf(
+                        statement(condition = """{"path":{"part":"request.path","pattern":"/a/{id}"}}""")
+                    )
+                )
+            )
         whole.statements.single().resources.single().pattern.assert().isEqualTo("http:path:/a/{id}")
         whole.statements.single().condition.assert().isNull()
 
@@ -68,7 +76,9 @@ class ConditionConversionTest {
     @Test
     fun `a path condition stays a condition, rejected, where the rest reads path variables`() {
         val condition = """{"bool":{"and":[{"path":{"part":"request.path","pattern":"/a/{id}"}},{"eq":{"part":"request.path.var.id","value":""}}]}}"""
-        val report = Converter().convert(source(listOf("p" to policy("p", statements = listOf(statement(condition = condition)))))).report
+        val report = Converter().convert(
+            source(listOf("p" to policy("p", statements = listOf(statement(condition = condition)))))
+        ).report
         // 7.x refuses it too (its PathVariableScope); the converter would not widen it even if it loaded.
         report.rejections.map { it.kind to it.location }.assert().containsExactlyInAnyOrder(
             RejectionKind.UNDECODABLE to "policy:p",
@@ -79,14 +89,25 @@ class ConditionConversionTest {
     @Test
     fun `a path condition beside a path action is rejected`() {
         val report = Converter().convert(
-            source(listOf("p" to policy("p", statements = listOf(statement("\"/x/**\"", condition = """{"path":{"part":"request.path","pattern":"/a/**"}}"""))))),
+            source(
+                listOf(
+                    "p" to policy("p", statements = listOf(statement("\"/x/**\"", condition = """{"path":{"part":"request.path","pattern":"/a/**"}}""")))
+                )
+            ),
         ).report
         report.rejections.single().location.assert().isEqualTo("policy:p#$.statements[0].condition.path")
     }
 
     @Test
     fun `a policy condition read the same way in both directions stays on the policy`() {
-        val converted = platformPolicy(policy("p", condition = """{"authenticated":{}}""", statements = listOf(statement(), statement(effect = "deny", name = "d"))))
+        val converted =
+            platformPolicy(
+                policy(
+                    "p",
+                    condition = """{"authenticated":{}}""",
+                    statements = listOf(statement(), statement(effect = "deny", name = "d"))
+                )
+            )
         render(converted.condition).assert().isEqualTo("eq(subject.authenticated,b:true,false)")
         converted.statements.forEach { it.condition.assert().isNull() }
     }
@@ -97,7 +118,10 @@ class ConditionConversionTest {
             policy(
                 "p",
                 condition = """{"inRole":{"value":"admin"}}""",
-                statements = listOf(statement(), statement(effect = "deny", name = "d", condition = """{"authenticated":{}}""")),
+                statements = listOf(
+                    statement(),
+                    statement(effect = "deny", name = "d", condition = """{"authenticated":{}}""")
+                ),
             ),
         )
         converted.condition.assert().isNull()
@@ -113,7 +137,12 @@ class ConditionConversionTest {
                 apps = listOf(
                     app(
                         "order",
-                        appPermission("order", permission("read"), permission("purge", effect = "deny"), condition = """{"inTenant":{"value":"user"}}"""),
+                        appPermission(
+                            "order",
+                            permission("read"),
+                            permission("purge", effect = "deny"),
+                            condition = """{"inTenant":{"value":"user"}}"""
+                        ),
                         "clerk" to """["read"]""",
                         "admin" to """["*"]""",
                     ),
@@ -128,7 +157,11 @@ class ConditionConversionTest {
 
     @Test
     fun `a statement whose condition never holds is rejected`() {
-        val report = Converter().convert(source(listOf("p" to policy("p", statements = listOf(statement(condition = """{"all":{"negate":true}}""")))))).report
+        val report = Converter().convert(
+            source(
+                listOf("p" to policy("p", statements = listOf(statement(condition = """{"all":{"negate":true}}"""))))
+            )
+        ).report
         report.rejections.single().message.assert().contains("never hold")
     }
 
@@ -198,7 +231,10 @@ class ConditionConversionTest {
         Files.writeString(directory.resolve(ExportDirectory.POLICIES_FILE), "[]")
         Files.writeString(directory.resolve(ExportDirectory.GLOBAL_POLICIES_FILE), "[]")
         Files.writeString(directory.resolve(ExportDirectory.APP_ROLE_PERMISSIONS_FILE), "[]")
-        Files.writeString(directory.resolve(ExportDirectory.RATE_LIMIT_RULES_FILE), """{"id":"one","action":"*","permitsPerSecond":1}""")
+        Files.writeString(
+            directory.resolve(ExportDirectory.RATE_LIMIT_RULES_FILE),
+            """{"id":"one","action":"*","permitsPerSecond":1}"""
+        )
         ExportDirectory.read(directory).rateLimitRules.single().location.assert().isEqualTo("rate-limit-rules.json[0]")
     }
 }

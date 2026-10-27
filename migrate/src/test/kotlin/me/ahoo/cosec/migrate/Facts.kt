@@ -13,14 +13,20 @@
 
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.api.configuration.Configuration
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.request.AppIdCapable
 import me.ahoo.cosec.api.context.request.DeviceIdCapable
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
+import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.context.SimpleSecurityContext
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.CheckResult
+import me.ahoo.cosec.model.condition.ConditionChecker
+import me.ahoo.cosec.model.condition.ConditionInput
+import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.policy.action.setPathVariables
-import me.ahoo.cosec.api.policy.ConditionMatcher
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactory
 import me.ahoo.cosec.policy.condition.ConditionMatcherFactoryProvider
 import me.ahoo.cosec.policy.condition.TimeConditionMatcher
@@ -30,12 +36,6 @@ import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.document.JavaZones
 import me.ahoo.cosec.tenant.SimpleTenant
-import me.ahoo.cosec.api.configuration.Configuration
-import me.ahoo.cosec.model.condition.Attribute
-import me.ahoo.cosec.model.condition.CheckResult
-import me.ahoo.cosec.model.condition.ConditionChecker
-import me.ahoo.cosec.model.condition.ConditionInput
-import me.ahoo.cosec.model.condition.IpAddress
 import java.net.URI
 import java.time.Clock
 import java.time.Instant
@@ -85,7 +85,10 @@ data class Facts(
             headers = headers,
         )
         val principal = if (authenticated) {
-            SimpleTenantPrincipal(SimplePrincipal(principalId, emptySet(), roles, principalAttributes), SimpleTenant(tenantId))
+            SimpleTenantPrincipal(
+                SimplePrincipal(principalId, emptySet(), roles, principalAttributes),
+                SimpleTenant(tenantId)
+            )
         } else {
             SimpleTenantPrincipal.ANONYMOUS
         }
@@ -180,7 +183,13 @@ data class Facts(
                 tenantId = listOf("(0)", "(platform)", "acme").random(random),
                 roles = ROLES.filter { random.nextInt(3) == 0 }.toSet(),
                 principalAttributes = map(listOf("owner", "dept")),
-                time = if (random.nextBoolean()) TIMES.random(random) else Instant.ofEpochSecond(random.nextLong(1_700_000_000, 1_900_000_000)),
+                time = if (random.nextBoolean()) {
+                    TIMES.random(
+                        random
+                    )
+                } else {
+                    Instant.ofEpochSecond(random.nextLong(1_700_000_000, 1_900_000_000))
+                },
             )
         }
     }
@@ -203,11 +212,17 @@ internal object Matchers7x {
 
     /** `TimeConditionMatcher`'s clock constructor is internal to cosec-core; the test reaches it by reflection. */
     private object ClockedTime : ConditionMatcherFactory {
-        private val constructor = TimeConditionMatcher::class.java.getDeclaredConstructor(Configuration::class.java, Clock::class.java)
+        private val constructor = TimeConditionMatcher::class.java.getDeclaredConstructor(
+            Configuration::class.java,
+            Clock::class.java
+        )
             .also { it.isAccessible = true }
         override val type: String = TimeConditionMatcherFactory.TYPE
 
-        override fun create(configuration: Configuration): ConditionMatcher = constructor.newInstance(configuration, clock)
+        override fun create(configuration: Configuration): ConditionMatcher = constructor.newInstance(
+            configuration,
+            clock
+        )
     }
 
     fun <T> use(block: () -> T): T {

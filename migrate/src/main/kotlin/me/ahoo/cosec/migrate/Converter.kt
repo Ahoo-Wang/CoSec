@@ -26,7 +26,6 @@ import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
-import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
@@ -125,8 +124,14 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
     val counts = LinkedHashMap<String, Int>()
     val translator = MatcherTranslator { kind, location, message -> reject(kind, location, message) }
     val scan = SemanticScan { changes += it }
-    val conditions = ConditionTranslator({ kind, location, message -> reject(kind, location, message) }, { changes += it })
-    val statements = StatementTranslator(translator, conditions) { kind, location, message -> reject(kind, location, message) }
+    val conditions = ConditionTranslator(
+        { kind, location, message -> reject(kind, location, message) },
+        { changes += it }
+    )
+    val statements = StatementTranslator(
+        translator,
+        conditions
+    ) { kind, location, message -> reject(kind, location, message) }
     val treeReader = CoSecJsonSerializer.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
     /** The policies and bindings of each document, in the order they are written. */
@@ -210,7 +215,12 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         if (translated == null || decoded == null) {
             return
         }
-        val definition = PolicyDefinition(PolicyId(id), attachable = !global, condition = translated.first, translated.second)
+        val definition = PolicyDefinition(
+            PolicyId(id),
+            attachable = !global,
+            condition = translated.first,
+            translated.second
+        )
         if (!compiles(key, definition, locations)) {
             return
         }
@@ -355,8 +365,17 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val permissions = permissions(tree, location, appCondition)
         val grants = convertGrants(app, permissions?.keys)
         // Translated over every permission once, so its rejections are reported even if nothing is granted.
-        val guard = statements.policy(appCondition, "$location#$.$CONDITION", permissions?.values?.map { it.statement }.orEmpty())
-        if (permissions == null || grants == null || guard == null || decoded == null) {
+        val guard = statements.policy(
+            appCondition,
+            "$location#$.$CONDITION",
+            permissions?.values?.map {
+                it.statement
+            }.orEmpty()
+        )
+        if (permissions == null || grants == null) {
+            return
+        }
+        if (guard == null || decoded == null) {
             return
         }
         val key = SnapshotKey.App(appId)
@@ -427,7 +446,12 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val definitions = sources.map { (permissionId, members, origin) ->
             val id = Converter.permissionPolicyId(appId, permissionId)
             // The app condition is the policy condition of every permission policy (RFC 0004 §5.1).
-            val (condition, guarded) = statements.policy(appCondition, conditionLocation, members.map { it.statement }) ?: return null
+            val (condition, guarded) = statements.policy(
+                appCondition, conditionLocation,
+                members.map {
+                    it.statement
+                }
+            ) ?: return null
             val definition = PolicyDefinition(PolicyId(id), attachable = false, condition = condition, guarded)
             val locations = members.map { it.location }
             if (!compiles(key, definition, locations)) {
@@ -592,17 +616,31 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
 
     private fun convertRateLimits() {
         val seen = HashSet<String>()
-        val translation = RateLimitTranslation(statements, { kind, location, message -> reject(kind, location, message) }) { changes += it }
+        val translation = RateLimitTranslation(
+            statements,
+            { kind, location, message -> reject(kind, location, message) }
+        ) {
+            changes += it
+        }
         for (entry in source.rateLimitRules) {
             count("rateLimitRules")
             if (!seen.add(entry.id)) {
-                reject(RejectionKind.DUPLICATE_ID, entry.location, "rate limit rule [${entry.id}] is listed more than once")
+                reject(
+                    RejectionKind.DUPLICATE_ID,
+                    entry.location,
+                    "rate limit rule [${entry.id}] is listed more than once"
+                )
                 continue
             }
             val tree = objectOf(entry.bytes, entry.location, "rate limit rule [${entry.id}]") ?: continue
             val rule = translation.translate(entry, tree) ?: continue
             // Compiled as a statement is, so a rule that would not match as written never gets written.
-            val policy = PolicyDefinition(PolicyId("$RATE_LIMIT_POLICY${entry.id}"), attachable = false, condition = null, listOf(rule.statement))
+            val policy = PolicyDefinition(
+                PolicyId("$RATE_LIMIT_POLICY${entry.id}"),
+                attachable = false,
+                condition = null,
+                listOf(rule.statement)
+            )
             if (compiles(SnapshotKey.Platform, policy, listOf(entry.location))) {
                 rateLimits += rule
             }

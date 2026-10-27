@@ -124,7 +124,11 @@ class RedisMigrationTest {
                     statement("\"/health\""),
                     statement("\"/admin/**\"", "deny"),
                     statement("\"/me/**\"", condition = """{"authenticated":{}}"""),
-                    statement("\"/orders/**\"", "deny", condition = """{"eq":{"part":"context.principal.id","value":"mallory"}}"""),
+                    statement(
+                        "\"/orders/**\"",
+                        "deny",
+                        condition = """{"eq":{"part":"context.principal.id","value":"mallory"}}"""
+                    ),
                 ),
             ).encodeToByteArray()
         )

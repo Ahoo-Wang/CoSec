@@ -36,7 +36,7 @@ internal class StatementTranslator(
      */
     fun statement(node: JsonNode, location: String, name: String, direction: Boolean? = null): StatementSource? {
         // A rate limit rule has no effect; its condition limits, so it reads in the DENY direction ([direction]).
-        val deny = direction ?: (node.get(EFFECT)?.takeIf { it.isString }?.asString()?.equals("deny", ignoreCase = true) == true)
+        val deny = direction ?: isDeny(node)
         val actionNode = node.get(ACTION)
         if (actionNode == null || actionNode.isNull) {
             reject(RejectionKind.UNDECODABLE, location, "a statement needs an action")
@@ -47,18 +47,26 @@ internal class StatementTranslator(
         // A path condition on request.path is the resource when the action names none (RFC 0005 §7.1). A 7.x path
         // condition captures nothing, so where the rest reads path variables (`""` in 7.x) a resource that captured
         // them would match more: it stays a condition, and is rejected.
-        val path = if (action != null && action.resources.isEmpty()) {
-            PathCondition.extract(conditionNode)?.takeUnless { it.rest?.toString()?.contains(PATH_VARIABLES) == true }
-        } else {
-            null
-        }
+        val path = PathCondition.extract(conditionNode).takeIf { action != null && action.resources.isEmpty() }
+            ?.takeUnless { it.rest?.toString()?.contains(PATH_VARIABLES) == true }
         val resources = path?.resources?.let { actions.pathResources(it, "$location.$CONDITION") }
-        val condition = conditions.translate(if (path != null) path.rest else conditionNode, "$location.$CONDITION", deny)
-        if (action == null || condition == null || (path != null && resources == null)) {
+        val condition = conditions.translate(
+            if (path != null) path.rest else conditionNode,
+            "$location.$CONDITION",
+            deny
+        )
+        if (action == null || condition == null) {
+            return null
+        }
+        if (path != null && resources == null) {
             return null
         }
         if (condition == Translated.Never) {
-            reject(RejectionKind.CONDITION_NOT_TRANSLATED, "$location.$CONDITION", "the condition can never hold: remove the statement")
+            reject(
+                RejectionKind.CONDITION_NOT_TRANSLATED,
+                "$location.$CONDITION",
+                "the condition can never hold: remove the statement"
+            )
             return null
         }
         return StatementSource(
@@ -70,13 +78,20 @@ internal class StatementTranslator(
         )
     }
 
+    private fun isDeny(node: JsonNode): Boolean =
+        node.get(EFFECT)?.takeIf { it.isString }?.asString()?.equals("deny", ignoreCase = true) == true
+
     /**
      * The policy condition at [location] over [statements]: translated in the direction of each statement. When the
      * DENY and the ALLOW readings differ, it cannot be shared, so it moves into each statement (RFC 0005 §7.1,
      * "direction"); the result is the same, since a policy condition is a conjunct of every statement. Null when
      * rejected.
      */
-    fun policy(node: JsonNode?, location: String, statements: List<StatementSource>): Pair<Condition?, List<StatementSource>>? {
+    fun policy(
+        node: JsonNode?,
+        location: String,
+        statements: List<StatementSource>
+    ): Pair<Condition?, List<StatementSource>>? {
         val directions = statements.map { it.effect == Effect.DENY }.distinct().ifEmpty { listOf(false) }
         val translated = directions.associateWith { conditions.translate(node, location, it) }
         if (translated.values.any { it == null }) {

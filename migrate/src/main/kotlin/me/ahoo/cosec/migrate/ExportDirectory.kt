@@ -59,7 +59,9 @@ object ExportDirectory {
             APP_ROLE_PERMISSIONS_FILE,
             input
         ).mapIndexed { i, entry -> app(entry, "$APP_ROLE_PERMISSIONS_FILE[$i]") }
-        val rules = directory.resolve(RATE_LIMIT_RULES_FILE).takeIf { Files.isRegularFile(it) }?.let { rateLimitRules(it, input) }.orEmpty()
+        val rules = directory.resolve(
+            RATE_LIMIT_RULES_FILE
+        ).takeIf { Files.isRegularFile(it) }?.let { rateLimitRules(it, input) }.orEmpty()
         return Source7x(policies, globalIndex, apps, null, GLOBAL_POLICIES_FILE, Source7x.sha256(input), rules)
     }
 

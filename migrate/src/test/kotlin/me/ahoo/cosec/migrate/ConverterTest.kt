@@ -325,7 +325,11 @@ class ConverterTest {
         changes.getValue("D3").single().assert().isEqualTo("policy:p#$.statements[2].condition.regular")
         // A template, a regular expression and an expression can each fail in 7.x.
         changes.getValue("C1a").assert()
-            .containsExactlyInAnyOrder("policy:p#$.statements[1]", "policy:p#$.statements[2]", "policy:p#$.statements[3]")
+            .containsExactlyInAnyOrder(
+                "policy:p#$.statements[1]",
+                "policy:p#$.statements[2]",
+                "policy:p#$.statements[3]"
+            )
         changes.getValue("C1c").single().assert().isEqualTo("policy:p#$.condition")
     }
 

@@ -54,7 +54,10 @@ class ConvertedRateLimit(
         val node = CoSecJsonSerializer.createObjectNode().put("id", id)
         listOf("action", "resource", "condition").forEach { field -> written.get(field)?.let { node.set(field, it) } }
         key?.let { node.put("key", it) }
-        return node.put("permitsPerSecond", permitsPerSecond).put("windowSeconds", windowSeconds).put("strictFailure", strictFailure)
+        return node.put(
+            "permitsPerSecond",
+            permitsPerSecond
+        ).put("windowSeconds", windowSeconds).put("strictFailure", strictFailure)
     }
 }
 
@@ -68,10 +71,18 @@ internal class RateLimitTranslation(
         val decoded = try {
             CoSecJsonSerializer.treeToValue(tree, RateLimitRule::class.java)
         } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
-            reject(RejectionKind.UNDECODABLE, entry.location, "rate limit rule [${entry.id}] cannot be decoded by 7.x: ${error.message}")
+            reject(
+                RejectionKind.UNDECODABLE,
+                entry.location,
+                "rate limit rule [${entry.id}] cannot be decoded by 7.x: ${error.message}"
+            )
             null
         } catch (error: LinkageError) {
-            reject(RejectionKind.UNDECODABLE, entry.location, "rate limit rule [${entry.id}] needs a class missing from the classpath (${error.message})")
+            reject(
+                RejectionKind.UNDECODABLE,
+                entry.location,
+                "rate limit rule [${entry.id}] needs a class missing from the classpath (${error.message})"
+            )
             null
         }
         // An unmatched or narrowed rule lets requests escape their limit: its condition limits, like a DENY.

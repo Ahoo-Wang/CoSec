@@ -114,7 +114,11 @@ internal class ConditionTranslator(
             "a [$type] condition has no exact translation (RFC 0005 §7.1)",
         )
 
-        else -> rejected(RejectionKind.CUSTOM_CONDITION, location, "condition type [$type] is a custom ConditionMatcherFactory")
+        else -> rejected(
+            RejectionKind.CUSTOM_CONDITION,
+            location,
+            "condition type [$type] is a custom ConditionMatcherFactory"
+        )
     }
 
     /** `and` all hold, and when `or` is not empty one of it does (7.x `BoolConditionMatcher`). */
@@ -140,7 +144,11 @@ internal class ConditionTranslator(
         return when (value) {
             "DEFAULT" -> ast(Condition.Eq(SUBJECT_TENANT, Literal.Str(DEFAULT_TENANT)))
             "PLATFORM" -> ast(Condition.Eq(SUBJECT_TENANT, Literal.Str(PLATFORM_TENANT)))
-            "USER" -> ast(Condition.Not(Condition.In(SUBJECT_TENANT, listOf(Literal.Str(DEFAULT_TENANT), Literal.Str(PLATFORM_TENANT)))))
+            "USER" -> ast(
+                Condition.Not(
+                    Condition.In(SUBJECT_TENANT, listOf(Literal.Str(DEFAULT_TENANT), Literal.Str(PLATFORM_TENANT)))
+                )
+            )
             else -> rejected(RejectionKind.UNDECODABLE, location, "inTenant is default, user or platform")
         }
     }
@@ -156,14 +164,25 @@ internal class ConditionTranslator(
         val role = if (separator < 0) value else value.substring(0, separator)
         val space = if (separator < 0) null else value.substring(separator + 1)
         if (role.isEmpty() || space?.isEmpty() == true || space?.contains(ROLE_SEPARATOR) == true) {
-            return rejected(RejectionKind.CONDITION_NOT_TRANSLATED, location, "inRole [$value] names no role in a space")
+            return rejected(
+                RejectionKind.CONDITION_NOT_TRANSLATED,
+                location,
+                "inRole [$value] names no role in a space"
+            )
         }
         return when {
             // Literal in 7.x: holding `x@s` matches in every requested space; the scoped roles say the same.
             space != null && deny -> ast(Condition.Contains(Literal.Str(value), SUBJECT_SCOPED_ROLES))
             space != null -> {
                 d1(location, value, "ALLOW", "matches only while the request is in space [$space]")
-                ast(Condition.And(listOf(Condition.Eq(SCOPE_SPACE, Literal.Str(space)), Condition.Contains(Literal.Str(role), SCOPE_ROLES))))
+                ast(
+                    Condition.And(
+                        listOf(
+                            Condition.Eq(SCOPE_SPACE, Literal.Str(space)),
+                            Condition.Contains(Literal.Str(role), SCOPE_ROLES)
+                        )
+                    )
+                )
             }
 
             deny -> {

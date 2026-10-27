@@ -25,7 +25,13 @@ internal object TimeTranslation {
     private val FIELDS = setOf("notBefore", "notAfter", "zone", "daysOfWeek", "from", "to", ConditionTranslator.NEGATE)
 
     fun translate(config: JsonNode, location: String, reject: (RejectionKind, String, String) -> Unit): Translated? {
-        val unknown = if (config.isObject) config.propertyNames().filterNot { it in FIELDS } else listOf("(not an object)")
+        val unknown = if (config.isObject) {
+            config.propertyNames().filterNot { it in FIELDS }
+        } else {
+            listOf(
+                "(not an object)"
+            )
+        }
         if (unknown.isNotEmpty()) {
             reject(RejectionKind.UNDECODABLE, location, "a time condition has no field $unknown")
             return null

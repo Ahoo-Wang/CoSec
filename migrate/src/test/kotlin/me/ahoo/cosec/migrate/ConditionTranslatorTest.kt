@@ -36,7 +36,10 @@ class ConditionTranslatorTest {
     data class Row(val json: String, val exact: Boolean)
 
     private fun translate(json: String, deny: Boolean, rejections: MutableList<Rejection> = ArrayList(), changes: MutableList<SemanticChange> = ArrayList()): Translated? =
-        ConditionTranslator({ kind, location, message -> rejections += Rejection(kind, location, message) }, { changes += it })
+        ConditionTranslator(
+            { kind, location, message -> rejections += Rejection(kind, location, message) },
+            { changes += it }
+        )
             .translate(CoSecJsonSerializer.readTree(json), "c", deny)
 
     @Test
@@ -63,7 +66,11 @@ class ConditionTranslatorTest {
                             else -> !new || old
                         }
                         if (!agrees) {
-                            fail("${row.json} (deny=$deny): 7.x=$old 8.0=$new on $request; translated as ${render(translated)}")
+                            fail(
+                                "${row.json} (deny=$deny): 7.x=$old 8.0=$new on $request; translated as ${render(
+                                    translated
+                                )}"
+                            )
                         }
                     }
                 }
@@ -109,7 +116,12 @@ class ConditionTranslatorTest {
             """{"a":{},"b":{}}|false|UNDECODABLE|c""",
         ],
     )
-    fun `what has no exact or safe translation is rejected at its location`(json: String, deny: Boolean, kind: RejectionKind, location: String) {
+    fun `what has no exact or safe translation is rejected at its location`(
+        json: String,
+        deny: Boolean,
+        kind: RejectionKind,
+        location: String
+    ) {
         val rejections = ArrayList<Rejection>()
         translate(json, deny, rejections).assert().isNull()
         rejections.first().kind.assert().isEqualTo(kind)
@@ -118,7 +130,13 @@ class ConditionTranslatorTest {
 
     @Test
     fun `intended differences and narrowings are recorded with their location`() {
-        fun changes(json: String, deny: Boolean) = ArrayList<SemanticChange>().also { translate(json, deny, changes = it) }
+        fun changes(json: String, deny: Boolean) = ArrayList<SemanticChange>().also {
+            translate(
+                json,
+                deny,
+                changes = it
+            )
+        }
         changes("""{"inRole":{"value":"admin"}}""", false).single().let {
             it.change.assert().isEqualTo("D1")
             it.location.assert().isEqualTo("c.inRole")
@@ -126,14 +144,29 @@ class ConditionTranslatorTest {
         }
         changes("""{"inRole":{"value":"admin"}}""", true).single().shape.assert().contains("DENY direction")
         // Under negate, a DENY reads the role in the ALLOW direction.
-        changes("""{"inRole":{"value":"admin","negate":true}}""", true).single().shape.assert().contains("ALLOW direction")
+        changes(
+            """{"inRole":{"value":"admin","negate":true}}""",
+            true
+        ).single().shape.assert().contains("ALLOW direction")
         changes("""{"inRole":{"value":"admin@team"}}""", true).assert().isEmpty()
-        changes("""{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}""", false).single().change.assert().isEqualTo("D2")
-        changes("""{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}""", true).single().shape.assert().contains("kept")
+        changes(
+            """{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}""",
+            false
+        ).single().change.assert().isEqualTo("D2")
+        changes(
+            """{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}""",
+            true
+        ).single().shape.assert().contains("kept")
         changes("""{"regular":{"part":"request.path","pattern":"^/a$"}}""", false).map { it.change }.assert()
             .containsExactlyInAnyOrder("D3", "ASCII-CASE")
-        changes("""{"regular":{"part":"request.path","pattern":"^/1$"}}""", true).map { it.change }.assert().containsExactly("D3")
-        changes("""{"eq":{"part":"request.path","value":"/A","ignoreCase":true}}""", false).single().change.assert().isEqualTo("ASCII-CASE")
+        changes(
+            """{"regular":{"part":"request.path","pattern":"^/1$"}}""",
+            true
+        ).map { it.change }.assert().containsExactly("D3")
+        changes(
+            """{"eq":{"part":"request.path","value":"/A","ignoreCase":true}}""",
+            false
+        ).single().change.assert().isEqualTo("ASCII-CASE")
         changes("""{"eq":{"part":"request.path","value":"","ignoreCase":false}}""", false).assert().isEmpty()
     }
 
@@ -145,8 +178,16 @@ class ConditionTranslatorTest {
         translate("""{"bool":{"or":[{"all":{"negate":true}}]}}""", false).assert().isEqualTo(Translated.Never)
         translate("""{"startsWith":{"part":"request.path","value":""}}""", false).assert().isEqualTo(Translated.Always)
         translate("""{"in":{"part":"request.path","value":[]}}""", false).assert().isEqualTo(Translated.Never)
-        Translated.not(Translated.Ast(me.ahoo.cosec.model.condition.Condition.Not(me.ahoo.cosec.model.condition.Condition.Exists("subject.id"))))
-            .let { (it as Translated.Ast).condition }.assert().isInstanceOf(me.ahoo.cosec.model.condition.Condition.Exists::class.java)
+        Translated.not(
+            Translated.Ast(
+                me.ahoo.cosec.model.condition.Condition.Not(
+                    me.ahoo.cosec.model.condition.Condition.Exists("subject.id")
+                )
+            )
+        )
+            .let { (it as Translated.Ast).condition }.assert().isInstanceOf(
+                me.ahoo.cosec.model.condition.Condition.Exists::class.java
+            )
     }
 
     @Test
@@ -155,7 +196,16 @@ class ConditionTranslatorTest {
         (LiteralRegex.parse("(?:a|b|a)") as LiteralRegex.Exact).choices.assert().containsExactly("a", "b")
         (LiteralRegex.parse("^/api/.*$") as LiteralRegex.Prefix).prefix.assert().isEqualTo("/api/")
         (LiteralRegex.parse("") as LiteralRegex.Exact).choices.assert().containsExactly("")
-        listOf("a+", "[ab]", "\\d", "a.*?", "(a)|(b)", "a\\", "x{2}", "^(a|b).*").forEach { LiteralRegex.parse(it).assert().describedAs(it).isNull() }
+        listOf(
+            "a+",
+            "[ab]",
+            "\\d",
+            "a.*?",
+            "(a)|(b)",
+            "a\\",
+            "x{2}",
+            "^(a|b).*"
+        ).forEach { LiteralRegex.parse(it).assert().describedAs(it).isNull() }
     }
 
     companion object {
@@ -164,7 +214,9 @@ class ConditionTranslatorTest {
 
         /** Requests that hit the edges on purpose. */
         val FIXED: List<Facts> = run {
-            val base = Facts.random(Random(1)).copy(authenticated = true, principalId = "alice", tenantId = "acme", roles = setOf("admin"))
+            val base = Facts.random(
+                Random(1)
+            ).copy(authenticated = true, principalId = "alice", tenantId = "acme", roles = setOf("admin"))
             listOf(
                 base,
                 base.copy(authenticated = false, principalId = "(0)", tenantId = "(0)", roles = emptySet(), principalAttributes = emptyMap()),
@@ -218,7 +270,9 @@ class ConditionTranslatorTest {
                 exact("""{"eq":{"part":"request.origin.host","value":""}}"""),
                 exact("""{"eq":{"part":"request.referer.host","value":"example.com"}}"""),
                 directional("""{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}"""),
-                directional("""{"eq":{"part":"request.attributes.owner","value":"#{principal.attributes['owner']}"}}"""),
+                directional(
+                    """{"eq":{"part":"request.attributes.owner","value":"#{principal.attributes['owner']}"}}"""
+                ),
                 directional("""{"eq":{"part":"resource.owner","value":"#{tenant.tenantId}"}}"""),
                 exact("""{"in":{"part":"request.path","value":["/orders","/orders/1"]}}"""),
                 exact("""{"in":{"part":"request.header.x-debug","value":["","1"]}}"""),
@@ -242,13 +296,21 @@ class ConditionTranslatorTest {
                 exact("""{"time":{"notBefore":"2026-10-26T08:00:00Z","notAfter":"2026-10-27T00:00:00Z"}}"""),
                 exact("""{"time":{"notBefore":"2026-10-26T09:00","zone":"Europe/Berlin"}}"""),
                 exact("""{"time":{"from":"09:00","to":"18:00","zone":"Europe/Berlin"}}"""),
-                exact("""{"time":{"from":"22:00","to":"06:00","daysOfWeek":["mon","FRIDAY"," sun "],"zone":"Asia/Shanghai"}}"""),
+                exact(
+                    """{"time":{"from":"22:00","to":"06:00","daysOfWeek":["mon","FRIDAY"," sun "],"zone":"Asia/Shanghai"}}"""
+                ),
                 exact("""{"time":{"daysOfWeek":["SAT","SUN"],"zone":"America/New_York"}}"""),
                 exact("""{"time":{"from":"02:00","to":"03:00","zone":"Europe/Berlin"}}"""),
                 exact("""{"bool":{"and":[{"authenticated":{}},{"eq":{"part":"request.method","value":"GET"}}]}}"""),
-                exact("""{"bool":{"or":[{"inTenant":{"value":"platform"}},{"eq":{"part":"request.header.x-debug","value":""}}]}}"""),
-                exact("""{"bool":{"and":[{"authenticated":{}}],"or":[{"eq":{"part":"request.appId","value":""}},{"startsWith":{"part":"request.path","value":"/orders/"}}]}}"""),
-                directional("""{"bool":{"and":[{"inRole":{"value":"admin"}},{"bool":{"or":[{"inRole":{"value":"viewer@team","negate":true}}]}}]}}"""),
+                exact(
+                    """{"bool":{"or":[{"inTenant":{"value":"platform"}},{"eq":{"part":"request.header.x-debug","value":""}}]}}"""
+                ),
+                exact(
+                    """{"bool":{"and":[{"authenticated":{}}],"or":[{"eq":{"part":"request.appId","value":""}},{"startsWith":{"part":"request.path","value":"/orders/"}}]}}"""
+                ),
+                directional(
+                    """{"bool":{"and":[{"inRole":{"value":"admin"}},{"bool":{"or":[{"inRole":{"value":"viewer@team","negate":true}}]}}]}}"""
+                ),
                 exact("""{"bool":{}}"""),
             ),
         )
