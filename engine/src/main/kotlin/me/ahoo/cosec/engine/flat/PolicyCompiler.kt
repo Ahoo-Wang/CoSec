@@ -24,6 +24,7 @@ import me.ahoo.cosec.model.condition.CheckedCondition
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.IndexKeys
+import me.ahoo.cosec.model.decision.DocumentKind
 
 /** A statement as a document writes it (RFC 0005 §5.1), before it is compiled. */
 class StatementSource(
@@ -107,6 +108,50 @@ class PolicyCompiler(
         val errors = ArrayList<CompileError>()
         return statement(index, source, "$.statements[$index]", errors, denyNomatch)
             ?: throw CompileException(policyId.value, errors)
+    }
+
+    /**
+     * Compiles a rate limit rule of the [kind] document of [owner] (RFC 0006 §8.1), or throws [CompileException].
+     *
+     * Its statement compiles as a DENY's does: a rule that matched less than it says would let requests escape their
+     * limit, so a bare resource type does not compile, and only the platform may write `onMissing: nomatch`. Its key
+     * names a text or address attribute; a `resource.var.<name>` key must be captured by every resource pattern.
+     */
+    fun rateLimit(kind: DocumentKind, owner: String, source: RateLimitSource): CompiledRateLimit {
+        val errors = ArrayList<CompileError>()
+        if (!CompiledRateLimit.isValidId(source.id)) {
+            errors += CompileError("$.id", "a rate limit rule id is letters, digits, '.', '_' and '-', not [${source.id}]")
+        }
+        val strict = with(source.statement) {
+            StatementSource(name, Effect.DENY, actions, resources, condition, onMissing)
+        }
+        val statement = statement(0, strict, "$", errors, denyNomatch = kind == DocumentKind.PLATFORM)
+        val key = source.key?.let { path -> key(path, statement, errors) }
+        if (errors.isNotEmpty()) {
+            throw CompileException(source.id, errors)
+        }
+        val id = CompiledRateLimit.counterId(kind, owner, source.id)
+        val policy = CompiledPolicy(CompiledRateLimit.policyId(id), null, listOf(statement!!), false, options)
+        return CompiledRateLimit(id, policy, statement, key, source.limit, source.strictFailure)
+    }
+
+    private fun key(path: String, statement: CompiledStatement?, errors: MutableList<CompileError>): Attribute? {
+        val attribute = checker.attribute(path)
+        if (attribute == null) {
+            errors += CompileError("$.key", "unknown attribute `$path`")
+            return null
+        }
+        if (attribute.type !in CompiledRateLimit.KEY_TYPES) {
+            errors += CompileError("$.key", "a key names a text or address attribute; `$path` is ${attribute.type}")
+            return null
+        }
+        if (attribute.kind == Attribute.Kind.RESOURCE_VAR && statement != null &&
+            statement.resources.any { attribute.name !in it.variableNames }
+        ) {
+            errors += CompileError("$.key", "the key reads $attribute, which a resource pattern does not capture")
+            return null
+        }
+        return attribute
     }
 
     private fun policyCondition(condition: Condition, path: String, errors: MutableList<CompileError>): CheckedCondition? {

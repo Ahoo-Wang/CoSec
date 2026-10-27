@@ -39,10 +39,10 @@ class RedisRateLimiter(
         private const val SCRIPT_PATH = "redis-rate-limiter.lua"
 
         /** The script returns the estimate in thousandths, since Redis truncates Lua numbers to integers. */
-        private const val ESTIMATE_SCALE = 1_000.0
+        internal const val ESTIMATE_SCALE = 1_000.0
 
         @Suppress("UNCHECKED_CAST")
-        private val SCRIPT: DefaultRedisScript<List<Long>> = DefaultRedisScript(
+        internal val SCRIPT: DefaultRedisScript<List<Long>> = DefaultRedisScript(
             loadScript(),
             List::class.java as Class<List<Long>>,
         )
