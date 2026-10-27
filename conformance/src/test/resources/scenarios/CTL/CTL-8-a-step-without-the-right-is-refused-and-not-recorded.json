@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "control",
-  "description": "eve of acme is bound to no control-plane policy: her proposal is refused before it is recorded, and she cannot stage alice's change either.",
+  "description": "eve of acme is bound to no control-plane policy: her proposal is refused before it is recorded, and she cannot stage alice's change either: she may not read it, so to her it does not exist (404, CTL-15).",
   "documents": {
     "platform": {
       "bindings": [
@@ -179,7 +179,7 @@
   "expect": {
     "steps": [
       "CHECKED",
-      "refused 403",
+      "refused 404",
       "refused 403"
     ],
     "errors": {

@@ -101,15 +101,17 @@ class ChangesTest {
             "operations[0]",
             "operations[1]"
         )
-        changes.propose(
-            ALICE_OP,
-            ACME,
-            0,
-            listOf(Operation.PutPolicy(allow("cosec:mine"))),
-            "migrated",
-            ProvenanceKind.MIGRATE
-        )
-            .errors.filter { it.check == "V2" }.assert().isEmpty()
+        // Claiming to be a migration exempts nothing: a change is never of kind MIGRATE (review K1).
+        runCatching {
+            changes.propose(
+                ALICE_OP,
+                ACME,
+                0,
+                listOf(Operation.PutPolicy(allow("cosec:mine"))),
+                "migrated",
+                ProvenanceKind.MIGRATE
+            )
+        }.exceptionOrNull().let { (it as ChangeRejectedException).status }.assert().isEqualTo(400)
         changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("shared"))), "shadowing")
             .errors.map { it.check to it.path }.assert().containsExactly("V2" to "$.policies[0].id")
         val big = (1..30).map { Operation.PutPolicy(allow("p$it", resource = "order/${"x".repeat(40)}")) }

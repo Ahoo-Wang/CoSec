@@ -241,10 +241,10 @@ class ControlAuthorizationTest {
         }.assert().isEqualTo(403)
         changes.propose(mallory, SnapshotKey.Tenant(GLOBEX.value), 0, listOf(Operation.PutPolicy(allow("p"))), "own")
             .state.assert().isEqualTo(ChangeState.CHECKED)
-        // Nor may a tenant's principal approve or publish another tenant's change.
+        // Nor may a tenant's principal approve or publish another tenant's change: to them it does not exist (CTL-15).
         val change = windowClosed(changes.propose(alice, TENANT, 1, grant(null), "viewers everywhere"))
-        refused { changes.approve(mallory, change.id, change.candidate!!) }.assert().isEqualTo(403)
-        refused { changes.abandon(mallory, change.id) }.assert().isEqualTo(403)
+        refused { changes.approve(mallory, change.id, change.candidate!!) }.assert().isEqualTo(404)
+        refused { changes.abandon(mallory, change.id) }.assert().isEqualTo(404)
         head().assert().isEqualTo(1)
     }
 
