@@ -32,18 +32,18 @@ fun interface TestIndex {
 /**
  * The traceability check of RFC 0008 §3.4:
  *
- * 1. every rule that is neither pending nor superseded has a positive and a negative scenario; a `build` or `startup`
- *    rule ([GUARDED_LEVELS]) has no scenarios and needs a property or guard instead: what it constrains is how a module
- *    is built or an instance starts, which no scenario runner drives;
+ * 1. every rule that is neither pending nor superseded has a positive and a negative scenario; a `build`, `startup`
+ *    or `timing` rule ([GUARDED_LEVELS]) has no scenarios and needs a property or guard instead: what it constrains is
+ *    how a module is built, how an instance starts, or how concurrent loads interleave, which no scenario runner drives;
  * 2. every scenario names rules of the registry, none of them superseded, and uses a known polarity and level;
  * 3. every property test and guard the registry names exists;
  * 4. the pending rules are reported with their PR.
  */
 object RuleCoverage {
-    val LEVELS = setOf("engine", "analysis", "pipeline", "control", "build", "startup")
+    val LEVELS = setOf("engine", "analysis", "pipeline", "control", "build", "startup", "timing")
 
     /** The levels whose rules are covered by named tests instead of scenarios. */
-    val GUARDED_LEVELS = setOf("build", "startup")
+    val GUARDED_LEVELS = setOf("build", "startup", "timing")
     val POLARITIES = setOf("positive", "negative")
     private val ID = Regex("[A-Z]{3}-[1-9][0-9]*")
 

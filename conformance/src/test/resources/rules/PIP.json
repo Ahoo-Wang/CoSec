@@ -4,8 +4,15 @@
       "id": "PIP-1",
       "source": "RFC 0006 §6.3",
       "statement": "Status codes come only from StatusMapping, and the three adapters answer the same request identically.",
-      "level": "pipeline",
-      "pending": "RFC 0006 PR-7"
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "runtime:OneDecisionPathTest#onlyStatusMappingConstructsOutcomes",
+        "runtime:OneDecisionPathTest#adaptersNeverSeeDecisions",
+        "runtime:OneDecisionPathTest#bridgesWriteOnlyEncodedProblems",
+        "cosec-spring-boot-starter:WebAdapterParityTest#the three adapters answer byte for byte alike",
+        "cosec-spring-boot-starter:WebAdapterParityTest#the three adapters make the same decision event"
+      ]
     },
     {
       "id": "PIP-2",

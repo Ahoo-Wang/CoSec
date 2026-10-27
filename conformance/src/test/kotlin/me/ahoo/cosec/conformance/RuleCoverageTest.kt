@@ -128,6 +128,18 @@ class RuleCoverageTest {
     }
 
     @Test
+    fun `a timing rule needs a test rather than scenarios, and no scenario runs at that level`() {
+        RuleCoverage.check(listOf(rule("SNP-1", level = "timing")), emptyList(), tests).errors.assert()
+            .containsExactly("Timing rule SNP-1 names no test")
+        RuleCoverage.check(
+            listOf(rule("SNP-1", level = "timing", properties = listOf("engine:SomePropertyTest"))),
+            listOf(scenario("s", "positive", "SNP-1", level = "timing")),
+            tests
+        )
+            .errors.assert().containsExactly("Scenario s has unknown level timing")
+    }
+
+    @Test
     fun `ids are unique, well formed and of a known level`() {
         val rules =
             listOf(
