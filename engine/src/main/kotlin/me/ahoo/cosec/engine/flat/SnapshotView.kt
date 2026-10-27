@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.Scope
@@ -51,6 +52,12 @@ class SnapshotView(
         platform.readsExternal || app?.readsExternal == true || tenant?.readsExternal == true
 
     /**
+     * Whether a boundary could hold the request (RFC 0007 §7.6): a tenant's own or the platform's default. Without
+     * one the engine skips the check entirely, so `boundary = none` costs one field read per Permit.
+     */
+    internal val bounded: Boolean = platform.boundary != null || tenant?.boundary != null
+
+    /**
      * A principal reads only its own tenant's document, and the app document of its own app. A request without an app
      * reads none: its role bindings would otherwise depend on whether the caller happened to load one.
      */
@@ -61,6 +68,17 @@ class SnapshotView(
         require(app == null || (scope.app.value.isNotEmpty() && app.owner == scope.app.value)) {
             "The app document of ${app?.owner} cannot decide for app '${scope.app.value}'"
         }
+    }
+
+    /**
+     * The boundary that holds the request's tenant (RFC 0007 §7.6): its tenant document's, else the platform's
+     * default; none for the platform tenant. Two field reads when there is none.
+     */
+    internal fun boundaryOf(scope: Scope): String? {
+        if (scope.tenant == TenantId.PLATFORM) {
+            return null
+        }
+        return tenant?.boundary ?: platform.boundary
     }
 
     /** The first document the request needs and was not given, or null. */

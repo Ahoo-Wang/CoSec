@@ -1,0 +1,159 @@
+{
+  "rules": [
+    "BRK-5"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Round-1 review K1: a proposal that names the MIGRATE or BOOTSTRAP kind is refused (400), whoever makes it; an ordinary change that creates a break-glass binding needs cosec:breakglass, which walt does not hold (403). Nothing is recorded.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "writer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish"
+              ],
+              "resource": [
+                "doc/**",
+                "scope/**"
+              ]
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "walt",
+          "subject": {
+            "principal": "walt",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "writer"
+        },
+        {
+          "id": "gil",
+          "subject": {
+            "principal": "gil",
+            "tenant": "globex"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "walt": {
+      "tenant": "(platform)"
+    },
+    "gil": {
+      "tenant": "globex"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "glass",
+              "subject": {
+                "principal": "plato",
+                "tenant": "(platform)"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "cosec:root",
+              "breakGlass": true,
+              "expiresAt": "2026-11-01T01:00:00Z"
+            }
+          }
+        ],
+        "kind": "MIGRATE"
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "glass",
+              "subject": {
+                "principal": "plato",
+                "tenant": "(platform)"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "cosec:root",
+              "breakGlass": true,
+              "expiresAt": "2026-11-01T01:00:00Z"
+            }
+          }
+        ],
+        "kind": "BOOTSTRAP"
+      }
+    },
+    {
+      "propose": {
+        "change": "c3",
+        "by": "walt",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "glass",
+              "subject": {
+                "principal": "plato",
+                "tenant": "(platform)"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "cosec:root",
+              "breakGlass": true,
+              "expiresAt": "2026-11-01T01:00:00Z"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "refused 400",
+      "refused 400",
+      "refused 403"
+    ],
+    "errors": {},
+    "heads": {
+      "platform": 1
+    }
+  }
+}

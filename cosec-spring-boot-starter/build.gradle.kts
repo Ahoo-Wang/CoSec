@@ -51,6 +51,10 @@ java {
         usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
         capability(group.toString(), "openapi-support", version.toString())
     }
+    registerFeature("controlSupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "control-support", version.toString())
+    }
     registerFeature("kafkaSupport") {
         usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
         capability(group.toString(), "kafka-support", version.toString())
@@ -60,8 +64,10 @@ dependencies {
     kapt(platform(project(":cosec-dependencies")))
     api(project(":cosec-core"))
     api(project(":cosec-jwt"))
+    api(project(":cosec-runtime"))
     "webmvcSupportImplementation"(project(":cosec-webmvc"))
     "webfluxSupportImplementation"(project(":cosec-webflux"))
+    "webfluxSupportImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     "gatewaySupportImplementation"(project(":cosec-gateway"))
     "oauthSupportImplementation"(project(":cosec-social"))
     "cacheSupportImplementation"(project(":cosec-cocache"))
@@ -74,6 +80,7 @@ dependencies {
     "openapiSupportImplementation"(project(":cosec-openapi"))
     "openapiSupportImplementation"("org.springframework.boot:spring-boot-starter-actuator")
     "openapiSupportImplementation"("org.springdoc:springdoc-openapi-starter-common")
+    "controlSupportImplementation"(project(":cosec-control"))
     "kafkaSupportImplementation"(project(":cosec-kafka"))
     "kafkaSupportImplementation"("org.springframework.boot:spring-boot-starter-kafka")
     api("org.springframework.boot:spring-boot-starter")
@@ -81,6 +88,7 @@ dependencies {
     kapt("org.springframework.boot:spring-boot-configuration-processor")
     kapt("org.springframework.boot:spring-boot-autoconfigure-processor")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.boot:spring-boot-webflux")
     testImplementation("org.springframework.boot:spring-boot-starter-data-redis")
     testImplementation("me.ahoo.cosid:cosid-test")
     testImplementation("me.ahoo.cocache:cocache-spring-boot-starter")

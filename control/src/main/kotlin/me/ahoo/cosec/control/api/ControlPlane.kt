@@ -115,6 +115,10 @@ interface ControlPlane {
 
     suspend fun diff(operator: Operator, key: SnapshotKey, from: Long, to: Long): DocumentDiff
 
+    /**
+     * Proposes a change of kind `PUBLISH`, the only kind a caller proposes (review K1): break-glass goes through
+     * [breakGlass], a rollback through [rollback].
+     */
     suspend fun propose(
         operator: Operator,
         key: SnapshotKey,
@@ -122,7 +126,6 @@ interface ControlPlane {
         operations: List<Operation>,
         note: String,
         confirmations: List<Confirmation> = emptyList(),
-        kind: ProvenanceKind = ProvenanceKind.PUBLISH,
     ): ChangeRequest
 
     suspend fun apply(operator: Operator, key: SnapshotKey, desired: PolicyDocument, mode: ApplyMode, note: String): ChangeRequest
@@ -214,8 +217,7 @@ class DefaultControlPlane(
         operations: List<Operation>,
         note: String,
         confirmations: List<Confirmation>,
-        kind: ProvenanceKind,
-    ): ChangeRequest = changes.propose(operator, key, base, operations, note, kind, confirmations)
+    ): ChangeRequest = changes.propose(operator, key, base, operations, note, ProvenanceKind.PUBLISH, confirmations)
 
     override suspend fun apply(operator: Operator, key: SnapshotKey, desired: PolicyDocument, mode: ApplyMode, note: String): ChangeRequest {
         authority.require(operator, key, ControlActions.READ)
@@ -252,13 +254,7 @@ class DefaultControlPlane(
         changes.publish(operator, change, ack)
 
     /** A change is read like its document: one the caller may not read is not there (404), so its id tells nothing. */
-    override suspend fun get(operator: Operator, change: ChangeId): ChangeRequest {
-        val found = changes.get(change)
-        if (!authority.holds(operator, found.key, ControlActions.READ)) {
-            throw ChangeRejectedException(NOT_FOUND, "no change ${change.value}")
-        }
-        return found
-    }
+    override suspend fun get(operator: Operator, change: ChangeId): ChangeRequest = changes.visible(operator, change)
 
     override suspend fun simulate(operator: Operator, request: SimulatedRequest, candidate: ChangeId?): Simulation {
         val tenant = SnapshotKey.Tenant(request.tenant.value)

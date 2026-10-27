@@ -15,8 +15,11 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.ConditionLimits
@@ -113,7 +116,33 @@ object ChangeRequestCodec {
             node.set("approver", actorTree(approval.approver))
             node.put("at", approval.at.toString()).put("candidate", approval.candidate)
             node.putArray("covers").apply { approval.covers.forEach { add(it) } }
+            approval.memberships?.let { memberships ->
+                val written = node.putObject("memberships")
+                val roles = written.putObject("roles")
+                memberships.roles.forEach { (space, spaceRoles) ->
+                    roles.putArray(space.value).apply { spaceRoles.forEach { add(it.value) } }
+                }
+                written.putArray("attachments").apply { memberships.attachments.forEach { add(it.value) } }
+                written.put("source", memberships.source.name)
+            }
+            if (approval.attributes.isNotEmpty()) {
+                val attributes = node.putObject("attributes")
+                approval.attributes.forEach { (name, value) -> attributes.put(name, value) }
+            }
         }
+    }
+
+    private fun memberships(node: JsonNode): Memberships {
+        node.only("roles", "attachments", "source")
+        val roles = LinkedHashMap<SpaceId, Set<RoleId>>()
+        node.need("roles").properties().forEach { (space, spaceRoles) ->
+            roles[SpaceId(space)] = spaceRoles.values().mapTo(LinkedHashSet()) { RoleId(it.text()) }
+        }
+        return Memberships(
+            Memberships.Source.valueOf(node.need("source").text()),
+            roles,
+            node.need("attachments").values().map { PolicyId(it.text()) },
+        )
     }
 
     private fun shadowTree(shadow: ShadowState): ObjectNode {
@@ -176,7 +205,8 @@ object ChangeRequestCodec {
                 .set("binding", PolicyDocumentCodec.bindingTree(operation.binding, kind, owner))
 
             is Operation.RemoveBinding -> item.put("op", "removeBinding").put("id", operation.id.value)
-            is Operation.PutCatalog, is Operation.SetLimits, is Operation.SetAttributes -> sectionTree(item, operation)
+            is Operation.PutCatalog, is Operation.SetLimits, is Operation.SetAttributes, is Operation.SetBoundary ->
+                sectionTree(item, operation)
         }
         ifMatchOf(operation)?.let { item.put("ifMatch", it) }
         return item
@@ -193,6 +223,9 @@ object ChangeRequestCodec {
             ).also { operation.limits?.let { item.set("limits", limitsTree(it)) } }
             is Operation.SetAttributes -> item.put("op", "setAttributes")
                 .also { operation.attributes?.let { item.set("attributes", attributesTree(it)) } }
+
+            is Operation.SetBoundary -> item.put("op", "setBoundary")
+                .also { operation.boundary?.let { item.put("boundary", it.value) } }
 
             else -> error("Not a section operation: $operation")
         }
@@ -260,12 +293,14 @@ object ChangeRequestCodec {
             shadow = node.get("shadow")?.let(::shadow),
             confirmations = node.get("confirmations")?.values()?.map(::confirmation).orEmpty(),
             approval = node.get("approval")?.let {
-                it.only("approver", "at", "candidate", "covers")
+                it.only("approver", "at", "candidate", "covers", "memberships", "attributes")
                 Approval(
                     actor(it.need("approver")),
                     Instant.parse(it.need("at").text()),
                     it.need("candidate").text(),
                     it.need("covers").values().map { covered -> covered.text() },
+                    it.get("memberships")?.let(::memberships),
+                    it.get("attributes")?.properties()?.associate { (name, value) -> name to value.text() }.orEmpty(),
                 )
             },
         )
@@ -305,6 +340,7 @@ object ChangeRequestCodec {
                 },
             )
 
+            "setBoundary" -> Operation.SetBoundary(node.get("boundary")?.let { PolicyId(it.text()) })
             "setAttributes" -> Operation.SetAttributes(
                 node.get("attributes")?.values()?.map {
                     val type = PolicyDocumentCodec.ATTRIBUTE_TYPES[it.need("type").text()]

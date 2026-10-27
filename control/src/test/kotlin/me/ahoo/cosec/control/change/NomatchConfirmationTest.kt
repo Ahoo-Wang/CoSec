@@ -37,10 +37,14 @@ class NomatchConfirmationTest {
     private val changes = harness.changes
     private val inFence = Condition.Eq("ext.geo.inFence", Literal.Bool(true))
 
-    private fun lapsing(action: String = "*", confirmed: OnMissingConfirmation? = null) = PolicyDefinition(
+    private fun lapsing(
+        action: String = "*",
+        confirmed: OnMissingConfirmation? = null,
+        policyCondition: Condition? = null,
+    ) = PolicyDefinition(
         PolicyId("fence"),
         false,
-        null,
+        policyCondition,
         listOf(
             StatementSource(
                 "",
@@ -108,6 +112,26 @@ class NomatchConfirmationTest {
         val changed = publish(ACME, listOf(Operation.PutPolicy(lapsing(action = "order:*"))))
         changed.state.assert().isEqualTo(ChangeState.DRAFT)
         changed.errors.single { it.check == "V5" }.path.assert().isEqualTo("$.policies[0].statements[0]")
+    }
+
+    /** Review K4: the policy condition guards the statement as much as its own, so the confirmation covers it too. */
+    @Test
+    fun `a confirmation does not survive a change of its policy's condition`() = runBlocking<Unit> {
+        publish(
+            SnapshotKey.Platform,
+            listOf(Operation.SetAttributes(listOf(Attribute.external("ext.geo.inFence", AttributeType.BOOL))))
+        )
+        val digest = StatementDigest.of(lapsing().statements.single())
+        publish(ACME, listOf(Operation.PutPolicy(lapsing())), listOf(Confirmation(PolicyId("fence"), 0, digest)))
+            .state.assert().isEqualTo(ChangeState.PUBLISHED)
+        val guarded = lapsing(policyCondition = Condition.Eq("subject.authenticated", Literal.Bool(true)))
+        val narrowed = publish(ACME, listOf(Operation.PutPolicy(guarded)))
+        narrowed.state.assert().isEqualTo(ChangeState.DRAFT)
+        narrowed.errors.single { it.check == "V5" }.path.assert().isEqualTo("$.policies[0].statements[0]")
+        val newDigest = StatementDigest.of(guarded.statements.single(), guarded.condition)
+        newDigest.assert().isNotEqualTo(digest)
+        publish(ACME, listOf(Operation.PutPolicy(guarded)), listOf(Confirmation(PolicyId("fence"), 0, newDigest)))
+            .state.assert().isEqualTo(ChangeState.PUBLISHED)
     }
 
     @Test

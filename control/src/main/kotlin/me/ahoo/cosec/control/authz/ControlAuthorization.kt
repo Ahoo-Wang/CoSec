@@ -141,6 +141,9 @@ object ControlActions {
     val APPROVE: Action = Action(SERVICE, "approve")
     val UNPROTECT: Action = Action(SERVICE, "unprotect")
     val BREAKGLASS: Action = Action(SERVICE, "breakglass")
+
+    /** Setting a tenant's boundary or the platform's default (RFC 0007 §7.6); only the platform holds it. */
+    val BOUNDARY: Action = Action(SERVICE, "boundary")
 }
 
 /**

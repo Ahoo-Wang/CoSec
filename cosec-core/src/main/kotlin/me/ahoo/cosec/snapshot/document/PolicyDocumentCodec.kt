@@ -88,7 +88,7 @@ object PolicyDocumentCodec {
         "id", "action", "resource", "condition", "onMissing", "key", "permitsPerSecond", "windowSeconds", "strictFailure",
     )
     private val PROVENANCE_FIELDS = arrayOf("parent", "change", "kind", "publishedBy", "approvedBy", "shadow")
-    private val POLICY_FIELDS = arrayOf("id", "attachable", "condition", "statements")
+    private val POLICY_FIELDS = arrayOf("id", "attachable", "boundary", "condition", "statements")
     private val STATEMENT_FIELDS =
         arrayOf("name", "effect", "action", "resource", "condition", "onMissing", "onMissingConfirmed")
     private val CONFIRMATION_FIELDS = arrayOf("by", "change")
@@ -109,8 +109,8 @@ object PolicyDocumentCodec {
         val root = DocumentNode(tree, ROOT)
         val fields = when (kind) {
             DocumentKind.APP -> DOCUMENT_FIELDS + "catalog"
-            DocumentKind.PLATFORM -> DOCUMENT_FIELDS + PLATFORM_FIELDS
-            DocumentKind.TENANT -> DOCUMENT_FIELDS
+            DocumentKind.PLATFORM -> DOCUMENT_FIELDS + PLATFORM_FIELDS + "boundaries"
+            DocumentKind.TENANT -> DOCUMENT_FIELDS + "boundary"
         }
         root.requireObject(*fields)
         val schema = root.required("schema").long()
@@ -129,6 +129,15 @@ object PolicyDocumentCodec {
             policies = root.field("policies")?.elements()?.map(::policy).orEmpty(),
             bindings = root.field("bindings")?.elements()?.map { binding(it, kind, owner) }.orEmpty(),
             catalog = root.field("catalog")?.let(::catalog),
+            boundary = when (kind) {
+                DocumentKind.PLATFORM -> root.field("boundaries")?.let { boundaries ->
+                    boundaries.requireObject("default")
+                    boundaries.field("default")?.let { PolicyId(it.nonEmpty()) }
+                }
+
+                DocumentKind.TENANT -> root.field("boundary")?.let { PolicyId(it.nonEmpty()) }
+                DocumentKind.APP -> null
+            },
             provenance = root.field("provenance")?.let(::provenance),
             limits = root.field("limits")?.let(::limits),
             attributes = root.field("attributes")?.let(::attributes),
@@ -237,6 +246,7 @@ object PolicyDocumentCodec {
             attachable = node.field("attachable")?.bool() ?: false,
             condition = node.field("condition")?.let(ConditionJson::read),
             statements = node.required("statements").elements().map(::statement),
+            boundary = node.field("boundary")?.bool() ?: false,
         )
     }
 
@@ -397,6 +407,12 @@ object PolicyDocumentCodec {
         root.put("schema", SCHEMA)
         root.put("revision", document.revision)
         root.put("publishedAt", document.publishedAt.toString())
+        document.boundary?.let { boundary ->
+            when (document.kind) {
+                DocumentKind.PLATFORM -> root.putObject("boundaries").put("default", boundary.value)
+                else -> root.put("boundary", boundary.value)
+            }
+        }
         document.provenance?.let { root.set("provenance", provenance(it)) }
         document.limits?.let { limits ->
             root.putObject("limits").put("maxNodes", limits.maxNodes).put("maxDepth", limits.maxDepth)
@@ -458,6 +474,7 @@ object PolicyDocumentCodec {
     private fun policy(policy: PolicyDefinition): ObjectNode {
         val node = factory.objectNode().put("id", policy.id.value)
         if (policy.attachable) node.put("attachable", true)
+        if (policy.boundary) node.put("boundary", true)
         policy.condition?.let { node.set("condition", ConditionJson.write(it)) }
         val statements = node.putArray("statements")
         for (statement in policy.statements) {

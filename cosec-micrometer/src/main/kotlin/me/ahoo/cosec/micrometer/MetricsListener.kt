@@ -58,7 +58,7 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
     private fun result(reason: Reason): String = when (reason) {
         Reason.PERMIT -> "allow"
         Reason.TOO_MANY_REQUESTS -> "too_many_requests"
-        Reason.EXPLICIT_DENY, Reason.SCOPE_REJECTED -> "explicit_deny"
+        Reason.EXPLICIT_DENY, Reason.SCOPE_REJECTED, Reason.BOUNDARY -> "explicit_deny"
         Reason.IMPLICIT_DENY -> "implicit_deny"
         Reason.INDETERMINATE, Reason.AUTHENTICATOR_UNAVAILABLE, Reason.DEADLINE_EXCEEDED -> INDETERMINATE
         Reason.INVALID_REQUEST -> "bad_request"
@@ -71,8 +71,10 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
             is BindingRef.Bound -> "binding"
             is BindingRef.Attached -> "attachment"
             BindingRef.Builtin -> "builtin"
+            is BindingRef.Boundary -> "boundary"
         }
         is StatementRef.ScopeRejected -> "scope"
+        is StatementRef.Boundary -> "boundary"
         null -> "none"
     }
 
@@ -86,6 +88,7 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
             is Cause.AttributeUnavailable -> "attribute"
             is Cause.MatcherFailed -> "matcher"
             is Cause.RequiredListenerFailed -> "required_listener"
+            is Cause.BoundaryUnavailable -> "boundary"
             is Cause.RateLimiterUnavailable -> "rate_limiter"
             null -> "unknown"
         }

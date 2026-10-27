@@ -24,6 +24,7 @@ import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.Catalog
 import me.ahoo.cosec.snapshot.document.CatalogGroup
 import me.ahoo.cosec.snapshot.document.CatalogPermission
+import me.ahoo.cosec.snapshot.document.PolicyDefinition
 import me.ahoo.cosec.snapshot.document.ProvenanceKind
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -101,15 +102,17 @@ class ChangesTest {
             "operations[0]",
             "operations[1]"
         )
-        changes.propose(
-            ALICE_OP,
-            ACME,
-            0,
-            listOf(Operation.PutPolicy(allow("cosec:mine"))),
-            "migrated",
-            ProvenanceKind.MIGRATE
-        )
-            .errors.filter { it.check == "V2" }.assert().isEmpty()
+        // Claiming to be a migration exempts nothing: a change is never of kind MIGRATE (review K1).
+        runCatching {
+            changes.propose(
+                ALICE_OP,
+                ACME,
+                0,
+                listOf(Operation.PutPolicy(allow("cosec:mine"))),
+                "migrated",
+                ProvenanceKind.MIGRATE
+            )
+        }.exceptionOrNull().let { (it as ChangeRejectedException).status }.assert().isEqualTo(400)
         changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("shared"))), "shadowing")
             .errors.map { it.check to it.path }.assert().containsExactly("V2" to "$.policies[0].id")
         val big = (1..30).map { Operation.PutPolicy(allow("p$it", resource = "order/${"x".repeat(40)}")) }
@@ -171,6 +174,73 @@ class ChangesTest {
         )
     }
 
+    /** What the approver held is kept, so that publish can check it again (review K3). */
+    @Test
+    fun `an approval reads back with what its approver held`() = runBlocking<Unit> {
+        val change = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("a"))), "x")
+        val memberships = me.ahoo.cosec.model.Memberships(
+            me.ahoo.cosec.model.Memberships.Source.CLAIMS,
+            mapOf(
+                me.ahoo.cosec.model.SpaceId.DEFAULT to setOf(me.ahoo.cosec.model.RoleId("admin")),
+                me.ahoo.cosec.model.SpaceId("team-a") to setOf(me.ahoo.cosec.model.RoleId("ops")),
+            ),
+            listOf(PolicyId("attached")),
+        )
+        val approval = Approval(
+            PLATO.actor,
+            StoreFixtures.START,
+            "c".repeat(64),
+            listOf("a[0]"),
+            memberships,
+            mapOf("department" to "ops")
+        )
+        val read = ChangeRequestCodec.decode(ChangeRequestCodec.encode(change.copy(approval = approval))).approval!!
+        read.copy(memberships = null).assert().isEqualTo(approval.copy(memberships = null))
+        val held = read.memberships!!
+        held.source.assert().isEqualTo(memberships.source)
+        held.roles.assert().isEqualTo(memberships.roles)
+        held.attachments.assert().isEqualTo(memberships.attachments)
+    }
+
+    /** RFC 0007 §7.6: a boundary is set like a section, resolves in the platform, and holds the policy it names. */
+    @Test
+    fun `boundaries are set, resolved and kept`() = runBlocking<Unit> {
+        val fence = PolicyDefinition(PolicyId("fence"), false, null, allow("x").statements, boundary = true)
+        publish(
+            SnapshotKey.Platform,
+            Operation.PutPolicy(fence),
+            Operation.PutPolicy(allow("plain")),
+            Operation.SetBoundary(PolicyId("fence"))
+        )
+        harness.revisions.head(SnapshotKey.Platform)!!.document.boundary!!.value.assert().isEqualTo("fence")
+        changes.propose(ALICE_OP, ACME, 0, listOf(Operation.SetBoundary(PolicyId("plain"))), "not a boundary")
+            .errors.map { it.check to it.path }.assert().containsExactly("REFERENCES" to "$.boundary")
+        publish(ACME, Operation.SetBoundary(PolicyId("fence")))
+        harness.revisions.head(ACME)!!.document.boundary!!.value.assert().isEqualTo("fence")
+        // The tenant names it: the platform can neither remove it nor stop naming it as the default and drop it.
+        changes.propose(
+            PLATO,
+            SnapshotKey.Platform,
+            1,
+            listOf(Operation.SetBoundary(null), Operation.RemovePolicy(PolicyId("fence"))),
+            "drop"
+        )
+            .errors.map { it.check }.assert().containsExactly("REFERENCES")
+        changes.propose(PLATO, SnapshotKey.App("order"), 0, listOf(Operation.SetBoundary(PolicyId("fence"))), "app")
+            .errors.map { it.check }.assert().containsExactly("OPERATION")
+        // Applying the head proposes nothing; a replace without the boundary removes it.
+        val head = harness.revisions.head(ACME)!!.document
+        changes.apply(ALICE_OP, ACME, head, ApplyMode.REPLACE, "same").operations.assert().isEmpty()
+        val cleared = changes.apply(
+            ALICE_OP,
+            ACME,
+            StoreFixtures.candidate(ACME, emptyList()),
+            ApplyMode.REPLACE,
+            "clear"
+        )
+        (cleared.operations.single() as Operation.SetBoundary).boundary.assert().isNull()
+    }
+
     @Test
     fun `a change reads back as it was stored`() = runBlocking<Unit> {
         val operations = listOf(
@@ -181,6 +251,8 @@ class ChangesTest {
             Operation.PutCatalog(null),
             Operation.SetLimits(ConditionLimits(maxCost = 100)),
             Operation.SetAttributes(listOf(Attribute.external("ext.geo.region", AttributeType.IP))),
+            Operation.SetBoundary(PolicyId("fence")),
+            Operation.SetBoundary(null),
         )
         val change = changes.propose(ALICE_OP, ACME, 0, operations, "all of them")
         val stored = ChangeRequestCodec.encode(change)

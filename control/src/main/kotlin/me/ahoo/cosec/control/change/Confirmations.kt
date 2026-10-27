@@ -18,11 +18,13 @@ import me.ahoo.cosec.engine.flat.OnMissingConfirmation
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.snapshot.document.Actor
 import me.ahoo.cosec.snapshot.document.PolicyDefinition
 import me.ahoo.cosec.snapshot.document.PolicyDocument
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
 import me.ahoo.cosec.snapshot.document.ProvenanceKind
+import tools.jackson.databind.node.JsonNodeFactory
 import java.time.Duration
 import java.time.Instant
 
@@ -42,13 +44,21 @@ data class Confirmation(val policy: PolicyId, val statement: Int, val digest: St
 }
 
 /**
- * The digest of a statement's content as the document format writes it, without any confirmation it carries: what a
- * [Confirmation] names. A statement that changes no longer matches the confirmation given for it.
+ * The digest of a statement's content as the document format writes it, without any confirmation it carries, together
+ * with the condition of its policy, which guards it as much as its own: what a [Confirmation] names. A statement, or a
+ * policy condition, that changes no longer matches the confirmation given for it (review K4).
  */
 object StatementDigest {
-    fun of(statement: StatementSource): String {
-        val bare = PolicyDefinition(PolicyId("statement"), false, null, listOf(unconfirmed(statement)))
-        return EntryDigest.sha256(PolicyDocumentCodec.policyTree(bare).get("statements").get(0))
+    fun of(statement: StatementSource, policyCondition: Condition? = null): String {
+        val bare = PolicyDefinition(PolicyId("statement"), false, policyCondition, listOf(unconfirmed(statement)))
+        val tree = PolicyDocumentCodec.policyTree(bare)
+        val statementTree = tree.get("statements").get(0)
+        // Without a policy condition, the statement's own digest, as before: confirmations given for one still match.
+        val policyTree = tree.get("condition") ?: return EntryDigest.sha256(statementTree)
+        val content = JsonNodeFactory.instance.objectNode()
+        content.set("statement", statementTree)
+        content.set("policyCondition", policyTree)
+        return EntryDigest.sha256(content)
     }
 
     internal fun unconfirmed(statement: StatementSource): StatementSource =
@@ -88,9 +98,11 @@ internal object NomatchConfirmations {
                 if (statement.effect != Effect.DENY || statement.onMissing != OnMissing.NOMATCH) {
                     return@mapIndexed bare
                 }
-                val digest = StatementDigest.of(statement)
-                val kept = before[policy.id]?.statements?.getOrNull(s)
-                    ?.takeIf { it.onMissingConfirmed != null && StatementDigest.of(it) == digest }?.onMissingConfirmed
+                val digest = StatementDigest.of(statement, policy.condition)
+                val previous = before[policy.id]
+                val kept = previous?.statements?.getOrNull(s)
+                    ?.takeIf { it.onMissingConfirmed != null && StatementDigest.of(it, previous.condition) == digest }
+                    ?.onMissingConfirmed
                 val confirmed = confirmations.any { it.policy == policy.id && it.statement == s && it.digest == digest }
                 when {
                     kept != null -> confirmedAs(bare, kept)
@@ -109,20 +121,21 @@ internal object NomatchConfirmations {
                     }
                 }
             }
-            PolicyDefinition(policy.id, policy.attachable, policy.condition, statements)
+            PolicyDefinition(policy.id, policy.attachable, policy.condition, statements, boundary = policy.boundary)
         }
         return PolicyDocument(
-            candidate.kind,
-            candidate.owner,
-            candidate.revision,
-            candidate.publishedAt,
-            policies,
-            candidate.bindings,
-            candidate.catalog,
-            candidate.provenance,
-            candidate.limits,
-            candidate.attributes,
-            candidate.rateLimits,
+            kind = candidate.kind,
+            owner = candidate.owner,
+            revision = candidate.revision,
+            publishedAt = candidate.publishedAt,
+            policies = policies,
+            bindings = candidate.bindings,
+            catalog = candidate.catalog,
+            boundary = candidate.boundary,
+            provenance = candidate.provenance,
+            limits = candidate.limits,
+            attributes = candidate.attributes,
+            rateLimits = candidate.rateLimits,
         ) to findings
     }
 
@@ -154,28 +167,62 @@ internal object BreakGlassRules {
     ): List<Finding> {
         val findings = ArrayList<Finding>()
         val before = base?.bindings.orEmpty().associateBy { it.id }
-        val exempt = kind == ProvenanceKind.MIGRATE || kind == ProvenanceKind.BOOTSTRAP
+        val request = kind == ProvenanceKind.BREAK_GLASS
+        // No kind is exempt: MIGRATE and BOOTSTRAP revisions are written by cosec-migrate through Revisions, never
+        // through a change, so a change claiming either is held to every rule (review K1).
         for ((i, binding) in candidate.bindings.withIndex()) {
             val previous = before[binding.id]
-            val changed = previous == null || EntryDigest.of(previous, candidate.kind, candidate.owner) != EntryDigest.of(binding, candidate.kind, candidate.owner)
-            if (!binding.breakGlass || !changed) continue
-            if (kind != ProvenanceKind.BREAK_GLASS && !exempt) {
-                findings += Finding("V5", "$.bindings[$i]", "a break-glass binding is created only by a break-glass request", UNPROCESSABLE)
-            }
-            val expiresAt = binding.expiresAt?.let(Instant::ofEpochMilli)
-            if (expiresAt == null || !expiresAt.isAfter(now) || Duration.between(now, expiresAt) > maxDuration) {
-                findings += Finding(
-                    "V5",
-                    "$.bindings[$i].expiresAt",
-                    "a break-glass binding expires after now and within $maxDuration of it, not at $expiresAt",
-                    UNPROCESSABLE,
-                )
+            val changed = previous == null ||
+                EntryDigest.of(previous, candidate.kind, candidate.owner) != EntryDigest.of(binding, candidate.kind, candidate.owner)
+            if (changed) {
+                findings += binding(i, binding, previous, request, now, maxDuration)
             }
         }
-        if (kind == ProvenanceKind.BREAK_GLASS) {
+        if (request) {
             findings += onlyBreakGlass(operations, before.values.filter { it.breakGlass }.map { it.id }.toSet())
         }
         return findings
+    }
+
+    /** What is wrong with changed binding [i], [binding], that was [previous], in a change that is a [request] or not. */
+    private fun binding(
+        i: Int,
+        binding: me.ahoo.cosec.model.Binding,
+        previous: me.ahoo.cosec.model.Binding?,
+        request: Boolean,
+        now: Instant,
+        maxDuration: Duration,
+    ): List<Finding> {
+        val findings = ArrayList<Finding>()
+        if (previous?.breakGlass == true && !binding.breakGlass && !request) {
+            findings += Finding("V5", "$.bindings[$i]", "a break-glass binding is changed only by a break-glass request", UNPROCESSABLE)
+        }
+        if (!binding.breakGlass) {
+            return findings
+        }
+        if (!request) {
+            findings += Finding("V5", "$.bindings[$i]", "a break-glass binding is created only by a break-glass request", UNPROCESSABLE)
+        }
+        val expiresAt = binding.expiresAt?.let(Instant::ofEpochMilli)
+        if (expiresAt == null || !expiresAt.isAfter(now) || Duration.between(now, expiresAt) > maxDuration) {
+            findings += Finding(
+                "V5",
+                "$.bindings[$i].expiresAt",
+                "a break-glass binding expires after now and within $maxDuration of it, not at $expiresAt",
+                UNPROCESSABLE,
+            )
+        }
+        return findings
+    }
+
+    /**
+     * Whether [operations] create or alter a break-glass binding of [base]: one that puts a break-glass binding, or puts
+     * another binding over one. Every break-glass rule keys on this, never on the change's kind alone (review K1):
+     * `cosec:breakglass`, the REQUIRED audit and its `BREAK_GLASS_REQUESTED` event. Removing one only narrows.
+     */
+    fun touches(operations: List<Operation>, base: PolicyDocument?): Boolean {
+        val glass = base?.bindings.orEmpty().filter { it.breakGlass }.map { it.id }.toSet()
+        return operations.any { it is Operation.PutBinding && (it.binding.breakGlass || it.binding.id in glass) }
     }
 
     /** The operations of a break-glass change that neither create nor revoke a break-glass binding. */

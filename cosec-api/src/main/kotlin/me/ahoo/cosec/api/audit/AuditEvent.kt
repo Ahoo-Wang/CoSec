@@ -42,6 +42,9 @@ enum class AuditReasonCode {
     SCOPE_REJECTED,
     RATE_LIMITER_UNAVAILABLE,
     TOKEN_REVOKED,
+
+    /** A Permit outside the tenant's platform boundary (RFC 0007 §7.6); the response says only `forbidden`. */
+    BOUNDARY,
 }
 
 enum class AuditSourceType {

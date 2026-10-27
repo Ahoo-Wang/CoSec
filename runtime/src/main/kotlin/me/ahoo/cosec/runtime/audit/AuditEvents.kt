@@ -89,6 +89,7 @@ object AuditEvents {
                 is BindingRef.Bound -> via.id.value
                 is BindingRef.Attached -> "attached:${via.policy.value}"
                 BindingRef.Builtin -> "builtin"
+                is BindingRef.Boundary -> "boundary:${via.tenant.value}"
                 null -> null
             },
             breakGlass = event.breakGlass,
@@ -101,9 +102,9 @@ object AuditEvents {
         return when (event.outcome.reason) {
             Reason.PERMIT -> AuditDecision.ALLOW to AuditReasonCode.ALLOW
             Reason.TOO_MANY_REQUESTS -> AuditDecision.TOO_MANY_REQUESTS to AuditReasonCode.TOO_MANY_REQUESTS
-            Reason.EXPLICIT_DENY -> AuditDecision.EXPLICIT_DENY to (rejected ?: AuditReasonCode.EXPLICIT_DENY)
+            Reason.EXPLICIT_DENY, Reason.SCOPE_REJECTED, Reason.BOUNDARY ->
+                AuditDecision.EXPLICIT_DENY to (rejected ?: explicit(event.outcome.reason))
             Reason.IMPLICIT_DENY -> AuditDecision.IMPLICIT_DENY to (rejected ?: AuditReasonCode.IMPLICIT_DENY)
-            Reason.SCOPE_REJECTED -> AuditDecision.EXPLICIT_DENY to (rejected ?: AuditReasonCode.SCOPE_REJECTED)
             // A 400 is refused before any decision; kind says why.
             Reason.INVALID_REQUEST -> AuditDecision.EXPLICIT_DENY to AuditReasonCode.EXPLICIT_DENY
             Reason.INDETERMINATE ->
@@ -118,6 +119,13 @@ object AuditEvents {
         }
     }
 
+    /** Why an explicit deny: a statement, the scope, or the tenant's boundary (RFC 0007 §7.6). */
+    private fun explicit(reason: Reason): AuditReasonCode = when (reason) {
+        Reason.SCOPE_REJECTED -> AuditReasonCode.SCOPE_REJECTED
+        Reason.BOUNDARY -> AuditReasonCode.BOUNDARY
+        else -> AuditReasonCode.EXPLICIT_DENY
+    }
+
     private fun rejected(reason: AuthnResult.RejectReason?): AuditReasonCode? = when (reason) {
         AuthnResult.RejectReason.TOKEN_EXPIRED -> AuditReasonCode.TOKEN_EXPIRED
         AuthnResult.RejectReason.TOKEN_REVOKED -> AuditReasonCode.TOKEN_REVOKED
@@ -126,6 +134,7 @@ object AuditEvents {
     }
 
     private fun reason(event: DecisionEvent): String {
+        (event.by as? StatementRef.Boundary)?.let { return "${event.outcome.reason.name}: ${it.boundary.value}" }
         val cause = event.outcome.cause ?: return event.outcome.reason.name
         return "${event.outcome.reason.name}: ${cause::class.simpleName}"
     }
@@ -134,6 +143,8 @@ object AuditEvents {
         by ?: return AuditSourceData(AuditSourceType.NONE)
         val (type, policyType) = when (val via = by.via) {
             BindingRef.Builtin -> AuditSourceType.BLACKLIST to PolicyType.SYSTEM
+            // A boundary is a platform policy.
+            is BindingRef.Boundary -> AuditSourceType.GLOBAL_POLICY to PolicyType.GLOBAL
             is BindingRef.Attached -> AuditSourceType.PRINCIPAL_POLICY to PolicyType.CUSTOM
             is BindingRef.Bound -> when {
                 by.policy == BuiltinPolicies.ROOT -> AuditSourceType.ROOT to PolicyType.SYSTEM
