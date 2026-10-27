@@ -1,0 +1,53 @@
+{
+  "rules": [
+    "TNT-4"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The same binding scoped to every app could be evaluated where the permission's app document is not read: the tenant document does not compile.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "order-service": {
+        "policies": [
+          {
+            "id": "perm:order-service/perm-read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "grant",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "perm:order-service/perm-read"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor"
+    ]
+  },
+  "request": {
+    "app": "order-service"
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "only scoped to that app"
+  }
+}

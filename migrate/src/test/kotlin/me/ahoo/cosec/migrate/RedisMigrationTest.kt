@@ -325,8 +325,9 @@ class RedisMigrationTest {
         ).first.assert().isEqualTo(MigrateMain.OK)
         val documents = ConvertedDirectory.read(out)
         val cache = runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+        val store = me.ahoo.cosec.cache.control.CoCacheControlStore.create(runtime, cache, keyPrefix)
         // A first run that stopped after the platform document.
-        DocumentPublisher(cache).publish(mapOf(SnapshotKey.Platform to documents.getValue(SnapshotKey.Platform)))
+        DocumentPublisher(store).publish(mapOf(SnapshotKey.Platform to documents.getValue(SnapshotKey.Platform)))
         val (refused, refusedOutput) = run(
             "publish",
             "--to-redis",
@@ -351,7 +352,7 @@ class RedisMigrationTest {
         resumed.assert().describedAs(resumedOutput).isEqualTo(MigrateMain.OK)
         resumedOutput.assert().contains("Already published, identical: platform").contains("Published app:order")
         // Everything is published now: a resume writes nothing.
-        DocumentPublisher(cache).publish(documents, resume = true).let {
+        DocumentPublisher(store).publish(documents, resume = true).let {
             it.written.assert().isEmpty()
             it.skipped.assert().containsExactly(SnapshotKey.Platform, SnapshotKey.App("order"))
         }

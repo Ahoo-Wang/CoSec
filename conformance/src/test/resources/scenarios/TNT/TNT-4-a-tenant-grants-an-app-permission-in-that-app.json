@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "TNT-4"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "RFC 0007 §9.3 (N1): acme's role binding names order-service's permission policy, scoped to order-service; the request in order-service resolves it from the app's document.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "order-service": {
+        "policies": [
+          {
+            "id": "perm:order-service/perm-read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "bindings": [
+          {
+            "id": "grant",
+            "subject": {
+              "role": "editor"
+            },
+            "app": "order-service",
+            "space": "*",
+            "policy": "perm:order-service/perm-read"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "editor"
+    ]
+  },
+  "request": {
+    "app": "order-service"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "perm:order-service/perm-read",
+      "statement": 0,
+      "via": {
+        "binding": "grant",
+        "document": "tenant"
+      }
+    }
+  }
+}
