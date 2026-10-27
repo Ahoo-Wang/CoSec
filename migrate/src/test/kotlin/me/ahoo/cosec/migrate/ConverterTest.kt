@@ -168,7 +168,7 @@ class ConverterTest {
                 "conditions" to policy(
                     "conditions",
                     statements = listOf(
-                        statement(condition = """{"inRole":{"value":"admin"}}"""),
+                        statement(condition = """{"contains":{"part":"request.path","value":"admin"}}"""),
                         statement(condition = """{"spel":{"value":"true"}}"""),
                         statement(condition = """{"noSuchMatcher":{}}"""),
                     ),
@@ -206,7 +206,7 @@ class ConverterTest {
         located(RejectionKind.UNDEFINED_PERMISSION).assert().containsExactly("app:role:permission:order:clerk")
         located(RejectionKind.SCHEMA_MARKER).assert().containsExactly("meta:schema")
         located(RejectionKind.CONDITION_NOT_TRANSLATED).assert()
-            .containsExactly("policy:conditions#$.statements[0].condition.inRole")
+            .containsExactly("policy:conditions#$.statements[0].condition.contains")
         located(RejectionKind.EXPRESSION_CONDITION).assert()
             .containsExactly("policy:conditions#$.statements[1].condition.spel")
         located(RejectionKind.CUSTOM_CONDITION).assert()
@@ -301,7 +301,7 @@ class ConverterTest {
     }
 
     @Test
-    fun `condition shapes of D1 to D3 and C1a and C1c are reported even while conditions are rejected`() {
+    fun `condition shapes of D1 to D3 and C1a and C1c are reported with their location`() {
         val report = convert(
             source(
                 listOf(
@@ -310,7 +310,7 @@ class ConverterTest {
                         condition = """{"authenticated":{}}""",
                         statements = listOf(
                             statement(condition = """{"bool":{"and":[{"inRole":{"value":"admin","negate":true}}]}}""", effect = "deny"),
-                            statement(condition = """{"eq":{"part":"request.attributes.owner","value":""}}"""),
+                            statement(condition = """{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}"""),
                             statement(condition = """{"regular":{"part":"request.path","pattern":"^/a$"}}"""),
                             statement(condition = """{"spel":{"value":"true"}}"""),
                         ),
@@ -323,9 +323,9 @@ class ConverterTest {
         report.semanticChanges.single { it.change == "D1" }.shape.assert().contains("ALLOW direction")
         changes.getValue("D2").single().assert().isEqualTo("policy:p#$.statements[1].condition.eq")
         changes.getValue("D3").single().assert().isEqualTo("policy:p#$.statements[2].condition.regular")
-        changes.getValue(
-            "C1a"
-        ).assert().containsExactlyInAnyOrder("policy:p#$.statements[2]", "policy:p#$.statements[3]")
+        // A template, a regular expression and an expression can each fail in 7.x.
+        changes.getValue("C1a").assert()
+            .containsExactlyInAnyOrder("policy:p#$.statements[1]", "policy:p#$.statements[2]", "policy:p#$.statements[3]")
         changes.getValue("C1c").single().assert().isEqualTo("policy:p#$.condition")
     }
 

@@ -120,7 +120,12 @@ class RedisMigrationTest {
             policy(
                 "g",
                 "global",
-                listOf(statement("\"/health\""), statement("\"/admin/**\"", "deny"))
+                listOf(
+                    statement("\"/health\""),
+                    statement("\"/admin/**\"", "deny"),
+                    statement("\"/me/**\"", condition = """{"authenticated":{}}"""),
+                    statement("\"/orders/**\"", "deny", condition = """{"eq":{"part":"context.principal.id","value":"mallory"}}"""),
+                ),
             ).encodeToByteArray()
         )
         policies.put(
@@ -135,11 +140,20 @@ class RedisMigrationTest {
         runtime.createGlobalPolicyIndex(
             CoSecCacheSpecs.globalPolicyIndex(keyPrefix)
         ).add(GlobalPolicyIndexCache.CACHE_KEY, setOf("g"))
-        raw(
-            CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME
-        ).put("order", appPermission("order", permission("read", "\"/orders/**\"")).encodeToByteArray())
+        val audit = """{"bool":{"and":[{"path":{"part":"request.path","pattern":"/audit/**"}},{"inRole":{"value":"auditor"}}]}}"""
+        val expired = """{"time":{"notAfter":"2020-01-01T00:00:00Z"}}"""
+        raw(CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME).put(
+            "order",
+            appPermission(
+                "order",
+                permission("read", "\"/orders/**\""),
+                permission("audit", condition = audit),
+                permission("expired", "\"/expired/**\"", condition = expired),
+                condition = """{"authenticated":{}}""",
+            ).encodeToByteArray(),
+        )
         val grants = raw(CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME)
-        grants.put("order:clerk", """["read"]""".encodeToByteArray())
+        grants.put("order:clerk", """["read","audit","expired"]""".encodeToByteArray())
         grants.put("order:admin@team", """["*"]""".encodeToByteArray())
     }
 
@@ -258,6 +272,8 @@ class RedisMigrationTest {
                 Principals(
                     mapOf(
                         "clerk" to mapOf(SpaceId.DEFAULT to setOf("clerk")),
+                        "mallory" to mapOf(SpaceId.DEFAULT to setOf("clerk")),
+                        "auditor" to mapOf(SpaceId.DEFAULT to setOf("clerk", "auditor")),
                         "admin" to mapOf(SpaceId("team") to setOf("admin")),
                     ),
                 ),
@@ -276,6 +292,14 @@ class RedisMigrationTest {
             // `*` granted to admin in space team only.
             status("POST", "/orders/1", "admin", "team").assert().isEqualTo(200)
             status("POST", "/orders/1", "admin").assert().isEqualTo(403)
+            // Conditions: authenticated, a principal's DENY over a grant, a path condition turned into the resource
+            // beside an inRole read in the requested space, and a time window that has closed.
+            status("GET", "/me/1", "clerk").assert().isEqualTo(200)
+            status("GET", "/me/1", null).assert().isEqualTo(401)
+            status("GET", "/orders/1", "mallory").assert().isEqualTo(403)
+            status("GET", "/audit/1", "clerk").assert().isEqualTo(403)
+            status("GET", "/audit/1", "auditor").assert().isEqualTo(200)
+            status("GET", "/expired/1", "clerk").assert().isEqualTo(403)
         }
     }
 

@@ -37,6 +37,7 @@ import kotlin.system.exitProcess
  * convert --from-redis redis://localhost:6379 [--key-prefix cosec] --out ./converted
  *         [--partition platform|by-owner] [--root-enabled] [--root-id cosec] [--root-expires-at 2026-12-31T00:00:00Z]
  * convert --from-files ./export --out ./converted [...]
+ *         [--rate-limit-rules ./rate-limit.json]
  * publish --to-redis redis://localhost:6379 [--key-prefix cosec] --in ./converted
  * ```
  *
@@ -52,6 +53,7 @@ object MigrateMain {
         Usage:
           convert (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
                   [--partition platform|by-owner] [--root-enabled] [--root-id <id>] [--root-expires-at <instant>]
+                  [--rate-limit-rules <file>]
           publish --to-redis <uri> [--key-prefix <p>] --in <dir>
     """.trimIndent()
 
@@ -102,6 +104,7 @@ object MigrateMain {
         companion object {
             private val VALUED = setOf(
                 "from-redis", "from-files", "key-prefix", "out", "partition", "root-id", "root-expires-at", "to-redis", "in",
+                "rate-limit-rules",
             )
             private val FLAGS = setOf("root-enabled")
 
@@ -138,11 +141,12 @@ object MigrateMain {
         val partition = partitionOf(options)
         val root = rootOf(options)
         val outDirectory = Path.of(options.required("out"))
-        val source = if (fromRedis != null) {
+        val read = if (fromRedis != null) {
             readRedis(fromRedis, options.value("key-prefix") ?: CoSec.COSEC)
         } else {
             ExportDirectory.read(Path.of(fromFiles!!))
         }
+        val source = options.value("rate-limit-rules")?.let { file -> read.withRateLimitRules(ExportDirectory.rateLimitRules(Path.of(file))) } ?: read
         val conversion = Converter().convert(source, ConvertOptions(partition, root))
         ConvertedDirectory.write(conversion, outDirectory)
         summarize(conversion.report, out)

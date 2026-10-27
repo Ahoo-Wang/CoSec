@@ -45,6 +45,9 @@ object ConvertedDirectory {
     const val TENANTS_DIRECTORY = "tenants"
     const val PROVENANCE_FILE = "provenance.json"
     const val REPORT_FILE = "report.json"
+
+    /** The translated rate limit rules, for the platform document's `rateLimits` (RFC 0006 PR-5). */
+    const val RATE_LIMITS_FILE = "rate-limits.json"
     private const val JSON = ".json"
 
     private val factory = JsonNodeFactory.instance
@@ -64,6 +67,12 @@ object ConvertedDirectory {
             val bytes = PolicyDocumentCodec.encode(document)
             Files.write(path, bytes)
             outputs[file] = sha256(bytes)
+        }
+        if (conversion.rateLimits.isNotEmpty()) {
+            val rules = factory.arrayNode().also { array -> conversion.rateLimits.forEach { array.add(it.toJson()) } }
+            val bytes = pretty.writeValueAsBytes(rules)
+            Files.write(directory.resolve(RATE_LIMITS_FILE), bytes)
+            outputs[RATE_LIMITS_FILE] = sha256(bytes)
         }
         if (conversion.report.accepted) {
             val bytes = pretty.writeValueAsBytes(provenance(conversion.provenance))

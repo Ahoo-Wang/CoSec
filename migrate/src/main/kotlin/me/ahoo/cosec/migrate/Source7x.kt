@@ -34,7 +34,15 @@ class Source7x(
     val globalIndexLocation: String,
     /** SHA-256 over every input read, in a fixed order. */
     val inputSha256: String,
+    /** 7.x rate limit rules (`LocalRateLimitRuleLoader`'s JSON), in file order; their ids may repeat, which is rejected. */
+    val rateLimitRules: List<Entry> = emptyList(),
 ) {
+    /** This source with [rules] after its own rate limit rules; the input hash covers them too. */
+    fun withRateLimitRules(rules: List<Entry>): Source7x {
+        val input = mapOf("source" to inputSha256.encodeToByteArray()) + rules.associate { it.location to it.bytes }
+        return Source7x(policies, globalIndex, apps, schemaMarker, globalIndexLocation, sha256(input), rateLimitRules + rules)
+    }
+
     /** The schema marker at [location], or a null [value] when it is absent. */
     class Marker(val location: String, val value: String?)
 

@@ -34,6 +34,7 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotKey
@@ -76,6 +77,8 @@ class Conversion(
     val documents: Map<SnapshotKey, PolicyDocument>,
     val provenance: Provenance,
     val report: ConversionReport,
+    /** The translated rate limit rules; none when the report holds a rejection. */
+    val rateLimits: List<ConvertedRateLimit> = emptyList(),
 )
 
 /**
@@ -122,6 +125,8 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
     val counts = LinkedHashMap<String, Int>()
     val translator = MatcherTranslator { kind, location, message -> reject(kind, location, message) }
     val scan = SemanticScan { changes += it }
+    val conditions = ConditionTranslator({ kind, location, message -> reject(kind, location, message) }, { changes += it })
+    val statements = StatementTranslator(translator, conditions) { kind, location, message -> reject(kind, location, message) }
     val treeReader = CoSecJsonSerializer.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
     /** The policies and bindings of each document, in the order they are written. */
@@ -131,6 +136,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
     val policyOrigins = ArrayList<Provenance.PolicyOrigin>()
     val bindingOrigins = ArrayList<Provenance.BindingOrigin>()
     val globalDenies = ArrayList<String>()
+    val rateLimits = ArrayList<ConvertedRateLimit>()
 
     fun reject(kind: RejectionKind, location: String, message: String) {
         rejections += Rejection(kind, location, message)
@@ -146,13 +152,16 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         checkMarker()
         convertPolicies()
         source.apps.forEach(::convertApp)
+        convertRateLimits()
         convertRoot()
         val documents = if (rejections.isEmpty()) documents() else emptyMap()
         count("documents", documents.size)
-        count("rejections", rejections.size)
+        count("rejections", rejections.distinct().size)
         count("warnings", warnings.size)
-        val report = ConversionReport(rejections, warnings, changes, counts, source.inputSha256)
-        return Conversion(documents, Provenance(policyOrigins, bindingOrigins), report)
+        // A policy condition is translated once per direction and per permission policy: report each finding once.
+        val report = ConversionReport(rejections.distinct(), warnings, changes.distinct(), counts, source.inputSha256)
+        val limits = if (report.accepted) rateLimits.toList() else emptyList()
+        return Conversion(documents, Provenance(policyOrigins, bindingOrigins), report, limits)
     }
 
     private fun checkMarker() {
@@ -197,11 +206,11 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val key = placement(id, global, tree, entry.location) ?: return
         val locations = tree.get(STATEMENTS)?.values().orEmpty().indices.map { "${entry.location}#$.$STATEMENTS[$it]" }
         // Translated even when it does not decode, so one run reports every problem of the policy.
-        val statements = translatePolicy(tree, locations, entry.location, global)
-        if (statements == null || decoded == null) {
+        val translated = translatePolicy(tree, locations, entry.location, global)
+        if (translated == null || decoded == null) {
             return
         }
-        val definition = PolicyDefinition(PolicyId(id), attachable = !global, condition = null, statements)
+        val definition = PolicyDefinition(PolicyId(id), attachable = !global, condition = translated.first, translated.second)
         if (!compiles(key, definition, locations)) {
             return
         }
@@ -263,29 +272,26 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         return inIndex && type == PolicyType.GLOBAL
     }
 
-    /** The statements of a policy under its condition, or null when one of them or the condition is rejected. */
+    /**
+     * The condition and statements of a policy, or null when one of them or the condition is rejected. Everything is
+     * translated even after a rejection, so one run reports every problem of the policy.
+     */
     private fun translatePolicy(
         tree: JsonNode,
         locations: List<String>,
         location: String,
-        global: Boolean
-    ): List<StatementSource>? {
+        global: Boolean,
+    ): Pair<Condition?, List<StatementSource>>? {
         val condition = tree.get(CONDITION)
-        val statements = tree.get(STATEMENTS)?.values().orEmpty()
-        val conditionOk = translator.condition(condition, "$location#$.$CONDITION")
-        val denies = statements.map { isDeny(it) }
-        scan.policyCondition(condition, denies, "$location#$.$CONDITION")
-        val translated = statements.mapIndexed { i, statement ->
-            translateStatement(
-                statement,
-                condition,
-                locations[i]
-            )
-        }
+        val nodes = tree.get(STATEMENTS)?.values().orEmpty()
+        val denies = nodes.map { isDeny(it) }
+        scan.policyCondition(condition, "$location#$.$CONDITION")
+        val translated = nodes.mapIndexed { i, statement -> translateStatement(statement, condition, locations[i]) }
         if (global) {
             locations.filterIndexed { i, _ -> denies[i] }.forEach { globalDenies += it }
         }
-        return if (conditionOk && translated.none { it == null }) translated.filterNotNull() else null
+        val policy = statements.policy(condition, "$location#$.$CONDITION", translated.filterNotNull())
+        return if (translated.none { it == null }) policy else null
     }
 
     /** Whether [tree] names an id other than the [id] its key or position names. */
@@ -318,35 +324,19 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         return key
     }
 
-    /** A 7.x statement as an 8.0 statement, or null when a part of it is rejected. */
+    /** A 7.x statement as an 8.0 statement without its policy condition, or null when a part of it is rejected. */
     private fun translateStatement(
         statement: JsonNode,
         policyCondition: JsonNode?,
-        location: String
+        location: String,
+        name: String = statement.get(NAME)?.takeIf { it.isString }?.asString().orEmpty(),
     ): StatementSource? {
         if (!statement.isObject) {
             reject(RejectionKind.UNDECODABLE, location, "a statement is an object")
             return null
         }
-        val deny = isDeny(statement)
-        val action = statement.get(ACTION)
-        val condition = statement.get(CONDITION)
-        scan.statement(deny, action, condition, policyCondition, location)
-        if (action == null || action.isNull) {
-            reject(RejectionKind.UNDECODABLE, location, "a statement needs an action")
-            return null
-        }
-        val translated = translator.action(action, "$location.$ACTION")
-        val conditionOk = translator.condition(condition, "$location.$CONDITION")
-        if (translated == null || !conditionOk) {
-            return null
-        }
-        return StatementSource(
-            name = statement.get(NAME)?.takeIf { it.isString }?.asString().orEmpty(),
-            effect = if (deny) Effect.DENY else Effect.ALLOW,
-            actions = translated.actions,
-            resources = translated.resources,
-        )
+        scan.statement(isDeny(statement), statement.get(ACTION), statement.get(CONDITION), policyCondition, location)
+        return statements.statement(statement, location, name)
     }
 
     // ---- apps (RFC 0004 §5.1: app permissions and role grants) ----
@@ -362,17 +352,16 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             CoSecJsonSerializer.treeToValue(tree, AppPermission::class.java)
         }
         val appCondition = tree.get(CONDITION)
-        val appConditionOk = translator.condition(appCondition, "$location#$.$CONDITION")
         val permissions = permissions(tree, location, appCondition)
         val grants = convertGrants(app, permissions?.keys)
-        if (permissions == null || grants == null) {
-            return
-        }
-        if (!appConditionOk || decoded == null) {
+        // Translated over every permission once, so its rejections are reported even if nothing is granted.
+        val guard = statements.policy(appCondition, "$location#$.$CONDITION", permissions?.values?.map { it.statement }.orEmpty())
+        if (permissions == null || grants == null || guard == null || decoded == null) {
             return
         }
         val key = SnapshotKey.App(appId)
-        val appPolicies = permissionPolicies(key, permissions, grants.flatMap { it.permissionIds }.toSet()) ?: return
+        val granted = grants.flatMap { it.permissionIds }.toSet()
+        val appPolicies = permissionPolicies(key, permissions, granted, appCondition, "$location#$.$CONDITION") ?: return
         policies[key] = appPolicies.toMutableList()
         bindings[key] = grants.flatMap { it.bindings }.toMutableList()
         catalogs[key] = catalogOf(tree)
@@ -425,6 +414,8 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         key: SnapshotKey.App,
         permissions: Map<String, AppPermissionStatement>,
         granted: Set<String>,
+        appCondition: JsonNode?,
+        conditionLocation: String,
     ): List<PolicyDefinition>? {
         val appId = key.appId
         val sources = permissions.values.filter { it.permissionId in granted }
@@ -435,8 +426,9 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         }
         val definitions = sources.map { (permissionId, members, origin) ->
             val id = Converter.permissionPolicyId(appId, permissionId)
-            val definition =
-                PolicyDefinition(PolicyId(id), attachable = false, condition = null, members.map { it.statement })
+            // The app condition is the policy condition of every permission policy (RFC 0004 §5.1).
+            val (condition, guarded) = statements.policy(appCondition, conditionLocation, members.map { it.statement }) ?: return null
+            val definition = PolicyDefinition(PolicyId(id), attachable = false, condition = condition, guarded)
             val locations = members.map { it.location }
             if (!compiles(key, definition, locations)) {
                 return null
@@ -476,27 +468,17 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
 
                     else -> {
                         // An app condition guards every permission statement, as a policy condition does.
-                        val statement = translateStatement(permission, appCondition, at)
+                        val statement = translateStatement(permission, appCondition, at, name = permissionId)
                         if (statement == null) {
                             ok = false
                         } else {
-                            permissions[permissionId] = AppPermissionStatement(
-                                permissionId,
-                                StatementSource(permissionId, statement.effect, statement.actions, statement.resources),
-                                at,
-                            )
+                            permissions[permissionId] = AppPermissionStatement(permissionId, statement, at)
                         }
                     }
                 }
             }
         }
-        scan.policyCondition(
-            appCondition,
-            permissions.values.map {
-                it.statement.effect == Effect.DENY
-            },
-            "$location#$.$CONDITION"
-        )
+        scan.policyCondition(appCondition, "$location#$.$CONDITION")
         return if (ok) permissions else null
     }
 
@@ -605,6 +587,27 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             )
         },
     )
+
+    // ---- rate limit rules (RFC 0005 §7.3) ----
+
+    private fun convertRateLimits() {
+        val seen = HashSet<String>()
+        val translation = RateLimitTranslation(statements, { kind, location, message -> reject(kind, location, message) }) { changes += it }
+        for (entry in source.rateLimitRules) {
+            count("rateLimitRules")
+            if (!seen.add(entry.id)) {
+                reject(RejectionKind.DUPLICATE_ID, entry.location, "rate limit rule [${entry.id}] is listed more than once")
+                continue
+            }
+            val tree = objectOf(entry.bytes, entry.location, "rate limit rule [${entry.id}]") ?: continue
+            val rule = translation.translate(entry, tree) ?: continue
+            // Compiled as a statement is, so a rule that would not match as written never gets written.
+            val policy = PolicyDefinition(PolicyId("$RATE_LIMIT_POLICY${entry.id}"), attachable = false, condition = null, listOf(rule.statement))
+            if (compiles(SnapshotKey.Platform, policy, listOf(entry.location))) {
+                rateLimits += rule
+            }
+        }
+    }
 
     // ---- root (RFC 0004 §4.8) ----
 
@@ -736,6 +739,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         const val SCHEMA_7 = "7"
         const val REVISION = 1L
         const val ROOT_OPTION = "--root-expires-at"
+        const val RATE_LIMIT_POLICY = "rate-limit/"
         val RESERVED = Converter.RESERVED_PREFIXES
         val STATEMENT_PATH = Regex("""^\$\.policies\[\d+]\.statements\[(\d+)]""")
         const val ID = "id"

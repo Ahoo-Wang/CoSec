@@ -24,6 +24,8 @@ dependencies {
     // convert decodes 7.x path actions with Spring's PathPatternParser, which cosec-core leaves to the application
     // (approved by the maintainer, 2026-10-26).
     runtimeOnly("org.springframework:spring-web")
+    // 7.x template values (`#{principal.id}`) decode through SpEL; the agreement test evaluates them.
+    testImplementation("org.springframework:spring-expression")
     // Converted documents are checked by deciding requests with them through the 8.0 pipeline.
     testImplementation(project(":cosec-runtime"))
 }
