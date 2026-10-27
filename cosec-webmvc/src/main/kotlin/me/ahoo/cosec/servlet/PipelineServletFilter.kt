@@ -20,6 +20,7 @@ import jakarta.servlet.ServletResponse
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import kotlinx.coroutines.runBlocking
+import reactor.core.scheduler.Schedulers
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.context.request.RemoteIpResolver
@@ -111,6 +112,13 @@ class PipelineServletFilter(
     }
 }
 
-/** [AuthorizationChecker.check] for servlet code (RFC 0006 §7.6): blocks the calling request thread. */
-fun AuthorizationChecker.checkBlocking(security: SecurityContext, action: String, resource: String): Boolean =
-    runBlocking { check(security, action, resource) }
+/**
+ * [AuthorizationChecker.check] for servlet code (RFC 0006 §7.6): blocks the calling request thread. Refuses to run on
+ * a non-blocking thread, such as a Netty event loop: use `checkMono` from `cosec-webflux` there.
+ */
+fun AuthorizationChecker.checkBlocking(security: SecurityContext, action: String, resource: String): Boolean {
+    check(!Schedulers.isInNonBlockingThread()) {
+        "checkBlocking would block the non-blocking thread [${Thread.currentThread().name}]; use checkMono."
+    }
+    return runBlocking { check(security, action, resource) }
+}

@@ -188,7 +188,8 @@ class Pipeline(
     /**
      * The decision for [action] on [resource] as [security] (RFC 0006 §7.6): the second half of [decide] (snapshot
      * view, attribute plan, engine) for the principal and scope of a permitted request. A query, not a request: no
-     * obligation runs, no listener hears of it, and nothing fails open: an unreadable view or an error is not a permit.
+     * obligation runs, no listener hears of it, and nothing fails open: an unreadable view, an error or a permit only
+     * break-glass gives is not a permit.
      */
     @Suppress("TooGenericExceptionCaught")
     internal suspend fun check(security: RequestSecurity, action: Action, resource: Resource): Decision {
@@ -200,7 +201,13 @@ class Pipeline(
         }
         val authz = with(security.request) { AuthzRequest(subject, scope, action, resource, environment) }
         val request = FlatRequest(authz, security.scope, security.memberships, clock.millis())
-        return evaluate(request, view, fetchedAttributes(), null)
+        val decision = evaluate(request, view, fetchedAttributes(), null)
+        // A check writes no audit, and every use of break-glass is written to a REQUIRED one (§9.4.3): a check that
+        // only break-glass permits is refused (review A1).
+        if (decision is Decision.Permit && view.platform.isBreakGlass(decision.by.via)) {
+            return Decision.Indeterminate(Cause.RequiredListenerFailed(emptyList()))
+        }
+        return decision
     }
 
     /** What a shadow listener needs, only when one samples this request (§9.5.4). */

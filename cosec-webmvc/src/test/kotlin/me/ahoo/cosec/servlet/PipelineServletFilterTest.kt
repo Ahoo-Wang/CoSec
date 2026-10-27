@@ -85,6 +85,13 @@ class PipelineServletFilterTest {
         response.getHeader("CoSec-Request-Id").assert().isNotNull()
         AuthorizationChecker(pipeline).checkBlocking(bound!!, "http:GET", "/orders/1").assert().isTrue()
         AuthorizationChecker(pipeline).checkBlocking(bound!!, "GET", "/orders/1").assert().isFalse()
+        // Never on a non-blocking thread: there it would stall an event loop.
+        val context = bound!!
+        val onEventLoop = java.util.concurrent.CompletableFuture<Throwable?>()
+        reactor.core.scheduler.Schedulers.parallel().schedule {
+            onEventLoop.complete(runCatching { AuthorizationChecker(pipeline).checkBlocking(context, "http:GET", "/o") }.exceptionOrNull())
+        }
+        onEventLoop.get().assert().isInstanceOf(IllegalStateException::class.java)
     }
 
     @Test

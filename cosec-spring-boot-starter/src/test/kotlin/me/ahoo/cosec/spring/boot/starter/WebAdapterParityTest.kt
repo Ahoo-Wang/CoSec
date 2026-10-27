@@ -92,15 +92,19 @@ import kotlin.time.Duration.Companion.seconds
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class WebAdapterParityTest {
     /** What one adapter wrote, and what it let through. */
+    /** What one adapter wrote: every header (names folded to lower case, values in order) and the raw body bytes. */
     data class Written(
         val status: Int,
-        val contentType: String?,
-        val requestId: String?,
-        val body: String,
+        val headers: Map<String, List<String>>,
+        val bytes: List<Byte>,
         val proceeded: Boolean,
         val principal: String?,
         val scope: String?,
-    )
+    ) {
+        val contentType: String? get() = headers["content-type"]?.single()
+        val requestId: String? get() = headers["cosec-request-id"]?.single()
+        val body: String get() = String(bytes.toByteArray(), Charsets.UTF_8)
+    }
 
     class Scenario(
         val name: String,
@@ -280,16 +284,16 @@ class WebAdapterParityTest {
         if (called) {
             response.setComplete().block(Duration.ofSeconds(5))
         }
-        val body = DataBufferUtils.join(response.body)
+        val bytes = DataBufferUtils.join(response.body)
             .map { buffer -> ByteArray(buffer.readableByteCount()).also { buffer.read(it) } }
-            .map { String(it, Charsets.UTF_8) }
-            .defaultIfEmpty("")
+            .defaultIfEmpty(ByteArray(0))
             .block(Duration.ofSeconds(5))!!
+        val headers = java.util.TreeMap<String, List<String>>()
+        response.headers.forEach { name, values -> headers[name.lowercase()] = values.toList() }
         return Written(
             status = response.statusCode?.value() ?: 200,
-            contentType = response.headers.getFirst("Content-Type"),
-            requestId = response.headers.getFirst("CoSec-Request-Id"),
-            body = body,
+            headers = headers,
+            bytes = bytes.toList(),
             proceeded = called,
             principal = proceeded?.let { "${it.principal.id}@${it.tenant.tenantId}" },
             scope = proceeded?.scope?.let { "${it.appId}/${it.spaceId}/${it.roles}" },
@@ -311,9 +315,8 @@ class WebAdapterParityTest {
         }
         return Written(
             status = response.status,
-            contentType = response.getHeader("Content-Type"),
-            requestId = response.getHeader("CoSec-Request-Id"),
-            body = response.contentAsString,
+            headers = response.headerNames.associateTo(java.util.TreeMap()) { it.lowercase() to response.getHeaders(it).toList() },
+            bytes = response.contentAsByteArray.toList(),
             proceeded = chain.request != null,
             principal = proceeded?.let { "${it.principal.id}@${it.tenant.tenantId}" },
             scope = proceeded?.scope?.let { "${it.appId}/${it.spaceId}/${it.roles}" },

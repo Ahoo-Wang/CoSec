@@ -57,7 +57,10 @@ class PipelineGatewayFilter(
 
     override fun filter(exchange: ServerWebExchange, chain: GatewayFilterChain): Mono<Void> =
         filterInternal(exchange) { authorized, outcome ->
-            val downstream = authorized.request.mutate().header(CoSecParameters.REQUEST_ID, outcome.requestId).build()
+            // Set, not added: the backend sees exactly the id the pipeline used, never the client's alongside it.
+            val downstream = authorized.request.mutate()
+                .headers { it.set(CoSecParameters.REQUEST_ID, outcome.requestId) }
+                .build()
             chain.filter(authorized.mutate().request(downstream).build())
         }
 
