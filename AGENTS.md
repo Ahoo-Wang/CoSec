@@ -43,6 +43,9 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
 - Build cache, configuration cache and parallel execution are on in `gradle.properties`. If a task fails with a
   configuration-cache problem, don't capture `Project` in `doFirst`/`doLast`; `--no-configuration-cache` bypasses it.
   A cached `test` run does not hit Redis: use `--rerun` (or `cleanTest`) to force Redis-backed tests.
+- On the shared machine, run local Gradle as `nice -n 15 ./gradlew --no-daemon --max-workers=2`, one module at a
+  time. Full checks and stress runs belong on CI. Never run `./gradlew --stop`. Run `pnpm build` once, with no
+  parallel builds.
 - Detekt runs with `autoCorrect = true`: `check` and `detekt` **rewrite source files**. Review and commit them.
 - Codecov requires ≥ 80 % coverage on changed lines.
 - Docs (`wiki/`, VitePress, en + zh), run from `wiki/`: `pnpm install`, then `pnpm check:mermaid`
