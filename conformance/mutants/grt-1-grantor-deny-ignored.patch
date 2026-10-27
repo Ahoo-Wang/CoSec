@@ -1,0 +1,17 @@
+# Rule: GRT-1
+# Mutant: the grant analysis ignores the grantor's own DENYs
+# Tests: :cosec-control:test --tests me.ahoo.cosec.control.grant.* :conformance:test
+
+diff --git a/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt b/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
+index 4a58226c..f6c17e0a 100644
+--- a/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
++++ b/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
+@@ -240,7 +240,7 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
+             )
+             is Search.Found -> found.held
+         }
+-        val deny = rights.denies.firstOrNull { it.applicability.intersects(scope) && !disjoint(it.statement, fragment) }
++        val deny = rights.denies.firstOrNull { false && it.applicability.intersects(scope) && !disjoint(it.statement, fragment) }
+         if (deny != null) {
+             return unknown(UnknownReason.DENY_OVERLAP, null, "may overlap ${describe(deny.ref)}", deny.ref)
+         }
