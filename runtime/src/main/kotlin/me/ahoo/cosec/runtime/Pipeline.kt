@@ -48,11 +48,11 @@ import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.FetchedAttributes
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
+import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.runtime.authn.Credentials
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.event.TraceContext
-import me.ahoo.cosec.runtime.authn.AuthnResult
-import me.ahoo.cosec.runtime.authn.Credentials
 import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.PathNormalizer
@@ -143,7 +143,12 @@ class Pipeline(
      * The REQUIRED listeners (§9.4.2): they see the outcome so far, and a failure turns only a permit into 503; any
      * other outcome keeps its status, and the failure is logged and counted.
      */
-    private suspend fun required(facts: HttpFacts, requestId: String, outcome: Outcome, record: RequestRecord): Outcome {
+    private suspend fun required(
+        facts: HttpFacts,
+        requestId: String,
+        outcome: Outcome,
+        record: RequestRecord
+    ): Outcome {
         if (listeners.required.isEmpty()) {
             return outcome
         }
@@ -183,11 +188,12 @@ class Pipeline(
             ?: return StatusMapping.invalidRequest(requestId, "path", null)
         val parameters = CoSecParameters.read(facts)
             ?: return StatusMapping.invalidRequest(requestId, "CoSec-* parameter", null)
-        record?.path = path
-        record?.deviceId = parameters.deviceId
+        val action = Action(HTTP, facts.method)
+        val resource = Resource(HTTP, path, emptyMap())
+        val fetched = fetchedAttributes()
 
         val authn = authenticate(credentials(facts))
-        record?.authn = authn
+        record?.authenticated(path, parameters.deviceId, authn, action, resource, fetched)
         if (authn is AuthnResult.Unavailable) {
             return StatusMapping.unavailable(requestId, Unavailability.AuthenticatorUnavailable(authn.cause), null)
         }
@@ -196,14 +202,6 @@ class Pipeline(
 
         val tenant = principal?.tenant ?: TenantId.DEFAULT
         val authzSubject = subject(principal, tenant)
-        val action = Action(HTTP, facts.method)
-        val resource = Resource(HTTP, path, emptyMap())
-        val fetched = if (attributes.isEmpty) null else FetchedAttributes()
-        record?.let {
-            it.action = action
-            it.resource = resource
-            it.fetched = fetched
-        }
 
         val stageA = if (fetched == null || attributes.stageA.isEmpty()) {
             null
@@ -228,7 +226,6 @@ class Pipeline(
 
         // The tenant is the scope's from here on: ScopeResolver makes it the principal's tenant (the default one when
         // anonymous), the view loads that tenant's document, and the engine refuses a view of another tenant.
-        record?.scope = scope
         val blacklist = blacklist(fetched)
         val view = when (val loaded = view(scope, blacklist)) {
             is Fetched.Value -> loaded.value
@@ -237,7 +234,7 @@ class Pipeline(
                 Cause.SourceUnavailable(DocumentKind.PLATFORM, loaded.error)
             )
         }
-        record?.view = view
+        record?.resolved(scope, view)
 
         val authz = AuthzRequest(
             subject = authzSubject,
@@ -252,15 +249,31 @@ class Pipeline(
             ),
         )
         val decision = evaluate(FlatRequest(authz, scope, memberships, clock.millis()), view, fetched, record)
-        if (decision is Decision.Permit && view.platform.isBreakGlass(decision.by.via)) {
-            // Every use of break-glass is written to a REQUIRED audit (RFC 0006 §9.4.3, Q20): without one, no permit.
-            if (listeners.required.isEmpty()) {
-                log.error { "Request [$requestId] permitted through break-glass, but no REQUIRED listener is registered." }
-                return unavailable(requestId, Cause.RequiredListenerFailed(emptyList()))
-            }
-            record?.breakGlass = true
+        return breakGlass(requestId, decision, view, record) ?: StatusMapping.decided(requestId, decision, authn, null)
+    }
+
+    /** Where this request's external attributes go; null without providers. */
+    private fun fetchedAttributes(): FetchedAttributes? = if (attributes.isEmpty) null else FetchedAttributes()
+
+    /**
+     * Every use of break-glass is written to a REQUIRED audit (RFC 0006 §9.4.3, Q20): without a REQUIRED listener, a
+     * break-glass permit is a 503. With one, [required] lets it proceed only when they all succeed. Null otherwise.
+     */
+    private fun breakGlass(
+        requestId: String,
+        decision: Decision,
+        view: SnapshotView,
+        record: RequestRecord?
+    ): Outcome? {
+        if (decision !is Decision.Permit || !view.platform.isBreakGlass(decision.by.via)) {
+            return null
         }
-        return StatusMapping.decided(requestId, decision, authn, null)
+        if (record == null || listeners.required.isEmpty()) {
+            log.error { "Request [$requestId] permitted through break-glass, but no REQUIRED listener is registered." }
+            return unavailable(requestId, Cause.RequiredListenerFailed(emptyList()))
+        }
+        record.breakGlass = true
+        return null
     }
 
     /** Stage B, when there are providers, then the engine. */

@@ -80,10 +80,11 @@ class DocumentSnapshotViews(private val source: SnapshotSource<CompiledDocument,
         val app = key.app?.let { id ->
             document(set.entry(SnapshotKey.App(id.value))!!, DocumentKind.APP, unresolved) { empty(id) }
         }
+        val tenantKey = key.tenant?.takeIf { keys.invalidTenant == null }?.let { SnapshotKey.Tenant(it.value) }
         val version = ViewVersion(
             set.shared.revision,
             key.app?.let { set.entry(SnapshotKey.App(it.value))!!.revision },
-            key.tenant?.takeIf { keys.invalidTenant == null }?.let { set.entry(SnapshotKey.Tenant(it.value))!!.revision },
+            tenantKey?.let { set.entry(it)!!.revision },
         )
         return SnapshotView(
             platform ?: CompiledDocument.platform(emptyList(), emptyList()),

@@ -96,12 +96,7 @@ object AuditEvents {
     }
 
     private fun decision(event: DecisionEvent): Pair<AuditDecision, AuditReasonCode> {
-        val rejected = when (event.subject.rejected) {
-            AuthnResult.RejectReason.TOKEN_EXPIRED -> AuditReasonCode.TOKEN_EXPIRED
-            AuthnResult.RejectReason.TOKEN_REVOKED -> AuditReasonCode.TOKEN_REVOKED
-            AuthnResult.RejectReason.TOKEN_INVALID, AuthnResult.RejectReason.API_KEY_INVALID -> AuditReasonCode.TOKEN_INVALID
-            null -> null
-        }
+        val rejected = rejected(event.subject.rejected)
         return when (event.outcome.reason) {
             Reason.PERMIT -> AuditDecision.ALLOW to AuditReasonCode.ALLOW
             Reason.EXPLICIT_DENY -> AuditDecision.EXPLICIT_DENY to (rejected ?: AuditReasonCode.EXPLICIT_DENY)
@@ -113,6 +108,13 @@ object AuditEvents {
                 AuditDecision.INDETERMINATE to AuditReasonCode.INDETERMINATE
             Reason.ERROR -> AuditDecision.ERROR to AuditReasonCode.ERROR
         }
+    }
+
+    private fun rejected(reason: AuthnResult.RejectReason?): AuditReasonCode? = when (reason) {
+        AuthnResult.RejectReason.TOKEN_EXPIRED -> AuditReasonCode.TOKEN_EXPIRED
+        AuthnResult.RejectReason.TOKEN_REVOKED -> AuditReasonCode.TOKEN_REVOKED
+        AuthnResult.RejectReason.TOKEN_INVALID, AuthnResult.RejectReason.API_KEY_INVALID -> AuditReasonCode.TOKEN_INVALID
+        null -> null
     }
 
     private fun reason(event: DecisionEvent): String {
@@ -131,7 +133,10 @@ object AuditEvents {
                 else -> AuditSourceType.GLOBAL_POLICY to PolicyType.GLOBAL
             }
         }
-        return AuditSourceData(type, AuditPolicyData(by.policy.value, policyType, AuditStatementData(by.index, by.name)))
+        return AuditSourceData(
+            type,
+            AuditPolicyData(by.policy.value, policyType, AuditStatementData(by.index, by.name))
+        )
     }
 }
 

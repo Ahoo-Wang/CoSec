@@ -50,6 +50,27 @@ internal class RequestRecord(val startNanos: Long, val time: Long, val trace: Tr
     var breakGlass: Boolean = false
     var requiredFailures: List<String> = emptyList()
 
+    fun authenticated(
+        path: String,
+        deviceId: String,
+        authn: AuthnResult,
+        action: Action,
+        resource: Resource,
+        fetched: FetchedAttributes?,
+    ) {
+        this.path = path
+        this.deviceId = deviceId
+        this.authn = authn
+        this.action = action
+        this.resource = resource
+        this.fetched = fetched
+    }
+
+    fun resolved(scope: Scope, view: SnapshotView) {
+        this.scope = scope
+        this.view = view
+    }
+
     fun event(
         id: String,
         requestId: String,
@@ -103,6 +124,16 @@ internal class RequestRecord(val startNanos: Long, val time: Long, val trace: Tr
         is Basis.Decided -> DecisionEvent.Kind.DECIDED
     }
 
+    private fun reason(decision: Decision): OutcomeSummary.Reason = when (decision) {
+        is Decision.Permit -> OutcomeSummary.Reason.PERMIT
+        is Decision.Deny -> when (decision.by) {
+            null -> OutcomeSummary.Reason.IMPLICIT_DENY
+            is StatementRef.ScopeRejected -> OutcomeSummary.Reason.SCOPE_REJECTED
+            is StatementRef.Policy -> OutcomeSummary.Reason.EXPLICIT_DENY
+        }
+        is Decision.Indeterminate -> OutcomeSummary.Reason.INDETERMINATE
+    }
+
     private fun summary(outcome: Outcome): OutcomeSummary {
         val reason = when (val basis = outcome.basis) {
             is Basis.InvalidRequest -> OutcomeSummary.Reason.INVALID_REQUEST
@@ -112,15 +143,7 @@ internal class RequestRecord(val startNanos: Long, val time: Long, val trace: Tr
                 is Unavailability.AuthenticatorUnavailable -> OutcomeSummary.Reason.AUTHENTICATOR_UNAVAILABLE
                 Unavailability.DeadlineExceeded -> OutcomeSummary.Reason.DEADLINE_EXCEEDED
             }
-            is Basis.Decided -> when (val decision = basis.decision) {
-                is Decision.Permit -> OutcomeSummary.Reason.PERMIT
-                is Decision.Deny -> when (decision.by) {
-                    null -> OutcomeSummary.Reason.IMPLICIT_DENY
-                    is StatementRef.ScopeRejected -> OutcomeSummary.Reason.SCOPE_REJECTED
-                    is StatementRef.Policy -> OutcomeSummary.Reason.EXPLICIT_DENY
-                }
-                is Decision.Indeterminate -> OutcomeSummary.Reason.INDETERMINATE
-            }
+            is Basis.Decided -> reason(basis.decision)
         }
         val cause = when (val basis = outcome.basis) {
             is Basis.Unavailable -> (basis.reason as? Unavailability.Indeterminate)?.cause

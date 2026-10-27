@@ -86,7 +86,9 @@ class DecisionListeners(
     val requiredFailuresOnNonPermits: Long get() = requiredFailureCount.get()
 
     init {
-        require(requiredTimeout.isPositive()) { "The required listener timeout must be positive, not $requiredTimeout." }
+        require(
+            requiredTimeout.isPositive()
+        ) { "The required listener timeout must be positive, not $requiredTimeout." }
         require(queueCapacity > 0) { "The listener queue capacity must be positive, not $queueCapacity." }
         val names = HashSet<String>()
         listeners.forEach { require(names.add(it.name)) { "Decision listener ${it.name} is registered twice." } }
@@ -135,7 +137,9 @@ class DecisionListeners(
         }
         if (failure != null) {
             stats.failureCount.incrementAndGet()
-            log.error(failure) { "REQUIRED decision listener [${listener.name}] failed on request [${event.requestId}]." }
+            log.error(
+                failure
+            ) { "REQUIRED decision listener [${listener.name}] failed on request [${event.requestId}]." }
             return false
         }
         return true
@@ -152,7 +156,9 @@ class DecisionListeners(
         for (queued in bestEffort) {
             if (queued.channel.trySend(event).isFailure) {
                 queued.stats.droppedCount.incrementAndGet()
-                warn(queued.stats) { "Dropping decision events: the queue of listener [${queued.listener.name}] is full." }
+                warn(
+                    queued.stats
+                ) { "Dropping decision events: the queue of listener [${queued.listener.name}] is full." }
             }
         }
     }

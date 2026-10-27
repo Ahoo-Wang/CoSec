@@ -57,8 +57,13 @@ fun interface BridgeContextContributor {
 
     companion object {
         /** Everything [contributors] capture, in order. */
-        fun capture(contributors: List<BridgeContextContributor>): CoroutineContext =
-            contributors.fold(EmptyCoroutineContext as CoroutineContext) { context, it -> context + it.capture() }
+        fun capture(contributors: List<BridgeContextContributor>): CoroutineContext {
+            var context: CoroutineContext = EmptyCoroutineContext
+            for (contributor in contributors) {
+                context += contributor.capture()
+            }
+            return context
+        }
     }
 }
 
