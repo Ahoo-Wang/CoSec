@@ -833,6 +833,8 @@ class DecisionEvent(
 
 每个 BEST_EFFORT 监听器各有一个队列和一个消费者，一个慢监听器（例如 Kafka 不可用）不会让指标或追踪丢事件。
 
+> **实现说明（2026-10-27，#1096）**：BEST_EFFORT 的队列是无锁的有界队列（`ConcurrentLinkedQueue` 加原子计数）加合并的唤醒：只在消费者停着且队列为空、或队列到达容量一半时唤醒，批后停留 1 ms（`DecisionListeners.LINGER`）再停下。所以消费者在负载下约每毫秒被唤醒一次，而不是每个请求一次；BEST_EFFORT 事件最多可能在发布后 1 ms 才开始处理，投递仍是异步、尽力而为的。`publish` 只入队、从不挂起，队列满或已关闭就丢弃并计数；每个监听器各有自己的队列。`Pipeline.evaluate` 只在存在 BEST_EFFORT 监听器时才构造发布事件（含事件 id 与重放句柄），REQUIRED 监听器照旧在 `required` 里拿到事件。
+
 ### 9.4 REQUIRED 审计
 
 #### 9.4.1 谁是 REQUIRED
@@ -906,6 +908,8 @@ RFC 0001 §3.7、RFC 0004 I9：break-glass 的每一次使用都要写入 REQUIR
   在候选快照（RFC 0003 PR-5 的快照叠加）上再调用一次 `Engine.evaluate`，比较两个 `Decision`，差异经 `ShadowEventSink` 发布。
 - 候选语句引用了基准没有取过的外部属性：影子不去取（不让影子产生额外 I/O），这些属性按"不在计划中"处理，差异标记为 `CANDIDATE_INDETERMINATE`。
 - 影子不执行义务、不触发 REQUIRED。`ShadowDiffKind` 增加 `CANDIDATE_INDETERMINATE`。
+
+> **实现说明（2026-10-27，#1088）**：`Pipeline` 的构造改为接收一个不可变的 `PipelineComponents`（认证器、快照源、成员关系、引擎、id 生成器、时钟、选项、属性提供者、监听器、限流器、路由；只有认证器与快照源必填，其余带原来的默认值），以后新增组件只是它的一个字段。决策路径不变。
 
 ---
 
