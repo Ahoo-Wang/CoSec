@@ -1058,7 +1058,7 @@ AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新�
 
 > **实现说明（2026-10-27，#1091）**：AOT：控制面读写 JSON 用 Jackson 树与手写的编解码，不按名字加载任何类，不需要提示。`ControlBoundaryTest` 新增一条规则：反射式 Jackson 绑定（`readValue`、`treeToValue`、`convertValue` 等）、`Class.forName`、`ServiceLoader`、`kotlin.reflect.full` 都会使它失败，因为它们需要没人注册的提示，且只在原生镜像里才出错。
 
-> **运维要求（2026-10-27，#1095）**：影子报告的命名空间（`cosec:…:shadow-report`）按原样被信任：`ShadowWindows` 直接对报告求和。只有数据面实例可以写这些 key，要用 Redis ACL 强制；能写的人可以用零差异提前关闭窗口。
+> **运维要求（2026-10-27，#1095）**：影子报告的 key 是 `{prefix}:shadow:report:{changeId}@{ms}` 与 `{prefix}:shadow:status:instances`（2026-10-27 第 2 轮审查更正：此前写成 `cosec:…:shadow-report`，按那个写的 ACL 什么也保护不了）。报告按原样被信任：`ShadowWindows` 直接对报告求和。只有数据面实例可以写这些 key，要用 Redis ACL 强制；能写的人可以用零差异提前关闭窗口。由于同一窗口所有实例的报告在同一个 key 里、每次整体改写，任何一个数据面实例都能抬高样本数或抹掉别的实例的 `CANDIDATE_ERROR`；按实例分 key 的修复见第 2 轮审查的跟进 PR。数据面的凭据对 `snapshot:*`、`candidate:*`、`control:*` 也必须只读。
 
 ---
 

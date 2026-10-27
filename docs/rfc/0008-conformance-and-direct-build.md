@@ -347,7 +347,9 @@ JMH 预算保留，但比较对象从"上一阶段"改为 **7.0 的实测数字*
   这些测量不是合入门槛：任何一项低于预算时，测量的 PR 照常合入，但立即把数字交给维护者（不等到 S1），由维护者决定先优化还是继续。
   硬性门槛仍是 S1（§3.9）。理由：#1040 的路径模式解析与匹配测得是 Spring `PathPattern` 的 44–102 %，等到切换才发现差距，修复会落在关键路径的末端。
 
-> **2026-10-27 修订**：常规的前后对比可以用 CI 的 JMH A/B 工作流（`.github/workflows/jmh-ab.yml`，#1084）：同一个作业里交替跑基准与候选，只报相对比例。S1 的门槛仍是空闲机器上的测量。
+> **2026-10-27 修订**：常规的前后对比可以用 CI 的 JMH A/B 工作流（`.github/workflows/jmh-ab.yml`，#1084）：同一个作业里交替跑基准与候选，只报相对比例。
+>
+> **2026-10-27 修订（维护者决定）**：S1 的性能门槛改为 CI 上的 v7/v8 对比：手动工作流 `jmh-v7-v8.yml` 在同一台 runner 上交替运行 7.0.x 与 8.0 的基准，每个场景 v8 与 v7 的比例不低于 100 % 即通过。上面以空闲机器测量为准的预算、本节的 k6 端到端测量都不再是门槛。低于 100 % 的场景在 S1b 之前优化，不豁免。
 
 ### 3.9 最终切换的通过标准
 
@@ -563,8 +565,8 @@ token（按 token 与按主体）得到 401 `token-revoked`（#1072）。
 > **2026-10-27 修订（S1 拆成 S1a 与 S1b，维护者批准）**：
 >
 > - **S1a**（`feat(starter): add the 8.0 auto-configuration`，已合入，#1097）：上表 S1 范围中的装配全部做成加法，可以 revert。8.0 的自动配置类**不**登记进 `AutoConfiguration.imports`，测试与端到端切片显式加载它们；没有开关，也没有 7.x 脚手架。完成的继承要求：`noeviction` 检查（`SNP-3`，已有守护）、平台文档缺失 fail closed、固定快照缓存并协调成一个 `localMaxAge`、带启动测试的 `controlSupport`、`explain`/`simulate` 走执法的流程、N3 重新编译并带 starter 测试、actuator 改用 `OpenAPIServiceGenerator`、真实的 `RevocationReader` 并带 starter 测试、`SCP-4` 的 `WebAdapterParityTest` 守护、端到端切片改由 starter 装配。`cosec.authorization.snapshot.eviction-check` 取 `fail`（默认）或 `warn`；`warn` 给禁用 `CONFIG GET` 的托管 Redis，启动时打印以 `!!!` 开头的 WARN。
-> - **S1b**（`refactor!: wire the 8.0 path in the starter`，未开工）：登记 8.0 的自动配置，删除 7.x 的自动配置、L1、L2、L5 的属性与 `init-repository`/`force-refresh`；`cosec-gateway-server` 与 `k8s/` 改到 8.0，`aot-smoke` 作业；它是不可回退点，带 §3.9 第 1–5 条的证据，并在自己的 head 上重跑：百万例运行（2026-10-27 起只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml` 上进行，#1099，不在本机跑；运行链接附在 S1b 的 PR 上）、`:conformance:mutationCheck`、空闲机器上的 JMH（含 `boundary = none`）、对照 7.0 基线的 k6。AGENTS.md 的过渡说明随 S1b。S1b 同时处理仍为 `pending` 的 `SNP-1`、`SNP-2`、`ACT-1`、`PIP-1`。S1b 的后续项：补上 BDY-1（平台边界）缺的变异体。
-> - **S1b 的阻塞项（2026-10-27）**：三个过时的变异体需要改写（修复 PR 待开）；`cosec-core` 的百万例运行把原生线程耗尽（在本地观察到，正通过阅读代码修复）；空闲机器上的 JMH 待测；8.0 的 k6 在 S1b 之后。
+> - **S1b**（`refactor!: wire the 8.0 path in the starter`，未开工）：登记 8.0 的自动配置，删除 7.x 的自动配置、L1、L2、L5 的属性与 `init-repository`/`force-refresh`；`cosec-gateway-server` 与 `k8s/` 改到 8.0，`aot-smoke` 作业；它是不可回退点，带 §3.9 第 1–5 条的证据，并在自己的 head 上重跑：百万例运行（2026-10-27 起只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml` 上进行，#1099，不在本机跑；运行链接附在 S1b 的 PR 上）、`:conformance:mutationCheck`、CI 上 `jmh-v7-v8.yml` 的 v7/v8 对比（2026-10-27 起取代空闲机器 JMH 与 k6）。AGENTS.md 的过渡说明随 S1b。S1b 同时处理仍为 `pending` 的 `SNP-1`、`SNP-2`、`ACT-1`、`PIP-1`。S1b 的后续项：补上 BDY-1（平台边界）缺的变异体。
+> - **S1b 的阻塞项（2026-10-27）**：三个过时的变异体（`atr-3`、`brk-4`、`pip-2`）已改写、能重新应用，PR 待开；`cosec-core` 的百万例运行把原生线程耗尽（在本地观察到），原因是 `SnapshotSource.close()` 不等自己的线程，修复（`close()` 最多等 5 秒）与上面的变异体放在同一个 PR（草稿 #1103）；性能证据改为 CI 上的 `jmh-v7-v8.yml` 对比（v8 ≥ v7，每个场景），不再要求空闲机器 JMH 与 k6。
 > - 新的属性：`cosec.pipeline.{timeout, authentication-timeout, allow-query-token, api-key-header, trace-level}`、`cosec.authorization.scope.app-id`、`cosec.authorization.{membership,attributes,rate-limit}.timeout`、`cosec.authorization.routes.location`、`cosec.authorization.snapshot.*`（`local-max-age`、`revalidate-interval`、`lag-warn`、`lag-escalate`、`fail-closed.{tenants,max-lag}`、`cold-load-timeout`、`max-apps`、`max-tenants`、`prewarm-apps`、`prewarm-tenants`、`compile-threads`、`key-prefix`、`eviction-check`）、`cosec.authentication.revocation.skew`、`cosec.audit.required.timeout`、`cosec.audit.kafka.delivery`、`cosec.control.*`。`key-prefix`（默认 `cosec`）是对 RFC 属性列表的补充。`cosec.jwt.token-revocation.enabled=false` 时吊销读接口保持 `NONE` 并在启动时警告，S1b 让吊销缓存随 `cacheSupport` 无条件开启。
 > - 依赖：starter 对 `cosec-runtime` 是 `api` 依赖，`controlSupport` 变体引入 `cosec-control`，`webfluxSupport` 增加 `kotlinx-coroutines-reactor`（版本来自 BOM）；只用于测试的依赖是 `spring-boot-webflux`、`spring-boot-data-redis` 与 `cocache-spring-boot-starter`；没有新版本。
 
