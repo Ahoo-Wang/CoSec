@@ -18,7 +18,8 @@ a change that fails to compile. When unsure, deny, and ask.
 ./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark
 ./gradlew :code-coverage-report:codeCoverageReport
 ./gradlew :conformance:check                      # spec conformance suite: scenarios + verifyRuleCoverage
-./gradlew propertyStress -PpropertyIterations=1000000   # the registered property tests, many cases (not in check)
+./gradlew propertyStress -PpropertyIterations=1000   # the registered property tests, more cases (not in check)
+gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only, never on a local machine
 ./gradlew :conformance:mutationCheck             # break each security rule on purpose, expect a test to fail (manual, not in check)
 ```
 
