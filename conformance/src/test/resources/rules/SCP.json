@@ -1,0 +1,88 @@
+{
+  "rules": [
+    {
+      "id": "SCP-1",
+      "source": "RFC 0004 §4.6",
+      "statement": "A declared non-empty space the principal has no role in is Rejected(SPACE_NOT_MEMBER); it never falls back to the default space (C3).",
+      "level": "engine",
+      "properties": [
+        "model:ScopeResolverPropertyTest#P11 a resolved scope only narrows"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SCP-2",
+      "source": "RFC 0004 §4.6",
+      "statement": "When the host is configured with an app, a different declared app is Rejected(APP_MISMATCH), and without a declaration the host's app applies (C4); without a host app the declared app applies.",
+      "level": "engine",
+      "properties": [
+        "model:ScopeResolverPropertyTest#the app and tenant follow the host and the credential"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SCP-3",
+      "source": "RFC 0004 §4.6 (review of #1015); RFC 0006 §6.1",
+      "statement": "An anonymous request that declares CoSec-Space-Id is answered 401.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:PipelineTest#scopeRejectedForAnAnonymousPrincipal"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SCP-4",
+      "source": "RFC 0008 §3.2 (review of #1015); RFC 0006 §6.1",
+      "statement": "When the header and the query parameter of the same CoSec-* parameter differ, the request cannot be read unambiguously and is answered 400.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:CoSecParametersTest#differentHeaderAndQueryValuesAreAmbiguous",
+        "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest",
+        "cosec-spring-boot-starter:WebAdapterParityTest#the three adapters answer byte for byte alike"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SCP-5",
+      "source": "RFC 0004 §4.1, §10",
+      "statement": "Only ScopeResolver constructs a Scope; no decoding path (JSON, header, cache) deserializes one.",
+      "level": "build",
+      "guards": [
+        "model:ScopeConstructionTest#onlyTheResolverConstructsScopes",
+        "model:ScopeConstructionTest#scopeIsNotADataClass",
+        "cosec-core:PolicyDocumentCodecTest#a scope is never decoded"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SCP-6",
+      "source": "RFC 0004 §4.6",
+      "statement": "An unauthenticated subject is always in the default tenant (0) and has no roles, whatever memberships it is given.",
+      "level": "engine",
+      "guards": [
+        "model:ScopeResolverTest#an anonymous subject is in the default tenant and has no roles"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SCP-7",
+      "source": "RFC 0004 §4.6 (round-1 review, 2026-10-26)",
+      "statement": "A declared app that cannot be an app id (blank, *, containing ':' or longer than 128 characters) is Rejected(APP_MISMATCH), with or without a host app.",
+      "level": "engine",
+      "guards": [
+        "model:ScopeResolverTest#a declared app that cannot be an app id is rejected with or without a host app"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SCP-8",
+      "source": "RFC 0004 §4.6 (PR-1, 2026-10-25)",
+      "statement": "The app is checked before the space: a request failing both is Rejected(APP_MISMATCH).",
+      "level": "engine",
+      "guards": [
+        "model:ScopeResolverTest#the app is checked before the space"
+      ],
+      "pending": null
+    }
+  ]
+}

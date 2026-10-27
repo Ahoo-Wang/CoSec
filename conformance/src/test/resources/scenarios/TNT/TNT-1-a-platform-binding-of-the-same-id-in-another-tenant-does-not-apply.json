@@ -1,0 +1,43 @@
+{
+  "rules": [
+    "TNT-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The platform binds alice of globex; alice of acme is another principal and gets nothing from it.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "p:alice",
+          "subject": {
+            "principal": "alice",
+            "tenant": "globex"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "tenant": "acme",
+    "id": "alice"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}
