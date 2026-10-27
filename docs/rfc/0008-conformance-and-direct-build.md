@@ -197,6 +197,10 @@ RFC 正文与登记表不一致时按 AGENTS.md "以代码为准"的原则修 RF
 RFC 0004 §5.3 的 C1–C6、RFC 0005 §8 的 D1–D3、RFC 0006 §11.4 的 R1–R3 不再是"差异类别"，而是上表中的规则（例如 C1a → `ALG-4`、C3 → `SCP-1`、
 R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`（§4.4）。
 
+> **实现说明（2026-10-27，#1093）**：登记表已按族拆成 `conformance/src/test/resources/rules/<FAMILY>.json`（每个文件 `{"rules": [...]}`，规则按族内原来的顺序），登记表范围的 `$comment` 在 `rules/_meta.json`；本节与全文中所有"`rules.json`"、"把规则加进 `rules.json`"都指规则所属族的文件。`Corpus.rules()` 读取 `_meta.json` 和全部族文件（按文件名排序），规则出现在别族的文件里、或族文件除 `rules` 之外还有别的内容时失败。拆分时共 96 条规则，每条与原来逐字节相同；原来族与族之间交错的顺序不保留。仍然修改 `rules.json` 的分支会因文件被删除而冲突，要把规则条目重新加到族文件里。
+>
+> **实现说明（2026-10-27，#1097）**：登记表新增 `startup` 级别：与 `build` 一样，它的规则由所列的测试守护，没有场景在该级别运行（`RuleCoverageTest`）。`SNP-3`（启动时检查 `noeviction`）改为 `startup`，不再 `pending`。
+
 ### 3.3 场景语料
 
 每个场景是 `conformance/src/test/resources/scenarios/<前缀>/<id>-<名字>.json` 下的一个文件：
@@ -311,6 +315,8 @@ R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`�
 - 新增或修改安全相关性质的 PR，在描述里列出它杀死的变异体；没有变异体能杀死的性质要说明原因。
 
 是否引入 PIT 一类的变异测试工具是新依赖，需要维护者决定，见 §6 Q2。
+
+> **实现说明（2026-10-27，#1086）**：初始的变异体已实现，另有八个：ALLOW 优先的 deny-first、失败的 DENY 被忽略、缺失属性使每条 DENY 失效（`onMissing`）、平台之外的 `nomatch`、租户名下的角色绑定、过期的绑定、任意租户中的 break-glass、不可用的认证器被当作匿名。`./gradlew :conformance:mutationCheck` 共 16 个变异体，全部被杀死（`-Pmutants=a,b` 选子集）：每个补丁在临时 `git worktree` 的 `HEAD` 上应用，要求被改动模块的测试源码能编译，再运行声明的测试，要求 JUnit 报告里至少一个失败；补丁不再适用（`DOES_NOT_APPLY`）或不再编译（`DOES_NOT_COMPILE`）也算失败。运行器是 `conformance` 测试源码里的 `MutationCheck.kt` 的 `main`，`MutationCheckTest` 检查每个补丁的文件头完整。`tnt-1`、`brk-4` 原先只被引擎测试杀死，#1093 为它们补了 `TNT-1`、`BRK-4` 的场景，现在只靠 `:conformance:test` 即被杀死。BDY-1（平台边界）的变异体尚未补。S1 之前运行并附上结果的要求不变。
 
 ### 3.8 性能：绝对预算
 
@@ -554,6 +560,14 @@ token（按 token 与按主体）得到 401 `token-revoked`（#1072）。
 `deploy-wiki.yml` 从 `main` 发布，S5 之前线上文档继续描述用户实际在用的 7.x，而 8.0 没有任何发布。S1–S4 让 S5 清单之外的文档出错时（例如 `pnpm build` 报出死链接），
 在同一个 PR 中修复。S5 在 S1 合入后即可开始写（文件与 S2–S4 不重叠），在 S4 之后合入，最终的删除清单以 S4 为准。RC 前清理（§4.6）的 PR 在 S5 之后。
 
+> **2026-10-27 修订（S1 拆成 S1a 与 S1b，维护者批准）**：
+>
+> - **S1a**（`feat(starter): add the 8.0 auto-configuration`，已合入，#1097）：上表 S1 范围中的装配全部做成加法，可以 revert。8.0 的自动配置类**不**登记进 `AutoConfiguration.imports`，测试与端到端切片显式加载它们；没有开关，也没有 7.x 脚手架。完成的继承要求：`noeviction` 检查（`SNP-3`，已有守护）、平台文档缺失 fail closed、固定快照缓存并协调成一个 `localMaxAge`、带启动测试的 `controlSupport`、`explain`/`simulate` 走执法的流程、N3 重新编译并带 starter 测试、actuator 改用 `OpenAPIServiceGenerator`、真实的 `RevocationReader` 并带 starter 测试、`SCP-4` 的 `WebAdapterParityTest` 守护、端到端切片改由 starter 装配。`cosec.authorization.snapshot.eviction-check` 取 `fail`（默认）或 `warn`；`warn` 给禁用 `CONFIG GET` 的托管 Redis，启动时打印以 `!!!` 开头的 WARN。
+> - **S1b**（`refactor!: wire the 8.0 path in the starter`，未开工）：登记 8.0 的自动配置，删除 7.x 的自动配置、L1、L2、L5 的属性与 `init-repository`/`force-refresh`；`cosec-gateway-server` 与 `k8s/` 改到 8.0，`aot-smoke` 作业；它是不可回退点，带 §3.9 第 1–5 条的证据，并在自己的 head 上重跑：百万例 `propertyStress`、`:conformance:mutationCheck`、空闲机器上的 JMH（含 `boundary = none`）、对照 7.0 基线的 k6。AGENTS.md 的过渡说明随 S1b。S1b 同时处理仍为 `pending` 的 `SNP-1`、`SNP-2`、`ACT-1`、`PIP-1`。
+> - **S1b 的阻塞项（2026-10-27）**：三个过时的变异体需要改写（修复 PR 待开）；`cosec-core` 的百万例性质压力运行把原生线程耗尽（根因调查中）；空闲机器上的 JMH 待测；8.0 的 k6 在 S1b 之后。
+> - 新的属性：`cosec.pipeline.{timeout, authentication-timeout, allow-query-token, api-key-header, trace-level}`、`cosec.authorization.scope.app-id`、`cosec.authorization.{membership,attributes,rate-limit}.timeout`、`cosec.authorization.routes.location`、`cosec.authorization.snapshot.*`（`local-max-age`、`revalidate-interval`、`lag-warn`、`lag-escalate`、`fail-closed.{tenants,max-lag}`、`cold-load-timeout`、`max-apps`、`max-tenants`、`prewarm-apps`、`prewarm-tenants`、`compile-threads`、`key-prefix`、`eviction-check`）、`cosec.authentication.revocation.skew`、`cosec.audit.required.timeout`、`cosec.audit.kafka.delivery`、`cosec.control.*`。`key-prefix`（默认 `cosec`）是对 RFC 属性列表的补充。`cosec.jwt.token-revocation.enabled=false` 时吊销读接口保持 `NONE` 并在启动时警告，S1b 让吊销缓存随 `cacheSupport` 无条件开启。
+> - 依赖：starter 对 `cosec-runtime` 是 `api` 依赖，`controlSupport` 变体引入 `cosec-control`，`webfluxSupport` 增加 `kotlinx-coroutines-reactor`（版本来自 BOM）；只用于测试的依赖是 `spring-boot-webflux`、`spring-boot-data-redis` 与 `cocache-spring-boot-starter`；没有新版本。
+
 #### 4.4.2 对照（2026-10-26 修订（路线图审查））
 
 | 原来的内容 | 落在 |
@@ -625,7 +639,7 @@ RFC 0006 PR-2 #1044 随后也已合入）；RFC 0008 PR-4 一行换成 S1–S5�
 | PR | 依赖 | 能否现在开工 |
 |---|---|---|
 | RFC 0008 PR-1 一致性套件 | — | ✓ 已合入（#1045） |
-| RFC 0008 PR-2 变异检查 | RFC 0008 PR-1 ✓ | **能** |
+| RFC 0008 PR-2 变异检查 | RFC 0008 PR-1 ✓ | ✓ 已合入（#1086） |
 | RFC 0008 PR-3 7.0 基线 | — | 已派发（2026-10-26；需要空闲机器） |
 | RFC 0005 PR-3 动作与资源 | RFC 0005 PR-1 ✓（#1022） | ✓ 已合入（#1040） |
 | RFC 0005 PR-4 编译与索引 | RFC 0005 PR-2 ✓（#1036、修复 #1037）、PR-3 ✓（#1040）；RFC 0004 PR-2 ✓（#1029） | ✓ 已合入（#1051） |
@@ -642,17 +656,18 @@ RFC 0006 PR-2 #1044 随后也已合入）；RFC 0008 PR-4 一行换成 S1–S5�
 | RFC 0006 PR-7 适配器桥接（改动） | RFC 0006 PR-2、PR-6 | 否 |
 | RFC 0007 PR-1 `control/` 模块 | RFC 0007 ✓（#1028） | ✓ 已合入（#1032） |
 | RFC 0007 PR-2 schema 生成 | RFC 0007 ✓（#1028） | ✓ 已合入（#1038） |
-| RFC 0007 PR-3 平台边界 | RFC 0004 PR-4；RFC 0005 PR-4 | 否 |
+| RFC 0007 PR-3 平台边界 | RFC 0004 PR-4；RFC 0005 PR-4 | ✓ 已合入（#1075） |
 | RFC 0007 PR-4 修订与 `putIfMatch` | RFC 0007 PR-1；RFC 0004 PR-4 | 否 |
 | RFC 0007 PR-5 校验、编译与暂存 | RFC 0007 PR-4；RFC 0005 PR-4；RFC 0006 PR-4 | 否 |
 | RFC 0007 PR-6a 授出分析（2026-10-26 修订（路线图审查）：从 PR-6 拆出） | RFC 0005 PR-2 ✓（#1036）、PR-3 ✓（#1040）；RFC 0007 PR-1 ✓（#1032） | **现在开工**（2026-10-26） |
 | RFC 0007 PR-6 写操作授权与授出分析 | RFC 0007 PR-5；RFC 0005 PR-2 ✓、PR-3；RFC 0006 PR-7；（2026-10-26 修订）PR-6a | 分析部分在 RFC 0005 PR-3 合入后；接线等 PR-5 与 RFC 0006 PR-7。2026-10-26 修订（路线图审查）：分析部分即 PR-6a，PR-6 只剩接线 |
 | RFC 0007 PR-7 影子窗口 | RFC 0007 PR-5；RFC 0006 PR-6 | 否 |
 | RFC 0007 PR-8 break-glass、租户自助、变更审计 | RFC 0007 PR-6、PR-7；RFC 0004 PR-5 | 否 |
-| RFC 0007 PR-9 库与 HTTP（改动） | RFC 0007 PR-5–PR-8；RFC 0006 PR-7 | 否 |
+| RFC 0007 PR-9 库与 HTTP（改动） | RFC 0007 PR-5–PR-8；RFC 0006 PR-7 | ✓ 已合入（#1091） |
 | 端到端切片（§4.4.3；2026-10-26 修订（路线图审查）） | RFC 0005 PR-4 ✓；RFC 0004 PR-4 ✓、PR-4b ✓（#1053）；RFC 0006 PR-2 ✓（#1044） | 打开中（#1056） |
 | ~~RFC 0008 PR-4 切换~~ | ~~以上全部；§3.9~~ | 2026-10-26 修订（路线图审查）：拆成下面五行 |
-| RFC 0008 S1 装配 8.0 路径 | 以上全部，包括端到端切片；§3.9 第 1–5 条 | 否 |
+| RFC 0008 S1a 装配 8.0 路径（未登记） | 以上全部，包括端到端切片 | ✓ 已合入（#1097） |
+| RFC 0008 S1b 登记 8.0 路径并删除 7.x 的自动配置 | S1a ✓；§3.9 第 1–5 条 | 否（阻塞项见 §4.4.2 之前的 2026-10-27 修订） |
 | RFC 0008 S2 删除存储与写入路径 | S1 | 否 |
 | RFC 0008 S3 删除 7.x 决策路径 | S2 | 否 |
 | RFC 0008 S4 删除 7.x 契约与匹配器 | S3 | 否 |

@@ -19,6 +19,7 @@ a change that fails to compile. When unsure, deny, and ask.
 ./gradlew :code-coverage-report:codeCoverageReport
 ./gradlew :conformance:check                      # spec conformance suite: scenarios + verifyRuleCoverage
 ./gradlew propertyStress -PpropertyIterations=1000000   # the registered property tests, many cases (not in check)
+./gradlew :conformance:mutationCheck             # break each security rule on purpose, expect a test to fail (manual, not in check)
 ```
 
 - `cosec-cocache` and `cosec-spring-boot-starter` tests need Redis on `localhost:6379`
@@ -35,6 +36,12 @@ a change that fails to compile. When unsure, deny, and ask.
   `./gradlew :cosec-core:generateSchemas` writes it, `verifySchemas` (part of `check`) fails when it is stale, and
   `SchemaConformanceTest` fails when a descriptor and its codec disagree. Every PR that changes a document format
   changes the descriptor.
+- `:conformance:mutationCheck` applies each patch in `conformance/mutants/` in a temporary worktree and requires a
+  failing test (`-Pmutants=a,b` runs a subset). Run it before S1 and in PRs that add or change a security property;
+  list the mutants the change kills in the PR.
+- Build cache, configuration cache and parallel execution are on in `gradle.properties`. If a task fails with a
+  configuration-cache problem, don't capture `Project` in `doFirst`/`doLast`; `--no-configuration-cache` bypasses it.
+  A cached `test` run does not hit Redis: use `--rerun` (or `cleanTest`) to force Redis-backed tests.
 - Detekt runs with `autoCorrect = true`: `check` and `detekt` **rewrite source files**. Review and commit them.
 - Codecov requires ≥ 80 % coverage on changed lines.
 - Docs (`wiki/`, VitePress, en + zh), run from `wiki/`: `pnpm install`, then `pnpm check:mermaid`
