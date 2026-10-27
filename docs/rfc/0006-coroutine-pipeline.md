@@ -715,6 +715,9 @@ SPI 的契约（KDoc 与 `extending.md`）：**不得阻塞调用线程**。CoSe
   `SnapshotDocumentStore` 装载本地文件，与本地策略相同（RFC 0003）。`RateLimitRuleProvider` SPI 在 PR-10 删除（Q16，AGENTS.md 要求先问）。
 - 规则是低基数、慢变化的数据，正是 P11 定义的快照数据（RFC 0003 I6）；计数器不进快照。
 
+> **实现说明（2026-10-27，#1078）**：文档的 `schema` 仍是 2：`rateLimits` 一节是可选的，已有的 8.0 文档依然有效（RFC 0008 Q5）。应用与租户的规则用各自的计数桶
+> `app:<app>/<id>` 与 `tenant:<tenant>/<id>`；平台规则的 id 沿用 7.x 的 Redis 桶。
+
 ### 8.2 引擎算义务
 
 ```kotlin
@@ -754,6 +757,8 @@ suspend fun execute(permit: Decision.Permit, request: AuthzRequest): Outcome {
 - "无法计算桶 key"现在是"配置错误，失败即拒绝"（`matched.bucket.getOrThrow()` 在失败处理之外抛出 → 500）。本阶段桶 key 的计算是 AST 属性读取，
   只有外部属性取不到这一种失败，按上面的 `strictFailure` 处理。
 - 影子评估、`AuthorizationChecker` 不执行义务。
+
+> **实现说明（2026-10-27，#1078）**：每次计数的上界是 `PipelineOptions.rateLimitTimeout`（默认 500 ms），S1 映射为 `cosec.authorization.rate-limit.timeout`。
 
 ### 8.4 `RateLimiter`
 

@@ -28,6 +28,9 @@ a change that fails to compile. When unsure, deny, and ask.
   [`wiki/architecture/overview.md#measuring`](wiki/architecture/overview.md#measuring). Run the jar yourself only with
   `-jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml`: without it the forked JVMs log at
   DEBUG and the numbers are skewed. Reference results: `docs/perf/`.
+- `gh workflow run jmh-ab.yml -f base=main -f head=<branch> -f module=<m> -f include=<regex>` compares two refs on one CI
+  runner as same-job head/base ratios (see `scripts/jmh-ab/README.md`). Use it as a first signal for routine changes;
+  hot-path claims and the S1 gate are still measured on an idle machine.
 - `schema/*.schema.json` is generated from the document format descriptors (`DocumentFormats` in `cosec-core`):
   `./gradlew :cosec-core:generateSchemas` writes it, `verifySchemas` (part of `check`) fails when it is stale, and
   `SchemaConformanceTest` fails when a descriptor and its codec disagree. Every PR that changes a document format
