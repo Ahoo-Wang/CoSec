@@ -122,10 +122,13 @@ class ExternalAttributesPipelineTest {
             authenticator = authenticator(authenticated(memberships)),
             engine = me.ahoo.cosec.engine.flat.CoSecFlatEngine,
             views = views,
-            membershipProvider = membershipProvider,
-            options = PipelineOptions(attributeTimeout = 50.milliseconds),
-            attributes = attributes,
-        )
+        ) {
+            it.copy(
+                membershipProvider = membershipProvider,
+                options = PipelineOptions(attributeTimeout = 50.milliseconds),
+                attributes = attributes,
+            )
+        }
         return runBlocking { pipeline.evaluate(PipelineFixtures.facts(headers = headers)) } to views
     }
 
