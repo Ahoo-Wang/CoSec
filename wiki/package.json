@@ -4,7 +4,7 @@
   "private": true,
   "description": "CoSec Security Framework Documentation",
   "type": "module",
-  "packageManager": "pnpm@11.28.8",
+  "packageManager": "pnpm@11.28.9",
   "scripts": {
     "dev": "vitepress dev",
     "build": "vitepress build",
