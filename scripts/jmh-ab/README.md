@@ -22,13 +22,25 @@ gh workflow run jmh-ab.yml -f base=main -f head=<branch-or-sha> -f module=cosec-
 | `include` | required | JMH include regex |
 | `params` | empty | space-separated JMH params, such as `"size=10,100 kind=a"` (each becomes `-p`) |
 | `rounds` | `3` | alternating rounds; each runs base, then head |
-| `forks`, `warmup`, `iterations` | `2`, `3`, `5` | `-f`, `-wi`, `-i` |
+| `forks`, `warmup`, `iterations` | `1`, `2`, `3` | `-f`, `-wi`, `-i` |
 | `warmup-time`, `measurement-time` | `1s`, `1s` | `-w`, `-r` |
 
 Both refs are checked out as worktrees and built once (`:<module>:jmhJar`, compiled for 17). Each round runs the jar
-of base and then of head on JDK 25 with `-prof gc` and the WARN-level `config/logback-jmh.xml` of that ref. Runtime
-is about `rounds × 2 × benchmarks × params × forks × (warmup + iterations) × 1 s`; keep it under an hour or
-lower `rounds` and `forks`.
+of base and then of head on JDK 25 with `-prof gc` and the WARN-level `config/logback-jmh.xml` of that ref.
+
+## Keeping it short
+
+Every `@Param` combination of every matching benchmark runs once per side and round, so the cost is
+`benchmark×param runs × forks × (3 s + warmup + iterations) × 2 sides × rounds`. For example
+`HttpPathPatternBenchmark` has 6 benchmarks × 7 scenarios = 42 runs: 34 minutes with the defaults, over 90 minutes with
+`forks=2 warmup=3 iterations=5`. The job prints this estimate first and fails when it exceeds 80 minutes
+(the job limit is 90). To stay under about 30 minutes:
+
+- narrow `include` to one benchmark method (`HttpPathPatternBenchmark.cosecMatch`) rather than the class;
+- narrow `params` (`"scenario=literal,miss"`);
+- lower `rounds` (2 is enough to see a large regression) or `forks`.
+
+Runs do not queue behind each other: each dispatch gets its own runner.
 
 ## Reading the result
 

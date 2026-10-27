@@ -32,6 +32,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.event.DecisionEvent
@@ -98,7 +99,15 @@ class MetricsListenerTest {
             override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel) =
                 FlatEvaluation(decision, null)
         }
-        val pipeline = Pipeline(authenticator, SuspendingSnapshotSource(Views), engine = engine, listeners = listeners)
+        val pipeline =
+            Pipeline(
+                PipelineComponents(
+                    authenticator,
+                    SuspendingSnapshotSource(Views),
+                    engine = engine,
+                    listeners = listeners
+                )
+            )
         val facts =
             HttpFacts("GET", "/orders", null, Headers.of(emptyMap()), Cookies.EMPTY, "10.0.0.1", HostScope(null))
         runBlocking {

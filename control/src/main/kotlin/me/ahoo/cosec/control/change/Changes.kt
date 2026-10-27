@@ -543,6 +543,15 @@ class Changes(
     }
 
     /**
+     * The candidate [id] would publish on the current head (RFC 0007 §10.3 `simulate`), or null when its operations no
+     * longer apply there. Nothing is written.
+     */
+    suspend fun candidateOf(id: ChangeId): PolicyDocument? {
+        val change = get(id)
+        return applied(change, revisions.head(change.key)?.document).first
+    }
+
+    /**
      * The candidate [change]'s operations make of [base], with the `nomatch` confirmations the control plane writes
      * (RFC 0007 §9.5), and what kept them from applying or left a DENY unconfirmed.
      */

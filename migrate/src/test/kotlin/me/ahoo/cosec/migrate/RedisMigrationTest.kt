@@ -39,6 +39,7 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
@@ -273,15 +274,17 @@ class RedisMigrationTest {
             SnapshotOptions()
         ).use { source ->
             val pipeline = Pipeline(
-                Principals(
-                    mapOf(
-                        "clerk" to mapOf(SpaceId.DEFAULT to setOf("clerk")),
-                        "mallory" to mapOf(SpaceId.DEFAULT to setOf("clerk")),
-                        "auditor" to mapOf(SpaceId.DEFAULT to setOf("clerk", "auditor")),
-                        "admin" to mapOf(SpaceId("team") to setOf("admin")),
+                PipelineComponents(
+                    Principals(
+                        mapOf(
+                            "clerk" to mapOf(SpaceId.DEFAULT to setOf("clerk")),
+                            "mallory" to mapOf(SpaceId.DEFAULT to setOf("clerk")),
+                            "auditor" to mapOf(SpaceId.DEFAULT to setOf("clerk", "auditor")),
+                            "admin" to mapOf(SpaceId("team") to setOf("admin")),
+                        ),
                     ),
-                ),
-                SuspendingSnapshotSource(DocumentSnapshotViews(source)),
+                    SuspendingSnapshotSource(DocumentSnapshotViews(source)),
+                )
             )
             fun status(method: String, path: String, token: String?, space: String? = null) =
                 runBlocking { pipeline.evaluate(request(method, path, token, space)) }.status

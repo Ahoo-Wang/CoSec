@@ -31,6 +31,7 @@ import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
@@ -52,10 +53,12 @@ import java.util.concurrent.CompletableFuture
 class EngineAuthority(private val revisions: Revisions) {
     private val checker = AuthorizationChecker(
         Pipeline(
-            authenticator = Authenticator {
-                AuthnResult.Anonymous
-            },
-            snapshots = SuspendingSnapshotSource(HeadViews(revisions))
+            PipelineComponents(
+                authenticator = Authenticator {
+                    AuthnResult.Anonymous
+                },
+                snapshots = SuspendingSnapshotSource(HeadViews(revisions))
+            )
         ),
     )
 
@@ -71,17 +74,28 @@ class EngineAuthority(private val revisions: Revisions) {
         roles: List<String> = emptyList(),
         policies: List<String> = emptyList(),
         attributes: Map<String, String> = emptyMap(),
-    ): Operator {
+    ): Operator = Operator.of(security(tenant, id, roles, policies, attributes))!!
+
+    /** The request the host pipeline permitted for that principal: what the control API's routes take. */
+    fun security(
+        tenant: TenantId,
+        id: String,
+        roles: List<String> = emptyList(),
+        policies: List<String> = emptyList(),
+        attributes: Map<String, String> = emptyMap(),
+    ): me.ahoo.cosec.runtime.RequestSecurity {
         val principal =
             AuthenticatedPrincipal(PrincipalId(id), tenant, MembershipClaims.parse(roles, policies), attributes)
         val host = Pipeline(
-            authenticator = Authenticator { AuthnResult.Authenticated(principal, "test") },
-            snapshots = SuspendingSnapshotSource(HOST_VIEWS),
-            engine = PERMITTING,
+            PipelineComponents(
+                authenticator = Authenticator { AuthnResult.Authenticated(principal, "test") },
+                snapshots = SuspendingSnapshotSource(HOST_VIEWS),
+                engine = PERMITTING,
+            )
         )
         val outcome = runBlocking { host.evaluate(FACTS) }
         check(outcome.proceed) { "The host pipeline did not permit the control API: ${outcome.status}" }
-        return Operator.of(outcome.security!!)!!
+        return outcome.security!!
     }
 
     /** Compiles the current heads on every load, as a source that confirms every document before a check would. */

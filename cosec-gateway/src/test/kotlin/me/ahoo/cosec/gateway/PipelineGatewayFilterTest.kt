@@ -27,6 +27,7 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
@@ -73,7 +74,7 @@ class PipelineGatewayFilterTest {
             }
         }
         val authenticator = Authenticator { AuthnResult.Anonymous }
-        val pipeline = Pipeline(authenticator, SuspendingSnapshotSource(Views), engine = engine)
+        val pipeline = Pipeline(PipelineComponents(authenticator, SuspendingSnapshotSource(Views), engine = engine))
         val exchange = MockServerWebExchange.from(
             MockServerHttpRequest.get("/orders").header("CoSec-Request-Id", "r-1")
         )
