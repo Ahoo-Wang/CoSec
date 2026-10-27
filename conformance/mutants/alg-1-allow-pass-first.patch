@@ -1,0 +1,18 @@
+# Rule: ALG-1
+# Mutant: the ALLOW pass runs first, so a matching ALLOW wins over a matching DENY
+# Tests: :cosec-engine:test --tests me.ahoo.cosec.engine.flat.* :conformance:test
+
+diff --git a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+index 5f88243f..f617cacf 100644
+--- a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
++++ b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+@@ -104,6 +104,9 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected
+     private var remoteIp: IpAddress? = null
+ 
+     fun evaluate(): Decision {
++        pass = Effect.ALLOW
++        enumerate()
++        matched?.let { return it }
+         val decision = denyPass()
+         if (decision != null) {
+             return decision

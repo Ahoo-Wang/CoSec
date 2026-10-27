@@ -1,0 +1,23 @@
+# Rule: ALG-4
+# Mutant: an ALLOW that fails counts as a match
+# Tests: :cosec-engine:test --tests me.ahoo.cosec.engine.flat.* :conformance:test
+
+diff --git a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+index 5f88243f..bf5f842c 100644
+--- a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
++++ b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+@@ -191,7 +191,13 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected
+                 return DECIDED
+             }
+ 
+-            ERROR -> erred(policy, statement, via, stepError!!, guard = false)
++            ERROR -> {
++                if (pass === Effect.ALLOW) {
++                    matched = decide(policy, statement, via)
++                    return DECIDED
++                }
++                erred(policy, statement, via, stepError!!, guard = false)
++            }
+             GUARD_FAILED -> {
+                 val error = stepError!!
+                 erred(policy, statement, via, error, guard = true)

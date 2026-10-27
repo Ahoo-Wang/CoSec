@@ -1,0 +1,18 @@
+# Rule: BRK-4
+# Mutant: the break-glass root binding applies to a principal of that id in any tenant
+# Tests: :cosec-engine:test --tests me.ahoo.cosec.engine.flat.* :conformance:test
+
+diff --git a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+index 92f28f92..1071d991 100644
+--- a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
++++ b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+@@ -170,7 +170,8 @@ class CompiledDocument private constructor(
+ 
+     internal fun policy(id: String): CompiledPolicy? = policies[id]
+ 
+-    internal fun breakGlass(tenant: String, principal: String): Array<BoundEntry>? = breakGlass[tenant]?.get(principal)
++    internal fun breakGlass(tenant: String, principal: String): Array<BoundEntry>? =
++        breakGlass.values.firstNotNullOfOrNull { it[principal] }
+ 
+     internal fun principal(tenant: String, principal: String): Array<BoundEntry>? = principals[tenant]?.get(principal)
+ 

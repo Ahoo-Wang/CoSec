@@ -1,0 +1,20 @@
+# Rule: ALG-1
+# Mutant: the DENY scan stops at the first DENY that fails, so a later matching DENY is never seen
+# Tests: :cosec-engine:test --tests me.ahoo.cosec.engine.flat.* :conformance:test
+
+diff --git a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+index 5f88243f..bc8a3d6f 100644
+--- a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
++++ b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+@@ -191,7 +191,10 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected
+                 return DECIDED
+             }
+ 
+-            ERROR -> erred(policy, statement, via, stepError!!, guard = false)
++            ERROR -> {
++                erred(policy, statement, via, stepError!!, guard = false)
++                if (pass === Effect.DENY) return DECIDED
++            }
+             GUARD_FAILED -> {
+                 val error = stepError!!
+                 erred(policy, statement, via, error, guard = true)
