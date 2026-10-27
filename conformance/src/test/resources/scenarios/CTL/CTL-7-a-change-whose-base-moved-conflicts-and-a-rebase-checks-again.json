@@ -1,0 +1,95 @@
+{
+  "rules": [
+    "CTL-7"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "c1 and c2 are both checked on revision 0; c1 publishes first, so c2 conflicts instead of overwriting, and a rebase checks it again on revision 1 before it publishes.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "fine",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read",
+                  "condition": {
+                    "eq": [
+                      "scope.space",
+                      "team-a"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "skipShadow": "c2"
+    },
+    {
+      "publish": "c2"
+    },
+    {
+      "rebase": "c2"
+    },
+    {
+      "skipShadow": "c2"
+    },
+    {
+      "publish": "c2"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "READY",
+      "CONFLICTED",
+      "CHECKED",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 2
+    }
+  }
+}

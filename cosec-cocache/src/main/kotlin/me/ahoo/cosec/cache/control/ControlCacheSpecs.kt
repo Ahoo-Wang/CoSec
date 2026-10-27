@@ -23,6 +23,10 @@ import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeRequestCodec
+import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
@@ -54,8 +58,10 @@ data class ReferenceKey(val target: SnapshotKey, val policy: PolicyId)
  * | revision index | `<p>:control:revisions:<docKey>` |
  * | back-references | `<p>:control:refs:<docKey>:<policyId>` |
  * | leases | `<p>:control:lease:<name>` |
+ * | change requests | `<p>:control:change:<changeId>` |
+ * | staging slots | `<p>:control:stage:<docKey>` |
  *
- * All four are [storeOfRecord] (`ttl = null`, failed reads throw), applied last: records and indexes are not data-plane
+ * All of them are [storeOfRecord] (`ttl = null`, failed reads throw), applied last: records and indexes are not data-plane
  * policy data, but reading a failure as "absent" would let the control plane publish on a wrong base (RFC 0007 §5.2).
  * Leases expire through the lifetime of each write instead. Keys and values are encoded explicitly, without reflection.
  */
@@ -93,6 +99,27 @@ object ControlCacheSpecs {
             .keyPrefix("")
             .keyEncoder(ReferenceKeyEncoder)
             .codec(SnapshotKeySetCodec)
+            .policy(policy.storeOfRecord())
+            .build()
+
+    fun changeRequest(
+        keyPrefix: String = CoSec.COSEC,
+        policy: CachePolicy = CachePolicy.DEFAULT,
+    ): CacheSpec<ChangeId, ChangeRequest> =
+        CacheSpec.builder<ChangeId, ChangeRequest>(CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME)
+            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME))
+            .keyPrefix("")
+            .keyEncoder { it.value }
+            .codec(ChangeRequestCacheCodec)
+            .policy(policy.storeOfRecord())
+            .build()
+
+    fun stage(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<SnapshotKey, StageSlot> =
+        CacheSpec.builder<SnapshotKey, StageSlot>(CoSecCacheSpecs.STAGE_CACHE_NAME)
+            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.STAGE_CACHE_NAME))
+            .keyPrefix("")
+            .keyEncoder(SnapshotKeyEncoder)
+            .codec(StageSlotCodec)
             .policy(policy.storeOfRecord())
             .build()
 
@@ -214,6 +241,20 @@ object RevisionIndexCodec : Codec<RevisionIndex> {
             throw SnapshotFormatException("The $WHAT is malformed: ${error.message}", error)
         }
     }
+}
+
+/** A change request as [ChangeRequestCodec] writes it. */
+object ChangeRequestCacheCodec : Codec<ChangeRequest> {
+    override fun encode(value: ChangeRequest): ByteArray = ChangeRequestCodec.encode(value)
+
+    override fun decode(bytes: ByteArray): ChangeRequest = ChangeRequestCodec.decode(bytes)
+}
+
+/** A staging slot as [ChangeRequestCodec] writes it. */
+object StageSlotCodec : Codec<StageSlot> {
+    override fun encode(value: StageSlot): ByteArray = ChangeRequestCodec.encode(value)
+
+    override fun decode(bytes: ByteArray): StageSlot = ChangeRequestCodec.decodeSlot(bytes)
 }
 
 /** A set of document keys as a sorted JSON array of their encodings, so equal sets have equal bytes and digests. */

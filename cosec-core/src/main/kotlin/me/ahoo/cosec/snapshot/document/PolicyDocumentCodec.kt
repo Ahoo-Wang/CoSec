@@ -28,6 +28,9 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.AttributeType
+import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotDocument
@@ -59,6 +62,23 @@ object PolicyDocumentCodec {
     private val reader: ObjectReader = CoSecJsonSerializer.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
     private val factory = JsonNodeFactory.instance
 
+    private val PLATFORM_FIELDS = arrayOf("limits", "attributes")
+    private val LIMIT_FIELDS = arrayOf(
+        "maxNodes",
+        "maxDepth",
+        "maxInValues",
+        "maxCidrBlocks",
+        "maxLiteralBytes",
+        "maxCost"
+    )
+
+    /** The types an external attribute can be declared with, by their document name. */
+    val ATTRIBUTE_TYPES: Map<String, AttributeType> = linkedMapOf(
+        "string" to AttributeType.STRING,
+        "bool" to AttributeType.BOOL,
+        "stringSet" to AttributeType.STRING_SET,
+        "ip" to AttributeType.IP,
+    )
     private val DOCUMENT_FIELDS = arrayOf("schema", "revision", "publishedAt", "provenance", "policies", "bindings")
     private val PROVENANCE_FIELDS = arrayOf("parent", "change", "kind", "publishedBy", "approvedBy", "shadow")
     private val POLICY_FIELDS = arrayOf("id", "attachable", "condition", "statements")
@@ -78,7 +98,11 @@ object PolicyDocumentCodec {
 
     fun decode(kind: DocumentKind, owner: String, tree: JsonNode): PolicyDocument {
         val root = DocumentNode(tree, ROOT)
-        val fields = if (kind == DocumentKind.APP) DOCUMENT_FIELDS + "catalog" else DOCUMENT_FIELDS
+        val fields = when (kind) {
+            DocumentKind.APP -> DOCUMENT_FIELDS + "catalog"
+            DocumentKind.PLATFORM -> DOCUMENT_FIELDS + PLATFORM_FIELDS
+            DocumentKind.TENANT -> DOCUMENT_FIELDS
+        }
         root.requireObject(*fields)
         val schema = root.required("schema").long()
         if (schema != SCHEMA.toLong()) {
@@ -97,7 +121,44 @@ object PolicyDocumentCodec {
             bindings = root.field("bindings")?.elements()?.map { binding(it, kind, owner) }.orEmpty(),
             catalog = root.field("catalog")?.let(::catalog),
             provenance = root.field("provenance")?.let(::provenance),
+            limits = root.field("limits")?.let(::limits),
+            attributes = root.field("attributes")?.let(::attributes),
         )
+    }
+
+    private fun limits(node: DocumentNode): ConditionLimits {
+        node.requireObject(*LIMIT_FIELDS)
+        fun limit(name: String, default: Int): Int {
+            val field = node.field(name) ?: return default
+            val value = field.long()
+            if (value < 1 || value > Int.MAX_VALUE) field.fail("a limit is a positive int")
+            return value.toInt()
+        }
+        val default = ConditionLimits.DEFAULT
+        return ConditionLimits(
+            maxNodes = limit("maxNodes", default.maxNodes),
+            maxDepth = limit("maxDepth", default.maxDepth),
+            maxInValues = limit("maxInValues", default.maxInValues),
+            maxCidrBlocks = limit("maxCidrBlocks", default.maxCidrBlocks),
+            maxLiteralBytes = limit("maxLiteralBytes", default.maxLiteralBytes),
+            maxCost = limit("maxCost", default.maxCost),
+        )
+    }
+
+    private fun attributes(node: DocumentNode): List<Attribute> {
+        // Unique paths, like unique ids, are the compiler's to check: a schema cannot say it.
+        return node.elements().map { item ->
+            item.requireObject("path", "type")
+            val path = item.required("path")
+            val text = path.text()
+            if (!Attribute.isExternalPath(text)) {
+                path.fail("an external attribute is ext.<provider>.<name>, not [$text]")
+            }
+            val type = item.required("type")
+            val declared = ATTRIBUTE_TYPES[type.text()]
+                ?: type.fail("an external attribute is one of ${ATTRIBUTE_TYPES.keys}, not [${type.text()}]")
+            Attribute.external(text, declared)
+        }
     }
 
     private fun provenance(node: DocumentNode): Provenance {
@@ -265,6 +326,25 @@ object PolicyDocumentCodec {
     }
 
     /** The stored bytes of [document]: its header first, then each section in the order [decode] reads them. */
+    /*
+     * One entry at a time, as the document holds it: for the control plane's entry-level operations, which name a
+     * policy, binding or catalog and compare its encoding (RFC 0007 §10.1). [path] is where errors say the entry is.
+     */
+
+    fun policyTree(policy: PolicyDefinition): ObjectNode = policy(policy)
+
+    fun decodePolicy(tree: JsonNode, path: String = ROOT): PolicyDefinition = policy(DocumentNode(tree, path))
+
+    /** A binding of a [kind] document of [owner], which decides the subjects' default tenants. */
+    fun bindingTree(binding: Binding, kind: DocumentKind, owner: String): ObjectNode = binding(binding, kind, owner)
+
+    fun decodeBinding(tree: JsonNode, kind: DocumentKind, owner: String, path: String = ROOT): Binding =
+        binding(DocumentNode(tree, path), kind, owner)
+
+    fun catalogTree(catalog: Catalog): ObjectNode = catalog(catalog)
+
+    fun decodeCatalog(tree: JsonNode, path: String = ROOT): Catalog = catalog(DocumentNode(tree, path))
+
     fun encode(document: PolicyDocument): ByteArray = CoSecJsonSerializer.writeValueAsBytes(tree(document))
 
     fun tree(document: PolicyDocument): ObjectNode {
@@ -273,6 +353,18 @@ object PolicyDocumentCodec {
         root.put("revision", document.revision)
         root.put("publishedAt", document.publishedAt.toString())
         document.provenance?.let { root.set("provenance", provenance(it)) }
+        document.limits?.let { limits ->
+            root.putObject("limits").put("maxNodes", limits.maxNodes).put("maxDepth", limits.maxDepth)
+                .put("maxInValues", limits.maxInValues).put("maxCidrBlocks", limits.maxCidrBlocks)
+                .put("maxLiteralBytes", limits.maxLiteralBytes).put("maxCost", limits.maxCost)
+        }
+        document.attributes?.let { attributes ->
+            val array = root.putArray("attributes")
+            attributes.forEach { attribute ->
+                val type = ATTRIBUTE_TYPES.entries.first { it.value == attribute.type }.key
+                array.addObject().put("path", attribute.path).put("type", type)
+            }
+        }
         document.catalog?.let { root.set("catalog", catalog(it)) }
         val policies = root.putArray("policies")
         document.policies.forEach { policies.add(policy(it)) }

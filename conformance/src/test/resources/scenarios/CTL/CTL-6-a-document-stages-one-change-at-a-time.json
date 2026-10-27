@@ -1,0 +1,83 @@
+{
+  "rules": [
+    "CTL-6"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "c1 holds the staging slot of tenant acme, so c2 cannot stage; once c1 is abandoned the slot is free and c2 stages.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "fine",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read",
+                  "condition": {
+                    "eq": [
+                      "scope.space",
+                      "team-a"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "stage": "c2"
+    },
+    {
+      "abandon": "c1"
+    },
+    {
+      "stage": "c2"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "CHECKED",
+      "SHADOWING",
+      "refused 409",
+      "ABANDONED",
+      "SHADOWING"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

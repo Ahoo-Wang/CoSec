@@ -162,6 +162,78 @@ internal object PolicyDocumentFormats {
         ),
     )
 
+    private fun limit(name: String, default: Int, description: String) =
+        Field(name, IntegerType(minimum = 1), description = description, default = default)
+
+    /** RFC 0007 §3.1 N3: what every document compiles against, written once in the platform document. */
+    private val platformSections = listOf(
+        Field(
+            "limits",
+            ObjectType(
+                listOf(
+                    limit("maxNodes", 64, "Nodes of one condition."),
+                    limit("maxDepth", 8, "Depth of one condition."),
+                    limit("maxInValues", 1024, "Literals of one `in`."),
+                    limit("maxCidrBlocks", 256, "Blocks of one `cidr`."),
+                    limit("maxLiteralBytes", 1024, "UTF-8 bytes of one literal."),
+                    limit("maxCost", 256, "Weighted cost of one statement's condition."),
+                ),
+            ),
+            description = "The condition limits of every document (RFC 0005 §3.5); absent ones are the defaults. Platform only.",
+        ),
+        Field(
+            "attributes",
+            ArrayType(
+                ObjectType(
+                    listOf(
+                        Field(
+                            "path",
+                            StringType(
+                                pattern = EXTERNAL_PATH,
+                                examples = listOf("ext.geo.region", "ext.risk.score"),
+                                counterExamples = listOf("geo.region", "ext.geo", "ext..x", "ext.geo."),
+                            ),
+                            required = true,
+                        ),
+                        Field("type", StringType(enum = listOf("string", "bool", "stringSet", "ip")), required = true),
+                    ),
+                ),
+            ),
+            description = "The external attributes documents may read (RFC 0006 §5.4.1), with their types; paths unique. Platform only.",
+        ),
+    )
+
+    /** A binding of the platform document: as [bindingSchema], except that a principal always names its tenant. */
+    private fun platformBinding(): ObjectType {
+        val root = bindingSchema.root as ObjectType
+        val principal = ObjectType(
+            listOf(
+                Field("principal", StringType(examples = listOf("cosec", "svc-batch")), required = true),
+                Field("tenant", StringType(examples = listOf("(platform)", "acme")), required = true),
+            ),
+        )
+        return ObjectType(
+            root.fields.map { field ->
+                if (field.name != "subject") {
+                    field
+                } else {
+                    Field(
+                        "subject",
+                        AnyOf(
+                            listOf(
+                                StringType(enum = listOf("*"), description = "Anyone, anonymous principals included."),
+                                principal,
+                                ref(BINDING, "roleSubject"),
+                            ),
+                        ),
+                        required = true,
+                    )
+                }
+            },
+            description = "A binding of the platform document: a principal names its tenant.",
+        )
+    }
+
     private val documentSections = listOf(
         Field("policies", ArrayType(ref(SNAPSHOT_DOCUMENT, "policy"))),
         Field("bindings", ArrayType(ref(BINDING))),
@@ -172,6 +244,15 @@ internal object PolicyDocumentFormats {
             documentHeader + documentSections,
             description = "A platform or tenant document (RFC 0004 §7.1).",
         ),
+        "platformDocument" to ObjectType(
+            documentHeader + platformSections + listOf(
+                Field("policies", ArrayType(ref(SNAPSHOT_DOCUMENT, "policy"))),
+                Field("bindings", ArrayType(ref(SNAPSHOT_DOCUMENT, "platformBinding"))),
+            ),
+            description = "The platform document with what only it holds: the limits and attributes every document " +
+                "compiles against (RFC 0007 §3.1 N3).",
+        ),
+        "platformBinding" to platformBinding(),
         "appDocument" to ObjectType(
             documentHeader + Field("catalog", ref(CATALOG)) + documentSections,
             description = "An app document: its catalog, its permission policies `perm:<app>/<permission>` and role bindings.",
@@ -315,3 +396,4 @@ private fun dateTime(vararg examples: String) = StringType(
     counterExamples = FormatPatterns.DATE_TIME_COUNTER_EXAMPLES,
     description = "An ISO date-time; without an offset it is read in zone.",
 )
+private const val EXTERNAL_PATH = "^ext\\.[^.]+\\..+$"

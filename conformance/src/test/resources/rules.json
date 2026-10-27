@@ -622,7 +622,11 @@
       "source": "RFC 0007 §6.3",
       "statement": "A candidate containing any Broken entry is not published, and the head does not move.",
       "level": "control",
-      "pending": "RFC 0007 PR-5"
+      "guards": [
+        "control:PublishCompileTest",
+        "control:ControlFailClosedTest"
+      ],
+      "pending": null
     },
     {
       "id": "CTL-2",
@@ -660,6 +664,27 @@
       "level": "control",
       "guards": [
         "control:RevisionsTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-6",
+      "source": "RFC 0007 §5.5",
+      "statement": "A document has at most one staged change; another stages only once it is published, abandoned or expired.",
+      "level": "control",
+      "guards": [
+        "control:ControlFailClosedTest#one staged change per document",
+        "cosec-cocache:RevisionChainTest#changes stage one at a time across instances and publish once"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-7",
+      "source": "RFC 0007 §5.5, §6.1",
+      "statement": "Every check of a change is bound to its base: a change whose base moved never publishes, and a rebase runs every check again on the new head.",
+      "level": "control",
+      "guards": [
+        "control:ControlFailClosedTest#a moved base conflicts and publishes nothing, a rebase checks again"
       ],
       "pending": null
     },

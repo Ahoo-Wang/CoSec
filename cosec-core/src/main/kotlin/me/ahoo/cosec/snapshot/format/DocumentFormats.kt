@@ -440,6 +440,7 @@ object DocumentFormats {
         root = AnyOf(
             listOf(
                 ref(SNAPSHOT_DOCUMENT, "document"),
+                ref(SNAPSHOT_DOCUMENT, "platformDocument"),
                 ref(SNAPSHOT_DOCUMENT, "appDocument"),
                 ref(SNAPSHOT_DOCUMENT, "policiesDocument"),
                 ref(SNAPSHOT_DOCUMENT, "legacyAppDocument"),
