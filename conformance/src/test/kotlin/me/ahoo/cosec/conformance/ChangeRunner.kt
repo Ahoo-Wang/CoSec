@@ -14,12 +14,16 @@
 package me.ahoo.cosec.conformance
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.control.api.DecisionView
+import me.ahoo.cosec.control.api.DefaultControlPlane
+import me.ahoo.cosec.control.api.SimulatedRequest
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.ChangeRejectedException
@@ -31,10 +35,12 @@ import me.ahoo.cosec.control.change.ShadowOptions
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
@@ -69,7 +75,8 @@ import java.time.Instant
  *            { "approve": { "change": "c1", "by": "bob", "candidate": "own" | "other" } },
  *            { "reject": { "change": "c1", "by": "bob" } }, { "advance": "PT73H" },
  *            { "report": { "change": "c1", "instance": "i1", "counts": { "NARROWED": 2 } } },
- *            { "publish": { "change": "c1", "ack": "summary" | { "NARROWED": 1 } } } ],
+ *            { "publish": { "change": "c1", "ack": "summary" | { "NARROWED": 1 } } },
+ *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } } ],
  * "expect": { "steps": ["CHECKED", "READY", "PUBLISHED"], "errors": { "c1": [] }, "heads": { "tenant:acme": 1 },
  *             "escalations": { "c1": ["NOT_COVERED"] } }
  * ```
@@ -125,6 +132,13 @@ object ChangeRunner : ScenarioRunner {
         )
         private val documents = LinkedHashSet<SnapshotKey>()
         private val named = LinkedHashMap<String, ChangeRequest>()
+        private val plane = DefaultControlPlane(
+            changes,
+            revisions,
+            ChangeAuthority(
+                if (authorized) engine.authorizer else ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }
+            ),
+        )
 
         /** A window closes as soon as it is looked at, unless the scenario sets `options.shadow`. */
         private fun shadowOptions(): ShadowOptions {
@@ -151,6 +165,8 @@ object ChangeRunner : ScenarioRunner {
                     "advanced"
                 } else if (action == "report") {
                     report(argument)
+                } else if (action == "simulate") {
+                    simulate(argument)
                 } else {
                     try {
                         step(action, argument).also { named[it.id.value] = it }.state.name
@@ -212,6 +228,40 @@ object ChangeRunner : ScenarioRunner {
                 )
             )
             return "reported"
+        }
+
+        /**
+         * The control plane's `simulate` (RFC 0007 §10.3): `{ "by": "alice", "request": { "tenant": "acme", "principal":
+         * "bob", "roles": [], "app": "", "space": "", "action": "order:read", "resource": "order/1" }, "candidate": "c1" }`.
+         * Its result is the decision, then `by <policy>` when the caller may see it, then `; candidate <decision>`.
+         */
+        private suspend fun simulate(argument: JsonNode): String = try {
+            argument.only("by", "request", "candidate")
+            val request = argument.required("request").also {
+                it.only("tenant", "principal", "roles", "app", "space", "action", "resource")
+            }
+            val action = request.required("action").text().split(':', limit = 2)
+            val resource = request.required("resource").text().split('/', limit = 2)
+            val tenant = TenantId(request.required("tenant").text())
+            val simulated = SimulatedRequest(
+                tenant = tenant,
+                principal = request.get("principal")?.text(),
+                roles = request.get("roles")?.strings().orEmpty(),
+                app = request.get("app")?.text().orEmpty(),
+                space = request.get("space")?.text().orEmpty(),
+                action = Action(action[0], action[1]),
+                resource = Resource(resource[0], resource.getOrElse(1) { "" }, emptyMap()),
+                time = clock.now.toEpochMilli(),
+            )
+            val result = plane.simulate(
+                by(argument, SnapshotKey.Tenant(tenant.value)),
+                simulated,
+                argument.get("candidate")?.text()?.let(::ChangeId)
+            )
+            fun shown(decision: DecisionView) = decision.decision + (decision.by?.let { " by ${it.policy}" } ?: "")
+            shown(result.enforced) + (result.candidate?.let { "; candidate ${shown(it)}" } ?: "")
+        } catch (error: ChangeRejectedException) {
+            "refused ${error.status}"
         }
 
         /** A publish's `ack`: `"summary"` acknowledges the window's summary, `{ "NARROWED": 1 }` other counts. */

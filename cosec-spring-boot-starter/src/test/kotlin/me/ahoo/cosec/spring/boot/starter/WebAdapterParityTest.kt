@@ -247,14 +247,18 @@ class WebAdapterParityTest {
         }
     }
 
-    private fun pipeline(listeners: DecisionListeners) = Pipeline(
+    /**
+     * Only the deadline scenario runs under the short [timeout]: under it, a cold JVM's first request could miss the
+     * deadline, become a 503 the REQUIRED recorder never hears, and fail a scenario that has nothing to do with it.
+     */
+    private fun pipeline(listeners: DecisionListeners, timeout: kotlin.time.Duration = 30.seconds) = Pipeline(
         PipelineComponents(
             authenticator = authenticator,
             snapshots = SuspendingSnapshotSource(views),
             membershipProvider = { _, _ -> error("The directory is down") },
             engine = engine,
             idGenerator = { "parity-request" },
-            options = PipelineOptions(timeout = 200.milliseconds, authenticationTimeout = 1.seconds),
+            options = PipelineOptions(timeout = timeout, authenticationTimeout = 1.seconds),
             attributes = attributes,
             listeners = listeners,
             rateLimiter = rateLimiter,
@@ -264,6 +268,7 @@ class WebAdapterParityTest {
     private val pipelines = mapOf(
         "default" to pipeline(defaultListeners),
         "failing-audit" to pipeline(failingListeners),
+        "deadline" to pipeline(defaultListeners, timeout = 200.milliseconds),
     )
 
     // --- the adapters --------------------------------------------------------------------------------------------
@@ -450,6 +455,7 @@ class WebAdapterParityTest {
                 "the deadline is 503",
                 path = "/orders/1",
                 headers = token("slow"),
+                pipeline = "deadline",
                 status = 503,
                 type = "unavailable"
             ),
@@ -502,7 +508,7 @@ class WebAdapterParityTest {
     @ParameterizedTest
     @MethodSource("scenarios")
     fun `the three adapters make the same decision event`(scenario: Scenario) {
-        if (scenario.pipeline != "default" || scenario.status == 500 || scenario.name == "the deadline is 503") {
+        if (scenario.pipeline != "default" || scenario.status == 500) {
             // REQUIRED listeners hear the outcomes the pipeline made in time: not a defect, nor a request past its
             // deadline, and the recorder is not on the failing pipeline.
             return
@@ -519,9 +525,10 @@ class WebAdapterParityTest {
                 scenario.type
             )
         events.clear()
-        webflux(fixed)
-        gateway(fixed)
-        servlet(fixed)
+        // REQUIRED delivery finishes before the response is written, so each adapter's event is here when it returns.
+        listOf(webflux(fixed), gateway(fixed), servlet(fixed)).forEach {
+            it.status.assert().describedAs(scenario.name).isEqualTo(scenario.status)
+        }
         events.size.assert().isEqualTo(3)
         val keys = events.map {
             listOf(
