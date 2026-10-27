@@ -129,3 +129,68 @@ average of 1.7 to 2.7.
 | `role` | 261k / 261k / 263k | 608k / 619k / 618k | 233 % / 238 % / 235 % | 235 % | met | 11,061 → 4,643 |
 | `none` | 331k / 334k / 329k | 672k / 669k / 670k | 203 % / 200 % / 203 % | 202 % | met | 6,088 → 4,712 |
 | `anonymous` | 817k / 790k / 787k | 1,558k / 1,568k / 1,555k | 191 % / 198 % / 198 % | 196 % | met | 4,560 → 3,253 |
+
+## The blacklist and decision listeners (#1066, #1068)
+
+RFC 0006 PR-4 (#1066) added the blacklist in stage A, and PR-6 (#1068) added decision listeners. The benchmark gained three
+8.0 scenarios:
+
+- `blacklist`: the `global` request with the in-memory blacklist registered, which does not name the request.
+- `blocked`: the same request from a blocked address (403).
+- `listener`: the `global` request with one BEST_EFFORT listener that does nothing. What it measures is the event and its
+  queue.
+
+They were measured with the same benchmarks and settings, from `main` at #1070 (`dd0e7f27`), in three alternating rounds of
+7.0.1 and 8.0. The JSON files are in [`listeners/`](listeners).
+
+**The machine was not idle.** The load average was 1.7 at the start, then 2.6 to 6 during the rounds, from other work.
+Round 3 is visibly disturbed: its errors are 5 to 25 % of the score on both sides. Read rounds 1 and 2, and compare
+ratios, not absolute numbers.
+
+**The four budget scenarios** still meet the budget in every round:
+
+| Scenario | 7.0.1 ops/s (rounds 1 / 2 / 3) | 8.0 ops/s (rounds 1 / 2 / 3) | 8.0 / 7.0 per round | B/op 7.0.1 → 8.0 |
+|---|---|---|---|---|
+| `global` | 289k / 286k / 280k | 803k / 747k / 487k | 278 % / 261 % / 174 % | 10,549 → 5,200 |
+| `role` | 263k / 262k / 215k | 560k / 553k / 395k | 213 % / 211 % / 184 % | 11,032 → 5,192 |
+| `none` | 311k / 316k / 205k | 609k / 621k / 453k | 196 % / 196 % / 221 % | 6,080 → 5,208 |
+| `anonymous` | 788k / 792k / 597k | 1,259k / 1,278k / 754k | 160 % / 161 % / 126 % | 4,520 → 3,832 |
+
+Compared with the timer fix's table (load 1.7 to 2.7), 8.0 is lower:
+
+- `global` is 803k and 747k here, against 932k there;
+- `anonymous` is about 1,270k against 1,560k;
+- 8.0 allocates about 500 to 580 B/op more per request.
+
+Part of the throughput drop is load. The rest is what #1066 to #1070 added per request:
+- a `RequestSecurity` and its `AuthzRequest` on a permit;
+- the view's `ViewVersion`;
+- reading the bridged `TraceContext`.
+
+That part is not measured separately here.
+
+**The new scenarios** have no 7.0 counterpart. Their percentage is against 8.0's own `global` in the same round:
+
+| Scenario | 8.0 ops/s (rounds 1 / 2 / 3) | / `global` per round | B/op |
+|---|---|---|---|
+| `blacklist` | 415k / 563k / 422k | 52 % / 75 % / 87 % | 7,592 |
+| `blocked` | 858k / 862k / 787k | 107 % / 115 % / 162 % | 7,168 |
+| `listener` | 439k / 325k / 387k | 55 % / 43 % / 79 % | 5,617 |
+
+- **`blacklist`** costs 0.4 to 1.2 µs and about 2.4 kB per request:
+  - the stage-A `coroutineScope` and its `async`;
+  - the `AttributeRequest`;
+  - three lookups, and the `FetchedAttributes` maps.
+
+  It is still above 7.0.1's `global` in every round, from 144 % to 197 %.
+- **`blocked`** is faster than `global`: a blocked request loads only the platform document and stops at the first DENY.
+- **`listener`** costs about 1.2 µs per request with a listener that does nothing. That is half the throughput of `global`
+  in rounds 1 and 2, though still above 7.0.1's `global` (113 % to 152 %).
+  - The event and its summaries cost about 420 B/op.
+  - Most of the time goes to the hand-off: each event wakes the listener's consumer coroutine on `Dispatchers.Default`,
+    so every request crosses threads.
+- **Suggested follow-up (an optimization PR):** make the hand-off cheaper. Batch events per consumer wake-up, or let a
+  BEST_EFFORT listener that needs no thread of its own run inline. Then build the event lazily, only for listeners that
+  need it. Measure again with this benchmark on an idle machine.
+
+**Command:** as above, with the jar built from `main` at `dd0e7f27`. The 7.0.1 side is unchanged.
