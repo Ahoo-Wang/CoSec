@@ -236,8 +236,7 @@ object Expectations {
             is Cause.MatcherFailed -> set("at", ref(cause.at)).put("guard", cause.guard)
             is Cause.MissingPolicies -> set("policies", policies(cause.policyIds))
             is Cause.AmbiguousPolicy -> set("policies", policies(cause.policyIds))
-            is Cause.SourceUnavailable -> put("document", cause.document.name.lowercase())
-            is Cause.NotLoaded -> put("document", cause.document.name.lowercase())
+            is Cause.SourceUnavailable, is Cause.NotLoaded -> put("document", documentOf(cause))
             is Cause.MembershipUnavailable -> Unit
             is Cause.BoundaryUnavailable -> put("boundary", cause.boundary.value)
             is Cause.RateLimiterUnavailable -> put("rule", cause.ruleId)
@@ -248,6 +247,12 @@ object Expectations {
                 cause.at?.let { set("at", ref(it)) }
             }
         }
+    }
+
+    private fun documentOf(cause: Cause): String = when (cause) {
+        is Cause.SourceUnavailable -> cause.document.name.lowercase()
+        is Cause.NotLoaded -> cause.document.name.lowercase()
+        else -> error("No document: $cause")
     }
 
     private fun policies(ids: Set<PolicyId>): JsonNode =

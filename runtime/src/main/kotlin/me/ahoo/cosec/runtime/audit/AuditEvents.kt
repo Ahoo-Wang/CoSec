@@ -102,10 +102,9 @@ object AuditEvents {
         return when (event.outcome.reason) {
             Reason.PERMIT -> AuditDecision.ALLOW to AuditReasonCode.ALLOW
             Reason.TOO_MANY_REQUESTS -> AuditDecision.TOO_MANY_REQUESTS to AuditReasonCode.TOO_MANY_REQUESTS
-            Reason.EXPLICIT_DENY -> AuditDecision.EXPLICIT_DENY to (rejected ?: AuditReasonCode.EXPLICIT_DENY)
+            Reason.EXPLICIT_DENY, Reason.SCOPE_REJECTED, Reason.BOUNDARY ->
+                AuditDecision.EXPLICIT_DENY to (rejected ?: explicit(event.outcome.reason))
             Reason.IMPLICIT_DENY -> AuditDecision.IMPLICIT_DENY to (rejected ?: AuditReasonCode.IMPLICIT_DENY)
-            Reason.SCOPE_REJECTED -> AuditDecision.EXPLICIT_DENY to (rejected ?: AuditReasonCode.SCOPE_REJECTED)
-            Reason.BOUNDARY -> AuditDecision.EXPLICIT_DENY to (rejected ?: AuditReasonCode.BOUNDARY)
             // A 400 is refused before any decision; kind says why.
             Reason.INVALID_REQUEST -> AuditDecision.EXPLICIT_DENY to AuditReasonCode.EXPLICIT_DENY
             Reason.INDETERMINATE ->
@@ -118,6 +117,13 @@ object AuditEvents {
                 AuditDecision.INDETERMINATE to AuditReasonCode.INDETERMINATE
             Reason.ERROR -> AuditDecision.ERROR to AuditReasonCode.ERROR
         }
+    }
+
+    /** Why an explicit deny: a statement, the scope, or the tenant's boundary (RFC 0007 §7.6). */
+    private fun explicit(reason: Reason): AuditReasonCode = when (reason) {
+        Reason.SCOPE_REJECTED -> AuditReasonCode.SCOPE_REJECTED
+        Reason.BOUNDARY -> AuditReasonCode.BOUNDARY
+        else -> AuditReasonCode.EXPLICIT_DENY
     }
 
     private fun rejected(reason: AuthnResult.RejectReason?): AuditReasonCode? = when (reason) {

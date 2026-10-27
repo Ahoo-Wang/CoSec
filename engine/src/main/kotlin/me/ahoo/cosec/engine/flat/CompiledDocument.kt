@@ -260,7 +260,15 @@ class CompiledDocument private constructor(
                     "Boundary ${boundary.id} holds ${boundary.allows.size} statements, more than $MAX_BOUNDARY_STATEMENTS"
                 }
             }
-            return CompiledDocument(DocumentKind.PLATFORM, "", index, bindings, boundaryIndex, defaultBoundary, rateLimits)
+            return CompiledDocument(
+                DocumentKind.PLATFORM,
+                "",
+                index,
+                bindings,
+                boundaryIndex,
+                defaultBoundary,
+                rateLimits
+            )
         }
 
         /** The document of [app]: its permission policies and role bindings (7.x app permissions and grants). */
@@ -270,7 +278,13 @@ class CompiledDocument private constructor(
             bindings: List<Binding>,
             rateLimits: List<CompiledRateLimit> = emptyList(),
         ): CompiledDocument =
-            CompiledDocument(DocumentKind.APP, app.value, index(DocumentKind.APP, policies), bindings, rateLimits = rateLimits)
+            CompiledDocument(
+                DocumentKind.APP,
+                app.value,
+                index(DocumentKind.APP, policies),
+                bindings,
+                rateLimits = rateLimits
+            )
 
         /**
          * The document of [tenant]: its own policies and bindings, and the platform [boundary] it is held to instead

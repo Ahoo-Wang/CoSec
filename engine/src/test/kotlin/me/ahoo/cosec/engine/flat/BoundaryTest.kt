@@ -32,7 +32,13 @@ class BoundaryTest {
     private val allowAll = fixture.policy("all", allow())
 
     private fun platform(vararg boundaries: CompiledPolicy, default: String? = null) =
-        CompiledDocument.platform(listOf(allowAll), listOf(anyone("g", "all")), emptyList(), boundaries.toList(), default)
+        CompiledDocument.platform(
+            listOf(allowAll),
+            listOf(anyone("g", "all")),
+            emptyList(),
+            boundaries.toList(),
+            default
+        )
 
     private fun decide(platform: CompiledDocument, tenant: CompiledDocument = tenant(), request: FlatRequest = flatRequest()): Decision {
         val view = SnapshotView(platform, null, tenant)
@@ -110,7 +116,8 @@ class BoundaryTest {
         val closed = fixture.policy("closed", allow(RuleBehavior.THROW))
         val platform = CompiledDocument.platform(
             listOf(fixture.policy("d", deny())),
-            listOf(anyone("g", "d")), emptyList(),
+            listOf(anyone("g", "d")),
+            emptyList(),
             listOf(closed),
             "closed",
         )
@@ -140,24 +147,45 @@ class BoundaryTest {
             CompiledDocument.platform(emptyList(), emptyList(), emptyList(), listOf(fixture.policy("b", deny())))
         }.hasMessageContaining("only allows")
         assertThrownBy<IllegalArgumentException> {
-            CompiledDocument.platform(emptyList(), emptyList(), emptyList(), listOf(fixture.policy("b", allow(), attachable = true)))
+            CompiledDocument.platform(
+                emptyList(),
+                emptyList(),
+                emptyList(),
+                listOf(fixture.policy("b", allow(), attachable = true))
+            )
         }.hasMessageContaining("cannot be attached")
         assertThrownBy<IllegalArgumentException> {
-            CompiledDocument.platform(emptyList(), emptyList(), emptyList(), listOf(fixture.policy("b", *Array(65) { allow() })))
+            CompiledDocument.platform(
+                emptyList(),
+                emptyList(),
+                emptyList(),
+                listOf(fixture.policy("b", *Array(65) { allow() }))
+            )
         }.hasMessageContaining("more than 64")
         assertThrownBy<IllegalArgumentException> {
-            CompiledDocument.platform(emptyList(), listOf(anyone("g", "b")), emptyList(), listOf(fixture.policy("b", allow())))
+            CompiledDocument.platform(
+                emptyList(),
+                listOf(anyone("g", "b")),
+                emptyList(),
+                listOf(fixture.policy("b", allow()))
+            )
         }.hasMessageContaining("binds boundary policy b")
         assertThrownBy<IllegalArgumentException> {
             CompiledDocument.platform(listOf(allowAll), emptyList(), emptyList(), emptyList(), "all")
         }.hasMessageContaining("is not a boundary policy")
         assertThrownBy<IllegalArgumentException> {
-            CompiledDocument.platform(listOf(allowAll), emptyList(), emptyList(), listOf(fixture.policy("all", allow())))
+            CompiledDocument.platform(
+                listOf(allowAll),
+                emptyList(),
+                emptyList(),
+                listOf(fixture.policy("all", allow()))
+            )
         }.hasMessageContaining("Duplicate policy id")
         assertThrownBy<IllegalArgumentException> {
             CompiledDocument.platform(
                 emptyList(),
-                emptyList(), emptyList(),
+                emptyList(),
+                emptyList(),
                 listOf(fixture.policy(BuiltinPolicies.ROOT.value, allow()))
             )
         }

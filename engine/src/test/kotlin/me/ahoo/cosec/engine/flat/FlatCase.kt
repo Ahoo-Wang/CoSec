@@ -55,7 +55,13 @@ class FlatCase(
     val defaultBoundary: String? = null,
     val tenantBoundary: String? = null,
 ) {
-    val platformDocument = CompiledDocument.platform(platform.policies, platform.bindings, emptyList(), boundaries, defaultBoundary)
+    val platformDocument = CompiledDocument.platform(
+        platform.policies,
+        platform.bindings,
+        emptyList(),
+        boundaries,
+        defaultBoundary
+    )
     val appDocument = CompiledDocument.app(request.scope.app, app.policies, app.bindings)
     val tenantDocument =
         CompiledDocument.tenant(request.scope.tenant, tenant.policies, tenant.bindings, emptyList(), tenantBoundary)

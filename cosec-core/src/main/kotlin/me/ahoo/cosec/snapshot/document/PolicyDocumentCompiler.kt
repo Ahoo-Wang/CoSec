@@ -143,7 +143,13 @@ class PolicyDocumentCompiler(
         return try {
             when (document.kind) {
                 DocumentKind.PLATFORM ->
-                    CompiledDocument.platform(policies, document.bindings, rateLimits, boundaries, document.boundary?.value)
+                    CompiledDocument.platform(
+                        policies,
+                        document.bindings,
+                        rateLimits,
+                        boundaries,
+                        document.boundary?.value
+                    )
 
                 DocumentKind.APP -> CompiledDocument.app(AppId(document.owner), compiled, document.bindings, rateLimits)
                 DocumentKind.TENANT ->
