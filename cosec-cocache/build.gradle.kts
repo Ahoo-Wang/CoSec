@@ -23,6 +23,9 @@ dependencies {
     // CoCacheControlStore implements the control plane's ControlStore (RFC 0007 §5.1). Compile-only, so an application
     // that reads snapshots without the control plane does not pull it in; the control plane brings it with it.
     compileOnly(project(":cosec-control"))
+    // ReactiveRedisRateLimiter implements the pipeline's suspending RateLimiter (RFC 0006 §8.4). Compile-only, as above:
+    // an application running the coroutine pipeline brings cosec-runtime with it.
+    compileOnly(project(":cosec-runtime"))
     testImplementation(project(":cosec-control"))
     testImplementation("me.ahoo.cocache:cocache-test")
     // MembershipCacheFailureTest resolves through the pipeline's MembershipResolver.

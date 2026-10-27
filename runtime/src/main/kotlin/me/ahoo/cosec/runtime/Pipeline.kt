@@ -35,6 +35,8 @@ import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.model.decision.Obligation
+import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.DeclaredScope
@@ -51,6 +53,8 @@ import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.authn.Credentials
 import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.ratelimit.RateLimitFailures
+import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.event.TraceContext
 import me.ahoo.cosec.runtime.http.CoSecParameters
@@ -95,8 +99,14 @@ class Pipeline(
     private val attributes: AttributeProviders = AttributeProviders.NONE,
     /** The decision listeners (RFC 0006 §9); none by default, and then no event is made. */
     private val listeners: DecisionListeners = DecisionListeners.NONE,
+    /**
+     * Counts the permits of rate limit rules (RFC 0006 §8.4). Without one, a permit with obligations finds the limiter
+     * unavailable: a strict rule refuses (503), any other is skipped.
+     */
+    private val rateLimiter: RateLimiter? = null,
 ) {
     private val memberships = MembershipResolver(membershipProvider, options.membershipTimeout)
+    private val rateLimitFailures = RateLimitFailures()
 
     /**
      * The only entry point of the adapters. An external cancellation propagates unchanged and makes no outcome;
@@ -292,8 +302,62 @@ class Pipeline(
         )
         val request = FlatRequest(authz, scope, memberships, clock.millis())
         val decision = evaluate(request, view, fetched, record)
-        return breakGlass(requestId, traceId, decision, view, record)
-            ?: StatusMapping.decided(requestId, decision, authn, traceId, security(requestId, principal, request, decision))
+        breakGlass(requestId, traceId, decision, view, record)?.let { return it }
+        val security = security(requestId, principal, request, decision)
+        if (decision is Decision.Permit && decision.obligations.isNotEmpty()) {
+            return obligations(requestId, traceId, decision, authn, security!!)
+        }
+        return StatusMapping.decided(requestId, decision, authn, traceId, security)
+    }
+
+    /**
+     * Runs a permit's obligations in order (RFC 0006 §8.3), as 7.x `RateLimitingAuthorization` does: the first exhausted
+     * rule is a 429 and the later rules spend nothing; earlier rules keep what they spent; the response reports the rule
+     * with the fewest permits left. A rule that cannot be counted (its limiter failed, timed out or is missing, or its
+     * bucket could not be read) refuses the request (503) when it is strict, and is skipped otherwise.
+     */
+    private suspend fun obligations(
+        requestId: String,
+        traceId: String?,
+        permit: Decision.Permit,
+        authn: AuthnResult,
+        security: RequestSecurity,
+    ): Outcome {
+        var tightest: RateLimitResult? = null
+        for (obligation in permit.obligations) {
+            if (obligation !is Obligation.RateLimit) {
+                continue
+            }
+            val result = acquire(obligation)
+            when {
+                result == null && obligation.strictFailure ->
+                    return unavailable(requestId, traceId, Cause.RateLimiterUnavailable(obligation.ruleId))
+                result == null -> continue
+                !result.allowed -> return StatusMapping.tooManyRequests(requestId, permit, obligation.ruleId, result, traceId)
+                tightest == null || result.remaining < tightest.remaining -> tightest = result
+            }
+        }
+        return StatusMapping.decided(requestId, permit, authn, traceId, security, tightest)
+    }
+
+    /** The limiter's answer for [obligation]; null when it cannot be counted, logged at most once per interval. */
+    private suspend fun acquire(obligation: Obligation.RateLimit): RateLimitResult? {
+        val bucket = obligation.bucket
+        val limiter = rateLimiter
+        val failure: Throwable = when {
+            bucket == null -> IllegalStateException("The bucket of rule [${obligation.ruleId}] could not be read.")
+            limiter == null -> IllegalStateException("No rate limiter is configured.")
+            else -> when (
+                val fetched = call(options.rateLimitTimeout) {
+                    limiter.tryAcquire(obligation.ruleId, bucket, obligation.limit)
+                }
+            ) {
+                is Fetched.Value -> return fetched.value
+                is Fetched.Failed -> fetched.error
+            }
+        }
+        rateLimitFailures.report(obligation, failure)
+        return null
     }
 
     /** Who may proceed, for a permit only (§7.6). */
