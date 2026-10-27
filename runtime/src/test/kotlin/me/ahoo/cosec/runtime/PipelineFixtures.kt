@@ -29,11 +29,9 @@ import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
-import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -133,26 +131,18 @@ object PipelineFixtures {
         }
     }
 
+    /** A pipeline of [authenticator], [engine] and [views] fixed ids; [configure] sets any other component. */
     fun pipeline(
         authenticator: Authenticator = ANONYMOUS,
         engine: FlatEngine = StubEngine(PERMIT),
         views: SnapshotViews = InstalledViews(),
-        membershipProvider: me.ahoo.cosec.membership.MembershipProvider? = null,
-        options: PipelineOptions = PipelineOptions(),
-        attributes: AttributeProviders = AttributeProviders.NONE,
-        listeners: DecisionListeners = DecisionListeners.NONE,
-        rateLimiter: me.ahoo.cosec.runtime.ratelimit.RateLimiter? = null,
-        routes: me.ahoo.cosec.route.RouteMap = me.ahoo.cosec.route.RouteMap.EMPTY,
+        configure: (PipelineComponents) -> PipelineComponents = { it },
     ): Pipeline = Pipeline(
-        authenticator = authenticator,
-        snapshots = SuspendingSnapshotSource(views),
-        membershipProvider = membershipProvider,
-        engine = engine,
-        idGenerator = ids,
-        options = options,
-        attributes = attributes,
-        listeners = listeners,
-        rateLimiter = rateLimiter,
-        routes = routes,
+        PipelineComponents(
+            authenticator = authenticator,
+            snapshots = SuspendingSnapshotSource(views),
+            engine = engine,
+            idGenerator = ids,
+        ).let(configure)
     )
 }

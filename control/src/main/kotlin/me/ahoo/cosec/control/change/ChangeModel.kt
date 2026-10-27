@@ -15,6 +15,7 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.ConditionLimits
@@ -99,6 +100,12 @@ sealed interface Operation {
 
     /** The external attributes the platform document declares (RFC 0007 §3.1 N3); `null` removes the section. */
     class SetAttributes(val attributes: List<Attribute>?) : Operation
+
+    /**
+     * The platform boundary (RFC 0007 §7.6): in the platform document the default, in a tenant document the one that
+     * holds that tenant instead; `null` removes it.
+     */
+    class SetBoundary(val boundary: PolicyId?) : Operation
 }
 
 /** How bad a finding is: an error keeps the change from being checked clean, a warning is shown at publish. */
@@ -178,9 +185,18 @@ data class Escalation(val subject: String, val reason: String, val detail: Strin
 
 /**
  * An approval (RFC 0007 §7.5): by [approver], at [at], of the change whose candidate digest was [candidate], covering
- * the escalation subjects [covers]. It is valid for `cosec.control.approval.expire-after` from [at].
+ * the escalation subjects [covers]. It is valid for `cosec.control.approval.expire-after` from [at], and only while
+ * the approver, with the [memberships] and [attributes] they approved with, still holds `cosec:approve` on the
+ * document: publishing checks that again (review K3). An approval without them cannot be checked, so it does not count.
  */
-data class Approval(val approver: Actor, val at: Instant, val candidate: String, val covers: List<String>)
+data class Approval(
+    val approver: Actor,
+    val at: Instant,
+    val candidate: String,
+    val covers: List<String>,
+    val memberships: Memberships? = null,
+    val attributes: Map<String, String> = emptyMap(),
+)
 
 /**
  * A change's shadow window (RFC 0007 §6.4): [window] names it in the candidate and in every instance's report; [closed]

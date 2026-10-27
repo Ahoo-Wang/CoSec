@@ -241,10 +241,10 @@ class ControlAuthorizationTest {
         }.assert().isEqualTo(403)
         changes.propose(mallory, SnapshotKey.Tenant(GLOBEX.value), 0, listOf(Operation.PutPolicy(allow("p"))), "own")
             .state.assert().isEqualTo(ChangeState.CHECKED)
-        // Nor may a tenant's principal approve or publish another tenant's change.
+        // Nor may a tenant's principal approve or publish another tenant's change: to them it does not exist (CTL-15).
         val change = windowClosed(changes.propose(alice, TENANT, 1, grant(null), "viewers everywhere"))
-        refused { changes.approve(mallory, change.id, change.candidate!!) }.assert().isEqualTo(403)
-        refused { changes.abandon(mallory, change.id) }.assert().isEqualTo(403)
+        refused { changes.approve(mallory, change.id, change.candidate!!) }.assert().isEqualTo(404)
+        refused { changes.abandon(mallory, change.id) }.assert().isEqualTo(404)
         head().assert().isEqualTo(1)
     }
 
@@ -358,6 +358,39 @@ class ControlAuthorizationTest {
             "narrow"
         )
         removal.escalations.assert().isEmpty()
+    }
+
+    /** RFC 0007 §7.6: only the platform sets a boundary, and anyone but the trust root needs a second person. */
+    @Test
+    fun `a boundary is the platform's to set`() = runBlocking<Unit> {
+        val fence = PolicyDefinition(
+            PolicyId("fence"),
+            false,
+            null,
+            listOf(StatementSource("", Effect.ALLOW, listOf("order:*"), emptyList())),
+            boundary = true,
+        )
+        val setter = PolicyDefinition(
+            PolicyId("boundary-setter"),
+            false,
+            null,
+            listOf(
+                StatementSource("", Effect.ALLOW, listOf("cosec:boundary"), listOf(ResourceSource("doc/tenant/**")))
+            ),
+        )
+        bootstrap(
+            SnapshotKey.Platform,
+            listOf(fence, setter),
+            revisions.head(SnapshotKey.Platform)!!.document.bindings +
+                control("bea", SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("bea")), PolicyId("boundary-setter")),
+        )
+        val set = listOf(Operation.SetBoundary(PolicyId("fence")))
+        // A tenant admin cannot loosen or tighten its own tenant's boundary.
+        refused { changes.propose(alice, TENANT, head(), set, "mine") }.assert().isEqualTo(403)
+        val bea = engine.operator(TenantId.PLATFORM, "bea")
+        changes.propose(bea, TENANT, head(), set, "fence acme").escalations.map { it.reason }.assert()
+            .containsExactly("NOT_ANALYZED")
+        changes.propose(plato, TENANT, head(), set, "trust root").escalations.assert().isEmpty()
     }
 
     @Test

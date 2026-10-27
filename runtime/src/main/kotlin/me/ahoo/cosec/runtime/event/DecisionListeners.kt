@@ -26,11 +26,15 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.runtime.resumeOffIo
 import me.ahoo.cosec.runtime.withLazyTimeoutOrNull
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
@@ -42,6 +46,9 @@ private val log = KotlinLogging.logger {}
  * - Each BEST_EFFORT listener has its own bounded queue of [queueCapacity] events and one consumer on [dispatcher],
  *   never on the request's thread: [publish] only offers the event, and a full queue drops it. One slow listener
  *   (Kafka down, say) therefore never costs another its events, and never holds up a request.
+ * - A consumer is woken once per batch, not once per event: waking it moves the request onto another thread, which
+ *   cost more than the event itself (`docs/perf/e2e-slice`). After delivering what is queued, it waits up to [LINGER]
+ *   for more, and only a consumer with nothing queued waits for a wake-up. A queue half full wakes it at once.
  *
  * [close] stops taking events; the consumers finish what is queued. Failures and drops are counted in [stats] and
  * logged at most once per [warnInterval] per listener.
@@ -67,7 +74,21 @@ class DecisionListeners(
         val failures: Long get() = failureCount.get()
     }
 
-    private class Queued(val listener: DecisionListener, val stats: Stats, val channel: Channel<DecisionEvent>)
+    private class Queued(val listener: DecisionListener, val stats: Stats, val capacity: Int) {
+        val events = ConcurrentLinkedQueue<DecisionEvent>()
+
+        /** Events in [events]: bounds the queue, which [ConcurrentLinkedQueue] does not. */
+        val size = AtomicInteger()
+
+        /** Conflated: a burst of wake-ups resumes the consumer once. */
+        val wake = Channel<Unit>(Channel.CONFLATED)
+
+        /** Set while the consumer waits on [wake] with nothing queued: only then does an event wake it. */
+        @Volatile
+        var parked = false
+
+        val halfFull = (capacity + 1) / 2
+    }
 
     internal val required: List<DecisionListener>
     private val requiredStats: List<Stats>
@@ -75,12 +96,18 @@ class DecisionListeners(
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val requiredFailureCount = AtomicLong()
 
+    @Volatile
+    private var closed = false
+
     /** The shadow listeners, asked whether they sample a request before its event is made (§9.5.4). */
     internal val shadows: List<ShadowListener>
 
     val stats: List<Stats>
 
     val isEmpty: Boolean get() = required.isEmpty() && bestEffort.isEmpty()
+
+    /** Whether [publish] has anyone to hand an event to. */
+    val hasBestEffort: Boolean get() = bestEffort.isNotEmpty()
 
     /** REQUIRED failures on a decision they could not change (`cosec.audit.required.failures`, §9.4.2). */
     val requiredFailuresOnNonPermits: Long get() = requiredFailureCount.get()
@@ -95,7 +122,7 @@ class DecisionListeners(
         required = listeners.filter { it.delivery == Delivery.REQUIRED }
         requiredStats = required.map { Stats(it.name, Delivery.REQUIRED) }
         bestEffort = listeners.filter { it.delivery == Delivery.BEST_EFFORT }.map { listener ->
-            Queued(listener, Stats(listener.name, Delivery.BEST_EFFORT), Channel(queueCapacity))
+            Queued(listener, Stats(listener.name, Delivery.BEST_EFFORT), queueCapacity)
         }
         bestEffort.forEach { queued -> scope.launch { consume(queued) } }
         shadows = listeners.filterIsInstance<ShadowListener>().filter { it.delivery == Delivery.BEST_EFFORT }
@@ -151,21 +178,48 @@ class DecisionListeners(
         log.error { "REQUIRED decision listeners $failed failed on request [${event.requestId}], answered ${event.outcome}." }
     }
 
-    /** Offers [event] to every BEST_EFFORT listener's queue without suspending; a full queue drops it. */
+    /** Offers [event] to every BEST_EFFORT listener's queue without suspending; a full or closed queue drops it. */
     internal fun publish(event: DecisionEvent) {
         for (queued in bestEffort) {
-            if (queued.channel.trySend(event).isFailure) {
+            val size = queued.size.incrementAndGet()
+            if (closed || size > queued.capacity) {
+                queued.size.decrementAndGet()
                 queued.stats.droppedCount.incrementAndGet()
                 warn(
                     queued.stats
                 ) { "Dropping decision events: the queue of listener [${queued.listener.name}] is full." }
+                continue
+            }
+            queued.events.offer(event)
+            // After the offer: a consumer that parked before it either sees the event or is seen parked here.
+            if (queued.parked || size == queued.halfFull) {
+                queued.wake.trySend(Unit)
             }
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
     private suspend fun consume(queued: Queued) {
-        for (event in queued.channel) {
+        while (true) {
+            queued.parked = true
+            if (queued.events.isEmpty()) {
+                if (queued.wake.receiveCatching().isClosed && queued.events.isEmpty()) {
+                    return
+                }
+            }
+            queued.parked = false
+            do {
+                drain(queued)
+                // Let the next events gather: one wake-up for the batch. Returns at once when closed or half full.
+                withTimeoutOrNull(LINGER) { queued.wake.receiveCatching() }
+            } while (queued.events.isNotEmpty())
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun drain(queued: Queued) {
+        while (true) {
+            val event = queued.events.poll() ?: return
+            queued.size.decrementAndGet()
             try {
                 queued.listener.onDecision(event)
             } catch (e: CancellationException) {
@@ -194,7 +248,8 @@ class DecisionListeners(
 
     /** Stops taking events: queued ones are still delivered. */
     override fun close() {
-        bestEffort.forEach { it.channel.close() }
+        closed = true
+        bestEffort.forEach { it.wake.close() }
     }
 
     /** Stops at once: queued events are dropped. */
@@ -205,6 +260,9 @@ class DecisionListeners(
 
     companion object {
         const val DEFAULT_QUEUE_CAPACITY = 1024
+
+        /** How long a consumer waits for more events after a batch: the most a BEST_EFFORT event waits to start. */
+        internal val LINGER: Duration = 1.milliseconds
 
         val NONE: DecisionListeners = DecisionListeners(emptyList())
     }

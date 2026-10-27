@@ -23,6 +23,7 @@ import me.ahoo.cosec.engine.flat.CompiledRateLimit
 import me.ahoo.cosec.engine.flat.PolicyCompiler
 import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
@@ -57,6 +58,10 @@ class DocumentCompileException(val document: String, val errors: List<CompileErr
  *   tokens or a membership provider, not in a snapshot.
  * - What [CompiledDocument] checks: unique ids, which subjects each document binds, reachable binding shapes, the
  *   break-glass rules and the built-in policies (`BND-3`, `BND-8`, `BRK-2`, `BRK-4`).
+ * - Platform boundaries (RFC 0007 §7.6, Q11): boundary policies only in the platform document, only ALLOW statements, at
+ *   most [CompiledDocument.MAX_BOUNDARY_STATEMENTS], neither attachable nor bound; the platform's default names one of
+ *   them; the platform tenant names no boundary. Whether a tenant's boundary exists is looked up per request, like any
+ *   reference to the platform: a missing one fails the request closed.
  *
  * References from app and tenant documents to platform policies are looked up per request ([CompiledDocument]): the
  * platform may change on its own, and a missing one makes the request indeterminate. [checkReferences] checks them
@@ -121,16 +126,33 @@ class PolicyDocumentCompiler(
             )
         }
         checkBindings(document, errors)
+        checkBoundaries(document, errors)
         checkAttributes(document, errors)
         if (errors.isNotEmpty()) {
             throw DocumentCompileException(name, errors)
         }
+        val boundaryIds = document.policies.filter { it.boundary }.mapTo(HashSet()) { it.id.value }
+        val (boundaries, policies) = compiled.partition { it.policyId.value in boundaryIds }
         return try {
             when (document.kind) {
-                DocumentKind.PLATFORM -> CompiledDocument.platform(compiled, document.bindings, rateLimits)
+                DocumentKind.PLATFORM ->
+                    CompiledDocument.platform(
+                        policies,
+                        document.bindings,
+                        rateLimits,
+                        boundaries,
+                        document.boundary?.value
+                    )
+
                 DocumentKind.APP -> CompiledDocument.app(AppId(document.owner), compiled, document.bindings, rateLimits)
                 DocumentKind.TENANT ->
-                    CompiledDocument.tenant(TenantId(document.owner), compiled, document.bindings, rateLimits)
+                    CompiledDocument.tenant(
+                        TenantId(document.owner),
+                        compiled,
+                        document.bindings,
+                        rateLimits,
+                        document.boundary?.value,
+                    )
             }
         } catch (error: IllegalArgumentException) {
             throw DocumentCompileException(name, listOf(CompileError("$", error.message ?: "invalid")), error)
@@ -254,6 +276,53 @@ class PolicyDocumentCompiler(
         }
     }
 
+    private fun checkBoundaries(document: PolicyDocument, errors: MutableList<CompileError>) {
+        val boundaries = HashSet<String>()
+        for ((i, policy) in document.policies.withIndex()) {
+            if (policy.boundary) {
+                boundaries += policy.id.value
+                checkBoundaryPolicy(document.kind, "$.policies[$i]", policy, errors)
+            }
+        }
+        for ((i, binding) in document.bindings.withIndex()) {
+            if (binding.policy.value in boundaries) {
+                errors += CompileError("$.bindings[$i].policy", "[${binding.policy.value}] is a boundary; boundaries are not bound")
+            }
+        }
+        val boundary = document.boundary ?: return
+        when {
+            document.kind == DocumentKind.PLATFORM && boundary.value !in boundaries ->
+                errors += CompileError("$.boundaries.default", "[${boundary.value}] is not a boundary of this document")
+
+            document.kind == DocumentKind.TENANT && document.owner == TenantId.PLATFORM.value ->
+                errors += CompileError("$.boundary", "the platform tenant has no boundary")
+        }
+    }
+
+    /** A boundary policy (RFC 0007 §7.6): in the platform, never attached, only ALLOWs, at most 64 of them. */
+    private fun checkBoundaryPolicy(
+        kind: DocumentKind,
+        path: String,
+        policy: PolicyDefinition,
+        errors: MutableList<CompileError>
+    ) {
+        if (kind != DocumentKind.PLATFORM) {
+            errors += CompileError("$path.boundary", "only the platform document holds boundaries")
+        }
+        if (policy.attachable) {
+            errors += CompileError("$path.attachable", "a boundary cannot be attached")
+        }
+        policy.statements.withIndex().filter { it.value.effect == Effect.DENY }.forEach { (s, _) ->
+            errors += CompileError("$path.statements[$s].effect", "a boundary only allows")
+        }
+        if (policy.statements.size > CompiledDocument.MAX_BOUNDARY_STATEMENTS) {
+            errors += CompileError(
+                "$path.statements",
+                "${policy.statements.size} statements, more than ${CompiledDocument.MAX_BOUNDARY_STATEMENTS}",
+            )
+        }
+    }
+
     /** Each external attribute is declared once (RFC 0007 §3.1 N3). */
     private fun checkAttributes(document: PolicyDocument, errors: MutableList<CompileError>) {
         val paths = HashSet<String>()
@@ -284,11 +353,18 @@ class PolicyDocumentCompiler(
             // A platform that declares a path twice does not compile; until it does, the first declaration counts.
             val catalog = platform?.attributes?.let { AttributeCatalog.of(it.distinctBy { attribute -> attribute.path }) }
                 ?: AttributeCatalog.NONE
-            return PolicyDocumentCompiler(
-                PolicyCompiler(ConditionChecker(limits = limits, zones = JavaZones.RESOLVER, catalog = catalog)),
-                principalBindingLimit,
-            )
+            return of(limits, catalog, principalBindingLimit)
         }
+
+        /** A compiler that checks conditions against [limits] and the external attributes of [catalog]. */
+        fun of(
+            limits: ConditionLimits,
+            catalog: AttributeCatalog,
+            principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
+        ): PolicyDocumentCompiler = PolicyDocumentCompiler(
+            PolicyCompiler(ConditionChecker(limits = limits, zones = JavaZones.RESOLVER, catalog = catalog)),
+            principalBindingLimit,
+        )
 
         /** RFC 0004 Q2. */
         const val DEFAULT_PRINCIPAL_BINDING_LIMIT: Int = 1_000

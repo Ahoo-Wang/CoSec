@@ -1,0 +1,17 @@
+# Rule: PIP-2
+# Mutant: an indeterminate decision is answered 403 instead of 503
+# Tests: :cosec-runtime:test --tests me.ahoo.cosec.runtime.Pipeline* :conformance:test
+
+diff --git a/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StatusMapping.kt b/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StatusMapping.kt
+index d07ba222..9ce9dfc7 100644
+--- a/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StatusMapping.kt
++++ b/runtime/src/main/kotlin/me/ahoo/cosec/runtime/StatusMapping.kt
+@@ -55,7 +55,7 @@ internal object StatusMapping {
+             )
+             is Decision.Deny -> problem(denied(decision, authn), requestId, traceId, Basis.Decided(decision))
+             is Decision.Indeterminate ->
+-                unavailable(requestId, Unavailability.Indeterminate(decision.cause), traceId)
++                problem(denied(Decision.Deny(null), authn), requestId, traceId, Basis.Decided(Decision.Deny(null)))
+         }
+ 
+     /** 503 `unavailable`: no decision could be made. Never with `Retry-After` (RFC 0006 Q1). */

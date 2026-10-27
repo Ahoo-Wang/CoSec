@@ -20,12 +20,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.FlatEngine
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.limiter.RateLimitResult
-import me.ahoo.cosec.membership.MembershipProvider
 import me.ahoo.cosec.membership.MembershipUnavailableException
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
@@ -44,7 +41,6 @@ import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
-import me.ahoo.cosec.route.RouteMap
 import me.ahoo.cosec.route.RouteResolution
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.attribute.AttributeRequest
@@ -54,7 +50,7 @@ import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.authn.Credentials
-import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.authn.MembershipSource
 import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.event.TraceContext
 import me.ahoo.cosec.runtime.http.CoSecParameters
@@ -62,10 +58,6 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.runtime.http.QueryParameters
 import me.ahoo.cosec.runtime.ratelimit.RateLimitFailures
-import me.ahoo.cosec.runtime.ratelimit.RateLimiter
-import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
-import me.ahoo.cosid.StringIdGenerator
-import java.time.Clock
 import java.util.concurrent.TimeoutException
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
@@ -87,32 +79,18 @@ private val log = KotlinLogging.logger {}
  * outcome at all (§7.4, `PIP-3`). Every SPI call goes through [resumeOffIo], so a request that never really suspends
  * finishes on its calling thread without a dispatch (§7.2).
  */
-class Pipeline(
-    private val authenticator: Authenticator,
-    private val snapshots: SuspendingSnapshotSource,
-    /** Asked when a token carries the provider marker instead of claims; without one such a request is a 503. */
-    private val membershipProvider: MembershipProvider? = null,
-    private val engine: FlatEngine = CoSecFlatEngine,
-    /** Request ids for requests without a `CoSec-Request-Id` header; without one, random ids that never block. */
-    private val idGenerator: StringIdGenerator? = null,
-    private val clock: Clock = Clock.systemUTC(),
-    private val options: PipelineOptions = PipelineOptions(),
-    /** The external attribute providers; the documents must be compiled with their [AttributeProviders.catalog]. */
-    private val attributes: AttributeProviders = AttributeProviders.NONE,
-    /** The decision listeners (RFC 0006 §9); none by default, and then no event is made. */
-    private val listeners: DecisionListeners = DecisionListeners.NONE,
-    /**
-     * Counts the permits of rate limit rules (RFC 0006 §8.4). Without one, a permit with obligations finds the limiter
-     * unavailable: a strict rule refuses (503), any other is skipped.
-     */
-    private val rateLimiter: RateLimiter? = null,
-    /**
-     * The service's routes (RFC 0005 §5.3): a mapped request has its route's `service:verb` on a typed resource, any
-     * other request `http:<METHOD>` on its path. None by default: every request is in the `http` namespace.
-     */
-    private val routes: RouteMap = RouteMap.EMPTY,
-) {
-    private val memberships = MembershipResolver(membershipProvider, options.membershipTimeout)
+class Pipeline(components: PipelineComponents) {
+    private val authenticator = components.authenticator
+    private val snapshots = components.snapshots
+    private val engine = components.engine
+    private val idGenerator = components.idGenerator
+    private val clock = components.clock
+    private val options = components.options
+    private val attributes = components.attributes
+    private val listeners = components.listeners
+    private val rateLimiter = components.rateLimiter
+    private val routes = components.routes
+    private val memberships = MembershipResolver(components.membershipProvider, options.membershipTimeout)
     private val rateLimitFailures = RateLimitFailures()
 
     /**
@@ -132,10 +110,15 @@ class Pipeline(
             evaluate(facts, requestId, traceId, record)
         } catch (e: CancellationException) {
             // Only an external cancellation gets here: a CANCELLED event, and still no outcome (§7.4).
-            listeners.publish(record.event(eventId(), requestId, facts, null))
+            if (listeners.hasBestEffort) {
+                listeners.publish(record.event(eventId(), requestId, facts, null))
+            }
             throw e
         }
-        listeners.publish(record.event(eventId(), requestId, facts, outcome, replay(record)))
+        // REQUIRED listeners had their event in [required]; without a BEST_EFFORT one, nobody would read this one.
+        if (listeners.hasBestEffort) {
+            listeners.publish(record.event(eventId(), requestId, facts, outcome, replay(record)))
+        }
         return outcome
     }
 
@@ -469,6 +452,12 @@ class Pipeline(
         if (request == null || fetched == null) {
             return memberships(principal)
         }
+        if (principal?.membershipSource !is MembershipSource.Provider) {
+            // Claims, or nothing to ask: the memberships never suspend, so there is nothing to overlap stage A with.
+            val memberships = memberships(principal)
+            fetchStageA(request, fetched)
+            return memberships
+        }
         return coroutineScope {
             val stageA = async(start = CoroutineStart.UNDISPATCHED) { fetchStageA(request, fetched) }
             val memberships = memberships(principal)
@@ -511,6 +500,10 @@ class Pipeline(
      * stays unavailable.
      */
     private suspend fun fetchStageB(request: FlatRequest, view: SnapshotView, fetched: FetchedAttributes) {
+        if (!attributes.hasStageB) {
+            // Only stage-A providers, the blacklist say, and stage A asked them for everything: no plan to make.
+            return
+        }
         if (request.request.environment.blocked) {
             // The blacklist rule decides; nothing else would be read.
             return

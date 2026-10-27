@@ -343,6 +343,8 @@ refs:<被引用文档>:<policyId> = { 引用它的 docKey… }      // 例：ref
 
 ---
 
+> **实现说明（2026-10-27，#1087）**：`bootstrap` 写入的绑定 id 是 `platform-admin-<principal>`；`publish` 经 `ControlStore` 写修订（`kind = MIGRATE`），拒绝期限超过 `--break-glass-max-duration` 的 break-glass 绑定。
+
 ## 6. 发布流程
 
 ### 6.1 状态机
@@ -431,6 +433,8 @@ flowchart LR
 
 **为什么默认强制**（Q1）：不能越权授权回答"这个人有没有资格这样改"，影子窗口回答"这样改了，真实流量会怎样"。前者挡不住"有资格但写错了"——
 例如租户管理员把一条 DENY 的资源模式写宽了，把自己的整个应用锁死。没有影子窗口，这类错误只能在发布后被用户发现。
+
+> **实现说明（2026-10-27，#1080）**：窗口关闭时冻结汇总并撤下候选文档，发布者的确认对照冻结的汇总；基准按修订匹配（`BASE_MISMATCH` 不计入有效样本）。
 
 ### 6.5 发布与传播
 
@@ -722,6 +726,9 @@ withinBoundary(p, req, view):
 
 ---
 
+> **实现说明（2026-10-27，#1087）**：经控制面的 break-glass 已实现（`BreakGlass`、`cosec:breakglass`、期限上限默认 4 小时、最长 24 小时，发布时再查）。
+> break-glass 绑定的元数据检查推迟到 PR-3 之后。
+
 ## 9. 租户自助
 
 ### 9.1 租户能写什么
@@ -783,6 +790,9 @@ RFC 0004 §5.2 方案 A 把 7.x 的数据全部放进平台层；控制面让运
 - 确认记入 `ChangeEvent`。`wiki/guide/security-model.md` 的失败即拒绝一节写明：这是策略作者显式选择的降级，不是运行时默认。
 
 ---
+
+> **实现说明（2026-10-27，#1087）**：确认的 JSON 是 `onMissingConfirmed: { by: { tenant, principal }, change }`；语句摘要不含确认本身。确认只由控制面写入，
+> 作者写进文档的确认被丢弃。只限平台的过渡规则在 PR-8 中删除（原定 PR-11）。
 
 ## 10. API
 
@@ -1054,8 +1064,8 @@ AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新�
 | PR-5 | `feat(control): validate, compile and stage changes` | §6.1–§6.3、§6.7：变更请求与状态机、条目级操作、V1–V5、严格编译、暂存槽、变基、`apply`；N3 的 `limits`/`attributes` 两节 | PR-4；RFC 0005 PR-4（AST 编译与成本）；RFC 0006 PR-4（属性目录） | RFC 0006 PR-4 合入后 | `PublishCompileTest`、`ControlFailClosedTest` |
 | PR-6a | `feat(engine,control): analyze grants`（**2026-10-26 修订（路线图审查）**：从 PR-6 拆出，现在开工，见 [RFC 0008](0008-conformance-and-direct-build.md) §4.5） | §7.4.1–§7.4.4：`GrantAnalyzer`（片段拆分、`specialize`、捕获变量、`disjoint`、收窄判定）；RFC 0005 §5.5 的模式包含（N7，`engine/`）；A6、A7。A5 在 RFC 0004 PR-4 之后加入（这里或 PR-6）；A8 与 `GRT-*` 场景留在 PR-6 | PR-1 ✓（#1032）；RFC 0005 PR-2 ✓（#1036）、PR-3 ✓（#1040） | **能**（2026-10-26 开工） | `GrantAnalyzerTest`（§7.4.6 每一行）、A6、A7 |
 | PR-6 | `feat(engine,control): authorize control-plane writes and analyze grants`（**2026-10-26 修订（路线图审查）**：分析部分移到 PR-6a，本 PR 只剩 §7.1–§7.3、§7.5、接线、A5（如未在 PR-6a 中）、A8 与 `GRT-*` 场景） | §7.1–§7.5：动作与资源、内置控制面策略、硬性规则、`GrantAnalyzer`、收窄判定、审批；RFC 0005 §5.5 的模式包含（N7）；A5–A8 | PR-5；RFC 0005 PR-2（`implies`、A1/A2）、PR-3（模式）；RFC 0006 PR-7（挂起的 `AuthorizationChecker`） | 分析部分在 RFC 0005 PR-2、PR-3 之后即可开工；接线等 RFC 0006 PR-7 | `GrantAnalyzerTest`（§7.4.6 每一行）、A5–A8 |
-| PR-7 | `feat(runtime,control): run shadow windows on candidate documents` | §6.4、§6.5：候选文档、`CandidateSource`、`ShadowListener` 改读候选、`ShadowReportSink` 与 CoCache 实现、实例状态、窗口判定与确认、`propagation` | PR-5；RFC 0006 PR-6（监听器） | RFC 0006 PR-6 合入后 | `ListenerIsolationTest` 扩展；用两个内存实例跑通一个窗口 |
-| PR-8 | `feat(control,core,migrate,kafka): break-glass, tenant self-service and change audit` | §8、§9、§10.5：break-glass、N1/N2 的编译规则、`nomatch` 确认（N6）、`ChangeListener` 与 Kafka 实现、`cosec-migrate bootstrap`/`partition plan`、`publish` 改经 `ControlStore` | PR-6、PR-7；RFC 0004 PR-5（`cosec-migrate`） | PR-6 合入后 | `BreakGlassControlTest`、`ControlTenantIsolationTest`、P12 的控制面形式 |
+| PR-7 | `feat(runtime,control): run shadow windows on candidate documents`（已合入，#1080） | §6.4、§6.5：候选文档、`CandidateSource`、`ShadowListener` 改读候选、`ShadowReportSink` 与 CoCache 实现、实例状态、窗口判定与确认、`propagation` | PR-5；RFC 0006 PR-6（监听器） | RFC 0006 PR-6 合入后 | `ListenerIsolationTest` 扩展；用两个内存实例跑通一个窗口 |
+| PR-8 | `feat(control,core,migrate,kafka): break-glass, tenant self-service and change audit`（已合入，#1087） | §8、§9、§10.5：break-glass、N1/N2 的编译规则、`nomatch` 确认（N6）、`ChangeListener` 与 Kafka 实现、`cosec-migrate bootstrap`/`partition plan`、`publish` 改经 `ControlStore` | PR-6、PR-7；RFC 0004 PR-5（`cosec-migrate`） | PR-6 合入后 | `BreakGlassControlTest`、`ControlTenantIsolationTest`、P12 的控制面形式 |
 | PR-9 | `feat(control,starter): expose the control plane as a library and over HTTP`（**2026-10-26 改动**：starter 装配移进切换 PR；依赖改为 RFC 0006 PR-7） | §10.1–§10.3：`ControlPlane` 门面、HTTP 路由、`controlSupport` feature variant 与属性、AOT hint 与测试、`simulate`/`explain`/`analyze`（`AccessAnalyzer` 重写）；控制面延迟测量（§14.2） | PR-5 到 PR-8；RFC 0006 PR-9（starter 装配 Pipeline） | RFC 0006 PR-9 合入后 | `:cosec-spring-boot-starter:check` 通过（需要 Redis）；§14.2 的数字 |
 | ~~PR-10~~ | ~~`test: replay phase 6 against phase 5 with zero differences`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | §12：门槛 D 的回放模式、发布往返性质、随机比较、百万例任务 | PR-3、PR-8、PR-9；RFC 0006 PR-10（基准是第 5 阶段结束时的实现） | RFC 0006 PR-10 合入后 | 用仓库内的合成数据跑通回放与往返 |
 | — | ~~**门槛 D**~~ **已取消（2026-10-26）** | 维护者在本地：对同一批导出跑回放（§12.3） | PR-10 | — | 差异为 0；证据附在 PR-11 |

@@ -52,6 +52,11 @@ class PolicyDocument(
     val bindings: List<Binding>,
     /** An app document's catalog; null for the other kinds. */
     val catalog: Catalog? = null,
+    /**
+     * The platform boundary (RFC 0007 §7.6): in the platform document, the default (`"boundaries": {"default": …}`);
+     * in a tenant document, the one that holds that tenant instead (`"boundary": …`). Null for none.
+     */
+    val boundary: PolicyId? = null,
     /** Where the revision came from; written by the control plane, absent in documents it did not publish. */
     val provenance: Provenance? = null,
     /**
@@ -74,6 +79,7 @@ class PolicyDocument(
         require(revision > 0) { "Revision must be positive, was $revision." }
         require((kind == DocumentKind.PLATFORM) == owner.isEmpty()) { "Only the platform document has no owner." }
         require(catalog == null || kind == DocumentKind.APP) { "Only an app document has a catalog." }
+        require(boundary == null || kind != DocumentKind.APP) { "An app document names no boundary." }
         require((limits == null && attributes == null) || kind == DocumentKind.PLATFORM) {
             "Only the platform document has limits and attributes."
         }
@@ -87,6 +93,8 @@ class PolicyDefinition(
     val attachable: Boolean,
     val condition: Condition?,
     val statements: List<StatementSource>,
+    /** A platform boundary (RFC 0007 §7.6): only ALLOWs, never bound or attached. */
+    val boundary: Boolean = false,
 )
 
 /** An app's permission catalog (RFC 0004 §4.9): for UIs, generators and validation. It takes no part in evaluation. */

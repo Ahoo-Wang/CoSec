@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.audit.RevisionRef
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.authz.TenantIsolation
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Publication
@@ -101,6 +102,10 @@ class Changes(
      * Proposes [operations] on revision [base] of [key] (0 for a document not published yet) and checks them. The
      * change is `CHECKED` when every check passes, `DRAFT` with its findings otherwise. A base that is not the head is
      * a 409: the author proposes on what they have seen. The [author] must be allowed every target first (403, 503).
+     *
+     * A caller proposes a `PUBLISH` change, or a `BREAK_GLASS` one through [BreakGlass]; any other [kind] is a 400.
+     * `ROLLBACK` is [rollback]'s, and `MIGRATE` and `BOOTSTRAP` revisions are written by cosec-migrate, never by a
+     * change (review K1): a kind is what an entry point is, never what its input says.
      */
     suspend fun propose(
         author: Operator,
@@ -112,10 +117,26 @@ class Changes(
         /** `deny-nomatch` confirmations of the statements that need them (RFC 0007 §9.5). */
         confirmations: List<Confirmation> = emptyList(),
     ): ChangeRequest {
-        authority.authorize(author, key, operations, kind)
-        val requestsBreakGlass = kind == ProvenanceKind.BREAK_GLASS && operations.any { it is Operation.PutBinding }
-        requireAudit(kind, operations)
+        if (kind != ProvenanceKind.PUBLISH && kind != ProvenanceKind.BREAK_GLASS) {
+            throw ChangeRejectedException(BAD_REQUEST, "a change is proposed as PUBLISH or BREAK_GLASS, not $kind")
+        }
+        return proposeAs(author, key, base, operations, note, kind, confirmations)
+    }
+
+    private suspend fun proposeAs(
+        author: Operator,
+        key: SnapshotKey,
+        base: Long,
+        operations: List<Operation>,
+        note: String,
+        kind: ProvenanceKind,
+        confirmations: List<Confirmation>,
+    ): ChangeRequest {
         val head = revisions.head(key)
+        // Keyed on what the change does, not on its kind (review K1).
+        val breakGlass = BreakGlassRules.touches(operations, head?.document)
+        authority.authorize(author, key, operations, kind, breakGlass || kind == ProvenanceKind.BREAK_GLASS)
+        requireAudit(breakGlass)
         if ((head?.revision ?: 0) != base) {
             throw ChangeRejectedException(CONFLICT, "[$key] is at revision ${head?.revision ?: 0}, not $base")
         }
@@ -137,7 +158,7 @@ class Changes(
             confirmations = confirmations,
         )
         val checked = checked(draft, head, author)
-        if (requestsBreakGlass) {
+        if (breakGlass) {
             audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor)
         }
         if (!store.putChange(null, checked)) {
@@ -172,11 +193,32 @@ class Changes(
         val body = revisions.revision(key, revision)
             ?: throw ChangeRejectedException(GONE, "[$key] keeps no revision $revision")
         val operations = Operations.diff(key, head.document, body, ApplyMode.REPLACE)
-        return propose(author, key, head.revision, operations, note, ProvenanceKind.ROLLBACK)
+        return proposeAs(author, key, head.revision, operations, note, ProvenanceKind.ROLLBACK, emptyList())
     }
 
     /** The change [id]; one past its expiry is `EXPIRED` from then on. */
     suspend fun get(id: ChangeId): ChangeRequest = expired(read(id).value)
+
+    /**
+     * The change [id] as [operator] may see it (review K2): one that does not exist, is of a document the hard rule
+     * keeps them from, or that they neither wrote nor may `cosec:read`, is the same 404, before its state is looked at
+     * or expired. A missing change still costs one authorization, so that how long the answer takes says as little as
+     * the answer; what it cannot equalize is the store read of a change that exists.
+     */
+    suspend fun visible(operator: Operator, id: ChangeId): ChangeRequest {
+        val stored = store.change(id)?.value
+        val key = stored?.key ?: SnapshotKey.Platform
+        val own = stored != null && stored.author == operator.actor && TenantIsolation.allows(operator, key)
+        val readable = own || authority.holds(operator, key, ControlActions.READ)
+        if (stored == null || !readable) {
+            throw ChangeRejectedException(NOT_FOUND, "no change ${id.value}")
+        }
+        return expired(stored)
+    }
+
+    /** Whether [change] creates or alters a break-glass binding of its document's current head. */
+    private suspend fun touchesBreakGlass(change: ChangeRequest): Boolean =
+        BreakGlassRules.touches(change.operations, revisions.head(change.key)?.document)
 
     /**
      * Replays a `CONFLICTED` change (or one not staged yet: `DRAFT`, `CHECKED`) on the current head and runs every
@@ -184,10 +226,10 @@ class Changes(
      * approvals said carries over. Only its author rebases it, and is checked again as they are now.
      */
     suspend fun rebase(author: Operator, id: ChangeId): ChangeRequest {
-        val change = get(id)
-        requireState(change, REBASABLE)
+        val change = visible(author, id)
         requireAuthor(author, change)
-        authority.authorize(author, change.key, change.operations, change.kind)
+        requireState(change, REBASABLE)
+        authority.authorize(author, change.key, change.operations, change.kind, touchesBreakGlass(change))
         return transition(id, REBASABLE) { current ->
             val head = revisions.head(current.key)
             val base = head?.let { Base(it.revision, it.digest) } ?: Base.NONE
@@ -205,9 +247,9 @@ class Changes(
      * skipped, without `cosec:skip-shadow`.
      */
     suspend fun stage(operator: Operator, id: ChangeId): ChangeRequest {
-        val change = get(id)
-        requireState(change, setOf(ChangeState.CHECKED))
+        val change = visible(operator, id)
         authority.require(operator, change.key, ControlActions.PUBLISH)
+        requireState(change, setOf(ChangeState.CHECKED))
         val head = revisions.head(change.key)
         takeSlot(change)
         if (exempt(change, head)) {
@@ -278,13 +320,13 @@ class Changes(
      */
     suspend fun skipShadow(operator: Operator, id: ChangeId, reason: String): ChangeRequest {
         require(reason.isNotBlank()) { "Skipping the shadow window needs a reason." }
-        val change = get(id)
-        requireState(change, setOf(ChangeState.CHECKED))
+        val change = visible(operator, id)
         if (exempt(change, revisions.head(change.key))) {
             authority.require(operator, change.key, ControlActions.PUBLISH)
         } else {
             authority.require(operator, change.key, ControlActions.SKIP_SHADOW)
         }
+        requireState(change, setOf(ChangeState.CHECKED))
         takeSlot(change)
         return transition(id, setOf(ChangeState.CHECKED)) { it.copy(state = afterWindow(it), skipShadow = reason) }
     }
@@ -295,9 +337,9 @@ class Changes(
      * The approval covers the change's escalations, and the change is `READY`.
      */
     suspend fun approve(operator: Operator, id: ChangeId, candidate: String): ChangeRequest {
-        val change = get(id)
-        requireState(change, setOf(ChangeState.AWAITING_APPROVAL))
+        val change = visible(operator, id)
         authority.require(operator, change.key, ControlActions.APPROVE)
+        requireState(change, setOf(ChangeState.AWAITING_APPROVAL))
         if (operator.actor == change.author) {
             throw ChangeRejectedException(FORBIDDEN, "the author of change ${id.value} cannot approve it")
         }
@@ -309,7 +351,15 @@ class Changes(
             if (current.candidate != candidate) {
                 throw ChangeRejectedException(CONFLICT, "change ${id.value} is not candidate $candidate")
             }
-            val approval = Approval(operator.actor, clock.instant(), candidate, current.escalations.map { it.subject })
+            // Who approved, as they were: publish checks again that they still hold cosec:approve (review K3).
+            val approval = Approval(
+                operator.actor,
+                clock.instant(),
+                candidate,
+                current.escalations.map { it.subject },
+                operator.memberships,
+                operator.attributes,
+            )
             current.copy(
                 state = ChangeState.READY,
                 approval = approval,
@@ -323,9 +373,9 @@ class Changes(
     /** Rejects an `AWAITING_APPROVAL` change: [operator] holds `cosec:approve` on the document. Its slot is released. */
     suspend fun reject(operator: Operator, id: ChangeId, reason: String): ChangeRequest {
         require(reason.isNotBlank()) { "A rejection needs a reason." }
-        val change = get(id)
-        requireState(change, setOf(ChangeState.AWAITING_APPROVAL))
+        val change = visible(operator, id)
         authority.require(operator, change.key, ControlActions.APPROVE)
+        requireState(change, setOf(ChangeState.AWAITING_APPROVAL))
         val rejected = transition(id, setOf(ChangeState.AWAITING_APPROVAL)) {
             it.copy(state = ChangeState.REJECTED, findings = it.findings + Finding(APPROVAL, "$", reason, FORBIDDEN))
         }
@@ -339,8 +389,7 @@ class Changes(
      * `cosec:publish` on the document, which the change may be holding up.
      */
     suspend fun abandon(operator: Operator, id: ChangeId): ChangeRequest {
-        val current = get(id)
-        authority.isolate(operator, current.key)
+        val current = visible(operator, id)
         if (operator.actor != current.author) {
             authority.require(operator, current.key, ControlActions.PUBLISH)
         }
@@ -366,11 +415,11 @@ class Changes(
      * goes back to `AWAITING_APPROVAL` with them, keeping its slot, and nothing is published.
      */
     suspend fun publish(publisher: Operator, id: ChangeId, ack: ShadowAck? = null): ChangeRequest {
-        val change = get(id)
-        requireState(change, setOf(ChangeState.READY))
+        val change = visible(publisher, id)
         authority.require(publisher, change.key, ControlActions.PUBLISH)
+        requireState(change, setOf(ChangeState.READY))
         acknowledged(change, ack)
-        authority.authorize(publisher, change.key, change.operations, change.kind)
+        authority.authorize(publisher, change.key, change.operations, change.kind, touchesBreakGlass(change))
         val head = revisions.head(change.key)
         if (head?.digest != change.base.digest) {
             return settle(change, ChangeState.CONFLICTED)
@@ -379,7 +428,9 @@ class Changes(
         if (rechecked.state != ChangeState.CHECKED || rechecked.candidate != change.candidate) {
             return settle(change, ChangeState.DRAFT, rechecked.findings)
         }
-        authority.approvalProblem(change, rechecked.escalations, publisher, clock.instant())?.let { problem ->
+        val problem = authority.approvalProblem(change, rechecked.escalations, publisher, clock.instant())
+            ?: authority.approverProblem(change, rechecked.escalations, publisher)
+        problem?.let { problem ->
             return transition(id, setOf(ChangeState.READY)) {
                 it.copy(
                     state = ChangeState.AWAITING_APPROVAL,
@@ -390,7 +441,7 @@ class Changes(
             }
         }
         val candidate = applied(change, head?.document).first!!
-        requireAudit(change.kind, change.operations)
+        requireAudit(BreakGlassRules.touches(change.operations, head?.document))
         audit(ChangeEvent.Kind.PUBLISHING, change, publisher.actor)
         val settled = when (
             val outcome = revisions.publish(
@@ -438,9 +489,12 @@ class Changes(
         else -> ChangeEvent.Kind.PUBLISHED
     }
 
-    /** Creating break-glass needs a REQUIRED change listener to record it (RFC 0007 §8): without one, a 503. */
-    private fun requireAudit(kind: ProvenanceKind, operations: List<Operation>) {
-        if (kind == ProvenanceKind.BREAK_GLASS && operations.any { it is Operation.PutBinding } && !listeners.hasRequired) {
+    /**
+     * Creating or altering break-glass ([breakGlass], [BreakGlassRules.touches]) needs a REQUIRED change listener to
+     * record it (RFC 0007 §8): without one, a 503, whatever the change's kind.
+     */
+    private fun requireAudit(breakGlass: Boolean) {
+        if (breakGlass && !listeners.hasRequired) {
             throw ChangeRejectedException(
                 UNAVAILABLE,
                 "break-glass needs a REQUIRED change listener, and none is configured"
@@ -540,6 +594,15 @@ class Changes(
                 e
             ) { "Withdrawing the candidate of window $window failed; instances count it as a base mismatch once it is stale." }
         }
+    }
+
+    /**
+     * The candidate [id] would publish on the current head (RFC 0007 §10.3 `simulate`), or null when its operations no
+     * longer apply there. Nothing is written.
+     */
+    suspend fun candidateOf(id: ChangeId): PolicyDocument? {
+        val change = get(id)
+        return applied(change, revisions.head(change.key)?.document).first
     }
 
     /**
@@ -687,6 +750,7 @@ class Changes(
 
     private companion object {
         private val log = KotlinLogging.logger {}
+        const val BAD_REQUEST = 400
         const val FORBIDDEN = 403
         const val NOT_FOUND = 404
         const val CONFLICT = 409

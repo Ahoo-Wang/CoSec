@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.engine.RuleBehavior
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.BindingRef
@@ -134,6 +135,70 @@ class FlatEnginePropertyTest {
                 val missing = enumeration.missing.shuffled(random)
                 val ambiguous = enumeration.ambiguous.shuffled(random)
                 val shuffled = ShuffledEvaluator(case.request, case.view(), candidates, missing, ambiguous)
+                shuffled.evaluate().javaClass.assert().isEqualTo(expected)
+            }
+        }
+    }
+
+    /** P-B1 (RFC 0007 §12): a boundary of one ALLOW that matches everything decides as no boundary does. */
+    @Test
+    fun `P-B1 a boundary that allows everything is the identity`() {
+        var bounded = 0
+        forEachCase(seed = 71) { case, random ->
+            val open = case.fixture.policy("open-boundary", allow())
+            val unbounded = case.copy(boundaries = emptyList(), defaultBoundary = null, tenantBoundary = null)
+            val boundedCase = if (case.request.scope.tenant != TenantId.PLATFORM && random.nextBoolean()) {
+                unbounded.copy(boundaries = listOf(open), tenantBoundary = open.id)
+            } else {
+                unbounded.copy(boundaries = listOf(open), defaultBoundary = open.id)
+            }
+            if (case.request.scope.tenant != TenantId.PLATFORM) bounded++
+            for (level in TraceLevel.entries) {
+                boundedCase.evaluate(level).decision.assert().describedAs("$level")
+                    .isEqualTo(unbounded.evaluate(level).decision)
+            }
+        }
+        bounded.assert().isGreaterThan(iterations / 3)
+    }
+
+    /** P-B2: a boundary only narrows: whatever it is, it never turns a Deny or an Indeterminate into a Permit. */
+    @Test
+    fun `P-B2 a boundary never permits what is not permitted without it`() {
+        var narrowed = 0
+        forEachCase(seed = 72) { case, _ ->
+            val unbounded = case.copy(boundaries = emptyList(), defaultBoundary = null, tenantBoundary = null)
+            val without = unbounded.evaluate().decision
+            for (level in TraceLevel.entries) {
+                val with = case.evaluate(level).decision
+                if (with is Decision.Permit) {
+                    with.assert().describedAs("$level").isEqualTo(without)
+                }
+            }
+            if (without is Decision.Permit && case.evaluate().decision !is Decision.Permit) narrowed++
+        }
+        // The generator holds some permits to a boundary that refuses them.
+        narrowed.assert().isGreaterThan(10)
+    }
+
+    /** P-B3: P8 with a boundary: shuffling the candidates never changes the kind of decision. */
+    @Test
+    fun `P-B3 a boundary decision does not depend on the candidate order`() {
+        forEachCase(seed = 73) { case, random ->
+            val boundary = case.fixture.policy(
+                "b",
+                *Array(random.nextInt(1, 4)) { allow(RuleBehavior.entries.random(random)) },
+            )
+            val bounded = case.copy(boundaries = listOf(boundary), defaultBoundary = boundary.id, tenantBoundary = null)
+            val expected = bounded.evaluate().decision.javaClass
+            val enumeration = Oracle.enumerate(bounded)
+            repeat(3) {
+                val shuffled = ShuffledEvaluator(
+                    bounded.request,
+                    bounded.view(),
+                    enumeration.candidates.shuffled(random),
+                    enumeration.missing.shuffled(random),
+                    enumeration.ambiguous.shuffled(random),
+                )
                 shuffled.evaluate().javaClass.assert().isEqualTo(expected)
             }
         }

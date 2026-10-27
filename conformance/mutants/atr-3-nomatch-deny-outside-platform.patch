@@ -1,0 +1,17 @@
+# Rule: ATR-3
+# Mutant: a DENY may say onMissing nomatch in any document, not only the platform document
+# Tests: :cosec-engine:test --tests me.ahoo.cosec.engine.flat.* :cosec-core:test --tests me.ahoo.cosec.snapshot.* :conformance:test
+
+diff --git a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
+index dd422ed7..e16bedf3 100644
+--- a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
++++ b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
+@@ -192,7 +192,7 @@ class PolicyCompiler(
+             errors += CompileError("$path.onMissing", "onMissing applies to external attributes only, and the condition reads none")
+             return
+         }
+-        if (onMissing == OnMissing.NOMATCH && source.effect === Effect.DENY && !denyNomatch) {
++        if (onMissing == OnMissing.NOMATCH && source.effect === Effect.DENY && !denyNomatch && false) {
+             errors += CompileError(
+                 "$path.onMissing",
+                 "a DENY may write onMissing: nomatch only in the platform document: it lapses while its provider fails",

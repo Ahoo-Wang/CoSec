@@ -35,6 +35,7 @@ import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
@@ -60,8 +61,10 @@ import java.util.concurrent.CompletableFuture
 class ControlEngine(private val revisions: Revisions) {
     private val checker = AuthorizationChecker(
         Pipeline(
-            authenticator = Authenticator { AuthnResult.Anonymous },
-            snapshots = SuspendingSnapshotSource(HeadViews(revisions))
+            PipelineComponents(
+                authenticator = Authenticator { AuthnResult.Anonymous },
+                snapshots = SuspendingSnapshotSource(HeadViews(revisions))
+            )
         ),
     )
 
@@ -76,9 +79,11 @@ class ControlEngine(private val revisions: Revisions) {
     ): Operator {
         val principal = AuthenticatedPrincipal(PrincipalId(id), tenant, MembershipClaims.parse(roles, policies))
         val host = Pipeline(
-            authenticator = Authenticator { AuthnResult.Authenticated(principal, "test") },
-            snapshots = SuspendingSnapshotSource(HOST_VIEWS),
-            engine = PERMITTING,
+            PipelineComponents(
+                authenticator = Authenticator { AuthnResult.Authenticated(principal, "test") },
+                snapshots = SuspendingSnapshotSource(HOST_VIEWS),
+                engine = PERMITTING,
+            )
         )
         val outcome = runBlocking { host.evaluate(FACTS) }
         check(outcome.proceed) { "The host pipeline did not permit the control API: ${outcome.status}" }

@@ -134,9 +134,10 @@ tasks.register<Test>("snapshotParity") {
     outputs.upToDateWhen { false }
     maxHeapSize = "2g"
     // As :cosec-core:engineParity: at TRACE, a million cases log tens of gigabytes.
+    val parityLogback = "${rootProject.rootDir}/config/logback-parity.xml"
     doFirst {
         jvmArgs = jvmArgs.orEmpty().filterNot { it.startsWith("-Dlogback.configurationFile=") } +
-            "-Dlogback.configurationFile=${rootProject.rootDir}/config/logback-parity.xml"
+            "-Dlogback.configurationFile=$parityLogback"
     }
     reports.html.required.set(false)
     reports.junitXml.includeSystemOutLog.set(false)

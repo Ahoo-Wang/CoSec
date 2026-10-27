@@ -34,9 +34,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Model and CoSec-Engine
         run: ./gradlew cosec-model:clean cosec-engine:clean cosec-model:check cosec-engine:check
@@ -53,9 +55,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Runtime
         run: ./gradlew cosec-runtime:clean cosec-runtime:check
@@ -72,9 +76,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Control
         run: ./gradlew cosec-control:clean cosec-control:check
@@ -102,9 +108,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Migrate
         run: ./gradlew cosec-migrate:clean cosec-migrate:check
@@ -121,9 +129,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test the spec conformance suite
         run: ./gradlew conformance:clean conformance:check
@@ -140,9 +150,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Core
         run: ./gradlew cosec-core:clean cosec-core:check
@@ -160,9 +172,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Kafka
         run: ./gradlew cosec-kafka:clean cosec-kafka:check
@@ -180,9 +194,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-OpenTelemetry
         run: ./gradlew cosec-opentelemetry:clean cosec-opentelemetry:check
@@ -200,9 +216,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Jwt
         run: ./gradlew cosec-jwt:clean cosec-jwt:check
@@ -230,9 +248,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Social
         run: ./gradlew cosec-social:clean cosec-social:check
@@ -260,9 +280,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-CoCache
         run: ./gradlew cosec-cocache:clean cosec-cocache:check
@@ -290,9 +312,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test the end-to-end slice
         run: ./gradlew e2e:clean e2e:check
@@ -310,9 +334,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-WebFlux
         run: ./gradlew cosec-webflux:clean cosec-webflux:check
@@ -330,9 +356,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-WebMvc
         run: ./gradlew cosec-webmvc:clean cosec-webmvc:check
@@ -360,9 +388,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
           server-id: github
           settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Spring-Boot-Starter
         run: ./gradlew cosec-spring-boot-starter:clean cosec-spring-boot-starter:check

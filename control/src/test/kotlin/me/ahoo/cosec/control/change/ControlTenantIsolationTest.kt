@@ -38,6 +38,7 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
@@ -147,14 +148,15 @@ class ControlTenantIsolationTest {
                 "empty"
             )
         }.assert().isEqualTo(403)
+        // A change of another tenant's document is not there for gil: 404 at every step, before its state (CTL-15).
         val change = changes.propose(ALICE_OP, acme, 1, put, "mine")
-        refused { changes.stage(gil, change.id) }.assert().isEqualTo(403)
-        refused { changes.skipShadow(gil, change.id, "hurry") }.assert().isEqualTo(403)
-        refused { changes.abandon(gil, change.id) }.assert().isEqualTo(403)
-        refused { changes.rebase(gil, change.id) }.assert().isEqualTo(403)
+        refused { changes.stage(gil, change.id) }.assert().isEqualTo(404)
+        refused { changes.skipShadow(gil, change.id, "hurry") }.assert().isEqualTo(404)
+        refused { changes.abandon(gil, change.id) }.assert().isEqualTo(404)
+        refused { changes.rebase(gil, change.id) }.assert().isEqualTo(404)
         changes.skipShadow(ALICE_OP, change.id, "test")
-        refused { changes.publish(gil, change.id) }.assert().isEqualTo(403)
-        refused { changes.reject(gil, change.id, "no") }.assert().isIn(403, 409)
+        refused { changes.publish(gil, change.id) }.assert().isEqualTo(404)
+        refused { changes.reject(gil, change.id, "no") }.assert().isEqualTo(404)
         revisions.head(acme)!!.revision.assert().isEqualTo(1)
     }
 
@@ -216,17 +218,19 @@ class ControlTenantIsolationTest {
     /** acme's principals' answers to a set of requests, through the pipeline and engine, on the current heads. */
     private fun decisions(): List<Int> = REQUESTS.map { (principal, method, path) ->
         val pipeline = Pipeline(
-            authenticator = Authenticator {
-                AuthnResult.Authenticated(
-                    AuthenticatedPrincipal(
-                        PrincipalId(principal),
-                        TenantId("acme"),
-                        MembershipClaims.parse(listOf("editor"), listOf("p0", "p1"))
-                    ),
-                    "token"
-                )
-            },
-            snapshots = SuspendingSnapshotSource(HeadViews()),
+            PipelineComponents(
+                authenticator = Authenticator {
+                    AuthnResult.Authenticated(
+                        AuthenticatedPrincipal(
+                            PrincipalId(principal),
+                            TenantId("acme"),
+                            MembershipClaims.parse(listOf("editor"), listOf("p0", "p1"))
+                        ),
+                        "token"
+                    )
+                },
+                snapshots = SuspendingSnapshotSource(HeadViews()),
+            )
         )
         runBlocking { pipeline.evaluate(facts(method, path)).status }
     }

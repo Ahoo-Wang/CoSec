@@ -1,0 +1,143 @@
+{
+  "rules": [
+    "BRK-5"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The same binding requested as BREAK_GLASS by plato, who holds cosec:breakglass, checks clean and waits for a second person; walt's ordinary change of an ordinary binding is checked as before.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "writer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish"
+              ],
+              "resource": [
+                "doc/**",
+                "scope/**"
+              ]
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "walt",
+          "subject": {
+            "principal": "walt",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "writer"
+        },
+        {
+          "id": "gil",
+          "subject": {
+            "principal": "gil",
+            "tenant": "globex"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "walt": {
+      "tenant": "(platform)"
+    },
+    "gil": {
+      "tenant": "globex"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "glass",
+              "subject": {
+                "principal": "plato",
+                "tenant": "(platform)"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "cosec:root",
+              "breakGlass": true,
+              "expiresAt": "2026-11-01T01:00:00Z"
+            }
+          }
+        ],
+        "kind": "BREAK_GLASS"
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "by": "walt",
+        "document": "platform",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "readers",
+              "subject": {
+                "principal": "walt",
+                "tenant": "(platform)"
+              },
+              "app": "cosec-control",
+              "space": "",
+              "policy": "writer"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "platform": 1
+    },
+    "escalations": {
+      "c1": [
+        "BREAK_GLASS"
+      ],
+      "c2": [
+        "NOT_ANALYZED"
+      ]
+    }
+  }
+}

@@ -32,14 +32,18 @@ fun interface TestIndex {
 /**
  * The traceability check of RFC 0008 §3.4:
  *
- * 1. every rule that is neither pending nor superseded has a positive and a negative scenario; a `build` rule has no
- *    scenarios and needs a property or guard instead;
+ * 1. every rule that is neither pending nor superseded has a positive and a negative scenario; a `build` or `startup`
+ *    rule ([GUARDED_LEVELS]) has no scenarios and needs a property or guard instead: what it constrains is how a module
+ *    is built or an instance starts, which no scenario runner drives;
  * 2. every scenario names rules of the registry, none of them superseded, and uses a known polarity and level;
  * 3. every property test and guard the registry names exists;
  * 4. the pending rules are reported with their PR.
  */
 object RuleCoverage {
-    val LEVELS = setOf("engine", "analysis", "pipeline", "control", "build")
+    val LEVELS = setOf("engine", "analysis", "pipeline", "control", "build", "startup")
+
+    /** The levels whose rules are covered by named tests instead of scenarios. */
+    val GUARDED_LEVELS = setOf("build", "startup")
     val POLARITIES = setOf("positive", "negative")
     private val ID = Regex("[A-Z]{3}-[1-9][0-9]*")
 
@@ -49,8 +53,10 @@ object RuleCoverage {
         val polarities = checkScenarios(scenarios, byId, errors)
         for (rule in rules) {
             if (rule.pending != null || rule.superseded != null) continue
-            if (rule.level == "build") {
-                if (rule.properties.isEmpty() && rule.guards.isEmpty()) errors += "Build rule ${rule.id} names no test"
+            if (rule.level in GUARDED_LEVELS) {
+                if (rule.properties.isEmpty() && rule.guards.isEmpty()) {
+                    errors += "${rule.level.replaceFirstChar(Char::uppercase)} rule ${rule.id} names no test"
+                }
                 continue
             }
             val missing = POLARITIES - polarities[rule.id].orEmpty()
@@ -84,7 +90,7 @@ object RuleCoverage {
         val polarities = HashMap<String, MutableSet<String>>()
         for (scenario in scenarios) {
             if (scenario.polarity !in POLARITIES) errors += "Scenario $scenario has unknown polarity ${scenario.polarity}"
-            if (scenario.level !in LEVELS - "build") errors += "Scenario $scenario has unknown level ${scenario.level}"
+            if (scenario.level !in LEVELS - GUARDED_LEVELS) errors += "Scenario $scenario has unknown level ${scenario.level}"
             if (scenario.rules.isEmpty()) errors += "Scenario $scenario names no rule"
             for (id in scenario.rules) {
                 val rule = rules[id]
