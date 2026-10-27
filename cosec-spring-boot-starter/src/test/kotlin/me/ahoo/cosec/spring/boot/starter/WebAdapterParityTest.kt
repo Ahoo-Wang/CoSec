@@ -32,7 +32,9 @@ import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.runtime.PipelineOptions
+import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.cosec.runtime.attribute.AttributeDeclaration
 import me.ahoo.cosec.runtime.attribute.AttributeProvider
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
@@ -174,8 +176,15 @@ class WebAdapterParityTest {
               "condition":{"eq":["ext.geo.inFence",true]}}]}],
           "bindings":[{"id":"g:public","subject":"*","app":"*","space":"*","policy":"public"},
                       {"id":"g:no-delete","subject":"*","app":"*","space":"*","policy":"no-delete"},
-                      {"id":"g:geo","subject":"*","app":"*","space":"*","policy":"geo"}]""",
+                      {"id":"g:geo","subject":"*","app":"*","space":"*","policy":"geo"}],
+          "rateLimits":[{"id":"limited","action":"*","resource":"http:path:/public/limited/**","permitsPerSecond":10}]""",
     )
+
+    /** Has permits for every rule but `limited`, whose bucket is exhausted: the 429 path (RFC 0006 §8.3). */
+    private val rateLimiter = RateLimiter { ruleId, _, _ ->
+        val allowed = ruleId != "limited"
+        RateLimitResult(allowed, 10, if (allowed) 9 else 0, java.time.Duration.ofSeconds(3))
+    }
     private val app = compile(
         SnapshotKey.App("order"),
         ""","catalog":{"groups":[{"name":"order","permissions":[{"id":"read"}]}]},
@@ -246,6 +255,7 @@ class WebAdapterParityTest {
         options = PipelineOptions(timeout = 200.milliseconds, authenticationTimeout = 1.seconds),
         attributes = attributes,
         listeners = listeners,
+        rateLimiter = rateLimiter,
     )
 
     private val pipelines = mapOf(
@@ -448,6 +458,7 @@ class WebAdapterParityTest {
                 type = "unavailable"
             ),
             Scenario("a defect is 500", path = "/boom", status = 500, type = "internal-error"),
+            Scenario("an exhausted rate limit is 429", path = "/public/limited/page", status = 429, type = "too-many-requests"),
         )
     }
 
@@ -472,6 +483,10 @@ class WebAdapterParityTest {
             webflux.contentType.assert().isEqualTo("application/problem+json")
             webflux.body.assert().contains("\"type\":\"https://cosec.ahoo.me/problems/${scenario.type}\"")
             webflux.body.assert().contains("\"traceId\":\"${trace.traceId}\"")
+        }
+        if (scenario.status == 429) {
+            webflux.headers["retry-after"].assert().isEqualTo(listOf("3"))
+            webflux.headers["ratelimit-remaining"].assert().isEqualTo(listOf("0"))
         }
     }
 
