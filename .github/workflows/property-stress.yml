@@ -69,7 +69,7 @@ jobs:
                       dirs.add(prop.split(":")[0])  # module:Class#test
           # Same naming as settings.gradle.kts: directories are the project name, or without the cosec- prefix.
           mods = {d: ":" + (d if d.startswith("cosec-") else "cosec-" + d) for d in dirs}
-          want = {m.strip() for m in os.environ["MODULES"].split(",") if m.strip()}
+          want = {m.strip().lstrip(":") for m in os.environ["MODULES"].split(",") if m.strip()}
           if want:
               unknown = {w for w in want if w.lstrip(":") not in {*mods, *(v.lstrip(":") for v in mods.values())}}
               if unknown:
