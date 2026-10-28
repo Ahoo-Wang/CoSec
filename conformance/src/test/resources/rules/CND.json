@@ -50,7 +50,8 @@
       "statement": "No attribute reference may read a credential header: `http.header.authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key` or `cosec-identity`, in any case, whether in a condition or a rate limit rule's `key`. `ConditionChecker.attribute` refuses it, so every reference is checked in one place. A document with such a reference does not compile, through the control plane and cosec-migrate alike.",
       "level": "engine",
       "guards": [
-        "model:ConditionCheckerTest#credential headers are refused"
+        "model:ConditionCheckerTest#credential headers are refused",
+        "model:ConditionCheckerTest#no attribute reference resolves a credential header"
       ],
       "pending": null
     }
