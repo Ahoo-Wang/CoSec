@@ -27,6 +27,15 @@ class CoverageReport(val errors: List<String>, val pending: List<RuleEntry>)
 fun interface TestIndex {
     /** Whether [module] has a test class [testClass] and, when [testName] is given, a test of that name in it. */
     fun exists(module: String, testClass: String, testName: String?): Boolean
+
+    /**
+     * Whether [testName] in [testClass] is a test JUnit runs: a function annotated `@Test`, `@ParameterizedTest`,
+     * `@RepeatedTest` or `@TestFactory`, or an `@ArchTest` rule, and neither it nor its class `@Disabled`.
+     */
+    fun isEnabledTest(module: String, testClass: String, testName: String): Boolean = exists(module, testClass, testName)
+
+    /** Whether [testClass] reads `cosec.property.iterations`, so that `propertyStress` raises its number of cases. */
+    fun scalesWithIterations(module: String, testClass: String): Boolean = false
 }
 
 /**
@@ -37,7 +46,9 @@ fun interface TestIndex {
  *    how a module is built, how an instance starts, or how concurrent loads interleave, which no scenario runner drives;
  * 2. every scenario names rules of the registry, none of them superseded, and uses a known polarity and level;
  * 3. every property test and guard the registry names exists;
- * 4. the pending rules are reported with their PR.
+ * 4. the pending rules are reported with their PR;
+ * 5. a guarded rule is covered only by tests [GuardAllowlist] lists for its level, each a named test JUnit runs (not a
+ *    bare class), and a `timing` rule by at least one property test that `propertyStress` scales.
  */
 object RuleCoverage {
     val LEVELS = setOf("engine", "analysis", "pipeline", "control", "build", "startup", "timing")
@@ -47,22 +58,66 @@ object RuleCoverage {
     val POLARITIES = setOf("positive", "negative")
     private val ID = Regex("[A-Z]{3}-[1-9][0-9]*")
 
-    fun check(rules: List<RuleEntry>, scenarios: List<Scenario>, tests: TestIndex): CoverageReport {
+    fun check(
+        rules: List<RuleEntry>,
+        scenarios: List<Scenario>,
+        tests: TestIndex,
+        allowlist: Map<String, Set<String>> = GuardAllowlist.GUARDS,
+    ): CoverageReport {
         val errors = ArrayList<String>()
         val byId = checkRules(rules, tests, errors)
         val polarities = checkScenarios(scenarios, byId, errors)
         for (rule in rules) {
             if (rule.pending != null || rule.superseded != null) continue
             if (rule.level in GUARDED_LEVELS) {
-                if (rule.properties.isEmpty() && rule.guards.isEmpty()) {
-                    errors += "${rule.level.replaceFirstChar(Char::uppercase)} rule ${rule.id} names no test"
-                }
+                checkGuarded(rule, tests, allowlist[rule.level].orEmpty(), errors)
                 continue
             }
             val missing = POLARITIES - polarities[rule.id].orEmpty()
             if (missing.isNotEmpty()) errors += "Rule ${rule.id} has no ${missing.sorted().joinToString(" or ")} scenario"
         }
+        checkAllowlist(rules, allowlist, errors)
         return CoverageReport(errors, rules.filter { it.pending != null && it.superseded == null })
+    }
+
+    private fun checkGuarded(rule: RuleEntry, tests: TestIndex, allowed: Set<String>, errors: MutableList<String>) {
+        val name = "${rule.level.replaceFirstChar(Char::uppercase)} rule ${rule.id}"
+        if (rule.properties.isEmpty() && rule.guards.isEmpty()) {
+            errors += "$name names no test"
+            return
+        }
+        for (reference in rule.properties + rule.guards) {
+            if (reference !in allowed) {
+                errors += "$name names $reference, which is not a ${rule.level} guard of GuardAllowlist"
+            }
+            val test = Reference.of(reference) ?: continue
+            if (test.name == null) {
+                errors += "$name names $reference, a class: a guard is one test"
+            } else if (tests.exists(test.module, test.testClass, test.name) &&
+                !tests.isEnabledTest(test.module, test.testClass, test.name)
+            ) {
+                errors += "$name names $reference, which is not an enabled test"
+            }
+        }
+        if (rule.level == TIMING) {
+            if (rule.properties.isEmpty()) errors += "$name names no property test"
+            for (reference in rule.properties) {
+                val test = Reference.of(reference) ?: continue
+                if (!tests.scalesWithIterations(test.module, test.testClass)) {
+                    errors += "$name names $reference, whose class does not read $ITERATIONS, so propertyStress " +
+                        "does not scale it"
+                }
+            }
+        }
+    }
+
+    /** An allowlisted guard must exist and be named by a rule of its level, or the list drifts from the registry. */
+    private fun checkAllowlist(rules: List<RuleEntry>, allowlist: Map<String, Set<String>>, errors: MutableList<String>) {
+        for ((level, references) in allowlist) {
+            if (level !in GUARDED_LEVELS) errors += "GuardAllowlist has unknown level $level"
+            val named = rules.filter { it.level == level }.flatMap { it.properties + it.guards }.toSet()
+            for (reference in references - named) errors += "GuardAllowlist lists $reference, which no $level rule names"
+        }
     }
 
     private fun checkRules(rules: List<RuleEntry>, tests: TestIndex, errors: MutableList<String>): Map<String, RuleEntry> {
@@ -105,24 +160,79 @@ object RuleCoverage {
     }
 
     private fun exists(reference: String, tests: TestIndex): Boolean {
-        val module = reference.substringBefore(':', "")
-        val test = reference.substringAfter(':')
-        val testClass = test.substringBefore('#')
-        val testName = if ('#' in test) test.substringAfter('#') else null
-        return module.isNotEmpty() && testClass.isNotEmpty() && tests.exists(module, testClass, testName)
+        val test = Reference.of(reference) ?: return false
+        return tests.exists(test.module, test.testClass, test.name)
+    }
+
+    private const val TIMING = "timing"
+    const val ITERATIONS = "cosec.property.iterations"
+
+    /** `module:Class#test name`, or `module:Class` for every test of a class. */
+    private class Reference(val module: String, val testClass: String, val name: String?) {
+        companion object {
+            fun of(reference: String): Reference? {
+                val module = reference.substringBefore(':', "")
+                val test = reference.substringAfter(':')
+                val testClass = test.substringBefore('#')
+                val name = if ('#' in test) test.substringAfter('#') else null
+                return Reference(module, testClass, name).takeIf { module.isNotEmpty() && testClass.isNotEmpty() }
+            }
+        }
     }
 }
 
 /** Looks for test sources in `<root>/<module>/src/test/kotlin`. */
 class SourceTestIndex(private val root: Path) : TestIndex {
     override fun exists(module: String, testClass: String, testName: String?): Boolean {
-        val sources = root.resolve(module).resolve("src/test/kotlin")
-        if (!sources.isDirectory()) return false
-        val file = Files.walk(sources).use { paths -> paths.filter { it.name == "$testClass.kt" }.findFirst().orElse(null) }
-            ?: return false
+        val text = source(module, testClass) ?: return false
         if (testName == null) return true
-        val text = file.readText()
         return "fun `$testName`" in text || Regex("\\b(fun|val) ${Regex.escape(testName)}\\b").containsMatchIn(text)
+    }
+
+    override fun isEnabledTest(module: String, testClass: String, testName: String): Boolean {
+        val lines = source(module, testClass)?.lines() ?: return false
+        val name = if (testName.matches(IDENTIFIER)) Regex.escape(testName) else Regex.escape("`$testName`")
+        val declaration = Regex("^\\s*(?:(?:public|internal|override)\\s+)*(?:fun\\s+$name\\s*\\(|val\\s+$name\\b)")
+        val classDeclaration = Regex("^\\s*(?:(?:public|internal|open|abstract)\\s+)*class\\s+${Regex.escape(testClass)}\\b")
+        val at = lines.indexOfFirst { declaration.containsMatchIn(it) }
+        val classAt = lines.indexOfFirst { classDeclaration.containsMatchIn(it) }
+        if (at < 0 || classAt < 0 || DISABLED in annotationsAbove(lines, classAt)) return false
+        val annotations = annotationsAbove(lines, at)
+        val isTest = ARCH_TEST in annotations || (!lines[at].contains(Regex("\\bval\\s")) && annotations.any { it in TESTS })
+        return isTest && DISABLED !in annotations
+    }
+
+    override fun scalesWithIterations(module: String, testClass: String): Boolean =
+        source(module, testClass)?.contains("\"${RuleCoverage.ITERATIONS}\"") == true
+
+    private fun source(module: String, testClass: String): String? {
+        val sources = root.resolve(module).resolve("src/test/kotlin")
+        if (!sources.isDirectory()) return null
+        val file = Files.walk(sources).use { paths -> paths.filter { it.name == "$testClass.kt" }.findFirst().orElse(null) }
+        return file?.readText()
+    }
+
+    /** The annotations on the lines above [index], over comments and blank lines, by simple name. */
+    private fun annotationsAbove(lines: List<String>, index: Int): Set<String> {
+        val annotations = HashSet<String>()
+        var line = index - 1
+        while (line >= 0) {
+            val text = lines[line].trim()
+            when {
+                text.startsWith("@") -> annotations += text.removePrefix("@").substringBefore('(').substringAfterLast('.')
+                text.isEmpty() || text.startsWith("//") || text.startsWith("/*") || text.startsWith("*") -> Unit
+                else -> break
+            }
+            line--
+        }
+        return annotations
+    }
+
+    private companion object {
+        val IDENTIFIER = Regex("[A-Za-z_][A-Za-z0-9_]*")
+        val TESTS = setOf("Test", "ParameterizedTest", "RepeatedTest", "TestFactory")
+        const val ARCH_TEST = "ArchTest"
+        const val DISABLED = "Disabled"
     }
 }
 
