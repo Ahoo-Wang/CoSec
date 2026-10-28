@@ -61,24 +61,21 @@ class JwtTokenVerifier(
         return Jwts.toPrincipal(decodedAccessToken)
     }
 
+    @Suppress("TooGenericExceptionCaught")
     override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {
         val decodedRefreshToken: DecodedJWT = verify(token.refreshToken)
-        val decodedAccessToken = decode(token.accessToken)
+        // The access token may have expired, so it is decoded here and only its signature checked. Decoding stays in
+        // this method: only the verifying methods may decode (PIP-11).
+        val decodedAccessToken = try {
+            Jwts.decode(token.accessToken)
+        } catch (exception: Exception) {
+            throw TokenVerificationException(exception.message ?: "The access token is malformed.", exception)
+        }
         verifyAccessTokenSignature(decodedAccessToken)
         if (decodedRefreshToken.subject != decodedAccessToken.id) {
             throw RefreshTokenMismatchException()
         }
         return Jwts.toPrincipal(decodedAccessToken)
-    }
-
-    /** Decodes the access token being refreshed: it may have expired, so only its signature is checked, after this. */
-    @Suppress("TooGenericExceptionCaught")
-    private fun decode(accessToken: String): DecodedJWT {
-        try {
-            return Jwts.decode(accessToken)
-        } catch (exception: Exception) {
-            throw TokenVerificationException(exception.message ?: "The access token is malformed.", exception)
-        }
     }
 
     @Suppress("TooGenericExceptionCaught")

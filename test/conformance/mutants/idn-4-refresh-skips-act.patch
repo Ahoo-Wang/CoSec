@@ -3,10 +3,10 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-index a792f5fd..edf2050c 100644
+index 6d751927..b2c67391 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-@@ -68,7 +68,7 @@ class JwtTokenVerifier(
+@@ -75,7 +75,7 @@ class JwtTokenVerifier(
          if (decodedRefreshToken.subject != decodedAccessToken.id) {
              throw RefreshTokenMismatchException()
          }
@@ -14,7 +14,7 @@ index a792f5fd..edf2050c 100644
 +        return Jwts.toPrincipal(decodedAccessToken, refusingDelegation = false)
      }
  
-     /** Decodes the access token being refreshed: it may have expired, so only its signature is checked, after this. */
+     @Suppress("TooGenericExceptionCaught")
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
 index 7574b067..3dafed53 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
