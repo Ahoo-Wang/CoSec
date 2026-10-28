@@ -15,5 +15,5 @@ coverage:
         threshold: 1%
 ignore:
   - "document/.*"
-  - "cosec-api/.*"
-  - "cosec-gateway-server/.*"
+  - "api/.*"
+  - "gateway-server/.*"

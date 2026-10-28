@@ -602,7 +602,7 @@ example in VS Code's `settings.json`:
 ```
 
 The files are generated from the format descriptors in `cosec-core`
-([`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt))
+([`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt))
 and never edited by hand. A test keeps them and the document reader in agreement: what one accepts, the other accepts.
 
 Passing the schema is necessary, not sufficient. JSON Schema cannot express, among others: which of the three

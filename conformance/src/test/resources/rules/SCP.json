@@ -38,7 +38,7 @@
       "guards": [
         "runtime:CoSecParametersTest#differentHeaderAndQueryValuesAreAmbiguous",
         "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest",
-        "cosec-spring-boot-starter:WebAdapterParityTest#the three adapters answer byte for byte alike"
+        "spring-boot-starter:WebAdapterParityTest#the three adapters answer byte for byte alike"
       ],
       "pending": null
     },
@@ -50,7 +50,7 @@
       "guards": [
         "model:ScopeConstructionTest#onlyTheResolverConstructsScopes",
         "model:ScopeConstructionTest#scopeIsNotADataClass",
-        "cosec-core:PolicyDocumentCodecTest#a scope is never decoded"
+        "core:PolicyDocumentCodecTest#a scope is never decoded"
       ],
       "pending": null
     },

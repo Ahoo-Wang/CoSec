@@ -90,7 +90,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           platforms: linux/amd64,linux/arm64
-          context: cosec-gateway-server
+          context: gateway-server
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -131,4 +131,4 @@ jobs:
       - name: Pull the image
         run: docker pull "${{ needs.docker-deploy.outputs.image }}"
       - name: Smoke requests
-        run: cosec-gateway-server/aot-smoke.sh "${{ needs.docker-deploy.outputs.image }}" migrate/build/install/cosec-migrate/bin/cosec-migrate
+        run: gateway-server/aot-smoke.sh "${{ needs.docker-deploy.outputs.image }}" migrate/build/install/cosec-migrate/bin/cosec-migrate

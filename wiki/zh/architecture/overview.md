@@ -49,7 +49,7 @@ flowchart BT
 - **`cosec-runtime`**（目录 `runtime/`）是数据面：协程 `Pipeline`、`StatusMapping`、`AuthorizationChecker`，以及请求会调用的 SPI（`Authenticator`、`AttributeProvider`、`DecisionListener`、`RateLimiter`）。协程只留在本模块和适配器中，Reactor 只出现在适配器的桥接处：当 `runtime/`、`engine/` 或 `model/` 中的代码引用 `reactor.*`，当数据面 SPI 的签名带有 Reactor 类型，当 `runtime/` 引用 Spring、Servlet API 或协程桥接（`kotlinx.coroutines.reactor`、`runBlocking`）、`GlobalScope` 或 `Dispatchers.IO`，或调用会吞掉取消的 `runCatching` 时，`RuntimeBoundaryTest`（ArchUnit）失败。
 - **`cosec-control`**（目录 `control/`）是控制面：修订、变更请求、影子窗口、审批、break-glass、模拟与分析。它是一个由宿主装配的库。`ControlBoundaryTest`（ArchUnit）导入本模块自己编译出的类，当其中任何一个位于 `me.ahoo.cosec.control` 之外、引用 Spring、`reactor.*`、协程或 Reactive Streams 桥接、Redis 客户端，或调用 `runBlocking`、`Dispatchers.IO`、`GlobalScope` 时失败。
 - **其余每个库模块只适配一种技术**：一种 Web 栈（`cosec-webflux`、`cosec-webmvc`、`cosec-gateway`），通过 CoCache 使用 Redis（`cosec-cocache`：快照存储、控制面存储、吊销、限流器、影子报告），JWT、OAuth、OpenAPI，或决策的观察者（`cosec-opentelemetry`、`cosec-micrometer`、`cosec-kafka`、`cosec-ip2region`）。适配器从不做决策，只做翻译。
-- **`cosec-spring-boot-starter`** 负责装配。每个集成都是 [`cosec-spring-boot-starter/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts) 中声明的一个 Gradle feature variant：适配模块只是该 variant 的依赖，其自动配置由 `@ConditionalOnClass` 保护，所以只有应用请求了该能力才会生效。各 capability 列在[简介](../guide/introduction.md#modules)中。
+- **`cosec-spring-boot-starter`** 负责装配。每个集成都是 [`spring-boot-starter/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/spring-boot-starter/build.gradle.kts) 中声明的一个 Gradle feature variant：适配模块只是该 variant 的依赖，其自动配置由 `@ConditionalOnClass` 保护，所以只有应用请求了该能力才会生效。各 capability 列在[简介](../guide/introduction.md#modules)中。
 - **`cosec-testkit`**（目录 `testkit/`）用 JUnit 5 针对应用自己的文档运行场景。它依赖 `cosec-core` 和 `junit-jupiter-api`（都属于它的 API），以及 `cosec-runtime`（用于与 Pipeline 相同的成员关系合并）。它持有场景格式的引擎层，`conformance` 也运行这一层，所以一致性套件和应用的测试以同一种方式求值场景。
 - **`cosec-migrate`** 把 7.x 的数据转换为 8.0 文档并发布；应用不依赖它。**`cosec-gateway-server`** 是由 starter 构建的、开箱即用的网关，从不发布。**`conformance`** 和 **`e2e`** 是仅用于测试的模块，同样从不发布。
 
@@ -140,7 +140,7 @@ sequenceDiagram
 
 策略以**快照文档**的形式到达引擎，每个键一个文档：平台文档、每个应用一个文档、每个租户一个文档。它们以 JSON（schema 2）存储，每个修订编译一次，以不可变的编译结果保存在内存中。视图只是对其中三个文档的引用，所以一次求值总是看到每个文档的同一个修订（`SNP-1`，由 `SnapshotConsistencyPropertyTest` 守护）。
 
-[`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt) 持有它们：
+[`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt) 持有它们：
 
 - **热路径。** `peek` 是内存中的同步查找，没有 future、没有 I/O，可以在事件循环上调用。只有未命中才会走 `load`。
 - **单飞。** 同一个键的并发加载共享一次读取和一次编译。编译在一个小的有界线程池上运行（`compile-threads`）；队列满时加载按失败即拒绝处理。同一个键按加载开始的顺序安装（`SNP-2`，`SnapshotInstallOrderPropertyTest`）。
@@ -148,7 +148,7 @@ sequenceDiagram
 - **重新验证。** 每个已安装的文档每隔 `revalidate-interval`（默认 10 秒）对权威存储做一次条件读取，摘要未变时不传输内容。存储发来的变更通知会让重新加载更早发生。冷键先读一次（可能来自本地副本），随即用条件读取确认。
 - **失败即拒绝。** 已安装文档期间读取失败时保留已安装的修订，并报告延迟。存在但无法解码或编译的文档被安装为*失败*。冷读取失败或未在 `cold-load-timeout` 内完成时，按失败应答。一个曾经有文档的键读到“不存在”是失败，而不是“没有策略”。失败的文档作为*未解析*排除在视图之外，除非有 DENY 匹配，否则决策为 `Indeterminate`。使用 starter 时，缺失的平台文档也视为未解析，所以在发布平台文档之前，所有请求都按失败即拒绝处理。
 
-存储是一个 SPI，`SnapshotDocumentStore`。使用 `cache-support` 时它是 [`RedisSnapshotDocumentStore`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore.kt)：Redis 是权威存储，CoCache 保留最多 `local-max-age` 的本地副本，条件读取绕过所有本地副本，CoCache 的失效频道传递变更通知。没有它时，starter 使用内存存储。Redis 键、`noeviction` 要求和 Redis 不可用时的行为见[存储](../operations/storage.md)；`cosec.authorization.snapshot.*` 属性见[配置](../operations/configuration.md)。
+存储是一个 SPI，`SnapshotDocumentStore`。使用 `cache-support` 时它是 [`RedisSnapshotDocumentStore`](https://github.com/Ahoo-Wang/CoSec/blob/main/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore.kt)：Redis 是权威存储，CoCache 保留最多 `local-max-age` 的本地副本，条件读取绕过所有本地副本，CoCache 的失效频道传递变更通知。没有它时，starter 使用内存存储。Redis 键、`noeviction` 要求和 Redis 不可用时的行为见[存储](../operations/storage.md)；`cosec.authorization.snapshot.*` 属性见[配置](../operations/configuration.md)。
 
 ## 控制面 {#control-plane}
 

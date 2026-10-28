@@ -12,7 +12,7 @@ Kubernetes manifests in the repository, how CI checks the image, and the JDK 25 
 
 ## The image
 
-CI builds the image from [`cosec-gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/Dockerfile)
+CI builds the image from [`gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/Dockerfile)
 on every push and publishes it as `ahoowang/cosec-gateway`, `ghcr.io/ahoo-wang/cosec-gateway` and
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`, for `linux/amd64` and `linux/arm64`. The gateway server is an
 application: it is published only as an image, never as a library.
@@ -149,7 +149,7 @@ rest. Keep the pod's termination grace period long enough for Spring's own grace
 | File | Contents |
 |---|---|
 | `cosec-gateway-config.yaml` | A ConfigMap with `application.yaml` and `bootstrap.yaml`, mounted over `/opt/cosec-gateway-server/config/`: the routes and the `cosec.*` settings above. |
-| `cosec-gateway-deployment.yml` | The Deployment: `COSEC_JWT_SECRET` from the Secret `cosec-jwt-secret`, a Redis Cluster from the Secret `redis-secret` (`SPRING_DATA_REDIS_CLUSTER_NODES`, `SPRING_DATA_REDIS_PASSWORD`, adaptive topology refresh), a startup probe on `/actuator/health`, a readiness probe on `/actuator/health/readiness` and a liveness probe on `/actuator/health/liveness`, and the OpenTelemetry Java agent injection annotation. |
+| `cosec-gateway-deployment.yml` | The Deployment: `COSEC_JWT_SECRET` from the Secret `cosec-jwt-secret`, a Redis Cluster from the Secret `redis-secret` (`SPRING_DATA_REDIS_CLUSTER_NODES`, `SPRING_DATA_REDIS_PASSWORD`, adaptive topology refresh), startup and liveness probes on `/actuator/health/liveness`, a readiness probe on `/actuator/health/readiness`, and the OpenTelemetry Java agent injection annotation. |
 | `cosec-gateway-reids.yaml` | The Secret `redis-secret`, with placeholder values. |
 | `cosec-gateway-service.yaml` | A Service, port 80 to the container's 8080. |
 | `cosec-gateway-hpa.yaml` | A HorizontalPodAutoscaler, 2 to 10 replicas on CPU. |
@@ -159,15 +159,17 @@ The Deployment names the image `ghcr.io/ahoo-wang/cosec-gateway:7.0.0`: set the 
 and fill `redis-secret` with your nodes and password. `cosec-migrate` connects to one Redis server through
 `--to-redis`.
 
-The startup probe on `/actuator/health` passes only once the platform document is installed ([Readiness](#readiness)).
-Publish the documents before the first rollout, or point the startup probe at `/actuator/health/liveness` so that pods
-start, and stay out of the Service, while Redis holds no platform document.
+The startup and liveness probes read `/actuator/health/liveness`, and the readiness probe
+`/actuator/health/readiness`; the gateway server enables these groups (`management.endpoint.health.probes.enabled`).
+So a pod starts while Redis holds no platform document, and stays out of the Service until it is installed
+([Readiness](#readiness)). Don't point a probe at `/actuator/health`: it stays DOWN until then, and a startup probe
+on it restarts the pod.
 
 ## How CI checks the image
 
 After the image is pushed, the `aot-smoke` job of
 [`docker-deploy.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/docker-deploy.yml) runs
-[`aot-smoke.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/aot-smoke.sh) against a Redis 7
+[`aot-smoke.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/aot-smoke.sh) against a Redis 7
 service container. It publishes a platform document with `cosec-migrate publish`, starts the image with
 `-XX:AOTMode=on` (a cache that cannot be mapped fails the job), adds a `/smoke/**` route to the gateway's own health
 endpoint, and checks that the health probe answers `200`, an anonymous request `401` with
@@ -195,7 +197,7 @@ work again. No code changes and no Spring AOT are involved.
 ### How the image uses it
 
 The `Dockerfile` trains the cache in its final stage with
-[`aot-train.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/aot-train.sh), against the exact
+[`aot-train.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/aot-train.sh), against the exact
 jars and path the container runs, and writes it to `/opt/cosec-gateway-server/aot/cosec-gateway-server.aot`.
 
 1. **Record.** The script starts the gateway with `-XX:AOTMode=record` and the same JVM options as production,

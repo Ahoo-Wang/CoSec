@@ -5,43 +5,43 @@
 
 'module: api':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-api/**'
+      - any-glob-to-any-file: 'api/**'
 'module: core':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-core/**'
+      - any-glob-to-any-file: 'core/**'
 'module: jwt':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-jwt/**'
+      - any-glob-to-any-file: 'jwt/**'
 'module: cocache':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-cocache/**'
+      - any-glob-to-any-file: 'cocache/**'
 'module: social':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-social/**'
+      - any-glob-to-any-file: 'social/**'
 'module: webmvc':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-webmvc/**'
+      - any-glob-to-any-file: 'webmvc/**'
 'module: webflux':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-webflux/**'
+      - any-glob-to-any-file: 'webflux/**'
 'module: gateway':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-gateway/**'
+      - any-glob-to-any-file: 'gateway/**'
 'module: gateway-server':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-gateway-server/**'
+      - any-glob-to-any-file: 'gateway-server/**'
 'module: opentelemetry':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-opentelemetry/**'
+      - any-glob-to-any-file: 'opentelemetry/**'
 'module: ip2region':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-ip2region/**'
+      - any-glob-to-any-file: 'ip2region/**'
 'module: openapi':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-openapi/**'
+      - any-glob-to-any-file: 'openapi/**'
 'module: kafka':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-kafka/**'
+      - any-glob-to-any-file: 'kafka/**'
 'module: engine':
   - changed-files:
       - any-glob-to-any-file: ['model/**', 'engine/**']
@@ -59,13 +59,13 @@
       - any-glob-to-any-file: 'conformance/**'
 'module: spring-boot-starter':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-spring-boot-starter/**'
+      - any-glob-to-any-file: 'spring-boot-starter/**'
 'module: bom':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-bom/**'
+      - any-glob-to-any-file: 'bom/**'
 'module: dependencies':
   - changed-files:
-      - any-glob-to-any-file: 'cosec-dependencies/**'
+      - any-glob-to-any-file: 'dependencies/**'
 
 'area: docs':
   - changed-files:

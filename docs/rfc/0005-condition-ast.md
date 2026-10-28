@@ -60,8 +60,8 @@ RFC 0004 统一了"一条语句对谁、在哪里生效"。本文统一"一条�
 | J1 | §3.3：动作模式编译进"路由前缀树"；§4：`cosec-engine` 只依赖 model；§3.10：引擎不用反射 | 7.x 的路径动作是 Spring 的 `PathPattern`（`spring-web`），引擎不能依赖它；`PathPattern` 还支持 `{var:regex}`，而 `java.util.regex` 不在 `EnginePurityTest` 的白名单里，正则也无法静态限定成本 | 引擎内用纯 Kotlin 实现 `HttpPathPattern`，语义与 `PathPattern` 在一个明确的子集上相同，用性质测试对照 Spring 的实现；子集之外的模式（`{var:regex}`、非 `/` 分隔符）转换时拒绝（§5.2）。Q1 |
 | J2 | §3.3："不再为每种匹配器写一个 `ConditionMatcherFactory`"；§3.5：阻塞的自定义匹配器由第 5 阶段的 `AttributeProvider` 取代 | 第 4 阶段删除工厂，第 5 阶段才有替代品，自定义匹配器在中间一个阶段无处可去（RFC 0004 §3 I13） | 保留不可分析的 `legacy` 节点，承载已注册的自定义 `ConditionMatcherFactory`，第 5 阶段删除（§3.7）。Q2 |
 | J3 | §3.10：OGNL/SpEL"在 AST 落地时标记为 deprecated，之后删除" | 8.0 不考虑兼容，也没有任何中间版本发布，"先 deprecated 再删除"没有使用者 | 切换 PR 直接删除；转换工具拒绝 OGNL/SpEL 条件并报告位置（§7.1）。Q3 |
-| J4 | §6 第 5 阶段：限流成为义务 | 7.x 的限流规则用的就是动作匹配器、条件匹配器和 part 键（[`RateLimitRule`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/limiter/RateLimitRule.kt)）。本文删除匹配器，限流规则就无法加载 | 本文把限流规则的匹配部分一并翻译成 AST（§7.3），执行方式留到第 5 阶段。Q4 |
-| J5 | §7.1：运算符包含 `time`；P1：引擎无 I/O | 7.x 的 `time` 条件读时钟（[`TimeConditionMatcher`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/TimeConditionMatcher.kt)），而 `EnginePurityTest` 禁止引擎读时钟 | `time` 读 `environment.time`，由调用方在请求开始时取一次（RFC 0004 §4.1）。决策因此可重放（回放用审计事件的时间戳） |
+| J4 | §6 第 5 阶段：限流成为义务 | 7.x 的限流规则用的就是动作匹配器、条件匹配器和 part 键（[`RateLimitRule`](../../core/src/main/kotlin/me/ahoo/cosec/limiter/RateLimitRule.kt)）。本文删除匹配器，限流规则就无法加载 | 本文把限流规则的匹配部分一并翻译成 AST（§7.3），执行方式留到第 5 阶段。Q4 |
+| J5 | §7.1：运算符包含 `time`；P1：引擎无 I/O | 7.x 的 `time` 条件读时钟（[`TimeConditionMatcher`](../../core/src/main/kotlin/me/ahoo/cosec/policy/condition/TimeConditionMatcher.kt)），而 `EnginePurityTest` 禁止引擎读时钟 | `time` 读 `environment.time`，由调用方在请求开始时取一次（RFC 0004 §4.1）。决策因此可重放（回放用审计事件的时间戳） |
 | J6 | §7.1：运算符集合固定 | 7.x 的 `endsWith`、`contains`、`regular` 在策略里很常见（例如按来源域名后缀放行），集合里没有对应的运算符 | 不加运算符。提供一个派生属性 `*.host.labels`（反转的域名标签，§3.2），使"域名后缀"可以写成 `prefix`；其余拒绝转换（§3.6）。Q5 |
 | J7 | §7.1："按 action 键精确查找，索引快且不会漏" | 只对 `service:verb` 成立。`http` 命名空间的路径模式（`**`、`{var}`、模板）不能按键精确查找 | 按命名空间分区：`service:verb` 哈希，`http` 按段前缀树，模板和不可分析的进"总是候选"桶（§6.2） |
 | J8 | §3.3 `onMissing` | 见 RFC 0004 §3 I7 | §3.4 |
@@ -341,7 +341,7 @@ class Resource(val type: String, val id: String, val attributes: Map<String, Str
 ```
 
 - **生成规则**：每个 operation 一条；`action` = `<service>:<operationId>`，可以用扩展字段 `x-cosec-action` 覆盖；`resource` 默认 `<service>/<path 中最后一个变量>`（没有变量时为
-  `<service>`），可以用 `x-cosec-resource` 覆盖。`service` 取 `info.title`（与 [`OpenAPIAppPermissionGenerator`](../../cosec-openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIAppPermissionGenerator.kt)
+  `<service>`），可以用 `x-cosec-resource` 覆盖。`service` 取 `info.title`（与 [`OpenAPIAppPermissionGenerator`](../../openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIAppPermissionGenerator.kt)
   取应用 id 的方式相同），可以用 `x-cosec-service` 覆盖。同一个 `operationId` 出现两次即生成失败。
 - **宿主侧**：WebFlux / WebMvc 适配器加载映射（`cosec.authorization.routes.location`），对请求做一次路由查找（同样用 `HttpPathPattern`），得到 `Action` 与 `Resource`。
 - **没有映射到的路由**：请求的动作是 `http:<METHOD>`、资源是 `http:path:<路径>`，即 `http` 命名空间。这不是降级：`http` 命名空间的策略照常生效，只有写成 `service:verb` 的策略不适用；
@@ -445,7 +445,7 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 |---|---|---|
 | `all` | 省略条件 | |
 | `authenticated` | `eq(subject.authenticated, true)` | |
-| `inTenant: default / user / platform` | `eq(subject.tenant, "(0)")` / `not(in(subject.tenant, ["(0)", "(platform)"]))` / `eq(subject.tenant, "(platform)")` | 7.x 读 `context.tenant`，它来自主体（[`SimpleSecurityContext`](../../cosec-core/src/main/kotlin/me/ahoo/cosec/context/SimpleSecurityContext.kt)） |
+| `inTenant: default / user / platform` | `eq(subject.tenant, "(0)")` / `not(in(subject.tenant, ["(0)", "(platform)"]))` / `eq(subject.tenant, "(platform)")` | 7.x 读 `context.tenant`，它来自主体（[`SimpleSecurityContext`](../../core/src/main/kotlin/me/ahoo/cosec/context/SimpleSecurityContext.kt)） |
 | `inRole: x`（裸），在 DENY 语句或 DENY 方向的条件中 | `in("x", subject.roles)` | 7.x：匹配裸角色 `x`（任何空间）或请求空间里的 `x@space`。8.0：主体在**任何空间**有 `x` 就匹配。只会让 DENY 更宽（改动 D1） |
 | `inRole: x`（裸），在 ALLOW 方向 | `in("x", scope.roles)` | 7.x：裸角色 `x` 在任何空间都生效（第二轮审查 M2）。8.0：只在 `x` 于请求空间生效时匹配。只会让 ALLOW 更窄（D1） |
 | `inRole: x@s`（带空间），在 DENY 方向 | `in("x@s", subject.scopedRoles)` | 7.x 按字面比较，主体持有 `x@s` 就在**任何**请求空间里匹配（M1）。照搬这个语义，DENY 不变窄 |

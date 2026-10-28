@@ -351,7 +351,7 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 The image is also published as `ghcr.io/ahoo-wang/cosec-gateway`. Publish its platform document first
 ([Quick start](../guide/quick-start.md#publish-the-platform-document)); until then every routed request is `503`.
 Configure routes and CoSec through standard Spring configuration; the defaults are in its
-[`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/src/main/resources/application.yaml).
+[`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/src/main/resources/application.yaml).
 Example Kubernetes manifests are in [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s). They read the JWT
 secret from a Secret named `cosec-jwt-secret`; create it first, and set the image tag to the version you deploy:
 

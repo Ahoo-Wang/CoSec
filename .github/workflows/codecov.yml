@@ -3,11 +3,11 @@ on:
   push:
     paths-ignore:
       - 'document/**'
-      - 'cosec-gateway-server/**'
+      - 'gateway-server/**'
   pull_request:
     paths-ignore:
       - 'document/**'
-      - 'cosec-gateway-server/**'
+      - 'gateway-server/**'
 
 permissions:
   contents: read

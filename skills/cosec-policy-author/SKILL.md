@@ -10,7 +10,7 @@ establish: the actions (route-map `service:verb`, or `http:<METHOD>` for unmappe
 is for (anyone, a principal, a role), in which tenant, app and space, and the explicit deny cases.
 
 The human-facing reference is https://cosec.ahoo.me/policies/language. In a CoSec checkout the format is defined in
-`cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/format/PolicyDocumentFormats.kt` (generated into
+`core/src/main/kotlin/me/ahoo/cosec/snapshot/format/PolicyDocumentFormats.kt` (generated into
 `schema/cosec-snapshot-document.schema.json`, `cosec-binding.schema.json`, `cosec-catalog.schema.json`) and read by
 `PolicyDocumentCodec`; conditions are checked by `model/.../condition/ConditionChecker.kt`. Treat those as the truth.
 

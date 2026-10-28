@@ -48,7 +48,7 @@ implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
 ```
 
 Declare the starter once per capability. With Maven, or a build that cannot select variants, add the module and mirror
-the feature's dependencies from `cosec-spring-boot-starter/build.gradle.kts`: for example `cache-support` also needs
+the feature's dependencies from `spring-boot-starter/build.gradle.kts`: for example `cache-support` also needs
 `org.springframework.boot:spring-boot-data-redis` and `me.ahoo.cocache:cocache-spring-boot-starter`; WebFlux needs
 `kotlinx-coroutines-reactor`; OpenAPI needs the actuator and `springdoc-openapi-starter-common`; Kafka needs
 `spring-boot-starter-kafka`. `control-support` requires `cache-support`.
@@ -83,7 +83,7 @@ Startup fails, on purpose, when:
 - **API keys with `store=redis` and no `ReactiveStringRedisTemplate`.**
 
 Every `cosec.*` property: https://cosec.ahoo.me/operations/configuration. In a CoSec checkout the source of truth is
-`cosec-spring-boot-starter/src/main/kotlin/.../pipeline/PipelineProperties.kt`, `control/ControlProperties.kt` and the
+`spring-boot-starter/src/main/kotlin/.../pipeline/PipelineProperties.kt`, `control/ControlProperties.kt` and the
 auto-configurations listed in `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`.
 
 ## Route maps

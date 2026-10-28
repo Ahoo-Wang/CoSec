@@ -85,7 +85,7 @@ RFC 0001 是目标架构，对第 3 阶段的描述有几处彼此矛盾，或�
 | # | RFC 0001 原文 | 矛盾之处 | 本阶段的处理 |
 |---|---|---|---|
 | I1 | §3.4：快照按租户分区，`Cache<TenantId, SnapshotDocument>`，版本 `(platform, tenant)` | 现有数据没有租户维度（§3.1）：`PolicyCache` 按策略 id 存放，`GlobalPolicyIndexCache` 只有一个 key，`AppPermissionCache` 按 `appId` 存放。`Policy` 虽然实现了 `Tenant`，但 `SimpleAuthorization` 从不读 `tenantId`，全局策略对所有租户生效，主体可以引用任何租户的策略。按租户分区就是改变语义 | 按数据实际的形状分区（§3.2），形状与第 4 阶段同构（§3.7）。Q1 |
-| I2 | §6 第 3 阶段："删除 `BlockingAware`" | `BlockingAware` 声明的是**匹配器**是否阻塞（`cosec-core/.../policy/BlockingAware.kt`），与策略数据从哪里来无关。快照只能消除"读数据"的切换，消除不了"执行阻塞匹配器"的切换。取代阻塞匹配器的 `AttributeProvider` 在 §6 第 5 阶段才有。本阶段删除它，含阻塞匹配器的策略就会在 Netty 事件循环上执行 | 本阶段只删除策略数据的切换（`toLocalFirstMono`）；`BlockingAware` 留到第 5 阶段。Q9 |
+| I2 | §6 第 3 阶段："删除 `BlockingAware`" | `BlockingAware` 声明的是**匹配器**是否阻塞（`core/.../policy/BlockingAware.kt`），与策略数据从哪里来无关。快照只能消除"读数据"的切换，消除不了"执行阻塞匹配器"的切换。取代阻塞匹配器的 `AttributeProvider` 在 §6 第 5 阶段才有。本阶段删除它，含阻塞匹配器的策略就会在 Netty 事件循环上执行 | 本阶段只删除策略数据的切换（`toLocalFirstMono`）；`BlockingAware` 留到第 5 阶段。Q9 |
 | I3 | §3.4：`suspend fun snapshot(tenant)`、`fun updates(): Flow<SnapshotChange>` | 协程是第 5 阶段（§6），第 3 阶段的 `SimpleAuthorization` 和 `SecurityPipeline` 仍是 Reactor | 本阶段的接口返回 `CompletableFuture`，变更通知用监听器；第 5 阶段加上挂起包装。Q10 |
 | I4 | §3.4："CoSec 把 `localMaxAge` 设为快照最大落后时长"；§3.11：严格读失败模式；§7.1："默认只告警" | 如果编译后的快照常驻在 CoCache L2 里，`localMaxAge` 到期后 L2 就丢掉副本，下一次读取去 Redis。Redis 不可用时严格读抛错，每个请求都是 500，也就是默认 fail-closed，与 §7.1 矛盾。另外，`ttl = null` 时 CoCache 不做提前刷新：`AbstractEngine.localEntry` 只在 L1 有寿命时才计算 `refreshAt`，所以每个文档每过 `localMaxAge` 必有一个请求冷读 Redis | 编译后的快照由 `SnapshotSource` 持有，只会被更新的版本替换或被 LRU 淘汰，不随 L2 到期；版本由对 L1 的条件读确认（§4.5），`localMaxAge` 只约束冷加载和写入方经过的 L2。Q5、Q7 |
 | I5 | §3.4："编译失败就保留旧版本并告警" | 本阶段不改变决策。7.0 读到无法解码的策略时，请求得到 500；保留旧版本意味着这些请求改为按旧内容决策，可能放行新内容本要拒绝的请求 | 本阶段保持 7.0 的行为（§4.4 F4、F5）；"保留旧版本"在第 6 阶段控制面发布前强制编译之后再引入。Q8 |
@@ -104,9 +104,9 @@ RFC 0001 是目标架构，对第 3 阶段的描述有几处彼此矛盾，或�
 
 ### 3.1 现状：数据怎么存、怎么读
 
-以 `main` @ `a130eb90` 为准（[`CoSecCacheSpecs`](../../cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt)、
-[`RedisPolicyRepository`](../../cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt)、
-[`RedisAppRolePermissionRepository`](../../cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisAppRolePermissionRepository.kt)）：
+以 `main` @ `a130eb90` 为准（[`CoSecCacheSpecs`](../../cocache/src/main/kotlin/me/ahoo/cosec/cache/CoSecCacheSpecs.kt)、
+[`RedisPolicyRepository`](../../cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisPolicyRepository.kt)、
+[`RedisAppRolePermissionRepository`](../../cocache/src/main/kotlin/me/ahoo/cosec/cache/RedisAppRolePermissionRepository.kt)）：
 
 | 缓存 | Redis key | 值 | 谁写 | 每个请求怎么读 |
 |---|---|---|---|---|
@@ -116,7 +116,7 @@ RFC 0001 是目标架构，对第 3 阶段的描述有几处彼此矛盾，或�
 | `RolePermissionCache` | `<p>:app:role:permission:<appId>:<roleId>[@<spaceId>]` | 一个角色在一个应用、一个空间的权限 id | 应用直接写这个 bean | 角色层：`getAll(作用域内的每个角色)` |
 
 四个缓存都是 `storeOfRecord()`：`ttl = null`、`ReadFailureMode.THROW`、`ForeignFormatMode.FAIL`，由 `CacheTtlPolicyTest`、
-`StrictCacheFailureTest` 守护。读取经 `Cache.async()`，再由 [`toLocalFirstMono`](../../cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/CacheFutures.kt)
+`StrictCacheFailureTest` 守护。读取经 `Cache.async()`，再由 [`toLocalFirstMono`](../../cocache/src/main/kotlin/me/ahoo/cosec/cache/CacheFutures.kt)
 转成 `Mono`：L2 命中在调用方线程上完成，未命中则在 `boundedElastic` 上继续。由 `LocalCacheFastPathTest` 守护。
 
 可以看出三点：
@@ -788,7 +788,7 @@ PR-5 起成为唯一的行为，用户在 8.0.0 GA 中第一次看到：
 | 来源 | 内容 | 何时跑 |
 |---|---|---|
 | 现有测试 | §6 守护列中的测试，以及 `SimpleAuthorizationTest`、`InRoleSpaceTest`、`PathVariableScopeTest`、`ResourceCheckTest`、`RootPrincipalIdentityTest`、`AuthorizationCheckerTest`、`ShadowAuthorizationTest`、`ShadowAppPermissionTest`、`MissingPolicyFailClosedTest`、`RolePermissionScopeTest`、`WebAdapterParityTest`，改为参数化：仓库来源 / 快照来源各跑一遍 | 每次 `check`，直到 PR-6 删除仓库来源 |
-| `PolicyTestKit` 套件 | `cosec-core/src/test/resources/cosec-policy-test/` 下的套件，经 `DecisionParity` 两边各跑一遍 | 每次 `check` |
+| `PolicyTestKit` 套件 | `core/src/test/resources/cosec-policy-test/` 下的套件，经 `DecisionParity` 两边各跑一遍 | 每次 `check` |
 | 随机生成 | 复用 RFC 0002 §8.2 的生成器，另加：数据先写进内存仓库，同时经 `CoSec7xReader` 的转换逻辑写成快照文档 | `check` 跑固定种子 2,000 例；`-PparityIterations=1000000` 手动跑百万例，PR-5 前必须跑过一次 |
 | 真实数据离线回放 | RFC 0002 §8.2.1 的同一批导出（策略、角色权限、≥ 100 万条、≥ 7 天的请求），不需要重新导出 | PR-4 合入之后、PR-5 合入之前 |
 
@@ -851,7 +851,7 @@ B/op 不随它变化（GLOBAL 层复用预构造的 `LayerInput`）。PR-2 的�
 ```
 
 ```bash
-java -jar cosec-core/build/libs/cosec-core-<version>-jmh.jar SimpleAuthorizationBenchmark -p source=engine,snapshot -p scenario=none -p globalPolicies=10,100,1000 -f 3 -wi 5 -i 10 -prof gc -jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml
+java -jar core/build/libs/cosec-core-<version>-jmh.jar SimpleAuthorizationBenchmark -p source=engine,snapshot -p scenario=none -p globalPolicies=10,100,1000 -f 3 -wi 5 -i 10 -prof gc -jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml
 ```
 
 ```bash
@@ -969,21 +969,21 @@ PR 按这里的值实现，数字由门槛的测量结果（§4.8）校准。
 
 本文对现有行为的描述，以 `main` @ `a130eb90` 的下列代码和 CoCache `v6.6.0` 为准：
 
-- 决策：`cosec-core/.../authorization/SimpleAuthorization.kt`、`PolicyRepository.kt`、`AppRolePermissionRepository.kt`、`RoleScope.kt`、
+- 决策：`core/.../authorization/SimpleAuthorization.kt`、`PolicyRepository.kt`、`AppRolePermissionRepository.kt`、`RoleScope.kt`、
   `MissingPolicyException.kt`；`policy/BlockingAware.kt`、`policy/PolicyData.kt`、`permission/AppPermissionData.kt`、`policy/condition/BoolConditionMatcher.kt`
 - 引擎输入：`engine/src/main/kotlin/me/ahoo/cosec/engine/PolicySet.kt`、`Engine.kt`；RFC 0002 PR-3 的适配层（进行中，`me.ahoo.cosec.authorization.engine`）
-- 存储：`cosec-cocache/.../cache/CoSecCacheSpecs.kt`、`PolicyCache.kt`、`GlobalPolicyIndexCache.kt`、`AppPermissionCache.kt`、`RolePermissionCache.kt`、
+- 存储：`cocache/.../cache/CoSecCacheSpecs.kt`、`PolicyCache.kt`、`GlobalPolicyIndexCache.kt`、`AppPermissionCache.kt`、`RolePermissionCache.kt`、
   `AppSpacedRoleId.kt`、`RedisPolicyRepository.kt`、`RedisAppRolePermissionRepository.kt`、`CacheFutures.kt`、`CoSecSchemaMarker.kt`、
   `CoSecCoCache5Migration.kt`、`RolePermissionKeyMigration.kt`、`RedisPolicyRevisionStore.kt`、`limiter/RedisRateLimiter.kt`
-- 写入方：`cosec-core/.../policy/LocalPolicyInitializer.kt`、`policy/history/PolicyHistory.kt`
-- 影子与解释：`cosec-core/.../shadow/ShadowAuthorization.kt`、`OverlayPolicyRepository.kt`、`OverlayAppRolePermissionRepository.kt`、
+- 写入方：`core/.../policy/LocalPolicyInitializer.kt`、`policy/history/PolicyHistory.kt`
+- 影子与解释：`core/.../shadow/ShadowAuthorization.kt`、`OverlayPolicyRepository.kt`、`OverlayAppRolePermissionRepository.kt`、
   `explain/AuthorizationExplainer.kt`、`explain/SnapshotRepositories.kt`
-- 限流：`cosec-core/.../limiter/RateLimitRuleProvider.kt`
-- starter：`cosec-spring-boot-starter/.../authorization/cache/CoSecPolicyCacheAutoConfiguration.kt`、`CoSecPermissionCacheAutoConfiguration.kt`、
+- 限流：`core/.../limiter/RateLimitRuleProvider.kt`
+- starter：`spring-boot-starter/.../authorization/cache/CoSecPolicyCacheAutoConfiguration.kt`、`CoSecPermissionCacheAutoConfiguration.kt`、
   `authorization/CoSecAuthorizationAutoConfiguration.kt`、`authorization/SecurityContextParseSchedulers.kt`
-- 测试：`cosec-cocache/src/test/.../CacheTtlPolicyTest.kt`、`LocalCacheFastPathTest.kt`、`limiter/RedisRateLimitingOffEventLoopTest.kt`；
-  `cosec-spring-boot-starter/src/test/.../cache/StrictCacheFailureTest.kt`
-- 基准：`cosec-core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`（内存仓库，返回 `Mono.just`）、`engine/src/jmh/.../EngineBenchmark.kt`
+- 测试：`cocache/src/test/.../CacheTtlPolicyTest.kt`、`LocalCacheFastPathTest.kt`、`limiter/RedisRateLimitingOffEventLoopTest.kt`；
+  `spring-boot-starter/src/test/.../cache/StrictCacheFailureTest.kt`
+- 基准：`core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`（内存仓库，返回 `Mono.just`）、`engine/src/jmh/.../EngineBenchmark.kt`
 - CoCache 6.6.0：`cocache-api` 的 `Cache`、`AsyncCache`、`Lookup`、`spi/InvalidationChannel`、`spi/CoherenceBackend`、`spi/RemoteStore`、`spi/Digest`；
   `cocache-core` 的 `policy/CachePolicy`（`ttl`、`localMaxAge`、`refreshWindow`、`LocalPolicy.maximumSize`、`LoadPolicy.asyncTimeout`、`ReadFailureMode`、
   `ForeignFormatMode`）、`engine/AbstractEngine.localEntry`（`ttl = null` 时 `refreshAt` 为永不）、`CacheRuntime.backend`、`CacheAdmin`、`ExternalInvalidator`、

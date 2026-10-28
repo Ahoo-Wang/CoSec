@@ -272,8 +272,8 @@ class RuleCoverageTest {
         index.isEnabledTest("mod", "GuardsTest", "no such test").assert().isFalse()
         index.isEnabledTest("mod", "OffTest", "guard").assert().isFalse()
         index.scalesWithIterations("mod", "GuardsTest").assert().isFalse()
-        index.scalesWithIterations("cosec-core", "SnapshotInstallOrderPropertyTest").assert().isFalse()
-        SourceTestIndex(Path.of("..")).scalesWithIterations("cosec-core", "SnapshotInstallOrderPropertyTest")
+        index.scalesWithIterations("core", "SnapshotInstallOrderPropertyTest").assert().isFalse()
+        SourceTestIndex(Path.of("..")).scalesWithIterations("core", "SnapshotInstallOrderPropertyTest")
             .assert().isTrue()
     }
 

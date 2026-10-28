@@ -63,6 +63,9 @@ Read [`wiki/architecture/overview.md`](wiki/architecture/overview.md) before tou
 the adapters, snapshots or the control plane. The parts that take several files to see:
 
 - **Layers.** `model ← engine ← runtime ← {adapters, stores, authenticators, listeners}`, and `control` on top.
+  Every module directory is its name without `cosec-` (`core/`, `spring-boot-starter/`, `gateway-server/`), mapped in
+  `settings.gradle.kts`; project paths and artifact ids keep the prefix (`:cosec-core:check`, `me.ahoo.cosec:cosec-core`).
+  Rule guards in `conformance/src/test/resources/rules/` name the directory (`core:SnapshotRecompileTest`).
   - `cosec-model` (`model/`) and `cosec-engine` (`engine/`) depend on the Kotlin standard library only:
     `EnginePurityTest` and `verifyPureClasspath` fail otherwise, and the root build leaves out the Guava/SLF4J
     defaults. The model holds ids, bindings, memberships, the condition AST, `ScopeResolver` and `Decision`; the

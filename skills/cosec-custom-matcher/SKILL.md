@@ -12,8 +12,8 @@ external attributes.
 
 Human-facing reference: https://cosec.ahoo.me/architecture/extending. In a CoSec checkout the SPIs live in
 `runtime/src/main/kotlin/me/ahoo/cosec/runtime/` (`attribute/`, `event/`, `ratelimit/`, `authn/`) and
-`cosec-core/src/main/kotlin/me/ahoo/cosec/membership/`; the starter wires them in
-`cosec-spring-boot-starter/.../pipeline/CoSecPipelineAutoConfiguration.kt` and
+`core/src/main/kotlin/me/ahoo/cosec/membership/`; the starter wires them in
+`spring-boot-starter/.../pipeline/CoSecPipelineAutoConfiguration.kt` and
 `CoSecPipelineIntegrationAutoConfiguration.kt`. Inspect the target version's interfaces before writing code.
 
 ## Rules for every extension

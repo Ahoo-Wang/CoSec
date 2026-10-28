@@ -82,7 +82,7 @@ Arrows point at what a module depends on. The rules behind the picture:
   shadow reports), JWT, OAuth, OpenAPI, or an observer of decisions (`cosec-opentelemetry`, `cosec-micrometer`,
   `cosec-kafka`, `cosec-ip2region`). An adapter never decides; it translates.
 - **`cosec-spring-boot-starter`** wires everything. Each integration is a Gradle feature variant declared in
-  [`cosec-spring-boot-starter/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts):
+  [`spring-boot-starter/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/spring-boot-starter/build.gradle.kts):
   the adapter module is a dependency of that variant only, and its auto-configuration is guarded by
   `@ConditionalOnClass`, so it is active only when the application requests the capability. The capabilities are listed
   in the [introduction](../guide/introduction.md#modules).
@@ -237,7 +237,7 @@ tenant. They are stored as JSON (schema 2), compiled once per revision, and held
 documents. A view is a reference to three of them, so an evaluation always sees one revision of each document
 (`SNP-1`, guarded by `SnapshotConsistencyPropertyTest`).
 
-[`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt)
+[`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt)
 holds them:
 
 - **Hot path.** `peek` is a synchronous lookup in memory, with no future and no I/O, safe on an event loop. Only a miss
@@ -259,7 +259,7 @@ holds them:
   so every request fails closed until one is published.
 
 The store is an SPI, `SnapshotDocumentStore`. With `cache-support` it is
-[`RedisSnapshotDocumentStore`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore.kt):
+[`RedisSnapshotDocumentStore`](https://github.com/Ahoo-Wang/CoSec/blob/main/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore.kt):
 Redis is the store of record, CoCache keeps a local copy for at most `local-max-age`, conditional reads bypass every
 local copy, and CoCache's invalidation channel carries the change notifications. Without it, the starter uses an
 in-memory store. Redis keys, the `noeviction` requirement and behavior when Redis is unavailable are in

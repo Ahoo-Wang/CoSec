@@ -11,7 +11,7 @@ description: "运行 cosec-gateway-server 镜像，并用它自带的 JDK 25 AOT
 
 ## 镜像 {#the-image}
 
-CI 在每次推送时用 [`cosec-gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/Dockerfile)
+CI 在每次推送时用 [`gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/Dockerfile)
 构建镜像，发布为 `ahoowang/cosec-gateway`、`ghcr.io/ahoo-wang/cosec-gateway` 和
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`，支持 `linux/amd64` 和 `linux/arm64`。网关服务是一个应用：只以
 镜像发布，从不作为库发布。
@@ -133,7 +133,7 @@ management:
 | 文件 | 内容 |
 |---|---|
 | `cosec-gateway-config.yaml` | 一个 ConfigMap，含 `application.yaml` 和 `bootstrap.yaml`，挂载到 `/opt/cosec-gateway-server/config/`：路由和上面的 `cosec.*` 设置。 |
-| `cosec-gateway-deployment.yml` | Deployment：`COSEC_JWT_SECRET` 来自 Secret `cosec-jwt-secret`，Redis Cluster 来自 Secret `redis-secret`（`SPRING_DATA_REDIS_CLUSTER_NODES`、`SPRING_DATA_REDIS_PASSWORD`、自适应拓扑刷新），启动探针为 `/actuator/health`，就绪探针为 `/actuator/health/readiness`，存活探针为 `/actuator/health/liveness`，以及注入 OpenTelemetry Java agent 的注解。 |
+| `cosec-gateway-deployment.yml` | Deployment：`COSEC_JWT_SECRET` 来自 Secret `cosec-jwt-secret`，Redis Cluster 来自 Secret `redis-secret`（`SPRING_DATA_REDIS_CLUSTER_NODES`、`SPRING_DATA_REDIS_PASSWORD`、自适应拓扑刷新），启动探针和存活探针为 `/actuator/health/liveness`，就绪探针为 `/actuator/health/readiness`，以及注入 OpenTelemetry Java agent 的注解。 |
 | `cosec-gateway-reids.yaml` | Secret `redis-secret`，值为占位符。 |
 | `cosec-gateway-service.yaml` | 一个 Service，80 端口转发到容器的 8080。 |
 | `cosec-gateway-hpa.yaml` | 一个 HorizontalPodAutoscaler，按 CPU 在 2 到 10 个副本之间伸缩。 |
@@ -142,14 +142,15 @@ Deployment 中的镜像是 `ghcr.io/ahoo-wang/cosec-gateway:7.0.0`：把标签�
 （`kubectl create secret generic cosec-jwt-secret --from-literal=secret=<random value>`），并在 `redis-secret` 中填入
 你的节点和密码。`cosec-migrate` 通过 `--to-redis` 连接一台 Redis 服务器。
 
-`/actuator/health` 上的启动探针只有在平台文档安装后才通过（[就绪](#readiness)）。在第一次部署前发布文档，或者把启动
-探针指向 `/actuator/health/liveness`，让 Redis 中还没有平台文档时 pod 也能启动，并留在 Service 之外。
+启动探针和存活探针读取 `/actuator/health/liveness`，就绪探针读取 `/actuator/health/readiness`；网关服务启用了这些分组
+（`management.endpoint.health.probes.enabled`）。因此 Redis 中还没有平台文档时 pod 也能启动，并在文档安装前留在 Service 之外
+（[就绪](#readiness)）。不要让探针指向 `/actuator/health`：在那之前它一直是 DOWN，启动探针指向它会让 pod 被重启。
 
 ## CI 如何检查镜像 {#how-ci-checks-the-image}
 
 镜像推送后，[`docker-deploy.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/docker-deploy.yml) 的
 `aot-smoke` 作业针对一个 Redis 7 服务容器运行
-[`aot-smoke.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/aot-smoke.sh)。它用
+[`aot-smoke.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/aot-smoke.sh)。它用
 `cosec-migrate publish` 发布一个平台文档，以 `-XX:AOTMode=on` 启动镜像（无法映射的缓存会让作业失败），添加一条指向
 网关自身健康端点的 `/smoke/**` 路由，然后检查：健康探针回答 `200`，匿名请求回答带 `application/problem+json` 的
 `401`，带有效 HS256 令牌的请求回答 `200`，匹配到 DENY 的请求回答带 `application/problem+json` 的 `403`。同样的步骤
@@ -171,7 +172,7 @@ JVM 启动时直接映射这个文件，不再重复这些工作。不需要改�
 
 ### 镜像如何使用它 {#how-the-image-uses-it}
 
-`Dockerfile` 在最终阶段用 [`aot-train.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/aot-train.sh)
+`Dockerfile` 在最终阶段用 [`aot-train.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/aot-train.sh)
 训练缓存，所用的 jar 和路径与容器运行时完全一致，结果写入 `/opt/cosec-gateway-server/aot/cosec-gateway-server.aot`。
 
 1. **记录。** 脚本用 `-XX:AOTMode=record` 和与生产相同的 JVM 参数启动网关，等到 `/actuator/health/liveness` 有响应后发送几个请求，

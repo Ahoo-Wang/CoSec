@@ -521,7 +521,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 }
 ```
 
-这些文件由 `cosec-core` 中的格式描述符（[`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt)）生成，从不手工编辑。有测试保证它们与文档读取器一致：一方接受的，另一方也接受。
+这些文件由 `cosec-core` 中的格式描述符（[`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt)）生成，从不手工编辑。有测试保证它们与文档读取器一致：一方接受的，另一方也接受。
 
 通过 schema 校验是必要条件，而非充分条件。JSON Schema 无法表达的内容包括：文件是三种文档中的哪一种；id 唯一和文档之间的引用；时区是否存在，以及 2 月 30 日这样的日期；`from` 等于 `to` 的时间窗口，以及 `notBefore` 晚于 `notAfter`；路径变量的作用域；属性目录和条件操作数的类型。要检查这些，请编译文档（[测试策略](./testing.md#validating-policies)）。
 

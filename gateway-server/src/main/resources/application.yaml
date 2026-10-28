@@ -52,3 +52,10 @@ cosec:
 logging:
   level:
     root: info
+management:
+  endpoint:
+    health:
+      # /actuator/health/liveness and /readiness for the Kubernetes probes, on any platform. Readiness stays
+      # REFUSING_TRAFFIC until the platform document and the prewarmed documents are installed.
+      probes:
+        enabled: true

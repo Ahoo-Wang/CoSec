@@ -18,7 +18,7 @@
       "level": "control",
       "guards": [
         "control:RevisionsTest",
-        "cosec-cocache:RevisionChainTest"
+        "cocache:RevisionChainTest"
       ],
       "pending": null
     },
@@ -40,7 +40,7 @@
       "level": "control",
       "guards": [
         "control:RevisionsTest",
-        "cosec-cocache:RevisionChainTest#two instances publishing on the same base never overwrite each other"
+        "cocache:RevisionChainTest#two instances publishing on the same base never overwrite each other"
       ],
       "pending": null
     },
@@ -61,7 +61,7 @@
       "level": "control",
       "guards": [
         "control:ControlFailClosedTest#one staged change per document",
-        "cosec-cocache:RevisionChainTest#changes stage one at a time across instances and publish once"
+        "cocache:RevisionChainTest#changes stage one at a time across instances and publish once"
       ],
       "pending": null
     },
@@ -166,7 +166,7 @@
       "pending": null,
       "guards": [
         "control:ControlRoundTwoFixesTest#a window sums one report per instance, and anything else keeps it open",
-        "cosec-cocache:CoCacheShadowTest#each instance's report has its own key, and one under another's key is not counted",
+        "cocache:CoCacheShadowTest#each instance's report has its own key, and one under another's key is not counted",
         "control:ControlRoundTwoFixesTest#an instance seen reporting on a window must keep reporting until it closes"
       ]
     },
