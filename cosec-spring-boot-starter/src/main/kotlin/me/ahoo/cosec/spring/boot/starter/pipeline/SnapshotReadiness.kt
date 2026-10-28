@@ -40,7 +40,12 @@ class SnapshotReadiness(
     @Volatile
     private var accepting = false
 
-    private val timer = Executors.newSingleThreadScheduledExecutor { Thread(it, "cosec-snapshot-readiness").apply { isDaemon = true } }
+    private val timer = Executors.newSingleThreadScheduledExecutor {
+        Thread(
+            it,
+            "cosec-snapshot-readiness"
+        ).apply { isDaemon = true }
+    }
 
     init {
         timer.scheduleWithFixedDelay(::check, 0, interval.toMillis(), TimeUnit.MILLISECONDS)
