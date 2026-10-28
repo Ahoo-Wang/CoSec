@@ -45,7 +45,6 @@ class RevocableTokenVerifier(
         require(!skew.isNegative) { "The revocation skew must not be negative, not $skew." }
     }
 
-
     /**
      * @param T the expected principal type
      * @param accessToken the access token to verify

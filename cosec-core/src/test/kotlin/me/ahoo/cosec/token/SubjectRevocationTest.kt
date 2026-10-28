@@ -60,6 +60,7 @@ class SubjectRevocationTest {
     }
 
     private val verifier = FixedVerifier(token(now))
+
     // No skew: these tests place tokens to the millisecond of the revocation; the skew has its own test.
     private val revocableVerifier = RevocableTokenVerifier(verifier, tokenStore, Duration.ZERO)
     private val revoker = DefaultTokenRevoker(verifier, tokenStore, refreshValidity, Clock.fixed(now, ZoneOffset.UTC))
