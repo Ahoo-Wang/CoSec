@@ -360,7 +360,7 @@ object ChangeRequestCodec {
     fun operation(key: SnapshotKey, node: JsonNode): Operation = guarded {
         val (kind, owner) = Revisions.ownerOf(key)
         node.only(
-            "op", "policy", "id", "binding", "rateLimit", "catalog", "limits", "attributes", "ifMatch",
+            "op", "policy", "id", "binding", "rateLimit", "catalog", "limits", "attributes", "boundary", "ifMatch",
         )
         operation(node, kind, owner)
     }

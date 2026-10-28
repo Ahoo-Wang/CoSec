@@ -87,6 +87,16 @@ class ControlHttpTest {
     }
 
     @Test
+    fun `a boundary operation is read from the request`() {
+        val boundary = """{"document":"platform","base":1,"note":"fence",""" +
+            """"operations":[{"op":"setBoundary","boundary":"fence"}]}"""
+        // Read, then judged: not a 400 for a field the codec did not know.
+        val (created, change) = call("POST", "/changes", boundary, security = plato)
+        created.assert().isEqualTo(201)
+        change.get("operations").single().get("boundary").asString().assert().isEqualTo("fence")
+    }
+
+    @Test
     fun `documents, history and diffs`() {
         call("GET", "/documents/tenant:acme").second.get("bindings").size().assert().isEqualTo(2)
         call("GET", "/documents/platform").first.assert().isEqualTo(403)
