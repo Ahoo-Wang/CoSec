@@ -46,6 +46,7 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.authn.Authenticator
+import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
@@ -72,6 +73,7 @@ import org.springframework.kafka.core.KafkaOperations
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
+import kotlin.time.toKotlinDuration
 
 /**
  * The control plane (RFC 0007, the starter's `controlSupport` feature): the only writer of the policy documents, on
@@ -194,6 +196,26 @@ class CoSecControlAutoConfiguration {
         ): KafkaChangeListener = with(properties.audit.kafka) { KafkaChangeListener(kafkaOperations, topic, delivery) }
     }
 
+    /**
+     * Every change listener, delivering until shutdown. `cosec.control.audit.kafka.delivery=required` asks for a REQUIRED
+     * Kafka record of every gated step: startup fails when that listener could not be created, rather than publishing
+     * without it.
+     */
+    @Bean(destroyMethod = "cancel")
+    @ConditionalOnMissingBean
+    fun cosecChangeListeners(
+        listeners: ObjectProvider<ChangeListener>,
+        properties: ControlProperties
+    ): ChangeListeners {
+        val all = listeners.orderedStream().toList()
+        val kafka = properties.audit.kafka
+        check(kafka.delivery != Delivery.REQUIRED || all.any { it.name == KAFKA_CHANGE_LISTENER }) {
+            "${ControlProperties.KAFKA_AUDIT_PREFIX}.delivery=required, but no Kafka change listener was created: it " +
+                "needs kafka-support, a KafkaOperations bean and ${ControlProperties.KAFKA_AUDIT_PREFIX}.enabled=true."
+        }
+        return ChangeListeners(all, properties.audit.requiredTimeout.toKotlinDuration())
+    }
+
     @Bean
     @ConditionalOnMissingBean
     fun cosecChanges(
@@ -203,7 +225,7 @@ class CoSecControlAutoConfiguration {
         authority: ChangeAuthority,
         options: ChangeOptions,
         runtime: CacheRuntime,
-        listeners: ObjectProvider<ChangeListener>,
+        listeners: ChangeListeners,
         idGenerator: ObjectProvider<StringIdGenerator>,
         shadowReports: ObjectProvider<CoCacheShadowReports>,
         properties: RuntimeAuthorizationProperties,
@@ -218,7 +240,7 @@ class CoSecControlAutoConfiguration {
             authority = authority,
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(runtime, properties.snapshot.keyPrefix),
-            listeners = ChangeListeners(listeners.orderedStream().toList()),
+            listeners = listeners,
         )
     }
 
@@ -258,6 +280,9 @@ class CoSecControlAutoConfiguration {
     @ConditionalOnMissingBean
     fun cosecControlHttp(plane: ControlPlane): ControlHttp = ControlHttp(plane)
 }
+
+/** [KafkaChangeListener.NAME], as a literal: `cosec-kafka` is an optional (`kafkaSupport`) dependency. */
+private const val KAFKA_CHANGE_LISTENER = "kafka-change-audit"
 
 /** The control plane's own snapshot source, held apart from the data plane's (see the bean's comment). */
 class ControlSnapshot(

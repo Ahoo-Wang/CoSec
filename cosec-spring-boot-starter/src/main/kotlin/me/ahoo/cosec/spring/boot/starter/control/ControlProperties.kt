@@ -79,6 +79,8 @@ class ControlProperties {
     }
 
     class Audit {
+        /** How long every REQUIRED change listener together may take to record a gated step before it fails (503). */
+        var requiredTimeout: Duration = Duration.ofSeconds(5)
         val kafka = Kafka()
 
         /** `KafkaChangeListener`, when `kafka-support` and a `KafkaOperations` bean are present. */
