@@ -1,0 +1,32 @@
+# Rule: IDN-4
+# Mutant: refresh builds the principal without the act check, so a delegation token refreshes into a token for its subject
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
+index a792f5fd..edf2050c 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
+@@ -68,7 +68,7 @@ class JwtTokenVerifier(
+         if (decodedRefreshToken.subject != decodedAccessToken.id) {
+             throw RefreshTokenMismatchException()
+         }
+-        return Jwts.toPrincipal(decodedAccessToken)
++        return Jwts.toPrincipal(decodedAccessToken, refusingDelegation = false)
+     }
+ 
+     /** Decodes the access token being refreshed: it may have expired, so only its signature is checked, after this. */
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+index 7574b067..3dafed53 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+@@ -55,8 +55,8 @@ internal object Jwts {
+      * [decodedAccessToken] as a principal; the caller has verified its signature. A delegation token (an `act` claim)
+      * never becomes one: read as its `sub`, it would give the actor everything the subject may do (RFC 0009 §6, `IDN-4`).
+      */
+-    fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT): T {
+-        if (!decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
++    fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT, refusingDelegation: Boolean = true): T {
++        if (refusingDelegation && !decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
+             throw DelegationUnsupportedException(
+                 "The token delegates (it carries an `act` claim), which CoSec does not support."
+             )
