@@ -39,7 +39,7 @@ class UnknownPropertiesTest {
             "cosec.pipeline.timeout=3s",
             "cosec.authentication.login.enabled=false",
             "cosec.authorization.snapshot.fail-closed.tenants[0]=acme",
-            "cosec.authentication.social.registration.github.client-id=id",
+            "cosec.authentication.login.social.registration.github.client-id=id",
             "cosec.unknown-properties=fail",
             // Read from the environment by the Kafka audit listener: declared in KafkaAuditProperties for the metadata.
             "cosec.audit.kafka.delivery=required",
@@ -48,9 +48,16 @@ class UnknownPropertiesTest {
 
     @Test
     fun `a 7_x key names what replaced it`() {
-        runner.withPropertyValues("cosec.authentication.enabled=false", "cosec.limiter.enabled=true").run { context ->
+        runner.withPropertyValues(
+            "cosec.authentication.enabled=false",
+            "cosec.authentication.social.registration.github.client-id=id",
+            "cosec.limiter.enabled=true",
+        ).run { context ->
             val message = context.startupFailure!!.messages()
             message.assert().contains("cosec.authentication.enabled -> cosec.authentication.login.enabled")
+            message.assert().contains(
+                "cosec.authentication.social.registration.github.client-id -> cosec.authentication.login.social."
+            )
             message.assert().contains("cosec.limiter.enabled -> removed")
         }
     }

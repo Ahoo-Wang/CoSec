@@ -69,6 +69,7 @@ class UnknownProperties(
         /** What 8.0 did with a 7.x key, by key or by prefix (ending in `.`). */
         val RENAMED: Map<String, String> = linkedMapOf(
             "cosec.authentication.enabled" to "cosec.authentication.login.enabled",
+            "cosec.authentication.social." to "cosec.authentication.login.social.",
             "cosec.authorization.allow-query-token" to "cosec.pipeline.allow-query-token",
             "cosec.api-key.header" to "cosec.pipeline.api-key-header",
             "cosec.authorization.enabled" to "removed: cosec.enabled=false switches CoSec off",

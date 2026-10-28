@@ -13,13 +13,13 @@
 
 package me.ahoo.cosec.spring.boot.starter
 
+import com.tngtech.archunit.base.DescribedPredicate
 import com.tngtech.archunit.core.domain.JavaCall.Predicates.target
+import com.tngtech.archunit.core.domain.JavaMethod
+import com.tngtech.archunit.core.domain.JavaMethodCall
 import com.tngtech.archunit.core.domain.properties.HasName.Predicates.name
 import com.tngtech.archunit.core.domain.properties.HasName.Predicates.nameMatching
 import com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner
-import com.tngtech.archunit.base.DescribedPredicate
-import com.tngtech.archunit.core.domain.JavaMethod
-import com.tngtech.archunit.core.domain.JavaMethodCall
 import com.tngtech.archunit.core.importer.ImportOption.DoNotIncludeTests
 import com.tngtech.archunit.junit.AnalyzeClasses
 import com.tngtech.archunit.junit.ArchTest
@@ -78,5 +78,4 @@ class UnverifiedTokenTest {
                 .or(target(owner(name(JWTS))).and(target(nameMatching("(decode|toPrincipal).*"))))
                 .forSubtype()
     }
-
 }
