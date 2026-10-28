@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.spi.token
 
-
 /**
  * Exception thrown when a token has been revoked.
  *

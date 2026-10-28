@@ -13,15 +13,15 @@
 
 package me.ahoo.cosec.jwt
 
-import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.api.tenant.SimpleTenant
-import me.ahoo.cosec.spi.token.DefaultTokenRevoker
+import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
 import me.ahoo.cosec.runtime.token.SimpleCompositeToken
+import me.ahoo.cosec.spi.token.DefaultTokenRevoker
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosid.test.MockIdGenerator

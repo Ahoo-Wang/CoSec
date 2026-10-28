@@ -16,7 +16,6 @@ package me.ahoo.cosec.runtime.identity
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
 import me.ahoo.cosec.spi.identity.IdentityOverflowException
-
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows

@@ -25,11 +25,11 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset

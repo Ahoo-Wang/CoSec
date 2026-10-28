@@ -16,7 +16,6 @@ package me.ahoo.cosec.runtime.snapshot
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
-
 import java.time.Clock
 
 /**

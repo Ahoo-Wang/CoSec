@@ -13,12 +13,11 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.runtime.snapshot.SnapshotSourceTest.Companion.await
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
-
-import me.ahoo.cosec.runtime.snapshot.SnapshotSourceTest.Companion.await
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Test

@@ -13,18 +13,17 @@
 
 package me.ahoo.cosec.runtime.token
 
+import me.ahoo.cosec.api.token.AccessToken
+import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
-
-import me.ahoo.cosec.api.token.AccessToken
-import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.model.PrincipalId
 import java.time.Duration
 
 /**

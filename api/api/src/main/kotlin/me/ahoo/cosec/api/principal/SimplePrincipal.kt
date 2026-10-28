@@ -12,8 +12,6 @@
  */
 package me.ahoo.cosec.api.principal
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-
 /**
  * Simple implementation of [CoSecPrincipal].
  *

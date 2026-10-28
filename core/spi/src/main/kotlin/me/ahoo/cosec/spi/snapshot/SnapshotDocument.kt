@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.spi.snapshot
 
-
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.time.Instant

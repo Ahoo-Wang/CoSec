@@ -14,15 +14,15 @@
 package me.ahoo.cosec.spi.membership
 
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
+import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.api.principal.SpacedRoleId
+import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.ScopeSubject
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
 import me.ahoo.cosec.runtime.token.SimpleTokenTenantPrincipal
 import me.ahoo.test.asserts.assert

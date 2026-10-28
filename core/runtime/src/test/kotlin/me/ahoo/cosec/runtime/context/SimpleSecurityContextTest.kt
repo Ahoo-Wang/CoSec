@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.api.context
+package me.ahoo.cosec.runtime.context
 
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.principal.SimplePrincipal

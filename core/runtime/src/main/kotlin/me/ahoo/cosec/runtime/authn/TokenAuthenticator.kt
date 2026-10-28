@@ -13,21 +13,20 @@
 
 package me.ahoo.cosec.runtime.authn
 
+import me.ahoo.cosec.api.findInDelegationChain
+import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
+import me.ahoo.cosec.runtime.token.SimpleAccessToken
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
-
-import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.api.findInDelegationChain
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.spi.token.ExpiresAtCapable
-import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
 import me.ahoo.cosec.spi.token.RevocationReader
-import me.ahoo.cosec.runtime.token.SimpleAccessToken
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenRevokedException

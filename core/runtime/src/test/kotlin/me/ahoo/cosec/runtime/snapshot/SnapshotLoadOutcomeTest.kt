@@ -15,7 +15,6 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
-
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CompletableFuture

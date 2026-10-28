@@ -13,11 +13,11 @@
 
 package me.ahoo.cosec.jwt
 
+import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
-import me.ahoo.cosec.api.context.tenant
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.runtime.context.tenant
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

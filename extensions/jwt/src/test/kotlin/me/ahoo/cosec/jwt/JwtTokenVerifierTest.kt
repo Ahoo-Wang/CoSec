@@ -16,10 +16,10 @@ package me.ahoo.cosec.jwt
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.login.token.RefreshTokenMismatchException
 import me.ahoo.cosec.runtime.token.SimpleAccessToken
 import me.ahoo.cosec.runtime.token.SimpleCompositeToken

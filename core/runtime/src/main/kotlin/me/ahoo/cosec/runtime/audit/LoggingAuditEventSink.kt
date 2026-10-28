@@ -15,13 +15,13 @@
 
 package me.ahoo.cosec.runtime.audit
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.github.oshai.kotlinlogging.KLogger
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditEvent
-import me.ahoo.cosec.spi.audit.AuditEventSink
 import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.audit.AuditEventSink
 
 /**
  * Default [AuditEventSink] writing single-line JSON to the logger named

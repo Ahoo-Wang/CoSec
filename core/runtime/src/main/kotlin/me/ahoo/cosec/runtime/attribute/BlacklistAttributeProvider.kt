@@ -13,11 +13,10 @@
 
 package me.ahoo.cosec.runtime.attribute
 
+import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration
 import me.ahoo.cosec.spi.attribute.AttributeProvider
 import me.ahoo.cosec.spi.attribute.AttributeRequest
-
-import me.ahoo.cosec.model.condition.AttributeType
 import java.util.concurrent.ConcurrentHashMap
 
 /**

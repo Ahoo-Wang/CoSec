@@ -16,10 +16,10 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.apikey.ApiKeys
-import me.ahoo.cosec.runtime.json.CoSecJson
 import org.springframework.data.redis.core.StringRedisTemplate
 
 const val DEFAULT_API_KEY_KEY_PREFIX = "cosec:api-key"

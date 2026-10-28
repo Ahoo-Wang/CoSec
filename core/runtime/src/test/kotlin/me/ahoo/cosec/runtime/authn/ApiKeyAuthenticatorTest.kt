@@ -13,19 +13,18 @@
 
 package me.ahoo.cosec.runtime.authn
 
-import me.ahoo.cosec.spi.authn.AuthnResult
-import me.ahoo.cosec.spi.authn.Credentials
-
 import kotlinx.coroutines.test.runTest
-import me.ahoo.cosec.spi.apikey.ApiKey
-import me.ahoo.cosec.spi.apikey.ApiKeyReader
-import me.ahoo.cosec.spi.apikey.ApiKeys
-import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.apikey.ApiKey
+import me.ahoo.cosec.spi.apikey.ApiKeyReader
+import me.ahoo.cosec.spi.apikey.ApiKeys
+import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Clock

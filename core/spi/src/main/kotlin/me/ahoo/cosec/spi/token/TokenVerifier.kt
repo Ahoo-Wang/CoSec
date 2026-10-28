@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.spi.token
 
-
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal

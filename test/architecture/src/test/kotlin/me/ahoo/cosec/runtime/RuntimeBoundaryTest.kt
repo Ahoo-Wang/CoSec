@@ -31,9 +31,9 @@ import com.tngtech.archunit.lang.SimpleConditionEvent
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.codeUnits
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
 import me.ahoo.cosec.engine.flat.FlatEngine
+import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
-import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 
 /**
  * Reactor stays at the adapter bridges (RFC 0006 §5.1, Q6): the code of `runtime/`, `engine/` and `model/` never

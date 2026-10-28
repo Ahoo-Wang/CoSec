@@ -15,9 +15,9 @@
 
 package me.ahoo.cosec.kafka
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.future.await
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.audit.AuditEvents
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener

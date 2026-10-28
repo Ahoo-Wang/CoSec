@@ -15,10 +15,10 @@
 
 package me.ahoo.cosec.kafka
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditReasonCode
 import me.ahoo.cosec.api.audit.AuditSourceType
@@ -156,7 +156,8 @@ class KafkaAuditEventSinkTest {
     /** The record value consumers read, pinned: a mapper or Jackson change that alters it fails here (RFC 0011 D3). */
     @Test
     fun recordValueIsPinned() {
-        CoSecJson.mapper.writeValueAsString(event).assert().isEqualTo(PINNED_AUDIT)
+        val pinned = checkNotNull(javaClass.getResource("/stored-format/audit.json")).readText()
+        CoSecJson.mapper.writeValueAsString(event).assert().isEqualTo(pinned)
     }
 
     @Test
@@ -282,10 +283,5 @@ class KafkaAuditEventSinkTest {
         started.await(5, TimeUnit.SECONDS).assert().isTrue()
         sink.destroy()
         release.countDown()
-    }
-
-    private companion object {
-        const val PINNED_AUDIT =
-            """{"eventId":"event-1","timestamp":"2026-08-18T00:00:00Z","tenantId":"tenant-1","principal":{"id":"principal-1","authenticated":true,"roles":["admin"],"policies":["orders"]},"request":{"id":"request-1","appId":"app-1","spaceId":"space-1","remoteIp":"127.0.0.1","method":"GET","path":"/orders/1","routeId":"orders","device":{"id":"device-1","userAgent":"test-agent"}},"authorization":{"decision":"ALLOW","reasonCode":"ALLOW","reason":"Allow","elapsedNanos":100,"source":{"type":"GLOBAL_POLICY","policy":{"id":"orders","type":"global","statement":{"index":0,"name":"read"}},"role":null}},"trace":{"traceId":"trace-1","spanId":"span-1"},"snapshotVersion":null,"binding":null,"breakGlass":false,"kind":"DECIDED"}"""
     }
 }

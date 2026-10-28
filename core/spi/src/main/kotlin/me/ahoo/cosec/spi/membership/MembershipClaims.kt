@@ -13,9 +13,9 @@
 
 package me.ahoo.cosec.spi.membership
 
+import me.ahoo.cosec.api.findInDelegationChain
 import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.api.tenant.TenantCapable
-import me.ahoo.cosec.api.findInDelegationChain
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId

@@ -21,9 +21,9 @@ import me.ahoo.cosec.api.principal.RoleCapable
 import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.runtime.token.SimpleCompositeToken
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.runtime.token.SimpleCompositeToken
+import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosid.StringIdGenerator
 import tools.jackson.databind.json.JsonMapper
 import java.time.Duration

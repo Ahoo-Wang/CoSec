@@ -17,14 +17,12 @@ import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.snapshot.SnapshotCompiler
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
-import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
  * The data plane's compiler (RFC 0007 §3.1 N3): every document compiles against the condition limits and external

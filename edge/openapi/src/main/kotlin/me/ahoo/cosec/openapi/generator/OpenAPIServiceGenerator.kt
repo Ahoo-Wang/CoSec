@@ -19,11 +19,6 @@ import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.route.Route
-import me.ahoo.cosec.runtime.route.RouteMap
-import me.ahoo.cosec.runtime.route.RouteMapCodec
-import me.ahoo.cosec.runtime.route.RouteMapDocument
-import me.ahoo.cosec.runtime.route.RouteMapException
 import me.ahoo.cosec.runtime.document.Catalog
 import me.ahoo.cosec.runtime.document.CatalogGroup
 import me.ahoo.cosec.runtime.document.CatalogPermission
@@ -31,6 +26,11 @@ import me.ahoo.cosec.runtime.document.DocumentCompileException
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.runtime.route.Route
+import me.ahoo.cosec.runtime.route.RouteMap
+import me.ahoo.cosec.runtime.route.RouteMapCodec
+import me.ahoo.cosec.runtime.route.RouteMapDocument
+import me.ahoo.cosec.runtime.route.RouteMapException
 import java.time.Instant
 
 /** An OpenAPI document the generator cannot turn into routes and actions; it names the operation. */

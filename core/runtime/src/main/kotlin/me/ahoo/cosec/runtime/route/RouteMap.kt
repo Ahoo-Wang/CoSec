@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.runtime.route
 
-import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.HttpPath
 import me.ahoo.cosec.engine.pattern.HttpPathPattern
@@ -21,6 +20,7 @@ import me.ahoo.cosec.engine.pattern.InvalidPatternException
 import me.ahoo.cosec.engine.pattern.PatternContainment
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.model.Resource
 
 /** A route map that does not load: malformed, or with routes that could answer one request two ways. */

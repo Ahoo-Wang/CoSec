@@ -18,7 +18,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.cosec.spi.snapshot.SnapshotVersion
-
 import java.time.Duration
 import java.time.Instant
 

@@ -22,7 +22,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
-
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant

@@ -10,14 +10,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.api.context
+package me.ahoo.cosec.runtime.context
 
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.tenant.Tenant
-import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.api.tenant.SimpleTenant
+import me.ahoo.cosec.api.tenant.Tenant
+import me.ahoo.cosec.api.tenant.TenantCapable
 import java.util.concurrent.ConcurrentHashMap
 
 /**

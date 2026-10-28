@@ -14,76 +14,50 @@ plugins {
     alias(libs.plugins.kotlin.spring)
     kotlin("kapt")
 }
-java {
-    registerFeature("webmvcSupport") {
-        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
-        capability(group.toString(), "webmvc-support", version.toString())
-    }
-    registerFeature("webfluxSupport") {
-        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
-        capability(group.toString(), "webflux-support", version.toString())
-    }
-    registerFeature("gatewaySupport") {
-        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
-        capability(group.toString(), "gateway-support", version.toString())
-    }
-    registerFeature("oauthSupport") {
-        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
-        capability(group.toString(), "oauth-support", version.toString())
-    }
-    registerFeature("cacheSupport") {
-        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
-        capability(group.toString(), "cache-support", version.toString())
-    }
-    registerFeature("ip2regionSupport") {
-        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
-        capability(group.toString(), "ip2region-support", version.toString())
-    }
-    registerFeature("opentelemetrySupport") {
-        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
-        capability(group.toString(), "opentelemetry-support", version.toString())
-    }
-    registerFeature("micrometerSupport") {
-        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
-        capability(group.toString(), "micrometer-support", version.toString())
-    }
-    registerFeature("openapiSupport") {
-        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
-        capability(group.toString(), "openapi-support", version.toString())
-    }
-    registerFeature("controlSupport") {
-        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
-        capability(group.toString(), "control-support", version.toString())
-    }
-    registerFeature("kafkaSupport") {
-        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
-        capability(group.toString(), "kafka-support", version.toString())
-    }
-}
 dependencies {
     kapt(platform(project(":dependencies")))
     api(project(":runtime"))
     api(project(":login"))
     api(project(":jwt"))
-    api(project(":runtime"))
-    "webmvcSupportImplementation"(project(":webmvc"))
-    "webfluxSupportImplementation"(project(":webflux"))
-    "webfluxSupportImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
-    "gatewaySupportImplementation"(project(":gateway"))
-    "oauthSupportImplementation"(project(":social"))
-    "cacheSupportImplementation"(project(":cocache"))
-    "cacheSupportImplementation"("org.springframework.boot:spring-boot-data-redis")
-    "cacheSupportImplementation"("me.ahoo.cocache:cocache-spring-boot-starter")
-    "opentelemetrySupportImplementation"(project(":opentelemetry"))
-    "ip2regionSupportImplementation"(project(":ip2region"))
-    "micrometerSupportImplementation"(project(":micrometer"))
-    "micrometerSupportImplementation"("io.micrometer:micrometer-core")
-    "openapiSupportImplementation"(project(":openapi"))
-    "openapiSupportImplementation"("org.springframework.boot:spring-boot-starter-actuator")
-    "openapiSupportImplementation"("org.springdoc:springdoc-openapi-starter-common")
-    "controlSupportImplementation"(project(":control"))
-    "kafkaSupportImplementation"(project(":kafka"))
-    "kafkaSupportImplementation"("org.springframework.boot:spring-boot-starter-kafka")
+    // RFC 0011 D2: the technology modules are on the application's classpath when it adds them; each auto-configuration
+    // is guarded by @ConditionalOnClass, and STA-1 (CoSecModuleCheck) fails startup when a feature it turns on, or the
+    // web stack it runs on, needs a module that is missing.
+    compileOnly(project(":webmvc"))
+    testImplementation(project(":webmvc"))
+    compileOnly(project(":webflux"))
+    testImplementation(project(":webflux"))
+    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+    compileOnly(project(":gateway"))
+    testImplementation(project(":gateway"))
+    compileOnly(project(":social"))
+    testImplementation(project(":social"))
+    compileOnly(project(":cocache"))
+    testImplementation(project(":cocache"))
+    compileOnly("org.springframework.boot:spring-boot-data-redis")
+    testImplementation("org.springframework.boot:spring-boot-data-redis")
+    compileOnly("me.ahoo.cocache:cocache-spring-boot-starter")
+    testImplementation("me.ahoo.cocache:cocache-spring-boot-starter")
+    compileOnly(project(":opentelemetry"))
+    testImplementation(project(":opentelemetry"))
+    compileOnly(project(":ip2region"))
+    testImplementation(project(":ip2region"))
+    compileOnly(project(":micrometer"))
+    testImplementation(project(":micrometer"))
+    compileOnly("io.micrometer:micrometer-core")
+    testImplementation("io.micrometer:micrometer-core")
+    compileOnly(project(":openapi"))
+    testImplementation(project(":openapi"))
+    compileOnly("org.springframework.boot:spring-boot-starter-actuator")
+    testImplementation("org.springframework.boot:spring-boot-starter-actuator")
+    compileOnly("org.springdoc:springdoc-openapi-starter-common")
+    testImplementation("org.springdoc:springdoc-openapi-starter-common")
+    compileOnly(project(":control"))
+    testImplementation(project(":control"))
+    compileOnly(project(":kafka"))
+    testImplementation(project(":kafka"))
+    compileOnly("org.springframework.boot:spring-boot-starter-kafka")
+    testImplementation("org.springframework.boot:spring-boot-starter-kafka")
     api("org.springframework.boot:spring-boot-starter")
     api("org.springframework.boot:spring-boot-starter-jackson")
     kapt("org.springframework.boot:spring-boot-configuration-processor")
@@ -95,7 +69,6 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-webflux")
     testImplementation("org.springframework.boot:spring-boot-starter-data-redis")
     testImplementation("me.ahoo.cosid:cosid-test")
-    testImplementation("me.ahoo.cocache:cocache-spring-boot-starter")
     testImplementation("me.ahoo.cocache:cocache-test")
     testImplementation("org.springframework.cloud:spring-cloud-gateway-server-webflux")
 }

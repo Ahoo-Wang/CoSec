@@ -13,7 +13,11 @@
 
 package me.ahoo.cosec.architecture
 
+import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.exists
+import kotlin.io.path.extension
+import kotlin.io.path.readLines
 
 /**
  * Where each Gradle project sits, from the build (`cosec.projects`, `name=directory;…`) rather than from a path
@@ -28,6 +32,40 @@ object Projects {
     }
 
     fun directory(name: String): Path = requireNotNull(directories[name]) { "No project :$name in the build." }
+
+    /** The group of [project] in the project list (RFC 0011 §3). */
+    fun groupOf(project: String): String =
+        ProjectListTest.GROUPS.entries.single { project in it.value }.key
+
+    /** Every package declared in a project's main sources, with the projects that declare it. */
+    val mainPackages: Map<String, Set<String>> by lazy {
+        val packages = mutableMapOf<String, MutableSet<String>>()
+        for ((project, directory) in directories) {
+            val main = directory.resolve("src/main")
+            if (!main.exists()) continue
+            Files.walk(main).use { files ->
+                files.filter { it.extension == "kt" || it.extension == "java" }.forEach { file ->
+                    file.readLines().firstOrNull { it.startsWith("package ") }?.let { line ->
+                        packages.getOrPut(line.removePrefix("package ").trim().removeSuffix(";")) { mutableSetOf() }
+                            .add(project)
+                    }
+                }
+            }
+        }
+        packages
+    }
+
+    /** The project whose main sources declare [packageName], if exactly one does. */
+    fun projectOfPackage(packageName: String): String? = mainPackages[packageName]?.singleOrNull()
+
+    /** Each project's declared and resolved dependencies, as the root build's `architectureFacts` wrote them. */
+    val facts: Map<String, List<String>> by lazy {
+        property("cosec.facts").split(';').filter { it.isNotBlank() }.associate {
+            val (name, file) = it.split('=', limit = 2)
+            val path = Path.of(file)
+            name to if (path.exists()) path.readLines().filter { line -> line.isNotBlank() } else emptyList()
+        }
+    }
 
     private fun property(name: String): String =
         requireNotNull(System.getProperty(name)) { "$name is not set: run the rules through Gradle." }

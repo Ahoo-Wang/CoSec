@@ -16,12 +16,12 @@
 package me.ahoo.cosec.runtime.document.format
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.document.DocumentCompileException
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.runtime.document.DocumentCompileException
-import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant

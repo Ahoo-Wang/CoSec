@@ -13,27 +13,26 @@
 
 package me.ahoo.cosec.runtime.authn
 
-import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
-import me.ahoo.cosec.spi.authn.AuthnResult
-import me.ahoo.cosec.spi.authn.Credentials
-import me.ahoo.cosec.spi.authn.MembershipSource
-
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
-import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenVerificationException

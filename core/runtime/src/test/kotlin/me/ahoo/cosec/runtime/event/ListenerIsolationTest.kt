@@ -15,13 +15,13 @@
 
 package me.ahoo.cosec.runtime.event
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.runtime.Basis
@@ -38,10 +38,10 @@ import me.ahoo.cosec.runtime.ThreadingFixtures.singleThread
 import me.ahoo.cosec.runtime.ThreadingFixtures.startOn
 import me.ahoo.cosec.runtime.Unavailability
 import me.ahoo.cosec.runtime.audit.AuditEvents
+import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
-import me.ahoo.cosec.runtime.shadow.ShadowRecorder
-import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test

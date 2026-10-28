@@ -15,17 +15,13 @@ package me.ahoo.cosec.testkit
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.FlatEngine
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
-import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
-import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
-import me.ahoo.cosec.spi.membership.MembershipProvider
-import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
@@ -48,9 +44,13 @@ import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
-import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.runtime.MembershipResolver
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
+import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
+import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import tools.jackson.databind.JsonNode
 import java.time.Instant
 import me.ahoo.cosec.model.Scope as DeclaredRequestScope

@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.spi.snapshot
 
-
 import me.ahoo.cosec.model.CoSecException
 import java.time.Duration
 

@@ -15,8 +15,6 @@ package me.ahoo.cosec.cache
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.test.HookedBackend
-import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
@@ -25,6 +23,8 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.MembershipResolver
 import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test

@@ -14,14 +14,14 @@
 package me.ahoo.cosec.spring.boot.starter.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
-import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
-import me.ahoo.cosec.spi.token.DefaultTokenRevoker
-import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
+import me.ahoo.cosec.spi.token.DefaultTokenRevoker
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
 import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert

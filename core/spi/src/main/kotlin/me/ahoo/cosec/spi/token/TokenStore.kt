@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.spi.token
 
-
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import java.time.Duration

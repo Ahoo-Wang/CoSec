@@ -15,12 +15,12 @@
 
 package me.ahoo.cosec.spring.boot.starter.actuate
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.swagger.v3.oas.models.OpenAPI
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.openapi.generator.OpenAPIServiceGenerator
-import me.ahoo.cosec.runtime.route.RouteMapCodec
-import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.runtime.route.RouteMapCodec
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation

@@ -13,6 +13,9 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
@@ -20,10 +23,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.cosec.spi.snapshot.SnapshotStaleException
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
-
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test

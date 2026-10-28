@@ -13,10 +13,6 @@
 
 package me.ahoo.cosec.runtime.http
 
-import me.ahoo.cosec.runtime.http.Cookies
-import me.ahoo.cosec.runtime.http.Headers
-import me.ahoo.cosec.runtime.http.HttpFacts
-
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

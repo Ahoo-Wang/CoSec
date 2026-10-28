@@ -1,0 +1,18 @@
+{
+  "rules": [
+    {
+      "id": "STA-1",
+      "source": "RFC 0011 D2",
+      "statement": "A feature turned on by a property or by the host's web stack never runs without the module it needs: startup fails and names the artifact to add.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a Spring MVC host without cosec-webmvc fails startup",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a WebFlux host without cosec-webflux fails startup",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a Spring Cloud Gateway host without cosec-gateway fails startup, even with CoSec off",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#Redis API keys without cosec-cocache fail startup",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a required Kafka audit without cosec-kafka fails startup"
+      ]
+    }
+  ]
+}

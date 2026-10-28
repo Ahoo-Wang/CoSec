@@ -40,6 +40,11 @@ object GuardAllowlist {
             "runtime:PipelineTest#anUnhandledKindUnderVersionSkewIs500",
         ),
         "startup" to setOf(
+            "spring-boot:CoSecModuleCheckAutoConfigurationTest#a Spring MVC host without cosec-webmvc fails startup",
+            "spring-boot:CoSecModuleCheckAutoConfigurationTest#a WebFlux host without cosec-webflux fails startup",
+            "spring-boot:CoSecModuleCheckAutoConfigurationTest#a Spring Cloud Gateway host without cosec-gateway fails startup, even with CoSec off",
+            "spring-boot:CoSecModuleCheckAutoConfigurationTest#Redis API keys without cosec-cocache fail startup",
+            "spring-boot:CoSecModuleCheckAutoConfigurationTest#a required Kafka audit without cosec-kafka fails startup",
             "cocache:CacheTtlPolicyTest#snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort",
             "cocache:CacheTtlPolicyTest#snapshotCacheKeepsItsPinsWhateverCustomizersSet",
             "spring-boot:CoSecPipelineAutoConfigurationTest#Redis that may evict snapshots fails startup unless told to warn",

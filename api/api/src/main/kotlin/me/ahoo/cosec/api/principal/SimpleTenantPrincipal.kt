@@ -13,10 +13,8 @@
 package me.ahoo.cosec.api.principal
 
 import me.ahoo.cosec.api.Delegated
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.TenantPrincipal
-import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.api.tenant.SimpleTenant
+import me.ahoo.cosec.api.tenant.Tenant
 
 /**
  * Simple implementation of [TenantPrincipal].

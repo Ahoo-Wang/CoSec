@@ -13,9 +13,6 @@
 
 package me.ahoo.cosec.runtime.http
 
-import me.ahoo.cosec.runtime.http.Headers
-import me.ahoo.cosec.runtime.http.HttpFacts
-
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.HttpNames

@@ -69,6 +69,10 @@ class StoredFormatTest {
         """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray(),
     )
 
+    /** The bytes as written before RFC 0011 PR-2, kept in `stored-format/<name>.json` with no trailing newline. */
+    private fun fixture(name: String): String =
+        checkNotNull(javaClass.getResource("/stored-format/$name.json")) { "No fixture $name." }.readText()
+
     private fun <T> pinned(name: String, value: T, encode: (T) -> ByteArray, decode: (ByteArray) -> T, expected: String) {
         val bytes = encode(value)
         bytes.decodeToString().assert().describedAs(name).isEqualTo(expected)
@@ -83,7 +87,7 @@ class StoredFormatTest {
             key,
             { CoSecJson.mapper.writeValueAsBytes(it) },
             { CoSecJson.mapper.readValue(it, ApiKey::class.java) },
-            """{"id":"k1","principalId":"alice","tenantId":"acme","roles":["admin"],"policies":["p1"],"attributes":{"team":"a"},"expiresAt":"2026-11-01T00:00:00Z","enabled":true}""",
+            fixture("apiKey"),
         )
     }
 
@@ -94,18 +98,36 @@ class StoredFormatTest {
             mapOf(SpaceId.DEFAULT to setOf(RoleId("admin")), SpaceId("sales") to setOf(RoleId("viewer"))),
             listOf(PolicyId("p1")),
         )
-        pinned("memberships", memberships, MembershipsCodec::encode, MembershipsCodec::decode, """{"roles":{"":["admin"],"sales":["viewer"]},"attachments":["p1"]}""")
+        pinned(
+            "memberships",
+            memberships,
+            MembershipsCodec::encode,
+            MembershipsCodec::decode,
+            fixture("memberships")
+        )
     }
 
     @Test
     fun `snapshot documents`() {
-        pinned("snapshot", document, SnapshotDocumentCodec::encode, SnapshotDocumentCodec::decode, """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""")
+        pinned(
+            "snapshot",
+            document,
+            SnapshotDocumentCodec::encode,
+            SnapshotDocumentCodec::decode,
+            fixture("snapshot")
+        )
     }
 
     @Test
     fun `control records`() {
         val index = RevisionIndex(listOf(RevisionEntry(3, digest, at)), listOf(PendingRecord(digest, at)), floor = 2)
-        pinned("revisionIndex", index, RevisionIndexCodec::encode, RevisionIndexCodec::decode, """{"entries":[{"revision":3,"digest":"000102030405060708090a0b0c0d0e0f10111213","publishedAt":"2026-11-01T00:00:00Z"}],"pending":[{"digest":"000102030405060708090a0b0c0d0e0f10111213","since":"2026-11-01T00:00:00Z"}],"floor":2}""")
+        pinned(
+            "revisionIndex",
+            index,
+            RevisionIndexCodec::encode,
+            RevisionIndexCodec::decode,
+            fixture("revisionIndex")
+        )
         val change = ChangeRequest(
             id = ChangeId("c1"),
             key = SnapshotKey.Tenant("acme"),
@@ -121,16 +143,46 @@ class StoredFormatTest {
             createdAt = at,
             updatedAt = at,
         )
-        pinned("changeRequest", change, ChangeRequestCacheCodec::encode, ChangeRequestCacheCodec::decode, """{"id":"c1","key":"tenant:acme","base":{"revision":0},"operations":[],"author":{"tenant":"acme","principal":"alice"},"note":"first","kind":"PUBLISH","state":"DRAFT","findings":[],"checkedWith":{},"createdAt":"2026-11-01T00:00:00Z","updatedAt":"2026-11-01T00:00:00Z"}""")
-        pinned("stageSlot", StageSlot(ChangeId("c1"), at), StageSlotCodec::encode, StageSlotCodec::decode, """{"holder":"c1","since":"2026-11-01T00:00:00Z"}""")
+        pinned(
+            "changeRequest",
+            change,
+            ChangeRequestCacheCodec::encode,
+            ChangeRequestCacheCodec::decode,
+            fixture("changeRequest")
+        )
+        pinned(
+            "stageSlot",
+            StageSlot(ChangeId("c1"), at),
+            StageSlotCodec::encode,
+            StageSlotCodec::decode,
+            fixture("stageSlot")
+        )
         val keys = setOf(SnapshotKey.Tenant("b"), SnapshotKey.Platform, SnapshotKey.App("order"))
-        pinned("keys", keys, SnapshotKeySetCodec::encode, SnapshotKeySetCodec::decode, """["app:order","platform","tenant:b"]""")
-        pinned("listed", mapOf("tenant:acme" to at), ListedCodec::encode, ListedCodec::decode, """{"tenant:acme":"2026-11-01T00:00:00Z"}""")
+        pinned(
+            "keys",
+            keys,
+            SnapshotKeySetCodec::encode,
+            SnapshotKeySetCodec::decode,
+            fixture("keys")
+        )
+        pinned(
+            "listed",
+            mapOf("tenant:acme" to at),
+            ListedCodec::encode,
+            ListedCodec::decode,
+            fixture("listed")
+        )
     }
 
     @Test
     fun `shadow records`() {
-        pinned("candidate", StoredCandidate("c1@1", 4, document), StoredCandidateCodec::encode, StoredCandidateCodec::decode, """{"window":"c1@1","baseRevision":4,"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","document":{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}}""")
+        pinned(
+            "candidate",
+            StoredCandidate("c1@1", 4, document),
+            StoredCandidateCodec::encode,
+            StoredCandidateCodec::decode,
+            fixture("candidate")
+        )
         val report = ShadowReport(
             window = "c1@1",
             instance = "i1",
@@ -144,7 +196,13 @@ class StoredFormatTest {
             first = at,
             last = at,
         )
-        pinned("report", report, ShadowReportCodec::encode, ShadowReportCodec::decode, """{"window":"c1@1","instance":"i1","counts":{"SAME":3,"NARROWED":1},"samples":{"NARROWED":[{"tenant":"acme","principal":"bob","app":"order","space":"","action":"http:GET","resource":"http//orders/1","enforcedBy":"read[0]","candidateBy":null}]},"baseRevisions":[4],"first":"2026-11-01T00:00:00Z","last":"2026-11-01T00:00:00Z"}""")
-        pinned("reporters", setOf("i2", "i1"), ReportersCodec::encode, ReportersCodec::decode, """["i1","i2"]""")
+        pinned(
+            "report",
+            report,
+            ShadowReportCodec::encode,
+            ShadowReportCodec::decode,
+            fixture("report")
+        )
+        pinned("reporters", setOf("i2", "i1"), ReportersCodec::encode, ReportersCodec::decode, fixture("reporters"))
     }
 }

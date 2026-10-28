@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.spi.snapshot
 
-
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 

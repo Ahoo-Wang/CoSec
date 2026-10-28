@@ -14,11 +14,11 @@
 package me.ahoo.cosec.spi.authn
 
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.spi.identity.Identity
-import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.membership.MembershipClaims
 
 /**
  * Turns a request's credentials into a principal (RFC 0006 §5.3.2).

@@ -17,7 +17,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.runtime.PipelineFixtures.InstalledViews
 import me.ahoo.cosec.runtime.PipelineFixtures.LoadingViews
@@ -35,6 +34,7 @@ import me.ahoo.cosec.runtime.ThreadingFixtures.singleThread
 import me.ahoo.cosec.runtime.ThreadingFixtures.startOn
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test

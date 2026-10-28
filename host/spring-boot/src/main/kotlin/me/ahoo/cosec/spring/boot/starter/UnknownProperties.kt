@@ -15,8 +15,8 @@
 
 package me.ahoo.cosec.spring.boot.starter
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.json.CoSecJson
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.context.properties.source.IterableConfigurationPropertySource
@@ -87,7 +87,7 @@ class UnknownProperties(
             "cosec.authorization.cache.token.expire-after-write" to
                 "cosec.authorization.cache.token.local-max-age, a duration (30s)",
             "cosec.authorization.cache.token.expire-unit" to "removed: the durations carry their unit",
-            "cosec.authorization.gateway.enabled" to "removed: the gateway filter comes with gatewaySupport",
+            "cosec.authorization.gateway.enabled" to "removed: the gateway filter comes with cosec-gateway",
             "cosec.limiter." to "removed: rate limit rules are in the platform document",
             "cosec.shadow." to "removed: shadow windows are control-plane operations; see cosec.authorization.shadow.*",
             "cosec.explain.enabled" to "removed: use the control plane's explain",

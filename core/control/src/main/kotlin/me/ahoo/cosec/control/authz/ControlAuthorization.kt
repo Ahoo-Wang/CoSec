@@ -24,9 +24,9 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.RequestSecurity
+import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.runtime.document.Actor
 
 /**
  * Who asks the control plane (RFC 0007 §10.1): a principal the host pipeline authenticated, with the memberships and

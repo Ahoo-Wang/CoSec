@@ -13,16 +13,15 @@
 
 package me.ahoo.cosec.login.token
 
-import me.ahoo.cosec.runtime.token.SimpleCompositeToken
-
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.login.Authentication
-import me.ahoo.cosec.login.Credentials
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.login.CompositeAuthentication
-import me.ahoo.cosec.login.DefaultAuthenticationProvider
 import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.login.Authentication
+import me.ahoo.cosec.login.CompositeAuthentication
+import me.ahoo.cosec.login.Credentials
+import me.ahoo.cosec.login.DefaultAuthenticationProvider
+import me.ahoo.cosec.runtime.token.SimpleCompositeToken
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.kotlin.core.publisher.toMono

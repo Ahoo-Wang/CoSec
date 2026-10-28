@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -23,8 +24,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
 import me.ahoo.cosec.spi.snapshot.SnapshotStaleException
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
-
-import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant

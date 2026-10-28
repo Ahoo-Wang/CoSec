@@ -13,9 +13,6 @@
 package me.ahoo.cosec.login
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.login.Authentication
-import me.ahoo.cosec.login.AuthenticationProvider
-import me.ahoo.cosec.login.Credentials
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import java.util.concurrent.ConcurrentHashMap
 

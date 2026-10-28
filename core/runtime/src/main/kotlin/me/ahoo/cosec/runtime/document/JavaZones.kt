@@ -15,9 +15,11 @@ package me.ahoo.cosec.runtime.document
 
 import me.ahoo.cosec.model.condition.ZoneOffsets
 import me.ahoo.cosec.model.condition.ZoneResolver
+import java.time.DateTimeException
 import java.time.Instant
 import java.time.ZoneId
 import java.time.zone.ZoneOffsetTransition
+import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -32,9 +34,18 @@ object JavaZones : ZoneResolver {
     /** Fixed offsets first, then regions: what documents compile with. */
     val RESOLVER: ZoneResolver = ZoneResolver.withRegions(this)
 
-    private val zones = ConcurrentHashMap<String, Result<ZoneOffsets?>>()
+    private val zones = ConcurrentHashMap<String, Optional<ZoneOffsets>>()
 
-    override fun resolve(id: String): ZoneOffsets? = zones.computeIfAbsent(id) { runCatching { load(it) } }.getOrNull()
+    /** A zone that cannot be loaded resolves to nothing, like an unknown one, and is not tried again. */
+    override fun resolve(id: String): ZoneOffsets? = zones.computeIfAbsent(id) {
+        Optional.ofNullable(
+            try {
+                load(it)
+            } catch (_: DateTimeException) {
+                null
+            },
+        )
+    }.orElse(null)
 
     private fun load(id: String): ZoneOffsets? {
         if (id !in ZoneId.getAvailableZoneIds()) {

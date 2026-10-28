@@ -15,15 +15,15 @@
 
 package me.ahoo.cosec.runtime.document.format
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import com.networknt.schema.Schema
 import com.networknt.schema.SchemaLocation
 import com.networknt.schema.SchemaRegistry
 import com.networknt.schema.SpecificationVersion
-import me.ahoo.cosec.runtime.identity.IdentityCodec
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.identity.IdentityCodec
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode

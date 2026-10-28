@@ -20,12 +20,12 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.ConditionLimits
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.runtime.document.Catalog
 import me.ahoo.cosec.runtime.document.CatalogGroup
 import me.ahoo.cosec.runtime.document.CatalogPermission
 import me.ahoo.cosec.runtime.document.PolicyDefinition
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test

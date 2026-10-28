@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.spi.identity
 
-
 import java.time.Instant
 
 /**

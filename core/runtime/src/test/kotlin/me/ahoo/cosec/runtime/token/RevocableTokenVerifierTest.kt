@@ -13,16 +13,15 @@
 
 package me.ahoo.cosec.runtime.token
 
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
-
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
-import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows

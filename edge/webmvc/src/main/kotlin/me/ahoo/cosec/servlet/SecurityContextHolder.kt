@@ -12,9 +12,8 @@
  */
 package me.ahoo.cosec.servlet
 
-import me.ahoo.cosec.api.context.SimpleSecurityContext
-
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.runtime.context.SimpleSecurityContext
 
 /**
  * Thread-local holder for security context.

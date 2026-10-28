@@ -26,7 +26,7 @@ import java.time.Instant
 data class ApiKeyProperties(
     @DefaultValue("false") override var enabled: Boolean = false,
     /**
-     * Where keys live: `memory` (the [keys] below) or `redis` (shared by every instance, needs `cache-support`).
+     * Where keys live: `memory` (the [keys] below) or `redis` (shared by every instance, needs `cosec-cocache`).
      */
     @DefaultValue("memory") var store: Store = Store.MEMORY,
     /**

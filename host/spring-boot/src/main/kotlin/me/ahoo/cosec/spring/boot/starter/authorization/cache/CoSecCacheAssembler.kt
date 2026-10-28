@@ -80,5 +80,5 @@ internal fun cosecCacheAssembler(
     properties: ObjectProvider<CoCacheProperties>,
 ): CoSecCacheAssembler = CoSecCacheAssembler(runtime, customizers.orderedStream().toList(), properties.ifAvailable)
 
-/** Referenced by name: CoCache's starter is an optional (`cacheSupport`) dependency. */
+/** Referenced by name: CoCache's starter is on the classpath only with `cosec-cocache`. */
 internal const val COCACHE_AUTO_CONFIGURATION = "me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration"

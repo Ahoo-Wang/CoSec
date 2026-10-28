@@ -13,22 +13,21 @@
 
 package me.ahoo.cosec.runtime.token
 
+import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.api.tenant.SimpleTenant
+import me.ahoo.cosec.api.token.AccessToken
+import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.token.DefaultTokenRevoker
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
-
-import me.ahoo.cosec.api.CoSec
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.token.AccessToken
-import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow

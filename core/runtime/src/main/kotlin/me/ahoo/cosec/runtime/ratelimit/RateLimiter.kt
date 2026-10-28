@@ -16,11 +16,11 @@ package me.ahoo.cosec.runtime.ratelimit
 import com.google.common.cache.Cache
 import com.google.common.cache.CacheBuilder
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.model.decision.Obligation
+import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.ratelimit.RateLimit
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
-import me.ahoo.cosec.model.decision.Obligation
-import me.ahoo.cosec.model.decision.RateLimitSpec
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicLong
 

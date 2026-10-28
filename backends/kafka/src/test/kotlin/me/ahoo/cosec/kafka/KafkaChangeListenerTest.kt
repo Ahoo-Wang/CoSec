@@ -15,11 +15,11 @@
 
 package me.ahoo.cosec.kafka
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeAuditException
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListeners
@@ -31,10 +31,10 @@ import me.ahoo.cosec.control.change.ShadowSummary
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test

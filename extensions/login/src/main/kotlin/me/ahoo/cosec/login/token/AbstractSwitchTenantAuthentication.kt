@@ -12,10 +12,10 @@
  */
 package me.ahoo.cosec.login.token
 
-import me.ahoo.cosec.login.Authentication
-import me.ahoo.cosec.login.Credentials
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.TenantPrincipal
+import me.ahoo.cosec.login.Authentication
+import me.ahoo.cosec.login.Credentials
 import reactor.core.publisher.Mono
 
 /**

@@ -13,8 +13,6 @@
 
 package me.ahoo.cosec.api.tenant
 
-import me.ahoo.cosec.api.tenant.Tenant
-
 /**
  * Simple implementation of [Tenant].
  *

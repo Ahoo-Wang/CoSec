@@ -15,8 +15,8 @@
 
 package me.ahoo.cosec.cache.snapshot
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cocache.api.Codec
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException

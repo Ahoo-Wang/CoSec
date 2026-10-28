@@ -13,9 +13,9 @@
 
 package me.ahoo.cosec.runtime
 
-import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.spi.identity.Identity
 
 /**
  * What an adapter does with a request (RFC 0006 §6.3): proceed to the handler, or write [status], [headers] and the

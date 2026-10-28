@@ -13,10 +13,9 @@
 
 package me.ahoo.cosec.runtime.token
 
-import me.ahoo.cosec.spi.token.TokenStore
-
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.token.TokenStore
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap

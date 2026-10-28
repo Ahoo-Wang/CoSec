@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.runtime.document
 
-import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.CompileError
 import me.ahoo.cosec.engine.flat.CompileException
@@ -23,6 +22,7 @@ import me.ahoo.cosec.engine.flat.CompiledRateLimit
 import me.ahoo.cosec.engine.flat.PolicyCompiler
 import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.SubjectRef

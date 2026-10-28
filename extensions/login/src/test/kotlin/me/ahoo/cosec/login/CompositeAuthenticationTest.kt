@@ -15,8 +15,6 @@ package me.ahoo.cosec.login
 
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.login.Authentication
-import me.ahoo.cosec.login.Credentials
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert

@@ -13,9 +13,8 @@
 
 package me.ahoo.cosec.servlet
 
-import me.ahoo.cosec.api.context.SimpleSecurityContext
-
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.runtime.context.SimpleSecurityContext
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test

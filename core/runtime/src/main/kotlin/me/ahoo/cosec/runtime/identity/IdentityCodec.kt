@@ -16,12 +16,11 @@
 package me.ahoo.cosec.runtime.identity
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
-import me.ahoo.cosec.spi.identity.IdentityOverflowException
-
 import me.ahoo.cosec.spi.identity.IdentityFormatException.Reason
-import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.identity.IdentityOverflowException
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode

@@ -15,8 +15,8 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.runtime.identity.IdentityCodec
 import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.identity.IdentityCodec
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.util.unit.DataSize
 import java.time.Duration
@@ -157,7 +157,7 @@ class RuntimeAuthorizationProperties {
     }
 
     /**
-     * The data plane's part of the control plane's shadow windows (RFC 0007 §6.4), with `cache-support`: sampled
+     * The data plane's part of the control plane's shadow windows (RFC 0007 §6.4), with `cosec-cocache`: sampled
      * requests are evaluated again on the staged candidates, and this instance reports what it saw.
      */
     class Shadow {

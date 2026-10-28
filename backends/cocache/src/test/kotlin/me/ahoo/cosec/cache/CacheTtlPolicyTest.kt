@@ -15,12 +15,12 @@
 
 package me.ahoo.cosec.cache
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import io.mockk.mockk
 import me.ahoo.cocache.api.CacheLoader
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ForeignFormatMode
 import me.ahoo.cocache.core.policy.ReadFailureMode
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.control.ControlCacheSpecs
 import me.ahoo.cosec.runtime.json.CoSecJson

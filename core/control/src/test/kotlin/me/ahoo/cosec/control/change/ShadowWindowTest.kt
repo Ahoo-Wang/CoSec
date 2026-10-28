@@ -43,9 +43,9 @@ import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
-import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
-import me.ahoo.cosec.spi.authn.Authenticator
-import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.ShadowListener
 import me.ahoo.cosec.runtime.http.Cookies
@@ -60,10 +60,10 @@ import me.ahoo.cosec.runtime.shadow.ShadowReporter
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.runtime.document.PolicyDefinition
-import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
-import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test

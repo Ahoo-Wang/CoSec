@@ -15,9 +15,9 @@
 
 package me.ahoo.cosec.cache
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.Codec
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId

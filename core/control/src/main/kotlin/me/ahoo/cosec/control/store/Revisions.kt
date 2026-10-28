@@ -17,9 +17,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.spi.snapshot.SnapshotDigest
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.ParentRevision
 import me.ahoo.cosec.runtime.document.PolicyDocument
@@ -27,6 +24,9 @@ import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.Provenance
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.document.ShadowWindow
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
 import java.util.UUID

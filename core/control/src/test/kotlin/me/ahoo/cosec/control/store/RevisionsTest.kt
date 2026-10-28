@@ -20,10 +20,10 @@ import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.policy
 import me.ahoo.cosec.control.store.StoreFixtures.publication
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Nested

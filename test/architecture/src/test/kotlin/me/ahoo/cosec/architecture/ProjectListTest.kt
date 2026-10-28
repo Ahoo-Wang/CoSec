@@ -25,11 +25,11 @@ class ProjectListTest {
     companion object {
         /** The project list (RFC 0011 §3). `settings.gradle.kts` includes exactly these. */
         val GROUPS: Map<String, List<String>> = linkedMapOf(
-            "api" to listOf("api"),
-            "core" to listOf("model", "engine", "runtime", "control", "core"),
+            "api" to listOf("annotations", "api"),
+            "core" to listOf("model", "engine", "spi", "runtime", "control"),
             "backends" to listOf("cocache", "kafka"),
             "edge" to listOf("webflux", "webmvc", "gateway", "openapi"),
-            "extensions" to listOf("jwt", "social", "ip2region", "micrometer", "opentelemetry"),
+            "extensions" to listOf("jwt", "social", "login", "ip2region", "micrometer", "opentelemetry"),
             "host" to listOf("spring-boot"),
             "migration" to listOf("migrate"),
             "test" to listOf("testkit", "conformance", "architecture", "e2e", "code-coverage-report"),
@@ -49,9 +49,7 @@ class ProjectListTest {
         /** No tests to run: the BOMs, the coverage report, and the gateway server, which `docker-deploy` builds. */
         private val UNTESTED = setOf("bom", "dependencies", "code-coverage-report", "gateway-server")
 
-        /** The starter keeps its 7.x artifact id until RFC 0011 PR-2 (D2). */
-        fun artifactOf(project: String): String =
-            if (project == "spring-boot") "cosec-spring-boot-starter" else "cosec-$project"
+        fun artifactOf(project: String): String = "cosec-$project"
     }
 
     @Test

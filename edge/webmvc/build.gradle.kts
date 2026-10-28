@@ -12,13 +12,13 @@
  */
 
 dependencies {
-    api(project(":runtime"))
-    api(project(":jwt"))
     // The bridge to the coroutine pipeline (RFC 0006 §7.3): runBlocking on the servlet thread.
     api(project(":runtime"))
     api("org.springframework:spring-context")
     api("org.springframework:spring-web")
     api("jakarta.servlet:jakarta.servlet-api")
+    // checkBlocking refuses a non-blocking thread, as Reactor marks them (the Netty event loop).
+    implementation("io.projectreactor:reactor-core")
     api("org.springframework:spring-webmvc")
     testImplementation("me.ahoo.cosid:cosid-test")
     testImplementation("org.springframework:spring-test")

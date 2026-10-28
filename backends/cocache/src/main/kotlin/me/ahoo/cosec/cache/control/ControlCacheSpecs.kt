@@ -15,12 +15,12 @@
 
 package me.ahoo.cosec.cache.control
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.codec.StringCodec
 import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord

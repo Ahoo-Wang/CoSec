@@ -59,6 +59,8 @@ object RepositoryDocuments {
         }
         return when {
             isLegacy(where, file) -> emptyList()
+            // Stored bytes pinned by StoredFormatTest and the Kafka record test: not documents a user writes.
+            "/src/test/resources/stored-format/" in where -> emptyList()
             // The test kit's examples: scenarios in the conformance format, and the documents they run against.
             where.startsWith("test/testkit/") && "/scenarios/" in where -> emptyList()
             where.startsWith("test/testkit/") && "/documents/" in where ->

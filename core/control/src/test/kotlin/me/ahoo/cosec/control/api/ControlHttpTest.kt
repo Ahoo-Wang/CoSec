@@ -15,8 +15,8 @@
 
 package me.ahoo.cosec.control.api
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.RequestSecurity

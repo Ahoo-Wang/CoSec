@@ -14,9 +14,9 @@
 package me.ahoo.cosec.login.token
 
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.TenantPrincipal
 import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.api.principal.TenantPrincipal
 import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

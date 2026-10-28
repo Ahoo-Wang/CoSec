@@ -47,7 +47,7 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.kafka.core.KafkaOperations
 
 /**
- * What the starter's optional features add to the [me.ahoo.cosec.runtime.Pipeline]: a rate limiter, decision listeners
+ * What the optional modules add to the [me.ahoo.cosec.runtime.Pipeline]: a rate limiter, decision listeners
  * (audit log, Kafka audit, metrics, tracing), bridge context contributors, the blacklist and the ip2region attribute
  * providers.
  */
@@ -164,7 +164,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
         fun cosecOpenTelemetryContextContributor(): BridgeContextContributor = OpenTelemetryContextContributor
     }
 
-    /** `ext.ip2region.*` attributes, when `cosec.ip2region.enabled` (default on with the feature). */
+    /** `ext.ip2region.*` attributes, when `cosec.ip2region.enabled` (default on with `cosec-ip2region`). */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["me.ahoo.cosec.ip2region.Ip2RegionAttributeProvider"])
     @ConditionalOnProperty(value = ["cosec.ip2region.enabled"], havingValue = "true", matchIfMissing = true)

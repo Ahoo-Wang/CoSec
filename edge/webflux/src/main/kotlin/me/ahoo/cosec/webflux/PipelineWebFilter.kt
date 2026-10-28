@@ -16,7 +16,6 @@ package me.ahoo.cosec.webflux
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactor.mono
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Outcome
@@ -27,6 +26,7 @@ import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.springframework.core.Ordered

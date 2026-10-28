@@ -25,6 +25,7 @@ import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -32,7 +33,6 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant

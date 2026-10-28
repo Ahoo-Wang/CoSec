@@ -14,10 +14,10 @@
 package me.ahoo.cosec.cache
 
 import kotlinx.coroutines.future.await
-import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.membership.MembershipProvider
 
 /**
  * Where the application's memberships come from: CoSec does not say where they are stored (RFC 0006 §5.5.2).

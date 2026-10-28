@@ -12,15 +12,14 @@
  */
 package me.ahoo.cosec.runtime.token
 
+import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.api.Delegated
+import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.spi.token.ExpiresAtCapable
 import me.ahoo.cosec.spi.token.IssuedAtCapable
 import me.ahoo.cosec.spi.token.TokenRevoker
-
-import me.ahoo.cosec.api.Delegated
-import me.ahoo.cosec.api.CoSec
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
 import java.time.Instant
 
 /**

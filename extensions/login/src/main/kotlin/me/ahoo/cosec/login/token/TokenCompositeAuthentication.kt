@@ -13,11 +13,11 @@
 
 package me.ahoo.cosec.login.token
 
-import me.ahoo.cosec.login.Authentication
-import me.ahoo.cosec.login.Credentials
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.CompositeAuthentication
+import me.ahoo.cosec.login.Credentials
 import reactor.core.publisher.Mono
 
 class TokenCompositeAuthentication(

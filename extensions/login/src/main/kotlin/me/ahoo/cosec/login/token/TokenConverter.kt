@@ -12,10 +12,9 @@
  */
 package me.ahoo.cosec.login.token
 
-import me.ahoo.cosec.spi.token.TokenVerifier
-
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.spi.token.TokenVerifier
 import java.time.Duration
 
 /**

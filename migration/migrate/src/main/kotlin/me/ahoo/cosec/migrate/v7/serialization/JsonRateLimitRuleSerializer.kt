@@ -13,13 +13,13 @@
 
 package me.ahoo.cosec.migrate.v7.serialization
 
-import me.ahoo.cosec.spi.ratelimit.RateLimit
 import me.ahoo.cosec.migrate.v7.api.policy.ActionMatcher
 import me.ahoo.cosec.migrate.v7.api.policy.ConditionMatcher
 import me.ahoo.cosec.migrate.v7.limiter.RateLimitRule
 import me.ahoo.cosec.migrate.v7.policy.action.RejectedTemplateValue
 import me.ahoo.cosec.migrate.v7.policy.action.onRejectedTemplateValue
 import me.ahoo.cosec.migrate.v7.policy.condition.AllConditionMatcher
+import me.ahoo.cosec.spi.ratelimit.RateLimit
 import tools.jackson.core.JsonGenerator
 import tools.jackson.core.JsonParser
 import tools.jackson.databind.DeserializationContext

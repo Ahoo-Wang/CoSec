@@ -13,10 +13,10 @@
 package me.ahoo.cosec.runtime.token
 
 import me.ahoo.cosec.api.Delegated
+import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
 
 /**
  * Simple implementation of [TokenTenantPrincipal].

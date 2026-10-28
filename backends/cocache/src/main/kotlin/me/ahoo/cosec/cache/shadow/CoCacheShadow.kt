@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.cache.shadow
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -28,10 +27,12 @@ import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ReadFailureMode
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.shadow.CandidateStore
 import me.ahoo.cosec.runtime.shadow.InstanceStatus
 import me.ahoo.cosec.runtime.shadow.ShadowCodec
@@ -39,7 +40,6 @@ import me.ahoo.cosec.runtime.shadow.ShadowReport
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
 import me.ahoo.cosec.runtime.shadow.ShadowReportSink
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
-import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration

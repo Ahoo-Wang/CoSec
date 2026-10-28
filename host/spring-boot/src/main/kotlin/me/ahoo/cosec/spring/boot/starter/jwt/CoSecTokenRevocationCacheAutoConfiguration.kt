@@ -21,10 +21,10 @@ import me.ahoo.cosec.cache.CoCacheTokenStore
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.RevokedSubjectCache
 import me.ahoo.cosec.cache.RevokedTokenCache
+import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
-import me.ahoo.cosec.spi.token.TokenStore
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -35,7 +35,7 @@ import org.springframework.context.annotation.Bean
 import tools.jackson.databind.ObjectMapper
 
 /**
- * The revoked token and subject caches, whenever `cosec-cocache` is present (the starter's `cacheSupport`): the
+ * The revoked token and subject caches, whenever `cosec-cocache` is present: the
  * pipeline's revocation reader and logout's [TokenStore] read and write them.
  */
 @AutoConfiguration(

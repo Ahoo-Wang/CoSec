@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.runtime.snapshot.SnapshotSourceTest.Companion.await
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
@@ -21,8 +22,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
 import me.ahoo.cosec.spi.snapshot.SnapshotVersion
-
-import me.ahoo.cosec.runtime.snapshot.SnapshotSourceTest.Companion.await
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
