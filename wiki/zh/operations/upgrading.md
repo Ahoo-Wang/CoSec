@@ -1,649 +1,442 @@
 ---
 title: "升级"
-description: "CoSec 各版本之间有哪些破坏性变更，以及如何迁移。"
+description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及如何迁移数据、代码、配置和客户端。"
 ---
 
 # 升级 {#upgrading}
 
-面向把现有 CoSec 部署升级到新版本的团队。每一节列出破坏了什么、要改什么，以及一份检查清单；本页是迁移步骤的唯一出处。每个
-版本的发布说明见 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
+面向把 CoSec 7.x 部署升级到 8.0 的团队。本页先给出一份检查清单，再按领域给出细节：数据迁移、8.0 在哪些地方决策不同、响应、认证、
+存储、API、属性和可观测性。本页是迁移步骤的唯一出处。每个版本的发布说明见
+[GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases)。
 
 ## 7.x 到 8.0 {#_7-x-to-8-0}
 
-### Spring MVC 只从查询字符串读取查询参数 {#spring-mvc-reads-query-parameters-from-the-query-string-only}
+8.0 只支持从 7.x 升级。从 6.x 升级时，先按
+[`7.x` 分支上的升级指南](https://github.com/Ahoo-Wang/CoSec/blob/7.x/wiki/operations/upgrading.md)升到 7.x（包括其中的数据迁移），
+再回到这里。`cosec-migrate convert` 拒绝不是 7.0 布局的 Redis 数据。
 
-在 Spring MVC 上，CoSec 用 `HttpServletRequest.getParameter` 读取查询参数，而它也会返回 `application/x-www-form-urlencoded`
-请求体中的字段。所以对表单 POST，容器会在 CoSec 的授权过滤器中解析并消费请求体，请求体字段也被当作查询参数。现在只读取
-URL 查询字符串，解码方式与 WebFlux 和 Gateway 相同，并且永远不碰请求体
-（[Spring MVC 上经过 CoSec 后表单 POST 请求体为空](./troubleshooting.md#form-post-body-is-empty-after-cosec-on-spring-mvc)）。
+简要地说，有这些不同：
 
-在 Spring MVC 上，表单字段不再设置：
-
-- `CoSec-App-Id`、`CoSec-Space-Id` 和 `CoSec-Device-Id`，因此也不再设置条件中的 `request.appId`、`request.spaceId`、
-  `request.deviceId`，以及角色权限使用的应用和空间（[应用与空间](../integration/web.md#app-and-space)）；
-- 在 `cosec.authorization.allow-query-token=true` 时读取的 `authorization` 令牌；
-- `ognl` 条件、自定义条件匹配器或 `RequestAttributesAppender` 中的 `getQuery(...)`。
-
-把这些作为表单字段发送的客户端，必须改为通过请求头或查询字符串发送。以这种方式匹配表单字段的条件不再匹配：allow 不再放行，
-deny 也不再拒绝。把这类检查移到应用中、在应用读取请求体之后进行；授权过滤器不能读取请求体。
-
-### 令牌吊销始终开启 {#token-revocation-is-always-on}
-
-`cosec.jwt.token-revocation.enabled` 已删除。启用 JWT 时，每个令牌都要检查是否已吊销；没有任何东西能回答这个检查时，启动失败：
-加上 `cache-support`（它带来 Redis 吊销存储），或者注册自己的 `TokenStore` 和 `RevocationReader` bean。以前没有
-`cache-support` 时，starter 使用一个什么都不记录的存储，登出悄无声息地不起作用。只签发令牌、从不校验令牌的服务可以改为设置
-`cosec.jwt.enabled=false`（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。
-
-### 读不到 Redis 的驱逐策略时启动失败 {#startup-fails-when-redis-s-eviction-policy-cannot-be-read}
-
-启动时 CoSec 读取 Redis 的 `maxmemory-policy`，不是 `noeviction` 就拒绝启动，因为被驱逐的策略文档会让其中的 DENY 悄无声息地失效。
-以前 `CONFIG GET` 失败或不被允许时（某些托管 Redis 就是这样），检查会悄无声息地通过。现在这种情况也会启动失败；CoCache
-后端是包装器或检查读不了的自定义后端时同样如此。如果你已经自行设置了 `noeviction`，请设置
-`cosec.authorization.snapshot.eviction-check=warn`：启动继续，并记录一条以 `!!!` 开头的警告。
-
-## 7.0.0 到 7.0.1 {#_7-0-0-to-7-0-1}
-
-Redis `RateLimiter` bean 的名称由 `redisRateLimiter` 改为 `cosecRedisRateLimiter`；旧名称与 Spring Cloud Gateway 使用的名称相同
-（[由此导致的启动失败](./troubleshooting.md#startup-fails-with-a-redisratelimiter-bean-conflict)）。它的类型和条件不变，所以按类型注入
-`RateLimiter` 或用自己的 bean 替换它都和以前一样。只有按名称 `redisRateLimiter` 引用 CoSec 这个 bean 的代码（`@Qualifier`、
-`getBean("redisRateLimiter")`、`@ConditionalOnBean(name = …)`）需要改用 `cosecRedisRateLimiter`。
-
-### 模板化的 path 动作拒绝会改变模式的值 {#templated-path-actions-reject-values-that-change-the-pattern}
-
-6.1.2 和 8.0 中同样适用。`path` 动作中的 `#{...}` 模板（例如 `/users/#{principal.id}/**`）以前会先求值成字符串，再整体解析为模式，所以含有模式语法的
-主体 id 或属性会改变语句匹配的范围。现在每个模板值只填充模式中的一段字面量，值为空、`.`、`..`，或含有 `*`、`?`、`{`、`}`、`\` 或路径分隔符（`/`，或 `separator` 选项），或在 `decodeAndParseSegments: false` 时含有 `%` 或 `;` 时会被拒绝
-（[`path` 动作中的模板值](../policies/language.md#template-values-in-path-actions)）：
-
-- `allow` 语句或权限不再匹配这样的主体（`Implicit Deny`）；
-- 无论条件如何，`deny` 语句或权限都会让这样的主体的请求以错误失败关闭（`RejectedTemplateValueException`，`500`）；
-- 限流规则同样失败关闭，且不消耗任何许可：值在匹配路径之前就被拒绝，所以到达模板化拒绝或限流规则的每个请求都会失败；
-- 用 `PathActionMatcherFactory` 在代码中构建、不在语句中使用的模板化匹配器同样失败。从 JSON 反序列化语句、权限或限流规则的
-  代码不受影响；自己构建 ALLOW 语句的自定义反序列化器可以对动作调用 `onRejectedTemplateValue(NO_MATCH)`。
-
-id 或属性含有这些字符的主体不再能使用模板化语句。产生多个路径段的模板，例如 `home` 为 `/users/alice` 时的
-`#{principal.attributes['home']}/**`，同样会被拒绝；放在 `{...}` 捕获内部的模板（例如 `{name:#{...}}`）现在会在加载策略时失败。
-需要做的：
-
-1. 找出模板化的`path` 动作：在策略、应用权限和限流规则的 `action` 中搜索 `#{`。
-2. 如果主体 id 或模板用到的属性可能含有这些字符，把语句改写为静态模式加上对路径变量的 `eq` 条件（[示例](../policies/language.md#template-values-in-path-actions)）。
-   `eq` 比较字符串，任何值都可以。
-3. 确认预期的主体仍然匹配（[模板化语句忽略某个主体或返回 500](./troubleshooting.md#templated-statement-ignores-one-principal-or-fails-with-500)）。
-
-## 6.1 到 7.0 {#_6-1-to-7-0}
-
-7.0 在多处收紧了授权：在这些地方，6.x 可能会误放行请求。它还迁移到了 [CoCache 6.6](https://cocache.ahoo.me/guide/migration-6)
-和 [CosId 4.0](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md)。CoCache 6 以新格式在 Redis 中存值，所以这次
-升级需要所有实例短暂停机，并做一次性的数据迁移。不支持滚动升级。
-
-开始之前先读完整节。然后依次完成 [检查清单](#upgrade-checklist)、[迁移](#migrating-the-data)，并在备份被删除之前随时准备好
-[回滚](#rollback)。
-
-更严格的授权让 `SimpleAuthorization` 的吞吐比 6.1.0 低 6% 到 9%，每次决策约多 0.2 µs；升级时无需为此做任何修改（[7.0 修复的代价](../architecture/overview.md#what-the-7-0-fixes-cost)）。
-
-### 破坏性变更 {#breaking-changes}
-
-每一行是一项变更；链接指向它的含义和要做的事。
-
-| 变更 | 一句话说明 |
-|---|---|
-| [缺失的主体策略会失败](#missing-principal-policies-fail) | 主体列出、但仓库中没有的策略 id，现在会让授权以 `500` 失败，而不是被跳过。 |
-| [缺失的角色权限会失败](#missing-role-permissions-fail) | 授予角色、但其应用的权限目录中没有的权限 id，现在会让授权以 `500` 失败，而不是被跳过。 |
-| [Root 默认关闭、只限平台租户、受黑名单约束](#root-is-off-platform-only-and-blacklisted) | `root-enabled` 默认 `false`，root 必须属于平台租户，黑名单先于 root 检查。 |
-| [角色授权属于一个应用和一个空间](#role-grants-belong-to-an-app-and-a-space) | 授权移到 `cosec:app:role:permission:<appId>:<roleId>[@<spaceId>]`，请求只看到为其空间写的角色。 |
-| [路径变量属于捕获它的语句](#path-variables-belong-to-their-statement) | 条件只能读取它自己的 `path` 动作捕获的变量；其他读取都是加载错误。 |
-| [`inRole` 跟随角色进入其空间](#inrole-follows-roles-into-their-space) | 裸的 `inRole` 值也匹配 `role@<请求空间>`；`in`、`spel` 和 `ognl` 仍看到原始字符串。 |
-| [无效的本地策略文件会让启动失败](#invalid-local-policy-files-stop-startup) | 无法解析或构建的本地策略文件会让加载失败，而不是被跳过。 |
-| [重复的 id 和不存在的位置会让启动失败](#duplicate-ids-and-missing-locations-stop-startup) | 两个文件声明同一个策略 id，或配置的位置匹配不到文件，都会让加载失败。 |
-| [限流规则和影子候选同样严格加载](#rate-limit-rules-and-shadow-candidates-load-strictly) | 同样的严格规则适用于 `cosec.limiter.locations` 和 `cosec.shadow.*`，错误类型变为 `IllegalStateException`。 |
-| [限流 key 在加载时检查](#rate-limit-keys-are-checked-at-load) | 不支持的 `key` 部分在规则加载时就失败，而不是在每个请求上失败。 |
-| [条件的 part 在加载时检查](#condition-parts-are-checked-at-load) | 不支持的条件 `part` 在策略加载时就失败；含有它的已存储副本在读取时失败。 |
-| [策略 id 不能以 `history:` 开头](#policy-ids-may-not-start-with-history) | `setPolicy` 会拒绝它们，因为它们会与策略历史共用一个 key。 |
-| [OpenAPI 应用 id 替换 `:`](#openapi-app-ids-replace) | 像 `orders:api` 这样的 OpenAPI 标题得到应用 id `orders-api`。 |
-| [Spring MVC 按请求 URI 授权](#spring-mvc-authorizes-the-request-uri) | 不再按 `servletPath`：策略能看到 `DispatcherServlet` 的前缀，路径也不再做百分号解码。 |
-| [去掉路径参数，并拒绝 `..;`](#path-parameters-are-removed) | 在所有适配器上，`/admin;x` 都按 `/admin` 授权，`/public/..;/admin` 得到 `400`。 |
-| [正则超时对匿名调用方返回 `401`](#a-regex-timeout-answers-401-to-anonymous-callers) | 它与其他拒绝一样映射，不再对所有调用方都返回 `403`。 |
-| [不匹配的刷新令牌按无效令牌处理](#a-mismatched-refresh-token-is-an-invalid-token) | `refresh` 抛出 `RefreshTokenMismatchException`（一种 `TokenVerificationException`），而不是 `IllegalArgumentException`。 |
-| [不支持滚动升级](#no-rolling-upgrade) | 6.x 和 7.0 无法共用缓存：停掉所有 6.x 实例，迁移，再启动 7.0。 |
-| [通过 CoSec 写入，而不是直接写 Redis](#write-through-cosec-not-redis) | 用 `SET` 或 `SADD` 写入的值不会被读取；缓存 API 改为 CoCache 6 的 API。 |
-| [Redis 7、Lettuce 和更宽的 ACL](#redis-7-lettuce-and-a-wider-acl) | Redis 7.0+（或 Valkey 7.2+），不支持 Jedis 和静态主从，ACL 中需要 `+hkeys +hget`。 |
-| [本地副本最多存活 5 分钟](#local-copies-live-at-most-5-minutes) | 每个本地副本的寿命都有上界，由 `expire-after-write` 设置。 |
-| [CoSec 自己创建缓存](#cosec-creates-its-caches-itself) | 6.x 的缓存组件 bean 和 `CacheProperties` 的五个 key 前缀已删除；通过 CoCache 调整缓存。 |
-| [id 生成器是 `StringIdGenerator`](#id-generators-are-stringidgenerators) | CosId 4 的生成器只实现 `StringIdGenerator`，CoSec 现在接收的就是它。 |
-| [未迁移的数据会让启动失败](#unmigrated-data-stops-startup) | 没有 schema 标记 `cosec:meta:schema` 时，Redis 中的 CoSec 数据会让启动以 `CoSecSchemaException` 失败。 |
-| [未迁移的数据失败即拒绝](#unmigrated-data-fails-closed) | 6.x 的值读取时以 `500` 失败，且绝不会被删除，无论 `foreign-format` 怎么设。 |
-| [全局策略索引会对照策略检查](#the-global-policy-index-is-checked-against-the-policies) | 索引中有 id 但没有内容时以 `500` 失败；索引中不是 `global` 的内容被忽略。 |
+- **策略是文档。** 一份平台文档、每个应用一份应用文档、每个租户一份租户文档，取代 7.x 的策略、全局策略索引、应用权限和角色授权。
+  Redis 仍是权威存储；每个实例把文档编译成快照，决策时不再按请求读 Redis。格式见[策略语言](../policies/language.md)。
+- **一条决策路径。** 7.x 的 `Authorization` 链已删除。每个适配器（WebFlux、Spring MVC、Gateway）把请求交给同一条协程 pipeline，
+  由它认证、解析作用域、决策，并把结果映射为状态码。
+- **变更经过控制面。** 写入、校验、模拟、影子、审批、解释和回滚策略都是控制面（`controlSupport`）的操作，而不是应用代码或本地文件。
+- **条件是数据。** 一套小的条件语言取代了匹配器工厂、OGNL 和 SpEL。策略中的任何内容都不会执行代码。
+- **错误响应是 `application/problem+json`。** 响应不再告诉客户端是否存在 DENY。
 
 ### 升级检查清单 {#upgrade-checklist}
 
-以下事项都在 6.x 仍在运行时完成。
-
-1. **Redis。** 确认 Redis 是 7.0 或更高（或 Valkey 7.2 或更高），应用通过 Lettuce 连接它，且 ACL 允许 `+hkeys +hget`（保留
-   `+hgetall`）（[详情](#redis-7-lettuce-and-a-wider-acl)）。
-2. **策略、应用权限和限流规则。** 在其中（包括存储在 Redis 中的）搜索 `request.path.var.` 和 `PATH_VARIABLES`，修正其作用域
-   （[详情](#path-variables-belong-to-their-statement)）。确认每个本地策略文件都能加载、策略 id 在文件之间唯一、每个配置的位置都
-   存在（[详情](#duplicate-ids-and-missing-locations-stop-startup)），每个限流 `key` 和每个条件 `part` 都是支持的部分
-   （[详情](#rate-limit-keys-are-checked-at-load)、[详情](#condition-parts-are-checked-at-load)），以及没有以 `history:` 开头的策略 id
-   （[详情](#policy-ids-may-not-start-with-history)）。
-3. **主体。** 找出列出了仓库中不存在的策略 id 的主体（令牌、API key、用户记录），写入那些策略或移除这些 id
-   （[详情](#missing-principal-policies-fail)）。
-4. **角色。** 决定每个 6.x 角色（和空间）属于哪个应用，并在令牌和 API key 中为每个非默认空间签发 `role@space` 角色
-   （[详情](#role-grants-belong-to-an-app-and-a-space)）。审查基于 `context.principal.roles` 的 `in`、`spel` 和 `ognl` 条件，
-   它们看到的是原始的 `role@space` 字符串（[详情](#inrole-follows-roles-into-their-space)）。确认授予角色的每个权限 id（`*` 除外）
-   都在其应用的权限目录中有定义（[详情](#missing-role-permissions-fail)）。
-5. **Root。** 如果依赖 root，显式开启它，并在平台租户中签发它的令牌（[详情](#root-is-off-platform-only-and-blacklisted)）。
-6. **OpenAPI。** 如果某个 OpenAPI 标题包含 `:`，让客户端改用新的 `CoSec-App-Id`（[详情](#openapi-app-ids-replace)）。
-7. **路径和客户端。** 在设置了 `spring.mvc.servlet.path` 的 Spring MVC 应用中，给策略、应用权限和限流规则的路径加上这个前缀
-   （[详情](#spring-mvc-authorizes-the-request-uri)）。检查把 `request.path` 当字符串比较的条件（[详情](#path-parameters-are-removed)），
-   以及把 `401` 当作"需要重新登录"的客户端（[详情](#a-regex-timeout-answers-401-to-anonymous-callers)）。
-8. **代码。** 把直接写 Redis 的应用权限和角色授权改为通过 CoSec 写入（[详情](#write-through-cosec-not-redis)），用
-   `CacheSpecCustomizer` 或 `cocache.caches.<CacheName>.*` 替换 6.x 的缓存组件 bean（[详情](#cosec-creates-its-caches-itself)），
-   把持有 `CosIdGenerator` 的 `IdGenerator` 声明改为 `StringIdGenerator`（[详情](#id-generators-are-stringidgenerators)），
-   并在刷新调用外捕获 `TokenVerificationException`（[详情](#a-mismatched-refresh-token-is-an-invalid-token)）。
-9. **规划停机。** 准备一个一次性的迁移任务（见下文），并规划一个窗口，期间没有任何 6.x 实例、7.0 实例或其他写入方触碰 CoSec 的 key。
-10. **然后：** 停止所有写入方，迁移数据，核对，再启动 7.0（[迁移数据](#migrating-the-data)）。只有在每个应用都迁移完之后，才删除旧的角色授权。
+1. **确认是 7.x 数据。** Redis 数据必须是 7.0 布局（schema 标记为 `7`）；6.x 部署先升级到 7.x。
+2. **找出没有 8.0 形式的内容。** 在策略和代码中搜索：`spel` 与 `ognl` 条件、自定义 `ActionMatcherFactory` 或
+   `ConditionMatcherFactory` 类型、动作中的 `#{...}` 路径模板、`regular` 条件、DENY 条件中的 `ignoreCase`、`BlockingAware`、
+   `Authorization`/`Statement`/`Policy` 的实现、`CoSecAuthorizationCustomizer`、root（`root-enabled`）、本地影子文件和 `cosecExplain`
+   端点。[转换](#migrating-the-data)会报告每一条无法翻译的策略。
+3. **用 `cosec-migrate convert` 转换数据**，修正每一个拒绝项，直到转换被接受。对照[8.0 在哪些地方决策不同](#what-8-0-decides-differently)
+   阅读 `report.json` 中的语义改动。
+4. **更新代码**：删除对[已删除 API](#removed-and-replaced-apis) 的使用，改为注册 8.0 的扩展 bean。
+5. **更新配置**：删除每一个[已删除的属性](#removed-and-renamed-properties)，并对新属性做出决定。三种常见情况会让启动失败：WebFlux 或
+   Spring MVC 宿主上 `classpath:cosec-routes.json` 没有路由映射（把 `cosec.authorization.routes.location` 设为一份映射，或设为空）；
+   使用 JWT 却既没有 `cache-support` 也没有自己的吊销存储（[令牌吊销始终开启](#token-revocation-is-always-on)）；Redis 的驱逐策略不是
+   `noeviction` 或读不到（[读不到 Redis 的驱逐策略时启动失败](#startup-fails-when-redis-s-eviction-policy-cannot-be-read)）。
+6. **更新客户端和告警**：错误响应体、`reason` 取值和部分状态码变了（[响应与状态码](#responses-and-status-codes)）；审计字段、指标标签和
+   span 也变了（[可观测性的变化](#observability-changes)）。
+7. **发布**：用 `cosec-migrate publish` 发布转换得到的文档；如果运行控制面，用 `cosec-migrate bootstrap` 绑定它的第一个管理员。
+   平台文档发布之前，CoSec 需要决策的每个请求都返回 `503`。
+8. **部署 8.0**，然后检查你依赖的请求的决策（控制面的 `simulate` 和 `explain`，见[测试策略](../policies/testing.md)）。
+9. **稍后清理。** 8.0 从不读取、修改或删除 7.x 的 key。确定不再需要[回滚](#rollback)之后再删除它们。
 
 ### 迁移数据 {#migrating-the-data}
 
-CoCache 6 读不了 CoSec 6.x 用 CoCache 5 存的值，而 Redis 是策略、应用权限和角色授权的唯一副本（[存储](./storage.md)）。
-有两个迁移负责转换它们。两者都是你从 7.0 进程（一个管理应用，或一个使用带 `cache-support` 的 starter 的一次性任务）中调用的
-类，而不是 Actuator 端点：会写授权数据的端点本身就必须被保护，而且在迁移结束很久之后仍会暴露在外。
+`cosec-migrate` 是 `migrate/` 模块中的一次性命令行工具。没有应用依赖它，starter 也从不依赖它。用你要部署的版本的 CoSec 源码构建它：
 
-- `CoSecCoCache5Migration` 用 CoCache 的 [`CoCache5Migrator`](https://cocache.ahoo.me/guide/migration-6) 原地转换策略、全局
-  策略索引、应用权限和已吊销令牌，并先备份每个原始值。策略历史（`cosec:policy:history:*`）不是 CoCache 数据，不做改动。无论
-  执行迁移的进程是否开启令牌吊销，已吊销令牌都会被迁移。
-- `RolePermissionKeyMigration` 把角色授权复制到新的、按应用划分的 key，一次一个应用（[迁移角色授权](#migrating-role-grants)）。
-  6.x 的 key 保持原样。
-
-::: danger 迁移期间任何东西都不能写入
-迁移过程中被修改的 key 会让这次运行中止；在迁移之前由 7.0 写入的 key 会被跳过且 **没有备份**，因此回滚无法恢复它
-（[迁移前的写入](#writes-before-the-migration)）。
-:::
-
-#### 1. 停止所有写入方 {#_1-stop-every-writer}
-
-停掉所有 6.x 实例，以及其他任何会写 CoSec key 的东西，例如写入策略或授权的管理服务。不要启动任何会写入的 7.0 实例。在迁移
-完成之前，[schema 检查](#unmigrated-data-stops-startup) 会阻止普通的 7.0 实例启动。
-
-#### 2. 准备迁移任务 {#_2-prepare-the-migration-job}
-
-在一个一次性任务中执行迁移，这个任务：
-
-- 设置 `cosec.authorization.cache.migration.check-schema=false`，因为 schema 检查会阻止它启动。**绝不要把这个设置部署到处理
-  流量的实例上**；
-- 不处理任何流量；
-- 6.x 使用了与当前不同的 key 前缀时，设置 `cosec.authorization.cache.migration.legacy-key-prefix`；6.x 使用了非默认的
-  `cocache.redis.missing-guard-sentinel` 时，设置 `cosec.authorization.cache.migration.missing-guard-sentinel`；要把备份放到
-  `cocache5-backup:` 以外的地方时，设置 `cosec.authorization.cache.migration.backup-prefix`。
-
-6.x 的 key 前缀要 **与当时的配置完全一致**。6.x 不会去掉末尾的 `:`（`myapp:` 把策略存在 `myapp::policy:` 下），而 7.0 会
-（`myapp:policy:`）。使用这样的前缀时，迁移会把每个值复制到它的 7.0 key，而不是原地转换，6.x 的 key 保持不变；等 7.0 运行良好
-后自己删除它们，但 `myapp::policy:history:*` 除外，7.0 仍在使用它。key 前缀改变时，策略历史不会被移动：7.0 把修订记录在
-`<new prefix>:policy:history:*` 下，6.x 的修订留在旧前缀下。
-
-迁移用 CoSec 自己的缓存声明写入值，不经过应用的 `CacheSpecCustomizer`。修改了某个 CoSec 缓存编解码器的定制器，会让迁移后的值
-对该缓存不可读：它的读取会失败（`500`），而不会被读成不存在。
-
-#### 3. 先演练，再迁移 {#_3-dry-run-then-migrate}
-
-在所有写入方都停止后，先做一次演练（dry run），它读取并解码每个值，但不写入任何东西；然后执行迁移，它在最后写入 schema 标记
-（`cosec:meta:schema`）：
-
-```kotlin
-@Bean
-fun migrateCoSecData(migration: CoSecCoCache5Migration) = ApplicationRunner {
-    log.info { "dry run: ${migration.dryRun()}" }
-    log.info { "migrated: ${migration.migrate()}" }
-}
+```bash
+./gradlew :cosec-migrate:installDist
+migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
 ```
 
-阅读每次的报告：按缓存列出 `read`、`written`、`skipped`（已迁移）和 `negatives`（缓存未命中，迁移为缓存未命中）的 key 数。
+它有四个命令。退出码：`0` 完成，`1` 数据被拒绝或写入失败，`2` 用法错误。
 
-- 无法解码的值会让运行以 `CoCache5MigrationException` 中止，并给出该 key。修正后重新运行。
-- 迁移过程中过期的已吊销令牌也会让运行中止（"the key changed"），令牌寿命短时更容易发生。重新运行即可。
-- 已迁移的 key 会被跳过，所以可以重复运行。
-
-#### 4. 迁移角色授权，每个应用一次 {#_4-migrate-role-grants-once-per-app}
-
-为每个应用运行 `RolePermissionKeyMigration.migrate`，先演练（[迁移角色授权](#migrating-role-grants)）。
-
-#### 5. 核对 {#_5-verify}
-
-检查报告，然后通过 7.0 进程读取几个策略、全局策略和授权，例如用 [解释](../integration/checks.md#explaining-a-decision)。仍以
-`ForeignFormatException` 失败的读取，会给出一个没有被迁移的 key。
-
-#### 6. 启动 7.0 {#_6-start-7-0}
-
-启动 7.0 实例，**不要** 带 `check-schema=false`。本地策略文件只在其 id 尚不存在时才在启动时写入 Redis（`force-refresh=false`），
-所以启动会先读取已存储的副本。如果这个副本读不了，因为它没有被迁移，或不再通过 7.0 的 [路径变量](#path-variables-belong-to-their-statement)
-检查，启动就会失败（[故障排查](./troubleshooting.md#startup-fails-reading-a-stored-policy)）。
-
-#### 7. 清理 {#_7-clean-up}
-
-等 7.0 运行良好后：
-
-- 用 `CoSecCoCache5Migration.dropBackups()` 删除备份。之后就无法再 [回滚](#rollback)；
-- 用 `RolePermissionKeyMigration.deleteLegacy()` 删除 6.x 的角色授权 key，**只能在每个应用都运行过 `migrate` 之后**：它删除的是
-  所有应用的旧授权，而不只是最后迁移的那个应用。先审查每份报告的 `skipped` 和 `conflicts`，再把 `deleteLegacy(dryRun = true)`
-  列出的 key 与报告中迁移的 key 对比；
-- 6.x 的 key 前缀以 `:` 结尾时，自己删除 6.x 的 key，但 `<prefix>:policy:history:*` 除外。
-
-### 迁移角色授权 {#migrating-role-grants}
-
-这是 [迁移数据](#migrating-the-data) 的第 4 步。6.x 的授权没有记录它属于哪个应用，所以 CoSec 无法自行迁移：由你指定目标应用，
-不会把任何东西复制到所有应用。复制由 `RolePermissionKeyMigration`（`cache-support` 下的一个 bean）完成。
-
-1. 决定每个 6.x 角色（和空间）属于哪个应用。几个应用的角色共用旧 key 空间时，用 `roleIds` 参数把它们分开。
-2. 在令牌和 API key 中，为每个非默认空间以 `role@space` 签发角色。
-3. 在没有实例处理流量时，从连接同一个 Redis 的 7.0 进程（例如管理应用或一次性任务）为每个应用运行一次迁移。先演练，阅读报告：
-
-   ```kotlin
-   @Bean
-   fun migrateRoleGrants(migration: RolePermissionKeyMigration) = ApplicationRunner {
-       val report = migration.migrate(appId = "order-app", dryRun = true) // then dryRun = false
-       log.info { "migrated=${report.migrated} conflicts=${report.conflicts} skipped=${report.skipped}" }
-   }
-   ```
-
-   写入经过 `RolePermissionCache`，所以运行中的实例会丢弃它们的本地副本。运行是幂等的：已迁移的授权报告为 `unchanged`；目标中
-   已有不同授权时报告为冲突（conflict）并保留目标。保存缓存未命中的 key、不是集合的 key，以及角色或空间有歧义的 key（多于一个
-   `@`，或某部分为空）报告为 `skipped`。
-4. 当每个实例都运行 7.0，且 **每个** 应用的授权都已迁移并核对后，用 `deleteLegacy()` 删除旧 key。它删除所有旧 key，不论原本属于
-   哪个应用，所以放到最后：审查每份报告的 `skipped` 和 `conflicts`，然后运行 `deleteLegacy(dryRun = true)`，把它列出的 key 与
-   报告中迁移的 key 对比。在此之前，回滚到 6.1 仍能找到它们。
-
-在某个角色的授权迁移到某个应用之前，依赖这些授权的请求在该应用中会被拒绝。
-
-- **首次运行后又通过 6.x 修改了授权**（发生在回滚期间：不支持滚动升级）：用 `overwrite = true` 重新运行迁移。它会改写那些旧
-  key 中授权不同的目标，但不会删除 6.x 已删除的授权（旧 key 已不存在，或保存的是缓存未命中）；这些要通过 `RolePermissionCache`
-  删除。
-- **lease 标记。** 读取一个还没有 7.0 授权的角色时，会在它的新 key 上留下一个短暂的 lease 标记（约 10 秒），演练时也会。它不含
-  授权，会自行过期。
-
-### 迁移前的写入 {#writes-before-the-migration}
-
-迁移完成之前任何东西都不能写入，schema 检查也会阻止 7.0 实例在此之前启动。仍然写入的进程（比如迁移任务本身）只受到部分检查：
-
-- **策略发布会失败，但不完全。** 每次 `setPolicy` 都会更新全局策略索引，而在索引仍是 6.x 原生 SET 时，CoCache 6 不会覆盖它：
-  发布以 `CacheWriteException` 失败，原因为指出索引 key（`cosec:global:policy`）的 `ForeignFormatException`。索引保持原样，
-  迁移仍会转换它。`setPolicy` 以这个错误结束（`force-refresh=true` 的本地策略会让启动失败，见
-  [故障排查](./troubleshooting.md#publishing-a-policy-fails-before-the-migration)），请求仍以 `500` 被拒绝。
-- **其他写入不受检查。** 全局策略的内容（在索引之前写入）和应用权限会以 7.0 格式替换其 key 上的 6.x 值。迁移随后会跳过这个
-  key，并且 **不保留它的备份**，所以回滚无法恢复它的 6.x 值。
-- **角色授权** 写到新 key，在迁移之前写入的授权会在那里被报告为冲突。
-
-### 回滚 {#rollback}
-
-在备份被删除之前，可以恢复到 6.1：
-
-1. 停止所有 7.0 实例和所有写入方。
-2. 调用 `CoSecCoCache5Migration.rollback()`。存在没有备份的 key 时它会拒绝执行（见下文）。
-3. **在不接流量的情况下** 启动 6.1。
-4. 通过 6.1 重新写入 7.0 创建的内容（见下文）。
-5. 然后才让 6.1 处理流量。
-
-回滚第一步就删除 schema 标记，所以在恢复后的数据上启动的 7.0 实例会拒绝启动；然后恢复迁移时的快照：
-
-- **已迁移的 key**（策略、应用权限、已吊销令牌、全局策略索引）从备份恢复其 6.x 值：类型、内容和剩余寿命。7.0 对它们所做的修改
-  会丢失，7.0 设为全局的策略会离开索引。
-- **没有备份的 key** 是 7.0 在迁移之后创建的 key（例如新的策略、应用权限或吊销记录），以及它在 [迁移之前](#writes-before-the-migration)
-  写入的 key。它们保持 7.0 格式。6.1 不会因它们失败：CoCache 5 把解码不了的值读成不存在，并 **用缓存未命中覆盖它**。于是 7.0
-  创建的拒绝策略会悄悄失效，7.0 吊销的令牌会重新被接受。
-
-  ::: danger 没有备份的 key
-  `rollback()` 会列出这些 key（`keysWithoutBackup()`），只要还有这样的 key，就以 `KeysWithoutBackupException` 拒绝执行。审查
-  它们，调用 `rollback(allowKeysWithoutBackup = true)`，然后在 6.1 处理流量之前，通过 6.1 重新写入那些策略和应用权限，并重新
-  吊销那些令牌。
-  :::
-
-- **6.x 的 key 前缀以 `:` 结尾。** 7.0 使用的副本被删除，6.1 读取它自己从未被修改过的 key。7.0 在自己前缀下创建的 key 对 6.1
-  不可见，所以它们也必须通过 6.1 重新写入。
-- **角色授权。** 6.x 的角色授权 key 从未被修改（除非运行过 `deleteLegacy()`），所以在 7.0 中增删的授权必须通过 6.1 重做。
-- **策略历史** 不会回滚：7.0 记录的修订仍留在其中，所以通过 6.1 恢复某个策略的最新修订，可能会带回 7.0 写的内容。恢复修订之前
-  先检查它的内容。
-
-### 常见问题 {#common-questions}
-
-**6.x 和 7.0 的实例能并存吗？** 不能。它们读不了彼此的值和失效消息（[不支持滚动升级](#no-rolling-upgrade)）。
-
-**7.0 以 `CoSecSchemaException` 拒绝启动。** 数据还没有迁移，或已被回滚（[故障排查](./troubleshooting.md#startup-fails-with-cosecschemaexception)）。
-
-**升级后每个请求都得到 `500`。** 有数据没有迁移，或某个全局策略没有内容（[故障排查](./troubleshooting.md#every-request-fails-with-500)）。
-
-**升级后基于角色的请求被拒绝。** 它们的授权没有迁移到请求的应用，或令牌中的角色没有为请求的空间书写（[迁移角色授权](#migrating-role-grants)）。
-
-**能否设置 `cocache.defaults.foreign-format=reclaim` 来清掉旧值？** 它对 CoSec 的缓存不起作用，也不应该起作用：没有加载器时，
-回收会删掉唯一的副本（[未迁移的数据失败即拒绝](#unmigrated-data-fails-closed)）。
-
-**能否手工写入 schema 标记？** 可能还有 6.x 数据时不能。标记告诉 7.0 每个值都是 7.0 布局；位于 7.0 不读的 6.x key 下的数据会被
-读成不存在。
-
-**迁移完一个应用后能运行 `deleteLegacy()` 吗？** 不能：它会删除所有应用的旧授权。放到最后运行（[清理](#_7-clean-up)）。
-
-**我已经在测试环境中让 7.0 连过这个 Redis。** `migrate()` 会跳过已迁移的数据并写入标记
-（[故障排查](./troubleshooting.md#startup-fails-with-cosecschemaexception)）。
-
-### 授权与加载的变更 {#authorization-and-loading-changes}
-
-[总表](#breaking-changes) 中授权和加载相关各行的含义，以及要做的事。
-
-#### 缺失的主体策略会失败 {#missing-principal-policies-fail}
-
-当主体列出的策略 id 在 `PolicyRepository` 中查不到时（已删除、从未写入、从 Redis 中丢失），`SimpleAuthorization` 现在以
-`MissingPolicyException` 失败，管道把它映射为 `500`。以前这个 id 会被跳过，由其余策略决定：当缺失的策略是一条拒绝（比如封禁
-账户的拒绝）时，一条全局允许就会放行请求。对于这样的主体，`AuthorizationChecker` 返回 `false`，解释结果报告 `500` 并带有
-`MISSING_POLICY` 警告。
-
-升级之前，找出列出了仓库中不存在的策略 id 的主体（令牌、API key、用户记录），写入这些策略或移除这些 id。
-`PolicyRepository.getPolicies` 本身没有变化：它仍返回找到的策略，所以自定义仓库无需修改。
-
-#### 缺失的角色权限会失败 {#missing-role-permissions-fail}
-
-授予角色的权限 id 在其应用的权限目录中没有定义时（已从目录中删除，或 id 写错），`SimpleAuthorization` 现在会以
-`MissingPermissionException` 失败，管道将其映射为 `500`。以前，这个 id 会被跳过：如果它指向一条拒绝权限，全局或主体策略中的允许就会放行请求。
-对在该应用和空间中持有这个角色的主体，只要角色层被评估、且在此之前没有拒绝匹配，请求就会失败：应用的条件不匹配时，这一层不适用；
-已被某条拒绝（前面某一层的，或角色层中更靠前的）匹配的请求仍然被拒绝。`*` 仍然表示授予全部权限。`AuthorizationChecker` 返回 `false`；
-解释结果会给出 `500` 并带有 `MISSING_PERMISSION` 警告；影子模式中去掉了某个已授予 id 的候选应用权限会报告 `CANDIDATE_ERROR`。
-`AccessAnalyzer` 和 `PolicyTestKit` 在构建或运行时拒绝这样的授权；测试套件的 `roles` 在每个应用中都会授予，因此每个应用都必须定义这些权限
-（只属于一个应用的 id 请用 `appRoles`）。`AppRolePermission.rolePermissionIndexer` 的默认实现也会抛出同一个异常。
-
-升级之前，对照每个应用的权限目录检查其角色授权，补上缺失的权限，或从授权中移除这个 id
-（[把权限授予角色](../policies/role-permissions.md#granting-permissions-to-roles)）。
-
-#### Root 默认关闭、只限平台租户、受黑名单约束 {#root-is-off-platform-only-and-blacklisted}
-
-以前，任何 id 为 `cosec`（或系统属性 `-Dcosec.root` 的值）的主体都会绕过所有检查，包括黑名单，且
-`cosec.authorization.root-enabled` 默认为 `true`。如果某个用户租户的身份提供方允许用户自选 id `cosec`，这个用户就获得了整个平台
-的访问权。现在：
-
-- `cosec.authorization.root-enabled` 默认为 `false`：除非你开启，否则没有主体是 root。
-- 开启后，`RootPrincipalMatcher.DEFAULT` 只在主体 id 等于 root id **且** 租户为平台租户（`(platform)`，
-  `Tenant.PLATFORM_TENANT_ID`）时才把它当作 root。用户租户中、默认租户中或没有租户的主体，即使 id 是 root id，也是普通主体。
-- 黑名单先于 root 检查，所以来自 root 的被拉黑请求会被拒绝。在解释结果中，`BLACKLIST` 层现在排在 `ROOT` 之前，`ExplainLayer`
-  也按这个顺序列出。
-- 直接构造 `SimpleAuthorization`、`AuthorizationExplainer` 或 `ShadowAuthorization` 的代码也默认使用 `RootPrincipalMatcher.NONE`，
-  与 starter 和 `PolicyTestKit` 一样：不传 `rootPrincipalMatcher` 参数时，没有主体是 root。
-
-如果依赖 root，设置 `cosec.authorization.root-enabled=true`，并以 `tenantId` `(platform)` 签发根主体的令牌。直接构造这些类的
-代码传入 `rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT`，`PolicyTestKit` 则把它作为 `run` 的 matcher 参数。如果 root 必须
-以别的方式工作，提供你自己的 `RootPrincipalMatcher` bean。
-
-#### 角色授权属于一个应用和一个空间 {#role-grants-belong-to-an-app-and-a-space}
-
-在 6.x 中，角色授权按角色和空间存储，不含应用，而应用（`CoSec-App-Id`）和空间（`CoSec-Space-Id`）都由客户端选择。因此一条授权
-（包括 `*`）在所有定义了相同权限 id 的应用中都生效，修改 `CoSec-Space-Id` 还能拿到另一个空间中同名角色的授权。在 7.0 中：
-
-- 授权按应用、角色和空间作为 key。Redis key 从 `cosec:role:permission:<roleId>[@<spaceId>]` 移到
-  `cosec:app:role:permission:<appId>:<roleId>[@<spaceId>]`，`RolePermissionCache` 接收 `AppSpacedRoleId(appId, roleId, spaceId)`
-  而不是 `SpacedRoleId`。应用 id 不能包含 `:`，角色 id 不能包含 `@`；OpenAPI 应用权限生成器会替换标题中的 `:`。
-- 带 `CoSec-Space-Id: x` 的请求只用主体中写作 `role@x` 的角色评估；不带该头时，只用没有后缀的角色。检查成员关系之后，在令牌和
-  API key 中为主体拥有角色的每个空间签发 `role@space`（[角色与空间](../integration/authentication.md#roles-and-spaces)）。
-- 授权从不读取 6.x 的 key。在它们被迁移之前，角色没有授权，基于角色的请求被拒绝（失败即拒绝）（[迁移角色授权](#migrating-role-grants)）。
-- `AppRolePermissionRepository.getAppRolePermission` 的签名不变。`SimpleAuthorization` 现在传入在该空间生效的角色，且不带
-  `@space` 后缀；自定义仓库只能返回为该应用和空间做的授权。
-- 解释器增加了 `NO_ROLE_IN_SPACE` 警告。
-- `AccessAnalyzer` 和 `PolicyTestKit` 以同样方式限定角色授权。没有后缀的授权角色只在默认空间授权；其他空间的授权要写成
-  `role@space`。`whoCan` 取请求所在空间的授权，`grantsOf` 只通过主体在授权所在空间持有的角色到达授权，并接收可选的 `spaceId`，
-  `AccessRule` 增加了 `spaceId`。测试套件用 `appRoles` 表示在一个应用中做的授权；`roles` 仍在所有应用中授权。格式错误的角色现在
-  会失败，而不是永远匹配不上。
-
-模型本身见 [角色授权范围](../policies/role-permissions.md#role-grant-scope)。
-
-#### 路径变量属于捕获它的语句 {#path-variables-belong-to-their-statement}
-
-以前，`request.path.var.*` 读取的是请求中最后一个匹配的 `path` 动作捕获的内容，可以来自任意语句、策略或层。因此一个条件可能依赖
-另一条语句：一条从未匹配的拒绝语句可能让一条 `all` 动作的允许匹配上（加一条拒绝反而扩大了访问），策略条件读到全局层的变量，
-没有 `path` 动作的限流规则读到某个策略的变量。现在：
-
-- 在每条语句、权限和限流规则匹配其动作之前，以及在策略和应用权限的条件之前，变量都会被清空，所以条件只能看到它自己的 `path`
-  动作捕获的内容；
-- 在没有同一语句或规则的 `path` 动作捕获变量的地方读取它们，是一个加载错误 `PathVariableScopeException`：在策略或应用权限的
-  `condition` 中，在动作不是 `path` 的语句或权限的条件中，在动作不是 `path` 的限流规则的 `condition` 或 `key` 中，以及在任何
-  动作的配置中，例如 `path` 模板 `/orders/#{...PATH_VARIABLES...}`：模板在其动作匹配之前求值，此时变量还不是它自己的
-  （[路径变量](../policies/language.md#path-variables)）。
-
-解析这样的策略、应用权限或限流规则会失败，用它构造 `PolicyData`、`AppPermissionData` 或 `RateLimitRule` 也会失败。
-`RedisPolicyRepository.setPolicy` 会拒绝它。包含这种写法的本地策略文件会让应用无法启动。已存储在 Redis 中的这类策略读取时失败，
-请求以 `500` 被拒绝。
-
-升级之前，在策略、应用权限和限流规则中搜索 `request.path.var.` 和 `PATH_VARIABLES`。把每处引用移到其 `path` 动作捕获了该变量的
-语句中，例如把 `"action": "*"` 换成声明该变量的模式，并把策略级条件移到它各语句的条件中。
-
-#### `inRole` 跟随角色进入其空间 {#inrole-follows-roles-into-their-space}
-
-当角色以 `role@space` 签发时，裸的 `inRole` 值现在也匹配主体的 `role@<请求空间>`，所以像 `inRole: suspended` 这样的拒绝在令牌
-从 `suspended` 改为 `suspended@team-a` 后仍然匹配。没有后缀的角色仍在每个空间中匹配。写成 `role@space` 的值与主体的角色按字面
-比较，与以前相同。以其他方式读取 `context.principal.roles` 的条件（`in`、`spel`、`ognl`）仍看到原始字符串，包括
-`suspended@team-a`，一旦令牌带上 `role@space`，它们就不再匹配裸角色名（[匹配角色](../policies/language.md#matching-roles)）。
-
-#### 无效的本地策略文件会让启动失败 {#invalid-local-policy-files-stop-startup}
-
-`LocalPolicyLoader` 以前遇到无法解析或构建的策略文件（JSON 格式错误、未知的匹配器类型、无效的选项）时，只记录日志并跳过，这可能
-悄悄丢掉一条拒绝。现在任何这样的文件都会让加载失败（与限流规则文件一直以来的行为一致），错误会给出文件名
-（[故障排查](./troubleshooting.md#startup-fails-loading-a-policy-file)）。
-
-#### 重复的 id 和不存在的位置会让启动失败 {#duplicate-ids-and-missing-locations-stop-startup}
-
-`LocalPolicyLoader` 以前遇到两个文件声明同一个策略 id 时，只保留其中一个并悄悄丢掉另一个；对于
-`cosec.authorization.local-policy.locations` 中不存在或匹配不到文件的位置，只记录一条告警。两者都可能在不知不觉中丢掉一条拒绝，
-例如只存放拒绝的位置被拼错。现在两者都会让加载失败，并给出 id 或位置。默认位置 `classpath:cosec-policy/*-policy.json` 仍可以匹配
-不到文件，所以没有本地策略的应用不受影响。升级之前，确认每个配置的位置都存在，且策略 id 在文件之间唯一；通过两个位置到达的同一
-个文件只加载一次。
-
-#### 限流规则和影子候选同样严格加载 {#rate-limit-rules-and-shadow-candidates-load-strictly}
-
-`LocalRateLimitRuleLoader` 和 `LocalShadowPolicyProvider` 以前对不存在或匹配不到文件的位置什么也不加载，所以
-`cosec.limiter.locations` 中的拼写错误会悄悄删掉它包含的所有配额，`cosec.shadow.locations` 或
-`cosec.shadow.app-permission-locations` 中的拼写错误会让影子模式对一个从未评估过的变更报告"没有差异"。现在：
-
-- 这样的位置会让启动失败（`Rate limit rule location [...] matches no file`、`Shadow policy location [...]`、
-  `Shadow app permission location [...]`）；只有默认位置（`classpath:cosec-rate-limit/*-rate-limit.json`、
-  `classpath:cosec-shadow/*-policy.json`、`classpath:cosec-shadow/*-app-permission.json`）可以匹配不到文件；
-- 规则 id、影子策略 id 或影子应用权限 id 被声明两次时，以 `... id [<id>] is declared more than once` 失败并给出文件，异常类型
-  现在是 `IllegalStateException`（以前是 `IllegalArgumentException`）；
-- 通过两个位置到达的同一个文件只加载一次；以前，被两个重叠位置匹配的规则或候选文件会被当作重复而失败；
-- `PolicyTestKit` 和 `AccessAnalyzer.load`（本来就对不存在的位置严格）现在对这些情况抛出 `IllegalStateException` 而不是
-  `IllegalArgumentException`，并且在两个文件声明同一个策略或应用权限 id 时也会失败；
-- 重复本地策略的错误信息现在为 `Policy id [<id>] is declared more than once`。
-
-#### 限流 key 在加载时检查 {#rate-limit-keys-are-checked-at-load}
-
-不是支持部分的 `key`（例如用 `request.ip` 代替 `request.remoteIp`）以前能加载，然后在每个匹配的请求上以 `500` 失败，而此时更早的
-规则已经消耗了许可。现在构造或加载这样的规则会失败（[Key](../policies/rate-limiting.md#keys)）。
-
-#### 条件的 part 在加载时检查 {#condition-parts-are-checked-at-load}
-
-`part` 不受支持的取值条件（`eq`、`in`、`contains`、`startsWith`、`endsWith`、`regular`、`path`），例如把 `request.remoteIp` 写成
-`request.ip`，或把 `request.header.x` 写成 `request.headers.x`，以前能加载，然后让每个匹配的请求都以 `500` 失败。现在构建这样的匹配器会失败，
-报 `Condition [<type>] part [<part>] is not a supported part`，与限流 key 的做法一致：含有它的本地策略文件会让启动失败，`setPolicy` 会拒绝它，
-已存储在 Redis 中的这类策略在读取时失败，所有读取该策略的请求都会以 `500` 被拒绝，而不仅是其语句匹配到的请求。升级之前，在策略、应用权限和
-限流规则的条件中搜索 `"part"`，逐个对照[支持的 part](../policies/language.md#parts)。
-
-#### 策略 id 不能以 `history:` 开头 {#policy-ids-may-not-start-with-history}
-
-策略历史把策略 `<id>` 的修订记录存放在 `<prefix>:policy:history:<id>`（以及 `<id>:seq`）下，与策略本身在同一个命名空间中，因此 id 为
-`history:<id>` 的策略会与策略 `<id>` 的历史记录共用一个 key（[Redis key](./storage.md#redis-keys)）。`RedisPolicyRepository.setPolicy`
-现在会拒绝这样的 id，报 `Policy id [...] must not start with [history:]`；启动时把这样的本地策略写入 Redis 也会失败。`history`、
-`history-viewer` 这类 id 不受影响。升级之前请重命名 id 以 `history:` 开头的策略；6.x 迁移会把这类 key 当作策略历史跳过。
-
-#### OpenAPI 应用 id 替换 `:` {#openapi-app-ids-replace}
-
-`OpenAPIAppPermissionGenerator` 从 OpenAPI 标题推导应用 id，而应用 id 不能再包含 `:`。标题包含 `:` 的应用（例如 `orders:api`）得到
-id `orders-api`；客户端必须在 `CoSec-App-Id` 中发送新的 id，它的角色授权也必须为新 id 写入。
-
-### 请求与令牌的变更 {#request-and-token-changes}
-
-[表格](#breaking-changes)中每一行请求与令牌变更的含义，以及要做的事。
-
-#### Spring MVC 按请求 URI 授权 {#spring-mvc-authorizes-the-request-uri}
-
-WebMvc 适配器原来使用 `HttpServletRequest.servletPath`，它不含 `pathInfo`。`DispatcherServlet` 映射在前缀下（`spring.mvc.servlet.path=/api`）时，
-每个请求都按 `/api` 授权：`/api/admin/**` 上的拒绝永远不会匹配，而 `/api/**` 上的允许会放行所有请求。现在使用去掉上下文路径之后的请求 URI，
-与 Spring MVC 的路由和 WebFlux 看到的路径一致（[请求路径](../integration/web.md#the-request-path)）。使用默认的 `/` 映射时，匹配的路径与以前相同，
-只是不再做百分号解码：`path` 动作仍像以前一样逐段解码，但把 `request.path` 当字符串比较的条件（`eq`、`regular` 等）现在看到的是 `/a%20b`
-而不是 `/a b`。升级配置了 Servlet 路径的应用之前，给它的策略、应用权限和限流规则加上这个前缀。
-
-#### 去掉路径参数，并拒绝 `..;` {#path-parameters-are-removed}
-
-在所有适配器上，`/admin;jsessionid=1` 都按 `/admin` 授权，与 Spring 的路由一致；以前 WebFlux 和 Gateway 原样传递，`request.path` 条件可能匹配不到。
-后面跟着路径参数的 `.` 或 `..` 段（`/public/..;/admin`）会被 Servlet 容器当作 `..` 处理，现在像其他路径穿越一样返回 `400`。
-
-#### 正则超时对匿名调用方返回 `401` {#a-regex-timeout-answers-401-to-anonymous-callers}
-
-`regular` 条件超出时间预算时，以前不论调用方是谁都返回 `403`。现在它与其他拒绝一样映射：匿名调用方返回 `401`（令牌校验失败时原因为
-`Token Expired` 或 `Token Invalid`），已认证调用方返回 `403`（[响应与状态码](../integration/web.md#responses-and-status-codes)）。
-把 `401` 当作"需要重新登录"的客户端，对这类请求也会收到 `401`。
-
-#### 不匹配的刷新令牌按无效令牌处理 {#a-mismatched-refresh-token-is-an-invalid-token}
-
-刷新令牌不是和访问令牌一起签发时，`JwtTokenVerifier.refresh` 以前抛出 `IllegalArgumentException`（`Illegal refreshToken.`），这种不匹配会
-表现为意外错误。现在它抛出 `RefreshTokenMismatchException`，与其他令牌失败一样是 `TokenVerificationException`
-（[刷新令牌](../integration/authentication.md#refreshing-tokens)）。在刷新调用外捕获 `IllegalArgumentException` 的代码，请改为捕获
-`TokenVerificationException`。
-
-### CoCache 6 与 CosId 4 {#cocache-6-and-cosid-4}
-
-CoSec 7.0 运行在 [CoCache 6.6](https://cocache.ahoo.me/guide/migration-6) 和
-[CosId 4.0](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md) 之上。CoCache 6 改变了值在 Redis 中的存储方式，
-所以这次升级需要短暂停机和一次性的数据迁移（[迁移数据](#migrating-the-data)）。
-
-#### 不支持滚动升级 {#no-rolling-upgrade}
-
-CoCache 6 改变了 Redis 中值的布局和失效通道，所以 6.x 和 7.0 的实例无法共用缓存：彼此都看不到对方的写入。停掉所有 6.x 实例，
-迁移数据，再启动 7.0。
-
-策略（`cosec:policy:<id>`）、全局策略索引（`cosec:global:policy`）、应用权限（`cosec:app:permission:<appId>`）和已吊销令牌
-（`cosec:token:revoked:<tokenId>`）的 Redis key 保持不变，其中 `cosec` 是
-[`cosec.authorization.cache.key-prefix`](./configuration.md#cache)；只有它们的值改变了格式。角色授权移到按应用划分的 key
-（[见上文](#role-grants-belong-to-an-app-and-a-space)）。策略历史、API key 和限流计数器不是 CoCache 数据，key 和格式都不变。所有
-key 列在 [存储](./storage.md#redis-keys) 中。
-
-#### 通过 CoSec 写入，而不是直接写 Redis {#write-through-cosec-not-redis}
-
-每个 CoCache 6 值都以一个二进制头开头，所以用 `SET` 或 `SADD` 写入的数据（例如管理服务写入的应用权限和角色授权）不会被读取。
-用 `PolicyRepository.setPolicy` 写入策略，通过 `AppPermissionCache` 和 `RolePermissionCache` bean 写入应用权限和角色授权。它们的
-API 是 CoCache 6 的：
-
-| 6.x（CoCache 5） | 7.0（CoCache 6） |
+| 命令 | 作用 |
 |---|---|
-| `me.ahoo.cache.api.Cache` | `me.ahoo.cocache.api.Cache` |
-| `cache[key] = value`、`set(key, ttlAt, value)` | `put(key, value)`、`put(key, value, ttl: Duration)` |
-| `evict(key)` | `invalidate(key)` |
-| `GlobalPolicyIndexCache` 是 `SetElementsCache`：`addElements` / `removeElements` | 它是 `SetCache`：`add` / `remove` |
+| `convert` | 读取 7.x 数据（Redis 或导出的文件），翻译后把 8.0 文档和一份报告写入一个新目录。不向 Redis 写任何东西。 |
+| `publish` | 把一次已接受的转换中的文档作为它们的第一个修订写入 Redis，经过控制面的存储。从不触碰 7.x 的 key。 |
+| `bootstrap` | 把平台租户的一个主体绑定到 `cosec:platform-admin`，让控制面有人可以写入。 |
+| `partition plan` | 分别用 `--partition platform` 和 `by-owner` 转换两次，为每个租户写出一份计划，由控制面提交。不向 Redis 写任何东西。 |
 
-#### Redis 7、Lettuce 和更宽的 ACL {#redis-7-lettuce-and-a-wider-acl}
+#### 转换 {#convert}
 
-CoCache 6 需要 Redis 7.0 或更高（或 Valkey 7.2 或更高），并根据 `spring.data.redis.*` 自建 Lettuce 客户端：不支持 Jedis，静态主从
-配置会在启动时失败。最小化的 Redis ACL 还必须允许 `+hkeys +hget`（保留 `+hgetall`）（[Redis 要求](./storage.md#redis-requirements)）。
+```bash
+cosec-migrate convert --from-redis redis://localhost:6379 [--key-prefix cosec] --out ./converted
+cosec-migrate convert --from-files ./export --out ./converted
+```
 
-#### 本地副本最多存活 5 分钟 {#local-copies-live-at-most-5-minutes}
-
-CoCache 6 总会限定本地副本的寿命（`localMaxAge`，默认 5 分钟），之后重新读 Redis；它没有"无限"选项。在 6.x 中，策略或权限的
-本地副本会一直存活到某次变更使它失效。`cosec.authorization.cache.policy`、`role` 和 `token` 的 `expire-after-write` 现在设置的就是
-这个上界，所以它适用于每个本地副本（[本地缓存设置](./configuration.md#local-cache-settings)）。
-
-#### CoSec 自己创建缓存 {#cosec-creates-its-caches-itself}
-
-缓存不再用 `@EnableCoCache` 声明，6.x 的组件 bean（`PolicyCache.KeyConverter`、`PolicyCache.ClientSideCache`、
-`PolicyCache.DistributedCache`，以及其他缓存的同类 bean）已被删除。用 CoCache 的 `CacheSpecCustomizer` bean 或
-`cocache.caches.<CacheName>.*` 调整缓存，缓存名为 `PolicyCache`、`GlobalPolicyIndexCache`、`AppPermissionCache`、
-`RolePermissionCache` 和 `RevokedTokenCache`。有两项设置仍由 CoSec 决定：存储布局（那里的 `key-prefix` 被忽略），以及对策略和权限
-而言的"永不过期，Redis 读不了就失败"，它在所有定制器和配置项之后应用（[优先级](./configuration.md#precedence)）。
-
-`CacheProperties` 删除了 `globalPolicyIndexKey`、`policyKeyPrefix`、`appPermissionKeyPrefix`、`rolePermissionKeyPrefix` 和
-`revokedTokenKeyPrefix`。CoCache 自己也重命名或删除了若干 `cocache.*` 配置项（例如 `cocache.redis.strict-failure`）；使用已删除的
-配置项会导致启动失败，错误信息会给出替代项。
-
-#### id 生成器是 `StringIdGenerator` {#id-generators-are-stringidgenerators}
-
-在 CosId 4 中，`UuidGenerator` 和 `CosIdGenerator` 只实现 `StringIdGenerator`。`AuditingAuthorization`、`JwtTokenConverter`、
-`JustAuthProvider`、`ReactiveRequestParser` 和 `ServletRequestParser` 接收 `StringIdGenerator`，由 starter 注入：存在
-`CosIdGenerator` 或其他 id 生成器 bean 时仍会使用它，否则使用 `UuidGenerator`。传入 `IdGenerator` 的代码仍能编译；用 `IdGenerator`
-声明来持有 `CosIdGenerator` 的代码必须改为声明 `StringIdGenerator`。如果应用自己也使用 CosId，请按 CosId 的
-[迁移指南](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md) 操作。
-
-#### 未迁移的数据会让启动失败 {#unmigrated-data-stops-startup}
-
-7.0 并不总能在 6.x 存放数据的地方读到它：key 前缀以 `:` 结尾时（6.x 存在 `myapp::policy:*`，7.0 读 `myapp:policy:*`）、key 前缀
-改过时、或回滚这类迁移之后，7.0 会找不到任何策略、任何全局 `DENY`、任何吊销记录，并把它们读成不存在。所以 starter 在创建任何
-CoSec 缓存之前检查 schema 标记 `cosec:meta:schema`。没有标记时，6.x key 前缀（`legacy-key-prefix`，原样配置）或当前前缀下的
-CoSec 数据会让启动以 `CoSecSchemaException` 失败；迁移在结束时写入标记。没有标记且没有任何 CoSec 数据时，这是一个新部署，标记会
-被写入。检查找不到它不知道的前缀下的 6.x 数据：key 前缀改变时，设置 `cosec.authorization.cache.migration.legacy-key-prefix`
-（[Schema 标记](./storage.md#schema-marker)）。
-
-#### 未迁移的数据失败即拒绝 {#unmigrated-data-fails-closed}
-
-7.0 实例读取 CoSec 6.x 写入的值时，读取会失败（`CacheReadException`，原因为 CoCache 的 `ForeignFormatException`），并把该值留在
-Redis 中，所以请求以 `500` 被拒绝。每个 CoSec 缓存都保持这种行为，即使设置了 `cocache.defaults.foreign-format=reclaim`：没有加载器
-时，回收会删掉策略或权限的唯一副本，也会删掉 6.x 的吊销记录，让对应令牌重新有效。
-
-#### 全局策略索引会对照策略检查 {#the-global-policy-index-is-checked-against-the-policies}
-
-索引和策略内容是两个独立的 Redis key。在 6.x 中，索引中有 id 但没有内容时会被跳过，所以丢失的全局 `DENY` 会悄悄失效；7.0 以
-`MissingPolicyException` 让读取失败，请求以 `500` 被拒绝（[故障排查](./troubleshooting.md#every-request-fails-with-500)）。索引中
-内容类型不是 `global` 的 id（并发的或只完成一半的重新发布）会被忽略，而不是对所有人生效
-（[全局策略索引](./storage.md#the-global-policy-index)）。
-
-## 6.0 到 6.1 {#_6-0-to-6-1}
-
-### 破坏性变更 {#breaking-changes-1}
-
-**限流是规则，而不是策略条件。** `rateLimiter`、`groupedRateLimiter`、`redisRateLimiter` 和 `redisGroupedRateLimiter` 条件已被
-删除，`TooManyRequestsException` 也一样。仍使用它们的策略不再能解析：在 6.1 中，使用它们的本地策略文件会被跳过并记录 `ERROR` 日志
-（自 7.0 起会让启动失败），存储在 Redis 中的这类策略读取时失败，请求被拒绝。升级之前把每个限制移到一条
-[限流规则](../policies/rate-limiting.md#rules) 中：
-
-| 之前（策略语句） | 之后（限流规则） |
+| 选项 | 含义 |
 |---|---|
-| 语句的 `action` | 规则的 `action` |
-| 语句的其他条件 | 规则的 `condition` |
-| `part` | `key` |
-| `permitsPerSecond`、`windowSeconds`、`strictFailure` | 同名字段 |
-| `rateLimiter` / `groupedRateLimiter` | 没有 Redis 时规则运行在 `LocalRateLimiter` 上 |
-| `expireAfterAccessSecond` | 不再需要：空闲的桶在一小时后丢弃 |
+| `--from-redis <uri>` | 从这个 Redis 读取 7.x 数据：`--key-prefix` 下的策略、全局策略索引、应用权限和角色授权，以及 schema 标记 `<prefix>:meta:schema`（必须为 `7`）。策略历史（`<prefix>:policy:history:*`）被跳过。 |
+| `--from-files <dir>` | 改为读取一份导出：`policies.json`（7.x 策略的数组，每条带 `id`）、`global-policies.json`（全局策略索引中 id 的数组）和 `app-role-permissions.json`（每个应用一项：`{"appPermission": {...}, "grants": {"admin": ["*"], "auditor@s1": ["invoice.read"]}}`；没有应用权限的应用写 `{"appId": "...", "grants": {...}}`）。这三个文件必须存在；`rate-limit-rules.json` 可选。7.x 的本地策略文件用这种方式转换：把它们的内容放进 `policies.json`。 |
+| `--key-prefix <p>` | 7.x 的 key 前缀；默认 `cosec`。 |
+| `--out <dir>` | 一个不存在或为空的目录。`convert` 从不覆盖。 |
+| `--rate-limit-rules <file>` | 7.x 的限流规则（`cosec.limiter.locations`）：一个规则对象，或规则的数组，每条带 `id`。多个规则文件请合并成一个数组。 |
+| `--partition platform\|by-owner` | `platform`（默认）把每条策略放进平台文档，任何人都可以附加，与 7.x 相同。`by-owner` 把每条非全局策略放进其 `tenantId` 所指租户的文档（见下文规则 C5）；含 DENY 语句的策略留在平台文档中，并给出警告。 |
+| `--root-enabled`、`--root-id <id>`、`--root-expires-at <instant>` | 把 7.x 的 root 转换为 [break-glass 绑定](#root-becomes-break-glass)。`--root-id` 默认为 `cosec`；后两个选项任一出现即隐含 `--root-enabled`。没有 `--root-expires-at` 的 root 会被拒绝。 |
 
-随之改变的三种行为：
+输出目录：
 
-- **被拒绝的请求不再消耗许可。** 以前，策略条件中的限流也会计入随后被其他层拒绝的请求。
-- **配额属于规则 `id`。** 以前，设置相同的 Redis 限流器共用一个配额。
-- **计数器重新开始。** Redis 计数器从 `<key-prefix>:<settings hash>:…` 移到 `<key-prefix>:<id>:…`，旧计数器被弃用并自行过期。
-  滚动升级期间，新旧实例分别计数。
+| 文件 | 内容 |
+|---|---|
+| `platform.json` | 平台文档。 |
+| `apps/<appId>.json` | 每个 7.x 应用权限对应一份应用文档：它的权限目录和角色绑定。 |
+| `tenants/<tenantId>.json` | 租户文档，只在 `--partition by-owner` 时出现。 |
+| `provenance.json` | 每条策略和绑定来自 7.x 数据的哪里。只在转换被接受时写出。 |
+| `report.json` | `accepted`、输入的 SHA-256、计数、`rejections`、`warnings`、`semanticChanges`，以及写出的每个文件的 SHA-256。 |
 
-**响应可能带有限流头。** 有规则匹配时，响应包含 `RateLimit-Limit`、`RateLimit-Remaining` 和 `RateLimit-Reset`，`429` 响应还包含
-`Retry-After`（[响应与响应头](../policies/rate-limiting.md#responses-and-headers)）。
+被拒绝的转换只写出 `report.json`。控制台打印同样的计数、警告和拒绝项。
 
-**`Authorization` bean 被装饰。** 开启限流时（`cosec.limiter.enabled`，默认 `true`），自动配置的 bean 是包住 `SimpleAuthorization`
-的 `RateLimitingAuthorization`，使用 `micrometer-support` 时外面还有一层 `MeteredAuthorization`。把这个 bean 强制转换为
-`SimpleAuthorization` 的代码必须改为以 `Authorization` 注入，或解开 `Delegated.delegate`。
+#### 拒绝项 {#rejections}
 
-**决策类型增加了字段。** `AuthorizationDecision` 和 `SecurityDecision` 增加了 `rateLimit` 属性。按位置解构它们或调用 `copy` 的
-Kotlin 代码必须重新编译。
+每个拒绝项给出种类、在 7.x 数据中的位置、一条消息和建议。修正 7.x 数据（或导出），然后转换到一个新目录。
 
-### 新功能 {#new-features}
-
-以下都是新增功能。会改变请求行为的功能默认关闭。
-
-| 功能 | 默认 | 位置 |
+| 种类 | 原因 | 怎么办 |
 |---|---|---|
-| 限流规则：按 IP、按用户或共享的配额，在 Redis 或内存中计数 | 开启，只要存在规则文件 | [限流](../policies/rate-limiting.md) |
-| 为描述出来的主体，或真实的令牌或 API key 解释决策 | 关闭（`cosec.explain.enabled`） | [解释一个决策](../integration/checks.md#explaining-a-decision) |
-| 影子模式：在真实流量上试验候选策略和应用权限 | 关闭（`cosec.shadow.enabled`） | [影子模式](../policies/testing.md#trying-changes-in-shadow-mode) |
-| `AuthorizationChecker`：在代码中检查权限，一个或多个动作 | 始终可用 | [检查权限](../integration/checks.md#checking-a-permission) |
-| 使用 `resource.<name>` 部分的对象级规则 | 按策略选用 | [对象级规则](../integration/checks.md#object-level-rules) |
-| `time` 条件：有效期、每日时间窗、自动过期的授权 | 按策略选用 | [时间条件](../policies/language.md#time-conditions) |
-| 策略历史与回滚 | 关闭（`cosec.authorization.cache.history.enabled`） | [策略历史](./storage.md#policy-history-and-rollback) |
-| 声明式策略测试用例（`PolicyTestKit`） | 库 | [策略测试用例](../policies/testing.md#policy-test-cases) |
-| 访问审查（`AccessAnalyzer`）：谁能做什么 | 库 | [访问审查](../policies/testing.md#access-reviews) |
-| 面向机器客户端的 API key，存于内存或 Redis | 关闭（`cosec.api-key.enabled`） | [API key](../integration/authentication.md#api-keys) |
-| `cosec.authorization` 决策指标 | 有 `micrometer-support` 和 `MeterRegistry` 时开启 | [可观测性](./observability.md#metrics) |
+| `SCHEMA_MARKER` | Redis 数据不是 7.0 布局。 | 先升级到 7.x（含它的数据迁移），再转换。 |
+| `GLOBAL_INDEX_WITHOUT_CONTENT` | 全局策略索引列出了一条没有内容的策略。7.x 中每个请求都会失败。 | 存入这条策略，或从索引中删除它的 id。 |
+| `GLOBAL_TYPE_NOT_INDEXED` | 一条 `GLOBAL` 类型的策略不在全局策略索引中。 | 把它加入索引，或改变它的类型。 |
+| `UNDEFINED_PERMISSION` | 角色授权引用了所属应用没有定义的权限（规则 C6）。 | 定义这个权限，或从授权中删除它。 |
+| `UNDECODABLE` | 不是合法的 7.x JSON、7.x 自己的模型无法解码，或需要类路径上缺少的类（`ognl` 条件、自定义匹配器）。 | 修正存储的 JSON。自定义匹配器没有 8.0 形式，见 `CUSTOM_ACTION` 和 `CUSTOM_CONDITION`。 |
+| `RESERVED_POLICY_ID` | 策略 id 以 `perm:`、`g:`、`r:` 或 `cosec:` 开头，这些前缀留给生成的 id。 | 重命名这条策略，以及引用它的每个附加策略。 |
+| `INVALID_ID` | 8.0 无法容纳的 id：应用或空间 id 为 `*` 或空、应用 id 含 `:`、角色 id 含 `@`。 | 重命名。8.0 中 `*` 表示任意应用或空间。 |
+| `DUPLICATE_ID` | 导出中同一条策略出现两次，或同一个应用中同一个权限出现两次。 | 只保留一个。 |
+| `ROOT_WITHOUT_EXPIRY` | 启用了 root 却没有 `--root-expires-at`。 | 给出过期时间，或不带 root 转换。 |
+| `OWNER_TENANT` | 使用 `--partition by-owner`，而策略的 `tenantId` 不指向任何租户。 | 设置它的 `tenantId`，或改用 `--partition platform` 转换。 |
+| `CONDITION_NOT_TRANSLATED` | 没有精确翻译的 7.x 内置条件，例如不是字面量、字面量前缀或字面量选择的 `regular`，或者动作不是 `all` 的语句中的 `path` 条件。 | 按消息给出的条件（`eq`、`in`、`startsWith` ……）重写。 |
+| `EXPRESSION_CONDITION` | `spel` 或 `ognl` 条件。 | 用[策略语言](../policies/language.md)的条件重写。 |
+| `CUSTOM_CONDITION` | 自定义 `ConditionMatcherFactory` 的条件。 | 把它读取的值移进一个 `AttributeProvider`，并在这个属性上写条件（[扩展](../architecture/extending.md)）。 |
+| `ACTION_NOT_TRANSLATED` | `#{...}` 路径模板、不是 `/` 的路径 `separator`、成员方法不同的动作数组，或者不是 HTTP token 的方法。 | 见[动作中的路径模板](#path-templates-in-actions)；按方法拆分语句；删除任何请求都不可能有的方法。 |
+| `CUSTOM_ACTION` | 自定义 `ActionMatcherFactory` 的动作。 | 改写为 HTTP 路径和方法，或路由映射出的动作。 |
+| `DOES_NOT_COMPILE` | 翻译后的语句无法编译，例如超出 8.0 接受范围的路径模式。 | 见消息和[策略语言](../policies/language.md)。 |
 
-新增配置项：`cosec.limiter.locations`、`cosec.explain.enabled`、`cosec.shadow.*`、`cosec.metrics.enabled`、`cosec.api-key.*` 和
-`cosec.authorization.cache.history.*`（[配置](./configuration.md)）。
+警告不会让转换停止。目前的警告有：全局策略索引中类型不是 `GLOBAL` 的策略（按可附加策略转换，因为 7.x 并不把它应用于所有人）；
+`by-owner` 时留在平台文档中、含 DENY 语句的租户策略；没有应用权限的应用上的角色授权（7.x 忽略它们，所以被丢弃）。
 
-### 升级检查清单 {#upgrade-checklist-1}
+#### 报告中的语义改动 {#semantic-changes-in-the-report}
 
-1. 在策略中（包括存储在 Redis 中的）搜索这四种已删除的条件类型，并在 `classpath:cosec-rate-limit/` 下写出等价的限流规则。
-2. 把自定义匹配器抛出的 `TooManyRequestsException` 替换为限流规则。
-3. 确认客户端和代理能容忍新的限流头。
-4. 替换把 `Authorization` bean 强制转换为 `SimpleAuthorization` 的代码。
-5. 升级，然后在启动日志中确认每个限流规则文件都已加载。读不了的规则文件会让启动失败。
-6. 可选：在再次修改策略之前，为你依赖的决策加上 `PolicyTestKit` 测试套件。
+`semanticChanges` 按 7.x 数据中的位置，列出 8.0 有意做出不同决策的形态。`change` 是[8.0 在哪些地方决策不同](#what-8-0-decides-differently)
+中的规则 id（`C1a`–`C6`、`D1`–`D3`）之一，或者：
+
+- `ASCII-CASE`：带 `ignoreCase` 的 ALLOW 条件。8.0 只折叠 ASCII 字母，所以这条 ALLOW 匹配的写法更少。DENY 条件的值含 ASCII 以外的字母时，
+  这个条件改为被拒绝。
+- `RATE-LIMIT`：一条 7.x 限流规则，翻译成了平台文档的限流规则（[限流规则变为义务](#rate-limit-rules-become-obligations)）。
+
+逐条阅读。报告中的条目都不要求修改数据，但每一条都可能改变某个响应。
+
+#### 发布 {#publish}
+
+```bash
+cosec-migrate publish --to-redis redis://localhost:6379 [--key-prefix cosec] --in ./converted \
+  [--resume] [--break-glass-max-duration PT4H]
+```
+
+`publish` 只读取被接受的转换，而且只读取 `report.json` 列出的文件，并校验其中记录的 SHA-256：`convert` 之后被修改、缺失或新增的文件会让
+它停止。然后它编译每一份文档，按平台文档检查每份应用文档的引用，并拒绝在 `--break-glass-max-duration`（默认 `PT4H`）之后才过期的
+break-glass 绑定。它经过控制面的存储把每份文档写成修订 1，所以文档的修订历史从这里开始；并且只在文档尚不存在时写入：它从不覆盖 8.0 数据。
+
+每份文档写一次。如果某一次失败，消息会列出已经写入的文档；用 `--resume` 再运行一次，它跳过内容相同的已发布文档，拒绝内容不同的。
+`--key-prefix` 是 8.0 的快照前缀，与 `cosec.authorization.snapshot.key-prefix` 相同。
+
+`publish` 之后，只通过控制面修改策略。再次运行 `convert` 和 `publish` 不会更新已存在的文档。
+
+#### 引导控制面 {#bootstrap-the-control-plane}
+
+```bash
+cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] --platform-admin alice [--force]
+```
+
+控制面用快照中的策略授权自己的写操作，所以没有管理员时谁都不能写入。`bootstrap` 只写平台租户的文档 `Tenant((platform))`；平台文档本身来自 `publish`，所以先发布。`bootstrap` 在平台租户自己的文档中，把平台租户的主体 `alice`
+绑定到内置策略 `cosec:platform-admin`，并记为一个 `BOOTSTRAP` 种类的修订。当这份文档已经把某人绑定到 `cosec:platform-admin` 时它拒绝执行；
+`--force` 用于这些管理员全部丢失后的恢复。持有 Redis 凭证的人本来就能写入；`bootstrap` 只是留下一条记录。
+
+#### 回滚 {#rollback}
+
+`publish` 和 `bootstrap` 只写 8.0 的 key（`<prefix>:snapshot:*` 和 `<prefix>:control:*`），8.0 也从不读取或修改 7.x 的 key。要回滚，
+重新部署 7.x：它读到的 7.x 数据保持原样。切换之后通过 8.0 控制面做的变更不在 7.x 数据中。从 `convert` 开始一直停止 7.x 的写入方，直到你
+不再打算回滚；或者在发布之前重新转换：`convert` 之后的 7.x 写入不在转换出的文档中。
+
+7.x 的策略历史（`<prefix>:policy:history:*`）既不转换也不删除。需要的话请自行导出。
+
+### 8.0 在哪些地方决策不同 {#what-8-0-decides-differently}
+
+在 8.0 中，下面这些就是规则；每条在一致性套件中都有 id。在没有错误、没有缺失数据、也没有下列形态时，8.0 对转换后的数据做出与 7.x 相同的
+决策。决策算法本身见[安全模型](../guide/security-model.md)。
+
+| 规则 | 8.0 | 7.x | 受影响的 7.x 形态 |
+|---|---|---|---|
+| **C1a**（`ALG-4`） | 出错的 ALLOW 语句（或其策略条件）按未命中处理：其他 ALLOW 仍可放行，否则为默认拒绝（`401`/`403`）。 | `500`。 | 条件可能出错的 ALLOW（表达式、正则表达式、模板、自定义匹配器）。这是唯一可能放行 7.x 以 `500` 拒绝的请求的规则。 |
+| **C1b**（`ALG-1`） | 命中的 DENY 做出决策（`403`/`401`），无论别处有什么错误、缺失或不可用的数据。 | 按层顺序先发生的失败为 `500`。 | 每条 DENY 语句。 |
+| **C1c** | 策略条件在它的语句第一次被访问时求值；出错时，它的 DENY 语句算作出错，ALLOW 语句算作未命中。 | 每层先求值该层全部策略条件；出错时该层为 `500`。 | `all` 以外的策略级 `condition`。 |
+| **C1d**（`BLK-1`） | 被拉黑的主体和 break-glass 主体仍需要平台文档；平台文档不可用时请求为 `503`。 | 黑名单和 root 不读任何策略。 | root、黑名单。 |
+| **C2**（`BRK-1`） | 命中的 DENY 也拒绝 break-glass 主体。 | root 跳过所有策略。 | root，以及任何全局 DENY。 |
+| **C3**（`SCP-1`） | 声明的空间（非空的 `CoSec-Space-Id`）必须是主体在其中有角色的空间；否则请求以 `scope-rejected`（`403`）拒绝，匿名时为 `401`。不会退回默认空间。 | 按声明的空间求值：该空间的角色权限为空，策略照常生效。 | 默认空间以外的角色授权；发送空间的客户端。 |
+| **C4**（`SCP-2`） | 设置了 `cosec.authorization.scope.app-id` 时，声明其他应用的请求被拒绝（`scope-rejected`）；没有声明时使用宿主的应用。 | 声明的应用总是生效。 | 只服务一个应用的宿主。 |
+| **C5**（`BND-2`） | 主体只能附加自己租户文档或平台层中可附加的策略。 | 任何主体都能附加任何策略。 | 主体策略，仅在 `--partition by-owner` 时。默认分区保持 7.x 的行为。 |
+| **C6** | 引用了所属应用未定义权限的角色授权，被 `convert` 拒绝。 | 到达它的请求为 `500`。 | 带有过时权限 id 的授权。 |
+| **D1** | ALLOW 中的 `inRole: r` 只匹配在请求空间中生效的角色；ALLOW 中的 `inRole: r@s` 只在请求处于空间 `s` 时匹配；DENY 中的 `inRole: r` 匹配在任意空间持有的该角色。 | 按字面匹配角色，裸角色也匹配 `r@<请求的空间>`。 | `inRole` 条件。DENY 只会变宽，ALLOW 只会变窄。 |
+| **D2**（`CND-1`） | 不存在的属性不等于任何值，也不等于空串。 | 不存在的 part 读作 `""`。 | 与 `#{principal.id}`、`#{principal.attributes['k']}` 或 `#{tenant.tenantId}` 比较的 `eq`。ALLOW 中，不存在的 part 不再匹配空的属性（变窄）。DENY 中，`convert` 补上 7.x 的情形，保持 7.x 的读法。 |
+| **D3** | 没有正则表达式，所以也没有正则超时。 | `RegexTimeoutException` 按默认拒绝处理。 | `regular` 条件；只有字面量、字面量前缀和字面量选择的模式能翻译。 |
+
+#### 声明空间的匿名请求返回 401 {#anonymous-requests-that-declare-a-space-are-401}
+
+规则 `SCP-3`：带非空 `CoSec-Space-Id`（请求头或查询参数）的匿名请求返回 `401` `unauthorized`，即使路径对所有人开放。匿名主体没有角色，
+所以不是任何空间的成员（C3）。令牌被拒绝的请求也是匿名请求，它得到带该令牌 problem 类型的 `401`。在公开端点上发送 `CoSec-Space-Id`
+的客户端必须停止在那里发送它。
+
+#### root 变为 break-glass {#root-becomes-break-glass}
+
+`cosec.authorization.root-enabled` 和根主体已删除。8.0 中对应的是 break-glass 绑定：有时间上限（最多 24 小时，
+`cosec.control.break-glass.max-duration`，默认 4 小时），受每一条 DENY 约束（C2），并且只有在 REQUIRED 决策监听器记录了请求时才能放行
+（否则 `503`，规则 `OBS-2`）。需要时通过控制面申请。`convert --root-enabled --root-expires-at` 会把 7.x 的 root 转换为平台租户中
+`--root-id` 主体的这样一个绑定，但除非它在 `--break-glass-max-duration` 之内过期，`publish` 会拒绝它。通常请不带 root 转换。
+
+#### 动作中的路径模板 {#path-templates-in-actions}
+
+带 `#{...}` 模板的 7.x `path` 动作，例如 `/users/#{principal.id}/**`，会被 `convert` 拒绝。8.0 中由路由映射给出资源及其 id
+（`"path": "/users/{userId}"`、`"resource": "user/{userId}"`），再用一个条件把资源属性与主体比较。见[策略语言](../policies/language.md)。
+`eq` 条件中的 `#{...}` 模板可以翻译（D2）。
+
+#### 限流规则变为义务 {#rate-limit-rules-become-obligations}
+
+7.x 的限流规则文件（`cosec.limiter.*`）已删除。`convert --rate-limit-rules` 把规则翻译成平台文档的限流规则。与 7.x 一样，规则作用于策略
+放行的请求：第一条耗尽的规则返回 `429`，被拒绝的请求不消耗许可。带 `strictFailure` 的规则在限流器失败时，现在返回 `503` 而不是 `429`（R3）。
+存在 `ReactiveStringRedisTemplate` bean 时，Redis 限流器使用相同的 key（`cosec:rate-limiter:<rule>:<bucket>:<window>`）；否则每个实例
+各自计数。见[限流](../policies/rate-limiting.md)。
+
+### 响应与状态码 {#responses-and-status-codes}
+
+#### 错误响应体是 problem+json {#error-bodies-are-problem-json}
+
+每个不放行的响应都带 `Content-Type: application/problem+json`、`CoSec-Request-Id` 响应头，以及下面这样的响应体（成员顺序固定；
+只有开启追踪时才有 `traceId`）：
+
+```json
+{"type":"https://cosec.ahoo.me/problems/forbidden","title":"Forbidden","status":403,"code":"FORBIDDEN","requestId":"..."}
+```
+
+7.x 以 `application/json` 返回的 `{"authorized":false,"reason":"..."}` 已删除。显式与隐式拒绝在响应中不再区分：两者都是 `unauthorized` 或
+`forbidden`，所以响应永远不会告诉调用方存在 DENY。审计事件保留这一区别。`400` 现在也带响应体和 `CoSec-Request-Id` 响应头；7.x 中两者都没有。
+完整的状态码表见 [Web 集成](../integration/web.md)。
+
+| 7.x 状态码与 `reason` | 8.0 状态码与 `code` |
+|---|---|
+| `400`，无响应体 | `400` `INVALID_REQUEST` |
+| `401` `Explicit Deny` 或 `Implicit Deny` | `401` `UNAUTHORIZED` |
+| `401` `Token Expired` | `401` `TOKEN_EXPIRED` |
+| `401` `Token Invalid`（无效的令牌或 API key） | `401` `TOKEN_INVALID` |
+| `401` `Token Invalid`（已吊销的令牌） | `401` `TOKEN_REVOKED` |
+| `403` `Explicit Deny` 或 `Implicit Deny` | `403` `FORBIDDEN`；声明的应用或空间被拒绝时为 `403` `SCOPE_REJECTED`（C3、C4） |
+| `429` `Too Many Requests` | `429` `TOO_MANY_REQUESTS`，`RateLimit-*` 与 `Retry-After` 响应头不变 |
+| `strictFailure` 规则的限流器失败时的 `429` `Too Many Requests` | `503` `UNAVAILABLE`（R3） |
+| `500` `Implicit Deny`（无法做出决策） | `503` `UNAVAILABLE`（R1、R2） |
+| `500` `Implicit Deny`（其他错误） | `500` `INTERNAL_ERROR` |
+
+与 7.x 一样，被拒绝的凭证按匿名求值：策略对匿名调用方放行的请求仍是 `200`；被拒绝时，problem 会说明凭证被拒绝的原因。
+
+#### 无法决策时用 503 取代 500 {#_503-replaces-500-when-no-decision-can-be-made}
+
+| 规则 | 8.0 | 7.x |
+|---|---|---|
+| **R1**（`PIP-2`） | 无法做出决策（文档不可用或未及时加载、成员关系不可用、黑名单读不到、外部属性取不到）：`503`。 | `500`。 |
+| **R2** | 认证器自身的依赖（读不到的吊销存储或 API key 存储）失败：`503`。 | `500`。 |
+| **R3** | 带 `strictFailure` 的限流规则无法计数：`503`。 | `429`。 |
+
+`500` 留给没有建模的异常，即缺陷。`503` 从不带 `Retry-After`。
+
+#### 有歧义的 CoSec 参数返回 400 {#ambiguous-cosec-parameters-are-400}
+
+规则 `SCP-4`：当 `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id` 以两个不同的非空值出现（请求头与查询字符串之间，或其中任一之内），
+请求返回 `400`。7.x 不会拒绝这样的请求。
+
+#### Spring MVC 只从查询字符串读取查询参数 {#spring-mvc-reads-query-parameters-from-the-query-string-only}
+
+在 Spring MVC 上，7.x 用 `HttpServletRequest.getParameter` 读取查询参数，而它也会返回 `application/x-www-form-urlencoded` 请求体中的字段。
+所以对表单 POST，容器会在 CoSec 的过滤器中解析并消费请求体，请求体字段也被当作查询参数。8.0 在每个适配器上都只读取 URL 查询字符串，
+并且永远不碰请求体（[Spring MVC 上经过 CoSec 后表单 POST 请求体为空](./troubleshooting.md#form-post-body-is-empty-after-cosec-on-spring-mvc)）。
+表单字段不再设置 `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id`，也不再设置在 `cosec.pipeline.allow-query-token=true` 时读取的
+`authorization` 令牌。把这些作为表单字段发送的客户端，必须改为通过请求头或查询字符串发送。
+
+### 认证 {#authentication}
+
+#### 令牌吊销始终开启 {#token-revocation-is-always-on}
+
+`cosec.jwt.token-revocation.enabled` 已删除。启用 JWT 时，每个令牌都要检查是否已吊销；没有任何东西能回答这个检查时，启动失败：加上
+`cache-support`（它带来 Redis 吊销存储），或者注册自己的 `TokenStore` 和 `RevocationReader` bean。7.x 中没有 `cache-support` 时，starter
+使用一个什么都不记录的存储，登出悄无声息地不起作用。只签发令牌、从不校验令牌的服务可以改为设置 `cosec.jwt.enabled=false`
+（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。7.x 写下的吊销继续有效：8.0 从相同的 key（`<prefix>:token:revoked:*`）
+读取它们。吊销检查报告的错误返回 `503`，永远不会接受该令牌（`PIP-7`）。
+
+#### 令牌与 API key {#tokens-and-api-keys}
+
+- 7.x 签发的令牌继续可用：8.0 读取同样的声明（`roles`、`policies`、`attributes`、`tenantId`），并按 7.x 的方式读取角色声明（`role` 在默认空间，
+  `role@space` 只在该空间，规则 `MEM-3`）。
+- `cosec.api-key.header` 改为 `cosec.pipeline.api-key-header`（默认 `X-API-Key`）。`cosec.api-key.store-blocking` 已删除：Redis 的 key
+  读取器从不阻塞。携带 API key 的请求只按 key 判定，即使它同时携带令牌（`PIP-8`）。
+- `cosec.authorization.allow-query-token` 改为 `cosec.pipeline.allow-query-token`（默认 `false`）。
+- 7.x 自定义的 `SecurityContextParser` bean 不再被使用。改为注册一个 `Authenticator` bean（[认证](../integration/authentication.md)）。
+
+### 存储与 Redis {#storage-and-redis}
+
+#### Redis key {#redis-keys}
+
+8.0 把文档存在 `<prefix>:snapshot:*` 下，控制面的数据存在 `<prefix>:control:*`、`<prefix>:candidate:*` 和 `<prefix>:shadow:*` 下。它不读取
+7.x 的 key：`<prefix>:policy:*`、`<prefix>:global:*`、`<prefix>:app:permission:*`、`<prefix>:app:role:permission:*` 和 `<prefix>:meta:schema`。
+直接读写这些 key 的工具必须改用控制面。只给控制面的 Redis 账号 `<prefix>:snapshot:*` 和 `<prefix>:control:*` 的写权限。全部 key 见
+[存储](./storage.md)。
+
+#### 读不到 Redis 的驱逐策略时启动失败 {#startup-fails-when-redis-s-eviction-policy-cannot-be-read}
+
+启动时 CoSec 读取 Redis 的 `maxmemory-policy`，不是 `noeviction` 就拒绝启动，因为被驱逐的平台文档会让其中的 DENY 悄无声息地失效。
+`CONFIG GET` 失败或不被允许时（某些托管 Redis 就是这样），启动同样失败；CoCache 后端是包装器或检查读不了的自定义后端时也一样。如果你已经
+自行设置了 `noeviction`，请设置 `cosec.authorization.snapshot.eviction-check=warn`：启动继续，并记录一条以 `!!!` 开头的警告。
+
+#### 每个实例依据快照决策 {#each-instance-decides-from-a-snapshot}
+
+- **不再按请求读 Redis。** 每个实例加载平台文档以及它的请求需要的应用文档和租户文档，编译它们，并每隔
+  `cosec.authorization.snapshot.revalidate-interval`（默认 `10s`）对每份已加载的文档做一次条件读。只有文档改变时 Redis 才传输它。
+- **Redis 故障期间，已安装的文档按最后一次确认的内容继续决策**，所以平台的 DENY 仍然有效。需要尚未加载的文档的请求最多等待
+  `cold-load-timeout`（默认 `2s`），然后返回 `503`。7.x 中，本地副本过期后（默认 5 分钟）请求开始以 `500` 失败。
+  `cosec.authorization.snapshot.fail-closed.{tenants,max-lag}` 作为属性存在，但本版本没有任何请求路径检查它们：目前还没有在快照落后后让请求
+  失败的设置。
+- **启动时在后台加载。** 平台文档、然后是 `prewarm-apps` 和 `prewarm-tenants`，在应用启动的同时加载；就绪状态不等待它们。尚未加载的应用的
+  第一个请求要编译它的整份文档；把繁忙的应用列进 `prewarm-apps`。
+- **缺失的平台文档按失败即拒绝处理。** 平台文档发布之前，CoSec 需要决策的每个请求都是 `503`。
+- **没有 `cache-support` 时**，starter 使用一个初始为空的内存存储，所以在应用把文档放进去之前每个请求都是 `503`。本地策略文件不再被加载
+  （`cosec.authorization.local-policy.*` 已删除）。
+- 读取失败表现为 `SnapshotUnavailableException`（原异常作为其 cause）和 `503`，取代 7.x 的 `CacheReadException` 和 `500`。
+
+发布、文档回滚以及 Redis 不可用时的行为见[存储](./storage.md)。
+
+### 已删除和替换的 API {#removed-and-replaced-apis}
+
+使用下列任何一项的代码不再能编译，或者不再被调用。
+
+| 7.x | 8.0 |
+|---|---|
+| `Authorization`、`AuthorizeResult`、`SimpleAuthorization`、装饰器链（`DecisionAuthorization`、追踪、审计、指标、限流、影子） | pipeline（`cosec-runtime`）。用 `DecisionListener` bean 观察决策。 |
+| `SecurityPipeline`、`SecurityDecision`、`RequestParser`、`SecurityContextParser` | pipeline；凭证用 `Authenticator` bean。 |
+| `CoSecAuthorizationCustomizer` | `Authenticator`、`DecisionListener`、`AttributeProvider`、`MembershipProvider`、`RateLimiter` 的 bean。 |
+| `Policy`、`Statement`、`PermissionVerifier`、`ActionMatcher`、`ConditionMatcher`、`AppPermission`、`AppRolePermission`、`RolePermission` 以及 `cosec-api` 中其余的策略与权限模型 | 文档（[策略语言](../policies/language.md)）。覆写了 `verify` 的 `Statement` 没有对应物。 |
+| `ActionMatcherFactory`、`ConditionMatcherFactory`、`MatcherFactoryRegistry`、内置匹配器、OGNL 与 SpEL | 只有内置的动作和条件。自定义条件读取的值改由 `AttributeProvider` 提供（[扩展](../architecture/extending.md)）。 |
+| `BlockingAware` | 无：没有条件会执行代码。阻塞的查询放进会挂起的 `AttributeProvider`。 |
+| `RootPrincipalMatcher`、`CoSecPrincipal.isRoot`、`root-enabled` | break-glass 绑定（[root 变为 break-glass](#root-becomes-break-glass)）。 |
+| `BlacklistChecker` | 放在 `AttributeProvider` bean（`BlacklistAttributeProvider`）后面的 `BlacklistSource`。 |
+| `RequestAttributesAppender`、`GatewayRouteRequestAttributesAppender` | `AttributeProvider`。 |
+| `PolicyRepository`、`AppRolePermissionRepository`、Redis 仓库与缓存、`SnapshotPublisher`、`RedisSnapshotPublisher`、`PolicyHistory`、`RedisPolicyRevisionStore`、对 `AppPermissionCache`/`RolePermissionCache` 的写入 | 写入用控制面（库或 HTTP API）；第一次写入用 `cosec-migrate publish`。 |
+| `LocalPolicyInitializer` 以及 `init-repository`/`force-refresh` | `cosec-migrate convert` 与 `publish`，或控制面的声明式 `apply`。 |
+| `CoSecExplainEndpoint`（`cosecExplain` actuator）、`AuthorizationExplainer`、`ExplainWarningCode` | 控制面的 `explain`（需要权限，可指定任一修订）；见[代码中的检查](../integration/checks.md)。 |
+| 影子模式（`ShadowAuthorization`、`ShadowPolicyProvider`、`cosec.shadow.*` 文件） | 控制面变更的影子窗口；见[测试策略](../policies/testing.md)。 |
+| `AccessAnalyzer` | 控制面的 `analyze`。 |
+| `PolicyTestKit` | 尚无 8.0 版本。用控制面的 `simulate` 测试决策。 |
+| `AuthorizationChecker.check(...)`：`Mono<Boolean>` | `AuthorizationChecker.check(security, action, resource)`，挂起函数；`cosec-webflux` 提供 `Mono<Boolean>` 形式，`cosec-webmvc` 提供阻塞形式（[代码中的检查](../integration/checks.md)）。 |
+| 过滤器 `ReactiveAuthorizationFilter`、`AuthorizationFilter`（servlet）、`AuthorizationGatewayFilter`，以及它们接受 `Authorization` 的构造器 | 由 starter 创建的 `PipelineWebFilter`、`PipelineServletFilter`、`PipelineGatewayFilter`。 |
+| `ReactiveInjectSecurityContextWebFilter`、`InjectSecurityContextFilter`（注入模式） | 无。没有只读取令牌而不决策的模式。8.0 的过滤器在每个放行的请求上放入安全上下文。 |
+| 授权之后留在调用方安全上下文中的路径变量 | 无。从你的 Web 框架读取路径变量。 |
+| `cosecPolicyGenerator`、`cosecAppPermissionGenerator` actuator 端点 | `cosecServiceGenerator/routes`（路由映射）和 `cosecServiceGenerator/app`（应用文档）。 |
+
+仍然可用：`SecurityContext`（新增 `scope`，即校验后的应用、空间和角色；应读取它，而不是客户端声明的 `CoSec-*` 请求头）、`ServerWebExchange`、
+Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`AuditEventSink`、`TokenStore`，以及 `cosec-api` 的审计类型。
+
+### 已删除和改名的属性 {#removed-and-renamed-properties}
+
+这里没有列出的 7.x `cosec.*` 属性保持名称和含义不变。8.0 的全部属性及默认值见[配置](./configuration.md)。
+
+| 7.x | 8.0 |
+|---|---|
+| `cosec.authorization.enabled` | 已删除。`cosec.enabled=false` 关闭 CoSec。 |
+| `cosec.authorization.local-policy.*`（`enabled`、`locations`、`init-repository`、`force-refresh`） | 已删除。转换并发布这些文件（[迁移数据](#migrating-the-data)）。 |
+| `cosec.authorization.allow-query-token` | `cosec.pipeline.allow-query-token` |
+| `cosec.authorization.root-enabled` | 已删除（[root 变为 break-glass](#root-becomes-break-glass)）。 |
+| `cosec.authorization.cache.enabled`、`.policy.*`、`.role.*`、`.history.*`、`.migration.*` | 已删除。快照缓存是 `cosec.authorization.snapshot.*`。`cosec.authorization.cache.key-prefix` 和 `.token.*` 保留。 |
+| `cosec.authorization.gateway.enabled` | 已删除。网关过滤器随 `gatewaySupport` 提供。 |
+| `cosec.limiter.*`（`enabled`、`locations`、`key-prefix`） | 已删除。规则在平台文档中；要使用不同的限流 key 前缀，需要自己的 `RateLimiter` bean。 |
+| `cosec.shadow.*` | 已删除。影子窗口是控制面的操作；每个实例的部分是 `cosec.authorization.shadow.*`。 |
+| `cosec.explain.enabled` | 已删除。使用控制面的 `explain`。 |
+| `cosec.inject.enabled` | 已删除。 |
+| `cosec.api-key.header` | `cosec.pipeline.api-key-header` |
+| `cosec.api-key.store-blocking` | 已删除。 |
+| `cosec.jwt.token-revocation.enabled` | 已删除；吊销始终开启。 |
+
+新的属性组：`cosec.pipeline.*`（超时、查询令牌、API key 请求头、trace 级别）、`cosec.authorization.scope.app-id`、
+`cosec.authorization.{membership,attributes,rate-limit}.timeout`、`cosec.authorization.routes.location`、`cosec.authorization.snapshot.*`、
+`cosec.authorization.shadow.*`、`cosec.authentication.revocation.skew`、`cosec.audit.required.timeout`、`cosec.audit.kafka.delivery` 和
+`cosec.control.*`。
+
+升级时有两个默认值需要做出决定：
+
+- `cosec.authorization.routes.location` 默认为 `classpath:cosec-routes.json`。在 WebFlux 或 Spring MVC 宿主上，映射不存在会让启动失败；把这个
+  属性设为空即可不使用路由映射，此时每个请求都是 `http` 命名空间中针对其路径的动作。网关不加载路由映射。
+- `cosec.authorization.scope.app-id` 默认不设置。只服务一个应用的宿主请设置它（规则 C4）。
+
+### 可观测性的变化 {#observability-changes}
+
+- **审计事件**为每个结果写出，包括 `400`、取消的请求、认证失败和错误，由 `kind` 说明是哪一种（`DECIDED`、`BAD_REQUEST`、
+  `AUTHENTICATION_UNAVAILABLE`、`CANCELLED`、`ERROR`）。新字段：`snapshotVersion`（读取的修订）、`binding`（做出决策的语句所经过的绑定，或
+  `attached:<policy>`）、`breakGlass`。新取值：决策 `INDETERMINATE`；原因码 `INDETERMINATE`、`SCOPE_REJECTED`、`RATE_LIMITER_UNAVAILABLE`、
+  `TOKEN_REVOKED`、`BOUNDARY`。来源类型保留 7.x 的名称：平台文档或租户文档中的绑定为 `GLOBAL_POLICY`，附加策略为 `PRINCIPAL_POLICY`，
+  应用文档中的角色绑定为 `ROLE_PERMISSION`，内置黑名单规则为 `BLACKLIST`。`elapsedNanos` 现在覆盖整个 pipeline（认证、属性、限流），而不只是
+  授权。7.x 的 `AuditEventSink` 无需修改即可继续使用。
+- **指标**：`cosec.authorization` 计时器同样覆盖整个 pipeline。它的 `source` 标签现在是 `binding`、`attachment`、`builtin`、`boundary`、
+  `scope` 或 `none`（7.x：`global_policy`、`principal_policy`、`role_permission`、`root`、`blacklist`、`none`、`unknown`）；`result` 新增
+  `indeterminate`、`bad_request` 和 `cancelled`；`cause` 是新标签，只出现在 `indeterminate` 上。新计数器：`cosec.listener.dropped`、
+  `cosec.listener.failures`、`cosec.audit.required.failures`。请更新仪表盘和告警。
+- **追踪**：`cosec.authorize` span 在决策之后由决策事件生成，所以一次求值中的 I/O span 不再是它的子 span，审计事件的 `spanId` 是父 span 的 id。
+- **Kafka 审计**默认尽力投递，除非设置 `cosec.audit.kafka.delivery=required`；失败的 REQUIRED 监听器会把放行变为 `503`。
+- **控制面变更**有自己的事件（`ChangeListener`；默认写日志，`KafkaChangeListener` 写 Kafka）。
+- **日志**：`SimpleAuthorization` 的 debug 日志已删除；决策在审计日志中。
+- **线程**：在 WebFlux 上，真正挂起之后，下游处理链在 `Dispatchers.Default` 的线程上继续，而不是 `boundedElastic`。代码不能依赖线程名或
+  `ThreadLocal`。
+
+见[可观测性](./observability.md)。
+
+### RFC 中的差异清单 {#rfc-change-lists}
+
+8.0 背后的 RFC 列出了已知差异。每一条要么在上文中说明，要么描述的是 7.x 与 8.0 之间的中间状态，没有任何发布版本有过这种状态。
+
+| 条目 | 位置 |
+|---|---|
+| RFC 0002 X1（按层读取） | 中间状态。8.0 不按请求读取策略（[每个实例依据快照决策](#each-instance-decides-from-a-snapshot)）。 |
+| RFC 0002 X2（`BlockingAware` 的线程切换） | 中间状态。`BlockingAware` 已删除（[已删除和替换的 API](#removed-and-replaced-apis)）。 |
+| RFC 0002 X3（调用方上下文不再留下路径变量） | [已删除和替换的 API](#removed-and-replaced-apis)。 |
+| RFC 0002 X4（自定义匹配器写路径变量） | 中间状态。自定义匹配器已删除。 |
+| RFC 0002 X5（覆写 `Statement.verify`） | [已删除和替换的 API](#removed-and-replaced-apis)。 |
+| RFC 0002 X6（7.x 解释器的输出） | 中间状态。7.x 解释器已删除；`explain` 是控制面的操作。 |
+| RFC 0002 X7（`SimpleAuthorization` 的 debug 日志） | [可观测性的变化](#observability-changes)。 |
+| RFC 0002 X8（引擎捕获哪些异常） | 中间状态。8.0 中没有策略会执行代码；没有建模的异常为 `500` `internal-error`。 |
+| RFC 0003 X1（Redis 故障） | [每个实例依据快照决策](#each-instance-decides-from-a-snapshot)。 |
+| RFC 0003 X2（I/O 形态） | [每个实例依据快照决策](#each-instance-decides-from-a-snapshot)。 |
+| RFC 0003 X3（全局策略的顺序） | 多条效果相同的语句同时命中时，被记为做出决策的那一条（审计的 `source`、`binding`）可能与 7.x 不同；7.x 的顺序本来就没有定义。决策相同。 |
+| RFC 0003 X4（异常类型） | [每个实例依据快照决策](#each-instance-decides-from-a-snapshot)。 |
+| RFC 0003 X5（索引项没有内容） | `GLOBAL_INDEX_WITHOUT_CONTENT`（[拒绝项](#rejections)）。 |
+| RFC 0003 X6（冷启动） | [每个实例依据快照决策](#each-instance-decides-from-a-snapshot)。 |
+| RFC 0003 X7（写 API） | [已删除和替换的 API](#removed-and-replaced-apis)。 |
+| RFC 0003 X8（新应用的第一个请求） | [每个实例依据快照决策](#each-instance-decides-from-a-snapshot)。 |
+| RFC 0004 C1a–C6 | [8.0 在哪些地方决策不同](#what-8-0-decides-differently)。 |
+| RFC 0004 §13 X1（审计来源） | [可观测性的变化](#observability-changes)：来源类型保留 7.x 的名称，新增 `binding`。 |
+| RFC 0004 §13 X2（每个请求三份文档） | [每个实例依据快照决策](#each-instance-decides-from-a-snapshot)。 |
+| RFC 0004 §13 X3（按绑定组织的解释） | 控制面的 `explain`（[代码中的检查](../integration/checks.md)）。 |
+| RFC 0004 §13 X4（写入需要指定文档） | [已删除和替换的 API](#removed-and-replaced-apis)。 |
+| RFC 0004 §13 X5（新的异常与原因） | [无法决策时用 503 取代 500](#_503-replaces-500-when-no-decision-can-be-made)；[排障](./troubleshooting.md)。 |
+| RFC 0004 §13 X6（`SecurityContext.scope`） | [已删除和替换的 API](#removed-and-replaced-apis)。 |
+| RFC 0005 D1–D3 | [8.0 在哪些地方决策不同](#what-8-0-decides-differently)。 |
+| RFC 0006 R1–R3 | [无法决策时用 503 取代 500](#_503-replaces-500-when-no-decision-can-be-made)。 |
+| RFC 0006 X1–X4（审计、耗时、追踪、指标） | [可观测性的变化](#observability-changes)。 |
+| RFC 0006 X5（响应体） | [错误响应体是 problem+json](#error-bodies-are-problem-json)。 |
+| RFC 0006 X6（线程） | [可观测性的变化](#observability-changes)。 |
+| RFC 0006 X7（API） | [已删除和替换的 API](#removed-and-replaced-apis)。 |
+| RFC 0006 X8（配置） | [已删除和改名的属性](#removed-and-renamed-properties)。不存在 `cosec.observability.listener.*` 属性。 |
+| RFC 0007 X1（写 API、策略历史） | [已删除和替换的 API](#removed-and-replaced-apis)、[回滚](#rollback)。 |
+| RFC 0007 X2（影子） | [已删除和替换的 API](#removed-and-replaced-apis)、[已删除和改名的属性](#removed-and-renamed-properties)。 |
+| RFC 0007 X3（解释） | [已删除和替换的 API](#removed-and-replaced-apis)。 |
+| RFC 0007 X4（文档格式） | 中间状态：7.x 没有文档。8.0 只读取自己的格式；8.0 没有 schema 标记。 |
+| RFC 0007 X5（配置） | [已删除和改名的属性](#removed-and-renamed-properties)。`cosec.policy.limits.*` 在 7.x 中从未存在；限制在平台文档中。 |
+| RFC 0007 X6（生成的 JSON schema） | `schema/` 文件描述 8.0 的格式（[策略语言](../policies/language.md)）。 |
+| RFC 0007 X7（控制面审计、`BOUNDARY`） | [可观测性的变化](#observability-changes)。 |
+| RFC 0007 X8（Redis 命名空间） | [Redis key](#redis-keys)。 |

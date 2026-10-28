@@ -1,774 +1,511 @@
 ---
 title: "Upgrading"
-description: "What breaks between CoSec versions and how to migrate."
+description: "How to upgrade a CoSec 7.x deployment to 8.0: what changes, and how to migrate the data, the code, the configuration and the clients."
 ---
 
 # Upgrading
 
-For teams moving an existing CoSec deployment to a newer version. Each section lists what breaks, what to change,
-and a checklist; this page is the single home of migration steps. Release notes for every version are on
+For teams moving a CoSec 7.x deployment to 8.0. The page starts with a checklist, then gives the details by area:
+the data migration, what 8.0 decides differently, responses, authentication, storage, APIs, properties and
+observability. This page is the single home of migration steps. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
 ## 7.x to 8.0
 
-### Spring MVC reads query parameters from the query string only {#spring-mvc-reads-query-parameters-from-the-query-string-only}
+8.0 upgrades only from 7.x. To upgrade from 6.x, first follow
+[the upgrade guide on the `7.x` branch](https://github.com/Ahoo-Wang/CoSec/blob/7.x/wiki/operations/upgrading.md) to
+7.x, including its data migration, then come back here. `cosec-migrate convert` refuses Redis data that is not in the
+7.0 layout.
 
-On Spring MVC, CoSec read a query parameter with `HttpServletRequest.getParameter`, which also returns the fields of
-an `application/x-www-form-urlencoded` body. So for a form POST, the container parsed and consumed the body inside
-CoSec's authorization filter, and a body field counted as a query parameter. It now reads the URL query string only,
-decoded as WebFlux and Gateway decode it, and never touches the body
-([Form POST body is empty after CoSec on Spring MVC](./troubleshooting.md#form-post-body-is-empty-after-cosec-on-spring-mvc)).
+What is different, in short:
 
-What a form field no longer sets on Spring MVC:
-
-- `CoSec-App-Id`, `CoSec-Space-Id` and `CoSec-Device-Id`, and so `request.appId`, `request.spaceId` and
-  `request.deviceId` in conditions and the app and space that role permissions use
-  ([App and space](../integration/web.md#app-and-space));
-- the `authorization` token read with `cosec.authorization.allow-query-token=true`;
-- `getQuery(...)` in an `ognl` condition, a custom condition matcher or a `RequestAttributesAppender`.
-
-Clients that send these as form fields must send them as headers or in the query string. A condition that matched a
-form field this way no longer matches: an allow stops allowing, and a deny stops denying. Move such checks into the
-application, after it has read the body; an authorization filter must not read request bodies.
-
-### Token revocation is always on {#token-revocation-is-always-on}
-
-`cosec.jwt.token-revocation.enabled` is gone. With JWT enabled, every token is checked for revocation, and startup
-fails when nothing can answer that check: add `cache-support`, which brings the Redis revocation store, or register a
-`TokenStore` and a `RevocationReader` bean of your own. Before, without `cache-support` the starter used a store that
-records nothing, so logout silently did nothing. A service that only issues tokens and never verifies them can set
-`cosec.jwt.enabled=false` instead ([Logout and revocation](../integration/authentication.md#logout-and-revocation)).
-
-### Startup fails when Redis's eviction policy cannot be read {#startup-fails-when-redis-s-eviction-policy-cannot-be-read}
-
-At startup CoSec reads Redis's `maxmemory-policy` and refuses to start unless it is `noeviction`, because an evicted
-policy document could silently drop its DENY statements. Before, when `CONFIG GET` failed or was not allowed, as on
-some managed Redis services, the check passed silently. It now fails startup in that case too, and also when the
-CoCache backend is a wrapper or a custom backend it cannot read. If you have set `noeviction` yourself, set
-`cosec.authorization.snapshot.eviction-check=warn`: startup goes on and logs a warning that starts with `!!!`.
-
-## 7.0.0 to 7.0.1
-
-The Redis `RateLimiter` bean is now named `cosecRedisRateLimiter` instead of `redisRateLimiter`, the name Spring Cloud
-Gateway also uses ([the startup failure it caused](./troubleshooting.md#startup-fails-with-a-redisratelimiter-bean-conflict)).
-Its type and conditions are unchanged, so injecting `RateLimiter` by type or replacing it with your own bean works as
-before. Only code that refers to CoSec's bean by the name `redisRateLimiter` (`@Qualifier`, `getBean("redisRateLimiter")`,
-`@ConditionalOnBean(name = …)`) must use `cosecRedisRateLimiter`.
-
-### Templated path actions reject values that change the pattern {#templated-path-actions-reject-values-that-change-the-pattern}
-
-Also in 6.1.2 and 8.0. A `#{...}` template in a `path` action, such as `/users/#{principal.id}/**`, used to be evaluated into a string that
-was then parsed as a whole pattern, so a principal id or attribute containing pattern syntax changed what the
-statement matched. Each template value now fills one literal part of the pattern, and a value that is empty, `.`,
-`..`, or contains `*`, `?`, `{`, `}`, `\` or the path separator (`/`, or the `separator` option), and, with
-`decodeAndParseSegments: false`, `%` or `;` is rejected ([Template values in `path` actions](../policies/language.md#template-values-in-path-actions)):
-
-- an `allow` statement or permission no longer matches such a principal (`Implicit Deny`);
-- a `deny` statement or permission fails such a principal's request closed with an error
-  (`RejectedTemplateValueException`, a `500`), whatever its condition;
-- a rate limit rule fails closed the same way and spends no permit: every request that reaches a templated deny or
-  rate limit rule fails, since the value is rejected before the path is matched;
-- a templated matcher built in code with `PathActionMatcherFactory` and used outside a statement fails the same way.
-  Code that deserializes statements, permissions or rate limit rules from JSON is unaffected; a custom deserializer
-  that builds ALLOW statements itself can call `onRejectedTemplateValue(NO_MATCH)` on the action.
-
-Principals whose ids or attributes contain these characters can no longer be served by templated statements. A
-template that produced several segments, such as `#{principal.attributes['home']}/**` with `home` set to
-`/users/alice`, is rejected the same way, and a template inside a `{...}` capture, such as `{name:#{...}}`, now
-fails when the policy loads. What to do:
-
-1. Find templated `path` actions: search policies, app permissions and rate limit rules for `#{` in an `action`.
-2. If principal ids or the attributes they use can contain these characters, rewrite the statement as a static
-   pattern plus an `eq` condition on the path variable ([example](../policies/language.md#template-values-in-path-actions)). `eq` compares strings, so any
-   value works.
-3. Check that the principals you expect still match
-   ([Templated statement ignores one principal or fails with 500](./troubleshooting.md#templated-statement-ignores-one-principal-or-fails-with-500)).
-
-## 6.1 to 7.0
-
-7.0 tightens authorization in several places where 6.x could let a request through by mistake, and moves to
-[CoCache 6.6](https://cocache.ahoo.me/guide/migration-6) and
-[CosId 4.0](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md). CoCache 6 stores values in Redis in a
-new format, so the upgrade needs a short stop of every instance and a one-off data migration. There is no rolling
-upgrade.
-
-Read the whole section before you start. Then work through the [checklist](#upgrade-checklist), the
-[migration](#migrating-the-data), and keep the [rollback](#rollback) at hand until the backups are dropped.
-
-The stricter authorization costs 6 to 9 % of `SimpleAuthorization` throughput compared with 6.1.0, about 0.2 µs
-per decision; nothing needs to change for it ([what the 7.0 fixes cost](../architecture/overview.md#what-the-7-0-fixes-cost)).
-
-### Breaking changes
-
-Each row is one change; the link leads to what it means and what to do.
-
-| Change | In one sentence |
-|---|---|
-| [Missing principal policies fail](#missing-principal-policies-fail) | A policy id a principal lists but the repository lacks now fails authorization with `500` instead of being skipped. |
-| [Missing role permissions fail](#missing-role-permissions-fail) | A permission id a role is granted but its app's catalog lacks now fails authorization with `500` instead of being skipped. |
-| [Root is off, platform-only, and blacklisted](#root-is-off-platform-only-and-blacklisted) | `root-enabled` defaults to `false`, root must belong to the platform tenant, and the blacklist is checked before root. |
-| [Role grants belong to an app and a space](#role-grants-belong-to-an-app-and-a-space) | Grants move to `cosec:app:role:permission:<appId>:<roleId>[@<spaceId>]`, and a request sees only the roles written for its space. |
-| [Path variables belong to their statement](#path-variables-belong-to-their-statement) | A condition reads only the variables its own `path` action captured; anything else is a load error. |
-| [`inRole` follows roles into their space](#inrole-follows-roles-into-their-space) | A bare `inRole` value also matches `role@<request space>`; `in`, `spel` and `ognl` still see raw strings. |
-| [Invalid local policy files stop startup](#invalid-local-policy-files-stop-startup) | A local policy file that cannot be parsed or built fails loading instead of being skipped. |
-| [Duplicate ids and missing locations stop startup](#duplicate-ids-and-missing-locations-stop-startup) | Two files with one policy id, or a configured location that matches no file, fail loading. |
-| [Rate limit rules and shadow candidates load strictly](#rate-limit-rules-and-shadow-candidates-load-strictly) | The same strictness applies to `cosec.limiter.locations` and `cosec.shadow.*`, and the errors become `IllegalStateException`. |
-| [Rate limit keys are checked at load](#rate-limit-keys-are-checked-at-load) | An unsupported `key` part fails when the rule loads, not on every request. |
-| [Condition parts are checked at load](#condition-parts-are-checked-at-load) | An unsupported condition `part` fails when the policy loads; a stored copy with one fails its reads. |
-| [Policy ids may not start with `history:`](#policy-ids-may-not-start-with-history) | `setPolicy` rejects them, because they would share a key with the policy history. |
-| [OpenAPI app ids replace `:`](#openapi-app-ids-replace) | An OpenAPI title such as `orders:api` gives the app id `orders-api`. |
-| [Spring MVC authorizes the request URI](#spring-mvc-authorizes-the-request-uri) | Not `servletPath`: policies see the `DispatcherServlet` prefix, and the path is no longer percent-decoded. |
-| [Path parameters are removed, and `..;` is rejected](#path-parameters-are-removed) | `/admin;x` is authorized as `/admin` on every adapter, and `/public/..;/admin` gets `400`. |
-| [A regex timeout answers `401` to anonymous callers](#a-regex-timeout-answers-401-to-anonymous-callers) | It is mapped like every other deny, no longer `403` for every caller. |
-| [A mismatched refresh token is an invalid token](#a-mismatched-refresh-token-is-an-invalid-token) | `refresh` throws `RefreshTokenMismatchException`, a `TokenVerificationException`, instead of `IllegalArgumentException`. |
-| [No rolling upgrade](#no-rolling-upgrade) | 6.x and 7.0 cannot share a cache: stop every 6.x instance, migrate, then start 7.0. |
-| [Write through CoSec, not Redis](#write-through-cosec-not-redis) | Values written with `SET` or `SADD` are not read; the cache API is CoCache 6's. |
-| [Redis 7, Lettuce, and a wider ACL](#redis-7-lettuce-and-a-wider-acl) | Redis 7.0+ (or Valkey 7.2+), no Jedis, no static master-replica, and `+hkeys +hget` in the ACL. |
-| [Local copies live at most 5 minutes](#local-copies-live-at-most-5-minutes) | Every local copy has a bounded lifetime, set by `expire-after-write`. |
-| [CoSec creates its caches itself](#cosec-creates-its-caches-itself) | The 6.x cache component beans and five `CacheProperties` key prefixes are gone; tune caches through CoCache. |
-| [Id generators are `StringIdGenerator`s](#id-generators-are-stringidgenerators) | CosId 4 generators implement only `StringIdGenerator`, which CoSec now takes. |
-| [Unmigrated data stops startup](#unmigrated-data-stops-startup) | Without the schema marker `cosec:meta:schema`, CoSec data in Redis stops startup with `CoSecSchemaException`. |
-| [Unmigrated data fails closed](#unmigrated-data-fails-closed) | A 6.x value fails its read with `500` and is never deleted, whatever `foreign-format` says. |
-| [The global policy index is checked against the policies](#the-global-policy-index-is-checked-against-the-policies) | An indexed id without content fails with `500`; indexed content that is not `global` is ignored. |
+- **Policies are documents.** A platform document, one document per app and one per tenant replace 7.x's policies,
+  global policy index, app permissions and role grants. Redis stays the store of record; each instance compiles the
+  documents into a snapshot and decides without reading Redis per request. The format is in the
+  [policy language](../policies/language.md).
+- **One decision path.** The 7.x `Authorization` chain is gone. Each adapter (WebFlux, Spring MVC, Gateway) hands the
+  request to one coroutine pipeline that authenticates, resolves the scope, decides and maps the outcome to a status.
+- **Changes go through a control plane.** Writing, validating, simulating, shadowing, approving, explaining and rolling
+  back policies are control-plane operations (`controlSupport`), not application code or local files.
+- **Conditions are data.** A small condition language replaces the matcher factories, OGNL and SpEL. Nothing in a
+  policy runs code.
+- **Errors are `application/problem+json`.** A response no longer tells a client whether a DENY exists.
 
 ### Upgrade checklist
 
-Do all of this while 6.x still runs.
-
-1. **Redis.** Check that Redis is 7.0 or later (or Valkey 7.2 or later), that the application reaches it through
-   Lettuce, and that its ACL allows `+hkeys +hget` (keep `+hgetall`)
-   ([details](#redis-7-lettuce-and-a-wider-acl)).
-2. **Policies, app permissions and rate limit rules.** Search them, including those stored in Redis, for
-   `request.path.var.` and `PATH_VARIABLES`, and fix their scope ([details](#path-variables-belong-to-their-statement)).
-   Check that every local policy file loads, that policy ids are unique across files, that every configured location
-   exists ([details](#duplicate-ids-and-missing-locations-stop-startup)), that every rate limit `key` and every
-   condition `part` is a supported part ([details](#rate-limit-keys-are-checked-at-load),
-   [details](#condition-parts-are-checked-at-load)), and that no policy id starts with `history:`
-   ([details](#policy-ids-may-not-start-with-history)).
-3. **Principals.** Find principals (tokens, API keys, user records) that list policy ids your repository does not
-   have, and write those policies or remove the ids ([details](#missing-principal-policies-fail)).
-4. **Roles.** Decide which app every 6.x role (and space) belongs to, and issue `role@space` roles in tokens and API
-   keys for every non-default space ([details](#role-grants-belong-to-an-app-and-a-space)). Audit `in`, `spel` and
-   `ognl` conditions over `context.principal.roles`, which see raw `role@space` strings
-   ([details](#inrole-follows-roles-into-their-space)). Check that every permission id granted to a role (other than
-   `*`) is defined by its app's permission catalog ([details](#missing-role-permissions-fail)).
-5. **Root.** If you rely on root, enable it explicitly and issue its token in the platform tenant
-   ([details](#root-is-off-platform-only-and-blacklisted)).
-6. **OpenAPI.** If an OpenAPI title contains `:`, switch clients to the new `CoSec-App-Id`
-   ([details](#openapi-app-ids-replace)).
-7. **Paths and clients.** On Spring MVC with `spring.mvc.servlet.path` set, add the prefix to the paths of policies,
-   app permissions and rate limit rules ([details](#spring-mvc-authorizes-the-request-uri)). Check conditions that
-   compare `request.path` as a string ([details](#path-parameters-are-removed)), and clients that treat `401` as
-   "sign in again" ([details](#a-regex-timeout-answers-401-to-anonymous-callers)).
-8. **Code.** Replace direct Redis writes of app permissions and role grants with writes through CoSec
-   ([details](#write-through-cosec-not-redis)), replace 6.x cache component beans with a `CacheSpecCustomizer` or
-   `cocache.caches.<CacheName>.*` ([details](#cosec-creates-its-caches-itself)), change `IdGenerator`
-   declarations that hold a `CosIdGenerator` to `StringIdGenerator`
-   ([details](#id-generators-are-stringidgenerators)), and catch `TokenVerificationException` around a refresh
-   ([details](#a-mismatched-refresh-token-is-an-invalid-token)).
-9. **Plan the stop.** Prepare a one-off migration job (below), and plan a window in which no 6.x instance, no 7.0
-   instance and no other writer touches CoSec's keys.
-10. **Then:** stop every writer, migrate the data, verify, then start 7.0
-   ([Migrating the data](#migrating-the-data)). Delete legacy role grants only after every app is migrated.
+1. **Be on 7.x data.** The Redis data must be in the 7.0 layout (schema marker `7`); a 6.x deployment upgrades to 7.x
+   first.
+2. **Find what has no 8.0 form.** Search policies and code for: `spel` and `ognl` conditions, custom
+   `ActionMatcherFactory` or `ConditionMatcherFactory` types, `#{...}` path templates in actions, `regular` conditions,
+   `ignoreCase` in DENY conditions, `BlockingAware`, implementations of `Authorization`, `Statement` or `Policy`,
+   `CoSecAuthorizationCustomizer`, root (`root-enabled`), local shadow files and the `cosecExplain` endpoint.
+   [Converting](#migrating-the-data) reports every policy that cannot be translated.
+3. **Convert the data** with `cosec-migrate convert` and fix every rejection until the conversion is accepted. Read
+   the semantic changes in `report.json` against [What 8.0 decides differently](#what-8-0-decides-differently).
+4. **Update the code**: remove the uses of [removed APIs](#removed-and-replaced-apis) and register the 8.0 extension
+   beans instead.
+5. **Update the configuration**: remove every [removed property](#removed-and-renamed-properties), and decide on the
+   new ones. Startup fails in three common cases: no route map at `classpath:cosec-routes.json` on a WebFlux or Spring
+   MVC host (set `cosec.authorization.routes.location` to a map, or empty), JWT without `cache-support` and without a
+   revocation store of your own ([Token revocation is always on](#token-revocation-is-always-on)), and a Redis whose
+   eviction policy is not `noeviction` or cannot be read
+   ([Startup fails when Redis's eviction policy cannot be read](#startup-fails-when-redis-s-eviction-policy-cannot-be-read)).
+6. **Update the clients and the alerts**: error bodies, `reason` values and some status codes change
+   ([Responses and status codes](#responses-and-status-codes)); audit fields, metric tags and spans change
+   ([Observability changes](#observability-changes)).
+7. **Publish** the converted documents with `cosec-migrate publish`, and, if you run the control plane, bind its first
+   administrator with `cosec-migrate bootstrap`. Until the platform document is published, every 8.0 request is
+   answered `503`.
+8. **Deploy 8.0**, then check decisions on the requests you rely on (the control plane's `simulate` and `explain`, see
+   [Testing policies](../policies/testing.md)).
+9. **Clean up later.** 8.0 never reads, changes or deletes the 7.x keys. Delete them once you no longer need to
+   [roll back](#rollback).
 
 ### Migrating the data
 
-CoCache 6 cannot read the values CoSec 6.x stored with CoCache 5, and Redis is the only copy of policies, app
-permissions and role grants ([Storage](./storage.md)). Two migrations convert them. Both are classes you call from a
-7.0 process (an admin application or a one-off job using the starter with `cache-support`), not Actuator endpoints:
-an endpoint that writes authorization data would itself have to be secured, and would stay exposed long after the
-migration.
+`cosec-migrate` is a one-time command-line tool in the `migrate/` module. No application depends on it, and the starter
+never does. Build it from the CoSec sources of the version you deploy:
 
-- `CoSecCoCache5Migration` converts policies, the global policy index, app permissions and revoked tokens in place
-  with CoCache's [`CoCache5Migrator`](https://cocache.ahoo.me/guide/migration-6), backing up every original value
-  first. The policy history (`cosec:policy:history:*`) is not CoCache data and is left alone. Revoked tokens are
-  migrated whether or not the migrating process enables token revocation.
-- `RolePermissionKeyMigration` copies role grants to their new app-scoped keys, one app at a time
-  ([Migrating role grants](#migrating-role-grants)). The 6.x keys stay as they were.
-
-::: danger Nothing may write during the migration
-A key changed while it is migrated aborts the run, and a key 7.0 wrote before its migration is skipped **without a
-backup**, so a rollback cannot restore it ([Writes before the migration](#writes-before-the-migration)).
-:::
-
-#### 1. Stop every writer
-
-Stop all 6.x instances and anything else that writes CoSec keys, such as an administration service writing policies
-or grants. Start no 7.0 instance that writes. The [schema check](#unmigrated-data-stops-startup) stops ordinary 7.0
-instances from starting until the migration has finished.
-
-#### 2. Prepare the migration job
-
-Run the migrations from a one-off job that:
-
-- sets `cosec.authorization.cache.migration.check-schema=false`, since the schema check would stop it from starting.
-  **Never deploy that setting to the instances that serve traffic**;
-- serves no traffic;
-- sets `cosec.authorization.cache.migration.legacy-key-prefix` when 6.x used a key prefix other than the current one,
-  `cosec.authorization.cache.migration.missing-guard-sentinel` when 6.x used a non-default
-  `cocache.redis.missing-guard-sentinel`, and `cosec.authorization.cache.migration.backup-prefix` to move the backups
-  away from `cocache5-backup:`.
-
-Give the 6.x key prefix **exactly as it was configured**. 6.x did not trim a trailing `:` (`myapp:` stored policies
-under `myapp::policy:`), but 7.0 does (`myapp:policy:`). With such a prefix the migration copies each value to its 7.0
-key instead of converting it in place, and leaves the 6.x keys unchanged; delete them yourself once 7.0 runs well,
-except `myapp::policy:history:*`, which 7.0 still uses. With a changed key prefix, the policy history is not moved: 7.0
-records revisions under `<new prefix>:policy:history:*`, and the 6.x revisions stay under the old prefix.
-
-The migration writes values with CoSec's own cache declarations, without the application's `CacheSpecCustomizer`s.
-A customizer that changes a CoSec cache's codec makes the migrated values unreadable to that cache: its reads fail
-(`500`), nothing is read as missing.
-
-#### 3. Dry run, then migrate
-
-With every writer stopped, first run a dry run, which reads and decodes every value and writes nothing, then the
-migration, which writes the schema marker (`cosec:meta:schema`) last:
-
-```kotlin
-@Bean
-fun migrateCoSecData(migration: CoSecCoCache5Migration) = ApplicationRunner {
-    log.info { "dry run: ${migration.dryRun()}" }
-    log.info { "migrated: ${migration.migrate()}" }
-}
+```bash
+./gradlew :cosec-migrate:installDist
+migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
 ```
 
-Read the report of each: per cache, the keys `read`, `written`, `skipped` (already migrated) and `negatives` (cached
-misses, migrated as cached misses).
+It has four commands. Exit codes: `0` done, `1` the data was rejected or a write failed, `2` a usage error.
 
-- A value that cannot be decoded aborts the run with a `CoCache5MigrationException` naming the key. Fix it and run
-  again.
-- A revoked token that expires while it is migrated aborts the run too ("the key changed"), which is likelier with
-  short token lifetimes. Run it again.
-- Migrated keys are skipped, so a run can be repeated.
-
-#### 4. Migrate role grants, once per app
-
-Run `RolePermissionKeyMigration.migrate` for every app, dry run first
-([Migrating role grants](#migrating-role-grants)).
-
-#### 5. Verify
-
-Check the reports, then read a few policies, global policies and grants through a 7.0 process, for example with
-[explain](../integration/checks.md#explaining-a-decision). A read that still fails with `ForeignFormatException` names a key
-that was not migrated.
-
-#### 6. Start 7.0
-
-Start the 7.0 instances **without** `check-schema=false`. Local policy files are written to Redis at startup only
-when their id is not there yet (`force-refresh=false`), so startup first reads the stored copy. If that copy cannot be
-read, because it was not migrated or no longer passes 7.0's [path variable](#path-variables-belong-to-their-statement)
-checks, startup fails ([Troubleshooting](./troubleshooting.md#startup-fails-reading-a-stored-policy)).
-
-#### 7. Clean up
-
-Once 7.0 runs well:
-
-- delete the backups with `CoSecCoCache5Migration.dropBackups()`. After that, [rollback](#rollback) is no longer
-  possible;
-- delete the 6.x role grant keys with `RolePermissionKeyMigration.deleteLegacy()`, **only after `migrate` has run
-  for every app**: it deletes the legacy grants of all apps, not only the last one migrated. Review each report's
-  `skipped` and `conflicts` first, then compare the keys `deleteLegacy(dryRun = true)` lists with the ones the reports
-  migrated;
-- with a 6.x key prefix ending in `:`, delete the 6.x keys yourself, except `<prefix>:policy:history:*`.
-
-### Migrating role grants
-
-This is step 4 of [Migrating the data](#migrating-the-data). 6.x grants do not record the app they were meant for,
-so CoSec cannot migrate them on its own: you name the target app, and nothing is copied to every app.
-`RolePermissionKeyMigration` (a bean with `cache-support`) does the copy.
-
-1. Decide which app each 6.x role (and space) belongs to. When roles of several apps share the old key space, split
-   them with the `roleIds` argument.
-2. Issue roles as `role@space` for every non-default space, in tokens and API keys.
-3. Run the migration once per app from a 7.0 process against the same Redis, for example an admin application or a
-   one-off job, while no instance serves traffic. Start with a dry run and read the report:
-
-   ```kotlin
-   @Bean
-   fun migrateRoleGrants(migration: RolePermissionKeyMigration) = ApplicationRunner {
-       val report = migration.migrate(appId = "order-app", dryRun = true) // then dryRun = false
-       log.info { "migrated=${report.migrated} conflicts=${report.conflicts} skipped=${report.skipped}" }
-   }
-   ```
-
-   Writes go through `RolePermissionCache`, so running instances drop their local copies. A run is idempotent: grants
-   already migrated are reported as `unchanged`, and a target that holds different grants is reported as a conflict
-   and kept. Keys holding a cached miss, keys that are not sets, and keys with an ambiguous role or space (more than
-   one `@`, or an empty part) are reported as `skipped`.
-4. Once every instance runs 7.0 and the grants of **every** app are migrated and verified, delete the old keys with
-   `deleteLegacy()`. It deletes every legacy key, whichever app it was meant for, so run it last: review the `skipped`
-   and `conflicts` of each report, then run `deleteLegacy(dryRun = true)` and compare the keys it lists with the ones
-   the reports migrated. Until then a rollback to 6.1 still finds them.
-
-Until a role's grants are migrated to an app, requests that rely on them are denied in that app.
-
-- **Grants changed through 6.x after a first run** (during a rollback: there is no rolling upgrade): run the
-  migration again with `overwrite = true`. It rewrites the targets whose legacy key holds other grants, but does not
-  remove a grant 6.x deleted (its legacy key gone, or holding a cached miss); remove those through
-  `RolePermissionCache`.
-- **Lease markers.** Reading a role that has no 7.0 grants yet leaves a short-lived lease marker (about 10 seconds)
-  on its new key, even on a dry run. It holds no grant and expires on its own.
-
-### Writes before the migration
-
-Nothing may write before the migration has finished, and the schema check stops 7.0 instances from starting until
-then. A process that writes anyway, such as the migration job itself, is checked only in part:
-
-- **Policy publishes fail, but not entirely.** Every `setPolicy` updates the global policy index, which CoCache 6 does
-  not overwrite while it still holds the 6.x native SET: the publish fails with `CacheWriteException`, caused by
-  `ForeignFormatException` naming the index key (`cosec:global:policy`). The index is left as it was, and the
-  migration still converts it. `setPolicy` completes with this error (a local policy with `force-refresh=true` stops
-  startup, see [Troubleshooting](./troubleshooting.md#publishing-a-policy-fails-before-the-migration)), and requests
-  are still denied with `500`.
-- **Other writes are not checked.** A global policy's content (written before the index) and app permissions replace
-  the 6.x value of their key in the 7.0 format. The migration then skips that key and **keeps no backup of it**, so a
-  rollback cannot restore its 6.x value.
-- **Role grants** go to new keys, and one written before its migration is reported there as a conflict.
-
-### Rollback
-
-Before the backups are dropped, 6.1 can be restored:
-
-1. Stop every 7.0 instance and every writer.
-2. Call `CoSecCoCache5Migration.rollback()`. It refuses while keys without a backup exist (below).
-3. Start 6.1 **without traffic**.
-4. Write again through 6.1 what 7.0 created (below).
-5. Only then let 6.1 serve traffic.
-
-Rollback removes the schema marker first, so a 7.0 instance started on the restored data refuses to start, and
-restores the snapshot taken by the migration:
-
-- **Migrated keys** (policies, app permissions, revoked tokens, the global policy index) get their 6.x value back from
-  their backup: type, content and remaining lifetime. Changes 7.0 made to them are lost, and a policy 7.0 made global
-  leaves the index.
-- **Keys without a backup** are the keys 7.0 created after the migration, such as new policies, app permissions or
-  revocations, and keys it wrote [before the migration](#writes-before-the-migration). They stay in the 7.0 format.
-  6.1 does not fail on them: CoCache 5 reads a value it cannot decode as missing and **overwrites it with a cached
-  miss**. A deny policy created by 7.0 then silently stops applying, and a token revoked by 7.0 is accepted again.
-
-  ::: danger Keys without a backup
-  `rollback()` lists these keys (`keysWithoutBackup()`) and refuses with `KeysWithoutBackupException` while there are
-  any. Review them, call `rollback(allowKeysWithoutBackup = true)`, then write those policies and app permissions
-  again and revoke those tokens again through 6.1, before it serves traffic.
-  :::
-
-- **A 6.x key prefix ending in `:`.** The copies 7.0 used are deleted and 6.1 reads its own keys, which were never
-  changed. Keys 7.0 created under its own prefix are invisible to 6.1, so they too must be written again through 6.1.
-- **Role grants.** The 6.x role grant keys were never changed, unless `deleteLegacy()` ran, so grants added or
-  removed in 7.0 must be made again through 6.1.
-- **Policy history** is not rolled back: revisions 7.0 recorded stay in it, so restoring the latest revision of a
-  policy through 6.1 may bring back what 7.0 wrote. Check a revision's content before restoring it.
-
-### Common questions
-
-**Can 6.x and 7.0 instances run side by side?** No. They cannot read each other's values or invalidations
-([No rolling upgrade](#no-rolling-upgrade)).
-
-**7.0 refuses to start with `CoSecSchemaException`.** The data has not been migrated, or was rolled back
-([Troubleshooting](./troubleshooting.md#startup-fails-with-cosecschemaexception)).
-
-**Every request gets `500` after the upgrade.** Some data was not migrated, or a global policy has no content
-([Troubleshooting](./troubleshooting.md#every-request-fails-with-500)).
-
-**Role-based requests are denied after the upgrade.** Their grants were not migrated to the request's app, or the
-token's roles are not written for the request's space ([Migrating role grants](#migrating-role-grants)).
-
-**Can I set `cocache.defaults.foreign-format=reclaim` to get rid of old values?** It has no effect on CoSec's caches,
-and must not: with no loader, a reclaim would delete the only copy ([Unmigrated data fails closed](#unmigrated-data-fails-closed)).
-
-**Can I write the schema marker by hand?** Not while 6.x data may exist. The marker tells 7.0 that every value is
-in the 7.0 layout; data under a 6.x key it does not read would be read as missing.
-
-**Can I run `deleteLegacy()` after migrating one app?** No: it deletes the legacy grants of every app. Run it last
-([Clean up](#_7-clean-up)).
-
-**I already ran 7.0 against this Redis in a test environment.** `migrate()` skips what is already migrated and
-writes the marker ([Troubleshooting](./troubleshooting.md#startup-fails-with-cosecschemaexception)).
-
-### Authorization and loading changes
-
-What each authorization and loading row of the [table](#breaking-changes) means, and what to do.
-
-#### Missing principal policies fail
-
-When a principal lists a policy id that the `PolicyRepository` does not return (deleted, never written, lost from
-Redis), `SimpleAuthorization` now fails with `MissingPolicyException`, which the pipeline maps to `500`. Before, the
-id was skipped and the remaining policies decided: when the missing policy was a deny, such as one that suspends an
-account, a global allow let the request through. `AuthorizationChecker` answers `false` for such a principal, and an
-explanation reports the `500` with a `MISSING_POLICY` warning.
-
-Before upgrading, find principals (tokens, API keys, user records) that list policy ids your repository does not
-have, and either write those policies or remove the ids. `PolicyRepository.getPolicies` itself is unchanged: it
-still returns the policies it found, so custom repositories need no change.
-
-#### Missing role permissions fail
-
-When a role is granted a permission id that its app's permission catalog does not define (removed from the
-catalog, or mistyped), `SimpleAuthorization` now fails with `MissingPermissionException`, which the pipeline maps to
-`500`. Before, the id was skipped: when it named a deny, a global or principal allow let the request through. A
-request of a principal holding that role in that app and space fails whenever the role layer is evaluated and no
-deny matched first: when the app's condition does not match, the layer does not apply, and a request that a deny (in
-an earlier layer, or earlier in the role layer) already matches stays denied. `*` still grants every permission.
-`AuthorizationChecker` answers `false`, an explanation reports the `500` with a `MISSING_PERMISSION` warning, and a
-shadow candidate app permission that drops a granted id reports `CANDIDATE_ERROR`. `AccessAnalyzer` and
-`PolicyTestKit` reject such grants when built or run; a test suite's `roles` are granted in every app, so each app
-must define them (use `appRoles` for ids of one app). The default `AppRolePermission.rolePermissionIndexer` throws
-the same exception.
-
-Before upgrading, compare each role grant with its app's permission catalog, and either add the missing permission
-or remove the id from the grant ([Granting permissions to roles](../policies/role-permissions.md#granting-permissions-to-roles)).
-
-#### Root is off, platform-only, and blacklisted
-
-Before, any principal whose id was `cosec` (or the `-Dcosec.root` system property) bypassed every check, including
-the blacklist, and `cosec.authorization.root-enabled` defaulted to `true`. A user tenant whose identity provider let
-a user pick the id `cosec` handed that user platform-wide access. Now:
-
-- `cosec.authorization.root-enabled` defaults to `false`: no principal is root unless you enable it.
-- When enabled, `RootPrincipalMatcher.DEFAULT` treats a principal as root only if its id is the root id **and** its
-  tenant is the platform tenant (`(platform)`, `Tenant.PLATFORM_TENANT_ID`). The root id in a user tenant, in the
-  default tenant, or on a principal without a tenant is an ordinary principal.
-- The blacklist is checked before root, so a blacklisted request from root is denied. In an explanation the
-  `BLACKLIST` layer now comes before `ROOT`, and `ExplainLayer` lists them in that order.
-- Code that builds `SimpleAuthorization`, `AuthorizationExplainer` or `ShadowAuthorization` directly defaults to
-  `RootPrincipalMatcher.NONE` too, like the starter and `PolicyTestKit`: without a `rootPrincipalMatcher` argument, no
-  principal is root.
-
-If you rely on root, set `cosec.authorization.root-enabled=true` and issue the root principal's token with `tenantId`
-`(platform)`. Code that builds these classes directly passes `rootPrincipalMatcher = RootPrincipalMatcher.DEFAULT`,
-and `PolicyTestKit` takes it as the matcher argument of `run`. If root must work some other way, provide your own
-`RootPrincipalMatcher` bean.
-
-#### Role grants belong to an app and a space
-
-In 6.x a role grant was stored per role and space, without the app, and the client chose both the app
-(`CoSec-App-Id`) and the space (`CoSec-Space-Id`). A grant, `*` included, therefore applied in every app that defined
-the same permission ids, and changing `CoSec-Space-Id` picked up the grants of a same-named role in another space. In
-7.0:
-
-- Grants are keyed by app, role and space. The Redis key moves from `cosec:role:permission:<roleId>[@<spaceId>]` to
-  `cosec:app:role:permission:<appId>:<roleId>[@<spaceId>]`, and `RolePermissionCache` takes an
-  `AppSpacedRoleId(appId, roleId, spaceId)` instead of a `SpacedRoleId`. App ids must not contain `:` and role ids
-  must not contain `@`; the OpenAPI app permission generator replaces `:` in the title.
-- A request with `CoSec-Space-Id: x` is evaluated with only the principal's roles written `role@x`; without the
-  header, with only the roles without a suffix. Issue `role@space` in tokens and API keys for every space a principal
-  holds a role in, after checking membership ([Roles and spaces](../integration/authentication.md#roles-and-spaces)).
-- Authorization never reads 6.x keys. Until they are migrated, roles have no grants and role-based requests are
-  denied (fail closed) ([Migrating role grants](#migrating-role-grants)).
-- `AppRolePermissionRepository.getAppRolePermission` keeps its signature. `SimpleAuthorization` now passes the roles
-  that apply in the space, without the `@space` suffix; a custom repository must return only the grants made for that
-  app and space.
-- The explainer adds the `NO_ROLE_IN_SPACE` warning.
-- `AccessAnalyzer` and `PolicyTestKit` scope role grants the same way. A grant role written without a suffix is
-  granted in the default space only; write `role@space` for grants in another space. `whoCan` takes grants from the
-  request's space, `grantsOf` reaches a grant only through a role held in its space and takes an optional `spaceId`,
-  and `AccessRule` adds `spaceId`. Test suites add `appRoles` for grants made in one app; `roles` still grants in
-  every app. Malformed roles now fail instead of never matching.
-
-The model itself is described in [Role grant scope](../policies/role-permissions.md#role-grant-scope).
-
-#### Path variables belong to their statement
-
-Before, `request.path.var.*` read whatever the last matching `path` action of the request had captured, in any
-statement, policy or layer. A condition could therefore depend on another statement: a deny statement that never
-matched could make an `all`-action allow match (adding a deny widened access), a policy condition read the variables
-of the global layer, and a rate limit rule without a `path` action read the variables of a policy. Now:
-
-- the variables are cleared before every statement, permission and rate limit rule matches its action, and before
-  policy and app permission conditions, so a condition only sees what its own `path` action captured;
-- reading them where no `path` action of the same statement or rule captured them is a load error,
-  `PathVariableScopeException`: in a policy or app permission `condition`, in the condition of a statement or
-  permission whose action is not `path`, in the `condition` or `key` of a rate limit rule whose action is not `path`,
-  and in any action's configuration, such as a `path` template `/orders/#{...PATH_VARIABLES...}`: a template is
-  evaluated before its action matches, when the variables are not its own
-  ([Path variables](../policies/language.md#path-variables)).
-
-Parsing such a policy, app permission or rate limit rule fails, and so does constructing `PolicyData`,
-`AppPermissionData` or `RateLimitRule` with one. `RedisPolicyRepository.setPolicy` rejects it. A local policy file
-with one stops the application from starting. A policy already stored in Redis with one fails its reads, which denies
-requests with `500`.
-
-Before upgrading, search policies, app permissions and rate limit rules for `request.path.var.` and
-`PATH_VARIABLES`. Move each reference into a statement whose `path` action captures the variable, for example replace
-`"action": "*"` with the pattern that declares it, and move a policy-level condition into the conditions of its
-statements.
-
-#### `inRole` follows roles into their space {#inrole-follows-roles-into-their-space}
-
-With roles issued as `role@space`, a bare `inRole` value now also matches the principal's `role@<request space>`, so
-a deny such as `inRole: suspended` keeps matching after tokens switch from `suspended` to `suspended@team-a`. A role
-held without a suffix still matches in every space. A value written `role@space` is compared literally with the
-principal's roles, as before. Conditions that read `context.principal.roles` some other way (`in`, `spel`, `ognl`)
-still see the raw strings, `suspended@team-a` included, and stop matching a bare role name once tokens carry
-`role@space` ([Matching roles](../policies/language.md#matching-roles)).
-
-#### Invalid local policy files stop startup
-
-`LocalPolicyLoader` used to log and skip a policy file it could not parse or build (malformed JSON, an unknown matcher
-type, an invalid option), which could silently drop a deny. Now any such file fails loading, as rate limit rule files
-already did, and the error names the file
-([Troubleshooting](./troubleshooting.md#startup-fails-loading-a-policy-file)).
-
-#### Duplicate ids and missing locations stop startup
-
-`LocalPolicyLoader` used to keep one of two files that declare the same policy id and silently drop the other, and
-only logged a warning for a location in `cosec.authorization.local-policy.locations` that does not exist or matches no
-file. Either could drop a deny without notice, for example after a typo in a location that only holds denies. Now
-both fail loading, naming the id or the location. The default location `classpath:cosec-policy/*-policy.json` may
-still match nothing, so applications without local policies are unaffected. Before upgrading, check that every
-configured location exists and that policy ids are unique across files; the same file reached through two locations
-is loaded once.
-
-#### Rate limit rules and shadow candidates load strictly
-
-`LocalRateLimitRuleLoader` and `LocalShadowPolicyProvider` used to load nothing from a location that does not exist or
-matches no file, so a typo in `cosec.limiter.locations` silently removed every quota it held, and a typo in
-`cosec.shadow.locations` or `cosec.shadow.app-permission-locations` made shadow mode report no difference for a change
-it never evaluated. Now:
-
-- such a location stops startup (`Rate limit rule location [...] matches no file`, `Shadow policy location [...]`,
-  `Shadow app permission location [...]`); only the defaults (`classpath:cosec-rate-limit/*-rate-limit.json`,
-  `classpath:cosec-shadow/*-policy.json`, `classpath:cosec-shadow/*-app-permission.json`) may match nothing;
-- a rule id, shadow policy id or shadow app permission id declared twice fails with
-  `... id [<id>] is declared more than once`, naming the files, and is now an `IllegalStateException` (it was an
-  `IllegalArgumentException`);
-- the same file reached through two locations is loaded once; before, a rule or candidate file matched by two
-  overlapping locations failed as a duplicate;
-- `PolicyTestKit` and `AccessAnalyzer.load` (already strict about missing locations) now throw
-  `IllegalStateException` instead of `IllegalArgumentException` for them, and also fail on a policy or app permission
-  id declared by two files;
-- the duplicate local policy error now reads `Policy id [<id>] is declared more than once`.
-
-#### Rate limit keys are checked at load
-
-A `key` that is not a supported part (for example `request.ip` instead of `request.remoteIp`) used to load and then
-fail every matching request with `500`, after earlier rules had spent their permits. Constructing or loading such a
-rule now fails ([Keys](../policies/rate-limiting.md#keys)).
-
-#### Condition parts are checked at load
-
-A value condition (`eq`, `in`, `contains`, `startsWith`, `endsWith`, `regular`, `path`) whose `part` is not a
-supported part (for example `request.ip` instead of `request.remoteIp`, or `request.headers.x` instead of
-`request.header.x`) used to load and then fail every matching request with `500`. Building such a matcher now fails
-with `Condition [<type>] part [<part>] is not a supported part`, as rate limit keys already did: a local policy file
-with one stops startup, `setPolicy` rejects it, and a policy stored in Redis with one fails its reads, which denies
-every request that reads the policy with `500`, not only those its statement matches. Before upgrading, search
-policies, app permissions and rate limit rule conditions for `"part"` and check each value against the
-[supported parts](../policies/language.md#parts).
-
-#### Policy ids may not start with `history:` {#policy-ids-may-not-start-with-history}
-
-The policy history stores the revisions of policy `<id>` under `<prefix>:policy:history:<id>` (and `<id>:seq`),
-inside the namespace of the policies themselves, so a policy with the id `history:<id>` would share a key with the
-history of policy `<id>` ([Redis keys](./storage.md#redis-keys)). `RedisPolicyRepository.setPolicy` now rejects such
-ids with `Policy id [...] must not start with [history:]`, and so does startup when a local policy with one is written
-to Redis. Ids such as `history` or `history-viewer` are unaffected. Rename any policy whose id starts with `history:`
-before upgrading; the 6.x migration skips such keys as policy history.
-
-#### OpenAPI app ids replace `:` {#openapi-app-ids-replace}
-
-`OpenAPIAppPermissionGenerator` derives the app id from the OpenAPI title, and app ids may no longer contain `:`. An
-app whose title contains `:` (for example `orders:api`) gets the id `orders-api`; clients must send the new id in
-`CoSec-App-Id`, and its role grants must be written for it.
-
-### Request and token changes
-
-What each request and token row of the [table](#breaking-changes) means, and what to do.
-
-#### Spring MVC authorizes the request URI
-
-The WebMvc adapter used `HttpServletRequest.servletPath`, which drops `pathInfo`. With the `DispatcherServlet` mapped
-under a prefix (`spring.mvc.servlet.path=/api`), every request was authorized as `/api`: a deny on `/api/admin/**`
-never matched, and an allow on `/api/**` let every request through. The path is now the request URI without the
-context path, as Spring MVC routes it and as WebFlux sees it ([The request path](../integration/web.md#the-request-path)).
-With the default `/` mapping the matched path is the same as before, except that it is no longer percent-decoded:
-`path` actions decode segments as before, but a condition that compares `request.path` as a string (`eq`, `regular`,
-…) now sees `/a%20b`, not `/a b`. Before upgrading an application with a servlet path, add the prefix to its
-policies, app permissions and rate limit rules.
-
-#### Path parameters are removed, and `..;` is rejected {#path-parameters-are-removed}
-
-On every adapter, `/admin;jsessionid=1` is authorized as `/admin`, as Spring routes it; before, WebFlux and Gateway
-passed it through, so a `request.path` condition could miss it. A `.` or `..` segment followed by a path parameter
-(`/public/..;/admin`), which servlet containers resolve as `..`, now answers `400` like any other traversal.
-
-#### A regex timeout answers `401` to anonymous callers {#a-regex-timeout-answers-401-to-anonymous-callers}
-
-A `regular` condition over its time budget used to answer `403` whatever the caller. It is now mapped like every
-other deny: `401` for an anonymous caller (with `Token Expired` or `Token Invalid` when its token failed
-verification), `403` for an authenticated one ([Responses and status codes](../integration/web.md#responses-and-status-codes)).
-Clients that treat `401` as "sign in again" now get it for these requests too.
-
-#### A mismatched refresh token is an invalid token
-
-`JwtTokenVerifier.refresh` threw `IllegalArgumentException` (`Illegal refreshToken.`) when the refresh token was not
-issued with the access token, so the mismatch surfaced as an unexpected error. It now throws
-`RefreshTokenMismatchException`, a `TokenVerificationException`, like every other token failure
-([Refreshing tokens](../integration/authentication.md#refreshing-tokens)). Code that caught
-`IllegalArgumentException` around a refresh catches `TokenVerificationException`.
-
-### CoCache 6 and CosId 4
-
-CoSec 7.0 runs on [CoCache 6.6](https://cocache.ahoo.me/guide/migration-6) and
-[CosId 4.0](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md). CoCache 6 changed how values are
-stored in Redis, so this upgrade needs a short stop and a one-off data migration ([Migrating the data](#migrating-the-data)).
-
-#### No rolling upgrade
-
-CoCache 6 changed the Redis value layout and the invalidation channel, so 6.x and 7.0 instances cannot share a cache:
-neither sees the other's writes. Stop every 6.x instance, migrate the data, then start 7.0.
-
-The Redis keys of policies (`cosec:policy:<id>`), the global policy index (`cosec:global:policy`), app permissions
-(`cosec:app:permission:<appId>`) and revoked tokens (`cosec:token:revoked:<tokenId>`) stay the same, where `cosec` is
-[`cosec.authorization.cache.key-prefix`](./configuration.md#cache); only their values change format. Role grants move
-to app-scoped keys ([above](#role-grants-belong-to-an-app-and-a-space)). Policy history, API keys and rate limit
-counters are not CoCache data and keep their keys and formats. Every key is listed in
-[Storage](./storage.md#redis-keys).
-
-#### Write through CoSec, not Redis
-
-Every CoCache 6 value starts with a binary header, so data written with `SET` or `SADD` (for example app permissions
-and role grants written by an administration service) is not read. Write policies with `PolicyRepository.setPolicy`,
-and app permissions and role grants through the `AppPermissionCache` and `RolePermissionCache` beans. Their API is
-CoCache 6's:
-
-| 6.x (CoCache 5) | 7.0 (CoCache 6) |
+| Command | What it does |
 |---|---|
-| `me.ahoo.cache.api.Cache` | `me.ahoo.cocache.api.Cache` |
-| `cache[key] = value`, `set(key, ttlAt, value)` | `put(key, value)`, `put(key, value, ttl: Duration)` |
-| `evict(key)` | `invalidate(key)` |
-| `GlobalPolicyIndexCache` is a `SetElementsCache`: `addElements` / `removeElements` | it is a `SetCache`: `add` / `remove` |
+| `convert` | Reads 7.x data (Redis or exported files), translates it, and writes 8.0 documents and a report into a new directory. Writes nothing to Redis. |
+| `publish` | Writes the documents of an accepted conversion to Redis as their first revisions, through the control plane's store. Never touches the 7.x keys. |
+| `bootstrap` | Binds one principal of the platform tenant to `cosec:platform-admin`, so the control plane has someone who may write. |
+| `partition plan` | Converts twice, with `--partition platform` and `by-owner`, and writes one plan per tenant to submit through the control plane. Writes nothing to Redis. |
 
-#### Redis 7, Lettuce, and a wider ACL
+#### Convert
 
-CoCache 6 needs Redis 7.0 or later (or Valkey 7.2 or later) and builds its own Lettuce client from
-`spring.data.redis.*`: Jedis is not supported, and a static master-replica setup fails at startup. A minimal Redis ACL
-must also allow `+hkeys +hget` (keep `+hgetall`) ([Redis requirements](./storage.md#redis-requirements)).
+```bash
+cosec-migrate convert --from-redis redis://localhost:6379 [--key-prefix cosec] --out ./converted
+cosec-migrate convert --from-files ./export --out ./converted
+```
 
-#### Local copies live at most 5 minutes
-
-CoCache 6 always bounds how long a local copy lives (`localMaxAge`, 5 minutes by default) and then reads Redis again;
-it has no unlimited setting. In 6.x a local copy of a policy or permission lived until a change invalidated it.
-`expire-after-write` of `cosec.authorization.cache.policy`, `role` and `token` now sets this bound, so it applies to
-every local copy ([Local cache settings](./configuration.md#local-cache-settings)).
-
-#### CoSec creates its caches itself
-
-The caches are no longer declared with `@EnableCoCache`, and the 6.x component beans (`PolicyCache.KeyConverter`,
-`PolicyCache.ClientSideCache`, `PolicyCache.DistributedCache`, and the same for the other caches) are gone. Tune a
-cache with a CoCache `CacheSpecCustomizer` bean or `cocache.caches.<CacheName>.*`, where the cache names are
-`PolicyCache`, `GlobalPolicyIndexCache`, `AppPermissionCache`, `RolePermissionCache` and `RevokedTokenCache`. Two
-settings stay CoSec's: the storage layout (`key-prefix` there is ignored) and, for policies and permissions, "never
-expire, and fail when Redis cannot be read", which is applied after any customizer or property
-([Precedence](./configuration.md#precedence)).
-
-`CacheProperties` lost `globalPolicyIndexKey`, `policyKeyPrefix`, `appPermissionKeyPrefix`, `rolePermissionKeyPrefix`
-and `revokedTokenKeyPrefix`. CoCache itself renamed or removed several `cocache.*` properties (for example
-`cocache.redis.strict-failure`); a removed one fails startup and names its replacement.
-
-#### Id generators are `StringIdGenerator`s {#id-generators-are-stringidgenerators}
-
-In CosId 4, `UuidGenerator` and `CosIdGenerator` implement only `StringIdGenerator`. `AuditingAuthorization`,
-`JwtTokenConverter`, `JustAuthProvider`, `ReactiveRequestParser` and `ServletRequestParser` take a
-`StringIdGenerator`, and the starter injects one: a `CosIdGenerator` or other id generator bean is still used when
-present, `UuidGenerator` otherwise. Code that passes an `IdGenerator` keeps compiling; code that declares an
-`IdGenerator` to hold a `CosIdGenerator` must declare a `StringIdGenerator`. If the application uses CosId itself,
-follow CosId's [migration guide](https://github.com/Ahoo-Wang/CosId/blob/main/docs/MIGRATION-4.0.md).
-
-#### Unmigrated data stops startup
-
-7.0 does not always read 6.x data where 6.x stored it: with a key prefix ending in `:` (6.x kept `myapp::policy:*`,
-7.0 reads `myapp:policy:*`), with a changed key prefix, or after the rollback of such a migration, 7.0 would find no
-policy, no global `DENY` and no revocation at all, and read them as missing. So the starter checks the schema marker
-`cosec:meta:schema` before it creates any CoSec cache. Without the marker, CoSec data under the 6.x key prefix
-(`legacy-key-prefix`, as configured) or under the current one stops startup with `CoSecSchemaException`; the
-migration writes the marker when it finishes. Without the marker and without any CoSec data, the deployment is new
-and the marker is written. The check cannot find 6.x data under a prefix it is not told about: when the key prefix
-changes, set `cosec.authorization.cache.migration.legacy-key-prefix` ([Schema marker](./storage.md#schema-marker)).
-
-#### Unmigrated data fails closed
-
-A 7.0 instance that reads a value CoSec 6.x wrote fails the read (`CacheReadException`, caused by CoCache's
-`ForeignFormatException`) and leaves the value in Redis, so the request is denied with `500`. Every CoSec cache keeps
-this behavior, even with `cocache.defaults.foreign-format=reclaim`: with no loader, a reclaim would delete the only
-copy of a policy or permission, and a 6.x revocation, which would make its token valid again.
-
-#### The global policy index is checked against the policies
-
-The index and the policy contents are separate Redis keys. In 6.x an indexed id without content was skipped, so a
-lost global `DENY` silently stopped applying; 7.0 fails the read with `MissingPolicyException` and the request is
-denied with `500` ([Troubleshooting](./troubleshooting.md#every-request-fails-with-500)). An indexed id whose content
-is not of type `global` (a concurrent or half-finished republish) is ignored instead of applying to everyone
-([Global policy index](./storage.md#the-global-policy-index)).
-
-## 6.0 to 6.1
-
-### Breaking changes {#breaking-changes-1}
-
-**Rate limits are rules, not policy conditions.** The `rateLimiter`, `groupedRateLimiter`, `redisRateLimiter` and
-`redisGroupedRateLimiter` conditions are removed, together with `TooManyRequestsException`. A policy that still uses
-one no longer parses: local policy files that use one were skipped with an `ERROR` log in 6.1 (since 7.0 they stop
-startup), and policies stored in Redis that use one fail their reads, which denies requests. Move each limit into a
-[rate limit rule](../policies/rate-limiting.md#rules) before upgrading:
-
-| Before (policy statement) | After (rate limit rule) |
+| Option | Meaning |
 |---|---|
-| The statement's `action` | The rule's `action` |
-| The statement's other conditions | The rule's `condition` |
-| `part` | `key` |
-| `permitsPerSecond`, `windowSeconds`, `strictFailure` | The same fields |
-| `rateLimiter` / `groupedRateLimiter` | Rules run on `LocalRateLimiter` when Redis is absent |
-| `expireAfterAccessSecond` | Not needed: idle buckets are dropped after an hour |
+| `--from-redis <uri>` | Read 7.x data from this Redis: the policies, the global policy index, app permissions and role grants under `--key-prefix`, and the schema marker `<prefix>:meta:schema`, which must be `7`. Policy history (`<prefix>:policy:history:*`) is skipped. |
+| `--from-files <dir>` | Read an export instead: `policies.json` (an array of 7.x policies, each with its `id`), `global-policies.json` (an array of the ids in the global policy index) and `app-role-permissions.json` (one entry per app: `{"appPermission": {...}, "grants": {"admin": ["*"], "auditor@s1": ["invoice.read"]}}`, or `{"appId": "...", "grants": {...}}` for an app without an app permission). The three files are required; `rate-limit-rules.json` is optional. Use this for 7.x local policy files: put their contents into `policies.json`. |
+| `--key-prefix <p>` | The 7.x key prefix; default `cosec`. |
+| `--out <dir>` | A directory that does not exist or is empty. `convert` never overwrites. |
+| `--rate-limit-rules <file>` | The 7.x rate limit rules (`cosec.limiter.locations`): one rule object or an array of rules, each with its `id`. Merge several rule files into one array. |
+| `--partition platform\|by-owner` | `platform` (default) puts every policy into the platform document, attachable by anyone, as in 7.x. `by-owner` puts each non-global policy into the document of the tenant its `tenantId` names (rule C5 below); a policy with DENY statements stays in the platform document, with a warning. |
+| `--root-enabled`, `--root-id <id>`, `--root-expires-at <instant>` | Convert 7.x root into a [break-glass binding](#root-becomes-break-glass). `--root-id` defaults to `cosec`; either of the last two implies `--root-enabled`. Root without `--root-expires-at` is rejected. |
 
-Three behaviors change with it:
+The output directory:
 
-- **Denied requests no longer spend permits.** Before, a limit in a policy condition also counted requests that
-  another layer then denied.
-- **Quotas belong to the rule `id`.** Before, Redis limiters with identical settings shared one quota.
-- **Counters restart.** Redis counters move from `<key-prefix>:<settings hash>:…` to `<key-prefix>:<id>:…`, so the
-  old counters are abandoned and expire on their own. During a rolling upgrade, old and new instances count
-  separately.
+| File | Content |
+|---|---|
+| `platform.json` | The platform document. |
+| `apps/<appId>.json` | One app document per 7.x app permission: its permission catalog and role bindings. |
+| `tenants/<tenantId>.json` | Tenant documents, with `--partition by-owner` only. |
+| `provenance.json` | Where each policy and binding came from in the 7.x data. Only for an accepted conversion. |
+| `report.json` | `accepted`, the input's SHA-256, counts, `rejections`, `warnings`, `semanticChanges`, and the SHA-256 of every file written. |
 
-**Responses can carry rate limit headers.** When a rule matches, responses include `RateLimit-Limit`,
-`RateLimit-Remaining` and `RateLimit-Reset`, and `429` responses include `Retry-After`
-([Responses and headers](../policies/rate-limiting.md#responses-and-headers)).
+A rejected conversion writes `report.json` only. The console prints the same counts, warnings and rejections.
 
-**The `Authorization` bean is decorated.** With rate limiting enabled (`cosec.limiter.enabled`, default `true`) the
-auto-configured bean is a `RateLimitingAuthorization` around `SimpleAuthorization`, and with `micrometer-support` a
-`MeteredAuthorization` around that. Code that casts the bean to `SimpleAuthorization` must inject it as
-`Authorization`, or unwrap `Delegated.delegate`.
+#### Rejections
 
-**Decision types gained a field.** `AuthorizationDecision` and `SecurityDecision` have a new `rateLimit` property.
-Kotlin code that destructures them or calls `copy` by position must be recompiled.
+Each rejection names its kind, the location in the 7.x data, a message and advice. Fix the 7.x data (or the export),
+then convert again into a new directory.
 
-### New features
-
-Everything below is additive. Features that change what a request experiences are off by default.
-
-| Feature | Default | Where |
+| Kind | Cause | What to do |
 |---|---|---|
-| Rate limit rules: per-IP, per-user or shared quotas, counted in Redis or in memory | on, once a rule file exists | [Rate limiting](../policies/rate-limiting.md) |
-| Explain a decision, for a described principal or a real token or API key | off (`cosec.explain.enabled`) | [Explaining a decision](../integration/checks.md#explaining-a-decision) |
-| Shadow mode: try candidate policies and app permissions on real traffic | off (`cosec.shadow.enabled`) | [Shadow mode](../policies/testing.md#trying-changes-in-shadow-mode) |
-| `AuthorizationChecker`: check permissions in code, one action or many | always available | [Checking a permission](../integration/checks.md#checking-a-permission) |
-| Object-level rules with `resource.<name>` parts | opt in per policy | [Object-level rules](../integration/checks.md#object-level-rules) |
-| `time` condition: validity periods and daily windows, self-expiring grants | opt in per policy | [Time conditions](../policies/language.md#time-conditions) |
-| Policy history and rollback | off (`cosec.authorization.cache.history.enabled`) | [Policy history](./storage.md#policy-history-and-rollback) |
-| Declarative policy test cases (`PolicyTestKit`) | library | [Policy test cases](../policies/testing.md#policy-test-cases) |
-| Access reviews (`AccessAnalyzer`): who can do what | library | [Access reviews](../policies/testing.md#access-reviews) |
-| API keys for machine clients, in memory or in Redis | off (`cosec.api-key.enabled`) | [API keys](../integration/authentication.md#api-keys) |
-| `cosec.authorization` decision metrics | on with `micrometer-support` and a `MeterRegistry` | [Observability](./observability.md#metrics) |
+| `SCHEMA_MARKER` | The Redis data is not in the 7.0 layout. | Upgrade to 7.x first (its data migration), then convert. |
+| `GLOBAL_INDEX_WITHOUT_CONTENT` | The global policy index lists a policy that has no content. 7.x failed every request. | Store the policy, or remove its id from the index. |
+| `GLOBAL_TYPE_NOT_INDEXED` | A policy of type `GLOBAL` is not in the global policy index. | Add it to the index, or change its type. |
+| `UNDEFINED_PERMISSION` | A role grant names a permission its app does not define (rule C6). | Define the permission, or remove it from the grant. |
+| `UNDECODABLE` | Not valid 7.x JSON, not decodable by 7.x's own model, or it needs a class missing from the classpath (an `ognl` condition, a custom matcher). | Fix the stored JSON. A custom matcher has no 8.0 form; see `CUSTOM_ACTION` and `CUSTOM_CONDITION`. |
+| `RESERVED_POLICY_ID` | A policy id starts with `perm:`, `g:`, `r:` or `cosec:`, which generated ids use. | Rename the policy and every attachment that names it. |
+| `INVALID_ID` | An id 8.0 cannot hold: `*` or empty as an app or space id, `:` in an app id, `@` in a role id. | Rename it. In 8.0 `*` means any app or space. |
+| `DUPLICATE_ID` | The same policy twice in an export, or the same permission twice in one app. | Keep one. |
+| `ROOT_WITHOUT_EXPIRY` | Root was enabled without `--root-expires-at`. | Pass an expiry, or convert without root. |
+| `OWNER_TENANT` | `--partition by-owner`, and a policy whose `tenantId` names no tenant. | Set its `tenantId`, or convert with `--partition platform`. |
+| `CONDITION_NOT_TRANSLATED` | A built-in 7.x condition with no exact translation, such as a `regular` that is not a literal, a literal prefix or a choice of literals, or a `path` condition outside a statement whose action is `all`. | Rewrite it with the conditions the message names (`eq`, `in`, `startsWith`, ...). |
+| `EXPRESSION_CONDITION` | A `spel` or `ognl` condition. | Rewrite it as conditions of the [policy language](../policies/language.md). |
+| `CUSTOM_CONDITION` | A condition of a custom `ConditionMatcherFactory`. | Move the value it reads into an `AttributeProvider` and write a condition on that attribute ([Extending](../architecture/extending.md)). |
+| `ACTION_NOT_TRANSLATED` | A `#{...}` path template, a path `separator` other than `/`, an action array whose members have different methods, or a method that is not an HTTP token. | See [Path templates in actions](#path-templates-in-actions); split statements by method; remove methods no request can have. |
+| `CUSTOM_ACTION` | An action of a custom `ActionMatcherFactory`. | Rewrite it as HTTP paths and methods, or as route-mapped actions. |
+| `DOES_NOT_COMPILE` | A translated statement does not compile, such as a path pattern outside what 8.0 accepts. | See the message and the [policy language](../policies/language.md). |
 
-New properties: `cosec.limiter.locations`, `cosec.explain.enabled`, `cosec.shadow.*`, `cosec.metrics.enabled`,
-`cosec.api-key.*` and `cosec.authorization.cache.history.*` ([Configuration](./configuration.md)).
+Warnings do not stop a conversion. The current ones: a policy in the global policy index whose type is not `GLOBAL`
+(converted as an attachable policy, since 7.x did not apply it to everyone), a tenant's policy with DENY statements kept
+in the platform document under `by-owner`, and role grants of an app without an app permission (7.x ignored them, so
+they are dropped).
 
-### Upgrade checklist {#upgrade-checklist-1}
+#### Semantic changes in the report
 
-1. Search your policies, including those stored in Redis, for the four removed condition types, and write the
-   equivalent rate limit rules under `classpath:cosec-rate-limit/`.
-2. Replace any `TooManyRequestsException` thrown by custom matchers with a rate limit rule.
-3. Check that clients and proxies tolerate the new rate limit headers.
-4. Replace casts of the `Authorization` bean to `SimpleAuthorization`.
-5. Upgrade, then confirm in the startup log that every rate limit rule file loaded. An unreadable rule file stops
-   startup.
-6. Optionally, add `PolicyTestKit` suites for the decisions you rely on before you change policies again.
+`semanticChanges` lists, for each place in the 7.x data, the shape whose decision 8.0 makes differently by design.
+`change` is one of the rule ids in [What 8.0 decides differently](#what-8-0-decides-differently) (`C1a`–`C6`,
+`D1`–`D3`), or:
+
+- `ASCII-CASE`: an ALLOW condition with `ignoreCase`. 8.0 folds ASCII letters only, so the ALLOW matches fewer
+  spellings. In a DENY condition whose value has letters outside ASCII, the condition is rejected instead.
+- `RATE-LIMIT`: a 7.x rate limit rule, translated into the platform document's rate limits
+  ([Rate limit rules become obligations](#rate-limit-rules-become-obligations)).
+
+Read each entry. Nothing in the report needs a change to the data, but each one can change a response.
+
+#### Publish
+
+```bash
+cosec-migrate publish --to-redis redis://localhost:6379 [--key-prefix cosec] --in ./converted \
+  [--resume] [--break-glass-max-duration PT4H]
+```
+
+`publish` reads only an accepted conversion, and only the files `report.json` lists with the SHA-256 recorded there:
+a file edited, missing or added since `convert` stops it. It then compiles every document, checks every app
+document's references against the platform document, and refuses a break-glass binding that expires more than
+`--break-glass-max-duration` (default `PT4H`) from now. It writes each document as revision 1 through the control
+plane's store, so the document's revision history starts there, and only when the document does not exist yet: it
+never overwrites 8.0 data.
+
+Writes are one per document. If one fails, the message names the documents already written; run again with
+`--resume`, which skips a document already published with the same content and refuses one with different content.
+`--key-prefix` is the 8.0 snapshot prefix, the same as `cosec.authorization.snapshot.key-prefix`.
+
+After `publish`, change policies through the control plane only. Running `convert` and `publish` again does not update
+documents that exist.
+
+#### Bootstrap the control plane
+
+```bash
+cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] --platform-admin alice [--force]
+```
+
+The control plane authorizes its own writes with the policies in the snapshot, so with no administrator nobody may
+write. `bootstrap` writes only the platform tenant's document, `Tenant((platform))`; the platform document itself
+comes from `publish`, so publish first. `bootstrap` binds principal `alice` of the platform tenant to the built-in `cosec:platform-admin` policy, in the
+platform tenant's document, and records it as a revision of kind `BOOTSTRAP`. It refuses when that document already
+binds someone to `cosec:platform-admin`; `--force` is for the recovery where every one of them is lost. Anyone with
+the Redis credentials can write anyway; `bootstrap` only leaves a record of it.
+
+#### Rollback
+
+`publish` and `bootstrap` write only 8.0 keys (`<prefix>:snapshot:*` and `<prefix>:control:*`), and 8.0 never reads
+or changes the 7.x keys. To roll back, deploy 7.x again: it reads the 7.x data as it was. Changes made through the 8.0
+control plane after the switch are not in the 7.x data. Keep 7.x writers stopped from `convert` until you no longer
+plan to roll back, or convert again before you publish: a 7.x write after `convert` is not in the converted
+documents.
+
+The 7.x policy history (`<prefix>:policy:history:*`) is neither converted nor deleted. Export it yourself if you need
+it.
+
+### What 8.0 decides differently
+
+In 8.0 these are the rules; each has an id in the conformance suite. Without errors, missing data or the shapes below,
+8.0 makes the same decisions as 7.x on converted data. The decision algorithm itself is described in the
+[security model](../guide/security-model.md).
+
+| Rule | 8.0 | 7.x | Affected 7.x shapes |
+|---|---|---|---|
+| **C1a** (`ALG-4`) | An ALLOW statement (or its policy condition) that fails counts as no match: another ALLOW may still permit, otherwise the implicit deny (`401`/`403`). | `500`. | An ALLOW whose condition could fail (an expression, a regular expression, a template, a custom matcher). The only rule that can let a request through that 7.x refused with `500`. |
+| **C1b** (`ALG-1`) | A matching DENY decides (`403`/`401`) whatever errors, missing or unavailable data exist elsewhere. | `500` when the failure came first in layer order. | Every DENY statement. |
+| **C1c** | A policy condition is evaluated when one of its statements is first visited; if it fails, its DENY statements fail and its ALLOW statements do not match. | Every policy condition of a layer evaluated first; a failure was `500` for the layer. | A policy-level `condition` other than `all`. |
+| **C1d** (`BLK-1`) | A blacklisted principal, and a break-glass principal, still need the platform document; while it is unavailable the request is `503`. | Blacklist and root read no policy. | Root, the blacklist. |
+| **C2** (`BRK-1`) | A matching DENY denies a break-glass principal too. | Root skipped every policy. | Root, together with any global DENY. |
+| **C3** (`SCP-1`) | A declared space (`CoSec-Space-Id`, not empty) must be one where the principal has a role; otherwise the request is denied with `scope-rejected` (`403`), or `401` when anonymous. It never falls back to the default space. | Evaluated in the declared space: role permissions were empty there, policies applied as usual. | Role grants in a space other than the default one; clients that send a space. |
+| **C4** (`SCP-2`) | With `cosec.authorization.scope.app-id` set, a request declaring another app is denied (`scope-rejected`); without a declaration the host's app applies. | The declared app always applied. | Hosts that serve one app. |
+| **C5** (`BND-2`) | A principal attaches only attachable policies of its own tenant's document or of the platform. | Any principal could attach any policy. | Principal policies, with `--partition by-owner` only. The default partition keeps 7.x's behavior. |
+| **C6** | A role grant that names a permission its app does not define is rejected by `convert`. | `500` on the request that reached it. | Grants with stale permission ids. |
+| **D1** | `inRole: r` in an ALLOW matches only a role in effect in the requested space; `inRole: r@s` in an ALLOW matches only while the request is in space `s`; `inRole: r` in a DENY matches the role held in any space. | Literal role match, a bare role also matching `r@<requested space>`. | `inRole` conditions. A DENY never narrows and an ALLOW never widens. |
+| **D2** (`CND-1`) | An absent attribute equals no value, not the empty string. | An absent part read as `""`. | `eq` against `#{principal.id}`, `#{principal.attributes['k']}` or `#{tenant.tenantId}`. In an ALLOW, an absent part no longer matches an empty attribute (narrower). In a DENY, `convert` keeps 7.x's reading by adding the 7.x cases. |
+| **D3** | No regular expressions, so no regex timeouts. | A `RegexTimeoutException` was an implicit deny. | `regular` conditions; only literal, literal-prefix and choice-of-literals patterns translate. |
+
+#### Anonymous requests that declare a space are 401
+
+Rule `SCP-3`: an anonymous request with a non-empty `CoSec-Space-Id` (header or query) is answered `401`
+`unauthorized`, even on a path everyone may call. An anonymous principal has no roles, so it is a member of no space
+(C3). A request whose token was rejected is anonymous too, and gets `401` with the token's problem type. Clients that
+send `CoSec-Space-Id` on public endpoints must stop sending it there.
+
+#### Root becomes break-glass
+
+`cosec.authorization.root-enabled` and the root principal are gone. The 8.0 counterpart is a break-glass binding:
+bounded in time (at most 24 hours, `cosec.control.break-glass.max-duration`, default 4 hours), bound by every DENY
+(C2), and allowed to permit only when a REQUIRED decision listener records the request (otherwise `503`, rule
+`OBS-2`). Request one through the control plane when you need it. `convert --root-enabled --root-expires-at` converts
+7.x root into such a binding for principal `--root-id` of the platform tenant, but `publish` refuses it unless it
+expires within `--break-glass-max-duration`. Usually, convert without root.
+
+#### Path templates in actions
+
+A 7.x `path` action with a `#{...}` template, such as `/users/#{principal.id}/**`, is rejected by `convert`. In 8.0 a
+route map names the resource and its id (`"path": "/users/{userId}"`, `"resource": "user/{userId}"`), and a condition
+compares the resource attribute with the principal. See the [policy language](../policies/language.md). `#{...}`
+templates inside `eq` conditions translate (D2).
+
+#### Rate limit rules become obligations
+
+7.x rate limit rule files (`cosec.limiter.*`) are gone. `convert --rate-limit-rules` translates the rules into the
+platform document's rate limits. A rule applies to a request the policies permit, as in 7.x: the first exhausted rule
+answers `429`, and denied requests spend nothing. A rule with `strictFailure` whose limiter fails now answers `503`
+instead of `429` (R3). The Redis limiter uses the same keys (`cosec:rate-limiter:<rule>:<bucket>:<window>`) when a
+`ReactiveStringRedisTemplate` bean exists; otherwise each instance counts alone. See
+[Rate limiting](../policies/rate-limiting.md).
+
+### Responses and status codes
+
+#### Error bodies are problem+json
+
+Every response that does not proceed has `Content-Type: application/problem+json`, a `CoSec-Request-Id` header, and
+this body (members always in this order; `traceId` only when tracing is on):
+
+```json
+{"type":"https://cosec.ahoo.me/problems/forbidden","title":"Forbidden","status":403,"code":"FORBIDDEN","requestId":"..."}
+```
+
+The 7.x body `{"authorized":false,"reason":"..."}` with `application/json` is gone. Explicit and implicit denies are
+no longer told apart in responses: both are `unauthorized` or `forbidden`, so a response never tells a caller that a
+DENY exists. The audit event keeps the difference. A `400` now has a body and a `CoSec-Request-Id` header too; in 7.x
+it had neither. The full status table is in [Web integration](../integration/web.md).
+
+| 7.x status and `reason` | 8.0 status and `code` |
+|---|---|
+| `400`, no body | `400` `INVALID_REQUEST` |
+| `401` `Explicit Deny` or `Implicit Deny` | `401` `UNAUTHORIZED` |
+| `401` `Token Expired` | `401` `TOKEN_EXPIRED` |
+| `401` `Token Invalid` (an invalid token or API key) | `401` `TOKEN_INVALID` |
+| `401` `Token Invalid` (a revoked token) | `401` `TOKEN_REVOKED` |
+| `403` `Explicit Deny` or `Implicit Deny` | `403` `FORBIDDEN`; `403` `SCOPE_REJECTED` when the declared app or space is refused (C3, C4) |
+| `429` `Too Many Requests` | `429` `TOO_MANY_REQUESTS`, same `RateLimit-*` and `Retry-After` headers |
+| `429` `Too Many Requests` from a `strictFailure` rule whose limiter failed | `503` `UNAVAILABLE` (R3) |
+| `500` `Implicit Deny` (a decision could not be made) | `503` `UNAVAILABLE` (R1, R2) |
+| `500` `Implicit Deny` (any other error) | `500` `INTERNAL_ERROR` |
+
+A rejected credential is evaluated as anonymous, as in 7.x: a request the policies permit for anonymous callers is
+still `200`; when it is denied, the problem names why the credential was rejected.
+
+#### 503 replaces 500 when no decision can be made
+
+| Rule | 8.0 | 7.x |
+|---|---|---|
+| **R1** (`PIP-2`) | No decision could be made (a document unavailable or not loaded in time, memberships unavailable, a blacklist that cannot be read, an external attribute that cannot be fetched): `503`. | `500`. |
+| **R2** | The authenticator's own dependency (a revocation store or an API key store that cannot be read) failed: `503`. | `500`. |
+| **R3** | A rate limit rule with `strictFailure` could not be counted: `503`. | `429`. |
+
+`500` remains for an exception nothing models, a defect. A `503` never carries `Retry-After`.
+
+#### Ambiguous CoSec parameters are 400
+
+Rule `SCP-4`: when `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id` arrives with two different non-blank values,
+between the header and the query string or within either, the request is `400`. 7.x did not refuse such a request.
+
+#### Spring MVC reads query parameters from the query string only {#spring-mvc-reads-query-parameters-from-the-query-string-only}
+
+On Spring MVC, 7.x read a query parameter with `HttpServletRequest.getParameter`, which also returns the fields of an
+`application/x-www-form-urlencoded` body. So for a form POST, the container parsed and consumed the body inside
+CoSec's filter, and a body field counted as a query parameter. 8.0 reads the URL query string only, on every adapter,
+and never touches the body
+([Form POST body is empty after CoSec on Spring MVC](./troubleshooting.md#form-post-body-is-empty-after-cosec-on-spring-mvc)).
+A form field no longer sets `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id`, nor the `authorization` token
+read with `cosec.pipeline.allow-query-token=true`. Clients that send these as form fields must send them as headers
+or in the query string.
+
+### Authentication
+
+#### Token revocation is always on {#token-revocation-is-always-on}
+
+`cosec.jwt.token-revocation.enabled` is gone. With JWT enabled, every token is checked for revocation, and startup
+fails when nothing can answer that check: add `cache-support`, which brings the Redis revocation store, or register a
+`TokenStore` and a `RevocationReader` bean of your own. In 7.x, without `cache-support` the starter used a store that
+records nothing, so logout silently did nothing. A service that only issues tokens and never verifies them can set
+`cosec.jwt.enabled=false` instead ([Logout and revocation](../integration/authentication.md#logout-and-revocation)).
+Revocations written by 7.x stay in force: 8.0 reads them under the same keys (`<prefix>:token:revoked:*`). An error
+the revocation check reports is `503`, never an accepted token (`PIP-7`).
+
+#### Tokens and API keys
+
+- Tokens issued by 7.x keep working: 8.0 reads the same claims (`roles`, `policies`, `attributes`, `tenantId`), and
+  role claims as 7.x did (`role` in the default space, `role@space` in that space only, rule `MEM-3`).
+- `cosec.api-key.header` is now `cosec.pipeline.api-key-header` (default `X-API-Key`).
+  `cosec.api-key.store-blocking` is gone: the Redis key reader never blocks. A request that carries an API key is
+  judged by the key alone, even if it also carries a token (`PIP-8`).
+- `cosec.authorization.allow-query-token` is now `cosec.pipeline.allow-query-token` (default `false`).
+- Custom 7.x `SecurityContextParser` beans are not used. Register an `Authenticator` bean instead
+  ([Authentication](../integration/authentication.md)).
+
+### Storage and Redis
+
+#### Redis keys
+
+8.0 stores documents under `<prefix>:snapshot:*` and the control plane's data under `<prefix>:control:*`,
+`<prefix>:candidate:*` and `<prefix>:shadow:*`. It does not read the 7.x keys `<prefix>:policy:*`,
+`<prefix>:global:*`, `<prefix>:app:permission:*`, `<prefix>:app:role:permission:*` and `<prefix>:meta:schema`. A
+tool that read or wrote those keys directly must use the control plane. Give only the control plane's Redis account
+write access to `<prefix>:snapshot:*` and `<prefix>:control:*`. All keys: [Storage](./storage.md).
+
+#### Startup fails when Redis's eviction policy cannot be read {#startup-fails-when-redis-s-eviction-policy-cannot-be-read}
+
+At startup CoSec reads Redis's `maxmemory-policy` and refuses to start unless it is `noeviction`, because an evicted
+platform document could silently drop its DENY statements. When `CONFIG GET` fails or is not allowed, as on some
+managed Redis services, startup fails too, and also when the CoCache backend is a wrapper or a custom backend it
+cannot read. If you have set `noeviction` yourself, set `cosec.authorization.snapshot.eviction-check=warn`: startup
+goes on and logs a warning that starts with `!!!`.
+
+#### Each instance decides from a snapshot
+
+- **No per-request Redis reads.** Each instance loads the platform document, and the app and tenant documents its
+  requests need, compiles them, and checks each loaded document with a conditional read every
+  `cosec.authorization.snapshot.revalidate-interval` (default `10s`). Redis transfers a document only when it
+  changed.
+- **During a Redis outage, installed documents keep deciding** as last confirmed, so a platform DENY still holds. A
+  request that needs a document not yet loaded waits up to `cold-load-timeout` (default `2s`) and is then `503`.
+  In 7.x, requests started failing with `500` once a local copy expired (5 minutes by default).
+  `cosec.authorization.snapshot.fail-closed.{tenants,max-lag}` exist as properties, but no request path of this
+  version checks them: there is no setting yet that fails requests once a snapshot lags.
+- **Startup loads in the background.** The platform document, then `prewarm-apps` and `prewarm-tenants`, load while
+  the application starts; readiness does not wait for them. The first request for an app that is not loaded compiles
+  its whole document; list busy apps in `prewarm-apps`.
+- **A missing platform document fails closed.** Every request CoSec has to decide is `503` until the platform document
+  is published.
+- **Without `cache-support`** the starter uses an in-memory store that starts empty, so every request is `503` until
+  the application puts documents into it. Local policy files are not loaded any more
+  (`cosec.authorization.local-policy.*` is gone).
+- A read failure surfaces as `SnapshotUnavailableException` (its cause the original exception) and a `503`, instead of
+  7.x's `CacheReadException` and a `500`.
+
+See [Storage](./storage.md) for publishing, rollback of documents and behavior when Redis is unavailable.
+
+### Removed and replaced APIs
+
+Code that uses any of these no longer compiles or is no longer called.
+
+| 7.x | 8.0 |
+|---|---|
+| `Authorization`, `AuthorizeResult`, `SimpleAuthorization`, the decorator chain (`DecisionAuthorization`, tracing, auditing, metrics, rate limiting, shadow) | The pipeline (`cosec-runtime`). Observe decisions with a `DecisionListener` bean. |
+| `SecurityPipeline`, `SecurityDecision`, `RequestParser`, `SecurityContextParser` | The pipeline; `Authenticator` beans for credentials. |
+| `CoSecAuthorizationCustomizer` | Beans of `Authenticator`, `DecisionListener`, `AttributeProvider`, `MembershipProvider`, `RateLimiter`. |
+| `Policy`, `Statement`, `PermissionVerifier`, `ActionMatcher`, `ConditionMatcher`, `AppPermission`, `AppRolePermission`, `RolePermission` and the rest of `cosec-api`'s policy and permission model | Documents ([policy language](../policies/language.md)). A `Statement` that overrode `verify` has no counterpart. |
+| `ActionMatcherFactory`, `ConditionMatcherFactory`, `MatcherFactoryRegistry`, the built-in matchers, OGNL and SpEL | Built-in actions and conditions only. A value a custom condition read comes from an `AttributeProvider` ([Extending](../architecture/extending.md)). |
+| `BlockingAware` | None: no condition runs code. Blocking lookups go into an `AttributeProvider`, which suspends. |
+| `RootPrincipalMatcher`, `CoSecPrincipal.isRoot`, `root-enabled` | Break-glass bindings ([Root becomes break-glass](#root-becomes-break-glass)). |
+| `BlacklistChecker` | A `BlacklistSource` behind an `AttributeProvider` bean (`BlacklistAttributeProvider`). |
+| `RequestAttributesAppender`, `GatewayRouteRequestAttributesAppender` | `AttributeProvider`. |
+| `PolicyRepository`, `AppRolePermissionRepository`, the Redis repositories and caches, `SnapshotPublisher`, `RedisSnapshotPublisher`, `PolicyHistory`, `RedisPolicyRevisionStore`, writes to `AppPermissionCache`/`RolePermissionCache` | The control plane (library or HTTP API) for writes; `cosec-migrate publish` for the first ones. |
+| `LocalPolicyInitializer` and `init-repository`/`force-refresh` | `cosec-migrate convert` and `publish`, or the control plane's declarative `apply`. |
+| `CoSecExplainEndpoint` (`cosecExplain` actuator), `AuthorizationExplainer`, `ExplainWarningCode` | The control plane's `explain` (authorized, and for any revision); see [Checks](../integration/checks.md). |
+| Shadow mode (`ShadowAuthorization`, `ShadowPolicyProvider`, `cosec.shadow.*` files) | Shadow windows of control-plane changes; see [Testing policies](../policies/testing.md). |
+| `AccessAnalyzer` | The control plane's `analyze`. |
+| `PolicyTestKit` | No 8.0 version yet. Test decisions with the control plane's `simulate`. |
+| `AuthorizationChecker.check(...)`: `Mono<Boolean>` | `AuthorizationChecker.check(security, action, resource)`, a suspending function; `cosec-webflux` adds a `Mono<Boolean>` form and `cosec-webmvc` a blocking one ([Checks](../integration/checks.md)). |
+| Filters `ReactiveAuthorizationFilter`, `AuthorizationFilter` (servlet), `AuthorizationGatewayFilter`, and their constructors taking an `Authorization` | `PipelineWebFilter`, `PipelineServletFilter`, `PipelineGatewayFilter`, created by the starter. |
+| `ReactiveInjectSecurityContextWebFilter`, `InjectSecurityContextFilter` (inject mode) | None. There is no mode that reads tokens without deciding. The 8.0 filters put the security context on every permitted request. |
+| Path variables left in the caller's security context after authorization | None. Read path variables from your web framework. |
+| `cosecPolicyGenerator`, `cosecAppPermissionGenerator` actuator endpoints | `cosecServiceGenerator/routes` (a route map) and `cosecServiceGenerator/app` (an app document). |
+
+Still available: `SecurityContext` (now with `scope`, the validated app, space and roles; read it rather than the
+`CoSec-*` headers, which are what the client declared), `getSecurityContext()` on `ServerWebExchange`, Reactor
+`ContextView` and `HttpServletRequest`, `AuditEventSink`, `TokenStore`, and the `cosec-api` audit types.
+
+### Removed and renamed properties
+
+Every 7.x `cosec.*` property not listed here keeps its name and meaning. Every 8.0 property and its default:
+[Configuration](./configuration.md).
+
+| 7.x | 8.0 |
+|---|---|
+| `cosec.authorization.enabled` | Gone. `cosec.enabled=false` switches CoSec off. |
+| `cosec.authorization.local-policy.*` (`enabled`, `locations`, `init-repository`, `force-refresh`) | Gone. Convert and publish the files ([Migrating the data](#migrating-the-data)). |
+| `cosec.authorization.allow-query-token` | `cosec.pipeline.allow-query-token` |
+| `cosec.authorization.root-enabled` | Gone ([Root becomes break-glass](#root-becomes-break-glass)). |
+| `cosec.authorization.cache.enabled`, `.policy.*`, `.role.*`, `.history.*`, `.migration.*` | Gone. Snapshot caching is `cosec.authorization.snapshot.*`. `cosec.authorization.cache.key-prefix` and `.token.*` remain. |
+| `cosec.authorization.gateway.enabled` | Gone. The gateway filter comes with `gatewaySupport`. |
+| `cosec.limiter.*` (`enabled`, `locations`, `key-prefix`) | Gone. Rules are in the platform document; a different limiter key prefix needs a `RateLimiter` bean of your own. |
+| `cosec.shadow.*` | Gone. Shadow windows are control-plane operations; each instance's part is `cosec.authorization.shadow.*`. |
+| `cosec.explain.enabled` | Gone. Use the control plane's `explain`. |
+| `cosec.inject.enabled` | Gone. |
+| `cosec.api-key.header` | `cosec.pipeline.api-key-header` |
+| `cosec.api-key.store-blocking` | Gone. |
+| `cosec.jwt.token-revocation.enabled` | Gone; revocation is always on. |
+
+New groups: `cosec.pipeline.*` (timeouts, query token, API key header, trace level), `cosec.authorization.scope.app-id`,
+`cosec.authorization.{membership,attributes,rate-limit}.timeout`, `cosec.authorization.routes.location`,
+`cosec.authorization.snapshot.*`, `cosec.authorization.shadow.*`, `cosec.authentication.revocation.skew`,
+`cosec.audit.required.timeout`, `cosec.audit.kafka.delivery` and `cosec.control.*`.
+
+Two defaults need a decision during the upgrade:
+
+- `cosec.authorization.routes.location` defaults to `classpath:cosec-routes.json`. On a WebFlux or Spring MVC host a
+  missing map fails startup; set the property empty to run without one, in which case every request is an action of
+  the `http` namespace on its path. A gateway loads no route map.
+- `cosec.authorization.scope.app-id` is unset. Set it on a host that serves one app (rule C4).
+
+### Observability changes
+
+- **Audit events** are written for every outcome, including `400`, cancelled requests, authentication failures and
+  errors, and `kind` says which (`DECIDED`, `BAD_REQUEST`, `AUTHENTICATION_UNAVAILABLE`, `CANCELLED`, `ERROR`). New
+  fields: `snapshotVersion` (the revisions read), `binding` (the binding the deciding statement applied through, or
+  `attached:<policy>`), `breakGlass`. New values: decision `INDETERMINATE`; reason codes `INDETERMINATE`,
+  `SCOPE_REJECTED`, `RATE_LIMITER_UNAVAILABLE`, `TOKEN_REVOKED`, `BOUNDARY`. The source types keep their 7.x names:
+  a binding of the platform or a tenant document is `GLOBAL_POLICY`, an attachment `PRINCIPAL_POLICY`, a role binding
+  of an app document `ROLE_PERMISSION`, the built-in blacklist rule `BLACKLIST`. `elapsedNanos` now covers the whole
+  pipeline (authentication, attributes, rate limits), not only the authorization. A 7.x `AuditEventSink` keeps working
+  without changes.
+- **Metrics**: the `cosec.authorization` timer covers the whole pipeline too. Its `source` tag is now `binding`,
+  `attachment`, `builtin`, `boundary`, `scope` or `none` (7.x: `global_policy`, `principal_policy`,
+  `role_permission`, `root`, `blacklist`, `none`, `unknown`); `result` adds `indeterminate`, `bad_request` and
+  `cancelled`; `cause` is new, on `indeterminate` only. New counters: `cosec.listener.dropped`,
+  `cosec.listener.failures`, `cosec.audit.required.failures`. Update dashboards and alerts.
+- **Tracing**: the `cosec.authorize` span is created after the decision, from the decision event, so the I/O spans of
+  an evaluation are no longer its children, and an audit event's `spanId` is the parent span's id.
+- **Kafka audit** is best effort unless `cosec.audit.kafka.delivery=required`; a REQUIRED listener that fails turns
+  a permit into `503`.
+- **Control-plane changes** are events of their own (`ChangeListener`; logged by default, Kafka with
+  `KafkaChangeListener`).
+- **Logs**: the `SimpleAuthorization` debug logger is gone; decisions are in the audit log.
+- **Threads**: on WebFlux, after a real suspension the downstream chain continues on a `Dispatchers.Default` thread,
+  not `boundedElastic`. Code that relies on a thread name or a `ThreadLocal` must not.
+
+See [Observability](./observability.md).
+
+### RFC change lists
+
+The RFCs behind 8.0 list known differences. Each item is covered above, or describes an intermediate state between
+7.x and 8.0 that no released version has.
+
+| Item | Where |
+|---|---|
+| RFC 0002 X1 (layer-by-layer reads) | Intermediate. 8.0 reads no policy per request ([Each instance decides from a snapshot](#each-instance-decides-from-a-snapshot)). |
+| RFC 0002 X2 (`BlockingAware` thread switch) | Intermediate. `BlockingAware` is removed ([Removed and replaced APIs](#removed-and-replaced-apis)). |
+| RFC 0002 X3 (path variables not left in the caller's context) | [Removed and replaced APIs](#removed-and-replaced-apis). |
+| RFC 0002 X4 (custom matchers writing path variables) | Intermediate. Custom matchers are removed. |
+| RFC 0002 X5 (`Statement.verify` overrides) | [Removed and replaced APIs](#removed-and-replaced-apis). |
+| RFC 0002 X6 (explain output of the 7.x explainer) | Intermediate. The 7.x explainer is removed; `explain` is a control-plane operation. |
+| RFC 0002 X7 (`SimpleAuthorization` debug log) | [Observability changes](#observability-changes). |
+| RFC 0002 X8 (which throwables the engine catches) | Intermediate. No policy runs code in 8.0; an unmodelled exception is `500` `internal-error`. |
+| RFC 0003 X1 (Redis outage) | [Each instance decides from a snapshot](#each-instance-decides-from-a-snapshot). |
+| RFC 0003 X2 (I/O shape) | [Each instance decides from a snapshot](#each-instance-decides-from-a-snapshot). |
+| RFC 0003 X3 (order of global policies) | When several statements of the same effect match, which one is recorded as deciding (audit `source`, `binding`) can differ from 7.x, whose order was undefined. The decision is the same. |
+| RFC 0003 X4 (exception type) | [Each instance decides from a snapshot](#each-instance-decides-from-a-snapshot). |
+| RFC 0003 X5 (index entry without content) | `GLOBAL_INDEX_WITHOUT_CONTENT` ([Rejections](#rejections)). |
+| RFC 0003 X6 (cold start) | [Each instance decides from a snapshot](#each-instance-decides-from-a-snapshot). |
+| RFC 0003 X7 (write API) | [Removed and replaced APIs](#removed-and-replaced-apis). |
+| RFC 0003 X8 (first request of a new app) | [Each instance decides from a snapshot](#each-instance-decides-from-a-snapshot). |
+| RFC 0004 C1a–C6 | [What 8.0 decides differently](#what-8-0-decides-differently). |
+| RFC 0004 §13 X1 (audit source) | [Observability changes](#observability-changes): the source types keep their 7.x names, and `binding` is added. |
+| RFC 0004 §13 X2 (three documents per request) | [Each instance decides from a snapshot](#each-instance-decides-from-a-snapshot). |
+| RFC 0004 §13 X3 (explain by binding) | The control plane's `explain` ([Checks](../integration/checks.md)). |
+| RFC 0004 §13 X4 (writes name a document) | [Removed and replaced APIs](#removed-and-replaced-apis). |
+| RFC 0004 §13 X5 (new exceptions and causes) | [503 replaces 500 when no decision can be made](#_503-replaces-500-when-no-decision-can-be-made); [Troubleshooting](./troubleshooting.md). |
+| RFC 0004 §13 X6 (`SecurityContext.scope`) | [Removed and replaced APIs](#removed-and-replaced-apis). |
+| RFC 0005 D1–D3 | [What 8.0 decides differently](#what-8-0-decides-differently). |
+| RFC 0006 R1–R3 | [503 replaces 500 when no decision can be made](#_503-replaces-500-when-no-decision-can-be-made). |
+| RFC 0006 X1–X4 (audit, timing, tracing, metrics) | [Observability changes](#observability-changes). |
+| RFC 0006 X5 (response body) | [Error bodies are problem+json](#error-bodies-are-problem-json). |
+| RFC 0006 X6 (threads) | [Observability changes](#observability-changes). |
+| RFC 0006 X7 (API) | [Removed and replaced APIs](#removed-and-replaced-apis). |
+| RFC 0006 X8 (configuration) | [Removed and renamed properties](#removed-and-renamed-properties). No `cosec.observability.listener.*` property exists. |
+| RFC 0007 X1 (write API, policy history) | [Removed and replaced APIs](#removed-and-replaced-apis), [Rollback](#rollback). |
+| RFC 0007 X2 (shadow) | [Removed and replaced APIs](#removed-and-replaced-apis), [Removed and renamed properties](#removed-and-renamed-properties). |
+| RFC 0007 X3 (explain) | [Removed and replaced APIs](#removed-and-replaced-apis). |
+| RFC 0007 X4 (document format) | Intermediate: 7.x has no documents. 8.0 reads only its own format; there is no 8.0 schema marker. |
+| RFC 0007 X5 (configuration) | [Removed and renamed properties](#removed-and-renamed-properties). `cosec.policy.limits.*` never existed in 7.x; limits are in the platform document. |
+| RFC 0007 X6 (generated JSON schema) | The `schema/` files describe the 8.0 formats ([policy language](../policies/language.md)). |
+| RFC 0007 X7 (control-plane audit, `BOUNDARY`) | [Observability changes](#observability-changes). |
+| RFC 0007 X8 (Redis namespaces) | [Redis keys](#redis-keys). |
