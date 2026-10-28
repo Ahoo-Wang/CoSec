@@ -1,183 +1,245 @@
 ---
 title: "Web Integration"
-description: "Wire CoSec into Spring WebFlux, Spring MVC or Spring Cloud Gateway, and read its decisions in your code."
+description: "Wire CoSec into Spring WebFlux, Spring MVC or Spring Cloud Gateway, map routes to actions, and read its decisions in your code."
 ---
 
 # Web Integration
 
 For developers wiring CoSec into a web application or gateway. This page covers choosing an adapter, what happens
-to a request on its way through CoSec, the responses CoSec writes, the headers and request attributes it reads, and
-how to reach the security context from your handlers.
+to a request on its way through CoSec, route maps, the responses CoSec writes, the `CoSec-*` parameters it reads,
+and how to reach the security context from your handlers. It is the home of the status mapping and the problem
+types.
 
 ## Choosing an adapter
 
-Pick the adapter for your stack by requesting its capability of `cosec-spring-boot-starter`. All three run the same
-`SecurityPipeline`, so they answer every request identically; only the plumbing differs.
+Pick the adapter for your stack by requesting its capability of `cosec-spring-boot-starter`. All three hand the
+request to the same `Pipeline`, so they answer every request byte for byte alike; only the plumbing differs.
 
-| Stack | Capability | Component the starter registers | Order |
+| Stack | Capability | Filter the starter registers | Order |
 |---|---|---|---|
-| Spring WebFlux | `webflux-support` | `ReactiveAuthorizationFilter` (`WebFilter`) | `1000` |
-| Spring MVC | `webmvc-support` | `AuthorizationFilter` (servlet `Filter`, every URL) | Spring Boot's default filter order |
-| Spring Cloud Gateway | `gateway-support` | `AuthorizationGatewayFilter` (`GlobalFilter`) | `HIGHEST_PRECEDENCE + 10` |
+| Spring WebFlux | `webflux-support` | `PipelineWebFilter` (`WebFilter`) | `1000` |
+| Spring MVC | `webmvc-support` | `PipelineServletFilter` (servlet `Filter`, every URL) | `HIGHEST_PRECEDENCE + 100` |
+| Spring Cloud Gateway | `gateway-support` | `PipelineGatewayFilter` (`GlobalFilter`) | `HIGHEST_PRECEDENCE + 10` |
 
-Every adapter needs the same three things: the capability, a `PolicyRepository` and an
-`AppRolePermissionRepository` (from `cache-support`, or your own beans; see
-[Choosing a store](../operations/storage.md#choosing-a-store)), and a JWT secret. The snippets below show only what
-differs per adapter. The full walk-through, with a first policy and a login endpoint, is the
-[Quick Start](../guide/quick-start.md).
+Every adapter needs the capability, `cache-support` (the snapshot documents and token revocation live in Redis), a
+JWT secret and a route map. The [Quick start](../guide/quick-start.md#add-the-dependency) shows the dependencies;
+the snippets below show only what differs.
 
-**Spring WebFlux**
+**Spring WebFlux.** The filter starts the pipeline on the event loop without a thread switch. After a real
+suspension (a Redis read, say) the request continues on `Dispatchers.Default`, never on a client library's I/O
+thread.
 
-```kotlin
-dependencies {
-    implementation(platform("me.ahoo.cosec:cosec-bom:<version>"))
-    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities { requireCapability("me.ahoo.cosec:webflux-support") }
-    }
-    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities { requireCapability("me.ahoo.cosec:cache-support") }
-    }
-}
-```
+**Spring MVC.** The servlet filter blocks its request thread until the outcome is known, which is the normal
+servlet model.
 
-```yaml
-cosec:
-  jwt:
-    secret: ${COSEC_JWT_SECRET}
-```
-
-**Spring MVC**: the same, with `webmvc-support` instead of `webflux-support`. The servlet filter blocks its request
-thread until the decision is made, which is the normal servlet model. Policies see the request URI without the
-context path, `DispatcherServlet` prefix included ([The request path](#the-request-path)).
-
-**Spring Cloud Gateway**: the same, with `gateway-support`. When the gateway's `GlobalFilter` is on the classpath,
-the starter registers `AuthorizationGatewayFilter` and no `ReactiveAuthorizationFilter`. Turning the gateway
-filter off ([feature switches](../operations/configuration.md#feature-switches)) therefore leaves the gateway with no
-authorization at all. See [Gateway](#gateway) for what the gateway adds.
+**Spring Cloud Gateway.** When the gateway's `GlobalFilter` is on the classpath, the starter registers
+`PipelineGatewayFilter` and no `PipelineWebFilter`. See [Gateway](#gateway) for what differs.
 
 With Maven, which has no feature variants, add `cosec-spring-boot-starter` plus the adapter module itself
-(`cosec-webflux`, `cosec-webmvc` or `cosec-gateway`). The [module list](../guide/introduction.md#modules) names the
-module behind every capability.
+(`cosec-webflux`, `cosec-webmvc` or `cosec-gateway`) and `cosec-cocache`. The
+[module list](../guide/introduction.md#modules) names the module behind every capability.
 
 ## How a request is handled
 
-Every adapter hands the request to `SecurityPipeline`, which always ends in a `SecurityDecision`, errors included.
-The adapter only writes that decision out; it never decides anything itself.
+Every adapter reads the request once into `HttpFacts` and hands it to `Pipeline.evaluate`, which always ends in an
+`Outcome`, errors included. The adapter only writes that outcome; it never decides anything itself.
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant C as Client
     participant A as Adapter<br>(WebFlux, MVC, Gateway)
-    participant P as SecurityPipeline
-    participant S as SecurityContextParser
-    participant Z as Authorization
+    participant P as Pipeline
+    participant E as Engine
     C->>A: HTTP request
-    A->>P: evaluate(request)
-    P->>P: parse request<br>(path check, request id, attributes)
-    P->>S: parse security context
-    S-->>P: principal from token or API key<br>(anonymous if missing or rejected)
-    P->>Z: decide(request, security context)
-    Z-->>P: AuthorizationDecision
-    P-->>A: SecurityDecision (status, result, headers)
-    alt allowed
-        A->>A: bind security context and principal
+    A->>P: evaluate(HttpFacts)
+    P->>P: normalize path, read CoSec-* parameters,<br>resolve route
+    P->>P: authenticate, resolve memberships,<br>resolve scope, read snapshot view
+    P->>E: evaluate(request, view)
+    E-->>P: Permit, Deny or Indeterminate
+    P->>P: run obligations, map to Outcome
+    P-->>A: Outcome
+    alt proceeds
+        A->>A: bind security context
         A->>C: continue to the handler or route
-    else denied or failed
-        A->>C: status code and JSON body
+    else refused
+        A->>C: status, headers, problem+json body
     end
 ```
 
 1. The adapter receives the request.
-2. It hands the transport request to the pipeline.
-3. The pipeline turns it into a CoSec `Request` ([The request path](#the-request-path)). A path with traversal
-   segments stops here with `400`. Otherwise it
-   takes the caller's `CoSec-Request-Id` or generates one, resolves the [client IP](#client-ip-behind-proxies), and
-   runs every [request attributes](#request-attributes) appender.
-4. The security context parser reads the credential: an API key if one is configured and sent, otherwise the
-   token ([Authentication](./authentication.md#tokens)). When token revocation or a blocking API key store is
-   enabled, the reactive adapters run this step on `boundedElastic`, off the event loop.
-5. A missing or rejected credential is not an error: the request goes on as anonymous, and the rejection is kept
-   to explain a later `401`. Any other parser error ends in `500`.
-6. The authorization chain decides, in the order described in the
-   [security model](../guide/security-model.md#evaluation-order).
-7. It returns the decision, together with any rate limit result.
-8. The pipeline maps the decision to a status, as in the [table below](#responses-and-status-codes).
-9. For an allowed request the adapter binds the security context (and, in WebFlux and the gateway, the exchange
-   principal) where your code can read it ([Accessing the security context](#accessing-the-security-context)).
+2. It reads the method, raw path (without the context path), query, headers, cookies and the
+   [client IP](#client-ip-behind-proxies), and hands them to the pipeline.
+3. The pipeline rejects a path or a `CoSec-*` parameter it cannot read without ambiguity, with `400`
+   ([The request path](#the-request-path), [App and space](#app-and-space)), and resolves the
+   [route](#route-maps) into an action and a resource.
+4. It authenticates the credential ([Authentication](./authentication.md)), resolves the principal's memberships,
+   checks the scope, and reads the snapshot documents the request needs.
+5. The engine decides, as the [security model](../guide/security-model.md#evaluation-order) describes.
+6. It returns Permit, Deny or Indeterminate.
+7. A Permit's rate limit obligations run ([Rate limiting](../policies/rate-limiting.md)), and the decision becomes
+   an `Outcome` ([Responses and status codes](#responses-and-status-codes)).
+8. The pipeline returns the outcome to the adapter.
+9. For a Permit, the adapter binds the security context where your code can read it
+   ([Accessing the security context](#accessing-the-security-context)).
 10. The request continues to your handler, or to the route's downstream service.
-11. A denied or failed request gets the status and a JSON body, and never reaches your handler.
+11. Anything else gets its status, its headers and a problem body, and never reaches your handler.
+
+Why there is exactly one decision path is in [Architecture overview](../architecture/overview.md).
 
 ## The request path
 
-The path that `path` actions and the `request.path` part see is the same on every adapter, apart from where it
-starts:
+The path CoSec authorizes is the request path within the application:
 
 | Adapter | Path |
 |---|---|
-| Spring MVC | The request URI without the servlet context path (`server.servlet.context-path`). It keeps the `DispatcherServlet` mapping prefix: with `spring.mvc.servlet.path=/api`, `/api/admin/users` is matched as `/api/admin/users`. |
-| WebFlux, Gateway | The full request path. |
+| Spring MVC | The request URI without the servlet context path (`server.servlet.context-path`). It keeps the `DispatcherServlet` mapping prefix: with `spring.mvc.servlet.path=/api`, `/api/admin/users` is authorized as `/api/admin/users`. |
+| WebFlux, Gateway | The path within the application, without `spring.webflux.base-path`. |
 
-On every adapter the path is:
+Before anything else, `PathNormalizer` checks it. On every adapter the path is:
 
-- **not decoded.** `path` actions decode each segment before they match, but a condition that compares
-  `request.path` as a string (`eq`, `regular`, …) sees `/a%20b`, not `/a b`.
-- **without `;` path parameters**, as Spring routes it: `/orders;jsessionid=1/42` is matched as `/orders/42`.
-- **rejected with `400`** when, after the path parameters are removed, it has a `.` or `..` segment (also
-  percent-encoded), or a malformed percent-escape. So `/public/..;/admin`, which a servlet container resolves to
-  `/admin`, is rejected too.
+- **without `;` path parameters**, as Spring routes it: `/orders;jsessionid=1/42` is authorized as `/orders/42`;
+- **not decoded**: the resource of an unmapped request is the path as received, percent-escapes included. How
+  patterns match encoded paths is in [Policy language](../policies/language.md);
+- **rejected with `400` `invalid-request`**, before authentication, when after removing path parameters and
+  decoding once it has a `.` or `..` segment (also with an encoded `;`, and with `\` or `%5C` as a separator), when
+  it has a malformed percent-escape, when it is longer than 2048 characters, or when a segment is longer than 256
+  characters. So `/public/..;/admin`, which a servlet container resolves to `/admin`, is rejected.
+
+## Route maps
+
+A route map gives each route of a service an action and a typed resource, so policies speak of `order:read` on
+`order/42` rather than `GET /orders/42`. WebFlux and WebMvc hosts load the route maps listed in
+`cosec.authorization.routes.location` (default `classpath:cosec-routes.json`; a comma-separated list):
+
+```json
+{
+  "service": "order",
+  "routes": [
+    { "method": "GET",  "path": "/orders/{orderId}",        "action": "order:read",   "resource": "order/{orderId}" },
+    { "method": "POST", "path": "/orders/{orderId}/cancel", "action": "order:cancel", "resource": "order/{orderId}" }
+  ]
+}
+```
+
+- A route matches a request with exactly its `method` whose path matches its `path` pattern. The resource template's
+  `{variables}` are captures of the path.
+- A request no route matches keeps the action `http:<METHOD>` on the resource `http:path:<path>`. A statement on a
+  `service:verb` action never covers it: no route falls back to a wildcard.
+- A route map loads whole or not at all. A location that does not exist, a malformed file (an unknown or missing
+  field, a repeated key, a value of the wrong type), a malformed route, or two routes one request could match (same
+  method, paths not provably disjoint) fails startup and names the location. Set the property to an empty value to
+  run without a route map on purpose.
+- A captured value that is empty or holds a `/` (a decoded `%2F`) cannot be a segment of a typed resource id: the
+  request is refused with `400` `invalid-request`, never evaluated as another resource.
+
+A Spring Cloud Gateway host loads no route map: every gateway request is in the `http` namespace.
+
+With `openapi-support` and Spring Boot Actuator, the endpoint `cosecServiceGenerator/routes` generates a route map
+from the service's OpenAPI document, and `cosecServiceGenerator/app` the matching app document to publish through
+the control plane ([Role permissions](../policies/role-permissions.md)).
 
 ## Responses and status codes
 
-Every status comes from `SecurityPipeline`; the adapters only copy it to the response.
+Every status comes from `StatusMapping` in the pipeline; the adapters only copy it to the response. A request
+proceeds to your handler only on a Permit.
 
-| Status | When | Body `reason` |
+| Status | Problem type | When |
 |---|---|---|
-| `200` (request passes) | The authorization decision allows it. | none, the handler answers |
-| `400` | The path has a `.` or `..` segment (also percent-encoded, or followed by a path parameter such as `..;`), or a malformed percent-escape (`InvalidRequestPathException`, see [The request path](#the-request-path)). | no body |
-| `401` | Denied, and the caller is anonymous: no credential, or one that was rejected. | `Token Expired` or `Token Invalid` when the credential was rejected; otherwise `Implicit Deny` or `Explicit Deny` |
-| `403` | Denied, and the caller is authenticated. | `Implicit Deny` or `Explicit Deny` |
-| `401`, `403` | A regex condition ran over its time budget (`RegexTimeoutException`). An implicit deny, mapped like the two rows above, not a server error. | as the two rows above |
-| `429` | The request was allowed, but a matching [rate limit rule](../policies/rate-limiting.md) has no permit left. | `Too Many Requests` |
-| `500` | Any other error. CoSec fails closed instead of guessing. | `Implicit Deny` |
+| `200` (proceeds) | none, your handler answers | The decision is Permit and every rate limit obligation had a permit left. |
+| `400` | `invalid-request` | The path cannot be read without ambiguity ([The request path](#the-request-path)), a `CoSec-*` parameter has conflicting values ([App and space](#app-and-space)), or a route captured a value that cannot be a resource id segment ([Route maps](#route-maps)). The engine never sees the request. |
+| `401` | `unauthorized` | Deny, and the caller is anonymous: no credential. Includes a rejected scope, such as an anonymous request that declares `CoSec-Space-Id`. |
+| `401` | `token-invalid` | Deny, and the credential was rejected as invalid: a token that does not verify, or an unknown, disabled or expired API key. |
+| `401` | `token-expired` | Deny, and the token had expired. |
+| `401` | `token-revoked` | Deny, and the token, or every token of its principal, was revoked. |
+| `403` | `forbidden` | Deny, and the caller is authenticated: an explicit DENY, the implicit deny, or the platform boundary. |
+| `403` | `scope-rejected` | The caller is authenticated, and the scope was rejected: a declared app other than the host's, or a space the principal has no role in. |
+| `429` | `too-many-requests` | Permit, but a matching [rate limit rule](../policies/rate-limiting.md) has no permit left. |
+| `503` | `unavailable` | No decision could be made: Indeterminate, the authenticator or a membership provider failed or timed out, the snapshot source failed, a strict rate limit rule could not be counted, a REQUIRED decision listener failed on a Permit, a Permit only break-glass gives without a REQUIRED listener, or `cosec.pipeline.timeout` passed. |
+| `500` | `internal-error` | An exception nothing modelled: a defect of CoSec. |
 
-`500` covers, among others:
+A rejected credential is not an error. The request is evaluated as anonymous: a Permit still proceeds (a public
+path works with an expired token), and only a Deny names the credential's problem. Explicit and implicit denies
+are both `forbidden` (or `unauthorized`), so a response never tells a caller that a DENY exists. Why errors refuse
+is in [Fail closed](../guide/security-model.md#fail-closed); for each status, the
+[troubleshooting guide](../operations/troubleshooting.md) lists the usual causes.
 
-- `MissingPolicyException`: the principal (or the global policy index) lists a policy the repository does not
-  have. It may be the deny that keeps the request out, so CoSec does not evaluate without it.
-- `MissingPermissionException`: a role of the principal is granted a permission id its app does not define
-  ([Granting permissions to roles](../policies/role-permissions.md#granting-permissions-to-roles)).
-- `CacheReadException`: a policy or permission is not in the local cache and Redis cannot be read, or the stored
-  value cannot be decoded (for example 6.x data that was not migrated). See
-  [When Redis is unavailable](../operations/storage.md#when-redis-is-unavailable).
-- `PathVariableScopeException`, or an unsupported condition part: a policy or permission stored by an earlier
-  version breaks a rule 7.0 checks at load, so it is rejected when it is read
-  ([Path variables](../policies/language.md#path-variables), [Parts](../policies/language.md#parts)).
-- A custom matcher, repository or API key store that throws (a Redis-backed API key store that cannot reach Redis
-  included).
+### Problem bodies
 
-Why errors deny is in [Fail closed](../guide/security-model.md#fail-closed), and the two deliberate exceptions in
-[The two documented exceptions](../guide/security-model.md#the-two-documented-exceptions). For each status, the
-[troubleshooting guide](../operations/troubleshooting.md#by-status-code) lists the usual causes.
-
-A rejected request has a JSON body with the content type `application/json`:
+Every response that does not proceed has an RFC 9457 body with the content type `application/problem+json`:
 
 ```json
-{ "authorized": false, "reason": "Implicit Deny" }
+{"type":"https://cosec.ahoo.me/problems/forbidden","title":"Forbidden","status":403,"code":"FORBIDDEN","requestId":"0ef3c9d2a4b14d7e","traceId":"4bf92f3577b34da6a3ce929d0e0e4736"}
 ```
 
-**Response headers.** Every request that gets past the path check carries `CoSec-Request-Id`: the caller's own
-value if it sent one, otherwise a generated id. The gateway also forwards it downstream. When a rate limit rule
-matched the request, the response, allowed or rejected, also carries `RateLimit-Limit`, `RateLimit-Remaining` and
-`RateLimit-Reset`, and a `429` also `Retry-After`. Their values are defined in
-[Responses and headers](../policies/rate-limiting.md#responses-and-headers).
+| Member | Content |
+|---|---|
+| `type` | `https://cosec.ahoo.me/problems/<slug>`, one per row of the table above. |
+| `title` | `Invalid Request`, `Unauthorized`, `Token Invalid`, `Token Expired`, `Token Revoked`, `Forbidden`, `Scope Rejected`, `Too Many Requests`, `Service Unavailable`, `Internal Server Error`. |
+| `status` | The HTTP status. |
+| `code` | The slug in upper snake case: `INVALID_REQUEST`, `UNAUTHORIZED`, `TOKEN_INVALID`, `TOKEN_EXPIRED`, `TOKEN_REVOKED`, `FORBIDDEN`, `SCOPE_REJECTED`, `TOO_MANY_REQUESTS`, `UNAVAILABLE`, `INTERNAL_ERROR`. |
+| `requestId` | The same value as the `CoSec-Request-Id` response header. |
+| `traceId` | The trace id, only when tracing captured one at the adapter. |
+
+The members always come in this order, and the body holds nothing else: no policy, statement, binding, cause or
+exception message. One hand-written encoder (`ProblemEncoder`) writes it, so the three adapters produce the same
+bytes whatever the host's JSON configuration. The body is ASCII: every non-ASCII and control character of the
+request id is escaped. The vocabulary is also published as `schema/problem.schema.json`.
+
+### Response headers
+
+- **`CoSec-Request-Id`**, on every outcome, the `400`s included: the caller's own `CoSec-Request-Id` header when it
+  is a plain id (1 to 64 characters of `A-Z a-z 0-9 . _ -`), otherwise a generated id. The gateway forwards it
+  downstream.
+- **`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`**, when a matching rate limit rule was counted: on
+  the proceeding response (for the rule with the fewest permits left) and on a `429`. A `429` also carries
+  `Retry-After`. Their values are defined in
+  [Responses and headers](../policies/rate-limiting.md#responses-and-headers).
+- A `503` never carries `Retry-After`.
+
+## App and space
+
+The client sends the `CoSec-*` parameters as headers or as query parameters of the same name:
+
+| Parameter | Meaning | Conditions read it as |
+|---|---|---|
+| `CoSec-App-Id` | The app the request is for. Ignored in favour of `cosec.authorization.scope.app-id` when that is set; a different value is then rejected. | `scope.app` |
+| `CoSec-Space-Id` | The space within the app. Accepted only when the principal has a role in it; empty means the default space. | `scope.space` (and `scope.roles`, the roles there) |
+| `CoSec-Device-Id` | The caller's device. Informational unless a policy or the blacklist reads it. | `environment.device` |
+| `CoSec-Request-Id` | Header only: the request id ([Response headers](#response-headers)). | |
+
+Rules for reading them:
+
+- Header names match ignoring case; query parameter names match exactly.
+- A parameter may be sent several times, in the header, in the query or both, as long as every non-blank value is
+  the same. Blank values are ignored.
+- Two different values, anywhere, make the request ambiguous: the pipeline and your handler could read different
+  scopes. It is refused with `400` `invalid-request`. So is a `CoSec-*` query value with a malformed
+  percent-escape.
+- A request body is never read: an authorization filter does not read request bodies.
+
+How `ScopeResolver` checks the app and space, and what the client therefore controls, is in
+[Trust boundaries](../guide/security-model.md#trust-boundaries). How a token carries `role@space` is in
+[Roles and spaces](./authentication.md#roles-and-spaces), and how role bindings are scoped to an app and a space in
+[Role permissions](../policies/role-permissions.md). Read the validated scope from the
+[security context](#accessing-the-security-context), never from the headers: the headers are what the client
+declared.
 
 ## Accessing the security context
 
-The security context holds the principal, its tenant and the parsed request. For an allowed request your
-handler can read it as shown below; a denied request never reaches the handler.
+For a request that proceeds, the adapter binds a `SecurityContext` (`me.ahoo.cosec.api.context`) built from the
+pipeline's outcome. A refused request never reaches your handler.
 
-**WebFlux and the gateway**: from the Reactor context of the request, or from the exchange attributes. The exchange
+| Member | Content |
+|---|---|
+| `principal.id` | The principal; `(0)` for an anonymous caller. |
+| `tenant.tenantId` | The scope's tenant: the principal's, or `(0)` for an anonymous caller. |
+| `principal.roles` | The principal's roles in the request's space. |
+| `principal.policies` | The principal's attached policies. |
+| `principal.attributes` | The credential's attributes (the token's `attributes` claim; `apiKeyId` for an API key). |
+| `scope.appId`, `scope.spaceId`, `scope.roles` | The scope `ScopeResolver` validated: app, space (empty for the default space) and the roles there. |
+
+**WebFlux and the gateway**: from the exchange attributes, or from the Reactor context of the request. The exchange
 principal is also set, so `exchange.getPrincipal()` returns the CoSec principal.
 
 ```kotlin
@@ -187,7 +249,7 @@ import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 fun currentUser(): Mono<String> =
     Mono.deferContextual { context -> Mono.just(context.getSecurityContext().principal.id) }
 
-// with an exchange at hand; null if the request never reached CoSec
+// with an exchange at hand; null if CoSec did not handle the request
 val securityContext = exchange.getSecurityContext()
 ```
 
@@ -203,59 +265,49 @@ val securityContext = SecurityContextHolder.requiredContext
 val securityContext = httpServletRequest.getSecurityContext()
 ```
 
-To ask from code whether the current principal may do something else, see [Checks in Code](./checks.md).
-
-## App and space
-
-Three request headers name where a request runs. Each one can also be sent as a parameter of the same name in the
-URL query string; the header wins. A form field in the request body is never read: an authorization filter does not
-read request bodies, on any adapter.
-
-| Header | Meaning | Read by |
-|---|---|---|
-| `CoSec-App-Id` | The app the request is for. Role grants apply only in the app they were made in. | role permissions, `request.appId` in conditions |
-| `CoSec-Space-Id` | The space within the app. Only the principal's roles written `role@<that space>` apply; without the header, only roles without a suffix apply. | role permissions, `inRole`, `request.spaceId` in conditions |
-| `CoSec-Device-Id` | The caller's device. Informational: CoSec makes no decision from it unless a policy does. | `request.deviceId` in conditions, audit events, traces |
-
-How roles, spaces and grants combine is in [Role grant scope](../policies/role-permissions.md#role-grant-scope),
-and how a token carries `role@space` in [Roles and spaces](./authentication.md#roles-and-spaces).
-
-The client sets all three. The space only selects among the roles the credential states, but CoSec takes the app id
-as sent; what that means when apps share paths, and how to bind it at the gateway, is in
-[Trust boundaries](../guide/security-model.md#trust-boundaries).
+The context is the one `AuthorizationChecker` accepts, to ask whether the same principal may do something else
+([Checks in code](./checks.md)).
 
 ## Client IP behind proxies
 
-Policies and audit events see the client IP as `request.remoteIp`. Set
-`cosec.authorization.remote-ip.max-trusted-index` ([Authorization properties](../operations/configuration.md#authorization))
-to the number of proxies in front of the application. CoSec then counts that many entries from the right of
-`X-Forwarded-For` (the entries your own proxies appended) and takes that one, so a value the client put at the
-left of the header is never used. `0` ignores `X-Forwarded-For` and uses the socket address. A request with no
-`X-Forwarded-For`, or with more than one such header, also uses the socket address. The IP is never resolved
-through reverse DNS.
+Policies, rate limit keys, the blacklist and audit events see the client IP as `environment.ip`. Set
+`cosec.authorization.remote-ip.max-trusted-index` to the number of proxies in front of the application (default
+`1`). CoSec then takes the entry that many places from the right of `X-Forwarded-For`, the one the outermost of
+your proxies appended, so a value the client put at the left of the header is never used. When the header has
+fewer entries than that, the leftmost one is used.
+
+`0` ignores `X-Forwarded-For` and uses the socket address: set it on a host that clients reach directly, or a
+client can claim any address. A request without `X-Forwarded-For`, or with more than one such header, also uses the
+socket address. The IP is never resolved through reverse DNS.
 
 ## Request attributes
 
-Request attributes are string values attached to the request before authorization. Conditions read them as
-`request.attributes.<name>`, and audit events include them. The client cannot set them: they come only from
-`RequestAttributesAppender` beans.
+Besides the credential, the scope, the action and the resource, conditions can read what the HTTP request carries
+(`http.header.<name>`, `http.origin`, `http.referer` and their hosts), which the client writes, and **request
+attributes**, `request.attributes.<name>`, which the adapter sets and the client cannot. The gateway filter sets
+`cosec.audit.routeId`, the id of the matched route. The attribute names are in
+[Policy language](../policies/language.md); which of them the client controls is in
+[Trust boundaries](../guide/security-model.md#trust-boundaries).
 
-| Attribute | Added by | Value |
+Facts the request does not carry come from `AttributeProvider` beans as **external attributes**,
+`ext.<provider>.<name>`, fetched only when a candidate statement reads them
+([Missing external attributes](../guide/security-model.md#missing-external-attributes)). The built-in ones:
+
+| Attributes | Added by | Value |
 |---|---|---|
-| `ipRegion` | `ip2region-support` | The client IP's location (country, region, city, ISP) from an embedded [ip2region](https://github.com/lionsoul2014/ip2region) database. Absent if the lookup fails. |
-| `cosec.audit.routeId` | `gateway-support`, with auditing on | The id of the matched gateway route. |
+| `ext.ip2region.country`, `.province`, `.city`, `.isp` | `ip2region-support`, with `cosec.ip2region.enabled` (on by default) | The client IP's location from an embedded [ip2region](https://github.com/lionsoul2014/ip2region) database. |
+| `ext.blacklist.principal`, `.ip`, `.device` | Your `BlacklistAttributeProvider` bean | Whether the request is blocked ([Blacklist](../guide/security-model.md#blacklist)). |
 
 ```json
-{ "contains": { "part": "request.attributes.ipRegion", "value": "中国" } }
+{ "eq": ["ext.ip2region.country", "中国"] }
 ```
 
-To add your own, declare a `RequestAttributesAppender` bean; every one is applied in turn
-([Request and security context](../architecture/extending.md#request-and-security-context)).
+To add your own, declare an `AttributeProvider` bean ([Extending CoSec](../architecture/extending.md)).
 
 ## CORS
 
 Browsers send CORS preflight requests without credentials, so authorization would answer them `401`. With
-WebFlux, register `OrderedCorsWebFilter`; it runs at order `999`, just before the authorization filter, and answers
+WebFlux, register `OrderedCorsWebFilter`; it runs at order `999`, just before `PipelineWebFilter`, and answers
 preflights itself:
 
 ```kotlin
@@ -263,34 +315,36 @@ preflights itself:
 fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source)
 ```
 
-With Spring MVC, register a CORS filter that runs before `AuthorizationFilter`.
+With Spring MVC, register a CORS filter with an order before `HIGHEST_PRECEDENCE + 100`.
 
 ## Gateway
 
-On Spring Cloud Gateway, CoSec authorizes the request before any route filter runs. In addition to what every
-adapter does, `AuthorizationGatewayFilter`:
+On Spring Cloud Gateway, `PipelineGatewayFilter` authorizes the request before any route filter runs. It differs
+from the WebFlux filter in three ways:
 
-- forwards `CoSec-Request-Id` to the downstream service, so its logs share the gateway's request id;
-- adds the matched route id as the [request attribute](#request-attributes) `cosec.audit.routeId`.
+- it runs on gateway routes only: a request no route matches, and the gateway's own actuator endpoints, are not
+  authorized by CoSec. Protect actuator with the management port or network policy;
+- it loads no route map, so every request is `http:<METHOD>` on `http:path:<path>`;
+- it forwards the outcome's `CoSec-Request-Id` to the downstream service, replacing any value the client sent, so
+  the backend's logs share the gateway's request id.
 
-On a gateway host that also serves the control plane's routes (`control-support`), the starter adds a
-`PipelineWebFilter` limited to `cosec.control.http.base-path`, because the gateway's filter runs on gateway routes
-only. Actuator endpoints are not covered by CoSec on a gateway host: protect them with the management port or network
-policy.
+The host app (`cosec.authorization.scope.app-id`) is one value for the whole gateway, not one per route. When one
+gateway fronts several apps, read [Trust boundaries](../guide/security-model.md#trust-boundaries) on keeping the
+client-declared app from widening access.
 
-Services behind the gateway do not need to authorize again: they can read the principal from the forwarded token
-without verifying its signature. [Behind a gateway](./authentication.md#behind-a-gateway) shows the configuration
-and when it is safe.
+Services behind the gateway run their own pipeline and verify the forwarded token themselves
+([Behind a gateway](./authentication.md#behind-a-gateway)).
 
-**Ready-to-run gateway.** `cosec-gateway-server` is a Spring Cloud Gateway application with CoSec authorization,
-Redis-backed policies and local policy initialization, published as a container image:
+**Ready-to-run gateway.** `cosec-gateway-server` is a Spring Cloud Gateway application with CoSec, reading its
+documents from Redis, published as a container image:
 
 ```bash
-docker run -p 8080:8080 -e COSEC_JWT_SECRET=... ahoowang/cosec-gateway:<version>
+docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT_SECRET=... ahoowang/cosec-gateway:<version>
 ```
 
-The image is also published as `ghcr.io/ahoo-wang/cosec-gateway`. Configure routes and CoSec through standard Spring
-configuration; the defaults are in its
+The image is also published as `ghcr.io/ahoo-wang/cosec-gateway`. Publish its platform document first
+([Quick start](../guide/quick-start.md#publish-the-platform-document)); until then every routed request is `503`.
+Configure routes and CoSec through standard Spring configuration; the defaults are in its
 [`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/src/main/resources/application.yaml).
 Example Kubernetes manifests are in [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s). They read the JWT
 secret from a Secret named `cosec-jwt-secret`; create it first, and set the image tag to the version you deploy:
@@ -298,5 +352,34 @@ secret from a Secret named `cosec-jwt-secret`; create it first, and set the imag
 ```bash
 kubectl create secret generic cosec-jwt-secret --from-literal=secret=<random value>
 ```
+
+## Control-plane routes
+
+With `control-support` (and `cache-support`), the starter serves the control plane's HTTP API under
+`cosec.control.http.base-path` (default `/cosec/control/v1`) as functional routes on a WebFlux or WebMvc host.
+What the API does is in [Testing policies](../policies/testing.md) and
+[Explaining a decision](./checks.md#explaining-a-decision); how its requests are handled:
+
+- **The pipeline first.** A control request is an ordinary request to the host: your documents must permit it
+  (for example `http:POST` on `http:path:/cosec/control/v1/**` for authenticated callers), or it is refused like any
+  other. Until a platform document is published, every request, control routes included, is `503`, so the first
+  platform document comes from `cosec-migrate publish`
+  ([Quick start](../guide/quick-start.md#publish-the-platform-document)).
+- **Then the control plane's own check.** Every call is authorized again as the request's principal, in the app
+  `cosec.control.app-id` (default `cosec-control`) and its default space, on documents confirmed current. An
+  anonymous request is `401`. Tenant isolation comes first and is not a policy: a tenant's principal acts only on
+  its own tenant's document.
+- **Body size.** On WebMvc at most `cosec.control.http.max-body-size` (default `16MB`) is read; a larger body is
+  `400` `invalid-request`, unread. On WebFlux the body is bounded by Spring's `spring.codec.max-in-memory-size`
+  (256 KB by default): raise it on control-plane hosts that receive large documents.
+- **Gateway hosts.** The gateway's global filter runs on gateway routes only, so the starter adds a
+  `PipelineWebFilter` limited to the base path. The control routes are authorized as on a WebFlux host; the
+  gateway's routes keep the gateway filter.
+
+The control API answers problems in the same format, with the types above plus its own: `not-found` (`404`),
+`conflict` (`409`), `gone` (`410`), `precondition-failed` (`412`), `unprocessable` (`422`) and
+`precondition-required` (`428`). A `400`, `409`, `410`, `412`, `422` or `428` explains the caller's own request in a
+`detail` member; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a
+document, a change or a DENY exists.
 
 **Next:** issue, refresh and revoke the tokens the adapter reads, in [Authentication](./authentication.md).

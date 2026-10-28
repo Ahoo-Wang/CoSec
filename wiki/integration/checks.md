@@ -5,9 +5,9 @@ description: "Ask CoSec for a decision from your own code, enforce object-level 
 
 # Checks in Code
 
-For developers whose rules depend on more than the URL: showing or hiding UI actions, checking ownership of a loaded
-object, or diagnosing a decision. This page covers calling authorization directly instead of relying only on the web
-adapter.
+For developers whose rules depend on more than the route: showing or hiding UI actions, checking a loaded object, or
+diagnosing a decision. This page covers `AuthorizationChecker`, which asks the engine directly, and the control
+plane's `explain`, which says why a decision came out as it did.
 
 ## When to check in code
 
@@ -15,165 +15,202 @@ The [web adapter](./web.md) already authorizes every request before your handler
 need an answer the adapter cannot give:
 
 - **What may the user do next?** A page decides which buttons to show, without sending those requests.
-- **Is this object theirs?** The rule depends on data you load in the handler, such as the order's owner
+- **Is this object theirs?** The answer depends on data you load in the handler, such as the order's owner
   ([Object-level rules](#object-level-rules)).
-- **Work that is not an HTTP request**, such as a message consumer acting for a user.
 
 Do not repeat the request's own check in the handler: the adapter has decided it already, with auditing and rate
-limiting, and a second check can only disagree with it. And a check is advice, not enforcement: keep enforcing on
-the real request.
+limiting, and a second check can only disagree with it. A check is advice for the next step, not enforcement of the
+current one.
 
 ## Checking a permission
 
-Inject the `AuthorizationChecker` bean (registered whenever authorization is enabled). Describe a check like the
-request it stands for, as a `CheckRequest`:
+The starter registers an `AuthorizationChecker` bean (`me.ahoo.cosec.runtime`). It decides for the principal and
+scope of a request the pipeline permitted, so it needs that request's `SecurityContext`
+([Accessing the security context](./web.md#accessing-the-security-context)):
 
-| Field | Default | Meaning |
+```kotlin
+suspend fun check(security: SecurityContext, action: String, resource: String): Boolean
+```
+
+- `action` is `service:verb`, as the route map names it (`order:cancel`), or `http:<METHOD>` for an unmapped route.
+  A string without `:` is `false`.
+- `resource` is a typed resource, `type/id` (`order/42`), or a path starting with `/` (`/orders/42`), which is an
+  `http` resource.
+
+Two adapter modules add non-suspending forms:
+
+| Module | Function | Use it |
 |---|---|---|
-| `path`, `method` | method `GET` | The request the check stands for. |
-| `appId`, `spaceId` | those of the current request | The app and space whose [role grants](../policies/role-permissions.md#role-grant-scope) apply. |
-| `headers` | none | Headers conditions read as `request.header.<name>`. |
-| `attributes` | none | Attributes conditions read as `request.attributes.<name>`. |
-| `resource` | none | Attributes of the object the action targets; conditions read them as `resource.<name>`. |
-
-The check also keeps the current request's client IP. Call `check(context, request)` for one answer, or
-`checkAll(context, requests)` for a map of them; both return a `Mono`. `check(context, path, method)` is the short
-form.
+| `cosec-webflux` | `AuthorizationChecker.checkMono(security, action, resource)`: `Mono<Boolean>` | In WebFlux and gateway code. It starts on the caller's thread and continues off any client library's I/O thread. |
+| `cosec-webmvc` | `AuthorizationChecker.checkBlocking(security, action, resource)`: `Boolean` | On a servlet request thread. It throws on a non-blocking thread, such as a Netty event loop: use `checkMono` there. |
 
 ```kotlin
 @RestController
-class PermissionController(private val checker: AuthorizationChecker) {
-    // WebFlux; with Spring MVC, take SecurityContextHolder.requiredContext instead of the exchange
-    @PostMapping("/permissions/check")
-    fun check(@RequestBody actions: Map<String, CheckRequest>, exchange: ServerWebExchange): Mono<Map<String, Boolean>> =
-        checker.checkAll(exchange.getSecurityContext()!!, actions)
+class OrderActionsController(private val checker: AuthorizationChecker) {
+    // WebFlux: which actions may the caller take on this order?
+    @GetMapping("/orders/{id}/actions")
+    fun actions(@PathVariable id: String, exchange: ServerWebExchange): Mono<Map<String, Boolean>> {
+        val security = exchange.getSecurityContext()!!
+        return Mono.zip(
+            checker.checkMono(security, "order:cancel", "order/$id"),
+            checker.checkMono(security, "order:delete", "order/$id"),
+        ).map { mapOf("cancel" to it.t1, "delete" to it.t2) }
+    }
 }
 ```
 
-A UI posts `{"edit": {"path": "/orders/42", "method": "PUT"}, "delete": {"path": "/orders/42", "method": "DELETE"}}`
-and gets `{"edit": true, "delete": false}`. The endpoint itself needs a policy that allows authenticated callers.
-
-Outside a request, for example in a message consumer, build the context for the user yourself:
-`SimpleSecurityContext(principal)`. The check then has no current request to take defaults from: name the app and
-space explicitly, and note that the client IP is `127.0.0.1`, so a policy that trusts local addresses trusts the
-check too.
+The endpoint itself is a route like any other: your documents must permit it.
 
 ### How a check relates to the request pipeline
 
-A check uses the same policies, role grants, blacklist and root rule as a real request, in the same
-[evaluation order](../guide/security-model.md#evaluation-order). It differs in what surrounds the decision:
+A check evaluates with the same engine, the same documents and the same rules as a request, in the
+[evaluation order](../guide/security-model.md#evaluation-order). It reuses the request's principal, memberships,
+scope (tenant, app, space and roles) and environment (client IP, device), and differs only in what surrounds the
+decision:
 
 | | Request through the adapter | `AuthorizationChecker` |
 |---|---|---|
-| Decides with | the full chain: tracing, auditing, metrics, rate limiting, shadow mode, your `CoSecAuthorizationCustomizer`s | `SimpleAuthorization` alone |
-| Audit events, traces, metrics | yes | none |
-| Rate limits | spends a permit, can answer `429` | never spends, never limited |
-| Security context | the request's | a copy (principal and tenant only), marked as a policy evaluation |
-| On an error | `500` | `false`, with a warning in the log |
-| Result | an HTTP status | `true` or `false` |
+| Action and resource | from the route map | the ones you pass |
+| Snapshot documents | read for the request | read again for the check |
+| Decision listeners (audit, metrics, traces) | yes | none |
+| Rate limits | spends permits, can answer `429` | never spends, never limited |
+| A Permit only break-glass gives | proceeds, after a REQUIRED audit | `false`: a check writes no audit |
+| Deny, Indeterminate, an error | a status code | `false`, with a warning in the log for an error |
+| Result | an HTTP status | `true` only on a Permit |
 
-Because each check runs on its own copy of the security context, path variables a check captures never leak into
-the caller's context, and custom matchers can recognize a check by `securityContext.isPolicyEvaluation` and skip
-side effects.
+A check fails closed: a `SecurityContext` the pipeline did not build (one you made yourself, or none) is `false`,
+whatever the documents say. There is therefore no check outside a request: a message consumer that acts for a user
+has no permitted request to check as, and must carry its own authorization.
 
 ## Object-level rules
 
-Whether a user may change *this* order depends on the order: its owner, tenant or status. Those live in your
-database, and the adapter runs before your handler has loaded anything, so an object-level rule is decided in two
-steps:
+Whether a user may change *this* order depends on the order: its owner, tenant or status. The adapter runs before
+your handler has loaded anything, so an object-level rule is decided in two steps:
 
-1. **In the adapter**, the route is authorized as usual. The resource is unknown there, so every `resource.<name>`
-   part is empty.
-2. **In your code**, after loading the object, a check passes its attributes as `resource`, and conditions read
-   them as `resource.<name>`.
+1. **In the adapter**, the route is authorized on what the request carries, such as `order:cancel` on `order/42`.
+2. **In your code**, after loading the object, a check names a resource whose id carries the facts the rule needs.
 
-Write object rules as **denies that apply only when the resource is known**. The same path then passes the adapter
-and is denied in the check for anyone but the owner:
+A check passes no resource attributes, only a type and an id. So write the facts into the id, and let a statement
+capture them. For example, check ownership as the resource `order-of/<owner>/<orderId>`, with this policy bound to
+anyone (`"subject": "*"`):
 
 ```json
 {
-  "name": "only-own-orders",
-  "effect": "deny",
-  "action": "/orders/**",
-  "condition": { "bool": { "and": [
-    { "eq": { "part": "resource.ownerId", "value": "", "negate": true } },
-    { "eq": { "part": "resource.ownerId", "value": "#{principal.id}", "negate": true } }
-  ] } }
+  "id": "own-orders-only",
+  "statements": [
+    { "name": "not-the-owner", "effect": "deny", "action": "order:cancel", "resource": "order-of/{owner}/*",
+      "condition": { "not": { "eq": ["resource.var.owner", { "attr": "subject.id" }] } } }
+  ]
 }
 ```
 
 ```kotlin
 val order = orderRepository.findById(id)
-val allowed = checker.check(
-    securityContext,
-    CheckRequest("/orders/$id", "PUT", resource = mapOf("ownerId" to order.ownerId)),
-).awaitSingle()
+val allowed = checker.checkBlocking(security, "order:cancel", "order-of/${order.ownerId}/$id")
 if (!allowed) throw AccessDeniedException()
 ```
 
-An allow that needs a resource part would deny the route in the adapter, where the part is empty: keep allows on
-what the request itself carries, and put object conditions on denies. The check must run in your code; a handler
-that skips it is not protected by the rule. Conditions and templates are described in
-[Conditions](../policies/language.md#conditions) and [Templates](../policies/language.md#templates).
+The DENY applies only to `order-of/...` resources, which no route produces, so the route itself is still decided by
+your other policies. The check is a separate decision: it is permitted only when an ALLOW also covers
+`order:cancel` on `order-of/...`, and it is denied for anyone but the owner. A captured value holds one segment and
+is compared exactly; ids are split on `/` and never decoded, so an owner id must not contain `/`. Resource patterns
+and conditions are described in [Policy language](../policies/language.md).
+
+The check must run in your code; a handler that skips it is not protected by the rule.
 
 ## Explaining a decision
 
-To see why a principal gets a decision for a request, without sending the real request, ask the explainer. It
-decides with the same code as a real request, against a snapshot of the repositories, then walks every policy
-statement and role permission and says which matched, which missed on the action, and which missed on the
-condition. Nothing is spent or changed: rate limits are only listed, and custom matchers see
-`securityContext.isPolicyEvaluation`.
+To see why a principal gets a decision for a request, without sending the real request, ask the control plane's
+`explain`. It needs `control-support` and `cache-support`, and is served on the host as
+`POST <base-path>/explain` (default `/cosec/control/v1/explain`; see
+[Control-plane routes](./web.md#control-plane-routes)).
 
-The explainer is off by default, because an explanation reveals your policy structure. Enable it with
-`cosec.explain.enabled=true`. With Spring Boot Actuator, also expose the endpoint:
-
-```yaml
-cosec:
-  explain:
-    enabled: true
-management:
-  endpoints:
-    web:
-      exposure:
-        include: cosecExplain
-```
-
-The endpoint goes through CoSec like any other request: add a policy that allows `POST /actuator/cosecExplain`
-for your administrators only.
+It decides with the same scope resolution, document compiler and engine as enforcement, at full trace, on the
+published documents: their heads, or the revisions you name. Nothing is spent or changed.
 
 ```bash
-curl -X POST localhost:8080/actuator/cosecExplain -H 'Content-Type: application/json' -d '{
-  "principal": { "id": "user-1", "tenantId": "t1", "roles": ["clerk"], "policies": ["orders"] },
-  "request":   { "path": "/orders/42", "method": "DELETE", "appId": "shop" },
-  "exhaustive": false,
-  "detail": "summary"
+curl -X POST localhost:8080/cosec/control/v1/explain \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' -d '{
+  "request": {
+    "tenant": "acme",
+    "principal": "alice",
+    "roles": ["clerk", "lead@team-a"],
+    "policies": ["orders-readonly"],
+    "app": "order",
+    "space": "team-a",
+    "action": "order:cancel",
+    "resource": "order/42"
+  }
 }'
 ```
 
-**Input.** `principal` has `id`, `tenantId`, `roles`, `policies` and `attributes`. `request` has `path`, `method`
-(`GET`), `remoteIp` (`127.0.0.1`), `appId`, `spaceId`, `deviceId`, `origin`, `referer`, `headers`, `query`,
-`cookies` and `attributes`. To explain an object-level check, pass the resource as attributes named
-`resource.<name>`, for example `"attributes": { "resource.ownerId": "user-2" }`. `exhaustive: true` keeps evaluating
-the layers after the decision; `detail: "full"` adds each matcher's configuration.
-
-To explain what a real caller gets, leave out `principal` and put their credential in the request's headers, for
-example `"headers": { "Authorization": "Bearer eyJ..." }` or `{ "X-API-Key": "..." }`. The application's own
-security context parser reads it, including revocation and API keys. A rejected credential is explained as the
-anonymous request it becomes, with its real `401` reason and a `TOKEN_INVALID` warning.
-
-**Output.**
+**Input.** `request` describes the request; nothing is read from a credential:
 
 | Field | Meaning |
 |---|---|
-| `status`, `authorized`, `reason` | The decision, mapped to a status [as for a real request](./web.md#responses-and-status-codes), except that rate limits never make it `429`. |
-| `decidedBy` | The rule that decided: layer, policy id and statement index, or role and permission id. `null` when nothing matched. |
-| `layers` | `BLACKLIST`, `ROOT`, `GLOBAL_POLICY`, `PRINCIPAL_POLICY`, `ROLE_PERMISSION`, each `EVALUATED`, `NOT_EVALUATED` (an earlier explicit deny ended evaluation), `EMPTY`, or `EVALUATED_AFTER_DECISION` (with `exhaustive: true`). Every statement and permission has an outcome: `MATCHED`, `ACTION_MISS`, `CONDITION_MISS`, `NOT_EVALUATED` (its policy's or app's condition did not match) or `ERROR`. |
-| `overriddenAllows` | Allows that a later explicit deny overrode. |
-| `rateLimitRules` | The [rate limit rules](../policies/rate-limiting.md) the request would spend a permit from, if it is allowed. |
-| `warnings` | `MISSING_POLICY` (the principal lists a policy the repository lacks, so a real request gets `500`), `MISSING_PERMISSION` (a role is granted a permission id its app does not define, so a real request gets `500`), `NO_APP_PERMISSION` (roles in the space, but no app permission for the app), `NO_ROLE_IN_SPACE` (roles, but none written for the request's space; see [Roles and spaces](./authentication.md#roles-and-spaces)), `MATCHER_ERROR`, `TOKEN_INVALID` (the credential was rejected), and `TRACE_INCONSISTENT` (the walk disagrees with the decision: trust the decision, and report it as a bug). |
+| `tenant` | Required. The principal's tenant. |
+| `principal` | The principal id; leave it out for the anonymous principal. |
+| `roles`, `policies` | The membership claims, written as a token carries them (`role`, `role@space`; [Roles and spaces](./authentication.md#roles-and-spaces)). |
+| `app`, `space` | The declared app and space, as `CoSec-App-Id` and `CoSec-Space-Id`; no host app applies. |
+| `action` | Required. `service:verb`. |
+| `resource` | Required. `type/id`, or a path starting with `/`. |
+| `remoteIp` | The client IP. |
+| `time` | The request time, an ISO-8601 instant; now by default. |
 
-Without Actuator, inject the `AuthorizationExplainer` bean and call `explain(request, principal)` (or
-`explain(request)` to use the request's own credential), for example in a test that pins down who may do what.
-For test cases over policy files, see [Testing Policies](../policies/testing.md).
+An optional `at` (`{"platform": 12, "app": 3, "tenant": 7}`) explains on those retained revisions instead of the
+heads; a revision no longer kept is `410`. Unknown fields are `400`.
+
+**Output.**
+
+```json
+{
+  "version": { "platform": 12, "app": 3, "tenant": 7 },
+  "decision": {
+    "decision": "Deny",
+    "by": { "policy": "no-cancel", "statement": 0, "name": "no-cancel", "via": "no-cancel", "document": "platform" },
+    "trace": {
+      "redacted": 1,
+      "candidates": [
+        { "effect": "DENY", "outcome": "MATCHED",
+          "statement": { "policy": "no-cancel", "statement": 0, "name": "no-cancel", "via": "no-cancel", "document": "platform" } }
+      ]
+    }
+  }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `version` | The revisions of the documents decided on. |
+| `decision.decision` | `Permit`, `Deny`, `Indeterminate`, or `Rejected` when the scope is rejected (then `cause` is `APP_MISMATCH` or `SPACE_NOT_MEMBER`, and there is no trace). |
+| `decision.by` | The statement that decided: policy, statement index and name, the binding it applied through (`via`: a binding id, or `attached:<policy>`) and its document. Absent for the implicit deny and for Indeterminate. |
+| `decision.cause` | For Indeterminate, the type of the cause (such as `MissingPolicies`, `MatcherFailed`, `SourceUnavailable`); never its message. |
+| `decision.redacted` | `true` when a statement decided that you may not see. |
+| `trace.candidates` | Each statement evaluated: its effect, its statement, and its outcome: `MATCHED`, `ACTION_MISS`, `RESOURCE_MISS`, `CONDITION_MISS`, `GUARD_MISS` (its policy's condition did not hold), `GUARD_ERROR`, `ERROR` or `NOT_EVALUATED`. |
+| `trace.redacted` | How many candidates were left out because you may not see them. |
+
+**Who may explain, and what they see.** `explain` is authorized like every control-plane call, as the principal of
+the request, in the app `cosec.control.app-id`:
+
+- the caller needs `cosec:explain` on the simulated tenant's document (`doc/tenant/<tenant>`). A tenant's principal
+  can only explain requests of its own tenant: tenant isolation comes first and is not a policy. The built-in
+  `cosec:tenant-viewer` and `cosec:tenant-admin` grant it on the caller's own tenant, `cosec:platform-admin` on every
+  tenant ([Built-in policies](../guide/security-model.md#built-in-policies));
+- statements are shown only from documents the caller may read (`cosec:read` on the document). A statement reached
+  through an attachment is shown only when the caller may read both the tenant and the platform document. Everything
+  else is left out of the trace and counted in `redacted`, and a decision made by a hidden statement says only
+  `"redacted": true`;
+- without the permission the answer is `403`, and when it cannot be decided `503`, with no detail.
+
+**What it does not see.** An explanation reads the published documents, not what an instance has installed (an
+instance may still serve an older revision for a while; see [Storage](../operations/storage.md)). It fetches no external attributes, so a
+statement that reads one counts as missing them ([Missing external attributes](../guide/security-model.md#missing-external-attributes)),
+and it has no token attributes, blacklist or rate limits.
+
+**Simulating a change.** `POST <base-path>/simulate` takes the same `request`, and optionally a staged change
+(`"candidate": "<change id>"`): it answers the decision on the current documents (`enforced`), on the documents with
+the change applied (`candidate`), and whether they differ. It needs `cosec:simulate` on the tenant's document and on
+the change's. Staging changes, shadow windows and access analysis (`/analyze`) are in
+[Testing policies](../policies/testing.md).
 
 **Next:** every property and its default, in [Configuration](../operations/configuration.md); or, to write the rules themselves, [Policy language](../policies/language.md).
