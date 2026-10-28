@@ -43,6 +43,8 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
@@ -69,7 +71,8 @@ import java.time.Instant
  * ```jsonc
  * "documents": { "platform": {...}, "apps": { "order": {...} }, "tenants": { "acme": {...} } },  // published first
  * "operators": { "alice": { "tenant": "acme", "roles": ["admin"], "policies": [], "attributes": { "level": 3 } } },
- * "options":   { "fourEyes": true, "shadow": { "minDuration": "PT15M", "minSamples": 3, "maxDuration": "PT1H" } },
+ * "options":   { "fourEyes": true, "shadow": { "minDuration": "PT15M", "minSamples": 3, "maxDuration": "PT1H" },
+ *                "providers": [ { "path": "ext.geo.country", "type": "string" } ] },   // the host's AttributeProviders
  * "steps": [ { "propose": { "change": "c1", "by": "alice", "document": "tenant:acme", "kind": "BREAK_GLASS",
  *                           "operations": [ { "putPolicy": { ...the document format's policy... } },
  *                                           { "putBinding": { ... } }, { "removePolicy": "id" }, { "removeBinding": "id" } ] } },
@@ -144,6 +147,7 @@ object ChangeRunner : ScenarioRunner {
             if (authorized) engine.authorizer else ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT },
             clock,
             ChangeOptions(fourEyes = node.get("options")?.get("fourEyes")?.bool() ?: false, shadow = shadowOptions()),
+            attributes = providers(),
             reports = reader,
             // Break-glass is recorded by a REQUIRED listener before it is created (RFC 0007 §8).
             listeners = ChangeListeners(listOf(RecordingAudit)),
@@ -160,7 +164,7 @@ object ChangeRunner : ScenarioRunner {
 
         /** A window closes as soon as it is looked at, unless the scenario sets `options.shadow`. */
         private fun shadowOptions(): ShadowOptions {
-            node.get("options")?.only("fourEyes", "shadow")
+            node.get("options")?.only("fourEyes", "shadow", "providers")
             val shadow = node.get("options")?.get("shadow") ?: return ShadowOptions(Duration.ZERO, 0, Duration.ZERO)
             shadow.only("minDuration", "minSamples", "maxDuration")
             return ShadowOptions(
@@ -169,6 +173,16 @@ object ChangeRunner : ScenarioRunner {
                 Duration.parse(shadow.required("maxDuration").text()),
             )
         }
+
+        /** The attributes the host's providers declare, which candidates compile against with the platform's. */
+        private fun providers(): AttributeCatalog = AttributeCatalog.of(
+            node.get("options")?.get("providers")?.values().orEmpty().map {
+                it.only("path", "type")
+                val type = PolicyDocumentCodec.ATTRIBUTE_TYPES[it.required("type").text()]
+                    ?: throw ScenarioFormatException("Unknown attribute type in $it")
+                Attribute.external(it.required("path").text(), type)
+            },
+        )
 
         suspend fun start() {
             node.get("documents")?.let { bootstrap(revisions, it) }

@@ -15,6 +15,7 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
+import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -101,7 +102,11 @@ class CheckResult(val findings: List<Finding>, val checkedWith: Map<SnapshotKey,
  *
  * Changing the platform's limits or attributes does not recompile the other documents; it is a warning.
  */
-class ChangeChecks(private val options: ChangeOptions = ChangeOptions()) {
+class ChangeChecks(
+    private val options: ChangeOptions = ChangeOptions(),
+    /** The host's `AttributeProvider` catalog: a candidate compiles against it as an instance would ([PolicyDocumentCompiler.forPlatform]). */
+    private val attributes: AttributeCatalog = AttributeCatalog.NONE,
+) {
     /** Reads what the checks combine a candidate with: current heads, and the back-references of the platform's policies. */
     interface Context {
         suspend fun head(key: SnapshotKey): Head?
@@ -144,7 +149,7 @@ class ChangeChecks(private val options: ChangeOptions = ChangeOptions()) {
             }
         }
         try {
-            PolicyDocumentCompiler.forPlatform(platform, options.principalBindingLimit).compile(candidate)
+            PolicyDocumentCompiler.forPlatform(platform, attributes, options.principalBindingLimit).compile(candidate)
         } catch (error: DocumentCompileException) {
             error.errors.forEach { findings += Finding("COMPILE", it.path, it.message, UNPROCESSABLE) }
         }

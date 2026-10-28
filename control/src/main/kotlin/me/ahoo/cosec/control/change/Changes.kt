@@ -28,6 +28,7 @@ import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
@@ -81,7 +82,9 @@ class Changes(
     authorizer: ControlAuthorizer,
     private val clock: Clock = Clock.systemUTC(),
     private val options: ChangeOptions = ChangeOptions(),
-    private val checks: ChangeChecks = ChangeChecks(options),
+    /** The host's `AttributeProvider` catalog, which candidates compile against with the platform's own declarations. */
+    attributes: AttributeCatalog = AttributeCatalog.NONE,
+    private val checks: ChangeChecks = ChangeChecks(options, attributes),
     private val authority: ChangeAuthority = ChangeAuthority(authorizer, options),
     /** What the instances report of the shadow windows (RFC 0007 §6.4); none by default. */
     reports: ShadowReportReader = InMemoryShadowReports(clock),

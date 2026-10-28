@@ -92,8 +92,6 @@ class PlatformCompiler(
     private fun inputsOf(platform: PolicyDocument?): Inputs {
         val limits = platform?.limits ?: ConditionLimits.DEFAULT
         val declared = platform?.attributes.orEmpty().distinctBy { it.path }
-        val byPath = declared.associateBy { it.path }
-        val catalog = AttributeCatalog { path -> byPath[path] ?: providers.external(path) }
         val signature = listOf(
             limits.maxNodes,
             limits.maxDepth,
@@ -103,6 +101,6 @@ class PlatformCompiler(
             limits.maxCost,
             declared.map { "${it.path}:${it.type}" }.sorted(),
         )
-        return Inputs(signature, PolicyDocumentCompiler.of(limits, catalog, principalBindingLimit))
+        return Inputs(signature, PolicyDocumentCompiler.forPlatform(platform, providers, principalBindingLimit))
     }
 }

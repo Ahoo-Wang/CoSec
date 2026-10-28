@@ -1,0 +1,56 @@
+{
+  "rules": [
+    "CTL-20"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "A condition on ext.geo.city, which neither the platform nor a provider declares, does not compile.",
+  "options": {
+    "providers": [
+      {
+        "path": "ext.geo.country",
+        "type": "string"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "geo",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read",
+                  "condition": {
+                    "eq": [
+                      "ext.geo.city",
+                      "NZ"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "DRAFT"
+    ],
+    "errors": {
+      "c1": [
+        "COMPILE"
+      ]
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}
