@@ -75,6 +75,7 @@ import java.util.UUID
  */
 @AutoConfiguration(afterName = [COCACHE_AUTO_CONFIGURATION])
 @ConditionalOnCoSecEnabled
+@ConditionalOnEnforceMode
 @EnableConfigurationProperties(RuntimeAuthorizationProperties::class)
 class CoSecSnapshotAutoConfiguration {
     /** Redis as the store of record (RFC 0003 §4.1). */

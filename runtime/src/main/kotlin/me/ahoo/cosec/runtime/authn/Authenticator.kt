@@ -14,6 +14,7 @@
 package me.ahoo.cosec.runtime.authn
 
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.identity.Identity
 import me.ahoo.cosec.membership.MembershipClaims
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
@@ -67,6 +68,8 @@ class AuthenticatedPrincipal(
     /** Where the principal's memberships come from (RFC 0004 §4.5). */
     val membershipSource: MembershipSource,
     val attributes: Map<String, Any> = emptyMap(),
+    /** The credential that proved it, by id and expiry, never its value: a gateway forwards it with the identity. */
+    val credential: Identity.Credential? = null,
 ) {
     /**
      * [memberships] are the claims of the token (RFC 0004 §4.5.1); null when the token asks for the
@@ -77,7 +80,14 @@ class AuthenticatedPrincipal(
         tenant: TenantId,
         memberships: Memberships?,
         attributes: Map<String, Any> = emptyMap(),
-    ) : this(id, tenant, memberships?.let(MembershipSource::Claims) ?: MembershipSource.Provider, attributes)
+        credential: Identity.Credential? = null,
+    ) : this(
+        id,
+        tenant,
+        memberships?.let(MembershipSource::Claims) ?: MembershipSource.Provider,
+        attributes,
+        credential,
+    )
 
     /** The claimed memberships; null when they come from the provider or cannot be used. */
     val memberships: Memberships? get() = (membershipSource as? MembershipSource.Claims)?.memberships

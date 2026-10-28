@@ -15,8 +15,10 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.engine.TraceLevel
+import me.ahoo.cosec.identity.IdentityCodec
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.util.unit.DataSize
 import java.time.Duration
 
 /** `cosec.pipeline.*` (RFC 0006 X8): the request pipeline's own bounds. */
@@ -37,8 +39,48 @@ class PipelineProperties {
     /** How much of an evaluation's trace decision events carry. */
     var traceLevel: TraceLevel = TraceLevel.OFF
 
+    /** `enforce` decides with policies; `gateway` trusts the identity the gateway in front forwards (`CoSec-Identity`). */
+    var mode: Mode = Mode.ENFORCE
+
+    /** `cosec.pipeline.gateway.*`: how a service behind a gateway reads the forwarded identity. */
+    val gateway = Gateway()
+
+    enum class Mode { ENFORCE, GATEWAY }
+
+    class Gateway {
+        /** An identity older than this (plus `cosec.authentication.revocation.skew`) is refused: 401 `token-expired`. */
+        var maxAge: Duration = Duration.ofSeconds(60)
+
+        /** A larger header is refused: 400 `invalid-request`. */
+        var maxSize: DataSize = DataSize.ofBytes(IdentityCodec.DEFAULT_MAX_BYTES.toLong())
+    }
+
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "pipeline"
+        const val MODE_KEY = "$PREFIX.mode"
+    }
+}
+
+/** `cosec.gateway.identity.*`: what a gateway forwards to the services behind it (`CoSec-Identity`). */
+@ConfigurationProperties(prefix = GatewayIdentityProperties.PREFIX)
+class GatewayIdentityProperties {
+    /** Whether a gateway forwards the verified identity; a route opts out with metadata `cosec-identity: false`. */
+    var enabled: Boolean = true
+
+    /** The token claims forwarded besides the identity, such as `name` and `email`: strings, numbers, booleans. */
+    var claims: Set<String> = emptySet()
+
+    /** A larger identity fails the request closed (500) rather than being cut. */
+    var maxSize: DataSize = DataSize.ofBytes(IdentityCodec.DEFAULT_MAX_BYTES.toLong())
+
+    /**
+     * Whether the client's `Authorization` header still goes downstream with the identity. Off: a service behind needs
+     * no token. Turn it on only for services that call other APIs on the user's behalf.
+     */
+    var forwardAuthorization: Boolean = false
+
+    companion object {
+        const val PREFIX = CoSec.COSEC_PREFIX + "gateway.identity"
     }
 }
 
