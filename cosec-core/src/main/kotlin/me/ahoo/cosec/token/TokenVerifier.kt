@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.token
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
@@ -26,10 +25,9 @@ import me.ahoo.cosec.api.token.TokenPrincipal
  * - Extracting principal information from tokens
  * - Refreshing tokens using refresh tokens
  *
- * @see PrincipalConverter
  * @see TokenConverter
  */
-interface TokenVerifier : PrincipalConverter {
+interface TokenVerifier {
     /**
      * Verifies an access token and returns the principal.
      *
@@ -40,11 +38,6 @@ interface TokenVerifier : PrincipalConverter {
      */
     @Throws(TokenVerificationException::class)
     fun <T : TokenPrincipal> verify(accessToken: AccessToken): T
-
-    /**
-     * Default implementation converting to principal via verify.
-     */
-    override fun toPrincipal(accessToken: AccessToken): CoSecPrincipal = verify(accessToken)
 
     /**
      * Refreshes tokens using a refresh token.

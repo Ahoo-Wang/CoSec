@@ -189,6 +189,26 @@
       "guards": [
         "control:ControlRoundTwoFixesTest#a rollback needs cosec read before it says which revisions exist"
       ]
+    },
+    {
+      "id": "CTL-19",
+      "source": "RFC 0007 §6.7, §10.1",
+      "statement": "A document's rate limit rules change only through a change: putRateLimit and removeRateLimit operations, or an :apply whose desired document sets them (all of them with REPLACE). A change that names no rate limit keeps the head's rules as they are.",
+      "level": "control",
+      "guards": [
+        "control:OperationsTest#rate limits are put, removed and diffed"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-20",
+      "source": "RFC 0007 §3.1 N3, §6.2",
+      "statement": "The control plane checks a candidate's conditions against the external attributes the platform declares and, after them, those the host's attribute providers declare, as an instance compiles it: a condition on a provider's attribute is checked clean, one on an attribute neither declares does not compile.",
+      "level": "control",
+      "guards": [
+        "control:ProviderAttributesTest#a candidate compiles against the platform's and the providers' attributes"
+      ],
+      "pending": null
     }
   ]
 }

@@ -17,7 +17,7 @@ import me.ahoo.cosec.authentication.CompositeAuthentication
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnAuthenticationEnabled
+import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
 import me.ahoo.cosec.token.DefaultTokenRevoker
 import me.ahoo.cosec.token.RevocableTokenVerifier
@@ -127,7 +127,7 @@ class CoSecJwtAutoConfiguration {
     }
 
     @Configuration
-    @ConditionalOnAuthenticationEnabled
+    @ConditionalOnLoginEnabled
     class OnAuthentication {
 
         @Bean

@@ -91,6 +91,8 @@ dependencies {
     compileOnly("org.springframework.boot:spring-boot-health")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-health")
+    // UnverifiedTokenTest: the classpath of every feature, so no module can decode a token without verifying it.
+    testImplementation("com.tngtech.archunit:archunit-junit5")
     testImplementation("org.springframework.boot:spring-boot-webflux")
     testImplementation("org.springframework.boot:spring-boot-starter-data-redis")
     testImplementation("me.ahoo.cosid:cosid-test")

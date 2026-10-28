@@ -15,7 +15,6 @@ package me.ahoo.cosec.jwt
 import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenTenantPrincipal
-import me.ahoo.cosec.jwt.Jwts.toPrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
 import org.openjdk.jmh.annotations.Benchmark
@@ -43,7 +42,6 @@ import org.openjdk.jmh.annotations.Threads
  * # Benchmark mode: Throughput, ops/time
  * ---------------------------------------------------------------------
  * Benchmark                   Mode  Cnt        Score        Error  Units
- * asPrincipalWithNoneVerify  thrpt   25  3413361.362 ± 274500.733  ops/s
  * asPrincipalWithVerify      thrpt   25   963915.375 ±  80948.670  ops/s
  * ---------------------------------------------------------------------
  * </pre>
@@ -69,10 +67,5 @@ open class JwtTokenConverterBenchmark {
     @Benchmark
     fun asPrincipalWithVerify(): TokenTenantPrincipal {
         return jwtTokenVerifier.verify(token)
-    }
-
-    @Benchmark
-    fun asPrincipalWithNoneVerify(): TokenTenantPrincipal {
-        return toPrincipal(token.accessToken)
     }
 }

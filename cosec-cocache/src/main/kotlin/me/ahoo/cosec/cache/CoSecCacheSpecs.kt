@@ -74,6 +74,9 @@ object CoSecCacheSpecs {
     const val REFERENCE_INDEX_CACHE_NAME = "ReferenceIndexCache"
     const val CONTROL_LEASE_CACHE_NAME = "ControlLeaseCache"
 
+    /** What the control plane's periodic tasks visit: every indexed document and the changes that may be open. */
+    const val CONTROL_LIST_CACHE_NAME = "ControlListCache"
+
     /** The control plane's change requests and each document's staging slot (RFC 0007 §5.2, §5.5). */
     const val CHANGE_REQUEST_CACHE_NAME = "ChangeRequestCache"
     const val STAGE_CACHE_NAME = "StageCache"
@@ -94,6 +97,7 @@ object CoSecCacheSpecs {
         REVISION_INDEX_CACHE_NAME,
         REFERENCE_INDEX_CACHE_NAME,
         CONTROL_LEASE_CACHE_NAME,
+        CONTROL_LIST_CACHE_NAME,
         CHANGE_REQUEST_CACHE_NAME,
         STAGE_CACHE_NAME,
         CANDIDATE_CACHE_NAME,
@@ -106,6 +110,7 @@ object CoSecCacheSpecs {
         REVISION_INDEX_CACHE_NAME,
         REFERENCE_INDEX_CACHE_NAME,
         CONTROL_LEASE_CACHE_NAME,
+        CONTROL_LIST_CACHE_NAME,
         CHANGE_REQUEST_CACHE_NAME,
         STAGE_CACHE_NAME,
         CANDIDATE_CACHE_NAME,
@@ -121,6 +126,7 @@ object CoSecCacheSpecs {
         REVISION_INDEX_CACHE_NAME to "control:revisions",
         REFERENCE_INDEX_CACHE_NAME to "control:refs",
         CONTROL_LEASE_CACHE_NAME to "control:lease",
+        CONTROL_LIST_CACHE_NAME to "control:list",
         CHANGE_REQUEST_CACHE_NAME to "control:change",
         STAGE_CACHE_NAME to "control:stage",
         CANDIDATE_CACHE_NAME to "candidate",

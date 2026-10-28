@@ -26,18 +26,27 @@ import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cache.snapshot.RedisTarget
 import me.ahoo.cosec.cache.snapshot.SnapshotNode
 import me.ahoo.cosec.cache.snapshot.newKeyPrefix
+import me.ahoo.cosec.control.change.Base
+import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.snapshot.SnapshotDigest
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotFormatException
 import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.snapshot.document.Actor
+import me.ahoo.cosec.snapshot.document.ProvenanceKind
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
@@ -53,16 +62,112 @@ class CoCacheControlStoreTest {
         """{"schema":2,"revision":$revision,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray(),
     )
 
-    private fun store(node: SnapshotNode, heads: Cache<SnapshotKey, SnapshotDocument> = node.cache) = CoCacheControlStore(
+    private fun store(
+        node: SnapshotNode,
+        heads: Cache<SnapshotKey, SnapshotDocument> = node.cache,
+        lists: Cache<String, Map<String, Instant>> = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
+        clock: Clock = Clock.systemUTC(),
+        changes: Cache<ChangeId, ChangeRequest> = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
+    ) = CoCacheControlStore(
         heads = heads,
         records = node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),
         indexes = node.runtime.create(ControlCacheSpecs.revisionIndex(node.keyPrefix)),
         references = node.runtime.create(ControlCacheSpecs.referenceIndex(node.keyPrefix)),
         leases = node.runtime.create(ControlCacheSpecs.lease(node.keyPrefix)),
-        changes = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
+        changes = changes,
         stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
         candidates = node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
+        lists = lists,
+        clock = clock,
+        missingGrace = Duration.ofHours(1),
     )
+
+    private fun change(id: String, state: ChangeState) = ChangeRequest(
+        id = ChangeId(id),
+        key = key,
+        base = Base(0, null),
+        operations = emptyList(),
+        author = Actor(TenantId("acme"), PrincipalId("alice")),
+        note = "",
+        kind = ProvenanceKind.PUBLISH,
+        state = state,
+        findings = emptyList(),
+        candidate = null,
+        checkedWith = emptyMap(),
+        createdAt = Instant.parse("2026-11-01T00:00:00Z"),
+        updatedAt = Instant.parse("2026-11-01T00:00:00Z"),
+    )
+
+    @Test
+    fun `indexed documents and open changes are listed, terminal ones are not`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val lists = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix))
+            val store = store(node, lists = lists)
+            store.documents().assert().isEmpty()
+            store.putIndex(key, null, RevisionIndex()).assert().isTrue()
+            store.documents().assert().containsExactly(key)
+
+            val open = change("c1", ChangeState.DRAFT)
+            store.putChange(null, open).assert().isTrue()
+            store.putChange(null, change("c2", ChangeState.DRAFT)).assert().isTrue()
+            store.openChanges().assert().containsExactlyInAnyOrder(ChangeId("c1"), ChangeId("c2"))
+            val digest = store.change(ChangeId("c1"))!!.digest
+            store.putChange(digest, open.copy(state = ChangeState.ABANDONED)).assert().isTrue()
+            store.openChanges().assert().containsExactly(ChangeId("c2"))
+
+            // A removal lost after the terminal write: the id is dropped the next time the list is read.
+            val listed = lists.get("open-changes")!!
+            lists.put("open-changes", listed + ("c1" to Instant.EPOCH))
+            store.openChanges().assert().containsExactly(ChangeId("c2"))
+            lists.get("open-changes")!!.keys.assert().containsExactly("c2")
+        }
+    }
+
+    /** Coordinator review: a change listed but not written yet is being written, or its write failed. */
+    @Test
+    fun `a listed change that is missing stays until the grace has passed`() = runBlocking<Unit> {
+        val backend = InMemoryBackend()
+        val keyPrefix = newKeyPrefix()
+        // Two instances over one Redis: one whose first write of c1 fails after listing it, one that reads the list.
+        SnapshotNode(backend, keyPrefix).use { writing ->
+            SnapshotNode(backend, keyPrefix).use { reading ->
+                val clock = MutableClock(Instant.parse("2026-11-01T00:00:00Z"))
+                val changes = writing.runtime.create(ControlCacheSpecs.changeRequest(writing.keyPrefix))
+                val failing = object : Cache<ChangeId, ChangeRequest> by changes {
+                    override fun async(): AsyncCache<ChangeId, ChangeRequest> =
+                        object : AsyncCache<ChangeId, ChangeRequest> by changes.async() {
+                            override fun putIfMatch(
+                                key: ChangeId,
+                                expected: Digest?,
+                                value: ChangeRequest
+                            ): CompletableFuture<ConditionalPut> =
+                                CompletableFuture.failedFuture(IllegalStateException("Redis is down"))
+                        }
+                }
+                val writer = store(writing, clock = clock, changes = failing)
+                assertThrownBy<IllegalStateException> {
+                    runBlocking { writer.putChange(null, change("c1", ChangeState.DRAFT)) }
+                }
+                val lists = reading.runtime.create(ControlCacheSpecs.list(reading.keyPrefix))
+                val reader = store(reading, lists = lists, clock = clock)
+                // c1 is listed and missing: it may be being written, so it is not dropped yet.
+                reader.openChanges().assert().containsExactly(ChangeId("c1"))
+                clock.now = clock.now.plus(Duration.ofMinutes(59))
+                reader.openChanges().assert().containsExactly(ChangeId("c1"))
+                clock.now = clock.now.plus(Duration.ofMinutes(2))
+                reader.openChanges().assert().isEmpty()
+                lists.get("open-changes")!!.assert().isEmpty()
+            }
+        }
+    }
+
+    private class MutableClock(var now: Instant) : Clock() {
+        override fun instant(): Instant = now
+
+        override fun getZone(): java.time.ZoneId = java.time.ZoneOffset.UTC
+
+        override fun withZone(zone: java.time.ZoneId): Clock = this
+    }
 
     @Test
     fun `heads and records share the data plane's digest`() = runBlocking<Unit> {
@@ -114,6 +219,7 @@ class CoCacheControlStoreTest {
                 node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
                 node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
+                node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
                 { published += it },
             )
             store.putHead(key, null, document(1)).assert().isInstanceOf(HeadWrite.Written::class.java)

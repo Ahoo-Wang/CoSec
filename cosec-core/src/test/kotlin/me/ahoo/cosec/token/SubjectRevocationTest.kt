@@ -70,7 +70,6 @@ class SubjectRevocationTest {
     private fun assertRevoked(principal: TokenPrincipal) {
         verifier.principal = principal
         assertThrows<TokenRevokedException> { revocableVerifier.verify<TokenPrincipal>(accessToken) }
-        assertThrows<TokenRevokedException> { revocableVerifier.toPrincipal(accessToken) }
         assertThrows<TokenRevokedException> { revocableVerifier.refresh<TokenPrincipal>(compositeToken) }
     }
 

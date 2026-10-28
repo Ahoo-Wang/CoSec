@@ -14,7 +14,7 @@ package me.ahoo.cosec.spring.boot.starter.authentication.social
 
 import com.xkcoding.http.config.HttpConfig
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
-import me.ahoo.cosec.spring.boot.starter.authentication.AuthenticationProperties
+import me.ahoo.cosec.spring.boot.starter.authentication.LoginProperties
 import me.zhyd.oauth.config.AuthConfig
 import me.zhyd.oauth.config.AuthDefaultSource
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -31,7 +31,7 @@ class SocialAuthenticationProperties(
     val registration: Map<String, Provider> = emptyMap()
 ) : EnabledCapable {
     companion object {
-        const val PREFIX = AuthenticationProperties.PREFIX + ".social"
+        const val PREFIX = LoginProperties.PREFIX + ".social"
     }
 
     @Suppress("LongParameterList")

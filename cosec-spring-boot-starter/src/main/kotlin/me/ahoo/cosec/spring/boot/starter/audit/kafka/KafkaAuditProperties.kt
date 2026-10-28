@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.audit.kafka
 
+import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
@@ -21,6 +22,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 data class KafkaAuditProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
     @DefaultValue(DEFAULT_TOPIC) var topic: String = DEFAULT_TOPIC,
+    /** `required` makes a permit wait for the broker's acknowledgement; best effort by default (RFC 0006 §9.2). */
+    @DefaultValue("best-effort") var delivery: Delivery = Delivery.BEST_EFFORT,
 ) : EnabledCapable {
     companion object {
         const val PREFIX: String = "cosec.audit.kafka"

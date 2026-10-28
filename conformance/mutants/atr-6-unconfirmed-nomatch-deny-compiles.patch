@@ -1,5 +1,5 @@
-# Rule: ATR-3
-# Mutant: a DENY may say onMissing nomatch in any document, not only the platform document
+# Rule: ATR-6
+# Mutant: a DENY with onMissing nomatch compiles without the control plane's confirmation, in any document
 # Tests: :cosec-engine:test --tests me.ahoo.cosec.engine.flat.* :cosec-core:test --tests me.ahoo.cosec.snapshot.* :conformance:test
 
 diff --git a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
