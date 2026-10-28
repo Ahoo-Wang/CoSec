@@ -19,3 +19,8 @@ dependencies {
     // MembershipResolver: memberships from claims and a provider, merged as the pipeline merges them.
     implementation(project(":cosec-runtime"))
 }
+
+// ConformanceScenariosTest reads the suite's scenarios.
+tasks.named<Test>("test") {
+    inputs.dir(rootProject.layout.projectDirectory.dir("conformance/src/test/resources/scenarios"))
+}
