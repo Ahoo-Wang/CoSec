@@ -17,6 +17,7 @@ import com.networknt.schema.Schema
 import com.networknt.schema.SchemaLocation
 import com.networknt.schema.SchemaRegistry
 import com.networknt.schema.SpecificationVersion
+import me.ahoo.cosec.identity.IdentityCodec
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
@@ -103,6 +104,7 @@ class SchemaConformanceTest {
 
             DocumentFormats.BINDING -> decodeDocument(document().also { it.putArray("bindings").add(node) })
             DocumentFormats.CATALOG -> decodeDocument(document().also { it.set("catalog", node) })
+            DocumentFormats.IDENTITY -> IdentityCodec.decodeJson(CoSecJsonSerializer.writeValueAsBytes(node))
             else -> error("No codec for ${file.fileName}.")
         }
     }

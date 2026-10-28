@@ -40,6 +40,7 @@ import org.springframework.context.annotation.Bean
  */
 @AutoConfiguration(before = [CoSecPipelineAutoConfiguration::class], afterName = [COCACHE_AUTO_CONFIGURATION])
 @ConditionalOnCoSecEnabled
+@ConditionalOnEnforceMode
 @ConditionalOnClass(name = ["me.ahoo.cosec.cache.CoCacheMembershipProvider"])
 @ConditionalOnBean(CacheRuntime::class, MembershipLoader::class)
 @EnableConfigurationProperties(CacheProperties::class)

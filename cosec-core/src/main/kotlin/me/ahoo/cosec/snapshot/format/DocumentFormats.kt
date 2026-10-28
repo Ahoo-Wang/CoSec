@@ -32,6 +32,7 @@ object DocumentFormats {
     const val BINDING = "cosec-binding"
     const val CATALOG = "cosec-catalog"
     const val PROBLEM = "problem"
+    const val IDENTITY = "cosec-identity"
 
     /** Where the files are published; their `$id`s. */
     const val BASE_URI = "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/"
@@ -119,6 +120,77 @@ object DocumentFormats {
         ),
     )
 
+    private fun id(vararg examples: String) = StringType(minLength = 1, examples = examples.toList())
+
+    private val epochSeconds = IntegerType(minimum = 0, description = "Epoch seconds, up to the end of year 9999.")
+
+    /**
+     * The `CoSec-Identity` header a gateway forwards to the services behind it, after base64url: format v1
+     * (`IdentityCodec` in `me.ahoo.cosec.identity`). Only what the gateway verified or resolved.
+     */
+    val identitySchema = SchemaFile(
+        name = IDENTITY,
+        title = "CoSec Identity Schema",
+        description = "The JSON of the `CoSec-Identity` header (base64url, no padding) a gateway sets on a permitted " +
+            "request: who the caller is and the scope the gateway decided in. Never a credential, policy or attribute value.",
+        root = ObjectType(
+            listOf(
+                Field("v", IntegerType(const = 1), required = true, description = "The format version."),
+                Field("tenant", id("acme", "(platform)"), required = true),
+                Field("sub", id("alice", "svc-billing"), required = true, description = "The principal's id."),
+                Field(
+                    "scope",
+                    ObjectType(
+                        listOf(
+                            Field("app", StringType(examples = listOf("order", "")), required = true),
+                            Field("space", StringType(examples = listOf("", "team-a")), required = true),
+                        ),
+                    ),
+                    required = true,
+                    description = "The scope the gateway decided in, resolved; empty strings for no app and the default space.",
+                ),
+                Field(
+                    "roles",
+                    ArrayType(id("clerk", "admin"), uniqueItems = true),
+                    required = true,
+                    description = "The roles effective in that scope after membership resolution.",
+                ),
+                Field(
+                    "auth",
+                    ObjectType(
+                        listOf(
+                            Field("method", StringType(enum = listOf("jwt", "api-key")), required = true),
+                            Field(
+                                "jti",
+                                id("0TEC7Hw00001zR0"),
+                                required = true,
+                                description = "The token or API key id."
+                            ),
+                            Field("exp", epochSeconds, required = true, description = "When the credential expires."),
+                        ),
+                    ),
+                    required = true,
+                ),
+                Field("iat", epochSeconds, required = true, description = "When the gateway made the header."),
+                Field("rid", id("0TEC7Hw00001zR0"), required = true, description = "The gateway's CoSec-Request-Id."),
+                Field(
+                    "claims",
+                    MapType(
+                        keys = id("name", "email"),
+                        values = AnyOf(
+                            listOf(
+                                StringType(maxLength = 1024, examples = listOf("Alice", "alice@example.com")),
+                                NumberType(),
+                                BooleanType(),
+                            ),
+                        ),
+                    ),
+                    description = "The token claims `cosec.gateway.identity.claims` names.",
+                ),
+            ),
+        ),
+    )
+
     /** Every generated file, in generation order. */
     val files: List<SchemaFile> =
         listOf(
@@ -127,6 +199,7 @@ object DocumentFormats {
             bindingSchema,
             catalogSchema,
             problemSchema,
+            identitySchema,
         )
 
     fun file(fileName: String): SchemaFile = files.first { it.fileName == fileName }

@@ -20,8 +20,8 @@ import me.ahoo.cosec.context.request.RemoteIpResolver
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Outcome
-import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.ProblemEncoder
+import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.ResumeDispatcher
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.Cookies
@@ -75,7 +75,7 @@ object HttpFactsReader {
  * away cancels the subscription, and so the coroutine: no outcome exists, and nothing is written.
  */
 abstract class ReactivePipelineBridge(
-    val pipeline: Pipeline,
+    val pipeline: RequestGate,
     private val contributors: List<BridgeContextContributor> = emptyList(),
     private val remoteIpResolver: RemoteIpResolver<ServerWebExchange> = ReactiveRemoteIpResolver,
     /** The app this host serves (RFC 0004 §4.6); [HttpFactsReader.NO_HOST] when the request declares it. */
@@ -121,7 +121,7 @@ abstract class ReactivePipelineBridge(
 
 /** The WebFlux filter over the coroutine pipeline (RFC 0006 §7.3). */
 class PipelineWebFilter(
-    pipeline: Pipeline,
+    pipeline: RequestGate,
     contributors: List<BridgeContextContributor> = emptyList(),
     remoteIpResolver: RemoteIpResolver<ServerWebExchange> = ReactiveRemoteIpResolver,
     host: HostScope = HttpFactsReader.NO_HOST,

@@ -16,6 +16,7 @@ package me.ahoo.cosec.runtime.authn
 import me.ahoo.cosec.apikey.ApiKey
 import me.ahoo.cosec.apikey.ApiKeyReader
 import me.ahoo.cosec.apikey.ApiKeys
+import me.ahoo.cosec.identity.Identity
 import me.ahoo.cosec.membership.MembershipClaims
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -50,6 +51,7 @@ class ApiKeyAuthenticator(
             tenant = apiKey.tenantId?.takeIf { it.isNotEmpty() }?.let(::TenantId) ?: TenantId.DEFAULT,
             membershipSource = MembershipSource.Claims(MembershipClaims.parse(apiKey.roles, apiKey.policies)),
             attributes = apiKey.attributes + (ApiKey.API_KEY_ID_ATTRIBUTE to apiKey.id),
+            credential = Identity.Credential(Identity.Method.API_KEY, apiKey.id, apiKey.expiresAt),
         )
         return AuthnResult.Authenticated(principal, method)
     }

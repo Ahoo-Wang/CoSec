@@ -60,7 +60,12 @@ internal object Jwts {
         val principal =
             withMembershipMarker(SimplePrincipal(principalId, policies, roles, attributes), decodedAccessToken)
         val tenantId = decodedAccessToken.getClaim(TENANT_ID_KEY).asString()
-        val tokenPrincipal = SimpleTokenPrincipal(accessTokenId, principal, decodedAccessToken.issuedAtAsInstant)
+        val tokenPrincipal = SimpleTokenPrincipal(
+            accessTokenId,
+            principal,
+            decodedAccessToken.issuedAtAsInstant,
+            decodedAccessToken.expiresAtAsInstant,
+        )
         if (tenantId.isNullOrEmpty()) {
             @Suppress("UNCHECKED_CAST")
             return tokenPrincipal as T

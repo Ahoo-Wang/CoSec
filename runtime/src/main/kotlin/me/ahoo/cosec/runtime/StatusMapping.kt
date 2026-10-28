@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.identity.Identity
+import me.ahoo.cosec.identity.IdentityCodec
 import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.StatementRef
@@ -26,6 +28,7 @@ import me.ahoo.cosec.runtime.http.CoSecParameters
  */
 internal object StatusMapping {
     private const val OK = 200
+    private val NO_FORWARD: Map<String, String?> = emptyMap()
     private const val CONTENT_TYPE = "Content-Type"
 
     /** 400 `invalid-request`: an ambiguous path or `CoSec-*` parameter. The engine never sees the request. */
@@ -61,6 +64,7 @@ internal object StatusMapping {
                 },
                 Basis.Decided(decision),
                 checkNotNull(security) { "A permit must carry who may proceed." },
+                NO_FORWARD,
             )
             is Decision.Deny -> problem(denied(decision, authn), requestId, traceId, Basis.Decided(decision))
             is Decision.Indeterminate ->
@@ -108,6 +112,31 @@ internal object StatusMapping {
         AuthnResult.Anonymous, is AuthnResult.Unavailable -> ProblemType.UNAUTHORIZED
     }
 
+    /** [outcome], forwarding [identity] to the services behind the gateway, or stripping the header when null. */
+    fun forwarding(outcome: Outcome, identity: String?): Outcome = with(outcome) {
+        Outcome(
+            status,
+            proceed,
+            requestId,
+            problem,
+            headers,
+            basis,
+            security,
+            forward + (IdentityCodec.HEADER to identity)
+        )
+    }
+
+    /** A service behind a gateway proceeds as [security], the identity the gateway forwarded or anonymous. */
+    fun asserted(requestId: String, security: RequestSecurity, identity: Identity?): Outcome =
+        Outcome(OK, true, requestId, null, requestIdHeader(requestId), Basis.Asserted(identity), security, NO_FORWARD)
+
+    /**
+     * A forwarded identity this service does not accept: 400 `invalid-request` when it cannot be read or is too large,
+     * 401 `token-expired` when it or its credential is too old, 401 `token-invalid` for a version it does not read.
+     */
+    fun identityRejected(requestId: String, type: ProblemType, reason: String, traceId: String?): Outcome =
+        problem(type, requestId, traceId, Basis.InvalidRequest(reason))
+
     private fun problem(
         type: ProblemType,
         requestId: String,
@@ -122,6 +151,7 @@ internal object StatusMapping {
         headers = mapOf(CoSecParameters.REQUEST_ID to requestId, CONTENT_TYPE to ProblemEncoder.MEDIA_TYPE) + extra,
         basis = basis,
         security = null,
+        forward = NO_FORWARD,
     )
 
     /**
