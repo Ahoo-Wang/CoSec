@@ -262,14 +262,27 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `environment.time` | Instant | 请求时间；只有 `time` 读取它。 |
 | `environment.device` | String | `CoSec-Device-Id` 参数；为空时缺失。 |
 | `environment.blocked` | Bool | 黑名单是否拦截该请求。 |
-| `http.header.<name>` | String | 请求头 `<name>`；请求没有该头时缺失。 |
-| `http.origin`、`http.referer` | String | `Origin` 和 `Referer` 请求头。 |
-| `http.origin.host`、`http.referer.host` | String | `Origin` 和 `Referer` URL 中的主机。 |
+| `http.header.<name>` | String | 请求头 `<name>`；请求没有该头时缺失。见[请求头](#headers)。 |
+| `http.origin`、`http.referer` | String | `Origin` 和 `Referer` 请求头，读取方式与 `http.header.*` 相同。 |
+| `http.origin.host`、`http.referer.host` | String | `Origin` 和 `Referer` URL 中的主机，小写；值不是带主机的 URL 时缺失。 |
 | `http.origin.host.labels`、`http.referer.host.labels` | Labels | 该主机的标签，倒序（`api.example.com` 为 `com.example.api`），小写；供 `prefix` 使用。 |
-| `request.attributes.<name>` | String | 宿主掌握的 HTTP 之外的请求信息，例如网关的路由 id。 |
+| `request.attributes.<name>` | String | 宿主掌握的 HTTP 之外的请求信息。网关设置 `request.attributes.cosec.audit.routeId`，即请求经过的路由 id；对元数据声明不传播身份（`cosec-identity: false`）的路由，还设置 `request.attributes.cosec.identity.forward`（`false`）。WebFlux 和 WebMvc 不设置任何值。 |
 | `ext.<provider>.<name>` | 声明的类型 | [外部属性](#external-attributes-and-onmissing)。 |
 
-不在此表中的路径无法编译。头名称不区分大小写：`http.header.X-Team` 就是 `http.header.x-team`。
+不在此表中的路径无法编译。
+
+### 请求头 {#headers}
+
+头名称不区分大小写：`http.header.X-Team` 就是 `http.header.x-team`。
+
+任何属性引用都不能读取携带凭证的请求头：`http.header.authorization`、`proxy-authorization`、`cookie`、`set-cookie`、
+`x-api-key` 和 `cosec-identity`，大小写不限，条件和限流规则的 `key` 都是如此。含有这种引用的文档无法编译，无论经由控制面还是
+`cosec-migrate`：在 `authorization` 上用 `prefix` 写的 DENY 会让文档作者逐个字符地获知其他主体的令牌，以它为 `key` 则会按令牌计数。`cosec-identity` 是网关转发给后端服务的请求头，在网关上它只是客户端的声明。这份列表是固定的
+（[`ConditionChecker.CREDENTIAL_HEADERS`](https://github.com/Ahoo-Wang/CoSec/blob/main/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt)）；
+从其他请求头读取 API key 的宿主不在其覆盖范围内。
+
+同一请求头出现多次且每份值都相同时，读作该值。各份值不同时，该请求头没有单一的值，读取它的语句出错：基于它的 DENY
+让请求成为 Indeterminate（`503`），除非另有 DENY 匹配；基于它的 ALLOW 不匹配。第一份或最后一份值永远不会单独决定结果。
 
 ### 匹配角色 {#matching-roles}
 
@@ -309,7 +322,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 ### 外部属性与 onMissing {#external-attributes-and-onmissing}
 
-`ext.<provider>.<name>` 属性来自属性提供者 `AttributeProvider`（[扩展](../architecture/extending.md)），只在请求的候选语句读取它们时获取。它们的类型是声明的：`string`、`bool`、`stringSet` 或 `ip`。没有任何提供者、也没有平台 [`attributes`](#limits-and-attributes) 条目声明的路径无法编译。控制面只按平台文档的 `attributes` 检查候选，所以要在那里声明每个外部属性。
+`ext.<provider>.<name>` 属性来自属性提供者 `AttributeProvider`（[扩展](../architecture/extending.md)），只在请求的候选语句读取它们时获取。它们的类型是声明的：`string`、`bool`、`stringSet` 或 `ip`。没有任何提供者、也没有平台 [`attributes`](#limits-and-attributes) 条目声明的路径无法编译。每个实例都按自己的提供者和平台的 `attributes` 编译，控制面检查变更时也是如此；因此每台主机上的提供者必须相同（[测试策略](./testing.md#trying-changes-in-shadow-mode)）。
 
 提供者可能不返回值（即上文的缺失），也可能失败、超时或没有被调用：此时属性*不可用*，由语句的 `onMissing` 决定：
 
@@ -396,7 +409,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `action` | 动作模式或其非空数组 | 必填 | 哪些请求计数。 |
 | `resource` | 资源模式或其非空数组 | 任意资源 | |
 | `condition` | 条件 | 恒为真 | |
-| `onMissing` | `"indeterminate"` 或 `"nomatch"` | `"indeterminate"` | 无法获取的外部属性：`indeterminate` 交给 `strictFailure` 决定；`nomatch` 跳过该规则。`nomatch` 只能用于平台文档。 |
+| `onMissing` | `"indeterminate"` 或 `"nomatch"` | `"indeterminate"` | 无法获取的外部属性：`indeterminate` 交给 `strictFailure` 决定；`nomatch` 跳过该规则。`nomatch` 只在平台文档中能编译：与 [DENY](#external-attributes-and-onmissing) 不同，限流规则没有确认流程。 |
 | `key` | 属性路径 | 一个共享桶 | String 或 Ip 属性，其值决定桶。`resource.var.<name>` 必须被每个资源模式捕获。 |
 | `permitsPerSecond` | 数字 | 必填 | 大于 `0`。 |
 | `windowSeconds` | 整数 | `1` | 至少为 `1`。 |

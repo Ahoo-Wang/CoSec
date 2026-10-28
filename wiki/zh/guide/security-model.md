@@ -184,6 +184,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 | 请求头、`Origin`、`Referer`（`http.*`） | HTTP 请求 | 客户端 |
 | 请求属性（`request.attributes.*`） | 适配器，例如网关的路由 id | 你 |
 | 外部属性（`ext.*`） | 你的 `AttributeProvider` Bean | 你 |
+| gateway 模式服务的调用方：主体、租户、应用、空间、角色、声明 | `CoSec-Identity` 头 | 网关，以及其他任何能访问该服务的人 |
 
 `ScopeResolver` 如何检查作用域：
 
@@ -201,7 +202,16 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 
 **客户端 IP。** `max-trusted-index` 是应用前面的代理数量；默认值 `1` 假定有一个代理。CoSec 从 `X-Forwarded-For` 右侧数起取该位置的条目，也就是你的代理追加的那一条。在客户端可直接访问的宿主上，请设置为 `0`，否则客户端可以在该请求头里写入任意地址（[代理之后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。
 
-**请求头是客户端输入。** 条件可以读取请求头（`http.header.<name>`）、`Origin` 和 `Referer`（`http.origin`、`http.referer` 及其主机）：它们全部由客户端写入。针对请求头的 DENY 只是客户端可以省略的提示，针对请求头的 ALLOW 则是客户端可以冒领的授权。请求属性（`request.attributes.<name>`，例如网关的路由 id）由宿主设置，而不是客户端。
+**请求头是客户端输入。** 条件可以读取请求头（`http.header.<name>`）、`Origin` 和 `Referer`（`http.origin`、`http.referer` 及其主机）：它们全部由客户端写入。针对请求头的 DENY 只是客户端可以省略的提示，针对请求头的 ALLOW 则是客户端可以冒领的授权。以不同的值发送多次的请求头没有单一的值：针对它的 DENY 为 Indeterminate（`503`），针对它的 ALLOW 不匹配（[属性](../policies/language.md#attributes)）。请求属性（`request.attributes.<name>`，例如网关的路由 id）由宿主设置，而不是客户端。
+
+条件不能读取携带凭证的请求头：`authorization`、`proxy-authorization`、`cookie`、`set-cookie`、`x-api-key` 和 `cosec-identity`。针对它们的条件无法编译。否则策略可以通过决策逐字符泄露其他主体的凭证，或者信任客户端写入的身份。用 `cosec.pipeline.api-key-header` 改名后的 API key 头不在这个列表中。
+
+**网关后面的服务。** gateway 模式（`cosec.pipeline.mode=gateway`）的服务不持有密钥和文档：它相信收到的 `CoSec-Identity` 头，自己不做任何决策。只有当网关是唯一能访问该服务的一方时，上面的保证才成立：
+
+- 网关在每个请求上删除客户端发来的 `CoSec-Identity`，不受它自身配置的影响，并且只在已认证主体的 Permit 上设置它。所以经过网关的请求要么带着网关验证过的身份（以及它做决策时的作用域），要么不带。
+- 其他任何能向该服务发请求的人，都可以冒充任意主体、租户和角色。让服务只能从网关访问：网络策略、私有网络或双向 TLS（[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)）。
+- 这个头没有签名。服务拒绝签发时间早于 `cosec.pipeline.gateway.max-age`（60 秒）加 `cosec.authentication.revocation.skew` 的头，以及凭证已过期的头，回答 `401` `token-expired`，所以在网络内截获的头只能在这段时间内重放。读不出或出现两次的头是 `400`，从不当作匿名。没有这个头的请求是匿名的。
+- 服务看到的就是网关决策时用的内容，仅此而已：那一个作用域的角色，没有策略，只有 `cosec.gateway.identity.claims` 列出的声明。
 
 ## 匿名调用方能做什么 {#what-anonymous-callers-can-do}
 
@@ -247,6 +257,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 CoSec 决定请求能否到达你的处理器。它不会：
 
 - 在未设置宿主应用时，校验客户端指定的应用是否与路径相符（见[信任边界](#trust-boundaries)）；
+- 阻止网关以外的人访问 gateway 模式的服务：这是网络的职责（[信任边界](#trust-boundaries)）；
 - 决定处理器返回哪些记录或字段：请在自己的代码中过滤数据，对象级规则可使用[代码中的权限检查](../integration/checks.md)；
 - 保护并非由它签发的凭证：被盗的令牌在过期或被吊销之前一直有效；
 - 拦住被策略误放行的请求：发布前请先试验变更（[策略测试](../policies/testing.md)）；
@@ -264,5 +275,6 @@ CoSec 决定请求能否到达你的处理器。它不会：
 - 必须始终生效的 DENY 放在没有条件的策略里，并且永远不要基于客户端写入的请求头授权。
 - 用于防滥用的限流规则，如果 Redis 故障时也不能失效，请设置 `"strictFailure": true`。
 - 只从用户无法影响的来源签发 `(platform)` 令牌。
+- 让每个 gateway 模式的服务只能从网关访问。
 
 **下一步：** 代码如何兑现这些保证，见[架构概览](../architecture/overview.md)；要开始使用 CoSec，见[快速开始](./quick-start.md)。

@@ -44,7 +44,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 - 路径含有 `.` 或 `..` 段，或者有格式错误的百分号转义；
 - `CoSec-App-Id`、`CoSec-Space-Id` 或 `CoSec-Device-Id` 参数有两个不同的非空值（在请求头和查询字符串之间，或在其中
   任一处之内），或者它的查询值有格式错误的百分号转义；
-- 路由映射捕获的值会改变资源 id 的分段。
+- 路由映射捕获的值会改变资源 id 的分段；
+- 在 `cosec.pipeline.mode=gateway` 的服务上，`CoSec-Identity` 头无法读取（[网关之后的服务拒绝请求](#a-service-behind-the-gateway-refuses-requests)）。
 
 修复客户端（[Web 集成](../integration/web.md)）。在控制 API 上，`400` 会在 `detail` 中说明问题
 （[控制面错误](#control-plane-errors)）。
@@ -68,17 +69,18 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
   `cosec.jwt.enabled=false` 时每个令牌都被拒绝。
 - **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md)）。携带
   API key 的请求只按 key 判断；不读取它的令牌。
+- **网关之后：** `CoSec-Identity` 是其他版本、没有 `auth.exp`，或签发时间在未来（[网关之后的服务拒绝请求](#a-service-behind-the-gateway-refuses-requests)）。
 
 ### `token-expired` {#token-expired}
 
 访问令牌的有效期已过。刷新它（[认证](../integration/authentication.md)），或检查时钟和
-[`cosec.jwt.token-validity.access`](./configuration.md#jwt)。
+[`cosec.jwt.token-validity.access`](./configuration.md#jwt)。在网关之后，转发来的身份也可能太旧（[网关之后的服务拒绝请求](#a-service-behind-the-gateway-refuses-requests)）。
 
 ### `token-revoked` {#token-revoked}
 
 令牌已被登出吊销，或者它所属主体在一次主体吊销之前签发的所有令牌都已被吊销（[认证](../integration/authentication.md)）。
 重新登录。在主体吊销之后 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)（5 秒）以内签发的
-令牌也会被吊销，所以紧接着吊销之后的登录可能需要等几秒。
+令牌也会被吊销，所以紧接着吊销之后的登录可能需要等几秒。刷新令牌时应用同样的偏差。
 
 登出后令牌在另一个实例上仍然可用：本地会把"未吊销"的回答缓存 30 秒，这限定了失效消息丢失时一个实例错过吊销的最长
 时间。Redis 故障期间，吊销检查会接受令牌（[Redis 不可用时](./storage.md#when-redis-is-unavailable)）。
@@ -124,12 +126,13 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 
 | `reason` / 指标 `cause` | 原因 | 修复 |
 |---|---|---|
-| `INDETERMINATE: SourceUnavailable` / `source_unavailable`，所有请求都是 | 没有发布平台文档：新的部署，或者 Redis 丢失了它。在平台文档存在之前，每个请求都是 `503`，控制 API 也一样。 | 用 `cosec-migrate publish` 发布一个（[最初的文档](./storage.md#the-first-documents)）。 |
+| `INDETERMINATE: SourceUnavailable` / `source_unavailable`，所有请求都是 | 没有发布平台文档：新的部署，或者 Redis 丢失了它。`cosec-migrate bootstrap` 只写平台租户的文档。在平台文档存在之前，每个请求都是 `503`，控制 API 也一样，就绪状态拒绝流量（[实例未就绪](#instance-is-not-ready)）。 | 用 `cosec-migrate publish` 发布一个（[最初的文档](./storage.md#the-first-documents)）。 |
+| `INDETERMINATE: SourceUnavailable` / `source_unavailable`，只有部分租户 | 该租户在 [`cosec.authorization.snapshot.fail-closed.tenants`](./configuration.md#snapshot) 中，而它的请求读取的最旧文档上次确认距今超过 `fail-closed.max-lag`（`Snapshot lag [<lag>] exceeds the fail-closed bound [<max>] of tenant [<tenant>].`）。 | 恢复 Redis；见[决策使用了旧的修订](#decisions-use-an-old-revision)。 |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable` | 请求需要的某个文档没能及时读到（冷加载时 Redis 宕机或缓慢）、无法解码或编译，或者见过之后又从 Redis 消失。加载失败和文档丢失会连同文档名一起记录：`Loading snapshot document [<doc>] failed.`、`Snapshot document [<doc>] disappeared from the store; failing closed.` | 恢复 Redis，或者发布该文档的一个可读修订（[Redis 不可用时](./storage.md#when-redis-is-unavailable)）。 |
 | `INDETERMINATE: MissingPolicies`、`AmbiguousPolicy` / `missing_policies` | 绑定或附加策略指向文档中未定义的策略，或者租户和平台都定义了同一个策略 id。 | 通过控制面修正文档。 |
 | `INDETERMINATE: MembershipUnavailable` / `membership` | `MembershipProvider` 失败，或耗时超过 [`cosec.authorization.membership.timeout`](./configuration.md#authorization)。 | 修复提供者或它的存储。 |
 | `INDETERMINATE: AttributeUnavailable` / `attribute` | 某条语句需要的外部属性的提供者失败或超时（以 `WARN` 记录 `<provider> failed to fetch [...]`）。 | 修复提供者，或者调大 [`cosec.authorization.attributes.timeout`](./configuration.md#authorization)。 |
-| `INDETERMINATE: MatcherFailed` / `matcher` | 某条 DENY 语句的条件，或它所在策略的条件，无法求值。失败的 ALLOW 永远不会让请求变成 `503`。 | 修正条件。 |
+| `INDETERMINATE: MatcherFailed` / `matcher` | 某条 DENY 语句的条件，或它所在策略的条件，无法求值。包括请求以不同的值多次发送某个请求头时，基于 `http.header.<name>` 的 DENY（`Header [<name>] arrived with different values; a condition on it cannot decide.`）；同一个值重复发送时按该值读取。失败的 ALLOW 永远不会让请求变成 `503`：基于这种请求头的 ALLOW 不匹配。 | 修正条件，或修正重复发送该请求头的客户端。 |
 | `INDETERMINATE: BoundaryUnavailable` / `boundary` | 对一个被放行的请求，租户边界中的某条语句无法求值。 | 修正边界。 |
 | `INDETERMINATE: RateLimiterUnavailable` / `rate_limiter` | `strictFailure: true` 的规则无法计数（以 `ERROR` 记录 `Rate limiter unavailable: rule [<id>] refuses the request.`）。 | 恢复 Redis，或去掉 `strictFailure`。 |
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | `REQUIRED` 决策监听器在一次放行上失败或超时（`REQUIRED decision listener [<name>] failed on request [<id>].`），或者放行来自 break-glass 绑定而没有 `REQUIRED` 监听器（`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`）。 | 修复监听器的存储，或在使用 break-glass 之前注册 `REQUIRED` 监听器（[决策监听器](./observability.md#decision-listeners)）。 |
@@ -142,6 +145,14 @@ DENY 仍然会做出决定：只要匹配到 DENY，即使某个文档不可用�
 
 CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `ERROR` 记录
 `Request [<requestId>] failed with an unmodelled exception.` 及堆栈，堆栈指明抛出异常的类。响应体从不携带异常消息。
+
+在网关上，身份无法转发的放行也是 `500`，记录为 `Request [<requestId>]: the identity cannot be forwarded.` 及其原因：
+
+- `The credential of [<subject>] never expires: a service could not bound the identity.`：没有 `expires-at` 的 API key（或没有
+  `exp` 的令牌）。给 key 设置过期时间，或把该路由的元数据设为 `cosec-identity: false`。
+- `The identity of [<subject>] is <n> bytes encoded, over the limit of <max>: ...`、`Claim [<name>] is <n> characters, over 1024.`
+  或 `Claim [<name>] is a <type>, not a string, number or boolean.`：减少角色或
+  [`cosec.gateway.identity.claims`](./configuration.md#gateway-identity)，或在网关和服务上都调大 `max-size`。
 
 ## 请求被意外放行 {#request-allowed-unexpectedly}
 
@@ -168,7 +179,60 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 
 控制面的传播视图显示有多少实例已装入某个修订（[快照健康状况](./observability.md#snapshot-health)）。
 
+## 网关之后的服务拒绝请求 {#a-service-behind-the-gateway-refuses-requests}
+
+[`cosec.pipeline.mode=gateway`](./configuration.md#pipeline) 的服务从网关转发的 `CoSec-Identity` 头读取调用方。没有该头的请求按匿名
+继续；它不接受的头从不被当作匿名：
+
+| 状态 | 原因 | 修复 |
+|---|---|---|
+| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、大于 [`cosec.pipeline.gateway.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
+| `401` `token-invalid` | 本服务不读取的版本、没有 `auth.exp`，或签发时间晚于当前时间加 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)。 | 让服务与网关一起升级；同步时钟。 |
+| `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.gateway.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。 |
+
+只有网关可以访问到这样的服务：它相信收到的任何该头。启动时以 `WARN` 记录这一点。
+
+## 实例未就绪 {#instance-is-not-ready}
+
+在平台文档以及 [`prewarm-apps` 和 `prewarm-tenants`](./configuration.md#snapshot) 中的每个文档都装入之前，就绪状态拒绝流量；存活状态不受
+影响。实例一直不就绪时：
+
+- **没有发布平台文档。** 用 `cosec-migrate publish` 发布一个。
+- **某个预热文档无法加载或编译。** 日志会指明它（`Loading snapshot document [<doc>] failed.`）。修正或发布该文档，或把它从预热列表中去掉。
+
+`cosecSnapshot` 健康指示器显示状态：`platform`（`installed`、`failed`、`absent` 或 `loading`）和 `prewarmed`。把它加入 readiness 组即可在
+探针中看到：`management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`。
+
+## 条件无法编译 {#a-condition-does-not-compile}
+
+- `` `<path>` is a credential header, which no condition may read ``：条件读取了 `http.header.authorization`、`proxy-authorization`、
+  `cookie`、`set-cookie`、`x-api-key` 或 `cosec-identity`。任何策略都不能读取凭证。改用主体属性或作用域作为条件
+  （[策略语言](../policies/language.md)）。
+- 条件读取的 `ext.*` 属性既没有在平台文档中声明，也没有宿主的属性提供者提供。变更按控制面宿主的属性提供者编译。
+
+## 影子窗口被候选错误阻塞 {#shadow-window-blocked-by-a-candidate-error}
+
+只要有一个实例报告 `CANDIDATE_ERROR`，影子窗口就被阻塞：该实例编译不了候选，无法比较决策，变更永远不会被发布。常见原因是候选读取的
+`ext.*` 属性，其提供者运行在控制面宿主上，却不在那个实例上。属性提供者及其声明的类型，在每个数据面实例和控制面宿主上必须相同。在这类变更
+进入影子阶段之前，把提供者部署到所有地方（[测试变更](../policies/testing.md)）。
+
 ## 启动失败 {#startup-failures}
+
+### 未知配置项导致启动失败 {#startup-fails-on-an-unknown-property}
+
+```text
+CoSec does not read <n> cosec.* properties, which would do nothing:
+  cosec.authentication.enabled -> cosec.authentication.login.enabled
+Remove or rename them; cosec.unknown-properties=warn only logs this.
+```
+
+CoSec 的任何模块都不读取的 `cosec.*` key：拼写错误，或 7.x 的 key，`->` 之后是替代它的配置（[7.x key](./upgrading.md#removed-and-renamed-properties)）。
+改名或删除它。[`cosec.unknown-properties=warn`](./configuration.md#unknown-properties) 只记录这份列表。
+
+### 管道模式导致启动失败 {#startup-fails-on-the-pipeline-mode}
+
+- `cosec.pipeline.mode=gateway on a Spring Cloud Gateway host: ...`：网关总是用策略决策。从网关上去掉这个配置项；在其后的服务上设置它。
+- `cosec.pipeline.mode` 绑定失败：值既不是 `enforce` 也不是 `gateway`。
 
 ### 驱逐检查导致启动失败 {#startup-fails-on-the-eviction-check}
 
@@ -229,6 +293,8 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 | `The PolicySnapshotCache cache takes no loader: Redis is the store of record, and only the snapshot source reads it.` | 某个 `CacheSpecCustomizer` 给每个缓存都设置了 loader；把 `PolicySnapshotCache` 排除在外。 |
 | `lagWarn must not exceed lagEscalate.` 以及其他快照选项检查 | 修正 [`cosec.authorization.snapshot.*`](./configuration.md#snapshot)。 |
 | `Invalid change options.`、`Invalid shadow window options.` | 修正 [`cosec.control.*`](./configuration.md#control-plane)：`break-glass.max-duration` 超过 `24h`，或 `shadow.max-duration` 小于 `shadow.min-duration`。 |
+| `cosec.control.revisions.reclaim-interval must be positive.`、`cosec.control.shadow.check-interval must be positive.` | 设置一个正的时长。 |
+| `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs kafka-support, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | 补上它列出的条件，或把 [`delivery`](./configuration.md#control-plane) 设为 `best-effort`。 |
 
 ## 控制面错误 {#control-plane-errors}
 
@@ -267,6 +333,7 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
    计数器。抛异常的监听器：`Decision listener [<name>] failed.`
 4. Kafka：`Failed to publish audit event to Kafka topic [<topic>].`，或 `The Kafka audit queue of [<topic>] is full.`
    （[审计日志与 Kafka](./observability.md#audit-log-and-kafka)）。
-5. 关闭时仍在队列中的事件会被丢弃。
+5. 关闭时，队列中的事件最多再发送 [`cosec.observability.listener.drain-timeout`](./configuration.md#decision-listeners)（5 秒），
+   之后剩下的被丢弃（`Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.`）。
 
 **下一步：** 把已有部署升级到新版本，见[升级](./upgrading.md)。

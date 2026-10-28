@@ -35,14 +35,15 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 3. **用 `cosec-migrate convert` 转换数据**，修正每一个拒绝项，直到转换被接受。对照[8.0 在哪些地方决策不同](#what-8-0-decides-differently)
    阅读 `report.json` 中的语义改动。
 4. **更新代码**：删除对[已删除 API](#removed-and-replaced-apis) 的使用，改为注册 8.0 的扩展 bean。
-5. **更新配置**：删除每一个[已删除的属性](#removed-and-renamed-properties)，并对新属性做出决定。三种常见情况会让启动失败：WebFlux 或
+5. **更新配置**：改名或删除每一个 [7.x key](#removed-and-renamed-properties)，并对新属性做出决定。8.0 不读取的 `cosec.*` key 会让启动
+   失败，并给出替代它的配置。另外三种常见情况也会让启动失败：WebFlux 或
    Spring MVC 宿主上 `classpath:cosec-routes.json` 没有路由映射（把 `cosec.authorization.routes.location` 设为一份映射，或设为空）；
    使用 JWT 却既没有 `cache-support` 也没有自己的吊销存储（[令牌吊销始终开启](#token-revocation-is-always-on)）；Redis 的驱逐策略不是
    `noeviction` 或读不到（[读不到 Redis 的驱逐策略时启动失败](#startup-fails-when-redis-s-eviction-policy-cannot-be-read)）。
 6. **更新客户端和告警**：错误响应体、`reason` 取值和部分状态码变了（[响应与状态码](#responses-and-status-codes)）；审计字段、指标标签和
    span 也变了（[可观测性的变化](#observability-changes)）。
 7. **发布**：用 `cosec-migrate publish` 发布转换得到的文档；如果运行控制面，用 `cosec-migrate bootstrap` 绑定它的第一个管理员。
-   平台文档发布之前，CoSec 需要决策的每个请求都返回 `503`。
+   平台文档发布之前，CoSec 需要决策的每个请求都返回 `503`，就绪状态拒绝流量。
 8. **部署 8.0**，然后检查你依赖的请求的决策（控制面的 `simulate` 和 `explain`，见[测试策略](../policies/testing.md)）。
 9. **稍后清理。** 8.0 从不读取、修改或删除 7.x 的 key。确定不再需要[回滚](#rollback)之后再删除它们。
 
@@ -281,6 +282,26 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
   读取器从不阻塞。携带 API key 的请求只按 key 判定，即使它同时携带令牌（`PIP-8`）。
 - `cosec.authorization.allow-query-token` 改为 `cosec.pipeline.allow-query-token`（默认 `false`）。
 - 7.x 自定义的 `SecurityContextParser` bean 不再被使用。改为注册一个 `Authenticator` bean（[认证](../integration/authentication.md)）。
+- `cosec.authentication.enabled` 改为 `cosec.authentication.login.enabled`，`cosec.authentication.social.*` 改为
+  `cosec.authentication.login.social.*`。这个开关打开或关闭登录 bean（`TokenCompositeAuthentication`、你的 `Authentication` bean、社交登录）；
+  无论它如何设置，请求都由管道认证。
+- 刷新令牌时应用与请求相同的 `cosec.authentication.revocation.skew`（默认 `5s`）：签发时间在主体吊销之后不超过该偏差的令牌不能再被刷新。
+
+#### 注入模式变为身份传递 {#inject-mode-becomes-identity-propagation}
+
+7.x 的注入模式（`cosec.inject.enabled=true`）让网关之后的服务不经校验地解析转发来的 JWT。8.0 没有不校验就读取令牌的模式。取而代之的是：
+网关转发它验证过的身份，其后的服务信任网关：
+
+| 位置 | 7.x | 8.0 |
+|---|---|---|
+| 网关 | 转发客户端的 `Authorization` 头。 | 无需设置：对有主体的放行，它设置 `CoSec-Identity`，并总是去掉客户端自己发来的。`cosec.gateway.identity.claims` 指定要转发的主体属性；路由元数据 `cosec-identity: false` 让该路由不转发。除非 `cosec.gateway.identity.forward-authorization=true`，转发的请求中会去掉 `Authorization` 头（[网关身份](./configuration.md#gateway-identity)）。 |
+| 其后的每个服务 | `cosec.inject.enabled=true` | `cosec.pipeline.mode=gateway`（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）：没有 key、策略、快照或 Redis；除非它签发令牌，否则设置 `cosec.jwt.enabled=false`。只有网关可以访问到该服务（网络策略、私有网络、mTLS）；其他能访问到它的人声称自己是谁就是谁。 |
+| 应用代码 | 从 `SecurityContext` 读取调用方。 | 相同。附加策略不被转发，角色是网关决策时所在作用域中的角色。 |
+
+永不过期的凭证（例如没有 `expires-at` 的 API key）不会被转发：网关对它的放行返回 `500`。给这类 key 设置过期时间，或让它们的路由不转发身份。
+
+在 CoSec 网关之后、自己校验令牌的服务不再收到 `Authorization` 头。要么在网关上设置 `cosec.gateway.identity.forward-authorization=true`，
+要么把该服务切换到 `cosec.pipeline.mode=gateway`。放在 cookie 中的令牌仍会被转发。
 
 ### 存储与 Redis {#storage-and-redis}
 
@@ -302,11 +323,11 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
 - **不再按请求读 Redis。** 每个实例加载平台文档以及它的请求需要的应用文档和租户文档，编译它们，并每隔
   `cosec.authorization.snapshot.revalidate-interval`（默认 `10s`）对每份已加载的文档做一次条件读。只有文档改变时 Redis 才传输它。
 - **Redis 故障期间，已安装的文档按最后一次确认的内容继续决策**，所以平台的 DENY 仍然有效。需要尚未加载的文档的请求最多等待
-  `cold-load-timeout`（默认 `2s`），然后返回 `503`。7.x 中，本地副本过期后（默认 5 分钟）请求开始以 `500` 失败。
-  `cosec.authorization.snapshot.fail-closed.{tenants,max-lag}` 作为属性存在，但本版本没有任何请求路径检查它们：目前还没有在快照落后后让请求
-  失败的设置。
-- **启动时在后台加载。** 平台文档、然后是 `prewarm-apps` 和 `prewarm-tenants`，在应用启动的同时加载；就绪状态不等待它们。尚未加载的应用的
-  第一个请求要编译它的整份文档；把繁忙的应用列进 `prewarm-apps`。
+  `cold-load-timeout`（默认 `2s`），然后返回 `503`。7.x 中，本地副本过期后（默认 5 分钟）请求开始以 `500` 失败。对于列在
+  `cosec.authorization.snapshot.fail-closed.tenants` 中的租户，若请求读取的文档上次确认距今超过 `fail-closed.max-lag`，请求改为 `503`，
+  除非有 DENY 匹配。
+- **就绪状态等待快照。** 平台文档、然后是 `prewarm-apps` 和 `prewarm-tenants`，在应用启动的同时加载；在它们全部装入之前，就绪状态拒绝
+  流量；存活状态不受影响。尚未加载的应用的第一个请求要编译它的整份文档；把繁忙的应用列进 `prewarm-apps`。
 - **缺失的平台文档按失败即拒绝处理。** 平台文档发布之前，CoSec 需要决策的每个请求都是 `503`。
 - **没有 `cache-support` 时**，starter 使用一个初始为空的内存存储，所以在应用把文档放进去之前每个请求都是 `503`。本地策略文件不再被加载
   （`cosec.authorization.local-policy.*` 已删除）。
@@ -334,40 +355,73 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
 | `CoSecExplainEndpoint`（`cosecExplain` actuator）、`AuthorizationExplainer`、`ExplainWarningCode` | 控制面的 `explain`（需要权限，可指定任一修订）；见[代码中的检查](../integration/checks.md)。 |
 | 影子模式（`ShadowAuthorization`、`ShadowPolicyProvider`、`cosec.shadow.*` 文件） | 控制面变更的影子窗口；见[测试策略](../policies/testing.md)。 |
 | `AccessAnalyzer` | 控制面的 `analyze`。 |
-| `PolicyTestKit` | 尚无 8.0 版本。用控制面的 `simulate` 测试决策。 |
+| `PolicyTestKit`（`cosec-core`） | `cosec-testkit` 模块中的 `PolicyTestKit`（[策略测试套件](#policy-test-suites)）。 |
+| `Jwts.toPrincipal(String)`、`Jwts.decode`、`Jwts.verifyTimeClaims` | 无：`Jwts` 是 `cosec-jwt` 的内部类。用会校验签名的 `TokenVerifier.verify` 把令牌变成主体。 |
+| `PrincipalConverter`、`TokenVerifier.toPrincipal` | `TokenVerifier.verify`。 |
 | `AuthorizationChecker.check(...)`：`Mono<Boolean>` | `AuthorizationChecker.check(security, action, resource)`，挂起函数；`cosec-webflux` 提供 `Mono<Boolean>` 形式，`cosec-webmvc` 提供阻塞形式（[代码中的检查](../integration/checks.md)）。 |
 | 过滤器 `ReactiveAuthorizationFilter`、`AuthorizationFilter`（servlet）、`AuthorizationGatewayFilter`，以及它们接受 `Authorization` 的构造器 | 由 starter 创建的 `PipelineWebFilter`、`PipelineServletFilter`、`PipelineGatewayFilter`。 |
-| `ReactiveInjectSecurityContextWebFilter`、`InjectSecurityContextFilter`（注入模式） | 无。没有只读取令牌而不决策的模式。8.0 的过滤器在每个放行的请求上放入安全上下文。 |
+| `ReactiveInjectSecurityContextWebFilter`、`InjectSecurityContextFilter`（注入模式） | CoSec 网关之后的 `cosec.pipeline.mode=gateway`（[注入模式变为身份传递](#inject-mode-becomes-identity-propagation)）。8.0 的过滤器在每个放行的请求上放入安全上下文。 |
 | 授权之后留在调用方安全上下文中的路径变量 | 无。从你的 Web 框架读取路径变量。 |
 | `cosecPolicyGenerator`、`cosecAppPermissionGenerator` actuator 端点 | `cosecServiceGenerator/routes`（路由映射）和 `cosecServiceGenerator/app`（应用文档）。 |
 
 仍然可用：`SecurityContext`（新增 `scope`，即校验后的应用、空间和角色；应读取它，而不是客户端声明的 `CoSec-*` 请求头）、`ServerWebExchange`、
 Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`AuditEventSink`、`TokenStore`，以及 `cosec-api` 的审计类型。
 
+#### 策略测试套件 {#policy-test-suites}
+
+8.0 的测试工具是 `cosec-testkit` 模块。`PolicyTestKit.load(dir)` 读取按 `cosec-migrate convert` 输出布局存放的文档，`tests(dir)` 为每个
+场景文件返回一个 JUnit 5 动态测试，供 `@TestFactory` 使用（[测试策略](../policies/testing.md)）。7.x 套件的 `policies`、`appPermissions` 和角色
+授予变成转换得到的文档；它的每个 `cases` 条目变成一个场景文件：
+
+| 7.x 用例 | 8.0 场景 |
+|---|---|
+| `name` | `description`（以及文件名） |
+| `principal` | `credential`：`tenant`、`id`、`roles`、`policies`、`attributes` |
+| `request` | `request`：`app`、`space`，以及路由映射给出的 `action` 和 `resource`（`type`、`id`）；测试工具不映射 HTTP 请求 |
+| `expect.result: ALLOW` | `"expect": {"decision": "Permit"}` |
+| `expect.result: EXPLICIT_DENY` | `"expect": {"decision": "Deny", "by": {...}}`，`by` 指明做出决策的语句 |
+| `expect.result: IMPLICIT_DENY` | `"expect": {"decision": "Deny", "by": null}` |
+| `policyId`、`statementName` | `by`：`policy`、`statement`（它的下标）和 `name` |
+
+只比较 `expect` 中写出的字段。
+
 ### 已删除和改名的属性 {#removed-and-renamed-properties}
 
 这里没有列出的 7.x `cosec.*` 属性保持名称和含义不变。8.0 的全部属性及默认值见[配置](./configuration.md)。
 
+下面每个 key 在 8.0 中都会让启动失败，错误信息会给出替代它的配置（starter 中的 `UnknownProperties.RENAMED`）。8.0 不读取的其他
+`cosec.*` key 也一样；`cosec.unknown-properties=warn` 只记录它们（[未知配置项](./configuration.md#unknown-properties)）。以 `.` 结尾的
+key 代表它之下的每个 key。
+
 | 7.x | 8.0 |
 |---|---|
-| `cosec.authorization.enabled` | 已删除。`cosec.enabled=false` 关闭 CoSec。 |
-| `cosec.authorization.local-policy.*`（`enabled`、`locations`、`init-repository`、`force-refresh`） | 已删除。转换并发布这些文件（[迁移数据](#migrating-the-data)）。 |
+| `cosec.authentication.enabled` | `cosec.authentication.login.enabled` |
+| `cosec.authentication.social.` | `cosec.authentication.login.social.` |
 | `cosec.authorization.allow-query-token` | `cosec.pipeline.allow-query-token` |
-| `cosec.authorization.root-enabled` | 已删除（[root 变为 break-glass](#root-becomes-break-glass)）。 |
-| `cosec.authorization.cache.enabled`、`.policy.*`、`.role.*`、`.history.*`、`.migration.*` | 已删除。快照缓存是 `cosec.authorization.snapshot.*`。`cosec.authorization.cache.key-prefix` 和 `.token.*` 保留。 |
-| `cosec.authorization.gateway.enabled` | 已删除。网关过滤器随 `gatewaySupport` 提供。 |
-| `cosec.limiter.*`（`enabled`、`locations`、`key-prefix`） | 已删除。规则在平台文档中；要使用不同的限流 key 前缀，需要自己的 `RateLimiter` bean。 |
-| `cosec.shadow.*` | 已删除。影子窗口是控制面的操作；每个实例的部分是 `cosec.authorization.shadow.*`。 |
-| `cosec.explain.enabled` | 已删除。使用控制面的 `explain`。 |
-| `cosec.inject.enabled` | 已删除。 |
 | `cosec.api-key.header` | `cosec.pipeline.api-key-header` |
+| `cosec.authorization.enabled` | 已删除：`cosec.enabled=false` 关闭 CoSec。 |
+| `cosec.authorization.local-policy.` | 已删除：用 `cosec-migrate` 转换并发布这些文件（[迁移数据](#migrating-the-data)）。 |
+| `cosec.authorization.root-enabled` | 已删除：root 变为 break-glass（[root 变为 break-glass](#root-becomes-break-glass)）。 |
+| `cosec.authorization.cache.enabled` | 已删除：快照缓存是 `cosec.authorization.snapshot.*`。 |
+| `cosec.authorization.cache.policy.` | 已删除：快照缓存是 `cosec.authorization.snapshot.*`。 |
+| `cosec.authorization.cache.role.` | 已删除：快照缓存是 `cosec.authorization.snapshot.*`。 |
+| `cosec.authorization.cache.history.` | 已删除。 |
+| `cosec.authorization.cache.migration.` | 已删除。 |
+| `cosec.authorization.cache.token.concurrency-level` | 已删除：自 CoCache 5 起被忽略。 |
+| `cosec.authorization.gateway.enabled` | 已删除：网关过滤器随 `gatewaySupport` 提供。 |
+| `cosec.limiter.` | 已删除：限流规则在平台文档中（[限流规则变为义务](#rate-limit-rules-become-obligations)）；要使用不同的限流 key 前缀，需要自己的 `RateLimiter` bean。 |
+| `cosec.shadow.` | 已删除：影子窗口是控制面的操作；每个实例的部分是 `cosec.authorization.shadow.*`。 |
+| `cosec.explain.enabled` | 已删除：使用控制面的 `explain`。 |
+| `cosec.inject.enabled` | 已删除（[注入模式变为身份传递](#inject-mode-becomes-identity-propagation)）。 |
 | `cosec.api-key.store-blocking` | 已删除。 |
-| `cosec.jwt.token-revocation.enabled` | 已删除；吊销始终开启。 |
+| `cosec.jwt.token-revocation.enabled` | 已删除：吊销始终开启（[令牌吊销始终开启](#token-revocation-is-always-on)）。 |
 
-新的属性组：`cosec.pipeline.*`（超时、查询令牌、API key 请求头、trace 级别）、`cosec.authorization.scope.app-id`、
-`cosec.authorization.{membership,attributes,rate-limit}.timeout`、`cosec.authorization.routes.location`、`cosec.authorization.snapshot.*`、
-`cosec.authorization.shadow.*`、`cosec.authentication.revocation.skew`、`cosec.audit.required.timeout`、`cosec.audit.kafka.delivery` 和
-`cosec.control.*`。
+`cosec.authorization.cache.key-prefix` 和 `cosec.authorization.cache.token.*` 保留。
+
+新的属性组：`cosec.pipeline.*`（超时、查询令牌、API key 请求头、trace 级别、模式）、`cosec.gateway.identity.*`、`cosec.unknown-properties`、
+`cosec.authorization.scope.app-id`、`cosec.authorization.{membership,attributes,rate-limit}.timeout`、`cosec.authorization.routes.location`、
+`cosec.authorization.snapshot.*`、`cosec.authorization.shadow.*`、`cosec.authentication.revocation.skew`、`cosec.audit.required.timeout`、
+`cosec.audit.kafka.delivery`、`cosec.observability.listener.*` 和 `cosec.control.*`。
 
 升级时有两个默认值需要做出决定：
 
@@ -431,7 +485,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 | RFC 0006 X5（响应体） | [错误响应体是 problem+json](#error-bodies-are-problem-json)。 |
 | RFC 0006 X6（线程） | [可观测性的变化](#observability-changes)。 |
 | RFC 0006 X7（API） | [已删除和替换的 API](#removed-and-replaced-apis)。 |
-| RFC 0006 X8（配置） | [已删除和改名的属性](#removed-and-renamed-properties)。不存在 `cosec.observability.listener.*` 属性。 |
+| RFC 0006 X8（配置） | [已删除和改名的属性](#removed-and-renamed-properties)。监听器队列是 `cosec.observability.listener.*`（[配置](./configuration.md#decision-listeners)）。 |
 | RFC 0007 X1（写 API、策略历史） | [已删除和替换的 API](#removed-and-replaced-apis)、[回滚](#rollback)。 |
 | RFC 0007 X2（影子） | [已删除和替换的 API](#removed-and-replaced-apis)、[已删除和改名的属性](#removed-and-renamed-properties)。 |
 | RFC 0007 X3（解释） | [已删除和替换的 API](#removed-and-replaced-apis)。 |

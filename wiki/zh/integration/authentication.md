@@ -32,7 +32,7 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 
 管道读取请求的凭证，然后询问一个 `Authenticator` 调用方是谁。starter 提供的是由两个认证器组成的 `CompositeAuthenticator`：
 
-- **`TokenAuthenticator`** 用 JWT 算法校验令牌，然后询问吊销读取器该令牌或其主体的全部令牌是否已被吊销。没有 JWT 时（`cosec.jwt.enabled=false`），带令牌的请求按 `token-invalid` 拒绝。
+- **`TokenAuthenticator`** 用 JWT 算法校验令牌，然后询问吊销读取器该令牌或其主体的全部令牌是否已被吊销。只有 `TokenVerifier.verify`（以及 `refresh`）能把令牌变成主体：CoSec 没有不校验签名就读取令牌声明的 API。没有 JWT 时（`cosec.jwt.enabled=false`），带令牌的请求按 `token-invalid` 拒绝。
 - **`ApiKeyAuthenticator`**，仅在 `cosec.api-key.enabled=true` 时启用，查找 [API key](#api-keys)。
 
 携带 API key 的请求（且已启用 API key）只依据该 key 判定，即使它同时发送了令牌：被拒绝的 key 绝不会退而使用令牌。其他请求交给令牌认证器；完全不带凭证的请求是匿名的。
@@ -111,7 +111,7 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 }
 ```
 
-这里的 `Credentials` 和 `Authentication` 是 `me.ahoo.cosec.api.authentication` 中的登录类型，不是管道的类型。登录路径必须允许匿名调用方访问，因此需要一个放行它的 `Anyone` 绑定，如[快速开始](../guide/quick-start.md#write-a-first-policy)所示。要自己签发令牌（例如使用自定义有效期），调用 `TokenConverter.toToken(principal)` 或 `toToken(principal, accessValidity, refreshValidity)`。
+这里的 `Credentials` 和 `Authentication` 是 `me.ahoo.cosec.api.authentication` 中的登录类型，不是管道的类型。`cosec.authentication.login.enabled`（默认开启）只开关这些登录 Bean，包括 `TokenCompositeAuthentication` 和社交登录；无论它如何设置，请求都由管道认证。登录路径必须允许匿名调用方访问，因此需要一个放行它的 `Anyone` 绑定，如[快速开始](../guide/quick-start.md#write-a-first-policy)所示。要自己签发令牌（例如使用自定义有效期），调用 `TokenConverter.toToken(principal)` 或 `toToken(principal, accessValidity, refreshValidity)`。
 
 ## 刷新令牌 {#refreshing-tokens}
 
@@ -159,7 +159,7 @@ JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。�
 
 - 没有租户的主体位于默认租户 `(0)`。
 - `iat` 精确到整秒，因此与吊销同一秒内签发的令牌，即使在吊销之后签发，也会被拒绝。主体被吊销后，不带 `iat` 的令牌一律被拒绝。
-- `iat` 来自签发方的时钟，`issuedBefore` 来自执行吊销的实例的时钟。为了防止时钟偏快的签发方给吊销前签发的令牌打上更晚的 `iat`，请求还会拒绝在 `issuedBefore` 之后 `cosec.authentication.revocation.skew`（5 秒）内签发的令牌。在这个窗口内重新登录的用户需要再登录一次。刷新检查不使用这个偏差。
+- `iat` 来自签发方的时钟，`issuedBefore` 来自执行吊销的实例的时钟。为了防止时钟偏快的签发方给吊销前签发的令牌打上更晚的 `iat`，请求还会拒绝在 `issuedBefore` 之后 `cosec.authentication.revocation.skew`（5 秒）内签发的令牌。在这个窗口内重新登录的用户需要再登录一次。[刷新](#refreshing-tokens)使用同样的偏差，因此这样的令牌也无法刷新成新令牌。
 - 该记录在 `issuedBefore` 之后再保留一个刷新令牌有效期。之后以更早的 `issuedBefore` 再次调用不会缩短它，即使两个实例同时吊销同一主体也是如此。
 - 它需要与吊销单个令牌相同的存储。无法记录它的 `TokenStore` 会抛出 `UnsupportedOperationException`，而不是什么都不做。
 - 检查行为与上文相同：失效消息丢失时，本地的“未吊销”答案最多保留 30 秒；降级读取时令牌被接受。
@@ -185,7 +185,7 @@ cosec:
         expires-at: 2027-01-01T00:00:00Z
 ```
 
-每个 key 都需要 `id`、64 个字符的小写十六进制 `hash` 和 `principal-id`，且 id 必须唯一；否则应用无法启动。轮换 key 的做法是：先添加新 key，把客户端切换过去，再删除旧 key。
+每个 key 都需要 `id`、64 个字符的小写十六进制 `hash` 和 `principal-id`，且 id 必须唯一；否则应用无法启动。经网关使用的 key 请设置 `expires-at`：网关拒绝转发永不过期的凭证的身份（[转发身份](./web.md#forwarding-the-identity)）。轮换 key 的做法是：先添加新 key，把客户端切换过去，再删除旧 key。
 
 **Redis 存储**，由所有实例共享，可在运行时修改：设置 `cosec.api-key.store: redis`（需要 `cache-support`；key 位于 `cosec.api-key.key-prefix` 之下，默认 `cosec:api-key`）。管道用非阻塞的 `RedisApiKeyReader` 读取它们。通过 `RedisApiKeyStore` Bean 管理 key：
 
@@ -209,7 +209,7 @@ cosec:
 
 ## 社交登录 {#social-login}
 
-启用 `oauth-support` 后，`SocialAuthentication` 通过 [JustAuth](https://github.com/justauth/JustAuth) 的提供方登录用户。在 `cosec.authentication.social.registration.<name>` 下配置每个提供方，包括它的 JustAuth `type`、client id、secret 和 redirect URI（[配置](../operations/configuration.md)）。
+启用 `oauth-support` 后，`SocialAuthentication` 通过 [JustAuth](https://github.com/justauth/JustAuth) 的提供方登录用户。在 `cosec.authentication.login.social.registration.<name>` 下配置每个提供方，包括它的 JustAuth `type`、client id、secret 和 redirect URI（[配置](../operations/configuration.md)）。
 
 1. 把用户引导到 `socialAuthentication.authorizeUrl("<name>")`。该 URL 带有新生成的 OAuth `state`，应用有 `StringIdGenerator` Bean 时由它生成，否则由 `UuidGenerator` 生成。state 在 Redis 中保留 3 分钟，因此社交登录需要 `StringRedisTemplate`（或你自己的 JustAuth `AuthStateCache` Bean）。
 2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>")`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。
@@ -217,8 +217,11 @@ cosec:
 
 ## 网关之后 {#behind-a-gateway}
 
-每个服务都自行决策。位于 `cosec-gateway-server` 或任何网关之后的服务运行自己的管道：它校验转发来的令牌的签名、有效期和吊销状态，并基于同样的文档做决策。不存在服务不经校验就信任令牌的模式。
+位于 `cosec-gateway-server` 或任何 CoSec 网关之后的服务，要么信任网关，要么再次决策。没有服务会不经校验就信任令牌。
 
-让各服务与网关使用相同的 `cosec.jwt.secret`、相同的 Redis 和相同的 `cosec.authorization.snapshot.key-prefix`，这样它们读取的是同样的文档和同样的吊销记录。网关原样转发 `Authorization` 请求头，并把 `CoSec-Request-Id` 设为它自己的请求 id（[网关](./web.md#gateway)），使每个服务的结果带有同一个 id。在每个服务上设置 `cosec.authorization.scope.app-id`，并把 `cosec.authorization.remote-ip.max-trusted-index` 设为它前面的代理数量（包括网关）（[信任边界](../guide/security-model.md#trust-boundaries)）。
+- **信任网关转发的身份**（`cosec.pipeline.mode=gateway`）。网关校验凭证、检查吊销并做出决策，然后在 `CoSec-Identity` 中转发调用方是谁。服务不需要密钥、key、文档或 Redis，并且必须只能经由网关访问。配置方法、回应和安全上下文见[网关之后的服务](./web.md#services-behind-the-gateway)。
+- **再次决策**（默认的 `enforce`）。服务运行自己的管道：校验令牌的签名、有效期和吊销状态，并基于同样的文档做决策。
+
+要再次决策，请在网关上设置 `cosec.gateway.identity.forward-authorization=true`：默认情况下网关在转发前会移除 `Authorization` 请求头。让各服务与网关使用相同的 `cosec.jwt.secret`、相同的 Redis 和相同的 `cosec.authorization.snapshot.key-prefix`，这样它们读取的是同样的文档和同样的吊销记录。网关把 `CoSec-Request-Id` 设为它自己的请求 id（[网关](./web.md#gateway)），使每个服务的结果带有同一个 id。在每个服务上设置 `cosec.authorization.scope.app-id`，并把 `cosec.authorization.remote-ip.max-trusted-index` 设为它前面的代理数量（包括网关）（[信任边界](../guide/security-model.md#trust-boundaries)）。
 
 **下一步：** 在自己的代码中请求决策，见[代码中的权限检查](./checks.md)。

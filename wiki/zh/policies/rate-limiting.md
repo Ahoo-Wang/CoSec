@@ -63,7 +63,7 @@ flowchart LR
 - 应用文档的规则，当请求读取了该文档时：请求有应用，且主体在请求空间中拥有角色（[角色权限](./role-permissions.md#app-documents)）；
 - 租户文档的规则，对该租户的请求。
 
-它们按这个顺序运行，同一文档内按文档中的顺序。每条匹配的规则消耗一个许可。第一条桶已耗尽的规则返回 `429`；它之后的规则不消耗，之前的规则保留已消耗的许可。
+它们按这个顺序运行，同一文档内按文档中的顺序。每条匹配的规则消耗一个许可。第一条桶已耗尽的规则返回 `429`；它之后的规则不消耗，之前的规则保留已消耗的许可。规则是叠加的：租户或应用规则永远不会替换或放宽平台规则，即使 id 相同；只有请求匹配的每条规则都还有许可时，请求才能通过。
 
 ## 键 {#keys}
 
@@ -74,7 +74,7 @@ flowchart LR
 | 未写 | 规则匹配的所有请求共享一个桶。 |
 | 已写 | 每个值一个桶。该值缺失的请求共享它们自己的一个桶。 |
 
-不同文档的规则永远不共享桶：平台规则按自己的 id 计数，应用规则按 `app:<appId>/<id>`，租户规则按 `tenant:<tenantId>/<id>`。因此租户无法消耗或重置平台的配额。
+不同文档的规则永远不共享桶：平台规则按自己的 id 计数，应用规则按 `app:<appId>/<id>`，租户规则按 `tenant:<tenantId>/<id>`（[`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt)）。规则 id 不能包含 `:` 或 `/`，所以任何规则都无法指向其他文档的计数器：租户无法消耗或重置平台的配额。
 
 读取 `subject.id` 的键让所有匿名调用方共享一个桶；请用另一条按 `environment.ip` 计数的规则约束他们。键或条件读取了无法获取的[外部属性](./language.md#external-attributes-and-onmissing)时，规则没有桶：若写了 `onMissing: "nomatch"`（仅平台规则）则跳过，否则按[限流器失败](#failure-behavior)的方式由 `strictFailure` 决定。
 
@@ -117,6 +117,13 @@ flowchart LR
 
 规则是所属文档的一部分，因此随文档一起检查和编译：无效的 id、同一文档内重复的 id、`permitsPerSecond` 不大于 `0`、`windowSeconds` 小于 `1`、不是 String 或 Ip 属性的 `key`，或模式没有捕获的变量，都会让整个文档失败（[测试策略](./testing.md#validating-policies)）。
 
-控制面目前还没有修改 `rateLimits` 的操作：每个变更、`apply` 和回滚都保留当前修订的规则，`apply` 会忽略所给文档中的 `rateLimits`。规则随文档的第一个修订通过 `cosec-migrate publish` 写入（[存储](../operations/storage.md)）。
+像其他条目一样通过控制面修改规则（[变更](./testing.md#changes)）：
+
+- `putRateLimit`（`rateLimit`，可选 `ifMatch`）添加一条规则，或在原位置替换同 id 的规则；`removeRateLimit`（`id`，可选 `ifMatch`）删除一条规则；
+- `POST /documents/{key}:apply` 从整份文档提出这些操作：`MERGE` 写入新增和改动的规则，`REPLACE` 还会删除文档中没有的规则。顺序是规则的一部分（由第一条耗尽的规则返回），所以位置不对的规则会先删除再重新写入；回滚以同样的方式恢复该修订的规则。
+
+每个操作需要对条目 `doc/<document>/rateLimit/<id>` 拥有 `cosec:write`，例如 `doc/tenant/acme/rateLimit/export-per-user`。租户修改自己的规则，无论收紧还是放宽，都不需要第二个人：它的规则在自己的桶中计数，平台和应用的每条规则仍然作用于它的请求。对平台或应用文档的规则修改（包括删除）与那里的其他变更一样需要[审批](./testing.md#approval)。
+
+影子窗口比较的是决策，而规则从不改变决策，所以只涉及限流规则的变更在窗口中显示不出任何差异：窗口无法反映配额的情况。
 
 **下一步：** 在错误进入生产环境之前发现它们，见[测试策略](./testing.md)。

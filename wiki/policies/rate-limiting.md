@@ -72,7 +72,8 @@ Which rules a request is held to:
 
 They run in that order, and in document order within a document. Each matching rule spends one permit. The first rule
 whose bucket is exhausted answers `429`; the rules after it spend nothing, and the rules before it keep what they
-spent.
+spent. Rules add up: a tenant or app rule never replaces or relaxes a platform rule, even one with the same id, so a
+request passes only while every rule it matches has permits left.
 
 ## Keys
 
@@ -87,8 +88,10 @@ pattern of the rule.
 | present | One bucket per value. Requests where the value is absent share one bucket of their own. |
 
 Rules of different documents never share buckets: a platform rule counts under its own id, an app rule under
-`app:<appId>/<id>` and a tenant rule under `tenant:<tenantId>/<id>`. So a tenant cannot spend, or reset, the
-platform's quotas.
+`app:<appId>/<id>` and a tenant rule under `tenant:<tenantId>/<id>`
+([`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt)).
+A rule id cannot contain `:` or `/`, so no rule can name another document's counter: a tenant cannot spend, or reset,
+the platform's quotas.
 
 A key that reads `subject.id` gives anonymous callers one shared bucket; key them by `environment.ip` in a separate
 rule. A key or condition that reads an [external attribute](./language.md#external-attributes-and-onmissing) which
@@ -146,8 +149,20 @@ Rules are part of their documents, so they are checked and compiled with them: a
 document, `permitsPerSecond` not above `0`, `windowSeconds` below `1`, a `key` that is not a String or Ip attribute,
 or a variable a pattern does not capture fails the whole document ([Testing policies](./testing.md#validating-policies)).
 
-The control plane has no operation that changes `rateLimits` yet: every change, `apply` and rollback keeps the rules
-of the current revision, and `apply` ignores the `rateLimits` of the document it is given. Rules are written with a
-document's first revision, through `cosec-migrate publish` ([Storage](../operations/storage.md)).
+Change rules through the control plane like any other entry ([Changes](./testing.md#changes)):
+
+- `putRateLimit` (`rateLimit`, optional `ifMatch`) adds a rule, or replaces the one with its id where it stands;
+  `removeRateLimit` (`id`, optional `ifMatch`) removes one;
+- `POST /documents/{key}:apply` proposes them from a whole document: `MERGE` puts new and changed rules, `REPLACE` also
+  removes the rules the document leaves out. Order is part of the rules (the first exhausted rule answers), so a
+  rule out of place is removed and put again; a rollback restores the rules of its revision the same way.
+
+Each operation needs `cosec:write` on the entry `doc/<document>/rateLimit/<id>`, such as
+`doc/tenant/acme/rateLimit/export-per-user`. A tenant's rule changes, tightening or loosening, need no second person:
+its rules count in its own buckets, and every platform and app rule still applies to its requests. A rule change to the
+platform or app document, removals included, needs [approval](./testing.md#approval) as any other change there does.
+
+A shadow window compares decisions, and a rule never changes a decision, so a change that touches only rate limit rules
+shows no difference in its window: the window tells you nothing about the quota.
 
 **Next:** catch mistakes before they reach production, in [Testing policies](./testing.md).

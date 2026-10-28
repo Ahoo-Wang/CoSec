@@ -20,7 +20,7 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 | `InMemorySnapshotDocumentStore` | `cosec-core` | 测试和本地开发。没有 `cache-support` 时 starter 创建一个空的存储；应用用 `put` 把文档放进去。 |
 | 你自己的 `SnapshotDocumentStore` bean，且没有 `cache-support` | 你的代码 | 文档存放在其他系统中。每个方法都必须不阻塞地返回（[扩展](../architecture/extending.md)）。 |
 
-在存入平台文档之前，每个请求都得到 `503` `unavailable`（[最初的文档](#the-first-documents)）。
+在存入平台文档之前，每个请求都得到 `503` `unavailable`，每个实例都报告自己未就绪（[最初的文档](#the-first-documents)）。
 
 ## Redis {#redis}
 
@@ -50,7 +50,8 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 | `<s>:control:revision:<doc>:<digest>` | 控制面、`cosec-migrate` | 一条修订记录，即完整的文档，按摘要寻址 |
 | `<s>:control:revisions:<doc>` | 控制面、`cosec-migrate` | 一个文档的修订索引 |
 | `<s>:control:refs:<doc>:<policyId>` | 控制面、`cosec-migrate` | 引用 `<doc>` 中某个策略的文档 |
-| `<s>:control:lease:<name>` | 控制面 | 一个租约；随每次写入过期 |
+| `<s>:control:lease:<name>` | 控制面 | 一个租约（`reclaim:<doc>`、`shadow-windows`）；随每次写入过期，持有者完成后删除它 |
+| `<s>:control:list:documents`、`<s>:control:list:open-changes` | 控制面 | 有修订的文档，以及可能仍未结束的变更请求，供维护任务逐个访问 |
 | `<s>:control:change:<changeId>` | 控制面 | 一个变更请求 |
 | `<s>:control:stage:<doc>` | 控制面 | 一个文档的暂存槽：哪个变更占用它 |
 | `<s>:candidate:<doc>` | 控制面 | 影子窗口打开期间一个文档暂存的候选 |
@@ -142,6 +143,9 @@ sequenceDiagram
 - **滞后**是 Redis 上一次确认某个文档以来的时间。只要 Redis 有应答，它就低于重新确认间隔。超过 `lag-warn`（60 秒）
   时实例以 `WARN` 记录 `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.`，超过
   `lag-escalate`（5 分钟）时以 `ERROR` 记录 `... is stale: not confirmed for <lag>.`，每个文档每分钟最多一次。
+- **按滞后失败即拒绝的租户。** 对 [`fail-closed.tenants`](./configuration.md#snapshot) 中列出的租户，当请求读取的
+  最旧文档（平台文档、该租户的文档和应用的文档）超过 `fail-closed.max-lag`（30 分钟）未被确认时，请求无法解析：它得到
+  `503`，除非有 DENY 匹配。其他租户无论已装入的修订多旧都照常决策，从不检查。
 - **本地副本**只服务冷加载。实例第一次需要某个文档时，可能采用 CoCache 的本地副本，它最多
   [`local-max-age`](./configuration.md#snapshot)（30 秒）旧；实例按这个最旧的时间计算它，并立即向 Redis 确认。本地的
   "没有这个文档"从不被信任：只有 Redis 能回答某个文档不存在。
@@ -158,6 +162,7 @@ sequenceDiagram
 | 尚未装入的文档 | 冷加载失败或超时：对该请求而言文档未解析，结果是 **`503`**，除非先匹配到 DENY。不会装入任何内容；下一个请求再试。 |
 | 无法解码或编译的文档 | 作为失败装入：需要它的每个请求都是 **`503`**（除非先匹配到 DENY），直到发布一个可读的修订。 |
 | 见过之后又从 Redis 消失的文档 | 失败，直到文档回来（以 `ERROR` 记录 `Snapshot document [<doc>] disappeared from the store; failing closed.`）。需要它的请求是 **`503`**，除非先匹配到 DENY。 |
+| `fail-closed.tenants` 中的租户，其文档滞后超过 `fail-closed.max-lag` 之后 | **`503`**，除非先有 DENY 匹配（[实例如何读取文档](#how-instances-read-documents)）。 |
 | 没有发布平台文档 | 每个请求都是 **`503`**（[最初的文档](#the-first-documents)）。 |
 | 已吊销的令牌和主体 | 检查回答"未吊销"，令牌被 **接受**，这样一次故障不会拒绝所有已认证的请求。令牌仍会校验签名，并会自行过期。 |
 | 基于 Redis 的 `MembershipProvider` 提供的成员关系 | **`503`**。令牌中携带的成员关系不受影响。 |
@@ -182,8 +187,10 @@ sequenceDiagram
 
 ### 最初的文档 {#the-first-documents}
 
-在空的 Redis 上，每个请求都得到 `503`，控制面自己的检查也一样，因为它们同样需要平台文档。用 `cosec-migrate` 写入
-最初的文档：
+在空的 Redis 上，每个请求都得到 `503`，控制面自己的检查也一样，因为它们同样需要平台文档；每个实例都报告自己未就绪
+（[就绪](./deployment.md#readiness)）。缺失的平台文档从不被当作空文档读取，否则会悄悄丢掉每条平台 DENY。控制面无法
+创建它，因为每个控制面请求都要先由它授权；而 `cosec-migrate bootstrap` 只写平台租户的文档（`tenant:(platform)`）。
+第一个平台文档总是来自 `cosec-migrate publish`：
 
 1. **发布文档。**
    `cosec-migrate publish --to-redis redis://host:6379 [--key-prefix cosec] --in <dir>` 发布一个目录中的文档，目录格式
@@ -227,7 +234,18 @@ sequenceDiagram
 回滚和其他变更一样：按内容需要经过检查、影子窗口和审批，发布后产生一个新修订，所以历史只增不减，并记录了谁做的回滚。
 会把 break-glass 绑定带回来的回滚永远无法通过检查。
 
-保留配置项 [`cosec.control.revisions.*`](./configuration.md#control-plane) 会被绑定，但目前没有组件删除修订记录：每个
-修订都留在 Redis 中。请为此规划 Redis 容量。
+每个控制面实例在运行期间执行两个维护任务，每个都在一个间隔之后第一次运行：
+
+- **回收修订**，每隔 [`cosec.control.revisions.reclaim-interval`](./configuration.md#control-plane)（1 小时）。对每个
+  文档，它删除最近 `max-count`（50）个之外、且早于 `min-age`（7 天）的修订记录，以及从未成为头部、早于 `orphan-age`
+  （1 小时）的发布记录。它从不删除头部，也不删除未结束变更所依赖的修订；某个未结束的变更读不到时，这一轮什么都不回收。
+  每个文档一个租约（`reclaim:<doc>`），同一时间只有一个实例处理一个文档。
+- **关闭影子窗口**，每隔 [`cosec.control.shadow.check-interval`](./configuration.md#control-plane)（1 分钟），持有
+  `shadow-windows` 租约，所以窗口最多晚一个间隔关闭。
+
+两个任务都会读取每个未结束的变更，所以没人完成的变更在提出后
+[`cosec.control.changes.expire-after`](./configuration.md#control-plane)（7 天）过期，并离开未结束变更的列表。
+
+失败的一轮会被记录，下一轮照常运行。已被回收的修订得到 `410`。
 
 **下一步：** 查看 CoSec 做了什么决策，见[可观测性](./observability.md)。

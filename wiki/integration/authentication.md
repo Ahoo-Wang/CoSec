@@ -45,8 +45,9 @@ The pipeline reads the request's credentials, then asks one `Authenticator` who 
 `CompositeAuthenticator` of two:
 
 - **`TokenAuthenticator`** verifies the token with the JWT algorithm, then asks the revocation reader whether the
-  token, or every token of its principal, was revoked. Without JWT (`cosec.jwt.enabled=false`), a request with a
-  token is rejected as `token-invalid`.
+  token, or every token of its principal, was revoked. Only `TokenVerifier.verify` (and `refresh`) turns a token into
+  a principal: CoSec has no API that reads a token's claims without checking its signature. Without JWT
+  (`cosec.jwt.enabled=false`), a request with a token is rejected as `token-invalid`.
 - **`ApiKeyAuthenticator`**, only with `cosec.api-key.enabled=true`, looks up the [API key](#api-keys).
 
 A request that carries an API key (and API keys are enabled) is judged by the key alone, even if it also sends a
@@ -158,10 +159,12 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 }
 ```
 
-`Credentials` and `Authentication` here are the login types of `me.ahoo.cosec.api.authentication`, not the
-pipeline's. The login path must be reachable by anonymous callers, so it needs an `Anyone` binding that permits it,
-as in the [Quick start](../guide/quick-start.md#write-a-first-policy). To issue tokens yourself, for example with a
-custom lifetime, call `TokenConverter.toToken(principal)` or `toToken(principal, accessValidity, refreshValidity)`.
+`Credentials` and `Authentication` here are the login types of `me.ahoo.cosec.api.authentication`, not the pipeline's.
+`cosec.authentication.login.enabled` (on by default) switches only these login beans, `TokenCompositeAuthentication`
+and social login included; requests are authenticated by the pipeline either way. The login path must be reachable by
+anonymous callers, so it needs an `Anyone` binding that permits it, as in the
+[Quick start](../guide/quick-start.md#write-a-first-policy). To issue tokens yourself, for example with a custom
+lifetime, call `TokenConverter.toToken(principal)` or `toToken(principal, accessValidity, refreshValidity)`.
 
 ## Refreshing tokens
 
@@ -237,7 +240,8 @@ refresh token of that principal in that tenant whose `iat` is before `issuedBefo
 - `iat` comes from the issuer's clock and `issuedBefore` from the clock of the instance that revokes. So that an
   issuer whose clock runs ahead cannot stamp a token issued before the revocation with a later `iat`, requests also
   reject tokens issued up to `cosec.authentication.revocation.skew` (5 seconds) after `issuedBefore`. A user who
-  logs in again within that window must log in once more. The refresh check applies no skew.
+  logs in again within that window must log in once more. [Refreshing](#refreshing-tokens) applies the same skew,
+  so such a token cannot be refreshed into a new one either.
 - The entry is kept for the refresh token lifetime past `issuedBefore`. A later call with an earlier `issuedBefore`
   does not shorten it, even when two instances revoke the same principal at once.
 - It needs the same store as revoking one token. A `TokenStore` that cannot record it throws
@@ -274,8 +278,9 @@ cosec:
 ```
 
 Each key needs an `id`, a 64-character lowercase hex `hash` and a `principal-id`, and ids must be unique; otherwise
-the application does not start. Rotate a key by adding the new one, moving the client over, then removing the old
-one.
+the application does not start. Give a key used through a gateway an `expires-at`: the gateway refuses to forward the
+identity of a credential that never expires ([Forwarding the identity](./web.md#forwarding-the-identity)). Rotate a
+key by adding the new one, moving the client over, then removing the old one.
 
 **In Redis**, shared by every instance and changeable at runtime: set `cosec.api-key.store: redis` (needs
 `cache-support`; keys live under `cosec.api-key.key-prefix`, default `cosec:api-key`). The pipeline reads them with
@@ -313,7 +318,7 @@ cannot influence.
 ## Social login
 
 With `oauth-support`, `SocialAuthentication` signs users in through [JustAuth](https://github.com/justauth/JustAuth)
-providers. Configure each provider under `cosec.authentication.social.registration.<name>`, with its JustAuth
+providers. Configure each provider under `cosec.authentication.login.social.registration.<name>`, with its JustAuth
 `type`, client id, secret and redirect URI ([Configuration](../operations/configuration.md)).
 
 1. Send the user to `socialAuthentication.authorizeUrl("<name>")`. The URL carries a fresh OAuth `state`, generated
@@ -328,15 +333,22 @@ providers. Configure each provider under `cosec.authentication.social.registrati
 
 ## Behind a gateway
 
-Every service decides for itself. A service behind `cosec-gateway-server`, or any gateway, runs its own pipeline:
-it verifies the forwarded token's signature, expiry and revocation, and decides with the same documents. There is no
-mode in which a service trusts a token without verifying it.
+A service behind `cosec-gateway-server`, or any CoSec gateway, either trusts the gateway or decides again. No service
+trusts a token without verifying it.
 
-Give the services and the gateway the same `cosec.jwt.secret`, the same Redis, and the same
-`cosec.authorization.snapshot.key-prefix`, so they read the same documents and the same revocations. The gateway
-forwards the `Authorization` header unchanged, and sets `CoSec-Request-Id` to its own request id
-([Gateway](./web.md#gateway)), so each service's outcome carries the same id. Set
-`cosec.authorization.scope.app-id` on each service, and `cosec.authorization.remote-ip.max-trusted-index` to the
-number of proxies in front of it, the gateway included ([Trust boundaries](../guide/security-model.md#trust-boundaries)).
+- **Trust the gateway's identity** (`cosec.pipeline.mode=gateway`). The gateway verifies the credential, checks
+  revocation and decides, then forwards who the caller is in `CoSec-Identity`. The service needs no secret, keys,
+  documents or Redis, and must be reachable only through the gateway. Setup, answers and the security context are in
+  [Services behind the gateway](./web.md#services-behind-the-gateway).
+- **Decide again** (the default, `enforce`). The service runs its own pipeline: it verifies the token's signature,
+  expiry and revocation, and decides with the same documents.
+
+To decide again, set `cosec.gateway.identity.forward-authorization=true` on the gateway: by default it removes the
+`Authorization` header before forwarding. Give the services and the gateway the same `cosec.jwt.secret`, the same
+Redis, and the same `cosec.authorization.snapshot.key-prefix`, so they read the same documents and the same
+revocations. The gateway sets `CoSec-Request-Id` to its own request id ([Gateway](./web.md#gateway)), so each
+service's outcome carries the same id. Set `cosec.authorization.scope.app-id` on each service, and
+`cosec.authorization.remote-ip.max-trusted-index` to the number of proxies in front of it, the gateway included
+([Trust boundaries](../guide/security-model.md#trust-boundaries)).
 
 **Next:** ask for decisions from your own code, in [Checks in code](./checks.md).

@@ -17,15 +17,22 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `TokenStore`、`RevocationReader` | `cosec-core` | 把被吊销的令牌存放在 Redis 以外的地方。 | 各一个 bean |
 | `ApiKeyReader` | `cosec-core` | 从内存或 Redis 以外的地方查找 API key。 | 一个 bean |
 | `MembershipProvider` | `cosec-core` | 为令牌中不携带成员关系的主体提供角色和附加策略。 | 一个 bean |
-| `AttributeProvider` | `cosec-runtime` | 为条件提供外部属性（`ext.<provider>.<name>`），包括黑名单。 | 所有 bean |
+| `AttributeProvider` | `cosec-runtime` | 为条件提供外部属性（`ext.<provider>.<name>`）。 | 所有 bean |
+| `BlacklistSource` | `cosec-runtime` | 说明哪些主体、地址和设备被拦截。 | 一个 bean，包装进 `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime` | 观察每一个决策：审计、告警、分析。 | 所有 bean |
+| `AuditEventSink` | `cosec-api` | 接收 7.x 风格的审计事件。 | 所有 bean，作为 `BEST_EFFORT` 监听器 |
 | `RateLimiter` | `cosec-runtime` | 在 Redis 或内存以外的地方计数限流许可。 | 一个 bean，替换内置实现 |
 | `SnapshotDocumentStore` | `cosec-core` | 把策略文档存放在 Redis 以外的地方。 | 一个 bean，不使用 `cache-support` 时 |
 | `BridgeContextContributor` | `cosec-runtime` | 把线程本地上下文（日志、追踪）带进 Pipeline。 | 所有 bean |
 | `ChangeListener` | `cosec-control` | 观察或把关控制面变更。 | 所有 bean，使用 `control-support` 时 |
+| `ControlStore` | `cosec-control` | 把控制面的记录保存在 Redis 以外的地方。 | 一个 bean，使用 `control-support` 时 |
 | 路由映射 | `cosec-core` | 让请求得到作用于类型化资源的 `service:verb` 动作。 | `cosec.authorization.routes.location` |
 
 修改这些接口本身（而不是实现它们）对每个实现了它们的应用都是破坏性变更。
+
+适配器本身调用的是 `RequestGate`（`cosec-runtime`）：`Pipeline`，或者在 CoSec 网关后面的服务上
+（`cosec.pipeline.mode=gateway`）是 `IdentityGate`。它不是扩展点：两者都通过 `StatusMapping` 构造每个结果，自己写的
+gate 会成为第二条决策路径。
 
 ## 每个扩展都遵守的规则 {#rules-every-extension-follows}
 
@@ -47,7 +54,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 | `Rejected(reason)` | 凭证无效、过期或已吊销。 | 以匿名主体求值请求；被拒绝时以该原因应答 `401`。 |
 | `Unavailable(cause)` | 依赖失败。 | `503`。抛出异常按同样方式处理。 |
 
-`AuthenticatedPrincipal` 包含 id、租户、成员关系来源（令牌的声明，或[成员关系提供者](#memberships)）和属性。条件以 `subject.attributes.<name>` 读取这些属性。
+`AuthenticatedPrincipal` 包含 id、租户、成员关系来源（令牌的声明，或[成员关系提供者](#memberships)）、属性和 `credential`。条件以 `subject.attributes.<name>` 读取这些属性。`credential`（`Identity.Credential`：方法 `JWT` 或 `API_KEY`、凭证的 id 及其过期时间，从不包含凭证的值）是网关随身份一起转发的内容：在网关上，没有它的主体会被放行，但不会以已认证身份转发给任何后端；凭证没有过期时间的主体会让请求以 `500` 失败。
 
 认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
 
@@ -127,11 +134,12 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
 ```
 
 - **声明每个属性**，形式为 `ext.<provider>.<name>`，并给出类型：`STRING`、`BOOL`、`STRING_SET` 或 `IP`。每个路径在所有提供者中只能声明一次。这些声明构成文档编译所依据的属性目录：读取了无人声明的 `ext.` 路径的策略无法编译。平台文档也可以声明这个目录，让控制面和每个实例保持一致。
+- **在每个主机上注册相同的提供者。** 控制面按平台的声明和它自己主机的提供者检查变更，每个实例按自己的提供者编译。某个实例缺少提供者时，读取它的变更在该实例上会失败：该实例报告 `CANDIDATE_ERROR` 并阻塞影子窗口（[部署网关服务](../operations/deployment.md#before-the-first-request)）。
 - **取值。** 按路径返回值，类型与声明一致。没有返回的路径是*缺省*。类型错误的值、抛出的异常或超时，会让被请求的属性*不可用*，读取它们的每个语句按其 `onMissing` 设置处理（[策略语言](../policies/language.md)）。
 - **阶段。** B 阶段属性（默认）只在引擎的计划表明本请求可能读取它时才获取，发生在作用域解析之后。A 阶段属性在每个请求上都获取，发生在作用域之前，与成员关系一起获取。只有决定要加载什么的属性才用 A 阶段，例如黑名单。
 - **提供者能看到什么。** `AttributeRequest` 包含主体、已解析的作用域（A 阶段为 null）、动作、资源、客户端地址、请求 id 和设备 id，绝不包含其他属性的值。
 
-**黑名单**是一个 A 阶段提供者：`BlacklistAttributeProvider(source)` 声明 `ext.blacklist.principal`、`ext.blacklist.ip` 和 `ext.blacklist.device`，被其中任何一个拦截的请求会遇到内置的 DENY `cosec:blacklist`。基于你的存储实现 `BlacklistSource.contains(kind, value)`（主体的值为 `<tenant>:<principal id>`），或使用 `InMemoryBlacklistSource`，并把提供者声明为 bean。来源失败绝不意味着“未被拦截”：除非有 DENY 匹配，否则请求得到 `503`。
+**黑名单**是一个 A 阶段提供者：`BlacklistAttributeProvider(source)` 声明 `ext.blacklist.principal`、`ext.blacklist.ip` 和 `ext.blacklist.device`，被其中任何一个拦截的请求会遇到内置的 DENY `cosec:blacklist`。基于你的存储实现 `BlacklistSource.contains(kind, value)`（主体的值为 `<tenant>:<principal id>`），或使用 `InMemoryBlacklistSource`，并把来源声明为 bean：starter 会把它包装进 `BlacklistAttributeProvider`。没有时，启动以 `INFO` 记录 `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).`。来源失败绝不意味着“未被拦截”：除非有 DENY 匹配，否则请求得到 `503`。
 
 使用 `ip2region-support` 时，starter 注册 `Ip2RegionAttributeProvider`（`ext.ip2region.country`、`.province`、`.city`、`.isp`）。
 
@@ -159,7 +167,9 @@ class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
 
 - 经由 break-glass 绑定得到的 Permit 至少需要一个 REQUIRED 监听器，否则得到 `503`。
 - REQUIRED 监听器应按 `event.id` 保持幂等：超时的写入可能其实已经成功。
-- 所有 `DecisionListener` bean 都会按 `@Order` 顺序注册。starter 会加入审计日志（`LoggingAuditListener`，除非 `cosec.audit.enabled=false`），并在启用相应 feature 时加入 `MetricsListener`、`TracingListener`、`KafkaAuditListener` 和影子监听器。事件、指标和 span 见[可观测性](../operations/observability.md)。
+- 所有 `DecisionListener` bean 都会按 `@Order` 顺序注册，不同时是监听器的每个 `AuditEventSink` bean 也会注册，作为以 bean 名命名的 `BEST_EFFORT` 监听器。starter 会加入审计日志（`LoggingAuditListener`，除非 `cosec.audit.enabled=false`），并在启用相应 feature 时加入 `MetricsListener`、`TracingListener`、`KafkaAuditListener` 和影子监听器。事件、指标和 span 见[可观测性](../operations/observability.md)。
+- `event.evaluationTrace` 是引擎按 `cosec.pipeline.trace-level` 记录的追踪；在默认的 `off` 时为 null。
+- 关闭时，队列中的事件仍会在 `cosec.observability.listener.drain-timeout` 内继续投递。
 
 ## 限流器 {#rate-limiters}
 
@@ -199,11 +209,21 @@ starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `opentelemetry-su
 
 使用 `control-support` 时，`ChangeListener` 会在变更的每一步收到 `ChangeEvent`：提出、检查、影子完成、批准、发布中、已发布、break-glass 申请或批准，等等。事件从不携带文档内容。
 
-- `REQUIRED` 监听器为发布和创建 break-glass 的每一步把关：只有每个 REQUIRED 监听器都在 5 秒内记录了该步骤，它才会发生，否则以 `503` 失败且不写入任何内容。创建 break-glass 至少需要一个 REQUIRED 监听器。
+- `REQUIRED` 监听器为发布和创建 break-glass 的每一步把关：只有每个 REQUIRED 监听器都在 `cosec.control.audit.required-timeout`（5 秒）内记录了该步骤，它才会发生，否则以 `503` 失败且不写入任何内容。创建 break-glass 至少需要一个 REQUIRED 监听器。
 - 其他事件，以及发给 `BEST_EFFORT` 监听器的每个事件，都不在调用方上投递；失败只记录日志。
-- 只有当应用没有声明任何 `ChangeListener` 时，starter 才注册 `LoggingChangeListener`。要在自己的监听器之外保留日志，把它也声明为 bean。
+- 监听器是累加的：每个 `ChangeListener` bean 都与 starter 的 `LoggingChangeListener` 一起注册，后者只在你声明了自己的 `LoggingChangeListener` bean 时才不注册。
 
-`cosec-kafka` 提供 `KafkaChangeListener(kafkaOperations, topic, delivery)`（默认主题 `cosec-control-audit`）；starter 不注册它，需要你把它声明为 bean。使用 `Delivery.REQUIRED` 时，把生产者配置为 `acks=all`。
+有 `kafka-support` 和 `KafkaOperations` bean 时，starter 在 `cosec.control.audit.kafka.*` 下注册 `KafkaChangeListener`（[可观测性](../operations/observability.md#control-plane-change-log)）。
+
+## 控制面存储 {#control-store}
+
+使用 `control-support` 时，控制面把修订、变更请求、暂存槽、候选和租约保存在 `ControlStore` 中；starter 提供的是 Redis 上的 `CoCacheControlStore`。除了按 key 读写这些记录，存储还要回答维护任务需要访问什么：
+
+- `documents()`：它为之建立了修订索引的每个文档。可以多列，不能少列。
+- `openChanges()`：可能仍未结束的变更请求。可以多列，不能少列；调用方读取每个变更并以其状态为准。
+- `acquireLease(name, holder, duration)` 和 `releaseLease(name, holder)`：每项任务同一时间只有一个实例。只有 `holder` 仍持有租约时，释放才会删除它。
+
+与数据面的存储一样，失败的读取会抛出异常：从不回答“不存在”。
 
 ## 路由映射 {#route-maps}
 

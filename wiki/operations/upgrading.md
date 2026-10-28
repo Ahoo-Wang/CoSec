@@ -44,8 +44,9 @@ What is different, in short:
    the semantic changes in `report.json` against [What 8.0 decides differently](#what-8-0-decides-differently).
 4. **Update the code**: remove the uses of [removed APIs](#removed-and-replaced-apis) and register the 8.0 extension
    beans instead.
-5. **Update the configuration**: remove every [removed property](#removed-and-renamed-properties), and decide on the
-   new ones. Startup fails in three common cases: no route map at `classpath:cosec-routes.json` on a WebFlux or Spring
+5. **Update the configuration**: rename or remove every [7.x key](#removed-and-renamed-properties), and decide on the
+   new ones. A `cosec.*` key 8.0 does not read fails startup and names its replacement. Startup also fails in three
+   common cases: no route map at `classpath:cosec-routes.json` on a WebFlux or Spring
    MVC host (set `cosec.authorization.routes.location` to a map, or empty), JWT without `cache-support` and without a
    revocation store of your own ([Token revocation is always on](#token-revocation-is-always-on)), and a Redis whose
    eviction policy is not `noeviction` or cannot be read
@@ -55,7 +56,7 @@ What is different, in short:
    ([Observability changes](#observability-changes)).
 7. **Publish** the converted documents with `cosec-migrate publish`, and, if you run the control plane, bind its first
    administrator with `cosec-migrate bootstrap`. Until the platform document is published, every 8.0 request is
-   answered `503`.
+   answered `503`, and readiness refuses traffic.
 8. **Deploy 8.0**, then check decisions on the requests you rely on (the control plane's `simulate` and `explain`, see
    [Testing policies](../policies/testing.md)).
 9. **Clean up later.** 8.0 never reads, changes or deletes the 7.x keys. Delete them once you no longer need to
@@ -329,6 +330,30 @@ the revocation check reports is `503`, never an accepted token (`PIP-7`).
 - `cosec.authorization.allow-query-token` is now `cosec.pipeline.allow-query-token` (default `false`).
 - Custom 7.x `SecurityContextParser` beans are not used. Register an `Authenticator` bean instead
   ([Authentication](../integration/authentication.md)).
+- `cosec.authentication.enabled` is now `cosec.authentication.login.enabled`, and `cosec.authentication.social.*` is
+  now `cosec.authentication.login.social.*`. The switch turns the login beans on or off (`TokenCompositeAuthentication`,
+  your `Authentication` beans, social login); requests are authenticated by the pipeline whatever it says.
+- A token refresh applies the same `cosec.authentication.revocation.skew` (default `5s`) as a request: a token issued
+  up to the skew after a subject revocation can no longer be refreshed.
+
+#### Inject mode becomes identity propagation
+
+7.x inject mode (`cosec.inject.enabled=true`) let a service behind the gateway parse the forwarded JWT without
+verifying it. 8.0 has no mode that reads a token without verifying it. Instead the gateway forwards the identity it
+verified, and the services behind it trust the gateway:
+
+| Where | 7.x | 8.0 |
+|---|---|---|
+| Gateway | Forwarded the client's `Authorization` header. | Nothing to set: on a permit with a principal it sets `CoSec-Identity`, and it always strips the client's own. `cosec.gateway.identity.claims` names principal attributes to forward; route metadata `cosec-identity: false` opts a route out. The `Authorization` header is removed from forwarded requests unless `cosec.gateway.identity.forward-authorization=true` ([Gateway identity](./configuration.md#gateway-identity)). |
+| Each service behind it | `cosec.inject.enabled=true` | `cosec.pipeline.mode=gateway` ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)): no keys, policies, snapshot or Redis; set `cosec.jwt.enabled=false` unless it issues tokens. Only the gateway may be able to reach the service (network policy, a private network, mTLS); anyone else who can is whoever they claim. |
+| Application code | Read the caller from `SecurityContext`. | The same. Attached policies are not forwarded, and the roles are those of the scope the gateway decided in. |
+
+A credential that never expires, such as an API key without `expires-at`, is not forwarded: the gateway answers its
+permits `500`. Give such keys an expiry, or opt their routes out.
+
+A service behind a CoSec gateway that verifies tokens itself no longer receives the `Authorization` header. Either set
+`cosec.gateway.identity.forward-authorization=true` on the gateway, or switch the service to
+`cosec.pipeline.mode=gateway`. A token in a cookie is still forwarded.
 
 ### Storage and Redis
 
@@ -356,12 +381,12 @@ goes on and logs a warning that starts with `!!!`.
   changed.
 - **During a Redis outage, installed documents keep deciding** as last confirmed, so a platform DENY still holds. A
   request that needs a document not yet loaded waits up to `cold-load-timeout` (default `2s`) and is then `503`.
-  In 7.x, requests started failing with `500` once a local copy expired (5 minutes by default).
-  `cosec.authorization.snapshot.fail-closed.{tenants,max-lag}` exist as properties, but no request path of this
-  version checks them: there is no setting yet that fails requests once a snapshot lags.
-- **Startup loads in the background.** The platform document, then `prewarm-apps` and `prewarm-tenants`, load while
-  the application starts; readiness does not wait for them. The first request for an app that is not loaded compiles
-  its whole document; list busy apps in `prewarm-apps`.
+  In 7.x, requests started failing with `500` once a local copy expired (5 minutes by default). For a tenant listed in
+  `cosec.authorization.snapshot.fail-closed.tenants`, a request whose documents were last confirmed longer ago than
+  `fail-closed.max-lag` is `503` instead, unless a DENY matches.
+- **Readiness waits for the snapshot.** The platform document, then `prewarm-apps` and `prewarm-tenants`, load while
+  the application starts, and readiness refuses traffic until all of them are installed; liveness is not affected.
+  The first request for an app that is not loaded compiles its whole document; list busy apps in `prewarm-apps`.
 - **A missing platform document fails closed.** Every request CoSec has to decide is `503` until the platform document
   is published.
 - **Without `cache-support`** the starter uses an in-memory store that starts empty, so every request is `503` until
@@ -392,10 +417,12 @@ Code that uses any of these no longer compiles or is no longer called.
 | `CoSecExplainEndpoint` (`cosecExplain` actuator), `AuthorizationExplainer`, `ExplainWarningCode` | The control plane's `explain` (authorized, and for any revision); see [Checks](../integration/checks.md). |
 | Shadow mode (`ShadowAuthorization`, `ShadowPolicyProvider`, `cosec.shadow.*` files) | Shadow windows of control-plane changes; see [Testing policies](../policies/testing.md). |
 | `AccessAnalyzer` | The control plane's `analyze`. |
-| `PolicyTestKit` | No 8.0 version yet. Test decisions with the control plane's `simulate`. |
+| `PolicyTestKit` (`cosec-core`) | `PolicyTestKit` in the `cosec-testkit` module ([Policy test suites](#policy-test-suites)). |
+| `Jwts.toPrincipal(String)`, `Jwts.decode`, `Jwts.verifyTimeClaims` | None: `Jwts` is internal to `cosec-jwt`. Turn a token into a principal with `TokenVerifier.verify`, which checks the signature. |
+| `PrincipalConverter`, `TokenVerifier.toPrincipal` | `TokenVerifier.verify`. |
 | `AuthorizationChecker.check(...)`: `Mono<Boolean>` | `AuthorizationChecker.check(security, action, resource)`, a suspending function; `cosec-webflux` adds a `Mono<Boolean>` form and `cosec-webmvc` a blocking one ([Checks](../integration/checks.md)). |
 | Filters `ReactiveAuthorizationFilter`, `AuthorizationFilter` (servlet), `AuthorizationGatewayFilter`, and their constructors taking an `Authorization` | `PipelineWebFilter`, `PipelineServletFilter`, `PipelineGatewayFilter`, created by the starter. |
-| `ReactiveInjectSecurityContextWebFilter`, `InjectSecurityContextFilter` (inject mode) | None. There is no mode that reads tokens without deciding. The 8.0 filters put the security context on every permitted request. |
+| `ReactiveInjectSecurityContextWebFilter`, `InjectSecurityContextFilter` (inject mode) | `cosec.pipeline.mode=gateway` behind a CoSec gateway ([Inject mode becomes identity propagation](#inject-mode-becomes-identity-propagation)). The 8.0 filters put the security context on every permitted request. |
 | Path variables left in the caller's security context after authorization | None. Read path variables from your web framework. |
 | `cosecPolicyGenerator`, `cosecAppPermissionGenerator` actuator endpoints | `cosecServiceGenerator/routes` (a route map) and `cosecServiceGenerator/app` (an app document). |
 
@@ -403,31 +430,64 @@ Still available: `SecurityContext` (now with `scope`, the validated app, space a
 `CoSec-*` headers, which are what the client declared), `getSecurityContext()` on `ServerWebExchange`, Reactor
 `ContextView` and `HttpServletRequest`, `AuditEventSink`, `TokenStore`, and the `cosec-api` audit types.
 
+#### Policy test suites
+
+The 8.0 test kit is the `cosec-testkit` module. `PolicyTestKit.load(dir)` reads documents laid out as
+`cosec-migrate convert` writes them, and `tests(dir)` returns a JUnit 5 dynamic test for each scenario file, for a
+`@TestFactory` ([Testing policies](../policies/testing.md)). A 7.x suite's `policies`, `appPermissions` and role grants
+become the converted documents; each of its `cases` becomes one scenario file:
+
+| 7.x case | 8.0 scenario |
+|---|---|
+| `name` | `description` (and the file name) |
+| `principal` | `credential`: `tenant`, `id`, `roles`, `policies`, `attributes` |
+| `request` | `request`: `app`, `space`, the `action` and the `resource` (`type`, `id`) as a route map names them; the test kit does not map HTTP requests |
+| `expect.result: ALLOW` | `"expect": {"decision": "Permit"}` |
+| `expect.result: EXPLICIT_DENY` | `"expect": {"decision": "Deny", "by": {...}}`, `by` naming the deciding statement |
+| `expect.result: IMPLICIT_DENY` | `"expect": {"decision": "Deny", "by": null}` |
+| `policyId`, `statementName` | `by`: `policy`, `statement` (its index) and `name` |
+
+Only the fields `expect` names are compared.
+
 ### Removed and renamed properties
 
 Every 7.x `cosec.*` property not listed here keeps its name and meaning. Every 8.0 property and its default:
 [Configuration](./configuration.md).
 
+Every key below fails startup in 8.0, and the message names what replaced it (`UnknownProperties.RENAMED` in the
+starter). So does any other `cosec.*` key 8.0 does not read; `cosec.unknown-properties=warn` only logs them
+([Unknown properties](./configuration.md#unknown-properties)). A key ending in `.` stands for every key under it.
+
 | 7.x | 8.0 |
 |---|---|
-| `cosec.authorization.enabled` | Gone. `cosec.enabled=false` switches CoSec off. |
-| `cosec.authorization.local-policy.*` (`enabled`, `locations`, `init-repository`, `force-refresh`) | Gone. Convert and publish the files ([Migrating the data](#migrating-the-data)). |
+| `cosec.authentication.enabled` | `cosec.authentication.login.enabled` |
+| `cosec.authentication.social.` | `cosec.authentication.login.social.` |
 | `cosec.authorization.allow-query-token` | `cosec.pipeline.allow-query-token` |
-| `cosec.authorization.root-enabled` | Gone ([Root becomes break-glass](#root-becomes-break-glass)). |
-| `cosec.authorization.cache.enabled`, `.policy.*`, `.role.*`, `.history.*`, `.migration.*` | Gone. Snapshot caching is `cosec.authorization.snapshot.*`. `cosec.authorization.cache.key-prefix` and `.token.*` remain. |
-| `cosec.authorization.gateway.enabled` | Gone. The gateway filter comes with `gatewaySupport`. |
-| `cosec.limiter.*` (`enabled`, `locations`, `key-prefix`) | Gone. Rules are in the platform document; a different limiter key prefix needs a `RateLimiter` bean of your own. |
-| `cosec.shadow.*` | Gone. Shadow windows are control-plane operations; each instance's part is `cosec.authorization.shadow.*`. |
-| `cosec.explain.enabled` | Gone. Use the control plane's `explain`. |
-| `cosec.inject.enabled` | Gone. |
 | `cosec.api-key.header` | `cosec.pipeline.api-key-header` |
-| `cosec.api-key.store-blocking` | Gone. |
-| `cosec.jwt.token-revocation.enabled` | Gone; revocation is always on. |
+| `cosec.authorization.enabled` | Removed: `cosec.enabled=false` switches CoSec off. |
+| `cosec.authorization.local-policy.` | Removed: convert and publish the files with `cosec-migrate` ([Migrating the data](#migrating-the-data)). |
+| `cosec.authorization.root-enabled` | Removed: root becomes break-glass ([Root becomes break-glass](#root-becomes-break-glass)). |
+| `cosec.authorization.cache.enabled` | Removed: snapshot caching is `cosec.authorization.snapshot.*`. |
+| `cosec.authorization.cache.policy.` | Removed: snapshot caching is `cosec.authorization.snapshot.*`. |
+| `cosec.authorization.cache.role.` | Removed: snapshot caching is `cosec.authorization.snapshot.*`. |
+| `cosec.authorization.cache.history.` | Removed. |
+| `cosec.authorization.cache.migration.` | Removed. |
+| `cosec.authorization.cache.token.concurrency-level` | Removed: ignored since CoCache 5. |
+| `cosec.authorization.gateway.enabled` | Removed: the gateway filter comes with `gatewaySupport`. |
+| `cosec.limiter.` | Removed: rate limit rules are in the platform document ([Rate limit rules become obligations](#rate-limit-rules-become-obligations)); a different limiter key prefix needs a `RateLimiter` bean of your own. |
+| `cosec.shadow.` | Removed: shadow windows are control-plane operations; each instance's part is `cosec.authorization.shadow.*`. |
+| `cosec.explain.enabled` | Removed: use the control plane's `explain`. |
+| `cosec.inject.enabled` | Removed ([Inject mode becomes identity propagation](#inject-mode-becomes-identity-propagation)). |
+| `cosec.api-key.store-blocking` | Removed. |
+| `cosec.jwt.token-revocation.enabled` | Removed: revocation is always on ([Token revocation is always on](#token-revocation-is-always-on)). |
 
-New groups: `cosec.pipeline.*` (timeouts, query token, API key header, trace level), `cosec.authorization.scope.app-id`,
+`cosec.authorization.cache.key-prefix` and `cosec.authorization.cache.token.*` remain.
+
+New groups: `cosec.pipeline.*` (timeouts, query token, API key header, trace level, mode),
+`cosec.gateway.identity.*`, `cosec.unknown-properties`, `cosec.authorization.scope.app-id`,
 `cosec.authorization.{membership,attributes,rate-limit}.timeout`, `cosec.authorization.routes.location`,
 `cosec.authorization.snapshot.*`, `cosec.authorization.shadow.*`, `cosec.authentication.revocation.skew`,
-`cosec.audit.required.timeout`, `cosec.audit.kafka.delivery` and `cosec.control.*`.
+`cosec.audit.required.timeout`, `cosec.audit.kafka.delivery`, `cosec.observability.listener.*` and `cosec.control.*`.
 
 Two defaults need a decision during the upgrade:
 
@@ -500,7 +560,7 @@ The RFCs behind 8.0 list known differences. Each item is covered above, or descr
 | RFC 0006 X5 (response body) | [Error bodies are problem+json](#error-bodies-are-problem-json). |
 | RFC 0006 X6 (threads) | [Observability changes](#observability-changes). |
 | RFC 0006 X7 (API) | [Removed and replaced APIs](#removed-and-replaced-apis). |
-| RFC 0006 X8 (configuration) | [Removed and renamed properties](#removed-and-renamed-properties). No `cosec.observability.listener.*` property exists. |
+| RFC 0006 X8 (configuration) | [Removed and renamed properties](#removed-and-renamed-properties). The listener queues are `cosec.observability.listener.*` ([Configuration](./configuration.md#decision-listeners)). |
 | RFC 0007 X1 (write API, policy history) | [Removed and replaced APIs](#removed-and-replaced-apis), [Rollback](#rollback). |
 | RFC 0007 X2 (shadow) | [Removed and replaced APIs](#removed-and-replaced-apis), [Removed and renamed properties](#removed-and-renamed-properties). |
 | RFC 0007 X3 (explain) | [Removed and replaced APIs](#removed-and-replaced-apis). |

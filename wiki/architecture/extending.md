@@ -22,16 +22,23 @@ implementation to the class that uses it, usually through `PipelineComponents`.
 | `TokenStore`, `RevocationReader` | `cosec-core` | Keep revoked tokens somewhere other than Redis. | one bean of each |
 | `ApiKeyReader` | `cosec-core` | Look API keys up somewhere other than memory or Redis. | one bean |
 | `MembershipProvider` | `cosec-core` | Supply the roles and attached policies of principals whose token does not carry them. | one bean |
-| `AttributeProvider` | `cosec-runtime` | Give conditions external attributes (`ext.<provider>.<name>`), including the blacklist. | every bean |
+| `AttributeProvider` | `cosec-runtime` | Give conditions external attributes (`ext.<provider>.<name>`). | every bean |
+| `BlacklistSource` | `cosec-runtime` | Say which principals, addresses and devices are blocked. | one bean, wrapped in `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime` | Observe every decision: audit, alerting, analytics. | every bean |
+| `AuditEventSink` | `cosec-api` | Receive 7.x-style audit events. | every bean, as a `BEST_EFFORT` listener |
 | `RateLimiter` | `cosec-runtime` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |
 | `SnapshotDocumentStore` | `cosec-core` | Keep policy documents somewhere other than Redis. | one bean, without `cache-support` |
 | `BridgeContextContributor` | `cosec-runtime` | Carry a thread-local context (logging, tracing) into the pipeline. | every bean |
 | `ChangeListener` | `cosec-control` | Observe or gate control-plane changes. | every bean, with `control-support` |
+| `ControlStore` | `cosec-control` | Keep the control plane's records somewhere other than Redis. | one bean, with `control-support` |
 | Route maps | `cosec-core` | Give requests `service:verb` actions on typed resources. | `cosec.authorization.routes.location` |
 
 Changing one of these interfaces (rather than implementing it) is a breaking change for every application that
 implements it.
+
+The adapters themselves call a `RequestGate` (`cosec-runtime`): the `Pipeline`, or, on a service behind a CoSec
+gateway (`cosec.pipeline.mode=gateway`), `IdentityGate`. It is not an extension point: both build every outcome through
+`StatusMapping`, and a gate of your own would be a second decision path.
 
 ## Rules every extension follows
 
@@ -63,7 +70,11 @@ contract:
 | `Unavailable(cause)` | A dependency failed. | `503`. A thrown exception is treated the same way. |
 
 An `AuthenticatedPrincipal` names its id, tenant, membership source (the token's claims, or the
-[membership provider](#memberships)) and attributes. Conditions read the attributes as `subject.attributes.<name>`.
+[membership provider](#memberships)), attributes and `credential`. Conditions read the attributes as
+`subject.attributes.<name>`. `credential` (`Identity.Credential`: method `JWT` or `API_KEY`, the credential's id and
+its expiry, never its value) is what a gateway forwards with the identity: on a gateway, a principal without one is
+permitted but forwarded to no backend as authenticated, and one whose credential has no expiry fails the request with
+`500`.
 
 An authenticator sees only what the pipeline reads as credentials: the token (the `Authorization` header, else the query
 parameter when `cosec.pipeline.allow-query-token` is on, else the cookie) and the API key header
@@ -162,6 +173,10 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
   path is declared once across all providers. The declarations form the attribute catalog that documents compile
   against: a policy that reads an `ext.` path nobody declares does not compile. A platform document may also declare
   the catalog, so the control plane and every instance agree.
+- **Register the same providers on every host.** The control plane checks a change against the platform's
+  declarations and its own host's providers, and every instance compiles against its own. A provider missing on one
+  instance makes a change it reads fail there: the instance reports `CANDIDATE_ERROR` and blocks the shadow window
+  ([Deploying the gateway server](../operations/deployment.md#before-the-first-request)).
 - **Values.** Return values by path, of the declared type. A path left out is *absent*. A value of the wrong type, a
   thrown exception or a timeout makes the attributes asked for *unavailable*, and each statement that reads them follows
   its `onMissing` setting ([Policy language](../policies/language.md)).
@@ -174,8 +189,10 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
 **The blacklist** is a stage-A provider: `BlacklistAttributeProvider(source)` declares `ext.blacklist.principal`,
 `ext.blacklist.ip` and `ext.blacklist.device`, and a request one of them blocks meets the built-in DENY
 `cosec:blacklist`. Implement `BlacklistSource.contains(kind, value)` over your store (principals are
-`<tenant>:<principal id>`), or use `InMemoryBlacklistSource`, and declare the provider as a bean. A source that fails
-never means "not blocked": the request is `503` unless a DENY matches.
+`<tenant>:<principal id>`), or use `InMemoryBlacklistSource`, and declare the source as a bean: the starter wraps it in
+a `BlacklistAttributeProvider`. Without one, startup logs
+`No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).` at `INFO`. A source that
+fails never means "not blocked": the request is `503` unless a DENY matches.
 
 With `ip2region-support`, the starter registers `Ip2RegionAttributeProvider` (`ext.ip2region.country`, `.province`,
 `.city`, `.isp`).
@@ -206,10 +223,13 @@ class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
 
 - A permit through a break-glass binding needs at least one REQUIRED listener, or it is a `503`.
 - A REQUIRED listener should be idempotent by `event.id`: a write that timed out may still have succeeded.
-- Every `DecisionListener` bean is registered, in `@Order` order. The starter adds the audit log
+- Every `DecisionListener` bean is registered, in `@Order` order, and so is every `AuditEventSink` bean that is not
+  also a listener, as a `BEST_EFFORT` listener named after the bean. The starter adds the audit log
   (`LoggingAuditListener`, unless `cosec.audit.enabled=false`), and, with their features, `MetricsListener`,
   `TracingListener`, `KafkaAuditListener` and the shadow listener. Events, metrics and spans are described in
   [Observability](../operations/observability.md).
+- `event.evaluationTrace` holds the engine's trace at `cosec.pipeline.trace-level`; it is null at `off`, the default.
+- On shutdown, queued events are still delivered for up to `cosec.observability.listener.drain-timeout`.
 
 ## Rate limiters
 
@@ -265,15 +285,28 @@ shadowed, approved, publishing, published, break-glass requested or approved, an
 content.
 
 - A `REQUIRED` listener gates publishing and every step of creating break-glass: the step happens only after every
-  REQUIRED listener recorded it within 5 s, otherwise it fails with `503` and writes nothing. Creating break-glass
-  needs at least one REQUIRED listener.
+  REQUIRED listener recorded it within `cosec.control.audit.required-timeout` (5 s), otherwise it fails with `503` and
+  writes nothing. Creating break-glass needs at least one REQUIRED listener.
 - Other events, and every event to a `BEST_EFFORT` listener, are delivered off the caller; a failure is logged.
-- The starter registers `LoggingChangeListener` only when the application declares no `ChangeListener`. To keep the log
-  next to your own listener, declare it as a bean too.
+- Listeners add up: every `ChangeListener` bean is registered next to the starter's `LoggingChangeListener`, which
+  backs off only for a `LoggingChangeListener` bean of yours.
 
-`cosec-kafka` provides `KafkaChangeListener(kafkaOperations, topic, delivery)` (default topic `cosec-control-audit`);
-the starter does not register it, so declare it as a bean. With `Delivery.REQUIRED`, configure the producer with
-`acks=all`.
+With `kafka-support` and a `KafkaOperations` bean, the starter registers `KafkaChangeListener` under
+`cosec.control.audit.kafka.*` ([Observability](../operations/observability.md#control-plane-change-log)).
+
+## Control store
+
+With `control-support`, the control plane keeps revisions, change requests, staging slots, candidates and leases in a
+`ControlStore`; the starter's is `CoCacheControlStore` on Redis. Besides reading and writing those records by key, a
+store answers what the maintenance passes visit:
+
+- `documents()`: every document it has indexed revisions for. It may name more than exist, never fewer.
+- `openChanges()`: the change requests that may still be open. It may name more, never fewer; callers read each
+  change and go by its state.
+- `acquireLease(name, holder, duration)` and `releaseLease(name, holder)`: one instance at a time per task. A release
+  removes the lease only while `holder` still has it.
+
+Like the data plane's stores, a read that fails throws: it never answers "absent".
 
 ## Route maps
 

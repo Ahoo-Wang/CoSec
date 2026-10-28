@@ -46,7 +46,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 |---|---|---|
 | `V1` | 400 | 候选无法读回为文档。 |
 | `V2` | 400、422 | 文档超过 8 MB；id 使用了保留前缀（`cosec:`、`g:`、`r:`）；租户策略复用了平台策略的 id。 |
-| `COMPILE` | 422 | 某个策略、条件、模式、绑定或规则无法用平台的限制和已声明属性编译。 |
+| `COMPILE` | 422 | 某个策略、条件、模式、绑定或规则无法用平台的限制、平台声明的属性以及控制面主机的属性提供者声明的属性编译。 |
 | `REFERENCES` | 422 | 绑定指向的策略无处可解析；平台变更删除了其他文档引用的策略；租户的 `boundary` 不是平台边界。 |
 | `OPERATION` | 422 | 操作删除了不存在的内容，或设置了该文档没有的字段。 |
 | `IF_MATCH` | 412 | 条目已不再是操作的 `ifMatch` 所说的样子。 |
@@ -122,11 +122,13 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `removePolicy` | `id`，可选 `ifMatch` | 删除策略。 |
 | `putBinding` | `binding`，可选 `ifMatch` | 新增绑定，或替换同 id 的绑定。 |
 | `removeBinding` | `id`，可选 `ifMatch` | 删除绑定。 |
+| `putRateLimit` | `rateLimit`，可选 `ifMatch` | 添加限流规则，或在原位置替换同 id 的规则。 |
+| `removeRateLimit` | `id`，可选 `ifMatch` | 删除限流规则。 |
 | `putCatalog` | `catalog` | 设置应用文档的目录；没有 `catalog` 时删除目录。 |
 | `setLimits` | 包含全部六个限制的 `limits` | 设置平台的限制；没有 `limits` 时恢复默认值。 |
 | `setAttributes` | `attributes` | 设置平台声明的属性；没有 `attributes` 时删除该字段。 |
 
-`ifMatch` 是条目按文档写法的 SHA-256：只有条目仍是这个样子时操作才生效。不想手写操作时，`POST /documents/{key}:apply` 接受整份文档（`{"document", "mode", "note"}`），并提议把当前修订变成该文档所需的操作：`MERGE` 只新增和修改，`REPLACE` 还会删除文档中没有的内容。设置租户的 `boundary` 或平台的默认边界请使用 `apply`。限流规则目前还不能通过控制面修改（[限流](./rate-limiting.md#publishing-rules)）。
+`ifMatch` 是条目按文档写法的 SHA-256：只有条目仍是这个样子时操作才生效。不想手写操作时，`POST /documents/{key}:apply` 接受整份文档（`{"document", "mode", "note"}`），并提议把当前修订变成该文档所需的操作：`MERGE` 只新增和修改，`REPLACE` 还会删除文档中没有的内容。设置租户的 `boundary` 或平台的默认边界请使用 `apply`。限流规则变更如何授权和审批见[限流](./rate-limiting.md#publishing-rules)。
 
 `base` 已不是当前修订时返回 `409`。`onMissing: "nomatch"` 的 DENY 需要在 `confirmations` 中提供确认（`{"policy", "statement", "digest", "kind": "deny-nomatch"}`）；没有确认的变更无法发布。
 
@@ -146,7 +148,7 @@ flowchart LR
     X -->|rebase| D
 ```
 
-一个文档至多有一个暂存的变更（`SHADOWING`、`AWAITING_APPROVAL` 或 `READY`）；在它发布、放弃、驳回或过期之前，暂存另一个变更返回 `409`。未完成的变更在提议后 `cosec.control.changes.expire-after`（默认 7 天）过期。作者可以对 `CONFLICTED`、`DRAFT` 或 `CHECKED` 的变更执行 `:rebase`，把它放到当前修订上，这会重新运行所有检查，并丢弃之前的审批和影子证据。作者或持有 `cosec:publish` 的人可以 `:abandon` 它。
+一个文档至多有一个暂存的变更（`SHADOWING`、`AWAITING_APPROVAL` 或 `READY`）；在它发布、放弃、驳回或过期之前，暂存另一个变更返回 `409`。未完成的变更在提议后 `cosec.control.changes.expire-after`（默认 7 天）过期：此后第一次被读取时即为 `EXPIRED`，而控制面的维护任务每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）读取一次所有未完成的变更。作者可以对 `CONFLICTED`、`DRAFT` 或 `CHECKED` 的变更执行 `:rebase`，把它放到当前修订上，这会重新运行所有检查，并丢弃之前的审批和影子证据。作者或持有 `cosec:publish` 的人可以 `:abandon` 它。
 
 ## 在影子模式中试运行变更 {#trying-changes-in-shadow-mode}
 
@@ -169,11 +171,11 @@ flowchart LR
 - 经过 `cosec.control.shadow.min-duration`（15 分钟），且实例上报的非 `BASE_MISMATCH` 样本达到 `cosec.control.shadow.min-samples`（1,000）时；
 - 到达 `cosec.control.shadow.max-duration`（24 小时）而样本不足时，状态为*证据不足*。
 
-窗口关闭后，变更变为 `READY`，需要[审批](#approval)时变为 `AWAITING_APPROVAL`。如果期间文档修订发生变化，变更变为 `CONFLICTED`。数据面在启用 `cacheSupport` 和 `cosec.authorization.shadow.*`（默认开启，采样 10% 的请求）时参与。
+控制面每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）检查一次所有未关闭的窗口，同一时间只由一个控制面实例执行。窗口关闭后，变更变为 `READY`，需要[审批](#approval)时变为 `AWAITING_APPROVAL`。如果期间文档修订发生变化，变更变为 `CONFLICTED`。数据面在启用 `cacheSupport` 和 `cosec.authorization.shadow.*`（默认开启，采样 10% 的请求）时参与。
 
-::: warning
-starter 目前还不会自动关闭影子窗口：关闭操作是 `Changes.shadowed(changeId)`，而 starter 中没有任何地方调用它。在此之前，暂存的变更会一直停留在 `SHADOWING` 直到过期，除非宿主定期调用 `cosecChanges` bean 的 `shadowed`，或该变更跳过窗口。
-:::
+属性提供者及其声明的类型，在每个数据面实例和控制面主机上必须相同。控制面按自己的提供者检查候选；缺少其中某个提供者的实例无法编译读取其属性的候选，会报告 `CANDIDATE_ERROR`，窗口随即以阻塞状态关闭，该变更永远不会发布。跳过窗口的变更也跳过了这项检查：无法编译已发布文档的实例会对该文档失败即拒绝。
+
+窗口比较的是决策，所以只涉及[限流规则](./rate-limiting.md#publishing-rules)的变更在窗口中显示不出差异。
 
 `POST /changes/{id}:skip-shadow` 带上 `reason`，可以不经窗口暂存一个 `CHECKED` 的变更；它需要 `cosec:skip-shadow`，修订会记录窗口被跳过。只创建或吊销 break-glass 绑定的变更没有窗口。
 
@@ -234,6 +236,85 @@ compiler.compile(acme)
 compiler.checkReferences(acme, platform)
 ```
 
-`decode` 抛出 `SnapshotFormatException`，`compile` 抛出 `DocumentCompileException`，其中包含每个错误及其 JSON 路径。CoSec 8.0 目前还没有用于断言决策的策略测试工具；要在发布前检查决策，请使用 [`simulate`](#simulating-a-request) 和[影子窗口](#trying-changes-in-shadow-mode)。
+`decode` 抛出 `SnapshotFormatException`，`compile` 抛出 `DocumentCompileException`，其中包含每个错误及其 JSON 路径。
+
+### 测试决策 {#testing-decisions}
+
+`cosec-testkit` 在单元测试中断言文档的决策，使用的就是每个实例运行的引擎：
+
+```kotlin
+dependencies {
+    testImplementation("me.ahoo.cosec:cosec-testkit")
+}
+```
+
+按 `cosec-migrate convert` 写出的布局存放文档，每个场景一个 JSON 文件：
+
+```text
+src/test/resources/policies/
+  documents/
+    platform.json
+    apps/order.json
+    tenants/acme.json             id 经过 URL 编码：acme-west 为 tenants/acme%2Dwest.json
+  scenarios/
+    a-reader-reads-an-order.json
+    nobody-deletes-an-order.json
+```
+
+```kotlin
+import me.ahoo.cosec.testkit.PolicyTestKit
+import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.TestFactory
+import java.nio.file.Path
+
+class PolicyTest {
+    private val kit = PolicyTestKit.load(Path.of("src/test/resources/policies/documents"))
+
+    @TestFactory
+    fun policies(): List<DynamicTest> = kit.tests(Path.of("src/test/resources/policies/scenarios"))
+}
+```
+
+`tenants/acme.json` 把角色 `reader` 绑定到 `order:read` 上的 ALLOW，并把每个主体绑定到 `order:delete` 上名为 `orders are never deleted` 的 DENY 时，下面两个场景通过：
+
+```json
+{
+  "description": "A reader of acme reads an order",
+  "credential": { "tenant": "acme", "id": "alice", "roles": ["reader"] },
+  "request": { "action": "order:read", "resource": { "type": "order", "id": "1" } },
+  "expect": { "decision": "Permit" }
+}
+```
+
+```json
+{
+  "description": "The deny wins over the reader's role",
+  "credential": { "tenant": "acme", "id": "alice", "roles": ["reader"] },
+  "request": { "action": "order:delete", "resource": { "type": "order", "id": "1" } },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "no-delete",
+      "statement": 0,
+      "name": "orders are never deleted",
+      "via": { "binding": "g:no-delete", "document": "tenant" }
+    }
+  }
+}
+```
+
+文档无法编译时 `load` 失败；没有 `platform.json` 时平台文档为空。`tests` 为目录下每个 `.json` 文件生成一个以其路径命名的测试，一个都没有时失败。`check(file)` 检查单个场景，`evaluate(json)` 只返回决策而不检查；`PolicyTestKit.of(platform, apps, tenants)` 接受 JSON 文本形式的文档。
+
+| 场景字段 | 含义 |
+|---|---|
+| `description` | 自由文本。 |
+| `credential` | 主体：`tenant`（默认 `acme`）、`id`（默认 `alice`）、`roles`（`role` 或 `role@space`）、`policies`（附加策略）、`attributes`；匿名调用方用 `"anonymous": true`。 |
+| `membershipProvider` | `MembershipProvider` 返回的成员关系，按管道的方式与凭证中的合并：按空间分组的 `roles`（`{"": ["reader"]}`）和 `attachments`；或 `{"fails": "message"}`。 |
+| `request` | `action`（默认 `order:read`）、`resource`（`type`、`id`、`attributes`；默认 `order/1`）、`app`、`space`、`hostApp`、`time`（ISO 时刻）、`ip`、`device`、`blocked`、`headers`、`attributes`（`request.attributes.*`）。 |
+| `expect` | `decision`：`Permit`、`Deny`、`Indeterminate` 或 `Rejected`，以及 `by`（作出决策的语句；隐式拒绝为 `null`）、`cause` 或 `reason`。 |
+
+只比较 `expect` 写出的字段：`{"decision": "Permit"}` 不论哪条语句允许都通过，写上 `by` 则固定为某条语句，并整体比较。拼错的字段是错误，不会被忽略。
+
+测试工具只评估决策。文档按默认的条件限制编译，且不带外部属性，所以读取 `ext.*` 的文档无法加载；限流规则不运行；请求直接给出动作和资源，不经过路由映射。读取 `ext.*` 的文档仍可用 [`simulate`](#simulating-a-request) 试验决策，它按控制面主机的提供者编译。
 
 **下一步：** 把测试过的策略发布到存储中，见[存储](../operations/storage.md)。

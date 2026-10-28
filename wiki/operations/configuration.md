@@ -13,15 +13,27 @@ Every property is optional unless marked **required**. A property only acts when
 classpath: each integration is a starter feature variant ([Modules](../guide/introduction.md#modules)). Durations take
 Spring's format (`500ms`, `10s`, `7d`), data sizes `16MB`; sets and lists take a comma-separated value or a YAML list;
 enum values are case-insensitive. Properties that 7.x had and 8.0 does not are listed in
-[Upgrading](./upgrading.md).
+[Upgrading](./upgrading.md#removed-and-renamed-properties).
+
+## Unknown properties
+
+Startup fails on a `cosec.*` key CoSec does not read, whatever else is configured (`cosec.enabled=false` included): a
+misspelled, renamed or removed key would otherwise do nothing. A key is known when the configuration metadata on the
+classpath (`META-INF/spring-configuration-metadata.json`) declares it, or when it lies under a map- or list-valued
+property. The message lists every unknown key and, for a 7.x key, what replaced it
+([the 7.x key table](./upgrading.md#removed-and-renamed-properties)).
+
+| Property | Type | Default | Effect |
+|---|---|---|---|
+| `cosec.unknown-properties` | `fail`, `warn` | `fail` | `fail` stops startup on an unknown `cosec.*` key; `warn` logs the same list at `WARN` and starts. |
 
 ## Feature switches
 
 | Property | Type | Default | Turns on |
 |---|---|---|---|
 | `cosec.enabled` | boolean | `true` | every CoSec auto-configuration |
-| `cosec.authentication.enabled` | boolean | `true` | the login side: `CompositeAuthentication` over your `Authentication` beans, and `TokenCompositeAuthentication` with JWT. Authenticating requests in the pipeline does not depend on it |
-| `cosec.authentication.social.enabled` | boolean | `true` | social login (`oauth-support`; needs `cosec.authentication.enabled`) |
+| `cosec.authentication.login.enabled` | boolean | `true` | the login beans, which turn credentials into a token: `CompositeAuthentication` over your `Authentication` beans, `TokenCompositeAuthentication` with JWT, and social login. Authenticating requests in the pipeline does not depend on it |
+| `cosec.authentication.login.social.enabled` | boolean | `true` | social login (`oauth-support`; needs `cosec.authentication.login.enabled`) |
 | `cosec.jwt.enabled` | boolean | `true` | issuing, verifying and revoking JWTs. Off, the pipeline rejects every token (`token-invalid`) and treats a request without one as anonymous |
 | `cosec.api-key.enabled` | boolean | `false` | [API keys](../integration/authentication.md) for machine clients |
 | `cosec.audit.enabled` | boolean | `true` | the audit log listener, and the Kafka audit listener with `cosec.audit.kafka.enabled` |
@@ -30,6 +42,7 @@ enum values are case-insensitive. Properties that 7.x had and 8.0 does not are l
 | `cosec.ip2region.enabled` | boolean | `true` | the `ext.ip2region.*` attribute provider (`ip2region-support`) |
 | `cosec.openapi.enabled` | boolean | `true` | the bearer-auth customizer of the OpenAPI document (`openapi-support`) |
 | `cosec.authorization.shadow.enabled` | boolean | `true` | this instance's part in shadow windows (`cache-support`); see [Shadow windows](#shadow-windows) |
+| `cosec.gateway.identity.enabled` | boolean | `true` | on a Spring Cloud Gateway host, forwarding the verified identity to the services behind it; see [Gateway identity](#gateway-identity) |
 
 These have no switch:
 
@@ -52,7 +65,10 @@ These have no switch:
 | `cosec.pipeline.authentication-timeout` | duration | `1s` | One call of the `Authenticator`. Past it, `503`. |
 | `cosec.pipeline.allow-query-token` | boolean | `false` | Also read the access token from the `authorization` query parameter. Off because URLs end up in access logs, browser history and `Referer` headers. |
 | `cosec.pipeline.api-key-header` | string | `X-API-Key` | The request header an API key comes in. |
-| `cosec.pipeline.trace-level` | `off`, `full`, `exhaustive` | `off` | How much of each evaluation the engine traces. Decision events do not carry the trace, so a higher level only costs time; leave it `off`. |
+| `cosec.pipeline.trace-level` | `off`, `full`, `exhaustive` | `off` | How much of each evaluation the engine traces. Decision events carry the trace as `evaluationTrace` (null at `off`, and when the request did not reach the engine); a higher level costs time on every request. |
+| `cosec.pipeline.mode` | `enforce`, `gateway` | `enforce` | `enforce`: the host decides with policies. `gateway`: a service behind a CoSec gateway reads the caller from the `CoSec-Identity` header the gateway forwards, and wires no authenticator, API keys, snapshot, policies, control plane or Redis of its own ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)). Any other value fails startup, and so does `gateway` on a Spring Cloud Gateway host. In `gateway` mode only the gateway may be able to reach the service: startup logs a `WARN` saying so. JWT is not limited to `enforce` mode: a service that issues no tokens sets `cosec.jwt.enabled=false`, or startup asks for a secret and a token store. |
+| `cosec.pipeline.gateway.max-age` | duration | `60s` | In `gateway` mode, an identity issued longer ago than this, plus `cosec.authentication.revocation.skew`, is refused: `401` `token-expired`. |
+| `cosec.pipeline.gateway.max-size` | data size | `8KB` | In `gateway` mode, a larger `CoSec-Identity` header is refused: `400` `invalid-request`. |
 
 ## Authorization
 
@@ -65,6 +81,23 @@ These have no switch:
 | `cosec.authorization.membership.timeout` | duration | `500ms` | One call of the `MembershipProvider`. Past it, or when it fails, `503`. |
 | `cosec.authorization.attributes.timeout` | duration | `300ms` | One call of an `AttributeProvider` that sets no timeout of its own. Past it, its attributes are unavailable, and a statement that needs them makes the decision Indeterminate. |
 | `cosec.authorization.routes.location` | comma-separated resource locations | `classpath:cosec-routes.json` | The route maps a WebFlux or WebMvc host loads at startup. A location that does not exist, or a map that does not parse, fails startup. Set it empty to run without a route map: every request is then authorized in the `http` namespace. A Spring Cloud Gateway host ignores it and loads no route map. |
+
+## Gateway identity
+
+`cosec.gateway.identity.*`, on a Spring Cloud Gateway host (`gateway-support`): what the gateway forwards to the
+services behind it. On a permit with a principal it sets `CoSec-Identity` to the identity it verified (format:
+[`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)).
+It always removes a `CoSec-Identity` the client sent, whatever these properties, the mode or `cosec.enabled` say. A
+route with the metadata `cosec-identity: false` forwards no identity.
+
+| Property | Type | Default | Effect |
+|---|---|---|---|
+| `cosec.gateway.identity.enabled` | boolean | `true` | Forward the verified identity. Off, the gateway still strips the client's. |
+| `cosec.gateway.identity.claims` | set of attribute names | empty | Principal attributes forwarded with the identity as `claims`, such as `name` and `email` (for a JWT, keys of its `attributes` claim, not top-level claims): strings of at most 1024 characters, numbers and booleans. Any other value fails the request (`500`). |
+| `cosec.gateway.identity.max-size` | data size | `8KB` | A larger encoded identity fails the request closed (`500`) rather than being cut. |
+| `cosec.gateway.identity.forward-authorization` | boolean | `false` | Whether the client's `Authorization` header still goes downstream. Off, the gateway removes it from every request it forwards: a service behind it needs no token. Turn it on only for services that call other APIs on the user's behalf. A token in a cookie is still forwarded. |
+
+A credential that never expires (an API key without `expires-at`) cannot be forwarded: its permits are answered `500`.
 
 ## Rate limiting
 
@@ -89,13 +122,13 @@ of your own replaces both.
 | `cosec.authorization.snapshot.revalidate-interval` | duration | `10s` | How often every installed document is confirmed against Redis with a conditional read. `0` turns the periodic pass off; invalidation messages still reload changed documents. |
 | `cosec.authorization.snapshot.lag-warn` | duration | `60s` | A document not confirmed for longer is logged at `WARN`. Must not exceed `lag-escalate`. |
 | `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | A document not confirmed for longer is logged at `ERROR` as stale. |
-| `cosec.authorization.snapshot.fail-closed.tenants` | set of tenant ids | empty | Bound and validated, but not enforced: no part of the 8.0 pipeline reads it yet. |
-| `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | Bound and validated, but not enforced, as above. |
+| `cosec.authorization.snapshot.fail-closed.tenants` | set of tenant ids | empty | Tenants that must not be decided on old documents: when the oldest document a request of such a tenant reads was confirmed longer ago than `max-lag`, the request is `503` (`SourceUnavailable`) unless a DENY matches. Other tenants keep deciding on what is installed. |
+| `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | The lag beyond which the tenants above fail closed. |
 | `cosec.authorization.snapshot.cold-load-timeout` | duration | `2s` | How long a request waits for a document that is not installed. Past it the document counts as failed for that request. |
 | `cosec.authorization.snapshot.max-apps` | int | `1024` | The most app documents held in memory; the least recently used one is dropped beyond it, and loaded again when needed. |
 | `cosec.authorization.snapshot.max-tenants` | int | `1024` | The same for tenant documents. The platform document is never dropped. |
-| `cosec.authorization.snapshot.prewarm-apps` | list of app ids | empty | App documents loaded at startup, after the platform document. |
-| `cosec.authorization.snapshot.prewarm-tenants` | list of tenant ids | empty | Tenant documents loaded at startup, after the platform document. |
+| `cosec.authorization.snapshot.prewarm-apps` | list of app ids | empty | App documents loaded at startup, after the platform document, which is always loaded. Readiness refuses traffic until the platform document and every listed document are installed; liveness is not affected. |
+| `cosec.authorization.snapshot.prewarm-tenants` | list of tenant ids | empty | Tenant documents loaded at startup, as above. |
 | `cosec.authorization.snapshot.compile-threads` | int | `2` | Threads that compile documents. |
 | `cosec.authorization.snapshot.eviction-check` | `fail`, `warn` | `fail` | What startup does when Redis' `maxmemory-policy` is not `noeviction` on every node, or cannot be read (a failed or denied `CONFIG GET`, a wrapped or custom CoCache backend). `fail` stops startup. `warn` starts and logs a `WARN` that begins with `!!!` ([Redis requirements](./storage.md#redis-requirements)). The in-memory CoCache backend always passes. |
 
@@ -170,7 +203,6 @@ Snapshot documents have their own properties ([Snapshot](#snapshot)).
 | `expire-after-write` | long, in `expire-unit` | CoCache's | How long a local copy lives at most (CoCache's `local-max-age`): the bound on staleness when an invalidation message is lost. |
 | `expire-after-access` | long, in `expire-unit` | none | Drop a local copy not read for this long. |
 | `expire-unit` | `TimeUnit` | `SECONDS` | Unit of the two expiry settings. |
-| `concurrency-level` | int | none | Deprecated and ignored. |
 
 These size and age the local copy only. A revocation's lifetime in Redis is set when it is written.
 
@@ -182,6 +214,16 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 | `cosec.audit.kafka.topic` | string | `cosec-audit` | Kafka topic of the audit events. |
 | `cosec.audit.kafka.delivery` | `best-effort`, `required` | `best-effort` | How the Kafka audit listener is delivered. `required` waits for the broker's acknowledgement, so a permit that cannot be audited is a `503`; configure the producer with `acks=all`. |
 
+## Decision listeners
+
+`cosec.observability.listener.*`: the queues of the `BEST_EFFORT` decision listeners
+([Decision listeners](./observability.md#decision-listeners)).
+
+| Property | Type | Default | Effect |
+|---|---|---|---|
+| `cosec.observability.listener.queue-capacity` | int | `1024` | Events one `BEST_EFFORT` listener may have waiting. A full queue drops the next event and counts it (`cosec.listener.dropped`). |
+| `cosec.observability.listener.drain-timeout` | duration | `5s` | On shutdown, how long queued events still go out; the rest is then dropped. |
+
 ## Control plane
 
 `cosec.control.*`, with `control-support` and `cache-support` ([Publishing documents](./storage.md#publishing-documents)).
@@ -191,31 +233,38 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 | `cosec.control.app-id` | string | `cosec-control` | The app control-plane actions are authorized in. |
 | `cosec.control.http.base-path` | string | `/cosec/control/v1` | Where the control API's routes are served. |
 | `cosec.control.http.max-body-size` | data size | `16MB` | The largest request body the control API reads on a WebMvc host. A larger body is a `400` `invalid-request`, unread; a request without a permitted principal has no body read at all (`401`). On WebFlux, `spring.codec.max-in-memory-size` (256 KB by default) bounds the body instead. |
-| `cosec.control.revisions.max-count` | int | `50` | Revisions always kept per document. Bound, but no component reclaims revisions yet, so every revision is kept. |
-| `cosec.control.revisions.min-age` | duration | `7d` | Revisions younger than this are always kept. Not applied yet, as above. |
-| `cosec.control.revisions.orphan-age` | duration | `1h` | Records of conflicted publishes are removed once this old. Not applied yet, as above. |
-| `cosec.control.changes.expire-after` | duration | `7d` | An open change request expires this long after it was proposed. |
+| `cosec.control.revisions.max-count` | int | `50` | Revisions always kept per document; older ones are reclaimed once also older than `min-age`. Revisions an open change rests on are kept. |
+| `cosec.control.revisions.min-age` | duration | `7d` | Revisions younger than this are always kept. |
+| `cosec.control.revisions.orphan-age` | duration | `1h` | Records of conflicted publishes are removed once this old. |
+| `cosec.control.revisions.reclaim-interval` | duration | `1h` | How often each control-plane instance reclaims revisions; a lease lets one instance at a time do each document. Must be positive. |
+| `cosec.control.changes.expire-after` | duration | `7d` | An open change request expires this long after it was proposed, and leaves the list of open changes. |
 | `cosec.control.approval.expire-after` | duration | `72h` | How long an approval stays valid. |
-| `cosec.control.approval.four-eyes` | boolean | `false` | Whether every publish, not only an escalated one, needs a second person's approval. |
+| `cosec.control.approval.four-eyes` | boolean | `false` | Whether the changes of an operator holding `cosec:approve` on the document (the trust root) are analyzed too: what the analysis cannot prove contained then needs a second person's approval. A change that escalates needs one either way. |
 | `cosec.control.break-glass.max-duration` | duration | `4h` | The longest a break-glass binding may last. More than `24h` fails startup. |
 | `cosec.control.shadow.min-duration` | duration | `15m` | A shadow window closes no earlier than this, once it also has `min-samples`. |
 | `cosec.control.shadow.min-samples` | long | `1000` | Compared samples a window needs to close before `max-duration`. |
 | `cosec.control.shadow.max-duration` | duration | `24h` | A window closes at this age with fewer samples, as insufficient evidence the publisher must acknowledge. Must not be less than `min-duration`. |
+| `cosec.control.shadow.check-interval` | duration | `1m` | How often shadowing changes are looked at, by one instance at a time; a window closes up to this late. Must be positive. |
+| `cosec.control.audit.required-timeout` | duration | `5s` | How long every `REQUIRED` change listener together may take to record a gated step (publish, break-glass) before the step fails with `503`. |
+| `cosec.control.audit.kafka.enabled` | boolean | `true` | The Kafka change listener (`kafka-support` and a `KafkaOperations` bean). |
+| `cosec.control.audit.kafka.topic` | string | `cosec-control-audit` | Kafka topic of the change events. |
+| `cosec.control.audit.kafka.delivery` | `best-effort`, `required` | `best-effort` | `required` makes publishing and break-glass wait for the broker. Startup fails when it is `required` and no Kafka change listener could be created. |
 
 ## Social login
 
-`cosec.authentication.social.registration.<name>.*` configures one OAuth provider per `<name>`:
+`cosec.authentication.login.social.registration.<name>.*` configures one OAuth provider per `<name>`:
 
 ```yaml
 cosec:
   authentication:
-    social:
-      registration:
-        github:
-          type: github           # a JustAuth AuthDefaultSource
-          client-id: ${GITHUB_CLIENT_ID}
-          client-secret: ${GITHUB_CLIENT_SECRET}
-          redirect-uri: https://app.example.com/oauth/github/callback
+    login:
+      social:
+        registration:
+          github:
+            type: github           # a JustAuth AuthDefaultSource
+            client-id: ${GITHUB_CLIENT_ID}
+            client-secret: ${GITHUB_CLIENT_SECRET}
+            redirect-uri: https://app.example.com/oauth/github/callback
 ```
 
 `type` (a JustAuth `AuthDefaultSource`) and `client-id` are required. The other fields map one-to-one to JustAuth's

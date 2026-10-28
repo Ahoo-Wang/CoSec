@@ -18,7 +18,7 @@ description: "看清 CoSec 做出的每个决策以及文档的每次变更：�
 | 投递方式 | 监听器何时运行 | 失败的后果 |
 |---|---|---|
 | `REQUIRED` | 在响应之前，与其他 `REQUIRED` 监听器一起运行，每个都在 [`cosec.audit.required.timeout`](./configuration.md#audit)（1 秒）之内，并且在 `cosec.pipeline.timeout` 剩余的时间之内。它看到的是到此为止决定的结果。 | 放行变成 `503` `unavailable`，请求不会继续。其他结果保持原状态；失败以 `ERROR` 记录并计数。 |
-| `BEST_EFFORT`（默认） | 结果确定之后，在请求路径之外运行。每个监听器有自己容量为 1,024 个事件的队列和自己的消费者，所以慢的监听器绝不会让别的监听器丢事件。它看到的是最终结果。 | 对请求没有影响。队列满时丢弃事件；抛异常的监听器最多每 10 秒以 `WARN` 记录一次，两者都会计数。 |
+| `BEST_EFFORT`（默认） | 结果确定之后，在请求路径之外运行。每个监听器有自己容量为 [`cosec.observability.listener.queue-capacity`](./configuration.md)（1,024）个事件的队列和自己的消费者，所以慢的监听器绝不会让别的监听器丢事件。它看到的是最终结果。 | 对请求没有影响。队列满时丢弃事件；抛异常的监听器最多每 10 秒以 `WARN` 记录一次，两者都会计数。 |
 
 starter 注册的监听器：
 
@@ -31,15 +31,24 @@ starter 注册的监听器：
 | `ShadowListener`（`shadow`） | `BEST_EFFORT` | `cache-support` 和 `cosec.authorization.shadow.enabled`（默认 `true`） |
 
 你自己的任何 `DecisionListener` bean 都会加入它们；名字必须唯一，否则启动失败（[扩展](../architecture/extending.md)）。
-为 7.x 编写的 `AuditEventSink` 不会被自动接入：把 `AuditListener.of(sink, "my-audit")` 注册为 `DecisionListener` bean。
-它总是 `BEST_EFFORT`，因为 `AuditEventSink.publish` 无法确认写入。
+`AuditEventSink` bean（例如为 7.x 编写的）也会加入：starter 把它包装成以 bean 名命名的 `BEST_EFFORT` 监听器
+（`AuditListener.of(sink, beanName)`），按它的 `@Order` 排在监听器之间。它总是 `BEST_EFFORT`，因为
+`AuditEventSink.publish` 无法确认写入。同时是两者的 bean 只注册一次，作为它本身的 `DecisionListener`。
 
 - **break-glass 需要 `REQUIRED` 监听器。** 通过 break-glass 绑定放行的请求是 `503`，除非至少注册了一个 `REQUIRED`
   监听器并且每一个都记录了它。开箱时没有任何监听器是 `REQUIRED`，所以 starter 在启动时记录
   `No REQUIRED decision listener is registered: break-glass bindings cannot permit (RFC 0006 §9.4.3).` 依赖
   break-glass 之前，设置 `cosec.audit.kafka.delivery=required`，或者注册你自己的 `REQUIRED` 监听器。
 - **`REQUIRED` 监听器应按事件的 `id` 保持幂等**：超时的写入可能其实已经成功。
-- **关闭时**，仍在 `BEST_EFFORT` 监听器队列中的事件被丢弃。
+- **关闭时**，监听器停止接收事件，已在队列中的事件仍会继续投递，最多
+  [`cosec.observability.listener.drain-timeout`](./configuration.md)（5 秒）。之后剩下的被丢弃，并以 `WARN` 记录
+  `Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.`
+- **求值追踪。** `DecisionEvent` 带有 `evaluationTrace`，即引擎查看过的内容，深度由
+  [`cosec.pipeline.trace-level`](./configuration.md#pipeline) 决定：`off`（默认，没有追踪，也没有开销）、`full`
+  （决策到达的每一层的每条规则，包括决定性规则之后的规则）或 `exhaustive`（还包括决策没有到达的层）。在 `off` 时，以及
+  请求没有到达引擎时，它为 null。只有你自己的监听器会读它：下面的审计事件、span 和指标都不包含它。
+- **gateway 模式的服务**（`cosec.pipeline.mode=gateway`）不产生决策事件：它们不做决策，也不注册监听器。由前面的网关
+  记录决策（[部署网关服务](./deployment.md#services-behind-the-gateway)）。
 
 ## 审计事件 {#audit-events}
 
@@ -139,6 +148,9 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 
 CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了文档：
 
+- **健康。** 有 Spring Boot Actuator 时，`cosecSnapshot` 健康指示器在平台文档和每个预热文档安装后为 `UP`，之前为
+  `DOWN`，细节为 `platform`（`installed`、`failed`、`absent` 或 `loading`）和 `prewarmed`。就绪状态遵循同样的条件
+  （[就绪](./deployment.md#readiness)）。
 - **滞后日志。** 文档超过 `lag-warn` 未被 Redis 确认时，实例以 `WARN` 记录，超过 `lag-escalate` 时以 `ERROR` 记录
   （[实例如何读取文档](./storage.md#how-instances-read-documents)）。其他值得告警的日志：
   `Snapshot document [<doc>] disappeared from the store; failing closed.`、
@@ -156,24 +168,22 @@ CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了�
 
 - **默认监听器**以 `INFO` 记录每个事件，格式为
   `Change <changeId> <kind> on <doc> by <principal>@<tenant>: base=..., candidate=..., escalations=<n>, confirmations=<n>`。
-  只有在应用没有注册自己的 `ChangeListener` 时才注册它。
+  变更监听器是累加的：每个 `ChangeListener` bean 都会注册，只有应用自己声明了 `LoggingChangeListener` bean 时才不再
+  注册默认的日志监听器。
 - **`PUBLISHING`、`BREAK_GLASS_REQUESTED` 和 `BREAK_GLASS_APPROVED` 是受控的：** 每个 `REQUIRED` 变更监听器都必须在
-  5 秒内记录该事件，这一步才会生效，否则这一步不会发生，控制 API 返回 `503`。其他事件，以及发给 `BEST_EFFORT` 监听器的
+  [`cosec.control.audit.required-timeout`](./configuration.md#control-plane)（5 秒，所有监听器合计）内记录该事件，这一步才会生效，否则这一步不会发生，控制 API 返回 `503`。其他事件，以及发给 `BEST_EFFORT` 监听器的
   所有事件，都在之后投递；失败记录为 `Change listener [<name>] could not record <event>.` 修订记录是已发布内容的持久
   记录。
 - **break-glass 需要 `REQUIRED` 变更监听器：** 没有时，创建或修改 break-glass 绑定得到 `503`
   （`break-glass needs a REQUIRED change listener, and none is configured`）。
 
-要把变更日志保存到 Kafka，注册一个 `KafkaChangeListener`；starter 不会创建它。它把每个事件写到自己的 topic（默认
-`cosec-control-audit`），key 是文档（`platform`、`app:order`、`tenant:acme`），因此一个文档的事件保持有序：
-
-```kotlin
-@Bean
-fun cosecKafkaChangeListener(kafka: KafkaOperations<String, String>): KafkaChangeListener =
-    KafkaChangeListener(kafka, delivery = Delivery.REQUIRED)
-```
-
-注册它会替换默认的日志监听器；要两者都保留，再注册一个 `LoggingChangeListener` bean。
+有 `kafka-support` 和 `KafkaOperations` bean 时，starter 还会注册一个 `KafkaChangeListener`，除非
+[`cosec.control.audit.kafka.enabled`](./configuration.md#control-plane) 为 `false`。它把每个事件写到
+`cosec.control.audit.kafka.topic`（`cosec-control-audit`），key 是文档（`platform`、`app:order`、`tenant:acme`），因此
+一个文档的事件保持有序。它的投递方式是 `cosec.control.audit.kafka.delivery`：默认 `best-effort`；`required` 让发布和
+break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设为 `delivery=required` 时，如果 Kafka 变更监听器无法
+创建（没有 `kafka-support`、没有 `KafkaOperations` bean，或 `enabled=false`），启动失败，而不是在没有记录的情况下发布：
+`cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: ...`。
 
 ## 日志 {#logs}
 
@@ -182,7 +192,7 @@ fun cosecKafkaChangeListener(kafka: KafkaOperations<String, String>): KafkaChang
 | `me.ahoo.cosec.audit` | 审计日志（[审计日志与 Kafka](#audit-log-and-kafka)） |
 | `me.ahoo.cosec.runtime` | 每个 `500` 都以 `ERROR` 记录 `Request [<requestId>] failed with an unmodelled exception.` 及堆栈；`REQUIRED` 监听器失败；被丢弃的事件；失败的属性提供者；无法计数的限流器 |
 | `me.ahoo.cosec.snapshot` | 加载、滞后、丢失和回退的文档（[快照健康状况](#snapshot-health)） |
-| `me.ahoo.cosec.spring.boot.starter` | 启动检查，例如 `!!!` 驱逐警告 |
+| `me.ahoo.cosec.spring.boot.starter` | 启动检查，例如 `!!!` 驱逐警告；应用没有声明 `BlacklistSource` 时以 `INFO` 记录的 `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).`（[黑名单](../guide/security-model.md#blacklist)）；gateway 模式服务的 `WARN`（[网关后面的服务](./deployment.md#services-behind-the-gateway)） |
 | `me.ahoo.cosec.control` | 变更日志，以及每个控制面 `500` 的 `Control API <method> <path> failed (request <requestId>).` |
 
 通过响应头 `CoSec-Request-Id` 把一个响应与它的日志、审计事件和 span 关联起来；它也是每个 problem 响应体中的

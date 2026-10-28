@@ -47,6 +47,7 @@ flowchart BT
     starter[cosec-spring-boot-starter] --> runtime & jwt
     starter -. feature variants .-> webflux & webmvc & gateway & cocache & control & social & listeners & openapi
     migrate[cosec-migrate] --> cocache & control
+    testkit[cosec-testkit] --> core & runtime
     server[cosec-gateway-server] --> starter
 ```
 
@@ -85,6 +86,10 @@ Arrows point at what a module depends on. The rules behind the picture:
   the adapter module is a dependency of that variant only, and its auto-configuration is guarded by
   `@ConditionalOnClass`, so it is active only when the application requests the capability. The capabilities are listed
   in the [introduction](../guide/introduction.md#modules).
+- **`cosec-testkit`** (directory `testkit/`) runs scenarios against an application's own documents in JUnit 5. It
+  depends on `cosec-core` and `junit-jupiter-api` (both part of its API) and on `cosec-runtime`, for the membership
+  merge the pipeline uses. It holds the engine level of the scenario format, which `conformance` runs too, so the
+  suite and the applications' tests evaluate scenarios one way.
 - **`cosec-migrate`** converts 7.x data into 8.0 documents and publishes them; no application depends on it.
   **`cosec-gateway-server`** is a ready-to-run gateway built from the starter; it is never published. **`conformance`**
   and **`e2e`** are test-only modules and are never published either.
@@ -95,7 +100,11 @@ Arrows point at what a module depends on. The rules behind the picture:
 [`Pipeline.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt)
 is one suspend function from the request's facts to an `Outcome`. The adapters (`PipelineWebFilter`,
 `PipelineServletFilter`, `PipelineGatewayFilter`) only read the request into `HttpFacts`, call it, and write what it
-returns.
+returns. They depend on `RequestGate`, the interface `Pipeline` implements. The other `RequestGate` is `IdentityGate`,
+which a service behind a CoSec gateway uses instead (`cosec.pipeline.mode=gateway`): it reads the caller from the
+`CoSec-Identity` header the gateway forwarded, with no authenticator, snapshot, engine or listeners, and builds its
+outcomes through `StatusMapping` too, so both gates answer alike on every adapter. Why that needs a network boundary is
+in [Trust boundaries](../guide/security-model.md#trust-boundaries).
 
 ```mermaid
 sequenceDiagram
@@ -157,7 +166,9 @@ sequenceDiagram
 - **REQUIRED listeners.** They see the outcome before it is returned (step 12); a failure turns only a permit into a
   `503`. A permit through a break-glass binding needs at least one REQUIRED listener, or it is a `503`.
 - **Status mapping.** `StatusMapping` is the only place that builds an `Outcome`: status, headers and the
-  `application/problem+json` body (step 13). The adapter writes it, or lets a permitted request continue with its
+  `application/problem+json` body (step 13). At a gateway the outcome also names the headers to forward: the verified
+  `CoSec-Identity` on a permit for an authenticated principal, and otherwise none, so the adapter removes any the
+  client sent. The adapter writes it, or lets a permitted request continue with its
   security context (step 14). The status of each outcome and the `CoSec-*` parameters are documented in
   [Web integration](../integration/web.md).
 - **BEST_EFFORT listeners.** The audit log, metrics, tracing, the shadow listener and, by default, Kafka get the final
@@ -296,10 +307,16 @@ What makes it safe:
   prove contained is an escalation and needs an approval by another person.
 - **Shadow windows.** Instances sample requests (`cosec.authorization.shadow.sample-rate`), evaluate them on the staged
   candidate as well, and report how the outcomes differ (`SAME`, `WIDENED`, `NARROWED`, ...). An instance that cannot
-  compile or evaluate the candidate blocks the window, and a blocked change never publishes. Publishing requires the
+  compile or evaluate the candidate blocks the window, and a blocked change never publishes. Documents compile against
+  the platform's attribute declarations and the host's `AttributeProvider`s, so the control host and every instance
+  must register the same providers: a candidate only the control host can compile blocks its window. Publishing requires the
   operator to acknowledge the numbers whenever anything changed or the evidence was insufficient.
 - **Break-glass** bindings are created only through the control plane, with a second approver, an expiry and a
   REQUIRED change listener.
+- **Maintenance.** Every control-plane instance periodically reclaims old revision records and closes shadow windows
+  (`ControlMaintenanceScheduler`). The `ControlStore` lists what those passes visit (`documents()`,
+  `openChanges()`), and a lease (`acquireLease`, `releaseLease`) lets one instance at a time do each piece of work
+  ([Revisions, history and rollback](../operations/storage.md#revisions-history-and-rollback)).
 
 How to use changes, simulation, shadow windows and approvals is in [Testing policies](../policies/testing.md); the
 `cosec.control.*` properties are in [Configuration](../operations/configuration.md).

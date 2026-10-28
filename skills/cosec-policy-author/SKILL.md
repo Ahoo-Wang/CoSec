@@ -1,6 +1,6 @@
 ---
 name: cosec-policy-author
-description: Write, review, validate, or explain CoSec 8.0 policy documents (platform, app and tenant documents) - policies and statements, actions and resources, condition ASTs, bindings, permission catalogs, rate limit rules, condition limits and external attributes - and check them with the JSON Schemas and the control plane's simulate and explain. Do not use for Spring Boot setup.
+description: Write, review, validate, or explain CoSec 8.0 policy documents (platform, app and tenant documents) - policies and statements, actions and resources, condition ASTs, bindings, permission catalogs, rate limit rules, condition limits and external attributes - and check them with the JSON Schemas, cosec-testkit scenarios, and the control plane's simulate and explain. Do not use for Spring Boot setup.
 ---
 
 # CoSec Policy Authoring
@@ -115,9 +115,15 @@ use `not`. Attributes:
 - `action.service`, `action.verb`, `resource.type`, `resource.id`, `resource.attributes.<name>` (set by checks in
   code), `resource.var.<name>`;
 - `environment.ip` (IP), `environment.time`, `environment.device`, `environment.blocked` (bool);
-- `http.header.<name>`, `http.origin`, `http.referer`, `http.origin.host`, `http.referer.host`, `*.host.labels`,
-  `request.attributes.<name>`: they compile, but the 8.0 request pipeline supplies no value for them yet, so they
-  are always absent there. Do not rely on them; verify with `simulate` before using one;
+- `http.header.<name>` (name case-insensitive), `http.origin`, `http.referer`, `http.origin.host`,
+  `http.referer.host` (lower case), `*.host.labels`, `request.attributes.<name>` (the gateway sets
+  `request.attributes.cosec.audit.routeId`, its route id, and `cosec.identity.forward` = `false` on routes that opt out
+  of identity propagation; WebFlux and WebMvc set none). A header sent more than once
+  with different values has no value: a DENY on it is Indeterminate (503), an ALLOW on it does not match; identical
+  copies read as one. **No attribute reference may read a credential header**, neither a condition nor a rate limit `key`:
+  `http.header.authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`, `cosec-identity` (any case)
+  do not compile. Headers are client input:
+  never treat one as identity;
 - `ext.<provider>.<name>`: external attributes (below).
 
 An unknown path, a type mismatch, or a literal that is not an IP or CIDR does not compile. An **absent** attribute makes
@@ -137,8 +143,10 @@ provider declares it or the platform document declares it in `attributes`:
 "attributes": [ { "path": "ext.risk.score", "type": "string" } ]
 ```
 
-Types are `string`, `bool`, `stringSet`, `ip`. Declaring it in the platform lets the control plane compile documents
-that read it; the data plane still needs the provider to fetch it, or the attribute is unavailable. When a statement's
+Types are `string`, `bool`, `stringSet`, `ip`. Instances and the control plane compile against their own providers
+plus the platform's declarations; the data plane still needs the provider to fetch it, or the attribute is
+unavailable. Providers (and their types) must be the same on every instance and on the control host: a candidate an
+instance cannot compile reports `CANDIDATE_ERROR`, blocks its shadow window and is never published. When a statement's
 external attribute cannot be fetched (provider failed, timed out, not registered), `onMissing` decides:
 `indeterminate` (default) makes the request 503 unless a DENY matches; `nomatch` treats the statement as not matching.
 `onMissing` is allowed only on a statement whose condition reads an `ext.` attribute. A DENY with `nomatch` silently
@@ -203,12 +211,19 @@ and `Retry-After`.
   "key": "environment.ip", "permitsPerSecond": 0.1, "windowSeconds": 60, "strictFailure": true }
 ```
 
-`id` is `[A-Za-z0-9_.-]+`, unique per document (an app's or tenant's rule counts in its own buckets). `action` is
+`id` is `[A-Za-z0-9_.-]+`, unique per document. Each document counts in its own buckets (a platform rule under its
+id, others under `app:<app>/<id>` and `tenant:<tenant>/<id>`), and rules add up: a tenant rule never replaces or
+relaxes a platform or app rule, even with the same id. `action` is
 required; `resource`, `condition` as in a statement, matched as a DENY is (so a bare resource type does not compile).
 `key` names a string or IP attribute (one bucket per value; absent key = one shared bucket; absent value = the empty
 bucket); a `resource.var.*` key must be captured by every resource pattern. A window allows
 `permitsPerSecond x windowSeconds` (default 1) requests. When the limiter cannot count, `strictFailure: false` (default)
-skips the rule and `true` answers 503. `onMissing: nomatch` on a rule is allowed in the platform document only.
+skips the rule and `true` answers 503. `onMissing: nomatch` on a rule compiles in the platform document only (rules
+have no confirmation flow).
+
+Change rules through the control plane: `putRateLimit` / `removeRateLimit` operations, or `:apply` (rule order is
+content). Each needs `cosec:write` on `doc/<document>/rateLimit/<id>`. A tenant's own rule changes need no approval; a
+shadow window compares decisions, so it shows nothing for a change that only touches rate limits.
 
 ## Boundaries and break-glass
 
@@ -257,14 +272,21 @@ Check the final document for:
 2. **Compile:** in Kotlin, `PolicyDocumentCompiler.forPlatform(platform).compile(PolicyDocumentCodec.decode(kind,
    owner, bytes))` throws `DocumentCompileException` listing every error with its JSON path;
    `checkReferences(document, platform)` checks that bound policies exist.
-3. **Simulate and explain** through the control plane (`controlSupport`), as an operator allowed to:
+3. **Test decisions** in the service's own test suite with `cosec-testkit`
+   (`testImplementation("me.ahoo.cosec:cosec-testkit")`): keep the documents as `cosec-migrate convert` writes them
+   (`platform.json`, `apps/<app>.json`, `tenants/<tenant>.json`, ids URL-encoded) and one scenario per JSON file, then
+   `PolicyTestKit.load(documentsDir).tests(scenariosDir)` from a JUnit 5 `@TestFactory`. A scenario is
+   `{"description", "credential": {"tenant", "id", "roles", "policies", "attributes"}, "request": {"action",
+   "resource": {"type", "id"}, "app", "space", ...}, "expect": {"decision": "Permit"}}`; only the fields `expect` names
+   are compared, and `"by"` pins the deciding statement (`"by": null` is the implicit deny). Write one scenario per
+   meaningful allow/deny boundary, and one per explicit DENY with its `by`. The kit does not run rate limits or route
+   maps, and documents that read `ext.*` do not load in it. https://cosec.ahoo.me/policies/testing#testing-decisions
+4. **Simulate and explain** through the control plane (`controlSupport`), as an operator allowed to:
    `POST /cosec/control/v1/simulate` with
    `{"request": {"tenant": "acme", "principal": "alice", "roles": ["editor"], "app": "order-service", "space": "", "action": "order:read", "resource": "order/42"}, "candidate": "<changeId>"}`
    compares a staged change with the enforced documents; `POST /explain` shows the deciding statement. External
    attributes are not fetched in a simulation, so a statement reading one is Indeterminate there.
-4. **Publish** through the control plane: `POST /documents/{key}:apply` (`mode` `MERGE` or `REPLACE`) or
+5. **Publish** through the control plane: `POST /documents/{key}:apply` (`mode` `MERGE` or `REPLACE`) or
    `POST /changes`, optionally a shadow window before publishing. A compile error is 422, a stale base revision 409,
    a `nomatch` DENY without confirmation 428. See https://cosec.ahoo.me/policies/testing. The first documents (and
    7.x data) are published with `cosec-migrate publish`.
-
-Add one test per meaningful allow/deny boundary in the service's own test suite.

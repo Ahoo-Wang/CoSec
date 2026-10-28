@@ -37,8 +37,15 @@ The starter collects these beans:
 | `MembershipProvider` | `me.ahoo.cosec.membership` | at most one | answers memberships for tokens marked `cosec.membership: "provider"` |
 | `RateLimiter` | `me.ahoo.cosec.runtime.ratelimit` | one; yours replaces the Redis or local limiter | counts rate-limit permits |
 | `Authenticator` | `me.ahoo.cosec.runtime.authn` | one; yours replaces the built-in token and API key authenticator | turns credentials into a principal |
+| `BlacklistSource` | `me.ahoo.cosec.runtime.attribute` | one; the starter wraps it in `BlacklistAttributeProvider` | says who and what is blocked |
+| `AuditEventSink` | `me.ahoo.cosec.api.audit` | any number; each becomes a BEST_EFFORT listener named after its bean | 7.x-style audit events |
+| `ControlStore` | `me.ahoo.cosec.control.store` | one, with `control-support`; replaces `CoCacheControlStore` | where the control plane keeps its records |
 
 Declare them as ordinary `@Bean`s. There is no `META-INF/services` registration for these SPIs.
+
+Not an extension point: `RequestGate` (`me.ahoo.cosec.runtime`), what the web adapters call. `Pipeline` is one;
+`IdentityGate` is the other, for a service behind a CoSec gateway (`cosec.pipeline.mode=gateway`). Both build every
+outcome through `StatusMapping`; do not write a third.
 
 ## AttributeProvider: external attributes
 
@@ -74,9 +81,14 @@ fun riskAttributeProvider(risk: RiskClient): AttributeProvider = RiskAttributePr
 - Documents compile only against paths some registered provider declares, or the platform document declares in
   `attributes` (declare them there so every instance and the control plane compile the same documents). A path declared twice, by two
   providers, fails startup. A document reading a path this instance cannot fetch makes those requests unavailable.
+- **Register the same providers, with the same types, on every data-plane instance and on the control-plane host.**
+  The control plane checks a change against its own host's providers; an instance without the provider cannot compile
+  the candidate, reports `CANDIDATE_ERROR` and blocks the shadow window, and a change published without a window makes
+  that instance answer 503 for the document.
 - Built-in providers: `Ip2RegionAttributeProvider` (`ext.ip2region.country`, `.province`, `.city`, `.isp`, with
-  `ip2region-support`) and `BlacklistAttributeProvider(source)` (`ext.blacklist.principal`, `.ip`, `.device`; register
-  it yourself with a `BlacklistSource`, such as `InMemoryBlacklistSource`). A blocked request meets the built-in DENY;
+  `ip2region-support`) and `BlacklistAttributeProvider(source)` (`ext.blacklist.principal`, `.ip`, `.device`; the starter
+  registers it when you declare a `BlacklistSource` bean, such as `InMemoryBlacklistSource`, and logs an INFO line
+  when there is none). A blocked request meets the built-in DENY;
   a failing blacklist source is 503, never "not blocked".
 
 ## MembershipProvider: memberships outside tokens
@@ -119,9 +131,12 @@ fun denyAlerts(alerts: Alerts): DecisionListener = object : DecisionListener {
   a permit into 503. Make it idempotent by `event.id`. Use it only for an audit that must not be lost.
 - Events carry the decision, deciding statement (`by`) and binding (`via`), break-glass flag, snapshot revisions,
   subject, scope, action, resource, request summary, attribute statuses (never values), trace ids. They carry no
-  token, header or external attribute value.
+  token, header or external attribute value. `event.evaluationTrace` holds the engine's trace at
+  `cosec.pipeline.trace-level` (null at `off`, the default).
 - Built-in listeners: the audit log (`cosec.audit.enabled`), Kafka (`kafka-support`), Micrometer, OpenTelemetry,
-  shadow. To reuse a 7.x `AuditEventSink`, wrap it: `AuditListener.of(sink, "my-audit")`.
+  shadow. A 7.x `AuditEventSink` bean is picked up as is: the starter wraps it (`AuditListener.of(sink, beanName)`).
+- BEST_EFFORT queues hold `cosec.observability.listener.queue-capacity` (1024) events each; on shutdown they drain for
+  up to `cosec.observability.listener.drain-timeout` (5s). A service in gateway mode registers no listeners.
 
 ## RateLimiter: where permits are counted
 
@@ -146,12 +161,24 @@ fun interface Authenticator {
 ```
 
 `Credentials` holds the bearer token (`Authorization` header, cookie, or query when allowed) and the API key header.
-Return `AuthnResult.Authenticated(AuthenticatedPrincipal(id, tenant, memberships, attributes), "method")`,
+Return `AuthnResult.Authenticated(AuthenticatedPrincipal(id, tenant, memberships, attributes, credential), "method")`,
 `Anonymous` (no credentials), `Rejected(reason)` (401 `token-*` on deny), or `Unavailable(cause)` (503). Memberships
 you pass have source `Memberships.Source.CLAIMS` (`MembershipClaims.parse(roles, policies)` builds them from
 `role`/`role@space` strings); pass `null` to ask the `MembershipProvider`. A bean of yours replaces the built-in `CompositeAuthenticator`
 (JWT with revocation, plus API keys when enabled): compose it yourself, for example
 `CompositeAuthenticator(myTokenAuthenticator, apiKeyAuthenticator)`, if you still need API keys.
+
+On a gateway, set `credential` (`Identity.Credential(method, id, expiresAt)`, method `JWT` or `API_KEY`, never the
+credential's value): without it the principal is forwarded to no backend, and with `expiresAt = null` the gateway
+answers 500 rather than forward an identity that never expires.
+
+## ControlStore: the control plane's records
+
+Replace `CoCacheControlStore` only to keep control-plane records outside Redis. Besides keyed, conditional reads and
+writes, implement `documents()` (every document with indexed revisions; may name more, never fewer),
+`openChanges()` (changes that may still be open; may name more, never fewer) and `acquireLease` / `releaseLease`
+(release only while the holder still has it). A failed read throws; never answer "absent". Start from
+`InMemoryControlStore` and the KDoc of `control/src/main/kotlin/me/ahoo/cosec/control/store/ControlStore.kt`.
 
 ## Verification
 

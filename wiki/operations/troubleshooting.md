@@ -48,7 +48,9 @@ The request cannot be read without ambiguity, so it is refused before authentica
 - the path has `.` or `..` segments, or a malformed percent-escape;
 - a `CoSec-App-Id`, `CoSec-Space-Id` or `CoSec-Device-Id` parameter has two different non-blank values, between the
   header and the query string or within either, or its query value has a malformed percent-escape;
-- a route map captures a value that would change the resource id's segments.
+- a route map captures a value that would change the resource id's segments;
+- on a service in `cosec.pipeline.mode=gateway`, a `CoSec-Identity` header that cannot be read
+  ([A service behind the gateway refuses requests](#a-service-behind-the-gateway-refuses-requests)).
 
 Fix the client ([Web integration](../integration/web.md)). On the control API, a `400` names the problem in `detail`
 ([Control-plane errors](#control-plane-errors)).
@@ -74,18 +76,21 @@ is not an error by itself: if a statement allows anonymous callers, the request 
 - **API key:** the key's SHA-256 is not stored, or the key is disabled or expired
   ([API keys](../integration/authentication.md)). A request that carries an API key is judged by the key alone; its
   token is not read.
+- **Behind a gateway:** a `CoSec-Identity` of another version, without `auth.exp`, or issued in the future
+  ([A service behind the gateway refuses requests](#a-service-behind-the-gateway-refuses-requests)).
 
 ### `token-expired` {#token-expired}
 
 The access token's lifetime is over. Refresh it ([Authentication](../integration/authentication.md)), or check the
-clocks and [`cosec.jwt.token-validity.access`](./configuration.md#jwt).
+clocks and [`cosec.jwt.token-validity.access`](./configuration.md#jwt). Behind a gateway, the forwarded identity can
+also be too old ([A service behind the gateway refuses requests](#a-service-behind-the-gateway-refuses-requests)).
 
 ### `token-revoked` {#token-revoked}
 
 The token was revoked by logout, or every token of its principal issued before a subject revocation was revoked
 ([Authentication](../integration/authentication.md)). Sign in again. A token issued up to
 [`cosec.authentication.revocation.skew`](./configuration.md#authentication) (5 seconds) after a subject revocation is
-revoked too, so a sign-in right after one may need a few seconds.
+revoked too, so a sign-in right after one may need a few seconds. A refresh applies the same skew.
 
 A token that still works on another instance after logout: a "not revoked" answer is cached locally for 30 seconds,
 which bounds how long an instance can miss a revocation whose invalidation message was lost. During a Redis outage
@@ -136,12 +141,13 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 
 | `reason` / metric `cause` | Cause | Fix |
 |---|---|---|
-| `INDETERMINATE: SourceUnavailable` / `source_unavailable`, on every request | No platform document is published: a new deployment, or a Redis that lost it. Until one exists every request is `503`, the control API included. | Publish one with `cosec-migrate publish` ([The first documents](./storage.md#the-first-documents)). |
+| `INDETERMINATE: SourceUnavailable` / `source_unavailable`, on every request | No platform document is published: a new deployment, or a Redis that lost it. `cosec-migrate bootstrap` writes only the platform tenant's document. Until a platform document exists every request is `503`, the control API included, and readiness refuses traffic ([Instance is not ready](#instance-is-not-ready)). | Publish one with `cosec-migrate publish` ([The first documents](./storage.md#the-first-documents)). |
+| `INDETERMINATE: SourceUnavailable` / `source_unavailable`, for some tenants only | The tenant is in [`cosec.authorization.snapshot.fail-closed.tenants`](./configuration.md#snapshot), and the oldest document its requests read was last confirmed longer ago than `fail-closed.max-lag` (`Snapshot lag [<lag>] exceeds the fail-closed bound [<max>] of tenant [<tenant>].`). | Restore Redis; see [Decisions use an old revision](#decisions-use-an-old-revision). |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable` | A document the request needs could not be read in time (Redis down or slow on a cold load), cannot be decoded or compiled, or disappeared from Redis after it was seen. A failed load and a lost document are logged with the document's name: `Loading snapshot document [<doc>] failed.`, `Snapshot document [<doc>] disappeared from the store; failing closed.` | Restore Redis, or publish a readable revision of the document ([When Redis is unavailable](./storage.md#when-redis-is-unavailable)). |
 | `INDETERMINATE: MissingPolicies`, `AmbiguousPolicy` / `missing_policies` | A binding or an attachment names a policy the documents do not define, or a policy id both the tenant and the platform define. | Fix the document through the control plane. |
 | `INDETERMINATE: MembershipUnavailable` / `membership` | The `MembershipProvider` failed, or took longer than [`cosec.authorization.membership.timeout`](./configuration.md#authorization). | Fix the provider or its store. |
 | `INDETERMINATE: AttributeUnavailable` / `attribute` | A statement needs an external attribute whose provider failed or timed out (`<provider> failed to fetch [...]` at `WARN`). | Fix the provider, or raise [`cosec.authorization.attributes.timeout`](./configuration.md#authorization). |
-| `INDETERMINATE: MatcherFailed` / `matcher` | A DENY statement's condition, or the condition of its policy, could not be evaluated. A failing ALLOW never makes a request `503`. | Fix the condition. |
+| `INDETERMINATE: MatcherFailed` / `matcher` | A DENY statement's condition, or the condition of its policy, could not be evaluated. That includes a DENY on `http.header.<name>` when the request sent that header more than once with different values (`Header [<name>] arrived with different values; a condition on it cannot decide.`); the same header repeated with one value reads as that value. A failing ALLOW never makes a request `503`: an ALLOW on such a header does not match. | Fix the condition, or the client that sends the header twice. |
 | `INDETERMINATE: BoundaryUnavailable` / `boundary` | A statement of the tenant's boundary could not be evaluated for a permitted request. | Fix the boundary. |
 | `INDETERMINATE: RateLimiterUnavailable` / `rate_limiter` | A rule with `strictFailure: true` could not be counted (`Rate limiter unavailable: rule [<id>] refuses the request.` at `ERROR`). | Restore Redis, or drop `strictFailure`. |
 | `INDETERMINATE: RequiredListenerFailed` / `required_listener` | A `REQUIRED` decision listener failed or timed out on a permit (`REQUIRED decision listener [<name>] failed on request [<id>].`), or a permit came through a break-glass binding with no `REQUIRED` listener (`Request [<id>] permitted through break-glass, but no REQUIRED listener is registered.`). | Fix the listener's store, or register a `REQUIRED` listener before using break-glass ([Decision listeners](./observability.md#decision-listeners)). |
@@ -155,6 +161,16 @@ A DENY still decides: if a DENY matches, the request is `401` or `403` even when
 An exception CoSec does not model: a defect, in CoSec or in an extension of yours. The log has
 `Request [<requestId>] failed with an unmodelled exception.` at `ERROR`, with the stack trace, which names the class
 that threw. The response body never carries the message.
+
+On a gateway, a permit whose identity cannot be forwarded is a `500` too, logged as
+`Request [<requestId>]: the identity cannot be forwarded.` with the cause:
+
+- `The credential of [<subject>] never expires: a service could not bound the identity.`: an API key without
+  `expires-at` (or a token without `exp`). Give the key an expiry, or set the route's metadata `cosec-identity: false`.
+- `The identity of [<subject>] is <n> bytes encoded, over the limit of <max>: ...`, `Claim [<name>] is <n> characters,
+  over 1024.` or `Claim [<name>] is a <type>, not a string, number or boolean.`: fewer roles or
+  [`cosec.gateway.identity.claims`](./configuration.md#gateway-identity), or a larger `max-size` on the gateway and
+  the services.
 
 ## Request allowed unexpectedly
 
@@ -188,7 +204,69 @@ plane published.
 The control plane's propagation view shows how many instances have a revision installed
 ([Snapshot health](./observability.md#snapshot-health)).
 
+## A service behind the gateway refuses requests
+
+A service in [`cosec.pipeline.mode=gateway`](./configuration.md#pipeline) reads the caller from the `CoSec-Identity`
+header the gateway forwards. A request without the header proceeds as anonymous; a header it cannot accept is never
+read as anonymous:
+
+| Status | Cause | Fix |
+|---|---|---|
+| `400` `invalid-request` | The header is not base64url JSON of format v1, has an unknown or missing member, is larger than [`cosec.pipeline.gateway.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
+| `401` `token-invalid` | A version this service does not read, no `auth.exp`, or an identity issued later than now plus [`cosec.authentication.revocation.skew`](./configuration.md#authentication). | Upgrade the service with the gateway; synchronize the clocks. |
+| `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.gateway.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. |
+
+Only the gateway may be able to reach such a service: it believes any header it receives. Startup logs this at `WARN`.
+
+## Instance is not ready
+
+Readiness refuses traffic until the platform document and every document in
+[`prewarm-apps` and `prewarm-tenants`](./configuration.md#snapshot) are installed; liveness is not affected. An
+instance that never becomes ready:
+
+- **No platform document is published.** Publish one with `cosec-migrate publish`.
+- **A prewarmed document cannot be loaded or compiled.** The logs name it (`Loading snapshot document [<doc>]
+  failed.`). Fix or publish the document, or remove it from the prewarm list.
+
+The `cosecSnapshot` health indicator shows the state: `platform` (`installed`, `failed`, `absent` or `loading`) and
+`prewarmed`. Add it to the readiness group to see it in the probe:
+`management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`.
+
+## A condition does not compile
+
+- `` `<path>` is a credential header, which no condition may read ``: a condition reads `http.header.authorization`,
+  `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key` or `cosec-identity`. No policy may read a credential.
+  Condition on a principal attribute or the scope instead ([Policy language](../policies/language.md)).
+- A condition on an `ext.*` attribute the platform document does not declare and no attribute provider of the host
+  serves. A change is compiled against the attribute providers of the control host.
+
+## Shadow window blocked by a candidate error
+
+A shadow window is blocked as soon as one instance reports `CANDIDATE_ERROR`: it cannot compile the candidate, so it
+cannot compare decisions, and the change is never published. The usual cause is a candidate that reads an `ext.*`
+attribute whose provider runs on the control host but not on that instance. Attribute providers, and the types they
+declare, must be the same on every data-plane instance and on the control host. Deploy the provider everywhere before such a
+change is shadowed ([Testing changes](../policies/testing.md)).
+
 ## Startup failures
+
+### Startup fails on an unknown property
+
+```text
+CoSec does not read <n> cosec.* properties, which would do nothing:
+  cosec.authentication.enabled -> cosec.authentication.login.enabled
+Remove or rename them; cosec.unknown-properties=warn only logs this.
+```
+
+A `cosec.*` key that no CoSec module reads: a typo, or a 7.x key, whose replacement follows `->`
+([7.x keys](./upgrading.md#removed-and-renamed-properties)). Rename or remove it.
+[`cosec.unknown-properties=warn`](./configuration.md#unknown-properties) only logs the list.
+
+### Startup fails on the pipeline mode
+
+- `cosec.pipeline.mode=gateway on a Spring Cloud Gateway host: ...`: a gateway always decides with policies. Remove
+  the property from the gateway; set it on the services behind it.
+- A binding failure for `cosec.pipeline.mode`: the value is neither `enforce` nor `gateway`.
 
 ### Startup fails on the eviction check
 
@@ -253,6 +331,8 @@ random one.
 | `The PolicySnapshotCache cache takes no loader: Redis is the store of record, and only the snapshot source reads it.` | A `CacheSpecCustomizer` sets a loader on every cache; exclude `PolicySnapshotCache`. |
 | `lagWarn must not exceed lagEscalate.` and the other snapshot option checks | Fix [`cosec.authorization.snapshot.*`](./configuration.md#snapshot). |
 | `Invalid change options.`, `Invalid shadow window options.` | Fix [`cosec.control.*`](./configuration.md#control-plane): `break-glass.max-duration` above `24h`, or `shadow.max-duration` below `shadow.min-duration`. |
+| `cosec.control.revisions.reclaim-interval must be positive.`, `cosec.control.shadow.check-interval must be positive.` | Set a positive duration. |
+| `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs kafka-support, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | Add what it names, or set [`delivery`](./configuration.md#control-plane) to `best-effort`. |
 
 ## Control-plane errors
 
@@ -292,6 +372,8 @@ never touches the body. Send the `CoSec-*` parameters as headers or query parame
    `cosec.listener.dropped` counter. A listener that throws: `Decision listener [<name>] failed.`
 4. Kafka: `Failed to publish audit event to Kafka topic [<topic>].`, or `The Kafka audit queue of [<topic>] is full.`
    ([Audit log and Kafka](./observability.md#audit-log-and-kafka)).
-5. Events queued at shutdown are dropped.
+5. At shutdown, queued events go out for up to
+   [`cosec.observability.listener.drain-timeout`](./configuration.md#decision-listeners) (5 seconds); the rest is dropped
+   (`Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.`).
 
 **Next:** move an existing deployment to a newer version, in [Upgrading](./upgrading.md).

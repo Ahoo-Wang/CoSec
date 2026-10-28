@@ -21,7 +21,7 @@ except that a `REQUIRED` one that fails turns a permit into `503`.
 | Delivery | When the listener runs | What a failure does |
 |---|---|---|
 | `REQUIRED` | Before the response, together with the other `REQUIRED` listeners, each within [`cosec.audit.required.timeout`](./configuration.md#audit) (1 second) and within what is left of `cosec.pipeline.timeout`. It sees the outcome as decided so far. | A permit becomes `503` `unavailable`; the request does not proceed. Any other outcome keeps its status; the failure is logged at `ERROR` and counted. |
-| `BEST_EFFORT` (the default) | After the response is decided, off the request path. Each listener has its own queue of 1,024 events and its own consumer, so a slow listener never costs another its events. It sees the final outcome. | Nothing for the request. A full queue drops the event; a listener that throws is logged at `WARN` at most every 10 seconds, and both are counted. |
+| `BEST_EFFORT` (the default) | After the response is decided, off the request path. Each listener has its own queue of [`cosec.observability.listener.queue-capacity`](./configuration.md) events (1,024) and its own consumer, so a slow listener never costs another its events. It sees the final outcome. | Nothing for the request. A full queue drops the event; a listener that throws is logged at `WARN` at most every 10 seconds, and both are counted. |
 
 The listeners the starter registers:
 
@@ -34,9 +34,10 @@ The listeners the starter registers:
 | `ShadowListener` (`shadow`) | `BEST_EFFORT` | `cache-support` and `cosec.authorization.shadow.enabled` (default `true`) |
 
 Any `DecisionListener` bean of yours joins them; names must be unique, or startup fails
-([Extending](../architecture/extending.md)). An `AuditEventSink` written for 7.x is not picked up on its own: register
-`AuditListener.of(sink, "my-audit")` as a `DecisionListener` bean. It is always `BEST_EFFORT`, because
-`AuditEventSink.publish` cannot acknowledge a write.
+([Extending](../architecture/extending.md)). An `AuditEventSink` bean, such as one written for 7.x, joins them too: the
+starter wraps it as a `BEST_EFFORT` listener named after the bean (`AuditListener.of(sink, beanName)`), in its
+`@Order` among the listeners. It is always `BEST_EFFORT`, because `AuditEventSink.publish` cannot acknowledge a write.
+A bean that is both is registered once, as the `DecisionListener` it is.
 
 - **Break-glass needs a `REQUIRED` listener.** A request permitted through a break-glass binding is `503` unless at
   least one `REQUIRED` listener is registered and every one of them records it. Out of the box no listener is
@@ -44,7 +45,17 @@ Any `DecisionListener` bean of yours joins them; names must be unique, or startu
   `No REQUIRED decision listener is registered: break-glass bindings cannot permit (RFC 0006 §9.4.3).` Set
   `cosec.audit.kafka.delivery=required`, or register a `REQUIRED` listener of your own, before you rely on break-glass.
 - **A `REQUIRED` listener should be idempotent** by the event's `id`: a write that timed out may still have succeeded.
-- **On shutdown**, events still queued for `BEST_EFFORT` listeners are dropped.
+- **On shutdown**, the listeners stop taking events, and the events already queued are still delivered for up to
+  [`cosec.observability.listener.drain-timeout`](./configuration.md) (5 seconds). What is left then is dropped, with
+  `Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.` at `WARN`.
+- **The evaluation trace.** A `DecisionEvent` carries `evaluationTrace`, what the engine looked at, to the depth of
+  [`cosec.pipeline.trace-level`](./configuration.md#pipeline): `off` (the default, no trace and no cost), `full`
+  (every rule of each layer the decision reaches, including those after the deciding one) or `exhaustive` (also the
+  layers it does not reach). It is null at `off` and when the request did not reach the engine. Only your own
+  listeners read it: the audit events, spans and metrics below do not include it.
+- **Services in gateway mode** (`cosec.pipeline.mode=gateway`) emit no decision events: they decide nothing and
+  register no listeners. The gateway in front records the decision
+  ([Deploying the gateway server](./deployment.md#services-behind-the-gateway)).
 
 ## Audit events
 
@@ -149,6 +160,10 @@ registry ([CoCache's documentation](https://cocache.ahoo.me)).
 
 CoSec registers no meters for the documents an instance holds. To see whether instances are current:
 
+- **Health.** With Spring Boot Actuator, the `cosecSnapshot` health indicator is `UP` once the platform document and
+  every prewarmed document are installed, `DOWN` before, with the details `platform` (`installed`, `failed`, `absent`
+  or `loading`) and `prewarmed`. Readiness follows the same condition
+  ([Readiness](./deployment.md#readiness)).
 - **Lag logs.** An instance logs a document not confirmed by Redis for longer than `lag-warn` at `WARN`, and longer
   than `lag-escalate` at `ERROR` ([How instances read documents](./storage.md#how-instances-read-documents)). Other
   lines to alert on: `Snapshot document [<doc>] disappeared from the store; failing closed.`,
@@ -171,26 +186,25 @@ content. Change listeners receive them.
 
 - **The default listener** logs each event at `INFO`, as
   `Change <changeId> <kind> on <doc> by <principal>@<tenant>: base=..., candidate=..., escalations=<n>, confirmations=<n>`.
-  It is registered only while the application registers no `ChangeListener` of its own.
+  Change listeners add up: every `ChangeListener` bean is registered, and the log listener is left out only when the
+  application declares a `LoggingChangeListener` bean of its own.
 - **`PUBLISHING`, `BREAK_GLASS_REQUESTED` and `BREAK_GLASS_APPROVED` are gated:** every `REQUIRED` change listener must
-  record the event within 5 seconds before the step takes effect, or the step does not happen and the control API
+  record the event within [`cosec.control.audit.required-timeout`](./configuration.md#control-plane) (5 seconds, for
+  all of them together) before the step takes effect, or the step does not happen and the control API
   answers `503`. Every other event, and every event to a `BEST_EFFORT` listener, is delivered afterwards; a failure is
   logged as `Change listener [<name>] could not record <event>.` The revision record is the durable record of what was
   published.
 - **Break-glass needs a `REQUIRED` change listener:** without one, creating or changing a break-glass binding answers
   `503` (`break-glass needs a REQUIRED change listener, and none is configured`).
 
-To keep the change log in Kafka, register a `KafkaChangeListener`; the starter does not create one. It writes each
-event to its topic (`cosec-control-audit` by default), keyed by the document (`platform`, `app:order`,
-`tenant:acme`), so a document's events stay in order:
-
-```kotlin
-@Bean
-fun cosecKafkaChangeListener(kafka: KafkaOperations<String, String>): KafkaChangeListener =
-    KafkaChangeListener(kafka, delivery = Delivery.REQUIRED)
-```
-
-Registering it replaces the default log listener; register a `LoggingChangeListener` bean too to keep both.
+With `kafka-support` and a `KafkaOperations` bean, the starter also registers a `KafkaChangeListener`, unless
+[`cosec.control.audit.kafka.enabled`](./configuration.md#control-plane) is `false`. It writes each event to
+`cosec.control.audit.kafka.topic` (`cosec-control-audit`), keyed by the document (`platform`, `app:order`,
+`tenant:acme`), so a document's events stay in order. Its delivery is `cosec.control.audit.kafka.delivery`:
+`best-effort` by default, `required` to gate publishing and break-glass on the broker's acknowledgement (configure the
+producer with `acks=all`). With `delivery=required`, startup fails when the Kafka change listener cannot be created
+(no `kafka-support`, no `KafkaOperations` bean, or `enabled=false`), rather than publishing without the record:
+`cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: ...`.
 
 ## Logs
 
@@ -199,7 +213,7 @@ Registering it replaces the default log listener; register a `LoggingChangeListe
 | `me.ahoo.cosec.audit` | the audit log ([Audit log and Kafka](#audit-log-and-kafka)) |
 | `me.ahoo.cosec.runtime` | `Request [<requestId>] failed with an unmodelled exception.` at `ERROR` with the stack trace, for every `500`; `REQUIRED` listener failures; dropped events; attribute providers that fail; rate limiters that cannot count |
 | `me.ahoo.cosec.snapshot` | loading, lag, lost and regressed documents ([Snapshot health](#snapshot-health)) |
-| `me.ahoo.cosec.spring.boot.starter` | the startup checks, such as the `!!!` eviction warning |
+| `me.ahoo.cosec.spring.boot.starter` | the startup checks, such as the `!!!` eviction warning; `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).` at `INFO` when the application declares no `BlacklistSource` ([Blacklist](../guide/security-model.md#blacklist)); the `WARN` of a service in gateway mode ([Services behind the gateway](./deployment.md#services-behind-the-gateway)) |
 | `me.ahoo.cosec.control` | the change log, and `Control API <method> <path> failed (request <requestId>).` for every control-plane `500` |
 
 Correlate a response with its log lines, audit event and span through the `CoSec-Request-Id` response header, which is

@@ -162,7 +162,9 @@ never overwrites: once a platform document exists, later changes go through the 
 Until a platform document is published, CoSec fails closed: it answers every request with `503`, the control
 plane's routes included, so the first platform document always comes from `cosec-migrate publish`. An absent
 platform document is never read as an empty one, which would silently drop every platform DENY
-([Fail closed](./security-model.md#fail-closed)).
+([Fail closed](./security-model.md#fail-closed)). Meanwhile the application reports itself not ready
+(`/actuator/health/readiness`, with Spring Boot Actuator), so a load balancer sends it no traffic
+([Readiness](../operations/deployment.md#readiness)).
 
 ## Issue a token
 

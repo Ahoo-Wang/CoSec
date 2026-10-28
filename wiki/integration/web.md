@@ -22,8 +22,10 @@ request to the same `Pipeline`, so they answer every request byte for byte alike
 | Spring Cloud Gateway | `gateway-support` | `PipelineGatewayFilter` (`GlobalFilter`) | `HIGHEST_PRECEDENCE + 10` |
 
 Every adapter needs the capability, `cache-support` (the snapshot documents and token revocation live in Redis), a
-JWT secret and a route map. The [Quick start](../guide/quick-start.md#add-the-dependency) shows the dependencies;
-the snippets below show only what differs.
+JWT secret and a route map; a service that only reads the identity its gateway forwards needs none of them
+([Services behind the gateway](#services-behind-the-gateway)). The
+[Quick start](../guide/quick-start.md#add-the-dependency) shows the dependencies; the snippets below show only what
+differs.
 
 **Spring WebFlux.** The filter starts the pipeline on the event loop without a thread switch. After a real
 suspension (a Redis read, say) the request continues on `Dispatchers.Default`, never on a client library's I/O
@@ -147,16 +149,16 @@ proceeds to your handler only on a Permit.
 | Status | Problem type | When |
 |---|---|---|
 | `200` (proceeds) | none, your handler answers | The decision is Permit and every rate limit obligation had a permit left. |
-| `400` | `invalid-request` | The path cannot be read without ambiguity ([The request path](#the-request-path)), a `CoSec-*` parameter has conflicting values ([App and space](#app-and-space)), or a route captured a value that cannot be a resource id segment ([Route maps](#route-maps)). The engine never sees the request. |
+| `400` | `invalid-request` | The path cannot be read without ambiguity ([The request path](#the-request-path)), a `CoSec-*` parameter has conflicting values ([App and space](#app-and-space)), or a route captured a value that cannot be a resource id segment ([Route maps](#route-maps)). The engine never sees the request. Behind a gateway: a `CoSec-Identity` that cannot be read ([Services behind the gateway](#services-behind-the-gateway)). |
 | `401` | `unauthorized` | Deny, and the caller is anonymous: no credential. Includes a rejected scope, such as an anonymous request that declares `CoSec-Space-Id`. |
-| `401` | `token-invalid` | Deny, and the credential was rejected as invalid: a token that does not verify, or an unknown, disabled or expired API key. |
-| `401` | `token-expired` | Deny, and the token had expired. |
+| `401` | `token-invalid` | Deny, and the credential was rejected as invalid: a token that does not verify, or an unknown, disabled or expired API key. Behind a gateway: a `CoSec-Identity` of an unknown version, from the future, or without a credential expiry. |
+| `401` | `token-expired` | Deny, and the token had expired. Behind a gateway: a `CoSec-Identity`, or its credential, that is too old. |
 | `401` | `token-revoked` | Deny, and the token, or every token of its principal, was revoked. |
 | `403` | `forbidden` | Deny, and the caller is authenticated: an explicit DENY, the implicit deny, or the platform boundary. |
 | `403` | `scope-rejected` | The caller is authenticated, and the scope was rejected: a declared app other than the host's, or a space the principal has no role in. |
 | `429` | `too-many-requests` | Permit, but a matching [rate limit rule](../policies/rate-limiting.md) has no permit left. |
 | `503` | `unavailable` | No decision could be made: Indeterminate, the authenticator or a membership provider failed or timed out, the snapshot source failed, a strict rate limit rule could not be counted, a REQUIRED decision listener failed on a Permit, a Permit only break-glass gives without a REQUIRED listener, or `cosec.pipeline.timeout` passed. |
-| `500` | `internal-error` | An exception nothing modelled: a defect of CoSec. |
+| `500` | `internal-error` | An exception nothing modelled: a defect of CoSec. At a gateway, also a Permit whose identity cannot be forwarded ([Forwarding the identity](#forwarding-the-identity)). |
 
 A rejected credential is not an error. The request is evaluated as anonymous: a Permit still proceeds (a public
 path works with an expired token), and only a Deny names the credential's problem. Explicit and implicit denies
@@ -236,7 +238,7 @@ pipeline's outcome. A refused request never reaches your handler.
 | `tenant.tenantId` | The scope's tenant: the principal's, or `(0)` for an anonymous caller. |
 | `principal.roles` | The principal's roles in the request's space. |
 | `principal.policies` | The principal's attached policies. |
-| `principal.attributes` | The credential's attributes (the token's `attributes` claim; `apiKeyId` for an API key). |
+| `principal.attributes` | The credential's attributes (the token's `attributes` claim; `apiKeyId` for an API key). Behind a gateway: the forwarded `claims`. |
 | `scope.appId`, `scope.spaceId`, `scope.roles` | The scope `ScopeResolver` validated: app, space (empty for the default space) and the roles there. |
 
 **WebFlux and the gateway**: from the exchange attributes, or from the Reactor context of the request. The exchange
@@ -285,9 +287,10 @@ socket address. The IP is never resolved through reverse DNS.
 Besides the credential, the scope, the action and the resource, conditions can read what the HTTP request carries
 (`http.header.<name>`, `http.origin`, `http.referer` and their hosts), which the client writes, and **request
 attributes**, `request.attributes.<name>`, which the adapter sets and the client cannot. The gateway filter sets
-`cosec.audit.routeId`, the id of the matched route. The attribute names are in
-[Policy language](../policies/language.md); which of them the client controls is in
-[Trust boundaries](../guide/security-model.md#trust-boundaries).
+`request.attributes.cosec.audit.routeId`, the id of the matched route, and `request.attributes.cosec.identity.forward`
+(`false`) on a route that [opts out](#forwarding-the-identity) of identity forwarding. The attribute names, and how a
+header sent more than once is read, are in [Policy language](../policies/language.md); which of them the client
+controls is in [Trust boundaries](../guide/security-model.md#trust-boundaries).
 
 Facts the request does not carry come from `AttributeProvider` beans as **external attributes**,
 `ext.<provider>.<name>`, fetched only when a candidate statement reads them
@@ -326,13 +329,16 @@ from the WebFlux filter in three ways:
   authorized by CoSec. Protect actuator with the management port or network policy;
 - it loads no route map, so every request is `http:<METHOD>` on `http:path:<path>`;
 - it forwards the outcome's `CoSec-Request-Id` to the downstream service, replacing any value the client sent, so
-  the backend's logs share the gateway's request id.
+  the backend's logs share the gateway's request id. On a Permit it also forwards the verified identity
+  ([Forwarding the identity](#forwarding-the-identity)), and it removes the client's `Authorization` header unless
+  `cosec.gateway.identity.forward-authorization=true`.
 
 The host app (`cosec.authorization.scope.app-id`) is one value for the whole gateway, not one per route. When one
 gateway fronts several apps, read [Trust boundaries](../guide/security-model.md#trust-boundaries) on keeping the
 client-declared app from widening access.
 
-Services behind the gateway run their own pipeline and verify the forwarded token themselves
+A service behind the gateway either trusts the identity the gateway forwards
+([Services behind the gateway](#services-behind-the-gateway)), or runs its own pipeline and verifies the token again
 ([Behind a gateway](./authentication.md#behind-a-gateway)).
 
 **Ready-to-run gateway.** `cosec-gateway-server` is a Spring Cloud Gateway application with CoSec, reading its
@@ -352,6 +358,105 @@ secret from a Secret named `cosec-jwt-secret`; create it first, and set the imag
 ```bash
 kubectl create secret generic cosec-jwt-secret --from-literal=secret=<random value>
 ```
+
+### Forwarding the identity
+
+On a Permit for an authenticated principal, the gateway tells the downstream service who it verified, in the
+`CoSec-Identity` header. The service then needs no secret, keys, documents or Redis of its own. This is on by default
+(`cosec.gateway.identity.enabled`).
+
+**A client cannot forge it.** Every gateway host removes any `CoSec-Identity` the client sends before any other
+filter runs (`IdentityStripFilter`), and again at the last hop, after every route filter (`IdentityHeadersFilter`),
+which sends only the value the pipeline forwarded. Both run whatever `cosec.pipeline.mode` or `cosec.enabled` say,
+so a route filter that adds the header cannot forward one either. A condition on `http.header.cosec-identity` does
+not compile.
+
+**No identity is forwarded** for an anonymous Permit, a refused request, a route whose metadata opts out, or with
+`cosec.gateway.identity.enabled=false`. Opt a route out when its backend is a third party:
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: partner
+              uri: https://partner.example.com
+              predicates:
+                - Path=/partner/**
+              metadata:
+                cosec-identity: false
+```
+
+**What it carries.** The value is base64url (no padding) of compact JSON, format version 1; the JSON Schema is
+[`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json).
+
+| Member | Content |
+|---|---|
+| `v` | `1`. |
+| `tenant`, `sub` | The tenant and principal the gateway verified. |
+| `scope` | `{app, space}`, as the gateway resolved them. |
+| `roles` | The principal's roles in that space: those the decision used. |
+| `auth` | `{method, jti, exp}`: `jwt` or `api-key`, the token's `jti` or the key's id, and the credential's expiry. Never the credential itself. |
+| `iat` | When the gateway made the header, in epoch seconds. |
+| `rid` | The gateway's request id. |
+| `claims` | Only the principal attributes named in `cosec.gateway.identity.claims` (the token's `attributes` claim, or an API key's attributes): strings, numbers and booleans. |
+
+It never carries the token, the API key, cookies or other request headers, policies, the matched statement,
+external attribute values or the client IP.
+
+**It fails closed.** The request is `500` `internal-error`, logged, and nothing is truncated, when the identity is
+larger than `cosec.gateway.identity.max-size` (8 KB), when a named claim is not a string, number or boolean or is
+longer than 1024 characters, or when the credential never expires (such as an [API key](./authentication.md#api-keys)
+without `expires-at`): a service could not bound such an identity.
+
+**`Authorization`.** The gateway removes the client's `Authorization` header before forwarding, so a compromised
+service never sees a token. Set `cosec.gateway.identity.forward-authorization=true` only when the services behind it
+verify the token again or call other APIs on the user's behalf.
+
+### Services behind the gateway
+
+A service behind the gateway sets `cosec.pipeline.mode=gateway` (the default is `enforce`). It needs only its web
+adapter (`webflux-support` or `webmvc-support`), and should set `cosec.jwt.enabled=false` unless it also issues
+tokens:
+
+```yaml
+cosec:
+  pipeline:
+    mode: gateway
+  jwt:
+    enabled: false
+```
+
+In this mode the adapter reads the forwarded identity through `IdentityGate`, and the starter wires no authenticator,
+snapshot, route map, rate limits, control plane, `AuthorizationChecker` or Redis. The service decides nothing with
+policies: the gateway decided. It believes any `CoSec-Identity` it receives, so **only the gateway may be able to
+reach it**: how to enforce that, and the startup checks, are in
+[Services behind the gateway](../operations/deployment.md#services-behind-the-gateway) of the deployment guide.
+
+| Request | Answer |
+|---|---|
+| No `CoSec-Identity` | Proceeds as the anonymous principal `(0)`; your code decides what it may see. |
+| A valid identity | Proceeds as that principal, in that scope. |
+| Not readable (not base64url, not the format, an unknown or duplicate member, a repeated role, `iat` or `exp` past year 9999), sent more than once, larger than `cosec.pipeline.gateway.max-size` (8 KB), or a scope that does not resolve here (such as an app other than `cosec.authorization.scope.app-id`) | `400` `invalid-request` |
+| An unknown version, an `iat` in the future, or no `auth.exp` | `401` `token-invalid` |
+| `auth.exp` passed, or `iat` older than `cosec.pipeline.gateway.max-age` (60 seconds) | `401` `token-expired` |
+
+The time checks allow `cosec.authentication.revocation.skew` (5 seconds) for the gateway's clock. The maximum age
+limits replaying a captured header inside the network: revocation is checked at the gateway only. The response
+carries the gateway's `CoSec-Request-Id`.
+
+The [security context](#accessing-the-security-context) of a request that proceeds holds:
+
+| Member | Content |
+|---|---|
+| `principal.id`, `tenant.tenantId` | `sub` and `tenant`; `(0)` for both without an identity. |
+| `principal.roles`, `scope.roles` | `roles`. |
+| `principal.policies` | Empty. |
+| `principal.attributes` | `claims`. |
+| `scope.appId`, `scope.spaceId` | `scope.app` and `scope.space`. |
+| `attributes["cosec.identity.rid"]`, `attributes["cosec.identity.jti"]` | The gateway's request id and the credential's id (`auth.jti`). |
 
 ## Control-plane routes
 

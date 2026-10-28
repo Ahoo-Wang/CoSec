@@ -17,7 +17,7 @@ description: "把 CoSec 接入 Spring WebFlux、Spring MVC 或 Spring Cloud Gate
 | Spring MVC | `webmvc-support` | `PipelineServletFilter`（Servlet `Filter`，所有 URL） | `HIGHEST_PRECEDENCE + 100` |
 | Spring Cloud Gateway | `gateway-support` | `PipelineGatewayFilter`（`GlobalFilter`） | `HIGHEST_PRECEDENCE + 10` |
 
-每个适配器都需要相应 capability、`cache-support`（快照文档和令牌吊销都存放在 Redis 中）、JWT 密钥和路由映射。依赖写法见[快速开始](../guide/quick-start.md#add-the-dependency)；下面只说明不同之处。
+每个适配器都需要相应 capability、`cache-support`（快照文档和令牌吊销都存放在 Redis 中）、JWT 密钥和路由映射；只读取网关转发的身份的服务一样都不需要（[网关之后的服务](#services-behind-the-gateway)）。依赖写法见[快速开始](../guide/quick-start.md#add-the-dependency)；下面只说明不同之处。
 
 **Spring WebFlux。** 过滤器在事件循环上启动管道，不切换线程。真正挂起之后（例如一次 Redis 读取），请求在 `Dispatchers.Default` 上继续，绝不会留在客户端库的 I/O 线程上。
 
@@ -113,16 +113,16 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 | 状态码 | problem 类型 | 何时出现 |
 |---|---|---|
 | `200`（继续处理） | 无，由处理器回应 | 决策为 Permit，且每条限流义务都还有许可。 |
-| `400` | `invalid-request` | 路径无法无歧义地读取（[请求路径](#the-request-path)）、某个 `CoSec-*` 参数的值相互冲突（[应用与空间](#app-and-space)），或路由捕获了不能作为资源 id 段的值（[路由映射](#route-maps)）。引擎根本看不到这个请求。 |
+| `400` | `invalid-request` | 路径无法无歧义地读取（[请求路径](#the-request-path)）、某个 `CoSec-*` 参数的值相互冲突（[应用与空间](#app-and-space)），或路由捕获了不能作为资源 id 段的值（[路由映射](#route-maps)）。引擎根本看不到这个请求。在网关之后：无法读取的 `CoSec-Identity`（[网关之后的服务](#services-behind-the-gateway)）。 |
 | `401` | `unauthorized` | Deny，且调用方是匿名的：没有凭证。包括作用域被拒绝，例如声明了 `CoSec-Space-Id` 的匿名请求。 |
-| `401` | `token-invalid` | Deny，且凭证因无效被拒绝：令牌校验不通过，或 API key 未知、已停用或已过期。 |
-| `401` | `token-expired` | Deny，且令牌已过期。 |
+| `401` | `token-invalid` | Deny，且凭证因无效被拒绝：令牌校验不通过，或 API key 未知、已停用或已过期。在网关之后：版本未知、来自未来或没有凭证有效期的 `CoSec-Identity`。 |
+| `401` | `token-expired` | Deny，且令牌已过期。在网关之后：`CoSec-Identity` 或其凭证过旧。 |
 | `401` | `token-revoked` | Deny，且该令牌或其主体的全部令牌已被吊销。 |
 | `403` | `forbidden` | Deny，且调用方已认证：显式 DENY、隐式拒绝或平台边界。 |
 | `403` | `scope-rejected` | 调用方已认证，且作用域被拒绝：声明了与宿主不同的应用，或主体在声明的空间中没有角色。 |
 | `429` | `too-many-requests` | Permit，但某条匹配的[限流规则](../policies/rate-limiting.md)已没有许可。 |
 | `503` | `unavailable` | 无法做出决策：Indeterminate；认证器或成员关系提供者失败或超时；快照源失败；严格的限流规则无法计数；Permit 时某个 REQUIRED 决策监听器失败；只有 break-glass 放行却没有 REQUIRED 监听器；或超过了 `cosec.pipeline.timeout`。 |
-| `500` | `internal-error` | 未被建模的异常：CoSec 的缺陷。 |
+| `500` | `internal-error` | 未被建模的异常：CoSec 的缺陷。在网关上，还包括身份无法转发的 Permit（[转发身份](#forwarding-the-identity)）。 |
 
 被拒绝的凭证不是错误。请求按匿名主体求值：Permit 照常继续（公开路径带着过期令牌也能访问），只有 Deny 才会指出凭证的问题。显式拒绝和隐式拒绝都是 `forbidden`（或 `unauthorized`），因此响应永远不会告诉调用方某条 DENY 存在。为什么出错时拒绝，见[失败即拒绝](../guide/security-model.md#fail-closed)；各状态码的常见原因见[故障排查](../operations/troubleshooting.md)。
 
@@ -181,7 +181,7 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 | `tenant.tenantId` | 作用域的租户：主体的租户，匿名调用方为 `(0)`。 |
 | `principal.roles` | 主体在请求空间中的角色。 |
 | `principal.policies` | 主体的附加策略。 |
-| `principal.attributes` | 凭证的属性（令牌的 `attributes` 声明；API key 则有 `apiKeyId`）。 |
+| `principal.attributes` | 凭证的属性（令牌的 `attributes` 声明；API key 则有 `apiKeyId`）。在网关之后：转发来的 `claims`。 |
 | `scope.appId`、`scope.spaceId`、`scope.roles` | `ScopeResolver` 校验后的作用域：应用、空间（默认空间为空）以及该空间中的角色。 |
 
 **WebFlux 和网关**：从 exchange 属性中读取，或从请求的 Reactor 上下文中读取。exchange 的 principal 也已设置，因此 `exchange.getPrincipal()` 返回 CoSec 主体。
@@ -218,7 +218,7 @@ val securityContext = httpServletRequest.getSecurityContext()
 
 ## 请求属性 {#request-attributes}
 
-除了凭证、作用域、动作和资源，条件还可以读取 HTTP 请求携带的内容（`http.header.<name>`、`http.origin`、`http.referer` 及其主机），它们由客户端写入；以及**请求属性** `request.attributes.<name>`，它们由适配器设置，客户端无法设置。网关过滤器会设置 `cosec.audit.routeId`，即匹配到的路由 id。属性名称见[策略语言](../policies/language.md)；其中哪些由客户端控制，见[信任边界](../guide/security-model.md#trust-boundaries)。
+除了凭证、作用域、动作和资源，条件还可以读取 HTTP 请求携带的内容（`http.header.<name>`、`http.origin`、`http.referer` 及其主机），它们由客户端写入；以及**请求属性** `request.attributes.<name>`，它们由适配器设置，客户端无法设置。网关过滤器会设置 `request.attributes.cosec.audit.routeId`，即匹配到的路由 id；在[选择不转发](#forwarding-the-identity)身份的路由上，还会设置 `request.attributes.cosec.identity.forward`（`false`）。属性名称，以及多次发送的请求头如何读取，见[策略语言](../policies/language.md)；其中哪些由客户端控制，见[信任边界](../guide/security-model.md#trust-boundaries)。
 
 请求本身不携带的信息，由 `AttributeProvider` Bean 以**外部属性** `ext.<provider>.<name>` 提供，并且只在候选语句读取时才获取（[外部属性缺失](../guide/security-model.md#missing-external-attributes)）。内置的外部属性：
 
@@ -250,11 +250,11 @@ fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source
 
 - 它只作用于网关路由：没有路由匹配的请求，以及网关自己的 actuator 端点，都不经 CoSec 授权。请通过管理端口或网络策略保护 actuator；
 - 它不加载路由映射，因此每个请求都是 `http:path:<path>` 上的 `http:<METHOD>`；
-- 它把结果中的 `CoSec-Request-Id` 转发给下游服务，替换客户端发送的任何值，使后端日志与网关共享同一个请求 id。
+- 它把结果中的 `CoSec-Request-Id` 转发给下游服务，替换客户端发送的任何值，使后端日志与网关共享同一个请求 id。Permit 时它还转发校验过的身份（[转发身份](#forwarding-the-identity)），并且除非设置了 `cosec.gateway.identity.forward-authorization=true`，它会移除客户端的 `Authorization` 请求头。
 
 宿主应用（`cosec.authorization.scope.app-id`）对整个网关只有一个值，不能按路由设置。一个网关面向多个应用时，如何防止客户端声明的应用放大权限，见[信任边界](../guide/security-model.md#trust-boundaries)。
 
-网关后面的服务运行自己的管道，并自行校验转发来的令牌（[网关之后](./authentication.md#behind-a-gateway)）。
+网关后面的服务要么信任网关转发的身份（[网关之后的服务](#services-behind-the-gateway)），要么运行自己的管道并再次校验令牌（[网关之后](./authentication.md#behind-a-gateway)）。
 
 **开箱即用的网关。** `cosec-gateway-server` 是一个集成了 CoSec、从 Redis 读取文档的 Spring Cloud Gateway 应用，以容器镜像发布：
 
@@ -267,6 +267,83 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 ```bash
 kubectl create secret generic cosec-jwt-secret --from-literal=secret=<随机值>
 ```
+
+### 转发身份 {#forwarding-the-identity}
+
+对已认证主体的 Permit，网关在 `CoSec-Identity` 请求头中告诉下游服务它校验了谁。这样服务自己不需要密钥、key、文档或 Redis。默认开启（`cosec.gateway.identity.enabled`）。
+
+**客户端无法伪造它。** 每个网关宿主都会在任何其他过滤器运行之前移除客户端发送的 `CoSec-Identity`（`IdentityStripFilter`），并在最后一跳、所有路由过滤器之后再移除一次（`IdentityHeadersFilter`），只发送管道转发的值。无论 `cosec.pipeline.mode` 或 `cosec.enabled` 如何设置，两者都会运行，因此添加该请求头的路由过滤器也无法转发身份。读取 `http.header.cosec-identity` 的条件无法编译。
+
+**不转发身份的情况**：匿名的 Permit、被拒绝的请求、元数据选择不转发的路由，或设置了 `cosec.gateway.identity.enabled=false`。后端是第三方时，让该路由选择不转发：
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: partner
+              uri: https://partner.example.com
+              predicates:
+                - Path=/partner/**
+              metadata:
+                cosec-identity: false
+```
+
+**它携带的内容。** 值是紧凑 JSON 的 base64url 编码（无填充），格式版本 1；JSON Schema 是 [`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)。
+
+| 成员 | 内容 |
+|---|---|
+| `v` | `1`。 |
+| `tenant`、`sub` | 网关校验的租户和主体。 |
+| `scope` | `{app, space}`，即网关解析出的应用和空间。 |
+| `roles` | 主体在该空间中的角色：决策所用的角色。 |
+| `auth` | `{method, jti, exp}`：`jwt` 或 `api-key`、令牌的 `jti` 或 key 的 id，以及凭证的过期时间。绝不包含凭证本身。 |
+| `iat` | 网关生成该请求头的时间，单位为 epoch 秒。 |
+| `rid` | 网关的请求 id。 |
+| `claims` | 只包含 `cosec.gateway.identity.claims` 中列出的主体属性（令牌的 `attributes` 声明，或 API key 的属性）：字符串、数字和布尔值。 |
+
+它绝不携带令牌、API key、cookie 或其他请求头、策略、匹配的语句、外部属性值或客户端 IP。
+
+**失败即拒绝。** 以下情况请求返回 `500` `internal-error` 并记录日志，不做任何截断：身份大于 `cosec.gateway.identity.max-size`（8 KB）；列出的某个声明不是字符串、数字或布尔值，或长于 1024 个字符；凭证永不过期（例如没有 `expires-at` 的 [API key](./authentication.md#api-keys)）：服务无法为这样的身份设定边界。
+
+**`Authorization`。** 网关在转发前移除客户端的 `Authorization` 请求头，因此被攻破的服务永远看不到令牌。只有当后面的服务要再次校验令牌，或要代表用户调用其他 API 时，才设置 `cosec.gateway.identity.forward-authorization=true`。
+
+### 网关之后的服务 {#services-behind-the-gateway}
+
+网关之后的服务设置 `cosec.pipeline.mode=gateway`（默认为 `enforce`）。它只需要自己的 Web 适配器（`webflux-support` 或 `webmvc-support`），并且除非它也签发令牌，应设置 `cosec.jwt.enabled=false`：
+
+```yaml
+cosec:
+  pipeline:
+    mode: gateway
+  jwt:
+    enabled: false
+```
+
+在这个模式下，适配器通过 `IdentityGate` 读取转发来的身份，starter 不装配认证器、快照、路由映射、限流、控制面、`AuthorizationChecker` 或 Redis。服务不基于策略做任何决策：决策已由网关做出。它相信收到的任何 `CoSec-Identity`，因此**只有网关能访问到它**：如何保证这一点以及启动时的检查，见部署指南中的[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)。
+
+| 请求 | 回应 |
+|---|---|
+| 没有 `CoSec-Identity` | 作为匿名主体 `(0)` 继续；由你的代码决定它能看到什么。 |
+| 有效的身份 | 以该主体、在该作用域中继续。 |
+| 无法读取（不是 base64url、不符合格式、有未知或重复的成员、角色重复、`iat` 或 `exp` 超过 9999 年）、发送了不止一次、大于 `cosec.pipeline.gateway.max-size`（8 KB），或作用域在本服务无法解析（例如应用不是 `cosec.authorization.scope.app-id`） | `400` `invalid-request` |
+| 未知版本、`iat` 在未来，或没有 `auth.exp` | `401` `token-invalid` |
+| `auth.exp` 已过，或 `iat` 早于 `cosec.pipeline.gateway.max-age`（60 秒） | `401` `token-expired` |
+
+这些时间检查为网关的时钟留出 `cosec.authentication.revocation.skew`（5 秒）的偏差。最大时长限制了在网络内部重放截获的请求头：吊销只在网关检查。响应带有网关的 `CoSec-Request-Id`。
+
+继续处理的请求的[安全上下文](#accessing-the-security-context)包含：
+
+| 成员 | 内容 |
+|---|---|
+| `principal.id`、`tenant.tenantId` | `sub` 和 `tenant`；没有身份时两者都是 `(0)`。 |
+| `principal.roles`、`scope.roles` | `roles`。 |
+| `principal.policies` | 空。 |
+| `principal.attributes` | `claims`。 |
+| `scope.appId`、`scope.spaceId` | `scope.app` 和 `scope.space`。 |
+| `attributes["cosec.identity.rid"]`、`attributes["cosec.identity.jti"]` | 网关的请求 id 和凭证的 id（`auth.jti`）。 |
 
 ## 控制面路由 {#control-plane-routes}
 

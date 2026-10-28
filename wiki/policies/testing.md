@@ -63,7 +63,7 @@ the HTTP `status` it stands for and a `severity`:
 |---|---|---|
 | `V1` | 400 | The candidate does not read back as a document. |
 | `V2` | 400, 422 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); a tenant policy reuses a platform policy's id. |
-| `COMPILE` | 422 | A policy, condition, pattern, binding or rule does not compile, with the platform's limits and declared attributes. |
+| `COMPILE` | 422 | A policy, condition, pattern, binding or rule does not compile, with the platform's limits, the platform's declared attributes and those of the control host's attribute providers. |
 | `REFERENCES` | 422 | A binding names a policy that resolves nowhere; a platform change removes a policy another document refers to; a tenant's `boundary` is not a platform boundary. |
 | `OPERATION` | 422 | An operation removes what is not there, or sets a section the document does not have. |
 | `IF_MATCH` | 412 | An entry is no longer what the operation's `ifMatch` says. |
@@ -148,6 +148,8 @@ A change is a set of entry operations on one document, made on the revision you 
 | `removePolicy` | `id`, optional `ifMatch` | Removes a policy. |
 | `putBinding` | `binding`, optional `ifMatch` | Adds the binding, or replaces the one with its id. |
 | `removeBinding` | `id`, optional `ifMatch` | Removes a binding. |
+| `putRateLimit` | `rateLimit`, optional `ifMatch` | Adds the rate limit rule, or replaces the one with its id where it stands. |
+| `removeRateLimit` | `id`, optional `ifMatch` | Removes a rate limit rule. |
 | `putCatalog` | `catalog` | Sets an app document's catalog; without `catalog`, removes it. |
 | `setLimits` | `limits` with all six limits | Sets the platform's limits; without `limits`, back to the defaults. |
 | `setAttributes` | `attributes` | Sets the platform's declared attributes; without `attributes`, removes them. |
@@ -155,8 +157,8 @@ A change is a set of entry operations on one document, made on the revision you 
 `ifMatch` is the SHA-256 of the entry as the document writes it: the operation applies only if the entry is still
 that. Instead of writing operations, `POST /documents/{key}:apply` takes a whole document (`{"document", "mode",
 "note"}`) and proposes the operations that turn the current revision into it: `MERGE` only adds and changes, `REPLACE`
-also removes what the document leaves out. Use `apply` to set a tenant's `boundary` or the platform's default. Rate
-limit rules cannot be changed through the control plane yet ([Rate limiting](./rate-limiting.md#publishing-rules)).
+also removes what the document leaves out. Use `apply` to set a tenant's `boundary` or the platform's default. How
+rate limit rule changes are authorized and approved is in [Rate limiting](./rate-limiting.md#publishing-rules).
 
 A base that is no longer the current revision is a `409`. A DENY with `onMissing: "nomatch"` needs a confirmation in
 `confirmations` (`{"policy", "statement", "digest", "kind": "deny-nomatch"}`); without one the change cannot publish.
@@ -179,7 +181,9 @@ flowchart LR
 
 A document has at most one staged change (`SHADOWING`, `AWAITING_APPROVAL` or `READY`); staging another is a `409`
 until that one is published, abandoned, rejected or expired. A change that is not finished expires
-`cosec.control.changes.expire-after` (default 7 days) after it was proposed. Its author can `:rebase` a `CONFLICTED`,
+`cosec.control.changes.expire-after` (default 7 days) after it was proposed: it is `EXPIRED` from the first time it is
+read after that, and the control plane's maintenance pass reads every open change each
+`cosec.control.shadow.check-interval` (default 1 minute). Its author can `:rebase` a `CONFLICTED`,
 `DRAFT` or `CHECKED` change onto the current revision, which runs every check again and drops earlier approvals and
 shadow evidence. The author, or anyone with `cosec:publish`, can `:abandon` it.
 
@@ -209,15 +213,19 @@ The window closes:
   `cosec.control.shadow.min-samples` (1,000) samples other than `BASE_MISMATCH`;
 - at `cosec.control.shadow.max-duration` (24 hours) with fewer, as *insufficient*.
 
-When it closes, the change becomes `READY`, or `AWAITING_APPROVAL` when it needs [approval](#approval). If the
-document's revision moved meanwhile, it becomes `CONFLICTED`. The data plane takes part with `cacheSupport` and
-`cosec.authorization.shadow.*` (on by default, sampling 10 % of requests).
+The control plane looks at every open window each `cosec.control.shadow.check-interval` (default 1 minute), on one
+control-plane instance at a time. When a window closes, the change becomes `READY`, or `AWAITING_APPROVAL` when it needs
+[approval](#approval). If the document's revision moved meanwhile, it becomes `CONFLICTED`. The data plane takes part
+with `cacheSupport` and `cosec.authorization.shadow.*` (on by default, sampling 10 % of requests).
 
-::: warning
-The starter does not close shadow windows on its own yet: closing is `Changes.shadowed(changeId)`, and nothing in
-the starter calls it. Until it does, a staged change stays `SHADOWING` until it expires, unless the host calls
-`shadowed` on the `cosecChanges` bean periodically, or the change skips its window.
-:::
+Attribute providers, and the types they declare, must be the same on every data-plane instance and on the control host.
+The control plane checks a candidate against its own providers; an instance without one of them cannot compile a
+candidate that reads its attributes, reports `CANDIDATE_ERROR`, and the window closes blocked, so the change is never
+published. A change that skips its window skips this check too: an instance that cannot compile the published document
+fails closed on it.
+
+A window compares decisions, so a change that touches only [rate limit rules](./rate-limiting.md#publishing-rules)
+shows no difference there.
 
 `POST /changes/{id}:skip-shadow` with a `reason` stages a `CHECKED` change without a window; it needs
 `cosec:skip-shadow`, and the revision records that the window was skipped. A change that only creates or revokes
@@ -303,7 +311,93 @@ compiler.checkReferences(acme, platform)
 ```
 
 `decode` throws `SnapshotFormatException` and `compile` throws `DocumentCompileException`, with every error and its
-JSON path. CoSec 8.0 has no policy test kit for asserting decisions yet; to check decisions before publishing, use
-[`simulate`](#simulating-a-request) and a [shadow window](#trying-changes-in-shadow-mode).
+JSON path.
+
+### Testing decisions
+
+`cosec-testkit` asserts what your documents decide, in unit tests, with the engine every instance runs:
+
+```kotlin
+dependencies {
+    testImplementation("me.ahoo.cosec:cosec-testkit")
+}
+```
+
+Keep the documents as `cosec-migrate convert` writes them, and one scenario per JSON file:
+
+```text
+src/test/resources/policies/
+  documents/
+    platform.json
+    apps/order.json
+    tenants/acme.json             ids URL-encoded: tenants/acme%2Dwest.json for acme-west
+  scenarios/
+    a-reader-reads-an-order.json
+    nobody-deletes-an-order.json
+```
+
+```kotlin
+import me.ahoo.cosec.testkit.PolicyTestKit
+import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.TestFactory
+import java.nio.file.Path
+
+class PolicyTest {
+    private val kit = PolicyTestKit.load(Path.of("src/test/resources/policies/documents"))
+
+    @TestFactory
+    fun policies(): List<DynamicTest> = kit.tests(Path.of("src/test/resources/policies/scenarios"))
+}
+```
+
+With `tenants/acme.json` binding the role `reader` to an ALLOW on `order:read`, and every principal to a DENY named
+`orders are never deleted` on `order:delete`, these two scenarios pass:
+
+```json
+{
+  "description": "A reader of acme reads an order",
+  "credential": { "tenant": "acme", "id": "alice", "roles": ["reader"] },
+  "request": { "action": "order:read", "resource": { "type": "order", "id": "1" } },
+  "expect": { "decision": "Permit" }
+}
+```
+
+```json
+{
+  "description": "The deny wins over the reader's role",
+  "credential": { "tenant": "acme", "id": "alice", "roles": ["reader"] },
+  "request": { "action": "order:delete", "resource": { "type": "order", "id": "1" } },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "no-delete",
+      "statement": 0,
+      "name": "orders are never deleted",
+      "via": { "binding": "g:no-delete", "document": "tenant" }
+    }
+  }
+}
+```
+
+`load` fails when a document does not compile; a missing `platform.json` is an empty platform document. `tests` makes one
+test per `.json` file under the directory, named by its path, and fails when there is none. `check(file)` checks one
+scenario and `evaluate(json)` returns the decision without checking; `PolicyTestKit.of(platform, apps, tenants)` takes
+documents as JSON text.
+
+| Scenario field | Meaning |
+|---|---|
+| `description` | Free text. |
+| `credential` | The principal: `tenant` (default `acme`), `id` (default `alice`), `roles` (`role` or `role@space`), `policies` (attachments), `attributes`; `"anonymous": true` for an anonymous caller. |
+| `membershipProvider` | Memberships a `MembershipProvider` returns, merged with the credential's as the pipeline merges them: `roles` by space (`{"": ["reader"]}`) and `attachments`; or `{"fails": "message"}`. |
+| `request` | `action` (default `order:read`), `resource` (`type`, `id`, `attributes`; default `order/1`), `app`, `space`, `hostApp`, `time` (ISO instant), `ip`, `device`, `blocked`, `headers`, `attributes` (`request.attributes.*`). |
+| `expect` | `decision`: `Permit`, `Deny`, `Indeterminate` or `Rejected`, with `by` (the deciding statement; `null` for the implicit deny), `cause` or `reason`. |
+
+Only the fields `expect` names are compared: `{"decision": "Permit"}` passes whichever statement permits, and `by`
+pins one, compared whole. A misspelt field is an error, not ignored.
+
+The kit evaluates the decision only. Documents compile with the default condition limits and without external
+attributes, so a document that reads `ext.*` does not load; rate limit rules do not run; a request names its action
+and resource, and no route map is applied. Decisions on documents that read `ext.*` can still be tried with
+[`simulate`](#simulating-a-request), which compiles against the control host's providers.
 
 **Next:** publish tested policies to the store, in [Storage](../operations/storage.md).

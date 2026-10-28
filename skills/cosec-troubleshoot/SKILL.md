@@ -1,6 +1,6 @@
 ---
 name: cosec-troubleshoot
-description: Diagnose CoSec 8.0 failures - startup failures (Redis eviction check, missing TokenStore or revocation reader, route maps), unexpected 400/401/403/429/503 problem responses, Indeterminate decisions, documents that do not compile or lag, rate limits, and control-plane errors - and explain which statement decided. Do not change behavior unless the user asks for a fix.
+description: Diagnose CoSec 8.0 failures - startup failures (unknown cosec.* keys, pipeline mode, Redis eviction check, missing TokenStore or revocation reader, route maps), instances that stay not ready, services behind a gateway that refuse the forwarded identity, unexpected 400/401/403/429/503 problem responses, Indeterminate decisions, documents that do not compile or lag, rate limits, and control-plane errors - and explain which statement decided. Do not change behavior unless the user asks for a fix.
 ---
 
 # CoSec Troubleshooting
@@ -63,6 +63,15 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 
 ## Startup failures
 
+- **`CoSec does not read <n> cosec.* properties, which would do nothing:`** followed by `<key> -> <replacement>` lines:
+  a typo or a 7.x key (for example `cosec.authentication.enabled -> cosec.authentication.login.enabled`,
+  `cosec.authentication.social.* -> cosec.authentication.login.social.*`). Rename or remove the key; the 7.x table is
+  at https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties. `cosec.unknown-properties=warn` only
+  logs the list; do not suggest it to hide a real typo.
+- **`cosec.pipeline.mode=gateway on a Spring Cloud Gateway host`**: a gateway always runs `enforce`; set `gateway` on
+  the services behind it. A binding failure on `cosec.pipeline.mode` means a value other than `enforce` or `gateway`.
+- **`cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created`**: add `kafka-support`, a
+  `KafkaOperations` bean and `cosec.control.audit.kafka.enabled=true`, or use `best-effort`.
 - **`Redis may evict CoSec's policy snapshot: maxmemory-policy is {...}, not noeviction`**: set
   `maxmemory-policy noeviction` on every node. **`Cannot tell whether Redis may evict CoSec's policy snapshot (CONFIG
   GET maxmemory-policy failed or is not allowed)`** or `(the CoCache backend ... is not one this check can read)`: a
@@ -85,10 +94,13 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 
 ## Symptoms
 
-### Every request is 503
+### Every request is 503, or the instance is not ready
 
-- No platform document is published yet (the first one comes from `cosec-migrate publish`), or it was lost (evicted):
-  an absent platform fails every request closed.
+- No platform document is published yet (the first one comes from `cosec-migrate publish`; `cosec-migrate bootstrap`
+  writes only the `(platform)` tenant's document), or it was lost (evicted): an absent platform fails every request
+  closed. Readiness refuses traffic until the platform document and every `prewarm-apps`/`prewarm-tenants` document is
+  installed; the `cosecSnapshot` health indicator shows `platform` (`installed`, `failed`, `absent`, `loading`) and
+  `prewarmed`.
 - A document the request needs does not decode or compile: its new revision is installed as failed
   (`SnapshotUnavailableException: ... revision <n> cannot be compiled`, caused by a `DocumentCompileException` listing
   JSON paths), and every request that needs it fails closed; the previous revision is not kept. Compile the stored
@@ -108,7 +120,9 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **External attribute unavailable**: a statement reads `ext.<provider>.<name>` with `onMissing: indeterminate`
   (default) and the provider failed, timed out (`cosec.authorization.attributes.timeout`) or is not registered on this
   instance. A blacklist source failure makes every request 503 unless a DENY matches.
-- **A DENY's condition errored**, or the tenant's boundary statement errored.
+- **A DENY's condition errored**, or the tenant's boundary statement errored. A DENY on `http.header.<name>` errors when
+  the request sent that header more than once with different values (`Header [<name>] arrived with different
+  values`); an ALLOW on it then does not match. One value repeated reads as that value.
 - **Rate limiter cannot count** and the matching rule has `strictFailure: true`.
 - **A REQUIRED decision listener failed or timed out** (`cosec.audit.required.timeout`): it turns a permit into 503.
 - **The authenticator's dependency failed** (for example the API key or revocation store); a revocation read that
@@ -131,8 +145,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - Is the policy bound in the right document, with the right app and space? `space: ""` is the default space only;
   roles count only in the request's space (`role@space` claims; unsuffixed roles in the default space).
 - Is the binding expired (`expiresAt`)? Is the tenant held by a boundary that does not cover the request?
-- Conditions: literals keep their JSON type (`true` vs `"true"`); `http.header.*`, `http.origin*`, `http.referer*` and
-  `request.attributes.*` are always absent in the 8.0 pipeline today, so an ALLOW on them never matches.
+- Conditions: literals keep their JSON type (`true` vs `"true"`). `http.header.<name>`, `http.origin`, `http.referer`
+  and `request.attributes.<name>` come from the request; `http.origin.host` and `http.referer.host` are lower case and
+  absent when the value is not a URI with a host. The gateway's route id is `request.attributes.cosec.audit.routeId`.
+- A condition on a credential header (`authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`,
+  `cosec-identity`) does not compile: `` `<path>` is a credential header, which no condition may read ``.
 - `scope-rejected`: the client's `CoSec-App-Id` or `CoSec-Space-Id` (see the table).
 
 ### Request allowed unexpectedly
@@ -143,6 +160,24 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   while its provider fails).
 - Is the instance on the expected revision? Compare the audit event's snapshot versions with the published head.
 - A break-glass binding permits as `cosec:root` until it expires; audit marks such permits.
+
+### Service behind a gateway (`cosec.pipeline.mode=gateway`)
+
+The service reads the caller from `CoSec-Identity`, which only the CoSec gateway sets (it strips the client's own). No
+header: anonymous. Otherwise never anonymous:
+
+- 400 `invalid-request`: not base64url JSON of format v1, unknown or missing members, over
+  `cosec.pipeline.gateway.max-size` (8KB), sent more than once, or a scope that does not resolve here.
+- 401 `token-invalid`: unsupported version, no `auth.exp`, or issued in the future (beyond
+  `cosec.authentication.revocation.skew`).
+- 401 `token-expired`: the credential expired, or the identity is older than `cosec.pipeline.gateway.max-age` (60s)
+  plus the skew. Check clocks.
+- On the gateway, a 500 with `Request [<id>]: the identity cannot be forwarded.`: the credential never expires (an API
+  key without `expires-at`), or the identity is too large or a `cosec.gateway.identity.claims` value is not a string
+  (at most 1024 characters), number or boolean. Route metadata `cosec-identity: false` opts a route out.
+- A backend that verifies tokens itself gets no `Authorization` header unless
+  `cosec.gateway.identity.forward-authorization=true`. A gateway-mode service that issues no tokens should set
+  `cosec.jwt.enabled=false`, or startup asks for a JWT secret and a token store.
 
 ### Change not visible / snapshot lag
 
@@ -172,6 +207,10 @@ does not match; 422 the candidate does not compile, refers to a missing policy, 
 be read. Large bodies on WebFlux need `spring.codec.max-in-memory-size`; on WebMvc a body over
 `cosec.control.http.max-body-size` is 400. Without a platform document the control API itself answers 503; publish the
 first one with `cosec-migrate publish`.
+
+A shadow window that stays blocked has a `CANDIDATE_ERROR`: one instance cannot compile the candidate, usually because
+it reads an `ext.*` attribute whose provider runs on the control host but not on that instance. Providers and their
+declared types must match on every instance and the control host; the change is never published while blocked.
 
 ## Reproduce narrowly
 

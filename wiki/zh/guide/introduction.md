@@ -62,7 +62,7 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 4. 执行 Permit 的义务（限流），并通知决策监听器；
 5. 返回结果：被允许的请求继续到达你的处理器，你的代码可以访问安全上下文；其他请求得到 `401`、`403`、`429`、`503` 或 `400`，响应体为 `application/problem+json`。
 
-三种过滤器运行同一条 Pipeline，所以网关和它后面的服务决策一致。你的应用需要提供签发令牌的登录接口。策略通过控制面发布到 Redis，控制面可以运行在你的某个服务中。见 [Web 集成](../integration/web.md)和[架构概览](../architecture/overview.md)。
+三种过滤器运行同一条 Pipeline，所以网关和它后面的服务决策一致。CoSec 网关后面的服务也可以改为信任网关的决策（`cosec.pipeline.mode=gateway`）：它从网关转发的 `CoSec-Identity` 头读取已验证的调用方，自己不需要密钥、文档或 Redis，但前提是除网关外没有任何人能访问它（[信任边界](./security-model.md#trust-boundaries)）。你的应用需要提供签发令牌的登录接口。策略通过控制面发布到 Redis，控制面可以运行在你的某个服务中。见 [Web 集成](../integration/web.md)和[架构概览](../architecture/overview.md)。
 
 ## 模块 {#modules}
 
@@ -83,6 +83,8 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 | 把客户端所在地区作为外部属性 | `ip2region-support` | `cosec-ip2region` |
 
 starter 始终引入 `cosec-runtime`（协程请求 Pipeline）、`cosec-core`（文档、快照、令牌、成员关系、API key）、`cosec-engine` 和 `cosec-model`（纯函数决策引擎）、`cosec-api`（公共契约）以及 `cosec-jwt`（JWT 令牌）。`cosec-bom` 用于对齐所有已发布模块的版本。
+
+`cosec-testkit` 是测试依赖：它用 JUnit 5 针对你自己的策略文档运行场景，方式与 CoSec 的一致性测试套件相同（[策略测试](../policies/testing.md)）。
 
 有两个制品不是应用的依赖：
 

@@ -37,6 +37,7 @@ flowchart BT
     starter[cosec-spring-boot-starter] --> runtime & jwt
     starter -. feature variants .-> webflux & webmvc & gateway & cocache & control & social & listeners & openapi
     migrate[cosec-migrate] --> cocache & control
+    testkit[cosec-testkit] --> core & runtime
     server[cosec-gateway-server] --> starter
 ```
 
@@ -49,11 +50,12 @@ flowchart BT
 - **`cosec-control`**（目录 `control/`）是控制面：修订、变更请求、影子窗口、审批、break-glass、模拟与分析。它是一个由宿主装配的库。`ControlBoundaryTest`（ArchUnit）导入本模块自己编译出的类，当其中任何一个位于 `me.ahoo.cosec.control` 之外、引用 Spring、`reactor.*`、协程或 Reactive Streams 桥接、Redis 客户端，或调用 `runBlocking`、`Dispatchers.IO`、`GlobalScope` 时失败。
 - **其余每个库模块只适配一种技术**：一种 Web 栈（`cosec-webflux`、`cosec-webmvc`、`cosec-gateway`），通过 CoCache 使用 Redis（`cosec-cocache`：快照存储、控制面存储、吊销、限流器、影子报告），JWT、OAuth、OpenAPI，或决策的观察者（`cosec-opentelemetry`、`cosec-micrometer`、`cosec-kafka`、`cosec-ip2region`）。适配器从不做决策，只做翻译。
 - **`cosec-spring-boot-starter`** 负责装配。每个集成都是 [`cosec-spring-boot-starter/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-spring-boot-starter/build.gradle.kts) 中声明的一个 Gradle feature variant：适配模块只是该 variant 的依赖，其自动配置由 `@ConditionalOnClass` 保护，所以只有应用请求了该能力才会生效。各 capability 列在[简介](../guide/introduction.md#modules)中。
+- **`cosec-testkit`**（目录 `testkit/`）用 JUnit 5 针对应用自己的文档运行场景。它依赖 `cosec-core` 和 `junit-jupiter-api`（都属于它的 API），以及 `cosec-runtime`（用于与 Pipeline 相同的成员关系合并）。它持有场景格式的引擎层，`conformance` 也运行这一层，所以一致性套件和应用的测试以同一种方式求值场景。
 - **`cosec-migrate`** 把 7.x 的数据转换为 8.0 文档并发布；应用不依赖它。**`cosec-gateway-server`** 是由 starter 构建的、开箱即用的网关，从不发布。**`conformance`** 和 **`e2e`** 是仅用于测试的模块，同样从不发布。
 
 ## 请求路径 {#request-path}
 
-[`Pipeline.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt) 中的 `Pipeline.evaluate` 是一个从请求事实到 `Outcome` 的挂起函数。适配器（`PipelineWebFilter`、`PipelineServletFilter`、`PipelineGatewayFilter`）只负责把请求读成 `HttpFacts`、调用它，并写出它返回的结果。
+[`Pipeline.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt) 中的 `Pipeline.evaluate` 是一个从请求事实到 `Outcome` 的挂起函数。适配器（`PipelineWebFilter`、`PipelineServletFilter`、`PipelineGatewayFilter`）只负责把请求读成 `HttpFacts`、调用它，并写出它返回的结果。它们依赖 `RequestGate`，`Pipeline` 实现了这个接口。另一个 `RequestGate` 是 `IdentityGate`，CoSec 网关后面的服务改用它（`cosec.pipeline.mode=gateway`）：它从网关转发的 `CoSec-Identity` 头读取调用方，没有认证器、快照、引擎或监听器，同样通过 `StatusMapping` 构造结果，所以两种 gate 在每个适配器上的应答一致。为什么这需要网络边界，见[信任边界](../guide/security-model.md#trust-boundaries)。
 
 ```mermaid
 sequenceDiagram
@@ -97,7 +99,7 @@ sequenceDiagram
 - **决策。** 引擎给出 `Permit`（附带义务）、`Deny` 或 `Indeterminate`（第 10 步）。
 - **义务。** Permit 的限流义务按顺序执行（第 11 步）。第一个耗尽的规则得到 `429`；无法计数的规则在严格模式下得到 `503`，否则跳过。
 - **REQUIRED 监听器。** 它们在结果返回之前看到结果（第 12 步）；失败只会把 Permit 变成 `503`。经由 break-glass 绑定得到的 Permit 至少需要一个 REQUIRED 监听器，否则得到 `503`。
-- **状态映射。** `StatusMapping` 是唯一构造 `Outcome` 的地方：状态码、响应头和 `application/problem+json` 响应体（第 13 步）。适配器写出它，或者让被放行的请求带着安全上下文继续（第 14 步）。各结果对应的状态码和 `CoSec-*` 参数见 [Web 集成](../integration/web.md)。
+- **状态映射。** `StatusMapping` 是唯一构造 `Outcome` 的地方：状态码、响应头和 `application/problem+json` 响应体（第 13 步）。在网关上，结果还指明要转发的头：已认证主体的 Permit 上是已验证的 `CoSec-Identity`，否则没有，因此适配器会删除客户端发来的那个。适配器写出它，或者让被放行的请求带着安全上下文继续（第 14 步）。各结果对应的状态码和 `CoSec-*` 参数见 [Web 集成](../integration/web.md)。
 - **BEST_EFFORT 监听器。** 审计日志、指标、追踪、影子监听器以及（默认情况下的）Kafka 通过各自的有界队列收到最终事件，不在请求路径上（第 15 步）。
 
 每次 SPI 调用都经过同一个包装：施加该调用的超时（`cosec.pipeline.*` 与 `cosec.authorization.*`，见[配置](../operations/configuration.md)；快照加载则由 `cold-load-timeout` 限定），把任何失败变成一个值，只让外部取消穿过。整个求值也有截止时间，超过即为 `503`。定时器是惰性设定的：从不挂起的请求不设定任何定时器。没有建模的异常得到 `500`。客户端离开会取消协程，不写出任何内容。
@@ -180,8 +182,9 @@ sequenceDiagram
 - **修订。** 每次发布先写入一条不可变的修订记录，然后用一次条件写入移动文档的 head，只有 head 仍是该变更的基线时才会成功。两个并发发布不可能都成功，读取方看到的要么是旧 head，要么是新 head，绝不会是混合。历史、diff 和回滚都读取修订链。
 - **变更。** 变更请求是一个基线修订加上条目级操作，用数据面的编译器检查并编译。head 移动后变更变为 `CONFLICTED`，直到 rebase。每个文档只有一个暂存槽位。
 - **授权。** 每个控制面操作都以操作者身份重新授权，动作为作用于文档资源的 `cosec:*`，所用的快照在每次检查前都会从存储确认是最新的。授权分析无法证明受限的授予属于越权，需要另一个人审批。
-- **影子窗口。** 实例对请求采样（`cosec.authorization.shadow.sample-rate`），同时在暂存的候选上求值，并报告结果的差异（`SAME`、`WIDENED`、`NARROWED` 等）。无法编译或求值候选的实例会阻塞窗口，被阻塞的变更永远不会发布。只要有任何变化或证据不足，发布时操作者就必须确认这些数字。
+- **影子窗口。** 实例对请求采样（`cosec.authorization.shadow.sample-rate`），同时在暂存的候选上求值，并报告结果的差异（`SAME`、`WIDENED`、`NARROWED` 等）。无法编译或求值候选的实例会阻塞窗口，被阻塞的变更永远不会发布。文档按平台的属性声明和主机的 `AttributeProvider` 编译，所以控制面主机和每个实例必须注册相同的提供者：只有控制面主机能编译的候选会阻塞它的窗口。只要有任何变化或证据不足，发布时操作者就必须确认这些数字。
 - **break-glass** 绑定只能通过控制面创建，需要第二位审批人、过期时间和一个 REQUIRED 变更监听器。
+- **维护。** 每个控制面实例定期回收旧的修订记录并关闭影子窗口（`ControlMaintenanceScheduler`）。`ControlStore` 列出这些任务要访问的内容（`documents()`、`openChanges()`），租约（`acquireLease`、`releaseLease`）让同一时间只有一个实例做每项工作（[修订、历史与回滚](../operations/storage.md#revisions-history-and-rollback)）。
 
 如何使用变更、模拟、影子窗口和审批见[测试策略](../policies/testing.md)；`cosec.control.*` 属性见[配置](../operations/configuration.md)。
 

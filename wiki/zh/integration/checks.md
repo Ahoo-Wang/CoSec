@@ -27,6 +27,8 @@ suspend fun check(security: SecurityContext, action: String, resource: String): 
 - `action` 为 `service:verb`，与路由映射中的命名一致（`order:cancel`），未映射的路由则为 `http:<METHOD>`。不含 `:` 的字符串结果为 `false`。
 - `resource` 为类型化资源 `type/id`（`order/42`），或以 `/` 开头的路径（`/orders/42`），后者是一个 `http` 资源。
 
+以 `cosec.pipeline.mode=gateway` 运行在网关之后的服务没有检查器：它不持有可用于决策的策略（[网关之后的服务](./web.md#services-behind-the-gateway)）。在这样的服务中，依靠网关的决策，或者以 `enforce` 模式运行该服务。
+
 两个适配器模块提供了非挂起的形式：
 
 | 模块 | 函数 | 使用场景 |

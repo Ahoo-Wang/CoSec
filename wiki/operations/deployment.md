@@ -7,8 +7,8 @@ description: "Run the cosec-gateway-server image, and use its JDK 25 AOT cache t
 
 For operators who run `cosec-gateway-server`, the ready-made Spring Cloud Gateway with CoSec in front, from its
 Docker image or on Kubernetes, or who build a similar image of their own. This page covers what the image contains,
-what it needs before it can answer a request, the Kubernetes manifests in the repository, how CI checks the image, and
-the JDK 25 AOT cache it ships with. Every property named here is in [Configuration](./configuration.md).
+what it forwards to the services behind it, what it needs before it can answer a request, readiness and shutdown, the
+Kubernetes manifests in the repository, how CI checks the image, and the JDK 25 AOT cache it ships with. Every property named here is in [Configuration](./configuration.md).
 
 ## The image
 
@@ -25,8 +25,8 @@ application: it is published only as an image, never as a library.
   configuration is `config/application.yaml`; the JVM options are in `bin/cosec-gateway-server` (ZGC, a 2 GiB heap).
   Add options through `JAVA_OPTS`.
 - **What is in it.** The gateway filter, the Redis snapshot store (`cache-support`), tracing and the Kafka module. Its
-  configuration turns Kafka audit (`cosec.audit.kafka.enabled: false`), login (`cosec.authentication.enabled: false`)
-  and ip2region (`cosec.ip2region.enabled: false`) off. It has no control plane: documents are published by
+  configuration turns Kafka audit (`cosec.audit.kafka.enabled: false`), login
+  (`cosec.authentication.login.enabled: false`) and ip2region (`cosec.ip2region.enabled: false`) off. It has no control plane: documents are published by
   `cosec-migrate` or by a control-plane application on the same Redis.
 
 ```bash
@@ -44,10 +44,55 @@ health probes included, are not. Routes are ordinary Spring Cloud Gateway config
 `spring.cloud.gateway.server.webflux.routes`. How a request becomes an action and a resource, and how outcomes become
 responses, is in [Web integration](../integration/web.md).
 
+What a routed request carries to its backend:
+
+- **`CoSec-Identity`**, on a permit for an authenticated principal: the identity the gateway verified and the scope it
+  decided in. The gateway removes any `CoSec-Identity` a client sent from every request, before any other filter and
+  again on the routed request, whatever `cosec.pipeline.mode` or `cosec.enabled` say. An anonymous permit, and a route
+  whose metadata says `cosec-identity: false`, carry none. Turn forwarding off with
+  `cosec.gateway.identity.enabled=false`; the other `cosec.gateway.identity.*` properties are in
+  [Configuration](./configuration.md).
+- **No `Authorization` header**, unless `cosec.gateway.identity.forward-authorization=true`. Turn it on only for a
+  backend that calls other APIs with the user's token.
+- **`CoSec-Request-Id`**, the gateway's own request id.
+
+A credential that never expires (an API key without `expires-at`) is not forwarded: such a request answers `500`, and
+the gateway logs `Request [<requestId>]: the identity cannot be forwarded.`
+
+## Services behind the gateway
+
+A service behind the gateway can decide for itself (the default, `cosec.pipeline.mode=enforce`, with its own
+documents and keys), or trust the gateway's decision with `cosec.pipeline.mode=gateway`. In gateway mode the service
+reads the caller from `CoSec-Identity` and nothing else: it has no keys, no documents, no Redis, no route map and no
+decision listeners. How a service is set up for it is in
+[Services behind the gateway](../integration/web.md#services-behind-the-gateway).
+
+```mermaid
+flowchart LR
+    C([Client]) -->|token or API key| G[cosec-gateway-server<br>decides with the documents]
+    G -->|CoSec-Identity| S1[Service<br>mode=gateway]
+    G -->|CoSec-Identity| S2[Service<br>mode=gateway]
+    G --- R[(Redis)]
+```
+
+**Only the gateway may reach a service in gateway mode.** The service believes any `CoSec-Identity` it receives, so
+anyone else who can send it a request can be whoever they claim. Enforce it in the network: a Kubernetes
+`NetworkPolicy` that admits only the gateway's pods, a private network, or mutual TLS between the gateway and the
+services. Each such service logs at startup, at `WARN`:
+
+```text
+cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives. Only the CoSec gateway, which strips the clients' own, may be able to reach it: anyone else who can is whoever they claim.
+```
+
+Startup fails when `cosec.pipeline.mode` is neither `enforce` nor `gateway`, and when it is `gateway` on a Spring Cloud
+Gateway host: the gateway itself always decides with the documents. Why the boundary matters, and what a captured
+header allows, is in [Trust boundaries](../guide/security-model.md#trust-boundaries).
+
 ## Before the first request
 
 The gateway starts without any document, but answers every routed request `503` until a platform document is
-published ([The first documents](./storage.md#the-first-documents)). For each environment:
+published ([The first documents](./storage.md#the-first-documents)), and reports itself not ready meanwhile
+([Readiness](#readiness)). For each environment:
 
 1. **Redis with `maxmemory-policy noeviction`.** Each instance checks it at startup with `CONFIG GET` and does not
    start otherwise ([Redis requirements](./storage.md#redis-requirements)). On a managed Redis that hides
@@ -58,9 +103,44 @@ published ([The first documents](./storage.md#the-first-documents)). For each en
 3. **Instance ids, if you lock Redis down per instance.** The gateway takes part in shadow windows by default, with a
    random instance id. To give each pod its own Redis user, set `COSEC_AUTHORIZATION_SHADOW_INSTANCE_ID` per pod
    ([Who may write which keys](./storage.md#who-may-write-which-keys)).
+4. **The same attribute providers everywhere.** Every gateway instance, every other data-plane instance and the
+   control plane's host must register the same `AttributeProvider`s, declaring the same `ext.*` attributes with the
+   same types. A document compiles against the platform's declarations and the host's providers, so a change the
+   control host accepts can fail to compile on an instance without the provider: in a shadow window that instance
+   reports `CANDIDATE_ERROR` and the window never closes clean, so the change is not published; published without a
+   window, that instance answers `503` for every request that needs the document, unless a DENY matches.
 
-An instance reports itself healthy and ready before it has loaded the platform document; the first requests wait for
-it, up to [`cold-load-timeout`](./configuration.md#snapshot) (2 seconds), and answer `503` if it cannot be read.
+## Readiness
+
+An instance is ready only once it has installed the platform document and every document named in
+[`prewarm-apps` and `prewarm-tenants`](./configuration.md#snapshot) (empty lists mean the platform document only).
+Until then it would answer every routed request `503`, so the starter turns Spring Boot's readiness state to
+`REFUSING_TRAFFIC`, and back to `ACCEPTING_TRAFFIC` once the documents are installed. A load balancer that follows
+`/actuator/health/readiness` sends it no traffic meanwhile. Liveness is not touched: a missing document is not a reason
+to restart the instance.
+
+With Spring Boot Actuator, the `cosecSnapshot` health indicator reports `UP` once the same documents are installed,
+`DOWN` before, with the details `platform` (`installed`, `failed`, `absent` or `loading`) and `prewarmed`. To see those
+details on the readiness endpoint, add it to the readiness group:
+
+```yaml
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,cosecSnapshot
+```
+
+`cosecSnapshot` is also part of `/actuator/health`, which therefore reports `DOWN` until the platform document is
+published.
+
+## Shutdown
+
+On shutdown, the decision listeners stop taking events and deliver what is queued to the `BEST_EFFORT` listeners (the
+audit log, Kafka, metrics) for up to
+[`cosec.observability.listener.drain-timeout`](./observability.md#decision-listeners) (5 seconds), then drop the
+rest. Keep the pod's termination grace period long enough for Spring's own graceful shutdown plus that timeout.
 
 ## Kubernetes
 
@@ -69,7 +149,7 @@ it, up to [`cold-load-timeout`](./configuration.md#snapshot) (2 seconds), and an
 | File | Contents |
 |---|---|
 | `cosec-gateway-config.yaml` | A ConfigMap with `application.yaml` and `bootstrap.yaml`, mounted over `/opt/cosec-gateway-server/config/`: the routes and the `cosec.*` settings above. |
-| `cosec-gateway-deployment.yml` | The Deployment: `COSEC_JWT_SECRET` from the Secret `cosec-jwt-secret`, a Redis Cluster from the Secret `redis-secret` (`SPRING_DATA_REDIS_CLUSTER_NODES`, `SPRING_DATA_REDIS_PASSWORD`, adaptive topology refresh), probes on `/actuator/health`, `/actuator/health/readiness` and `/actuator/health/liveness`, and the OpenTelemetry Java agent injection annotation. |
+| `cosec-gateway-deployment.yml` | The Deployment: `COSEC_JWT_SECRET` from the Secret `cosec-jwt-secret`, a Redis Cluster from the Secret `redis-secret` (`SPRING_DATA_REDIS_CLUSTER_NODES`, `SPRING_DATA_REDIS_PASSWORD`, adaptive topology refresh), a startup probe on `/actuator/health`, a readiness probe on `/actuator/health/readiness` and a liveness probe on `/actuator/health/liveness`, and the OpenTelemetry Java agent injection annotation. |
 | `cosec-gateway-reids.yaml` | The Secret `redis-secret`, with placeholder values. |
 | `cosec-gateway-service.yaml` | A Service, port 80 to the container's 8080. |
 | `cosec-gateway-hpa.yaml` | A HorizontalPodAutoscaler, 2 to 10 replicas on CPU. |
@@ -78,6 +158,10 @@ The Deployment names the image `ghcr.io/ahoo-wang/cosec-gateway:7.0.0`: set the 
 `cosec-jwt-secret` yourself (`kubectl create secret generic cosec-jwt-secret --from-literal=secret=<random value>`),
 and fill `redis-secret` with your nodes and password. `cosec-migrate` connects to one Redis server through
 `--to-redis`.
+
+The startup probe on `/actuator/health` passes only once the platform document is installed ([Readiness](#readiness)).
+Publish the documents before the first rollout, or point the startup probe at `/actuator/health/liveness` so that pods
+start, and stay out of the Service, while Redis holds no platform document.
 
 ## How CI checks the image
 

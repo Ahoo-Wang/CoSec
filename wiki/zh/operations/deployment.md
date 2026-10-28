@@ -6,8 +6,8 @@ description: "运行 cosec-gateway-server 镜像，并用它自带的 JDK 25 AOT
 # 部署网关服务 {#deploying-the-gateway-server}
 
 面向用 Docker 镜像或在 Kubernetes 上运行 `cosec-gateway-server`（前置了 CoSec 的现成 Spring Cloud Gateway）的运维人员，
-以及要自己构建类似镜像的团队。本页介绍镜像里有什么、它在应答请求之前需要什么、仓库中的 Kubernetes 清单、CI 如何检查
-镜像，以及镜像自带的 JDK 25 AOT 缓存。这里提到的每个配置项都在[配置](./configuration.md)中。
+以及要自己构建类似镜像的团队。本页介绍镜像里有什么、它向后面的服务转发什么、它在应答请求之前需要什么、就绪与关闭、
+仓库中的 Kubernetes 清单、CI 如何检查镜像，以及镜像自带的 JDK 25 AOT 缓存。这里提到的每个配置项都在[配置](./configuration.md)中。
 
 ## 镜像 {#the-image}
 
@@ -23,7 +23,7 @@ CI 在每次推送时用 [`cosec-gateway-server/Dockerfile`](https://github.com/
 - **目录结构。** 应用位于 `/opt/cosec-gateway-server`，以非特权用户 `appuser` 运行。配置文件是
   `config/application.yaml`；JVM 参数在 `bin/cosec-gateway-server` 中（ZGC，2 GiB 堆）。通过 `JAVA_OPTS` 追加参数。
 - **包含什么。** 网关过滤器、Redis 快照存储（`cache-support`）、追踪和 Kafka 模块。它的配置关闭了 Kafka 审计
-  （`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.enabled: false`）和 ip2region
+  （`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.login.enabled: false`）和 ip2region
   （`cosec.ip2region.enabled: false`）。它没有控制面：文档由 `cosec-migrate` 或同一个 Redis 上的控制面应用发布。
 
 ```bash
@@ -40,10 +40,51 @@ CoSec 作为 Spring Cloud Gateway 的全局过滤器运行，而全局过滤器�
 `spring.cloud.gateway.server.webflux.routes` 下普通的 Spring Cloud Gateway 配置。请求如何变成动作和资源、结果如何
 变成响应，见 [Web 集成](../integration/web.md)。
 
+被路由的请求向后端带去：
+
+- **`CoSec-Identity`**，在已认证主体的 Permit 上：网关验证过的身份，以及它做决策时的作用域。无论
+  `cosec.pipeline.mode` 或 `cosec.enabled` 怎样设置，网关都会从每个请求中删除客户端发来的 `CoSec-Identity`：先于其他
+  任何过滤器删除一次，在发往后端的请求上再删除一次。匿名的 Permit，以及元数据为 `cosec-identity: false` 的路由，不带
+  身份。用 `cosec.gateway.identity.enabled=false` 关闭转发；其余 `cosec.gateway.identity.*` 配置项见
+  [配置](./configuration.md)。
+- **不带 `Authorization` 头**，除非设置 `cosec.gateway.identity.forward-authorization=true`。只为需要用用户的令牌
+  调用其他 API 的后端打开它。
+- **`CoSec-Request-Id`**，网关自己的请求 id。
+
+永不过期的凭证（没有 `expires-at` 的 API key）不会被转发：这样的请求回答 `500`，网关记录
+`Request [<requestId>]: the identity cannot be forwarded.`
+
+## 网关后面的服务 {#services-behind-the-gateway}
+
+网关后面的服务可以自己做决策（默认的 `cosec.pipeline.mode=enforce`，有自己的文档和密钥），也可以用
+`cosec.pipeline.mode=gateway` 信任网关的决策。在 gateway 模式下，服务只从 `CoSec-Identity` 读取调用方：它没有密钥、
+没有文档、没有 Redis、没有路由映射，也没有决策监听器。如何配置这样的服务，见
+[网关后面的服务](../integration/web.md#services-behind-the-gateway)。
+
+```mermaid
+flowchart LR
+    C([客户端]) -->|令牌或 API key| G[cosec-gateway-server<br>用文档做决策]
+    G -->|CoSec-Identity| S1[服务<br>mode=gateway]
+    G -->|CoSec-Identity| S2[服务<br>mode=gateway]
+    G --- R[(Redis)]
+```
+
+**只有网关可以访问 gateway 模式的服务。** 服务相信它收到的任何 `CoSec-Identity`，所以其他能向它发请求的人都可以
+自称任何人。在网络上保证这一点：只放行网关 pod 的 Kubernetes `NetworkPolicy`、私有网络，或网关与服务之间的双向 TLS。
+每个这样的服务在启动时以 `WARN` 记录：
+
+```text
+cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives. Only the CoSec gateway, which strips the clients' own, may be able to reach it: anyone else who can is whoever they claim.
+```
+
+`cosec.pipeline.mode` 既不是 `enforce` 也不是 `gateway` 时启动失败；在 Spring Cloud Gateway 主机上设为 `gateway`
+时也启动失败：网关自己总是用文档做决策。这条边界为什么重要、截获的头能做什么，见
+[信任边界](../guide/security-model.md#trust-boundaries)。
+
 ## 第一个请求之前 {#before-the-first-request}
 
 网关在没有任何文档时也能启动，但在平台文档发布之前，对每个被路由的请求都回答 `503`
-（[最初的文档](./storage.md#the-first-documents)）。每个环境都需要：
+（[最初的文档](./storage.md#the-first-documents)），在此期间报告自己未就绪（[就绪](#readiness)）。每个环境都需要：
 
 1. **`maxmemory-policy noeviction` 的 Redis。** 每个实例在启动时用 `CONFIG GET` 检查，否则不启动
    （[Redis 要求](./storage.md#redis-requirements)）。在隐藏了 `CONFIG GET` 的托管 Redis 上，自行设置 `noeviction`，
@@ -53,9 +94,37 @@ CoSec 作为 Spring Cloud Gateway 的全局过滤器运行，而全局过滤器�
    `cosec.authorization.snapshot.key-prefix`。
 3. **实例 id（如果按实例收紧 Redis 权限）。** 网关默认参与影子窗口，使用随机的实例 id。要给每个 pod 独立的 Redis 用户，
    为每个 pod 设置 `COSEC_AUTHORIZATION_SHADOW_INSTANCE_ID`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。
+4. **各处相同的属性提供者。** 每个网关实例、其他每个数据面实例和控制面所在的主机，都必须注册相同的
+   `AttributeProvider`，以相同的类型声明相同的 `ext.*` 属性。文档按平台的声明和主机的提供者编译，所以控制面主机接受的
+   变更，在缺少该提供者的实例上可能编译失败：在影子窗口中，该实例报告 `CANDIDATE_ERROR`，窗口无法正常关闭，变更不会
+   发布；不经窗口发布时，该实例对需要该文档的每个请求回答 `503`，除非有 DENY 匹配。
 
-实例在加载平台文档之前就报告自己健康并就绪；最初的请求会等待它，最多
-[`cold-load-timeout`](./configuration.md#snapshot)（2 秒），读不到时回答 `503`。
+## 就绪 {#readiness}
+
+实例只有在安装了平台文档，以及 [`prewarm-apps` 和 `prewarm-tenants`](./configuration.md#snapshot) 列出的每个文档
+（列表为空表示只有平台文档）之后才算就绪。在此之前它会对每个被路由的请求回答 `503`，所以 starter 把 Spring Boot 的
+就绪状态改为 `REFUSING_TRAFFIC`，文档安装后再改回 `ACCEPTING_TRAFFIC`。跟随 `/actuator/health/readiness` 的负载均衡器
+在此期间不会给它流量。存活状态不受影响：缺少文档不是重启实例的理由。
+
+有 Spring Boot Actuator 时，`cosecSnapshot` 健康指示器在这些文档安装后报告 `UP`，之前报告 `DOWN`，细节为 `platform`
+（`installed`、`failed`、`absent` 或 `loading`）和 `prewarmed`。要在就绪端点上看到这些细节，把它加入 readiness 组：
+
+```yaml
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,cosecSnapshot
+```
+
+`cosecSnapshot` 也是 `/actuator/health` 的一部分，因此在平台文档发布之前它报告 `DOWN`。
+
+## 关闭 {#shutdown}
+
+关闭时，决策监听器停止接收事件，把队列中的事件投递给 `BEST_EFFORT` 监听器（审计日志、Kafka、指标），最多
+[`cosec.observability.listener.drain-timeout`](./observability.md#decision-listeners)（5 秒），然后丢弃剩下的。让 pod 的
+终止宽限期足够容纳 Spring 自身的优雅关闭加上这段时间。
 
 ## Kubernetes {#kubernetes}
 
@@ -64,7 +133,7 @@ CoSec 作为 Spring Cloud Gateway 的全局过滤器运行，而全局过滤器�
 | 文件 | 内容 |
 |---|---|
 | `cosec-gateway-config.yaml` | 一个 ConfigMap，含 `application.yaml` 和 `bootstrap.yaml`，挂载到 `/opt/cosec-gateway-server/config/`：路由和上面的 `cosec.*` 设置。 |
-| `cosec-gateway-deployment.yml` | Deployment：`COSEC_JWT_SECRET` 来自 Secret `cosec-jwt-secret`，Redis Cluster 来自 Secret `redis-secret`（`SPRING_DATA_REDIS_CLUSTER_NODES`、`SPRING_DATA_REDIS_PASSWORD`、自适应拓扑刷新），探针为 `/actuator/health`、`/actuator/health/readiness` 和 `/actuator/health/liveness`，以及注入 OpenTelemetry Java agent 的注解。 |
+| `cosec-gateway-deployment.yml` | Deployment：`COSEC_JWT_SECRET` 来自 Secret `cosec-jwt-secret`，Redis Cluster 来自 Secret `redis-secret`（`SPRING_DATA_REDIS_CLUSTER_NODES`、`SPRING_DATA_REDIS_PASSWORD`、自适应拓扑刷新），启动探针为 `/actuator/health`，就绪探针为 `/actuator/health/readiness`，存活探针为 `/actuator/health/liveness`，以及注入 OpenTelemetry Java agent 的注解。 |
 | `cosec-gateway-reids.yaml` | Secret `redis-secret`，值为占位符。 |
 | `cosec-gateway-service.yaml` | 一个 Service，80 端口转发到容器的 8080。 |
 | `cosec-gateway-hpa.yaml` | 一个 HorizontalPodAutoscaler，按 CPU 在 2 到 10 个副本之间伸缩。 |
@@ -72,6 +141,9 @@ CoSec 作为 Spring Cloud Gateway 的全局过滤器运行，而全局过滤器�
 Deployment 中的镜像是 `ghcr.io/ahoo-wang/cosec-gateway:7.0.0`：把标签改成你部署的版本。自己创建 `cosec-jwt-secret`
 （`kubectl create secret generic cosec-jwt-secret --from-literal=secret=<random value>`），并在 `redis-secret` 中填入
 你的节点和密码。`cosec-migrate` 通过 `--to-redis` 连接一台 Redis 服务器。
+
+`/actuator/health` 上的启动探针只有在平台文档安装后才通过（[就绪](#readiness)）。在第一次部署前发布文档，或者把启动
+探针指向 `/actuator/health/liveness`，让 Redis 中还没有平台文档时 pod 也能启动，并留在 Service 之外。
 
 ## CI 如何检查镜像 {#how-ci-checks-the-image}
 

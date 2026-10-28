@@ -256,6 +256,7 @@ A grant is only as trustworthy as the inputs it depends on.
 | Headers, `Origin`, `Referer` (`http.*`) | The HTTP request | The client |
 | Request attributes (`request.attributes.*`) | The adapter, such as the gateway's route id | You |
 | External attributes (`ext.*`) | Your `AttributeProvider` beans | You |
+| The caller of a service in gateway mode: principal, tenant, app, space, roles, claims | The `CoSec-Identity` header | The gateway, and anyone else who can reach the service |
 
 How `ScopeResolver` checks the scope:
 
@@ -289,8 +290,32 @@ clients reach directly, set it to `0`, or a client can write any address into th
 
 **Headers are client input.** Conditions can read request headers (`http.header.<name>`), `Origin` and `Referer`
 (`http.origin`, `http.referer` and their hosts): the client writes all of them. A DENY on a header is a hint the
-client can drop, and an ALLOW on one is a grant the client can claim. Request attributes (`request.attributes.<name>`,
-such as the gateway's route id) are set by the host, not the client.
+client can drop, and an ALLOW on one is a grant the client can claim. A header sent more than once with different
+values has no single value: a DENY on it is Indeterminate (`503`) and an ALLOW on it does not match
+([Attributes](../policies/language.md#attributes)). Request attributes (`request.attributes.<name>`, such as the
+gateway's route id) are set by the host, not the client.
+
+Conditions cannot read the headers that carry credentials: `authorization`, `proxy-authorization`, `cookie`,
+`set-cookie`, `x-api-key` and `cosec-identity`. A condition on one of them does not compile. Otherwise a policy could
+leak another principal's credential through decisions, one character at a time, or trust an identity a client wrote.
+An API key header renamed with `cosec.pipeline.api-key-header` is not on that list.
+
+**Services behind a gateway.** A service in gateway mode (`cosec.pipeline.mode=gateway`) holds no keys and no
+documents: it believes the `CoSec-Identity` header it receives, and decides nothing itself. The guarantees above then
+hold only if the gateway is the only one that can reach the service:
+
+- The gateway removes any `CoSec-Identity` a client sends, on every request and whatever its own configuration, and
+  sets one only on a permit for an authenticated principal. So a request through the gateway carries either the
+  identity the gateway verified, in the scope it decided in, or none.
+- Anyone else who can send the service a request can claim any principal, tenant and role. Keep the service
+  reachable from the gateway only: a network policy, a private network, or mutual TLS
+  ([Services behind the gateway](../operations/deployment.md#services-behind-the-gateway)).
+- The header is not signed. The service refuses one issued longer ago than `cosec.pipeline.gateway.max-age`
+  (60 seconds) plus `cosec.authentication.revocation.skew`, or whose credential has expired, with `401`
+  `token-expired`, so a header captured inside the network replays only for that long. One that cannot be read or
+  arrives twice is `400`, never anonymous. A request without the header is anonymous.
+- The service sees what the gateway decided with, nothing more: the roles of that one scope, no policies, and only
+  the claims `cosec.gateway.identity.claims` names.
 
 ## What anonymous callers can do
 
@@ -355,6 +380,8 @@ CoSec decides whether a request may reach your handler. It does not:
 
 - verify that a client-named app is the right one for the path when no host app is set (see
   [Trust boundaries](#trust-boundaries));
+- keep anyone but the gateway from reaching a service in gateway mode: that is the network's job
+  ([Trust boundaries](#trust-boundaries));
 - decide which records a handler returns, or which fields: filter data in your own code, and use
   [checks in code](../integration/checks.md) for object-level rules;
 - protect credentials it did not issue: a stolen token is valid until it expires or is revoked;
@@ -375,5 +402,6 @@ Before production:
   writes.
 - Give rate limit rules that protect against abuse `"strictFailure": true` if a Redis outage must not lift them.
 - Issue `(platform)` tokens only from a source users cannot influence.
+- Make every service in gateway mode reachable from the gateway only.
 
 **Next:** how the code keeps these guarantees, in [Architecture overview](../architecture/overview.md); or, to start using CoSec, [Quick start](./quick-start.md).

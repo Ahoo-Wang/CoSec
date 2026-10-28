@@ -22,8 +22,8 @@ tenant documents of the request's scope. The pipeline reads them from a `Snapsho
 | `InMemorySnapshotDocumentStore` | `cosec-core` | Tests and local development. The starter creates an empty one without `cache-support`; the application puts documents into it with `put`. |
 | Your own `SnapshotDocumentStore` bean, without `cache-support` | your code | The documents live in another system. Every method must return without blocking ([Extending](../architecture/extending.md)). |
 
-Until a platform document is stored, every request answers `503` `unavailable`
-([The first documents](#the-first-documents)).
+Until a platform document is stored, every request answers `503` `unavailable`, and each instance reports itself not
+ready ([The first documents](#the-first-documents)).
 
 ## Redis
 
@@ -57,7 +57,8 @@ contain `:`, so a key names one document only.
 | `<s>:control:revision:<doc>:<digest>` | the control plane, `cosec-migrate` | one revision record, the full document, addressed by its digest |
 | `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document |
 | `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>` |
-| `<s>:control:lease:<name>` | the control plane | a lease; it expires with each write |
+| `<s>:control:lease:<name>` | the control plane | a lease (`reclaim:<doc>`, `shadow-windows`); it expires with each write, and its holder deletes it when done |
+| `<s>:control:list:documents`, `<s>:control:list:open-changes` | the control plane | the documents that have revisions, and the change requests that may still be open, so the maintenance passes can visit each |
 | `<s>:control:change:<changeId>` | the control plane | a change request |
 | `<s>:control:stage:<doc>` | the control plane | the staging slot of a document: which change holds it |
 | `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open |
@@ -163,6 +164,11 @@ sequenceDiagram
   interval. Past `lag-warn` (60 seconds) the instance logs
   `Snapshot document [<doc>] revision <n> has not been confirmed for <lag>.` at `WARN`, past `lag-escalate`
   (5 minutes) `... is stale: not confirmed for <lag>.` at `ERROR`, at most once a minute per document.
+- **Tenants that fail closed on lag.** For the tenants listed in
+  [`fail-closed.tenants`](./configuration.md#snapshot), a request is unresolved when the oldest document it reads
+  (the platform, the tenant's and the app's) has not been confirmed for longer than `fail-closed.max-lag`
+  (30 minutes): it answers `503` unless a DENY matches. Other tenants are decided on the installed revisions however
+  old they are, and are never checked.
 - **Local copies** serve only cold loads. The first time an instance needs a document, it may take CoCache's local
   copy, at most [`local-max-age`](./configuration.md#snapshot) (30 seconds) old; it counts that copy as that old and
   confirms it with Redis at once. A local "no such document" is never trusted: only Redis can answer that a document
@@ -182,6 +188,7 @@ sequenceDiagram
 | A document not installed yet | The cold load fails or times out: the document is unresolved for that request, which is **`503`**, unless a DENY matches first. Nothing is installed; the next request tries again. |
 | A document that cannot be decoded or compiled | Installed as failed: every request that needs it is **`503`**, unless a DENY matches first, until a readable revision is published. |
 | A document that disappeared from Redis after it was seen | Failed until a document returns (`Snapshot document [<doc>] disappeared from the store; failing closed.` at `ERROR`). Requests that need it are **`503`**, unless a DENY matches first. |
+| A tenant listed in `fail-closed.tenants`, once its documents lag past `fail-closed.max-lag` | **`503`**, unless a DENY matches first ([How instances read documents](#how-instances-read-documents)). |
 | No platform document published | Every request is **`503`** ([The first documents](#the-first-documents)). |
 | Revoked tokens and principals | The check answers "not revoked" and the token is **accepted**, so an outage does not reject every authenticated request. Tokens are still signature-verified and expire on their own. |
 | Memberships from a `MembershipProvider` on Redis | **`503`**. Memberships carried in the token are not affected. |
@@ -210,7 +217,11 @@ the base moved.
 ### The first documents
 
 On an empty Redis every request answers `503`, the control plane's own checks included, because they also need a
-platform document. Seed it with `cosec-migrate`:
+platform document, and every instance reports itself not ready
+([Readiness](./deployment.md#readiness)). An absent platform document is never read as an empty one, which would
+silently drop every platform DENY. The control plane cannot create it, since every control-plane request is first
+authorized by it, and `cosec-migrate bootstrap` writes only the platform tenant's document (`tenant:(platform)`). The
+first platform document always comes from `cosec-migrate publish`:
 
 1. **Publish the documents.**
    `cosec-migrate publish --to-redis redis://host:6379 [--key-prefix cosec] --in <dir>` publishes the documents of a
@@ -261,7 +272,20 @@ A rollback is a change like any other: it is checked, shadowed and approved as i
 it makes a new revision, so the history only grows and records who rolled back. A rollback that would bring a
 break-glass binding back never checks clean.
 
-The retention properties [`cosec.control.revisions.*`](./configuration.md#control-plane) are bound, but no component
-removes revision records yet: every revision stays in Redis. Size Redis for it.
+Every control-plane instance runs two maintenance passes while it runs, each first after one interval:
+
+- **Reclaiming revisions**, every [`cosec.control.revisions.reclaim-interval`](./configuration.md#control-plane)
+  (1 hour). For each document it removes the revision records beyond the `max-count` (50) most recent that are also
+  older than `min-age` (7 days), and the records of publishes that never became the head once older than `orphan-age`
+  (1 hour). It never removes the head, nor a revision an open change rests on; when an open change cannot be read, it
+  reclaims nothing that pass. A lease per document (`reclaim:<doc>`) lets one instance at a time do each document.
+- **Closing shadow windows**, every [`cosec.control.shadow.check-interval`](./configuration.md#control-plane)
+  (1 minute), under the `shadow-windows` lease, so a window closes at most one interval late.
+
+Both passes read every open change, so a change nobody finishes expires
+[`cosec.control.changes.expire-after`](./configuration.md#control-plane) (7 days) after it was proposed, and leaves
+the list of open changes.
+
+A failed pass is logged, and the next one runs. A revision that has been reclaimed answers `410`.
 
 **Next:** see what CoSec decided, in [Observability](./observability.md).

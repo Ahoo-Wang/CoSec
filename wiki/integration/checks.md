@@ -37,6 +37,10 @@ suspend fun check(security: SecurityContext, action: String, resource: String): 
 - `resource` is a typed resource, `type/id` (`order/42`), or a path starting with `/` (`/orders/42`), which is an
   `http` resource.
 
+A service behind the gateway in `cosec.pipeline.mode=gateway` has no checker: it holds no policies to decide with
+([Services behind the gateway](./web.md#services-behind-the-gateway)). Check there through the gateway's decision, or
+run the service in `enforce` mode.
+
 Two adapter modules add non-suspending forms:
 
 | Module | Function | Use it |

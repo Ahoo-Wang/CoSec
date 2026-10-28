@@ -80,7 +80,10 @@ which:
 5. returns an outcome: an allowed request goes on to your handler, with the security context available to your code;
    any other gets a `401`, `403`, `429`, `503` or `400` with an `application/problem+json` body.
 
-All three filters run the same pipeline, so a gateway and the services behind it decide alike. Your application
+All three filters run the same pipeline, so a gateway and the services behind it decide alike. A service behind a
+CoSec gateway can instead trust the gateway's decision (`cosec.pipeline.mode=gateway`): it reads the verified caller
+from the `CoSec-Identity` header the gateway forwards, and needs no keys, documents or Redis of its own, but only as
+long as nothing but the gateway can reach it ([Trust boundaries](./security-model.md#trust-boundaries)). Your application
 supplies the login endpoint that issues tokens. Policies are published to Redis through the control plane, which can
 run in one of your services. See [Web integration](../integration/web.md) and the
 [architecture overview](../architecture/overview.md).
@@ -108,6 +111,9 @@ Applications depend on `cosec-spring-boot-starter` and add integrations as Gradl
 The starter always brings `cosec-runtime` (the coroutine request pipeline), `cosec-core` (documents, snapshots,
 tokens, memberships, API keys), `cosec-engine` and `cosec-model` (the pure decision engine), `cosec-api` (the public
 contracts) and `cosec-jwt` (JWT tokens). `cosec-bom` aligns the versions of every published module.
+
+`cosec-testkit` is a test dependency: it runs scenarios against your own policy documents in JUnit 5, the way
+CoSec's conformance suite does ([Testing policies](../policies/testing.md)).
 
 Two artifacts are not dependencies of an application:
 

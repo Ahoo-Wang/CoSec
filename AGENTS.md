@@ -84,6 +84,10 @@ the adapters, snapshots or the control plane. The parts that take several files 
     `cosec-jwt`, `cosec-social`, `cosec-opentelemetry`, `cosec-micrometer`, `cosec-kafka` (decision listeners),
     `cosec-ip2region` (an `AttributeProvider`), `cosec-openapi` (route maps). `cosec-migrate` (`migrate/`) converts
     7.x data, and holds the only copy of the 7.x model (`me.ahoo.cosec.migrate.v7`).
+  - `cosec-testkit` (`testkit/`) is the policy test kit applications run their own scenarios with. It depends on
+    `cosec-core` and `junit-jupiter-api` (api: `DynamicTest` is part of its API) and on `cosec-runtime`
+    (implementation, for `MembershipResolver`). It holds the engine level of the scenario format, which `conformance`
+    reuses: change the format there, not in `conformance/`.
   - `cosec-spring-boot-starter` wires them through Gradle feature variants (`webfluxSupport`, `cacheSupport`,
     `controlSupport`, …), so an application pulls in only what it asks for.
 - **Request path.** Adapter (`PipelineWebFilter`, `PipelineServletFilter`, `PipelineGatewayFilter`) reads
@@ -145,6 +149,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | New failure symptom | `wiki/operations/troubleshooting.md`, `skills/cosec-troubleshoot` |
 | Tokens, login, revocation | `wiki/integration/authentication.md` |
 | Architecture, invariants, performance numbers | `wiki/architecture/overview.md` |
+| A new place a document reads an attribute (a condition operand, a rate limit `key`, anything later) | resolve it through `ConditionChecker.attribute`, which refuses credential headers (CND-5) for every reference; never `Attribute.parse` directly |
 | Extension points (SPIs) | `wiki/architecture/extending.md`, `skills/cosec-custom-matcher` |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
 | A normative rule (an RFC "must / must not / always", RFC 0008 §3.2) | `conformance/src/test/resources/rules/<FAMILY>.json` and its scenarios: a positive and a negative one for each rule that is not `pending` (`verifyRuleCoverage`) |

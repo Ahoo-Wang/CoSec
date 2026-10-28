@@ -299,15 +299,31 @@ Literals are JSON strings or booleans, never numbers; a string is never read as 
 | `environment.time` | Instant | The request time; only `time` reads it. |
 | `environment.device` | String | The `CoSec-Device-Id` parameter; absent when empty. |
 | `environment.blocked` | Bool | Whether the blacklist blocks the request. |
-| `http.header.<name>` | String | The request header `<name>`; absent when the request has none. |
-| `http.origin`, `http.referer` | String | The `Origin` and `Referer` headers. |
-| `http.origin.host`, `http.referer.host` | String | The host of the `Origin` and `Referer` URLs. |
+| `http.header.<name>` | String | The request header `<name>`; absent when the request has none. See [Headers](#headers). |
+| `http.origin`, `http.referer` | String | The `Origin` and `Referer` headers, read as `http.header.*` is. |
+| `http.origin.host`, `http.referer.host` | String | The host of the `Origin` and `Referer` URLs, in lower case; absent when the value is not a URL with a host. |
 | `http.origin.host.labels`, `http.referer.host.labels` | Labels | That host's labels, reversed (`api.example.com` is `com.example.api`), in lower case; for `prefix`. |
-| `request.attributes.<name>` | String | What the host knows about the request besides HTTP, such as the gateway's route id. |
+| `request.attributes.<name>` | String | What the host knows about the request besides HTTP. The gateway sets `request.attributes.cosec.audit.routeId`, the id of the route the request came through, and `request.attributes.cosec.identity.forward` (`false`) on a route whose metadata opts out of identity propagation (`cosec-identity: false`); WebFlux and WebMvc set none. |
 | `ext.<provider>.<name>` | declared | An [external attribute](#external-attributes-and-onmissing). |
 
-A path outside this table does not compile. Header names are case-insensitive: `http.header.X-Team` is
-`http.header.x-team`.
+A path outside this table does not compile.
+
+### Headers
+
+Header names are case-insensitive: `http.header.X-Team` is `http.header.x-team`.
+
+No attribute reference can read a header that carries a credential: `http.header.authorization`,
+`proxy-authorization`, `cookie`, `set-cookie`, `x-api-key` and `cosec-identity`, in any case. That covers a condition
+and a rate limit rule's `key` alike. A document with such a reference does not compile, through the control plane and
+`cosec-migrate` alike. A DENY with `prefix` on `authorization` would let a document's author learn another principal's
+token one character at a time, and a key on it would count requests per token. `cosec-identity` is what a gateway forwards to the services behind it; at the
+gateway it is only the client's claim. The list is fixed
+([`ConditionChecker.CREDENTIAL_HEADERS`](https://github.com/Ahoo-Wang/CoSec/blob/main/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt));
+a host that reads API keys from another header is not covered by it.
+
+A header sent more than once reads as its value when every copy is the same. When the copies differ, the header has no
+single value, and a statement that reads it errs: a DENY on it makes the request Indeterminate (`503`) unless another
+DENY matches, and an ALLOW on it does not match. The first or last copy never decides.
 
 ### Matching roles
 
@@ -354,8 +370,9 @@ At least one of `notBefore`, `notAfter`, `daysOfWeek` or `from`/`to` is required
 `ext.<provider>.<name>` attributes come from an `AttributeProvider` ([Extending](../architecture/extending.md)),
 fetched only for requests whose candidate statements read them. Their type is declared: `string`, `bool`,
 `stringSet` or `ip`. A path no provider and no platform [`attributes`](#limits-and-attributes) entry declares does not
-compile. The control plane checks candidates against the platform document's `attributes` only, so declare every
-external attribute there.
+compile. Every instance compiles against both its own providers and the platform's `attributes`, and so does the
+control plane when it checks a change; the providers must therefore be the same on every host
+([Testing policies](./testing.md#trying-changes-in-shadow-mode)).
 
 A provider may return no value (absent, as above), or fail, time out or not be asked: then the attribute is
 *missing*, and the statement's `onMissing` decides:
@@ -457,7 +474,7 @@ Nothing checks that a catalog entry has a policy, or the reverse. See [Role perm
 | `action` | action pattern or non-empty array | required | Which requests count. |
 | `resource` | resource pattern or non-empty array | any resource | |
 | `condition` | condition | always | |
-| `onMissing` | `"indeterminate"` or `"nomatch"` | `"indeterminate"` | For an external attribute that cannot be fetched: `indeterminate` leaves it to `strictFailure`; `nomatch` skips the rule. `nomatch` only in the platform document. |
+| `onMissing` | `"indeterminate"` or `"nomatch"` | `"indeterminate"` | For an external attribute that cannot be fetched: `indeterminate` leaves it to `strictFailure`; `nomatch` skips the rule. `nomatch` compiles only in the platform document: rate limit rules have no confirmation, unlike a [DENY](#external-attributes-and-onmissing). |
 | `key` | attribute path | one shared bucket | A String or Ip attribute whose value names the bucket. `resource.var.<name>` must be captured by every resource pattern. |
 | `permitsPerSecond` | number | required | Greater than `0`. |
 | `windowSeconds` | integer | `1` | At least `1`. |
