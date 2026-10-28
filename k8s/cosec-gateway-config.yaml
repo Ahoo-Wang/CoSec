@@ -46,7 +46,8 @@ data:
         kafka:
           enabled: false
       authentication:
-        enabled: false
+        login:
+          enabled: false
       jwt:
         algorithm: hmac256
         secret: ${COSEC_JWT_SECRET} # no fallback: startup fails if the secret is missing

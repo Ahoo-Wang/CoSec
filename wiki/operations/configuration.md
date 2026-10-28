@@ -18,7 +18,7 @@ Durations take Spring's format (`10m`, `7d`); sets and lists take a comma-separa
 | Property | Type | Default | Turns on |
 |---|---|---|---|
 | `cosec.enabled` | boolean | `true` | everything CoSec auto-configures |
-| `cosec.authentication.login.enabled` | boolean | `true` | the login beans (`TokenCompositeAuthentication`, your `Authentication` beans, social login); not request authentication, which always runs |
+| `cosec.authentication.enabled` | boolean | `true` | authentication (`TokenCompositeAuthentication` and your `Authentication` beans) |
 | `cosec.authentication.social.enabled` | boolean | `true` | social login (`oauth-support`) |
 | `cosec.authorization.enabled` | boolean | `true` | the WebFlux and WebMvc authorization filters |
 | `cosec.authorization.gateway.enabled` | boolean | `true` | the Spring Cloud Gateway filter (`gateway-support`) |
@@ -117,6 +117,7 @@ process ([Storage](./storage.md)).
 | `expire-after-write` | long, in `expire-unit` | CoCache's, 5 minutes (`token`: `30`) | How long a local copy lives at most (CoCache's `localMaxAge`): the bound on staleness if an invalidation message is lost. It cannot be unlimited. |
 | `expire-after-access` | long, in `expire-unit` | none | Drop a local copy not read for this long. |
 | `expire-unit` | `TimeUnit` | `SECONDS` | Unit of the two expiry settings. |
+| `concurrency-level` | int | — | Deprecated and ignored: Caffeine has no concurrency level. |
 
 These settings size and age the local copy only. Store-of-record entries never expire in Redis, whatever is set here.
 

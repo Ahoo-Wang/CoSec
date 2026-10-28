@@ -34,6 +34,7 @@ object GuardAllowlist {
             "model:ScopeConstructionTest#scopeIsNotADataClass",
             "cosec-core:PolicyDocumentCodecTest#a scope is never decoded",
             "cosec-spring-boot-starter:UnverifiedTokenTest#onlyTheVerifierDecodesATokenIntoAPrincipal",
+            "cosec-spring-boot-starter:UnverifiedTokenTest#withinTheVerifierOnlyTheVerifyingMethodsDecode",
         ),
         "startup" to setOf(
             "cosec-cocache:CacheTtlPolicyTest#snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort",
