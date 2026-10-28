@@ -22,8 +22,8 @@ import me.ahoo.cosec.cache.MembershipCache
 import me.ahoo.cosec.cache.MembershipLoader
 import me.ahoo.cosec.membership.MembershipProvider
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.COCACHE_AUTO_CONFIGURATION
+import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.cosecCacheAssembler
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration

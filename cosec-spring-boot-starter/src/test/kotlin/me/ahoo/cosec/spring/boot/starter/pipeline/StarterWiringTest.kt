@@ -219,7 +219,11 @@ class StarterWiringTest {
             .run { context ->
                 context.startupFailure.assert().isNull()
                 context.getBeansOfType(ChangeListener::class.java).keys.assert()
-                    .containsExactlyInAnyOrder("ownChangeListener", "cosecLoggingChangeListener", "cosecKafkaChangeListener")
+                    .containsExactlyInAnyOrder(
+                        "ownChangeListener",
+                        "cosecLoggingChangeListener",
+                        "cosecKafkaChangeListener"
+                    )
                 context.getBean(KafkaChangeListener::class.java).delivery.assert().isEqualTo(Delivery.REQUIRED)
             }
         controlRunner.withPropertyValues("cosec.control.audit.kafka.enabled=false").run { context ->

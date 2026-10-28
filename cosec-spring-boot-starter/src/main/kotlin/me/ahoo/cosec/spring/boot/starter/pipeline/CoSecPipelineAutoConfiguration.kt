@@ -85,7 +85,8 @@ class CoSecPipelineAutoConfiguration {
         beans: ListableBeanFactory,
         requiredListenerProperties: RequiredListenerProperties,
     ): DecisionListeners {
-        val sinks = beans.getBeansOfType(AuditEventSink::class.java).map { (name, sink) -> AuditListener.of(sink, name) }
+        val sinks = beans.getBeansOfType(AuditEventSink::class.java)
+            .map { (name, sink) -> AuditListener.of(sink, name) }
         return DecisionListeners(
             listeners.orderedStream().toList() + sinks,
             requiredListenerProperties.timeout.toKotlinDuration()
