@@ -148,8 +148,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - Conditions: literals keep their JSON type (`true` vs `"true"`). `http.header.<name>`, `http.origin`, `http.referer`
   and `request.attributes.<name>` come from the request; `http.origin.host` and `http.referer.host` are lower case and
   absent when the value is not a URI with a host. The gateway's route id is `request.attributes.cosec.audit.routeId`.
-- A condition on a credential header (`authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`,
-  `cosec-identity`) does not compile: `` `<path>` is a credential header, which no condition may read ``.
+- A condition or rate limit `key` on a credential header (`authorization`, `proxy-authorization`, `cookie`,
+  `set-cookie`, `x-api-key`, `cosec-identity`) does not compile:
+  `` `<path>` is a credential header, which no attribute reference may read ``. A header name that is not an ASCII
+  token (RFC 9110) does not compile either: `` `<path>` is not a header name ``.
 - `scope-rejected`: the client's `CoSec-App-Id` or `CoSec-Space-Id` (see the table).
 
 ### Request allowed unexpectedly

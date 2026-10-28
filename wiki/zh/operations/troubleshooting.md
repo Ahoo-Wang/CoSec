@@ -205,9 +205,11 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 
 ## 条件无法编译 {#a-condition-does-not-compile}
 
-- `` `<path>` is a credential header, which no condition may read ``：条件读取了 `http.header.authorization`、`proxy-authorization`、
-  `cookie`、`set-cookie`、`x-api-key` 或 `cosec-identity`。任何策略都不能读取凭证。改用主体属性或作用域作为条件
-  （[策略语言](../policies/language.md)）。
+- `` `<path>` is a credential header, which no attribute reference may read ``：条件或限流规则的 `key` 读取了
+  `http.header.authorization`、`proxy-authorization`、`cookie`、`set-cookie`、`x-api-key` 或 `cosec-identity`。任何策略都不能读取凭证。
+  改用主体属性或作用域作为条件或 `key`（[策略语言](../policies/language.md#headers)）。
+- `` `<path>` is not a header name: a header name is an ASCII token (RFC 9110) ``：`http.header.` 之后的名称含有 ASCII
+  字母、数字和 ``!#$%&'*+-.^_`|~`` 之外的字符，例如空格或形似字母。
 - 条件读取的 `ext.*` 属性既没有在平台文档中声明，也没有宿主的属性提供者提供。变更按控制面宿主的属性提供者编译。
 
 ## 影子窗口被候选错误阻塞 {#shadow-window-blocked-by-a-candidate-error}

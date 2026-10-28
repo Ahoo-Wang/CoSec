@@ -234,9 +234,12 @@ The `cosecSnapshot` health indicator shows the state: `platform` (`installed`, `
 
 ## A condition does not compile
 
-- `` `<path>` is a credential header, which no condition may read ``: a condition reads `http.header.authorization`,
-  `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key` or `cosec-identity`. No policy may read a credential.
-  Condition on a principal attribute or the scope instead ([Policy language](../policies/language.md)).
+- `` `<path>` is a credential header, which no attribute reference may read ``: a condition or a rate limit `key`
+  reads `http.header.authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key` or `cosec-identity`.
+  No policy may read a credential. Condition or key on a principal attribute or the scope instead
+  ([Policy language](../policies/language.md#headers)).
+- `` `<path>` is not a header name: a header name is an ASCII token (RFC 9110) ``: the name after `http.header.` has
+  a character outside ASCII letters, digits and ``!#$%&'*+-.^_`|~``, such as a space or a look-alike letter.
 - A condition on an `ext.*` attribute the platform document does not declare and no attribute provider of the host
   serves. A change is compiled against the attribute providers of the control host.
 
