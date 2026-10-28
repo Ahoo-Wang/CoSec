@@ -1,0 +1,24 @@
+# Rule: STA-1
+# Mutant: a required Kafka audit that was never created is skipped, and decisions go unrecorded
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.StarterWiringTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt
+index 723d4065..a06a3550 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt
+@@ -116,15 +116,6 @@ class CoSecPipelineAutoConfiguration {
+             sinks.orderedStream().toList().filter { it !is DecisionListener }
+                 .map { it to AuditListener.of(it, names.getValue(it)) }
+         val ordered = all.sortedWith { a, b -> AnnotationAwareOrderComparator.INSTANCE.compare(a.first, b.first) }
+-        val requiredKafka = environment.getProperty(KAFKA_AUDIT_DELIVERY_KEY).equals("required", ignoreCase = true)
+-        check(
+-            !requiredKafka ||
+-                ordered.any { it.second.name == KAFKA_AUDIT_LISTENER && it.second.delivery == Delivery.REQUIRED }
+-        ) {
+-            "$KAFKA_AUDIT_DELIVERY_KEY=required, but no Kafka audit listener was created: it needs cosec-kafka, a " +
+-                "KafkaOperations bean (spring-boot-starter-kafka), cosec.audit.enabled=true and " +
+-                "cosec.audit.kafka.enabled=true (STA-1)."
+-        }
+         return DecisionListeners(
+             ordered.map { it.second },
+             requiredListenerProperties.timeout.toKotlinDuration(),

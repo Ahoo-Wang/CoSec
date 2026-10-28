@@ -129,7 +129,10 @@ class CoSecPipelineIntegrationAutoConfiguration {
         ): KafkaAuditListener = KafkaAuditListener(
             kafkaOperations,
             environment.getProperty(KafkaAuditProperties.PREFIX + ".topic", KafkaAuditProperties.DEFAULT_TOPIC),
-            environment.getProperty(KAFKA_DELIVERY_KEY, Delivery::class.java, Delivery.BEST_EFFORT),
+            // Read as Boot binds enums, whatever conversion service the environment has: `required`, `best-effort`.
+            environment.getProperty(KAFKA_DELIVERY_KEY)
+                ?.let { Delivery.valueOf(it.trim().uppercase().replace('-', '_')) }
+                ?: Delivery.BEST_EFFORT,
         )
     }
 

@@ -35,6 +35,7 @@ import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
+import me.ahoo.cosec.kafka.KafkaAuditListener
 import me.ahoo.cosec.kafka.KafkaChangeListener
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.model.Memberships
@@ -220,6 +221,32 @@ class StarterWiringTest {
                 Thread.sleep(100)
                 listening.events.get().assert().isEqualTo(1)
             }
+    }
+
+    private val kafkaRunner = pipelineRunner
+        .withBean(KafkaOperations::class.java, { mockk<KafkaOperations<String, String>>(relaxed = true) })
+
+    @Test
+    fun `a required Kafka audit records every decision`() {
+        kafkaRunner.withPropertyValues("cosec.audit.kafka.delivery=required").run { context ->
+            context.startupFailure.assert().isNull()
+            context.getBean(KafkaAuditListener::class.java).delivery.assert().isEqualTo(Delivery.REQUIRED)
+        }
+    }
+
+    /** STA-1: a REQUIRED audit that was not created fails startup instead of deciding without it. */
+    @Test
+    fun `a required Kafka audit that cannot be created fails startup`() {
+        listOf(
+            pipelineRunner.withPropertyValues("cosec.audit.kafka.delivery=required"),
+            kafkaRunner.withPropertyValues("cosec.audit.kafka.delivery=required", "cosec.audit.enabled=false"),
+            kafkaRunner.withPropertyValues("cosec.audit.kafka.delivery=required", "cosec.audit.kafka.enabled=false"),
+        ).forEach { runner ->
+            runner.run { context ->
+                context.startupFailure!!.rootCause().message.assert()
+                    .contains("cosec.audit.kafka.delivery=required, but no Kafka audit listener was created")
+            }
+        }
     }
 
     private val membershipRunner = ApplicationContextRunner()

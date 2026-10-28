@@ -75,6 +75,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `cosec.audit.kafka.delivery=required` `cosec-kafka`. Add the named artifact next to `cosec-spring-boot`; 8.0 has no
   starter capabilities (`requireCapability("me.ahoo.cosec:...-support")` from 7.x no longer resolves). Do not suggest
   turning the feature off unless the user does not want it.
+- **`cosec.audit.kafka.delivery=required, but no Kafka audit listener was created`** (STA-1): `cosec-kafka` is there,
+  but the listener is not: add a `KafkaOperations` bean (`spring-boot-starter-kafka` with `spring.kafka.*`), and keep
+  `cosec.audit.enabled` and `cosec.audit.kafka.enabled` on; or use `best-effort`.
+- **`cosec-cocache needs a ReactiveStringRedisTemplate bean`** (STA-1): add `spring-boot-data-redis` and configure
+  Redis; without it no snapshot is read and rate limits would count per instance.
 - **`cosec.pipeline.mode=gateway on a Spring Cloud Gateway host`**: a gateway always runs `enforce`; set `gateway` on
   the services behind it. A binding failure on `cosec.pipeline.mode` means a value other than `enforce` or `gateway`.
 - **`cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created`**: add `cosec-kafka`, a

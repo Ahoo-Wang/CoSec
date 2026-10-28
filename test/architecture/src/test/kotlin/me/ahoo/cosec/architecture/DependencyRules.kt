@@ -52,7 +52,7 @@ object DependencyRules {
         Exception(
             "cocache",
             "runtime",
-            "the shadow stores implement runtime's shadow ports; CoSecJson is the one mapper"
+            "implementation: the shadow stores implement runtime's shadow ports; CoSecJson writes the stored formats",
         ),
         Exception("cocache", "control", "CoCacheControlStore implements the control plane's ControlStore"),
         Exception("kafka", "runtime", "KafkaAuditListener is a DecisionListener; CoSecJson is the one mapper"),

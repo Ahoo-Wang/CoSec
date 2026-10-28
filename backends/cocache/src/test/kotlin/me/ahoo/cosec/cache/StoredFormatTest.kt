@@ -69,7 +69,11 @@ class StoredFormatTest {
         """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray(),
     )
 
-    /** The bytes as written before RFC 0011 PR-2, kept in `stored-format/<name>.json` with no trailing newline. */
+    /**
+     * The bytes `main` wrote before RFC 0011 PR-2, kept in `stored-format/<name>.json` with no trailing newline: each was
+     * produced by running that commit's writers (its `CoSecJsonSerializer` and codecs, the snapshot through its
+     * `SnapshotDocumentCodec`) on the values below, in a worktree of `origin/main` at da58e780.
+     */
     private fun fixture(name: String): String =
         checkNotNull(javaClass.getResource("/stored-format/$name.json")) { "No fixture $name." }.readText()
 

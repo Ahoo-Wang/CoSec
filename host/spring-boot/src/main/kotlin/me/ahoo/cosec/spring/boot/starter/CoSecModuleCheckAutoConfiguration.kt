@@ -105,7 +105,29 @@ class CoSecModuleCheckAutoConfiguration {
             )
     }
 
+    /**
+     * `cosec-cocache` keeps snapshots, revocations, rate limits and API keys in Redis: without a Redis connection the
+     * rate limiter would fall back to one count per instance, and no snapshot could be read.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnCoSecEnabled
+    @ConditionalOnClass(name = [COCACHE_MARKER])
+    class CoCacheRedis {
+        @Bean
+        fun cosecCoCacheRedisCheck(context: ApplicationContext): InitializingBean = InitializingBean {
+            val present = ClassUtils.isPresent(REACTIVE_REDIS_TEMPLATE, context.classLoader) &&
+                context.getBeanNamesForType(ClassUtils.forName(REACTIVE_REDIS_TEMPLATE, context.classLoader)).isNotEmpty()
+            check(present) {
+                "cosec-cocache needs a ReactiveStringRedisTemplate bean: add org.springframework.boot:" +
+                    "spring-boot-data-redis to the application's dependencies and configure Redis (STA-1)."
+            }
+        }
+    }
+
     companion object {
+        private const val COCACHE_MARKER = "me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore"
+        private const val REACTIVE_REDIS_TEMPLATE = "org.springframework.data.redis.core.ReactiveStringRedisTemplate"
+
         fun requireModule(
             context: ApplicationContext,
             className: String,

@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter
 
+import io.mockk.mockk
 import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -22,13 +23,18 @@ import org.springframework.boot.test.context.runner.AbstractApplicationContextRu
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 
 /** `STA-1`: a feature that needs a module fails startup without it, and names the artifact to add. */
 class CoSecModuleCheckAutoConfigurationTest {
     private val config = AutoConfigurations.of(CoSecModuleCheckAutoConfiguration::class.java)
+    private val redis = { mockk<ReactiveStringRedisTemplate>(relaxed = true) }
     private val plain = ApplicationContextRunner().withConfiguration(config)
+        .withBean(ReactiveStringRedisTemplate::class.java, redis)
     private val servlet = WebApplicationContextRunner().withConfiguration(config)
+        .withBean(ReactiveStringRedisTemplate::class.java, redis)
     private val reactive = ReactiveWebApplicationContextRunner().withConfiguration(config)
+        .withBean(ReactiveStringRedisTemplate::class.java, redis)
 
     private fun failsNaming(runner: AbstractApplicationContextRunner<*, *, *>, artifact: String) {
         runner.run { context ->
@@ -121,5 +127,24 @@ class CoSecModuleCheckAutoConfigurationTest {
             plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.kafka.KafkaAuditListener"))
                 .withPropertyValues("cosec.audit.kafka.delivery=best_effort")
         )
+    }
+
+    @Test
+    fun `cosec-cocache without a Redis template fails startup`() {
+        val noRedis = ApplicationContextRunner().withConfiguration(config)
+        noRedis.run { context ->
+            val failure = context.startupFailure
+            failure.assert().isNotNull()
+            generateSequence(failure) { it.cause }.any { "spring-boot-data-redis" in it.message.orEmpty() }
+                .assert().describedAs(failure.toString()).isTrue()
+        }
+    }
+
+    @Test
+    fun `without cosec-cocache, or with CoSec off, no Redis template is needed`() {
+        val noRedis = ApplicationContextRunner().withConfiguration(config)
+        starts(noRedis.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore")))
+        starts(noRedis.withPropertyValues("cosec.enabled=false"))
+        starts(plain)
     }
 }

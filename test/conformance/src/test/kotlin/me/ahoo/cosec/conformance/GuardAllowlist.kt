@@ -40,6 +40,8 @@ object GuardAllowlist {
             "runtime:PipelineTest#anUnhandledKindUnderVersionSkewIs500",
         ),
         "startup" to setOf(
+            "spring-boot:StarterWiringTest#a required Kafka audit that cannot be created fails startup",
+            "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a Redis template fails startup",
             "spring-boot:CoSecModuleCheckAutoConfigurationTest#a Spring MVC host without cosec-webmvc fails startup",
             "spring-boot:CoSecModuleCheckAutoConfigurationTest#a WebFlux host without cosec-webflux fails startup",
             "spring-boot:CoSecModuleCheckAutoConfigurationTest#a Spring Cloud Gateway host without cosec-gateway fails startup, even with CoSec off",

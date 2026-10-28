@@ -28,6 +28,7 @@ import me.ahoo.cosec.runtime.authn.CompositeAuthenticator
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.route.RouteMap
 import me.ahoo.cosec.runtime.route.RouteMapCodec
@@ -95,6 +96,8 @@ class CoSecPipelineAutoConfiguration {
      * Every [DecisionListener] bean, and each [AuditEventSink] bean that is not also one as a BEST_EFFORT [AuditListener]
      * named after the bean (RFC 0006 §9.5.3), so a sink written for 7.x keeps receiving events. All in `@Order`.
      * On shutdown, delivers what is queued for up to `cosec.observability.listener.drain-timeout`, then drops the rest.
+     * `cosec.audit.kafka.delivery=required` asks for a REQUIRED Kafka record of every decision: startup fails when that
+     * listener was not created, rather than deciding without it (STA-1).
      */
     @Bean(destroyMethod = "drain")
     @ConditionalOnMissingBean
@@ -104,6 +107,7 @@ class CoSecPipelineAutoConfiguration {
         beans: ListableBeanFactory,
         requiredListenerProperties: RequiredListenerProperties,
         listenerProperties: ListenerProperties,
+        environment: Environment,
     ): DecisionListeners {
         val names = IdentityHashMap<AuditEventSink, String>()
         beans.getBeansOfType(AuditEventSink::class.java).forEach { (name, sink) -> names[sink] = name }
@@ -112,6 +116,15 @@ class CoSecPipelineAutoConfiguration {
             sinks.orderedStream().toList().filter { it !is DecisionListener }
                 .map { it to AuditListener.of(it, names.getValue(it)) }
         val ordered = all.sortedWith { a, b -> AnnotationAwareOrderComparator.INSTANCE.compare(a.first, b.first) }
+        val requiredKafka = environment.getProperty(KAFKA_AUDIT_DELIVERY_KEY).equals("required", ignoreCase = true)
+        check(
+            !requiredKafka ||
+                ordered.any { it.second.name == KAFKA_AUDIT_LISTENER && it.second.delivery == Delivery.REQUIRED }
+        ) {
+            "$KAFKA_AUDIT_DELIVERY_KEY=required, but no Kafka audit listener was created: it needs cosec-kafka, a " +
+                "KafkaOperations bean (spring-boot-starter-kafka), cosec.audit.enabled=true and " +
+                "cosec.audit.kafka.enabled=true (STA-1)."
+        }
         return DecisionListeners(
             ordered.map { it.second },
             requiredListenerProperties.timeout.toKotlinDuration(),
@@ -227,6 +240,10 @@ class CoSecPipelineAutoConfiguration {
     fun cosecAuthorizationChecker(pipeline: Pipeline): AuthorizationChecker = AuthorizationChecker(pipeline)
 
     companion object {
+        /** `KafkaAuditListener.NAME`, as a literal: `cosec-kafka` is optional. */
+        private const val KAFKA_AUDIT_LISTENER = "kafka-audit"
+        private const val KAFKA_AUDIT_DELIVERY_KEY = "cosec.audit.kafka.delivery"
+
         /** No token verifier: a request without a token is anonymous, one with a token is rejected. */
         private val NO_TOKEN = Authenticator { credentials ->
             if (credentials.token == null) {

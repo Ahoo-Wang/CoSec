@@ -37,6 +37,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.context.support.GenericApplicationContext
 import org.springframework.kafka.core.KafkaOperations
 import org.springframework.kafka.support.SendResult
 import java.time.Duration
@@ -47,6 +48,7 @@ import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
+import java.util.function.Supplier
 
 class KafkaAuditEventSinkTest {
     private val sinks = mutableListOf<KafkaAuditEventSink>()
@@ -153,7 +155,11 @@ class KafkaAuditEventSinkTest {
         json.get("trace").get("traceId").asString().assert().isEqualTo("trace-1")
     }
 
-    /** The record value consumers read, pinned: a mapper or Jackson change that alters it fails here (RFC 0011 D3). */
+    /**
+     * The record value consumers read, pinned: a mapper or Jackson change that alters it fails here (RFC 0011 D3). The
+     * fixture is what `main`'s `CoSecJsonSerializer` wrote for this event before RFC 0011 PR-2 (`origin/main` at
+     * da58e780).
+     */
     @Test
     fun recordValueIsPinned() {
         val pinned = checkNotNull(javaClass.getResource("/stored-format/audit.json")).readText()
@@ -283,5 +289,35 @@ class KafkaAuditEventSinkTest {
         started.await(5, TimeUnit.SECONDS).assert().isTrue()
         sink.destroy()
         release.countDown()
+    }
+
+    /** The owned thread is a daemon, so closing the context is what sends the events still queued. */
+    @Test
+    fun closingTheContextSendsTheQueuedEvents() {
+        val release = CountDownLatch(1)
+        val sent = CountDownLatch(3)
+        val kafkaOperations = mockk<KafkaOperations<String, String>> {
+            every { send(any(), any(), any()) } answers {
+                release.await(5, TimeUnit.SECONDS)
+                sent.countDown()
+                CompletableFuture.completedFuture(mockk())
+            }
+        }
+        val context = GenericApplicationContext()
+        context.registerBean(
+            "kafkaAuditEventSink",
+            KafkaAuditEventSink::class.java,
+            Supplier { KafkaAuditEventSink(kafkaOperations, "cosec-audit") },
+        )
+        context.refresh()
+        val sink = context.getBean(KafkaAuditEventSink::class.java)
+        repeat(3) { sink.publish(event.copy(request = event.request.copy(id = "request-$it"))) }
+
+        val closed = CompletableFuture.runAsync(context::close)
+        release.countDown()
+
+        closed.get(5, TimeUnit.SECONDS)
+        sent.count.assert().isEqualTo(0L)
+        verify(exactly = 3) { kafkaOperations.send(any(), any(), any()) }
     }
 }

@@ -35,6 +35,14 @@ private const val MAX_PENDING_AUDIT_EVENTS = 1024
 private const val KAFKA_AUDIT_THREAD_NAME = "cosec-kafka-audit"
 private val DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(10)
 
+/**
+ * Sends each audit event to [topic], off the publishing thread: `publish` hands it to an executor and returns.
+ *
+ * Without [executor], the sink owns one daemon thread with a queue of 1024 events, which keeps the send order; a full
+ * queue drops the event and warns once. [destroy] (on context close) stops taking events and sends what was queued, for
+ * up to [shutdownTimeout]. A caller-supplied [executor] must run tasks on threads of its own, never on the caller's: an
+ * audit sink must not block the decision. The sink never shuts a caller's executor down.
+ */
 class KafkaAuditEventSink(
     private val kafkaOperations: KafkaOperations<String, String>,
     private val topic: String,

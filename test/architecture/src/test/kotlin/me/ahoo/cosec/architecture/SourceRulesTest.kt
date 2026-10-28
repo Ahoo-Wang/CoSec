@@ -59,7 +59,16 @@ class SourceRulesTest {
          */
         val BACKEND_REACH: Map<String, List<String>> = mapOf(
             "me.ahoo.cosec.cache.shadow" to listOf("me.ahoo.cosec.runtime.shadow."),
-            "me.ahoo.cosec.cache.control" to listOf("me.ahoo.cosec.control.", "me.ahoo.cosec.runtime.shadow.StoredCandidate"),
+            // The ControlStore port's package, and the change values its signatures carry, with their codec.
+            "me.ahoo.cosec.cache.control" to listOf(
+                "me.ahoo.cosec.control.store.",
+                "me.ahoo.cosec.control.change.ChangeId",
+                "me.ahoo.cosec.control.change.ChangeRequest",
+                "me.ahoo.cosec.control.change.ChangeRequestCodec",
+                "me.ahoo.cosec.control.change.ChangeState",
+                "me.ahoo.cosec.control.change.StageSlot",
+                "me.ahoo.cosec.runtime.shadow.StoredCandidate",
+            ),
             "me.ahoo.cosec.kafka" to listOf(
                 "me.ahoo.cosec.runtime.event.",
                 "me.ahoo.cosec.runtime.audit.AuditEvents",
@@ -72,6 +81,10 @@ class SourceRulesTest {
 
         fun projectOf(javaClass: JavaClass): String? = Projects.projectOfPackage(javaClass.packageName)
     }
+
+    /** A package (ending in `.`) reaches what is in it; a class reaches itself and its nested classes. */
+    private fun reach(target: String, allowed: String): Boolean =
+        if (allowed.endsWith('.')) target.startsWith(allowed) else target == allowed || target.startsWith("$allowed\$")
 
     private fun violations(rule: (project: String, target: String) -> Boolean): List<String> =
         CLASSES.flatMap { origin ->
@@ -114,7 +127,7 @@ class SourceRulesTest {
             val origin = violation.substringBefore(" -> ")
             val target = violation.substringAfter(" -> ")
             BACKEND_REACH.any { (from, to) ->
-                origin.substringBeforeLast('.') == from && to.any { target.startsWith(it) }
+                origin.substringBeforeLast('.') == from && to.any { reach(target, it) }
             }
         }.assert().isEmpty()
     }
