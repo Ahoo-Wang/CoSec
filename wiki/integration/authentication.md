@@ -181,9 +181,9 @@ Two things a refresh does not do:
 
 ## Logout and revocation
 
-JWTs are stateless: without extra work a token stays valid until it expires. To make logout take effect at once,
-enable revocation with `cosec.jwt.token-revocation.enabled=true`. It needs `cache-support`: without it the
-starter logs a warning and logout does nothing.
+JWTs are stateless: without extra work a token stays valid until it expires. So that logout takes effect at once,
+revocation is always on in 8.0, with no switch. It needs `cache-support`, or a `TokenStore` and a `RevocationReader`
+bean of your own. Without them, startup fails: logout that does nothing is not an option.
 
 From your logout endpoint, call `TokenRevoker.revoke(accessToken)`. It verifies the token, then records its `jti`
 in Redis for the refresh token's lifetime. From then on every instance rejects the access token as
@@ -217,8 +217,8 @@ refresh token of that principal in that tenant whose `iat` is before `issuedBefo
   in sync, or pass an `issuedBefore` a few seconds after now.
 - The entry is kept for the refresh token lifetime past `issuedBefore`. A later call with an earlier `issuedBefore`
   does not shorten it, even when two instances revoke the same principal at once.
-- It needs the same `cosec.jwt.token-revocation.enabled=true` and `cache-support` as revoking one token. Without a
-  store that can record it, it throws `UnsupportedOperationException` instead of doing nothing.
+- It needs the same store as revoking one token. A `TokenStore` that cannot record it throws
+  `UnsupportedOperationException` instead of doing nothing.
 - The check behaves as described above: a local "not revoked" answer for up to 30 seconds if an invalidation is
   lost, and the token is accepted while Redis is unreachable.
 

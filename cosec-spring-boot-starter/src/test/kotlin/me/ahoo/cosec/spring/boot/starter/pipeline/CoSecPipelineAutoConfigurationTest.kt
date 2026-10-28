@@ -16,6 +16,9 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
+import com.auth0.jwt.algorithms.Algorithm
+import me.ahoo.cosec.token.RevocationReader
+import me.ahoo.cosec.token.TokenStore
 import io.mockk.mockk
 import io.mockk.verify
 import jakarta.servlet.ServletInputStream
@@ -105,6 +108,9 @@ class CoSecPipelineAutoConfigurationTest {
             "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             "cosec.authorization.routes.location=file:${routes.absolutePath}",
         )
+        // Without Redis an application brings its own revocation store and reader; here, explicitly, none.
+        .withBean(TokenStore::class.java, { TokenStore.NoOp })
+        .withBean(RevocationReader::class.java, { RevocationReader.NONE })
 
     private fun facts(token: String? = null) = HttpFacts(
         method = "GET",
@@ -157,10 +163,21 @@ class CoSecPipelineAutoConfigurationTest {
     }
 
     @Test
-    fun `token revocation without a reader fails startup instead of revoking nothing`() {
-        runner.withPropertyValues("${JwtProperties.PREFIX}.token-revocation.enabled=true").run { context ->
-            context.startupFailure!!.stackTraceToString().assert().contains("no revocation reader")
-        }
+    fun `tokens without a revocation reader fail startup instead of revoking nothing`() {
+        ApplicationContextRunner()
+            .withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER))
+            .withConfiguration(
+                AutoConfigurations.of(
+                    CoSecSnapshotAutoConfiguration::class.java,
+                    CoSecPipelineAutoConfiguration::class.java,
+                )
+            )
+            .withPropertyValues("cosec.authorization.routes.location=")
+            .withBean(Algorithm::class.java, { Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLwGA_") })
+            .withBean(TokenStore::class.java, { TokenStore.NoOp })
+            .run { context ->
+                context.startupFailure!!.stackTraceToString().assert().contains("no revocation reader")
+            }
     }
 
     @Test

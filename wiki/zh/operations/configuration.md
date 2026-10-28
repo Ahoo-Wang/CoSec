@@ -58,7 +58,6 @@ OpenTelemetry 追踪没有开关：只要 classpath 上有 `opentelemetry-suppor
 | `cosec.jwt.algorithm` | `hmac256`、`hmac384`、`hmac512` | `hmac256` | 签名算法。签发方和校验方必须一致。 |
 | `cosec.jwt.token-validity.access` | 时长 | `10m` | 访问令牌有效期。 |
 | `cosec.jwt.token-validity.refresh` | 时长 | `7d` | 刷新令牌有效期。 |
-| `cosec.jwt.token-revocation.enabled` | boolean | `false` | 每个令牌都对照吊销存储检查，使登出立即生效（需要 `cache-support`）。见 [登出与吊销](../integration/authentication.md#logout-and-revocation)。 |
 
 ## API key {#api-keys}
 

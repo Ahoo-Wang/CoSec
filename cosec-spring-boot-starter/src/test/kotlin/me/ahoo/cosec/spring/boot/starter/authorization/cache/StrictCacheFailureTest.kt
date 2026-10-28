@@ -52,6 +52,8 @@ class StrictCacheFailureTest {
         ApplicationContextRunner()
             .withPropertyValues(
                 "cocache.backend=memory",
+                // A hooked in-memory backend: the SNP-3 check cannot read it, and need not.
+                "cosec.authorization.snapshot.eviction-check=warn",
                 // an application's defaults must not weaken CoSec's store of record
                 "cocache.defaults.read-failure=degrade",
                 "cocache.defaults.ttl=60s",

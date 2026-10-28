@@ -92,7 +92,6 @@ class PipelineStarterRedisTest {
         )
         .withPropertyValues(
             "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
-            "${JwtProperties.PREFIX}.token-revocation.enabled=true",
             "cosec.authorization.cache.key-prefix=$keyPrefix",
             "cosec.authorization.snapshot.key-prefix=$keyPrefix",
             "cosec.authorization.snapshot.revalidate-interval=200ms",

@@ -107,6 +107,8 @@ class StoreOfRecordOverrideTest {
             *(
                 listOf(
                     "cocache.backend=memory",
+                    // A hooked in-memory backend: the SNP-3 check cannot read it, and need not.
+                    "cosec.authorization.snapshot.eviction-check=warn",
                     "cocache.defaults.foreign-format=reclaim",
                     "cosec.jwt.enabled=true",
                     "cosec.jwt.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",

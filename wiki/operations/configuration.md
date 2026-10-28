@@ -60,7 +60,6 @@ OpenTelemetry tracing has no switch: it is on whenever `opentelemetry-support` i
 | `cosec.jwt.algorithm` | `hmac256`, `hmac384`, `hmac512` | `hmac256` | Signing algorithm. Issuers and verifiers must agree. |
 | `cosec.jwt.token-validity.access` | duration | `10m` | Access token lifetime. |
 | `cosec.jwt.token-validity.refresh` | duration | `7d` | Refresh token lifetime. |
-| `cosec.jwt.token-revocation.enabled` | boolean | `false` | Check every token against the revocation store, so logout takes effect at once (needs `cache-support`). See [Logout and revocation](../integration/authentication.md#logout-and-revocation). |
 
 ## API keys
 
