@@ -97,6 +97,18 @@
         "cosec-cocache:RedisApiKeyReaderTest#anUnreachableRedisThrows"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-9",
+      "source": "RFC 0005 §3.2; RFC 0006 §5.4",
+      "statement": "Conditions read the request's host attributes: `http.header.<name>`, `http.origin`, `http.referer` and their hosts (in lower case) from the request's headers, and `request.attributes.<name>` from what the adapter knows besides HTTP (the gateway's route id). A DENY on them applies, and an ALLOW gated on them permits; they are never read as absent when the request carries them. A header sent more than once with different values has no single value: a statement reading it errs (a DENY is indeterminate, an ALLOW does not match).",
+      "level": "pipeline",
+      "guards": [
+        "runtime:HostAttributesPipelineTest",
+        "cosec-spring-boot-starter:WebAdapterParityTest#the three adapters give the engine the same host attributes",
+        "cosec-spring-boot-starter:WebAdapterParityTest#the gateway gives the engine the route id"
+      ],
+      "pending": null
     }
   ]
 }

@@ -160,6 +160,11 @@ class RequestSummary internal constructor(
     val remoteIp: String,
     /** Empty when the request names no device. */
     val deviceId: String,
+    /**
+     * The gateway route the request came through (the request attribute `cosec.audit.routeId`, which conditions read
+     * as `request.attributes.cosec.audit.routeId`); null for other adapters.
+     */
+    val routeId: String? = null,
 )
 
 /**

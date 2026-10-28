@@ -72,7 +72,7 @@ object AuditEvents {
                 remoteIp = event.request.remoteIp,
                 method = event.request.method,
                 path = event.request.path,
-                routeId = null,
+                routeId = event.request.routeId,
                 device = AuditDeviceData(event.request.deviceId.ifEmpty { null }, null),
             ),
             authorization = AuditAuthorizationData(

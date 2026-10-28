@@ -1,0 +1,71 @@
+{
+  "rules": [
+    "PIP-9"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "X-Debug sent twice with the same value is one value: the DENY reads 0 and the ALLOW permits.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        },
+        {
+          "id": "no-debug",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "condition": {
+                "eq": [
+                  "http.header.x-debug",
+                  "1"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        },
+        {
+          "id": "no-debug",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-debug"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "X-Debug": [
+        "0",
+        "0"
+      ]
+    }
+  },
+  "authentication": {
+    "result": "authenticated"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

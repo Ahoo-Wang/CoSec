@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
@@ -93,7 +94,13 @@ internal class RequestRecord(val startNanos: Long, val time: Long, val trace: Tr
             scope = scope,
             action = action,
             resource = resource,
-            request = RequestSummary(facts.method, path ?: facts.rawPath, facts.remoteAddress, deviceId),
+            request = RequestSummary(
+                facts.method,
+                path ?: facts.rawPath,
+                facts.remoteAddress,
+                deviceId,
+                facts.requestAttributes[AuditRequest.ROUTE_ID_ATTRIBUTE_KEY],
+            ),
             attributes = fetched?.statuses().orEmpty(),
             trace = trace,
             requiredFailures = requiredFailures,

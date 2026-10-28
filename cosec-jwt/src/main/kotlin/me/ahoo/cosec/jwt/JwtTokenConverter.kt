@@ -42,8 +42,8 @@ import java.util.*
  * @param membershipClaimLimit the most bytes the `roles` and `policies` claims may take, serialized as JSON, before
  * the access token carries `cosec.membership: "provider"` instead of them (RFC 0004 §4.5.1); `null`, the default,
  * never moves them. Set it only together with a [me.ahoo.cosec.membership.MembershipProvider] that knows the
- * memberships: until RFC 0004 PR-7, authorization still reads the principal's `roles` and `policies`, so a moved
- * principal has none. RFC 0004 PR-7 makes [DEFAULT_MEMBERSHIP_CLAIM_LIMIT] the default.
+ * memberships: a token that carries the marker has no memberships of its own, and without a provider its requests
+ * fail closed (503). [DEFAULT_MEMBERSHIP_CLAIM_LIMIT] is a suggested value, not the default.
  * @see TokenConverter
  * @see JwtTokenVerifier
  */
