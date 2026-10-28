@@ -62,6 +62,8 @@ class ConditionCheckerTest {
             checker.attribute("http.header.$header").assert().isNull()
             checker.unresolved("http.header.$header").assert().contains("credential header")
         }
+        checker.attribute("http.header.x-api-\u212Aey").assert().isNull()
+        checker.unresolved("http.header.x-api-\u212Aey").assert().contains("not a header name")
         checker.attribute("http.header.x-debug").assert().isNotNull()
         checker.unresolved("http.header.").assert().isEqualTo("unknown attribute `http.header.`")
         checker.unresolved("ext.geo.country").assert().contains("not declared")

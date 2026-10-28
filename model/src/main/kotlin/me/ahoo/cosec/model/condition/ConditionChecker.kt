@@ -76,7 +76,10 @@ class ConditionChecker(
     /** Why [attribute] has no attribute for [path], as an error a caller reports. */
     fun unresolved(path: String): String {
         val parsed = Attribute.parse(path)
+        val header = Attribute.Kind.HTTP_HEADER.path
         return when {
+            parsed == null && path.startsWith(header) && path.length > header.length ->
+                "`$path` is not a header name: a header name is an ASCII token (RFC 9110)"
             parsed != null && isCredentialHeader(parsed) ->
                 "`$path` is a credential header, which no attribute reference may read"
             parsed == null && Attribute.isExternalPath(path) ->

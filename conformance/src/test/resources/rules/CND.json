@@ -47,11 +47,13 @@
     {
       "id": "CND-5",
       "source": "RFC 0005 §3.2",
-      "statement": "No attribute reference may read a credential header: `http.header.authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key` or `cosec-identity`, in any case, whether in a condition or a rate limit rule's `key`. `ConditionChecker.attribute` refuses it, so every reference is checked in one place. A document with such a reference does not compile, through the control plane and cosec-migrate alike.",
+      "statement": "No attribute reference may read a credential header: `http.header.authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key` or `cosec-identity`, whether in a condition or a rate limit rule's `key`. A header name is an ASCII token (RFC 9110 tchar), matched case-insensitively with the ASCII fold on both the document and the request side, so no Unicode case mapping can reach a credential header; any other name does not compile. `ConditionChecker.attribute` refuses both, so every reference is checked in one place. A document with such a reference does not compile, through the control plane and cosec-migrate alike.",
       "level": "engine",
       "guards": [
         "model:ConditionCheckerTest#credential headers are refused",
-        "model:ConditionCheckerTest#no attribute reference resolves a credential header"
+        "model:ConditionCheckerTest#no attribute reference resolves a credential header",
+        "model:AttributeTest#a header name that is not an ASCII token does not parse",
+        "runtime:HttpAttributesTest#header names fold ASCII letters only"
       ],
       "pending": null
     }
