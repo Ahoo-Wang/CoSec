@@ -5,20 +5,26 @@ description: "运行 cosec-gateway-server 镜像，并用它自带的 JDK 25 AOT
 
 # 部署网关服务 {#deploying-the-gateway-server}
 
-面向用 Docker 镜像运行 `cosec-gateway-server`（前置了 CoSec 的现成 Spring Cloud Gateway）的运维人员，以及要自己构建类似镜像的团队。
-本页介绍镜像里有什么，以及镜像自带的 JDK 25 AOT 缓存：它加快了什么、JVM 何时不使用它、如何为自己的部署训练一份。
+面向用 Docker 镜像或在 Kubernetes 上运行 `cosec-gateway-server`（前置了 CoSec 的现成 Spring Cloud Gateway）的运维人员，
+以及要自己构建类似镜像的团队。本页介绍镜像里有什么、它在应答请求之前需要什么、仓库中的 Kubernetes 清单、CI 如何检查
+镜像，以及镜像自带的 JDK 25 AOT 缓存。这里提到的每个配置项都在[配置](./configuration.md)中。
 
 ## 镜像 {#the-image}
 
 CI 在每次推送时用 [`cosec-gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/Dockerfile)
 构建镜像，发布为 `ahoowang/cosec-gateway`、`ghcr.io/ahoo-wang/cosec-gateway` 和
-`registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`，支持 `linux/amd64` 和 `linux/arm64`。网关服务是一个应用：只以镜像发布，从不作为库发布。
+`registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`，支持 `linux/amd64` 和 `linux/arm64`。网关服务是一个应用：只以
+镜像发布，从不作为库发布。
 
-- **JDK。** 镜像运行在 Alibaba Dragonwell 25（`dragonwell:25-ubuntu`）上。代码和其他 CoSec 模块一样按 Java 17 编译，JDK 17 基线不变。
-- **必需配置。** `COSEC_JWT_SECRET`（没有默认值，见[认证](../integration/authentication.md)）和 Redis 地址 `SPRING_DATA_REDIS_URL`。
-  Redis 是策略和权限的权威存储（[存储与缓存](./storage.md)）。
-- **目录结构。** 应用位于 `/opt/cosec-gateway-server`，以非特权用户 `appuser` 运行。配置文件是 `config/application.yaml`；
-  JVM 参数在 `bin/cosec-gateway-server` 中（ZGC，2 GiB 堆）。通过 `JAVA_OPTS` 追加参数。
+- **JDK。** 镜像运行在 Alibaba Dragonwell 25（`dragonwell:25-ubuntu`）上。代码和其他 CoSec 模块一样按 Java 17 编译，
+  JDK 17 基线不变。
+- **必需配置。** `COSEC_JWT_SECRET`（没有默认值，见[认证](../integration/authentication.md)）和 Redis 地址，例如
+  `SPRING_DATA_REDIS_URL`。
+- **目录结构。** 应用位于 `/opt/cosec-gateway-server`，以非特权用户 `appuser` 运行。配置文件是
+  `config/application.yaml`；JVM 参数在 `bin/cosec-gateway-server` 中（ZGC，2 GiB 堆）。通过 `JAVA_OPTS` 追加参数。
+- **包含什么。** 网关过滤器、Redis 快照存储（`cache-support`）、追踪和 Kafka 模块。它的配置关闭了 Kafka 审计
+  （`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.enabled: false`）和 ip2region
+  （`cosec.ip2region.enabled: false`）。它没有控制面：文档由 `cosec-migrate` 或同一个 Redis 上的控制面应用发布。
 
 ```bash
 docker run -d -p 8080:8080 \
@@ -26,6 +32,56 @@ docker run -d -p 8080:8080 \
   -e COSEC_JWT_SECRET=... \
   ahoowang/cosec-gateway
 ```
+
+## 网关授权什么 {#what-the-gateway-authorizes}
+
+CoSec 作为 Spring Cloud Gateway 的全局过滤器运行，而全局过滤器只作用于网关的路由。因此每个被路由的请求都会被授权，
+在 `http` 命名空间中（网关不加载路由映射），而网关自己的 actuator 端点（包括健康探针）不会。路由就是
+`spring.cloud.gateway.server.webflux.routes` 下普通的 Spring Cloud Gateway 配置。请求如何变成动作和资源、结果如何
+变成响应，见 [Web 集成](../integration/web.md)。
+
+## 第一个请求之前 {#before-the-first-request}
+
+网关在没有任何文档时也能启动，但在平台文档发布之前，对每个被路由的请求都回答 `503`
+（[最初的文档](./storage.md#the-first-documents)）。每个环境都需要：
+
+1. **`maxmemory-policy noeviction` 的 Redis。** 每个实例在启动时用 `CONFIG GET` 检查，否则不启动
+   （[Redis 要求](./storage.md#redis-requirements)）。在隐藏了 `CONFIG GET` 的托管 Redis 上，自行设置 `noeviction`，
+   并设置 `COSEC_AUTHORIZATION_SNAPSHOT_EVICTION_CHECK=warn`。
+2. **文档。** 用 `cosec-migrate publish --to-redis <uri> --in <dir>` 发布它们；如果将由控制面管理，再用
+   `cosec-migrate bootstrap` 指定第一个管理员。网关、控制面和 `cosec-migrate` 必须使用同一个 Redis 和同一个
+   `cosec.authorization.snapshot.key-prefix`。
+3. **实例 id（如果按实例收紧 Redis 权限）。** 网关默认参与影子窗口，使用随机的实例 id。要给每个 pod 独立的 Redis 用户，
+   为每个 pod 设置 `COSEC_AUTHORIZATION_SHADOW_INSTANCE_ID`（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。
+
+实例在加载平台文档之前就报告自己健康并就绪；最初的请求会等待它，最多
+[`cold-load-timeout`](./configuration.md#snapshot)（2 秒），读不到时回答 `503`。
+
+## Kubernetes {#kubernetes}
+
+[`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) 中有示例清单：
+
+| 文件 | 内容 |
+|---|---|
+| `cosec-gateway-config.yaml` | 一个 ConfigMap，含 `application.yaml` 和 `bootstrap.yaml`，挂载到 `/opt/cosec-gateway-server/config/`：路由和上面的 `cosec.*` 设置。 |
+| `cosec-gateway-deployment.yml` | Deployment：`COSEC_JWT_SECRET` 来自 Secret `cosec-jwt-secret`，Redis Cluster 来自 Secret `redis-secret`（`SPRING_DATA_REDIS_CLUSTER_NODES`、`SPRING_DATA_REDIS_PASSWORD`、自适应拓扑刷新），探针为 `/actuator/health`、`/actuator/health/readiness` 和 `/actuator/health/liveness`，以及注入 OpenTelemetry Java agent 的注解。 |
+| `cosec-gateway-reids.yaml` | Secret `redis-secret`，值为占位符。 |
+| `cosec-gateway-service.yaml` | 一个 Service，80 端口转发到容器的 8080。 |
+| `cosec-gateway-hpa.yaml` | 一个 HorizontalPodAutoscaler，按 CPU 在 2 到 10 个副本之间伸缩。 |
+
+Deployment 中的镜像是 `ghcr.io/ahoo-wang/cosec-gateway:7.0.0`：把标签改成你部署的版本。自己创建 `cosec-jwt-secret`
+（`kubectl create secret generic cosec-jwt-secret --from-literal=secret=<random value>`），并在 `redis-secret` 中填入
+你的节点和密码。`cosec-migrate` 通过 `--to-redis` 连接一台 Redis 服务器。
+
+## CI 如何检查镜像 {#how-ci-checks-the-image}
+
+镜像推送后，[`docker-deploy.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/docker-deploy.yml) 的
+`aot-smoke` 作业针对一个 Redis 7 服务容器运行
+[`aot-smoke.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/aot-smoke.sh)。它用
+`cosec-migrate publish` 发布一个平台文档，以 `-XX:AOTMode=on` 启动镜像（无法映射的缓存会让作业失败），添加一条指向
+网关自身健康端点的 `/smoke/**` 路由，然后检查：健康探针回答 `200`，匿名请求回答带 `application/problem+json` 的
+`401`，带有效 HS256 令牌的请求回答 `200`，匹配到 DENY 的请求回答带 `application/problem+json` 的 `403`。同样的步骤
+也可以用来快速检查你自己的部署。
 
 ## AOT 缓存 {#aot-cache}
 
@@ -51,9 +107,9 @@ JVM 启动时直接映射这个文件，不再重复这些工作。不需要改�
 2. **创建。** 第二次运行使用 `-XX:AOTMode=create`，把记录下的配置生成缓存。
 3. **检查。** 第三次运行使用 `-XX:AOTMode=on`；如果生产参数无法映射缓存，构建失败。
 
-训练不需要 Redis，也不需要网络。它设置 `cocache.backend=memory`，CoCache 把缓存保存在进程内，整个应用不连 Redis 也能启动。
-代价是：只有 Redis 响应后才加载的类（Lettuce 连接路径），以及第一个匹配路由的请求才加载的类（CoSec 授权过滤器），不在缓存里。
-它们按常规方式加载，所以第一个经过授权的请求和没有缓存时开销相同。
+训练不需要 Redis，也不需要网络。它设置 `cocache.backend=memory`，CoCache 把缓存保存在进程内，整个应用不连 Redis 也能启动；
+内存后端总能通过驱逐检查。代价是：只有 Redis 响应后才加载的类（Lettuce 连接路径），以及只有在真实文档上做决策时才加载的类，
+不在缓存里（没有平台文档，训练中的每个请求都被拒绝）。它们按常规方式加载，所以第一个经过授权的请求和没有缓存时开销相同。
 
 容器通过 `JDK_JAVA_OPTIONS` 而不是 `JAVA_OPTS` 传入 `-XX:AOTCache=…`，所以设置 `JAVA_OPTS` 不会丢掉缓存。
 每次启动都会在 stderr 打印 `NOTE: Picked up JDK_JAVA_OPTIONS: …`。容器里的其他 `java` 命令也会带上这个参数：不带网关参数的命令（例如 `java -version`）
@@ -108,7 +164,7 @@ java -XX:AOTCache=app.aot -cp "$CLASSPATH" com.example.App
 
 ### 启动实测 {#measured-startup}
 
-到 Spring Boot 日志中 `Started GatewayServerKt` 的时间，以及启动一秒后 JVM 的常驻内存。每次运行都是新的 JVM，两种情况交替进行。全部在 Apple M4（10 核）上运行。
+到 Spring Boot 日志中 `Started GatewayServerKt` 的时间，以及启动一秒后 JVM 的常驻内存。这些数据是 2026 年 10 月在网关改用 8.0 管道之前测得的，此后没有重新测量。每次运行都是新的 JVM，两种情况交替进行。全部在 Apple M4（10 核）上运行。
 
 **容器中：** 镜像（Dragonwell 25.0.4，`linux/arm64`）连接一个 Redis 7 容器，两种情况各 15 次。机器较忙（1 分钟负载 4.4 到 6.7），所以离散度较大：
 

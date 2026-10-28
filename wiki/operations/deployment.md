@@ -6,8 +6,9 @@ description: "Run the cosec-gateway-server image, and use its JDK 25 AOT cache t
 # Deploying the Gateway Server
 
 For operators who run `cosec-gateway-server`, the ready-made Spring Cloud Gateway with CoSec in front, from its
-Docker image, or who build a similar image of their own. This page covers what the image contains, and the JDK 25
-AOT cache it ships with: what it speeds up, when the JVM ignores it, and how to train one for your own deployment.
+Docker image or on Kubernetes, or who build a similar image of their own. This page covers what the image contains,
+what it needs before it can answer a request, the Kubernetes manifests in the repository, how CI checks the image, and
+the JDK 25 AOT cache it ships with. Every property named here is in [Configuration](./configuration.md).
 
 ## The image
 
@@ -19,11 +20,14 @@ application: it is published only as an image, never as a library.
 - **JDK.** The image runs on Alibaba Dragonwell 25 (`dragonwell:25-ubuntu`). The code is compiled for Java 17 like
   every other CoSec module, so the JDK 17 baseline is unchanged.
 - **Required settings.** `COSEC_JWT_SECRET` (there is no default, see
-  [Authentication](../integration/authentication.md)) and the Redis address, `SPRING_DATA_REDIS_URL`. Redis is the
-  store of record for policies and permissions ([Storage and caching](./storage.md)).
+  [Authentication](../integration/authentication.md)) and the Redis address, for example `SPRING_DATA_REDIS_URL`.
 - **Layout.** The application lives in `/opt/cosec-gateway-server` and runs as the unprivileged `appuser`. The
   configuration is `config/application.yaml`; the JVM options are in `bin/cosec-gateway-server` (ZGC, a 2 GiB heap).
   Add options through `JAVA_OPTS`.
+- **What is in it.** The gateway filter, the Redis snapshot store (`cache-support`), tracing and the Kafka module. Its
+  configuration turns Kafka audit (`cosec.audit.kafka.enabled: false`), login (`cosec.authentication.enabled: false`)
+  and ip2region (`cosec.ip2region.enabled: false`) off. It has no control plane: documents are published by
+  `cosec-migrate` or by a control-plane application on the same Redis.
 
 ```bash
 docker run -d -p 8080:8080 \
@@ -31,6 +35,60 @@ docker run -d -p 8080:8080 \
   -e COSEC_JWT_SECRET=... \
   ahoowang/cosec-gateway
 ```
+
+## What the gateway authorizes
+
+CoSec runs as a Spring Cloud Gateway global filter, which runs on the gateway's routes only. So every routed request
+is authorized, in the `http` namespace (the gateway loads no route map), and the gateway's own actuator endpoints,
+health probes included, are not. Routes are ordinary Spring Cloud Gateway configuration under
+`spring.cloud.gateway.server.webflux.routes`. How a request becomes an action and a resource, and how outcomes become
+responses, is in [Web integration](../integration/web.md).
+
+## Before the first request
+
+The gateway starts without any document, but answers every routed request `503` until a platform document is
+published ([The first documents](./storage.md#the-first-documents)). For each environment:
+
+1. **Redis with `maxmemory-policy noeviction`.** Each instance checks it at startup with `CONFIG GET` and does not
+   start otherwise ([Redis requirements](./storage.md#redis-requirements)). On a managed Redis that hides
+   `CONFIG GET`, set `noeviction` yourself and `COSEC_AUTHORIZATION_SNAPSHOT_EVICTION_CHECK=warn`.
+2. **The documents.** Publish them with `cosec-migrate publish --to-redis <uri> --in <dir>`, then name the first
+   administrator with `cosec-migrate bootstrap` if a control plane will manage them. The gateway, the control plane and
+   `cosec-migrate` must use the same Redis and the same `cosec.authorization.snapshot.key-prefix`.
+3. **Instance ids, if you lock Redis down per instance.** The gateway takes part in shadow windows by default, with a
+   random instance id. To give each pod its own Redis user, set `COSEC_AUTHORIZATION_SHADOW_INSTANCE_ID` per pod
+   ([Who may write which keys](./storage.md#who-may-write-which-keys)).
+
+An instance reports itself healthy and ready before it has loaded the platform document; the first requests wait for
+it, up to [`cold-load-timeout`](./configuration.md#snapshot) (2 seconds), and answer `503` if it cannot be read.
+
+## Kubernetes
+
+[`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) holds example manifests:
+
+| File | Contents |
+|---|---|
+| `cosec-gateway-config.yaml` | A ConfigMap with `application.yaml` and `bootstrap.yaml`, mounted over `/opt/cosec-gateway-server/config/`: the routes and the `cosec.*` settings above. |
+| `cosec-gateway-deployment.yml` | The Deployment: `COSEC_JWT_SECRET` from the Secret `cosec-jwt-secret`, a Redis Cluster from the Secret `redis-secret` (`SPRING_DATA_REDIS_CLUSTER_NODES`, `SPRING_DATA_REDIS_PASSWORD`, adaptive topology refresh), probes on `/actuator/health`, `/actuator/health/readiness` and `/actuator/health/liveness`, and the OpenTelemetry Java agent injection annotation. |
+| `cosec-gateway-reids.yaml` | The Secret `redis-secret`, with placeholder values. |
+| `cosec-gateway-service.yaml` | A Service, port 80 to the container's 8080. |
+| `cosec-gateway-hpa.yaml` | A HorizontalPodAutoscaler, 2 to 10 replicas on CPU. |
+
+The Deployment names the image `ghcr.io/ahoo-wang/cosec-gateway:7.0.0`: set the tag to the version you deploy. Create
+`cosec-jwt-secret` yourself (`kubectl create secret generic cosec-jwt-secret --from-literal=secret=<random value>`),
+and fill `redis-secret` with your nodes and password. `cosec-migrate` connects to one Redis server through
+`--to-redis`.
+
+## How CI checks the image
+
+After the image is pushed, the `aot-smoke` job of
+[`docker-deploy.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/docker-deploy.yml) runs
+[`aot-smoke.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/cosec-gateway-server/aot-smoke.sh) against a Redis 7
+service container. It publishes a platform document with `cosec-migrate publish`, starts the image with
+`-XX:AOTMode=on` (a cache that cannot be mapped fails the job), adds a `/smoke/**` route to the gateway's own health
+endpoint, and checks that the health probe answers `200`, an anonymous request `401` with
+`application/problem+json`, a request with a valid HS256 token `200`, and a request a DENY matches `403` with
+`application/problem+json`. The same steps are a quick check of your own deployment.
 
 ## AOT cache
 
@@ -64,9 +122,10 @@ jars and path the container runs, and writes it to `/opt/cosec-gateway-server/ao
 3. **Check.** A third run with `-XX:AOTMode=on` fails the build if the production options cannot map the cache.
 
 Training needs no Redis and no network. It sets `cocache.backend=memory`, so CoCache keeps its caches in process
-and the whole application starts without a Redis server. The trade-off: classes that load only once Redis answers
-(the Lettuce connection path) or on the first request a route matches (the CoSec authorization filter) are not in
-the cache. They load the normal way, so the first authorized request costs what it would cost without a cache.
+and the whole application starts without a Redis server; the eviction check passes for the in-memory backend. The
+trade-off: classes that load only once Redis answers (the Lettuce connection path) or only for a decision on real
+documents are not in the cache (with no platform document, every training request is refused). They load the normal
+way, so the first authorized request costs what it would cost without a cache.
 
 The container passes `-XX:AOTCache=…` through `JDK_JAVA_OPTIONS`, not `JAVA_OPTS`, so setting `JAVA_OPTS` keeps the
 cache. Each start prints `NOTE: Picked up JDK_JAVA_OPTIONS: …` on stderr. Every other `java` command in the
@@ -137,7 +196,8 @@ java -XX:AOTCache=app.aot -cp "$CLASSPATH" com.example.App
 ### Measured startup
 
 Time to `Started GatewayServerKt`, as Spring Boot logs it, and the JVM's resident set size one second after
-startup. Each run is a new JVM, and the two modes alternate. Everything ran on an Apple M4 (10 cores).
+startup. These were measured in October 2026 on the gateway before it moved to the 8.0 pipeline, and have not been
+measured again since. Each run is a new JVM, and the two modes alternate. Everything ran on an Apple M4 (10 cores).
 
 **In the container:** the image (Dragonwell 25.0.4, `linux/arm64`) against a Redis 7 container, 15 runs of each. The
 machine was busy (1-minute load average 4.4 to 6.7), so the spread is wide:
