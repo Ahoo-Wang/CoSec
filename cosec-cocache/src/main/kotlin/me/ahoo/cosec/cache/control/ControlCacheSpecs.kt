@@ -58,6 +58,7 @@ data class ReferenceKey(val target: SnapshotKey, val policy: PolicyId)
  * | revision index | `<p>:control:revisions:<docKey>` |
  * | back-references | `<p>:control:refs:<docKey>:<policyId>` |
  * | leases | `<p>:control:lease:<name>` |
+ * | lists | `<p>:control:list:documents`, `<p>:control:list:open-changes` |
  * | change requests | `<p>:control:change:<changeId>` |
  * | staging slots | `<p>:control:stage:<docKey>` |
  *
@@ -120,6 +121,16 @@ object ControlCacheSpecs {
             .keyPrefix("")
             .keyEncoder(SnapshotKeyEncoder)
             .codec(StageSlotCodec)
+            .policy(policy.storeOfRecord())
+            .build()
+
+    /** The sets [CoCacheControlStore.documents] and [CoCacheControlStore.openChanges] read, one key each. */
+    fun list(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<String, Set<String>> =
+        CacheSpec.builder<String, Set<String>>(CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME)
+            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME))
+            .keyPrefix("")
+            .keyEncoder { it }
+            .codec(StringSetCodec)
             .policy(policy.storeOfRecord())
             .build()
 
@@ -272,4 +283,18 @@ object SnapshotKeySetCodec : Codec<Set<SnapshotKey>> {
             val text = item.text(WHAT)
             SnapshotKeyEncoder.decode(text) ?: malformed(WHAT, "[$text] is not a document key")
         }
+}
+
+/** A set of strings as a sorted JSON array, so equal sets have equal bytes and digests. */
+object StringSetCodec : Codec<Set<String>> {
+    private const val WHAT = "control list"
+
+    override fun encode(value: Set<String>): ByteArray {
+        val array = factory.arrayNode()
+        value.sorted().forEach(array::add)
+        return CoSecJsonSerializer.writeValueAsBytes(array)
+    }
+
+    override fun decode(bytes: ByteArray): Set<String> =
+        read(bytes, WHAT).items(WHAT).mapTo(LinkedHashSet()) { it.text(WHAT) }
 }

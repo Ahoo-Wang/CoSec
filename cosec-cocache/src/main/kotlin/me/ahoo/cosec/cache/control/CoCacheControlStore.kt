@@ -26,6 +26,7 @@ import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cache.snapshot.SnapshotDocumentCodec
+import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
@@ -65,6 +66,8 @@ class CoCacheControlStore(
     private val stages: Cache<SnapshotKey, StageSlot>,
     /** The staged candidates the data plane's shadow listeners read (RFC 0007 §6.4). */
     private val candidates: Cache<SnapshotKey, StoredCandidate>,
+    /** The document keys and the ids of changes that may be open ([documents], [openChanges]). */
+    private val lists: Cache<String, Set<String>>,
     /** Told after a head write, typically `RedisSnapshotDocumentStore.notifyChanged`, so this instance reloads at once. */
     private val onPublished: (SnapshotKey) -> Unit = {},
 ) : ControlStore {
@@ -107,8 +110,16 @@ class CoCacheControlStore(
     override suspend fun index(key: SnapshotKey): Versioned<RevisionIndex>? =
         read(indexes, key)?.let { (value, digest) -> Versioned(value, digest) }
 
-    override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean =
-        put(indexes, key, expected, index, digest(RevisionIndexCodec, index)) is Put.Written
+    /** A first index write lists [key] before it is written, so [documents] never misses a document. */
+    override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean {
+        if (expected == null) {
+            updateList(DOCUMENTS) { it + SnapshotKeyEncoder.encode(key) }
+        }
+        return put(indexes, key, expected, index, digest(RevisionIndexCodec, index)) is Put.Written
+    }
+
+    override suspend fun documents(): Set<SnapshotKey> =
+        read(lists, DOCUMENTS)?.first.orEmpty().mapNotNullTo(LinkedHashSet()) { SnapshotKeyEncoder.decode(it) }
 
     override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Set<SnapshotKey>>? =
         read(references, ReferenceKey(target, policy))?.let { (value, digest) -> Versioned(value, digest) }
@@ -130,8 +141,29 @@ class CoCacheControlStore(
     override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
         read(changes, id)?.let { (value, digest) -> Versioned(value, digest) }
 
-    override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean =
-        put(changes, change.id, expected, change, digest(ChangeRequestCacheCodec, change)) is Put.Written
+    /**
+     * A change is listed open before its first write and unlisted after the write that makes it terminal. When that
+     * removal fails, the change is terminal and still listed: [openChanges] drops it the next time it is read.
+     */
+    override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean {
+        if (expected == null) {
+            updateList(OPEN_CHANGES) { it + change.id.value }
+        }
+        val written = put(changes, change.id, expected, change, digest(ChangeRequestCacheCodec, change)) is Put.Written
+        if (written && change.state.terminal) {
+            updateList(OPEN_CHANGES) { it - change.id.value }
+        }
+        return written
+    }
+
+    override suspend fun openChanges(): Set<ChangeId> {
+        val listed = read(lists, OPEN_CHANGES)?.first.orEmpty()
+        val closed = listed.filterTo(HashSet()) { id -> read(changes, ChangeId(id))?.first?.state?.terminal ?: true }
+        if (closed.isNotEmpty()) {
+            updateList(OPEN_CHANGES) { it - closed }
+        }
+        return (listed - closed).mapTo(LinkedHashSet(), ::ChangeId)
+    }
 
     override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? =
         read(stages, key)?.let { (value, digest) -> Versioned(value, digest) }
@@ -155,6 +187,21 @@ class CoCacheControlStore(
             return true
         }
         return (read(leases, name)?.first) == holder
+    }
+
+    /** Read, change, `putIfMatch`: retried while another writer changed the list in between. */
+    private suspend fun updateList(name: String, next: (Set<String>) -> Set<String>) {
+        repeat(MAX_LIST_ATTEMPTS) {
+            val current = read(lists, name)
+            val value = next(current?.first.orEmpty())
+            if (value == current?.first) {
+                return
+            }
+            if (put(lists, name, current?.second, value, digest(StringSetCodec, value)) is Put.Written) {
+                return
+            }
+        }
+        throw IllegalStateException("The control list [$name] kept changing; gave up after $MAX_LIST_ATTEMPTS attempts.")
     }
 
     private sealed interface Put {
@@ -205,6 +252,10 @@ class CoCacheControlStore(
         }
 
     companion object {
+        private const val DOCUMENTS = "documents"
+        private const val OPEN_CHANGES = "open-changes"
+        private const val MAX_LIST_ATTEMPTS = 16
+
         /** The digest CoCache computes for [value] stored with [codec]. */
         fun <V> digest(codec: Codec<V>, value: V): SnapshotDigest = SnapshotDigest(
             Digest.of(Envelope.Scalar(codec.encode(value))).sha1
@@ -225,6 +276,7 @@ class CoCacheControlStore(
             changes = runtime.create(ControlCacheSpecs.changeRequest(keyPrefix)),
             stages = runtime.create(ControlCacheSpecs.stage(keyPrefix)),
             candidates = runtime.create(ShadowCacheSpecs.candidate(keyPrefix)),
+            lists = runtime.create(ControlCacheSpecs.list(keyPrefix)),
             onPublished = onPublished,
         )
     }

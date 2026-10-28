@@ -26,15 +26,23 @@ import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cache.snapshot.RedisTarget
 import me.ahoo.cosec.cache.snapshot.SnapshotNode
 import me.ahoo.cosec.cache.snapshot.newKeyPrefix
+import me.ahoo.cosec.control.change.Base
+import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.snapshot.SnapshotDigest
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotFormatException
 import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.snapshot.document.Actor
+import me.ahoo.cosec.snapshot.document.ProvenanceKind
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -53,7 +61,11 @@ class CoCacheControlStoreTest {
         """{"schema":2,"revision":$revision,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray(),
     )
 
-    private fun store(node: SnapshotNode, heads: Cache<SnapshotKey, SnapshotDocument> = node.cache) = CoCacheControlStore(
+    private fun store(
+        node: SnapshotNode,
+        heads: Cache<SnapshotKey, SnapshotDocument> = node.cache,
+        lists: Cache<String, Set<String>> = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
+    ) = CoCacheControlStore(
         heads = heads,
         records = node.runtime.create(ControlCacheSpecs.revisionRecord(node.keyPrefix)),
         indexes = node.runtime.create(ControlCacheSpecs.revisionIndex(node.keyPrefix)),
@@ -62,7 +74,48 @@ class CoCacheControlStoreTest {
         changes = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
         stages = node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
         candidates = node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
+        lists = lists,
     )
+
+    private fun change(id: String, state: ChangeState) = ChangeRequest(
+        id = ChangeId(id),
+        key = key,
+        base = Base(0, null),
+        operations = emptyList(),
+        author = Actor(TenantId("acme"), PrincipalId("alice")),
+        note = "",
+        kind = ProvenanceKind.PUBLISH,
+        state = state,
+        findings = emptyList(),
+        candidate = null,
+        checkedWith = emptyMap(),
+        createdAt = Instant.parse("2026-11-01T00:00:00Z"),
+        updatedAt = Instant.parse("2026-11-01T00:00:00Z"),
+    )
+
+    @Test
+    fun `indexed documents and open changes are listed, terminal ones are not`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val lists = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix))
+            val store = store(node, lists = lists)
+            store.documents().assert().isEmpty()
+            store.putIndex(key, null, RevisionIndex()).assert().isTrue()
+            store.documents().assert().containsExactly(key)
+
+            val open = change("c1", ChangeState.DRAFT)
+            store.putChange(null, open).assert().isTrue()
+            store.putChange(null, change("c2", ChangeState.DRAFT)).assert().isTrue()
+            store.openChanges().assert().containsExactlyInAnyOrder(ChangeId("c1"), ChangeId("c2"))
+            val digest = store.change(ChangeId("c1"))!!.digest
+            store.putChange(digest, open.copy(state = ChangeState.ABANDONED)).assert().isTrue()
+            store.openChanges().assert().containsExactly(ChangeId("c2"))
+
+            // A removal lost after the terminal write: the id is dropped the next time the list is read.
+            lists.put("open-changes", setOf("c1", "c2", "gone"))
+            store.openChanges().assert().containsExactly(ChangeId("c2"))
+            lists.get("open-changes").assert().isEqualTo(setOf("c2"))
+        }
+    }
 
     @Test
     fun `heads and records share the data plane's digest`() = runBlocking<Unit> {
@@ -114,6 +167,7 @@ class CoCacheControlStoreTest {
                 node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix)),
                 node.runtime.create(ControlCacheSpecs.stage(node.keyPrefix)),
                 node.runtime.create(me.ahoo.cosec.cache.shadow.ShadowCacheSpecs.candidate(node.keyPrefix)),
+                node.runtime.create(ControlCacheSpecs.list(node.keyPrefix)),
                 { published += it },
             )
             store.putHead(key, null, document(1)).assert().isInstanceOf(HeadWrite.Written::class.java)

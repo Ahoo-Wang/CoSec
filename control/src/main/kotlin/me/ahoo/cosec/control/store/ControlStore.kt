@@ -103,6 +103,20 @@ interface ControlStore : CandidateStore {
     suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate?)
 
     /**
+     * Every document this store has indexed revisions for, so reclamation can visit each (RFC 0007 §5.7). It may name
+     * more than exist, never fewer: a key is added before its first index write and never removed.
+     */
+    suspend fun documents(): Set<SnapshotKey>
+
+    /**
+     * The change requests that may still be open, so shadow windows can be closed (RFC 0007 §6.4) and the revisions
+     * open changes rest on kept (§5.7). It may name more, never fewer: an id is added before its change is first written
+     * and removed once a write makes the change terminal. A removal that failed is made up here: ids whose change is
+     * terminal or gone are dropped when this is read. Callers still read each change and go by its state.
+     */
+    suspend fun openChanges(): Set<ChangeId>
+
+    /**
      * Takes the lease [name] for [holder] for [duration] if nobody holds it, so that one control-plane instance runs a
      * periodic task (RFC 0007 §5.7). `false` when another holder has it.
      */

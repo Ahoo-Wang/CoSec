@@ -85,6 +85,12 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
             true
         }
 
+    override suspend fun documents(): Set<SnapshotKey> = synchronized(lock) { indexes.keys.toSet() }
+
+    override suspend fun openChanges(): Set<ChangeId> = synchronized(lock) {
+        changes.filterValues { (change, _) -> !change.state.terminal }.keys.toSet()
+    }
+
     override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Set<SnapshotKey>>? =
         synchronized(lock) { references[target to policy]?.let { Versioned(it, setDigest(it)) } }
 
