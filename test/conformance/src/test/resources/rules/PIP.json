@@ -1,0 +1,137 @@
+{
+  "rules": [
+    {
+      "id": "PIP-1",
+      "source": "RFC 0006 §6.3",
+      "statement": "Status codes come only from StatusMapping, and the three adapters answer the same request identically.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "architecture:OneDecisionPathTest#onlyStatusMappingConstructsOutcomes",
+        "architecture:OneDecisionPathTest#adaptersNeverSeeDecisions",
+        "architecture:OneDecisionPathTest#bridgesWriteOnlyEncodedProblems",
+        "spring-boot:WebAdapterParityTest#the three adapters answer byte for byte alike",
+        "spring-boot:WebAdapterParityTest#the three adapters make the same decision event"
+      ]
+    },
+    {
+      "id": "PIP-2",
+      "source": "RFC 0006 §6.1",
+      "statement": "Indeterminate is always 503; 500 is kept for unmodelled exceptions.",
+      "level": "pipeline",
+      "properties": [
+        "runtime:ProblemBodyPropertyTest#problemBodiesHoldOnlyTheAllowedMembers"
+      ],
+      "guards": [
+        "runtime:PipelineTest#indeterminateDecisionIs503",
+        "runtime:PipelineTest#unmodelledExceptionIs500",
+        "runtime:PipelineTest#authenticatorUnavailableIs503"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-3",
+      "source": "RFC 0006 §7.4",
+      "statement": "External cancellation never produces an Outcome, and the downstream is never called.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:PipelineCancellationTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-4",
+      "source": "RFC 0006 §10.2",
+      "statement": "No failure or timeout of any SPI produces a Permit (P13).",
+      "level": "pipeline",
+      "guards": [
+        "runtime:PipelineTest#failingLateOrWrongMembershipsAre503",
+        "runtime:PipelineTest#snapshotSourceFailureIs503",
+        "runtime:PipelineTest#authenticatorTimeoutIs503"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-5",
+      "source": "RFC 0006 §5.3.1 (amended 2026-10-27, review of #1044)",
+      "statement": "A path with a dot segment after one decoding, in any encoding (including after removing path parameters, with an encoded ';' and with '\\' as a separator), or longer than 2048 characters, or with a segment longer than 256 characters, is answered 400 before authentication.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:PathNormalizerTest#ambiguousPathsAreRejected",
+        "runtime:PathNormalizerTest#longPathsAndSegmentsAreRejected",
+        "runtime:PipelineTest#ambiguousPathIsInvalidRequestBeforeAuthentication"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-6",
+      "source": "RFC 0006 §5.3.2, §6.1 (K2, Q2)",
+      "statement": "A credential that is invalid, expired or revoked is evaluated as anonymous: a permit proceeds, and a deny answers 401 with the token-* problem type that names why (token-invalid, token-expired, token-revoked), never unauthorized.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:TokenAuthenticatorTest#rejectedTokensNameWhy",
+        "runtime:PipelineTest#rejectedCredentialsDenyWithTheirReason",
+        "runtime:PipelineTest#rejectedCredentialsAreEvaluatedAsAnonymous"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-7",
+      "source": "AGENTS.md (Fail closed); RFC 0006 §5.3.2",
+      "statement": "Only the revocation store's own degraded read may count a token as not revoked (the documented exception to failing closed); an error the revocation check reports fails the request with 503, never accepts the token.",
+      "level": "pipeline",
+      "guards": [
+        "cocache:CoCacheRevocationReaderTest#anUnreadableStoreMeansNotRevoked",
+        "runtime:TokenAuthenticatorTest#otherFailuresPropagate"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-8",
+      "source": "RFC 0006 §5.3.2",
+      "statement": "A request that carries an API key is judged by the key alone, never by a token it also carries: an unknown, disabled or expired key is a rejected credential (evaluated as anonymous, a deny answers 401 token-invalid), and a key store that cannot be read answers 503.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:ApiKeyAuthenticatorTest",
+        "runtime:CompositeAuthenticatorTest#aKeyIsJudgedAlone",
+        "cocache:RedisApiKeyReaderTest#anUnreachableRedisThrows"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-9",
+      "source": "RFC 0005 §3.2; RFC 0006 §5.4",
+      "statement": "Conditions read the request's host attributes: `http.header.<name>`, `http.origin`, `http.referer` and their hosts (in lower case) from the request's headers, and `request.attributes.<name>` from what the adapter knows besides HTTP (the gateway's route id). A DENY on them applies, and an ALLOW gated on them permits; they are never read as absent when the request carries them. A header sent more than once with different values has no single value: a statement reading it errs (a DENY is indeterminate, an ALLOW does not match).",
+      "level": "pipeline",
+      "guards": [
+        "runtime:HostAttributesPipelineTest",
+        "spring-boot:WebAdapterParityTest#the three adapters give the engine the same host attributes",
+        "spring-boot:WebAdapterParityTest#the gateway gives the engine the route id"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-10",
+      "source": "RFC 0006 §7.3 (identity propagation, replacing 7.x inject)",
+      "statement": "A gateway never forwards an identity a client sent: CoSec-Identity is stripped from every request before anything reads it, whatever the mode or cosec.enabled, and the routing filters send only the identity the pipeline verified on a permit for an authenticated principal (unless the route opts out), so no route or global filter can add one.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:IdentityForwardingTest",
+        "gateway:PipelineGatewayFilterTest",
+        "gateway:IdentityGuardTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-11",
+      "source": "RFC 0004 §4.5, RFC 0006 §5.3.2 (7.x inject mode removed)",
+      "statement": "Only the verifier turns a token into a principal: no class of CoSec decodes a JWT, or reads its claims as a principal, without verifying its signature first.",
+      "level": "build",
+      "guards": [
+        "architecture:UnverifiedTokenTest#onlyTheVerifierDecodesATokenIntoAPrincipal",
+        "architecture:UnverifiedTokenTest#withinTheVerifierOnlyTheVerifyingMethodsDecode"
+      ],
+      "pending": null
+    }
+  ]
+}

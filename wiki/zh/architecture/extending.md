@@ -242,6 +242,6 @@ starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `opentelemetry-su
 - starter 在启动时加载 `cosec.authorization.routes.location` 列出的路由映射（默认 `classpath:cosec-routes.json`，逗号分隔）。映射缺失或无效，或者有两个路由可能匹配同一个请求，都会让启动失败。默认位置也是如此：没有路由映射的 WebFlux 或 WebMvc 服务要把该属性设为空。网关宿主不加载路由映射。
 - 使用 `openapi-support` 和 Spring Boot Actuator 时，`cosecServiceGenerator` 端点从服务的 OpenAPI 描述生成两份文档：`routes` 是作为 `cosec-routes.json` 随服务发布的路由映射，`app` 是通过控制面发布的应用文档（目录与权限策略）。
 
-文件按严格模式读取：未知或缺失的字段都会让它失败（[`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/route/RouteMapCodec.kt)）。应用文档和目录见[角色权限](../policies/role-permissions.md)。
+文件按严格模式读取：未知或缺失的字段都会让它失败（[`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/core/src/main/kotlin/me/ahoo/cosec/route/RouteMapCodec.kt)）。应用文档和目录见[角色权限](../policies/role-permissions.md)。
 
 **下一步：** 如何提出并合入修改，见 [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md)；修改 CoSec 的构建规则与不变量，见 [`AGENTS.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/AGENTS.md)。

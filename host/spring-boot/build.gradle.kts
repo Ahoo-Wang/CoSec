@@ -1,0 +1,100 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+plugins {
+    alias(libs.plugins.kotlin.spring)
+    kotlin("kapt")
+}
+java {
+    registerFeature("webmvcSupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "webmvc-support", version.toString())
+    }
+    registerFeature("webfluxSupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "webflux-support", version.toString())
+    }
+    registerFeature("gatewaySupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "gateway-support", version.toString())
+    }
+    registerFeature("oauthSupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "oauth-support", version.toString())
+    }
+    registerFeature("cacheSupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "cache-support", version.toString())
+    }
+    registerFeature("ip2regionSupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "ip2region-support", version.toString())
+    }
+    registerFeature("opentelemetrySupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "opentelemetry-support", version.toString())
+    }
+    registerFeature("micrometerSupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "micrometer-support", version.toString())
+    }
+    registerFeature("openapiSupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "openapi-support", version.toString())
+    }
+    registerFeature("controlSupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "control-support", version.toString())
+    }
+    registerFeature("kafkaSupport") {
+        usingSourceSet(sourceSets[SourceSet.MAIN_SOURCE_SET_NAME])
+        capability(group.toString(), "kafka-support", version.toString())
+    }
+}
+dependencies {
+    kapt(platform(project(":dependencies")))
+    api(project(":core"))
+    api(project(":jwt"))
+    api(project(":runtime"))
+    "webmvcSupportImplementation"(project(":webmvc"))
+    "webfluxSupportImplementation"(project(":webflux"))
+    "webfluxSupportImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+    "gatewaySupportImplementation"(project(":gateway"))
+    "oauthSupportImplementation"(project(":social"))
+    "cacheSupportImplementation"(project(":cocache"))
+    "cacheSupportImplementation"("org.springframework.boot:spring-boot-data-redis")
+    "cacheSupportImplementation"("me.ahoo.cocache:cocache-spring-boot-starter")
+    "opentelemetrySupportImplementation"(project(":opentelemetry"))
+    "ip2regionSupportImplementation"(project(":ip2region"))
+    "micrometerSupportImplementation"(project(":micrometer"))
+    "micrometerSupportImplementation"("io.micrometer:micrometer-core")
+    "openapiSupportImplementation"(project(":openapi"))
+    "openapiSupportImplementation"("org.springframework.boot:spring-boot-starter-actuator")
+    "openapiSupportImplementation"("org.springdoc:springdoc-openapi-starter-common")
+    "controlSupportImplementation"(project(":control"))
+    "kafkaSupportImplementation"(project(":kafka"))
+    "kafkaSupportImplementation"("org.springframework.boot:spring-boot-starter-kafka")
+    api("org.springframework.boot:spring-boot-starter")
+    api("org.springframework.boot:spring-boot-starter-jackson")
+    kapt("org.springframework.boot:spring-boot-configuration-processor")
+    kapt("org.springframework.boot:spring-boot-autoconfigure-processor")
+    // SnapshotHealthIndicator: only when the host has actuator.
+    compileOnly("org.springframework.boot:spring-boot-health")
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.boot:spring-boot-health")
+    testImplementation("org.springframework.boot:spring-boot-webflux")
+    testImplementation("org.springframework.boot:spring-boot-starter-data-redis")
+    testImplementation("me.ahoo.cosid:cosid-test")
+    testImplementation("me.ahoo.cocache:cocache-spring-boot-starter")
+    testImplementation("me.ahoo.cocache:cocache-test")
+    testImplementation("org.springframework.cloud:spring-cloud-gateway-server-webflux")
+}

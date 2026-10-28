@@ -1,0 +1,48 @@
+{
+  "rules": [
+    {
+      "id": "MEM-1",
+      "source": "RFC 0004 §4.5.2 (#1027)",
+      "statement": "A token that carries the membership marker together with role or policy claims fails closed: Indeterminate(MembershipUnavailable).",
+      "level": "engine",
+      "guards": [
+        "runtime:MembershipResolverTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MEM-2",
+      "source": "RFC 0004 §4.5.2",
+      "statement": "When the MembershipProvider is missing, fails or times out, the decision is Indeterminate(MembershipUnavailable); it never falls back to the token's claims or to no memberships.",
+      "level": "engine",
+      "guards": [
+        "runtime:MembershipResolverTest",
+        "cocache:MembershipCacheFailureTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MEM-3",
+      "source": "RFC 0004 §4.5.1",
+      "statement": "Membership claims read as 7.x RoleScope: `role` is a role in the default space, `role@space` a role in that space only, and a malformed entry (empty role or space, more than one @, `role@*`) applies in no space.",
+      "level": "engine",
+      "guards": [
+        "core:MembershipClaimsTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "MEM-4",
+      "source": "RFC 0004 §4.5.3",
+      "statement": "After revokeSubject(tenant, principal, issuedBefore), every token of that principal issued before the instant, or up to cosec.authentication.revocation.skew after it, is rejected: by the pipeline and by refresh alike, with the same skew, so a token the pipeline refuses is never renewed.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:TokenAuthenticatorTest#aRevokedSubjectsOlderTokensAreRejected",
+        "core:RevocationReaderTest#subjectRevocation",
+        "core:SubjectRevocationTest#theSkewRevokesTokensIssuedJustAfterTheRevocation",
+        "spring-boot:CoSecJwtAutoConfigurationTest#theRefreshVerifierTakesTheRevocationSkew"
+      ],
+      "pending": null
+    }
+  ]
+}

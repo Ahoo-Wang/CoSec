@@ -1,0 +1,17 @@
+# Rule: ALG-2
+# Mutant: a DENY that fails is ignored instead of making the decision indeterminate
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.* :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+index 5f88243f..351eff23 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+@@ -562,7 +562,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected
+             return
+         }
+         if (pass === Effect.DENY) {
+-            failed(policy, statement, via, error, guard)
++            return
+         } else if (missing && skipped == null) {
+             skipped = Cause.AttributeUnavailable(setOf((error as AttributeMissing).path), ref(policy, statement, via))
+         }

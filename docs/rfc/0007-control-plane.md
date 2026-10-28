@@ -197,7 +197,7 @@ cosec-cocache（CoCacheControlStore）──────────┘      cos
 | `cosec-spring-boot-starter` | feature variant `controlSupport`：装配 `ControlPlane` 与 HTTP 路由（§10.2） | 应用只在需要时引入控制面 |
 | `migrate/` | `bootstrap`；`publish` 改经 `ControlStore` | 唯一在控制面之外写存储的工具（§5.9） |
 
-`control/` 以 Gradle 项目 `:cosec-control`、目录 `control/` 加入，与 `model/`、`engine/`、`runtime/` 的约定一致。
+`control/` 以 Gradle 项目 `:control`、目录 `control/` 加入，与 `model/`、`engine/`、`runtime/` 的约定一致。
 
 ### 5.2 数据
 
@@ -917,7 +917,7 @@ JSON 结构与上面的类型一一对应；`docKey` 在路径中写作 `platfor
 
 - **格式描述**：`cosec-core` 中的 `me.ahoo.cosec.snapshot.format`，一个很小的 Kotlin DSL，逐个声明文档、策略、语句、条件运算符、属性目录类型、绑定、目录、
   限流规则、`provenance` 等的字段、类型、枚举、必填项，以及与编译器一致的"不允许未知字段"。它是纯数据，不用反射。
-- **生成**：Gradle 任务 `:cosec-core:generateSchemas` 把描述写成 `schema/*.schema.json`（键排序、确定性输出）；`:cosec-core:verifySchemas` 挂在 `check` 上，
+- **生成**：Gradle 任务 `:core:generateSchemas` 把描述写成 `schema/*.schema.json`（键排序、确定性输出）；`:core:verifySchemas` 挂在 `check` 上，
   提交的文件与生成结果不同即失败。AGENTS.md 中"`schema/*.schema.json`（no test checks it）"一行随之改为"改格式描述，运行 `generateSchemas`"。
 - **与编解码器绑定**：`SchemaConformanceTest`：① 由描述随机生成合法文档，编译器必须接受（语义规则除外，如悬空引用——生成器只生成自洽的引用）；② 对合法文档做
   单点变异（删必填字段、加未知字段、改类型），schema 校验与编译器必须同时拒绝；③ 仓库里全部示例与测试资源文件两边结论一致。编解码器仍是手写的流式代码
@@ -1095,16 +1095,16 @@ AGENTS.md 在 PR-11 更新：Mental model 的 "Layers" 加上 `control/`，新�
 
 | PR | 标题 | 范围 | 依赖 | 能否提前开工 | 完成标准 |
 |---|---|---|---|---|---|
-| PR-1 | `build: add the cosec-control module` | `control/` 空模块、BOM、ArchUnit（不依赖 Spring、Reactor、Redis 客户端；不引用 `reactor.*`）、`jmh` 源码集 | 本 RFC 获批 | **能** | `:cosec-control:check` 通过；临时引用一个 `reactor.core` 类能让 ArchUnit 失败 |
-| PR-2 | `feat(core): generate JSON schemas from document format descriptors`（**2026-10-26**：此后改格式的 PR 为 RFC 0004 PR-4、RFC 0006 PR-5、本文 PR-4/PR-5 与切换 PR，见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | §10.4：格式描述（覆盖 `main` 当时的文档格式）、`generateSchemas`、`verifySchemas`、`SchemaConformanceTest`；AGENTS.md 的 schema 一行 | 本 RFC 获批 | **能**。之后每个改格式的 PR（RFC 0004 PR-7、RFC 0005 PR-8、RFC 0006 PR-5 等）必须同时改描述，`verifySchemas` 强制 | `:cosec-core:check` 通过；现有 schema 文件由生成得到 |
-| PR-3 | `feat(engine,core): enforce platform boundaries` | §7.6：文档的边界数据与编译规则、`withinBoundary`、`StatementRef.Boundary`、trace；P-B1–P-B3；`boundary` 基准参数 | RFC 0004 PR-2、PR-4；RFC 0005 PR-4 | RFC 0005 PR-4 合入后 | `:cosec-engine:check`、`:cosec-core:check` 通过；§14.1 的 `none` 目标 |
-| PR-4 | `feat(control,cocache): store revisions and publish documents with putIfMatch` | §5：`ControlStore` 与 CoCache 实现、修订记录与链、索引、写入顺序、回滚、回收、反向引用索引、`provenance` 与 schema 加一（**2026-10-26**：按 [RFC 0008](0008-conformance-and-direct-build.md) Q5 不加号，`provenance` 作为可选字段加进唯一的 `schema: 2` 格式）；`RevisionChainTest` | PR-1；RFC 0004 PR-4（三种文档）；RFC 0003 PR-3（已合入） | RFC 0004 PR-4 合入后 | `:cosec-control:check`、`:cosec-cocache:check` 通过（需要 Redis） |
+| PR-1 | `build: add the cosec-control module` | `control/` 空模块、BOM、ArchUnit（不依赖 Spring、Reactor、Redis 客户端；不引用 `reactor.*`）、`jmh` 源码集 | 本 RFC 获批 | **能** | `:control:check` 通过；临时引用一个 `reactor.core` 类能让 ArchUnit 失败 |
+| PR-2 | `feat(core): generate JSON schemas from document format descriptors`（**2026-10-26**：此后改格式的 PR 为 RFC 0004 PR-4、RFC 0006 PR-5、本文 PR-4/PR-5 与切换 PR，见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | §10.4：格式描述（覆盖 `main` 当时的文档格式）、`generateSchemas`、`verifySchemas`、`SchemaConformanceTest`；AGENTS.md 的 schema 一行 | 本 RFC 获批 | **能**。之后每个改格式的 PR（RFC 0004 PR-7、RFC 0005 PR-8、RFC 0006 PR-5 等）必须同时改描述，`verifySchemas` 强制 | `:core:check` 通过；现有 schema 文件由生成得到 |
+| PR-3 | `feat(engine,core): enforce platform boundaries` | §7.6：文档的边界数据与编译规则、`withinBoundary`、`StatementRef.Boundary`、trace；P-B1–P-B3；`boundary` 基准参数 | RFC 0004 PR-2、PR-4；RFC 0005 PR-4 | RFC 0005 PR-4 合入后 | `:engine:check`、`:core:check` 通过；§14.1 的 `none` 目标 |
+| PR-4 | `feat(control,cocache): store revisions and publish documents with putIfMatch` | §5：`ControlStore` 与 CoCache 实现、修订记录与链、索引、写入顺序、回滚、回收、反向引用索引、`provenance` 与 schema 加一（**2026-10-26**：按 [RFC 0008](0008-conformance-and-direct-build.md) Q5 不加号，`provenance` 作为可选字段加进唯一的 `schema: 2` 格式）；`RevisionChainTest` | PR-1；RFC 0004 PR-4（三种文档）；RFC 0003 PR-3（已合入） | RFC 0004 PR-4 合入后 | `:control:check`、`:cocache:check` 通过（需要 Redis） |
 | PR-5 | `feat(control): validate, compile and stage changes` | §6.1–§6.3、§6.7：变更请求与状态机、条目级操作、V1–V5、严格编译、暂存槽、变基、`apply`；N3 的 `limits`/`attributes` 两节 | PR-4；RFC 0005 PR-4（AST 编译与成本）；RFC 0006 PR-4（属性目录） | RFC 0006 PR-4 合入后 | `PublishCompileTest`、`ControlFailClosedTest` |
 | PR-6a | `feat(engine,control): analyze grants`（**2026-10-26 修订（路线图审查）**：从 PR-6 拆出，现在开工，见 [RFC 0008](0008-conformance-and-direct-build.md) §4.5） | §7.4.1–§7.4.4：`GrantAnalyzer`（片段拆分、`specialize`、捕获变量、`disjoint`、收窄判定）；RFC 0005 §5.5 的模式包含（N7，`engine/`）；A6、A7。A5 在 RFC 0004 PR-4 之后加入（这里或 PR-6）；A8 与 `GRT-*` 场景留在 PR-6 | PR-1 ✓（#1032）；RFC 0005 PR-2 ✓（#1036）、PR-3 ✓（#1040） | **能**（2026-10-26 开工） | `GrantAnalyzerTest`（§7.4.6 每一行）、A6、A7 |
 | PR-6 | `feat(engine,control): authorize control-plane writes and analyze grants`（**2026-10-26 修订（路线图审查）**：分析部分移到 PR-6a，本 PR 只剩 §7.1–§7.3、§7.5、接线、A5（如未在 PR-6a 中）、A8 与 `GRT-*` 场景） | §7.1–§7.5：动作与资源、内置控制面策略、硬性规则、`GrantAnalyzer`、收窄判定、审批；RFC 0005 §5.5 的模式包含（N7）；A5–A8 | PR-5；RFC 0005 PR-2（`implies`、A1/A2）、PR-3（模式）；RFC 0006 PR-7（挂起的 `AuthorizationChecker`） | 分析部分在 RFC 0005 PR-2、PR-3 之后即可开工；接线等 RFC 0006 PR-7 | `GrantAnalyzerTest`（§7.4.6 每一行）、A5–A8 |
 | PR-7 | `feat(runtime,control): run shadow windows on candidate documents`（已合入，#1080） | §6.4、§6.5：候选文档、`CandidateSource`、`ShadowListener` 改读候选、`ShadowReportSink` 与 CoCache 实现、实例状态、窗口判定与确认、`propagation` | PR-5；RFC 0006 PR-6（监听器） | RFC 0006 PR-6 合入后 | `ListenerIsolationTest` 扩展；用两个内存实例跑通一个窗口 |
 | PR-8 | `feat(control,core,migrate,kafka): break-glass, tenant self-service and change audit`（已合入，#1087） | §8、§9、§10.5：break-glass、N1/N2 的编译规则、`nomatch` 确认（N6）、`ChangeListener` 与 Kafka 实现、`cosec-migrate bootstrap`/`partition plan`、`publish` 改经 `ControlStore` | PR-6、PR-7；RFC 0004 PR-5（`cosec-migrate`） | PR-6 合入后 | `BreakGlassControlTest`、`ControlTenantIsolationTest`、P12 的控制面形式 |
-| PR-9 | `feat(control,starter): expose the control plane as a library and over HTTP`（**2026-10-26 改动**：starter 装配移进切换 PR；依赖改为 RFC 0006 PR-7） | §10.1–§10.3：`ControlPlane` 门面、HTTP 路由、`controlSupport` feature variant 与属性、AOT hint 与测试、`simulate`/`explain`/`analyze`（`AccessAnalyzer` 重写）；控制面延迟测量（§14.2） | PR-5 到 PR-8；RFC 0006 PR-9（starter 装配 Pipeline） | RFC 0006 PR-9 合入后 | `:cosec-spring-boot-starter:check` 通过（需要 Redis）；§14.2 的数字 |
+| PR-9 | `feat(control,starter): expose the control plane as a library and over HTTP`（**2026-10-26 改动**：starter 装配移进切换 PR；依赖改为 RFC 0006 PR-7） | §10.1–§10.3：`ControlPlane` 门面、HTTP 路由、`controlSupport` feature variant 与属性、AOT hint 与测试、`simulate`/`explain`/`analyze`（`AccessAnalyzer` 重写）；控制面延迟测量（§14.2） | PR-5 到 PR-8；RFC 0006 PR-9（starter 装配 Pipeline） | RFC 0006 PR-9 合入后 | `:spring-boot:check` 通过（需要 Redis）；§14.2 的数字 |
 | ~~PR-10~~ | ~~`test: replay phase 6 against phase 5 with zero differences`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | §12：门槛 D 的回放模式、发布往返性质、随机比较、百万例任务 | PR-3、PR-8、PR-9；RFC 0006 PR-10（基准是第 5 阶段结束时的实现） | RFC 0006 PR-10 合入后 | 用仓库内的合成数据跑通回放与往返 |
 | — | ~~**门槛 D**~~ **已取消（2026-10-26）** | 维护者在本地：对同一批导出跑回放（§12.3） | PR-10 | — | 差异为 0；证据附在 PR-11 |
 | ~~PR-11~~ | ~~`refactor!: make the control plane the only writer of snapshot documents`~~ **并入 RFC 0008 的切换 PR（2026-10-26）** | 删除 §15 X1–X3 的全部项与 `cosecExplain`；`nomatch` 只限平台的规则删除；ArchUnit"快照只有一个写入者"与 Reactor 公开签名规则（M12）；starter 默认装配；文档（§16.3）；AGENTS.md | 门槛 D；PR-1 到 PR-10；RFC 0006 PR-10 | **不能** | 全部模块 `check` 通过；`wiki` 检查通过 |
@@ -1200,6 +1200,6 @@ PR-1、PR-2 可以立即开工；PR-6 的分析部分只等 RFC 0005 PR-2、PR-3
 - 解释、分析与生成器：`spring-boot-starter/.../explain/CoSecExplainEndpoint.kt`、`actuate/CoSecPolicyGeneratorEndpoint.kt`、`actuate/CoSecAppPermissionGeneratorEndpoint.kt`；
   `core/.../analysis/AccessAnalyzer.kt`
 - 代码内检查：`core/.../authorization/AuthorizationChecker.kt`（第 5 阶段改为挂起，RFC 0006 §7.6）
-- 模型：`model/src/main/kotlin/me/ahoo/cosec/model/Binding.kt`、`Ids.kt`、`Memberships.kt`、`scope/Scope.kt`、`scope/ScopeResolver.kt`
+- 模型：`core/model/src/main/kotlin/me/ahoo/cosec/model/Binding.kt`、`Ids.kt`、`Memberships.kt`、`scope/Scope.kt`、`scope/ScopeResolver.kt`
 - schema：`schema/action.schema.json`、`condition.schema.json`、`cosec-app-permission.schema.json`、`cosec-policy.schema.json`、`definitions.schema.json`、`rate-limit-rule.schema.json`
 - 配置：`wiki/operations/configuration.md`（`local-policy.*`、`cache.history.*`、`shadow.*`）、`wiki/operations/storage.md`（策略历史与回滚）

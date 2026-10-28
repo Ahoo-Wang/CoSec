@@ -74,7 +74,7 @@ flowchart LR
 | 未写 | 规则匹配的所有请求共享一个桶。 |
 | 已写 | 每个值一个桶。该值缺失的请求共享它们自己的一个桶。 |
 
-不同文档的规则永远不共享桶：平台规则按自己的 id 计数，应用规则按 `app:<appId>/<id>`，租户规则按 `tenant:<tenantId>/<id>`（[`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt)）。规则 id 不能包含 `:` 或 `/`，所以任何规则都无法指向其他文档的计数器：租户无法消耗或重置平台的配额。
+不同文档的规则永远不共享桶：平台规则按自己的 id 计数，应用规则按 `app:<appId>/<id>`，租户规则按 `tenant:<tenantId>/<id>`（[`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt)）。规则 id 不能包含 `:` 或 `/`，所以任何规则都无法指向其他文档的计数器：租户无法消耗或重置平台的配额。
 
 读取 `subject.id` 的键让所有匿名调用方共享一个桶；请用另一条按 `environment.ip` 计数的规则约束他们。键或条件读取了无法获取的[外部属性](./language.md#external-attributes-and-onmissing)时，规则没有桶：若写了 `onMissing: "nomatch"`（仅平台规则）则跳过，否则按[限流器失败](#failure-behavior)的方式由 `strictFailure` 决定。
 

@@ -41,7 +41,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Model and CoSec-Engine
-        run: ./gradlew cosec-model:clean cosec-engine:clean cosec-model:check cosec-engine:check
+        run: ./gradlew model:clean engine:clean model:check engine:check
 
   cosec-runtime-test:
     name: CoSec Runtime Test
@@ -62,7 +62,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Runtime
-        run: ./gradlew cosec-runtime:clean cosec-runtime:check
+        run: ./gradlew runtime:clean runtime:check
 
   cosec-control-test:
     name: CoSec Control Test
@@ -83,7 +83,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Control
-        run: ./gradlew cosec-control:clean cosec-control:check
+        run: ./gradlew control:clean control:check
 
   cosec-testkit-test:
     name: CoSec Test Kit Test
@@ -104,7 +104,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-TestKit
-        run: ./gradlew cosec-testkit:clean cosec-testkit:check
+        run: ./gradlew testkit:clean testkit:check
 
   cosec-migrate-test:
     name: CoSec Migrate Test
@@ -136,7 +136,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Migrate
-        run: ./gradlew cosec-migrate:clean cosec-migrate:check
+        run: ./gradlew migrate:clean migrate:check
 
   conformance-test:
     name: Conformance Test
@@ -159,6 +159,27 @@ jobs:
       - name: Test the spec conformance suite
         run: ./gradlew conformance:clean conformance:check
 
+  architecture-test:
+    name: Architecture Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Test the architecture rules
+        run: ./gradlew architecture:clean architecture:check
+
   cosec-core-test:
     name: CoSec Core Test
     runs-on: ubuntu-latest
@@ -178,7 +199,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Core
-        run: ./gradlew cosec-core:clean cosec-core:check
+        run: ./gradlew core:clean core:check
 
   cosec-kafka-test:
     name: CoSec Kafka Test
@@ -200,7 +221,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Kafka
-        run: ./gradlew cosec-kafka:clean cosec-kafka:check
+        run: ./gradlew kafka:clean kafka:check
 
   cosec-opentelemetry-test:
     name: CoSec OpenTelemetry Test
@@ -222,7 +243,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-OpenTelemetry
-        run: ./gradlew cosec-opentelemetry:clean cosec-opentelemetry:check
+        run: ./gradlew opentelemetry:clean opentelemetry:check
 
   cosec-jwt-test:
     name: CoSec Jwt Test
@@ -244,7 +265,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Jwt
-        run: ./gradlew cosec-jwt:clean cosec-jwt:check
+        run: ./gradlew jwt:clean jwt:check
 
   cosec-social-test:
     name: CoSec Social Test
@@ -276,7 +297,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Social
-        run: ./gradlew cosec-social:clean cosec-social:check
+        run: ./gradlew social:clean social:check
 
   cosec-cocache-test:
     name: CoSec CoCache Test
@@ -308,7 +329,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-CoCache
-        run: ./gradlew cosec-cocache:clean cosec-cocache:check
+        run: ./gradlew cocache:clean cocache:check
 
   cosec-api-test:
     name: CoSec API Test
@@ -339,7 +360,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec API
-        run: ./gradlew cosec-api:clean cosec-api:check
+        run: ./gradlew api:clean api:check
 
   cosec-gateway-test:
     name: CoSec Gateway Test
@@ -371,7 +392,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec Gateway
-        run: ./gradlew cosec-gateway:clean cosec-gateway:check
+        run: ./gradlew gateway:clean gateway:check
 
   cosec-micrometer-test:
     name: CoSec Micrometer Test
@@ -403,7 +424,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec Micrometer
-        run: ./gradlew cosec-micrometer:clean cosec-micrometer:check
+        run: ./gradlew micrometer:clean micrometer:check
 
   cosec-ip2region-test:
     name: CoSec Ip2region Test
@@ -435,7 +456,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec Ip2region
-        run: ./gradlew cosec-ip2region:clean cosec-ip2region:check
+        run: ./gradlew ip2region:clean ip2region:check
 
   cosec-openapi-test:
     name: CoSec OpenAPI Test
@@ -467,7 +488,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec OpenAPI
-        run: ./gradlew cosec-openapi:clean cosec-openapi:check
+        run: ./gradlew openapi:clean openapi:check
 
   e2e-test:
     name: End-to-end Slice Test
@@ -521,7 +542,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-WebFlux
-        run: ./gradlew cosec-webflux:clean cosec-webflux:check
+        run: ./gradlew webflux:clean webflux:check
 
   cosec-webmvc-test:
     name: CoSec WebMvc Test
@@ -543,7 +564,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-WebMvc
-        run: ./gradlew cosec-webmvc:clean cosec-webmvc:check
+        run: ./gradlew webmvc:clean webmvc:check
 
   cosec-spring-boot-starter-test:
     name: CoSec Spring Boot Starter Test
@@ -575,4 +596,4 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test CoSec-Spring-Boot-Starter
-        run: ./gradlew cosec-spring-boot-starter:clean cosec-spring-boot-starter:check
+        run: ./gradlew spring-boot:clean spring-boot:check

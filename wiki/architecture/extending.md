@@ -333,7 +333,7 @@ service's terms. Mapped requests get the route's action; every other request kee
   (catalog and permission policies) to publish through the control plane.
 
 The file is read strictly: an unknown or missing field fails it
-([`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/route/RouteMapCodec.kt)).
+([`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/core/src/main/kotlin/me/ahoo/cosec/route/RouteMapCodec.kt)).
 App documents and catalogs are in [Role permissions](../policies/role-permissions.md).
 
 **Next:** how to propose and land a change, in [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md), and the build rules and invariants for changing CoSec, in [`AGENTS.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/AGENTS.md).
