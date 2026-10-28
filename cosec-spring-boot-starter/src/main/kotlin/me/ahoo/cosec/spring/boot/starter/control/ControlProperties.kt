@@ -14,6 +14,7 @@
 package me.ahoo.cosec.spring.boot.starter.control
 
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.runtime.event.Delivery
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.util.unit.DataSize
 import java.time.Duration
@@ -29,6 +30,7 @@ class ControlProperties {
     val approval = Approval()
     val breakGlass = BreakGlass()
     val shadow = Shadow()
+    val audit = Audit()
 
     class Http {
         /** Where the control API's routes are served (RFC 0007 §10.2). */
@@ -73,7 +75,23 @@ class ControlProperties {
         var maxDuration: Duration = Duration.ofHours(24)
     }
 
+    class Audit {
+        /** How long every REQUIRED change listener together may take to record a gated step before it fails (503). */
+        var requiredTimeout: Duration = Duration.ofSeconds(5)
+        val kafka = Kafka()
+
+        /** `KafkaChangeListener`, when `kafka-support` and a `KafkaOperations` bean are present. */
+        class Kafka {
+            var enabled: Boolean = true
+            var topic: String = "cosec-control-audit"
+
+            /** `required` makes publishing and break-glass wait for the broker; break-glass needs one REQUIRED listener. */
+            var delivery: Delivery = Delivery.BEST_EFFORT
+        }
+    }
+
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "control"
+        const val KAFKA_AUDIT_PREFIX = "$PREFIX.audit.kafka"
     }
 }
