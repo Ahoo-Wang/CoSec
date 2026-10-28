@@ -19,6 +19,7 @@ import me.ahoo.cosec.cache.RedisApiKeyReader
 import me.ahoo.cosec.cache.RedisApiKeyStore
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -41,6 +42,7 @@ import org.springframework.data.redis.core.StringRedisTemplate
     ],
 )
 @ConditionalOnCoSecEnabled
+@ConditionalOnEnforceMode
 @ConditionalOnProperty(value = [ApiKeyProperties.ENABLED_KEY], havingValue = "true")
 @EnableConfigurationProperties(ApiKeyProperties::class)
 class CoSecApiKeyAutoConfiguration {

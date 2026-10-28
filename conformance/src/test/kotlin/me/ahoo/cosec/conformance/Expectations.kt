@@ -39,6 +39,7 @@ import tools.jackson.databind.node.ObjectNode
  * { "decision": "NotCompiled", "error": "a part of the error message" }
  * { "keys": ["a"], "admits": true, "implies": "YES", "evaluations": { "c1": true } }   // analysis
  * { "status": 200, "proceed": true }                                   // pipeline
+ * { "status": 200, "proceed": true, "identity": { "sub": "alice", ... } } // pipeline of a gateway: what it forwards
  * { "status": 400, "type": "invalid-request" }                         // pipeline, the problem's slug
  * { "outcome": "none" }                                                // pipeline, the caller cancelled
  * { "fragments": [ { "policy": "p", "statement": 0, "action": "a:b", "resource": "r", "verdict": "YES" } ],
@@ -187,6 +188,7 @@ object Expectations {
     private fun answered(outcome: Outcome.Answered): JsonNode = json.objectNode().put("status", outcome.status).apply {
         if (outcome.proceed) put("proceed", true)
         outcome.type?.let { put("type", it) }
+        if (outcome.identity.first) set("identity", outcome.identity.second ?: json.nullNode())
     }
 
     private fun entry(entry: ProtectedEntry): String = when (entry) {

@@ -1,0 +1,67 @@
+{
+  "rules": [
+    "PIP-10"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A client sends its own CoSec-Identity with alice's token: the gateway forwards alice as it verified her, never the client's header. Through the gateway host's filters: the strip, the pipeline's filter and the last hop.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "identity": {},
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "token",
+      "CoSec-Identity": "eyJ2IjoxfQ"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "identity": {
+      "tenant": "acme",
+      "sub": "alice",
+      "app": "",
+      "space": "",
+      "jti": "t1",
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "gateway": {}
+}
