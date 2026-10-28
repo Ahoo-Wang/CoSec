@@ -92,6 +92,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
     `controlSupport`, …), so an application pulls in only what it asks for.
 - **Request path.** Adapter (`PipelineWebFilter`, `PipelineServletFilter`, `PipelineGatewayFilter`) reads
   `HttpFacts` → `Pipeline.evaluate`: normalize the path and read the `CoSec-*` parameters (400 when ambiguous) →
+  route resolution (`routes.resolve`: an unmapped route is `http:<METHOD>` on its path, an `Invalid` one is 400) →
   `Authenticator` → memberships and stage-A attributes → `ScopeResolver` → snapshot view → attribute plan and
   external attributes → flat engine → obligations (rate limits) → `StatusMapping` → REQUIRED, then BEST_EFFORT
   decision listeners → `Outcome`, which the adapter writes (problem+json on refusal). Adapters translate; they never

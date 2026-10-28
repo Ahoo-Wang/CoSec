@@ -126,7 +126,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 
 | `reason` / 指标 `cause` | 原因 | 修复 |
 |---|---|---|
-| `INDETERMINATE: SourceUnavailable` / `source_unavailable`，所有请求都是 | 没有发布平台文档：新的部署，或者 Redis 丢失了它。`cosec-migrate bootstrap` 只写平台租户的文档。在平台文档存在之前，每个请求都是 `503`，控制 API 也一样，就绪状态拒绝流量（[实例未就绪](#instance-is-not-ready)）。 | 用 `cosec-migrate publish` 发布一个（[最初的文档](./storage.md#the-first-documents)）。 |
+| `INDETERMINATE: SourceUnavailable` / `source_unavailable`，所有请求都是 | 没有发布平台文档：新的部署，或者 Redis 丢失了它。`cosec-migrate bootstrap` 只写平台租户的文档。在平台文档存在之前，每个请求都是 `503`，控制 API 也一样。新部署时，就绪状态在第一个平台文档安装前拒绝流量（[实例未就绪](#instance-is-not-ready)）。就绪状态一旦接受流量就不再变化：之后丢失的文档不会让它再次拒绝流量，每个请求都按失败关闭返回 `503`，只有 `cosecSnapshot` 健康指示器变为 DOWN。只有把 `cosecSnapshot` 加入就绪组，它才会让就绪状态变为 DOWN；在 Redis 故障期间，这会把 503 变成连接失败。 | 用 `cosec-migrate publish` 发布一个（[最初的文档](./storage.md#the-first-documents)）。 |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`，只有部分租户 | 该租户在 [`cosec.authorization.snapshot.fail-closed.tenants`](./configuration.md#snapshot) 中，而它的请求读取的最旧文档上次确认距今超过 `fail-closed.max-lag`（`Snapshot lag [<lag>] exceeds the fail-closed bound [<max>] of tenant [<tenant>].`）。 | 恢复 Redis；见[决策使用了旧的修订](#decisions-use-an-old-revision)。 |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable` | 请求需要的某个文档没能及时读到（冷加载时 Redis 宕机或缓慢）、无法解码或编译，或者见过之后又从 Redis 消失。加载失败和文档丢失会连同文档名一起记录：`Loading snapshot document [<doc>] failed.`、`Snapshot document [<doc>] disappeared from the store; failing closed.` | 恢复 Redis，或者发布该文档的一个可读修订（[Redis 不可用时](./storage.md#when-redis-is-unavailable)）。 |
 | `INDETERMINATE: MissingPolicies`、`AmbiguousPolicy` / `missing_policies` | 绑定或附加策略指向文档中未定义的策略，或者租户和平台都定义了同一个策略 id。 | 通过控制面修正文档。 |

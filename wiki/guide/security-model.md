@@ -295,8 +295,9 @@ values has no single value: a DENY on it is Indeterminate (`503`) and an ALLOW o
 ([Attributes](../policies/language.md#attributes)). Request attributes (`request.attributes.<name>`, such as the
 gateway's route id) are set by the host, not the client.
 
-Conditions cannot read the headers that carry credentials: `authorization`, `proxy-authorization`, `cookie`,
-`set-cookie`, `x-api-key` and `cosec-identity`. A condition on one of them does not compile. Otherwise a policy could
+No attribute reference can read the headers that carry credentials: `authorization`, `proxy-authorization`,
+`cookie`, `set-cookie`, `x-api-key` and `cosec-identity`, neither a condition nor a rate limit `key`
+([Headers](../policies/language.md#headers)). A document that reads one does not compile. Otherwise a policy could
 leak another principal's credential through decisions, one character at a time, or trust an identity a client wrote.
 An API key header renamed with `cosec.pipeline.api-key-header` is not on that list.
 

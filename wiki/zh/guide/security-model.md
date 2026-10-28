@@ -204,7 +204,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 
 **请求头是客户端输入。** 条件可以读取请求头（`http.header.<name>`）、`Origin` 和 `Referer`（`http.origin`、`http.referer` 及其主机）：它们全部由客户端写入。针对请求头的 DENY 只是客户端可以省略的提示，针对请求头的 ALLOW 则是客户端可以冒领的授权。以不同的值发送多次的请求头没有单一的值：针对它的 DENY 为 Indeterminate（`503`），针对它的 ALLOW 不匹配（[属性](../policies/language.md#attributes)）。请求属性（`request.attributes.<name>`，例如网关的路由 id）由宿主设置，而不是客户端。
 
-条件不能读取携带凭证的请求头：`authorization`、`proxy-authorization`、`cookie`、`set-cookie`、`x-api-key` 和 `cosec-identity`。针对它们的条件无法编译。否则策略可以通过决策逐字符泄露其他主体的凭证，或者信任客户端写入的身份。用 `cosec.pipeline.api-key-header` 改名后的 API key 头不在这个列表中。
+任何属性引用都不能读取携带凭证的请求头：`authorization`、`proxy-authorization`、`cookie`、`set-cookie`、`x-api-key` 和 `cosec-identity`，条件和限流规则的 `key` 都是如此（[请求头](../policies/language.md#headers)）。读取它们的文档无法编译。否则策略可以通过决策逐字符泄露其他主体的凭证，或者信任客户端写入的身份。用 `cosec.pipeline.api-key-header` 改名后的 API key 头不在这个列表中。
 
 **网关后面的服务。** gateway 模式（`cosec.pipeline.mode=gateway`）的服务不持有密钥和文档：它相信收到的 `CoSec-Identity` 头，自己不做任何决策。只有当网关是唯一能访问该服务的一方时，上面的保证才成立：
 
