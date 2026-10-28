@@ -5,6 +5,11 @@
 > 参考：Wow 的 [06 模块与目录](https://github.com/Ahoo-Wang/Wow/blob/main/documentation/designs/06-modules.md)、`test/architecture` ·
 > 基线：`main` @ `457092c2` · 交付：§7 的 PR-1、PR-2 排在 RFC 0008 PR-5（死代码清理）与 RFC 0010 的 C1–C3 之后，GA 之前合入；PR-3 在 RC 之前
 
+> **2026-10-28 修订（PR-2 盘点）**：端口归**定义它的类型所在的层**，不一律进 `spi`。`ControlStore`（签名用控制面的变更与修订模型、文档模型）、
+> 影子报告存储、`ChangeListener` 留在 `control`/`runtime`；`DecisionListener`（`DecisionEvent` 带引擎的 `FlatTrace` 与 `SnapshotView`、
+> 运行时的 `AuthnResult`）留在 `runtime`。把这些模型搬进 `spi` 会让 `spi` 依赖 `engine` 与 Jackson，违反 §2；改成传字节则是新的抽象，
+> 违反 RFC 0010 Q1。`spi` 只收签名只用 `model` 与 `api` 类型的端口（§3 的表已按此改）。§5 的 `backends` 规则改为显式白名单（下文）。
+
 ## 0. 结论先行
 
 目标是让核心模型稳定、可靠、可扩展：技术的变化只发生在外圈，核心模块的公共 API 不因第三方库、宿主或存储的变化而变化。
@@ -72,7 +77,7 @@ flowchart BT
 | `api/api/` | `:api` | `cosec-api` | 宿主代码会 import 的契约：`SecurityContext`、主体视图、租户、线上契约的值（`CoSec-Identity` 的头名与字段、problem 类型） |
 | `core/model/` | `:model` | `cosec-model` | 决策模型、条件 AST、绑定、属性目录；`CoSecException` |
 | `core/engine/` | `:engine` | `cosec-engine` | 编译后的结构与求值（不变） |
-| `core/spi/` | `:spi` | `cosec-spi` | 全部端口与它们的值类型：快照文档存储、`ControlStore`、`MembershipProvider`、`AttributeProvider`、`RateLimiter`、`RevocationReader`、`ApiKeyReader`、`Authenticator`、`TokenVerifier`、`DecisionListener`、`AuditEventSink`、`RequestGate`；它们的内存实现 |
+| `core/spi/` | `:spi` | `cosec-spi` | 签名只用 `model` 与 `api` 类型的端口及其值：快照文档存储、`MembershipProvider`、`RevocationReader`、`ApiKeyReader`、`TokenVerifier`、`RateLimiter`、`AttributeProvider`、`Authenticator`（含 `Identity` 与声明值）、`RequestGate`（含 `HttpFacts`）、`AuditEventSink`；它们的内存实现。`DecisionListener` 在 `runtime`，`ControlStore`、`ChangeListener` 与影子报告存储在 `control`/`runtime` |
 | `core/runtime/` | `:runtime` | `cosec-runtime` | Pipeline、快照源与视图、文档模型与编译器（`runtime.document`）、身份传递、限流义务、编解码 |
 | `core/control/` | `:control` | `cosec-control` | 控制面 |
 | `backends/cocache/` | `:cocache` | `cosec-cocache` | Redis 上的 `spi` 实现 |
@@ -121,7 +126,7 @@ flowchart BT
 | `annotations`、`api`、`model`、`engine` | 仅标准库 |
 | `spi` | 以上，加 kotlinx-coroutines |
 | `runtime`、`control` | 以上，加 Jackson 与日志门面；不得引用 Reactor、Spring、Servlet、Redis 客户端 |
-| `backends` | `spi` 与自己的技术；不得依赖 `runtime`、`control` |
+| `backends` | `spi` 与自己的技术。例外只经 `test/architecture` 里的数据白名单：`cocache` 以 `compileOnly` 用 `control`（`ControlStore`）与 `runtime`（影子报告存储）；`kafka` 用 `runtime`（`DecisionListener`）与 `control`（`ChangeListener`）。其余一律不得依赖 `runtime`、`control` |
 | `edge`、`extensions` | `spi`、`runtime`；Reactor 只允许出现在这里 |
 | `host` | 全部；Spring 只允许出现在 `host` 与 `edge` |
 | 任何模块的 `main` | 不得依赖 `test/*` 与 `platform/*` |
