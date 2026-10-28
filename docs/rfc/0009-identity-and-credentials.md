@@ -136,7 +136,7 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 
 ## 6. 委托 token 在 8.0 的处理
 
-- `TokenAuthenticator` 遇到带 `act` 声明的 token：`TOKEN_INVALID`（401），审计记 `delegation-unsupported`。`may_act` 只表示"允许被谁代理"，不改变主体，忽略。
+- 带 `act` 声明的 token 在验证器里被拒（`JwtTokenVerifier`，验证与刷新两条路径；`TokenAuthenticator` 只看到 `TokenPrincipal`，读不到原始声明），结果是 `RejectReason.DELEGATION_UNSUPPORTED`：拒绝时为 `TOKEN_INVALID`（401），审计原因码 `DELEGATION_UNSUPPORTED`。自定义的 `TokenVerifier` 或自行解析 token 的 `Authenticator` 承担同样的义务。`may_act` 只表示"允许被谁代理"，不改变主体，忽略。
 - 与外部 IdP 无关地成立：CoSec 自己永远不签发带 `act` 的 token，直到 §7 落地。
 
 ## 7. 委托（8.1，另开 RFC）
