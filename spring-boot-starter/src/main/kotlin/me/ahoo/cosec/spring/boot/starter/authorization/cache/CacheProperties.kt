@@ -29,7 +29,7 @@ import java.time.temporal.ChronoUnit
 class CacheProperties(
     @DefaultValue(CoSec.COSEC) var keyPrefix: String = CoSec.COSEC,
     @NestedConfigurationProperty
-    var token: CacheConfiguration = CacheConfiguration(localMaxAge = Duration.ofSeconds(30), maximumSize = 100_000),
+    var token: CacheConfiguration = CacheConfiguration(),
 ) {
     companion object {
         const val PREFIX: String = CoSec.COSEC_PREFIX + "authorization.cache"
@@ -37,19 +37,26 @@ class CacheProperties(
 }
 
 /**
- * Local (in-process) cache settings. An unset (null) value keeps CoCache's default: 10,000 entries, and a local copy that
- * lives at most 5 minutes.
+ * Local (in-process) cache settings of the revocation caches. The defaults are on the fields, not on the property that
+ * holds them: constructor binding builds this from its own defaults as soon as one key is set, so `maximum-size` alone
+ * must not drop `local-max-age` to CoCache's 5 minutes. A null value keeps CoCache's default.
  */
 data class CacheConfiguration(
     /** How long a local copy lives at most (CoCache's `localMaxAge`): the bound on staleness when an invalidation is lost. */
     @param:DurationUnit(ChronoUnit.SECONDS) @field:DurationUnit(ChronoUnit.SECONDS)
-    var localMaxAge: Duration? = null,
-    var maximumSize: Long? = null,
+    var localMaxAge: Duration? = DEFAULT_LOCAL_MAX_AGE,
+    var maximumSize: Long? = DEFAULT_MAXIMUM_SIZE,
     var initialCapacity: Int? = null,
     /** Drops a local copy not read for this long. A number without a unit is seconds, as the expiry settings always were. */
     @param:DurationUnit(ChronoUnit.SECONDS) @field:DurationUnit(ChronoUnit.SECONDS)
     var expireAfterAccess: Duration? = null,
 ) {
+    companion object {
+        /** How stale a revocation may be on an instance that missed its invalidation message. */
+        val DEFAULT_LOCAL_MAX_AGE: Duration = Duration.ofSeconds(30)
+        const val DEFAULT_MAXIMUM_SIZE: Long = 100_000
+    }
+
     fun toCachePolicy(base: CachePolicy): CachePolicy {
         val local = base.local
         return base.toBuilder()

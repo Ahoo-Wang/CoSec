@@ -52,6 +52,8 @@ class UnknownPropertiesTest {
             "cosec.authentication.enabled=false",
             "cosec.authentication.social.registration.github.client-id=id",
             "cosec.limiter.enabled=true",
+            "cosec.authorization.cache.token.expire-after-write=30",
+            "cosec.authorization.cache.token.expire-unit=SECONDS",
         ).run { context ->
             val message = context.startupFailure!!.messages()
             message.assert().contains("cosec.authentication.enabled -> cosec.authentication.login.enabled")
@@ -59,6 +61,10 @@ class UnknownPropertiesTest {
                 "cosec.authentication.social.registration.github.client-id -> cosec.authentication.login.social."
             )
             message.assert().contains("cosec.limiter.enabled -> removed")
+            message.assert().contains(
+                "cosec.authorization.cache.token.expire-after-write -> cosec.authorization.cache.token.local-max-age"
+            )
+            message.assert().contains("cosec.authorization.cache.token.expire-unit -> removed")
         }
     }
 
