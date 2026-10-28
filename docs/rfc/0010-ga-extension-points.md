@@ -16,18 +16,29 @@
 
 ## 1. 场景检查
 
-| 场景 | 结论 | 依据 |
+"破坏"指破坏已有 API：删除或改变已有的公共类型、方法签名、`cosec.*` 属性、token 与文档格式、控制面 HTTP API 的含义。只是新增能力的特性增强，
+不算破坏。逐个场景问：以后加它，是新增，还是要改已有的？
+
+| 场景 | 以后加入时 | 走哪个接缝 |
 |---|---|---|
-| JWT 签名密钥轮换 | 以后新增 | `cosec.jwt.keys[]`、新的校验器、覆盖 `cosecAuthenticator`（`@ConditionalOnMissingBean`）都是新增 |
-| 外部 IdP（OIDC/JWKS、内省、声明映射） | 以后新增；一处现在改（§3 C3） | 新的 `Authenticator`；`MembershipProvider` 是 `fun interface`，以后加带默认实现的重载即可 |
-| 委托（RFC 8693 `act`） | 以后新增 | RFC 0009 §6 现在拒绝；`CoSec-Identity` 升 v2；`DecisionEvent` 的构造器是 `internal` |
-| mTLS / SPIFFE、请求签名 | 功能到来时设计 | 认证器今天只看到 `Credentials(token, apiKey)`；到时给 `Credentials` 加字段，或进下一个大版本 |
-| 配额 | 功能到来时设计 | 新的规则种类走新的限流实现；第三方 `RateLimiter` 很少，不为它预先抽象 |
-| OpenAPI 校验、请求体大小 | 以后新增 | `RequestGate` 是公共 `fun interface`，可以装饰 |
-| 基于请求体的策略属性 | 功能到来时设计 | 需要适配器缓冲请求体，代价大，按需求再定 |
-| 响应侧义务（字段脱敏） | **现在改（§3 C1）** | 见 §2 |
-| API 发现、SIEM 导出 | 以后新增 | 新的 `DecisionListener` 模块 |
-| 管理控制台 | **现在改（§3 C2）** | 版本号只在 `base-path` 的默认值里 |
+| JWT 签名密钥轮换 | 新增 | 新属性 `cosec.jwt.keys[]`（`secret` 保留）、新的校验器；`cosecAuthenticator` 是 `@ConditionalOnMissingBean` |
+| 外部 IdP（OIDC/JWKS、内省、声明映射） | 新增；线上协议一处现在改（§3 C3） | 新的 `Authenticator` 实现；`MembershipProvider` 是 `fun interface`，带声明的重载以默认方法加入；`RejectReason` 增加常量 |
+| 委托（RFC 8693 `act`） | 新增 | `AuthenticatedPrincipal` 加 `actor` 字段并保留旧构造器；引擎的双重判定是内部实现；`CoSec-Identity` 升 v2（协议本来就带版本）；`DecisionEvent` 的构造器是 `internal` |
+| mTLS / SPIFFE | 新增 | `Credentials`、`HttpFacts` 加可选的 `peer` 字段并保留旧构造器；适配器填充它是内部实现 |
+| 请求签名防重放 | 新增 | `Credentials`/`HttpFacts` 加按需读取的请求体；nonce 存储是新的 SPI |
+| 配额（按天、按月、按套餐） | 新增 | 文档格式加可选的 `quota` 字段；计数用新的 SPI，不扩充已有的 `RateLimiter`，旧的限流实现不会误读新规则 |
+| OpenAPI 校验、请求体大小 | 新增 | `RequestGate` 是公共 `fun interface`，可以装饰；`ProblemType` 增加 413/415 |
+| 基于请求体的策略属性 | 新增 | `AttributeRequest` 加字段并保留旧构造器；`Attribute.Kind` 增加种类 |
+| 响应侧义务（字段脱敏） | 新增；但现在有一个放行隐患（§2、§3 C1） | `Obligation` 是 sealed，增加子类；`Outcome` 增加 `obligations` |
+| API 发现、SIEM 导出 | 新增 | 新的 `DecisionListener` 模块 |
+| 管理控制台 | 新增；版本路径现在顺手改（§3 C2） | 控制面 HTTP API 加新端点；请求与响应体以后加 descriptor |
+| Agent 身份 | 新增 | 即委托（[RFC 0009](0009-identity-and-credentials.md) §7） |
+
+结论：**现有架构的接缝足够，没有一个场景需要破坏已有 API。** 加入时遵守三条常规做法即可：给公共类加字段时保留旧构造器；给用户实现的接口加方法时带默认实现
+（`-Xjvm-default=all-compatibility` 已经打开）；新语义用新 SPI，不改变旧 SPI 的含义。
+
+唯一的细节是公共 SPI 里的 `data class`：加字段会改变 `copy` 与 `componentN`，这对已编译的调用方是二进制破坏。会在 GA 前重写的两个
+（`ApiKey`、`Memberships`，[RFC 0009](0009-identity-and-credentials.md) PR-3）顺手改成普通类，没有额外成本；其余的等真正要加字段时再处理。
 
 ## 2. 唯一的安全问题
 
