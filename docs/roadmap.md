@@ -3,7 +3,7 @@
 > 目标架构见 [RFC 0001](rfc/0001-target-architecture.md)，各阶段的细化设计见各自的 RFC。本文只记录**进度**：每个阶段走到了哪一步、
 > 还差什么、在等谁的决定。决策和理由以 RFC 为准；本文与 RFC 不一致时，以 RFC 为准并修正本文。
 >
-> 更新于 2026-10-27，基线 `main` @ `f7d839e4`（#1093）。
+> 更新于 2026-10-27，基线 `main` @ `60d85012`（#1108）。
 >
 > 面向用户的路线图见 [CoSec 8.0 路线图](https://cosec.ahoo.me/zh/guide/roadmap)（[`wiki/zh/guide/roadmap.md`](../wiki/zh/guide/roadmap.md)）。
 
@@ -154,7 +154,7 @@ PR-3（#1075，`feat(engine,core): enforce platform boundaries`，已合入）�
 
 PR-9（#1091，`feat(control): expose the control plane as a library and over HTTP`，已合入）：`ControlPlane`/`DefaultControlPlane`（`read`、`history`、`diff`、`propose`、`apply`、`rollback`、`rebase`、`startShadow`、`skipShadow`、`approve`、`reject`、`abandon`、`publish`、`get`、`breakGlass`、`simulate`、`explain`、`analyze`、`propagation`），每次调用都经 `ChangeAuthority`，硬性规则在先；`Simulator` 用执法流程自己的部件（`ScopeResolver`、数据面的 `PolicyDocumentCompiler`、`CoSecFlatEngine.evaluate` 的完整 trace），没有第二个求值器（`CTL-3` 改为已实现）；`explain` 按 `SnapshotVersion` 决策，已不保留的修订为 410；决策与 trace 只在调用者能读该文档时点名语句，否则为 `redacted`，`analyze` 只列可读文档并统计隐藏与不透明的数量；`ControlHttp`（不依赖 Web 框架，`ControlBoundaryTest`）实现 RFC 0007 §10.2 的路由，每个路由要求管道放行的 `RequestSecurity`，否则 401；问题类型沿用 RFC 0006 的词汇，加上 `not-found`、`conflict`、`gone`、`precondition-failed`、`unprocessable`、`precondition-required`，401/403/404/500/503 不带 `detail`；AOT：控制面不需要提示，`ControlBoundaryTest` 新增规则，禁止反射式 Jackson 绑定、`Class.forName`、`ServiceLoader` 与 `kotlin.reflect.full`。§14.2 的延迟记在 `docs/perf/rfc-0007-control/README.md`，都在预算内（Redis、0.95 MB 租户文档：`propose` p99 125 ms，`publish` 端到端 p99 313 ms；8 MB 文档未测）。starter 的路由注册与 `controlSupport` 在 S1。`cosec:shadow-read` 已定义，暂无路由使用。
 
-#1095（`fix(control): round-1 review fixes for the control plane`，已合入）：**K1（高）**：变更的 `kind` 由入口决定，不再由请求体决定：`Changes.propose` 只接受 `PUBLISH` 与 `BREAK_GLASS`，`POST /changes` 带 `kind` 字段为 400，`ROLLBACK` 只由 `rollback()` 设置，`MIGRATE`/`BOOTSTRAP` 只存在于 `cosec-migrate` 直接走 `Revisions` 的路径；此前持有写、授权、发布三个权限的操作员可以用 `MIGRATE`/`BOOTSTRAP` 创建可用的 `cosec:root` break-glass 绑定，绕过 `cosec:breakglass`、REQUIRED 变更审计与影子窗口，租户管理员也能借此绕过保留名检查。现在所有 break-glass 规则都按内容判定（`BreakGlassRules.touches`：变更放入 break-glass 绑定，或在其上放入另一个绑定），V5、期限上限、保留名检查对任何 kind 都不豁免，把 break-glass 绑定改成普通绑定也算 break-glass 变更；移除 break-glass 绑定仍只缩小范围、只需 `cosec:write`。**K2（中）**：所有以变更 id 为参数的步骤先过 `Changes.visible`，对不可读的变更与不存在的变更给出同一个 `404 "no change <id>"`（可读 = 租户隔离加该文档的 `cosec:read`，或是变更的作者）；隔离拒绝不再点名文档；没有 `cosec:read` 的人现在得到 404 而不是 403。**K3**：`Approval` 记录批准人的成员关系与属性，发布时重新对当前文档检查批准人的 `cosec:approve`，失败或无法判定则回到 `AWAITING_APPROVAL`；已知限制：成员关系取批准时的快照，IdP 中撤销的角色要等批准过期（`approvalExpireAfter`）才被发现；runtime 新增 `RequestSecurity.asPrincipal(principal, memberships)`。**K4**：`nomatch` 确认的语句摘要包含策略的条件（`StatementDigest.of(statement, policyCondition)`），改变条件即丢弃确认，没有策略条件时摘要不变。新规则 `BRK-5`、`CTL-15`；`ControlReviewFixesTest`。运维要求：影子报告的 key（`{prefix}:shadow:report:{changeId}@{ms}`、`{prefix}:shadow:status:instances`；第 2 轮审查更正了此前写错的 `cosec:…:shadow-report`）里的数据按原样被信任（`ShadowWindows` 直接求和），只有数据面实例可以写这些 key，用 Redis ACL 强制；数据面凭据对 `snapshot:*`、`candidate:*`、`control:*` 只读。同一窗口所有实例的报告共用一个 key，按实例分 key 的修复在第 2 轮审查的跟进 PR 中。
+#1095（`fix(control): round-1 review fixes for the control plane`，已合入）：**K1（高）**：变更的 `kind` 由入口决定，不再由请求体决定：`Changes.propose` 只接受 `PUBLISH` 与 `BREAK_GLASS`，`POST /changes` 带 `kind` 字段为 400，`ROLLBACK` 只由 `rollback()` 设置，`MIGRATE`/`BOOTSTRAP` 只存在于 `cosec-migrate` 直接走 `Revisions` 的路径；此前持有写、授权、发布三个权限的操作员可以用 `MIGRATE`/`BOOTSTRAP` 创建可用的 `cosec:root` break-glass 绑定，绕过 `cosec:breakglass`、REQUIRED 变更审计与影子窗口，租户管理员也能借此绕过保留名检查。现在所有 break-glass 规则都按内容判定（`BreakGlassRules.touches`：变更放入 break-glass 绑定，或在其上放入另一个绑定），V5、期限上限、保留名检查对任何 kind 都不豁免，把 break-glass 绑定改成普通绑定也算 break-glass 变更；移除 break-glass 绑定仍只缩小范围、只需 `cosec:write`。**K2（中）**：所有以变更 id 为参数的步骤先过 `Changes.visible`，对不可读的变更与不存在的变更给出同一个 `404 "no change <id>"`（可读 = 租户隔离加该文档的 `cosec:read`，或是变更的作者）；隔离拒绝不再点名文档；没有 `cosec:read` 的人现在得到 404 而不是 403。**K3**：`Approval` 记录批准人的成员关系与属性，发布时重新对当前文档检查批准人的 `cosec:approve`，失败或无法判定则回到 `AWAITING_APPROVAL`；已知限制：成员关系取批准时的快照，IdP 中撤销的角色要等批准过期（`approvalExpireAfter`）才被发现；runtime 新增 `RequestSecurity.asPrincipal(principal, memberships)`。**K4**：`nomatch` 确认的语句摘要包含策略的条件（`StatementDigest.of(statement, policyCondition)`），改变条件即丢弃确认，没有策略条件时摘要不变。新规则 `BRK-5`、`CTL-15`；`ControlReviewFixesTest`。运维要求：影子报告的 key（`{prefix}:shadow:report:{changeId}@{ms}`、`{prefix}:shadow:status:instances`；第 2 轮审查更正了此前写错的 `cosec:…:shadow-report`）里的数据按原样被信任（`ShadowWindows` 直接求和），只有数据面实例可以写这些 key，用 Redis ACL 强制；数据面凭据对 `snapshot:*`、`candidate:*`、`control:*` 只读。第 2 轮审查的跟进 #1110（已合入）把报告按实例分 key（`{prefix}:shadow:report:{changeId}@{ms}:{instance}`，索引 `{prefix}:shadow:reporters:{changeId}@{ms}`），计数为负即失败，任一实例有 `CANDIDATE_ERROR` 即阻止，缺报告的实例使窗口保持打开；数据面不需要访问 `control:*`；回滚要求 `cosec:read`，永远不带回 break-glass；live break-glass 绑定授出的策略冻结；可读性无法判定的变更答 503；`RequestSecurity.asPrincipal` 改为内部（新规则 `CTL-16`–`CTL-18`、`APR-5`、`BRK-6`、`BRK-7`，见 RFC 0007 §5.6、§6.4、§8 的实现说明）。
 
 ---
 
@@ -168,11 +168,9 @@ PR-9（#1091，`feat(control): expose the control plane as a library and over HT
 | 端到端切片 | `e2e/` 测试模块：快照 → 扁平引擎 → 协程 Pipeline → WebFlux 桥接，真实 CoCache 与 Redis；第一次 JMH/k6 测量（RFC 0008 §4.4.3） | RFC 0005 PR-4 ✓、RFC 0004 PR-4 ✓、PR-4b ✓、RFC 0006 PR-2 ✓ | 已合入（#1056）：快照到 Pipeline 一段与第一次 JMH 测量（`anonymous` 只有 7.0 的 61 %）；计时器修复（#1058）后四个场景为 7.0 的 196–314 %，见 `docs/perf/e2e-slice/`；WebFlux 桥接随 RFC 0006 PR-7（#1070）合入；k6 端到端测量未做；#1073（已合入）测量黑名单与决策监听器经切片的代价，#1096 据此优化 BEST_EFFORT 的交接与阶段 A 黑名单；CI 的 JMH A/B 工作流（#1084 加入，#1090 把默认值调到 1 fork、2 次预热、3 次测量并在运行前估算时长、超过 80 分钟即失败、超时 90 分钟、去掉串行的 concurrency 组，#1094 给作业加 Redis 服务使 `e2e` 与 `cosec-cocache` 的基准能跑）可作首次信号，S1 的门槛仍在空闲机器上测 |
 | ~~RFC 0008 PR-4~~ | ~~切换~~：2026-10-26 拆成 S1–S5（RFC 0008 §4.4.1） | — | — |
 | S1a | `feat(starter): add the 8.0 auto-configuration`（RFC 0008 §4.4 的 S1 拆分，2026-10-27 批准）：加法，可以 revert；8.0 的自动配置类**不**登记进 `AutoConfiguration.imports`，由测试与端到端切片显式加载；没有开关，也没有 7.x 脚手架 | 其余全部实现 PR、端到端切片 | ✅ 已合入（#1097） |
-| S1b | `refactor!: wire the 8.0 path in the starter`：登记 8.0 的自动配置，删除 7.x 的自动配置、L1、L2、L5 的属性与 `init-repository`/`force-refresh`；`cosec-gateway-server` 与 `k8s/` 改到 8.0；`aot-smoke` 作业；不可回退点，带 RFC 0008 §3.9 第 1–5 条的证据 | S1a ✓；§3.9 第 1–5 条 | 未开工。阻塞项见下 |
-| S2 | 删除存储与写入路径（`cosec-cocache`、RFC 0007 X1–X3） | S1 | 未开工 |
-| S3 | 删除 7.x 决策路径（`cosec-core`、`engine/` 按层引擎、适配器、装饰器链） | S2 | 未开工 |
-| S4 | 删除 7.x 契约与匹配器（`cosec-api`、OGNL/SpEL、序列化器） | S3 | 未开工 |
-| S5 | 文档：`wiki/`、`skills/`、`schema/`、AGENTS.md、`upgrading.md` | S1 后开始写；S4 后合入 | 未开工 |
+| S1b | `refactor!: wire the 8.0 path in the starter`：登记 8.0 的自动配置，删除 7.x 的自动配置、L1、L2、L5 的属性与 `init-repository`/`force-refresh`；`cosec-gateway-server` 与 `k8s/` 改到 8.0；`aot-smoke` 作业；不可回退点，带 RFC 0008 §3.9 第 1–5 条的证据 | S1a ✓；§3.9 第 1–5 条 | 草稿 #1104：清单全部完成（含 S1a 第 1 轮审查的 6 项与 S6 守护白名单），`mutationCheck` 17/17；等合并 `main`、把 `SNP-4` 移到 `timing`、在最终 head 上取证据。维护者已授权：证据齐备且全绿即合入（2026-10-27） |
+| S2–S4 | 一个删除 PR（2026-10-27 合并，RFC 0008 §4.4.1）：`refactor!: remove the 7.x storage, decision path, contracts and matchers`，按提交依次删除存储与写入路径（`cosec-cocache`、RFC 0007 X1–X3）、7.x 决策路径（`cosec-core`、`engine/` 按层引擎、适配器、装饰器链）、7.x 契约与匹配器（`cosec-api`、OGNL/SpEL、序列化器） | S1 | 未开工；S1b 合入后派发 |
+| S5 | 文档：`wiki/`、`skills/`、`schema/`、AGENTS.md、`upgrading.md` | 删除 PR 合入后写完并合入 | 未开工 |
 | RFC 0008 PR-5、PR-6 | RC 前清理：按 RFC 0008 §4.6 的清单删除遗留代码、构建配置与文档中的版本沿革，加入守护 G1–G7；清单清空（"保留"项除外）是 RC 前提 | S5；RFC 0008 §6 Q9–Q15 ✓（2026-10-26 批准） | 等 S5（L17、L31 可以提前） |
 | RC 安全审查 | 集成系统的威胁模型审查：多租户隔离、控制面越权与授出分析、break-glass、快照与缓存投毒、problem+json 泄露、DoS；发现全部在 RC 前修复（RFC 0008 §3.9） | S1 后开始；PR-5、PR-6 后做最后一遍 | 未开工 |
 
@@ -193,21 +191,17 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 ## 7. 进行中
 
-打开的 PR（2026-10-27）：#1101（`test(control)`，补 #1098 的 detekt 换行；#1098 带着 detekt 失败合入，`main` 的 `CoSec Control Test` 在 #1101 合入前是红的，所以排在队首）。#1075、#1085、#1086、#1088、#1090 至 #1100 都已合入（#1099：手动触发的百万例 `property-stress.yml`；#1100：上一次文档同步）；#1098 修复了 `ChangeListenersTest` 的计时抖动（只有等超时的用例保留 100 ms 的 `requiredTimeout`）。
+2026-10-27 第二批合入：#1109（`jmh-v7-v8.yml` 用 `:cosec-engine` 的项目名；第一次运行因此失败）、#1111（`config/logback-parity.xml` 关掉 `SnapshotSource` 的日志：`SnapshotInstallOrderPropertyTest` 故意注入存储失败，每次一条带栈的 WARN，百万例运行写满了 runner 的磁盘；本地 2000 例从 626 MB 降到 16 KB）、#1110（控制面第 2 轮审查跟进 R1–R6，见 §5）。#1101、#1103、#1105 已合入。
 
-没有 PR 的进行中的工作：
+- **百万例 `property-stress.yml` 在 `main` 上全部通过**：`model`、`engine`、`runtime`、`control`（[40628433863](https://github.com/Ahoo-Wang/CoSec/actions/runs/40628433863)），`cosec-core`（#1111 之后重跑，[40635399876](https://github.com/Ahoo-Wang/CoSec/actions/runs/40635399876)）。S1b 的证据在它自己的最终 head 上再跑一次。
+- #1108（`fix(runtime)`，N3 重新编译覆盖加载中的槽位，审查发现 S4）：按旧平台编译的加载不安装，无法重新编译即 fail closed 并按退避重试；新规则 `SNP-4`（`pending`，S1b 把它移到 `timing`）；变异体拆成 4 个，全部被杀死。已合入。
+- S1b 草稿 #1104：见 §6。合入顺序：#1108 → S1b 合并 `main` 并处理 `SNP-4` → 在最终 head 上跑 `jmh-v7-v8.yml`、`property-stress.yml`、`mutationCheck` → 合入。
+- 观察项（再失败就按"可能放行 / 失效通知丢失"调查，不只重跑）：`PathTemplateValueTest` 的 LEGACY 限流偶发放行（应为 429）；`RedisSnapshotDocumentStoreTest#passesOnInvalidationsOfItsNamespaceFromEveryInstance`（REDIS）在 #1108 的 Codecov 作业失败一次。
+- 后续项：影子报告索引改为只增的 Redis SET（`SADD`，ACL 只放行 `SADD`/`SMEMBERS`），关闭"在控制面第一次看到前被删出索引"的缺口，需要 starter 传入 Redis 客户端（S1b 之后）；`ACT-1`、`BDY-1` 的变异体。
+- #1106、#1107 草稿只作保存，不合入。
+- 协调过程：同一时间只运行一个子会话（共享机器的 CPU，维护者 2026-10-27）；CI 上的运行不受此限。
 
-- 三个过时变异体的改写，以及 `cosec-core` 百万例运行的原生线程耗尽（本地观察到，通过阅读代码修复；S1b 的阻塞项）：草稿 PR #1103（分支 `claude/evidence-mutants-threads`，剩余事项见 PR 描述）。百万例运行只在 CI 的 `property-stress.yml`（#1099）上进行。
-- S1b 草稿 #1104：已登记 8.0 的自动配置并删除 starter 中 7.x 的自动配置，剩余事项见 PR 描述。
-- #1097（S1a）第 1 轮审查与 #1095 第 2 轮审查已完成（只读，2026-10-27），没有外部可利用的问题。必须在 S1b 合入前修复的三个中等问题：S1 控制面在重新加载失败时按旧版本文档做检查（`SourceConfirmation.confirm`）；S2 `CONFIG GET` 失败时 `SNP-3` 静默放过；S3 数据面没有装配影子记录器与上报器。这三项与 S5（`simulate`/`explain` 未完全走执法流程）、S7（WebMvc 控制路由先读整个请求体；网关宿主上没有 `PipelineWebFilter`）以及无条件开启吊销，都并入 S1b（#1104）。
-- 待派发（下一个会话）：control/conformance/wiki 的审查跟进 PR：R1 影子报告按实例分 key 与 `wiki/operations/storage.md` 的 ACL 说明；S4 N3 重新编译包括加载中的槽位；S6 `RuleCoverage` 的守护规则白名单；R2 K3 记录非字符串属性；R6 不确定时答 503 而不是 404；R3 `RequestSecurity.asPrincipal` 改为内部；R4/R5 回滚与 break-glass 绑定策略。不碰 starter。
-- `jmh-v7-v8.yml`：在 CI 上对比 v7 与 v8 性能的手动工作流（#1105，已开启自动合并）；场景是 7.x 与 8.0 都有的 pipeline（global、role、none、anonymous）与授权（global、role、none），每个场景 v8/v7 的中位数比例不低于 100 % 即通过。合入后才能第一次触发。
-- #1101 已合入（`main` 的 detekt 失败已修复）。#1103 在补 `codecov/patch`（`close()` 新分支的测试），自动合并已开启。
-- #1106（草稿）：7.0 基线会话留在本机的 k6 脚本修改，已推送保存；k6 不再是门槛，可能关闭。
-- #1107（草稿）：协调会话本机留下的 5 个 7.x 探查测试，已推送保存；不合入，可移植的用例改写成一致性场景后关闭。
-- 收尾状态（2026-10-27）：本机代码全部已推送；#1103（已补 `close()` 的覆盖测试）、#1105、本 PR 开着自动合并，CI 通过后合入；#1104（S1b）、#1106、#1107 保持草稿。下次继续：先派发 control/conformance/wiki 的审查跟进 PR，再在 `main` 上触发 `property-stress.yml` 与 `jmh-v7-v8.yml`，运行链接附到 #1104，请维护者确认 S1b。
-
-（#866、#1082 是 Renovate 的 pnpm 升级，不属于路线图。）
+（#866 是 Renovate 的 pnpm 升级，不属于路线图。）
 
 ## 8. 等待维护者的决定
 
@@ -236,6 +230,10 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **不在本机跑压力测试**：S1b 的百万例 `propertyStress` 只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml` 上运行（`gh workflow run property-stress.yml -f ref=<branch>`，#1099），运行链接附在 S1b 的 PR 上，这是 §3.9 的证据 | 2026-10-27 | #1099、`AGENTS.md` 的 Feedback loop |
 | **迭代效率**：本地只跑改动模块的测试与 detekt，完整的多模块 `check` 由 CI 跑（合入仍要求 CI 全绿）；空闲机器只留给 JMH；常规的性能前后对比用 CI 的 JMH A/B 工作流（`jmh-ab.yml`，#1084），S1 的门槛仍在空闲机器上测；Gradle 构建缓存、配置缓存与并行构建（#1085）；机械性任务用较便宜的模型 | 2026-10-27 | 仅记在本文；`AGENTS.md` 的 Feedback loop |
 | **合并冲突逐块解决**，共享文档从不整文件取一边（#1076 曾因此回退 RFC 0008 与路线图，#1077 恢复） | 2026-10-27 | 仅记在本文 |
+| **同一时间只运行一个子会话**：协调者派发的会话串行，避免与其他会话抢占共享机器的 CPU；CI 上的运行不受限 | 2026-10-27 | 仅记在本文 |
+| **影子报告索引**先用"控制面持久化见过的实例"的方案，不为只增 SET 改动 S1b；信任模型写进 `wiki/operations/storage.md` | 2026-10-27 | #1110、RFC 0007 §6.4 |
+| **S1b 合入授权**：证据（#1104 CI 全绿、`mutationCheck` 全部杀死、S1b head 上的百万例 `property-stress.yml`、`jmh-v7-v8.yml` 每个场景 v8 ≥ v7）齐备即由协调者合入；任何一项不满足就停下报告 | 2026-10-27 | #1104 |
+| **S2–S4 合并为一个删除 PR**，按提交分组审查；S5 独立，在它之后 | 2026-10-27 | [RFC 0008 §4.4.1](rfc/0008-conformance-and-direct-build.md) |
 
 ## 10. 尚未派发的下一步
 

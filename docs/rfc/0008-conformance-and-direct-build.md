@@ -556,7 +556,7 @@ RFC 0005 PR-8/PR-9、RFC 0006 PR-9/PR-10、RFC 0007 PR-11。PR 很大，但删�
 token（按 token 与按主体）得到 401 `token-revoked`（#1072）。
 
 **实例按平台的 `limits`/`attributes` 编译（N3，2026-10-26 修订，#1071）。** 控制面编译租户与应用文档时，以平台文档的 `limits` 与 `attributes` 为准；平台文档改变时，
-依赖它的文档要重新编译，并在暂存的变更中报告结果。S1 装配的启动编译与快照加载使用同一套输入，并有一个测试：改动平台的 `limits` 或 `attributes` 后，依赖它的实例文档被重新编译。
+依赖它的文档要重新编译，并在暂存的变更中报告结果。S1 装配的启动编译与快照加载使用同一套输入，并有一个测试：改动平台的 `limits` 或 `attributes` 后，依赖它的实例文档被重新编译。重新编译也覆盖正在加载的文档：按旧平台编译、在平台改变后才完成的加载不会安装，等待它的请求得到重新编译的结果；无法重新编译的文档 fail closed，不保留旧的编译（`SNP-4`，#1108）。
 
 **S1 与 S5 之间文档滞后于代码。** AGENTS.md 要求事实与代码在同一个 PR 中更新；S1–S4 对 S5 列出的页面暂不执行这一条，S5 一次写完。这样做的理由：
 `deploy-wiki.yml` 从 `main` 发布，S5 之前线上文档继续描述用户实际在用的 7.x，而 8.0 没有任何发布。S1–S4 让 S5 清单之外的文档出错时（例如 `pnpm build` 报出死链接），
@@ -565,10 +565,17 @@ token（按 token 与按主体）得到 401 `token-revoked`（#1072）。
 > **2026-10-27 修订（S1 拆成 S1a 与 S1b，维护者批准）**：
 >
 > - **S1a**（`feat(starter): add the 8.0 auto-configuration`，已合入，#1097）：上表 S1 范围中的装配全部做成加法，可以 revert。8.0 的自动配置类**不**登记进 `AutoConfiguration.imports`，测试与端到端切片显式加载它们；没有开关，也没有 7.x 脚手架。完成的继承要求：`noeviction` 检查（`SNP-3`，已有守护）、平台文档缺失 fail closed、固定快照缓存并协调成一个 `localMaxAge`、带启动测试的 `controlSupport`、`explain`/`simulate` 走执法的流程、N3 重新编译并带 starter 测试、actuator 改用 `OpenAPIServiceGenerator`、真实的 `RevocationReader` 并带 starter 测试、`SCP-4` 的 `WebAdapterParityTest` 守护、端到端切片改由 starter 装配。`cosec.authorization.snapshot.eviction-check` 取 `fail`（默认）或 `warn`；`warn` 给禁用 `CONFIG GET` 的托管 Redis，启动时打印以 `!!!` 开头的 WARN。
-> - **S1b**（`refactor!: wire the 8.0 path in the starter`，未开工）：登记 8.0 的自动配置，删除 7.x 的自动配置、L1、L2、L5 的属性与 `init-repository`/`force-refresh`；`cosec-gateway-server` 与 `k8s/` 改到 8.0，`aot-smoke` 作业；它是不可回退点，带 §3.9 第 1–5 条的证据，并在自己的 head 上重跑：百万例运行（2026-10-27 起只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml` 上进行，#1099，不在本机跑；运行链接附在 S1b 的 PR 上）、`:conformance:mutationCheck`、CI 上 `jmh-v7-v8.yml` 的 v7/v8 对比（2026-10-27 起取代空闲机器 JMH 与 k6）。AGENTS.md 的过渡说明随 S1b。S1b 同时处理仍为 `pending` 的 `SNP-1`、`SNP-2`、`ACT-1`、`PIP-1`。S1b 的后续项：补上 BDY-1（平台边界）缺的变异体。
+> - **S1b**（`refactor!: wire the 8.0 path in the starter`，草稿 #1104）：登记 8.0 的自动配置，删除 7.x 的自动配置、L1、L2、L5 的属性与 `init-repository`/`force-refresh`；`cosec-gateway-server` 与 `k8s/` 改到 8.0，`aot-smoke` 作业；它是不可回退点，带 §3.9 第 1–5 条的证据，并在自己的 head 上重跑：百万例运行（2026-10-27 起只在手动触发的 CI 工作流 `.github/workflows/property-stress.yml` 上进行，#1099，不在本机跑；运行链接附在 S1b 的 PR 上）、`:conformance:mutationCheck`、CI 上 `jmh-v7-v8.yml` 的 v7/v8 对比（2026-10-27 起取代空闲机器 JMH 与 k6）。AGENTS.md 的过渡说明随 S1b。S1b 同时处理仍为 `pending` 的 `SNP-1`、`SNP-2`、`ACT-1`、`PIP-1`。S1b 的后续项：补上 BDY-1（平台边界）缺的变异体。
 > - **S1b 的阻塞项（2026-10-27）**：三个过时的变异体（`atr-3`、`brk-4`、`pip-2`）已改写、能重新应用，PR 待开；`cosec-core` 的百万例运行把原生线程耗尽（在本地观察到），原因是 `SnapshotSource.close()` 不等自己的线程，修复（`close()` 最多等 5 秒）与上面的变异体放在同一个 PR（草稿 #1103）；性能证据改为 CI 上的 `jmh-v7-v8.yml` 对比（v8 ≥ v7，每个场景），不再要求空闲机器 JMH 与 k6。
 > - 新的属性：`cosec.pipeline.{timeout, authentication-timeout, allow-query-token, api-key-header, trace-level}`、`cosec.authorization.scope.app-id`、`cosec.authorization.{membership,attributes,rate-limit}.timeout`、`cosec.authorization.routes.location`、`cosec.authorization.snapshot.*`（`local-max-age`、`revalidate-interval`、`lag-warn`、`lag-escalate`、`fail-closed.{tenants,max-lag}`、`cold-load-timeout`、`max-apps`、`max-tenants`、`prewarm-apps`、`prewarm-tenants`、`compile-threads`、`key-prefix`、`eviction-check`）、`cosec.authentication.revocation.skew`、`cosec.audit.required.timeout`、`cosec.audit.kafka.delivery`、`cosec.control.*`。`key-prefix`（默认 `cosec`）是对 RFC 属性列表的补充。`cosec.jwt.token-revocation.enabled=false` 时吊销读接口保持 `NONE` 并在启动时警告，S1b 让吊销缓存随 `cacheSupport` 无条件开启。
 > - 依赖：starter 对 `cosec-runtime` 是 `api` 依赖，`controlSupport` 变体引入 `cosec-control`，`webfluxSupport` 增加 `kotlinx-coroutines-reactor`（版本来自 BOM）；只用于测试的依赖是 `spring-boot-webflux`、`spring-boot-data-redis` 与 `cocache-spring-boot-starter`；没有新版本。
+
+> **2026-10-27 修订（S2–S4 合并为一个删除 PR，维护者批准）**：S2、S3、S4 合并成一个 PR
+> `refactor!: remove the 7.x storage, decision path, contracts and matchers`，范围是上表三行之和，§4.4.2 中分给 S2–S4 的项都归它。理由：S1b 之后 7.x 代码不再被装配，
+> 删除由编译器驱动，正确性由一致性套件、变异体与各模块的 `check` 守护，一次运行即可；按模块分步时每个中间状态都要能编译，有时要留临时胶水；
+> S1b 已是不可回退点，分步换不来更安全的回退；协调者同一时间只运行一个子会话，三轮串行的实现、CI 与两轮审查合成一轮。PR 内按原来的次序分成有序的提交
+> （存储与写入 → 决策路径 → 契约与匹配器），审查逐个提交进行，重点是被删的东西 8.0 是否在用、留下的代码是否改了语义；合入门槛不变（全部模块的 `check`）。
+> S5 仍然独立，在删除 PR 合入后写完并合入；RC 前清理（PR-5、PR-6）在 S5 之后。下文与 RFC 0001/0008 其余部分中的"S2–S4"均指这个 PR。
 
 #### 4.4.2 对照（2026-10-26 修订（路线图审查））
 
