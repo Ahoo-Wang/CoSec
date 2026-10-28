@@ -325,7 +325,20 @@ class ControlHttp(private val plane: ControlPlane) {
     }
 
     private fun simulated(node: JsonNode): SimulatedRequest {
-        node.only("tenant", "principal", "roles", "policies", "app", "space", "action", "resource", "remoteIp", "time")
+        node.only(
+            "tenant",
+            "principal",
+            "roles",
+            "policies",
+            "app",
+            "space",
+            "action",
+            "resource",
+            "remoteIp",
+            "time",
+            "headers",
+            "requestAttributes",
+        )
         val action = node.need("action").text().split(':', limit = 2).takeIf { it.size == 2 }
             ?: throw IllegalArgumentException("An action is service:verb.")
         return SimulatedRequest(
@@ -339,6 +352,12 @@ class ControlHttp(private val plane: ControlPlane) {
             resource = resource(node.need("resource").text()),
             remoteIp = node.get("remoteIp")?.text().orEmpty(),
             time = node.get("time")?.let { Instant.parse(it.text()).toEpochMilli() } ?: System.currentTimeMillis(),
+            headers = node.get("headers")?.properties()?.associate { (name, value) ->
+                name to if (value.isArray) value.values().map { it.text() } else listOf(value.text())
+            }.orEmpty(),
+            requestAttributes = node.get("requestAttributes")?.properties()?.associate { (name, value) ->
+                name to value.text()
+            }.orEmpty(),
         )
     }
 

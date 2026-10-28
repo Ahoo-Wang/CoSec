@@ -258,7 +258,7 @@ object ChangeRunner : ScenarioRunner {
         private suspend fun simulate(argument: JsonNode): String = try {
             argument.only("by", "request", "candidate")
             val request = argument.required("request").also {
-                it.only("tenant", "principal", "roles", "app", "space", "action", "resource")
+                it.only("tenant", "principal", "roles", "app", "space", "action", "resource", "headers", "requestAttributes")
             }
             val action = request.required("action").text().split(':', limit = 2)
             val resource = request.required("resource").text().split('/', limit = 2)
@@ -272,6 +272,8 @@ object ChangeRunner : ScenarioRunner {
                 action = Action(action[0], action[1]),
                 resource = Resource(resource[0], resource.getOrElse(1) { "" }, emptyMap()),
                 time = clock.now.toEpochMilli(),
+                headers = request.get("headers")?.fields().orEmpty().mapValues { (_, value) -> value.strings() },
+                requestAttributes = request.get("requestAttributes")?.fields().orEmpty().mapValues { (_, value) -> value.text() },
             )
             val result = plane.simulate(
                 by(argument, SnapshotKey.Tenant(tenant.value)),
