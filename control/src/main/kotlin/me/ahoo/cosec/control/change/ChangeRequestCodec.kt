@@ -383,6 +383,13 @@ object ChangeRequestCodec {
                 ifMatch
             )
             "removeRateLimit" -> Operation.RemoveRateLimit(node.need("id").text(), ifMatch)
+            else -> section(node, op)
+        }
+    }
+
+    /** The operations on a document's sections, which have no `ifMatch`. */
+    private fun section(node: JsonNode, op: String): Operation {
+        return when (op) {
             "putCatalog" -> Operation.PutCatalog(node.get("catalog")?.let { PolicyDocumentCodec.decodeCatalog(it) })
             "setLimits" -> Operation.SetLimits(
                 node.get("limits")?.let {

@@ -110,76 +110,57 @@ object Operations {
 
         fun apply(path: String, operation: Operation) {
             when (operation) {
-                is Operation.PutPolicy -> {
-                    val id = operation.policy.id.value
-                    if (ifMatch(path, operation.ifMatch, policies[id]?.let(EntryDigest::of))) {
-                        policies[id] = operation.policy
-                    }
-                }
+                is Operation.PutPolicy ->
+                    put(path, policies, operation.policy.id.value, operation.policy, operation.ifMatch, EntryDigest::of)
+                is Operation.RemovePolicy ->
+                    remove(path, "policy", policies, operation.id.value, operation.ifMatch, EntryDigest::of)
+                is Operation.PutBinding ->
+                    put(path, bindings, operation.binding.id.value, operation.binding, operation.ifMatch, ::digest)
+                is Operation.RemoveBinding ->
+                    remove(path, "binding", bindings, operation.id.value, operation.ifMatch, ::digest)
+                is Operation.PutRateLimit ->
+                    put(path, rateLimits, operation.rule.id, operation.rule, operation.ifMatch, EntryDigest::of)
+                is Operation.RemoveRateLimit ->
+                    remove(path, "rate limit", rateLimits, operation.id, operation.ifMatch, EntryDigest::of)
+                else -> section(path, operation)
+            }
+        }
 
-                is Operation.RemovePolicy -> remove(
-                    path,
-                    "policy",
-                    policies,
-                    operation.id.value,
-                    operation.ifMatch,
-                    EntryDigest::of
-                )
-                is Operation.PutBinding -> {
-                    val id = operation.binding.id.value
-                    if (ifMatch(path, operation.ifMatch, bindings[id]?.let(::digest))) {
-                        bindings[id] = operation.binding
-                    }
-                }
-
-                is Operation.RemoveBinding -> remove(
-                    path,
-                    "binding",
-                    bindings,
-                    operation.id.value,
-                    operation.ifMatch,
-                    ::digest
-                )
-                is Operation.PutRateLimit -> {
-                    val id = operation.rule.id
-                    if (ifMatch(path, operation.ifMatch, rateLimits[id]?.let(EntryDigest::of))) {
-                        rateLimits[id] = operation.rule
-                    }
-                }
-
-                is Operation.RemoveRateLimit -> remove(
-                    path,
-                    "rate limit",
-                    rateLimits,
-                    operation.id,
-                    operation.ifMatch,
-                    EntryDigest::of
-                )
+        private fun section(path: String, operation: Operation) {
+            when (operation) {
                 is Operation.PutCatalog -> section(path, DocumentKind.APP, "only an app document has a catalog") {
                     catalog = operation.catalog
                 }
 
-                is Operation.SetLimits -> section(
-                    path,
-                    DocumentKind.PLATFORM,
-                    "only the platform document has limits"
-                ) {
+                is Operation.SetLimits -> section(path, DocumentKind.PLATFORM, "only the platform document has limits") {
                     limits = operation.limits
                 }
 
-                is Operation.SetAttributes -> section(
-                    path,
-                    DocumentKind.PLATFORM,
-                    "only the platform document declares attributes"
-                ) {
-                    attributes = operation.attributes
-                }
+                is Operation.SetAttributes ->
+                    section(path, DocumentKind.PLATFORM, "only the platform document declares attributes") {
+                        attributes = operation.attributes
+                    }
 
                 is Operation.SetBoundary -> if (kind == DocumentKind.APP) {
                     findings += Finding("OPERATION", path, "an app document names no boundary", UNPROCESSABLE)
                 } else {
                     boundary = operation.boundary
                 }
+
+                else -> error("Not a section operation: $operation")
+            }
+        }
+
+        private fun <T> put(
+            path: String,
+            entries: MutableMap<String, T>,
+            id: String,
+            value: T,
+            ifMatch: String?,
+            digest: (T) -> String,
+        ) {
+            if (ifMatch(path, ifMatch, entries[id]?.let(digest))) {
+                entries[id] = value
             }
         }
 

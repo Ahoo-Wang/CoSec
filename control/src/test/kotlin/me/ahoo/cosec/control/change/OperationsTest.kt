@@ -33,7 +33,15 @@ class OperationsTest {
     )
 
     private fun document(vararg rules: RateLimitSource) =
-        PolicyDocument(DocumentKind.TENANT, "acme", 1, Instant.EPOCH, emptyList(), emptyList(), rateLimits = rules.toList())
+        PolicyDocument(
+            DocumentKind.TENANT,
+            "acme",
+            1,
+            Instant.EPOCH,
+            emptyList(),
+            emptyList(),
+            rateLimits = rules.toList()
+        )
 
     @Test
     fun `rate limits are put, removed and diffed`() {

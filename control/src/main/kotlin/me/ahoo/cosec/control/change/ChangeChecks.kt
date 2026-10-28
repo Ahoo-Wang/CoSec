@@ -15,9 +15,9 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
-import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.snapshot.SnapshotDigest
 import me.ahoo.cosec.snapshot.SnapshotFormatException
