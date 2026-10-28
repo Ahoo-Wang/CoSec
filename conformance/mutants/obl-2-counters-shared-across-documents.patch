@@ -1,0 +1,19 @@
+# Rule: OBL-2
+# Mutant: every document's rules count in the platform's buckets, so a tenant rule spends the platform's counter of the same id
+# Tests: :cosec-engine:test --tests me.ahoo.cosec.engine.flat.RateLimitObligationTest :conformance:test
+
+diff --git a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt
+index c8aecb7d..80bc4394 100644
+--- a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt
++++ b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt
+@@ -65,8 +65,8 @@ class CompiledRateLimit internal constructor(
+         /** The id of [id] within the counters, for a rule of the [kind] document of [owner]. */
+         fun counterId(kind: DocumentKind, owner: String, id: String): String = when (kind) {
+             DocumentKind.PLATFORM -> id
+-            DocumentKind.APP -> "app:$owner/$id"
+-            DocumentKind.TENANT -> "tenant:$owner/$id"
++            DocumentKind.APP -> id
++            DocumentKind.TENANT -> id
+         }
+ 
+         internal fun isValidId(id: String): Boolean = ID.matches(id)
