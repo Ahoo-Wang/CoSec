@@ -14,6 +14,7 @@
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import com.auth0.jwt.algorithms.Algorithm
+import me.ahoo.cosec.api.audit.AuditEventSink
 import me.ahoo.cosec.apikey.ApiKeyReader
 import me.ahoo.cosec.apikey.ApiKeyStore
 import me.ahoo.cosec.apikey.InMemoryApiKeyStore
@@ -27,6 +28,7 @@ import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.attribute.AttributeProvider
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.audit.AuditListener
 import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
@@ -42,6 +44,7 @@ import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.cosec.token.RevocationReader
 import me.ahoo.cosec.token.TokenStore
 import me.ahoo.cosid.StringIdGenerator
+import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -71,13 +74,23 @@ class CoSecPipelineAutoConfiguration {
     fun cosecAttributeProviders(providers: ObjectProvider<AttributeProvider>): AttributeProviders =
         AttributeProviders(providers.orderedStream().toList())
 
+    /**
+     * Every [DecisionListener] bean, and each [AuditEventSink] bean as a BEST_EFFORT [AuditListener] named after the
+     * bean (RFC 0006 §9.5.3), so a sink written for 7.x keeps receiving events.
+     */
     @Bean(destroyMethod = "cancel")
     @ConditionalOnMissingBean
     fun cosecDecisionListeners(
         listeners: ObjectProvider<DecisionListener>,
+        beans: ListableBeanFactory,
         requiredListenerProperties: RequiredListenerProperties,
-    ): DecisionListeners =
-        DecisionListeners(listeners.orderedStream().toList(), requiredListenerProperties.timeout.toKotlinDuration())
+    ): DecisionListeners {
+        val sinks = beans.getBeansOfType(AuditEventSink::class.java).map { (name, sink) -> AuditListener.of(sink, name) }
+        return DecisionListeners(
+            listeners.orderedStream().toList() + sinks,
+            requiredListenerProperties.timeout.toKotlinDuration()
+        )
+    }
 
     /**
      * Token and API-key authentication. A token is verified by the JWT algorithm and checked against the revocation
