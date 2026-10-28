@@ -41,8 +41,6 @@ class CacheProperties(
  */
 data class CacheConfiguration(
     var initialCapacity: Int = UNSET.toInt(),
-    @Deprecated("Caffeine has no concurrency level; ignored since CoCache 5.")
-    var concurrencyLevel: Int = UNSET.toInt(),
     var maximumSize: Long = UNSET,
     var expireUnit: TimeUnit = TimeUnit.SECONDS,
     var expireAfterWrite: Long = UNSET,

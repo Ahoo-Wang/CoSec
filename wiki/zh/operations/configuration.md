@@ -17,7 +17,7 @@ description: "每个 cosec.* 配置项、它的默认值以及它改变什么。
 | 配置项 | 类型 | 默认值 | 打开 |
 |---|---|---|---|
 | `cosec.enabled` | boolean | `true` | CoSec 自动配置的一切 |
-| `cosec.authentication.enabled` | boolean | `true` | 认证（`TokenCompositeAuthentication` 和你的 `Authentication` bean） |
+| `cosec.authentication.login.enabled` | boolean | `true` | 登录相关的 bean（`TokenCompositeAuthentication`、你的 `Authentication` bean、社交登录）；不影响请求认证，请求认证总是执行 |
 | `cosec.authentication.social.enabled` | boolean | `true` | 社交登录（`oauth-support`） |
 | `cosec.authorization.enabled` | boolean | `true` | WebFlux 和 WebMvc 的授权过滤器 |
 | `cosec.authorization.gateway.enabled` | boolean | `true` | Spring Cloud Gateway 过滤器（`gateway-support`） |
@@ -114,7 +114,6 @@ OpenTelemetry 追踪没有开关：只要 classpath 上有 `opentelemetry-suppor
 | `expire-after-write` | long，单位为 `expire-unit` | CoCache 的默认值 5 分钟（`token`：`30`） | 本地副本最多存活多久（CoCache 的 `localMaxAge`）：失效消息丢失时陈旧时间的上界。不能设为无限。 |
 | `expire-after-access` | long，单位为 `expire-unit` | 无 | 本地副本这么久没被读取就丢弃。 |
 | `expire-unit` | `TimeUnit` | `SECONDS` | 两个过期设置的单位。 |
-| `concurrency-level` | int | — | 已废弃并被忽略：Caffeine 没有并发级别。 |
 
 这些设置只决定本地副本的大小和寿命。无论这里怎么设，权威存储的条目在 Redis 中都不会过期。
 

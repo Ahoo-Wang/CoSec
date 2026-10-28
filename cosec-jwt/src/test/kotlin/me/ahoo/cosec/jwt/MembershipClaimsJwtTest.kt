@@ -105,13 +105,13 @@ class MembershipClaimsJwtTest {
 
     @Test
     fun currentTokensWithoutTenantParseAsBefore() {
-        val parsed = Jwts.toPrincipal<TokenPrincipal>(sevenXToken(tenantId = null))
+        val parsed = Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(sevenXToken(tenantId = null)))
 
         parsed.javaClass.assert().isEqualTo(SimpleTokenPrincipal::class.java)
         MembershipClaims.tenantOf(parsed).assert().isEqualTo(TenantId.DEFAULT)
-        MembershipClaims.tenantOf(Jwts.toPrincipal<TokenPrincipal>(sevenXToken(tenantId = "")))
+        MembershipClaims.tenantOf(Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(sevenXToken(tenantId = ""))))
             .assert().isEqualTo(TenantId.DEFAULT)
-        MembershipClaims.tenantOf(Jwts.toPrincipal<TokenPrincipal>(sevenXToken("tenant"))).assert().isEqualTo(tenant)
+        MembershipClaims.tenantOf(Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(sevenXToken("tenant")))).assert().isEqualTo(tenant)
         parsed.innermost().assert().isEqualTo(SimplePrincipal("alice", policies, roles, attributes))
     }
 
@@ -122,7 +122,7 @@ class MembershipClaimsJwtTest {
 
     @Test
     fun currentTokensResolveToTheirClaims() {
-        val parsed = Jwts.toPrincipal<TokenPrincipal>(sevenXToken("tenant"))
+        val parsed = Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(sevenXToken("tenant")))
 
         val memberships = resolve(null, parsed)
 
@@ -228,7 +228,7 @@ class MembershipClaimsJwtTest {
                 is Int -> builder.withClaim(MembershipClaims.MARKER_KEY, value)
                 is Boolean -> builder.withClaim(MembershipClaims.MARKER_KEY, value)
             }
-            val parsed = Jwts.toPrincipal<TokenPrincipal>(builder.sign(JwtFixture.ALGORITHM))
+            val parsed = Jwts.toPrincipal<TokenPrincipal>(Jwts.decode(builder.sign(JwtFixture.ALGORITHM)))
 
             MembershipClaims.markerOf(parsed).assert().isEqualTo(text)
             assertThrows<MembershipUnavailableException> { resolve(InMemoryMembershipProvider(), parsed) }

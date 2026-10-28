@@ -15,18 +15,14 @@ package me.ahoo.cosec.spring.boot.starter.authentication
 import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 
-/**
- * Conditional On CoSec Enabled.
- *
- * @author ahoo wang
- */
+/** On `cosec.authentication.login.enabled` (default on): the login beans. */
 @ConditionalOnProperty(
-    value = [ConditionalOnAuthenticationEnabled.ENABLED_KEY],
+    value = [ConditionalOnLoginEnabled.ENABLED_KEY],
     matchIfMissing = true,
     havingValue = "true",
 )
-annotation class ConditionalOnAuthenticationEnabled {
+annotation class ConditionalOnLoginEnabled {
     companion object {
-        const val ENABLED_KEY = AuthenticationProperties.PREFIX + ENABLED_SUFFIX_KEY
+        const val ENABLED_KEY = LoginProperties.PREFIX + ENABLED_SUFFIX_KEY
     }
 }

@@ -18,32 +18,20 @@ import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.PolicyCapable
 import me.ahoo.cosec.api.principal.RoleCapable
 import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
-import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.api.token.TokenTenantPrincipal
 import me.ahoo.cosec.membership.MembershipClaims
 import me.ahoo.cosec.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.tenant.SimpleTenant
-import me.ahoo.cosec.token.PrincipalConverter
 import me.ahoo.cosec.token.SimpleTokenPrincipal
 import me.ahoo.cosec.token.SimpleTokenTenantPrincipal
-import me.ahoo.cosec.token.TokenExpiredException
-import me.ahoo.cosec.token.TokenVerificationException
-import java.util.Date
 
 /**
- * JWT utility functions.
- *
- * This object provides helper methods for JWT operations including:
- * - Token decoding
- * - Principal extraction from tokens
- * - Bearer prefix handling
- *
- * @see JwtTokenVerifier
- * @see JwtTokenConverter
+ * What [JwtTokenVerifier] needs to turn a token into a principal: decoding, which reads a token without checking its
+ * signature, and reading the claims of a token. Internal: only the verifier, after it verified the signature, may turn
+ * a token into a principal (`PIP-11`, `UnverifiedTokenTest`).
  */
-object Jwts : PrincipalConverter {
+internal object Jwts {
     const val TOKEN_PREFIX = "Bearer "
     private val jwtParser = JWT()
 
@@ -59,26 +47,7 @@ object Jwts : PrincipalConverter {
         return jwtParser.decodeJwt(jwtToken)
     }
 
-    /**
-     * Verifies exp/nbf time claims without verifying the signature.
-     * A token without exp is rejected: inject mode must never accept never-expiring tokens.
-     * Comparison uses millisecond precision — strictly tighter than java-jwt's verified path,
-     * which truncates now to whole seconds. Do not soften this without re-reading the design note.
-     */
-    fun verifyTimeClaims(decodedJwt: DecodedJWT) {
-        val expiresAt = decodedJwt.expiresAt ?: throw TokenVerificationException()
-        if (expiresAt.before(Date())) {
-            throw TokenExpiredException()
-        }
-        verifyNotBefore(decodedJwt.notBefore)
-    }
-
-    private fun verifyNotBefore(notBefore: Date?) {
-        if (notBefore != null && notBefore.after(Date())) {
-            throw TokenVerificationException()
-        }
-    }
-
+    /** [decodedAccessToken] as a principal; the caller has verified its signature. */
     fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT): T {
         val accessTokenId = decodedAccessToken.id
         val principalId = decodedAccessToken.subject
@@ -116,19 +85,4 @@ object Jwts : PrincipalConverter {
         }
         return MembershipMarkedPrincipal(principal, marker)
     }
-
-    /**
-     * Convert string token to [TokenTenantPrincipal] without verify.
-     *
-     * @param accessToken accessToken
-     * @param <T> type of TokenPrincipal
-     * @return TokenTenantPrincipal
-     */
-    @JvmStatic
-    fun <T : TokenPrincipal> toPrincipal(accessToken: String): T {
-        val decodedAccessToken = decode(accessToken)
-        return toPrincipal(decodedAccessToken)
-    }
-
-    override fun toPrincipal(accessToken: AccessToken): CoSecPrincipal = toPrincipal(accessToken.accessToken)
 }
