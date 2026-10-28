@@ -1,6 +1,6 @@
 # CoSec
 
-面向 Spring 的多租户响应式安全框架：IAM 风格的策略与基于角色的权限，每个请求都按“拒绝优先”求值。
+面向 Spring 的多租户、非阻塞授权框架：IAM 风格的策略文档与基于角色的权限，每个请求都按“拒绝优先”求值。
 
 
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
@@ -17,32 +17,36 @@
 
 ## 为什么选择 CoSec
 
-- **策略即数据。** 用 JSON 编写策略，支持路径动作和可组合的条件（角色、租户、请求头、IP、表达式）；
-  可在运行时修改，所有实例立即生效。
-- **限流。** 对被放行的请求按 IP、按用户或共享配额限流，由 Redis 全集群计数，并返回 `RateLimit-*` 和 `Retry-After` 响应头。
-- **拒绝处处优先。** 全局策略、主体自身的策略和角色权限按“拒绝优先”合并；未匹配的请求一律拒绝，出错也拒绝。
-- **多租户与角色权限。** 主体可感知租户；按应用定义权限目录，并按空间授予角色。
-- **一条流程，三种技术栈。** Spring WebFlux、Spring MVC 和 Spring Cloud Gateway 共用同一条安全处理流程，响应行为完全一致。
-- **响应式且高性能。** 基于 Project Reactor，单次授权约 2 µs，不阻塞事件循环。
-- **可审计。** 每次决策都会产生审计事件（日志或 Kafka）和 OpenTelemetry Span，并记录做出决定的策略或权限。
+- **策略即数据。** 平台、应用和租户文档都是 JSON：语句作用于动作和资源，条件带类型（角色、租户、应用和空间、IP 段、时间窗口、
+  外部属性），绑定说明每条策略适用于谁。每个实例把文档编译成从 Redis 读取的快照，发布的变更无需重启即可生效。
+- **拒绝处处优先。** 任何文档中命中的 DENY 都压过所有 ALLOW；未匹配的请求一律拒绝；无法做出决策的请求失败即拒绝，返回 `503`。
+- **多租户与角色权限。** 租户拥有自己的文档，每个应用发布自己的权限目录并按空间把权限授予角色，平台边界限定任何租户能放行的范围。
+- **可审查的变更。** 控制面在发布前校验、模拟变更，并用线上流量做影子验证；保留修订记录，可以回滚。
+- **限流。** 按 IP、按用户或共享的配额写成文档中的规则，只由被放行的请求消耗，由 Redis 全集群计数，并返回 `RateLimit-*` 和
+  `Retry-After` 响应头。
+- **一条流程，三种技术栈。** Spring WebFlux、Spring MVC 和 Spring Cloud Gateway 共用同一条处理流程，响应完全一致，错误统一为
+  `application/problem+json`。
+- **高性能且不阻塞。** 每个请求的流程开销约 2 µs，不阻塞事件循环。
+- **可审计。** 每个请求都有一个决策事件（审计日志、Kafka、Micrometer、OpenTelemetry），并记录做出决定的语句和绑定。
 
 ## 如何做出决策
 
 ```mermaid
 flowchart LR
-    R([请求 + JWT]) --> BL{在黑名单中?}
-    BL -->|是| DENY([EXPLICIT_DENY])
-    BL -->|否| ROOT{"root 主体?<br>（仅在开启 root 时）"}
-    ROOT -->|是| ALLOW([ALLOW])
-    ROOT -->|否| L["全局策略<br>主体策略<br>角色权限"]
-    L --> D{命中任何 DENY?}
+    R([请求 + 令牌]) --> BL{在黑名单中?}
+    BL -->|是| DENY([Deny])
+    BL -->|否| D{"绑定策略中<br>有 DENY 命中?"}
     D -->|是| DENY
-    D -->|否| A{命中任何 ALLOW?}
-    A -->|是| ALLOW
-    A -->|否| IMP([IMPLICIT_DENY])
+    D -->|否| U{"有无法检查<br>的内容?"}
+    U -->|是| IND([Indeterminate])
+    U -->|否| A{有 ALLOW 命中?}
+    A -->|否| DENY
+    A -->|是| B{在租户的边界内?}
+    B -->|否| DENY
+    B -->|是| P([Permit])
 ```
 
-被拒绝时，匿名调用方返回 `401`，已认证调用方返回 `403`，触发限流返回 `429`。
+被拒绝时，匿名调用方返回 `401`，已认证调用方返回 `403`；无法决策的请求返回 `503`；被放行但超出限流的请求返回 `429`。
 
 ## 快速开始
 
@@ -53,7 +57,7 @@ dependencies {
         capabilities { requireCapability("me.ahoo.cosec:webflux-support") } // 或 webmvc-support / gateway-support
     }
     implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities { requireCapability("me.ahoo.cosec:cache-support") }   // 基于 Redis 的策略存储
+        capabilities { requireCapability("me.ahoo.cosec:cache-support") }   // Redis：快照、吊销、限流
     }
 }
 ```
@@ -63,19 +67,30 @@ cosec:
   jwt:
     secret: ${COSEC_JWT_SECRET}
   authorization:
-    local-policy:
-      enabled: true          # classpath:cosec-policy/*-policy.json
-      init-repository: true
+    routes:
+      location: ""   # 暂不使用路由映射：请求按 http:<METHOD> 和 http:path:<path> 授权
 ```
+
+Redis 必须使用 `maxmemory-policy noeviction`。发布一份平台文档（这里用 `cosec-migrate publish`）；在它存在之前，所有请求都返回 `503`：
 
 ```json
 {
-  "id": "app", "name": "App", "category": "app", "description": "", "type": "global", "tenantId": "(platform)",
-  "statements": [
-    { "name": "public", "action": ["/auth/login", "/actuator/health"] },
-    { "name": "authenticated", "action": "/api/**", "condition": { "authenticated": {} } },
-    { "name": "admins-only", "effect": "deny", "action": "/api/admin/**",
-      "condition": { "inRole": { "value": "admin", "negate": true } } }
+  "schema": 2, "revision": 1, "publishedAt": "2026-10-28T00:00:00Z",
+  "policies": [
+    { "id": "public", "statements": [
+      { "effect": "allow", "action": "http:POST", "resource": "http:path:/auth/login" },
+      { "effect": "allow", "action": "http:GET", "resource": "http:path:/actuator/health" } ] },
+    { "id": "members", "statements": [
+      { "effect": "allow", "action": "http:*", "resource": "http:path:/api/**",
+        "condition": { "eq": ["subject.authenticated", true] } } ] },
+    { "id": "admins-only", "statements": [
+      { "effect": "deny", "action": "http:*", "resource": "http:path:/api/admin/**",
+        "condition": { "not": { "in": ["admin", "scope.roles"] } } } ] }
+  ],
+  "bindings": [
+    { "id": "public", "subject": "*", "app": "*", "space": "*", "policy": "public" },
+    { "id": "members", "subject": "*", "app": "*", "space": "*", "policy": "members" },
+    { "id": "admins-only", "subject": "*", "app": "*", "space": "*", "policy": "admins-only" }
   ]
 }
 ```
@@ -84,9 +99,9 @@ cosec:
 
 ## 模块
 
-starter 自带核心、JWT 支持和自动配置；各项集成（WebFlux、MVC、Gateway、Redis、OAuth、OpenTelemetry、OpenAPI、
-ip2region、Kafka）都是按需启用的 Gradle 能力。完整列表见[模块](https://cosec.ahoo.me/zh/guide/introduction#modules)。
-开箱即用的网关以容器镜像 `ahoowang/cosec-gateway` 发布。
+starter 自带核心、请求处理流程、JWT 支持和自动配置；各项集成（WebFlux、MVC、Gateway、Redis、控制面、OAuth、OpenTelemetry、
+Micrometer、OpenAPI、ip2region、Kafka）都是按需启用的 Gradle 能力。`cosec-migrate` 用于转换 7.x 数据并发布文档。
+完整列表见[模块](https://cosec.ahoo.me/zh/guide/introduction#modules)。开箱即用的网关以容器镜像 `ahoowang/cosec-gateway` 发布。
 
 ## 文档
 

@@ -1,165 +1,247 @@
 ---
 title: "扩展 CoSec"
-description: "添加自定义条件、动作、仓库、限流后端和钩子。"
+description: "把自己的认证器、成员关系来源、属性提供者、决策监听器、限流器、存储和路由映射接入 8.0 的 Pipeline。"
 ---
 
 # 扩展 CoSec {#extending-cosec}
 
-面向需要 CoSec 未内置行为的开发者。本页列出所有扩展点、它们必须保证的性质（纯粹、不阻塞事件循环、失败即拒绝）以及注册方式。这些保证来自[架构不变量](./overview.md#invariants)；破坏其中任何一条的扩展，都会削弱整个决策。
+面向需要 CoSec 未内置行为的开发者。本页列出 8.0 Pipeline 和控制面的所有扩展点、每个扩展点必须保证的性质，以及 starter 如何接入它们。这些保证来自[架构不变量](./overview.md#invariants)：阻塞线程或隐藏失败的扩展，会削弱每一个决策。
 
 ## 扩展点 {#extension-points}
 
-使用 starter 时，声明一个 bean 就能扩展 CoSec。starter 的 bean 都带 `@ConditionalOnMissingBean`，同类型的 bean 会替换默认实现。不使用 Spring 时，把实现传给使用它的类的构造函数（例如 `SimpleAuthorization`）。
+使用 starter 时，声明一个 Spring bean 就能扩展 CoSec。有些扩展点收集该类型的所有 bean；其余的是单个 bean，替换 starter 的默认实现（`@ConditionalOnMissingBean`）。不使用 Spring 时，把实现交给使用它的类，通常是通过 `PipelineComponents`。
 
-| 扩展点 | 模块 | 替换它来 |
-|---|---|---|
-| `ConditionMatcherFactory`、`ActionMatcherFactory` | `cosec-core` | 为策略语言新增条件或动作类型。 |
-| `PolicyRepository`、`AppRolePermissionRepository` | `cosec-core` | 把策略和角色授权存放在 Redis 以外的地方。 |
-| `BlacklistChecker` | `cosec-core` | 在评估任何策略之前拒绝请求。 |
-| `RootPrincipalMatcher` | `cosec-core` | 决定哪些主体绕过授权。 |
-| `RateLimitRuleProvider`、`RateLimiter` | `cosec-core` | 从别处加载限流规则；在 Redis 或内存以外的地方计数。 |
-| `ShadowPolicyProvider`、`ShadowEventSink` | `cosec-core` | 从别处提供影子候选；把影子差异发送到日志以外的地方。 |
-| `CoSecAuthorizationCustomizer`、`Authorization` | starter、`cosec-api` | 包裹或替换决策。 |
-| `RequestAttributesAppender` | `cosec-core` | 添加条件可以读取的请求属性。 |
-| `SecurityContextParser`、`TokenStore`、`ApiKeyStore` | `cosec-core` | 以其他方式解析主体；把吊销记录或 API key存放在别处。 |
-| `Authentication`、`AbstractSwitchTenantAuthentication`、`SocialUserPrincipalConverter` | `cosec-api`、`cosec-core`、`cosec-social` | 新增登录方式、切换租户、映射社交登录用户。 |
-| `AuditEventSink` | `cosec-api` | 把审计事件发送到你自己的系统。 |
+| 扩展点 | 模块 | 实现它来 | starter 接收 |
+|---|---|---|---|
+| `Authenticator` | `cosec-runtime` | 接受另一种凭证，或替换令牌与 API key 认证。 | 一个 bean，替换内置实现 |
+| `TokenStore`、`RevocationReader` | `cosec-core` | 把被吊销的令牌存放在 Redis 以外的地方。 | 各一个 bean |
+| `ApiKeyReader` | `cosec-core` | 从内存或 Redis 以外的地方查找 API key。 | 一个 bean |
+| `MembershipProvider` | `cosec-core` | 为令牌中不携带成员关系的主体提供角色和附加策略。 | 一个 bean |
+| `AttributeProvider` | `cosec-runtime` | 为条件提供外部属性（`ext.<provider>.<name>`）。 | 所有 bean |
+| `BlacklistSource` | `cosec-runtime` | 说明哪些主体、地址和设备被拦截。 | 一个 bean，包装进 `BlacklistAttributeProvider` |
+| `DecisionListener` | `cosec-runtime` | 观察每一个决策：审计、告警、分析。 | 所有 bean |
+| `AuditEventSink` | `cosec-api` | 接收 7.x 风格的审计事件。 | 所有 bean，作为 `BEST_EFFORT` 监听器 |
+| `RateLimiter` | `cosec-runtime` | 在 Redis 或内存以外的地方计数限流许可。 | 一个 bean，替换内置实现 |
+| `SnapshotDocumentStore` | `cosec-core` | 把策略文档存放在 Redis 以外的地方。 | 一个 bean，不使用 `cache-support` 时 |
+| `BridgeContextContributor` | `cosec-runtime` | 把线程本地上下文（日志、追踪）带进 Pipeline。 | 所有 bean |
+| `ChangeListener` | `cosec-control` | 观察或把关控制面变更。 | 所有 bean，使用 `control-support` 时 |
+| `ControlStore` | `cosec-control` | 把控制面的记录保存在 Redis 以外的地方。 | 一个 bean，使用 `control-support` 时 |
+| 路由映射 | `cosec-core` | 让请求得到作用于类型化资源的 `service:verb` 动作。 | `cosec.authorization.routes.location` |
 
 修改这些接口本身（而不是实现它们）对每个实现了它们的应用都是破坏性变更。
 
-没有单独的决策监听器。要观察决策，请包裹授权（见[授权钩子](#authorization-hooks)）或实现 `AuditEventSink`。监听器 API 是 [RFC 0001](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/rfc/0001-target-architecture.md) 中的提案，目前尚不存在。
+适配器本身调用的是 `RequestGate`（`cosec-runtime`）：`Pipeline`，或者在 CoSec 网关后面的服务上
+（`cosec.pipeline.mode=gateway`）是 `IdentityGate`。它不是扩展点：两者都通过 `StatusMapping` 构造每个结果，自己写的
+gate 会成为第二条决策路径。
 
-## 自定义条件和动作 {#custom-conditions-and-actions}
+## 每个扩展都遵守的规则 {#rules-every-extension-follows}
 
-只有内置动作和条件无法表达规则时才新增匹配器；组合 `path`、`bool` 和各种 part 条件能覆盖大多数场景（见[策略语言](../policies/language.md)）。匹配器类型是注册在某个类型名下的**工厂**，策略中以 `{ "<type>": { ...配置 } }` 引用它：
+Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上。这里的每个 SPI 都遵守同一份契约：
+
+- **永远不阻塞调用线程。** 这些 SPI 都是 `suspend` 函数（快照存储返回 `CompletableFuture`）。使用挂起式客户端没有问题。基于阻塞客户端（JDBC、阻塞式 HTTP 客户端）的实现，要把调用移到自己的有界执行器上，例如用 `withContext(myDispatcher)`。CoSec 模块内不得使用 `Dispatchers.IO`（`RuntimeBoundaryTest` 禁止）；在你自己的代码里，也优先使用按依赖规模设定的有界执行器。
+- **用抛出异常报告失败。** 查找失败时，永远不要返回“什么都没有”：空的成员关系、缺失的属性或“未吊销”，都可能把拒绝变成放行。Pipeline 把抛出的异常或超时变成 `Indeterminate`，除非有 DENY 匹配，否则应答 `503`。
+- **不要捕获取消。** 客户端离开会取消请求的协程。重新抛出 `CancellationException`，也不要用 `runCatching` 包裹挂起调用。
+- **保持廉价。** 每次调用都有超时（见[配置](../operations/configuration.md)）；整个请求受 `cosec.pipeline.timeout` 约束。不挂起的本地应答不切换线程，也不设定时器。
+
+## 认证器 {#authenticators}
+
+`Authenticator` 把请求的凭证（`Credentials.token`、`Credentials.apiKey`）变成 `AuthnResult`：
+
+| 结果 | 何时 | 之后 |
+|---|---|---|
+| `Authenticated(principal, method)` | 凭证有效。 | 以该主体求值请求；`method` 写入审计。 |
+| `Anonymous` | 没有凭证。 | 以匿名主体求值请求。 |
+| `Rejected(reason)` | 凭证无效、过期或已吊销。 | 以匿名主体求值请求；被拒绝时以该原因应答 `401`。 |
+| `Unavailable(cause)` | 依赖失败。 | `503`。抛出异常按同样方式处理。 |
+
+`AuthenticatedPrincipal` 包含 id、租户、成员关系来源（令牌的声明，或[成员关系提供者](#memberships)）、属性和 `credential`。条件以 `subject.attributes.<name>` 读取这些属性。`credential`（`Identity.Credential`：方法 `JWT` 或 `API_KEY`、凭证的 id 及其过期时间，从不包含凭证的值）是网关随身份一起转发的内容：在网关上，没有它的主体会被放行，但不会以已认证身份转发给任何后端；凭证没有过期时间的主体会让请求以 `500` 失败。
+
+认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
+
+starter 的默认实现是 `CompositeAuthenticator`：带 API key 的请求只由 API key 认证器判断（开启 `cosec.api-key.enabled` 时），其他请求由 JWT 的 `TokenAuthenticator` 判断。**你的 `Authenticator` bean 会替换掉这一切。** 要接受另一种令牌格式并保留内置认证，自己构建内置认证器并委托给它们：
 
 ```kotlin
-// "businessHours"：在 `zone` 时区内，周一至周五 `from` 到 `to` 点之间匹配。
-class BusinessHoursConditionMatcherFactory : ConditionMatcherFactory {
-    companion object {
-        const val TYPE = "businessHours"
+@Bean
+fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys: ApiKeyReader): Authenticator {
+    val builtIn = CompositeAuthenticator(
+        TokenAuthenticator(JwtTokenVerifier(algorithm), revocations),
+        ApiKeyAuthenticator(keys),
+    )
+    val sessions = SessionTokenAuthenticator() // 你自己的 Authenticator，处理 "Session ..." 令牌
+    return Authenticator { credentials ->
+        if (credentials.token?.startsWith("Session ") == true) {
+            sessions.authenticate(credentials)
+        } else {
+            builtIn.authenticate(credentials)
+        }
     }
-
-    override val type: String = TYPE
-
-    override fun create(configuration: Configuration): ConditionMatcher =
-        BusinessHoursConditionMatcher(configuration)
 }
+```
 
-class BusinessHoursConditionMatcher(configuration: Configuration) :
-    AbstractConditionMatcher(BusinessHoursConditionMatcherFactory.TYPE, configuration) {
-    private val zone = ZoneId.of(configuration.getRequired("zone").asString())
-    private val from = configuration.getRequired("from").asInt()
-    private val to = configuration.getRequired("to").asInt()
+交给 `TokenAuthenticator` 的是普通校验器（`JwtTokenVerifier`），绝不是 `RevocableTokenVerifier`：吊销通过挂起式的 `RevocationReader` 检查。令牌、声明和成员关系对用户意味着什么，见[认证](../integration/authentication.md)。
 
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        val now = ZonedDateTime.now(zone)
-        return now.dayOfWeek < DayOfWeek.SATURDAY && now.hour in from until to
+## 凭证与吊销 {#credentials-and-revocation}
+
+| 扩展点 | 契约 |
+|---|---|
+| `TokenStore` | 吊销的写入侧，供登出使用：`revoke(tokenId, ttl)`、`revokeSubject(tenant, principal, issuedBefore, ttl)`。条目必须比它吊销的刷新令牌存活得更久。无法吊销某主体全部令牌的存储从 `revokeSubject` 抛出异常，紧急吊销因此绝不会悄悄失效。 |
+| `RevocationReader` | 吊销的读取侧，每个已认证请求都会调用：`isRevoked(tokenId)`、`subjectRevokedBefore(tenant, principal)`。两者都是挂起函数，不得阻塞。 |
+| `ApiKeyReader` | `findByHash(hash): ApiKey?`，挂起函数。未知的 key 返回 null；查找失败时抛出异常（请求应答 `503`）。 |
+
+使用 `cache-support` 时，starter 装配 `CoCacheTokenStore` 及其读取器。不使用时，除非你注册了 `TokenStore` 和 `RevocationReader`（或设置 `cosec.jwt.enabled=false`），JWT 会让启动失败。注册 `RevocationReader.NONE` 是明确选择不吊销任何令牌。
+
+吊销读取是失败即拒绝的两个有文档说明的例外之一：存储在降级读取无法应答时，自己报告“未吊销”。`RevocationReader` 抛出的任何异常仍然应答 `503`。这些例外列在[安全模型](../guide/security-model.md)中。
+
+## 成员关系 {#memberships}
+
+令牌以声明的形式携带主体的角色和附加策略；如果它们变化频繁或放不进令牌，令牌改为携带 provider 标记。对这些主体，Pipeline 询问 `MembershipProvider`：
+
+```kotlin
+fun interface MembershipProvider {
+    suspend fun memberships(tenant: TenantId, principal: PrincipalId): Memberships
+}
+```
+
+- 返回 `Memberships(Memberships.Source.PROVIDER, roles, attachments)`：按空间组织的角色（默认空间用 `SpaceId.DEFAULT`）和附加策略 id，保持顺序。其他来源会被拒绝。
+- 未知主体返回 `Memberships(PROVIDER, emptyMap(), emptyList())`。查找失败时抛出异常。
+- 失败、超时（`cosec.authorization.membership.timeout`）或没有提供者，都让请求得到 `503`，绝不当作“没有角色”：没有角色也就意味着绑定到角色的 DENY 都不适用。
+
+`InMemoryMembershipProvider`（`cosec-core`）用于测试。`CoCacheMembershipProvider`（`cosec-cocache`）把你的 `MembershipLoader` 的应答缓存在 Redis 中，所有实例共享；主体的成员关系变化时调用它的 `invalidate`。starter 两者都不注册：把你需要的那个声明为 bean。
+
+## 外部属性 {#external-attributes}
+
+条件可以直接读取请求、主体和作用域。其他任何东西（来自目录服务的部门、风险评分、客户端所在地区）都来自 `AttributeProvider`：
+
+```kotlin
+@Component
+class DirectoryAttributeProvider(private val directory: DirectoryClient) : AttributeProvider {
+    override val attributes = listOf(AttributeDeclaration("ext.directory.department", AttributeType.STRING))
+
+    override val timeout: Duration = 200.milliseconds // kotlin.time；null 表示使用 cosec.authorization.attributes.timeout
+
+    override suspend fun fetch(request: AttributeRequest, names: Set<String>): Map<String, Any> {
+        if (!request.subject.authenticated) {
+            return emptyMap() // 缺省：与它的比较结果为 false
+        }
+        val department = directory.departmentOf(request.subject.tenantId, request.subject.id) // 挂起；失败时抛出异常
+        return if (department == null) emptyMap() else mapOf("ext.directory.department" to department)
     }
 }
 ```
 
 ```json
-"condition": { "businessHours": { "zone": "Asia/Shanghai", "from": 9, "to": 18 } }
+{ "eq": ["ext.directory.department", "finance"] }
 ```
 
-**基类。** 继承 `AbstractConditionMatcher`（处理 `negate`）或 `PartConditionMatcher`（还会提取请求或上下文的 `part`）。动作则继承 `AbstractActionMatcher`（处理 `method`）并实现 `ActionMatcherFactory`。接口位于 `me.ahoo.cosec.policy.condition` 和 `me.ahoo.cosec.policy.action`。
+- **声明每个属性**，形式为 `ext.<provider>.<name>`，并给出类型：`STRING`、`BOOL`、`STRING_SET` 或 `IP`。每个路径在所有提供者中只能声明一次。这些声明构成文档编译所依据的属性目录：读取了无人声明的 `ext.` 路径的策略无法编译。平台文档也可以声明这个目录，让控制面和每个实例保持一致。
+- **在每个主机上注册相同的提供者。** 控制面按平台的声明和它自己主机的提供者检查变更，每个实例按自己的提供者编译。某个实例缺少提供者时，读取它的变更在该实例上会失败：该实例报告 `CANDIDATE_ERROR` 并阻塞影子窗口（[部署网关服务](../operations/deployment.md#before-the-first-request)）。
+- **取值。** 按路径返回值，类型与声明一致。没有返回的路径是*缺省*。类型错误的值、抛出的异常或超时，会让被请求的属性*不可用*，读取它们的每个语句按其 `onMissing` 设置处理（[策略语言](../policies/language.md)）。
+- **阶段。** B 阶段属性（默认）只在引擎的计划表明本请求可能读取它时才获取，发生在作用域解析之后。A 阶段属性在每个请求上都获取，发生在作用域之前，与成员关系一起获取。只有决定要加载什么的属性才用 A 阶段，例如黑名单。
+- **提供者能看到什么。** `AttributeRequest` 包含主体、已解析的作用域（A 阶段为 null）、动作、资源、客户端地址、请求 id 和设备 id，绝不包含其他属性的值。
 
-### 注册工厂 {#registering-a-factory}
+**黑名单**是一个 A 阶段提供者：`BlacklistAttributeProvider(source)` 声明 `ext.blacklist.principal`、`ext.blacklist.ip` 和 `ext.blacklist.device`，被其中任何一个拦截的请求会遇到内置的 DENY `cosec:blacklist`。基于你的存储实现 `BlacklistSource.contains(kind, value)`（主体的值为 `<tenant>:<principal id>`），或使用 `InMemoryBlacklistSource`，并把来源声明为 bean：starter 会把它包装进 `BlacklistAttributeProvider`。没有时，启动以 `INFO` 记录 `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).`。来源失败绝不意味着“未被拦截”：除非有 DENY 匹配，否则请求得到 `503`。
 
-有两种方式，最终都进入同一个注册表（`ConditionMatcherFactoryProvider`、`ActionMatcherFactoryProvider`）：
+使用 `ip2region-support` 时，starter 注册 `Ip2RegionAttributeProvider`（`ext.ip2region.country`、`.province`、`.city`、`.isp`）。
 
-- **`ServiceLoader`**，适用于任何环境。在 `src/main/resources/META-INF/services/me.ahoo.cosec.policy.condition.ConditionMatcherFactory`（或 `…/me.ahoo.cosec.policy.action.ActionMatcherFactory`）中列出工厂类。注册表在首次使用时加载这些条目。
-- **Spring bean**，适用于工厂需要 Spring 管理的依赖时。starter 的 `MatcherFactoryRegister` 在启动时注册所有 `ConditionMatcherFactory` 和 `ActionMatcherFactory` bean，时机早于把本地策略写入仓库。
+## 决策监听器 {#decision-listeners}
 
-同一类型以最后一次注册为准。Spring bean 在 `ServiceLoader` 条目之后注册，因此能可靠地替换内置类型；同一类型的两个 `ServiceLoader` 条目之间则取决于类路径顺序。除非有意替换，不要用两种方式注册同一个类型。
-
-### 匹配器规则 {#rules-for-matchers}
-
-- **不做 I/O，不保存状态。** 匹配器对每个请求都会运行，包括被拒绝的请求，而且可能在事件循环上运行。在构造函数中一次性读取配置。配额应当写成[限流规则](../policies/rate-limiting.md)，而不是匹配器。抛出异常会拒绝请求。
-- **标记会阻塞的匹配器。** 如果条件匹配器必须阻塞（网络或数据库调用），实现 `me.ahoo.cosec.policy.BlockingAware` 并令 `requiresBlocking = true`。`SimpleAuthorization` 随后在 `boundedElastic` 上评估包含它的层，其他层仍留在调用方线程上。组合匹配器只要有任一子匹配器阻塞就必须报告 `true`，`bool` 就是这样做的。动作匹配器从不被检查：它们不能阻塞。
-- **在仅用于评估的运行中跳过副作用。** 保存策略时会用模拟请求把每个条件运行一次来校验，解释决策时也会运行条件。有无法避免的外部副作用的匹配器，要检查 `securityContext.isPolicyEvaluation`（`me.ahoo.cosec.policy`），为 `true` 时跳过副作用。策略和请求数据无法设置这个标记。
-- **路径变量的作用域是所在语句。** 在代码中读取路径变量（`securityContext.getPathVariables()`）的匹配器，加载时的作用域检查看不到，因为该检查只检查配置字符串。每条语句匹配动作之前都会清空路径变量，所以这样的匹配器只能看到它所在语句的 `path` 动作捕获的变量。在策略级或应用权限的条件中、在其他类型的动作下、以及在动作匹配器内部，它什么也看不到。
-
-添加一个测试：通过工厂创建匹配器，检查一次匹配和一次不匹配。如果改动了注册方式，再反序列化一条使用新类型的策略，这样缺少 service 条目或 bean 时测试会失败。
-
-## 授权钩子 {#authorization-hooks}
-
-| 扩展点 | 约定 |
-|---|---|
-| `BlacklistChecker` | `check(request, context): Mono<Boolean>`，`false` 表示被拦截。最先运行，对包括 root 在内的所有主体生效。 |
-| `RootPrincipalMatcher` | `isRoot(principal): Boolean`。根主体绕过所有策略和权限，但不绕过黑名单。starter 默认使用 `RootPrincipalMatcher.NONE`，只有 `cosec.authorization.root-enabled=true` 时才使用 `DEFAULT`（[根主体](../guide/security-model.md#root-principal)）。需要更强的信号（如签名声明）时，请提供自己的实现。 |
-| `CoSecAuthorizationCustomizer` | `customize(authorization): Authorization`。在限流之外、审计和追踪之内包裹 starter 的授权；定制器按 `@Order` 顺序应用。指标就是这样加入的。 |
-| `Authorization` | 替换整条链。替换后的实现不会获得审计、限流或影子模式（追踪仍会包裹它）；需要时自行组合 `AuditingAuthorization`、`RateLimitingAuthorization` 和 `ShadowAuthorization`。 |
-
-装饰器应实现 `DecisionAuthorization` 并转发 `decide(...)`，而不是只实现 `authorize(...)`，这样匹配到的 `VerifyContext` 才能到达审计、追踪和解释。每个装饰器所处的位置见[授权链](./overview.md#authorization-chain)。
-
-## 仓库 {#repositories}
-
-`PolicyRepository` 和 `AppRolePermissionRepository` 是授权读取的数据来源。`cosec-cocache` 基于 Redis 实现了它们；使用其他存储时需要你自己实现。
+`DecisionListener` 观察每一个 `DecisionEvent`：结果与状态码、决策以及做出决策的语句和绑定、文档修订、主体、作用域、动作与资源、每个外部属性的状态（绝不包含值），以及追踪信息。它不能改变决策。
 
 ```kotlin
-interface PolicyRepository {
-    fun getGlobalPolicy(): Mono<List<Policy>>
-    fun getPolicies(policyIds: Set<String>): Mono<List<Policy>>
-    fun setPolicy(policy: Policy): Mono<Void>
-}
+@Component
+class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
+    override val name = "break-glass-alerts" // 在所有监听器中唯一
 
-interface AppRolePermissionRepository {
-    fun getAppRolePermission(appId: AppId, spaceId: SpaceId, roleIds: Set<RoleId>): Mono<AppRolePermission>
+    override suspend fun onDecision(event: DecisionEvent) {
+        if (event.breakGlass) {
+            pager.page("break-glass used by ${event.subject.tenant}/${event.subject.id}")
+        }
+    }
 }
 ```
 
-实现必须遵守以下约定：
+| `delivery` | 投递方式 | 失败时 |
+|---|---|---|
+| `BEST_EFFORT`（默认） | 不挂起地放入监听器自己的有界队列，在请求路径之外处理。队列满时丢弃事件。 | 记录日志并计数；响应不变。 |
+| `REQUIRED` | 在响应之前，与其他 REQUIRED 监听器一起，在 `cosec.audit.required.timeout` 内投递。 | 把 Permit 变成 `503`；其他结果保持原状态码。 |
 
-- **`getPolicies` 只返回找到的策略。** 不要编造占位策略，也不要因为没有某些 id 而失败：`SimpleAuthorization` 会把结果与请求的 id 比较，缺失时以 `MissingPolicyException` 让请求失败。`LocalPolicyInitializer` 也依赖这一约定来判断哪些本地策略还需要写入。
-- **`getGlobalPolicy` 不能悄悄丢弃策略。** 返回所有类型为 `global` 的策略。如果你的存储把索引和内容分开保存，那么有索引而无内容时必须失败：丢弃它可能就丢掉了一条全局 `DENY`，从而扩大访问范围。
-- **失败就是错误。** 读取失败要以错误信号发出，绝不能当作空结果。错误会拒绝请求（`500`）；空结果会被理解为"没有策略"，可能导致放行。
-- **`getAppRolePermission` 只返回在 `appId` 中为 `spaceId` 授予的权限。** 传入的 `roleIds` 已经是主体在该空间生效的角色，并去掉了 `@space` 后缀。绝不能返回在其他应用或空间中授予的权限。应用没有应用权限时返回空的 `Mono`。
-- **不阻塞订阅者。** 返回以非阻塞方式完成 I/O 的 `Mono`，或把阻塞 I/O 移到 `Schedulers.boundedElastic()`。能从内存中应答时就不要切换线程：每个请求都会读取仓库。
-- **写入不能打开扩大访问范围的窗口。** 如果一次写入涉及多个键（内容和索引），请安排写入顺序，使中途的读取方最多看到旧状态或新状态，绝不会看到一条策略被应用到它不该生效的地方。
+- 经由 break-glass 绑定得到的 Permit 至少需要一个 REQUIRED 监听器，否则得到 `503`。
+- REQUIRED 监听器应按 `event.id` 保持幂等：超时的写入可能其实已经成功。
+- 所有 `DecisionListener` bean 都会按 `@Order` 顺序注册，不同时是监听器的每个 `AuditEventSink` bean 也会注册，作为以 bean 名命名的 `BEST_EFFORT` 监听器。starter 会加入审计日志（`LoggingAuditListener`，除非 `cosec.audit.enabled=false`），并在启用相应 feature 时加入 `MetricsListener`、`TracingListener`、`KafkaAuditListener` 和影子监听器。事件、指标和 span 见[可观测性](../operations/observability.md)。
+- `event.evaluationTrace` 是引擎按 `cosec.pipeline.trace-level` 记录的追踪；在默认的 `off` 时为 null。
+- 关闭时，队列中的事件仍会在 `cosec.observability.listener.drain-timeout` 内继续投递。
 
-存储的选择和 Redis 的运维见[存储](../operations/storage.md)。
+## 限流器 {#rate-limiters}
 
-## 限流后端 {#rate-limiter-backends}
+`RateLimiter` 为 Permit 的限流义务计数许可：
 
-| 扩展点 | 约定 |
-|---|---|
-| `RateLimitRuleProvider` | `getRules(): List<RateLimitRule>`。每个已允许的请求都会调用它：请从内存中应答。`RateLimitRuleProvider.of(rules)` 会拒绝重复的 id。 |
-| `RateLimiter` | `tryAcquire(ruleId, bucket, rateLimit): Mono<RateLimitResult>` 从桶中消耗一个许可并报告剩余许可。`RateLimit.resultOf(...)` 根据滑动窗口估算值构建结果。 |
+```kotlin
+fun interface RateLimiter {
+    suspend fun tryAcquire(ruleId: String, bucket: String, limit: RateLimitSpec): RateLimitResult
+}
+```
 
-`RateLimiter` 不能阻塞订阅线程，在 WebFlux 和 Gateway 下那是 Netty 事件循环：阻塞 I/O 请放到 `boundedElastic` 上。失败以错误信号发出；规则的 `strictFailure` 决定是否因此拒绝请求。面向用户的规则、键和失败行为见[限流](../policies/rate-limiting.md)。
+从规则 `ruleId` 的 `bucket` 中按 `limit` 消耗一个许可，并报告剩余数量；`RateLimiter.window(limit)` 给出两个内置限流器都使用的滑动窗口，它的 `resultOf(...)` 构造结果。后端失败时抛出异常：由规则的 `strictFailure` 决定应答 `503` 还是跳过该规则。使用 `cache-support` 且存在 `ReactiveStringRedisTemplate` 时，starter 注册跨实例计数的 `ReactiveRedisRateLimiter`；否则注册按实例计数的 `LocalRateLimiter`。你的 bean 会替换这两者。规则、桶和响应头见[限流](../policies/rate-limiting.md)。
 
-## 影子模式 {#shadow-mode}
+## 快照文档存储 {#snapshot-document-stores}
 
-| 扩展点 | 约定 |
-|---|---|
-| `ShadowPolicyProvider` | `getPolicies()` 和 `getAppPermissions()` 返回候选项，它们替换 id 相同的已生效项，或新增条目。每个被影子评估的请求都会调用它：请从内存中应答，并返回同一个列表实例，以便复用叠加结果。无法加载的候选项要明确报错：被悄悄漏掉的候选项会让影子运行报告"没有差异"。 |
-| `ShadowEventSink` | `publish(diff)` 接收每一条差异。它在请求路径上运行：请转交出去，不要阻塞。 |
+`SnapshotDocumentStore` 是 `SnapshotSource` 读取平台、应用和租户文档的地方：
 
-影子模式的用法见[测试策略](../policies/testing.md#trying-changes-in-shadow-mode)。
+- `read(key)` 可以从本地副本应答（把副本的最大年龄报告为 `localCopyMaxAge`）；`readIfChanged(key, known)` 必须读取权威存储，摘要一致时应答 `Unchanged`；`subscribe(listener)` 在变更可读之后报告变更。
+- 每个方法都不阻塞地返回，且从不抛出异常：失败以异常方式完成 future。存储的值无法解码时，异常的 cause 链中要带有 `SnapshotFormatException`。
+- 永远不要删除文档。一个曾经有文档的键读到“不存在”时，会按失败即拒绝处理。
 
-## 请求与安全上下文 {#request-and-security-context}
+使用 `cache-support` 时，starter 使用 `RedisSnapshotDocumentStore`，控制面也写入同一个 Redis。不使用时，starter 注册 `InMemorySnapshotDocumentStore`；用 `put(key, document)` 放入文档，或者改为声明自己的 `SnapshotDocumentStore` bean。在平台文档就位之前，请求都按失败即拒绝处理。
 
-| 扩展点 | 约定 |
-|---|---|
-| `RequestAttributesAppender` | `append(request): Request`。为每个请求补充属性，条件以 `request.attributes.<name>` 读取；用 `request.mergeAttributes(...)` 返回新请求。 |
-| `SecurityContextParser` | `parse(request): SecurityContext`。凭证无效时抛出 `TokenVerificationException`：调用方被视为匿名，拒绝结果会报告令牌失败。其他异常应答 `500`。`parse` 是同步的，除非开启了令牌吊销或阻塞的 API key存储，否则在调用方线程上运行，所以做 I/O 的解析器在其他情况下不能运行在事件循环上。 |
-| `TokenStore` | `revoke(tokenId, ttl)` 和 `isRevoked(tokenId)`。开启吊销后每个已认证请求都会查询它：查询要足够便宜。记录的存活时间必须长于与该令牌 id 绑定的刷新令牌。 |
-| `ApiKeyStore` | `findByHash(hash): ApiKey?`。在解析安全上下文时调用；需要 I/O 的存储要设置 `cosec.api-key.store-blocking=true`。 |
+## 桥接上下文 {#bridge-context}
 
-## 认证 {#authentication}
+适配器用接收请求的线程上捕获的上下文启动每个请求的协程。`BridgeContextContributor` 向这个上下文添加内容，让你的代码依赖的线程本地变量在 Pipeline 于其他线程上恢复执行时被还原：
 
-| 扩展点 | 约定 |
-|---|---|
-| `Authentication<C, CoSecPrincipal>` | 为类型为 `C` 的凭证新增一种登录方式。starter 会注册所有 `Authentication` bean。 |
-| `AbstractSwitchTenantAuthentication` | 让主体切换租户的基类。 |
-| `SocialUserPrincipalConverter` | `convert(provider, socialUser): Mono<CoSecPrincipal>` 把社交登录的用户映射为你的主体。 |
+```kotlin
+fun interface BridgeContextContributor {
+    fun capture(): CoroutineContext
+}
+```
 
-面向用户的令牌、登录和吊销说明见[认证](../integration/authentication.md)。
+starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `opentelemetry-support` 时还注册 OpenTelemetry 上下文。所有 `BridgeContextContributor` bean 都会按 `@Order` 顺序使用。`capture` 每个请求运行一次：保持廉价。
 
-## 审计 {#auditing}
+## 变更监听器 {#change-listeners}
 
-实现 `AuditEventSink`（`publish(event)`，位于 `cosec-api`）把审计事件发送到你自己的系统。你的 bean 会同时替换日志 sink 和 Kafka sink。发布在请求路径上运行，所以请异步转交事件，不要阻塞。sink 抛出的异常会被记录，永远不会改变决策。事件字段见[可观测性](../operations/observability.md#audit-events)。
+使用 `control-support` 时，`ChangeListener` 会在变更的每一步收到 `ChangeEvent`：提出、检查、影子完成、批准、发布中、已发布、break-glass 申请或批准，等等。事件从不携带文档内容。
 
-**下一步：** 如何提出并合入变更，见 [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md)；修改 CoSec 时的构建规则和不变式，见 [`AGENTS.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/AGENTS.md)。
+- `REQUIRED` 监听器为发布和创建 break-glass 的每一步把关：只有每个 REQUIRED 监听器都在 `cosec.control.audit.required-timeout`（5 秒）内记录了该步骤，它才会发生，否则以 `503` 失败且不写入任何内容。创建 break-glass 至少需要一个 REQUIRED 监听器。
+- 其他事件，以及发给 `BEST_EFFORT` 监听器的每个事件，都不在调用方上投递；失败只记录日志。
+- 监听器是累加的：每个 `ChangeListener` bean 都与 starter 的 `LoggingChangeListener` 一起注册，后者只在你声明了自己的 `LoggingChangeListener` bean 时才不注册。
+
+有 `kafka-support` 和 `KafkaOperations` bean 时，starter 在 `cosec.control.audit.kafka.*` 下注册 `KafkaChangeListener`（[可观测性](../operations/observability.md#control-plane-change-log)）。
+
+## 控制面存储 {#control-store}
+
+使用 `control-support` 时，控制面把修订、变更请求、暂存槽、候选和租约保存在 `ControlStore` 中；starter 提供的是 Redis 上的 `CoCacheControlStore`。除了按 key 读写这些记录，存储还要回答维护任务需要访问什么：
+
+- `documents()`：它为之建立了修订索引的每个文档。可以多列，不能少列。
+- `openChanges()`：可能仍未结束的变更请求。可以多列，不能少列；调用方读取每个变更并以其状态为准。
+- `acquireLease(name, holder, duration)` 和 `releaseLease(name, holder)`：每项任务同一时间只有一个实例。只有 `holder` 仍持有租约时，释放才会删除它。
+
+与数据面的存储一样，失败的读取会抛出异常：从不回答“不存在”。
+
+## 路由映射 {#route-maps}
+
+默认情况下，请求的动作是 `http:<METHOD>`，资源是 `http:path:<path>`。路由映射为服务的路由赋予自己的动作和类型化资源（作用于 `order/{orderId}` 的 `order:read`），让策略以服务自己的术语书写。匹配到路由的请求得到该路由的动作；其他请求仍在 `http` 命名空间中。
+
+```json
+{
+  "service": "order",
+  "routes": [
+    { "method": "GET", "path": "/orders/{orderId}", "action": "order:read", "resource": "order/{orderId}" },
+    { "method": "POST", "path": "/orders/{orderId}/cancel", "action": "order:cancel", "resource": "order/{orderId}" }
+  ]
+}
+```
+
+- starter 在启动时加载 `cosec.authorization.routes.location` 列出的路由映射（默认 `classpath:cosec-routes.json`，逗号分隔）。映射缺失或无效，或者有两个路由可能匹配同一个请求，都会让启动失败。默认位置也是如此：没有路由映射的 WebFlux 或 WebMvc 服务要把该属性设为空。网关宿主不加载路由映射。
+- 使用 `openapi-support` 和 Spring Boot Actuator 时，`cosecServiceGenerator` 端点从服务的 OpenAPI 描述生成两份文档：`routes` 是作为 `cosec-routes.json` 随服务发布的路由映射，`app` 是通过控制面发布的应用文档（目录与权限策略）。
+
+文件按严格模式读取：未知或缺失的字段都会让它失败（[`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/route/RouteMapCodec.kt)）。应用文档和目录见[角色权限](../policies/role-permissions.md)。
+
+**下一步：** 如何提出并合入修改，见 [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md)；修改 CoSec 的构建规则与不变量，见 [`AGENTS.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/AGENTS.md)。
