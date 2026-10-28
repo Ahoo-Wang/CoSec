@@ -142,6 +142,22 @@ Rules themselves are described in [Rate limiting](../policies/rate-limiting.md#r
 
 How to use it: [Trying changes in shadow mode](../policies/testing.md#trying-changes-in-shadow-mode).
 
+In 8.0, candidates come from the control plane instead of local files. Each instance with `cache-support` takes part in
+the control plane's shadow windows:
+
+| Property | Type | Default | Effect |
+|---|---|---|---|
+| `cosec.authorization.shadow.enabled` | boolean | `true` | Evaluate sampled requests again on the staged candidates and report the results. Off, this instance's traffic counts for nothing in a shadow window, and a candidate it cannot compile does not block the window. |
+| `cosec.authorization.shadow.sample-rate` | double, `0` to `1` | `0.1` | Share of requests also evaluated on the candidates. Each costs a second evaluation, off the request path. |
+| `cosec.authorization.shadow.report-interval` | duration | `10s` | How often the instance writes its shadow reports and its status to Redis. |
+| `cosec.authorization.shadow.instance-id` | string | random | This instance's id in reports and statuses. It must be unique per running instance. |
+
+## Control plane
+
+| Property | Type | Default | Effect |
+|---|---|---|---|
+| `cosec.control.http.max-body-size` | data size | `16MB` | The largest request body the control API reads on a Spring MVC host. A larger body gets a 400 without being read, and so does any body of a request without a permitted principal. On WebFlux, `spring.codec.max-in-memory-size` bounds the body instead. |
+
 ## Audit
 
 | Property | Type | Default | Effect |

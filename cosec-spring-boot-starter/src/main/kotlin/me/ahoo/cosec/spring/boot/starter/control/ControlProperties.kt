@@ -15,6 +15,7 @@ package me.ahoo.cosec.spring.boot.starter.control
 
 import me.ahoo.cosec.api.CoSec
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.util.unit.DataSize
 import java.time.Duration
 
 /** `cosec.control.*` (RFC 0007 X5): the control plane of the starter's `controlSupport` feature. */
@@ -32,6 +33,12 @@ class ControlProperties {
     class Http {
         /** Where the control API's routes are served (RFC 0007 §10.2). */
         var basePath: String = "/cosec/control/v1"
+
+        /**
+         * The largest request body the WebMvc routes read; a larger one is answered 400 unread. Twice a document's
+         * 8 MB cap (RFC 0003 Q14), for the JSON around it. WebFlux hosts are bounded by `spring.codec.max-in-memory-size`.
+         */
+        var maxBodySize: DataSize = DataSize.ofMegabytes(16)
     }
 
     class Revisions {

@@ -139,6 +139,21 @@ OpenTelemetry 追踪没有开关：只要 classpath 上有 `opentelemetry-suppor
 
 用法见 [在影子模式中试验变更](../policies/testing.md#trying-changes-in-shadow-mode)。
 
+8.0 的候选来自控制面，不再来自本地文件。每个带 `cache-support` 的实例都参与控制面的影子窗口：
+
+| 配置项 | 类型 | 默认值 | 作用 |
+|---|---|---|---|
+| `cosec.authorization.shadow.enabled` | boolean | `true` | 用暂存的候选再评估一次被采样的请求，并报告结果。关闭后，本实例的流量在影子窗口里不计数，本实例编译不了的候选也不会阻断窗口。 |
+| `cosec.authorization.shadow.sample-rate` | double，`0` 到 `1` | `0.1` | 同时用候选评估的请求比例。每个请求多花一次评估，不在请求路径上。 |
+| `cosec.authorization.shadow.report-interval` | duration | `10s` | 实例向 Redis 写影子报告和实例状态的间隔。 |
+| `cosec.authorization.shadow.instance-id` | string | 随机 | 本实例在报告和状态中的 id。每个运行中的实例必须不同。 |
+
+## 控制面 {#control-plane}
+
+| 配置项 | 类型 | 默认值 | 作用 |
+|---|---|---|---|
+| `cosec.control.http.max-body-size` | 数据大小 | `16MB` | Spring MVC 宿主上控制 API 读取的最大请求体。更大的请求体不读取，直接返回 400；没有已放行主体的请求也不读取请求体。WebFlux 上由 `spring.codec.max-in-memory-size` 限制请求体。 |
+
 ## 审计 {#audit}
 
 | 配置项 | 类型 | 默认值 | 作用 |

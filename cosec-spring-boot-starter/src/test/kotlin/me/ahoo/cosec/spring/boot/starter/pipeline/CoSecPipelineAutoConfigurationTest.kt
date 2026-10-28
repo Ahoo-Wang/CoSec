@@ -17,6 +17,16 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import jakarta.servlet.ServletInputStream
+import me.ahoo.cosec.spring.boot.starter.control.ControlRoutesWebFilter
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest
+import org.springframework.mock.web.MockHttpServletRequest
+import org.springframework.mock.web.server.MockServerWebExchange
+import org.springframework.test.web.servlet.RequestBuilder
+import org.springframework.web.server.WebFilterChain
+import reactor.core.publisher.Mono
+import java.io.ByteArrayInputStream
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.redis.RedisBackend
@@ -267,6 +277,43 @@ class CoSecPipelineAutoConfigurationTest {
             .perform(MockMvcRequestBuilders.get("/cosec/control/v1/documents/platform"))
             .andExpect(MockMvcResultMatchers.status().isUnauthorized)
             .andExpect(MockMvcResultMatchers.content().contentType("application/problem+json"))
+    }
+
+    @Test
+    fun `the WebMvc control routes read no body before a permitted request, and no more than the cap`() {
+        val routes = CoSecControlRoutesAutoConfiguration.WebMvc()
+            .cosecControlRoutes(ControlHttp(mockk<ControlPlane>()), ControlProperties())
+        val unread = RequestBuilder { context ->
+            object : MockHttpServletRequest(context, "POST", "/cosec/control/v1/changes") {
+                override fun getInputStream(): ServletInputStream = throw AssertionError("The body was read.")
+            }
+        }
+        MockMvcBuilders.routerFunctions(routes).build()
+            .perform(unread)
+            .andExpect(MockMvcResultMatchers.status().isUnauthorized)
+        CoSecControlRoutesAutoConfiguration.readBody(ByteArrayInputStream(ByteArray(16)), 16)!!.size.assert().isEqualTo(16)
+        CoSecControlRoutesAutoConfiguration.readBody(ByteArrayInputStream(ByteArray(17)), 16).assert().isNull()
+        CoSecControlRoutesAutoConfiguration.tooLarge(16).statusCode().value().assert().isEqualTo(400)
+        ControlProperties().http.maxBodySize.toMegabytes().assert().isEqualTo(16)
+    }
+
+    @Test
+    fun `on a gateway host the pipeline covers the control routes and nothing else`() {
+        val pipeline = mockk<PipelineWebFilter> {
+            every { order } returns 1
+            every { filter(any(), any()) } returns Mono.empty()
+        }
+        val filter = ControlRoutesWebFilter(pipeline, "/cosec/control/v1")
+        val chain = mockk<WebFilterChain> { every { filter(any()) } returns Mono.empty() }
+        for (path in listOf("/cosec/control/v1", "/cosec/control/v1/changes")) {
+            filter.filter(MockServerWebExchange.from(MockServerHttpRequest.get(path)), chain).block()
+        }
+        for (path in listOf("/orders/1", "/cosec/control/v10")) {
+            filter.filter(MockServerWebExchange.from(MockServerHttpRequest.get(path)), chain).block()
+        }
+        verify(exactly = 2) { pipeline.filter(any(), any()) }
+        verify(exactly = 2) { chain.filter(any()) }
+        filter.order.assert().isEqualTo(1)
     }
 
     @Test
