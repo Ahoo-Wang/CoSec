@@ -3,13 +3,13 @@
 # Tests: :cosec-engine:test --tests me.ahoo.cosec.engine.flat.RateLimitObligationTest :conformance:test
 
 diff --git a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
-index 45de40a9..b388d18b 100644
+index 79d6bcec..b3c3402a 100644
 --- a/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
 +++ b/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
 @@ -138,7 +138,7 @@ class PolicyCompiler(
              StatementSource(name, Effect.DENY, actions, resources, condition, onMissing)
          }
-         // A rate limit rule has no confirmation flow: as before RFC 0007 N6, only the platform may let one lapse.
+         // A rate limit rule has no confirmation flow, so only the platform may let one lapse (ATR-7).
 -        val statement = statement(0, strict, "$", errors, unconfirmedLapse = kind == DocumentKind.PLATFORM)
 +        val statement = statement(0, strict, "$", errors, unconfirmedLapse = true)
          val key = source.key?.let { path -> key(path, statement, errors) }
