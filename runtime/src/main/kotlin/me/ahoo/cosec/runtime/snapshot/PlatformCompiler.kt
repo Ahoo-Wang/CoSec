@@ -31,8 +31,9 @@ import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
  * attributes of the platform document this instance last compiled, as the control plane checks candidates
  * (`PolicyDocumentCompiler.forPlatform`), plus the attributes the registered providers declare ([providers]).
  *
- * When a platform revision changes its limits or attributes, the app and tenant documents installed in the bound
- * source compiled against the previous ones, so they are read and compiled again ([bind]). Until the platform is
+ * When a platform revision changes its limits or attributes, the app and tenant documents of the bound source, installed
+ * or loading, may have compiled against the previous ones, so they are read and compiled again ([bind],
+ * [SnapshotSource.recompile]); one that cannot be compiled again fails closed. Until the platform is
  * compiled the defaults apply; a host loads the platform first so that no instance document compiles against them.
  */
 class PlatformCompiler(
@@ -76,9 +77,12 @@ class PlatformCompiler(
         return compiled
     }
 
+    /**
+     * After [inputs] changed: the documents installed and those whose load is in flight, which may have compiled with
+     * the previous inputs and install after this call (review finding S4).
+     */
     private fun recompileDependents() {
-        val bound = source ?: return
-        bound.entries().map { it.key }.filter { it != SnapshotKey.Platform }.forEach { bound.reload(it) }
+        source?.recompile()
     }
 
     private fun inputsOf(platform: PolicyDocument?): Inputs {

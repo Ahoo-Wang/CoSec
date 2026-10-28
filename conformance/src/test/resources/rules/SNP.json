@@ -35,6 +35,21 @@
         "cosec-spring-boot-starter:CoSecPipelineAutoConfigurationTest#Redis that may evict snapshots fails startup unless told to warn"
       ],
       "pending": null
+    },
+    {
+      "id": "SNP-4",
+      "source": "RFC 0007 §3.1 N3; RFC 0008 §4.4 (review finding S4)",
+      "statement": "Once the platform's limits or attributes change, every app and tenant document installed afterwards was compiled with them or is compiled again, including one whose load was in flight; one that cannot be compiled again fails closed.",
+      "level": "pipeline",
+      "properties": [
+        "cosec-core:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily"
+      ],
+      "pending": "a scenario format for snapshot timing (RFC 0008 §3.3); guarded by the tests below",
+      "guards": [
+        "cosec-core:SnapshotRecompileTest#a load that compiled with the old inputs while they changed installs and is compiled again",
+        "cosec-core:SnapshotRecompileTest#a document that cannot be compiled again fails closed until a retry compiles it",
+        "runtime:PlatformCompilerInFlightTest#a document compiled against the previous platform while it changed is compiled again"
+      ]
     }
   ]
 }
