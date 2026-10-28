@@ -56,6 +56,10 @@ class PlatformCompiler(
     /** The compiler documents compile with now: the last compiled platform's limits and attributes. */
     val current: PolicyDocumentCompiler get() = inputs.compiler
 
+    /**
+     * The bound source's entry point, and only its: compiling the platform makes its limits and attributes the live
+     * inputs of this instance. To check a candidate without that, compile it with `PolicyDocumentCompiler.forPlatform`.
+     */
     override fun compile(key: SnapshotKey, document: SnapshotDocument): CompiledDocument {
         if (key != SnapshotKey.Platform) {
             return inputs.compiler.compile(key, document)
