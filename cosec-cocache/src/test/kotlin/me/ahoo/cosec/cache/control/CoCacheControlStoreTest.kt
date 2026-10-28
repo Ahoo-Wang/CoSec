@@ -126,39 +126,38 @@ class CoCacheControlStoreTest {
     /** Coordinator review: a change listed but not written yet is being written, or its write failed. */
     @Test
     fun `a listed change that is missing stays until the grace has passed`() = runBlocking<Unit> {
-        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
-            val clock = MutableClock(Instant.parse("2026-11-01T00:00:00Z"))
-            val lists = node.runtime.create(ControlCacheSpecs.list(node.keyPrefix))
-            val changes = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix))
-            // The first write fails after the id was listed.
-            val failing = object : Cache<ChangeId, ChangeRequest> by changes {
-                override fun async(): AsyncCache<ChangeId, ChangeRequest> =
-                    object : AsyncCache<ChangeId, ChangeRequest> by changes.async() {
-                        override fun putIfMatch(
-                            key: ChangeId,
-                            expected: Digest?,
-                            value: ChangeRequest
-                        ): CompletableFuture<ConditionalPut> =
-                            CompletableFuture.failedFuture(IllegalStateException("Redis is down"))
-                    }
-            }
-            val store = store(node, lists = lists, clock = clock, changes = failing)
-            assertThrownBy<IllegalStateException> {
-                runBlocking {
-                    store.putChange(
-                        null,
-                        change("c1", ChangeState.DRAFT)
-                    )
+        val backend = InMemoryBackend()
+        val keyPrefix = newKeyPrefix()
+        // Two instances over one Redis: one whose first write of c1 fails after listing it, one that reads the list.
+        SnapshotNode(backend, keyPrefix).use { writing ->
+            SnapshotNode(backend, keyPrefix).use { reading ->
+                val clock = MutableClock(Instant.parse("2026-11-01T00:00:00Z"))
+                val changes = writing.runtime.create(ControlCacheSpecs.changeRequest(writing.keyPrefix))
+                val failing = object : Cache<ChangeId, ChangeRequest> by changes {
+                    override fun async(): AsyncCache<ChangeId, ChangeRequest> =
+                        object : AsyncCache<ChangeId, ChangeRequest> by changes.async() {
+                            override fun putIfMatch(
+                                key: ChangeId,
+                                expected: Digest?,
+                                value: ChangeRequest
+                            ): CompletableFuture<ConditionalPut> =
+                                CompletableFuture.failedFuture(IllegalStateException("Redis is down"))
+                        }
                 }
+                val writer = store(writing, clock = clock, changes = failing)
+                assertThrownBy<IllegalStateException> {
+                    runBlocking { writer.putChange(null, change("c1", ChangeState.DRAFT)) }
+                }
+                val lists = reading.runtime.create(ControlCacheSpecs.list(reading.keyPrefix))
+                val reader = store(reading, lists = lists, clock = clock)
+                // c1 is listed and missing: it may be being written, so it is not dropped yet.
+                reader.openChanges().assert().containsExactly(ChangeId("c1"))
+                clock.now = clock.now.plus(Duration.ofMinutes(59))
+                reader.openChanges().assert().containsExactly(ChangeId("c1"))
+                clock.now = clock.now.plus(Duration.ofMinutes(2))
+                reader.openChanges().assert().isEmpty()
+                lists.get("open-changes")!!.assert().isEmpty()
             }
-            // Another instance reads the list while c1 is listed and missing: it is not dropped.
-            val reader = store(node, lists = lists, clock = clock, changes = changes)
-            reader.openChanges().assert().containsExactly(ChangeId("c1"))
-            clock.now = clock.now.plus(Duration.ofMinutes(59))
-            reader.openChanges().assert().containsExactly(ChangeId("c1"))
-            clock.now = clock.now.plus(Duration.ofMinutes(2))
-            reader.openChanges().assert().isEmpty()
-            lists.get("open-changes")!!.assert().isEmpty()
         }
     }
 
