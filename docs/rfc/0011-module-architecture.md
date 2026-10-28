@@ -134,6 +134,16 @@ flowchart BT
 
 再加一条：`core/*` 的公共签名中不得出现 `tools.jackson.*`（D3）。
 
+PR-2 落地的例外（都以数据形式登记在 `test/architecture`，新增一条就是一次评审过的改动）：
+
+| 例外 | 理由 |
+|---|---|
+| `cocache`、`kafka` 可以引用 `me.ahoo.cosec.runtime.json.CoSecJson`（`@InternalCoSecApi`，只构建共享的 JSON 映射器） | 存储格式只有一份配置；字节固定测试覆盖每一种存储类型 |
+| `gateway` → `webflux` | 网关过滤器运行在 WebFlux 桥上 |
+| `social` → `login` | 社交登录是 `login` 的一个认证提供者 |
+| `cocache` 内部使用 Reactor | 非阻塞的 Redis 读取用 Spring Data Redis 的响应式 API；公共签名中不得出现 Reactor 类型 |
+| `backends`、`extensions` 使用各自技术的 Spring 部分（`cocache`：`data.redis`、`aot.hint`；`kafka`：`spring-kafka`；`social`：`data.redis`） | 只限它所适配的技术 |
+
 `EnginePurityTest`、`RuntimeBoundaryTest`、`ControlBoundaryTest` 与 `verifyPureClasspath` 的规则并入这里，原测试删除；`RuntimeBoundaryTest` 中
 不属于依赖方向的规则（`runBlocking`、`GlobalScope`、`Dispatchers.IO`、`runCatching`）作为源码规则一并迁入。
 
