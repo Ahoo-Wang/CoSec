@@ -1,0 +1,120 @@
+{
+  "rules": [
+    "CTL-16"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Round-2 review R1: i1 writes its cumulative report of 4 samples three times; the window holds 4, not 12, and stays open until i2 reports; acknowledging every write summed (6 NARROWED) is refused.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT0S",
+      "minSamples": 6,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "NARROWED": 2,
+          "SAME": 2
+        }
+      }
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "NARROWED": 2,
+          "SAME": 2
+        }
+      }
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "NARROWED": 2,
+          "SAME": 2
+        }
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i2",
+        "counts": {
+          "NARROWED": 1,
+          "SAME": 1
+        }
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "ack": {
+          "NARROWED": 7,
+          "SAME": 7
+        }
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "ack": "summary"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "reported",
+      "reported",
+      "SHADOWING",
+      "reported",
+      "READY",
+      "refused 428",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

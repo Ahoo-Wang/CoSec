@@ -1,0 +1,17 @@
+# Rule: SNP-4
+# Mutant: a load after a recompile does not know its entry compiled with the old inputs
+# Tests: :cosec-core:test --tests me.ahoo.cosec.snapshot.SnapshotRecompileTest
+
+diff --git a/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt b/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
+index 1060f1d9..03ec81ca 100644
+--- a/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
++++ b/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
+@@ -692,7 +692,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+             // Only a compiled entry depends on the compiler's inputs; the shared document is not recompiled.
+             val compiled = known != null &&
+                 (known.origin == EntryOrigin.DOCUMENT || known.origin == EntryOrigin.UNCOMPILABLE)
+-            val recompiles = key != sharedKey && compiled && installedEpoch < epoch
++            val recompiles = false
+             return Load(known, force, result, epoch, recompiles)
+         }
+ 

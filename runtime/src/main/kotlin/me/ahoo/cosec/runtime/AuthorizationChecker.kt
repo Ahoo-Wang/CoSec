@@ -19,10 +19,12 @@ import kotlinx.coroutines.isActive
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
@@ -94,6 +96,32 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
             log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - indeterminate." }
             Decision.Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, e))
         }
+    }
+
+    /**
+     * The decision on [action] over [resource] for [principal] with [memberships], a principal the caller recorded
+     * earlier rather than the one [security] authenticated: the approver of a control-plane change, checked again when
+     * the change publishes (RFC 0007 §7.5, review K3). As [decide], in the default space of [app] of [principal]'s
+     * tenant, on the current documents and in the environment of [security], the request asking now; a scope that
+     * does not resolve is a deny.
+     *
+     * It answers a decision and never a [RequestSecurity] (round-2 review R3): a permitted request is what routes trust,
+     * so none is minted for a principal that did not make the request.
+     *
+     * **Server side only.** [principal] and [memberships] are taken as given, unchecked: pass only what the server
+     * itself recorded from an authenticated request (an approval in the control store), never a principal, attribute
+     * or membership a caller supplies. Otherwise a caller chooses whom it is checked as.
+     */
+    suspend fun decideAs(
+        security: RequestSecurity,
+        principal: AuthenticatedPrincipal,
+        memberships: Memberships,
+        app: AppId,
+        action: Action,
+        resource: Resource,
+    ): Decision {
+        val recorded = security.asPrincipal(principal, memberships) ?: return Decision.Deny(null)
+        return decide(recorded, app, action, resource)
     }
 
     private companion object {

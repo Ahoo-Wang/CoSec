@@ -127,9 +127,47 @@ object ChangeRequestCodec {
             }
             if (approval.attributes.isNotEmpty()) {
                 val attributes = node.putObject("attributes")
-                approval.attributes.forEach { (name, value) -> attributes.put(name, value) }
+                approval.attributes.forEach { (name, value) -> attributes.set(name, attributeTree(value)) }
             }
         }
+    }
+
+    /**
+     * An approver's attribute as JSON (round-2 review R2): of its own type where JSON has one, so that it reads back
+     * as the same value; anything else as the text the engine reads of it (`subject.attributes.<name>` is its string).
+     */
+    private fun attributeTree(value: Any?): JsonNode = when (value) {
+        null -> factory.nullNode()
+        is Map<*, *> -> factory.objectNode().apply {
+            value.forEach { (name, item) -> set(name.toString(), attributeTree(item)) }
+        }
+        is Iterable<*> -> factory.arrayNode().apply { value.forEach { add(attributeTree(it)) } }
+        is Array<*> -> factory.arrayNode().apply { value.forEach { add(attributeTree(it)) } }
+        else -> scalarTree(value)
+    }
+
+    private fun scalarTree(value: Any): JsonNode = when (value) {
+        is String -> factory.stringNode(value)
+        is Boolean -> factory.booleanNode(value)
+        is Int, is Short, is Byte -> factory.numberNode((value as Number).toInt())
+        is Long -> factory.numberNode(value)
+        is Float -> factory.numberNode(value)
+        is Double -> factory.numberNode(value)
+        is java.math.BigInteger -> factory.numberNode(value)
+        is java.math.BigDecimal -> factory.numberNode(value)
+        else -> factory.stringNode(value.toString())
+    }
+
+    private fun attribute(node: JsonNode): Any? = when {
+        node.isNull -> null
+        node.isString -> node.text()
+        node.isBoolean -> node.booleanValue()
+        node.isIntegralNumber -> if (node.canConvertToLong()) node.longValue() else node.bigIntegerValue()
+        node.isBigDecimal -> node.decimalValue()
+        node.isFloatingPointNumber -> node.doubleValue()
+        node.isArray -> node.values().map(::attribute)
+        node.isObject -> node.properties().associate { (name, item) -> name to attribute(item) }
+        else -> throw SnapshotFormatException("An approver's attribute is not a JSON value: $node")
     }
 
     private fun memberships(node: JsonNode): Memberships {
@@ -155,6 +193,9 @@ object ChangeRequestCodec {
             val counts = summary.putObject("counts")
             closed.counts.toSortedMap().forEach { (outcome, count) -> counts.put(outcome, count) }
         }
+        if (shadow.reporters.isNotEmpty()) {
+            node.putArray("reporters").apply { shadow.reporters.sorted().forEach { add(it) } }
+        }
         return node
     }
 
@@ -169,7 +210,7 @@ object ChangeRequestCodec {
     }
 
     private fun shadow(node: JsonNode): ShadowState {
-        node.only("window", "startedAt", "closed")
+        node.only("window", "startedAt", "closed", "reporters")
         return ShadowState(
             node.need("window").text(),
             Instant.parse(node.need("startedAt").text()),
@@ -182,6 +223,7 @@ object ChangeRequestCodec {
                     closed.need("blocked").asBoolean(),
                 )
             },
+            node.get("reporters")?.values()?.mapTo(LinkedHashSet()) { it.text() }.orEmpty(),
         )
     }
 
@@ -300,7 +342,9 @@ object ChangeRequestCodec {
                     it.need("candidate").text(),
                     it.need("covers").values().map { covered -> covered.text() },
                     it.get("memberships")?.let(::memberships),
-                    it.get("attributes")?.properties()?.associate { (name, value) -> name to value.text() }.orEmpty(),
+                    it.get("attributes")?.properties()?.mapNotNull { (name, value) ->
+                        attribute(value)?.let { read -> name to read }
+                    }?.toMap().orEmpty(),
                 )
             },
         )

@@ -1,0 +1,162 @@
+{
+  "rules": [
+    "CTL-18"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Round-2 review R5: walt, who may read and write the platform document, rolls it back to revision 1; it is a checked change, and a revision that is not kept is 410.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "writer",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish"
+              ],
+              "resource": [
+                "doc/**",
+                "scope/**"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "scribe",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:write",
+                "cosec:grant",
+                "cosec:publish"
+              ],
+              "resource": [
+                "doc/**",
+                "scope/**"
+              ]
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "walt",
+          "subject": {
+            "principal": "walt",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "writer"
+        },
+        {
+          "id": "sam",
+          "subject": {
+            "principal": "sam",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "scribe"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "plato": {
+      "tenant": "(platform)"
+    },
+    "walt": {
+      "tenant": "(platform)"
+    },
+    "sam": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "plato",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "more",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": {
+        "change": "c1",
+        "by": "plato"
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "plato"
+      }
+    },
+    {
+      "rollback": {
+        "change": "c2",
+        "by": "walt",
+        "document": "platform",
+        "revision": 1
+      }
+    },
+    {
+      "rollback": {
+        "change": "c3",
+        "by": "walt",
+        "document": "platform",
+        "revision": 9
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "READY",
+      "PUBLISHED",
+      "CHECKED",
+      "refused 410"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "platform": 2
+    }
+  }
+}
