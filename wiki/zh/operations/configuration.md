@@ -226,7 +226,7 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
 | `cosec.control.app-id` | string | `cosec-control` | 控制面动作在哪个应用中授权。 |
-| `cosec.control.http.base-path` | string | `/cosec/control/v1` | 控制 API 路由的路径。 |
+| `cosec.control.http.base-path` | string | `/cosec/control` | 控制 API 的路径。路由位于 `{base-path}/v1` 之下，因此移动 API 时版本不会丢失。 |
 | `cosec.control.http.max-body-size` | data size | `16MB` | WebMvc 宿主上控制 API 读取的最大请求体。更大的请求体不被读取，得到 `400` `invalid-request`；没有已放行主体的请求根本不读请求体（`401`）。WebFlux 上由 `spring.codec.max-in-memory-size`（默认 256 KB）限定请求体。 |
 | `cosec.control.revisions.max-count` | int | `50` | 每个文档总是保留的修订数；更早的修订在同时超过 `min-age` 后被回收。未关闭变更所依赖的修订会被保留。 |
 | `cosec.control.revisions.min-age` | duration | `7d` | 比这年轻的修订总是保留。 |

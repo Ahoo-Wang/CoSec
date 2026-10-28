@@ -231,7 +231,7 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `cosec.control.app-id` | string | `cosec-control` | The app control-plane actions are authorized in. |
-| `cosec.control.http.base-path` | string | `/cosec/control/v1` | Where the control API's routes are served. |
+| `cosec.control.http.base-path` | string | `/cosec/control` | Where the control API is served. Its routes are under `{base-path}/v1`, so moving the API keeps the version. |
 | `cosec.control.http.max-body-size` | data size | `16MB` | The largest request body the control API reads on a WebMvc host. A larger body is a `400` `invalid-request`, unread; a request without a permitted principal has no body read at all (`401`). On WebFlux, `spring.codec.max-in-memory-size` (256 KB by default) bounds the body instead. |
 | `cosec.control.revisions.max-count` | int | `50` | Revisions always kept per document; older ones are reclaimed once also older than `min-age`. Revisions an open change rests on are kept. |
 | `cosec.control.revisions.min-age` | duration | `7d` | Revisions younger than this are always kept. |

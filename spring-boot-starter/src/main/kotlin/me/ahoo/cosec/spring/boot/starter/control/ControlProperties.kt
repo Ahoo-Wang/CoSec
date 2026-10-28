@@ -33,8 +33,8 @@ class ControlProperties {
     val audit = Audit()
 
     class Http {
-        /** Where the control API's routes are served (RFC 0007 §10.2). */
-        var basePath: String = "/cosec/control/v1"
+        /** Where the control API is served (RFC 0007 §10.2): its routes are under `{base-path}/v1`. */
+        var basePath: String = "/cosec/control"
 
         /**
          * The largest request body the WebMvc routes read; a larger one is answered 400 unread. Twice a document's
