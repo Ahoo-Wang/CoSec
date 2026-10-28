@@ -141,8 +141,8 @@ Everything else, such as `GET /admin`, matches nothing and is denied. The fields
 Build `cosec-migrate` from your CoSec checkout:
 
 ```bash
-./gradlew :cosec-migrate:installDist
-# the tool is migrate/build/install/cosec-migrate/bin/cosec-migrate
+./gradlew :migrate:installDist
+# the tool is migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
 ```
 
 `publish` reads a directory the way `convert` writes it: it publishes exactly the files that `report.json` lists,

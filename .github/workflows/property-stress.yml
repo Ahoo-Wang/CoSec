@@ -14,7 +14,7 @@
 # Manual property stress (RFC 0008 §3.5/§3.9): the property tests the rule registry names, with `iterations` random
 # cases each (default 1,000,000), one job per module that registers the `propertyStress` task. Run it here, never
 # on a developer machine: a million cases per property takes far too long and loads the machine. The modules come
-# from conformance/src/test/resources/rules/*.json of the tested ref, the same source build.gradle.kts registers
+# from test/conformance/src/test/resources/rules/*.json of the tested ref, the same source build.gradle.kts registers
 # the tasks from, so a new registered property needs no change to this file.
 name: Property stress
 on:
@@ -61,7 +61,7 @@ jobs:
           if not re.fullmatch(r"[1-9][0-9]{0,11}", os.environ["ITERATIONS"]):
               sys.exit("::error::iterations must be a positive integer")
           dirs = set()
-          for path in glob.glob("conformance/src/test/resources/rules/*.json"):
+          for path in glob.glob("test/conformance/src/test/resources/rules/*.json"):
               if path.endswith("_meta.json"):
                   continue
               for rule in json.load(open(path))["rules"]:

@@ -817,7 +817,7 @@ class Evidence(val classId: String, val statement: StatementRef?, val detail: St
 | 来源 | 内容 | 何时跑 |
 |---|---|---|
 | 现有测试 | RFC 0003 §8.2 第一行的测试集，参数化为"第 3 阶段实现 / 本阶段实现"两边各跑一遍；预期不同的断言按类别标注（例如 root 的用例改为 C2 的预期），每一处在 PR 描述里列出 | 每次 `check`，直到 PR-8 |
-| `PolicyTestKit` 套件 | `core/src/test/resources/cosec-policy-test/` 下的套件经转换后两边各跑一遍 | 每次 `check` |
+| `PolicyTestKit` 套件 | `core/core/src/test/resources/cosec-policy-test/` 下的套件经转换后两边各跑一遍 | 每次 `check` |
 | 合成语料 | §9.2 每一类的正例与反例 | 每次 `check` |
 | 随机生成 | 复用 RFC 0002/0003 的生成器，另加：成员关系（含非成员空间、`malformed`）、break-glass 绑定（含过期）、按概率抛错的 DENY/ALLOW 和前置条件、缺失的附加、不可用的文档；数据经转换工具转换 | `check` 跑固定种子 2,000 例；`-PparityIterations=1000000` 手动跑百万例，PR-7 前必须跑过一次。**随机语料同样要求未归类差异为零** |
 | 真实数据离线回放 | RFC 0002 §8.2.1 的同一批导出，不需要重新导出；基准是第 3 阶段实现在原始导出上，候选是本阶段实现在 `cosec-migrate convert --from-files` 的输出上 | PR-6 合入之后、PR-7 合入之前 |
@@ -931,8 +931,8 @@ PR-7 是切换、PR-8 是删除；每个 PR 合入后两轮审查。
 |---|---|---|---|---|---|
 | PR-1 | `feat(model): add tenants, bindings, memberships and resolved scopes` | §4.1 的类型；`ScopeResolver`（§4.6）；P11；ArchUnit 规则 | 本 RFC 获批 | **能**：只依赖已合入的 `model/` | `:model:check`、`:engine:check` 通过 |
 | PR-2 | `feat(engine): evaluate the flat algorithm over bindings` | `SnapshotView` 的引擎侧接口、编译后的绑定索引（§6.4）、扁平算法（§6.1）、候选顺序（§6.3）、trace（§6.5）、`evaluate(request, snapshot)`；P1′、P8、P9、P10、P12；`EngineBenchmark` 的新参数 | PR-1；RFC 0002 PR-2（已合入） | **能** | 变更行覆盖率 ≥ 80%；§12 的分配目标 |
-| PR-3 | `feat(core): resolve memberships from claims and providers` | 声明解析（§4.5.1）、`MembershipProvider` SPI 与内存实现、`cosec.membership` 标记、`JwtTokenConverter` 的体积阈值、按主体吊销（§4.5.3） | PR-1 | **能** | `:cosec-core:check`、`:cosec-jwt:check` 通过；`MembershipFailClosedTest` |
-| PR-4 | `feat(core): compile platform, app and tenant snapshot documents`（**2026-10-26 改动**：语句直接用 RFC 0005 的 AST，依赖改为 RFC 0005 PR-4；不做 `UnifiedAuthorization` 与 `SnapshotPublisher` 的绑定写入；编解码器拒绝 `Match.Exactly("*")`；见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | `schema: 2` 文档与编解码、编译（7.x 匹配器经 RFC 0002 PR-3 的适配层）、编译期检查（引用完整性、租户隔离、主体绑定上限、break-glass）、内置的黑名单和 root 策略、`UnifiedAuthorization`（`DecisionAuthorization`，测试中装配）、`SnapshotPublisher` 的绑定写入 | PR-2、PR-3；RFC 0002 PR-3（#993）；RFC 0003 PR-1、PR-2（`SnapshotSource`、编译器、`LayerReads`、`EngineDecisionFlow`，均已合入） | **能**：依赖都已合入，不需要 RFC 0002 PR-6 | `:cosec-core:check` 及依赖模块通过 |
+| PR-3 | `feat(core): resolve memberships from claims and providers` | 声明解析（§4.5.1）、`MembershipProvider` SPI 与内存实现、`cosec.membership` 标记、`JwtTokenConverter` 的体积阈值、按主体吊销（§4.5.3） | PR-1 | **能** | `:core:check`、`:jwt:check` 通过；`MembershipFailClosedTest` |
+| PR-4 | `feat(core): compile platform, app and tenant snapshot documents`（**2026-10-26 改动**：语句直接用 RFC 0005 的 AST，依赖改为 RFC 0005 PR-4；不做 `UnifiedAuthorization` 与 `SnapshotPublisher` 的绑定写入；编解码器拒绝 `Match.Exactly("*")`；见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | `schema: 2` 文档与编解码、编译（7.x 匹配器经 RFC 0002 PR-3 的适配层）、编译期检查（引用完整性、租户隔离、主体绑定上限、break-glass）、内置的黑名单和 root 策略、`UnifiedAuthorization`（`DecisionAuthorization`，测试中装配）、`SnapshotPublisher` 的绑定写入 | PR-2、PR-3；RFC 0002 PR-3（#993）；RFC 0003 PR-1、PR-2（`SnapshotSource`、编译器、`LayerReads`、`EngineDecisionFlow`，均已合入） | **能**：依赖都已合入，不需要 RFC 0002 PR-6 | `:core:check` 及依赖模块通过 |
 | PR-5 | `feat(migrate): add the 7.x to 8.0 data converter`（**2026-10-26 改动**：不做 `verify`；拒绝 `*` 作为应用或空间 id；见 [RFC 0008](0008-conformance-and-direct-build.md) §4.1） | `migrate/` 模块、`convert`/`publish`/`verify`（`verify` 依赖 PR-6 的分类器，先只做 `convert`/`publish`）、拒绝项（§8.4）、来源映射、报告 | PR-4；RFC 0003 PR-3（#1006，CoCache 6.7 的文档存储与发布者，已合入；`CoSec7xReader` 随它提供） | **能** | 合成 7.x 数据（含每一种拒绝项）的转换测试；转换后的文档经 PR-4 编译通过 |
 | ~~PR-6~~ | ~~`test: classify intended decision differences in replay`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | `DifferenceClassifier`、C1a–C3 的类别、正例与反例、合成语料、回放工具的候选模式（转换 + 本阶段实现）、`cosec-migrate verify`；百万例任务 | PR-5；`DecisionParity` 与回放工具（`cosec-core` 测试夹具，#997、#1002，已合入）；RFC 0003 PR-4 | **能**：比较器已经是通用的（比较任意两个 `DecisionAuthorization`）；回放任务现名 `engineReplay`，RFC 0002 PR-6 改名为 `decisionReplay` 后跟随改名 | 每一类的正例被归入、反例不被归入；用仓库内的合成数据跑通回放与 `verify` |
 | — | ~~**门槛 A**~~ **已取消（2026-10-26）** | 维护者在本地：对同一批导出跑回放（§9.4），逐条确认 C1a 的样本 | PR-6 | — | 未归类差异为 0；证据（计数与哈希）附在 PR-7 |
@@ -1014,7 +1014,7 @@ PR-1、PR-3 可以立即并行；PR-2 只等 PR-1。RFC 0005 的 PR-1（AST 类�
 - 决策：`core/.../authorization/SimpleAuthorization.kt`、`RoleScope.kt`、`RootPrincipalMatcher.kt`、`PolicyVerifyContext.kt`、`MissingPolicyException.kt`、
   `blacklist/BlacklistChecker.kt`、`context/SimpleSecurityContext.kt`（租户来自主体）、`context/DefaultSecurityContextParser.kt`
 - 匹配器（本阶段不改，RFC 0005 翻译）：`policy/condition/context/InRoleConditionMatcher.kt`、`InTenantConditionMatcher.kt`、`policy/condition/part/PartExtractor.kt`
-- 引擎：`model/src/main/kotlin/me/ahoo/cosec/model/AuthzRequest.kt`、`Decision.kt`、`LayerKind.kt`；`engine/src/main/kotlin/me/ahoo/cosec/engine/Engine.kt`、`PolicySet.kt`、`Evaluator.kt`
+- 引擎：`core/model/src/main/kotlin/me/ahoo/cosec/model/AuthzRequest.kt`、`Decision.kt`、`LayerKind.kt`；`core/engine/src/main/kotlin/me/ahoo/cosec/engine/Engine.kt`、`PolicySet.kt`、`Evaluator.kt`
 - 认证：`jwt/.../JwtTokenConverter.kt`、`Jwts.kt`（`roles`、`policies`、`tenantId` 声明）、`core/.../token/TokenRevoker.kt`、`RevocableTokenVerifier.kt`、
   `spring-boot-starter/.../jwt/JwtProperties.kt`（access token 默认 10 分钟）
 - 存储：RFC 0003 附录 B 的全部；`cocache/.../cache/AppSpacedRoleId.kt`、`CoSecSchemaMarker.kt`

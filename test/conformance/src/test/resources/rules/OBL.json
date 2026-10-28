@@ -1,0 +1,37 @@
+{
+  "rules": [
+    {
+      "id": "OBL-1",
+      "source": "RFC 0006 §8.2",
+      "statement": "Obligations run only with a Permit; denied requests consume no rate-limit quota (P15).",
+      "level": "pipeline",
+      "guards": [
+        "engine:RateLimitObligationTest",
+        "runtime:RateLimitObligationTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "OBL-2",
+      "source": "RFC 0006 §8.1 (counters per document)",
+      "statement": "Each document's rate limit rules count in buckets of their own (the platform's by rule id, an app's and a tenant's prefixed with the document), so a tenant rule never spends, replaces or relaxes another document's: a tenant rule with a platform rule's id has its own counter, and the platform's rule still applies to the tenant's requests.",
+      "level": "pipeline",
+      "guards": [
+        "engine:RateLimitObligationTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "OBL-3",
+      "source": "RFC 0010 §3 C1",
+      "statement": "Every kind of obligation a permit carries is handled before the request proceeds; none is skipped. The pipeline dispatches on the sealed Obligation with an exhaustive when and no else, so a new kind does not compile until it is handled, and a model newer than the pipeline (version skew) fails the request with 500, never a permit.",
+      "level": "build",
+      "guards": [
+        "architecture:ObligationDispatchTest#obligations are dispatched by an exhaustive when without else",
+        "architecture:ObligationDispatchTest#no runtime code skips a kind of obligation",
+        "runtime:PipelineTest#anUnhandledKindUnderVersionSkewIs500"
+      ],
+      "pending": null
+    }
+  ]
+}

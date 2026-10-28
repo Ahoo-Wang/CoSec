@@ -1,0 +1,19 @@
+# Rule: PIP-4
+# Mutant: an authenticator that is unavailable is read as an anonymous request
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.Pipeline* :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index 3570c476..420d4acf 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -252,9 +252,7 @@ class Pipeline(
+ 
+         val authn = authenticate(credentials(facts))
+         record?.authenticated(path, parameters.deviceId, authn, action, resource, fetched)
+-        if (authn is AuthnResult.Unavailable) {
+-            return StatusMapping.unavailable(requestId, Unavailability.AuthenticatorUnavailable(authn.cause), traceId)
+-        }
++
+         // A rejected credential is evaluated as anonymous (RFC 0006 K2).
+         val principal = (authn as? AuthnResult.Authenticated)?.principal
+ 

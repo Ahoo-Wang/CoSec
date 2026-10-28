@@ -589,7 +589,7 @@ PR-3 把读取器放在 `cosec-cocache` 的测试源码集里（`CoSec7xReader`�
 `Binding` 和按租户的文档（RFC 0001 §6 第 4 阶段"一次性的数据转换工具"）。如果第 3 阶段也给用户一个迁移，用户的数据要么迁移两次，要么第 3 阶段的
 迁移从未被任何用户用过。所以：
 
-- 第 3 阶段的读取器服务于门槛（§8）、规模测量（§4.8）和 `main` 上的开发/测试部署（`./gradlew :cosec-cocache:snapshotConvert -PredisUrl=... -PkeyPrefix=...`
+- 第 3 阶段的读取器服务于门槛（§8）、规模测量（§4.8）和 `main` 上的开发/测试部署（`./gradlew :cocache:snapshotConvert -PredisUrl=... -PkeyPrefix=...`
   [`-PdryRun=true`] [`-Pinstances=N`] [`-PrevalidateInterval=10s`]，测试源码集里的 `JavaExec` 任务，不进发布的 jar；只支持单机 Redis）。
 - 面向用户的 7.x → 8.0 迁移在第 4 阶段的 RFC 里设计，读取端复用这个读取器。
 - `upgrading.md` 在第 3 阶段只写 API 层面的破坏性变更（§11.3），不写数据迁移步骤。
@@ -606,7 +606,7 @@ RFC 0001 §7.2 留下两个问题：快照的规模上限，以及快照文档�
 **数据**：从维护者指定的部署（与 RFC 0002 Q7 的部署相同）取一份**完整**的 7.x 策略数据，而不是只取请求样本涉及的部分：把该部署 Redis 的 RDB 恢复到本地
 Redis，或者在维护窗口内对生产 Redis 只读运行读取器。另用 RFC 0002 回放已有的 `requests.jsonl` 估计活跃应用数。
 
-**工具**（PR-4）：`./gradlew :cosec-cocache:snapshotMeasure -PredisUrl=redis://localhost:6379 -PkeyPrefix=cosec -PrequestsFile=<可选>`，测试源码集里的
+**工具**（PR-4）：`./gradlew :cocache:snapshotMeasure -PredisUrl=redis://localhost:6379 -PkeyPrefix=cosec -PrequestsFile=<可选>`，测试源码集里的
 `JavaExec` 任务。它运行读取器，再对每个文档测量：
 
 | 测量项 | 方法 | 用来决定 |
@@ -788,7 +788,7 @@ PR-5 起成为唯一的行为，用户在 8.0.0 GA 中第一次看到：
 | 来源 | 内容 | 何时跑 |
 |---|---|---|
 | 现有测试 | §6 守护列中的测试，以及 `SimpleAuthorizationTest`、`InRoleSpaceTest`、`PathVariableScopeTest`、`ResourceCheckTest`、`RootPrincipalIdentityTest`、`AuthorizationCheckerTest`、`ShadowAuthorizationTest`、`ShadowAppPermissionTest`、`MissingPolicyFailClosedTest`、`RolePermissionScopeTest`、`WebAdapterParityTest`，改为参数化：仓库来源 / 快照来源各跑一遍 | 每次 `check`，直到 PR-6 删除仓库来源 |
-| `PolicyTestKit` 套件 | `core/src/test/resources/cosec-policy-test/` 下的套件，经 `DecisionParity` 两边各跑一遍 | 每次 `check` |
+| `PolicyTestKit` 套件 | `core/core/src/test/resources/cosec-policy-test/` 下的套件，经 `DecisionParity` 两边各跑一遍 | 每次 `check` |
 | 随机生成 | 复用 RFC 0002 §8.2 的生成器，另加：数据先写进内存仓库，同时经 `CoSec7xReader` 的转换逻辑写成快照文档 | `check` 跑固定种子 2,000 例；`-PparityIterations=1000000` 手动跑百万例，PR-5 前必须跑过一次 |
 | 真实数据离线回放 | RFC 0002 §8.2.1 的同一批导出（策略、角色权限、≥ 100 万条、≥ 7 天的请求），不需要重新导出 | PR-4 合入之后、PR-5 合入之前 |
 
@@ -841,21 +841,21 @@ B/op 不随它变化（GLOBAL 层复用预构造的 `LayerInput`）。PR-2 的�
 完全沿用 RFC 0002 §7.2 和 [`docs/perf/rfc-0002-baseline`](../perf/rfc-0002-baseline/README.md) 的做法：
 
 ```bash
-./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark,SnapshotCompileBenchmark -PjmhJavaVersion=25 -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
+./gradlew :core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark,SnapshotCompileBenchmark -PjmhJavaVersion=25 -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
 ```
 
 `globalPolicies` 不在默认矩阵里，从基准 jar 运行：
 
 ```bash
-./gradlew :cosec-core:jmhJar
+./gradlew :core:jmhJar
 ```
 
 ```bash
-java -jar core/build/libs/cosec-core-<version>-jmh.jar SimpleAuthorizationBenchmark -p source=engine,snapshot -p scenario=none -p globalPolicies=10,100,1000 -f 3 -wi 5 -i 10 -prof gc -jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml
+java -jar core/core/build/libs/cosec-core-<version>-jmh.jar SimpleAuthorizationBenchmark -p source=engine,snapshot -p scenario=none -p globalPolicies=10,100,1000 -f 3 -wi 5 -i 10 -prof gc -jvmArgsAppend -Dlogback.configurationFile=$PWD/config/logback-jmh.xml
 ```
 
 ```bash
-./gradlew :cosec-cocache:jmh -PjmhIncludes=SnapshotAuthorizationBenchmark -PjmhJavaVersion=25 -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
+./gradlew :cocache:jmh -PjmhIncludes=SnapshotAuthorizationBenchmark -PjmhJavaVersion=25 -PjmhWarmupIterations=5 -PjmhIterations=10 -PjmhFork=3 -PjmhProfilers=gc
 ```
 
 - `cosec-cocache` 现在没有 `jmh` 源码集，PR-2 按根 `build.gradle.kts` 中 `cosec-core` 的配置加上，并支持同样的 `-Pjmh*` 属性。
@@ -895,9 +895,9 @@ java -jar core/build/libs/cosec-core-<version>-jmh.jar SimpleAuthorizationBenchm
 
 | PR | 标题（Conventional Commits） | 范围 | 依赖 | 能否在 RFC 0002 PR-6 之前开工 | 完成标准 |
 |---|---|---|---|---|---|
-| PR-1 | `feat(core): add the snapshot source with on-demand loading and bounded staleness` | `SnapshotKey`、`SnapshotDocument`、`SnapshotVersion`、`SnapshotDocumentStore`/`SnapshotChangeListener` SPI、内存 `SnapshotDocumentStore`、`SnapshotSource`（对编译函数泛化：单飞、有序安装、重新校验、LRU、落后时长、fail-closed 判定、预热、指标接口）；F1–F11、F14、F15 的测试和 P6（用一个假的编译函数） | 本 RFC 获批 | **能**：不依赖引擎适配层 | `:cosec-core:check` 通过，变更行覆盖率 ≥ 80% |
-| PR-2 | `feat(core): compile policy snapshots and load the PolicySet from them` | `SnapshotCompiler`（JSON → `PolicyData`/`AppPermissionData` → PR-3 的规则组，含 `Broken`）、`CompiledPolicies`/`CompiledApp`、`PolicySnapshot`、`SnapshotPolicySetLoader`；P5、P7；`SimpleAuthorizationBenchmark` 的 `source` 参数（`snapshot` 来源在 PR-5 之前经测试用的装配运行）；`SnapshotCompileBenchmark`；`cosec-cocache` 的 `jmh` 源码集 | PR-1；RFC 0002 PR-3（`PolicySetLoader`、`PolicyGroup`、`AppPermissionRules`） | **能**：RFC 0002 PR-3 合入即可 | `:cosec-core:check` 及依赖它的模块通过；P5 固定种子 2,000 例零差异 |
-| PR-3 | `feat(cocache): store snapshot documents in CoCache` | `PolicySnapshotCache` 声明（`storeOfRecord`，显式 key 编码）、`SnapshotDocumentCodec`、`RedisSnapshotDocumentStore`（含失效通道订阅）、`RedisSnapshotPublisher`（条件写入）、`CoSec7xReader` 与 `snapshotConvert` 任务、`RuntimeHintsRegistrar`；F3、F9、F12 在真实 Redis 上的测试；`CacheTtlPolicyTest`、`StrictCacheFailureTest` 增加针对新缓存的用例 | PR-1；CoCache 6.7.0 的条件写入与条件读（Q5；2026-10-22 发布） | **能** | `:cosec-cocache:check` 通过（需要 Redis）；一个人为制造的并发写入测试证明不丢更新 |
+| PR-1 | `feat(core): add the snapshot source with on-demand loading and bounded staleness` | `SnapshotKey`、`SnapshotDocument`、`SnapshotVersion`、`SnapshotDocumentStore`/`SnapshotChangeListener` SPI、内存 `SnapshotDocumentStore`、`SnapshotSource`（对编译函数泛化：单飞、有序安装、重新校验、LRU、落后时长、fail-closed 判定、预热、指标接口）；F1–F11、F14、F15 的测试和 P6（用一个假的编译函数） | 本 RFC 获批 | **能**：不依赖引擎适配层 | `:core:check` 通过，变更行覆盖率 ≥ 80% |
+| PR-2 | `feat(core): compile policy snapshots and load the PolicySet from them` | `SnapshotCompiler`（JSON → `PolicyData`/`AppPermissionData` → PR-3 的规则组，含 `Broken`）、`CompiledPolicies`/`CompiledApp`、`PolicySnapshot`、`SnapshotPolicySetLoader`；P5、P7；`SimpleAuthorizationBenchmark` 的 `source` 参数（`snapshot` 来源在 PR-5 之前经测试用的装配运行）；`SnapshotCompileBenchmark`；`cosec-cocache` 的 `jmh` 源码集 | PR-1；RFC 0002 PR-3（`PolicySetLoader`、`PolicyGroup`、`AppPermissionRules`） | **能**：RFC 0002 PR-3 合入即可 | `:core:check` 及依赖它的模块通过；P5 固定种子 2,000 例零差异 |
+| PR-3 | `feat(cocache): store snapshot documents in CoCache` | `PolicySnapshotCache` 声明（`storeOfRecord`，显式 key 编码）、`SnapshotDocumentCodec`、`RedisSnapshotDocumentStore`（含失效通道订阅）、`RedisSnapshotPublisher`（条件写入）、`CoSec7xReader` 与 `snapshotConvert` 任务、`RuntimeHintsRegistrar`；F3、F9、F12 在真实 Redis 上的测试；`CacheTtlPolicyTest`、`StrictCacheFailureTest` 增加针对新缓存的用例 | PR-1；CoCache 6.7.0 的条件写入与条件读（Q5；2026-10-22 发布） | **能** | `:cocache:check` 通过（需要 Redis）；一个人为制造的并发写入测试证明不丢更新 |
 | PR-4 | `test: add snapshot parity, replay and sizing tools`（已合入，#1030；**2026-10-26**：工具在 RFC 0008 的切换 PR 中删除） | `DecisionParity` 对快照来源的装配；回放工具增加候选为快照的模式；百万例任务；`snapshotMeasure` 任务（§4.8）；§8.2 第一行的参数化测试 | PR-2、PR-3；RFC 0002 PR-4（比较器、回放工具） | **能**：基于 RFC 0002 PR-4 的代码；RFC 0002 PR-6 之后改用改名后的 `DecisionParity`、`decisionReplay`（Q12） | 用仓库内的合成数据跑通回放和测量；一个人为制造的差异出现在报告中；百万例跑通 |
 | — | ~~**门槛**~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）** | 维护者在本地：对 RFC 0002 的同一批导出数据跑回放（§8.3）；对完整数据跑 `snapshotMeasure`（§4.8），据此确认 Q7、Q14、Q19 的数字 | PR-4 | — | 回放零差异；测量摘要贴在 issue 或 PR-5 中 |
 | ~~PR-5~~ | ~~`refactor!: authorize from the policy snapshot`~~ **已取消（2026-10-26，[RFC 0008](0008-conformance-and-direct-build.md)）**：7.0 形状的文档被 RFC 0004 取代；仍然成立的要求转入切换 PR | `SimpleAuthorization` 改为 §5.1 的流程；starter 装配 `SnapshotSource`、`RedisSnapshotDocumentStore`、`SnapshotPublisher`、健康指标、actuator 端点、`cosec.authorization.snapshot.*` 属性；`LocalPolicyInitializer`、`PolicyHistory`、解释、`AuthorizationChecker`、`PolicyTestKit` 改为读快照或经发布者写入；影子改为快照叠加，删除 `Overlay*Repository`；`CoSecSchemaMarker` 升为 `"8"`；`WebAdapterParityTest` 的新用例；文档（§11.3）；JMH 对比 | RFC 0002 PR-6；PR-4；门槛 | **不能** | 全部模块 `check` 通过；门槛证据（计数与哈希）附在 PR 上；§9 的目标满足 |
@@ -971,7 +971,7 @@ PR 按这里的值实现，数字由门槛的测量结果（§4.8）校准。
 
 - 决策：`core/.../authorization/SimpleAuthorization.kt`、`PolicyRepository.kt`、`AppRolePermissionRepository.kt`、`RoleScope.kt`、
   `MissingPolicyException.kt`；`policy/BlockingAware.kt`、`policy/PolicyData.kt`、`permission/AppPermissionData.kt`、`policy/condition/BoolConditionMatcher.kt`
-- 引擎输入：`engine/src/main/kotlin/me/ahoo/cosec/engine/PolicySet.kt`、`Engine.kt`；RFC 0002 PR-3 的适配层（进行中，`me.ahoo.cosec.authorization.engine`）
+- 引擎输入：`core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicySet.kt`、`Engine.kt`；RFC 0002 PR-3 的适配层（进行中，`me.ahoo.cosec.authorization.engine`）
 - 存储：`cocache/.../cache/CoSecCacheSpecs.kt`、`PolicyCache.kt`、`GlobalPolicyIndexCache.kt`、`AppPermissionCache.kt`、`RolePermissionCache.kt`、
   `AppSpacedRoleId.kt`、`RedisPolicyRepository.kt`、`RedisAppRolePermissionRepository.kt`、`CacheFutures.kt`、`CoSecSchemaMarker.kt`、
   `CoSecCoCache5Migration.kt`、`RolePermissionKeyMigration.kt`、`RedisPolicyRevisionStore.kt`、`limiter/RedisRateLimiter.kt`
@@ -981,9 +981,9 @@ PR 按这里的值实现，数字由门槛的测量结果（§4.8）校准。
 - 限流：`core/.../limiter/RateLimitRuleProvider.kt`
 - starter：`spring-boot-starter/.../authorization/cache/CoSecPolicyCacheAutoConfiguration.kt`、`CoSecPermissionCacheAutoConfiguration.kt`、
   `authorization/CoSecAuthorizationAutoConfiguration.kt`、`authorization/SecurityContextParseSchedulers.kt`
-- 测试：`cocache/src/test/.../CacheTtlPolicyTest.kt`、`LocalCacheFastPathTest.kt`、`limiter/RedisRateLimitingOffEventLoopTest.kt`；
-  `spring-boot-starter/src/test/.../cache/StrictCacheFailureTest.kt`
-- 基准：`core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`（内存仓库，返回 `Mono.just`）、`engine/src/jmh/.../EngineBenchmark.kt`
+- 测试：`backends/cocache/src/test/.../CacheTtlPolicyTest.kt`、`LocalCacheFastPathTest.kt`、`limiter/RedisRateLimitingOffEventLoopTest.kt`；
+  `host/spring-boot/src/test/.../cache/StrictCacheFailureTest.kt`
+- 基准：`core/core/src/jmh/.../authorization/SimpleAuthorizationBenchmark.kt`（内存仓库，返回 `Mono.just`）、`core/engine/src/jmh/.../EngineBenchmark.kt`
 - CoCache 6.6.0：`cocache-api` 的 `Cache`、`AsyncCache`、`Lookup`、`spi/InvalidationChannel`、`spi/CoherenceBackend`、`spi/RemoteStore`、`spi/Digest`；
   `cocache-core` 的 `policy/CachePolicy`（`ttl`、`localMaxAge`、`refreshWindow`、`LocalPolicy.maximumSize`、`LoadPolicy.asyncTimeout`、`ReadFailureMode`、
   `ForeignFormatMode`）、`engine/AbstractEngine.localEntry`（`ttl = null` 时 `refreshAt` 为永不）、`CacheRuntime.backend`、`CacheAdmin`、`ExternalInvalidator`、

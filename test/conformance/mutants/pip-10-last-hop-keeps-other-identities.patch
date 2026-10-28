@@ -1,0 +1,16 @@
+# Rule: PIP-10
+# Mutant: the last hop keeps a CoSec-Identity a route or global filter added when the pipeline forwarded none
+# Tests: :gateway:test --tests me.ahoo.cosec.gateway.IdentityGuardTest
+
+diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt
+index 560d337a..d652b261 100644
+--- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt
++++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt
+@@ -58,7 +58,6 @@ class IdentityHeadersFilter : HttpHeadersFilter {
+         }
+         val headers = HttpHeaders()
+         headers.putAll(input)
+-        headers.remove(IdentityCodec.HEADER)
+         forwarded?.let { headers.set(IdentityCodec.HEADER, it) }
+         return headers
+     }

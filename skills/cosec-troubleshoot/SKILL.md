@@ -220,13 +220,13 @@ declared types must match on every instance and the control host; the change is 
   (`PolicyDocumentCompiler.forPlatform(platform).compile(PolicyDocumentCodec.decode(kind, owner, bytes))`); the
   exception lists every error with its JSON path.
 - Decisions: `simulate` / `explain` on the control plane, or an engine-level conformance scenario
-  (`conformance/src/test/resources/scenarios/`) in a CoSec checkout.
+  (`test/conformance/src/test/resources/scenarios/`) in a CoSec checkout.
 - Transport mapping: `WebAdapterParityTest`, `PipelineTest` (`runtime`).
 
 In this repository, run a focused class first, for example:
 
 ```bash
-./gradlew :cosec-runtime:test --tests "me.ahoo.cosec.runtime.PipelineTest"
+./gradlew :runtime:test --tests "me.ahoo.cosec.runtime.PipelineTest"
 ```
 
 Use `$cosec-policy-author` to rewrite a confirmed-bad document and `$cosec-integration` to change confirmed-bad Spring

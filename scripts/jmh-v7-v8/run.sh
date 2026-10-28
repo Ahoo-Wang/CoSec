@@ -19,13 +19,13 @@
 # Environment: V7_DIR, V8_DIR (worktrees with built jmhJars), RESULTS (output dir), JAVA25, INCLUDE, SCENARIOS,
 # ROUNDS, FORKS, WARMUP, ITERATIONS, WARMUP_TIME, MEASUREMENT_TIME, SCRIPTS (directory of estimate.py).
 #
-# Each line of PAIRS is: name | 7.x module | 7.x class | 8.0 module | 8.0 class | extra 8.0 params. The scenario
+# Each line of PAIRS is: name | 7.x directory | 7.x class | 8.0 directory | 8.0 class | extra 8.0 params. The scenario
 # names are identical on both sides; the mapping is documented in compare.py.
 set -euo pipefail
 
 PAIRS=(
-  "pipeline|cosec-core|SecurityPipelineBenchmark|e2e|PipelineBenchmark|"
-  "authorization|cosec-core|SimpleAuthorizationBenchmark|engine|FlatAuthorizationBenchmark|boundary=none"
+  "pipeline|cosec-core|SecurityPipelineBenchmark|test/e2e|PipelineBenchmark|"
+  "authorization|cosec-core|SimpleAuthorizationBenchmark|core/engine|FlatAuthorizationBenchmark|boundary=none"
 )
 
 jar_of() { # dir module

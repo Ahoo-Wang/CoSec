@@ -1,0 +1,21 @@
+# Rule: OBL-3
+# Mutant: the pipeline skips an obligation kind it does not handle instead of dispatching exhaustively
+# Tests: :architecture:test --tests me.ahoo.cosec.runtime.ObligationDispatchTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+index aaa9996d..925fcd4b 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
+@@ -336,9 +336,10 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+         for (next in permit.obligations) {
+             // Exhaustive, with no else (OBL-3): a new kind of obligation does not compile until it is handled here, and
+             // a newer model beside this pipeline throws NoWhenBranchMatchedException, which `evaluate` answers 500.
+-            val obligation = when (next) {
+-                is Obligation.RateLimit -> next
++            if (next !is Obligation.RateLimit) {
++                continue
+             }
++            val obligation = next
+             val result = acquire(obligation)
+             when {
+                 result == null && obligation.strictFailure ->

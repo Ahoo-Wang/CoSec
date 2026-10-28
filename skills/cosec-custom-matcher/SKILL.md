@@ -11,8 +11,8 @@ most needs (use `$cosec-policy-author`). CoSec 7.x custom action and condition m
 external attributes.
 
 Human-facing reference: https://cosec.ahoo.me/architecture/extending. In a CoSec checkout the SPIs live in
-`runtime/src/main/kotlin/me/ahoo/cosec/runtime/` (`attribute/`, `event/`, `ratelimit/`, `authn/`) and
-`core/src/main/kotlin/me/ahoo/cosec/membership/`; the starter wires them in
+`core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/` (`attribute/`, `event/`, `ratelimit/`, `authn/`) and
+`core/core/src/main/kotlin/me/ahoo/cosec/membership/`; the starter wires them in
 `spring-boot-starter/.../pipeline/CoSecPipelineAutoConfiguration.kt` and
 `CoSecPipelineIntegrationAutoConfiguration.kt`. Inspect the target version's interfaces before writing code.
 
@@ -178,7 +178,7 @@ Replace `CoCacheControlStore` only to keep control-plane records outside Redis. 
 writes, implement `documents()` (every document with indexed revisions; may name more, never fewer),
 `openChanges()` (changes that may still be open; may name more, never fewer) and `acquireLease` / `releaseLease`
 (release only while the holder still has it). A failed read throws; never answer "absent". Start from
-`InMemoryControlStore` and the KDoc of `control/src/main/kotlin/me/ahoo/cosec/control/store/ControlStore.kt`.
+`InMemoryControlStore` and the KDoc of `core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlStore.kt`.
 
 ## Verification
 

@@ -1,0 +1,17 @@
+# Rule: ACT-1
+# Mutant: a wildcard value compared with eq is read as a pattern: a principal id ** or a path segment * matches anything
+# Tests: :conformance:test
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
+index 1389c375..e4d86302 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/CheckedCondition.kt
+@@ -84,7 +84,7 @@ sealed class CheckedCondition(
+                 AttributeType.STRING -> {
+                     val l = input.string(left) ?: return false
+                     val r = input.string(right) ?: return false
+-                    if (ignoreCase) Ascii.equalsIgnoreCase(l, r) else l == r
++                    if (ignoreCase) Ascii.equalsIgnoreCase(l, r) else l == r || r == "**" || l == "*"
+                 }
+ 
+                 AttributeType.BOOL -> {

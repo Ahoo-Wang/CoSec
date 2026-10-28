@@ -11,7 +11,7 @@ description: "运行 cosec-gateway-server 镜像，并用它自带的 JDK 25 AOT
 
 ## 镜像 {#the-image}
 
-CI 在每次推送时用 [`gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/Dockerfile)
+CI 在每次推送时用 [`platform/gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/Dockerfile)
 构建镜像，发布为 `ahoowang/cosec-gateway`、`ghcr.io/ahoo-wang/cosec-gateway` 和
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`，支持 `linux/amd64` 和 `linux/arm64`。网关服务是一个应用：只以
 镜像发布，从不作为库发布。
@@ -150,7 +150,7 @@ Deployment 中的镜像是 `ghcr.io/ahoo-wang/cosec-gateway:7.0.0`：把标签�
 
 镜像推送后，[`docker-deploy.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/docker-deploy.yml) 的
 `aot-smoke` 作业针对一个 Redis 7 服务容器运行
-[`aot-smoke.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/aot-smoke.sh)。它用
+[`aot-smoke.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/aot-smoke.sh)。它用
 `cosec-migrate publish` 发布一个平台文档，以 `-XX:AOTMode=on` 启动镜像（无法映射的缓存会让作业失败），添加一条指向
 网关自身健康端点的 `/smoke/**` 路由，然后检查：健康探针回答 `200`，匿名请求回答带 `application/problem+json` 的
 `401`，带有效 HS256 令牌的请求回答 `200`，匹配到 DENY 的请求回答带 `application/problem+json` 的 `403`。同样的步骤
@@ -172,7 +172,7 @@ JVM 启动时直接映射这个文件，不再重复这些工作。不需要改�
 
 ### 镜像如何使用它 {#how-the-image-uses-it}
 
-`Dockerfile` 在最终阶段用 [`aot-train.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/gateway-server/aot-train.sh)
+`Dockerfile` 在最终阶段用 [`aot-train.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/aot-train.sh)
 训练缓存，所用的 jar 和路径与容器运行时完全一致，结果写入 `/opt/cosec-gateway-server/aot/cosec-gateway-server.aot`。
 
 1. **记录。** 脚本用 `-XX:AOTMode=record` 和与生产相同的 JVM 参数启动网关，等到 `/actuator/health/liveness` 有响应后发送几个请求，

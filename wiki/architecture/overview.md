@@ -28,6 +28,11 @@ change must keep. What a decision *means* (deny first, default deny, fail closed
 
 ## Module layering
 
+Modules sit in group directories: `api/`, `core/` (model, engine, runtime, control, core), `backends/` (cocache,
+kafka), `edge/` (webflux, webmvc, gateway, openapi), `extensions/` (jwt, social, ip2region, micrometer,
+opentelemetry), `host/` (spring-boot), `migration/`, `test/`, `bom/` and `platform/` (gateway-server). A Gradle project
+is named after its directory (`:engine`, `:spring-boot`); its artifact keeps the `cosec-` prefix.
+
 ```mermaid
 flowchart BT
     model[cosec-model]
@@ -53,7 +58,7 @@ flowchart BT
 
 Arrows point at what a module depends on. The rules behind the picture:
 
-- **`cosec-model` and `cosec-engine`** (directories `model/` and `engine/`) are the pure core: ids, bindings,
+- **`cosec-model` and `cosec-engine`** (directories `core/model/` and `core/engine/`) are the pure core: ids, bindings,
   memberships, the condition AST, scopes and decisions in the model; action and resource patterns, the policy compiler
   and the flat engine in the engine. They depend on the Kotlin standard library only. `EnginePurityTest` (ArchUnit)
   fails on any reference to Reactor, Spring, logging, I/O, threads or clocks, and the `verifyPureClasspath` task, part
@@ -65,14 +70,14 @@ Arrows point at what a module depends on. The rules behind the picture:
   keys, and the logging audit sink. It depends on `cosec-api` and `cosec-engine`.
 - **`cosec-api`** holds the contracts applications compile against: `CoSecPrincipal`, `Tenant`, tokens,
   `Authentication`, `SecurityContext`, `AuditEvent` and `AuditEventSink`. It depends on Reactor alone. Changing it is a breaking change.
-- **`cosec-runtime`** (directory `runtime/`) is the data plane: the coroutine `Pipeline`, `StatusMapping`,
+- **`cosec-runtime`** (directory `core/runtime/`) is the data plane: the coroutine `Pipeline`, `StatusMapping`,
   `AuthorizationChecker`, and the SPIs a request calls (`Authenticator`, `AttributeProvider`, `DecisionListener`,
   `RateLimiter`). Coroutines stay in this module and the adapters, Reactor only at the adapter bridges:
   `RuntimeBoundaryTest` (ArchUnit) fails when code in `runtime/`, `engine/` or `model/` references `reactor.*`, when a
   data-plane SPI signature carries a Reactor type, when `runtime/` references Spring, the Servlet API or a coroutine
   bridge (`kotlinx.coroutines.reactor`, `runBlocking`), `GlobalScope` or `Dispatchers.IO`, or when it calls
   `runCatching`, which swallows cancellation.
-- **`cosec-control`** (directory `control/`) is the control plane: revisions, change requests, shadow windows,
+- **`cosec-control`** (directory `core/control/`) is the control plane: revisions, change requests, shadow windows,
   approvals, break-glass, simulation and analysis. It is a library that a host wires in. `ControlBoundaryTest`
   (ArchUnit) imports the module's own compiled classes and fails when one of them is outside `me.ahoo.cosec.control`,
   references Spring, `reactor.*`, the coroutine or Reactive Streams bridges or a Redis client, or calls `runBlocking`,
@@ -82,22 +87,24 @@ Arrows point at what a module depends on. The rules behind the picture:
   shadow reports), JWT, OAuth, OpenAPI, or an observer of decisions (`cosec-opentelemetry`, `cosec-micrometer`,
   `cosec-kafka`, `cosec-ip2region`). An adapter never decides; it translates.
 - **`cosec-spring-boot-starter`** wires everything. Each integration is a Gradle feature variant declared in
-  [`spring-boot-starter/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/spring-boot-starter/build.gradle.kts):
+  [`host/spring-boot/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/build.gradle.kts):
   the adapter module is a dependency of that variant only, and its auto-configuration is guarded by
   `@ConditionalOnClass`, so it is active only when the application requests the capability. The capabilities are listed
   in the [introduction](../guide/introduction.md#modules).
-- **`cosec-testkit`** (directory `testkit/`) runs scenarios against an application's own documents in JUnit 5. It
+- **`cosec-testkit`** (directory `test/testkit/`) runs scenarios against an application's own documents in JUnit 5. It
   depends on `cosec-core` and `junit-jupiter-api` (both part of its API) and on `cosec-runtime`, for the membership
   merge the pipeline uses. It holds the engine level of the scenario format, which `conformance` runs too, so the
   suite and the applications' tests evaluate scenarios one way.
 - **`cosec-migrate`** converts 7.x data into 8.0 documents and publishes them; no application depends on it.
-  **`cosec-gateway-server`** is a ready-to-run gateway built from the starter; it is never published. **`conformance`**
-  and **`e2e`** are test-only modules and are never published either.
+  **`cosec-gateway-server`** is a ready-to-run gateway built from the starter; it is never published. **`conformance`**,
+  **`architecture`** and **`e2e`** are test-only modules and are never published either. `architecture` holds the
+  structural rules that scan several modules: the purity and boundary tests above, the one-decision-path and token
+  rules, the project list and the version catalog.
 
 ## Request path
 
 `Pipeline.evaluate` in
-[`Pipeline.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt)
+[`Pipeline.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt)
 is one suspend function from the request's facts to an `Outcome`. The adapters (`PipelineWebFilter`,
 `PipelineServletFilter`, `PipelineGatewayFilter`) only read the request into `HttpFacts`, call it, and write what it
 returns. They depend on `RequestGate`, the interface `Pipeline` implements. The other `RequestGate` is `IdentityGate`,
@@ -188,7 +195,7 @@ permit there.
 ## The flat engine
 
 The engine
-([`FlatEngine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt))
+([`FlatEngine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt))
 evaluates one request against one `SnapshotView`: the compiled platform document, plus the tenant's document and, when
 the scope has roles in an app, that app's document. It reads no clock (the request carries its time) and does no I/O
 (external attributes arrive with the request). The view must belong to the request's tenant and app; the engine refuses
@@ -197,7 +204,7 @@ any other.
 ### Candidate order
 
 The engine first enumerates the policies that apply to the request, the *candidates*
-([`CandidateOrder.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt)):
+([`CandidateOrder.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt)):
 
 | # | Candidates |
 |---|---|
@@ -237,7 +244,7 @@ tenant. They are stored as JSON (schema 2), compiled once per revision, and held
 documents. A view is a reference to three of them, so an evaluation always sees one revision of each document
 (`SNP-1`, guarded by `SnapshotConsistencyPropertyTest`).
 
-[`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt)
+[`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt)
 holds them:
 
 - **Hot path.** `peek` is a synchronous lookup in memory, with no future and no I/O, safe on an event loop. Only a miss
@@ -259,7 +266,7 @@ holds them:
   so every request fails closed until one is published.
 
 The store is an SPI, `SnapshotDocumentStore`. With `cache-support` it is
-[`RedisSnapshotDocumentStore`](https://github.com/Ahoo-Wang/CoSec/blob/main/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore.kt):
+[`RedisSnapshotDocumentStore`](https://github.com/Ahoo-Wang/CoSec/blob/main/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore.kt):
 Redis is the store of record, CoCache keeps a local copy for at most `local-max-age`, conditional reads bypass every
 local copy, and CoCache's invalidation channel carries the change notifications. Without it, the starter uses an
 in-memory store. Redis keys, the `noeviction` requirement and behavior when Redis is unavailable are in
@@ -325,9 +332,9 @@ How to use changes, simulation, shadow windows and approvals is in [Testing poli
 
 Each invariant exists for a reason, and each has tests guarding it. Never weaken a guard to make a change pass. The
 normative rules behind them are in
-[`conformance/src/test/resources/rules/`](https://github.com/Ahoo-Wang/CoSec/tree/main/conformance/src/test/resources/rules),
+[`test/conformance/src/test/resources/rules/`](https://github.com/Ahoo-Wang/CoSec/tree/main/test/conformance/src/test/resources/rules),
 each with its scenarios or guard tests, and `:conformance:mutationCheck` breaks the rules on purpose
-([`conformance/mutants/`](https://github.com/Ahoo-Wang/CoSec/tree/main/conformance/mutants)) to prove a test fails.
+([`test/conformance/mutants/`](https://github.com/Ahoo-Wang/CoSec/tree/main/test/conformance/mutants)) to prove a test fails.
 [`AGENTS.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/AGENTS.md) holds the same list for coding agents.
 
 | Invariant | Why | Guard |
@@ -345,11 +352,11 @@ each with its scenarios or guard tests, and `:conformance:mutationCheck` breaks 
 
 Two benchmarks measure the hot path:
 
-- **`FlatAuthorizationBenchmark`** (`engine/src/jmh`) measures the engine alone: three global policies, two attached
+- **`FlatAuthorizationBenchmark`** (`core/engine/src/jmh`) measures the engine alone: three global policies, two attached
   principal policies and an app with 50 permissions granted to roles, in the scenarios `global` (a global ALLOW
   matches), `role` (a permission near the end of the app's list), `none` (nothing matches) and `role-heavy`, each with
   no platform boundary or a boundary of 1 or 8 statements.
-- **`PipelineBenchmark`** (`e2e/src/jmh`) measures `Pipeline.evaluate` end to end, with the same data published to
+- **`PipelineBenchmark`** (`test/e2e/src/jmh`) measures `Pipeline.evaluate` end to end, with the same data published to
   Redis and read through CoCache, a warm snapshot, and the scenarios `global`, `role`, `none`, `anonymous`,
   `blacklist`, `blocked` and `listener`.
 
@@ -372,7 +379,7 @@ The rounds, conditions and per-scenario numbers are in
 Run a benchmark through Gradle:
 
 ```bash
-./gradlew :cosec-engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark
+./gradlew :engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark
 ./gradlew :e2e:jmh -PjmhIncludes=PipelineBenchmark      # needs Redis on localhost:6379
 ```
 
@@ -385,7 +392,7 @@ To compare versions, build the jar and run it with real settings:
 
 ```bash
 ./gradlew :e2e:jmhJar
-java -jar e2e/build/libs/e2e-*-jmh.jar 'PipelineBenchmark.evaluate' \
+java -jar test/e2e/build/libs/e2e-*-jmh.jar 'PipelineBenchmark.evaluate' \
   -f 3 -wi 5 -i 10 -w 2s -r 2s -prof gc -rf json -rff jmh.json \
   -jvmArgsAppend "-Dlogback.configurationFile=$PWD/config/logback-jmh.xml"
 ```

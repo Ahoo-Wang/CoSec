@@ -278,7 +278,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 任何属性引用都不能读取携带凭证的请求头：`http.header.authorization`、`proxy-authorization`、`cookie`、`set-cookie`、
 `x-api-key` 和 `cosec-identity`，大小写不限，条件和限流规则的 `key` 都是如此。含有这种引用的文档无法编译，无论经由控制面还是
 `cosec-migrate`：在 `authorization` 上用 `prefix` 写的 DENY 会让文档作者逐个字符地获知其他主体的令牌，以它为 `key` 则会按令牌计数。`cosec-identity` 是网关转发给后端服务的请求头，在网关上它只是客户端的声明。这份列表是固定的
-（[`ConditionChecker.CREDENTIAL_HEADERS`](https://github.com/Ahoo-Wang/CoSec/blob/main/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt)）；
+（[`ConditionChecker.CREDENTIAL_HEADERS`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt)）；
 从其他请求头读取 API key 的宿主不在其覆盖范围内。
 
 同一请求头出现多次且每份值都相同时，读作该值。各份值不同时，该请求头没有单一的值，读取它的语句出错：基于它的 DENY
@@ -521,7 +521,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 }
 ```
 
-这些文件由 `cosec-core` 中的格式描述符（[`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt)）生成，从不手工编辑。有测试保证它们与文档读取器一致：一方接受的，另一方也接受。
+这些文件由 `cosec-core` 中的格式描述符（[`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt)）生成，从不手工编辑。有测试保证它们与文档读取器一致：一方接受的，另一方也接受。
 
 通过 schema 校验是必要条件，而非充分条件。JSON Schema 无法表达的内容包括：文件是三种文档中的哪一种；id 唯一和文档之间的引用；时区是否存在，以及 2 月 30 日这样的日期；`from` 等于 `to` 的时间窗口，以及 `notBefore` 晚于 `notAfter`；路径变量的作用域；属性目录和条件操作数的类型。要检查这些，请编译文档（[测试策略](./testing.md#validating-policies)）。
 
