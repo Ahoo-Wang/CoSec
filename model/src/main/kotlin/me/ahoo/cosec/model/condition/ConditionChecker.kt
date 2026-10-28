@@ -62,9 +62,31 @@ class ConditionChecker(
     /** The external attributes the registered providers declare (RFC 0006 §5.4.1). */
     val catalog: AttributeCatalog = AttributeCatalog.NONE,
 ) {
-    /** The attribute [path] names, a declared external one included; null when there is none. */
-    fun attribute(path: String): Attribute? =
-        Attribute.parse(path) ?: if (Attribute.isExternalPath(path)) catalog.external(path) else null
+    /**
+     * The attribute [path] names, a declared external one included; null when there is none. Every attribute reference
+     * of a document resolves here (conditions, rate limit keys), so this is where a credential header is refused: it
+     * is null for one, whoever asks (`CND-5`, [isCredentialHeader]).
+     */
+    fun attribute(path: String): Attribute? {
+        val attribute = Attribute.parse(path)
+            ?: return if (Attribute.isExternalPath(path)) catalog.external(path) else null
+        return attribute.takeUnless { isCredentialHeader(it) }
+    }
+
+    /** Why [attribute] has no attribute for [path], as an error a caller reports. */
+    fun unresolved(path: String): String {
+        val parsed = Attribute.parse(path)
+        val header = Attribute.Kind.HTTP_HEADER.path
+        return when {
+            parsed == null && path.startsWith(header) && path.length > header.length ->
+                "`$path` is not a header name: a header name is an ASCII token (RFC 9110)"
+            parsed != null && isCredentialHeader(parsed) ->
+                "`$path` is a credential header, which no attribute reference may read"
+            parsed == null && Attribute.isExternalPath(path) ->
+                "external attribute `$path` is not declared by any registered AttributeProvider"
+            else -> "unknown attribute `$path`"
+        }
+    }
 
     fun check(condition: Condition): CheckResult {
         val run = Run()
@@ -306,22 +328,13 @@ class ConditionChecker(
 
         /**
          * Paths take names (`subject.attributes.<name>`), so they are bounded like literals. A credential header is
-         * never readable ([CREDENTIAL_HEADERS]).
+         * never readable ([CREDENTIAL_HEADERS]): [attribute] refuses it.
          */
         private fun attribute(path: String, at: String): Attribute? {
             string(path, at) ?: return null
-            Attribute.parse(path)?.let { attribute ->
-                if (attribute.kind == Attribute.Kind.HTTP_HEADER && attribute.name in CREDENTIAL_HEADERS) {
-                    error(at, "`$path` is a credential header, which no condition may read")
-                    return null
-                }
-                return attribute
-            }
-            if (Attribute.isExternalPath(path)) {
-                return catalog.external(path)
-                    ?: null.also { error(at, "external attribute `$path` is not declared by any registered AttributeProvider") }
-            }
-            return null.also { error(at, "unknown attribute `$path`") }
+            this@ConditionChecker.attribute(path)?.let { return it }
+            error(at, unresolved(path))
+            return null
         }
 
         private fun strings(values: List<Literal>, path: String, attribute: Attribute): List<String>? {
@@ -365,6 +378,10 @@ class ConditionChecker(
          */
         val CREDENTIAL_HEADERS: Set<String> =
             setOf("authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "cosec-identity")
+
+        /** Whether [attribute] is a credential header, which no attribute reference may read (`CND-5`). */
+        fun isCredentialHeader(attribute: Attribute): Boolean =
+            attribute.kind == Attribute.Kind.HTTP_HEADER && attribute.name in CREDENTIAL_HEADERS
 
         private const val ROOT = "$"
         private const val IPV4_BITS = 32

@@ -73,4 +73,12 @@ class HttpAttributesTest {
         attributes.ip(Attribute.of(Kind.ENVIRONMENT_IP)).assert().isNull()
         attributes.time(Attribute.of(Kind.ENVIRONMENT_TIME)).assert().isEqualTo(ConditionInput.NO_TIME)
     }
+
+    /** Header names fold as the documents fold them: ASCII only, so `X-API-\u212Aey` is not `x-api-key`. */
+    @Test
+    fun `header names fold ASCII letters only`() {
+        val headers = Headers.of(mapOf("X-API-\u212Aey" to listOf("forged"), "X-API-KEY" to listOf("real")))
+        headers.values("x-api-key").assert().containsExactly("real")
+        headers.values("x-api-\u212Aey").assert().containsExactly("forged")
+    }
 }

@@ -15,10 +15,10 @@ package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.ConditionInput
+import me.ahoo.cosec.model.condition.HttpNames
 import me.ahoo.cosec.model.condition.IpAddress
 import java.net.URI
 import java.net.URISyntaxException
-import java.util.Locale
 
 /**
  * The host's attributes of one HTTP request (RFC 0005 §3.2, RFC 0006 §5.4): what the engine does not hold itself.
@@ -71,7 +71,7 @@ class HttpAttributes(
     }
 
     private fun hostOf(value: String): String? = try {
-        URI(value).host?.lowercase(Locale.ROOT)
+        URI(value).host?.let(HttpNames::fold)
     } catch (_: URISyntaxException) {
         null
     }

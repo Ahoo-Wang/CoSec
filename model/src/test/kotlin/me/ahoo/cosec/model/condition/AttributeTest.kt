@@ -120,4 +120,28 @@ class AttributeTest {
         val mistyped = ConditionChecker(catalog = catalog).check(Condition.Eq("ext.geo.inFence", Literal.Str("yes")))
         (mistyped is CheckResult.Invalid).assert().isTrue()
     }
+
+    /**
+     * `CND-5`: a header name is an ASCII token, folded with the ASCII fold. A Unicode case mapping would let
+     * `x-api-\u212Aey` (KELVIN SIGN) pass the credential check and still read `x-api-key` where a header map folds Unicode.
+     */
+    @Test
+    fun `a header name that is not an ASCII token does not parse`() {
+        listOf("x-api-\u212Aey", "coo\u212Aie", "caf\u00e9", "x debug", "x:debug").forEach { name ->
+            Attribute.parse("http.header.$name").assert().isNull()
+            assertThrows<IllegalArgumentException> { Attribute.of(Attribute.Kind.HTTP_HEADER, name) }
+        }
+        Attribute.parse("http.header.").assert().isNull()
+        assertThrows<IllegalArgumentException> { Attribute.of(Attribute.Kind.HTTP_HEADER, "") }
+        Attribute.parse("http.header.X-Api-Version!#\$%&'*+.^_`|~").assert().isNotNull()
+        Attribute.of(Attribute.Kind.HTTP_HEADER, "X-API-KEY").name.assert().isEqualTo("x-api-key")
+    }
+
+    @Test
+    fun `http names fold only ASCII letters`() {
+        HttpNames.fold("X-API-\u212Aey").assert().isEqualTo("x-api-\u212Aey")
+        HttpNames.fold("COOKIE").assert().isEqualTo("cookie")
+        HttpNames.isToken("x-api-key").assert().isTrue()
+        HttpNames.isToken("").assert().isFalse()
+    }
 }

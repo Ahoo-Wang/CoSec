@@ -1,0 +1,17 @@
+# Rule: CND-5
+# Mutant: any non-empty header name is a token, so x-api-<KELVIN SIGN>ey compiles and can fold onto x-api-key
+# Tests: :cosec-model:test --tests me.ahoo.cosec.model.condition.AttributeTest :conformance:test
+
+diff --git a/model/src/main/kotlin/me/ahoo/cosec/model/condition/HttpNames.kt b/model/src/main/kotlin/me/ahoo/cosec/model/condition/HttpNames.kt
+index c29b9b0d..34e427d2 100644
+--- a/model/src/main/kotlin/me/ahoo/cosec/model/condition/HttpNames.kt
++++ b/model/src/main/kotlin/me/ahoo/cosec/model/condition/HttpNames.kt
+@@ -21,7 +21,7 @@ package me.ahoo.cosec.model.condition
+  */
+ object HttpNames {
+     /** Whether [name] is a non-empty token. */
+-    fun isToken(name: String): Boolean = name.isNotEmpty() && name.all(::isTokenChar)
++    fun isToken(name: String): Boolean = name.isNotEmpty()
+ 
+     /** [value] with `A`–`Z` folded to `a`–`z`, and nothing else changed. */
+     fun fold(value: String): String = Ascii.lowercase(value)

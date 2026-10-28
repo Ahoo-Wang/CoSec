@@ -128,7 +128,11 @@ class Attribute private constructor(
             require(kind.parameterized) { "Attribute ${kind.path} takes no name." }
             require(kind != Kind.EXTERNAL) { "External attributes have a declared type: use Attribute.external." }
             require(name.isNotEmpty()) { "Attribute ${kind.path}<name> needs a name." }
-            return Attribute(kind, if (kind == Kind.HTTP_HEADER) Ascii.lowercase(name) else name)
+            if (kind == Kind.HTTP_HEADER) {
+                require(HttpNames.isToken(name)) { "A header name is an ASCII token (RFC 9110), not `$name`." }
+                return Attribute(kind, HttpNames.fold(name))
+            }
+            return Attribute(kind, name)
         }
 
         /**
@@ -151,12 +155,19 @@ class Attribute private constructor(
             return dot > 0 && dot < rest.length - 1
         }
 
-        /** The built-in catalog attribute at [path], or null if there is none. External attributes are never built in. */
+        /**
+         * The built-in catalog attribute at [path], or null if there is none. External attributes are never built in,
+         * and a header whose name is not an ASCII token ([HttpNames.isToken]) is none: it could fold onto another.
+         */
         fun parse(path: String): Attribute? {
             FIXED[path]?.let { return it }
             for (kind in PARAMETERIZED) {
                 if (path.length > kind.path.length && path.startsWith(kind.path)) {
-                    return of(kind, path.substring(kind.path.length))
+                    val name = path.substring(kind.path.length)
+                    if (kind == Kind.HTTP_HEADER && !HttpNames.isToken(name)) {
+                        return null
+                    }
+                    return of(kind, name)
                 }
             }
             return null
