@@ -24,6 +24,7 @@ import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.api.audit.AuditEvent
 import me.ahoo.cosec.api.audit.AuditEventSink
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.cache.CoCacheMembershipProvider
 import me.ahoo.cosec.cache.MembershipCache
 import me.ahoo.cosec.cache.MembershipLoader
@@ -34,6 +35,7 @@ import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.kafka.KafkaChangeListener
 import me.ahoo.cosec.membership.MembershipClaims
+import me.ahoo.cosec.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.membership.MembershipProvider
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
@@ -112,15 +114,14 @@ class StarterWiringTest {
         .withBean(RevocationReader::class.java, { RevocationReader.NONE })
         .withBean(SnapshotDocumentStore::class.java, { documents })
 
-    private fun token(
-        context: ApplicationContext,
-        principal: String,
-        attributes: Map<String, String> = emptyMap(),
-    ): String = context.getBean(TokenConverter::class.java)
-        .toToken(
-            SimpleTenantPrincipal(SimplePrincipal(principal, emptySet(), emptySet(), attributes), SimpleTenant(TENANT))
-        )
-        .accessToken
+    /** [principal]'s token; with [provider], one that asks the membership provider (RFC 0004 §4.5.2). */
+    private fun token(context: ApplicationContext, principal: String, provider: Boolean = false): String {
+        val plain: CoSecPrincipal = SimplePrincipal(principal)
+        val marked = if (provider) MembershipMarkedPrincipal(plain, MembershipClaims.PROVIDER) else plain
+        return context.getBean(TokenConverter::class.java)
+            .toToken(SimpleTenantPrincipal(marked, SimpleTenant(TENANT)))
+            .accessToken
+    }
 
     private fun status(context: ApplicationContext, token: String): Int {
         val facts = HttpFacts(
@@ -312,8 +313,8 @@ class StarterWiringTest {
         cachedPipelineRunner.run { context ->
             context.startupFailure.assert().isNull()
             published(context)
-            status(context, token(context, "alice", PROVIDER)).assert().isEqualTo(200)
-            status(context, token(context, "bob", PROVIDER)).assert().isEqualTo(403)
+            status(context, token(context, "alice", provider = true)).assert().isEqualTo(200)
+            status(context, token(context, "bob", provider = true)).assert().isEqualTo(403)
         }
     }
 
@@ -327,7 +328,7 @@ class StarterWiringTest {
         cachedPipelineRunner.withBean(MembershipCache::class.java, { failing }).run { context ->
             context.startupFailure.assert().isNull()
             published(context)
-            status(context, token(context, "alice", PROVIDER)).assert().isEqualTo(503)
+            status(context, token(context, "alice", provider = true)).assert().isEqualTo(503)
         }
     }
 
@@ -410,8 +411,6 @@ class StarterWiringTest {
     private fun Throwable.rootCause(): Throwable = generateSequence(this) { it.cause }.last()
 
     private companion object {
-        val PROVIDER = mapOf(MembershipClaims.MARKER_KEY to MembershipClaims.PROVIDER)
-
         /** acme's clerks, in the default space, may do anything. */
         const val CLERKS = ""","policies":[{"id":"clerks","statements":[{"effect":"allow","action":"http:*"}]}],""" +
             """"bindings":[{"id":"clerks","subject":{"role":"clerk"},"app":"*","space":"*","policy":"clerks"}]"""
