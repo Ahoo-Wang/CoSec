@@ -267,7 +267,7 @@ R1 → `PIP-2`）；它们对 7.x 用户意味着什么，写进 `upgrading.md`�
 | A3、A4 | 规范化不改变语义；求值访问的节点数不超过上限 | `model/`：`condition/ConditionPropertyTest` | 已合入（#1022） |
 | Q 规则 | 按决定编号写成的规则用例，例如 RFC 0005 Q7（不存在不等于任何值） | `model/`：`condition/ConditionEvaluationTest` | 已合入（#1022）；登记为 `CND-1` 的守护 |
 | P6 | 安装单调 | `cosec-core`：`snapshot/SnapshotInstallOrderPropertyTest` | 已合入（#988） |
-| P7 | 一次评估只用每份文档的一个修订 | `cosec-core`：`authorization/SnapshotConsistencyPropertyTest` | 已合入（#998）；随 RFC 0004 PR-4 改到 8.0 的文档上 |
+| P7 | 一次评估只用每份文档的一个修订 | `cosec-core`：`snapshot/SnapshotConsistencyPropertyTest` | 已合入（#998）；#1114 改到 8.0 的快照路径（平台与租户文档经 8.0 编译器、扁平引擎）；视图由测试内的 `DocumentSnapshotViews` 副本拼装，生产拼装在并发重新发布下的变体是后续项 |
 
 随后续 PR 加入（登记表中先为 `pending`）：
 

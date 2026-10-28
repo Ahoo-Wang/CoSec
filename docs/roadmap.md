@@ -3,7 +3,7 @@
 > 目标架构见 [RFC 0001](rfc/0001-target-architecture.md)，各阶段的细化设计见各自的 RFC。本文只记录**进度**：每个阶段走到了哪一步、
 > 还差什么、在等谁的决定。决策和理由以 RFC 为准；本文与 RFC 不一致时，以 RFC 为准并修正本文。
 >
-> 更新于 2026-10-27，基线 `main` @ `7467cc18`（#1104，S1b）。
+> 更新于 2026-10-28，基线 `main` @ `04c9f65e`（#1114，S2–S4）。
 >
 > 面向用户的路线图见 [CoSec 8.0 路线图](https://cosec.ahoo.me/zh/guide/roadmap)（[`wiki/zh/guide/roadmap.md`](../wiki/zh/guide/roadmap.md)）。
 
@@ -169,8 +169,8 @@ PR-9（#1091，`feat(control): expose the control plane as a library and over HT
 | ~~RFC 0008 PR-4~~ | ~~切换~~：2026-10-26 拆成 S1–S5（RFC 0008 §4.4.1） | — | — |
 | S1a | `feat(starter): add the 8.0 auto-configuration`（RFC 0008 §4.4 的 S1 拆分，2026-10-27 批准）：加法，可以 revert；8.0 的自动配置类**不**登记进 `AutoConfiguration.imports`，由测试与端到端切片显式加载；没有开关，也没有 7.x 脚手架 | 其余全部实现 PR、端到端切片 | ✅ 已合入（#1097） |
 | S1b | `refactor!: wire the 8.0 path in the starter`：登记 8.0 的自动配置，删除 7.x 的自动配置、L1、L2、L5 的属性与 `init-repository`/`force-refresh`；`cosec-gateway-server` 与 `k8s/` 改到 8.0；`aot-smoke` 作业；不可回退点，带 RFC 0008 §3.9 第 1–5 条的证据 | S1a ✓；§3.9 第 1–5 条 | ✅ 已合入（#1104，`7467cc18`，2026-10-27）。§3.9 证据（head `c2753727`）：CI 全绿；没有 `pending` 规则（`SNP-1`/`SNP-2`/`SNP-4` 为 `timing`）；百万例 `property-stress.yml` [40640041416](https://github.com/Ahoo-Wang/CoSec/actions/runs/40640041416) 全部通过；`mutationCheck` 21/21；`jmh-v7-v8.yml` [40640046212](https://github.com/Ahoo-Wang/CoSec/actions/runs/40640046212) 7 个场景全部 PASS（授权 364–601 %，Pipeline 126–219 %） |
-| S2–S4 | 一个删除 PR（2026-10-27 合并，RFC 0008 §4.4.1）：`refactor!: remove the 7.x storage, decision path, contracts and matchers`，按提交依次删除存储与写入路径（`cosec-cocache`、RFC 0007 X1–X3）、7.x 决策路径（`cosec-core`、`engine/` 按层引擎、适配器、装饰器链）、7.x 契约与匹配器（`cosec-api`、OGNL/SpEL、序列化器） | S1 | 进行中（2026-10-27 派发） |
-| S5 | 文档：`wiki/`、`skills/`、`schema/`、AGENTS.md、`upgrading.md` | 删除 PR 合入后写完并合入 | 未开工 |
+| S2–S4 | 一个删除 PR（2026-10-27 合并，RFC 0008 §4.4.1）：`refactor!: remove the 7.x storage, decision path, contracts and matchers`，按提交依次删除存储与写入路径（`cosec-cocache`、RFC 0007 X1–X3）、7.x 决策路径（`cosec-core`、`engine/` 按层引擎、适配器、装饰器链）、7.x 契约与匹配器（`cosec-api`、OGNL/SpEL、序列化器） | S1 | ✅ 已合入（#1114，`04c9f65e`，2026-10-28）：删除 42,080 行、新增 1,400 行；`migrate/` 需要的 7.x 解码搬进 `migrate.v7`（内部，`ognl` 为 `compileOnly`，缺失时 `convert` 给出原因而不是崩溃）；8.0 代码用到的常量与函数搬进 8.0 的类，行为不变；`CoSecModule` 只剩 `PolicyType` 序列化与 `Scope` 拒绝（`SCP-5`）；`mutationCheck` 21/21；完成 §4.6 的 L1、L2（`cosec-cocache` 部分）、L6、L7、L8（`migrate/` 之外）、L9、L15、L18（目录条目保留给 `migrate` 的 `compileOnly`） |
+| S5 | 文档：`wiki/`、`skills/`、`schema/`、AGENTS.md、`upgrading.md` | 删除 PR 合入后写完并合入 | 进行中（2026-10-28 派发） |
 | RFC 0008 PR-5、PR-6 | RC 前清理：按 RFC 0008 §4.6 的清单删除遗留代码、构建配置与文档中的版本沿革，加入守护 G1–G7；清单清空（"保留"项除外）是 RC 前提 | S5；RFC 0008 §6 Q9–Q15 ✓（2026-10-26 批准） | 等 S5（L17、L31 可以提前） |
 | RC 安全审查 | 集成系统的威胁模型审查：多租户隔离、控制面越权与授出分析、break-glass、快照与缓存投毒、problem+json 泄露、DoS；发现全部在 RC 前修复（RFC 0008 §3.9） | S1 后开始；PR-5、PR-6 后做最后一遍 | 未开工 |
 
@@ -195,7 +195,8 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 
 - **百万例 `property-stress.yml` 在 `main` 上全部通过**：`model`、`engine`、`runtime`、`control`（[40628433863](https://github.com/Ahoo-Wang/CoSec/actions/runs/40628433863)），`cosec-core`（#1111 之后重跑，[40635399876](https://github.com/Ahoo-Wang/CoSec/actions/runs/40635399876)）。S1b 的证据在它自己的最终 head 上再跑一次。
 - #1108（`fix(runtime)`，N3 重新编译覆盖加载中的槽位，审查发现 S4）：按旧平台编译的加载不安装，无法重新编译即 fail closed 并按退避重试；新规则 `SNP-4`（`pending`，S1b 把它移到 `timing`）；变异体拆成 4 个，全部被杀死。已合入。
-- **S1b 已合入**（#1104，`7467cc18`）：8.0 路径是 starter 唯一装配的路径，证据见 §6。下一步是 S2–S4 的删除 PR（进行中），然后 S5 文档，之后 RFC 0008 PR-5/PR-6 与 RC 安全审查。
+- **S1b 已合入**（#1104，`7467cc18`）：8.0 路径是 starter 唯一装配的路径，证据见 §6。S2–S4 的删除 PR 已合入（#1114，见 §6）。S5 文档进行中，之后 RFC 0008 PR-5/PR-6 与 RC 安全审查。
+- 后续项（#1114 审查）：`SnapshotConsistencyPropertyTest`（SNP-1）的视图由测试内的副本拼装，补一个经生产 `DocumentSnapshotViews`、在并发重新发布下的 runtime 级变体；`migrate/` 改用不需要匹配器的读取器，去掉 `OgnlSandbox` 与 `ognl`（L8 余项）。
 - 观察项（再失败就按"可能放行 / 失效通知丢失"调查，不只重跑）：`PathTemplateValueTest` 的 LEGACY 限流偶发放行（应为 429）；`RedisSnapshotDocumentStoreTest#passesOnInvalidationsOfItsNamespaceFromEveryInstance`（REDIS）在 #1108 的 Codecov 作业失败一次。
 - 后续项：影子报告索引改为只增的 Redis SET（`SADD`，ACL 只放行 `SADD`/`SMEMBERS`），关闭"在控制面第一次看到前被删出索引"的缺口，需要 starter 传入 Redis 客户端（S1b 之后）；`ACT-1`、`BDY-1` 的变异体。
 - #1106、#1107 草稿只作保存，不合入。
