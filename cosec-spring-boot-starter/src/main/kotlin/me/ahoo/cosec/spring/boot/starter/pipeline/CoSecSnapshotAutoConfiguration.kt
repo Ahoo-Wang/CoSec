@@ -60,7 +60,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.availability.ApplicationAvailability
 import org.springframework.boot.context.properties.EnableConfigurationProperties
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import java.time.Clock
@@ -200,7 +202,7 @@ class CoSecSnapshotAutoConfiguration {
 
     /**
      * The snapshot source. It loads the platform first, so that no app or tenant document compiles against default
-     * limits, then the prewarmed apps and tenants.
+     * limits, then prewarms the platform and the configured apps and tenants: empty lists mean the platform only.
      */
     @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean
@@ -212,9 +214,30 @@ class CoSecSnapshotAutoConfiguration {
         val snapshot = properties.snapshot
         val source = DocumentSnapshots.source(store, compiler, snapshot.toOptions())
         compiler.bind(source)
-        val prewarm = snapshot.prewarmApps.map { SnapshotKey.App(it) } + snapshot.prewarmTenants.map { SnapshotKey.Tenant(it) }
+        val prewarm = listOf(SnapshotKey.Platform) + snapshot.prewarmApps.map { SnapshotKey.App(it) } +
+            snapshot.prewarmTenants.map { SnapshotKey.Tenant(it) }
         source.load().whenComplete { _, _ -> source.prewarm(prewarm) }
         return source
+    }
+
+    /** Readiness refuses traffic until the snapshot is ready ([SnapshotReadiness]); liveness is not touched. */
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean
+    fun cosecSnapshotReadiness(
+        source: SnapshotSource<CompiledDocument, CompiledDocument>,
+        publisher: ApplicationEventPublisher,
+        availability: ObjectProvider<ApplicationAvailability>,
+    ): SnapshotReadiness = SnapshotReadiness(source, publisher, availability.ifAvailable)
+
+    /** `cosecSnapshot` in the health endpoint, when the host has actuator. */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = ["org.springframework.boot.health.contributor.HealthIndicator"])
+    class Health {
+        @Bean
+        @ConditionalOnMissingBean(name = ["cosecSnapshotHealthIndicator"])
+        fun cosecSnapshotHealthIndicator(
+            source: SnapshotSource<CompiledDocument, CompiledDocument>,
+        ): SnapshotHealthIndicator = SnapshotHealthIndicator(source)
     }
 
     @Bean

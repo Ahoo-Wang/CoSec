@@ -16,6 +16,7 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.identity.IdentityCodec
+import me.ahoo.cosec.runtime.event.DecisionListeners
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.util.unit.DataSize
 import java.time.Duration
@@ -213,5 +214,19 @@ class RequiredListenerProperties {
 
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "audit.required"
+    }
+}
+
+/** `cosec.observability.listener.*` (RFC 0006 X8): the queues of the BEST_EFFORT decision listeners. */
+@ConfigurationProperties(prefix = ListenerProperties.PREFIX)
+class ListenerProperties {
+    /** The events one BEST_EFFORT listener may have waiting; a full queue drops the next and counts it. */
+    var queueCapacity: Int = DecisionListeners.DEFAULT_QUEUE_CAPACITY
+
+    /** On shutdown, how long queued events still go out before the rest is dropped. */
+    var drainTimeout: Duration = Duration.ofSeconds(5)
+
+    companion object {
+        const val PREFIX = CoSec.COSEC_PREFIX + "observability.listener"
     }
 }

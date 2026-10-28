@@ -18,18 +18,23 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.future.asCompletableFuture
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.runtime.resumeOffIo
 import me.ahoo.cosec.runtime.withLazyTimeoutOrNull
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
@@ -50,16 +55,20 @@ private val log = KotlinLogging.logger {}
  *   cost more than the event itself (`docs/perf/e2e-slice`). After delivering what is queued, it waits up to [LINGER]
  *   for more, and only a consumer with nothing queued waits for a wake-up. A queue half full wakes it at once.
  *
- * [close] stops taking events; the consumers finish what is queued. Failures and drops are counted in [stats] and
- * logged at most once per [warnInterval] per listener.
+ * [close] stops taking events; the consumers finish what is queued. [drain] does that for at most [drainTimeout], then
+ * drops the rest: what a host calls on shutdown (`cosec.observability.listener.drain-timeout`). Failures and drops are
+ * counted in [stats] and logged at most once per [warnInterval] per listener.
  */
 class DecisionListeners(
     listeners: List<DecisionListener>,
     /** `cosec.audit.required.timeout`: how long one REQUIRED listener may take. */
     val requiredTimeout: Duration = 1.seconds,
+    /** `cosec.observability.listener.queue-capacity`: the events one BEST_EFFORT listener may have waiting. */
     queueCapacity: Int = DEFAULT_QUEUE_CAPACITY,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val warnInterval: Duration = 10.seconds,
+    /** `cosec.observability.listener.drain-timeout`: how long [drain] lets the consumers deliver what is queued. */
+    private val drainTimeout: Duration = DEFAULT_DRAIN_TIMEOUT,
 ) : AutoCloseable {
     /** What happened to one listener's events. */
     class Stats internal constructor(val listener: String, val delivery: Delivery) {
@@ -94,6 +103,7 @@ class DecisionListeners(
     private val requiredStats: List<Stats>
     private val bestEffort: List<Queued>
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
+    private val consumers: List<Job>
     private val requiredFailureCount = AtomicLong()
 
     @Volatile
@@ -124,7 +134,7 @@ class DecisionListeners(
         bestEffort = listeners.filter { it.delivery == Delivery.BEST_EFFORT }.map { listener ->
             Queued(listener, Stats(listener.name, Delivery.BEST_EFFORT), queueCapacity)
         }
-        bestEffort.forEach { queued -> scope.launch { consume(queued) } }
+        consumers = bestEffort.map { queued -> scope.launch { consume(queued) } }
         shadows = listeners.filterIsInstance<ShadowListener>().filter { it.delivery == Delivery.BEST_EFFORT }
         stats = requiredStats + bestEffort.map { it.stats }
         if (required.isEmpty() && listeners.isNotEmpty()) {
@@ -252,6 +262,27 @@ class DecisionListeners(
         bestEffort.forEach { it.wake.close() }
     }
 
+    /**
+     * Stops taking events and lets the consumers deliver what is queued for up to [drainTimeout]; whatever is left then is
+     * dropped. True when everything queued was delivered. A blocking call, for a host's shutdown, never for a request.
+     */
+    fun drain(): Boolean {
+        close()
+        val drained = try {
+            scope.async { consumers.joinAll() }.asCompletableFuture()
+                .get(drainTimeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)
+            true
+        } catch (_: TimeoutException) {
+            log.warn { "Decision listeners did not deliver every queued event within $drainTimeout; the rest is dropped." }
+            false
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+        scope.cancel()
+        return drained
+    }
+
     /** Stops at once: queued events are dropped. */
     fun cancel() {
         close()
@@ -260,6 +291,7 @@ class DecisionListeners(
 
     companion object {
         const val DEFAULT_QUEUE_CAPACITY = 1024
+        val DEFAULT_DRAIN_TIMEOUT: Duration = 5.seconds
 
         /** How long a consumer waits for more events after a batch: the most a BEST_EFFORT event waits to start. */
         internal val LINGER: Duration = 1.milliseconds
