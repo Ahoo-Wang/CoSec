@@ -113,6 +113,25 @@ class PolicyTestKitTest {
         assertThrows<IllegalArgumentException> { PolicyTestKit.load(Path.of("src", "test", "resources", "missing")) }
     }
 
+    /** The kit compiles as an instance does: against the platform's declared attributes and its limits. */
+    @Test
+    fun `documents compile against the platform's attributes and limits`() {
+        val platform = """{"limits": {"maxInValues": 2}, "attributes": [{"path": "ext.geo.region", "type": "string"}]}"""
+        val tenant = { condition: String ->
+            """{"policies": [{"id": "p", "statements": [{"effect": "allow", "action": "*", "condition": $condition}]}]}"""
+        }
+        // An attribute the platform declares compiles in a tenant document; undeclared, it does not.
+        PolicyTestKit.of(platform, tenants = mapOf("acme" to tenant("""{"eq": ["ext.geo.region", "eu"]}""")))
+        assertThrows<DocumentException> {
+            PolicyTestKit.of("{}", tenants = mapOf("acme" to tenant("""{"eq": ["ext.geo.region", "eu"]}""")))
+        }.message.assert().startsWith("The tenant acme document:")
+        // The platform's stricter limit holds for the other documents.
+        val wide = tenant("""{"in": ["scope.app", ["a", "b", "c"]]}""")
+        PolicyTestKit.of("{}", tenants = mapOf("acme" to wide))
+        assertThrows<DocumentException> { PolicyTestKit.of(platform, tenants = mapOf("acme" to wide)) }
+            .message.assert().startsWith("The tenant acme document:")
+    }
+
     private fun scenario(expect: String, action: String = "order:read") = ScenarioJson.parse(
         """{"credential": {"tenant": "acme", "roles": ["reader"]}, "request": {"action": "$action"}, "expect": $expect}"""
     )
