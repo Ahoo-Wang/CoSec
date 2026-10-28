@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache
 
 import io.lettuce.core.RedisURI
@@ -21,7 +23,8 @@ import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.core.proxy.CacheProxies
 import me.ahoo.cocache.redis.RedisBackend
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosid.test.MockIdGenerator
 
 /**
@@ -35,12 +38,12 @@ internal class CoSecTestCaches(
     val runtime: CacheRuntime = CacheRuntime.builder().backend(backend).build()
 
     val revokedTokenCache: RevokedTokenCache by lazy {
-        runtime.createCache(CoSecCacheSpecs.revokedToken(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer), keyPrefix))
+        runtime.createCache(CoSecCacheSpecs.revokedToken(CoSecCacheSpecs.jacksonCodec(CoSecJson.mapper), keyPrefix))
     }
 
     val revokedSubjectCache: RevokedSubjectCache by lazy {
         runtime.createCache(
-            CoSecCacheSpecs.revokedSubject(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer), keyPrefix)
+            CoSecCacheSpecs.revokedSubject(CoSecCacheSpecs.jacksonCodec(CoSecJson.mapper), keyPrefix)
         )
     }
 

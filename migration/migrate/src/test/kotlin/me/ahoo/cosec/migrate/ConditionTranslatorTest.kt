@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.fail
@@ -40,7 +43,7 @@ class ConditionTranslatorTest {
             { kind, location, message -> rejections += Rejection(kind, location, message) },
             { changes += it }
         )
-            .translate(CoSecJsonSerializer.readTree(json), "c", deny)
+            .translate(CoSecJson.mapper.readTree(json), "c", deny)
 
     @Test
     fun `every row agrees with 7x on adversarial requests, never widening`() {
@@ -262,7 +265,7 @@ class ConditionTranslatorTest {
         private fun directional(json: String) = Row(json, exact = false)
 
         private fun negations(rows: List<Row>): List<Row> = rows + rows.map { row ->
-            val node = CoSecJsonSerializer.readTree(row.json) as tools.jackson.databind.node.ObjectNode
+            val node = CoSecJson.mapper.readTree(row.json) as tools.jackson.databind.node.ObjectNode
             val config = node.properties().first().value
             if (config is tools.jackson.databind.node.ObjectNode) config.put("negate", true)
             Row(node.toString(), row.exact)

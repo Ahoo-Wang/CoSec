@@ -22,8 +22,8 @@ import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.jwt.Jwts.removeBearerPrefix
-import me.ahoo.cosec.token.RefreshTokenMismatchException
-import me.ahoo.cosec.token.TokenVerifier
+import me.ahoo.cosec.login.token.RefreshTokenMismatchException
+import me.ahoo.cosec.spi.token.TokenVerifier
 
 /**
  * JWT-based token verifier.
@@ -47,10 +47,10 @@ class JwtTokenVerifier(
         try {
             return jwtVerifier.verify(accessToken)
         } catch (tokenExpiredException: TokenExpiredException) {
-            throw me.ahoo.cosec.token
+            throw me.ahoo.cosec.spi.token
                 .TokenExpiredException(tokenExpiredException.message!!, tokenExpiredException)
         } catch (exception: Exception) {
-            throw me.ahoo.cosec.token
+            throw me.ahoo.cosec.spi.token
                 .TokenVerificationException(exception.message!!, exception)
         }
     }
@@ -76,7 +76,7 @@ class JwtTokenVerifier(
         try {
             algorithm.verify(decodedAccessToken)
         } catch (exception: Exception) {
-            throw me.ahoo.cosec.token
+            throw me.ahoo.cosec.spi.token
                 .TokenVerificationException(exception.message!!, exception)
         }
     }

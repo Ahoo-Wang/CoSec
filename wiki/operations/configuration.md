@@ -10,7 +10,8 @@ starter binds, and for the `cocache.*` properties that change how CoSec behaves;
 here for its type and default.
 
 Every property is optional unless marked **required**. A property only acts when the module it configures is on the
-classpath: each integration is a starter feature variant ([Modules](../guide/introduction.md#modules)). Durations take
+classpath: each integration is a module the application adds next to the starter
+([Modules](../guide/introduction.md#modules)). Durations take
 Spring's format (`500ms`, `10s`, `7d`), data sizes `16MB`; sets and lists take a comma-separated value or a YAML list;
 enum values are case-insensitive. Properties that 7.x had and 8.0 does not are listed in
 [Upgrading](./upgrading.md#removed-and-renamed-properties).
@@ -33,26 +34,26 @@ property. The message lists every unknown key and, for a 7.x key, what replaced 
 |---|---|---|---|
 | `cosec.enabled` | boolean | `true` | every CoSec auto-configuration |
 | `cosec.authentication.login.enabled` | boolean | `true` | the login beans, which turn credentials into a token: `CompositeAuthentication` over your `Authentication` beans, `TokenCompositeAuthentication` with JWT, and social login. Authenticating requests in the pipeline does not depend on it |
-| `cosec.authentication.login.social.enabled` | boolean | `true` | social login (`oauth-support`; needs `cosec.authentication.login.enabled`) |
+| `cosec.authentication.login.social.enabled` | boolean | `true` | social login (`cosec-social`; needs `cosec.authentication.login.enabled`) |
 | `cosec.jwt.enabled` | boolean | `true` | issuing, verifying and revoking JWTs. Off, the pipeline rejects every token (`token-invalid`) and treats a request without one as anonymous |
 | `cosec.api-key.enabled` | boolean | `false` | [API keys](../integration/authentication.md) for machine clients |
 | `cosec.audit.enabled` | boolean | `true` | the audit log listener, and the Kafka audit listener with `cosec.audit.kafka.enabled` |
-| `cosec.audit.kafka.enabled` | boolean | `true` | the Kafka audit listener (`kafka-support` and a `KafkaOperations` bean) |
-| `cosec.metrics.enabled` | boolean | `true` | the metrics listener (`micrometer-support` and a `MeterRegistry` bean) |
-| `cosec.ip2region.enabled` | boolean | `true` | the `ext.ip2region.*` attribute provider (`ip2region-support`) |
-| `cosec.openapi.enabled` | boolean | `true` | the bearer-auth customizer of the OpenAPI document (`openapi-support`) |
-| `cosec.authorization.shadow.enabled` | boolean | `true` | this instance's part in shadow windows (`cache-support`); see [Shadow windows](#shadow-windows) |
+| `cosec.audit.kafka.enabled` | boolean | `true` | the Kafka audit listener (`cosec-kafka` and a `KafkaOperations` bean) |
+| `cosec.metrics.enabled` | boolean | `true` | the metrics listener (`cosec-micrometer` and a `MeterRegistry` bean) |
+| `cosec.ip2region.enabled` | boolean | `true` | the `ext.ip2region.*` attribute provider (`cosec-ip2region`) |
+| `cosec.openapi.enabled` | boolean | `true` | the bearer-auth customizer of the OpenAPI document (`cosec-openapi`) |
+| `cosec.authorization.shadow.enabled` | boolean | `true` | this instance's part in shadow windows (`cosec-cocache`); see [Shadow windows](#shadow-windows) |
 | `cosec.gateway.identity.enabled` | boolean | `true` | on a Spring Cloud Gateway host, forwarding the verified identity to the services behind it; see [Gateway identity](#gateway-identity) |
 
 These have no switch:
 
-- **Tracing** is on whenever `opentelemetry-support` is on the classpath ([Tracing](./observability.md#tracing)).
-- **The control plane** is on whenever `control-support` and `cache-support` are on the classpath; its routes need a
+- **Tracing** is on whenever `cosec-opentelemetry` is on the classpath ([Tracing](./observability.md#tracing)).
+- **The control plane** is on whenever `cosec-control` and `cosec-cocache` are on the classpath; its routes need a
   WebFlux or WebMvc application ([Control plane](#control-plane)).
-- **The rate limiter** is always there: on Redis when a `ReactiveStringRedisTemplate` bean exists (`cache-support`),
+- **The rate limiter** is always there: on Redis when a `ReactiveStringRedisTemplate` bean exists (`cosec-cocache`),
   otherwise counted per instance ([Rate limiting](#rate-limiting)).
 - **Token revocation** is always on with JWT ([Startup](./troubleshooting.md#startup-fails-without-a-token-store)).
-- **The `cosecServiceGenerator` actuator endpoint** is there whenever `openapi-support` and Spring Boot Actuator are;
+- **The `cosecServiceGenerator` actuator endpoint** is there whenever `cosec-openapi` and Spring Boot Actuator are;
   expose it like any actuator endpoint.
 
 ## Pipeline
@@ -84,7 +85,7 @@ These have no switch:
 
 ## Gateway identity
 
-`cosec.gateway.identity.*`, on a Spring Cloud Gateway host (`gateway-support`): what the gateway forwards to the
+`cosec.gateway.identity.*`, on a Spring Cloud Gateway host (`cosec-gateway`): what the gateway forwards to the
 services behind it. On a permit with a principal it sets `CoSec-Identity` to the identity it verified (format:
 [`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)).
 It always removes a `CoSec-Identity` the client sent, whatever these properties, the mode or `cosec.enabled` say. A
@@ -134,7 +135,7 @@ of your own replaces both.
 
 ## Shadow windows
 
-`cosec.authorization.shadow.*`: the data plane's part in the control plane's shadow windows. It needs `cache-support`.
+`cosec.authorization.shadow.*`: the data plane's part in the control plane's shadow windows. It needs `cosec-cocache`.
 How windows work: [Testing changes](../policies/testing.md).
 
 | Property | Type | Default | Effect |
@@ -159,14 +160,14 @@ How windows work: [Testing changes](../policies/testing.md).
 | `cosec.jwt.token-validity.access` | duration | `10m` | Access token lifetime. |
 | `cosec.jwt.token-validity.refresh` | duration | `7d` | Refresh token lifetime; a revocation is kept in Redis this long, plus one second. |
 
-With JWT enabled, startup fails unless revocations can be recorded and read: `cache-support`, or a `TokenStore` and a
+With JWT enabled, startup fails unless revocations can be recorded and read: `cosec-cocache`, or a `TokenStore` and a
 `RevocationReader` bean of your own.
 
 ## API keys
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.api-key.store` | `memory`, `redis` | `memory` | `memory`: the keys configured below. `redis`: keys shared by every instance; needs `cache-support`, a `StringRedisTemplate` and a `ReactiveStringRedisTemplate`. |
+| `cosec.api-key.store` | `memory`, `redis` | `memory` | `memory`: the keys configured below. `redis`: keys shared by every instance; needs `cosec-cocache`, a `StringRedisTemplate` and a `ReactiveStringRedisTemplate`. |
 | `cosec.api-key.key-prefix` | string | `cosec:api-key` | Redis key prefix of the `redis` store, with a trailing `:` removed. Independent of every other prefix ([Redis keys](./storage.md#redis-keys)). |
 | `cosec.api-key.keys[n].*` | list | empty | Keys of the `memory` store; ignored with `redis`. |
 
@@ -186,7 +187,7 @@ The header is [`cosec.pipeline.api-key-header`](#pipeline). Each entry of `cosec
 
 ## Cache
 
-`cosec.authorization.cache.*`: the revoked token and revoked subject caches, created with JWT and `cache-support`.
+`cosec.authorization.cache.*`: the revoked token and revoked subject caches, created with JWT and `cosec-cocache`.
 Snapshot documents have their own properties ([Snapshot](#snapshot)).
 
 | Property | Type | Default | Effect |
@@ -211,7 +212,7 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 |---|---|---|---|
 | `cosec.audit.required.timeout` | duration | `1s` | How long one `REQUIRED` decision listener may take. A failure or timeout turns a permit into `503` ([Decision listeners](./observability.md#decision-listeners)). |
 | `cosec.audit.kafka.topic` | string | `cosec-audit` | Kafka topic of the audit events. |
-| `cosec.audit.kafka.delivery` | `best-effort`, `required` | `best-effort` | How the Kafka audit listener is delivered. `required` waits for the broker's acknowledgement, so a permit that cannot be audited is a `503`; configure the producer with `acks=all`. |
+| `cosec.audit.kafka.delivery` | `best-effort`, `required` | `best-effort` | How the Kafka audit listener is delivered. `required` waits for the broker's acknowledgement, so a permit that cannot be audited is a `503`; configure the producer with `acks=all`. Startup fails when it is `required` without `cosec-kafka` ([STA-1](./troubleshooting.md#startup-fails-on-a-missing-module)). |
 
 ## Decision listeners
 
@@ -225,7 +226,7 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 
 ## Control plane
 
-`cosec.control.*`, with `control-support` and `cache-support` ([Publishing documents](./storage.md#publishing-documents)).
+`cosec.control.*`, with `cosec-control` and `cosec-cocache` ([Publishing documents](./storage.md#publishing-documents)).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
@@ -245,7 +246,7 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 | `cosec.control.shadow.max-duration` | duration | `24h` | A window closes at this age with fewer samples, as insufficient evidence the publisher must acknowledge. Must not be less than `min-duration`. |
 | `cosec.control.shadow.check-interval` | duration | `1m` | How often shadowing changes are looked at, by one instance at a time; a window closes up to this late. Must be positive. |
 | `cosec.control.audit.required-timeout` | duration | `5s` | How long every `REQUIRED` change listener together may take to record a gated step (publish, break-glass) before the step fails with `503`. |
-| `cosec.control.audit.kafka.enabled` | boolean | `true` | The Kafka change listener (`kafka-support` and a `KafkaOperations` bean). |
+| `cosec.control.audit.kafka.enabled` | boolean | `true` | The Kafka change listener (`cosec-kafka` and a `KafkaOperations` bean). |
 | `cosec.control.audit.kafka.topic` | string | `cosec-control-audit` | Kafka topic of the change events. |
 | `cosec.control.audit.kafka.delivery` | `best-effort`, `required` | `best-effort` | `required` makes publishing and break-glass wait for the broker. Startup fails when it is `required` and no Kafka change listener could be created. |
 
@@ -276,7 +277,7 @@ Redis through a `StringRedisTemplate`.
 
 ## CoCache properties that affect CoSec
 
-With `cache-support`, CoSec creates its caches on CoCache's runtime. The full list of CoCache properties is in
+With `cosec-cocache`, CoSec creates its caches on CoCache's runtime. The full list of CoCache properties is in
 [CoCache's documentation](https://cocache.ahoo.me).
 
 | Property | Effect on CoSec |

@@ -15,9 +15,9 @@ package me.ahoo.cosec.ip2region
 
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.IpAddress
-import me.ahoo.cosec.runtime.attribute.AttributeDeclaration
-import me.ahoo.cosec.runtime.attribute.AttributeProvider
-import me.ahoo.cosec.runtime.attribute.AttributeRequest
+import me.ahoo.cosec.spi.attribute.AttributeDeclaration
+import me.ahoo.cosec.spi.attribute.AttributeProvider
+import me.ahoo.cosec.spi.attribute.AttributeRequest
 import org.lionsoul.ip2region.xdb.Searcher
 import org.lionsoul.ip2region.xdb.Version
 import java.io.ByteArrayInputStream

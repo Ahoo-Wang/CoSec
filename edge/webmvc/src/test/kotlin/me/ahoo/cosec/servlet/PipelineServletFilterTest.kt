@@ -14,7 +14,6 @@
 package me.ahoo.cosec.servlet
 
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.context.SecurityContextHolder
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.FlatEngine
@@ -32,12 +31,12 @@ import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
-import me.ahoo.cosec.runtime.authn.Authenticator
-import me.ahoo.cosec.runtime.authn.AuthnResult
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.mock.web.MockHttpServletRequest

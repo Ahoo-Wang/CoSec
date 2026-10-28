@@ -16,22 +16,30 @@ With the starter you extend CoSec by declaring a Spring bean. Some extension poi
 the others are single beans that replace the starter's default (`@ConditionalOnMissingBean`). Without Spring, pass your
 implementation to the class that uses it, usually through `PipelineComponents`.
 
-| Extension point | Module | Implement it to | The starter takes |
+| Extension point | Module, package | Implement it to | The starter takes |
 |---|---|---|---|
-| `Authenticator` | `cosec-runtime` | Accept another kind of credential, or replace token and API key authentication. | one bean, replacing the built-in one |
-| `TokenStore`, `RevocationReader` | `cosec-core` | Keep revoked tokens somewhere other than Redis. | one bean of each |
-| `ApiKeyReader` | `cosec-core` | Look API keys up somewhere other than memory or Redis. | one bean |
-| `MembershipProvider` | `cosec-core` | Supply the roles and attached policies of principals whose token does not carry them. | one bean |
-| `AttributeProvider` | `cosec-runtime` | Give conditions external attributes (`ext.<provider>.<name>`). | every bean |
-| `BlacklistSource` | `cosec-runtime` | Say which principals, addresses and devices are blocked. | one bean, wrapped in `BlacklistAttributeProvider` |
-| `DecisionListener` | `cosec-runtime` | Observe every decision: audit, alerting, analytics. | every bean |
-| `AuditEventSink` | `cosec-api` | Receive 7.x-style audit events. | every bean, as a `BEST_EFFORT` listener |
-| `RateLimiter` | `cosec-runtime` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |
-| `SnapshotDocumentStore` | `cosec-core` | Keep policy documents somewhere other than Redis. | one bean, without `cache-support` |
-| `BridgeContextContributor` | `cosec-runtime` | Carry a thread-local context (logging, tracing) into the pipeline. | every bean |
-| `ChangeListener` | `cosec-control` | Observe or gate control-plane changes. | every bean, with `control-support` |
-| `ControlStore` | `cosec-control` | Keep the control plane's records somewhere other than Redis. | one bean, with `control-support` |
-| Route maps | `cosec-core` | Give requests `service:verb` actions on typed resources. | `cosec.authorization.routes.location` |
+| `Authenticator` | `cosec-spi`, `spi.authn` | Accept another kind of credential, or replace token and API key authentication. | one bean, replacing the built-in one |
+| `TokenStore`, `RevocationReader` | `cosec-spi`, `spi.token` | Keep revoked tokens somewhere other than Redis. | one bean of each |
+| `ApiKeyReader` | `cosec-spi`, `spi.apikey` | Look API keys up somewhere other than memory or Redis. | one bean |
+| `MembershipProvider` | `cosec-spi`, `spi.membership` | Supply the roles and attached policies of principals whose token does not carry them. | one bean |
+| `AttributeProvider` | `cosec-spi`, `spi.attribute` | Give conditions external attributes (`ext.<provider>.<name>`). | every bean |
+| `AuditEventSink` | `cosec-spi`, `spi.audit` | Receive 7.x-style audit events. | every bean, as a `BEST_EFFORT` listener |
+| `RateLimiter` | `cosec-spi`, `spi.ratelimit` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |
+| `SnapshotDocumentStore` | `cosec-spi`, `spi.snapshot` | Keep policy documents somewhere other than Redis. | one bean, without `cosec-cocache` |
+| `BlacklistSource` | `cosec-runtime`, `runtime.attribute` | Say which principals, addresses and devices are blocked. | one bean, wrapped in `BlacklistAttributeProvider` |
+| `DecisionListener` | `cosec-runtime`, `runtime.event` | Observe every decision: audit, alerting, analytics. | every bean |
+| `BridgeContextContributor` | `cosec-runtime`, `runtime.event` | Carry a thread-local context (logging, tracing) into the pipeline. | every bean |
+| `ChangeListener` | `cosec-control`, `control.audit` | Observe or gate control-plane changes. | every bean, with `cosec-control` |
+| `ControlStore` | `cosec-control`, `control.store` | Keep the control plane's records somewhere other than Redis. | one bean, with `cosec-control` |
+| Route maps | `cosec-runtime`, `runtime.route` | Give requests `service:verb` actions on typed resources. | `cosec.authorization.routes.location` |
+
+Packages are under `me.ahoo.cosec`. The ports whose signatures need only the model and the contracts live in
+`cosec-spi`, with their value types and in-memory implementations (`InMemorySnapshotDocumentStore`,
+`InMemoryMembershipProvider`, `InMemoryApiKeyStore`); it depends on `cosec-model`, `cosec-api` and
+kotlinx-coroutines only, so an implementation of one of them needs nothing else from CoSec. A port whose signature
+carries a layer's own types stays with that layer: `DecisionListener` takes the runtime's `DecisionEvent`, the shadow
+window ports (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader`) the runtime's candidates and reports, and
+`ControlStore` and `ChangeListener` the control plane's records and events.
 
 Changing one of these interfaces (rather than implementing it) is a breaking change for every application that
 implements it.
@@ -114,7 +122,7 @@ checked through the suspending `RevocationReader`. How tokens, claims and member
 | `RevocationReader` | The read side, called on every authenticated request: `isRevoked(tokenId)`, `subjectRevokedBefore(tenant, principal)`. Both suspend and must not block. |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`, suspending. Return null for an unknown key; throw when the lookup fails (the request answers `503`). |
 
-With `cache-support`, the starter wires `CoCacheTokenStore` and its reader. Without it, JWT fails startup unless you
+With `cosec-cocache`, the starter wires `CoCacheTokenStore` and its reader. Without it, JWT fails startup unless you
 register a `TokenStore` and a `RevocationReader` (or set `cosec.jwt.enabled=false`). Registering
 `RevocationReader.NONE` is an explicit choice to revoke nothing.
 
@@ -139,7 +147,7 @@ fun interface MembershipProvider {
 - A failure, a timeout (`cosec.authorization.membership.timeout`) or a missing provider makes the request `503`, never
   "no roles": no roles would also mean that no DENY bound to a role applies.
 
-`InMemoryMembershipProvider` (`cosec-core`) is for tests. `CoCacheMembershipProvider` (`cosec-cocache`) caches what your
+`InMemoryMembershipProvider` (`cosec-spi`) is for tests. `CoCacheMembershipProvider` (`cosec-cocache`) caches what your
 `MembershipLoader` answers in Redis, shared by every instance; call its `invalidate` when a principal's memberships
 change. The starter registers neither: declare the one you want as a bean.
 
@@ -194,7 +202,7 @@ a `BlacklistAttributeProvider`. Without one, startup logs
 `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).` at `INFO`. A source that
 fails never means "not blocked": the request is `503` unless a DENY matches.
 
-With `ip2region-support`, the starter registers `Ip2RegionAttributeProvider` (`ext.ip2region.country`, `.province`,
+With `cosec-ip2region`, the starter registers `Ip2RegionAttributeProvider` (`ext.ip2region.country`, `.province`,
 `.city`, `.isp`).
 
 ## Decision listeners
@@ -243,7 +251,7 @@ fun interface RateLimiter {
 
 Spend one permit of `limit` from `bucket` of rule `ruleId` and report what is left; `RateLimiter.window(limit)` gives
 the sliding window both built-in limiters use, and its `resultOf(...)` builds the result. Throw when the backend
-fails: the rule's `strictFailure` then decides between `503` and skipping the rule. With `cache-support` and a
+fails: the rule's `strictFailure` then decides between `503` and skipping the rule. With `cosec-cocache` and a
 `ReactiveStringRedisTemplate`, the starter registers `ReactiveRedisRateLimiter`, which counts across instances; otherwise
 the per-instance `LocalRateLimiter`. Your bean replaces both. Rules, buckets and headers are in
 [Rate limiting](../policies/rate-limiting.md).
@@ -259,7 +267,7 @@ the per-instance `LocalRateLimiter`. Your bean replaces both. Rules, buckets and
   that cannot be decoded carries a `SnapshotFormatException` in its cause chain.
 - Never delete a document. A key that once had a document and then reads as absent fails closed.
 
-With `cache-support`, the starter uses `RedisSnapshotDocumentStore`, and the control plane writes through the same Redis.
+With `cosec-cocache`, the starter uses `RedisSnapshotDocumentStore`, and the control plane writes through the same Redis.
 Without it, the starter registers an `InMemorySnapshotDocumentStore`; put documents into it with `put(key, document)`, or
 declare your own `SnapshotDocumentStore` bean instead. Requests fail closed until a platform document is there.
 
@@ -275,12 +283,12 @@ fun interface BridgeContextContributor {
 }
 ```
 
-The starter registers `MdcContextContributor` (the SLF4J MDC) and, with `opentelemetry-support`, the OpenTelemetry
+The starter registers `MdcContextContributor` (the SLF4J MDC) and, with `cosec-opentelemetry`, the OpenTelemetry
 context. Every `BridgeContextContributor` bean is used, in `@Order` order. `capture` runs once per request: keep it cheap.
 
 ## Change listeners
 
-With `control-support`, a `ChangeListener` receives a `ChangeEvent` for every step of a change: proposed, checked,
+With `cosec-control`, a `ChangeListener` receives a `ChangeEvent` for every step of a change: proposed, checked,
 shadowed, approved, publishing, published, break-glass requested or approved, and so on. An event never carries document
 content.
 
@@ -291,12 +299,12 @@ content.
 - Listeners add up: every `ChangeListener` bean is registered next to the starter's `LoggingChangeListener`, which
   backs off only for a `LoggingChangeListener` bean of yours.
 
-With `kafka-support` and a `KafkaOperations` bean, the starter registers `KafkaChangeListener` under
+With `cosec-kafka` and a `KafkaOperations` bean, the starter registers `KafkaChangeListener` under
 `cosec.control.audit.kafka.*` ([Observability](../operations/observability.md#control-plane-change-log)).
 
 ## Control store
 
-With `control-support`, the control plane keeps revisions, change requests, staging slots, candidates and leases in a
+With `cosec-control`, the control plane keeps revisions, change requests, staging slots, candidates and leases in a
 `ControlStore`; the starter's is `CoCacheControlStore` on Redis. Besides reading and writing those records by key, a
 store answers what the maintenance passes visit:
 
@@ -328,12 +336,12 @@ service's terms. Mapped requests get the route's action; every other request kee
   `classpath:cosec-routes.json`, comma-separated) at startup. A missing or invalid map, or two routes one request could
   match, fails startup. That includes the default location: a WebFlux or WebMvc service without a route map sets the
   property empty. A gateway host loads none.
-- With `openapi-support` and Spring Boot Actuator, the `cosecServiceGenerator` endpoint generates both documents from
+- With `cosec-openapi` and Spring Boot Actuator, the `cosecServiceGenerator` endpoint generates both documents from
   the service's OpenAPI description: `routes` is the route map to ship as `cosec-routes.json`, `app` is the app document
   (catalog and permission policies) to publish through the control plane.
 
 The file is read strictly: an unknown or missing field fails it
-([`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/core/src/main/kotlin/me/ahoo/cosec/route/RouteMapCodec.kt)).
+([`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/route/RouteMapCodec.kt)).
 App documents and catalogs are in [Role permissions](../policies/role-permissions.md).
 
 **Next:** how to propose and land a change, in [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md), and the build rules and invariants for changing CoSec, in [`AGENTS.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/AGENTS.md).

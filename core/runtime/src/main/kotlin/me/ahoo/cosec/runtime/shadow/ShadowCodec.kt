@@ -11,12 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.shadow
 
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotFormatException
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -31,7 +34,7 @@ import java.time.Instant
  */
 object ShadowCodec {
     private val factory = JsonNodeFactory.instance
-    private val reader = CoSecJsonSerializer.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+    private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
     fun encode(candidate: StoredCandidate): ByteArray = write(
         factory.objectNode().put("window", candidate.window).put("baseRevision", candidate.baseRevision)
@@ -50,7 +53,7 @@ object ShadowCodec {
                 node.need("schema").asInt(),
                 node.need("revision").long(),
                 Instant.parse(node.need("publishedAt").text()),
-                CoSecJsonSerializer.writeValueAsBytes(node.need("document")),
+                CoSecJson.mapper.writeValueAsBytes(node.need("document")),
             ),
         )
     }
@@ -154,7 +157,7 @@ object ShadowCodec {
         else -> malformed("[$text] is not a document key")
     }
 
-    private fun write(node: JsonNode): ByteArray = CoSecJsonSerializer.writeValueAsBytes(node)
+    private fun write(node: JsonNode): ByteArray = CoSecJson.mapper.writeValueAsBytes(node)
 
     private fun read(bytes: ByteArray): JsonNode = try {
         reader.readTree(bytes) ?: malformed("empty")

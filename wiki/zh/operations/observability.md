@@ -25,10 +25,10 @@ starter 注册的监听器：
 | 监听器（`name`） | 投递方式 | 存在条件 |
 |---|---|---|
 | `LoggingAuditListener`（`logging-audit`） | `BEST_EFFORT` | `cosec.audit.enabled`（默认 `true`） |
-| `KafkaAuditListener`（`kafka-audit`） | [`cosec.audit.kafka.delivery`](./configuration.md#audit)，默认 `BEST_EFFORT` | `kafka-support`、一个 `KafkaOperations` bean、`cosec.audit.enabled` 和 `cosec.audit.kafka.enabled`（都默认 `true`） |
-| `MetricsListener`（`metrics`） | `BEST_EFFORT` | `micrometer-support`、一个 `MeterRegistry` bean 和 `cosec.metrics.enabled`（默认 `true`） |
-| `TracingListener`（`tracing`） | `BEST_EFFORT` | `opentelemetry-support` |
-| `ShadowListener`（`shadow`） | `BEST_EFFORT` | `cache-support` 和 `cosec.authorization.shadow.enabled`（默认 `true`） |
+| `KafkaAuditListener`（`kafka-audit`） | [`cosec.audit.kafka.delivery`](./configuration.md#audit)，默认 `BEST_EFFORT` | `cosec-kafka`、一个 `KafkaOperations` bean、`cosec.audit.enabled` 和 `cosec.audit.kafka.enabled`（都默认 `true`） |
+| `MetricsListener`（`metrics`） | `BEST_EFFORT` | `cosec-micrometer`、一个 `MeterRegistry` bean 和 `cosec.metrics.enabled`（默认 `true`） |
+| `TracingListener`（`tracing`） | `BEST_EFFORT` | `cosec-opentelemetry` |
+| `ShadowListener`（`shadow`） | `BEST_EFFORT` | `cosec-cocache` 和 `cosec.authorization.shadow.enabled`（默认 `true`） |
 
 你自己的任何 `DecisionListener` bean 都会加入它们；名字必须唯一，否则启动失败（[扩展](../architecture/extending.md)）。
 `AuditEventSink` bean（例如为 7.x 编写的）也会加入：starter 把它包装成以 bean 名命名的 `BEST_EFFORT` 监听器
@@ -104,7 +104,7 @@ JSON 数组 `[tenantId, principalId]`。它与审计日志并存，而不是替�
 
 ## 追踪 {#tracing}
 
-有 `opentelemetry-support` 时，每个决策事件变成一个名为 `cosec.authorize` 的 span（instrumentation `me.ahoo.cosec`，
+有 `cosec-opentelemetry` 时，每个决策事件变成一个名为 `cosec.authorize` 的 span（instrumentation `me.ahoo.cosec`，
 kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管道的耗时生成，挂在适配器收到请求时的当前 span 之下；没有
 当前 span 时它是根 span。因此追踪从不拖慢请求，也不会使请求失败。管道为请求发起的调用（Redis、成员关系提供者）是
 `cosec.authorize` 的兄弟 span，挂在同一个父 span 下。tracer 来自 `GlobalOpenTelemetry`。
@@ -122,7 +122,7 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 
 ## 指标 {#metrics}
 
-有 `micrometer-support` 和一个 `MeterRegistry`（例如来自 Spring Boot Actuator）时，每个决策事件都由计时器
+有 `cosec-micrometer` 和一个 `MeterRegistry`（例如来自 Spring Boot Actuator）时，每个决策事件都由计时器
 `cosec.authorization` 记录，覆盖整个管道。每个标签的取值都是一个固定的小集合，因此无论有多少策略、应用和租户，时间序列
 的数量都有界：
 
@@ -177,12 +177,12 @@ CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了�
 - **break-glass 需要 `REQUIRED` 变更监听器：** 没有时，创建或修改 break-glass 绑定得到 `503`
   （`break-glass needs a REQUIRED change listener, and none is configured`）。
 
-有 `kafka-support` 和 `KafkaOperations` bean 时，starter 还会注册一个 `KafkaChangeListener`，除非
+有 `cosec-kafka` 和 `KafkaOperations` bean 时，starter 还会注册一个 `KafkaChangeListener`，除非
 [`cosec.control.audit.kafka.enabled`](./configuration.md#control-plane) 为 `false`。它把每个事件写到
 `cosec.control.audit.kafka.topic`（`cosec-control-audit`），key 是文档（`platform`、`app:order`、`tenant:acme`），因此
 一个文档的事件保持有序。它的投递方式是 `cosec.control.audit.kafka.delivery`：默认 `best-effort`；`required` 让发布和
 break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设为 `delivery=required` 时，如果 Kafka 变更监听器无法
-创建（没有 `kafka-support`、没有 `KafkaOperations` bean，或 `enabled=false`），启动失败，而不是在没有记录的情况下发布：
+创建（没有 `cosec-kafka`、没有 `KafkaOperations` bean，或 `enabled=false`），启动失败，而不是在没有记录的情况下发布：
 `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: ...`。
 
 ## 日志 {#logs}
@@ -191,7 +191,7 @@ break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设�
 |---|---|
 | `me.ahoo.cosec.audit` | 审计日志（[审计日志与 Kafka](#audit-log-and-kafka)） |
 | `me.ahoo.cosec.runtime` | 每个 `500` 都以 `ERROR` 记录 `Request [<requestId>] failed with an unmodelled exception.` 及堆栈；`REQUIRED` 监听器失败；被丢弃的事件；失败的属性提供者；无法计数的限流器 |
-| `me.ahoo.cosec.snapshot` | 加载、滞后、丢失和回退的文档（[快照健康状况](#snapshot-health)） |
+| `me.ahoo.cosec.runtime.snapshot` | 加载、滞后、丢失和回退的文档（[快照健康状况](#snapshot-health)） |
 | `me.ahoo.cosec.spring.boot.starter` | 启动检查，例如 `!!!` 驱逐警告；应用没有声明 `BlacklistSource` 时以 `INFO` 记录的 `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).`（[黑名单](../guide/security-model.md#blacklist)）；gateway 模式服务的 `WARN`（[网关后面的服务](./deployment.md#services-behind-the-gateway)） |
 | `me.ahoo.cosec.control` | 变更日志，以及每个控制面 `500` 的 `Control API <method> <path> failed (request <requestId>).` |
 

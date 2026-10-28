@@ -18,9 +18,11 @@ dependencies {
     // The grant analysis of RFC 0007 §7.4, run by GrantRunner.
     testImplementation(project(":control"))
     // MembershipResolver (RFC 0004 §4.5) and Jackson for reading scenarios.
-    testImplementation(project(":core"))
+    testImplementation(project(":runtime"))
+    testImplementation("tools.jackson.core:jackson-databind")
     // PipelineRunner: the coroutine pipeline of RFC 0006.
     testImplementation(project(":runtime"))
+    testImplementation("tools.jackson.core:jackson-databind")
     // The engine level of the scenario format, and its reading, shared with users.
     testImplementation(project(":testkit"))
     // PIP-10 through a gateway host's own filters: the identity strip, the pipeline's filter and the last hop.

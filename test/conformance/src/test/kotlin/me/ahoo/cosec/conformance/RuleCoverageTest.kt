@@ -273,7 +273,7 @@ class RuleCoverageTest {
         index.isEnabledTest("mod", "OffTest", "guard").assert().isFalse()
         index.scalesWithIterations("mod", "GuardsTest").assert().isFalse()
         index.scalesWithIterations("core", "SnapshotInstallOrderPropertyTest").assert().isFalse()
-        SourceTestIndex.ofBuild().scalesWithIterations("core", "SnapshotInstallOrderPropertyTest")
+        SourceTestIndex.ofBuild().scalesWithIterations("runtime", "SnapshotInstallOrderPropertyTest")
             .assert().isTrue()
     }
 

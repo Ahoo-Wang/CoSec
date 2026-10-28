@@ -125,7 +125,7 @@ The check must run in your code; a handler that skips it is not protected by the
 ## Explaining a decision
 
 To see why a principal gets a decision for a request, without sending the real request, ask the control plane's
-`explain`. It needs `control-support` and `cache-support`, and is served on the host as
+`explain`. It needs `cosec-control` and `cosec-cocache`, and is served on the host as
 `POST <base-path>/explain` (default `/cosec/control/v1/explain`; see
 [Control-plane routes](./web.md#control-plane-routes)).
 

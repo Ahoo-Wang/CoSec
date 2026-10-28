@@ -1,6 +1,6 @@
 # Rule: ATR-6
 # Mutant: a DENY with onMissing nomatch compiles without the control plane's confirmation, in any document
-# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.* :core:test --tests me.ahoo.cosec.snapshot.* :conformance:test
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.* :runtime:test --tests me.ahoo.cosec.runtime.document.* --tests me.ahoo.cosec.runtime.snapshot.* :conformance:test
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
 index 45de40a9..3556b795 100644

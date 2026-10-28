@@ -15,24 +15,28 @@ package me.ahoo.cosec.runtime.authn
 
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
-import me.ahoo.cosec.membership.MembershipClaims
-import me.ahoo.cosec.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.principal.SimplePrincipal
-import me.ahoo.cosec.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.tenant.SimpleTenant
-import me.ahoo.cosec.token.RevocationReader
-import me.ahoo.cosec.token.SimpleTokenPrincipal
-import me.ahoo.cosec.token.TokenExpiredException
-import me.ahoo.cosec.token.TokenRevokedException
-import me.ahoo.cosec.token.TokenVerificationException
-import me.ahoo.cosec.token.TokenVerifier
+import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.authn.MembershipSource
+import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenExpiredException
+import me.ahoo.cosec.spi.token.TokenRevokedException
+import me.ahoo.cosec.spi.token.TokenVerificationException
+import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -75,7 +79,7 @@ class TokenAuthenticatorTest {
         principal: () -> TokenPrincipal,
         revocations: RevocationReader = RevocationReader.NONE,
         token: String? = "t",
-        skew: java.time.Duration = me.ahoo.cosec.token.SubjectRevocation.DEFAULT_SKEW,
+        skew: java.time.Duration = me.ahoo.cosec.spi.token.SubjectRevocation.DEFAULT_SKEW,
     ): AuthnResult = TokenAuthenticator(
         Verifier(mapOf("t" to principal)),
         revocations,

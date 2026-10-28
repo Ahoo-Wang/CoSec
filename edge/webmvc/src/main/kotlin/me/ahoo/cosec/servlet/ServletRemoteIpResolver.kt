@@ -14,7 +14,7 @@
 package me.ahoo.cosec.servlet
 
 import jakarta.servlet.http.HttpServletRequest
-import me.ahoo.cosec.context.request.RemoteIpResolver
+import me.ahoo.cosec.runtime.http.RemoteIpResolver
 
 object ServletRemoteIpResolver : RemoteIpResolver<HttpServletRequest> {
     /**

@@ -14,7 +14,6 @@
 package me.ahoo.cosec.migrate.v7.limiter
 
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.limiter.RateLimit
 import me.ahoo.cosec.migrate.v7.api.context.request.Request
 import me.ahoo.cosec.migrate.v7.api.policy.ActionMatcher
 import me.ahoo.cosec.migrate.v7.api.policy.ConditionMatcher
@@ -23,6 +22,7 @@ import me.ahoo.cosec.migrate.v7.policy.clearPathVariablesBeforeMatch
 import me.ahoo.cosec.migrate.v7.policy.condition.AllConditionMatcher
 import me.ahoo.cosec.migrate.v7.policy.condition.part.DefaultPartExtractor
 import me.ahoo.cosec.migrate.v7.policy.condition.part.PartExtractor
+import me.ahoo.cosec.spi.ratelimit.RateLimit
 
 /**
  * Limits the requests matching [action] and [condition] to [rateLimit].

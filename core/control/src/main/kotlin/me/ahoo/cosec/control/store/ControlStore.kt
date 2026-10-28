@@ -19,9 +19,9 @@ import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.runtime.shadow.CandidateStore
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
-import me.ahoo.cosec.snapshot.SnapshotDigest
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
 import java.time.Instant
 

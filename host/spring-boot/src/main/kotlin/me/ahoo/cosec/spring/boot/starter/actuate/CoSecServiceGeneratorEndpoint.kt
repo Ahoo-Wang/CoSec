@@ -11,13 +11,16 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.actuate
 
 import io.swagger.v3.oas.models.OpenAPI
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.openapi.generator.OpenAPIServiceGenerator
-import me.ahoo.cosec.route.RouteMapCodec
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.runtime.route.RouteMapCodec
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation
@@ -42,7 +45,7 @@ class CoSecServiceGeneratorEndpoint(private val openAPIProvider: ObjectProvider<
             APP -> PolicyDocumentCodec.encode(OpenAPIServiceGenerator.appDocument(openAPI))
             else -> return null
         }
-        return CoSecJsonSerializer.readTree(bytes)
+        return CoSecJson.mapper.readTree(bytes)
     }
 
     companion object {

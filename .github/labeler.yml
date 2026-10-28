@@ -6,9 +6,15 @@
 'module: api':
   - changed-files:
       - any-glob-to-any-file: 'api/api/**'
-'module: core':
+'module: annotations':
   - changed-files:
-      - any-glob-to-any-file: 'core/core/**'
+      - any-glob-to-any-file: 'api/annotations/**'
+'module: spi':
+  - changed-files:
+      - any-glob-to-any-file: 'core/spi/**'
+'module: login':
+  - changed-files:
+      - any-glob-to-any-file: 'extensions/login/**'
 'module: jwt':
   - changed-files:
       - any-glob-to-any-file: 'extensions/jwt/**'

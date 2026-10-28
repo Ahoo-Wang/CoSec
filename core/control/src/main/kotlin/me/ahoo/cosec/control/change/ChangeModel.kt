@@ -20,12 +20,12 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.ConditionLimits
-import me.ahoo.cosec.snapshot.SnapshotDigest
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.Actor
-import me.ahoo.cosec.snapshot.document.Catalog
-import me.ahoo.cosec.snapshot.document.PolicyDefinition
-import me.ahoo.cosec.snapshot.document.ProvenanceKind
+import me.ahoo.cosec.runtime.document.Actor
+import me.ahoo.cosec.runtime.document.Catalog
+import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
 
 /** The id of a change request (RFC 0007 §5.2), a sortable id from the host's generator. */

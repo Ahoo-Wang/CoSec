@@ -25,7 +25,7 @@ import kotlin.time.Duration.Companion.seconds
 class PipelineOptions(
     /** The whole evaluation (`cosec.pipeline.timeout`): an upper bound, not the sum of the stages. Then 503. */
     val timeout: Duration = 5.seconds,
-    /** One [me.ahoo.cosec.runtime.authn.Authenticator] call. Then 503. */
+    /** One [me.ahoo.cosec.spi.authn.Authenticator] call. Then 503. */
     val authenticationTimeout: Duration = 1.seconds,
     /** One `MembershipProvider` call (`cosec.authorization.membership.timeout`, RFC 0004). Then 503. */
     val membershipTimeout: Duration = 500.milliseconds,

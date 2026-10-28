@@ -45,16 +45,16 @@ import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
-import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
+import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
+import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
+import me.ahoo.cosec.runtime.snapshot.SnapshotEntry
+import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
-import me.ahoo.cosec.snapshot.DocumentSnapshots
-import me.ahoo.cosec.snapshot.DocumentState
-import me.ahoo.cosec.snapshot.SnapshotEntry
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.SnapshotSource
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
@@ -76,7 +76,7 @@ import java.util.UUID
 import kotlin.time.toKotlinDuration
 
 /**
- * The control plane (RFC 0007, the starter's `controlSupport` feature): the only writer of the policy documents, on
+ * The control plane (RFC 0007, with `cosec-control`): the only writer of the policy documents, on
  * the Redis the instances read, with its HTTP routes ([CoSecControlRoutesAutoConfiguration]). Its own checks run
  * through the host's engine on a snapshot source apart from the data plane's, confirmed current before each check
  * (RFC 0007 §7.2); `simulate` and `explain` evaluate with the same engine as enforcement (`CTL-3`).
@@ -214,7 +214,7 @@ class CoSecControlAutoConfiguration {
         val kafka = properties.audit.kafka
         check(kafka.delivery != Delivery.REQUIRED || all.any { it.name == KAFKA_CHANGE_LISTENER }) {
             "${ControlProperties.KAFKA_AUDIT_PREFIX}.delivery=required, but no Kafka change listener was created: it " +
-                "needs kafka-support, a KafkaOperations bean and ${ControlProperties.KAFKA_AUDIT_PREFIX}.enabled=true."
+                "needs cosec-kafka, a KafkaOperations bean and ${ControlProperties.KAFKA_AUDIT_PREFIX}.enabled=true."
         }
         return ChangeListeners(all, properties.audit.requiredTimeout.toKotlinDuration())
     }
@@ -287,7 +287,7 @@ class CoSecControlAutoConfiguration {
     fun cosecControlHttp(plane: ControlPlane): ControlHttp = ControlHttp(plane)
 }
 
-/** [KafkaChangeListener.NAME], as a literal: `cosec-kafka` is an optional (`kafkaSupport`) dependency. */
+/** [KafkaChangeListener.NAME], as a literal: `cosec-kafka` is optional. */
 private const val KAFKA_CHANGE_LISTENER = "kafka-change-audit"
 
 /** The control plane's own snapshot source, held apart from the data plane's (see the bean's comment). */

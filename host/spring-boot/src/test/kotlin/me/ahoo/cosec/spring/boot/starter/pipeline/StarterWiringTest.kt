@@ -23,8 +23,10 @@ import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.api.audit.AuditEvent
-import me.ahoo.cosec.api.audit.AuditEventSink
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.principal.SimplePrincipal
+import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
+import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.cache.CoCacheMembershipProvider
 import me.ahoo.cosec.cache.MembershipCache
 import me.ahoo.cosec.cache.MembershipLoader
@@ -33,18 +35,15 @@ import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
+import me.ahoo.cosec.kafka.KafkaAuditListener
 import me.ahoo.cosec.kafka.KafkaChangeListener
-import me.ahoo.cosec.membership.MembershipClaims
-import me.ahoo.cosec.membership.MembershipMarkedPrincipal
-import me.ahoo.cosec.membership.MembershipProvider
+import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.principal.SimplePrincipal
-import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.BlacklistKind
@@ -57,19 +56,21 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
-import me.ahoo.cosec.snapshot.InMemorySnapshotDocumentStore
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotDocumentStore
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.audit.AuditEventSink
+import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
+import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.control.CoSecControlAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.control.ControlMaintenanceScheduler
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
-import me.ahoo.cosec.tenant.SimpleTenant
-import me.ahoo.cosec.token.RevocationReader
-import me.ahoo.cosec.token.TokenConverter
-import me.ahoo.cosec.token.TokenStore
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
@@ -220,6 +221,41 @@ class StarterWiringTest {
                 Thread.sleep(100)
                 listening.events.get().assert().isEqualTo(1)
             }
+    }
+
+    private val kafkaRunner = pipelineRunner
+        .withBean(KafkaOperations::class.java, { mockk<KafkaOperations<String, String>>(relaxed = true) })
+
+    @Test
+    fun `a required Kafka audit records every decision`() {
+        kafkaRunner.withPropertyValues("cosec.audit.kafka.delivery=required").run { context ->
+            context.startupFailure.assert().isNull()
+            context.getBean(KafkaAuditListener::class.java).delivery.assert().isEqualTo(Delivery.REQUIRED)
+        }
+    }
+
+    /** STA-1: a REQUIRED audit that was not created fails startup instead of deciding without it. */
+    @Test
+    fun `a required Kafka audit that cannot be created fails startup`() {
+        listOf(
+            pipelineRunner.withPropertyValues("cosec.audit.kafka.delivery=required"),
+            kafkaRunner.withPropertyValues("cosec.audit.kafka.delivery=required", "cosec.audit.enabled=false"),
+            kafkaRunner.withPropertyValues("cosec.audit.kafka.delivery=required", "cosec.audit.kafka.enabled=false"),
+            pipelineRunner.withPropertyValues("cosec.audit.kafka.delivery= required "),
+        ).forEach { runner ->
+            runner.run { context ->
+                context.startupFailure!!.rootCause().message.assert()
+                    .contains("cosec.audit.kafka.delivery=required, but no Kafka audit listener was created")
+            }
+        }
+    }
+
+    @Test
+    fun `a Kafka audit delivery that is neither required nor best-effort fails startup`() {
+        kafkaRunner.withPropertyValues("cosec.audit.kafka.delivery=sometimes").run { context ->
+            context.startupFailure!!.rootCause().message.assert()
+                .contains("cosec.audit.kafka.delivery=[sometimes] is neither required nor best-effort")
+        }
     }
 
     private val membershipRunner = ApplicationContextRunner()

@@ -14,7 +14,7 @@
       "level": "build",
       "pending": null,
       "guards": [
-        "core:PolicyDocumentCodecTest#the wildcard is only ever Any"
+        "runtime:PolicyDocumentCodecTest#the wildcard is only ever Any"
       ]
     },
     {

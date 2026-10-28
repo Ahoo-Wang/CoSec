@@ -17,9 +17,9 @@ import io.mockk.confirmVerified
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import me.ahoo.cosec.snapshot.DocumentState
-import me.ahoo.cosec.snapshot.Snapshot
-import me.ahoo.cosec.snapshot.SnapshotSource
+import me.ahoo.cosec.runtime.snapshot.DocumentState
+import me.ahoo.cosec.runtime.snapshot.Snapshot
+import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.availability.ApplicationAvailability

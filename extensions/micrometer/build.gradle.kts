@@ -12,7 +12,6 @@
  */
 
 dependencies {
-    implementation(project(":core"))
     // MetricsListener (RFC 0006 §9.5.2) observes the coroutine pipeline's decision events.
     implementation(project(":runtime"))
     implementation("io.micrometer:micrometer-core")

@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.api
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.ChangeId
@@ -31,10 +34,10 @@ import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.ProblemType
 import me.ahoo.cosec.runtime.RequestSecurity
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotFormatException
-import me.ahoo.cosec.snapshot.SnapshotKey
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -84,7 +87,7 @@ class ControlHttpResponse(val status: Int, val contentType: String, val body: By
  * A document key is written `platform`, `app:order` or `tenant:acme`.
  */
 class ControlHttp(private val plane: ControlPlane) {
-    private val reader = CoSecJsonSerializer.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+    private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
     @Suppress("TooGenericExceptionCaught")
     suspend fun handle(request: ControlHttpRequest, security: RequestSecurity?): ControlHttpResponse {
@@ -296,7 +299,7 @@ class ControlHttp(private val plane: ControlPlane) {
         ChangeRequestCodec.encode(change)
     )
 
-    private fun document(document: me.ahoo.cosec.snapshot.document.PolicyDocument) = ControlHttpResponse(
+    private fun document(document: me.ahoo.cosec.runtime.document.PolicyDocument) = ControlHttpResponse(
         OK,
         JSON,
         PolicyDocumentCodec.encode(document)
@@ -305,7 +308,7 @@ class ControlHttp(private val plane: ControlPlane) {
     private fun json(node: JsonNode, status: Int = OK) = ControlHttpResponse(
         status,
         JSON,
-        CoSecJsonSerializer.writeValueAsBytes(node)
+        CoSecJson.mapper.writeValueAsBytes(node)
     )
 
     private fun notFound(): ControlHttpResponse = throw ChangeRejectedException(NOT_FOUND, "no such route")
@@ -513,7 +516,7 @@ class ControlHttp(private val plane: ControlPlane) {
             .put("code", problem.name)
             .put("requestId", requestId)
         if (problem.detailed && !detail.isNullOrBlank()) node.put("detail", detail)
-        return ControlHttpResponse(problem.status, PROBLEM_JSON, CoSecJsonSerializer.writeValueAsBytes(node))
+        return ControlHttpResponse(problem.status, PROBLEM_JSON, CoSecJson.mapper.writeValueAsBytes(node))
     }
 
     private fun JsonNode.need(name: String): JsonNode = get(name)?.takeUnless {

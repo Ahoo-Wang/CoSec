@@ -14,7 +14,7 @@
 dependencies {
     // Guava: the modules whose main code uses it declare it; the root build adds it to none.
     implementation("com.google.guava:guava")
-    api(project(":core"))
+    api(project(":login"))
     api("me.ahoo.cosid:cosid-core")
     api("org.springframework.data:spring-data-redis")
     api("me.zhyd.oauth:JustAuth")

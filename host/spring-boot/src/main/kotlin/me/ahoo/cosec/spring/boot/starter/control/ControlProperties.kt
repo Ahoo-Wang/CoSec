@@ -19,7 +19,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.util.unit.DataSize
 import java.time.Duration
 
-/** `cosec.control.*` (RFC 0007 X5): the control plane of the starter's `controlSupport` feature. */
+/** `cosec.control.*` (RFC 0007 X5): the control plane, with `cosec-control`. */
 @ConfigurationProperties(prefix = ControlProperties.PREFIX)
 class ControlProperties {
     /** The app control-plane actions are authorized in (RFC 0007 §7.2). */
@@ -86,7 +86,7 @@ class ControlProperties {
         var requiredTimeout: Duration = Duration.ofSeconds(5)
         val kafka = Kafka()
 
-        /** `KafkaChangeListener`, when `kafka-support` and a `KafkaOperations` bean are present. */
+        /** `KafkaChangeListener`, when `cosec-kafka` and a `KafkaOperations` bean are present. */
         class Kafka {
             var enabled: Boolean = true
             var topic: String = "cosec-control-audit"

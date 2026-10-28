@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.webflux
 
-import me.ahoo.cosec.context.request.XForwardedRemoteIpResolver
+import me.ahoo.cosec.runtime.http.XForwardedRemoteIpResolver
 import org.springframework.web.server.ServerWebExchange
 
 class ReactiveXForwardedRemoteIpResolver(override val maxTrustedIndex: Int = 1) :

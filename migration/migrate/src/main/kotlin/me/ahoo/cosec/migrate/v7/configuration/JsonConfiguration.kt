@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.migrate.v7.configuration
 
-import me.ahoo.cosec.Delegated
+import me.ahoo.cosec.api.Delegated
 import me.ahoo.cosec.migrate.v7.api.configuration.Configuration
 import me.ahoo.cosec.migrate.v7.serialization.V7JsonSerializer
 import tools.jackson.databind.JsonNode

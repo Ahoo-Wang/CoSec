@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate.v7.serialization
 
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.json.CoSecJson
 
-/** [CoSecJsonSerializer] that also reads and writes the 7.x policy, app permission and rate limit formats. */
-internal val V7JsonSerializer = CoSecJsonSerializer.rebuild().addModule(CoSecModule()).build()
+/** [CoSecJson.mapper] that also reads and writes the 7.x policy, app permission and rate limit formats. */
+internal val V7JsonSerializer = CoSecJson.mapper.rebuild().addModule(CoSecModule()).build()

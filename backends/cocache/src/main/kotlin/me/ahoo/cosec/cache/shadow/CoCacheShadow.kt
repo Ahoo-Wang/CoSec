@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache.shadow
 
 import kotlinx.coroutines.async
@@ -25,10 +27,12 @@ import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.core.policy.ReadFailureMode
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.shadow.CandidateStore
 import me.ahoo.cosec.runtime.shadow.InstanceStatus
 import me.ahoo.cosec.runtime.shadow.ShadowCodec
@@ -36,8 +40,7 @@ import me.ahoo.cosec.runtime.shadow.ShadowReport
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
 import me.ahoo.cosec.runtime.shadow.ShadowReportSink
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
 
@@ -118,10 +121,10 @@ object ShadowReportCodec : Codec<ShadowReport> {
 
 /** The instances that reported on a window, as a sorted JSON array of their ids. */
 object ReportersCodec : Codec<Set<String>> {
-    override fun encode(value: Set<String>): ByteArray = CoSecJsonSerializer.writeValueAsBytes(value.sorted())
+    override fun encode(value: Set<String>): ByteArray = CoSecJson.mapper.writeValueAsBytes(value.sorted())
 
     override fun decode(bytes: ByteArray): Set<String> {
-        val node = CoSecJsonSerializer.readTree(bytes)
+        val node = CoSecJson.mapper.readTree(bytes)
         require(
             node.isArray && node.values().all { it.isString }
         ) { "The reporters of a window are an array of instance ids" }

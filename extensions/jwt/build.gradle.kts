@@ -12,7 +12,8 @@
  */
 
 dependencies {
-    api(project(":core"))
+    api(project(":login"))
+    implementation("tools.jackson.core:jackson-databind")
     api("me.ahoo.cosid:cosid-core")
     api("com.auth0:java-jwt")
     testImplementation("me.ahoo.cosid:cosid-test")

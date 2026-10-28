@@ -20,7 +20,7 @@ The response body says only what the client can act on. The detail is in the aud
    `authorization.source.policy`, the `binding` it applied through, and the `snapshotVersion` it read
    ([Audit events](./observability.md#audit-events)).
 3. For every statement a decision checked and why each matched or not, explain the request through the control plane
-   ([Explaining a decision](../integration/checks.md)). With `opentelemetry-support` the deciding statement is also on
+   ([Explaining a decision](../integration/checks.md)). With `cosec-opentelemetry` the deciding statement is also on
    the `cosec.authorize` span ([Tracing](./observability.md#tracing)).
 
 ## By status code
@@ -271,6 +271,29 @@ A `cosec.*` key that no CoSec module reads: a typo, or a 7.x key, whose replacem
   the property from the gateway; set it on the services behind it.
 - A binding failure for `cosec.pipeline.mode`: the value is neither `enforce` nor `gateway`.
 
+### Startup fails on a missing module
+
+```text
+A Spring MVC host needs cosec-webmvc (me.ahoo.cosec:cosec-webmvc) on the classpath: add it to the application's dependencies (STA-1).
+```
+
+The starter wires only the CoSec modules on the classpath, so a forgotten one would silently switch a protection off.
+It refuses to start instead, naming the artifact, when a feature that is on needs a module that is missing:
+
+| Message starts with | Add |
+|---|---|
+| `A Spring MVC host needs cosec-webmvc` | `cosec-webmvc` |
+| `A WebFlux host needs cosec-webflux` | `cosec-webflux` |
+| `A Spring Cloud Gateway host needs cosec-gateway` | `cosec-gateway`; checked even with `cosec.enabled=false`, since its filter strips a client's `CoSec-Identity` header |
+| `cosec.api-key.store=redis needs cosec-cocache` | `cosec-cocache` with what it needs ([Modules](../guide/introduction.md#modules)), or use `store=memory` |
+| `cosec.audit.kafka.delivery=required needs cosec-kafka` | `cosec-kafka` with `spring-boot-starter-kafka`, or set [`delivery`](./configuration.md#audit) to `best-effort` |
+| `cosec.audit.kafka.delivery=required, but no Kafka audit listener was created` | The module is there but the listener is not: a `KafkaOperations` bean (`spring-boot-starter-kafka` and its `spring.kafka.*` settings), `cosec.audit.enabled=true` and `cosec.audit.kafka.enabled=true` |
+| `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` and a Redis connection (`spring.data.redis.*`): without it no snapshot is read and rate limits would count per instance |
+
+The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux
+check, as it needs `cosec-gateway` instead. An application that moved from 7.x's capabilities adds the modules
+themselves ([Modules, artifacts and packages](./upgrading.md#modules-artifacts-and-packages)).
+
 ### Startup fails on the eviction check
 
 ```text
@@ -291,11 +314,11 @@ evicts, an app or tenant document loaded after it was evicted is read as absent,
 ### Startup fails without a token store
 
 ```text
-JWT is enabled, but no TokenStore records revoked tokens: add cosec-cocache (the starter's cacheSupport feature) or a TokenStore bean, or set cosec.jwt.enabled=false.
-Tokens are verified, but no revocation reader is available: add cosec-cocache (the starter's cacheSupport feature) or a RevocationReader bean, or set cosec.jwt.enabled=false.
+JWT is enabled, but no TokenStore records revoked tokens: add cosec-cocache or a TokenStore bean, or set cosec.jwt.enabled=false.
+Tokens are verified, but no revocation reader is available: add cosec-cocache or a RevocationReader bean, or set cosec.jwt.enabled=false.
 ```
 
-Token revocation is always on with JWT, and the starter never revokes into nothing. Add `cache-support`, register a
+Token revocation is always on with JWT, and the starter never revokes into nothing. Add `cosec-cocache`, register a
 `TokenStore` and a `RevocationReader` bean of your own, or turn JWT off in a service that neither issues nor verifies
 tokens.
 
@@ -322,7 +345,7 @@ random one.
 ### Startup fails on API keys
 
 - `API keys are enabled, but no ApiKeyReader is available for the store <class>: with cosec.api-key.store=redis, a ReactiveStringRedisTemplate is needed.`
-  Add `cache-support` with Spring Data Redis, or register an `ApiKeyReader`.
+  Add `cosec-cocache` with Spring Data Redis, or register an `ApiKeyReader`.
 - `API key [<id>] needs the SHA-256 hex of the key as hash.`, `... needs a principal-id.`, `Duplicate API key ids: [...].`
   Fix [`cosec.api-key.keys`](./configuration.md#api-keys).
 
@@ -335,7 +358,7 @@ random one.
 | `lagWarn must not exceed lagEscalate.` and the other snapshot option checks | Fix [`cosec.authorization.snapshot.*`](./configuration.md#snapshot). |
 | `Invalid change options.`, `Invalid shadow window options.` | Fix [`cosec.control.*`](./configuration.md#control-plane): `break-glass.max-duration` above `24h`, or `shadow.max-duration` below `shadow.min-duration`. |
 | `cosec.control.revisions.reclaim-interval must be positive.`, `cosec.control.shadow.check-interval must be positive.` | Set a positive duration. |
-| `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs kafka-support, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | Add what it names, or set [`delivery`](./configuration.md#control-plane) to `best-effort`. |
+| `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs cosec-kafka, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | Add what it names, or set [`delivery`](./configuration.md#control-plane) to `best-effort`. |
 
 ## Control-plane errors
 

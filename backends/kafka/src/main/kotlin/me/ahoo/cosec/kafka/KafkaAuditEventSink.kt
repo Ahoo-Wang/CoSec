@@ -11,28 +11,42 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.kafka
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditEvent
-import me.ahoo.cosec.api.audit.AuditEventSink
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.audit.AuditEventSink
 import org.springframework.beans.factory.DisposableBean
 import org.springframework.kafka.core.KafkaOperations
-import reactor.core.scheduler.Scheduler
-import reactor.core.scheduler.Schedulers
 import java.time.Duration
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val MAX_PENDING_AUDIT_EVENTS = 1024
-private const val KAFKA_AUDIT_SCHEDULER_NAME = "cosec-kafka-audit"
+private const val KAFKA_AUDIT_THREAD_NAME = "cosec-kafka-audit"
 private val DEFAULT_SHUTDOWN_TIMEOUT = Duration.ofSeconds(10)
 
+/**
+ * Sends each audit event to [topic], off the publishing thread: `publish` hands it to an executor and returns.
+ *
+ * Without [executor], the sink owns one daemon thread with a queue of 1024 events, which keeps the send order; a full
+ * queue drops the event and warns once. [destroy] (on context close) stops taking events and sends what was queued, for
+ * up to [shutdownTimeout]. A caller-supplied [executor] must run tasks on threads of its own, never on the caller's: an
+ * audit sink must not block the decision. The sink never shuts a caller's executor down.
+ */
 class KafkaAuditEventSink(
     private val kafkaOperations: KafkaOperations<String, String>,
     private val topic: String,
-    scheduler: Scheduler? = null,
+    executor: Executor? = null,
     private val shutdownTimeout: Duration = DEFAULT_SHUTDOWN_TIMEOUT,
 ) : AuditEventSink,
     DisposableBean {
@@ -40,25 +54,28 @@ class KafkaAuditEventSink(
         require(topic.isNotBlank()) { "topic must not be blank." }
     }
 
-    private val ownsScheduler = scheduler == null
-    private val scheduler = scheduler ?: Schedulers.newBoundedElastic(
-        1,
-        MAX_PENDING_AUDIT_EVENTS,
-        KAFKA_AUDIT_SCHEDULER_NAME,
-    )
+    /** One thread with a bounded queue keeps the send order; a full queue rejects, and the event is dropped. */
+    private val owned: ExecutorService? = if (executor == null) {
+        ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, ArrayBlockingQueue(MAX_PENDING_AUDIT_EVENTS)) { task ->
+            Thread(task, KAFKA_AUDIT_THREAD_NAME).apply { isDaemon = true }
+        }
+    } else {
+        null
+    }
+    private val executor: Executor = executor ?: owned!!
     private val queueFullWarningLogged = AtomicBoolean()
 
     @Suppress("TooGenericExceptionCaught")
     override fun publish(event: AuditEvent) {
         try {
             // ponytail: one bounded scheduler preserves order; shard by key if throughput becomes a bottleneck.
-            scheduler.schedule {
+            this.executor.execute {
                 queueFullWarningLogged.set(false)
                 try {
                     kafkaOperations.send(
                         topic,
-                        CoSecJsonSerializer.writeValueAsString(arrayOf(event.tenantId, event.principal.id)),
-                        CoSecJsonSerializer.writeValueAsString(event),
+                        CoSecJson.mapper.writeValueAsString(arrayOf(event.tenantId, event.principal.id)),
+                        CoSecJson.mapper.writeValueAsString(event),
                     ).whenComplete { _, error ->
                         if (error != null) {
                             logFailure(error)
@@ -75,16 +92,18 @@ class KafkaAuditEventSink(
         }
     }
 
-    @Suppress("TooGenericExceptionCaught")
     override fun destroy() {
-        if (!ownsScheduler) {
-            return
-        }
+        val owned = owned ?: return
+        owned.shutdown()
         try {
-            scheduler.disposeGracefully().block(shutdownTimeout)
-        } catch (error: RuntimeException) {
-            log.warn(error) { "Timed out while draining the Kafka audit queue; forcing shutdown." }
-            scheduler.dispose()
+            if (!owned.awaitTermination(shutdownTimeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                log.warn { "Timed out while draining the Kafka audit queue; forcing shutdown." }
+                owned.shutdownNow()
+            }
+        } catch (error: InterruptedException) {
+            owned.shutdownNow()
+            Thread.currentThread().interrupt()
+            log.warn(error) { "Interrupted while draining the Kafka audit queue; forcing shutdown." }
         }
     }
 

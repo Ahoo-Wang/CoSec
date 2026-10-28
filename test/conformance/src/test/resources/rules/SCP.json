@@ -50,7 +50,7 @@
       "guards": [
         "architecture:ScopeConstructionTest#onlyTheResolverConstructsScopes",
         "architecture:ScopeConstructionTest#scopeIsNotADataClass",
-        "core:PolicyDocumentCodecTest#a scope is never decoded"
+        "runtime:PolicyDocumentCodecTest#a scope is never decoded"
       ],
       "pending": null
     },

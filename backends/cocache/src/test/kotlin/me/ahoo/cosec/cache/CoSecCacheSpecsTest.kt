@@ -11,11 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache
 
 import me.ahoo.cocache.api.Codec
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Memberships
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
@@ -25,9 +28,9 @@ class CoSecCacheSpecsTest {
 
     @Test
     fun scalarCodecsRoundTrip() {
-        CoSecCacheSpecs.jacksonCodec<Set<String>>(CoSecJsonSerializer).roundTrip(setOf("a", "b"))
+        CoSecCacheSpecs.jacksonCodec<Set<String>>(CoSecJson.mapper).roundTrip(setOf("a", "b"))
             .assert().isEqualTo(setOf("a", "b"))
-        CoSecCacheSpecs.jacksonCodec<Boolean>(CoSecJsonSerializer).roundTrip(true).assert().isTrue()
+        CoSecCacheSpecs.jacksonCodec<Boolean>(CoSecJson.mapper).roundTrip(true).assert().isTrue()
     }
 
     @Test

@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.social
 
-import me.ahoo.cosec.api.authentication.Credentials
+import me.ahoo.cosec.login.Credentials
 
 interface SocialCredentials : Credentials {
     val provider: String

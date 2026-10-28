@@ -157,13 +157,3 @@ interface AuditEvent {
     /** What the event records: `DECIDED`, `BAD_REQUEST`, `AUTHENTICATION_UNAVAILABLE`, `CANCELLED` or `ERROR`. */
     val kind: String get() = "DECIDED"
 }
-
-/**
- * SPI for consuming audit events.
- *
- * Implementations must be non-blocking; thrown exceptions are
- * swallowed by [me.ahoo.cosec.audit.AuditingAuthorization] and never affect authorization.
- */
-fun interface AuditEventSink {
-    fun publish(event: AuditEvent)
-}

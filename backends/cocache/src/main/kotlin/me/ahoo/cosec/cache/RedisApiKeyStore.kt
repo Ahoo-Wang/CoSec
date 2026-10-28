@@ -11,12 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache
 
-import me.ahoo.cosec.apikey.ApiKey
-import me.ahoo.cosec.apikey.ApiKeyStore
-import me.ahoo.cosec.apikey.ApiKeys
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.apikey.ApiKey
+import me.ahoo.cosec.spi.apikey.ApiKeyStore
+import me.ahoo.cosec.spi.apikey.ApiKeys
 import org.springframework.data.redis.core.StringRedisTemplate
 
 const val DEFAULT_API_KEY_KEY_PREFIX = "cosec:api-key"
@@ -41,7 +44,7 @@ class RedisApiKeyStore(
     override fun findByHash(hash: String): ApiKey? =
         stringRedisTemplate.opsForValue().get(
             redisKey(hash)
-        )?.let { CoSecJsonSerializer.readValue(it, ApiKey::class.java) }
+        )?.let { CoSecJson.mapper.readValue(it, ApiKey::class.java) }
 
     /**
      * Creates a key for [apiKey], stores only its hash, and returns the key. It cannot be recovered afterwards.
@@ -56,7 +59,7 @@ class RedisApiKeyStore(
      * Stores [apiKey] under [hash], replacing any key with that hash (e.g. to disable it or change its roles).
      */
     fun save(hash: String, apiKey: ApiKey) {
-        stringRedisTemplate.opsForValue().set(redisKey(hash), CoSecJsonSerializer.writeValueAsString(apiKey))
+        stringRedisTemplate.opsForValue().set(redisKey(hash), CoSecJson.mapper.writeValueAsString(apiKey))
     }
 
     /** Removes the key with [hash]; it stops working on the next request. */

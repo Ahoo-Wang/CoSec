@@ -16,7 +16,7 @@ package me.ahoo.cosec.cache
 import kotlinx.coroutines.future.await
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.token.RevocationReader
+import me.ahoo.cosec.spi.token.RevocationReader
 import java.time.Instant
 
 /**

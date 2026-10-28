@@ -24,7 +24,7 @@ application: it is published only as an image, never as a library.
 - **Layout.** The application lives in `/opt/cosec-gateway-server` and runs as the unprivileged `appuser`. The
   configuration is `config/application.yaml`; the JVM options are in `bin/cosec-gateway-server` (ZGC, a 2 GiB heap).
   Add options through `JAVA_OPTS`.
-- **What is in it.** The gateway filter, the Redis snapshot store (`cache-support`), tracing and the Kafka module. Its
+- **What is in it.** The gateway filter, the Redis snapshot store (`cosec-cocache`), tracing and the Kafka module. Its
   configuration turns Kafka audit (`cosec.audit.kafka.enabled: false`), login
   (`cosec.authentication.login.enabled: false`) and ip2region (`cosec.ip2region.enabled: false`) off. It has no control plane: documents are published by
   `cosec-migrate` or by a control-plane application on the same Redis.

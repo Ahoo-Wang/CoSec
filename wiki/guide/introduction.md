@@ -90,27 +90,39 @@ run in one of your services. See [Web integration](../integration/web.md) and th
 
 ## Modules
 
-Applications depend on `cosec-spring-boot-starter` and add integrations as Gradle capabilities (see
-[Quick start](./quick-start.md#add-the-dependency)). Every application needs one web adapter; most also need
-`cache-support`, which makes Redis the store of record for policy snapshots and revoked tokens.
+Applications depend on `cosec-spring-boot`, the Spring Boot auto-configuration, and add the modules they need
+next to it (see [Quick start](./quick-start.md#add-the-dependency)). The starter wires every module it finds on the
+classpath. Every application needs one web adapter; most also need `cosec-cocache`, which makes Redis the store of
+record for policy snapshots and revoked tokens.
 
-| You need | Capability | Module |
+| You need | Add | With |
 |---|---|---|
-| Authorization in a Spring WebFlux service | `webflux-support` | `cosec-webflux` |
-| Authorization in a Spring MVC service | `webmvc-support` | `cosec-webmvc` |
-| Authorization in Spring Cloud Gateway | `gateway-support` | `cosec-gateway` |
-| Policy snapshots, revoked tokens, shadow windows and cluster-wide rate limits in Redis | `cache-support` | `cosec-cocache` |
-| The control plane: publishing, history, rollback, shadow windows, approvals, simulation | `control-support` | `cosec-control` (needs `cache-support`) |
-| Social login through OAuth | `oauth-support` | `cosec-social` |
-| A tracing span per decision | `opentelemetry-support` | `cosec-opentelemetry` |
-| A timer per decision, by result | `micrometer-support` | `cosec-micrometer` |
-| Route maps and app documents generated from your OpenAPI description | `openapi-support` | `cosec-openapi` |
-| Decision events, and optionally control-plane changes, sent to Kafka | `kafka-support` | `cosec-kafka` |
-| The client's region as an external attribute | `ip2region-support` | `cosec-ip2region` |
+| Authorization in a Spring WebFlux service | `cosec-webflux` | |
+| Authorization in a Spring MVC service | `cosec-webmvc` | |
+| Authorization in Spring Cloud Gateway | `cosec-gateway` | |
+| Policy snapshots, revoked tokens, API keys, shadow windows and cluster-wide rate limits in Redis | `cosec-cocache` | `org.springframework.boot:spring-boot-data-redis`, `me.ahoo.cocache:cocache-spring-boot-starter` |
+| The control plane: publishing, history, rollback, shadow windows, approvals, simulation | `cosec-control` | `cosec-cocache` |
+| Social login through OAuth | `cosec-social` | |
+| A tracing span per decision | `cosec-opentelemetry` | |
+| A timer per decision, by result | `cosec-micrometer` | `io.micrometer:micrometer-core` |
+| Route maps and app documents generated from your OpenAPI description | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-common` |
+| Decision events, and optionally control-plane changes, sent to Kafka | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
+| The client's region as an external attribute | `cosec-ip2region` | |
 
-The starter always brings `cosec-runtime` (the coroutine request pipeline), `cosec-core` (documents, snapshots,
-tokens, memberships, API keys), `cosec-engine` and `cosec-model` (the pure decision engine), `cosec-api` (the public
-contracts) and `cosec-jwt` (JWT tokens). `cosec-bom` aligns the versions of every published module.
+The "With" column is what the starter's auto-configuration for that module needs besides the module itself. With
+Gradle, the CoSec modules bring the platform that gives these libraries their versions; with Maven, which does not
+pass a platform on, import `me.ahoo.cosec:cosec-dependencies` or give the versions yourself.
+
+A module that a feature you turned on needs is checked at startup (STA-1): the application does not start, and the
+message names the artifact to add, when a Spring MVC host lacks `cosec-webmvc`, a WebFlux host lacks `cosec-webflux`,
+a Spring Cloud Gateway host lacks `cosec-gateway` (even with `cosec.enabled=false`), `cosec.api-key.store=redis`
+lacks `cosec-cocache`, or `cosec.audit.kafka.delivery=required` lacks `cosec-kafka`
+([Troubleshooting](../operations/troubleshooting.md#startup-fails-on-a-missing-module)).
+
+The starter always brings `cosec-runtime` (the coroutine request pipeline, the policy documents, snapshots and token
+verification), `cosec-spi` (the extension points), `cosec-engine` and `cosec-model` (the pure decision engine),
+`cosec-api` (the public contracts), `cosec-login` (login and token issuing) and `cosec-jwt` (JWT tokens). `cosec-bom`
+aligns the versions of every published module.
 
 `cosec-testkit` is a test dependency: it runs scenarios against your own policy documents in JUnit 5, the way
 CoSec's conformance suite does ([Testing policies](../policies/testing.md)).

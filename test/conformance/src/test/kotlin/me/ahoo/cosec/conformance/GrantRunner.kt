@@ -22,7 +22,6 @@ import me.ahoo.cosec.control.grant.GrantStatement
 import me.ahoo.cosec.control.grant.Grantor
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
-import me.ahoo.cosec.membership.MembershipClaims
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -35,6 +34,7 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.testkit.ScenarioFormatException
 import me.ahoo.cosec.testkit.bool
 import me.ahoo.cosec.testkit.fields

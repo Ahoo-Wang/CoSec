@@ -14,8 +14,8 @@
 package me.ahoo.cosec.cache
 
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.apikey.ApiKey
-import me.ahoo.cosec.apikey.ApiKeys
+import me.ahoo.cosec.spi.apikey.ApiKey
+import me.ahoo.cosec.spi.apikey.ApiKeys
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll

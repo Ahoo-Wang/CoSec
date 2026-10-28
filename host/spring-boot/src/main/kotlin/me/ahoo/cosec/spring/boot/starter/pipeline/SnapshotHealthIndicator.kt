@@ -13,8 +13,8 @@
 
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
-import me.ahoo.cosec.snapshot.DocumentState
-import me.ahoo.cosec.snapshot.SnapshotSource
+import me.ahoo.cosec.runtime.snapshot.DocumentState
+import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import org.springframework.boot.health.contributor.Health
 import org.springframework.boot.health.contributor.HealthIndicator
 

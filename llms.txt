@@ -6,7 +6,7 @@ Key facts: any matching DENY overrides every ALLOW; a request nothing allows is 
 
 ## Getting started
 
-- [Introduction](https://cosec.ahoo.me/guide/introduction): what CoSec is, what it decides, the modules and the starter's feature variants
+- [Introduction](https://cosec.ahoo.me/guide/introduction): what CoSec is, what it decides, the modules and what each needs next to the starter
 - [Quick Start](https://cosec.ahoo.me/guide/quick-start): dependency, configuration, the first platform document, issuing a token, the first denied request
 - [Concepts](https://cosec.ahoo.me/guide/concepts): principals, tenants, apps and spaces, documents, policies and statements, bindings, memberships, the snapshot, decisions
 - [Security Model](https://cosec.ahoo.me/guide/security-model): the decision algorithm (candidates, deny-first, default deny, Indeterminate, boundaries, break-glass), fail closed and its exceptions, trust boundaries

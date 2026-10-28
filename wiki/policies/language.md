@@ -570,7 +570,7 @@ The control plane and `cosec-migrate` record how each revision was published. It
 
 ## Publishing documents
 
-Documents are stored in Redis and written only through the control plane (the starter's `controlSupport`) or
+Documents are stored in Redis and written only through the control plane (the `cosec-control` module) or
 `cosec-migrate publish` and `bootstrap`; see [Storage](../operations/storage.md). The control plane checks and compiles
 every change before it publishes it, and can try it on live traffic first: see [Testing policies](./testing.md).
 
@@ -601,8 +601,8 @@ example in VS Code's `settings.json`:
 }
 ```
 
-The files are generated from the format descriptors in `cosec-core`
-([`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/core/src/main/kotlin/me/ahoo/cosec/snapshot/format/DocumentFormats.kt))
+The files are generated from the format descriptors in `cosec-runtime`
+([`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/format/DocumentFormats.kt))
 and never edited by hand. A test keeps them and the document reader in agreement: what one accepts, the other accepts.
 
 Passing the schema is necessary, not sufficient. JSON Schema cannot express, among others: which of the three

@@ -29,7 +29,7 @@ import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.shadow.ShadowSample
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.util.concurrent.ThreadLocalRandom
 import kotlin.coroutines.cancellation.CancellationException
 

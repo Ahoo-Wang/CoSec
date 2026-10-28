@@ -27,7 +27,7 @@ logging:
 ```
 
 Each audit event names the deciding policy and statement, the binding it applied through, and the snapshot revisions.
-To see why without reproducing traffic, use the control plane (needs `control-support` and an operator allowed to):
+To see why without reproducing traffic, use the control plane (needs `cosec-control` and an operator allowed to):
 `POST /cosec/control/v1/explain` with
 `{"request": {"tenant": "acme", "principal": "alice", "roles": ["editor"], "policies": [], "app": "order-service", "space": "", "action": "order:read", "resource": "order/42", "remoteIp": "10.0.0.1"}}`
 returns the decision and its trace; `POST /analyze` with a `query` (`tenant`, `app`, `space`, `action`, `resource`)
@@ -68,9 +68,21 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `cosec.authentication.social.* -> cosec.authentication.login.social.*`). Rename or remove the key; the 7.x table is
   at https://cosec.ahoo.me/operations/upgrading#removed-and-renamed-properties. `cosec.unknown-properties=warn` only
   logs the list; do not suggest it to hide a real typo.
+- **`<what> needs <artifact> (me.ahoo.cosec:<artifact>) on the classpath: add it to the application's dependencies
+  (STA-1).`**: a feature that is on needs a CoSec module that is missing. `A Spring MVC host` needs `cosec-webmvc`,
+  `A WebFlux host` `cosec-webflux`, `A Spring Cloud Gateway host` `cosec-gateway` (checked even with
+  `cosec.enabled=false`: its filter strips a client's `CoSec-Identity`), `cosec.api-key.store=redis` `cosec-cocache`,
+  `cosec.audit.kafka.delivery=required` `cosec-kafka`. Add the named artifact next to `cosec-spring-boot`; 8.0 has no
+  starter capabilities (`requireCapability("me.ahoo.cosec:...-support")` from 7.x no longer resolves). Do not suggest
+  turning the feature off unless the user does not want it.
+- **`cosec.audit.kafka.delivery=required, but no Kafka audit listener was created`** (STA-1): `cosec-kafka` is there,
+  but the listener is not: add a `KafkaOperations` bean (`spring-boot-starter-kafka` with `spring.kafka.*`), and keep
+  `cosec.audit.enabled` and `cosec.audit.kafka.enabled` on; or use `best-effort`.
+- **`cosec-cocache needs a ReactiveStringRedisTemplate bean`** (STA-1): add `spring-boot-data-redis` and configure
+  Redis; without it no snapshot is read and rate limits would count per instance.
 - **`cosec.pipeline.mode=gateway on a Spring Cloud Gateway host`**: a gateway always runs `enforce`; set `gateway` on
   the services behind it. A binding failure on `cosec.pipeline.mode` means a value other than `enforce` or `gateway`.
-- **`cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created`**: add `kafka-support`, a
+- **`cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created`**: add `cosec-kafka`, a
   `KafkaOperations` bean and `cosec.control.audit.kafka.enabled=true`, or use `best-effort`.
 - **`Redis may evict CoSec's policy snapshot: maxmemory-policy is {...}, not noeviction`**: set
   `maxmemory-policy noeviction` on every node. **`Cannot tell whether Redis may evict CoSec's policy snapshot (CONFIG
@@ -80,7 +92,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   (eviction-check=warn)` at every start. Never suggest `warn` to silence a Redis that really evicts: an evicted app or
   tenant document reads as absent, and its DENYs silently stop applying.
 - **`JWT is enabled, but no TokenStore records revoked tokens`** or **`Tokens are verified, but no revocation reader
-  is available`**: revocation is always on. Add `cache-support` (Redis token store), or register a `TokenStore` and a
+  is available`**: revocation is always on. Add `cosec-cocache` (Redis token store), or register a `TokenStore` and a
   `RevocationReader` bean, or set `cosec.jwt.enabled=false` on a service that does not verify tokens.
 - **`Property [cosec.jwt.secret] must not be blank`**: set the secret (same algorithm and secret as the issuer).
 - **`The route map [classpath:cosec-routes.json] (cosec.authorization.routes.location) does not exist`**: add the route

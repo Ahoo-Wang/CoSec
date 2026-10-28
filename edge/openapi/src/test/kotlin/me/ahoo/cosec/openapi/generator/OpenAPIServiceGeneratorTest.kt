@@ -17,10 +17,10 @@ import io.swagger.v3.core.util.Json
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.PathItem
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.route.RouteMapCodec
-import me.ahoo.cosec.route.RouteResolution
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
-import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.runtime.route.RouteMapCodec
+import me.ahoo.cosec.runtime.route.RouteResolution
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows

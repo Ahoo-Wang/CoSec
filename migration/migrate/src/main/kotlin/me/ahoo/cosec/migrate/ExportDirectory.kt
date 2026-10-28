@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.json.CoSecJson
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -40,8 +43,8 @@ object ExportDirectory {
     /** Optional: the deployment's rate limit rules, as `LocalRateLimitRuleLoader` reads them. */
     const val RATE_LIMIT_RULES_FILE = "rate-limit-rules.json"
 
-    private val reader = CoSecJsonSerializer.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
-    private val writer = CoSecJsonSerializer.writer()
+    private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+    private val writer = CoSecJson.mapper.writer()
 
     fun read(directory: Path): Source7x {
         val input = HashMap<String, ByteArray>()

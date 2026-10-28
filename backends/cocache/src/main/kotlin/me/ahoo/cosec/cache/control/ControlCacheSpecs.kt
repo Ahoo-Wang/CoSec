@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache.control
 
 import me.ahoo.cocache.api.Codec
@@ -18,6 +20,7 @@ import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.codec.StringCodec
 import me.ahoo.cocache.core.policy.CachePolicy
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
@@ -31,11 +34,11 @@ import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotDigest
-import me.ahoo.cosec.snapshot.SnapshotDocument
-import me.ahoo.cosec.snapshot.SnapshotFormatException
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -158,7 +161,7 @@ object ReferenceKeyEncoder : KeyEncoder<ReferenceKey> {
 }
 
 private val factory = JsonNodeFactory.instance
-private val reader = CoSecJsonSerializer.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
 private fun read(bytes: ByteArray, what: String): JsonNode = try {
     reader.readTree(bytes) ?: throw SnapshotFormatException("The $what is empty.")
@@ -226,7 +229,7 @@ object RevisionIndexCodec : Codec<RevisionIndex> {
             ).put("since", it.since.toString())
         }
         root.put("floor", value.floor)
-        return CoSecJsonSerializer.writeValueAsBytes(root)
+        return CoSecJson.mapper.writeValueAsBytes(root)
     }
 
     override fun decode(bytes: ByteArray): RevisionIndex {
@@ -278,7 +281,7 @@ object SnapshotKeySetCodec : Codec<Set<SnapshotKey>> {
     override fun encode(value: Set<SnapshotKey>): ByteArray {
         val array = factory.arrayNode()
         value.map(SnapshotKeyEncoder::encode).sorted().forEach(array::add)
-        return CoSecJsonSerializer.writeValueAsBytes(array)
+        return CoSecJson.mapper.writeValueAsBytes(array)
     }
 
     override fun decode(bytes: ByteArray): Set<SnapshotKey> =
@@ -295,7 +298,7 @@ object ListedCodec : Codec<Map<String, Instant>> {
     override fun encode(value: Map<String, Instant>): ByteArray {
         val node = factory.objectNode()
         value.entries.sortedBy { it.key }.forEach { (entry, listedAt) -> node.put(entry, listedAt.toString()) }
-        return CoSecJsonSerializer.writeValueAsBytes(node)
+        return CoSecJson.mapper.writeValueAsBytes(node)
     }
 
     override fun decode(bytes: ByteArray): Map<String, Instant> {

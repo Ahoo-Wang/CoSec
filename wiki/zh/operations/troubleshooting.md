@@ -18,7 +18,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
    查看 `authorization.reasonCode` 和 `authorization.reason`、`authorization.source.policy` 中做出决定的语句、它所
    通过的 `binding`，以及它读取的 `snapshotVersion`（[审计事件](./observability.md#audit-events)）。
 3. 要看一个决策检查过的每条语句以及每条为什么匹配或不匹配，通过控制面对请求做 explain
-   （[解释一个决策](../integration/checks.md)）。有 `opentelemetry-support` 时，做出决定的语句也在 `cosec.authorize`
+   （[解释一个决策](../integration/checks.md)）。有 `cosec-opentelemetry` 时，做出决定的语句也在 `cosec.authorize`
    span 上（[追踪](./observability.md#tracing)）。
 
 ## 按状态码 {#by-status-code}
@@ -236,6 +236,26 @@ CoSec 的任何模块都不读取的 `cosec.*` key：拼写错误，或 7.x 的 
 - `cosec.pipeline.mode=gateway on a Spring Cloud Gateway host: ...`：网关总是用策略决策。从网关上去掉这个配置项；在其后的服务上设置它。
 - `cosec.pipeline.mode` 绑定失败：值既不是 `enforce` 也不是 `gateway`。
 
+### 缺少模块时启动失败 {#startup-fails-on-a-missing-module}
+
+```text
+A Spring MVC host needs cosec-webmvc (me.ahoo.cosec:cosec-webmvc) on the classpath: add it to the application's dependencies (STA-1).
+```
+
+starter 只装配类路径上的 CoSec 模块，漏加一个模块会悄无声息地关掉一项保护。因此当已开启的功能需要的模块缺失时，它拒绝启动，并给出制品名：
+
+| 报错开头 | 添加 |
+|---|---|
+| `A Spring MVC host needs cosec-webmvc` | `cosec-webmvc` |
+| `A WebFlux host needs cosec-webflux` | `cosec-webflux` |
+| `A Spring Cloud Gateway host needs cosec-gateway` | `cosec-gateway`；即使 `cosec.enabled=false` 也会检查，因为它的过滤器会剥离客户端的 `CoSec-Identity` 头 |
+| `cosec.api-key.store=redis needs cosec-cocache` | `cosec-cocache` 及其所需依赖（[模块](../guide/introduction.md#modules)），或改用 `store=memory` |
+| `cosec.audit.kafka.delivery=required needs cosec-kafka` | `cosec-kafka` 和 `spring-boot-starter-kafka`，或把 [`delivery`](./configuration.md#audit) 设为 `best-effort` |
+| `cosec.audit.kafka.delivery=required, but no Kafka audit listener was created` | 模块已在，但监听器没有创建：需要 `KafkaOperations` Bean（`spring-boot-starter-kafka` 及其 `spring.kafka.*` 配置）、`cosec.audit.enabled=true` 和 `cosec.audit.kafka.enabled=true` |
+| `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` 和 Redis 连接（`spring.data.redis.*`）：没有它就读不到快照，限流也会退化为按实例计数 |
+
+Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。从 7.x capability 迁移过来的应用要自己添加这些模块（[模块、制品与包](./upgrading.md#modules-artifacts-and-packages)）。
+
 ### 驱逐检查导致启动失败 {#startup-fails-on-the-eviction-check}
 
 ```text
@@ -255,11 +275,11 @@ Cannot tell whether Redis may evict CoSec's policy snapshot (CONFIG GET maxmemor
 ### 缺少令牌存储导致启动失败 {#startup-fails-without-a-token-store}
 
 ```text
-JWT is enabled, but no TokenStore records revoked tokens: add cosec-cocache (the starter's cacheSupport feature) or a TokenStore bean, or set cosec.jwt.enabled=false.
-Tokens are verified, but no revocation reader is available: add cosec-cocache (the starter's cacheSupport feature) or a RevocationReader bean, or set cosec.jwt.enabled=false.
+JWT is enabled, but no TokenStore records revoked tokens: add cosec-cocache or a TokenStore bean, or set cosec.jwt.enabled=false.
+Tokens are verified, but no revocation reader is available: add cosec-cocache or a RevocationReader bean, or set cosec.jwt.enabled=false.
 ```
 
-启用 JWT 时令牌吊销始终开启，starter 绝不会把吊销写进空处。添加 `cache-support`，注册你自己的 `TokenStore` 和
+启用 JWT 时令牌吊销始终开启，starter 绝不会把吊销写进空处。添加 `cosec-cocache`，注册你自己的 `TokenStore` 和
 `RevocationReader` bean，或者在既不签发也不校验令牌的服务中关闭 JWT。
 
 ### JWT 密钥错误导致启动失败 {#startup-fails-with-a-jwt-secret-error}
@@ -283,7 +303,7 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 ### API key 导致启动失败 {#startup-fails-on-api-keys}
 
 - `API keys are enabled, but no ApiKeyReader is available for the store <class>: with cosec.api-key.store=redis, a ReactiveStringRedisTemplate is needed.`
-  添加带 Spring Data Redis 的 `cache-support`，或者注册一个 `ApiKeyReader`。
+  添加带 Spring Data Redis 的 `cosec-cocache`，或者注册一个 `ApiKeyReader`。
 - `API key [<id>] needs the SHA-256 hex of the key as hash.`、`... needs a principal-id.`、`Duplicate API key ids: [...].`
   修正 [`cosec.api-key.keys`](./configuration.md#api-keys)。
 
@@ -296,7 +316,7 @@ WebFlux 或 WebMvc 宿主默认加载 `classpath:cosec-routes.json`，文件不�
 | `lagWarn must not exceed lagEscalate.` 以及其他快照选项检查 | 修正 [`cosec.authorization.snapshot.*`](./configuration.md#snapshot)。 |
 | `Invalid change options.`、`Invalid shadow window options.` | 修正 [`cosec.control.*`](./configuration.md#control-plane)：`break-glass.max-duration` 超过 `24h`，或 `shadow.max-duration` 小于 `shadow.min-duration`。 |
 | `cosec.control.revisions.reclaim-interval must be positive.`、`cosec.control.shadow.check-interval must be positive.` | 设置一个正的时长。 |
-| `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs kafka-support, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | 补上它列出的条件，或把 [`delivery`](./configuration.md#control-plane) 设为 `best-effort`。 |
+| `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs cosec-kafka, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | 补上它列出的条件，或把 [`delivery`](./configuration.md#control-plane) 设为 `best-effort`。 |
 
 ## 控制面错误 {#control-plane-errors}
 

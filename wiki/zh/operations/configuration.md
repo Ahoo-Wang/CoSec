@@ -9,7 +9,7 @@ description: "每个 cosec.* 配置项的类型、默认值以及它改变什么
 配置项的唯一参考；其他页面提到某个配置项时，链接到这里查它的类型和默认值。
 
 除标注 **必填** 的以外，所有配置项都是可选的。配置项只有在它所配置的模块位于 classpath 上时才起作用：每个集成都是
-starter 的一个特性变体（[模块](../guide/introduction.md#modules)）。时长使用 Spring 的格式（`500ms`、`10s`、`7d`），
+应用在 starter 旁边添加的一个模块（[模块](../guide/introduction.md#modules)）。时长使用 Spring 的格式（`500ms`、`10s`、`7d`），
 数据大小写成 `16MB`；集合和列表可以写成逗号分隔的值或 YAML 列表；枚举值不区分大小写。7.x 有而 8.0 没有的配置项列在
 [升级](./upgrading.md#removed-and-renamed-properties)中。
 
@@ -30,26 +30,26 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 |---|---|---|---|
 | `cosec.enabled` | boolean | `true` | CoSec 的全部自动配置 |
 | `cosec.authentication.login.enabled` | boolean | `true` | 把凭证换成令牌的登录 bean：基于你的 `Authentication` bean 的 `CompositeAuthentication`、启用 JWT 时的 `TokenCompositeAuthentication`，以及社交登录。管道中对请求的认证不依赖它 |
-| `cosec.authentication.login.social.enabled` | boolean | `true` | 社交登录（`oauth-support`；需要 `cosec.authentication.login.enabled`） |
+| `cosec.authentication.login.social.enabled` | boolean | `true` | 社交登录（`cosec-social`；需要 `cosec.authentication.login.enabled`） |
 | `cosec.jwt.enabled` | boolean | `true` | 签发、校验和吊销 JWT。关闭后，管道拒绝每个令牌（`token-invalid`），没有令牌的请求按匿名处理 |
 | `cosec.api-key.enabled` | boolean | `false` | 面向机器客户端的 [API key](../integration/authentication.md) |
 | `cosec.audit.enabled` | boolean | `true` | 审计日志监听器；与 `cosec.audit.kafka.enabled` 一起决定 Kafka 审计监听器 |
-| `cosec.audit.kafka.enabled` | boolean | `true` | Kafka 审计监听器（需要 `kafka-support` 和一个 `KafkaOperations` bean） |
-| `cosec.metrics.enabled` | boolean | `true` | 指标监听器（需要 `micrometer-support` 和一个 `MeterRegistry` bean） |
-| `cosec.ip2region.enabled` | boolean | `true` | `ext.ip2region.*` 属性提供者（`ip2region-support`） |
-| `cosec.openapi.enabled` | boolean | `true` | OpenAPI 文档的 bearer 认证定制器（`openapi-support`） |
-| `cosec.authorization.shadow.enabled` | boolean | `true` | 本实例参与影子窗口（`cache-support`）；见[影子窗口](#shadow-windows) |
+| `cosec.audit.kafka.enabled` | boolean | `true` | Kafka 审计监听器（需要 `cosec-kafka` 和一个 `KafkaOperations` bean） |
+| `cosec.metrics.enabled` | boolean | `true` | 指标监听器（需要 `cosec-micrometer` 和一个 `MeterRegistry` bean） |
+| `cosec.ip2region.enabled` | boolean | `true` | `ext.ip2region.*` 属性提供者（`cosec-ip2region`） |
+| `cosec.openapi.enabled` | boolean | `true` | OpenAPI 文档的 bearer 认证定制器（`cosec-openapi`） |
+| `cosec.authorization.shadow.enabled` | boolean | `true` | 本实例参与影子窗口（`cosec-cocache`）；见[影子窗口](#shadow-windows) |
 | `cosec.gateway.identity.enabled` | boolean | `true` | 在 Spring Cloud Gateway 宿主上，把已验证的身份转发给其后的服务；见[网关身份](#gateway-identity) |
 
 以下功能没有开关：
 
-- **追踪**：只要 `opentelemetry-support` 在 classpath 上就开启（[追踪](./observability.md#tracing)）。
-- **控制面**：只要 `control-support` 和 `cache-support` 在 classpath 上就开启；它的路由需要 WebFlux 或 WebMvc 应用
+- **追踪**：只要 `cosec-opentelemetry` 在 classpath 上就开启（[追踪](./observability.md#tracing)）。
+- **控制面**：只要 `cosec-control` 和 `cosec-cocache` 在 classpath 上就开启；它的路由需要 WebFlux 或 WebMvc 应用
   （[控制面](#control-plane)）。
-- **限流器**：始终存在。有 `ReactiveStringRedisTemplate` bean 时（`cache-support`）基于 Redis，否则按实例计数
+- **限流器**：始终存在。有 `ReactiveStringRedisTemplate` bean 时（`cosec-cocache`）基于 Redis，否则按实例计数
   （[限流](#rate-limiting)）。
 - **令牌吊销**：启用 JWT 时始终开启（[启动](./troubleshooting.md#startup-fails-without-a-token-store)）。
-- **`cosecServiceGenerator` actuator 端点**：只要有 `openapi-support` 和 Spring Boot Actuator 就存在；像其他 actuator
+- **`cosecServiceGenerator` actuator 端点**：只要有 `cosec-openapi` 和 Spring Boot Actuator 就存在；像其他 actuator
   端点一样决定是否暴露它。
 
 ## 管道 {#pipeline}
@@ -81,7 +81,7 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 
 ## 网关身份 {#gateway-identity}
 
-`cosec.gateway.identity.*`，用于 Spring Cloud Gateway 宿主（`gateway-support`）：网关转发给其后服务的内容。对有主体的
+`cosec.gateway.identity.*`，用于 Spring Cloud Gateway 宿主（`cosec-gateway`）：网关转发给其后服务的内容。对有主体的
 放行，它把 `CoSec-Identity` 设为自己验证过的身份（格式见
 [`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)）。
 无论这些配置项、模式或 `cosec.enabled` 如何，它总是移除客户端发来的 `CoSec-Identity`。元数据为 `cosec-identity: false`
@@ -130,7 +130,7 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 
 ## 影子窗口 {#shadow-windows}
 
-`cosec.authorization.shadow.*`：数据面在控制面影子窗口中承担的部分，需要 `cache-support`。窗口如何工作见
+`cosec.authorization.shadow.*`：数据面在控制面影子窗口中承担的部分，需要 `cosec-cocache`。窗口如何工作见
 [测试变更](../policies/testing.md)。
 
 | 配置项 | 类型 | 默认值 | 作用 |
@@ -155,14 +155,14 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 | `cosec.jwt.token-validity.access` | duration | `10m` | 访问令牌有效期。 |
 | `cosec.jwt.token-validity.refresh` | duration | `7d` | 刷新令牌有效期；吊销记录在 Redis 中保留这么久再加一秒。 |
 
-启用 JWT 时，除非吊销能被记录和读取，否则启动失败：需要 `cache-support`，或你自己的 `TokenStore` 和
+启用 JWT 时，除非吊销能被记录和读取，否则启动失败：需要 `cosec-cocache`，或你自己的 `TokenStore` 和
 `RevocationReader` bean。
 
 ## API key {#api-keys}
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.api-key.store` | `memory`、`redis` | `memory` | `memory`：下面配置的 key。`redis`：所有实例共享的 key；需要 `cache-support`、一个 `StringRedisTemplate` 和一个 `ReactiveStringRedisTemplate`。 |
+| `cosec.api-key.store` | `memory`、`redis` | `memory` | `memory`：下面配置的 key。`redis`：所有实例共享的 key；需要 `cosec-cocache`、一个 `StringRedisTemplate` 和一个 `ReactiveStringRedisTemplate`。 |
 | `cosec.api-key.key-prefix` | string | `cosec:api-key` | `redis` 存储的 Redis key 前缀，去掉末尾的 `:`。与其他前缀都无关（[Redis key](./storage.md#redis-keys)）。 |
 | `cosec.api-key.keys[n].*` | list | 空 | `memory` 存储的 key；使用 `redis` 时忽略。 |
 
@@ -182,7 +182,7 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 
 ## 缓存 {#cache}
 
-`cosec.authorization.cache.*`：已吊销令牌和已吊销主体的缓存，在启用 JWT 且有 `cache-support` 时创建。快照文档有自己的
+`cosec.authorization.cache.*`：已吊销令牌和已吊销主体的缓存，在启用 JWT 且有 `cosec-cocache` 时创建。快照文档有自己的
 配置项（[快照](#snapshot)）。
 
 | 配置项 | 类型 | 默认值 | 作用 |
@@ -207,7 +207,7 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 |---|---|---|---|
 | `cosec.audit.required.timeout` | duration | `1s` | 一个 `REQUIRED` 决策监听器最多用多久。失败或超时会把放行变成 `503`（[决策监听器](./observability.md#decision-listeners)）。 |
 | `cosec.audit.kafka.topic` | string | `cosec-audit` | 审计事件的 Kafka topic。 |
-| `cosec.audit.kafka.delivery` | `best-effort`、`required` | `best-effort` | Kafka 审计监听器的投递方式。`required` 等待 broker 的确认，因此无法审计的放行会得到 `503`；生产者请配置 `acks=all`。 |
+| `cosec.audit.kafka.delivery` | `best-effort`、`required` | `best-effort` | Kafka 审计监听器的投递方式。`required` 等待 broker 的确认，因此无法审计的放行会得到 `503`；生产者请配置 `acks=all`。为 `required` 而缺少 `cosec-kafka` 时启动失败（[STA-1](./troubleshooting.md#startup-fails-on-a-missing-module)）。 |
 
 ## 决策监听器 {#decision-listeners}
 
@@ -220,7 +220,7 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 
 ## 控制面 {#control-plane}
 
-`cosec.control.*`，需要 `control-support` 和 `cache-support`（[发布文档](./storage.md#publishing-documents)）。
+`cosec.control.*`，需要 `cosec-control` 和 `cosec-cocache`（[发布文档](./storage.md#publishing-documents)）。
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
@@ -240,7 +240,7 @@ map、list 类型配置项之下的 key，算作已知。错误信息列出每�
 | `cosec.control.shadow.max-duration` | duration | `24h` | 窗口到这个年龄时即使样本不足也关闭，作为发布者必须确认的证据不足。不得小于 `min-duration`。 |
 | `cosec.control.shadow.check-interval` | duration | `1m` | 多久查看一次处于影子阶段的变更，同一时间只有一个实例执行；窗口最多晚这么久关闭。必须为正。 |
 | `cosec.control.audit.required-timeout` | duration | `5s` | 所有 `REQUIRED` 变更监听器合计最多用多久记录一个受控步骤（发布、break-glass），超过后该步骤以 `503` 失败。 |
-| `cosec.control.audit.kafka.enabled` | boolean | `true` | Kafka 变更监听器（需要 `kafka-support` 和一个 `KafkaOperations` bean）。 |
+| `cosec.control.audit.kafka.enabled` | boolean | `true` | Kafka 变更监听器（需要 `cosec-kafka` 和一个 `KafkaOperations` bean）。 |
 | `cosec.control.audit.kafka.topic` | string | `cosec-control-audit` | 变更事件的 Kafka topic。 |
 | `cosec.control.audit.kafka.delivery` | `best-effort`、`required` | `best-effort` | `required` 使发布和 break-glass 等待 broker 确认。设为 `required` 却无法创建 Kafka 变更监听器时，启动失败。 |
 
@@ -271,7 +271,7 @@ Redis 中。
 
 ## 影响 CoSec 的 CoCache 配置项 {#cocache-properties-that-affect-cosec}
 
-有 `cache-support` 时，CoSec 在 CoCache 的运行时上创建它的缓存。CoCache 配置项的完整列表见
+有 `cosec-cocache` 时，CoSec 在 CoCache 的运行时上创建它的缓存。CoCache 配置项的完整列表见
 [CoCache 文档](https://cocache.ahoo.me)。
 
 | 配置项 | 对 CoSec 的影响 |

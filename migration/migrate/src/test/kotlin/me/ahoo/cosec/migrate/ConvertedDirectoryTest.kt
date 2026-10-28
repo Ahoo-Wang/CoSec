@@ -11,15 +11,18 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.migrate.Fixtures7x.app
 import me.ahoo.cosec.migrate.Fixtures7x.appPermission
 import me.ahoo.cosec.migrate.Fixtures7x.permission
 import me.ahoo.cosec.migrate.Fixtures7x.policy
 import me.ahoo.cosec.migrate.Fixtures7x.source
-import me.ahoo.cosec.serialization.CoSecJsonSerializer
-import me.ahoo.cosec.snapshot.SnapshotKey
+import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -64,12 +67,12 @@ class ConvertedDirectoryTest {
         val read = ConvertedDirectory.read(out)
         read.keys.assert().containsExactly(SnapshotKey.Platform, SnapshotKey.App("a/b"))
         read.getValue(SnapshotKey.App("a/b")).bindings.map { it.id.value }.assert().containsExactly("r:r:0", "r:r@s:0")
-        val report = CoSecJsonSerializer.readTree(Files.readAllBytes(out.resolve(ConvertedDirectory.REPORT_FILE)))
+        val report = CoSecJson.mapper.readTree(Files.readAllBytes(out.resolve(ConvertedDirectory.REPORT_FILE)))
         report.get("accepted").asBoolean().assert().isTrue()
         report.get("outputSha256").propertyNames().toList().assert()
             .containsExactly("apps/a%2Fb.json", "platform.json", "provenance.json")
         report.get("warnings").single().get("location").asString().assert().isEqualTo("app-role-permissions.json[1]")
-        val provenance = CoSecJsonSerializer.readTree(
+        val provenance = CoSecJson.mapper.readTree(
             Files.readAllBytes(out.resolve(ConvertedDirectory.PROVENANCE_FILE))
         )
         provenance.get("bindings").size().assert().isEqualTo(3)
@@ -82,7 +85,7 @@ class ConvertedDirectoryTest {
         ConvertedDirectory.write(conversion, out)
         Files.list(out).use { files -> files.map { it.fileName.toString() }.toList() }.assert()
             .containsExactly(ConvertedDirectory.REPORT_FILE)
-        val rejection = CoSecJsonSerializer.readTree(Files.readAllBytes(out.resolve(ConvertedDirectory.REPORT_FILE)))
+        val rejection = CoSecJson.mapper.readTree(Files.readAllBytes(out.resolve(ConvertedDirectory.REPORT_FILE)))
             .get("rejections").single()
         rejection.get("kind").asString().assert().isEqualTo("RESERVED_POLICY_ID")
         rejection.get("location").asString().assert().isEqualTo("policy:perm:x")

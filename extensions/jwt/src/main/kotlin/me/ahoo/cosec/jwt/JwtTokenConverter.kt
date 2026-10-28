@@ -21,9 +21,9 @@ import me.ahoo.cosec.api.principal.RoleCapable
 import me.ahoo.cosec.api.tenant.Tenant.Companion.TENANT_ID_KEY
 import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.membership.MembershipClaims
-import me.ahoo.cosec.token.SimpleCompositeToken
-import me.ahoo.cosec.token.TokenConverter
+import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.runtime.token.SimpleCompositeToken
+import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosid.StringIdGenerator
 import tools.jackson.databind.json.JsonMapper
 import java.time.Duration
@@ -41,7 +41,7 @@ import java.util.*
  * @param refreshTokenValidity Duration for which refresh tokens are valid
  * @param membershipClaimLimit the most bytes the `roles` and `policies` claims may take, serialized as JSON, before
  * the access token carries `cosec.membership: "provider"` instead of them (RFC 0004 §4.5.1); `null`, the default,
- * never moves them. Set it only together with a [me.ahoo.cosec.membership.MembershipProvider] that knows the
+ * never moves them. Set it only together with a [me.ahoo.cosec.spi.membership.MembershipProvider] that knows the
  * memberships: a token that carries the marker has no memberships of its own, and without a provider its requests
  * fail closed (503). [DEFAULT_MEMBERSHIP_CLAIM_LIMIT] is a suggested value, not the default.
  * @see TokenConverter
