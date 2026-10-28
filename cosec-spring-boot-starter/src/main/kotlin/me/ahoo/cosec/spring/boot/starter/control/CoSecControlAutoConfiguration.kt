@@ -22,6 +22,7 @@ import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.api.DefaultControlPlane
+import me.ahoo.cosec.control.api.Simulator
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.audit.LoggingChangeListener
@@ -194,8 +195,14 @@ class CoSecControlAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    fun cosecControlPlane(changes: Changes, revisions: Revisions, authority: ChangeAuthority): ControlPlane =
-        DefaultControlPlane(changes, revisions, authority)
+    fun cosecControlPlane(
+        changes: Changes,
+        revisions: Revisions,
+        authority: ChangeAuthority,
+        attributes: AttributeProviders,
+    ): ControlPlane =
+        // simulate and explain compile against the host's attribute providers, as enforcement does (S5).
+        DefaultControlPlane(changes, revisions, authority, Simulator(attributes = attributes.catalog))
 
     @Bean
     @ConditionalOnMissingBean
