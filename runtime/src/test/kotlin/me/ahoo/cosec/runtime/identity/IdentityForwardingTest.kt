@@ -140,6 +140,23 @@ class IdentityForwardingTest {
         outcome.proceed.assert().isFalse()
     }
 
+    /** Review of #1124: a service could not bound an identity whose credential never expires, so none is sent. */
+    @Test
+    fun `a credential that never expires fails the request closed`() {
+        val forever = AuthnResult.Authenticated(
+            AuthenticatedPrincipal(
+                PipelineFixtures.PRINCIPAL,
+                PipelineFixtures.TENANT,
+                PipelineFixtures.claims("" to "clerk"),
+                credential = credential.copy(expiresAt = null),
+            ),
+            "apikey",
+        )
+        val outcome = evaluate(forever)
+        outcome.status.assert().isEqualTo(500)
+        outcome.proceed.assert().isFalse()
+    }
+
     @Test
     fun `without an issuer nothing is forwarded`() {
         val outcome = runBlocking {
