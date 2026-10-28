@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicLong
 class SnapshotRecompileTest {
     private val clock = ManualClock()
     private val ticker = AtomicLong()
+    private val metrics = RecordingMetrics()
 
     /** Compiles to the revision and the [inputs] it compiled with; [during] runs inside a compilation of its key. */
     private class InputsCompiler : SnapshotCompiler<Compiled> {
@@ -60,7 +61,7 @@ class SnapshotRecompileTest {
         DocumentSnapshots.families(compiler, options),
         options,
         clock,
-        SnapshotMetrics.NOOP,
+        metrics,
         directExecutor,
         null,
     ) { ticker.incrementAndGet() }
@@ -73,7 +74,7 @@ class SnapshotRecompileTest {
     private fun DocumentState<Compiled>.inputs(): String = (this as DocumentState.Present).compiled.entries.single()
 
     @Test
-    fun `a load that compiled with the old inputs while they changed installs and is compiled again`() {
+    fun `a load that compiled with the old inputs while they changed is compiled again before anyone is served it`() {
         val store = ControllableStore()
         store.publish(SnapshotKey.Platform, 1)
         store.publish(TENANT_A, 1)
@@ -85,9 +86,12 @@ class SnapshotRecompileTest {
                 compiler.inputs = 2
                 source.recompile()
             }
-            source.loadAll(listOf(TENANT_A)).join()
+            val waited = source.loadAll(listOf(TENANT_A)).join()
+            waited.scoped.single().state.inputs().assert().isEqualTo("inputs-2")
             source.installed(TENANT_A).inputs().assert().isEqualTo("inputs-2")
             compiler.compiled.count { it == TENANT_A }.assert().isEqualTo(2)
+            metrics.installs.filter { it.key == TENANT_A }.map { (it.state as DocumentState.Present<*>).compiled }
+                .assert().containsExactly(Compiled(TENANT_A, 1, listOf("inputs-2"), emptySet()))
         }
     }
 
@@ -130,6 +134,34 @@ class SnapshotRecompileTest {
             source.recompile().join()
             val failed = source.installed(TENANT_A) as DocumentState.Failed
             failed.error.assert().isInstanceOf(SnapshotUnavailableException::class.java)
+            store.failure = null
+            awaitCondition { source.installed(TENANT_A) is DocumentState.Present }
+            source.installed(TENANT_A).inputs().assert().isEqualTo("inputs-2")
+        }
+    }
+
+    @Test
+    fun `a document failed by a recompile keeps retrying while the store stays down`() {
+        val store = ControllableStore()
+        store.publish(SnapshotKey.Platform, 1)
+        store.publish(TENANT_A, 1)
+        val compiler = InputsCompiler()
+        // No revalidation: only the retries can bring the document back.
+        val options = SnapshotOptions(
+            revalidateInterval = Duration.ZERO,
+            rejectedReloadRetry = Duration.ofMillis(1),
+            prewarmInitialBackoff = Duration.ofMillis(1),
+            prewarmMaxBackoff = Duration.ofMillis(5),
+        )
+        source(store, compiler, options).use { source ->
+            source.loadAll(listOf(TENANT_A)).join()
+            store.failure = IllegalStateException("redis down")
+            compiler.inputs = 2
+            source.recompile().join()
+            source.installed(TENANT_A).assert().isInstanceOf(DocumentState.Failed::class.java)
+            // The first retry fails too, and the ones after it.
+            val reads = store.conditionalReads.get()
+            awaitCondition { store.conditionalReads.get() >= reads + 3 }
             store.failure = null
             awaitCondition { source.installed(TENANT_A) is DocumentState.Present }
             source.installed(TENANT_A).inputs().assert().isEqualTo("inputs-2")

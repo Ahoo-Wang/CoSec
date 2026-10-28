@@ -1004,11 +1004,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                     guarded(load) { compileAndInstall(load, read) }
                 }
             } catch (rejected: RejectedExecutionException) {
-                onTransientFailure(load, SnapshotUnavailableException(key, "the compile queue is full", rejected))
-                // A recompiling load retries from onTransientFailure.
-                if (load.known != null && !load.recompiles) {
-                    retryLater()
-                }
+                onTransientFailure(load, SnapshotUnavailableException(key, "the compile queue is full", rejected), rejected = true)
             }
         }
 
@@ -1051,8 +1047,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         /**
          * The store could not be read: keep what is installed (F6), or answer failed without installing (F1). An entry
          * compiled with inputs that have changed since is not kept: it fails closed until a retry compiles it again.
+         * A reload [rejected] by the compile queue retries, and so does one that keeps an entry that failed to compile
+         * (it may only be waiting for a recompile), however the inputs changed, until a load compiles it.
          */
-        private fun onTransientFailure(load: Load, cause: Throwable) {
+        private fun onTransientFailure(load: Load, cause: Throwable, rejected: Boolean = false) {
             val known = load.known
             if (known != null && load.recompiles) {
                 offRequestThread {
@@ -1082,6 +1080,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                     log.warn(cause) { "Reloading snapshot document [$key] failed; keeping revision ${known.revision}." }
                 }
                 finish(load, known, install = false)
+                if (rejected || known.origin == EntryOrigin.UNCOMPILABLE) {
+                    retryLater()
+                }
                 return
             }
             offRequestThread { log.warn(cause) { "Loading snapshot document [$key] failed." } }
@@ -1093,22 +1094,29 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
          * did, the state changes: the in-flight load is cleared and, if a change arrived meanwhile, the next load is
          * created under the same lock, so no other load and no removal can come between them. The load's future
          * completes last. Eviction and dropping an empty slot run afterwards on the housekeeping thread.
+         *
+         * A family entry compiled in an earlier [compileEpoch] may have compiled with inputs that [recompile] replaced:
+         * another load follows at once, and a compiled document is not installed. Its waiters get what that load
+         * installs, or fail by their own timeout, never the old compilation.
          */
         private fun finish(load: Load, entry: SnapshotEntry<T>, install: Boolean) {
             if (!load.claim()) {
                 log.error { "Snapshot load of [$key] tried to finish twice; ignored." }
                 return
             }
+            val stale = install && key != sharedKey && load.epoch < compileEpoch.get() &&
+                (entry.origin == EntryOrigin.DOCUMENT || entry.origin == EntryOrigin.UNCOMPILABLE)
+            val withheld = stale && entry.origin == EntryOrigin.DOCUMENT
             try {
-                if (install) {
+                if (install && !withheld) {
                     recordInstall(entry)
                 }
             } finally {
-                advance(load, entry, install)
+                advance(load, entry, install && !withheld, stale, withheld)
             }
         }
 
-        private fun advance(load: Load, entry: SnapshotEntry<T>, install: Boolean) {
+        private fun advance(load: Load, entry: SnapshotEntry<T>, install: Boolean, stale: Boolean, withheld: Boolean) {
             val nextLoad: Load?
             val unanswered: CompletableFuture<SnapshotEntry<T>>?
             val empty: Boolean
@@ -1120,7 +1128,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 if (inFlight === load) {
                     inFlight = null
                 }
-                val wanted = dirty || (install && load.fromLocalCopy)
+                val wanted = dirty || stale || (install && load.fromLocalCopy)
                 val pending = next
                 val open = !closed && !removed
                 nextLoad = if (wanted && inFlight == null && open) {
@@ -1134,11 +1142,22 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 next = null
                 empty = installed == null
             }
+            val answer = if (withheld && nextLoad == null) {
+                failedEntry(SnapshotUnavailableException(key, "compiled with inputs that changed"), clock.instant())
+            } else {
+                entry
+            }
             try {
-                startOrAnswer(nextLoad, unanswered, entry)
+                startOrAnswer(nextLoad, unanswered, answer)
             } finally {
                 housekeep(empty, install)
-                load.result.complete(entry)
+                if (withheld && nextLoad != null) {
+                    nextLoad.result.whenComplete { next, error ->
+                        load.result.complete(next ?: transientFailure(clock.instant(), unwrap(error)))
+                    }
+                } else {
+                    load.result.complete(answer)
+                }
             }
         }
 

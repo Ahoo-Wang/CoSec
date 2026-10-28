@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * N3 with a load in flight (review finding S4): a tenant document whose compilation read the previous platform's
- * attributes and installs after the platform changed is compiled again, so it never stays compiled against them.
+ * attributes and finishes after the platform changed is compiled again before anyone is served it.
  */
 class PlatformCompilerInFlightTest {
     private val store = InMemorySnapshotDocumentStore()
@@ -93,11 +93,12 @@ class PlatformCompilerInFlightTest {
             // 2. The platform stops declaring it while that load is in flight: the tenant slot holds no entry yet.
             publish(SnapshotKey.Platform, "")
             source.reload(SnapshotKey.Platform).join()
-            // 3. The held compilation installs what it compiled against the previous platform.
+            // 3. The held compilation finishes with what it compiled against the previous platform.
             releaseFirst.countDown()
-            loading.join().tenant.assert().isNotNull()
 
-            // It is compiled again, against the platform that no longer declares the attribute, and fails closed.
+            // Neither its waiter nor a later request sees that: the tenant is compiled again, against the platform that
+            // no longer declares the attribute, and fails closed.
+            loading.join().tenant.assert().describedAs("the waiter got the old compilation").isNull()
             compiledAgain.await(10, TimeUnit.SECONDS).assert().describedAs("never compiled again").isTrue()
             awaitUnresolved(views, key)
         }
