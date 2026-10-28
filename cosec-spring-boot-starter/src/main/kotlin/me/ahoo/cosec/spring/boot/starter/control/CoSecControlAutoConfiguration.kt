@@ -34,6 +34,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.ShadowOptions
+import me.ahoo.cosec.control.store.ControlMaintenance
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.RetentionPolicy
 import me.ahoo.cosec.control.store.Revisions
@@ -96,11 +97,14 @@ class CoSecControlAutoConfiguration {
         heads: PolicySnapshotCache,
         documents: RedisSnapshotDocumentStore,
         properties: RuntimeAuthorizationProperties,
+        control: ControlProperties,
     ): ControlStore = CoCacheControlStore.create(
         runtime,
         heads,
         properties.snapshot.keyPrefix,
-        documents::notifyChanged
+        documents::notifyChanged,
+        // A change listed but missing this long had its first write fail.
+        missingGrace = control.revisions.orphanAge,
     )
 
     @Bean
@@ -242,6 +246,27 @@ class CoSecControlAutoConfiguration {
             listeners = listeners,
         )
     }
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecControlMaintenance(
+        store: ControlStore,
+        revisions: Revisions,
+        changes: Changes,
+        properties: ControlProperties,
+    ): ControlMaintenance = ControlMaintenance(store, revisions, changes, properties.shadow.checkInterval)
+
+    /** Runs [ControlMaintenance] at `cosec.control.revisions.reclaim-interval` and `cosec.control.shadow.check-interval`. */
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecControlMaintenanceScheduler(
+        maintenance: ControlMaintenance,
+        properties: ControlProperties,
+    ): ControlMaintenanceScheduler = ControlMaintenanceScheduler(
+        maintenance,
+        reclaimInterval = properties.revisions.reclaimInterval,
+        shadowInterval = properties.shadow.checkInterval,
+    )
 
     @Bean
     @ConditionalOnMissingBean

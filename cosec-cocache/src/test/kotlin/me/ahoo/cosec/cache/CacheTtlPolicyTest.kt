@@ -47,6 +47,7 @@ class CacheTtlPolicyTest {
         CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME to ControlCacheSpecs.revisionIndex(policy = weakened).policy,
         CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME to ControlCacheSpecs.referenceIndex(policy = weakened).policy,
         CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME to ControlCacheSpecs.lease(policy = weakened).policy,
+        CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME to ControlCacheSpecs.list(policy = weakened).policy,
         CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME to ControlCacheSpecs.changeRequest(policy = weakened).policy,
         CoSecCacheSpecs.STAGE_CACHE_NAME to ControlCacheSpecs.stage(policy = weakened).policy,
         // RFC 0007 §6.4: a staged candidate is the control plane's only copy while its change stages.
@@ -71,6 +72,7 @@ class CacheTtlPolicyTest {
         ControlCacheSpecs.revisionIndex("other:").namespace.assert().isEqualTo("other:control:revisions")
         ControlCacheSpecs.referenceIndex().namespace.assert().isEqualTo("cosec:control:refs")
         ControlCacheSpecs.lease().namespace.assert().isEqualTo("cosec:control:lease")
+        ControlCacheSpecs.list().namespace.assert().isEqualTo("cosec:control:list")
         ControlCacheSpecs.changeRequest().namespace.assert().isEqualTo("cosec:control:change")
         ControlCacheSpecs.stage().namespace.assert().isEqualTo("cosec:control:stage")
         listOf(
