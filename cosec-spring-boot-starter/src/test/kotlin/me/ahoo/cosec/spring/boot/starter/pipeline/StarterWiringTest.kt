@@ -282,18 +282,25 @@ class StarterWiringTest {
             }
         })
 
-    /** Publishes [CLERKS] to the snapshot cache and waits until the pipeline decides on it. */
+    /**
+     * Publishes an empty platform document and [CLERKS] as acme's (a role binding is a tenant's or an app's, never the
+     * platform's), and waits until the pipeline decides on them.
+     */
     private fun published(context: ApplicationContext) {
-        context.getBean(PolicySnapshotCache::class.java).put(
-            SnapshotKey.Platform,
-            SnapshotDocument(
-                SnapshotDocument.DOCUMENT_SCHEMA,
-                1,
-                Instant.parse(PUBLISHED_AT),
-                """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$CLERKS}""".encodeToByteArray(),
-            ),
-        )
-        context.getBean(RedisSnapshotDocumentStore::class.java).notifyChanged(SnapshotKey.Platform)
+        val cache = context.getBean(PolicySnapshotCache::class.java)
+        val documents = context.getBean(RedisSnapshotDocumentStore::class.java)
+        mapOf(SnapshotKey.Platform to "", SnapshotKey.Tenant(TENANT) to CLERKS).forEach { (key, body) ->
+            cache.put(
+                key,
+                SnapshotDocument(
+                    SnapshotDocument.DOCUMENT_SCHEMA,
+                    1,
+                    Instant.parse(PUBLISHED_AT),
+                    """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$body}""".encodeToByteArray(),
+                ),
+            )
+            documents.notifyChanged(key)
+        }
         val deadline = System.nanoTime() + 10_000_000_000L
         while (status(context, token(context, "bob")) == 503 && System.nanoTime() < deadline) {
             Thread.sleep(20)
@@ -405,7 +412,7 @@ class StarterWiringTest {
     private companion object {
         val PROVIDER = mapOf(MembershipClaims.MARKER_KEY to MembershipClaims.PROVIDER)
 
-        /** clerk, in the default space, may do anything. */
+        /** acme's clerks, in the default space, may do anything. */
         const val CLERKS = ""","policies":[{"id":"clerks","statements":[{"effect":"allow","action":"http:*"}]}],""" +
             """"bindings":[{"id":"clerks","subject":{"role":"clerk"},"app":"*","space":"*","policy":"clerks"}]"""
 
