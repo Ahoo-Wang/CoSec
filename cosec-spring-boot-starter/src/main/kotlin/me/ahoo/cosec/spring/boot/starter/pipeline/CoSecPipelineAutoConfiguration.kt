@@ -14,6 +14,8 @@
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import com.auth0.jwt.algorithms.Algorithm
+import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.api.audit.AuditEventSink
 import me.ahoo.cosec.apikey.ApiKeyReader
 import me.ahoo.cosec.apikey.ApiKeyStore
 import me.ahoo.cosec.apikey.InMemoryApiKeyStore
@@ -27,6 +29,8 @@ import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.attribute.AttributeProvider
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
+import me.ahoo.cosec.runtime.audit.AuditListener
 import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
@@ -43,6 +47,7 @@ import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
 import me.ahoo.cosec.token.RevocationReader
 import me.ahoo.cosec.token.TokenStore
 import me.ahoo.cosid.StringIdGenerator
+import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -51,10 +56,14 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.annotation.AnnotationAwareOrderComparator
 import org.springframework.core.env.Environment
 import org.springframework.core.io.ResourceLoader
 import org.springframework.util.ClassUtils
+import java.util.IdentityHashMap
 import kotlin.time.toKotlinDuration
+
+private val log = KotlinLogging.logger {}
 
 /**
  * The 8.0 request pipeline (RFC 0006 §7, RFC 0008 S1): authentication (token with a real revocation reader, API key),
@@ -73,16 +82,35 @@ import kotlin.time.toKotlinDuration
 class CoSecPipelineAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
-    fun cosecAttributeProviders(providers: ObjectProvider<AttributeProvider>): AttributeProviders =
-        AttributeProviders(providers.orderedStream().toList())
+    fun cosecAttributeProviders(providers: ObjectProvider<AttributeProvider>): AttributeProviders {
+        val all = providers.orderedStream().toList()
+        if (all.none { it is BlacklistAttributeProvider }) {
+            log.info { "No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*)." }
+        }
+        return AttributeProviders(all)
+    }
 
+    /**
+     * Every [DecisionListener] bean, and each [AuditEventSink] bean that is not also one as a BEST_EFFORT [AuditListener]
+     * named after the bean (RFC 0006 §9.5.3), so a sink written for 7.x keeps receiving events. All in `@Order`.
+     */
     @Bean(destroyMethod = "cancel")
     @ConditionalOnMissingBean
     fun cosecDecisionListeners(
         listeners: ObjectProvider<DecisionListener>,
+        sinks: ObjectProvider<AuditEventSink>,
+        beans: ListableBeanFactory,
         requiredListenerProperties: RequiredListenerProperties,
-    ): DecisionListeners =
-        DecisionListeners(listeners.orderedStream().toList(), requiredListenerProperties.timeout.toKotlinDuration())
+    ): DecisionListeners {
+        val names = IdentityHashMap<AuditEventSink, String>()
+        beans.getBeansOfType(AuditEventSink::class.java).forEach { (name, sink) -> names[sink] = name }
+        // Each kind in its own @Order (classes and @Bean methods alike); a stable sort then orders the two together.
+        val all = listeners.orderedStream().toList().map { it to it } +
+            sinks.orderedStream().toList().filter { it !is DecisionListener }
+                .map { it to AuditListener.of(it, names.getValue(it)) }
+        val ordered = all.sortedWith { a, b -> AnnotationAwareOrderComparator.INSTANCE.compare(a.first, b.first) }
+        return DecisionListeners(ordered.map { it.second }, requiredListenerProperties.timeout.toKotlinDuration())
+    }
 
     /**
      * Token and API-key authentication. A token is verified by the JWT algorithm and checked against the revocation
