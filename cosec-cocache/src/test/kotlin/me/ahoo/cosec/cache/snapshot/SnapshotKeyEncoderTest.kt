@@ -21,7 +21,6 @@ import org.junit.jupiter.api.Test
 class SnapshotKeyEncoderTest {
     @Test
     fun encodesExplicitly() {
-        SnapshotKeyEncoder.encode(SnapshotKey.Policies).assert().isEqualTo("policies")
         SnapshotKeyEncoder.encode(SnapshotKey.App("order-service")).assert().isEqualTo("app:order-service")
         SnapshotKeyEncoder.encode(SnapshotKey.Platform).assert().isEqualTo("platform")
         SnapshotKeyEncoder.encode(SnapshotKey.Tenant("acme")).assert().isEqualTo("tenant:acme")
@@ -31,7 +30,6 @@ class SnapshotKeyEncoderTest {
     @Test
     fun decodesWhatItEncodes() {
         listOf(
-            SnapshotKey.Policies,
             SnapshotKey.App("order-service"),
             SnapshotKey.Platform,
             SnapshotKey.Tenant("acme"),
@@ -44,7 +42,7 @@ class SnapshotKeyEncoderTest {
     @Test
     fun decodesNothingElse() {
         listOf(
-            "", "policy", "app:", "app:a:b", "other:x", "platform:x", "tenant:", "tenant:a:b", "tenant:*", "tenant: ",
+            "", "policy", "policies", "app:", "app:a:b", "other:x", "platform:x", "tenant:", "tenant:a:b", "tenant:*", "tenant: ",
             "tenant:a\nb", "tenant:" + "t".repeat(129),
         ).forEach {
             SnapshotKeyEncoder.decode(it).assert().describedAs(it).isNull()

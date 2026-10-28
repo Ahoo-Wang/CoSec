@@ -31,7 +31,6 @@ import me.ahoo.cosec.model.condition.CheckResult
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IpAddress
-import me.ahoo.cosec.policy.EvaluateRequest
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.snapshot.document.JavaZones

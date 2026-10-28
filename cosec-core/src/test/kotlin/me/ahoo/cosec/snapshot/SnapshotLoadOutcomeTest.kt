@@ -49,7 +49,7 @@ class SnapshotLoadOutcomeTest {
     }
 
     private val store = ControllableStore().apply {
-        put(SnapshotKey.Policies, document(1))
+        put(SnapshotKey.Platform, document(1))
         hold = true
     }
     private val metrics = RecordingMetrics()
@@ -62,7 +62,7 @@ class SnapshotLoadOutcomeTest {
         return answer.thenApply { metrics.loads.toList() } to answer
     }
 
-    private fun policiesOutcomes() = metrics.loads.filter { it.first == SnapshotKind.POLICIES }.map { it.second }
+    private fun policiesOutcomes() = metrics.loads.filter { it.first == SnapshotKind.PLATFORM }.map { it.second }
 
     @Test
     fun coldLoadMetricIsRecordedBeforeTheAnswer() {
@@ -70,7 +70,7 @@ class SnapshotLoadOutcomeTest {
             val (seen, answer) = source.loadObserved()
             store.releaseAll()
 
-            seen.join().assert().containsExactly(SnapshotKind.POLICIES to LoadOutcome.COLD)
+            seen.join().assert().containsExactly(SnapshotKind.PLATFORM to LoadOutcome.COLD)
             answer.join().policies.assert().isInstanceOf(DocumentState.Present::class.java)
         }
         scheduler.shutdownNow()
@@ -82,7 +82,7 @@ class SnapshotLoadOutcomeTest {
             val (seen, answer) = source.loadObserved()
             scheduler.fire()
 
-            seen.join().assert().containsExactly(SnapshotKind.POLICIES to LoadOutcome.TIMEOUT)
+            seen.join().assert().containsExactly(SnapshotKind.PLATFORM to LoadOutcome.TIMEOUT)
             answer.join().policies.assert().isInstanceOf(DocumentState.Failed::class.java)
 
             store.releaseAll()
@@ -99,7 +99,7 @@ class SnapshotLoadOutcomeTest {
             val (seen, answer) = source.loadObserved()
             store.releaseAll()
 
-            seen.join().assert().containsExactly(SnapshotKind.POLICIES to LoadOutcome.FAILED)
+            seen.join().assert().containsExactly(SnapshotKind.PLATFORM to LoadOutcome.FAILED)
             answer.join().policies.assert().isInstanceOf(DocumentState.Failed::class.java)
         }
         scheduler.shutdownNow()
@@ -125,7 +125,7 @@ class SnapshotLoadOutcomeTest {
         val barrier = CyclicBarrier(2)
         repeat(500) { iteration ->
             val racing = ControllableStore().apply {
-                put(SnapshotKey.Policies, document(1))
+                put(SnapshotKey.Platform, document(1))
                 hold = true
             }
             val recorded = RecordingMetrics()
@@ -140,7 +140,7 @@ class SnapshotLoadOutcomeTest {
                 racing.releaseAll()
                 timeout.join()
 
-                val outcomes = recorded.loads.filter { it.first == SnapshotKind.POLICIES }.map { it.second }
+                val outcomes = recorded.loads.filter { it.first == SnapshotKind.PLATFORM }.map { it.second }
                 outcomes.assert().describedAs("iteration $iteration").hasSize(1)
                 val policies = answer.join().policies
                 when (outcomes.single()) {

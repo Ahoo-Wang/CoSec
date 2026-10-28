@@ -11,16 +11,13 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.policy.action
+package me.ahoo.cosec.migrate.v7.api.principal
 
-import me.ahoo.cosec.policy.MatcherFactoryRegistry
+import me.ahoo.cosec.api.CoSec
 
-object ActionMatcherFactoryProvider {
-    private val registry = MatcherFactoryRegistry(ActionMatcherFactory::class.java) { it.type }
+/** 7.x's root principal id: the system property [ROOT_KEY], `cosec` by default. */
+internal object RootPrincipal {
+    const val ROOT_KEY = "cosec.root"
 
-    fun register(factory: ActionMatcherFactory) = registry.register(factory)
-
-    fun get(type: String): ActionMatcherFactory? = registry.get(type)
-
-    fun getRequired(type: String): ActionMatcherFactory = registry.getRequired(type)
+    val ROOT_ID: String = System.getProperty(ROOT_KEY, CoSec.COSEC)
 }

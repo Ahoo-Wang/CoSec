@@ -33,6 +33,7 @@ import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 
 class ConverterTest {
@@ -233,6 +234,31 @@ class ConverterTest {
             SnapshotKey.Platform
         ).policies.single().statements.single().resources.single().pattern
             .assert().isEqualTo("http:path:/a/{id}")
+    }
+
+    /**
+     * OGNL is compile-only, as it was in cosec-core: convert runs without it. A 7.x policy with an OGNL condition is
+     * rejected at its condition, with a reason, never a crash of the whole run.
+     */
+    @Test
+    fun `an OGNL condition is rejected without OGNL on the runtime classpath`() {
+        assertThrows<ClassNotFoundException> { Class.forName("ognl.Ognl") }
+        val conversion = convert(
+            source(
+                listOf(
+                    "p" to policy(
+                        "p",
+                        statements = listOf(statement(condition = """{"ognl":{"expression":"true"}}""")),
+                    )
+                )
+            )
+        )
+        val rejections = conversion.report.rejections
+        rejections.map { it.kind }.assert().contains(RejectionKind.EXPRESSION_CONDITION, RejectionKind.UNDECODABLE)
+        rejections.single { it.kind == RejectionKind.UNDECODABLE }.message.assert().contains(
+            "missing from the classpath"
+        )
+        conversion.documents.values.flatMap { it.policies }.assert().isEmpty()
     }
 
     @Test

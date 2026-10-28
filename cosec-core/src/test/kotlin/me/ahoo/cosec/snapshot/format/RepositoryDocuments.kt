@@ -24,7 +24,8 @@ data class RepositoryDocument(val where: String, val file: SchemaFile, val node:
  * the `json` code blocks of the documentation and skills that parse and name a known format.
  *
  * A resource file that is neither a known format nor [NOT_A_DOCUMENT_FORMAT] fails the search, so a new kind of file
- * is classified here before it lands.
+ * is classified here before it lands. 7.x's formats (policies, app permissions, rate limit rules) have no descriptor:
+ * only `cosec-migrate` reads them, with 7.x's own decoders, so their files and examples are skipped.
  */
 object RepositoryDocuments {
     /** Resource files whose format has no schema: policy test suites and replay settings. */
@@ -53,32 +54,19 @@ object RepositoryDocuments {
         if (NOT_A_DOCUMENT_FORMAT.any { it.matches(file.name) } || where.startsWith("conformance/")) {
             return emptyList()
         }
-        val node = CoSecJsonSerializer.readTree(file.readBytes())
-        fun each(format: SchemaFile) = node.values().mapIndexed { index, entry ->
-            RepositoryDocument(
-                "$where[$index]",
-                format,
-                entry
-            )
-        }
         return when {
-            where.contains(
-                "/cosec-rate-limit/"
-            ) -> listOf(RepositoryDocument(where, DocumentFormats.rateLimitRuleSchema, node))
-            file.name.endsWith(
-                "-app-permission.json"
-            ) -> listOf(RepositoryDocument(where, DocumentFormats.appPermissionSchema, node))
-            file.name.endsWith("-policy.json") || where.contains("/cosec-policy/") -> listOf(
-                RepositoryDocument(where, DocumentFormats.policySchema, node)
-            )
-            // The replay tool's inputs: an array of policies, and an array of app document bodies.
-            where.endsWith("/cosec-replay/policies.json") -> each(DocumentFormats.policySchema)
-            where.endsWith("/cosec-replay/app-role-permissions.json") -> each(DocumentFormats.snapshotDocumentSchema)
+            isLegacy(where, file) -> emptyList()
             else -> throw IllegalStateException(
                 "Resource [$where] has no known document format: classify it in RepositoryDocuments."
             )
         }
     }
+
+    /** A 7.x policy, app permission or rate limit rules file. */
+    private fun isLegacy(where: String, file: File): Boolean = where.contains("/cosec-rate-limit/") ||
+        file.name.endsWith("-app-permission.json") ||
+        file.name.endsWith("-policy.json") ||
+        where.contains("/cosec-policy/")
 
     private fun markdown(root: File, file: File): List<RepositoryDocument> {
         val where = file.relativeTo(root).invariantSeparatorsPath
@@ -97,11 +85,8 @@ object RepositoryDocuments {
             return null
         }
         return when {
-            sample.has("permitsPerSecond") -> DocumentFormats.rateLimitRuleSchema
             node.isArray -> null
-            sample.has("policies") || sample.has("appPermission") -> DocumentFormats.snapshotDocumentSchema
-            sample.has("groups") -> DocumentFormats.appPermissionSchema
-            sample.has("tenantId") || (sample.has("statements") && sample.has("id")) -> DocumentFormats.policySchema
+            sample.has("policies") || sample.has("bindings") -> DocumentFormats.snapshotDocumentSchema
             else -> null
         }
     }

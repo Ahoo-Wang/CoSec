@@ -20,9 +20,9 @@ import org.springframework.aot.hint.RuntimeHintsRegistrar
 /**
  * What a native image needs to decode and compile snapshot documents (RFC 0003 §10). The document header is read with
  * the streaming parser and keys are encoded explicitly, so neither needs a hint; the body is decoded through CoSec's
- * Jackson module and its matcher factories, all found with `ServiceLoader`. This registers the service files and the
- * public constructors of every class they list, as found on the classpath when the AOT processor runs, so a factory
- * added by the application is covered too.
+ * Jackson module, found with `ServiceLoader`. This registers the service file and the public constructors of every
+ * class it lists, as found on the classpath when the AOT processor runs, so a module added by the application is
+ * covered too.
  *
  * A missing hint can only make a document or entry fail to decode or compile (RFC 0003 §4.4 F3, F4), which fails
  * closed; it never skips a statement.
@@ -52,8 +52,6 @@ class SnapshotRuntimeHints : RuntimeHintsRegistrar {
         /** The services snapshot compilation loads. */
         val SERVICES: List<String> = listOf(
             "tools.jackson.databind.JacksonModule",
-            "me.ahoo.cosec.policy.action.ActionMatcherFactory",
-            "me.ahoo.cosec.policy.condition.ConditionMatcherFactory",
         )
     }
 }

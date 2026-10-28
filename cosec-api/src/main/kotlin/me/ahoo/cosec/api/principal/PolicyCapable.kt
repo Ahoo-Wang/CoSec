@@ -18,10 +18,6 @@ package me.ahoo.cosec.api.principal
  * This interface allows principals to have direct policy assignments
  * in addition to role-based permissions.
  *
- * Relationship:
- * - [CoSecPrincipal] 1:N [me.ahoo.cosec.policy.Policy]
- *
- * @see Policy
  * @see CoSecPrincipal
  */
 interface PolicyCapable {

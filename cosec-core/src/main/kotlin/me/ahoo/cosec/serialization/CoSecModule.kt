@@ -13,17 +13,7 @@
 
 package me.ahoo.cosec.serialization
 
-import me.ahoo.cosec.api.permission.AppPermission
-import me.ahoo.cosec.api.permission.Permission
-import me.ahoo.cosec.api.permission.PermissionGroup
-import me.ahoo.cosec.api.policy.ActionMatcher
-import me.ahoo.cosec.api.policy.ConditionMatcher
-import me.ahoo.cosec.api.policy.Effect
-import me.ahoo.cosec.api.policy.Policy
 import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.api.policy.Statement
-import me.ahoo.cosec.configuration.JsonConfiguration
-import me.ahoo.cosec.limiter.RateLimitRule
 import me.ahoo.cosec.model.scope.Scope
 import tools.jackson.core.JsonParser
 import tools.jackson.databind.DeserializationContext
@@ -31,47 +21,15 @@ import tools.jackson.databind.deser.std.StdDeserializer
 import tools.jackson.databind.module.SimpleModule
 
 /**
- * Jackson module for serializing/deserializing CoSec types.
- *
- * This module registers serializers and deserializers for:
- * - ActionMatcher
- * - ConditionMatcher
- * - Effect
- * - Statement
- * - Policy
- * - PolicyType
- * - Permission
- * - PermissionGroup
- * - AppPermission
- * - JsonConfiguration
- * - RateLimitRule
+ * Jackson module for CoSec types, found by [CoSecJsonSerializer] through `META-INF/services`: [PolicyType] as audit
+ * events write it (lower case), and the refusal to read a resolved [Scope].
  *
  * @see CoSecJsonSerializer
  */
 class CoSecModule : SimpleModule() {
     init {
-        addSerializer(ActionMatcher::class.java, JsonActionMatcherSerializer)
-        addDeserializer(ActionMatcher::class.java, JsonActionMatcherDeserializer)
-        addSerializer(ConditionMatcher::class.java, JsonConditionMatcherSerializer)
-        addDeserializer(ConditionMatcher::class.java, JsonConditionMatcherDeserializer)
-        addSerializer(Effect::class.java, JsonEffectSerializer)
-        addDeserializer(Effect::class.java, JsonEffectDeserializer)
-        addSerializer(Statement::class.java, JsonStatementSerializer)
-        addDeserializer(Statement::class.java, JsonStatementDeserializer)
         addSerializer(PolicyType::class.java, JsonPolicyTypeSerializer)
         addDeserializer(PolicyType::class.java, JsonPolicyTypeDeserializer)
-        addSerializer(Policy::class.java, JsonPolicySerializer)
-        addDeserializer(Policy::class.java, JsonPolicyDeserializer)
-        addSerializer(JsonConfiguration::class.java, JsonConfigurationSerializer)
-        addDeserializer(JsonConfiguration::class.java, JsonConfigurationDeserializer)
-        addSerializer(Permission::class.java, JsonPermissionSerializer)
-        addDeserializer(Permission::class.java, JsonPermissionDeserializer)
-        addSerializer(PermissionGroup::class.java, JsonPermissionGroupSerializer)
-        addDeserializer(PermissionGroup::class.java, JsonPermissionGroupDeserializer)
-        addSerializer(AppPermission::class.java, JsonAppPermissionSerializer)
-        addDeserializer(AppPermission::class.java, JsonAppPermissionDeserializer)
-        addSerializer(RateLimitRule::class.java, JsonRateLimitRuleSerializer)
-        addDeserializer(RateLimitRule::class.java, JsonRateLimitRuleDeserializer)
         // Only ScopeResolver builds a resolved scope (SCP-5); Jackson would otherwise call its constructor by reflection.
         addDeserializer(Scope::class.java, RefusingScopeDeserializer)
     }

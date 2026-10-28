@@ -14,16 +14,7 @@
 package me.ahoo.cosec.cache
 
 import me.ahoo.cocache.api.Codec
-import me.ahoo.cosec.api.permission.AppPermission
-import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.model.Memberships
-import me.ahoo.cosec.permission.AppPermissionData
-import me.ahoo.cosec.permission.PermissionData
-import me.ahoo.cosec.permission.PermissionGroupData
-import me.ahoo.cosec.policy.PolicyData
-import me.ahoo.cosec.policy.StatementData
-import me.ahoo.cosec.policy.action.AllActionMatcher
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

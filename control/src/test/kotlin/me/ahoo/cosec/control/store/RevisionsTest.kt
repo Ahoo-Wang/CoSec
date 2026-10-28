@@ -142,9 +142,6 @@ class RevisionsTest {
         @Test
         fun `only platform, app and tenant documents are published`() {
             assertThrownBy<IllegalArgumentException> {
-                runBlocking { revisions.publish(SnapshotKey.Policies, null, candidate(ACME), publication()) }
-            }
-            assertThrownBy<IllegalArgumentException> {
                 runBlocking { revisions.publish(SnapshotKey.Tenant("beta"), null, candidate(ACME), publication()) }
             }
         }

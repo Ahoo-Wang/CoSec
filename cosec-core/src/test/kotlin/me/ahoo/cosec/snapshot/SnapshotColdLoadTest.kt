@@ -46,7 +46,7 @@ class SnapshotColdLoadTest {
     }
 
     private val store = ControllableStore().apply {
-        put(SnapshotKey.Policies, document(1))
+        put(SnapshotKey.Platform, document(1))
         put(APP_A, document(1, "a1"))
         put(APP_B, document(1, "b1"))
         put(APP_C, document(1, "c1"))
@@ -102,7 +102,7 @@ class SnapshotColdLoadTest {
     fun coldMissCompilesOffTheCallerThread() {
         val compiler = FakeCompiler()
         val inMemory = InMemorySnapshotDocumentStore().apply {
-            put(SnapshotKey.Policies, document(1))
+            put(SnapshotKey.Platform, document(1))
             put(APP_A, document(1, "a1"))
         }
         testSource(inMemory, compiler = compiler, compileExecutor = null).use { source ->
@@ -130,7 +130,7 @@ class SnapshotColdLoadTest {
             val failure = (snapshot.policies as DocumentState.Failed).error
             failure.assert().isInstanceOf(SnapshotUnavailableException::class.java)
             failure.cause.assert().isInstanceOf(TimeoutException::class.java)
-            metrics.loads.assert().containsExactly(SnapshotKind.POLICIES to LoadOutcome.TIMEOUT)
+            metrics.loads.assert().containsExactly(SnapshotKind.PLATFORM to LoadOutcome.TIMEOUT)
             source.peek().assert().isNull()
 
             store.releaseAll()
@@ -178,8 +178,8 @@ class SnapshotColdLoadTest {
             await { compiler.threads.size == 3 }
             source.load("app-c")
 
-            store.put(SnapshotKey.Policies, document(2))
-            source.reload(SnapshotKey.Policies).get(10, TimeUnit.SECONDS).revision.assert().isEqualTo(1)
+            store.put(SnapshotKey.Platform, document(2))
+            source.reload(SnapshotKey.Platform).get(10, TimeUnit.SECONDS).revision.assert().isEqualTo(1)
             source.peek()!!.policiesCompiled.revision.assert().isEqualTo(1)
 
             // The rejected reload is retried on its own once the queue drains: no further notification is needed.

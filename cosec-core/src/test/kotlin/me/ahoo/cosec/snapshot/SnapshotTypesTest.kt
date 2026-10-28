@@ -22,8 +22,8 @@ import java.time.Instant
 class SnapshotTypesTest {
     @Test
     fun keys() {
-        SnapshotKey.Policies.kind.assert().isEqualTo(SnapshotKind.POLICIES)
-        SnapshotKey.Policies.toString().assert().isEqualTo("policies")
+        SnapshotKey.Platform.kind.assert().isEqualTo(SnapshotKind.PLATFORM)
+        SnapshotKey.Platform.toString().assert().isEqualTo("platform")
         APP_A.kind.assert().isEqualTo(SnapshotKind.APP)
         APP_A.toString().assert().isEqualTo("app:app-a")
         SnapshotKey.App("app-a").assert().isEqualTo(APP_A)
@@ -150,7 +150,7 @@ class SnapshotTypesTest {
         InMemorySnapshotDocumentStore.digestOf(document(1, "y")).assert().isNotEqualTo(base)
         InMemorySnapshotDocumentStore.digestOf(document(2, "x")).assert().isNotEqualTo(base)
         InMemorySnapshotDocumentStore.digestOf(
-            SnapshotDocument(2, 1, Instant.parse("2026-10-21T08:00:00Z"), "x".encodeToByteArray())
+            SnapshotDocument(1, 1, Instant.parse("2026-10-21T08:00:00Z"), "x".encodeToByteArray())
         )
             .assert().isNotEqualTo(base)
     }

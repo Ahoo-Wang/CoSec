@@ -68,31 +68,9 @@ interface CoSecPrincipal :
         get() = !anonymous
 
     companion object {
-        //region ROOT - Root user with full permissions
-        /** System property key for root user ID */
-        const val ROOT_KEY = "cosec.root"
-
-        /**
-         * The root user ID.
-         * Can be customized via system property "cosec.root".
-         * The id alone does not make a principal root: `RootPrincipalMatcher` in `cosec-core` decides that.
-         */
-        val ROOT_ID: String = System.getProperty(ROOT_KEY, CoSec.COSEC)
-
-        //endregion
-
         /**
          * The anonymous user ID used for unauthenticated requests.
          */
         const val ANONYMOUS_ID = CoSec.DEFAULT
-
-        /**
-         * Extension property to check if a principal's id is the root user id.
-         * It ignores the tenant, so it is not an authorization decision on its own.
-         *
-         * @return true if this principal's ID equals [ROOT_ID]
-         */
-        val CoSecPrincipal.isRoot: Boolean
-            get() = ROOT_ID == id
     }
 }

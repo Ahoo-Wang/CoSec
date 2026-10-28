@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture
 /** RFC 0003 §4.4 F1–F6, and the rule that a document once seen never reads as absent. */
 class SnapshotSourceFailureTest {
     private val store = ControllableStore().apply {
-        put(SnapshotKey.Policies, document(1))
+        put(SnapshotKey.Platform, document(1))
         put(APP_A, document(1, "a1"))
     }
 
@@ -42,7 +42,7 @@ class SnapshotSourceFailureTest {
             source.peek().assert().isNull()
             source.entries().assert().isEmpty()
             metrics.loads.assert().containsExactly(
-                SnapshotKind.POLICIES to LoadOutcome.FAILED,
+                SnapshotKind.PLATFORM to LoadOutcome.FAILED,
                 SnapshotKind.APP to LoadOutcome.FAILED
             )
 
@@ -87,7 +87,7 @@ class SnapshotSourceFailureTest {
             installed.policies.failure().cause!!.cause.assert().isInstanceOf(SnapshotFormatException::class.java)
 
             store.undecodable = false
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
             source.peek()!!.policiesCompiled.revision.assert().isEqualTo(2)
         }
     }
@@ -95,7 +95,7 @@ class SnapshotSourceFailureTest {
     @Test
     fun f3DocumentThatDoesNotCompileIsInstalledAsFailed() {
         val metrics = RecordingMetrics()
-        store.put(SnapshotKey.Policies, document(2, "THROW"))
+        store.put(SnapshotKey.Platform, document(2, "THROW"))
         testSource(store, metrics = metrics).use { source ->
             val failure = source.load().join().policies.failure()
             failure.assert().isInstanceOf(SnapshotUnavailableException::class.java)
@@ -103,13 +103,13 @@ class SnapshotSourceFailureTest {
             source.peek()!!.version.assert().isEqualTo(SnapshotVersion(2, 0))
             // The cold read may come from a local copy, so it is confirmed at once, and a document that failed to
             // compile is always read in full and compiled again.
-            metrics.compiles.assert().containsOnly(SnapshotKind.POLICIES to false).hasSize(2)
+            metrics.compiles.assert().containsOnly(SnapshotKind.PLATFORM to false).hasSize(2)
         }
     }
 
     @Test
     fun f4BrokenEntryFailsOnlyThatEntry() {
-        store.put(SnapshotKey.Policies, document(2, "a,!b,c"))
+        store.put(SnapshotKey.Platform, document(2, "a,!b,c"))
         testSource(store).use { source ->
             val compiled = source.load().join().policiesCompiled
             compiled.entries.assert().containsExactly("a", "b", "c")
@@ -122,7 +122,7 @@ class SnapshotSourceFailureTest {
         testSource(store).use { source ->
             source.load().join()
             store.undecodable = true
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
 
             source.peek()!!.policies.failure().assert().isInstanceOf(SnapshotUnavailableException::class.java)
         }
@@ -132,7 +132,7 @@ class SnapshotSourceFailureTest {
     fun f5NewRevisionThatDoesNotCompileReplacesTheInstalledOne() {
         testSource(store).use { source ->
             source.load().join()
-            store.put(SnapshotKey.Policies, document(2, "THROW"))
+            store.put(SnapshotKey.Platform, document(2, "THROW"))
 
             val snapshot = source.peek()!!
             snapshot.policies.failure().assert().isInstanceOf(SnapshotUnavailableException::class.java)
@@ -141,7 +141,7 @@ class SnapshotSourceFailureTest {
             source.revalidate().join()
             source.peek()!!.policies.assert().isInstanceOf(DocumentState.Failed::class.java)
 
-            store.put(SnapshotKey.Policies, document(3))
+            store.put(SnapshotKey.Platform, document(3))
             source.peek()!!.policiesCompiled.revision.assert().isEqualTo(3)
         }
     }
@@ -154,7 +154,7 @@ class SnapshotSourceFailureTest {
             store.failure = IllegalStateException("redis down")
             clock.advance(Duration.ofHours(1))
 
-            store.notifyChanged(SnapshotKey.Policies)
+            store.notifyChanged(SnapshotKey.Platform)
             source.revalidate().join()
 
             val snapshot = source.peek("app-a")!!
@@ -185,19 +185,19 @@ class SnapshotSourceFailureTest {
         testSource(store, metrics = metrics).use { source ->
             source.load("app-a").join()
             store.remove(APP_A)
-            store.remove(SnapshotKey.Policies)
+            store.remove(SnapshotKey.Platform)
 
             val snapshot = source.peek("app-a")!!
             snapshot.policies.failure().assert().isInstanceOf(SnapshotUnavailableException::class.java)
             snapshot.app.failure().assert().isInstanceOf(SnapshotUnavailableException::class.java)
-            metrics.lost.assert().containsExactlyInAnyOrder(SnapshotKey.Policies to 1L, APP_A to 1L)
+            metrics.lost.assert().containsExactlyInAnyOrder(SnapshotKey.Platform to 1L, APP_A to 1L)
 
             val lostEntry = source.peek()!!.policiesEntry
             source.revalidate().join()
             source.peek()!!.policiesEntry.assert().isSameAs(lostEntry)
             metrics.lost.assert().hasSize(2)
 
-            store.put(SnapshotKey.Policies, document(2))
+            store.put(SnapshotKey.Platform, document(2))
             source.peek()!!.policiesCompiled.revision.assert().isEqualTo(2)
         }
     }
@@ -221,7 +221,7 @@ class SnapshotSourceFailureTest {
         store.undecodable = true
         testSource(store).use { source ->
             source.load().join()
-            store.remove(SnapshotKey.Policies)
+            store.remove(SnapshotKey.Platform)
             store.undecodable = false
             source.revalidate().join()
             source.peek()!!.policies.assert().isInstanceOf(DocumentState.Failed::class.java)

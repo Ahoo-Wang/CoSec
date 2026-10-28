@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.StatementSource
@@ -21,6 +20,7 @@ import me.ahoo.cosec.migrate.v7.api.permission.AppPermission
 import me.ahoo.cosec.migrate.v7.api.permission.AppRolePermission
 import me.ahoo.cosec.migrate.v7.api.policy.Policy
 import me.ahoo.cosec.migrate.v7.api.policy.PolicyType
+import me.ahoo.cosec.migrate.v7.api.principal.RootPrincipal
 import me.ahoo.cosec.migrate.v7.cache.AppSpacedRoleId
 import me.ahoo.cosec.migrate.v7.serialization.V7JsonSerializer
 import me.ahoo.cosec.model.AppId
@@ -60,7 +60,7 @@ enum class Partition {
 }
 
 /** A 7.x deployment that enabled root: its id, and when the break-glass binding that replaces it expires. */
-class RootOptions(val id: String = CoSecPrincipal.ROOT_ID, val expiresAt: Instant?)
+class RootOptions(val id: String = RootPrincipal.ROOT_ID, val expiresAt: Instant?)
 
 class ConvertOptions(
     val partition: Partition = Partition.PLATFORM,

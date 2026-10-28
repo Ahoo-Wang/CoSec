@@ -21,10 +21,10 @@ import io.lettuce.core.api.sync.RedisCommands
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.api.CoSec
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.control.CoCacheControlStore
 import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.migrate.v7.api.principal.RootPrincipal
 import me.ahoo.cosec.model.PrincipalId
 import java.io.PrintStream
 import java.nio.file.Path
@@ -187,7 +187,7 @@ object MigrateMain {
         if (!options.flag("root-enabled") && expiresAt == null && rootId == null) {
             return null
         }
-        return RootOptions(rootId ?: CoSecPrincipal.ROOT_ID, expiresAt)
+        return RootOptions(rootId ?: RootPrincipal.ROOT_ID, expiresAt)
     }
 
     private fun summarize(report: ConversionReport, out: PrintStream) {
