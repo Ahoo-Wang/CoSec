@@ -31,20 +31,6 @@ internal class CoSecTestCaches(
 ) : AutoCloseable {
     val runtime: CacheRuntime = CacheRuntime.builder().backend(backend).build()
 
-    val policyCache: PolicyCache by lazy {
-        runtime.createCache(CoSecCacheSpecs.policy(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer), keyPrefix))
-    }
-    val globalPolicyIndexCache: GlobalPolicyIndexCache by lazy {
-        runtime.createGlobalPolicyIndex(CoSecCacheSpecs.globalPolicyIndex(keyPrefix))
-    }
-    val appPermissionCache: AppPermissionCache by lazy {
-        runtime.createCache(CoSecCacheSpecs.appPermission(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer), keyPrefix))
-    }
-    val rolePermissionCache: RolePermissionCache by lazy {
-        runtime.createCache(
-            CoSecCacheSpecs.rolePermission(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer), keyPrefix)
-        )
-    }
     val revokedTokenCache: RevokedTokenCache by lazy {
         runtime.createCache(CoSecCacheSpecs.revokedToken(CoSecCacheSpecs.jacksonCodec(CoSecJsonSerializer), keyPrefix))
     }
@@ -56,10 +42,6 @@ internal class CoSecTestCaches(
     }
 
     val membershipCache: MembershipCache by lazy { runtime.createCache(CoSecCacheSpecs.membership(keyPrefix)) }
-
-    fun policyRepository() = RedisPolicyRepository(globalPolicyIndexCache, policyCache)
-
-    fun appRolePermissionRepository() = RedisAppRolePermissionRepository(appPermissionCache, rolePermissionCache)
 
     /** Drops this instance's local copies only; the shared backend keeps the values. */
     fun clearLocal(cacheName: String) {

@@ -20,13 +20,6 @@ import me.ahoo.cocache.api.Lookup
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.test.HookedBackend
-import me.ahoo.cosec.api.context.request.AppIdCapable
-import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.context.SimpleSecurityContext
-import me.ahoo.cosec.parity.PolicySetParity
-import me.ahoo.cosec.policy.EvaluateRequest
-import me.ahoo.cosec.policy.PolicyData
-import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotFormatException
@@ -48,8 +41,6 @@ import java.util.concurrent.atomic.AtomicInteger
  * subscription, and how a stored value that cannot be decoded is reported (RFC 0003 §6 F3).
  */
 class RedisSnapshotDocumentStoreTest {
-    private fun policy(id: String) = PolicyData(id, "c", id, "", PolicyType.CUSTOM, "t")
-
     private fun SnapshotRead.revision(): Long = (this as SnapshotRead.Present).document.revision
 
     private fun Throwable.chain(): List<Throwable> = generateSequence(this) { it.cause }.toList()
@@ -65,26 +56,26 @@ class RedisSnapshotDocumentStoreTest {
     fun readsPresentAndAbsentDocumentsWithCoCachesDigest(target: RedisTarget) {
         target.backend().use { backend ->
             SnapshotNode(backend, newKeyPrefix()).use { node ->
-                node.store.read(SnapshotKey.Policies).get().assert().isEqualTo(SnapshotRead.Absent)
-                node.store.readIfChanged(SnapshotKey.Policies, null).get().assert().isEqualTo(SnapshotRead.Absent)
+                node.store.read(SnapshotKey.Platform).get().assert().isEqualTo(SnapshotRead.Absent)
+                node.store.readIfChanged(SnapshotKey.Platform, null).get().assert().isEqualTo(SnapshotRead.Absent)
 
-                node.publisher.setPolicy(policy("a")).block()
+                node.writer.publish(SnapshotKey.Platform).block()
                 // the first read misses the local copy, the second hits it: both carry the digest Redis computes
-                val cold = node.store.read(SnapshotKey.Policies).get() as SnapshotRead.Present
-                val local = node.store.read(SnapshotKey.Policies).get() as SnapshotRead.Present
-                val fromRedis = node.store.readIfChanged(SnapshotKey.Policies, null).get() as SnapshotRead.Present
+                val cold = node.store.read(SnapshotKey.Platform).get() as SnapshotRead.Present
+                val local = node.store.read(SnapshotKey.Platform).get() as SnapshotRead.Present
+                val fromRedis = node.store.readIfChanged(SnapshotKey.Platform, null).get() as SnapshotRead.Present
                 cold.document.revision.assert().isEqualTo(1L)
                 local.digest.assert().isEqualTo(cold.digest)
                 fromRedis.digest.assert().isEqualTo(cold.digest)
                 RedisSnapshotDocumentStore.digestOf(cold.document).assert().isEqualTo(cold.digest)
                 node.store.readIfChanged(
-                    SnapshotKey.Policies,
+                    SnapshotKey.Platform,
                     cold.digest
                 ).get().assert().isEqualTo(SnapshotRead.Unchanged)
 
-                node.publisher.setPolicy(policy("b")).block()
-                node.store.readIfChanged(SnapshotKey.Policies, cold.digest).get().revision().assert().isEqualTo(2L)
-                node.store.read(SnapshotKey.Policies).get().revision().assert().isEqualTo(2L)
+                node.writer.publish(SnapshotKey.Platform).block()
+                node.store.readIfChanged(SnapshotKey.Platform, cold.digest).get().revision().assert().isEqualTo(2L)
+                node.store.read(SnapshotKey.Platform).get().revision().assert().isEqualTo(2L)
                 node.store.localCopyMaxAge.assert().isEqualTo(node.cache.localCopyMaxAge)
             }
         }
@@ -104,7 +95,7 @@ class RedisSnapshotDocumentStoreTest {
                 SnapshotNode(backend, keyPrefix).use { writer ->
                     val key = SnapshotKey.App("app")
                     reader.store.read(key).get().assert().isEqualTo(SnapshotRead.Absent)
-                    writer.publisher.setAppPermission(appPermission("app")).block()
+                    writer.writer.publish(SnapshotKey.App("app")).block()
 
                     // the local copy still says absent: without the confirmation, read() would too
                     (reader.cache.async().lookup(key).get() is Lookup.Absent).assert().isTrue()
@@ -123,13 +114,13 @@ class RedisSnapshotDocumentStoreTest {
                 RawSnapshotWriter(backend, keyPrefix).use { raw ->
                     // CoCache's format, but not a document: a repeated header field
                     raw.put(
-                        SnapshotKey.Policies,
-                        """{"schema":1,"revision":1,"revision":2,"publishedAt":"2026-10-21T08:00:00Z","policies":[]}"""
+                        SnapshotKey.Platform,
+                        """{"schema":2,"revision":1,"revision":2,"publishedAt":"2026-10-21T08:00:00Z"}"""
                     )
                 }
                 listOf(
-                    node.store.read(SnapshotKey.Policies),
-                    node.store.readIfChanged(SnapshotKey.Policies, null),
+                    node.store.read(SnapshotKey.Platform),
+                    node.store.readIfChanged(SnapshotKey.Platform, null),
                 ).forEach { read ->
                     failureOf(read).chain().any { it is SnapshotFormatException }.assert().isTrue()
                 }
@@ -152,8 +143,8 @@ class RedisSnapshotDocumentStoreTest {
         SnapshotNode(backend, newKeyPrefix()).use { node ->
             backend.failAll = true
             listOf(
-                node.store.read(SnapshotKey.Policies),
-                node.store.readIfChanged(SnapshotKey.Policies, null),
+                node.store.read(SnapshotKey.Platform),
+                node.store.readIfChanged(SnapshotKey.Platform, null),
             ).forEach { read ->
                 failureOf(read).chain().none { it is SnapshotFormatException }.assert().isTrue()
             }
@@ -175,19 +166,19 @@ class RedisSnapshotDocumentStoreTest {
 
                         override fun onReset() = Unit
                     })
-                    writing.publisher.setPolicy(policy("a")).block()
-                    writing.publisher.setAppPermission(appPermission("app")).block()
+                    writing.writer.publish(SnapshotKey.Platform).block()
+                    writing.writer.publish(SnapshotKey.App("app")).block()
                     awaitTrue(what = "both invalidations") {
-                        changed.containsAll(listOf(SnapshotKey.Policies, SnapshotKey.App("app")))
+                        changed.containsAll(listOf(SnapshotKey.Platform, SnapshotKey.App("app")))
                     }
                     // an instance hears of its own writes too
-                    listening.publisher.setPolicy(policy("b")).block()
-                    awaitTrue(what = "the instance's own write") { changed.count { it == SnapshotKey.Policies } >= 2 }
+                    listening.writer.publish(SnapshotKey.Platform).block()
+                    awaitTrue(what = "the instance's own write") { changed.count { it == SnapshotKey.Platform } >= 2 }
 
                     subscription.close()
                     changed.clear()
-                    writing.publisher.setPolicy(policy("c")).block()
-                    listening.publisher.setPolicy(policy("d")).block()
+                    writing.writer.publish(SnapshotKey.Platform).block()
+                    listening.writer.publish(SnapshotKey.Platform).block()
                     Thread.sleep(200)
                     changed.assert().isEmpty()
                 }
@@ -198,7 +189,7 @@ class RedisSnapshotDocumentStoreTest {
     @Test
     fun mapsOnlyItsOwnStorageKeys() {
         SnapshotNode(InMemoryBackend(), "k").use { node ->
-            node.cache.snapshotKeyOf("k:snapshot:policies").assert().isEqualTo(SnapshotKey.Policies)
+            node.cache.snapshotKeyOf("k:snapshot:platform").assert().isEqualTo(SnapshotKey.Platform)
             node.cache.snapshotKeyOf("k:snapshot:app:a").assert().isEqualTo(SnapshotKey.App("a"))
             node.cache.snapshotKeyOf("k:snapshot:other").assert().isNull()
             node.cache.snapshotKeyOf("k:policy:p").assert().isNull()
@@ -224,7 +215,7 @@ class RedisSnapshotDocumentStoreTest {
                     heard += "reset"
                 }
             })
-            node.store.notifyChanged(SnapshotKey.Policies)
+            node.store.notifyChanged(SnapshotKey.Platform)
             heard.assert().contains("changed")
         }
     }
@@ -254,7 +245,7 @@ class RedisSnapshotDocumentStoreTest {
     @Test
     fun computesTheDigestOfALocalCopyOffTheCallersThread() {
         SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
-            node.publisher.setPolicy(policy("a")).block()
+            node.writer.publish(SnapshotKey.Platform).block()
             val ran = CopyOnWriteArrayList<String>()
             val executor = Executor { task ->
                 Thread({
@@ -263,10 +254,10 @@ class RedisSnapshotDocumentStoreTest {
                 }, "digest-test").start()
             }
             val store = RedisSnapshotDocumentStore(node.cache, executor)
-            store.read(SnapshotKey.Policies).get()
+            store.read(SnapshotKey.Platform).get()
             ran.clear()
             // now a local hit: answered without Redis, but hashed on the executor
-            val read = store.read(SnapshotKey.Policies).get() as SnapshotRead.Present
+            val read = store.read(SnapshotKey.Platform).get() as SnapshotRead.Present
             ran.assert().containsExactly("digest-test")
             read.digest.assert().isEqualTo(RedisSnapshotDocumentStore.digestOf(read.document))
         }
@@ -292,33 +283,8 @@ class RedisSnapshotDocumentStoreTest {
                 node.cache.localCopyMaxAge,
                 node.cache.channel,
             )
-            val error = failureOf(RedisSnapshotDocumentStore(cache).read(SnapshotKey.Policies))
+            val error = failureOf(RedisSnapshotDocumentStore(cache).read(SnapshotKey.Platform))
             (error is IllegalStateException).assert().isTrue()
-        }
-    }
-
-    /** Review: app A's document copied under `app:B` is read, but never compiled into B's permissions. */
-    @Test
-    fun aDocumentCopiedUnderAnotherAppsKeyFailsClosed() {
-        val backend = InMemoryBackend()
-        val keyPrefix = newKeyPrefix()
-        SnapshotNode(backend, keyPrefix).use { node ->
-            node.publisher.setAppPermission(appPermission("a")).block()
-            node.publisher.setRoleGrants("a", "r", "", setOf("p1")).block()
-            val copied = (node.store.read(SnapshotKey.App("a")).get() as SnapshotRead.Present).document
-            RawSnapshotWriter(backend, keyPrefix).use { raw ->
-                raw.cache.put(SnapshotKey.App("b"), copied.bodyBytes())
-            }
-            val read = node.store.read(SnapshotKey.App("b")).get() as SnapshotRead.Present
-            val layers = PolicySetParity.ofSnapshot(
-                EvaluateRequest(path = "/a", headers = mapOf(AppIdCapable.APP_ID_KEY to "b")),
-                SimpleSecurityContext(SimplePrincipal("user", roles = setOf("r"))),
-            ) { key -> Result.success(if (key == SnapshotKey.App("b")) read.document else null) }
-            (layers[2] as List<*>)[1].assert().isEqualTo("unavailable")
-            // and a writer refuses to build on it
-            assertThrows<SnapshotFormatException> {
-                node.publisher.setRoleGrants("b", "r", "", setOf("p1")).block()
-            }
         }
     }
 }

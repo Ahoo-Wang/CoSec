@@ -11,8 +11,8 @@
  * limitations under the License.
  */
 
-// The coroutine request pipeline (RFC 0006 §5.1). cosec-core still brings Reactor onto the classpath (SnapshotPublisher
-// returns Mono until phase 6), so RuntimeBoundaryTest guards what the code references, not the classpath (RFC 0006 Q6).
+// The coroutine request pipeline (RFC 0006 §5.1). cosec-core still brings Reactor onto the classpath, so
+// RuntimeBoundaryTest guards what the code references, not the classpath (RFC 0006 Q6).
 dependencies {
     api(project(":cosec-engine"))
     api(project(":cosec-core"))

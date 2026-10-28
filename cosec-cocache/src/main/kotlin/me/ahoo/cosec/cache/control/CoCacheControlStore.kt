@@ -46,8 +46,8 @@ import java.time.Duration
  * reads ([PolicySnapshotCache], one key per document); the records, indexes, back-references and leases are the
  * caches of [ControlCacheSpecs].
  *
- * Writes are `putIfMatch`, one Lua script each (CoCache 6.7), as [me.ahoo.cosec.cache.snapshot.RedisSnapshotPublisher]
- * writes: the head only over the digest it was read at, a record only where there is none. A write whose reply is lost
+ * Writes are `putIfMatch`, one Lua script each (CoCache 6.7), as 7.x's snapshot publisher
+ * wrote: the head only over the digest it was read at, a record only where there is none. A write whose reply is lost
  * is resolved by reading the digest back, never by writing again: `putIfMatch` is not idempotent. Nothing waits for
  * replicas (RFC 0007 Q27): a write lost in a failover shows up as a broken chain or a revision regression.
  *

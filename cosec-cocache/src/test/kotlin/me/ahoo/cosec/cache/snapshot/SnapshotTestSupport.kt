@@ -19,6 +19,8 @@ import io.lettuce.core.cluster.RedisClusterClient
 import io.lettuce.core.codec.ByteArrayCodec
 import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.Codec
+import me.ahoo.cocache.api.ConditionalGet
+import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.api.spi.InvalidationChannel
 import me.ahoo.cocache.api.spi.InvalidationListener
@@ -28,18 +30,17 @@ import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.redis.RedisBackend
-import me.ahoo.cosec.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
 import me.ahoo.cosec.cache.CoSecTestCaches
-import me.ahoo.cosec.cache.GlobalPolicyIndexCache
-import me.ahoo.cosec.permission.AppPermissionData
-import me.ahoo.cosec.permission.PermissionData
-import me.ahoo.cosec.permission.PermissionGroupData
-import me.ahoo.cosec.policy.action.AllActionMatcher
+import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import reactor.core.publisher.Mono
+import reactor.core.scheduler.Schedulers
 import java.time.Duration
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -122,7 +123,7 @@ class SnapshotNode(
     val cache: PolicySnapshotCache =
         runtime.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix, localMaxAge = localMaxAge))
     val store = RedisSnapshotDocumentStore(cache)
-    val publisher = RedisSnapshotPublisher(cache, store)
+    val writer = DocumentWriter(cache, store)
 
     override fun close() {
         runtime.close()
@@ -222,51 +223,32 @@ private const val POLL_MILLIS = 20L
 
 fun newKeyPrefix(): String = CoSecTestCaches.newKeyPrefix()
 
-/** An app permission with one permission, `p1`, that allows everything. */
-fun appPermission(appId: String, vararg permissionIds: String = arrayOf("p1")): AppPermissionData = AppPermissionData(
-    id = appId,
-    groups = listOf(
-        PermissionGroupData(
-            "g",
-            permissions = permissionIds.map { PermissionData(id = it, name = it, action = AllActionMatcher.INSTANCE) },
-        )
-    ),
-)
-
 /**
- * Writes 7.x policy data as stored JSON, whether or not this instance could decode it, in 7.0's layout; its own
- * runtime. The global policy index is written through 7.0's cache.
+ * Publishes the next revision of a document, as the control plane's store does: `putIfMatch` over the digest read,
+ * again on a conflict, then [RedisSnapshotDocumentStore.notifyChanged]. Off the caller's thread, like a real writer.
+ * The documents carry a header only; these tests compile them to their revision.
  */
-class Raw7xWriter(backend: CoherenceBackend, private val keyPrefix: String) : AutoCloseable {
-    private val runtime = CacheRuntime.builder().backend(backend).build()
-    private val caches = CoSecTestCaches(backend, keyPrefix)
+class DocumentWriter(private val cache: PolicySnapshotCache, private val store: RedisSnapshotDocumentStore) {
+    private val async = cache.async()
 
-    private fun raw(cacheName: String): Cache<String, ByteArray> = runtime.create(
-        CacheSpec.builder<String, ByteArray>("Raw$cacheName")
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, cacheName))
-            .keyPrefix("")
-            .keyEncoder { it }
-            .codec(RawCodec)
-            .policy(CachePolicy.DEFAULT.storeOfRecord())
-            .build()
-    )
+    fun publish(key: SnapshotKey): Mono<Void> = Mono.fromFuture { async.getIfChanged(key, null) }
+        .publishOn(Schedulers.boundedElastic())
+        .flatMap { read ->
+            val current = read as? ConditionalGet.Present
+            val next = document((current?.value?.revision ?: 0) + 1)
+            Mono.fromFuture { async.putIfMatch(key, current?.digest, next) }
+        }
+        .flatMap { result ->
+            if (result is ConditionalPut.Written) {
+                Mono.fromRunnable<Void> { store.notifyChanged(key) }
+            } else {
+                publish(key)
+            }
+        }
 
-    private val policies = raw(CoSecCacheSpecs.POLICY_CACHE_NAME)
-    private val appPermissions = raw(CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME)
-    private val grants = raw(CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME)
-
-    fun policy(id: String, json: String) = policies.put(id, json.encodeToByteArray())
-
-    fun index(vararg ids: String) {
-        caches.globalPolicyIndexCache.add(GlobalPolicyIndexCache.CACHE_KEY, ids.toList())
-    }
-
-    fun appPermission(appId: String, json: String) = appPermissions.put(appId, json.encodeToByteArray())
-
-    fun grants(id: AppSpacedRoleId, json: String) = grants.put(id.toString(), json.encodeToByteArray())
-
-    override fun close() {
-        caches.close()
-        runtime.close()
+    private fun document(revision: Long): SnapshotDocument {
+        val publishedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS)
+        val body = """{"schema":${SnapshotDocument.DOCUMENT_SCHEMA},"revision":$revision,"publishedAt":"$publishedAt"}"""
+        return SnapshotDocument(SnapshotDocument.DOCUMENT_SCHEMA, revision, publishedAt, body.encodeToByteArray())
     }
 }

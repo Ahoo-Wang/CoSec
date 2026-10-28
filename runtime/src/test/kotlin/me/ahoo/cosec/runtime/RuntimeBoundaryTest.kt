@@ -39,8 +39,8 @@ import me.ahoo.cosec.snapshot.SnapshotSource
  * Reactor stays at the adapter bridges (RFC 0006 §5.1, Q6): the code of `runtime/`, `engine/` and `model/` never
  * references `reactor.*`, and no data-plane SPI signature carries a Reactor type. `runtime/` also stays out of its host
  * (Spring, the Servlet API, the coroutine bridges) and never uses `runCatching`. SPI implementations in other
- * modules may still await a Reactor-based client internally. A classpath check follows once phase 6 rewrites
- * `SnapshotPublisher`.
+ * modules may still await a Reactor-based client internally. A classpath check follows once cosec-core no
+ * longer brings Reactor.
  */
 @AnalyzeClasses(
     packages = ["me.ahoo.cosec.runtime", "me.ahoo.cosec.engine", "me.ahoo.cosec.model", "me.ahoo.cosec.snapshot"],

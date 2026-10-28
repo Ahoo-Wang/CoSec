@@ -14,11 +14,10 @@
 package me.ahoo.cosec.cache.snapshot
 
 import kotlinx.coroutines.runBlocking
-import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiterTest
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.policy.PolicyData
+import me.ahoo.cosec.snapshot.DocumentSnapshots
 import me.ahoo.cosec.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.snapshot.SnapshotCompiler
 import me.ahoo.cosec.snapshot.SnapshotKey
@@ -41,8 +40,8 @@ import kotlin.coroutines.startCoroutine
 
 /**
  * No blocking on the event loop (AGENTS.md, RFC 0003 §6): BlockHound watches threads named like a non-blocking caller,
- * and every store and publisher entry point, and a [SnapshotSource] cold load over the store, runs on such a thread
- * against real Redis. Only these threads are watched, so other tests in the JVM are unaffected.
+ * and every store entry point, a writer publishing through it, and a [SnapshotSource] cold load over the store, runs
+ * on such a thread against real Redis. Only these threads are watched, so other tests in the JVM are unaffected.
  *
  * Two waits are allowed, each exactly where it happens:
  * - logback's console appender lock: the logging setup of the test JVMs, not the code under test;
@@ -53,8 +52,6 @@ import kotlin.coroutines.startCoroutine
  *   Without the allowance, the test failed only when the lock happened to be contended: flaky, not a finding.
  */
 class SnapshotStoreBlockHoundTest {
-    private fun policy(id: String) = PolicyData(id, "c", id, "", PolicyType.CUSTOM, "t")
-
     /** Runs [block] on a fresh watched thread and returns its result. */
     @Suppress("TooGenericExceptionCaught")
     private fun <T> onNonBlockingThread(block: () -> T): T {
@@ -81,10 +78,10 @@ class SnapshotStoreBlockHoundTest {
     }
 
     @Test
-    fun storeAndPublisherNeverBlockTheCaller() {
+    fun theStoreAndItsWritersNeverBlockTheCaller() {
         RedisTarget.REDIS.backend().use { backend ->
             SnapshotNode(backend, newKeyPrefix()).use { node ->
-                node.publisher.setPolicy(policy("seed")).block()
+                node.writer.publish(SnapshotKey.Platform).block()
                 val pending = onNonBlockingThread {
                     val listener = object : SnapshotChangeListener {
                         override fun onChanged(keys: Collection<SnapshotKey>) = Unit
@@ -93,19 +90,19 @@ class SnapshotStoreBlockHoundTest {
                     }
                     val subscription = node.store.subscribe(listener)
                     listOf<CompletableFuture<*>>(
-                        node.store.read(SnapshotKey.Policies),
+                        node.store.read(SnapshotKey.Platform),
                         node.store.read(SnapshotKey.App("absent")),
-                        node.store.readIfChanged(SnapshotKey.Policies, null),
-                        node.publisher.setPolicy(policy("a")).toFuture(),
-                        node.publisher.setAppPermission(appPermission("app"))
-                            .then(node.publisher.setRoleGrants("app", "r", "", setOf("p1")))
+                        node.store.readIfChanged(SnapshotKey.Platform, null),
+                        node.writer.publish(SnapshotKey.Platform).toFuture(),
+                        node.writer.publish(SnapshotKey.App("app"))
+                            .then(node.writer.publish(SnapshotKey.App("app")))
                             .toFuture(),
                     ) to subscription
                 }
                 pending.first.forEach { it.get(TIMEOUT_SECONDS, TimeUnit.SECONDS) }
                 pending.second.close()
                 // a second read answers from the local copy; its digest is computed off the watched thread
-                onNonBlockingThread { node.store.read(SnapshotKey.Policies) }
+                onNonBlockingThread { node.store.read(SnapshotKey.Platform) }
                     .get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
                     .assert().isInstanceOf(SnapshotRead.Present::class.java)
             }
@@ -117,11 +114,10 @@ class SnapshotStoreBlockHoundTest {
     fun aColdLoadOverTheStoreNeverBlocksTheCaller() {
         RedisTarget.REDIS.backend().use { backend ->
             SnapshotNode(backend, newKeyPrefix()).use { node ->
-                node.publisher.setPolicy(policy("a")).block()
-                node.publisher.setAppPermission(appPermission("app")).block()
-                SnapshotSource(
+                node.writer.publish(SnapshotKey.Platform).block()
+                node.writer.publish(SnapshotKey.App("app")).block()
+                DocumentSnapshots.source(
                     node.store,
-                    SnapshotCompiler { _, document -> document.revision },
                     SnapshotCompiler { _, document -> document.revision },
                     SnapshotOptions(revalidateInterval = Duration.ZERO),
                 ).use { source ->

@@ -15,14 +15,12 @@ package me.ahoo.cosec.cache.snapshot
 
 import me.ahoo.cocache.api.Lookup
 import me.ahoo.cocache.api.spi.CoherenceBackend
-import me.ahoo.cosec.api.policy.PolicyType
-import me.ahoo.cosec.policy.PolicyData
+import me.ahoo.cosec.snapshot.DocumentSnapshots
 import me.ahoo.cosec.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.snapshot.SnapshotCompiler
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.SnapshotOptions
 import me.ahoo.cosec.snapshot.SnapshotRead
-import me.ahoo.cosec.snapshot.SnapshotSource
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
@@ -37,15 +35,13 @@ import java.util.concurrent.CopyOnWriteArrayList
  * revalidation, which bypasses local copies, still installs the new revision, as it does when notifications are lost.
  */
 class SnapshotInvalidationOrderTest {
-    private fun policy(id: String) = PolicyData(id, "c", id, "", PolicyType.CUSTOM, "t")
-
     /** Starts a read of [key] whenever the store reports a change of it, from inside the callback. */
     private class ReadingListener(private val node: SnapshotNode) : SnapshotChangeListener {
         val reads = CopyOnWriteArrayList<CompletableFuture<SnapshotRead>>()
 
         override fun onChanged(keys: Collection<SnapshotKey>) {
-            if (SnapshotKey.Policies in keys) {
-                reads += node.store.read(SnapshotKey.Policies)
+            if (SnapshotKey.Platform in keys) {
+                reads += node.store.read(SnapshotKey.Platform)
             }
         }
 
@@ -65,9 +61,9 @@ class SnapshotInvalidationOrderTest {
             readerBackend(backend).use { wrapped ->
                 SnapshotNode(wrapped, keyPrefix).use { reader ->
                     SnapshotNode(backend, keyPrefix).use { writer ->
-                        writer.publisher.setPolicy(policy("a")).block()
+                        writer.writer.publish(SnapshotKey.Platform).block()
                         // fills the reader's local copy with revision 1
-                        (reader.store.read(SnapshotKey.Policies).get() as SnapshotRead.Present).document.revision
+                        (reader.store.read(SnapshotKey.Platform).get() as SnapshotRead.Present).document.revision
                             .assert().isEqualTo(1L)
                         test(reader, writer)
                     }
@@ -82,7 +78,7 @@ class SnapshotInvalidationOrderTest {
         withCopyOfRevisionOne(target, { NotClosing(it) }) { reader, writer ->
             val listener = ReadingListener(reader)
             reader.store.subscribe(listener).use {
-                writer.publisher.setPolicy(policy("b")).block()
+                writer.writer.publish(SnapshotKey.Platform).block()
                 awaitTrue(what = "the invalidation") { listener.reads.isNotEmpty() }
                 listener.revisionsRead().first().assert().isEqualTo(2L)
             }
@@ -94,16 +90,15 @@ class SnapshotInvalidationOrderTest {
     fun revalidationConvergesWhenTheListenerHearsFirst(target: RedisTarget) {
         withCopyOfRevisionOne(target, ::ReversingChannelBackend) { reader, writer ->
             val listener = ReadingListener(reader)
-            val source = SnapshotSource(
+            val source = DocumentSnapshots.source(
                 reader.store,
-                SnapshotCompiler { _, document -> document.revision },
                 SnapshotCompiler { _, document -> document.revision },
                 SnapshotOptions(revalidateInterval = Duration.ofMillis(200)),
             )
             source.use {
                 reader.store.subscribe(listener).use {
                     source.load().get().version.shared.assert().isEqualTo(1L)
-                    writer.publisher.setPolicy(policy("b")).block()
+                    writer.writer.publish(SnapshotKey.Platform).block()
                     awaitTrue(what = "the invalidation") { listener.reads.isNotEmpty() }
                     // the listener heard first: its read was answered by the stale local copy
                     listener.revisionsRead().first().assert().isEqualTo(1L)
@@ -117,17 +112,16 @@ class SnapshotInvalidationOrderTest {
     @EnumSource(RedisTarget::class)
     fun revalidationConvergesWhenNotificationsAreLost(target: RedisTarget) {
         withCopyOfRevisionOne(target, ::SilentChannelBackend) { reader, writer ->
-            SnapshotSource(
+            DocumentSnapshots.source(
                 reader.store,
-                SnapshotCompiler { _, document -> document.revision },
                 SnapshotCompiler { _, document -> document.revision },
                 SnapshotOptions(revalidateInterval = Duration.ofMillis(200)),
             ).use { source ->
                 source.load().get().version.shared.assert().isEqualTo(1L)
-                writer.publisher.setPolicy(policy("b")).block()
+                writer.writer.publish(SnapshotKey.Platform).block()
                 awaitTrue(what = "revision 2 installed") { source.peek()?.version?.shared == 2L }
                 // nothing told the reader: its local copy still holds revision 1
-                (reader.cache.async().lookup(SnapshotKey.Policies).get() as Lookup.Present).value.revision
+                (reader.cache.async().lookup(SnapshotKey.Platform).get() as Lookup.Present).value.revision
                     .assert().isEqualTo(1L)
             }
         }
