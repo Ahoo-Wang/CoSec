@@ -137,6 +137,16 @@ class ChangeAuthority(
                     ControlActions.WRITE,
                     entry(key, BINDING, operation.id.value)
                 )
+                is Operation.PutRateLimit -> require(
+                    operator,
+                    ControlActions.WRITE,
+                    entry(key, RATE_LIMIT, operation.rule.id)
+                )
+                is Operation.RemoveRateLimit -> require(
+                    operator,
+                    ControlActions.WRITE,
+                    entry(key, RATE_LIMIT, operation.id)
+                )
                 is Operation.PutCatalog -> require(operator, ControlActions.WRITE, section(key, "catalog"))
                 is Operation.SetLimits -> require(operator, ControlActions.WRITE, section(key, "limits"))
                 is Operation.SetAttributes -> require(operator, ControlActions.WRITE, section(key, "attributes"))
@@ -173,6 +183,10 @@ class ChangeAuthority(
             }
             return escalations
         }
+        // A tenant's rate limit rules need no second person, tightened or loosened: they count in the tenant's own
+        // buckets (OBL-2), so they never spend another document's, and every platform and app rule still applies to
+        // the tenant's requests. Rate limits are obligations on a permit, never a permit: `cosec:write` on the rule is
+        // enough. The shadow window does not see a change that only touches obligations; it compares decisions.
         if (operations.any { it is Operation.SetBoundary }) {
             // Removing or replacing a boundary can widen every permit of the tenant; the analysis does not see it.
             escalations += Escalation("boundary of $key", NOT_ANALYZED, "only the trust root changes it alone")
@@ -349,6 +363,7 @@ class ChangeAuthority(
         const val UNAVAILABLE = 503
         const val POLICY = "policy"
         const val BINDING = "binding"
+        const val RATE_LIMIT = "rateLimit"
         const val NOT_ANALYZED = "NOT_ANALYZED"
         const val BREAK_GLASS = "BREAK_GLASS"
     }

@@ -118,8 +118,9 @@ enum class OnMissing {
     INDETERMINATE,
 
     /**
-     * The statement does not match. On a DENY that makes the DENY lapse while a dependency fails, so only the platform
-     * document may write it (RFC 0006 Q13).
+     * The statement does not match. On a DENY that makes the DENY lapse while a dependency fails, so a DENY compiles
+     * with it only when it carries the control plane's confirmation, in any document (RFC 0007 N6, Q13; `ATR-6`). A rate
+     * limit rule has no confirmation flow: only the platform document's rules may say it (`ATR-7`).
      */
     NOMATCH,
 }

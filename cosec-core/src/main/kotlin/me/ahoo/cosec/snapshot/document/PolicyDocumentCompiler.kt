@@ -338,17 +338,19 @@ class PolicyDocumentCompiler(
     companion object {
         /**
          * The compiler every document compiles with when [platform] is the platform document (RFC 0007 §3.1 N3): its
-         * condition limits and its declared external attributes, or the defaults where it declares none. The control
-         * plane compiles candidates with it, so what it accepts is what an instance reading the same platform accepts.
+         * condition limits, or the defaults, and the external attributes it declares ahead of those the host's providers
+         * declare ([providers]). The data plane, `simulate` and the control plane's checks all compile with it, so what
+         * one accepts the others accept.
          */
         fun forPlatform(
             platform: PolicyDocument?,
+            providers: AttributeCatalog = AttributeCatalog.NONE,
             principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
         ): PolicyDocumentCompiler {
             val limits = platform?.limits ?: ConditionLimits.DEFAULT
             // A platform that declares a path twice does not compile; until it does, the first declaration counts.
-            val catalog = platform?.attributes?.let { AttributeCatalog.of(it.distinctBy { attribute -> attribute.path }) }
-                ?: AttributeCatalog.NONE
+            val declared = platform?.attributes.orEmpty().distinctBy { it.path }.associateBy { it.path }
+            val catalog = AttributeCatalog { path -> declared[path] ?: providers.external(path) }
             return of(limits, catalog, principalBindingLimit)
         }
 

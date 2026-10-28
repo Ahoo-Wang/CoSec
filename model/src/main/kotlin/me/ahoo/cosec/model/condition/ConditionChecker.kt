@@ -15,7 +15,8 @@ package me.ahoo.cosec.model.condition
 
 /**
  * The cost bounds of a condition (RFC 0005 §3.5, Q9). The defaults are the decided values, to be calibrated
- * against the converter's measurements of 7.x policies. Hosts set them per snapshot (`cosec.policy.limits.*`).
+ * against the converter's measurements of 7.x policies. The platform document's `limits` section sets them for every
+ * document (RFC 0007 §3.1 N3), so the control plane and every instance compile against the same bounds.
  */
 class ConditionLimits(
     val maxNodes: Int = 64,

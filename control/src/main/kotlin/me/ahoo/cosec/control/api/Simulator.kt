@@ -30,7 +30,6 @@ import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.AttributeCatalog
-import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
@@ -176,13 +175,8 @@ class Simulator(
      * The compiler of [platform] as the data plane's `PlatformCompiler` makes it: its limits, and the attributes it
      * declares ahead of the host's providers ([attributes]).
      */
-    private fun compiler(platform: PolicyDocument?): PolicyDocumentCompiler {
-        val declared = platform?.attributes.orEmpty().distinctBy { it.path }.associateBy { it.path }
-        return PolicyDocumentCompiler.of(
-            platform?.limits ?: ConditionLimits.DEFAULT,
-            AttributeCatalog { path -> declared[path] ?: attributes.external(path) },
-        )
-    }
+    private fun compiler(platform: PolicyDocument?): PolicyDocumentCompiler =
+        PolicyDocumentCompiler.forPlatform(platform, attributes)
 
     /** [document] compiled, [empty] when none is published, or null (unresolved) when it does not compile. */
     private fun documentOf(

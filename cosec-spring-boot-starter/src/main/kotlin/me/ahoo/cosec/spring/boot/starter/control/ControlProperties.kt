@@ -60,7 +60,10 @@ class ControlProperties {
     class Approval {
         var expireAfter: Duration = Duration.ofHours(72)
 
-        /** Whether every publish, not only an escalated one, needs a second person's approval. */
+        /**
+         * Whether the trust root's own changes are analyzed too (RFC 0007 Q10): what the analysis cannot prove needs a
+         * second administrator's approval. A change that escalates needs one either way.
+         */
         var fourEyes: Boolean = false
     }
 

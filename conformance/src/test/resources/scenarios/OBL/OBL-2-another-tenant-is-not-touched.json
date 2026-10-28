@@ -1,0 +1,70 @@
+{
+  "rules": [
+    "OBL-2"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "acme's api counter is exhausted; globex has no rule of its own, and the platform's api counter is untouched: globex is permitted.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "api",
+          "action": "*",
+          "permitsPerSecond": 10
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [],
+        "bindings": [],
+        "rateLimits": [
+          {
+            "id": "api",
+            "action": "*",
+            "permitsPerSecond": 1000
+          }
+        ]
+      }
+    }
+  },
+  "rateLimiter": {
+    "exhausted": [
+      "tenant:acme/api"
+    ]
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1"
+  },
+  "authentication": {
+    "result": "authenticated",
+    "tenant": "globex",
+    "id": "alice"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}
