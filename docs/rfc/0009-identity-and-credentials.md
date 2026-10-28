@@ -170,7 +170,7 @@ JWT 保留 `roles`、`policies`、`attributes` 声明作为已签名缓存，条
 
 | PR | 内容 | 破坏性 |
 |---|---|---|
-| PR-1 | `fix(runtime)`：拒绝带 `act` 的 token（§6、IDN-4） | 否 |
+| PR-1 | `fix(jwt)!`：拒绝带 `act` 的 token（§6、IDN-4）；7.x 接受的 token 现在被拒，属于授权语义变更 | 是 |
 | PR-2 | `feat!`：`principal.type`、`auth.method` 属性，`Memberships.type/active`，`CoSec-Identity` 的 `sub_type`，JWT 签发写入类型，I5 的隔离（§4.3、§5、IDN-5） | 是：`MembershipProvider` 的返回值、token 声明 |
 | PR-3 | `feat!`：API Key 新格式、`MembershipSource.Provider(cap)`、启动检查、`migrate api-keys`（§4、IDN-1/2/3/6） | 是：API Key 存储格式 |
 
