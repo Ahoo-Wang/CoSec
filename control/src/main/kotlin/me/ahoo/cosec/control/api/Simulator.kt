@@ -29,7 +29,10 @@ import me.ahoo.cosec.model.Environment
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.AttributeCatalog
+import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.BindingRef
+import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
@@ -39,6 +42,7 @@ import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
+import me.ahoo.cosec.runtime.snapshot.MissingPlatformException
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.PolicyDocument
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCompiler
@@ -70,9 +74,14 @@ class Documents(val platform: PolicyDocument?, val app: PolicyDocument?, val ten
 /**
  * The control plane's decisions (RFC 0007 §10.3, Q22, CTL-3): the enforcing flow's parts, not a second evaluator. The
  * scope is resolved by [ScopeResolver], the documents are compiled by the data plane's [PolicyDocumentCompiler] with
- * the platform's limits and attributes, and [engine] is the data plane's `Engine.evaluate`, at full trace.
+ * the platform's limits and attributes and the host's [attributes], into the view enforcement would read, and [engine]
+ * is the data plane's `Engine.evaluate`, at full trace.
  */
-class Simulator(private val engine: FlatEngine = CoSecFlatEngine) {
+class Simulator(
+    private val engine: FlatEngine = CoSecFlatEngine,
+    /** The host's `AttributeProvider` catalog, which enforcement compiles against. */
+    private val attributes: AttributeCatalog = AttributeCatalog.NONE,
+) {
     /** The scope [request] resolves to, or the rejection that decides it, as the pipeline resolves a host request. */
     fun scope(request: SimulatedRequest): ScopeResolution {
         val memberships = MembershipClaims.parse(request.roles, request.policies)
@@ -112,17 +121,34 @@ class Simulator(private val engine: FlatEngine = CoSecFlatEngine) {
         scope.app.takeIf { scope.roles.isNotEmpty() && it.value.isNotEmpty() }?.let { SnapshotKey.App(it.value) },
     )
 
+    /**
+     * The view enforcement would read (`DocumentSnapshotViews` with `platformRequired`): an absent platform document is
+     * unresolved, not empty; a document that does not compile is unresolved, so the decision is indeterminate unless a
+     * DENY matches, as on the data plane, rather than an error of the whole call.
+     */
     private fun view(scope: Scope, documents: Documents): SnapshotView {
-        val compiler = PolicyDocumentCompiler.forPlatform(documents.platform)
+        val unresolved = ArrayList<Cause>(0)
+        val compiler = compiler(documents.platform)
+        val platform = documents.platform?.let { compiled(compiler, it, unresolved) } ?: run {
+            if (documents.platform == null) {
+                unresolved += Cause.SourceUnavailable(DocumentKind.PLATFORM, MissingPlatformException())
+            }
+            CompiledDocument.platform(emptyList(), emptyList())
+        }
         val app = scope.app.takeIf { scope.roles.isNotEmpty() && it.value.isNotEmpty() }
         return SnapshotView(
-            documents.platform?.let { compiler.compile(it) } ?: CompiledDocument.platform(emptyList(), emptyList()),
+            platform,
             app?.let { id ->
-                documents.app?.let {
-                    compiler.compile(it)
-                } ?: CompiledDocument.app(AppId(id.value), emptyList(), emptyList())
+                documentOf(
+                    documents.app,
+                    compiler,
+                    unresolved
+                ) { CompiledDocument.app(AppId(id.value), emptyList(), emptyList()) }
             },
-            documents.tenant?.let { compiler.compile(it) } ?: CompiledDocument.tenant(scope.tenant, emptyList(), emptyList()),
+            documentOf(documents.tenant, compiler, unresolved) {
+                CompiledDocument.tenant(scope.tenant, emptyList(), emptyList())
+            },
+            unresolved,
             version = ViewVersion(
                 documents.platform?.revision ?: 0,
                 app?.let {
@@ -131,6 +157,38 @@ class Simulator(private val engine: FlatEngine = CoSecFlatEngine) {
                 documents.tenant?.revision ?: 0
             ),
         )
+    }
+
+    /**
+     * The compiler of [platform] as the data plane's `PlatformCompiler` makes it: its limits, and the attributes it
+     * declares ahead of the host's providers ([attributes]).
+     */
+    private fun compiler(platform: PolicyDocument?): PolicyDocumentCompiler {
+        val declared = platform?.attributes.orEmpty().distinctBy { it.path }.associateBy { it.path }
+        return PolicyDocumentCompiler.of(
+            platform?.limits ?: ConditionLimits.DEFAULT,
+            AttributeCatalog { path -> declared[path] ?: attributes.external(path) },
+        )
+    }
+
+    /** [document] compiled, [empty] when none is published, or null (unresolved) when it does not compile. */
+    private fun documentOf(
+        document: PolicyDocument?,
+        compiler: PolicyDocumentCompiler,
+        unresolved: MutableList<Cause>,
+        empty: () -> CompiledDocument,
+    ): CompiledDocument? = if (document == null) empty() else compiled(compiler, document, unresolved)
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun compiled(
+        compiler: PolicyDocumentCompiler,
+        document: PolicyDocument,
+        unresolved: MutableList<Cause>,
+    ): CompiledDocument? = try {
+        compiler.compile(document)
+    } catch (e: Exception) {
+        unresolved += Cause.SourceUnavailable(document.kind, e)
+        null
     }
 
     companion object {

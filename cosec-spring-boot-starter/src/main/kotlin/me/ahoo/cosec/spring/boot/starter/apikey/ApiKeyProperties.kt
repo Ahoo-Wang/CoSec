@@ -13,7 +13,6 @@
 package me.ahoo.cosec.spring.boot.starter.apikey
 
 import me.ahoo.cosec.apikey.ApiKey
-import me.ahoo.cosec.apikey.ApiKeySecurityContextParser
 import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -21,17 +20,11 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 import java.time.Instant
 
 /**
- * API keys for machine clients. Off by default.
+ * API keys for machine clients. Off by default. The header they come in is `cosec.pipeline.api-key-header`.
  */
 @ConfigurationProperties(ApiKeyProperties.PREFIX)
 data class ApiKeyProperties(
     @DefaultValue("false") override var enabled: Boolean = false,
-    /**
-     * Request header carrying the key.
-     */
-    @DefaultValue(
-        ApiKeySecurityContextParser.DEFAULT_HEADER
-    ) var header: String = ApiKeySecurityContextParser.DEFAULT_HEADER,
     /**
      * Where keys live: `memory` (the [keys] below) or `redis` (shared by every instance, needs `cache-support`).
      */
@@ -41,11 +34,6 @@ data class ApiKeyProperties(
      */
     @DefaultValue(DEFAULT_KEY_PREFIX) var keyPrefix: String = DEFAULT_KEY_PREFIX,
     /**
-     * Whether the [me.ahoo.cosec.apikey.ApiKeyStore] blocks (a database or Redis lookup), so the security context is
-     * parsed off the event loop.
-     */
-    @DefaultValue("false") var storeBlocking: Boolean = false,
-    /**
      * Keys of the in-memory store, by their SHA-256 hash. Ignored with the Redis store.
      */
     var keys: List<Key> = emptyList(),
@@ -53,7 +41,6 @@ data class ApiKeyProperties(
     companion object {
         const val PREFIX: String = "cosec.api-key"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY
-        const val STORE_BLOCKING_KEY: String = "$PREFIX.store-blocking"
         const val STORE_KEY: String = "$PREFIX.store"
         const val DEFAULT_KEY_PREFIX = "cosec:api-key"
     }

@@ -10,80 +10,57 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package me.ahoo.cosec.spring.boot.starter.apikey
 
-import io.mockk.mockk
-import me.ahoo.cosec.api.permission.AppRolePermission
-import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.api.principal.RoleId
-import me.ahoo.cosec.apikey.ApiKeySecurityContextParser
+import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.apikey.ApiKeyReader
 import me.ahoo.cosec.apikey.ApiKeyStore
 import me.ahoo.cosec.apikey.ApiKeys
-import me.ahoo.cosec.authorization.AppRolePermissionRepository
-import me.ahoo.cosec.authorization.PolicyRepository
+import me.ahoo.cosec.cache.RedisApiKeyReader
 import me.ahoo.cosec.cache.RedisApiKeyStore
-import me.ahoo.cosec.context.DefaultSecurityContextParser
-import me.ahoo.cosec.context.SecurityContextParser
-import me.ahoo.cosec.policy.EvaluateRequest
-import me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.authorization.CoSecRequestParserAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.authorization.securityContextParseScheduler
-import me.ahoo.cosec.token.TokenVerifier
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.runtime.authn.Authenticator
+import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.runtime.authn.Credentials
+import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecSnapshotAutoConfiguration
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
 import org.junit.jupiter.api.Test
+import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+import org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
-import reactor.core.publisher.Mono
-import reactor.core.scheduler.Schedulers
 
 internal class CoSecApiKeyAutoConfigurationTest {
     private val key = ApiKeys.generate()
 
     private val contextRunner = ApplicationContextRunner()
-        .withBean(PolicyRepository::class.java, {
-            object : PolicyRepository {
-                override fun getGlobalPolicy(): Mono<List<Policy>> = Mono.just(emptyList())
-                override fun getPolicies(policyIds: Set<String>): Mono<List<Policy>> = Mono.just(emptyList())
-                override fun setPolicy(policy: Policy): Mono<Void> = Mono.empty()
-            }
-        })
-        .withBean(AppRolePermissionRepository::class.java, {
-            object : AppRolePermissionRepository {
-                override fun getAppRolePermission(
-                    appId: String,
-                    spaceId: String,
-                    roleIds: Set<RoleId>
-                ): Mono<AppRolePermission> = Mono.empty()
-            }
-        })
-        .withBean(TokenVerifier::class.java, { mockk() })
-        .withUserConfiguration(
-            CoSecAutoConfiguration::class.java,
-            CoSecApiKeyAutoConfiguration::class.java,
-            CoSecRequestParserAutoConfiguration::class.java,
-            CoSecAuthorizationAutoConfiguration::class.java,
+        .withPropertyValues("cosec.authorization.routes.location=")
+        .withConfiguration(
+            AutoConfigurations.of(
+                CoSecApiKeyAutoConfiguration::class.java,
+                CoSecSnapshotAutoConfiguration::class.java,
+                CoSecPipelineAutoConfiguration::class.java,
+            )
         )
 
     @Test
     fun disabledByDefault() {
         contextRunner.run { context ->
             assertThat(context).hasNotFailed().doesNotHaveBean(ApiKeyStore::class.java)
-            assertThat(
-                context.getBean(SecurityContextParser::class.java)
-            ).isInstanceOf(DefaultSecurityContextParser::class.java)
-            context.environment.securityContextParseScheduler().assert().isSameAs(Schedulers.immediate())
+            val result = runBlocking {
+                context.getBean(Authenticator::class.java).authenticate(Credentials(null, key))
+            }
+            result.assert().isEqualTo(AuthnResult.Anonymous)
         }
     }
 
     @Test
-    fun resolvesConfiguredKeys() {
+    fun authenticatesConfiguredKeys() {
         contextRunner
             .withPropertyValues(
                 "cosec.api-key.enabled=true",
-                "cosec.api-key.header=X-Service-Key",
                 "cosec.api-key.keys[0].id=billing",
                 "cosec.api-key.keys[0].hash=${ApiKeys.hash(key)}",
                 "cosec.api-key.keys[0].principal-id=svc-billing",
@@ -92,20 +69,12 @@ internal class CoSecApiKeyAutoConfigurationTest {
             )
             .run { context ->
                 assertThat(context).hasNotFailed().hasSingleBean(ApiKeyStore::class.java)
-                val parser = context.getBean(SecurityContextParser::class.java)
-                assertThat(parser).isInstanceOf(ApiKeySecurityContextParser::class.java)
-                val principal = parser.parse(EvaluateRequest(headers = mapOf("X-Service-Key" to key))).principal
-                principal.id.assert().isEqualTo("svc-billing")
-                principal.roles.assert().containsExactlyInAnyOrder("billing", "reader")
-            }
-    }
-
-    @Test
-    fun blockingStoreParsesOffTheEventLoop() {
-        contextRunner
-            .withPropertyValues("cosec.api-key.enabled=true", "cosec.api-key.store-blocking=true")
-            .run { context ->
-                context.environment.securityContextParseScheduler().assert().isSameAs(Schedulers.boundedElastic())
+                val authenticator = context.getBean(Authenticator::class.java)
+                val result = runBlocking { authenticator.authenticate(Credentials(null, key)) }
+                result.assert().isInstanceOf(AuthnResult.Authenticated::class.java)
+                (result as AuthnResult.Authenticated).principal.id.assert().isEqualTo(PrincipalId("svc-billing"))
+                val unknown = runBlocking { authenticator.authenticate(Credentials(null, ApiKeys.generate())) }
+                unknown.assert().isInstanceOf(AuthnResult.Rejected::class.java)
             }
     }
 
@@ -122,14 +91,19 @@ internal class CoSecApiKeyAutoConfigurationTest {
     }
 
     @Test
-    fun redisStore() {
+    fun redisStoreIsReadWithoutBlocking() {
         contextRunner
-            .withUserConfiguration(DataRedisAutoConfiguration::class.java)
+            .withConfiguration(
+                AutoConfigurations.of(
+                    DataRedisAutoConfiguration::class.java,
+                    DataRedisReactiveAutoConfiguration::class.java,
+                )
+            )
             .withPropertyValues("cosec.api-key.enabled=true", "cosec.api-key.store=redis")
             .run { context ->
                 assertThat(context).hasNotFailed()
                 assertThat(context.getBean(ApiKeyStore::class.java)).isInstanceOf(RedisApiKeyStore::class.java)
-                context.environment.securityContextParseScheduler().assert().isSameAs(Schedulers.boundedElastic())
+                assertThat(context.getBean(ApiKeyReader::class.java)).isInstanceOf(RedisApiKeyReader::class.java)
             }
     }
 }

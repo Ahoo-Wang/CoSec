@@ -13,11 +13,7 @@
 package me.ahoo.cosec.spring.boot.starter.authorization.cache
 
 import me.ahoo.cocache.core.policy.CachePolicy
-import me.ahoo.cocache.redis.migration.CoCache5MigrationOptions
 import me.ahoo.cosec.api.CoSec
-import me.ahoo.cosec.policy.history.PolicyRevisions
-import me.ahoo.cosec.spring.boot.starter.EnabledCapable
-import me.ahoo.cosec.spring.boot.starter.authorization.AuthorizationProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.NestedConfigurationProperty
 import org.springframework.boot.context.properties.bind.DefaultValue
@@ -25,77 +21,17 @@ import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 /**
- * CacheProperties .
- *
- * @author ahoo wang
+ * `cosec.authorization.cache.*`: the token revocation caches. The policy snapshot has its own properties
+ * (`cosec.authorization.snapshot.*`).
  */
 @ConfigurationProperties(prefix = CacheProperties.PREFIX)
 class CacheProperties(
-    @DefaultValue("true") override var enabled: Boolean = true,
     @DefaultValue(CoSec.COSEC) var keyPrefix: String = CoSec.COSEC,
     @NestedConfigurationProperty
-    var policy: CacheConfiguration = CacheConfiguration(),
-    @NestedConfigurationProperty
-    var role: CacheConfiguration = CacheConfiguration(),
-    @NestedConfigurationProperty
     var token: CacheConfiguration = CacheConfiguration(expireAfterWrite = 30, maximumSize = 100_000),
-    @NestedConfigurationProperty
-    var history: PolicyHistoryConfiguration = PolicyHistoryConfiguration(),
-    @NestedConfigurationProperty
-    var migration: MigrationConfiguration = MigrationConfiguration(),
-) : EnabledCapable {
-    companion object {
-        const val PREFIX: String = AuthorizationProperties.PREFIX + ".cache"
-    }
-
-    /**
-     * The key prefix of the 6.x deployment, as configured: 6.x appended `:policy:` and the like without trimming a
-     * trailing `:` (`myapp:` stored policies under `myapp::policy:`), so the migrations do not trim it either.
-     */
-    val legacyKeyPrefix: String
-        get() = migration.legacyKeyPrefix ?: keyPrefix
-
-    /**
-     * Role grants of 6.x, keyed without the app (`<prefix><roleId>[@<spaceId>]`). Authorization never reads them;
-     * only [me.ahoo.cosec.cache.RolePermissionKeyMigration] does.
-     */
-    val legacyRolePermissionKeyPrefix: String
-        get() = "$legacyKeyPrefix:role:permission:"
-    val policyHistoryKeyPrefix: String = "$keyPrefix:policy:history"
-}
-
-/**
- * Revision history of policies saved through the Redis repository.
- */
-data class PolicyHistoryConfiguration(
-    var enabled: Boolean = false,
-    /** Revisions kept per policy; older ones are dropped. */
-    var maxRevisions: Int = PolicyRevisions.DEFAULT_MAX_REVISIONS,
-)
-
-/**
- * How CoSec 6.x (CoCache 5) stored its data, for the one-off migrations to 7.0 ([me.ahoo.cosec.cache.CoSecCoCache5Migration]
- * and [me.ahoo.cosec.cache.RolePermissionKeyMigration]).
- */
-data class MigrationConfiguration(
-    /**
-     * `cosec.authorization.cache.key-prefix` of the 6.x deployment, as it was configured (not trimmed); defaults to
-     * the current key prefix.
-     */
-    var legacyKeyPrefix: String? = null,
-    /** `cocache.redis.missing-guard-sentinel` of the 6.x deployment. */
-    var missingGuardSentinel: String = DEFAULT_MISSING_GUARD_SENTINEL,
-    /** Where the CoCache migration backs up each 6.x value it converts, for a rollback. */
-    var backupPrefix: String = CoCache5MigrationOptions.DEFAULT_BACKUP_PREFIX,
-    /**
-     * Refuse to start while CoSec data exists without the 7.0 schema marker ([me.ahoo.cosec.cache.CoSecSchemaMarker]).
-     * Turn it off only in the one-off job that runs the migration, which serves no traffic.
-     */
-    var checkSchema: Boolean = true,
 ) {
     companion object {
-        const val DEFAULT_MISSING_GUARD_SENTINEL = CoCache5MigrationOptions.DEFAULT_MISSING_GUARD_SENTINEL
-        const val CHECK_SCHEMA_KEY = CacheProperties.PREFIX + ".migration.check-schema"
+        const val PREFIX: String = CoSec.COSEC_PREFIX + "authorization.cache"
     }
 }
 

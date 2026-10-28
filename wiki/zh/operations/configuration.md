@@ -58,7 +58,6 @@ OpenTelemetry 追踪没有开关：只要 classpath 上有 `opentelemetry-suppor
 | `cosec.jwt.algorithm` | `hmac256`、`hmac384`、`hmac512` | `hmac256` | 签名算法。签发方和校验方必须一致。 |
 | `cosec.jwt.token-validity.access` | 时长 | `10m` | 访问令牌有效期。 |
 | `cosec.jwt.token-validity.refresh` | 时长 | `7d` | 刷新令牌有效期。 |
-| `cosec.jwt.token-revocation.enabled` | boolean | `false` | 每个令牌都对照吊销存储检查，使登出立即生效（需要 `cache-support`）。见 [登出与吊销](../integration/authentication.md#logout-and-revocation)。 |
 
 ## API key {#api-keys}
 
@@ -138,6 +137,21 @@ OpenTelemetry 追踪没有开关：只要 classpath 上有 `opentelemetry-suppor
 | `cosec.shadow.report-rule-changes` | boolean | `false` | 结果相同但由不同规则决定的请求也报告。 |
 
 用法见 [在影子模式中试验变更](../policies/testing.md#trying-changes-in-shadow-mode)。
+
+8.0 的候选来自控制面，不再来自本地文件。每个带 `cache-support` 的实例都参与控制面的影子窗口：
+
+| 配置项 | 类型 | 默认值 | 作用 |
+|---|---|---|---|
+| `cosec.authorization.shadow.enabled` | boolean | `true` | 用暂存的候选再评估一次被采样的请求，并报告结果。关闭后，本实例的流量在影子窗口里不计数，本实例编译不了的候选也不会阻断窗口。 |
+| `cosec.authorization.shadow.sample-rate` | double，`0` 到 `1` | `0.1` | 同时用候选评估的请求比例。每个请求多花一次评估，不在请求路径上。 |
+| `cosec.authorization.shadow.report-interval` | duration | `10s` | 实例向 Redis 写影子报告和实例状态的间隔。 |
+| `cosec.authorization.shadow.instance-id` | string | 随机 | 本实例在报告和状态中的 id。每个运行中的实例必须不同，且只能包含字母、数字、`.`、`_` 和 `-`；其他 id 会让启动失败。 |
+
+## 控制面 {#control-plane}
+
+| 配置项 | 类型 | 默认值 | 作用 |
+|---|---|---|---|
+| `cosec.control.http.max-body-size` | 数据大小 | `16MB` | Spring MVC 宿主上控制 API 读取的最大请求体。更大的请求体不读取，直接返回 400；没有已放行主体的请求也不读取请求体。WebFlux 上由 `spring.codec.max-in-memory-size` 限制请求体。 |
 
 ## 审计 {#audit}
 

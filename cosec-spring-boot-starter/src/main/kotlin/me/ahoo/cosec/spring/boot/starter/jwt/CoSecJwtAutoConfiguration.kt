@@ -13,7 +13,6 @@
 package me.ahoo.cosec.spring.boot.starter.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.authentication.CompositeAuthentication
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
@@ -50,10 +49,6 @@ import org.springframework.context.annotation.Configuration
     JwtProperties::class,
 )
 class CoSecJwtAutoConfiguration {
-
-    companion object {
-        private val log = KotlinLogging.logger {}
-    }
 
     @Bean
     @ConditionalOnMissingBean
@@ -93,19 +88,16 @@ class CoSecJwtAutoConfiguration {
         )
     }
 
+    /**
+     * Reached only without `cosec-cocache`, whose token store comes first: revocation is always on (RFC 0008 S1b), and a
+     * store that records nothing would make logout silently do nothing, so startup fails instead.
+     */
     @Bean
     @ConditionalOnMissingBean
-    fun cosecTokenStore(jwtProperties: JwtProperties): TokenStore {
-        if (jwtProperties.tokenRevocation.enabled) {
-            log.warn {
-                "Token revocation is enabled but no TokenStore implementation is available, " +
-                    "so logout will NOT take effect. " +
-                    "Please add the cosec-cocache dependency (the cosec-spring-boot-starter cacheSupport Gradle feature) " +
-                    "to provide the Redis-backed CoCacheTokenStore."
-            }
-        }
-        return TokenStore.NoOp
-    }
+    fun cosecTokenStore(): TokenStore = throw IllegalStateException(
+        "JWT is enabled, but no TokenStore records revoked tokens: add cosec-cocache (the starter's cacheSupport " +
+            "feature) or a TokenStore bean, or set ${JwtProperties.PREFIX}.enabled=false."
+    )
 
     @Bean
     @ConditionalOnMissingBean

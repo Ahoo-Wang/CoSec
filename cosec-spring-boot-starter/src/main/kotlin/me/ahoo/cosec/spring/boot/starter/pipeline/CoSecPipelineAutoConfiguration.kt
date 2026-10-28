@@ -14,7 +14,6 @@
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import com.auth0.jwt.algorithms.Algorithm
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.apikey.ApiKeyReader
 import me.ahoo.cosec.apikey.ApiKeyStore
 import me.ahoo.cosec.apikey.InMemoryApiKeyStore
@@ -98,7 +97,7 @@ class CoSecPipelineAutoConfiguration {
         val token = algorithm.ifAvailable?.let {
             TokenAuthenticator(
                 JwtTokenVerifier(it),
-                revocationReader(revocationReader, tokenStore, environment),
+                revocationReader(revocationReader, tokenStore),
                 revocationSkew = revocationProperties.skew,
             )
         } ?: NO_TOKEN
@@ -166,8 +165,6 @@ class CoSecPipelineAutoConfiguration {
     fun cosecAuthorizationChecker(pipeline: Pipeline): AuthorizationChecker = AuthorizationChecker(pipeline)
 
     companion object {
-        private val log = KotlinLogging.logger {}
-
         /** No token verifier: a request without a token is anonymous, one with a token is rejected. */
         private val NO_TOKEN = Authenticator { credentials ->
             if (credentials.token == null) {
@@ -178,28 +175,18 @@ class CoSecPipelineAutoConfiguration {
         }
 
         /**
-         * The reader of revoked tokens and subjects (RFC 0008 §4.4: never [RevocationReader.NONE] by omission): a
-         * [RevocationReader] bean, else the CoCache token store's. With `cosec.jwt.token-revocation.enabled` and neither,
-         * startup fails: revocation would silently do nothing.
+         * The reader of revoked tokens and subjects, always (RFC 0008 S1b): a [RevocationReader] bean, else the CoCache
+         * token store's. With neither, startup fails: the starter never reads revocations from nothing.
          */
         internal fun revocationReader(
             reader: ObjectProvider<RevocationReader>,
             tokenStore: ObjectProvider<TokenStore>,
-            environment: Environment,
         ): RevocationReader {
             reader.ifAvailable?.let { return it }
-            CoCacheRevocation.readerOf(tokenStore.ifAvailable)?.let { return it }
-            val enabled = environment.getProperty(
-                JwtProperties.PREFIX + ".token-revocation.enabled",
-                Boolean::class.java,
-                false
-            )
-            check(!enabled) {
-                "Token revocation is enabled, but no revocation reader is available: add cosec-cocache " +
-                    "(the starter's cacheSupport feature) or a RevocationReader bean."
+            return checkNotNull(CoCacheRevocation.readerOf(tokenStore.ifAvailable)) {
+                "Tokens are verified, but no revocation reader is available: add cosec-cocache (the starter's " +
+                    "cacheSupport feature) or a RevocationReader bean, or set ${JwtProperties.PREFIX}.enabled=false."
             }
-            log.warn { "Token revocation is off: a revoked token is accepted until it expires." }
-            return RevocationReader.NONE
         }
 
         /** The API keys the pipeline reads: an [ApiKeyReader] bean, else the in-memory store's. */

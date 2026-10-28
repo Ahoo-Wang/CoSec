@@ -248,6 +248,9 @@ fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source
 - 把 `CoSec-Request-Id` 转发给下游服务，让下游日志使用和网关相同的请求 ID；
 - 把匹配到的路由 ID 作为[请求属性](#request-attributes) `cosec.audit.routeId` 添加到请求上。
 
+如果网关宿主同时提供控制面的路由（`control-support`），starter 会额外注册一个只作用于 `cosec.control.http.base-path` 的
+`PipelineWebFilter`，因为网关的过滤器只对网关路由生效。网关宿主上的 actuator 端点不受 CoSec 保护：请用管理端口或网络策略保护它们。
+
 网关后面的服务不必再次授权：它们可以从转发来的令牌中读取主体，而不校验签名。配置方法以及什么情况下这样做是安全的，见
 [网关之后](./authentication.md#behind-a-gateway)。
 

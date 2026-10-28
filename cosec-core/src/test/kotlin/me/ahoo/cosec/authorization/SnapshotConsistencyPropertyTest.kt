@@ -135,7 +135,7 @@ class SnapshotConsistencyPropertyTest {
                     }
                 }
             }
-            for (revision in 2L..REVISIONS) {
+            for (revision in 2L..revisions) {
                 store.put(SnapshotKey.Policies, policies(revision))
                 store.put(SnapshotKey.App("app"), app(revision))
                 // Let the readers evaluate between revisions, however loaded the machine is.
@@ -150,14 +150,19 @@ class SnapshotConsistencyPropertyTest {
             readers.shutdown()
         }
         violations.assert().isEmpty()
-        evaluations.get().assert().isGreaterThan(REVISIONS.toInt())
+        evaluations.get().assert().isGreaterThan(revisions.toInt())
         // The readers must have evaluated against many distinct (policies, app) revision pairs, or nothing was tested.
         seen.size.assert().isGreaterThan(10)
     }
 
     companion object {
         private const val READERS = 4
-        private const val REVISIONS = 200L
+
+        /**
+         * Revisions published while the readers evaluate. propertyStress raises it (RFC 0008 §3.5): each revision is a
+         * publish and a recompile of both documents, so one per thousand of its cases.
+         */
+        private val revisions: Long = maxOf(200L, Integer.getInteger("cosec.property.iterations", 0) / 1000L)
 
         /** Three statements in each of two policies, two grants and a wildcard over three permissions. */
         private const val RULES_PER_EVALUATION = 3 + 3 + 2 + 3

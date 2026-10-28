@@ -12,11 +12,13 @@
  */
 package me.ahoo.cosec.spring.boot.starter.apikey
 
+import me.ahoo.cosec.apikey.ApiKeyReader
 import me.ahoo.cosec.apikey.ApiKeyStore
 import me.ahoo.cosec.apikey.InMemoryApiKeyStore
+import me.ahoo.cosec.cache.RedisApiKeyReader
 import me.ahoo.cosec.cache.RedisApiKeyStore
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.authorization.CoSecAuthorizationAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -24,15 +26,19 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.data.redis.core.StringRedisTemplate
 
 /**
- * API keys for machine clients, active only with `cosec.api-key.enabled=true`. Provides the [ApiKeyStore];
- * [CoSecAuthorizationAutoConfiguration] then resolves keys ahead of the token parser.
+ * API keys for machine clients, active only with `cosec.api-key.enabled=true`. Provides the [ApiKeyStore] keys are
+ * managed through and, for Redis, the [ApiKeyReader] the pipeline reads them with ([CoSecPipelineAutoConfiguration]).
  */
 @AutoConfiguration(
-    before = [CoSecAuthorizationAutoConfiguration::class],
-    afterName = ["org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration"],
+    before = [CoSecPipelineAutoConfiguration::class],
+    afterName = [
+        "org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration",
+        "org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration",
+    ],
 )
 @ConditionalOnCoSecEnabled
 @ConditionalOnProperty(value = [ApiKeyProperties.ENABLED_KEY], havingValue = "true")
@@ -59,5 +65,13 @@ class CoSecApiKeyAutoConfiguration {
             stringRedisTemplate: StringRedisTemplate,
             apiKeyProperties: ApiKeyProperties
         ): ApiKeyStore = RedisApiKeyStore(stringRedisTemplate, apiKeyProperties.keyPrefix)
+
+        /** Reads without blocking, since the pipeline may look a key up on an event loop. */
+        @Bean
+        @ConditionalOnMissingBean
+        fun redisApiKeyReader(
+            redisTemplate: ReactiveStringRedisTemplate,
+            apiKeyProperties: ApiKeyProperties
+        ): ApiKeyReader = RedisApiKeyReader(redisTemplate, apiKeyProperties.keyPrefix)
     }
 }

@@ -162,8 +162,8 @@ fun refresh(@RequestBody credentials: RefreshCredentials): Mono<out CompositeTok
 
 ## 登出与吊销 {#logout-and-revocation}
 
-JWT 是无状态的：不做额外处理的话，令牌在过期之前一直有效。要让登出立即生效，设置
-`cosec.jwt.token-revocation.enabled=true` 启用吊销。它需要 `cache-support`：没有的话 starter 会记一条警告，登出不起作用。
+JWT 是无状态的：不做额外处理的话，令牌在过期之前一直有效。为了让登出立即生效，8.0 的吊销始终开启，没有开关。它需要
+`cache-support`，或者应用自己提供的 `TokenStore` 与 `RevocationReader` bean。两者都没有时启动失败：不允许登出什么都不做。
 
 在登出接口中调用 `TokenRevoker.revoke(accessToken)`。它先校验令牌，然后把令牌的 `jti` 记录到 Redis，保留时长为刷新令牌的
 有效期。此后每个实例都以 `Token Invalid` 拒绝这个访问令牌，刷新它也会失败。要在访问令牌过期之前吊销：已过期的令牌无法吊销，
@@ -190,8 +190,7 @@ JWT 是无状态的：不做额外处理的话，令牌在过期之前一直有�
   而继续有效。请保持时钟同步，或者传入比当前时间晚几秒的 `issuedBefore`。
 - 吊销记录保留到 `issuedBefore` 之后一个刷新令牌有效期。之后用更早的 `issuedBefore` 再次调用，不会缩短它，两个实例同时吊销同一个
   主体时也不会。
-- 它与吊销单个令牌一样，需要 `cosec.jwt.token-revocation.enabled=true` 和 `cache-support`。存储无法记录时，它抛出
-  `UnsupportedOperationException`，而不是什么都不做。
+- 它与吊销单个令牌需要同样的存储。无法记录它的 `TokenStore` 抛出 `UnsupportedOperationException`，而不是什么都不做。
 - 检查的行为与上面相同：失效消息丢失时，本地的"未吊销"结果最多保留 30 秒；Redis 不可达时放行令牌。
 
 ## API key {#api-keys}

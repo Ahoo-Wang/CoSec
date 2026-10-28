@@ -273,6 +273,11 @@ adapter does, `AuthorizationGatewayFilter`:
 - forwards `CoSec-Request-Id` to the downstream service, so its logs share the gateway's request id;
 - adds the matched route id as the [request attribute](#request-attributes) `cosec.audit.routeId`.
 
+On a gateway host that also serves the control plane's routes (`control-support`), the starter adds a
+`PipelineWebFilter` limited to `cosec.control.http.base-path`, because the gateway's filter runs on gateway routes
+only. Actuator endpoints are not covered by CoSec on a gateway host: protect them with the management port or network
+policy.
+
 Services behind the gateway do not need to authorize again: they can read the principal from the forwarded token
 without verifying its signature. [Behind a gateway](./authentication.md#behind-a-gateway) shows the configuration
 and when it is safe.

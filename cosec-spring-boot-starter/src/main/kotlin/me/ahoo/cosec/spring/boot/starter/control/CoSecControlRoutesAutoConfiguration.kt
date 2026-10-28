@@ -19,17 +19,32 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlHttpRequest
 import me.ahoo.cosec.control.api.ControlHttpResponse
+import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.ProblemType
 import me.ahoo.cosec.runtime.RequestSecurity
+import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineWebAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
+import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
+import me.ahoo.cosec.webflux.PipelineWebFilter
+import me.ahoo.cosec.webflux.ReactiveXForwardedRemoteIpResolver
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.Ordered
 import org.springframework.http.MediaType
+import org.springframework.web.server.ServerWebExchange
+import org.springframework.web.server.WebFilter
+import org.springframework.web.server.WebFilterChain
+import reactor.core.publisher.Mono
+import java.io.InputStream
 import org.springframework.web.reactive.function.server.RequestPredicates as ReactivePredicates
 import org.springframework.web.reactive.function.server.RouterFunction as ReactiveRouterFunction
 import org.springframework.web.reactive.function.server.RouterFunctions as ReactiveRouterFunctions
@@ -91,10 +106,18 @@ class CoSecControlRoutesAutoConfiguration {
             properties: ControlProperties
         ): ServletRouterFunction<ServletServerResponse> {
             val base = basePathOf(properties)
+            val maxBodySize = properties.http.maxBodySize.toBytes()
             return ServletRouterFunctions.route(ServletPredicates.path("$base/**")) { request ->
                 val servlet = request.servletRequest()
                 val security = RequestSecurity.of(servlet.getSecurityContext())
-                val body = servlet.inputStream.use { it.readAllBytes() }
+                // Nothing is read for a request no permitted principal stands behind (ControlHttp answers 401), and
+                // never more than max-body-size: the body is read before ControlHttp authorizes the action.
+                val body = if (security == null) {
+                    EMPTY
+                } else {
+                    readBody(servlet.inputStream, maxBodySize)
+                        ?: return@route tooLarge(maxBodySize)
+                }
                 val query = request.params().toSingleValueMap()
                 // A servlet thread is the caller's own: waiting on it blocks no event loop.
                 val response: ControlHttpResponse = runBlocking(Dispatchers.Default) {
@@ -110,11 +133,79 @@ class CoSecControlRoutesAutoConfiguration {
         }
     }
 
+    /**
+     * On a Spring Cloud Gateway host the gateway's global filter runs on its routes only, so the control routes would
+     * never pass the pipeline and every call would be 401. A [PipelineWebFilter] limited to the control base path
+     * authorizes them as on a WebFlux host; the gateway's own routes keep the gateway filter, and actuator endpoints
+     * stay outside CoSec, as before.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
+    @ConditionalOnClass(name = ["me.ahoo.cosec.webflux.PipelineWebFilter", GATEWAY_GLOBAL_FILTER])
+    class GatewayHost {
+        @Bean
+        fun cosecControlPipelineWebFilter(
+            pipeline: Pipeline,
+            contributors: ObjectProvider<BridgeContextContributor>,
+            authorization: RuntimeAuthorizationProperties,
+            properties: ControlProperties,
+        ): ControlRoutesWebFilter = ControlRoutesWebFilter(
+            PipelineWebFilter(
+                pipeline,
+                contributors.orderedStream().toList(),
+                ReactiveXForwardedRemoteIpResolver(authorization.remoteIp.maxTrustedIndex),
+                CoSecPipelineWebAutoConfiguration.hostOf(authorization),
+            ),
+            basePathOf(properties),
+        )
+    }
+
     internal companion object {
         private val EMPTY = ByteArray(0)
+
+        /** At most [max] bytes of [input], or null when it holds more. */
+        fun readBody(input: InputStream, max: Long): ByteArray? = input.use {
+            val limit = max.coerceAtMost(Int.MAX_VALUE - 1L).toInt()
+            val bytes = it.readNBytes(limit + 1)
+            bytes.takeIf { read -> read.size <= limit }
+        }
+
+        fun tooLarge(max: Long): ServletServerResponse = ServletServerResponse.status(
+            ProblemType.INVALID_REQUEST.status
+        )
+            .contentType(MediaType.parseMediaType(ControlHttp.PROBLEM_JSON))
+            .body(
+                mapOf(
+                    "type" to ProblemType.INVALID_REQUEST.uri,
+                    "title" to ProblemType.INVALID_REQUEST.title,
+                    "status" to ProblemType.INVALID_REQUEST.status,
+                    "code" to ProblemType.INVALID_REQUEST.code,
+                    "detail" to "The request body is larger than ${ControlProperties.PREFIX}.http.max-body-size ($max bytes).",
+                ),
+            )
 
         fun basePathOf(properties: ControlProperties): String = "/" + properties.http.basePath.trim('/')
 
         fun relative(path: String, base: String): String = path.removePrefix(base).ifEmpty { "/" }
     }
+}
+
+/** [delegate] for the requests under [basePath] only; every other request goes on untouched. */
+class ControlRoutesWebFilter(
+    private val delegate: PipelineWebFilter,
+    private val basePath: String
+) : WebFilter, Ordered {
+    override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
+        val path = exchange.request.path.pathWithinApplication().value()
+        return if (path == basePath || path.startsWith("$basePath/")) {
+            delegate.filter(
+                exchange,
+                chain
+            )
+        } else {
+            chain.filter(exchange)
+        }
+    }
+
+    override fun getOrder(): Int = delegate.order
 }

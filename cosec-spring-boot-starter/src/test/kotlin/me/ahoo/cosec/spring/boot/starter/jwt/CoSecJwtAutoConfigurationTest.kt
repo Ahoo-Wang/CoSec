@@ -42,6 +42,7 @@ class CoSecJwtAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
             .withBean(StringIdGenerator::class.java, { MockIdGenerator.INSTANCE })
+            .withBean(TokenStore::class.java, { RecordingTokenStore() })
             .withUserConfiguration(
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecJwtAutoConfiguration::class.java,
@@ -61,6 +62,7 @@ class CoSecJwtAutoConfigurationTest {
             .withPropertyValues(
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
+            .withBean(TokenStore::class.java, { RecordingTokenStore() })
             .withUserConfiguration(
                 CoSecJwtAutoConfiguration::class.java,
             )
@@ -112,6 +114,7 @@ class CoSecJwtAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
                 "${JwtProperties.PREFIX}.token-validity.refresh=PT72H",
             )
+            .withBean(TokenStore::class.java, { RecordingTokenStore() })
             .withUserConfiguration(
                 CoSecJwtAutoConfiguration::class.java,
             )
@@ -119,13 +122,29 @@ class CoSecJwtAutoConfigurationTest {
                 AssertionsForInterfaceTypes.assertThat(context)
                     .hasSingleBean(TokenStore::class.java)
                     .hasSingleBean(TokenRevoker::class.java)
-                context.getBean(TokenStore::class.java).assert().isSameAs(TokenStore.NoOp)
                 context.getBean(TokenVerifier::class.java)
                     .assert()
                     .isInstanceOf(RevocableTokenVerifier::class.java)
                 val revoker = context.getBean(TokenRevoker::class.java)
                 revoker.assert().isInstanceOf(DefaultTokenRevoker::class.java)
                 ReflectionTestUtils.getField(revoker, "revocationTtl").assert().isEqualTo(refreshValidity)
+            }
+    }
+
+    /** Revocation is always on: without a store that records it, logout would silently do nothing. */
+    @Test
+    fun contextFailsWithoutTokenStore() {
+        contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+                // A switch that no longer exists turns nothing off.
+                "${JwtProperties.PREFIX}.token-revocation.enabled=false",
+            )
+            .withUserConfiguration(
+                CoSecJwtAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                context.startupFailure!!.stackTraceToString().assert().contains("no TokenStore records revoked tokens")
             }
     }
 
@@ -147,4 +166,14 @@ class CoSecJwtAutoConfigurationTest {
                 context.getBean(TokenStore::class.java).assert().isSameAs(customTokenStore)
             }
     }
+}
+
+private class RecordingTokenStore : TokenStore {
+    private val revoked = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    override fun revoke(tokenId: String, ttl: Duration) {
+        revoked += tokenId
+    }
+
+    override fun isRevoked(tokenId: String): Boolean = tokenId in revoked
 }

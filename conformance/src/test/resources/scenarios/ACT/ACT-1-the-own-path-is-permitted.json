@@ -1,0 +1,63 @@
+{
+  "rules": [
+    "ACT-1"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The near miss: alice on /users/alice/orders, where the captured value equals subject.id.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "own",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/users/{u}/**",
+                "condition": {
+                  "eq": [
+                    "resource.var.u",
+                    {
+                      "attr": "subject.id"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "own",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "own"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/users/alice/orders",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "issuedAt": "2026-10-01T00:00:00Z"
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

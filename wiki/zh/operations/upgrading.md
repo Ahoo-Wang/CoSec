@@ -27,6 +27,20 @@ URL 查询字符串，解码方式与 WebFlux 和 Gateway 相同，并且永远�
 把这些作为表单字段发送的客户端，必须改为通过请求头或查询字符串发送。以这种方式匹配表单字段的条件不再匹配：allow 不再放行，
 deny 也不再拒绝。把这类检查移到应用中、在应用读取请求体之后进行；授权过滤器不能读取请求体。
 
+### 令牌吊销始终开启 {#token-revocation-is-always-on}
+
+`cosec.jwt.token-revocation.enabled` 已删除。启用 JWT 时，每个令牌都要检查是否已吊销；没有任何东西能回答这个检查时，启动失败：
+加上 `cache-support`（它带来 Redis 吊销存储），或者注册自己的 `TokenStore` 和 `RevocationReader` bean。以前没有
+`cache-support` 时，starter 使用一个什么都不记录的存储，登出悄无声息地不起作用。只签发令牌、从不校验令牌的服务可以改为设置
+`cosec.jwt.enabled=false`（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。
+
+### 读不到 Redis 的驱逐策略时启动失败 {#startup-fails-when-redis-s-eviction-policy-cannot-be-read}
+
+启动时 CoSec 读取 Redis 的 `maxmemory-policy`，不是 `noeviction` 就拒绝启动，因为被驱逐的策略文档会让其中的 DENY 悄无声息地失效。
+以前 `CONFIG GET` 失败或不被允许时（某些托管 Redis 就是这样），检查会悄无声息地通过。现在这种情况也会启动失败；CoCache
+后端是包装器或检查读不了的自定义后端时同样如此。如果你已经自行设置了 `noeviction`，请设置
+`cosec.authorization.snapshot.eviction-check=warn`：启动继续，并记录一条以 `!!!` 开头的警告。
+
 ## 7.0.0 到 7.0.1 {#_7-0-0-to-7-0-1}
 
 Redis `RateLimiter` bean 的名称由 `redisRateLimiter` 改为 `cosecRedisRateLimiter`；旧名称与 Spring Cloud Gateway 使用的名称相同

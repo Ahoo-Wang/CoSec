@@ -31,6 +31,22 @@ Clients that send these as form fields must send them as headers or in the query
 form field this way no longer matches: an allow stops allowing, and a deny stops denying. Move such checks into the
 application, after it has read the body; an authorization filter must not read request bodies.
 
+### Token revocation is always on {#token-revocation-is-always-on}
+
+`cosec.jwt.token-revocation.enabled` is gone. With JWT enabled, every token is checked for revocation, and startup
+fails when nothing can answer that check: add `cache-support`, which brings the Redis revocation store, or register a
+`TokenStore` and a `RevocationReader` bean of your own. Before, without `cache-support` the starter used a store that
+records nothing, so logout silently did nothing. A service that only issues tokens and never verifies them can set
+`cosec.jwt.enabled=false` instead ([Logout and revocation](../integration/authentication.md#logout-and-revocation)).
+
+### Startup fails when Redis's eviction policy cannot be read {#startup-fails-when-redis-s-eviction-policy-cannot-be-read}
+
+At startup CoSec reads Redis's `maxmemory-policy` and refuses to start unless it is `noeviction`, because an evicted
+policy document could silently drop its DENY statements. Before, when `CONFIG GET` failed or was not allowed, as on
+some managed Redis services, the check passed silently. It now fails startup in that case too, and also when the
+CoCache backend is a wrapper or a custom backend it cannot read. If you have set `noeviction` yourself, set
+`cosec.authorization.snapshot.eviction-check=warn`: startup goes on and logs a warning that starts with `!!!`.
+
 ## 7.0.0 to 7.0.1
 
 The Redis `RateLimiter` bean is now named `cosecRedisRateLimiter` instead of `redisRateLimiter`, the name Spring Cloud
