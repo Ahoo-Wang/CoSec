@@ -79,7 +79,7 @@ description. They are listed under 💥 Breaking Changes and require a major ver
 - **Coverage gates** (Codecov): changed lines need **≥ 80 %** coverage, and overall project coverage
   must not drop by more than 1 %.
 - **Performance claims** come with a JMH benchmark (`src/jmh`), e.g.
-  `./gradlew :cosec-core:jmh -PjmhIncludes=SimpleAuthorizationBenchmark`.
+  `./gradlew :cosec-engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark`.
   That task runs one short iteration; for a before/after comparison run the benchmark jar as described in
   [Measuring](https://cosec.ahoo.me/architecture/overview#measuring), including
   `-jvmArgsAppend -Dlogback.configurationFile=…`, or the forked JVMs log at DEBUG and skew the results.

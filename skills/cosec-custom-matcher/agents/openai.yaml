@@ -1,4 +1,4 @@
 interface:
-  display_name: "CoSec Custom Matchers"
-  short_description: "Build CoSec matcher extensions"
-  default_prompt: "Use $cosec-custom-matcher to implement and register a custom CoSec action or condition matcher."
+  display_name: "Extending CoSec"
+  short_description: "Build CoSec extension beans"
+  default_prompt: "Use $cosec-custom-matcher to implement and register a CoSec extension, such as an AttributeProvider, MembershipProvider or DecisionListener."

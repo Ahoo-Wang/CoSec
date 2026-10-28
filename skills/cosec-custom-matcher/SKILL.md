@@ -1,103 +1,163 @@
 ---
 name: cosec-custom-matcher
-description: Extend CoSec with custom ActionMatcher or ConditionMatcher implementations and register their factories through ServiceLoader or Spring. Do not use for policies that built-in matchers already express.
+description: Extend CoSec 8.0 with Spring beans - AttributeProvider (external ext.* attributes fetched per request), MembershipProvider (roles and attached policies kept outside tokens), DecisionListener (audit, metrics, alerts), RateLimiter (where permits are counted) and Authenticator (how tokens or API keys are verified). Use when the policy language and built-in features cannot express a requirement. Do not use for writing policy documents.
 ---
 
-# CoSec Custom Matchers
+# Extending CoSec
 
-Add a matcher only after confirming that the built-ins cannot express the rule. Prefer composing `path`, `bool`, and part matchers over new code. For quotas, write a rate limit rule (`cosec.limiter.locations`) instead of a stateful matcher, or implement the `RateLimiter` / `RateLimitRuleProvider` SPIs in `me.ahoo.cosec.limiter` to change where counters or rules live.
+Extend only after confirming that a document cannot express the rule: conditions, bindings and rate limit rules cover
+most needs (use `$cosec-policy-author`). CoSec 7.x custom action and condition matchers (`ActionMatcherFactory`,
+`ConditionMatcherFactory`) have no 8.0 equivalent: conditions are a fixed AST, and new facts enter evaluation as
+external attributes.
 
-## Extension contract
+Human-facing reference: https://cosec.ahoo.me/architecture/extending. In a CoSec checkout the SPIs live in
+`runtime/src/main/kotlin/me/ahoo/cosec/runtime/` (`attribute/`, `event/`, `ratelimit/`, `authn/`) and
+`cosec-core/src/main/kotlin/me/ahoo/cosec/membership/`; the starter wires them in
+`cosec-spring-boot-starter/.../pipeline/CoSecPipelineAutoConfiguration.kt` and
+`CoSecPipelineIntegrationAutoConfiguration.kt`. Inspect the target version's interfaces before writing code.
 
-- `ActionMatcher` and `ConditionMatcher` live in `cosec-api` and extend `RequestMatcher`.
-- Their factory interfaces and providers live in `cosec-core` under `me.ahoo.cosec.policy.action` and `me.ahoo.cosec.policy.condition`.
-- A factory's `type` is the object key used in policy JSON. It must not collide with another factory; later registration replaces the existing entry.
-- Do not change the SPI interfaces to add a matcher. Implement them and register the factory.
-- Keep matching synchronous and side-effect free. Authorization is a pure decision: matchers run for denied requests too, so a stateful control such as a quota belongs in `RateLimitingAuthorization`, not in a matcher.
-- Path variables are scoped to their statement. A matcher that reads them in code (`securityContext.getPathVariables()`) is not caught by the load-time `PathVariableScope` check, which only scans configuration strings; at run time it sees only the variables captured by its own statement's `path` action, and an empty map in policy/app permission conditions, under any other action, or inside an action matcher.
-- If a custom matcher has an unavoidable external side effect, skip it when `securityContext.isPolicyEvaluation` (`me.ahoo.cosec.policy`) is `true`: saving a policy validates it by running each condition once against a mock request.
+## Rules for every extension
 
-Before editing, inspect the target CoSec version's interfaces and the nearest built-in matcher. In a CoSec checkout, the authoritative files are:
+- **Never block the calling thread.** Every SPI is a Kotlin `suspend` function and may run on an event loop. Wrap a
+  blocking client with `withContext(yourBoundedDispatcher)`; never use `runBlocking`, `GlobalScope` or
+  `Dispatchers.IO` inside the pipeline.
+- **Report failure by throwing**, never by returning a default. CoSec turns a failure into the safe outcome (503 or the
+  statement's `onMissing`); a made-up "not blocked" or "no roles" answer can let a request through.
+- **Do not change the decision.** Extensions supply facts or observe outcomes; only documents decide.
+- Do not change the SPI interfaces; ask first if one seems insufficient.
 
-- `cosec-api/src/main/kotlin/me/ahoo/cosec/api/principal/RequestMatcher.kt`
-- `cosec-core/src/main/kotlin/me/ahoo/cosec/policy/action/`
-- `cosec-core/src/main/kotlin/me/ahoo/cosec/policy/condition/`
+## Registration
 
-## Minimal condition matcher
+The starter collects these beans:
 
-Use `AbstractConditionMatcher` when `negate` support is desirable. Parse and validate configuration once during construction, not on every request.
+| SPI | Package | Beans | Effect |
+|---|---|---|---|
+| `AttributeProvider` | `me.ahoo.cosec.runtime.attribute` | any number (ordered) | adds `ext.*` attributes to the catalog and fetches them |
+| `DecisionListener` | `me.ahoo.cosec.runtime.event` | any number, unique `name` | hears every decision event |
+| `MembershipProvider` | `me.ahoo.cosec.membership` | at most one | answers memberships for tokens marked `cosec.membership: "provider"` |
+| `RateLimiter` | `me.ahoo.cosec.runtime.ratelimit` | one; yours replaces the Redis or local limiter | counts rate-limit permits |
+| `Authenticator` | `me.ahoo.cosec.runtime.authn` | one; yours replaces the built-in token and API key authenticator | turns credentials into a principal |
+
+Declare them as ordinary `@Bean`s. There is no `META-INF/services` registration for these SPIs.
+
+## AttributeProvider: external attributes
+
+A provider declares `ext.<provider>.<name>` paths with a type (`STRING`, `BOOL`, `STRING_SET`, `IP`) and fetches
+their values when a request's statements need them:
 
 ```kotlin
-class PremiumUserConditionMatcher(configuration: Configuration) :
-    AbstractConditionMatcher(PremiumUserConditionMatcherFactory.TYPE, configuration) {
+class RiskAttributeProvider(private val risk: RiskClient) : AttributeProvider {
+    override val attributes = listOf(AttributeDeclaration("ext.risk.level", AttributeType.STRING))
+    override val timeout: Duration? = 200.milliseconds // kotlin.time; null uses cosec.authorization.attributes.timeout
 
-    private val requiredTier = configuration.getRequired("tier").asString()
-
-    override fun internalMatch(request: Request, securityContext: SecurityContext): Boolean {
-        val tier = securityContext.principal.attributes["tier"]?.toString()
-        return tier == requiredTier
+    override suspend fun fetch(request: AttributeRequest, names: Set<String>): Map<String, Any> {
+        val level = risk.level(request.subject.id, request.remoteIp) ?: return emptyMap() // absent, not failed
+        return mapOf("ext.risk.level" to level)
     }
 }
 
-class PremiumUserConditionMatcherFactory : ConditionMatcherFactory {
-    companion object {
-        const val TYPE = "premiumUser"
-    }
-
-    override val type: String = TYPE
-
-    override fun create(configuration: Configuration): ConditionMatcher =
-        PremiumUserConditionMatcher(configuration)
-}
-```
-
-Register it for non-Spring and Spring environments with:
-
-```text
-# src/main/resources/META-INF/services/me.ahoo.cosec.policy.condition.ConditionMatcherFactory
-com.example.cosec.PremiumUserConditionMatcherFactory
+@Bean
+fun riskAttributeProvider(risk: RiskClient): AttributeProvider = RiskAttributeProvider(risk)
 ```
 
 ```json
-{
-  "action": "/api/premium/**",
-  "condition": {
-    "premiumUser": { "tier": "gold" }
-  }
-}
+{ "effect": "deny", "action": "order:ship", "condition": { "eq": ["ext.risk.level", "high"] } }
 ```
 
-For an action matcher, use the same pattern with `AbstractActionMatcher`, `ActionMatcherFactory`, and:
+- A value left out is **absent** (comparisons with it are false). A thrown exception, a timeout, or a value of the
+  wrong type makes every attribute asked for **unavailable**: each statement reading one follows its `onMissing`
+  (`indeterminate`, the default, answers 503 unless a DENY matches; `nomatch` treats the statement as not matching).
+- `AttributeRequest` carries only settled facts: subject, resolved scope (null in stage A), action, resource, remote IP,
+  request id, device id. It never carries another attribute's value.
+- `AttributeDeclaration(..., stage = Stage.A)` fetches on every request before the scope is resolved; keep it for
+  what decides what to load (the blacklist). The default, stage B, fetches only what the request's statements read.
+- Documents compile only against paths some registered provider declares, or the platform document declares in
+  `attributes` (declare them there so every instance and the control plane compile the same documents). A path declared twice, by two
+  providers, fails startup. A document reading a path this instance cannot fetch makes those requests unavailable.
+- Built-in providers: `Ip2RegionAttributeProvider` (`ext.ip2region.country`, `.province`, `.city`, `.isp`, with
+  `ip2region-support`) and `BlacklistAttributeProvider(source)` (`ext.blacklist.principal`, `.ip`, `.device`; register
+  it yourself with a `BlacklistSource`, such as `InMemoryBlacklistSource`). A blocked request meets the built-in DENY;
+  a failing blacklist source is 503, never "not blocked".
 
-```text
-src/main/resources/META-INF/services/me.ahoo.cosec.policy.action.ActionMatcherFactory
-```
+## MembershipProvider: memberships outside tokens
 
-## Spring registration
-
-When a factory needs Spring-managed dependencies, expose it as a bean instead of adding a service file:
+For principals whose roles change often, must be revoked at once, or do not fit in a token. Only tokens carrying
+`cosec.membership: "provider"` (and no `roles`/`policies` claims) are asked:
 
 ```kotlin
 @Bean
-fun premiumUserConditionMatcherFactory(): ConditionMatcherFactory =
-    PremiumUserConditionMatcherFactory()
+fun membershipProvider(directory: Directory): MembershipProvider = MembershipProvider { tenant, principal ->
+    val grants = directory.grants(tenant.value, principal.value) // suspend, non-blocking
+    Memberships(
+        Memberships.Source.PROVIDER,
+        roles = grants.rolesBySpace.mapKeys { SpaceId(it.key) }.mapValues { (_, r) -> r.map(::RoleId).toSet() },
+        attachments = grants.policies.map(::PolicyId),
+    )
+}
 ```
 
-`MatcherFactoryRegister` registers all action and condition factory beans at startup. Do not register the same type through both mechanisms unless replacement is intentional.
+Answer `Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList())` for an unknown principal. A thrown
+exception or a late answer (`cosec.authorization.membership.timeout`, default 500ms) fails the request with 503; it
+never counts as "no memberships"; so does an answer whose source is not `PROVIDER`. The default space's key is
+`SpaceId.DEFAULT` (`""`).
+`InMemoryMembershipProvider` exists for tests.
 
-## Useful API surface
+## DecisionListener: observing decisions
 
-Read configuration through `get`/`getRequired` followed by `asString`, `asBoolean`, `asInt`, `asLong`, `asDouble`, `asList`, or `asMap`.
+```kotlin
+@Bean
+fun denyAlerts(alerts: Alerts): DecisionListener = object : DecisionListener {
+    override val name = "deny-alerts"
+    override suspend fun onDecision(event: DecisionEvent) {
+        if (event.decision is Decision.Deny && event.subject.authenticated) alerts.record(event.requestId, event.by)
+    }
+}
+```
 
-Request matching commonly uses `path`, `method`, `remoteIp`, `origin`, `referer`, `appId`, `spaceId`, `deviceId`, `requestId`, headers, queries, cookies, and request attributes. Context matching commonly uses principal ID/authentication/roles/policies/attributes, tenant ID, and context attributes. Inspect the target interfaces rather than assuming fields from another CoSec version.
+- `BEST_EFFORT` (default): queued off the request path into a bounded queue; a full queue drops the event.
+- `Delivery.REQUIRED`: runs before the response, within `cosec.audit.required.timeout` (1s); a failure or timeout turns
+  a permit into 503. Make it idempotent by `event.id`. Use it only for an audit that must not be lost.
+- Events carry the decision, deciding statement (`by`) and binding (`via`), break-glass flag, snapshot revisions,
+  subject, scope, action, resource, request summary, attribute statuses (never values), trace ids. They carry no
+  token, header or external attribute value.
+- Built-in listeners: the audit log (`cosec.audit.enabled`), Kafka (`kafka-support`), Micrometer, OpenTelemetry,
+  shadow. To reuse a 7.x `AuditEventSink`, wrap it: `AuditListener.of(sink, "my-audit")`.
 
-## Existing type names
+## RateLimiter: where permits are counted
 
-Do not replace these unless the user explicitly wants an override:
+```kotlin
+fun interface RateLimiter {
+    suspend fun tryAcquire(ruleId: String, bucket: String, limit: RateLimitSpec): RateLimitResult
+}
+```
 
-- Actions: `all`, `path`, `composite`
-- Conditions: `all`, `authenticated`, `inRole`, `inTenant`, `eq`, `contains`, `startsWith`, `endsWith`, `in`, `regular`, `path`, `bool`, `spel`, `ognl`, `time`
+Implement `me.ahoo.cosec.runtime.ratelimit.RateLimiter` (not the older `me.ahoo.cosec.limiter.RateLimiter`). The rules
+stay in the documents; the limiter only counts. Return `RateLimitResult(allowed, limit, remaining, resetAfter)`; use
+`RateLimiter.window(limit)` for the same sliding window as the built-in limiters. Throw when the store fails: the
+rule's `strictFailure` then decides (skip, or 503). The built-ins are `ReactiveRedisRateLimiter` (with a
+`ReactiveStringRedisTemplate`) and `LocalRateLimiter` (per JVM).
+
+## Authenticator: verifying credentials
+
+```kotlin
+fun interface Authenticator {
+    suspend fun authenticate(credentials: Credentials): AuthnResult
+}
+```
+
+`Credentials` holds the bearer token (`Authorization` header, cookie, or query when allowed) and the API key header.
+Return `AuthnResult.Authenticated(AuthenticatedPrincipal(id, tenant, memberships, attributes), "method")`,
+`Anonymous` (no credentials), `Rejected(reason)` (401 `token-*` on deny), or `Unavailable(cause)` (503). Memberships
+you pass have source `Memberships.Source.CLAIMS` (`MembershipClaims.parse(roles, policies)` builds them from
+`role`/`role@space` strings); pass `null` to ask the `MembershipProvider`. A bean of yours replaces the built-in `CompositeAuthenticator`
+(JWT with revocation, plus API keys when enabled): compose it yourself, for example
+`CompositeAuthenticator(myTokenAuthenticator, apiKeyAuthenticator)`, if you still need API keys.
 
 ## Verification
 
-Add one focused test that creates the matcher through its factory and checks a match and non-match. If registration changed, also deserialize one policy using the custom type so a missing service entry or Spring bean fails the test. Run the narrow module test and the repository's static analysis command.
+- Unit-test the extension directly (`runTest`), including its failure path: a provider that throws, a listener that
+  times out, a limiter whose store fails.
+- Add one context test that starts the application with the bean and shows the effect end to end: a document reading
+  the `ext.*` path compiles and decides, a provider-marked token gets its roles, a listener receives the event.
+- Check that nothing blocks: in a CoSec checkout, `RuntimeBoundaryTest` and the BlockHound tests guard the built-ins;
+  run the module's `check` (tests and detekt).
