@@ -1,9 +1,9 @@
 # Rule: SNP-4
-# Mutant: a recompile skips loads in flight, and later loads keep the old compilation
-# Tests: :cosec-core:test --tests me.ahoo.cosec.snapshot.SnapshotRecompileTest --tests me.ahoo.cosec.snapshot.SnapshotInstallOrderPropertyTest
+# Mutant: a load after a recompile does not know its entry compiled with the old inputs
+# Tests: :cosec-core:test --tests me.ahoo.cosec.snapshot.SnapshotRecompileTest
 
 diff --git a/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt b/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
-index a985270f..1a63e18d 100644
+index 1060f1d9..03ec81ca 100644
 --- a/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
 +++ b/cosec-core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt
 @@ -692,7 +692,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
@@ -15,11 +15,3 @@ index a985270f..1a63e18d 100644
              return Load(known, force, result, epoch, recompiles)
          }
  
-@@ -705,7 +705,6 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
-                 return false
-             }
-             if (inFlight != null) {
--                dirty = true
-                 return false
-             }
-             val known = installed ?: return false
