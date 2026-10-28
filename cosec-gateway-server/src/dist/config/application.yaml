@@ -13,4 +13,5 @@ cosec:
     kafka:
       enabled: false
   authentication:
-    enabled: false
+    login:
+      enabled: false

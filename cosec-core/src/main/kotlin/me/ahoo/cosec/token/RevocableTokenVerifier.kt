@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.token
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.api.token.TokenPrincipal
@@ -24,9 +23,7 @@ import java.time.Duration
 /**
  * [TokenVerifier] decorator that rejects revoked tokens.
  *
- * Both the request path ([verify] and its [toPrincipal] alias used by
- * [me.ahoo.cosec.context.SecurityContextParser]) and the renewal path ([refresh])
- * consult the [TokenStore] after the delegate succeeds, so a logged-out token
+ * Both [verify] and the renewal path ([refresh]) consult the [TokenStore] after the delegate succeeds, so a logged-out token
  * can neither authenticate nor be refreshed back to life. The same holds for the
  * tokens of a principal revoked with [TokenRevoker.revokeSubject].
  *
@@ -58,20 +55,6 @@ class RevocableTokenVerifier(
         @Suppress("UNCHECKED_CAST")
         return tokenPrincipal as T
     }
-
-    /**
-     * Routes through [verify] so the revocation check cannot be bypassed.
-     *
-     * This override must stay explicit: `TokenVerifier by delegate` would otherwise
-     * forward this interface default method straight to the delegate, and the
-     * per-request path ([me.ahoo.cosec.context.SecurityContextParser]) calls it.
-     *
-     * @param accessToken the access token to convert
-     * @return the principal of the verified token
-     * @throws TokenVerificationException if the token is invalid
-     * @throws TokenRevokedException if the token has been revoked
-     */
-    override fun toPrincipal(accessToken: AccessToken): CoSecPrincipal = verify(accessToken)
 
     /**
      * @param T the expected principal type

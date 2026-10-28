@@ -29,7 +29,7 @@ internal class CoSecAuthenticationAutoConfigurationTest {
             .withUserConfiguration(CoSecAuthenticationAutoConfiguration::class.java)
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
-                    .hasSingleBean(AuthenticationProperties::class.java)
+                    .hasSingleBean(LoginProperties::class.java)
                     .hasSingleBean(CoSecAuthenticationAutoConfiguration::class.java)
                     .hasSingleBean(AuthenticationProvider::class.java)
                     .hasSingleBean(CompositeAuthentication::class.java)
@@ -39,11 +39,11 @@ internal class CoSecAuthenticationAutoConfigurationTest {
     @Test
     fun contextLoadsWhenDisable() {
         contextRunner
-            .withPropertyValues("${ConditionalOnAuthenticationEnabled.ENABLED_KEY}=false")
+            .withPropertyValues("${ConditionalOnLoginEnabled.ENABLED_KEY}=false")
             .withUserConfiguration(CoSecAuthenticationAutoConfiguration::class.java)
             .run { context: AssertableApplicationContext ->
                 AssertionsForInterfaceTypes.assertThat(context)
-                    .doesNotHaveBean(AuthenticationProperties::class.java)
+                    .doesNotHaveBean(LoginProperties::class.java)
                     .doesNotHaveBean(CoSecAuthenticationAutoConfiguration::class.java)
                     .doesNotHaveBean(AuthenticationProvider::class.java)
                     .doesNotHaveBean(CompositeAuthentication::class.java)
