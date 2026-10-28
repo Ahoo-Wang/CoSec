@@ -160,13 +160,14 @@
     },
     {
       "id": "CTL-16",
-      "source": "RFC 0007 §6.4; round-2 review R1",
-      "statement": "A shadow window's numbers are the sum of one report per instance, each that instance's latest cumulative report: an instance's report replaces only its own, and a second report of one instance, or a report of another window, keeps the window open instead of being counted.",
+      "source": "RFC 0007 §6.4; round-2 review R1 and its review",
+      "statement": "A shadow window's numbers are the sum of one report per instance, each that instance's latest cumulative report: an instance's report replaces only its own. A second report of one instance, a report of another window, a negative count, or no report from an instance seen reporting on the window keeps it open instead of being counted, and one instance's CANDIDATE_ERROR blocks the window by itself.",
       "level": "control",
       "pending": null,
       "guards": [
         "control:ControlRoundTwoFixesTest#a window sums one report per instance, and anything else keeps it open",
-        "cosec-cocache:CoCacheShadowTest#each instance's report has its own key, and one under another's key is not counted"
+        "cosec-cocache:CoCacheShadowTest#each instance's report has its own key, and one under another's key is not counted",
+        "control:ControlRoundTwoFixesTest#an instance seen reporting on a window must keep reporting until it closes"
       ]
     },
     {

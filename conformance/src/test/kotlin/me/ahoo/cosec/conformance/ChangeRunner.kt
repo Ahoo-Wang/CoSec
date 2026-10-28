@@ -46,6 +46,7 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome
 import me.ahoo.cosec.runtime.shadow.ShadowReport
+import me.ahoo.cosec.runtime.shadow.ShadowReportReader
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.Actor
@@ -78,6 +79,7 @@ import java.time.Instant
  *            { "publish": { "change": "c1", "ack": "summary" | { "NARROWED": 1 } } },
  *            { "rollback": { "change": "c2", "by": "walt", "document": "platform", "revision": 1 } },
  *            { "outage": true },   // every check is indeterminate until { "outage": false }
+ *            { "vanish": "i1" },   // i1 is taken off the reporters of every window, its report left
  *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } } ],
  * "expect": { "steps": ["CHECKED", "READY", "PUBLISHED"], "errors": { "c1": [] }, "heads": { "tenant:acme": 1 },
  *             "escalations": { "c1": ["NOT_COVERED"] } }
@@ -122,6 +124,14 @@ object ChangeRunner : ScenarioRunner {
         }
         private var next: ChangeId? = null
         private val reports = InMemoryShadowReports(clock)
+
+        /** Instances a `vanish` step took off the window's reporters, as an instance that can write them could. */
+        private val vanished = HashSet<String>()
+        private val reader = object : ShadowReportReader {
+            override suspend fun reports(window: String) = reports.reports(window).filter { it.instance !in vanished }
+
+            override suspend fun statuses() = reports.statuses()
+        }
         private val changes = Changes(
             store,
             revisions,
@@ -129,7 +139,7 @@ object ChangeRunner : ScenarioRunner {
             if (authorized) engine.authorizer else ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT },
             clock,
             ChangeOptions(fourEyes = node.get("options")?.get("fourEyes")?.bool() ?: false, shadow = shadowOptions()),
-            reports = reports,
+            reports = reader,
             // Break-glass is recorded by a REQUIRED listener before it is created (RFC 0007 §8).
             listeners = ChangeListeners(listOf(RecordingAudit)),
         )
@@ -166,6 +176,9 @@ object ChangeRunner : ScenarioRunner {
                 if (action == "advance") {
                     clock.now = clock.now.plus(Duration.parse(argument.text()))
                     "advanced"
+                } else if (action == "vanish") {
+                    vanished += argument.text()
+                    "vanished"
                 } else if (action == "outage") {
                     engine.outage = argument.bool()
                     if (engine.outage) "down" else "up"

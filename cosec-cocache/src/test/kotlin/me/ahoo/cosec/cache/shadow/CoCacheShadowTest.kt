@@ -128,7 +128,8 @@ class CoCacheShadowTest {
         reports.async().get("c1@1:i0").await()!!.counts.getValue(ShadowOutcome.NARROWED).assert().isEqualTo(1L)
         reports.async().get("c1@1:i1").await()!!.counts.getValue(ShadowOutcome.NARROWED).assert().isEqualTo(2L)
         reporters.async().get("c1@1").await().assert().isEqualTo(setOf("i0", "i1"))
-        // An instance whose entry was dropped from the window's reporters is back with its next report.
+        // An instance whose entry was dropped from the window's reporters is back with its next report (the control
+        // plane, which keeps every instance it has seen, refuses to close the window in the meantime).
         reporters.async().put("c1@1", setOf("i0")).await()
         sink.reports("c1@1").map { it.instance }.assert().containsExactly("i0")
         sink.write(report("i1", 3))
@@ -137,6 +138,13 @@ class CoCacheShadowTest {
         // A report under one instance's key that says it is another's is an error, never a sample.
         reports.async().put("c1@1:i1", report("i2", 9)).await()
         assertThrownBy<IllegalStateException> { runBlocking { sink.reports("c1@1") } }
+        // So is a listed instance whose report is gone: the instance that vanishes may be the one that saw errors.
+        reports.async().invalidate("c1@1:i1").await()
+        assertThrownBy<IllegalStateException> { runBlocking { sink.reports("c1@1") } }
+        // An id that would make a key ambiguous, or a negative count, is never written.
+        listOf(report("x:i3", 1), report("i3", -1), report("i3", 1).copy(window = "c1@1:i0")).forEach { bad ->
+            assertThrownBy<IllegalArgumentException> { runBlocking { sink.write(bad) } }
+        }
     }
 
     @Test

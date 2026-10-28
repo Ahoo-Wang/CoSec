@@ -154,11 +154,17 @@ class CoCacheCandidateStore(private val candidates: Cache<SnapshotKey, StoredCan
 
 /**
  * Shadow reports and instance statuses on Redis (RFC 0007 §6.4, §6.5). Each instance's report of a window has a key
- * of its own, which only that instance writes, replacing its previous cumulative report; the window's reporters are
- * only ever added to, with `putIfMatch` over the value read, and checked on every write, so that an entry lost from
- * them comes back with the instance's next report. A window's total is the sum of one report per instance (review R1). Statuses share one key, replaced with
- * `putIfMatch` over the value read, so that instances writing at once never lose each other's entries; statuses older
- * than a minute are dropped as they are written and ignored as they are read.
+ * of its own, `<window>:<instance>`, which only that instance writes, replacing its previous cumulative report; an
+ * instance id has no `:` ([ShadowReport.isInstanceId]) and a window id none either, so a key names one report only.
+ * The report is written first, then the instance is added to the window's reporters with `putIfMatch` over the value
+ * read; every write checks that it is still there. A window's total is the sum of one report per instance (review R1),
+ * and a listed instance without a report is an error, never left out.
+ *
+ * The reporters are a value every instance writes: an instance can remove another from them. The control plane keeps
+ * every instance it has seen with the change (`ShadowState.reporters`), so a removal after that is an error too; one
+ * before the control plane looks again is not detected. Statuses share one key, replaced with `putIfMatch` over the
+ * value read, so that instances writing at once never lose each other's entries; statuses older than a minute are
+ * dropped as they are written and ignored as they are read.
  */
 class CoCacheShadowReports(
     private val reports: Cache<String, ShadowReport>,
@@ -167,10 +173,13 @@ class CoCacheShadowReports(
     private val clock: Clock = Clock.systemUTC(),
 ) : ShadowReportSink, ShadowReportReader {
     override suspend fun write(report: ShadowReport) {
+        require(ShadowReport.isInstanceId(report.instance)) { "[${report.instance}] is not an instance id" }
+        require(report.window.isNotEmpty() && ':' !in report.window) { "[${report.window}] is not a window id" }
+        require(report.counts.values.all { it >= 0 }) { "A report's counts are never negative" }
+        reports.async().put(ShadowCacheSpecs.reportKey(report.window, report.instance), report).await()
         if (read(reporters, report.window)?.first?.contains(report.instance) != true) {
             update(reporters, report.window, { it + report.instance }, emptySet())
         }
-        reports.async().put(ShadowCacheSpecs.reportKey(report.window, report.instance), report).await()
     }
 
     override suspend fun write(status: InstanceStatus) {
@@ -181,20 +190,25 @@ class CoCacheShadowReports(
     }
 
     /**
-     * One report per instance that reported on [window]. A report stored under another instance's or window's key is
-     * an error, not a sample: the window cannot close on it (fail closed).
+     * One report per instance listed as having reported on [window]. A listed instance without a report (expired,
+     * removed), an id that is not an instance id, and a report stored under another instance's or window's key are
+     * errors, not samples: the window cannot close on them (fail closed).
      */
     override suspend fun reports(window: String): List<ShadowReport> {
         val instances = read(reporters, window)?.first.orEmpty()
+        check(
+            instances.all(ShadowReport::isInstanceId)
+        ) { "The reporters of window $window name an invalid instance id" }
         return coroutineScope {
             instances.sorted().map { instance ->
                 async {
-                    read(
-                        reports,
-                        ShadowCacheSpecs.reportKey(window, instance)
-                    )?.first?.also { checkOwner(it, window, instance) }
+                    val key = ShadowCacheSpecs.reportKey(window, instance)
+                    val report = checkNotNull(
+                        read(reports, key)?.first
+                    ) { "[$key] is listed as reported but has no report" }
+                    report.also { checkOwner(it, window, instance) }
                 }
-            }.awaitAll().filterNotNull()
+            }.awaitAll()
         }
     }
 

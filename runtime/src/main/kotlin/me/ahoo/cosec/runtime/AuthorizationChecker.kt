@@ -107,6 +107,10 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      *
      * It answers a decision and never a [RequestSecurity] (round-2 review R3): a permitted request is what routes trust,
      * so none is minted for a principal that did not make the request.
+     *
+     * **Server side only.** [principal] and [memberships] are taken as given, unchecked: pass only what the server
+     * itself recorded from an authenticated request (an approval in the control store), never a principal, attribute
+     * or membership a caller supplies. Otherwise a caller chooses whom it is checked as.
      */
     suspend fun decideAs(
         security: RequestSecurity,

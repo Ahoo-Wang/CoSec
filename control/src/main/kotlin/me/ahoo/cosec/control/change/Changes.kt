@@ -322,15 +322,22 @@ class Changes(
             return settle(change, ChangeState.CONFLICTED, from = setOf(ChangeState.SHADOWING))
         }
         @Suppress("TooGenericExceptionCaught")
-        val summary = try {
-            windows.close(state, clock.instant())
+        val look = try {
+            windows.look(state, clock.instant())
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             throw ChangeRejectedException(UNAVAILABLE, "the shadow reports of ${state.window} could not be read", e)
-        } ?: return change
+        }
+        // Every instance seen is kept, so that one dropped from the window's reporters later still has to report.
+        val seen = state.copy(reporters = look.reporters)
+        val summary = look.summary ?: return if (seen == state) {
+            change
+        } else {
+            transition(id, setOf(ChangeState.SHADOWING)) { it.copy(shadow = seen) }
+        }
         val closed = transition(id, setOf(ChangeState.SHADOWING)) {
-            it.copy(state = afterWindow(it), shadow = state.copy(closed = summary))
+            it.copy(state = afterWindow(it), shadow = seen.copy(closed = summary))
         }
         withdraw(closed)
         audit(ChangeEvent.Kind.SHADOWED, closed, closed.author)

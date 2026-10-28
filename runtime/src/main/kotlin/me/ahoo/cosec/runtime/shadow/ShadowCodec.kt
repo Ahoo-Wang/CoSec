@@ -116,12 +116,16 @@ object ShadowCodec {
 
     private fun report(node: JsonNode): ShadowReport {
         node.only("window", "instance", "counts", "samples", "baseRevisions", "first", "last")
+        val instance = node.need("instance").text()
+        if (!ShadowReport.isInstanceId(instance)) {
+            malformed("[$instance] is not an instance id")
+        }
         return ShadowReport(
             window = node.need("window").text(),
-            instance = node.need("instance").text(),
+            instance = instance,
             counts = node.need(
                 "counts"
-            ).properties().associate { (outcome, count) -> ShadowOutcome.valueOf(outcome) to count.long() },
+            ).properties().associate { (outcome, count) -> ShadowOutcome.valueOf(outcome) to count.count() },
             samples = node.need("samples").properties().associate { (outcome, samples) ->
                 ShadowOutcome.valueOf(outcome) to samples.values().map { sample ->
                     sample.only("tenant", "principal", "app", "space", "action", "resource", "enforcedBy", "candidateBy")
@@ -175,6 +179,9 @@ object ShadowCodec {
     private fun JsonNode.text(): String = if (isString) asString() else malformed("$this is not a string")
 
     private fun JsonNode.long(): Long = if (isIntegralNumber) asLong() else malformed("$this is not an integer")
+
+    /** A count is never negative: summed over instances, a negative one would cancel another instance's (review). */
+    private fun JsonNode.count(): Long = long().takeIf { it >= 0 } ?: malformed("$this is not a count")
 
     private fun JsonNode.only(vararg names: String) {
         if (!isObject) malformed("$this is not an object")

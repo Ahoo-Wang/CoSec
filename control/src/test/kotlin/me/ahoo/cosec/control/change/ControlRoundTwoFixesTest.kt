@@ -90,7 +90,11 @@ class ControlRoundTwoFixesTest {
 
     private val audit = Audit()
 
-    private fun changes(listeners: List<ChangeListener> = listOf(audit)): Changes {
+    private fun changes(
+        listeners: List<ChangeListener> = listOf(audit),
+        reports: ShadowReportReader = InMemoryShadowReports(clock),
+        shadow: ShadowOptions = IMMEDIATE_WINDOW,
+    ): Changes {
         val registered = ChangeListeners(listeners).also { opened += it }
         return Changes(
             store,
@@ -98,7 +102,8 @@ class ControlRoundTwoFixesTest {
             { ChangeId("c${ids.incrementAndGet()}") },
             engine.authorizer,
             clock,
-            ChangeOptions(shadow = IMMEDIATE_WINDOW),
+            ChangeOptions(shadow = shadow),
+            reports = reports,
             listeners = registered,
         )
     }
@@ -187,10 +192,15 @@ class ControlRoundTwoFixesTest {
         e
     }
 
-    private fun report(instance: String, narrowed: Long, window: String = "c1@1") = ShadowReport(
+    private fun report(
+        instance: String,
+        narrowed: Long,
+        window: String = "c1@1",
+        errors: Long = 0,
+    ) = ShadowReport(
         window,
         instance,
-        mapOf(ShadowOutcome.SAME to 1L, ShadowOutcome.NARROWED to narrowed),
+        mapOf(ShadowOutcome.SAME to 1L, ShadowOutcome.NARROWED to narrowed, ShadowOutcome.CANDIDATE_ERROR to errors),
         emptyMap(),
         emptySet(),
         clock.now,
@@ -211,6 +221,8 @@ class ControlRoundTwoFixesTest {
         listOf(
             listOf(report("i1", 2), report("i1", 3)),
             listOf(report("i1", 2), report("i2", 1, window = "c2@1")),
+            // A negative count would cancel another instance's: pod-b's errors, here.
+            listOf(report("pod-a", 0, errors = -1), report("pod-b", 0, errors = 1)),
         ).forEach { read ->
             val reader = object : ShadowReportReader {
                 override suspend fun reports(window: String): List<ShadowReport> = read
@@ -226,6 +238,44 @@ class ControlRoundTwoFixesTest {
                 }
             }
         }
+        // One instance's error blocks the window by itself.
+        val blocked = InMemoryShadowReports(clock)
+        blocked.write(report("pod-a", 0))
+        blocked.write(report("pod-b", 0, errors = 1))
+        ShadowWindows(blocked, options).close(state, clock.now)!!.blocked.assert().isTrue()
+    }
+
+    @Test
+    fun `an instance seen reporting on a window must keep reporting until it closes`() = runBlocking<Unit> {
+        val written = InMemoryShadowReports(clock)
+        val vanished = HashSet<String>()
+        val reader = object : ShadowReportReader {
+            override suspend fun reports(window: String) = written.reports(window).filter { it.instance !in vanished }
+
+            override suspend fun statuses(): List<InstanceStatus> = emptyList()
+        }
+        val changes = changes(reports = reader, shadow = ShadowOptions(Duration.ZERO, 10, Duration.ofHours(1)))
+        val change = changes.propose(
+            pia,
+            SnapshotKey.Platform,
+            1,
+            listOf(Operation.PutPolicy(writer.copyAs("more"))),
+            "x"
+        )
+        val window = changes.stage(pia, change.id).shadow!!.window
+        written.write(report("pod-a", 0, window))
+        written.write(report("pod-b", 0, window))
+        // Not enough samples yet: the window stays open, and the control plane keeps who has reported.
+        changes.shadowed(change.id).shadow!!.reporters.assert().isEqualTo(setOf("pod-a", "pod-b"))
+        // pod-b vanishes from the window's reporters: enough samples or not, the window does not close without it.
+        written.write(report("pod-a", 20, window))
+        vanished += "pod-b"
+        refused { changes.shadowed(change.id) }.status.assert().isEqualTo(503)
+        changes.get(change.id).state.assert().isEqualTo(ChangeState.SHADOWING)
+        // Back, with the error it saw: the window closes blocked.
+        vanished.clear()
+        written.write(report("pod-b", 0, window, errors = 1))
+        changes.shadowed(change.id).shadow!!.closed!!.blocked.assert().isTrue()
     }
 
     @Test
@@ -260,6 +310,12 @@ class ControlRoundTwoFixesTest {
             "big" to Long.MAX_VALUE,
             "nested" to mapOf("k" to 1, "flags" to listOf(true, false)),
             "when" to java.time.Instant.parse("2026-11-01T00:00:00Z"),
+            "short" to 7.toShort(),
+            "byte" to 1.toByte(),
+            "double" to 2.5,
+            "huge" to java.math.BigInteger("123456789012345678901234567890"),
+            "decimal" to java.math.BigDecimal("1.25"),
+            "sparse" to listOf("a", null),
         )
         val change = runBlocking {
             changes.propose(walt, SnapshotKey.Platform, 1, listOf(Operation.PutPolicy(writer.copyAs("more"))), "x")
@@ -269,6 +325,70 @@ class ControlRoundTwoFixesTest {
         stored.attributes.mapValues { it.value.toString() }.assert().isEqualTo(
             attributes.mapValues { it.value.toString() }
         )
+        // An array is stored as the list of its elements.
+        val array = approval.copy(attributes = mapOf("teams" to arrayOf("red", "blue")))
+        ChangeRequestCodec.decode(ChangeRequestCodec.encode(change.copy(approval = array))).approval!!.attributes
+            .assert().isEqualTo(mapOf("teams" to listOf("red", "blue")))
+    }
+
+    @Test
+    fun `an approver is checked again only as recorded, and anything else does not count`() = runBlocking<Unit> {
+        val change = changes.propose(
+            walt,
+            SnapshotKey.Platform,
+            1,
+            listOf(Operation.PutPolicy(writer.copyAs("x"))),
+            "x"
+        )
+        val needed = listOf(Escalation("document platform", "NOT_ANALYZED"))
+        val approved = change.copy(
+            approval = Approval(pia.actor, clock.now, change.candidate!!, needed.map { it.subject }, pia.memberships)
+        )
+        ChangeAuthority(engine.authorizer).approverProblem(approved, needed, walt).assert().isNull()
+        val noLonger = "the approver no longer holds cosec:approve on the document"
+        // An authorizer that cannot check a recorded principal, or fails to, does not count it.
+        ChangeAuthority(PERMIT_ALL).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        val failing = object : me.ahoo.cosec.control.authz.ControlAuthorizer {
+            override suspend fun decide(
+                operator: Operator,
+                action: me.ahoo.cosec.model.Action,
+                resource: me.ahoo.cosec.model.Resource
+            ) =
+                me.ahoo.cosec.control.authz.ControlDecision.PERMIT
+
+            override suspend fun decideAs(
+                operator: Operator,
+                principal: me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal,
+                memberships: me.ahoo.cosec.model.Memberships,
+                action: me.ahoo.cosec.model.Action,
+                resource: me.ahoo.cosec.model.Resource,
+            ): me.ahoo.cosec.control.authz.ControlDecision = error("down")
+        }
+        ChangeAuthority(failing).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        // An approver the hard rule keeps from the document never counts, whatever its policies say.
+        val elsewhere = approved.copy(
+            approval = approved.approval!!.copy(approver = alice.actor, memberships = alice.memberships)
+        )
+        ChangeAuthority(PERMIT_ALL).approverProblem(elsewhere, needed, walt).assert().isEqualTo(noLonger)
+        // The pipeline's authorizer: no request, no decision; documents it cannot confirm, no decision either.
+        val principal = me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal(
+            pia.actor.principal,
+            pia.actor.tenant,
+            me.ahoo.cosec.runtime.authn.MembershipSource.Provider,
+        )
+        val approve = me.ahoo.cosec.control.authz.ControlActions.APPROVE
+        val document = me.ahoo.cosec.control.authz.ControlResources.document(SnapshotKey.Platform)
+        engine.authorizer.decideAs(
+            Operator(walt.actor, walt.memberships),
+            principal,
+            pia.memberships,
+            approve,
+            document
+        )
+            .assert().isEqualTo(me.ahoo.cosec.control.authz.ControlDecision.DENY)
+        engine.confirmation = DocumentConfirmation { error("the snapshot source is down") }
+        engine.authorizer.decideAs(walt, principal, pia.memberships, approve, document)
+            .assert().isEqualTo(me.ahoo.cosec.control.authz.ControlDecision.INDETERMINATE)
     }
 
     @Test

@@ -1,0 +1,93 @@
+{
+  "rules": [
+    "CTL-16"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Coordinator review of #1110: i1 and i2 have reported; i2 is then taken off the window's reporters. With i1's samples alone the window would close, but an instance seen reporting must keep reporting: the window stays open (503) until i2 is back.",
+  "options": {
+    "shadow": {
+      "minDuration": "PT0S",
+      "minSamples": 6,
+      "maxDuration": "PT1H"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "stage": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "SAME": 1
+        }
+      }
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i2",
+        "counts": {
+          "SAME": 1
+        }
+      }
+    },
+    {
+      "shadowed": "c1"
+    },
+    {
+      "report": {
+        "change": "c1",
+        "instance": "i1",
+        "counts": {
+          "SAME": 6
+        }
+      }
+    },
+    {
+      "vanish": "i2"
+    },
+    {
+      "shadowed": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "SHADOWING",
+      "reported",
+      "reported",
+      "SHADOWING",
+      "reported",
+      "vanished",
+      "refused 503"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

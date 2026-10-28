@@ -206,7 +206,16 @@ data class Approval(
  * A change's shadow window (RFC 0007 §6.4): [window] names it in the candidate and in every instance's report; [closed]
  * is what the reports summed to when it closed, and stays as the evidence the publisher acknowledges.
  */
-data class ShadowState(val window: String, val startedAt: Instant, val closed: ShadowSummary? = null)
+data class ShadowState(
+    val window: String,
+    val startedAt: Instant,
+    val closed: ShadowSummary? = null,
+    /**
+     * Every instance the control plane has seen report on the window, kept with the change where no data-plane
+     * credential writes: one that reported once must report until the window closes (round-2 review).
+     */
+    val reporters: Set<String> = emptySet(),
+)
 
 /**
  * The reports of a window summed over the instances (RFC 0007 §6.4): counts by outcome (`SAME`, `WIDENED`, ...), when

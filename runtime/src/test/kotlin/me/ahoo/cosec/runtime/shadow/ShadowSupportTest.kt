@@ -109,6 +109,11 @@ class ShadowSupportTest {
         recorder.forget("w")
         recorder.reports().single().window.assert().isEqualTo("v")
         assertThrownBy<IllegalArgumentException> { ShadowRecorder("") }
+        // An instance id ends its report's key: a ':' would let it match another instance's key or ACL pattern.
+        listOf("x:pod-a", "pod a", "pod/a", "pod*").forEach { id ->
+            assertThrownBy<IllegalArgumentException> { ShadowRecorder(id) }
+        }
+        ShadowRecorder("pod-a.eu_1").instance.assert().isEqualTo("pod-a.eu_1")
     }
 
     @Test
@@ -173,6 +178,16 @@ class ShadowSupportTest {
         }
         assertThrownBy<SnapshotFormatException> {
             ShadowCodec.decodeReport("""{"window":"w"}""".encodeToByteArray())
+        }
+        // A negative count would cancel another instance's when the reports are summed; a ':' in an instance id
+        // would make its key ambiguous.
+        val valid = String(ShadowCodec.encodeReport(report))
+        listOf(
+            valid.replace(""""NARROWED":2""", """"NARROWED":-2"""),
+            valid.replace(""""instance":"i1"""", """"instance":"x:i1""""),
+        ).forEach { text ->
+            text.assert().isNotEqualTo(valid)
+            assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeReport(text.encodeToByteArray()) }
         }
         assertThrownBy<SnapshotFormatException> {
             ShadowCodec.decodeStatuses(

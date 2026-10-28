@@ -193,6 +193,9 @@ object ChangeRequestCodec {
             val counts = summary.putObject("counts")
             closed.counts.toSortedMap().forEach { (outcome, count) -> counts.put(outcome, count) }
         }
+        if (shadow.reporters.isNotEmpty()) {
+            node.putArray("reporters").apply { shadow.reporters.sorted().forEach { add(it) } }
+        }
         return node
     }
 
@@ -207,7 +210,7 @@ object ChangeRequestCodec {
     }
 
     private fun shadow(node: JsonNode): ShadowState {
-        node.only("window", "startedAt", "closed")
+        node.only("window", "startedAt", "closed", "reporters")
         return ShadowState(
             node.need("window").text(),
             Instant.parse(node.need("startedAt").text()),
@@ -220,6 +223,7 @@ object ChangeRequestCodec {
                     closed.need("blocked").asBoolean(),
                 )
             },
+            node.get("reporters")?.values()?.mapTo(LinkedHashSet()) { it.text() }.orEmpty(),
         )
     }
 

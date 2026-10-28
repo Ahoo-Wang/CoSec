@@ -201,29 +201,43 @@ In 8.0 the control plane and the data-plane instances share one more set of keys
 | `<s>:candidate:<document>` | the control plane | the staged candidate of a document while its shadow window is open |
 | `<s>:control:*` | the control plane | revision records, revision indexes, back-references, leases, changes and staging slots |
 | `<s>:shadow:report:<window>:<instance>` | data-plane instance `<instance>` only | that instance's cumulative report of shadow window `<window>` (`<changeId>@<epoch ms>`); each write replaces its previous one; expires 8 days after its last write |
-| `<s>:shadow:reporters:<window>` | every data-plane instance | the ids of the instances that reported on `<window>`; an instance adds itself, and adds itself again on every write if its id has gone missing; same expiry |
+| `<s>:shadow:reporters:<window>` | every data-plane instance | the ids of the instances that reported on `<window>`; an instance adds itself after writing its report, and again on any later write that finds its id gone; same expiry |
 | `<s>:shadow:status:instances` | every data-plane instance | each instance's installed revisions, for the propagation view; entries older than a minute are ignored |
 
 A window's numbers are the sum of one report per instance, each that instance's latest. The control plane reads
-the reports as they are: they decide when a window closes and what the publisher acknowledges. A report under one
-instance's key that names another instance or another window is an error, and the window stays open. So:
+the reports as they are: they decide when a window closes and what the publisher acknowledges. It keeps the window
+open (the step answers `503`) rather than count anything else: a report under one instance's key that names another
+instance or another window, a negative count, a listed instance without a report, or no report from an instance it
+has seen report on the window before (it keeps those with the change, under `<s>:control:*`). One instance's
+`CANDIDATE_ERROR` blocks the window whatever the others report. Instance ids have only letters, digits, `.`, `_` and
+`-`, so a key, and an ACL pattern, names one instance's report.
 
-- Only data-plane instances may write `<s>:shadow:*`. Data-plane credentials are read-only on `<s>:snapshot:*`,
-  `<s>:candidate:*` and `<s>:control:*`; only the control plane writes them.
+The trust model: each data-plane instance is trusted for its own report, and nothing else. An instance can always
+misreport its own traffic (report no errors, say), so the ACL's job is to keep it to its own keys:
+
+- Only data-plane instances may write `<s>:shadow:*`. Data-plane credentials are read-only on `<s>:snapshot:*`
+  and `<s>:candidate:*`, and need no access at all to `<s>:control:*`: only the control plane reads and writes it, and
+  its change records hold approvers' token attributes.
 - To keep one instance from writing another instance's report, give each instance its own user, limited to its
   own report keys (`<s>:shadow:report:*:<instance>`). Every instance still writes `<s>:shadow:reporters:*` and
-  `<s>:shadow:status:*`. A misbehaving instance can drop another instance's id from a window's reporters until that
-  instance writes again, at most one report interval (10 seconds) later.
+  `<s>:shadow:status:*`, which CoCache writes through Lua scripts, so an ACL cannot make them add-only.
+- The remaining gap: an instance with write access to `<s>:shadow:reporters:*` can remove another instance's id from
+  a window's reporters. Once the control plane has seen that instance report, the window stays open until its report
+  is back. An id removed before the control plane first sees it goes unnoticed, and that instance's report is not
+  counted until it writes again and finds its id gone.
 
-An example for instance `pod-a`, with the default prefix (Redis 7 ACL syntax; `%R~` is read-only):
+An example for instance `pod-a`, with the default prefix (Redis 7 ACL syntax; `%R~` is read-only). The first line sets
+the keys and takes every command away (`-@all`); the second grants the commands and channels the instance needs.
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys %R~cosec:snapshot:* %R~cosec:candidate:* %R~cosec:control:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:*
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:*
+ACL SETUSER cosec-pod-a <the commands and channels CoCache lists>
 ```
 
-Add the keys and channels the instance's other features use (the [Redis keys](#redis-keys) above, CoCache's
-invalidation channels) and the commands [CoCache lists](https://cocache.ahoo.me/operations/#acl). Check the user
-with `ACL DRYRUN` before production: CoCache writes through Lua scripts, which Redis checks key by key.
+The commands and channels are the ones [CoCache lists](https://cocache.ahoo.me/operations/#acl) for its Redis backend
+(its scripts, the invalidation channels `cocache:inv:<s>:*`); add the keys the instance's other features use (the
+[Redis keys](#redis-keys) above). Check the user with `ACL DRYRUN` before production: CoCache writes through Lua
+scripts, which Redis checks key by key.
 
 ## When Redis is unavailable
 
