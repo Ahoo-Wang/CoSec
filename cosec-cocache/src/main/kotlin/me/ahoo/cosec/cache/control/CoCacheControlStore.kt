@@ -201,7 +201,9 @@ class CoCacheControlStore(
                 return
             }
         }
-        throw IllegalStateException("The control list [$name] kept changing; gave up after $MAX_LIST_ATTEMPTS attempts.")
+        throw IllegalStateException(
+            "The control list [$name] kept changing; gave up after $MAX_LIST_ATTEMPTS attempts."
+        )
     }
 
     private sealed interface Put {

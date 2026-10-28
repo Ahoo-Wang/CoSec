@@ -125,7 +125,10 @@ object ControlCacheSpecs {
             .build()
 
     /** The sets [CoCacheControlStore.documents] and [CoCacheControlStore.openChanges] read, one key each. */
-    fun list(keyPrefix: String = CoSec.COSEC, policy: CachePolicy = CachePolicy.DEFAULT): CacheSpec<String, Set<String>> =
+    fun list(
+        keyPrefix: String = CoSec.COSEC,
+        policy: CachePolicy = CachePolicy.DEFAULT
+    ): CacheSpec<String, Set<String>> =
         CacheSpec.builder<String, Set<String>>(CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME)
             .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME))
             .keyPrefix("")
