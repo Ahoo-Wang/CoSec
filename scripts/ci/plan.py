@@ -73,6 +73,12 @@ def plan(root):
         if unknown := names - projects.keys():
             fail(f"{label} names projects settings.gradle.kts does not include: {sorted(unknown)}")
 
+    codecov = (root / "codecov.yml").read_text()
+    # Codecov drops the lines of a project codecov.yml ignores, and an upload left empty errors, so the statuses would
+    # wait for it forever: such a project uploads nothing.
+    ignore = re.search(r"^ignore:\n((?:[ \t]+-.*\n?)*)", codecov, re.M)
+    ignored = set(re.findall(r'"([^"]+)"', ignore.group(1))) if ignore else set()
+
     jobs = []
     for group, names in groups.items():
         tested = [name for name in names if name not in EXCLUDED]
@@ -89,11 +95,11 @@ def plan(root):
                 "coverage": " ".join(
                     f"{projects[name]}/{REPORT}" for name in members
                     if name not in UNCOVERED and (root / projects[name] / "src/test").is_dir()
+                    and f"{projects[name]}/.*" not in ignored
                 ),
             })
 
     uploads = sum(1 for job in jobs if job["coverage"])
-    codecov = (root / "codecov.yml").read_text()
     waits = [int(n) for n in re.findall(r"^\s*after_n_builds:\s*(\d+)\s*$", codecov, re.M)]
     if len(waits) != 2 or set(waits) != {uploads}:
         fail(f"codecov.yml must wait for {uploads} uploads, one per job with coverage, in both "
