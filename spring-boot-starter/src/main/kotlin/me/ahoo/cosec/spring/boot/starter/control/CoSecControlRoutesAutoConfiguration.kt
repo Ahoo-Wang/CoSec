@@ -72,7 +72,7 @@ class CoSecControlRoutesAutoConfiguration {
             http: ControlHttp,
             properties: ControlProperties
         ): ReactiveRouterFunction<ReactiveServerResponse> {
-            val base = basePathOf(properties)
+            val base = apiRootOf(properties)
             return ReactiveRouterFunctions.route(ReactivePredicates.path("$base/**")) { request ->
                 val security = RequestSecurity.of(request.exchange().getSecurityContext())
                 request.bodyToMono(ByteArray::class.java).defaultIfEmpty(EMPTY).flatMap { body ->
@@ -105,7 +105,7 @@ class CoSecControlRoutesAutoConfiguration {
             http: ControlHttp,
             properties: ControlProperties
         ): ServletRouterFunction<ServletServerResponse> {
-            val base = basePathOf(properties)
+            val base = apiRootOf(properties)
             val maxBodySize = properties.http.maxBodySize.toBytes()
             return ServletRouterFunctions.route(ServletPredicates.path("$base/**")) { request ->
                 val servlet = request.servletRequest()
@@ -185,6 +185,14 @@ class CoSecControlRoutesAutoConfiguration {
             )
 
         fun basePathOf(properties: ControlProperties): String = "/" + properties.http.basePath.trim('/')
+
+        /**
+         * Where this version of the API is served: `{base-path}/v1`. The version is fixed here, not part of
+         * `base-path`, so moving the API never drops it.
+         */
+        fun apiRootOf(properties: ControlProperties): String = basePathOf(properties) + "/" + API_VERSION
+
+        const val API_VERSION = "v1"
 
         fun relative(path: String, base: String): String = path.removePrefix(base).ifEmpty { "/" }
     }

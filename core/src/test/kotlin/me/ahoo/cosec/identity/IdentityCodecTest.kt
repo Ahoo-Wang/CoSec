@@ -65,7 +65,7 @@ class IdentityCodecTest {
         reason(header("""{"v":1,$valid,"sub":"bob"}""")).assert().isEqualTo(IdentityFormatException.Reason.MALFORMED)
         reason(header("""{"v":1,${valid.replace("\"alice\"", "\"\"")}}""")).assert()
             .isEqualTo(IdentityFormatException.Reason.MALFORMED)
-        reason(header("""{"v":1,${valid.replace("\"jwt\"", "\"basic\"")}}""")).assert()
+        reason(header("""{"v":1,${valid.replace("\"jwt\"", "\"\"")}}""")).assert()
             .isEqualTo(IdentityFormatException.Reason.MALFORMED)
         reason(header("""{"v":1,${valid.replace("[]", "[\"a\",\"a\"]")}}""")).assert()
             .isEqualTo(IdentityFormatException.Reason.MALFORMED)
@@ -83,6 +83,18 @@ class IdentityCodecTest {
             .isEqualTo(IdentityFormatException.Reason.MALFORMED)
         reason(header("""{"v":1,${valid.replace("\"exp\":2", "\"exp\":253402300800")}}""")).assert()
             .isEqualTo(IdentityFormatException.Reason.MALFORMED)
+    }
+
+    /** RFC 0010 C3: a method this release does not know is read as it is, so a newer gateway's authenticator works. */
+    @Test
+    fun `any named method is read as it is`() {
+        val valid = """"tenant":"acme","sub":"alice","scope":{"app":"","space":""},"roles":[],""" +
+            """"auth":{"method":"oidc","jti":"t1","exp":2},"iat":1,"rid":"r1""""
+        val decoded = IdentityCodec.decode(header("""{"v":1,$valid}"""))
+        decoded.credential.method.assert().isEqualTo(Identity.Method("oidc"))
+        IdentityCodec.decode(IdentityCodec.encode(decoded)).credential.method.value.assert().isEqualTo("oidc")
+        Identity.Method.API_KEY.toString().assert().isEqualTo("api-key")
+        assertThrows<IllegalArgumentException> { Identity.Method("") }
     }
 
     @Test

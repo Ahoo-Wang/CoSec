@@ -398,7 +398,7 @@ spring:
 | `tenant`, `sub` | The tenant and principal the gateway verified. |
 | `scope` | `{app, space}`, as the gateway resolved them. |
 | `roles` | The principal's roles in that space: those the decision used. |
-| `auth` | `{method, jti, exp}`: `jwt` or `api-key`, the token's `jti` or the key's id, and the credential's expiry. Never the credential itself. |
+| `auth` | `{method, jti, exp}`: how the principal authenticated (`jwt` and `api-key` are CoSec's own; any other non-empty name is read as it is, so a gateway with another authenticator works), the token's `jti` or the key's id, and the credential's expiry. Never the credential itself. |
 | `iat` | When the gateway made the header, in epoch seconds. |
 | `rid` | The gateway's request id. |
 | `claims` | Only the principal attributes named in `cosec.gateway.identity.claims` (the token's `attributes` claim, or an API key's attributes): strings, numbers and booleans. |
@@ -461,7 +461,7 @@ The [security context](#accessing-the-security-context) of a request that procee
 ## Control-plane routes
 
 With `control-support` (and `cache-support`), the starter serves the control plane's HTTP API under
-`cosec.control.http.base-path` (default `/cosec/control/v1`) as functional routes on a WebFlux or WebMvc host.
+`{cosec.control.http.base-path}/v1` (default `/cosec/control/v1`) as functional routes on a WebFlux or WebMvc host.
 What the API does is in [Testing policies](../policies/testing.md) and
 [Explaining a decision](./checks.md#explaining-a-decision); how its requests are handled:
 

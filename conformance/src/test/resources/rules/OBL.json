@@ -20,6 +20,18 @@
         "engine:RateLimitObligationTest"
       ],
       "pending": null
+    },
+    {
+      "id": "OBL-3",
+      "source": "RFC 0010 §3 C1",
+      "statement": "Every kind of obligation a permit carries is handled before the request proceeds; none is skipped. The pipeline dispatches on the sealed Obligation with an exhaustive when and no else, so a new kind does not compile until it is handled, and a model newer than the pipeline (version skew) fails the request with 500, never a permit.",
+      "level": "build",
+      "guards": [
+        "runtime:ObligationDispatchTest#obligations are dispatched by an exhaustive when without else",
+        "runtime:ObligationDispatchTest#no runtime code skips a kind of obligation",
+        "runtime:PipelineTest#anUnhandledKindUnderVersionSkewIs500"
+      ],
+      "pending": null
     }
   ]
 }

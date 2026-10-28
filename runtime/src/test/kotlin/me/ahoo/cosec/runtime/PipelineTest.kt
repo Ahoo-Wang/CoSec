@@ -393,6 +393,17 @@ class PipelineTest {
             .hasMessage(defect.message)
     }
 
+    /**
+     * OBL-3 under version skew: a model newer than this pipeline gives an obligation kind it does not handle, and the
+     * exhaustive `when` throws [NoWhenBranchMatchedException]. It is a defect like any other: 500, never a permit.
+     */
+    @Test
+    fun anUnhandledKindUnderVersionSkewIs500() = runTest {
+        val outcome = pipeline(engine = StubEngine { throw NoWhenBranchMatchedException() }).evaluate(facts())
+        outcome.assertProblem(ProblemType.INTERNAL_ERROR)
+        outcome.proceed.assert().isFalse()
+    }
+
     /** A CancellationException nobody asked for is not a cancellation: it must not make the request vanish. */
     @Test
     fun strayCancellationOutsideAnSpiIs500() = runTest {

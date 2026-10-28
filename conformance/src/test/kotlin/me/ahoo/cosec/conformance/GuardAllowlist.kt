@@ -35,6 +35,9 @@ object GuardAllowlist {
             "core:PolicyDocumentCodecTest#a scope is never decoded",
             "spring-boot-starter:UnverifiedTokenTest#onlyTheVerifierDecodesATokenIntoAPrincipal",
             "spring-boot-starter:UnverifiedTokenTest#withinTheVerifierOnlyTheVerifyingMethodsDecode",
+            "runtime:ObligationDispatchTest#obligations are dispatched by an exhaustive when without else",
+            "runtime:ObligationDispatchTest#no runtime code skips a kind of obligation",
+            "runtime:PipelineTest#anUnhandledKindUnderVersionSkewIs500",
         ),
         "startup" to setOf(
             "cocache:CacheTtlPolicyTest#snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort",

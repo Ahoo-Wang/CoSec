@@ -13,7 +13,7 @@ tools around it. The fields themselves are in the [policy language](./language.m
 ## The control plane
 
 The control plane comes with the starter's `controlSupport` feature (it needs `cacheSupport`, since documents live in
-Redis). It serves an HTTP API under `cosec.control.http.base-path` (default `/cosec/control/v1`); its settings are
+Redis). It serves an HTTP API under `{cosec.control.http.base-path}/v1` (default `/cosec/control/v1`); its settings are
 `cosec.control.*` ([Configuration](../operations/configuration.md)), and how documents are stored and first
 published is in [Storage](../operations/storage.md).
 

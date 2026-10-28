@@ -49,13 +49,24 @@ data class Identity(
         val expiresAt: Instant?,
     )
 
-    enum class Method(val value: String) {
-        JWT("jwt"),
-        API_KEY("api-key"),
-        ;
+    /**
+     * How the principal authenticated, by name: any non-empty one. [JWT] and [API_KEY] are CoSec's own; an authenticator
+     * for another kind of credential names its own (RFC 0010 C3), and a service behind the gateway reads it as it is.
+     */
+    class Method(val value: String) {
+        init {
+            require(value.isNotEmpty()) { "An authentication method has a name." }
+        }
+
+        override fun equals(other: Any?): Boolean = other is Method && other.value == value
+
+        override fun hashCode(): Int = value.hashCode()
+
+        override fun toString(): String = value
 
         companion object {
-            fun of(value: String): Method? = entries.firstOrNull { it.value == value }
+            val JWT = Method("jwt")
+            val API_KEY = Method("api-key")
         }
     }
 }

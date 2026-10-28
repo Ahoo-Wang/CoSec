@@ -120,7 +120,7 @@ object IdentityCodec {
             space = scope.need("space").text("$.scope.space"),
             roles = roles(root.need("roles")),
             credential = Identity.Credential(
-                method = Identity.Method.of(method) ?: throw malformed("$.auth.method [$method] is not jwt or api-key"),
+                method = method.takeIf { it.isNotEmpty() }?.let(Identity::Method) ?: throw malformed("$.auth.method is empty"),
                 id = auth.need("jti").id("$.auth.jti"),
                 expiresAt = (
                     auth.get("exp") ?: throw IdentityFormatException(Reason.UNBOUNDED, "The identity has no auth.exp.")

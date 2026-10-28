@@ -197,7 +197,7 @@ enforcing on the real request. See https://cosec.ahoo.me/integration/checks.
 ## Hosting the control plane
 
 With `control-support` (and `cache-support`), the host serves the control API under
-`cosec.control.http.base-path` (default `/cosec/control/v1`): documents, changes, shadow windows, approval,
+`{cosec.control.http.base-path}/v1` (default `/cosec/control/v1`): documents, changes, shadow windows, approval,
 break-glass, `simulate`, `explain`, `analyze`. Each call first passes the host pipeline (so the host's documents must
 permit the authenticated caller on that path), then is authorized again in app `cosec.control.app-id`
 (`cosec-control`) against the built-in `cosec:platform-admin`, `cosec:tenant-admin` and `cosec:tenant-viewer`
