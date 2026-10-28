@@ -312,12 +312,11 @@ class StarterWiringTest {
 
     @Test
     fun `memberships that cannot be read make the request a 503`() {
-        val failing = mockk<MembershipCache> {
-            every { async() } returns mockk<AsyncCache<String, Memberships>> {
-                every { get(any()) } returns
-                    CompletableFuture.failedFuture<Memberships>(IllegalStateException("Redis is down"))
-            }
-        }
+        val async = mockk<AsyncCache<String, Memberships>>()
+        every { async.get(any()) } returns
+            CompletableFuture.failedFuture<Memberships>(IllegalStateException("Redis is down"))
+        val failing = mockk<MembershipCache>()
+        every { failing.async() } returns async
         cachedPipelineRunner.withBean(MembershipCache::class.java, { failing }).run { context ->
             context.startupFailure.assert().isNull()
             published(context)
