@@ -48,11 +48,11 @@ spec:
             - name: JAVA_OPTS
               # https://github.com/netty/netty/issues/16082
               value: -Djava.net.preferIPv4Stack=true
-          image: ghcr.io/ahoo-wang/cosec-gateway:7.0.0
+          image: ghcr.io/ahoo-wang/cosec-gateway:8.0.0-SNAPSHOT
           startupProbe:
             httpGet:
               port: http
-              path: /actuator/health
+              path: /actuator/health/liveness
           readinessProbe:
             httpGet:
               port: http
