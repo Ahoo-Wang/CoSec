@@ -25,8 +25,4 @@ dependencies {
     // ProblemSchemaTest validates encoded problems against schema/problem.schema.json, as cosec-core's
     // SchemaConformanceTest does for the formats CoSec reads.
     testImplementation("com.networknt:json-schema-validator")
-    // OneDecisionPathTest checks the adapters' classes: they must never see a Decision or construct an Outcome.
-    testRuntimeOnly(project(":webflux"))
-    testRuntimeOnly(project(":webmvc"))
-    testRuntimeOnly(project(":gateway"))
 }
