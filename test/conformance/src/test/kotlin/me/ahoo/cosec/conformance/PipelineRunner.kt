@@ -357,11 +357,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node.only(
             "result", "reason", "tenant", "id", "roles", "policies", "membership", "token", "jwt", "apiKeys", "apiKeysFail",
         )
-        val result = node.get("result")?.text() ?: "authenticated"
-        if (result != "jwt" && node.has("jwt")) {
-            throw ScenarioFormatException("\"jwt\" is read only with \"result\": \"jwt\", not with $result.")
-        }
-        return when (result) {
+        return when (val result = resultOf(node)) {
             "token" -> TokenAuthenticator(ScenarioTokenVerifier(node.required("token")), revocations(revocations))
             "jwt" -> TokenAuthenticator(ScenarioJwtVerifier(node.required("jwt")), revocations(revocations))
             "composite" -> CompositeAuthenticator(
@@ -389,6 +385,15 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
             else -> throw ScenarioFormatException("Unknown authentication result $result")
         }
+    }
+
+    /** The authentication result; `jwt` claims under another result would be silently ignored, so they fail. */
+    private fun resultOf(node: JsonNode): String {
+        val result = node.get("result")?.text() ?: "authenticated"
+        if (result != "jwt" && node.has("jwt")) {
+            throw ScenarioFormatException("\"jwt\" is read only with \"result\": \"jwt\", not with $result.")
+        }
+        return result
     }
 
     private fun authenticated(node: JsonNode): AuthnResult {

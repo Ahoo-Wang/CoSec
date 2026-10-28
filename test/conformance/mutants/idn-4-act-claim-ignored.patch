@@ -3,7 +3,7 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest :conformance:test
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
-index abf96fe5..4a11efe4 100644
+index 7574b067..d5019d66 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
 @@ -25,7 +25,6 @@ import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
@@ -14,11 +14,11 @@ index abf96fe5..4a11efe4 100644
  
  /**
   * What [JwtTokenVerifier] needs to turn a token into a principal: decoding, which reads a token without checking its
-@@ -53,11 +52,6 @@ internal object Jwts {
+@@ -56,11 +55,6 @@ internal object Jwts {
       * never becomes one: read as its `sub`, it would give the actor everything the subject may do (RFC 0009 §6, `IDN-4`).
       */
      fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT): T {
--        if (!decodedAccessToken.getClaim(DelegationUnsupportedException.ACTOR_CLAIM).isMissing) {
+-        if (!decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
 -            throw DelegationUnsupportedException(
 -                "The token delegates (it carries an `act` claim), which CoSec does not support."
 -            )
