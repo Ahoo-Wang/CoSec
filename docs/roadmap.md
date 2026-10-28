@@ -265,7 +265,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **死代码清理按引用判断**：8.0 路径上没有 `main` 引用、不是扩展点、文档不教的代码一律删除，G 系列守卫防回潮（RFC 0008 PR-5 扩大范围） | 2026-10-28 | [RFC 0008](rfc/0008-conformance-and-direct-build.md) PR-5 |
 | **身份与凭据分层**：主体 / 凭据 / 委托；API Key 不携带授予、只能收窄；`principal.type`、`auth.method` 为属性；拒绝带 `act` 的 token；委托放到 8.1 | 2026-10-28 | [RFC 0009](rfc/0009-identity-and-credentials.md) |
 | **GA 前只做"不做会静默放行"和"几乎零成本"的改动**，不为未来功能预先抽象公共 SPI；企业网关场景逐项检查后只剩三项（未知义务即拒绝、控制面 API 版本独立于 `base-path`、`auth.method` 开放取值） | 2026-10-28 | [RFC 0010](rfc/0010-ga-extension-points.md) |
-| **模块架构：六边形分层与目录分组，GA 前完成**（取代当天早些时候的两条草案：`domain/application/adapters` 分组、`json` 与 `document` 模块）：`api`/`core`/`backends`/`edge`/`extensions`/`host`/`test`/`bom`/`examples` 分组；新增 `spi`，拆散 `core/` 模块；项目名去掉 `cosec-` 前缀；starter 按类路径装配并在缺模块时启动失败；`runtime` 可用 Jackson 但不进公共签名；RC 时启用 ABI 校验 | 2026-10-28 | [RFC 0011](rfc/0011-module-architecture.md) |
+| **模块架构：六边形分层与目录分组，GA 前完成**（取代当天早些时候的两条草案：`domain/application/adapters` 分组、`json` 与 `document` 模块）：`api`/`core`/`backends`/`edge`/`extensions`/`host`/`test`/`bom`/`platform` 分组（`platform/gateway-server` 是给用户直接部署的网关服务）；新增 `spi`，拆散 `core/` 模块；项目名去掉 `cosec-` 前缀；starter 按类路径装配并在缺模块时启动失败；`runtime` 可用 Jackson 但不进公共签名；RC 时启用 ABI 校验 | 2026-10-28 | [RFC 0011](rfc/0011-module-architecture.md) |
 
 ## 10. 尚未派发的下一步
 

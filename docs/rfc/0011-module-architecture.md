@@ -14,7 +14,7 @@
 - **今天的 `core/` 模块拆散**：端口进新的 `spi`，其余进 `runtime`；`core/` 变成分组目录（§4）。
 - **守卫集中到 `test/architecture`**：依赖图与源码引用两类规则，取代分散在各模块的边界测试（§5）。
 - **五项决定**（§6）：项目名去掉 `cosec-` 前缀；starter 改为按类路径装配；`runtime` 允许使用 Jackson，但 Jackson 不进入公共签名；
-  RC 时启用 ABI 校验与 API 分级；`gateway-server` 移到 `examples/`。
+  RC 时启用 ABI 校验与 API 分级；`gateway-server` 移到 `platform/`。
 
 ## 1. 模块的划分原则
 
@@ -86,7 +86,7 @@ flowchart BT
 | `test/testkit/` | `:testkit` | `cosec-testkit` | 用户的策略测试工具 |
 | `test/conformance/`、`test/architecture/`、`test/e2e/`、`test/code-coverage-report/` | | 不发布 | 规范一致性、架构规则、端到端、覆盖率 |
 | `bom/bom/`、`bom/dependencies/` | `:bom`、`:dependencies` | `cosec-bom`、`cosec-dependencies` | 版本平台 |
-| `examples/gateway-server/` | `:gateway-server` | 不发布 | 网关应用；端到端、AOT 与压测的对象（D5） |
+| `platform/gateway-server/` | `:gateway-server` | Docker 镜像（不发布到 Maven） | 给用户直接部署的网关服务；也是端到端、AOT 与压测的对象（D5） |
 
 根目录保留 `config/`、`docs/`、`gradle/`、`k8s/`、`schema/`、`scripts/`、`skills/`、`wiki/`。
 
@@ -124,7 +124,8 @@ flowchart BT
 | `backends` | `spi` 与自己的技术；不得依赖 `runtime`、`control` |
 | `edge`、`extensions` | `spi`、`runtime`；Reactor 只允许出现在这里 |
 | `host` | 全部；Spring 只允许出现在 `host` 与 `edge` |
-| 任何模块的 `main` | 不得依赖 `test/*` 与 `examples/*` |
+| 任何模块的 `main` | 不得依赖 `test/*` 与 `platform/*` |
+| `platform/*` | 是 CoSec 模块的应用：只依赖发布的模块，像用户一样使用它们；上面各组的规则不适用于它 |
 
 再加一条：`core/*` 的公共签名中不得出现 `tools.jackson.*`（D3）。
 
@@ -139,7 +140,7 @@ flowchart BT
 | D2 | **starter 取消 Gradle 特性变体**，改为一个按类路径生效的自动配置模块 `cosec-spring-boot`；用户直接加技术模块（`cosec-cocache`、`cosec-webflux` …） | 特性变体只在 Gradle 里有效，Maven 用户只能手工补依赖（Wow D44）。**fail closed**：凡是由属性开启的安全功能（API Key、吊销、黑名单、必需的监听器、网关身份），所需模块不在类路径上时启动失败，错误信息写明要加的构件；新规则 `STA-1`（`startup` 级） |
 | D3 | **`runtime` 允许 Jackson，作为实现细节** | 要挡在核心外的是 Reactor 与 Spring。条件：公共 API 只收发 `ByteArray`、`String` 或 CoSec 自己的类型；`PolicyDocumentCodec.decode(…, JsonNode)`、`ConditionJson.write(…): JsonNode`、`RouteMapCodec.tree(…): ObjectNode` 改为 `internal`，`testkit` 需要时以 `@InternalCoSecApi` 打开。否则 Jackson 的一次大版本升级就是 CoSec 的破坏性变更 |
 | D4 | **ABI 校验与 API 分级**：Kotlin Gradle 插件的 `abiValidation` 进入 `check`，每个发布模块保存转储文件；`@InternalCoSecApi`（opt-in 为 ERROR，不进转储）、`@ExperimentalCoSecApi`（WARNING，进转储） | 核心模型的稳定靠构建守住，不靠评审（Wow D216、D282）。RC 时开启，GA 时冻结：此后转储的删除或签名改变即破坏性变更，PR 标题带 `!` |
-| D5 | **`gateway-server` 移到 `examples/`** | 它是应用，不是库；Maven 从不发布它（Docker 镜像照旧） |
+| D5 | **`gateway-server` 移到 `platform/`** | 它是给用户直接部署的产品（Docker 镜像），不是示例，也不是库：它是 CoSec 模块的一个应用，只依赖发布的模块，与 Wow 的 `platform/` 服务同一种定位。Maven 不发布它 |
 
 RFC 0006 Q5（不改模块名）由 D1 修订。RFC 0008 L11（`cosec-api` 保留为薄契约模块）不变，内容按 §3 收窄。
 
