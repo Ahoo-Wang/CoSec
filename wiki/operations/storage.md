@@ -18,16 +18,16 @@ tenant documents of the request's scope. The pipeline reads them from a `Snapsho
 
 | Store | Module | Use it when |
 |---|---|---|
-| Redis, through [CoCache](https://cocache.ahoo.me) | `cosec-cocache` (`cache-support`) | Production. Several instances read the same documents, and the control plane publishes changes at runtime. The rest of this page is about this store. |
-| `InMemorySnapshotDocumentStore` | `cosec-core` | Tests and local development. The starter creates an empty one without `cache-support`; the application puts documents into it with `put`. |
-| Your own `SnapshotDocumentStore` bean, without `cache-support` | your code | The documents live in another system. Every method must return without blocking ([Extending](../architecture/extending.md)). |
+| Redis, through [CoCache](https://cocache.ahoo.me) | `cosec-cocache` | Production. Several instances read the same documents, and the control plane publishes changes at runtime. The rest of this page is about this store. |
+| `InMemorySnapshotDocumentStore` | `cosec-spi` | Tests and local development. The starter creates an empty one without `cosec-cocache`; the application puts documents into it with `put`. |
+| Your own `SnapshotDocumentStore` bean, without `cosec-cocache` | your code | The documents live in another system. Every method must return without blocking ([Extending](../architecture/extending.md)). |
 
 Until a platform document is stored, every request answers `503` `unavailable`, and each instance reports itself not
 ready ([The first documents](#the-first-documents)).
 
 ## Redis
 
-With `cache-support`, Redis holds the documents and everything the control plane keeps about them, and also revoked
+With `cosec-cocache`, Redis holds the documents and everything the control plane keeps about them, and also revoked
 tokens, shadow-window reports and rate-limit counters. Each instance keeps an in-process copy through CoCache.
 
 ### Redis is the store of record
@@ -206,7 +206,7 @@ The revocation check and rate-limit rules without `strictFailure` are the docume
 Data-plane instances never write documents. Two writers do, both through the control plane's store, so every
 document's revision chain starts with their first write:
 
-- the **control plane** (`control-support` with `cache-support`), at runtime, through change requests;
+- the **control plane** (`cosec-control` with `cosec-cocache`), at runtime, through change requests;
 - **`cosec-migrate`**, for the first documents of a deployment and for the move from 7.x.
 
 Both write on the Redis and under the `cosec.authorization.snapshot.key-prefix` the instances read. A publish writes

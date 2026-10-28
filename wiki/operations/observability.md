@@ -28,10 +28,10 @@ The listeners the starter registers:
 | Listener (`name`) | Delivery | Present when |
 |---|---|---|
 | `LoggingAuditListener` (`logging-audit`) | `BEST_EFFORT` | `cosec.audit.enabled` (default `true`) |
-| `KafkaAuditListener` (`kafka-audit`) | [`cosec.audit.kafka.delivery`](./configuration.md#audit), `BEST_EFFORT` by default | `kafka-support`, a `KafkaOperations` bean, `cosec.audit.enabled` and `cosec.audit.kafka.enabled` (both default `true`) |
-| `MetricsListener` (`metrics`) | `BEST_EFFORT` | `micrometer-support`, a `MeterRegistry` bean and `cosec.metrics.enabled` (default `true`) |
-| `TracingListener` (`tracing`) | `BEST_EFFORT` | `opentelemetry-support` |
-| `ShadowListener` (`shadow`) | `BEST_EFFORT` | `cache-support` and `cosec.authorization.shadow.enabled` (default `true`) |
+| `KafkaAuditListener` (`kafka-audit`) | [`cosec.audit.kafka.delivery`](./configuration.md#audit), `BEST_EFFORT` by default | `cosec-kafka`, a `KafkaOperations` bean, `cosec.audit.enabled` and `cosec.audit.kafka.enabled` (both default `true`) |
+| `MetricsListener` (`metrics`) | `BEST_EFFORT` | `cosec-micrometer`, a `MeterRegistry` bean and `cosec.metrics.enabled` (default `true`) |
+| `TracingListener` (`tracing`) | `BEST_EFFORT` | `cosec-opentelemetry` |
+| `ShadowListener` (`shadow`) | `BEST_EFFORT` | `cosec-cocache` and `cosec.authorization.shadow.enabled` (default `true`) |
 
 Any `DecisionListener` bean of yours joins them; names must be unique, or startup fails
 ([Extending](../architecture/extending.md)). An `AuditEventSink` bean, such as one written for 7.x, joins them too: the
@@ -113,7 +113,7 @@ with at most 1,024 sends waiting:
 
 ## Tracing
 
-With `opentelemetry-support`, each decision event becomes a span named `cosec.authorize` (instrumentation
+With `cosec-opentelemetry`, each decision event becomes a span named `cosec.authorize` (instrumentation
 `me.ahoo.cosec`, kind `INTERNAL`). The span is made after the decision, from the request's start time and the
 pipeline's duration, under the span that was current when the adapter received the request; without one, it is a root
 span. Tracing therefore never delays or fails a request. Calls the pipeline makes for the request (Redis, a membership
@@ -133,7 +133,7 @@ which ties a response to its trace.
 
 ## Metrics
 
-With `micrometer-support` and a `MeterRegistry` (for example from Spring Boot Actuator), every decision event is
+With `cosec-micrometer` and a `MeterRegistry` (for example from Spring Boot Actuator), every decision event is
 recorded by the timer `cosec.authorization`, over the whole pipeline. Every tag has a small fixed set of values, so the
 number of time series stays bounded however many policies, apps and tenants there are:
 
@@ -197,13 +197,13 @@ content. Change listeners receive them.
 - **Break-glass needs a `REQUIRED` change listener:** without one, creating or changing a break-glass binding answers
   `503` (`break-glass needs a REQUIRED change listener, and none is configured`).
 
-With `kafka-support` and a `KafkaOperations` bean, the starter also registers a `KafkaChangeListener`, unless
+With `cosec-kafka` and a `KafkaOperations` bean, the starter also registers a `KafkaChangeListener`, unless
 [`cosec.control.audit.kafka.enabled`](./configuration.md#control-plane) is `false`. It writes each event to
 `cosec.control.audit.kafka.topic` (`cosec-control-audit`), keyed by the document (`platform`, `app:order`,
 `tenant:acme`), so a document's events stay in order. Its delivery is `cosec.control.audit.kafka.delivery`:
 `best-effort` by default, `required` to gate publishing and break-glass on the broker's acknowledgement (configure the
 producer with `acks=all`). With `delivery=required`, startup fails when the Kafka change listener cannot be created
-(no `kafka-support`, no `KafkaOperations` bean, or `enabled=false`), rather than publishing without the record:
+(no `cosec-kafka`, no `KafkaOperations` bean, or `enabled=false`), rather than publishing without the record:
 `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: ...`.
 
 ## Logs
@@ -212,7 +212,7 @@ producer with `acks=all`). With `delivery=required`, startup fails when the Kafk
 |---|---|
 | `me.ahoo.cosec.audit` | the audit log ([Audit log and Kafka](#audit-log-and-kafka)) |
 | `me.ahoo.cosec.runtime` | `Request [<requestId>] failed with an unmodelled exception.` at `ERROR` with the stack trace, for every `500`; `REQUIRED` listener failures; dropped events; attribute providers that fail; rate limiters that cannot count |
-| `me.ahoo.cosec.snapshot` | loading, lag, lost and regressed documents ([Snapshot health](#snapshot-health)) |
+| `me.ahoo.cosec.runtime.snapshot` | loading, lag, lost and regressed documents ([Snapshot health](#snapshot-health)) |
 | `me.ahoo.cosec.spring.boot.starter` | the startup checks, such as the `!!!` eviction warning; `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).` at `INFO` when the application declares no `BlacklistSource` ([Blacklist](../guide/security-model.md#blacklist)); the `WARN` of a service in gateway mode ([Services behind the gateway](./deployment.md#services-behind-the-gateway)) |
 | `me.ahoo.cosec.control` | the change log, and `Control API <method> <path> failed (request <requestId>).` for every control-plane `500` |
 

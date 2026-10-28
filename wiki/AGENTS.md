@@ -57,7 +57,7 @@ time one copy is updated. The homes that are easiest to duplicate by accident:
 | Decision algorithm and candidate order; deny-first, default-deny and fail-closed guarantees and their exceptions; boundary, blacklist and break-glass | `guide/security-model.md` |
 | Which inputs the client controls (tenant, app, space, remote IP) | `guide/security-model.md#trust-boundaries` |
 | Terms (principal, tenant, document, policy, statement, binding, membership, decision) | `guide/concepts.md` |
-| Module list and starter feature variants | `guide/introduction.md#modules` |
+| Module list, what each module needs, and the starter's module check (STA-1) | `guide/introduction.md#modules` |
 | Reader paths (which page follows which) | `guide/introduction.md#where-to-go-next` |
 | Outcome to HTTP status mapping; problem+json bodies; `CoSec-*` parameters | `integration/web.md` |
 | Credentials, membership claims, revocation, API keys | `integration/authentication.md` |

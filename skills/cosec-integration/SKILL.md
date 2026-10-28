@@ -1,6 +1,6 @@
 ---
 name: cosec-integration
-description: Integrate CoSec 8.0 into a Spring Boot service - choose the starter's feature variants (WebFlux, WebMVC, Gateway, Redis cache, control plane, ...), configure JWT and revocation, Redis with noeviction, route maps, the first platform document, checks in code with AuthorizationChecker, and hosting the control plane. Do not use for policy-only authoring or diagnosis.
+description: Integrate CoSec 8.0 into a Spring Boot service - choose the CoSec modules to add next to the starter (WebFlux, WebMVC, Gateway, Redis cache, control plane, ...), configure JWT and revocation, Redis with noeviction, route maps, the first platform document, checks in code with AuthorizationChecker, and hosting the control plane. Do not use for policy-only authoring or diagnosis.
 ---
 
 # CoSec Spring Boot Integration
@@ -20,38 +20,38 @@ Determine:
   control plane), and whether this service should also host the control plane.
 - Whether OAuth login, IP regions, tracing, metrics, OpenAPI or Kafka audit are actually required.
 
-The starter brings `cosec-core`, `cosec-jwt` and `cosec-runtime`. Each integration is a Gradle feature variant
-(capability) of the starter:
+The starter, `me.ahoo.cosec:cosec-spring-boot`, brings `cosec-runtime`, `cosec-login` and `cosec-jwt`, and wires every
+other CoSec module it finds on the classpath. Add each integration as a dependency of its own, with what it needs:
 
-| Need | Capability | Module |
+| Need | Module | Also add |
 |---|---|---|
-| Spring MVC | `webmvc-support` | `cosec-webmvc` |
-| Spring WebFlux | `webflux-support` | `cosec-webflux` |
-| Spring Cloud Gateway | `gateway-support` | `cosec-gateway` |
-| Redis: policy snapshot, revocation, API keys, cluster-wide rate limits, shadow | `cache-support` | `cosec-cocache` |
-| Control plane (change, simulate, explain, publish) | `control-support` | `cosec-control` |
-| Social OAuth login | `oauth-support` | `cosec-social` |
-| IP region attributes (`ext.ip2region.*`) | `ip2region-support` | `cosec-ip2region` |
-| OpenTelemetry spans | `opentelemetry-support` | `cosec-opentelemetry` |
-| Micrometer metrics | `micrometer-support` | `cosec-micrometer` |
-| OpenAPI route map and app document generation | `openapi-support` | `cosec-openapi` |
-| Kafka audit | `kafka-support` | `cosec-kafka` |
+| Spring MVC | `cosec-webmvc` | |
+| Spring WebFlux | `cosec-webflux` | |
+| Spring Cloud Gateway | `cosec-gateway` | |
+| Redis: policy snapshot, revocation, API keys, cluster-wide rate limits, shadow | `cosec-cocache` | `org.springframework.boot:spring-boot-data-redis`, `me.ahoo.cocache:cocache-spring-boot-starter` |
+| Control plane (change, simulate, explain, publish) | `cosec-control` | `cosec-cocache` |
+| Social OAuth login | `cosec-social` | |
+| IP region attributes (`ext.ip2region.*`) | `cosec-ip2region` | |
+| OpenTelemetry spans | `cosec-opentelemetry` | |
+| Micrometer metrics | `cosec-micrometer` | `io.micrometer:micrometer-core` |
+| OpenAPI route map and app document generation | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-common` |
+| Kafka audit | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 
 ```kotlin
 implementation(platform(libs.cosec.bom))
-implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-    capabilities { requireCapability("me.ahoo.cosec:webflux-support") }
-}
-implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-    capabilities { requireCapability("me.ahoo.cosec:cache-support") }
-}
+implementation("me.ahoo.cosec:cosec-spring-boot")
+implementation("me.ahoo.cosec:cosec-webflux")
+implementation("me.ahoo.cosec:cosec-cocache")
+implementation("org.springframework.boot:spring-boot-data-redis")
+implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 ```
 
-Declare the starter once per capability. With Maven, or a build that cannot select variants, add the module and mirror
-the feature's dependencies from `host/spring-boot/build.gradle.kts`: for example `cache-support` also needs
-`org.springframework.boot:spring-boot-data-redis` and `me.ahoo.cocache:cocache-spring-boot-starter`; WebFlux needs
-`kotlinx-coroutines-reactor`; OpenAPI needs the actuator and `springdoc-openapi-starter-common`; Kafka needs
-`spring-boot-starter-kafka`. `control-support` requires `cache-support`.
+Maven takes the same artifacts. The "Also add" column mirrors the `compileOnly` lines of
+`host/spring-boot/build.gradle.kts`; with Maven, import `me.ahoo.cosec:cosec-dependencies` or pin their versions.
+There are no starter capabilities (`requireCapability(...-support)`) in 8.0: replace each with its module.
+Startup fails with `... needs <artifact> (me.ahoo.cosec:<artifact>) on the classpath ... (STA-1)` when the web stack's
+adapter is missing (MVC, WebFlux, or Gateway even with `cosec.enabled=false`), when `cosec.api-key.store=redis` lacks
+`cosec-cocache`, or when `cosec.audit.kafka.delivery=required` lacks `cosec-kafka`: add the artifact it names.
 
 ## Minimal configuration
 
@@ -71,12 +71,12 @@ cosec:
 
 Startup fails, on purpose, when:
 
-- **JWT is on without revocation storage.** Revocation is always on. With `cache-support` the Redis token store
+- **JWT is on without revocation storage.** Revocation is always on. With `cosec-cocache` the Redis token store
   supplies it; without it, register a `TokenStore` and a `RevocationReader` bean yourself, or set
   `cosec.jwt.enabled=false`.
 - **The route map location does not exist.** The default `classpath:cosec-routes.json` must exist on WebFlux and
   WebMvc hosts unless `cosec.authorization.routes.location` is set empty. A gateway host loads no route map.
-- **Redis may evict the snapshot.** With `cache-support`, every Redis node must have `maxmemory-policy noeviction`. A
+- **Redis may evict the snapshot.** With `cosec-cocache`, every Redis node must have `maxmemory-policy noeviction`. A
   different policy, or one that cannot be read (`CONFIG GET` denied on a managed Redis, a wrapped CoCache backend),
   fails startup. Only when the operator has set `noeviction` and CoCache cannot read it, set
   `cosec.authorization.snapshot.eviction-check=warn` (it starts and logs a `!!!` warning).
@@ -98,13 +98,13 @@ On WebFlux and WebMvc hosts, `cosec-routes.json` gives requests their `service:v
 ```
 
 It loads all or nothing: overlapping routes for one method, a malformed route, or a resource variable the path does not
-capture fails startup. Requests no route matches stay `http:<METHOD>` on `http:path:<path>`. With `openapi-support`,
+capture fails startup. Requests no route matches stay `http:<METHOD>` on `http:path:<path>`. With `cosec-openapi`,
 `GET /actuator/cosecServiceGenerator/routes` generates the route map and `/app` the app document. Policies on `http:*`
 never cover mapped requests: tell the policy author which namespace each endpoint is in.
 
 ## Publishing the first documents
 
-The service decides on a snapshot of documents (platform, app, tenant), read from Redis with `cache-support` or from an
+The service decides on a snapshot of documents (platform, app, tenant), read from Redis with `cosec-cocache` or from an
 in-memory store without it. **Until a platform document exists, every request is 503.**
 
 - With Redis: write the documents into a directory (`platform.json`, `apps/<appId>.json`, `tenants/<tenantId>.json`)
@@ -143,7 +143,7 @@ cosec:
     enabled: false  # it verifies no tokens, so it needs no secret
 ```
 
-- Add only the web capability (`webflux-support` or `webmvc-support`); no `cache-support`. No `AuthorizationChecker`
+- Add only the web module (`cosec-webflux` or `cosec-webmvc`); no `cosec-cocache`. No `AuthorizationChecker`
   is wired in this mode.
 - **Only the gateway may reach it** (NetworkPolicy, private network or mTLS): it believes any `CoSec-Identity`, and
   logs a WARN at startup saying so. Never expose such a service directly.
@@ -196,7 +196,7 @@ enforcing on the real request. See https://cosec.ahoo.me/integration/checks.
 
 ## Hosting the control plane
 
-With `control-support` (and `cache-support`), the host serves the control API under
+With `cosec-control` (and `cosec-cocache`), the host serves the control API under
 `{cosec.control.http.base-path}/v1` (default `/cosec/control/v1`): documents, changes, shadow windows, approval,
 break-glass, `simulate`, `explain`, `analyze`. Each call first passes the host pipeline (so the host's documents must
 permit the authenticated caller on that path), then is authorized again in app `cosec.control.app-id`
@@ -209,13 +209,13 @@ in app `cosec-control`. On WebFlux, raise `spring.codec.max-in-memory-size` for 
 ## Optional behavior
 
 - Audit: decisions are logged under `me.ahoo.cosec.audit` (denies WARN, allows DEBUG) unless
-  `cosec.audit.enabled=false`; `kafka-support` adds a Kafka listener (`cosec.audit.kafka.*`). Existing
+  `cosec.audit.enabled=false`; `cosec-kafka` adds a Kafka listener (`cosec.audit.kafka.*`). Existing
   `AuditEventSink` beans are picked up as BEST_EFFORT listeners. Queued events drain on shutdown for up to
   `cosec.observability.listener.drain-timeout` (5s). Metrics and tracing
   listeners come with their features. https://cosec.ahoo.me/operations/observability.
 - Rate limits are rules in the documents. The limiter is Redis when a `ReactiveStringRedisTemplate` is present,
   otherwise per JVM.
-- Shadow windows: with `cache-support`, the instance replays a sample (`cosec.authorization.shadow.sample-rate`,
+- Shadow windows: with `cosec-cocache`, the instance replays a sample (`cosec.authorization.shadow.sample-rate`,
   default 0.1) of requests on staged candidates and reports differences to the control plane.
 - Blacklist: declare a `BlacklistSource` bean and the starter registers the blacklist provider; without one, startup
   logs an INFO line and nothing is blocked.

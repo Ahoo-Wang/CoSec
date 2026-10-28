@@ -66,23 +66,27 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 
 ## 模块 {#modules}
 
-应用依赖 `cosec-spring-boot-starter`，并以 Gradle capability 的形式添加集成（见[快速开始](./quick-start.md#add-the-dependency)）。每个应用需要一个 Web 适配器；多数还需要 `cache-support`，让 Redis 成为策略快照和已吊销令牌的权威存储。
+应用依赖 Spring Boot 自动配置 `cosec-spring-boot`，并在它旁边添加所需的模块（见[快速开始](./quick-start.md#add-the-dependency)）。starter 会装配它在类路径上找到的每个模块。每个应用需要一个 Web 适配器；多数还需要 `cosec-cocache`，让 Redis 成为策略快照和已吊销令牌的权威存储。
 
-| 你需要 | Capability | 模块 |
+| 你需要 | 添加 | 同时添加 |
 |---|---|---|
-| 在 Spring WebFlux 服务中做授权 | `webflux-support` | `cosec-webflux` |
-| 在 Spring MVC 服务中做授权 | `webmvc-support` | `cosec-webmvc` |
-| 在 Spring Cloud Gateway 中做授权 | `gateway-support` | `cosec-gateway` |
-| 在 Redis 中存放策略快照、已吊销令牌、影子窗口，以及集群范围的限流 | `cache-support` | `cosec-cocache` |
-| 控制面：发布、历史、回滚、影子窗口、审批、模拟 | `control-support` | `cosec-control`（需要 `cache-support`） |
-| 通过 OAuth 社交登录 | `oauth-support` | `cosec-social` |
-| 每次决策一个追踪 span | `opentelemetry-support` | `cosec-opentelemetry` |
-| 按结果统计的每次决策计时器 | `micrometer-support` | `cosec-micrometer` |
-| 从 OpenAPI 描述生成路由映射和应用文档 | `openapi-support` | `cosec-openapi` |
-| 把决策事件（以及可选的控制面变更）发送到 Kafka | `kafka-support` | `cosec-kafka` |
-| 把客户端所在地区作为外部属性 | `ip2region-support` | `cosec-ip2region` |
+| 在 Spring WebFlux 服务中做授权 | `cosec-webflux` | |
+| 在 Spring MVC 服务中做授权 | `cosec-webmvc` | |
+| 在 Spring Cloud Gateway 中做授权 | `cosec-gateway` | |
+| 在 Redis 中存放策略快照、已吊销令牌、API key、影子窗口，以及集群范围的限流 | `cosec-cocache` | `org.springframework.boot:spring-boot-data-redis`、`me.ahoo.cocache:cocache-spring-boot-starter` |
+| 控制面：发布、历史、回滚、影子窗口、审批、模拟 | `cosec-control` | `cosec-cocache` |
+| 通过 OAuth 社交登录 | `cosec-social` | |
+| 每次决策一个追踪 span | `cosec-opentelemetry` | |
+| 按结果统计的每次决策计时器 | `cosec-micrometer` | `io.micrometer:micrometer-core` |
+| 从 OpenAPI 描述生成路由映射和应用文档 | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`、`org.springdoc:springdoc-openapi-starter-common` |
+| 把决策事件（以及可选的控制面变更）发送到 Kafka | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
+| 把客户端所在地区作为外部属性 | `cosec-ip2region` | |
 
-starter 始终引入 `cosec-runtime`（协程请求 Pipeline）、`cosec-core`（文档、快照、令牌、成员关系、API key）、`cosec-engine` 和 `cosec-model`（纯函数决策引擎）、`cosec-api`（公共契约）以及 `cosec-jwt`（JWT 令牌）。`cosec-bom` 用于对齐所有已发布模块的版本。
+“同时添加”一列是 starter 中该模块的自动配置除模块本身之外还需要的依赖。使用 Gradle 时，CoSec 模块会带上为这些库提供版本的 platform；Maven 不会传递 platform，需要导入 `me.ahoo.cosec:cosec-dependencies`，或自己写明版本。
+
+已开启的功能所需的模块会在启动时检查（STA-1）：以下情况应用无法启动，报错信息会给出要添加的制品——Spring MVC 宿主缺少 `cosec-webmvc`；WebFlux 宿主缺少 `cosec-webflux`；Spring Cloud Gateway 宿主缺少 `cosec-gateway`（即使 `cosec.enabled=false`）；`cosec.api-key.store=redis` 缺少 `cosec-cocache`；`cosec.audit.kafka.delivery=required` 缺少 `cosec-kafka`（[故障排查](../operations/troubleshooting.md#startup-fails-on-a-missing-module)）。
+
+starter 始终引入 `cosec-runtime`（协程请求 Pipeline、策略文档、快照与令牌校验）、`cosec-spi`（扩展点）、`cosec-engine` 和 `cosec-model`（纯函数决策引擎）、`cosec-api`（公共契约）、`cosec-login`（登录与签发令牌）以及 `cosec-jwt`（JWT 令牌）。`cosec-bom` 用于对齐所有已发布模块的版本。
 
 `cosec-testkit` 是测试依赖：它用 JUnit 5 针对你自己的策略文档运行场景，方式与 CoSec 的一致性测试套件相同（[策略测试](../policies/testing.md)）。
 

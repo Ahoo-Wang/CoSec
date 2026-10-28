@@ -61,20 +61,20 @@ description. They are listed under 💥 Breaking Changes and require a major ver
   formatting locally, so commit the corrected files.
 - Every source file starts with the Apache-2.0 license header in
   [config/detekt/license.template](config/detekt/license.template). Detekt fails the build otherwise.
-- Public APIs are interfaces in `cosec-api`; implementations live in `cosec-core` and the integration
-  modules. See the [architecture overview](https://cosec.ahoo.me/architecture/overview).
+- Public contracts are interfaces in `cosec-api`, extension points (ports) in `cosec-spi`; the pipeline, documents
+  and snapshots live in `cosec-runtime`, and each technology in its own module. See the [architecture overview](https://cosec.ahoo.me/architecture/overview).
 
 ## 5. Tests and coverage
 
 ```bash
 ./gradlew check                                   # tests + detekt for all modules
-./gradlew :core:test --tests "me.ahoo.cosec.policy.*"
+./gradlew :runtime:test --tests "me.ahoo.cosec.runtime.document.*"
 ./gradlew :code-coverage-report:codeCoverageReport
 ```
 
 - **Unit tests**: JUnit 5, MockK, Hamcrest and FluentAssert, next to the code they cover.
 - **Integration tests** run against real infrastructure. The Redis-backed modules (`cosec-cocache`,
-  `cosec-spring-boot-starter`) expect Redis on `localhost:6379`:
+  `cosec-spring-boot`) expect Redis on `localhost:6379`:
   `docker run -d --name cosec-redis -p 6379:6379 redis:7`.
 - **Coverage gates** (Codecov): changed lines need **≥ 80 %** coverage, and overall project coverage
   must not drop by more than 1 %.

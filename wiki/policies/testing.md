@@ -12,7 +12,7 @@ tools around it. The fields themselves are in the [policy language](./language.m
 
 ## The control plane
 
-The control plane comes with the starter's `controlSupport` feature (it needs `cacheSupport`, since documents live in
+The control plane comes with the `cosec-control` module (it needs `cosec-cocache`, since documents live in
 Redis). It serves an HTTP API under `{cosec.control.http.base-path}/v1` (default `/cosec/control/v1`); its settings are
 `cosec.control.*` ([Configuration](../operations/configuration.md)), and how documents are stored and first
 published is in [Storage](../operations/storage.md).
@@ -216,7 +216,7 @@ The window closes:
 The control plane looks at every open window each `cosec.control.shadow.check-interval` (default 1 minute), on one
 control-plane instance at a time. When a window closes, the change becomes `READY`, or `AWAITING_APPROVAL` when it needs
 [approval](#approval). If the document's revision moved meanwhile, it becomes `CONFLICTED`. The data plane takes part
-with `cacheSupport` and `cosec.authorization.shadow.*` (on by default, sampling 10 % of requests).
+with `cosec-cocache` and `cosec.authorization.shadow.*` (on by default, sampling 10 % of requests).
 
 Attribute providers, and the types they declare, must be the same on every data-plane instance and on the control host.
 The control plane checks a candidate against its own providers; an instance without one of them cannot compile a
@@ -293,7 +293,7 @@ memberships.
 ## Policies in CI
 
 Validate document files with the [JSON Schemas](./language.md#json-schema), then compile them with the reader and
-compiler the control plane and every instance use, from `cosec-core`:
+compiler the control plane and every instance use, from `cosec-runtime`:
 
 ```kotlin
 import me.ahoo.cosec.model.decision.DocumentKind

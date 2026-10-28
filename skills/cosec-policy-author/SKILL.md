@@ -10,7 +10,7 @@ establish: the actions (route-map `service:verb`, or `http:<METHOD>` for unmappe
 is for (anyone, a principal, a role), in which tenant, app and space, and the explicit deny cases.
 
 The human-facing reference is https://cosec.ahoo.me/policies/language. In a CoSec checkout the format is defined in
-`core/core/src/main/kotlin/me/ahoo/cosec/snapshot/format/PolicyDocumentFormats.kt` (generated into
+`core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/format/PolicyDocumentFormats.kt` (generated into
 `schema/cosec-snapshot-document.schema.json`, `cosec-binding.schema.json`, `cosec-catalog.schema.json`) and read by
 `PolicyDocumentCodec`; conditions are checked by `model/.../condition/ConditionChecker.kt`. Treat those as the truth.
 
@@ -281,7 +281,7 @@ Check the final document for:
    are compared, and `"by"` pins the deciding statement (`"by": null` is the implicit deny). Write one scenario per
    meaningful allow/deny boundary, and one per explicit DENY with its `by`. The kit does not run rate limits or route
    maps, and documents that read `ext.*` do not load in it. https://cosec.ahoo.me/policies/testing#testing-decisions
-4. **Simulate and explain** through the control plane (`controlSupport`), as an operator allowed to:
+4. **Simulate and explain** through the control plane (`cosec-control`), as an operator allowed to:
    `POST /cosec/control/v1/simulate` with
    `{"request": {"tenant": "acme", "principal": "alice", "roles": ["editor"], "app": "order-service", "space": "", "action": "order:read", "resource": "order/42"}, "candidate": "<changeId>"}`
    compares a staged change with the enforced documents; `POST /explain` shows the deciding statement. External

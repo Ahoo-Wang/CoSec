@@ -159,7 +159,9 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 }
 ```
 
-`Credentials` and `Authentication` here are the login types of `me.ahoo.cosec.api.authentication`, not the pipeline's.
+`Credentials` and `Authentication` here are the login types of `me.ahoo.cosec.login` (`TokenCompositeAuthentication`
+and `TokenConverter` are in `me.ahoo.cosec.login.token`), from `cosec-login`, which the starter brings; they are not
+the pipeline's `Credentials` and `Authenticator` (`me.ahoo.cosec.spi.authn`).
 `cosec.authentication.login.enabled` (on by default) switches only these login beans, `TokenCompositeAuthentication`
 and social login included; requests are authenticated by the pipeline either way. The login path must be reachable by
 anonymous callers, so it needs an `Anyone` binding that permits it, as in the
@@ -204,7 +206,7 @@ Two things a refresh does not do:
 ## Logout and revocation
 
 JWTs are stateless: without extra work a token stays valid until it expires. So that logout takes effect at once,
-revocation is always on, with no switch. It needs `cache-support`, or a `TokenStore` and a `RevocationReader` bean of
+revocation is always on, with no switch. It needs `cosec-cocache`, or a `TokenStore` and a `RevocationReader` bean of
 your own. With JWT enabled and neither, startup fails: a logout that silently does nothing is not an option. A
 service that only verifies tokens it never revokes still needs the reader; one that issues no tokens and reads none
 can set `cosec.jwt.enabled=false`.
@@ -283,7 +285,7 @@ identity of a credential that never expires ([Forwarding the identity](./web.md#
 key by adding the new one, moving the client over, then removing the old one.
 
 **In Redis**, shared by every instance and changeable at runtime: set `cosec.api-key.store: redis` (needs
-`cache-support`; keys live under `cosec.api-key.key-prefix`, default `cosec:api-key`). The pipeline reads them with
+`cosec-cocache`; keys live under `cosec.api-key.key-prefix`, default `cosec:api-key`). The pipeline reads them with
 the non-blocking `RedisApiKeyReader`. Manage keys through the `RedisApiKeyStore` bean:
 
 | Call | Effect |
@@ -317,7 +319,7 @@ cannot influence.
 
 ## Social login
 
-With `oauth-support`, `SocialAuthentication` signs users in through [JustAuth](https://github.com/justauth/JustAuth)
+With `cosec-social`, `SocialAuthentication` signs users in through [JustAuth](https://github.com/justauth/JustAuth)
 providers. Configure each provider under `cosec.authentication.login.social.registration.<name>`, with its JustAuth
 `type`, client id, secret and redirect URI ([Configuration](../operations/configuration.md)).
 

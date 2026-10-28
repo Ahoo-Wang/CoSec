@@ -28,55 +28,69 @@ change must keep. What a decision *means* (deny first, default deny, fail closed
 
 ## Module layering
 
-Modules sit in group directories: `api/`, `core/` (model, engine, runtime, control, core), `backends/` (cocache,
-kafka), `edge/` (webflux, webmvc, gateway, openapi), `extensions/` (jwt, social, ip2region, micrometer,
-opentelemetry), `host/` (spring-boot), `migration/`, `test/`, `bom/` and `platform/` (gateway-server). A Gradle project
-is named after its directory (`:engine`, `:spring-boot`); its artifact keeps the `cosec-` prefix.
+Modules sit in group directories: `api/` (annotations, api), `core/` (model, engine, spi, runtime, control),
+`backends/` (cocache, kafka), `edge/` (webflux, webmvc, gateway, openapi), `extensions/` (jwt, social, login,
+ip2region, micrometer, opentelemetry), `host/` (spring-boot), `migration/`, `test/`, `bom/` and `platform/`
+(gateway-server). A Gradle project is named after its directory (`:engine`, `:spring-boot`); its artifact keeps the
+`cosec-` prefix.
 
 ```mermaid
 flowchart BT
+    annotations[cosec-annotations]
+    api[cosec-api]
     model[cosec-model]
     engine[cosec-engine] --> model
-    api[cosec-api]
-    core[cosec-core] --> api & engine
-    runtime[cosec-runtime] --> engine & core
+    spi[cosec-spi] --> model & api
+    runtime[cosec-runtime] --> engine & spi & annotations
     control[cosec-control] --> runtime
-    jwt[cosec-jwt] --> core
-    cocache[cosec-cocache] --> core
-    social[cosec-social] --> core
-    openapi[cosec-openapi] --> core
-    listeners[cosec-opentelemetry<br>cosec-micrometer<br>cosec-kafka<br>cosec-ip2region] --> runtime
-    webflux[cosec-webflux] --> runtime & jwt
-    webmvc[cosec-webmvc] --> runtime & jwt
+    cocache[cosec-cocache] --> spi
+    kafka[cosec-kafka] --> spi & runtime
+    login[cosec-login] --> runtime
+    jwt[cosec-jwt] --> login
+    social[cosec-social] --> login
+    openapi[cosec-openapi] --> runtime
+    listeners[cosec-opentelemetry<br>cosec-micrometer<br>cosec-ip2region] --> runtime
+    webflux[cosec-webflux] --> runtime
+    webmvc[cosec-webmvc] --> runtime
     gateway[cosec-gateway] --> webflux
-    starter[cosec-spring-boot-starter] --> runtime & jwt
-    starter -. feature variants .-> webflux & webmvc & gateway & cocache & control & social & listeners & openapi
+    starter[cosec-spring-boot] --> runtime & login & jwt
+    starter -. on the classpath .-> webflux & webmvc & gateway & cocache & control & kafka & social & listeners & openapi
     migrate[cosec-migrate] --> cocache & control
-    testkit[cosec-testkit] --> core & runtime
+    testkit[cosec-testkit] --> runtime
     server[cosec-gateway-server] --> starter
 ```
 
-Arrows point at what a module depends on. The rules behind the picture:
+Arrows point at what a module depends on; the dotted ones are modules the starter wires when the application adds them.
+The rules behind the picture:
 
 - **`cosec-model` and `cosec-engine`** (directories `core/model/` and `core/engine/`) are the pure core: ids, bindings,
   memberships, the condition AST, scopes and decisions in the model; action and resource patterns, the policy compiler
   and the flat engine in the engine. They depend on the Kotlin standard library only. `EnginePurityTest` (ArchUnit)
-  fails on any reference to Reactor, Spring, logging, I/O, threads or clocks, and the `verifyPureClasspath` task, part
-  of `check`, fails on any other dependency. `ScopeConstructionTest` checks that only `ScopeResolver` constructs a
-  resolved `Scope`.
-- **`cosec-core`** holds what every host needs around the engine: the snapshot documents and their codec, compiler and
-  format descriptors (which generate `schema/*.schema.json`), `SnapshotSource` and the `SnapshotDocumentStore` SPI,
-  route maps, membership claims and `MembershipProvider`, tokens and revocation (`TokenStore`, `RevocationReader`), API
-  keys, and the logging audit sink. It depends on `cosec-api` and `cosec-engine`.
-- **`cosec-api`** holds the contracts applications compile against: `CoSecPrincipal`, `Tenant`, tokens,
-  `Authentication`, `SecurityContext`, `AuditEvent` and `AuditEventSink`. It depends on Reactor alone. Changing it is a breaking change.
+  fails on any reference to Reactor, Spring, logging, I/O, threads or clocks, and `DependencyRulesTest` fails on any
+  other resolved dependency. `ScopeConstructionTest` checks that only `ScopeResolver` constructs a resolved `Scope`.
+- **`cosec-api`** (directory `api/api/`) holds the contracts applications compile against: `CoSecPrincipal`, `Tenant`,
+  tokens, `SecurityContext`, `AuditEvent`, and their simple implementations (`SimplePrincipal`, `SimpleTenant`). It
+  depends on the Kotlin standard library alone. Changing it is a breaking change.
+- **`cosec-annotations`** (directory `api/annotations/`) holds `@InternalCoSecApi`, an opt-in marker at error level: a
+  declaration carrying it is public only so CoSec's own modules can reach it, and has no compatibility promise.
+  Applications do not opt in; `SourceRulesTest` fails when an opt-in appears outside CoSec's own Kotlin sources.
+- **`cosec-spi`** (directory `core/spi/`) holds the ports a request or a store calls, with their values and in-memory
+  implementations, under `me.ahoo.cosec.spi.*`: the snapshot store (`SnapshotDocumentStore`), memberships, token
+  verification and revocation (`TokenVerifier`, `RevocationReader`, `TokenStore`, `TokenRevoker`), API keys, rate
+  limiters, attribute providers, authenticators, the forwarded identity and the audit sink. It depends on
+  `cosec-model`, `cosec-api` and kotlinx-coroutines only, so a third party implements a port against it alone. A port
+  whose signature needs a layer's types stays with that layer: `DecisionListener`, `RequestGate`, the shadow window
+  ports in `cosec-runtime`; `ControlStore` and `ChangeListener` in `cosec-control`
+  ([Extending](./extending.md)).
 - **`cosec-runtime`** (directory `core/runtime/`) is the data plane: the coroutine `Pipeline`, `StatusMapping`,
-  `AuthorizationChecker`, and the SPIs a request calls (`Authenticator`, `AttributeProvider`, `DecisionListener`,
-  `RateLimiter`). Coroutines stay in this module and the adapters, Reactor only at the adapter bridges:
-  `RuntimeBoundaryTest` (ArchUnit) fails when code in `runtime/`, `engine/` or `model/` references `reactor.*`, when a
-  data-plane SPI signature carries a Reactor type, when `runtime/` references Spring, the Servlet API or a coroutine
-  bridge (`kotlinx.coroutines.reactor`, `runBlocking`), `GlobalScope` or `Dispatchers.IO`, or when it calls
-  `runCatching`, which swallows cancellation.
+  `AuthorizationChecker`, the snapshot documents and their codec, compiler and format descriptors (which generate
+  `schema/*.schema.json`), `SnapshotSource`, route maps, token verification, the built-in authenticators and the
+  logging audit sink. Its one Jackson mapper, `CoSecJson`, is internal (`@InternalCoSecApi`), and no Jackson type
+  appears in a public signature of `api/` or `core/` (`JacksonSignatureTest`). Coroutines stay in this module and the adapters,
+  Reactor only at the adapter bridges: `RuntimeBoundaryTest` (ArchUnit) fails when code in `runtime/`, `engine/` or
+  `model/` references `reactor.*`, when a data-plane SPI signature carries a Reactor type, when `runtime/` references
+  Spring, the Servlet API or a coroutine bridge (`kotlinx.coroutines.reactor`, `runBlocking`), `GlobalScope` or
+  `Dispatchers.IO`, or when it calls `runCatching`, which swallows cancellation.
 - **`cosec-control`** (directory `core/control/`) is the control plane: revisions, change requests, shadow windows,
   approvals, break-glass, simulation and analysis. It is a library that a host wires in. `ControlBoundaryTest`
   (ArchUnit) imports the module's own compiled classes and fails when one of them is outside `me.ahoo.cosec.control`,
@@ -84,22 +98,39 @@ Arrows point at what a module depends on. The rules behind the picture:
   `Dispatchers.IO` or `GlobalScope`.
 - **Every other library module adapts exactly one technology**: a web stack (`cosec-webflux`, `cosec-webmvc`,
   `cosec-gateway`), Redis through CoCache (`cosec-cocache`: snapshot store, control store, revocation, rate limiter,
-  shadow reports), JWT, OAuth, OpenAPI, or an observer of decisions (`cosec-opentelemetry`, `cosec-micrometer`,
-  `cosec-kafka`, `cosec-ip2region`). An adapter never decides; it translates.
-- **`cosec-spring-boot-starter`** wires everything. Each integration is a Gradle feature variant declared in
-  [`host/spring-boot/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/build.gradle.kts):
-  the adapter module is a dependency of that variant only, and its auto-configuration is guarded by
-  `@ConditionalOnClass`, so it is active only when the application requests the capability. The capabilities are listed
-  in the [introduction](../guide/introduction.md#modules).
+  shadow reports), Kafka (`cosec-kafka`), login and token issuing (`cosec-login`, which keeps the 7.x Reactor login
+  contracts), JWT (`cosec-jwt`), OAuth (`cosec-social`), OpenAPI, or an observer of decisions
+  (`cosec-opentelemetry`, `cosec-micrometer`, `cosec-ip2region`). An adapter never decides; it translates.
+- **`cosec-spring-boot`** (directory `host/spring-boot/`) wires everything. It brings `cosec-runtime`, `cosec-login`
+  and `cosec-jwt`; every other module is `compileOnly` in
+  [`host/spring-boot/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/build.gradle.kts),
+  and its auto-configuration is guarded by `@ConditionalOnClass`, so it is active only when the application adds the
+  module. A module that a turned-on feature needs is checked at startup (STA-1,
+  [`CoSecModuleCheckAutoConfiguration`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt)):
+  a forgotten adapter would otherwise leave a web host without a filter, so startup fails and names the artifact.
+  The modules and what each needs are listed in the [introduction](../guide/introduction.md#modules).
 - **`cosec-testkit`** (directory `test/testkit/`) runs scenarios against an application's own documents in JUnit 5. It
-  depends on `cosec-core` and `junit-jupiter-api` (both part of its API) and on `cosec-runtime`, for the membership
-  merge the pipeline uses. It holds the engine level of the scenario format, which `conformance` runs too, so the
-  suite and the applications' tests evaluate scenarios one way.
+  depends on `cosec-runtime` and `junit-jupiter-api` (both part of its API). It holds the engine level of the scenario
+  format, which `conformance` runs too, so the suite and the applications' tests evaluate scenarios one way.
 - **`cosec-migrate`** converts 7.x data into 8.0 documents and publishes them; no application depends on it.
   **`cosec-gateway-server`** is a ready-to-run gateway built from the starter; it is never published. **`conformance`**,
-  **`architecture`** and **`e2e`** are test-only modules and are never published either. `architecture` holds the
-  structural rules that scan several modules: the purity and boundary tests above, the one-decision-path and token
-  rules, the project list and the version catalog.
+  **`architecture`** and **`e2e`** are test-only modules and are never published either.
+
+`architecture` (directory `test/architecture/`) holds the structural rules that scan several modules (RFC 0011 §5):
+
+- `DependencyRulesTest` reads the declared and resolved main dependencies of every project, which the root build's
+  `architectureFacts` task writes, and fails when a declared dependency points outwards (the reviewed exceptions, such
+  as `cosec-kafka` on `cosec-runtime` for `DecisionListener`, are listed with their reason in `DependencyRules`), when
+  `cosec-annotations`, `cosec-api`, `cosec-model` or `cosec-engine` resolves anything but the Kotlin standard library
+  (`cosec-spi` adds coroutines), or when `cosec-runtime` or `cosec-control` resolves Reactor, Spring, the Servlet API or
+  a Redis client.
+- `SourceRulesTest` scans the compiled classes: Reactor only in the edge, the extensions and the host (and
+  `cosec-cocache`, whose reactive Redis client the suspending ports await); no Spring, Servlet API or Redis client in
+  `api/` and `core/`; the backends and extensions use only their own Spring technology; the backends reach into
+  `cosec-runtime` and `cosec-control` only through the listed ports and `CoSecJson`; a package belongs to one module;
+  opt-ins to the internal API only in CoSec's own sources.
+- `JacksonSignatureTest`, the purity and boundary tests above, the one-decision-path and token rules, the project list
+  (`ProjectListTest`) and the version catalog.
 
 ## Request path
 
@@ -244,7 +275,7 @@ tenant. They are stored as JSON (schema 2), compiled once per revision, and held
 documents. A view is a reference to three of them, so an evaluation always sees one revision of each document
 (`SNP-1`, guarded by `SnapshotConsistencyPropertyTest`).
 
-[`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/core/src/main/kotlin/me/ahoo/cosec/snapshot/SnapshotSource.kt)
+[`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt)
 holds them:
 
 - **Hot path.** `peek` is a synchronous lookup in memory, with no future and no I/O, safe on an event loop. Only a miss
@@ -265,7 +296,7 @@ holds them:
   decision is `Indeterminate` unless a DENY matches. With the starter, a missing platform document is unresolved too,
   so every request fails closed until one is published.
 
-The store is an SPI, `SnapshotDocumentStore`. With `cache-support` it is
+The store is an SPI, `SnapshotDocumentStore`. With `cosec-cocache` it is
 [`RedisSnapshotDocumentStore`](https://github.com/Ahoo-Wang/CoSec/blob/main/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore.kt):
 Redis is the store of record, CoCache keeps a local copy for at most `local-max-age`, conditional reads bypass every
 local copy, and CoCache's invalidation channel carries the change notifications. Without it, the starter uses an
@@ -275,7 +306,7 @@ in-memory store. Redis keys, the `noeviction` requirement and behavior when Redi
 
 ## Control plane
 
-The control plane (`control-support`) is the only component that writes policy documents. Data-plane instances only read
+The control plane (`cosec-control`) is the only component that writes policy documents. Data-plane instances only read
 them. It runs inside a host application, behind the same pipeline as every other request, and exposes its API under
 `cosec.control.http.base-path`.
 

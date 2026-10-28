@@ -12,16 +12,16 @@ types.
 
 ## Choosing an adapter
 
-Pick the adapter for your stack by requesting its capability of `cosec-spring-boot-starter`. All three hand the
+Pick the adapter for your stack by adding its module next to `cosec-spring-boot`. All three hand the
 request to the same `Pipeline`, so they answer every request byte for byte alike; only the plumbing differs.
 
-| Stack | Capability | Filter the starter registers | Order |
+| Stack | Module | Filter the starter registers | Order |
 |---|---|---|---|
-| Spring WebFlux | `webflux-support` | `PipelineWebFilter` (`WebFilter`) | `1000` |
-| Spring MVC | `webmvc-support` | `PipelineServletFilter` (servlet `Filter`, every URL) | `HIGHEST_PRECEDENCE + 100` |
-| Spring Cloud Gateway | `gateway-support` | `PipelineGatewayFilter` (`GlobalFilter`) | `HIGHEST_PRECEDENCE + 10` |
+| Spring WebFlux | `cosec-webflux` | `PipelineWebFilter` (`WebFilter`) | `1000` |
+| Spring MVC | `cosec-webmvc` | `PipelineServletFilter` (servlet `Filter`, every URL) | `HIGHEST_PRECEDENCE + 100` |
+| Spring Cloud Gateway | `cosec-gateway` | `PipelineGatewayFilter` (`GlobalFilter`) | `HIGHEST_PRECEDENCE + 10` |
 
-Every adapter needs the capability, `cache-support` (the snapshot documents and token revocation live in Redis), a
+Every adapter needs its module, `cosec-cocache` (the snapshot documents and token revocation live in Redis), a
 JWT secret and a route map; a service that only reads the identity its gateway forwards needs none of them
 ([Services behind the gateway](#services-behind-the-gateway)). The
 [Quick start](../guide/quick-start.md#add-the-dependency) shows the dependencies; the snippets below show only what
@@ -37,9 +37,11 @@ servlet model.
 **Spring Cloud Gateway.** When the gateway's `GlobalFilter` is on the classpath, the starter registers
 `PipelineGatewayFilter` and no `PipelineWebFilter`. See [Gateway](#gateway) for what differs.
 
-With Maven, which has no feature variants, add `cosec-spring-boot-starter` plus the adapter module itself
-(`cosec-webflux`, `cosec-webmvc` or `cosec-gateway`) and `cosec-cocache`. The
-[module list](../guide/introduction.md#modules) names the module behind every capability.
+The starter checks the adapter at startup (STA-1): a Spring MVC host without `cosec-webmvc`, a WebFlux host without
+`cosec-webflux` or a Spring Cloud Gateway host without `cosec-gateway` does not start, and the message names the
+artifact. A gateway host is checked even with `cosec.enabled=false`, because the gateway filter that strips a client's
+`CoSec-Identity` header comes with `cosec-gateway`. The [module list](../guide/introduction.md#modules) names what
+each module needs with it.
 
 ## How a request is handled
 
@@ -137,7 +139,7 @@ A route map gives each route of a service an action and a typed resource, so pol
 
 A Spring Cloud Gateway host loads no route map: every gateway request is in the `http` namespace.
 
-With `openapi-support` and Spring Boot Actuator, the endpoint `cosecServiceGenerator/routes` generates a route map
+With `cosec-openapi` and Spring Boot Actuator, the endpoint `cosecServiceGenerator/routes` generates a route map
 from the service's OpenAPI document, and `cosecServiceGenerator/app` the matching app document to publish through
 the control plane ([Role permissions](../policies/role-permissions.md)).
 
@@ -298,7 +300,7 @@ Facts the request does not carry come from `AttributeProvider` beans as **extern
 
 | Attributes | Added by | Value |
 |---|---|---|
-| `ext.ip2region.country`, `.province`, `.city`, `.isp` | `ip2region-support`, with `cosec.ip2region.enabled` (on by default) | The client IP's location from an embedded [ip2region](https://github.com/lionsoul2014/ip2region) database. |
+| `ext.ip2region.country`, `.province`, `.city`, `.isp` | `cosec-ip2region`, with `cosec.ip2region.enabled` (on by default) | The client IP's location from an embedded [ip2region](https://github.com/lionsoul2014/ip2region) database. |
 | `ext.blacklist.principal`, `.ip`, `.device` | Your `BlacklistAttributeProvider` bean | Whether the request is blocked ([Blacklist](../guide/security-model.md#blacklist)). |
 
 ```json
@@ -418,7 +420,7 @@ verify the token again or call other APIs on the user's behalf.
 ### Services behind the gateway
 
 A service behind the gateway sets `cosec.pipeline.mode=gateway` (the default is `enforce`). It needs only its web
-adapter (`webflux-support` or `webmvc-support`), and should set `cosec.jwt.enabled=false` unless it also issues
+adapter (`cosec-webflux` or `cosec-webmvc`), and should set `cosec.jwt.enabled=false` unless it also issues
 tokens:
 
 ```yaml
@@ -460,7 +462,7 @@ The [security context](#accessing-the-security-context) of a request that procee
 
 ## Control-plane routes
 
-With `control-support` (and `cache-support`), the starter serves the control plane's HTTP API under
+With `cosec-control` (and `cosec-cocache`), the starter serves the control plane's HTTP API under
 `{cosec.control.http.base-path}/v1` (default `/cosec/control/v1`) as functional routes on a WebFlux or WebMvc host.
 What the API does is in [Testing policies](../policies/testing.md) and
 [Explaining a decision](./checks.md#explaining-a-decision); how its requests are handled:

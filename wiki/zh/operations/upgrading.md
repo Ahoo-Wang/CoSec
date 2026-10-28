@@ -21,7 +21,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
   Redis 仍是权威存储；每个实例把文档编译成快照，决策时不再按请求读 Redis。格式见[策略语言](../policies/language.md)。
 - **一条决策路径。** 7.x 的 `Authorization` 链已删除。每个适配器（WebFlux、Spring MVC、Gateway）把请求交给同一条协程 pipeline，
   由它认证、解析作用域、决策，并把结果映射为状态码。
-- **变更经过控制面。** 写入、校验、模拟、影子、审批、解释和回滚策略都是控制面（`controlSupport`）的操作，而不是应用代码或本地文件。
+- **变更经过控制面。** 写入、校验、模拟、影子、审批、解释和回滚策略都是控制面（`cosec-control`）的操作，而不是应用代码或本地文件。
 - **条件是数据。** 一套小的条件语言取代了匹配器工厂、OGNL 和 SpEL。策略中的任何内容都不会执行代码。
 - **错误响应是 `application/problem+json`。** 响应不再告诉客户端是否存在 DENY。
 
@@ -34,11 +34,11 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
    端点。[转换](#migrating-the-data)会报告每一条无法翻译的策略。
 3. **用 `cosec-migrate convert` 转换数据**，修正每一个拒绝项，直到转换被接受。对照[8.0 在哪些地方决策不同](#what-8-0-decides-differently)
    阅读 `report.json` 中的语义改动。
-4. **更新代码**：删除对[已删除 API](#removed-and-replaced-apis) 的使用，改为注册 8.0 的扩展 bean。
+4. **更新依赖和代码**：用模块本身替换 starter 的 capability，把 import 改到新的包（[模块、制品与包](#modules-artifacts-and-packages)），删除对[已删除 API](#removed-and-replaced-apis) 的使用，改为注册 8.0 的扩展 bean。
 5. **更新配置**：改名或删除每一个 [7.x key](#removed-and-renamed-properties)，并对新属性做出决定。8.0 不读取的 `cosec.*` key 会让启动
    失败，并给出替代它的配置。另外三种常见情况也会让启动失败：WebFlux 或
    Spring MVC 宿主上 `classpath:cosec-routes.json` 没有路由映射（把 `cosec.authorization.routes.location` 设为一份映射，或设为空）；
-   使用 JWT 却既没有 `cache-support` 也没有自己的吊销存储（[令牌吊销始终开启](#token-revocation-is-always-on)）；Redis 的驱逐策略不是
+   使用 JWT 却既没有 `cosec-cocache` 也没有自己的吊销存储（[令牌吊销始终开启](#token-revocation-is-always-on)）；Redis 的驱逐策略不是
    `noeviction` 或读不到（[读不到 Redis 的驱逐策略时启动失败](#startup-fails-when-redis-s-eviction-policy-cannot-be-read)）。
 6. **更新客户端和告警**：错误响应体、`reason` 取值和部分状态码变了（[响应与状态码](#responses-and-status-codes)）；审计字段、指标标签和
    span 也变了（[可观测性的变化](#observability-changes)）。
@@ -269,7 +269,7 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
 #### 令牌吊销始终开启 {#token-revocation-is-always-on}
 
 `cosec.jwt.token-revocation.enabled` 已删除。启用 JWT 时，每个令牌都要检查是否已吊销；没有任何东西能回答这个检查时，启动失败：加上
-`cache-support`（它带来 Redis 吊销存储），或者注册自己的 `TokenStore` 和 `RevocationReader` bean。7.x 中没有 `cache-support` 时，starter
+`cosec-cocache`（它带来 Redis 吊销存储），或者注册自己的 `TokenStore` 和 `RevocationReader` bean。7.x 中没有 `cosec-cocache` 时，starter
 使用一个什么都不记录的存储，登出悄无声息地不起作用。只签发令牌、从不校验令牌的服务可以改为设置 `cosec.jwt.enabled=false`
 （[登出与吊销](../integration/authentication.md#logout-and-revocation)）。7.x 写下的吊销继续有效：8.0 从相同的 key（`<prefix>:token:revoked:*`）
 读取它们。吊销检查报告的错误返回 `503`，永远不会接受该令牌（`PIP-7`）。
@@ -329,11 +329,71 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
 - **就绪状态等待快照。** 平台文档、然后是 `prewarm-apps` 和 `prewarm-tenants`，在应用启动的同时加载；在它们全部装入之前，就绪状态拒绝
   流量；存活状态不受影响。尚未加载的应用的第一个请求要编译它的整份文档；把繁忙的应用列进 `prewarm-apps`。
 - **缺失的平台文档按失败即拒绝处理。** 平台文档发布之前，CoSec 需要决策的每个请求都是 `503`。
-- **没有 `cache-support` 时**，starter 使用一个初始为空的内存存储，所以在应用把文档放进去之前每个请求都是 `503`。本地策略文件不再被加载
+- **没有 `cosec-cocache` 时**，starter 使用一个初始为空的内存存储，所以在应用把文档放进去之前每个请求都是 `503`。本地策略文件不再被加载
   （`cosec.authorization.local-policy.*` 已删除）。
 - 读取失败表现为 `SnapshotUnavailableException`（原异常作为其 cause）和 `503`，取代 7.x 的 `CacheReadException` 和 `500`。
 
 发布、文档回滚以及 Redis 不可用时的行为见[存储](./storage.md)。
+
+### 模块、制品与包 {#modules-artifacts-and-packages}
+
+**starter 是 `cosec-spring-boot`，不再有 capability。** 7.x 的 `cosec-spring-boot-starter` 把每个集成作为一个 Gradle capability 提供（`webflux-support`、`cache-support` 等）。8.0 的制品是 `me.ahoo.cosec:cosec-spring-boot`，应用在它旁边添加所需的模块，Gradle 和 Maven 写法相同。starter 装配它在类路径上找到的每个模块。
+
+```kotlin
+// 7.x
+implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+    capabilities { requireCapability("me.ahoo.cosec:webflux-support") }
+}
+implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
+    capabilities { requireCapability("me.ahoo.cosec:cache-support") }
+}
+// 8.0
+implementation("me.ahoo.cosec:cosec-spring-boot")
+implementation("me.ahoo.cosec:cosec-webflux")
+implementation("me.ahoo.cosec:cosec-cocache")
+implementation("org.springframework.boot:spring-boot-data-redis")
+implementation("me.ahoo.cocache:cocache-spring-boot-starter")
+```
+
+| 7.x capability | 8.0 模块 |
+|---|---|
+| `webflux-support`、`webmvc-support`、`gateway-support` | `cosec-webflux`、`cosec-webmvc`、`cosec-gateway` |
+| `cache-support` | `cosec-cocache`，同时添加 `spring-boot-data-redis` 和 `cocache-spring-boot-starter` |
+| `oauth-support` | `cosec-social` |
+| `opentelemetry-support`、`ip2region-support` | `cosec-opentelemetry`、`cosec-ip2region` |
+| `micrometer-support` | `cosec-micrometer`，同时添加 `micrometer-core` |
+| `openapi-support` | `cosec-openapi`，同时添加 `spring-boot-starter-actuator` 和 `springdoc-openapi-starter-common` |
+| `kafka-support` | `cosec-kafka`，同时添加 `spring-boot-starter-kafka` |
+| （8.0 新增） | `cosec-control`，即控制面，同时添加 `cosec-cocache` |
+
+完整列表见[模块](../guide/introduction.md#modules)。已开启的功能所需的模块会在启动时检查：缺少适配器模块的 Web 宿主、缺少 `cosec-gateway` 的网关、缺少 `cosec-cocache` 的 `cosec.api-key.store=redis`、缺少 `cosec-kafka` 的 `cosec.audit.kafka.delivery=required`，都会启动失败并给出制品名（[缺少模块时启动失败](./troubleshooting.md#startup-fails-on-a-missing-module)）。
+
+**`cosec-core` 不再存在。** 它的代码按性质拆分：应用要实现的端口在 `cosec-spi`（`me.ahoo.cosec.spi.*`）；文档、快照、令牌校验和写日志的审计 sink 在 `cosec-runtime`（`me.ahoo.cosec.runtime.*`）；登录与签发令牌在 `cosec-login`（`me.ahoo.cosec.login`）。starter 会引入这三个模块。只实现某个端口的库依赖 `cosec-spi` 即可。移动了的包：
+
+| 7.x 包 | 8.0 包（模块） | 类型 |
+|---|---|---|
+| `me.ahoo.cosec.api.authentication`、`me.ahoo.cosec.authentication` | `me.ahoo.cosec.login`（`cosec-login`） | `Authentication`、`AuthenticationProvider`、`Credentials`、`CompositeAuthentication`、`DefaultAuthenticationProvider` |
+| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token`（`cosec-login`） | `AbstractRefreshTokenAuthentication`、`AbstractSwitchTenantAuthentication` |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token`（`cosec-login`） | `TokenConverter`、`TokenCompositeAuthentication`、`RefreshTokenMismatchException` |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token`（`cosec-spi`） | `TokenVerifier`、`TokenStore`、`TokenRevoker`、`RevocationReader`、`TokenVerificationException`、`TokenExpiredException`、`TokenRevokedException` |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token`（`cosec-runtime`） | `SimpleAccessToken`、`SimpleCompositeToken`、`SimpleTokenPrincipal`、`SimpleTokenTenantPrincipal`、`RevocableTokenVerifier` |
+| `me.ahoo.cosec.principal` | `me.ahoo.cosec.api.principal`（`cosec-api`） | `SimplePrincipal`、`SimpleTenantPrincipal` |
+| `me.ahoo.cosec.tenant` | `me.ahoo.cosec.api.tenant`（`cosec-api`） | `SimpleTenant` |
+| `me.ahoo.cosec.context` | `me.ahoo.cosec.runtime.context`（`cosec-runtime`） | `SimpleSecurityContext` |
+| `me.ahoo.cosec.context` | `me.ahoo.cosec.servlet`（`cosec-webmvc`） | `SecurityContextHolder` |
+| `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http`（`cosec-runtime`） | `RemoteIpResolver`、`XForwardedRemoteIpResolver` |
+| `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit`（`cosec-spi`） | `AuditEventSink` |
+| `me.ahoo.cosec.audit` | `me.ahoo.cosec.runtime.audit`（`cosec-runtime`） | `LoggingAuditEventSink`、`AuditEventData` |
+| `me.ahoo.cosec.apikey` | `me.ahoo.cosec.spi.apikey`（`cosec-spi`） | `ApiKey`、`ApiKeyReader`、`ApiKeyStore`、`InMemoryApiKeyStore` |
+| `me.ahoo.cosec.limiter` | `me.ahoo.cosec.spi.ratelimit`（`cosec-spi`） | `RateLimit`、`RateLimitResult`、`RateLimiter`（[见下文](#removed-and-replaced-apis)） |
+| `me.ahoo.cosec` | `me.ahoo.cosec.model`（`cosec-model`） | `CoSecException` |
+| `me.ahoo.cosec` | `me.ahoo.cosec.api`（`cosec-api`） | `Delegated` |
+
+8.0 的 SPI 也在这些地方：`MembershipProvider` 和 `MembershipClaims` 在 `me.ahoo.cosec.spi.membership`，`SnapshotDocumentStore` 和 `InMemorySnapshotDocumentStore` 在 `me.ahoo.cosec.spi.snapshot`，`AttributeProvider` 在 `me.ahoo.cosec.spi.attribute`，`Authenticator` 在 `me.ahoo.cosec.spi.authn`；`SnapshotSource` 在 `me.ahoo.cosec.runtime.snapshot`，文档编解码器和编译器在 `me.ahoo.cosec.runtime.document`，路由映射在 `me.ahoo.cosec.runtime.route`（[扩展 CoSec](../architecture/extending.md#extension-points)）。
+
+**`CoSecJsonSerializer` 已删除。** CoSec 的 Jackson mapper 是 CoSec 内部的，核心模块的公共签名中不出现 Jackson 类型。用你自己的 mapper 序列化你自己的类型；用 `PolicyDocumentCodec` 读写策略文档。mapper 的配置没有变化，所以已存放在 Redis 中或已发送到 Kafka 的文档、令牌和记录照常可读。标注了 `@InternalCoSecApi` 的声明之所以公开，只是为了让 CoSec 的模块互相调用：它没有兼容性承诺，任何版本都可能改变，而且不显式 opt in 编译器就拒绝调用它。不要在应用中 opt in。
+
+**`KafkaAuditEventSink` 接收 `Executor`。** 它的第三个参数原来是 Reactor `Scheduler`，现在是 `java.util.concurrent.Executor`（默认是它自己的、带有界队列的单线程）。
 
 ### 已删除和替换的 API {#removed-and-replaced-apis}
 
@@ -368,7 +428,7 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
 | `cosecPolicyGenerator`、`cosecAppPermissionGenerator` actuator 端点 | `cosecServiceGenerator/routes`（路由映射）和 `cosecServiceGenerator/app`（应用文档）。 |
 
 仍然可用：`SecurityContext`（新增 `scope`，即校验后的应用、空间和角色；应读取它，而不是客户端声明的 `CoSec-*` 请求头）、`ServerWebExchange`、
-Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`AuditEventSink`、`TokenStore`，以及 `cosec-api` 的审计类型。
+Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`AuditEventSink`、`TokenStore`，以及 `cosec-api` 的审计类型，其中一些换了包（[模块、制品与包](#modules-artifacts-and-packages)）。
 
 #### 策略测试套件 {#policy-test-suites}
 
@@ -413,7 +473,7 @@ key 代表它之下的每个 key。
 | `cosec.authorization.cache.token.concurrency-level` | 已删除：自 CoCache 5 起被忽略。 |
 | `cosec.authorization.cache.token.expire-after-write` | `cosec.authorization.cache.token.local-max-age`，一个时长（`30s`）。 |
 | `cosec.authorization.cache.token.expire-unit` | 已删除：时长自带单位。`expire-after-access` 也是时长；不带单位的数字仍表示秒。 |
-| `cosec.authorization.gateway.enabled` | 已删除：网关过滤器随 `gatewaySupport` 提供。 |
+| `cosec.authorization.gateway.enabled` | 已删除：网关过滤器随 `cosec-gateway` 提供。 |
 | `cosec.limiter.` | 已删除：限流规则在平台文档中（[限流规则变为义务](#rate-limit-rules-become-obligations)）；要使用不同的限流 key 前缀，需要自己的 `RateLimiter` bean。 |
 | `cosec.shadow.` | 已删除：影子窗口是控制面的操作；每个实例的部分是 `cosec.authorization.shadow.*`。 |
 | `cosec.explain.enabled` | 已删除：使用控制面的 `explain`。 |

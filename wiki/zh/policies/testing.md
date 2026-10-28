@@ -9,7 +9,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 
 ## 控制面 {#the-control-plane}
 
-控制面随 starter 的 `controlSupport` 特性提供（它需要 `cacheSupport`，因为文档保存在 Redis 中）。它在 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）下提供 HTTP API；其设置为 `cosec.control.*`（[配置](../operations/configuration.md)），文档如何存储以及如何首次发布见[存储](../operations/storage.md)。
+控制面随 `cosec-control` 模块提供（它需要 `cosec-cocache`，因为文档保存在 Redis 中）。它在 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）下提供 HTTP API；其设置为 `cosec.control.*`（[配置](../operations/configuration.md)），文档如何存储以及如何首次发布见[存储](../operations/storage.md)。
 
 控制请求首先是一个普通请求：宿主管道对它认证，并且必须允许它，因此文档必须允许运维人员访问该 API 路径。之后每一步都以该主体的身份再次授权，所在应用为 `cosec.control.app-id`（默认 `cosec-control`），动作为针对所涉及文档（`doc/platform`、`doc/app/<appId>`、`doc/tenant/<tenantId>`）或条目的 `cosec:<verb>`。在任何策略之前，先执行一条硬性规则：租户的主体只能操作自己租户的文档；平台文档和应用文档属于 `(platform)` 租户的主体。
 
@@ -171,7 +171,7 @@ flowchart LR
 - 经过 `cosec.control.shadow.min-duration`（15 分钟），且实例上报的非 `BASE_MISMATCH` 样本达到 `cosec.control.shadow.min-samples`（1,000）时；
 - 到达 `cosec.control.shadow.max-duration`（24 小时）而样本不足时，状态为*证据不足*。
 
-控制面每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）检查一次所有未关闭的窗口，同一时间只由一个控制面实例执行。窗口关闭后，变更变为 `READY`，需要[审批](#approval)时变为 `AWAITING_APPROVAL`。如果期间文档修订发生变化，变更变为 `CONFLICTED`。数据面在启用 `cacheSupport` 和 `cosec.authorization.shadow.*`（默认开启，采样 10% 的请求）时参与。
+控制面每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）检查一次所有未关闭的窗口，同一时间只由一个控制面实例执行。窗口关闭后，变更变为 `READY`，需要[审批](#approval)时变为 `AWAITING_APPROVAL`。如果期间文档修订发生变化，变更变为 `CONFLICTED`。数据面在启用 `cosec-cocache` 和 `cosec.authorization.shadow.*`（默认开启，采样 10% 的请求）时参与。
 
 属性提供者及其声明的类型，在每个数据面实例和控制面主机上必须相同。控制面按自己的提供者检查候选；缺少其中某个提供者的实例无法编译读取其属性的候选，会报告 `CANDIDATE_ERROR`，窗口随即以阻塞状态关闭，该变更永远不会发布。跳过窗口的变更也跳过了这项检查：无法编译已发布文档的实例会对该文档失败即拒绝。
 
@@ -219,7 +219,7 @@ flowchart LR
 
 ## CI 中的策略 {#policies-in-ci}
 
-用 [JSON Schema](./language.md#json-schema) 校验文档文件，然后用 `cosec-core` 中控制面和每个实例所用的读取器和编译器编译它们：
+用 [JSON Schema](./language.md#json-schema) 校验文档文件，然后用 `cosec-runtime` 中控制面和每个实例所用的读取器和编译器编译它们：
 
 ```kotlin
 import me.ahoo.cosec.model.decision.DocumentKind

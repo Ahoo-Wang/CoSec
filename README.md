@@ -5,7 +5,7 @@ evaluated deny-first for every request.
 
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![GitHub release](https://img.shields.io/github/release/Ahoo-Wang/CoSec.svg)](https://github.com/Ahoo-Wang/CoSec/releases)
-[![Maven Central Version](https://img.shields.io/maven-central/v/me.ahoo.cosec/cosec-core)](https://central.sonatype.com/artifact/me.ahoo.cosec/cosec-core)
+[![Maven Central Version](https://img.shields.io/maven-central/v/me.ahoo.cosec/cosec-api)](https://central.sonatype.com/artifact/me.ahoo.cosec/cosec-api)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/b3133cf684a74192a55abbefe2a0759a)](https://www.codacy.com/gh/Ahoo-Wang/CoSec/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=Ahoo-Wang/CoSec&amp;utm_campaign=Badge_Grade)
 [![codecov](https://codecov.io/gh/Ahoo-Wang/CoSec/branch/main/graph/badge.svg?token=AL0RyJbMZv)](https://codecov.io/gh/Ahoo-Wang/CoSec)
 [![Integration Test Status](https://github.com/Ahoo-Wang/CoSec/actions/workflows/integration-test.yml/badge.svg)](https://github.com/Ahoo-Wang/CoSec)
@@ -60,12 +60,11 @@ over a rate limit `429`.
 ```kotlin
 dependencies {
     implementation(platform("me.ahoo.cosec:cosec-bom:<version>"))
-    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities { requireCapability("me.ahoo.cosec:webflux-support") } // or webmvc-support / gateway-support
-    }
-    implementation("me.ahoo.cosec:cosec-spring-boot-starter") {
-        capabilities { requireCapability("me.ahoo.cosec:cache-support") }   // Redis: snapshot, revocation, rate limits
-    }
+    implementation("me.ahoo.cosec:cosec-spring-boot")
+    implementation("me.ahoo.cosec:cosec-webflux")                      // or cosec-webmvc / cosec-gateway
+    implementation("me.ahoo.cosec:cosec-cocache")                      // Redis: snapshot, revocation, rate limits
+    implementation("org.springframework.boot:spring-boot-data-redis")
+    implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 }
 ```
 
@@ -108,9 +107,9 @@ Continue with the [Quick Start](https://cosec.ahoo.me/guide/quick-start) to issu
 
 ## Modules
 
-The starter brings the core, the request pipeline, JWT support and auto-configuration; each integration
-(WebFlux, MVC, Gateway, Redis, control plane, OAuth, OpenTelemetry, Micrometer, OpenAPI, ip2region, Kafka) is an
-opt-in Gradle capability. `cosec-migrate` converts 7.x data and publishes documents. See
+`cosec-spring-boot` brings the request pipeline, login, JWT support and auto-configuration; each integration
+(WebFlux, MVC, Gateway, Redis, control plane, OAuth, OpenTelemetry, Micrometer, OpenAPI, ip2region, Kafka) is a module
+you add next to it, and the starter wires what it finds on the classpath. `cosec-migrate` converts 7.x data and publishes documents. See
 [Modules](https://cosec.ahoo.me/guide/introduction#modules) for the full list. A ready-to-run gateway is
 published as the container image `ahoowang/cosec-gateway`.
 

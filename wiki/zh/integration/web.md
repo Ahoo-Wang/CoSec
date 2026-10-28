@@ -9,15 +9,15 @@ description: "把 CoSec 接入 Spring WebFlux、Spring MVC 或 Spring Cloud Gate
 
 ## 选择适配器 {#choosing-an-adapter}
 
-按技术栈请求 `cosec-spring-boot-starter` 的相应 capability 来选择适配器。三个适配器都把请求交给同一个 `Pipeline`，因此对每个请求的回应逐字节一致，区别只在接入方式。
+按技术栈在 `cosec-spring-boot` 旁边添加相应模块来选择适配器。三个适配器都把请求交给同一个 `Pipeline`，因此对每个请求的回应逐字节一致，区别只在接入方式。
 
-| 技术栈 | Capability | starter 注册的过滤器 | 顺序 |
+| 技术栈 | 模块 | starter 注册的过滤器 | 顺序 |
 |---|---|---|---|
-| Spring WebFlux | `webflux-support` | `PipelineWebFilter`（`WebFilter`） | `1000` |
-| Spring MVC | `webmvc-support` | `PipelineServletFilter`（Servlet `Filter`，所有 URL） | `HIGHEST_PRECEDENCE + 100` |
-| Spring Cloud Gateway | `gateway-support` | `PipelineGatewayFilter`（`GlobalFilter`） | `HIGHEST_PRECEDENCE + 10` |
+| Spring WebFlux | `cosec-webflux` | `PipelineWebFilter`（`WebFilter`） | `1000` |
+| Spring MVC | `cosec-webmvc` | `PipelineServletFilter`（Servlet `Filter`，所有 URL） | `HIGHEST_PRECEDENCE + 100` |
+| Spring Cloud Gateway | `cosec-gateway` | `PipelineGatewayFilter`（`GlobalFilter`） | `HIGHEST_PRECEDENCE + 10` |
 
-每个适配器都需要相应 capability、`cache-support`（快照文档和令牌吊销都存放在 Redis 中）、JWT 密钥和路由映射；只读取网关转发的身份的服务一样都不需要（[网关之后的服务](#services-behind-the-gateway)）。依赖写法见[快速开始](../guide/quick-start.md#add-the-dependency)；下面只说明不同之处。
+每个适配器都需要它的模块、`cosec-cocache`（快照文档和令牌吊销都存放在 Redis 中）、JWT 密钥和路由映射；只读取网关转发的身份的服务一样都不需要（[网关之后的服务](#services-behind-the-gateway)）。依赖写法见[快速开始](../guide/quick-start.md#add-the-dependency)；下面只说明不同之处。
 
 **Spring WebFlux。** 过滤器在事件循环上启动管道，不切换线程。真正挂起之后（例如一次 Redis 读取），请求在 `Dispatchers.Default` 上继续，绝不会留在客户端库的 I/O 线程上。
 
@@ -25,7 +25,7 @@ description: "把 CoSec 接入 Spring WebFlux、Spring MVC 或 Spring Cloud Gate
 
 **Spring Cloud Gateway。** 类路径上有网关的 `GlobalFilter` 时，starter 注册 `PipelineGatewayFilter`，不注册 `PipelineWebFilter`。差异见[网关](#gateway)。
 
-使用没有 feature variant 的 Maven 时，添加 `cosec-spring-boot-starter`，以及适配器模块本身（`cosec-webflux`、`cosec-webmvc` 或 `cosec-gateway`）和 `cosec-cocache`。每个 capability 背后的模块见[模块列表](../guide/introduction.md#modules)。
+starter 在启动时检查适配器（STA-1）：缺少 `cosec-webmvc` 的 Spring MVC 宿主、缺少 `cosec-webflux` 的 WebFlux 宿主、缺少 `cosec-gateway` 的 Spring Cloud Gateway 宿主都无法启动，报错信息会给出制品名。即使 `cosec.enabled=false` 也会检查网关宿主，因为剥离客户端 `CoSec-Identity` 头的网关过滤器随 `cosec-gateway` 提供。各模块还需要什么，见[模块列表](../guide/introduction.md#modules)。
 
 ## 请求的处理过程 {#how-a-request-is-handled}
 
@@ -104,7 +104,7 @@ CoSec 授权的路径是应用内的请求路径：
 
 Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `http` 命名空间。
 
-使用 `openapi-support` 和 Spring Boot Actuator 时，端点 `cosecServiceGenerator/routes` 根据服务的 OpenAPI 文档生成路由映射，`cosecServiceGenerator/app` 生成对应的、通过控制面发布的应用文档（[角色权限](../policies/role-permissions.md)）。
+使用 `cosec-openapi` 和 Spring Boot Actuator 时，端点 `cosecServiceGenerator/routes` 根据服务的 OpenAPI 文档生成路由映射，`cosecServiceGenerator/app` 生成对应的、通过控制面发布的应用文档（[角色权限](../policies/role-permissions.md)）。
 
 ## 响应与状态码 {#responses-and-status-codes}
 
@@ -224,7 +224,7 @@ val securityContext = httpServletRequest.getSecurityContext()
 
 | 属性 | 由谁添加 | 值 |
 |---|---|---|
-| `ext.ip2region.country`、`.province`、`.city`、`.isp` | `ip2region-support`，需开启 `cosec.ip2region.enabled`（默认开启） | 客户端 IP 的归属地，来自内嵌的 [ip2region](https://github.com/lionsoul2014/ip2region) 数据库。 |
+| `ext.ip2region.country`、`.province`、`.city`、`.isp` | `cosec-ip2region`，需开启 `cosec.ip2region.enabled`（默认开启） | 客户端 IP 的归属地，来自内嵌的 [ip2region](https://github.com/lionsoul2014/ip2region) 数据库。 |
 | `ext.blacklist.principal`、`.ip`、`.device` | 你的 `BlacklistAttributeProvider` Bean | 请求是否被拦截（[黑名单](../guide/security-model.md#blacklist)）。 |
 
 ```json
@@ -312,7 +312,7 @@ spring:
 
 ### 网关之后的服务 {#services-behind-the-gateway}
 
-网关之后的服务设置 `cosec.pipeline.mode=gateway`（默认为 `enforce`）。它只需要自己的 Web 适配器（`webflux-support` 或 `webmvc-support`），并且除非它也签发令牌，应设置 `cosec.jwt.enabled=false`：
+网关之后的服务设置 `cosec.pipeline.mode=gateway`（默认为 `enforce`）。它只需要自己的 Web 适配器（`cosec-webflux` 或 `cosec-webmvc`），并且除非它也签发令牌，应设置 `cosec.jwt.enabled=false`：
 
 ```yaml
 cosec:
@@ -347,7 +347,7 @@ cosec:
 
 ## 控制面路由 {#control-plane-routes}
 
-启用 `control-support`（以及 `cache-support`）时，starter 在 WebFlux 或 WebMvc 宿主上以函数式路由在 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）下提供控制面的 HTTP API。API 的功能见[策略测试](../policies/testing.md)和[解释一个决策](./checks.md#explaining-a-decision)；它的请求按以下方式处理：
+启用 `cosec-control`（以及 `cosec-cocache`）时，starter 在 WebFlux 或 WebMvc 宿主上以函数式路由在 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）下提供控制面的 HTTP API。API 的功能见[策略测试](../policies/testing.md)和[解释一个决策](./checks.md#explaining-a-decision)；它的请求按以下方式处理：
 
 - **先经过管道。** 控制请求对宿主来说是普通请求：你的文档必须放行它（例如对已认证调用方放行 `http:path:/cosec/control/v1/**` 上的 `http:POST`），否则它会像其他请求一样被拒绝。在平台文档发布之前，每个请求（包括控制路由）都是 `503`，因此第一份平台文档要通过 `cosec-migrate publish` 发布（[快速开始](../guide/quick-start.md#publish-the-platform-document)）。
 - **再经过控制面自己的检查。** 每次调用都以请求的主体身份，在应用 `cosec.control.app-id`（默认 `cosec-control`）的默认空间中、基于已确认为最新的文档再次授权。匿名请求返回 `401`。租户隔离最先检查，而且不是策略：租户的主体只能操作自己租户的文档。
