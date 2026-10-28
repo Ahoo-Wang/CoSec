@@ -19,7 +19,7 @@ import me.ahoo.cosec.authorization.PolicyRepository
 import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.blacklist.BlacklistChecker
-import me.ahoo.cosec.cache.AppSpacedRoleId
+import me.ahoo.cosec.migrate.v7.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.CoSecTestCaches
 import me.ahoo.cosec.explain.ExplainLayer
 import me.ahoo.cosec.migrate.CoSec7xReader

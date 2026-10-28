@@ -21,7 +21,7 @@ import me.ahoo.cosec.authorization.DecisionAuthorization
 import me.ahoo.cosec.authorization.RoleScope
 import me.ahoo.cosec.authorization.RootPrincipalMatcher
 import me.ahoo.cosec.blacklist.BlacklistChecker
-import me.ahoo.cosec.cache.AppSpacedRoleId
+import me.ahoo.cosec.migrate.v7.cache.AppSpacedRoleId
 import me.ahoo.cosec.migrate.CoSec7xReader
 import me.ahoo.cosec.parity.AuthorizationFactory
 import me.ahoo.cosec.parity.FailureView

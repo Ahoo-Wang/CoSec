@@ -24,7 +24,7 @@ import me.ahoo.cosec.api.permission.PermissionId
 import me.ahoo.cosec.api.policy.PolicyId
 import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.cache.AppPermissionCache
-import me.ahoo.cosec.cache.AppSpacedRoleId
+import me.ahoo.cosec.migrate.v7.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.PolicyCache
 import me.ahoo.cosec.cache.RolePermissionCache

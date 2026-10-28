@@ -20,7 +20,7 @@ import io.lettuce.core.ScanCursor
 import me.ahoo.cocache.api.CacheReadException
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cosec.api.context.request.AppIdCapable
-import me.ahoo.cosec.cache.AppSpacedRoleId
+import me.ahoo.cosec.migrate.v7.cache.AppSpacedRoleId
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.context.SimpleSecurityContext
 import me.ahoo.cosec.migrate.CoSec7xReader

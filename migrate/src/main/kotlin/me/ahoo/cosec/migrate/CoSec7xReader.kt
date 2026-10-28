@@ -21,14 +21,13 @@ import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cosec.api.context.request.AppId
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
-import me.ahoo.cosec.api.policy.PolicyId
 import me.ahoo.cosec.api.principal.SpacedRoleId
-import me.ahoo.cosec.cache.AppSpacedRoleId
-import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
-import me.ahoo.cosec.cache.GlobalPolicyIndexCache
-import me.ahoo.cosec.cache.RedisPolicyRepository
-import me.ahoo.cosec.cache.createGlobalPolicyIndex
+import me.ahoo.cosec.migrate.v7.api.policy.PolicyId
+import me.ahoo.cosec.migrate.v7.cache.AppSpacedRoleId
+import me.ahoo.cosec.migrate.v7.cache.GlobalPolicyIndexCache
+import me.ahoo.cosec.migrate.v7.cache.V7CacheSpecs
+import me.ahoo.cosec.migrate.v7.cache.createGlobalPolicyIndex
 
 /**
  * Reads CoSec 7.x policy data in Redis (RFC 0003 §4.7, RFC 0004 §8.2) as it is stored: each policy, app permission and
@@ -51,21 +50,21 @@ class CoSec7xReader(
 
     private val runtime = CacheRuntime.builder().backend(backend).build()
     private val globalPolicyIndexCache: GlobalPolicyIndexCache =
-        runtime.createGlobalPolicyIndex(CoSecCacheSpecs.globalPolicyIndex(keyPrefix))
-    private val rawPolicies = rawCache(keyPrefix, CoSecCacheSpecs.POLICY_CACHE_NAME)
-    private val rawAppPermissions = rawCache(keyPrefix, CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME)
-    private val rawGrants = rawCache(keyPrefix, CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME)
-    private val policyNamespace = CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.POLICY_CACHE_NAME)
-    private val appNamespace = CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME)
-    private val grantNamespace = CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME)
+        runtime.createGlobalPolicyIndex(V7CacheSpecs.globalPolicyIndex(keyPrefix))
+    private val rawPolicies = rawCache(keyPrefix, V7CacheSpecs.POLICY_CACHE_NAME)
+    private val rawAppPermissions = rawCache(keyPrefix, V7CacheSpecs.APP_PERMISSION_CACHE_NAME)
+    private val rawGrants = rawCache(keyPrefix, V7CacheSpecs.ROLE_PERMISSION_CACHE_NAME)
+    private val policyNamespace = V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.POLICY_CACHE_NAME)
+    private val appNamespace = V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.APP_PERMISSION_CACHE_NAME)
+    private val grantNamespace = V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.ROLE_PERMISSION_CACHE_NAME)
     private val globalIndexKey =
-        "${CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.GLOBAL_POLICY_INDEX_CACHE_NAME)}:" +
+        "${V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.GLOBAL_POLICY_INDEX_CACHE_NAME)}:" +
             GlobalPolicyIndexCache.CACHE_KEY
 
     /** The same storage layout as 7.0's caches, with values as stored bytes. */
     private fun rawCache(keyPrefix: String, cacheName: String): Cache<String, ByteArray> = runtime.create(
         CacheSpec.builder<String, ByteArray>("Raw$cacheName")
-            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, cacheName))
+            .namespace(V7CacheSpecs.cacheNamespace(keyPrefix, cacheName))
             .keyPrefix("")
             .keyEncoder { it }
             .codec(RawCodec)
@@ -135,11 +134,11 @@ class CoSec7xReader(
          * The policy history (`<p>:policy:history:*`) is skipped, as `CoSecSchemaMarker` does.
          */
         fun keys(keyPrefix: String, scan: (String) -> Sequence<String>): Keys {
-            val policyPrefix = CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.POLICY_CACHE_NAME) + ":"
-            val appPrefix = CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.APP_PERMISSION_CACHE_NAME) + ":"
-            val grantPrefix = CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.ROLE_PERMISSION_CACHE_NAME) + ":"
+            val policyPrefix = V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.POLICY_CACHE_NAME) + ":"
+            val appPrefix = V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.APP_PERMISSION_CACHE_NAME) + ":"
+            val grantPrefix = V7CacheSpecs.cacheNamespace(keyPrefix, V7CacheSpecs.ROLE_PERMISSION_CACHE_NAME) + ":"
             val policyIds = scan("$policyPrefix*").map { it.removePrefix(policyPrefix) }
-                .filterNot { it.startsWith(RedisPolicyRepository.RESERVED_POLICY_ID_PREFIX) }
+                .filterNot { it.startsWith(V7CacheSpecs.RESERVED_POLICY_ID_PREFIX) }
                 .toSortedSet()
             val appIds = scan("$appPrefix*").map { it.removePrefix(appPrefix) }.toSortedSet()
             val grants = scan("$grantPrefix*").map { it.removePrefix(grantPrefix) }.map(::parseGrantKey).toSet()

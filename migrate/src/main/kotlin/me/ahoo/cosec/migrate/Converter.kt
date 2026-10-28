@@ -13,15 +13,16 @@
 
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cosec.api.permission.AppPermission
-import me.ahoo.cosec.api.permission.AppRolePermission
-import me.ahoo.cosec.api.policy.Policy
-import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.SpacedRoleId
-import me.ahoo.cosec.cache.AppSpacedRoleId
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.migrate.v7.api.permission.AppPermission
+import me.ahoo.cosec.migrate.v7.api.permission.AppRolePermission
+import me.ahoo.cosec.migrate.v7.api.policy.Policy
+import me.ahoo.cosec.migrate.v7.api.policy.PolicyType
+import me.ahoo.cosec.migrate.v7.cache.AppSpacedRoleId
+import me.ahoo.cosec.migrate.v7.serialization.V7JsonSerializer
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -209,7 +210,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val id = entry.id
         val tree = policyTree(entry) ?: return
         val decoded =
-            decode(entry.location, "policy [$id]") { CoSecJsonSerializer.treeToValue(tree, Policy::class.java) }
+            decode(entry.location, "policy [$id]") { V7JsonSerializer.treeToValue(tree, Policy::class.java) }
         val type = decoded?.type ?: tree.get(TYPE)?.takeIf { it.isString }?.let { typeOf(it.asString()) }
         val global = isGlobal(id, type, entry.location) ?: return
         val key = placement(id, global, tree, entry.location) ?: return
@@ -397,7 +398,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val tree = appPermissionTree(app) ?: return
         val location = app.appPermission?.location ?: return
         val decoded = decode(location, "the app permission of [$appId]") {
-            CoSecJsonSerializer.treeToValue(tree, AppPermission::class.java)
+            V7JsonSerializer.treeToValue(tree, AppPermission::class.java)
         }
         val appCondition = tree.get(CONDITION)
         val permissions = permissions(tree, location, appCondition)
