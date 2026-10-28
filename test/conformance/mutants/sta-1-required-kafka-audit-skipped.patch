@@ -3,19 +3,19 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.StarterWiringTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt
-index 723d4065..a06a3550 100644
+index f466044a..7b4ab415 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt
-@@ -116,15 +116,6 @@ class CoSecPipelineAutoConfiguration {
+@@ -118,15 +118,6 @@ class CoSecPipelineAutoConfiguration {
              sinks.orderedStream().toList().filter { it !is DecisionListener }
                  .map { it to AuditListener.of(it, names.getValue(it)) }
          val ordered = all.sortedWith { a, b -> AnnotationAwareOrderComparator.INSTANCE.compare(a.first, b.first) }
--        val requiredKafka = environment.getProperty(KAFKA_AUDIT_DELIVERY_KEY).equals("required", ignoreCase = true)
+-        val requiredKafka = kafkaAuditDelivery(environment) == Delivery.REQUIRED
 -        check(
 -            !requiredKafka ||
 -                ordered.any { it.second.name == KAFKA_AUDIT_LISTENER && it.second.delivery == Delivery.REQUIRED }
 -        ) {
--            "$KAFKA_AUDIT_DELIVERY_KEY=required, but no Kafka audit listener was created: it needs cosec-kafka, a " +
+-            "${KafkaAuditProperties.DELIVERY_KEY}=required, but no Kafka audit listener was created: it needs cosec-kafka, a " +
 -                "KafkaOperations bean (spring-boot-starter-kafka), cosec.audit.enabled=true and " +
 -                "cosec.audit.kafka.enabled=true (STA-1)."
 -        }
