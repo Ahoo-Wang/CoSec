@@ -299,6 +299,8 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
 - **影子窗口**照常；需要快速回滚时由有 `cosec:skip-shadow` 的人发布（Q1）。
 - 只提供"回到某个修订的整份文档"，不提供"撤销某一次变更"：后者是条目级的逆操作，留给 UI 用 `propose` 自己组合。
 
+> **实现说明（2026-10-27，#1110）**：回滚先要求回滚者对该文档有 `cosec:read`，否则与不存在的修订一样答 404，不透露历史（`CTL-18`）；回滚若放入、恢复 break-glass 绑定或改动 live break-glass 绑定授出的策略，就是 break-glass 变更，需要 `cosec:breakglass` 并受 V5 约束，回滚永远不会带回 break-glass（`BRK-7`）；只移除 break-glass 绑定的回滚立即发布。
+
 ### 5.7 保留与回收
 
 | 对象 | 保留规则（默认） | 属性 |
@@ -435,6 +437,8 @@ flowchart LR
 例如租户管理员把一条 DENY 的资源模式写宽了，把自己的整个应用锁死。没有影子窗口，这类错误只能在发布后被用户发现。
 
 > **实现说明（2026-10-27，#1080）**：窗口关闭时冻结汇总并撤下候选文档，发布者的确认对照冻结的汇总；基准按修订匹配（`BASE_MISMATCH` 不计入有效样本）。
+
+> **实现说明（2026-10-27，#1110）**：影子报告按实例分 key：`{prefix}:shadow:report:{changeId}@{ms}:{instance}`，加上索引 `{prefix}:shadow:reporters:{changeId}@{ms}`；实例 id 只允许 `[A-Za-z0-9._-]`。窗口取每个实例的最新报告；计数为负即解码失败；任何一个实例的 `CANDIDATE_ERROR > 0` 就阻止发布（不按总和判断）；索引中列出、但报告缺失的实例使窗口保持打开（503），控制面把见过的实例记入变更的 `ShadowState`，之后被删出索引也照样要求它的报告（`CTL-16`）。信任模型：每个数据面实例对自己的报告负责，ACL 只许它写自己的 key；剩余缺口是在控制面第一次看到之前就被删出索引的实例，前提是攻击者能写 `shadow:reporters:*`。把索引改成只增的 Redis SET（`SADD`，ACL 只放行 `SADD`/`SMEMBERS`）是后续项，需要 starter 传入 Redis 客户端。
 
 ### 6.5 发布与传播
 
@@ -740,6 +744,8 @@ withinBoundary(p, req, view):
 
 > **实现说明（2026-10-27，#1087）**：经控制面的 break-glass 已实现（`BreakGlass`、`cosec:breakglass`、期限上限默认 4 小时、最长 24 小时，发布时再查）。
 > break-glass 绑定的元数据检查推迟到 PR-3 之后。
+
+> **实现说明（2026-10-27，#1110）**：live break-glass 绑定（未过期，或没有期限）所授出的策略被冻结，直到绑定被撤销或过期；改动它即为 break-glass 变更（`BRK-6`）。过期的 break-glass 绑定所授出的策略按普通策略处理。
 
 ## 9. 租户自助
 
