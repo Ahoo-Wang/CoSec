@@ -18,6 +18,7 @@ import me.ahoo.cosec.model.condition.Containment
 import me.ahoo.cosec.model.condition.IndexKeys
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.scope.ScopeResolution
+import tools.jackson.databind.JsonNode
 
 /**
  * Runs the scenarios of one level (RFC 0008 §3.3). A runner only interprets the scenario: it builds what the
@@ -36,7 +37,13 @@ sealed interface Outcome {
     class Rejected(val reason: ScopeResolution.Rejected.Reason) : Outcome
 
     /** The pipeline answered: [status], whether the request goes on, and the problem's slug when it does not. */
-    class Answered(val status: Int, val proceed: Boolean, val type: String?) : Outcome
+    /** [identity]: whether the outcome forwards `CoSec-Identity` at all, and what (null: the header is stripped). */
+    class Answered(
+        val status: Int,
+        val proceed: Boolean,
+        val type: String?,
+        val identity: Pair<Boolean, JsonNode?> = false to null,
+    ) : Outcome
 
     /** The caller went away and the pipeline made no outcome at all (RFC 0006 §7.4). */
     data object Cancelled : Outcome

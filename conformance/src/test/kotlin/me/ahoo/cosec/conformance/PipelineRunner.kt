@@ -28,6 +28,10 @@ import me.ahoo.cosec.apikey.ApiKeys
 import me.ahoo.cosec.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.gateway.IdentityHeadersFilter
+import me.ahoo.cosec.gateway.IdentityStripFilter
+import me.ahoo.cosec.gateway.PipelineGatewayFilter
+import me.ahoo.cosec.identity.IdentityCodec
 import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.membership.MembershipClaims
@@ -74,12 +78,14 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
+import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosec.snapshot.DocumentSnapshots
 import me.ahoo.cosec.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.snapshot.SnapshotDocument
@@ -92,8 +98,18 @@ import me.ahoo.cosec.token.TokenExpiredException
 import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.StringIdGenerator
+import org.springframework.cloud.gateway.filter.headers.HttpHeadersFilter
+import org.springframework.cloud.gateway.route.Route
+import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpMethod
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest
+import org.springframework.mock.web.server.MockServerWebExchange
+import reactor.core.publisher.Mono
 import tools.jackson.databind.JsonNode
+import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
+import java.net.URI
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
@@ -161,7 +177,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node.only(
             "\$comment", "rules", "polarity", "level", "description", "documents", "http", "authentication",
             "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations", "attributeProviders",
-            "blacklist", "listeners", "rateLimiter", "routes",
+            "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway",
         )
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
@@ -207,17 +223,30 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
                 listeners = listeners,
                 rateLimiter = rateLimiter(node.get("rateLimiter")),
                 routes = routes,
+                identity = node.get("identity")?.let(::issuer),
             )
         )
-        val facts = facts(node.get("http") ?: EMPTY)
         try {
-            if (cancelAt != null) {
-                return cancelled(pipeline, facts, reached)
-            }
-            return answered(runBlocking { pipeline.evaluate(facts) })
+            return answer(node, pipeline, cancelAt, reached)
         } finally {
             listeners.cancel()
         }
+    }
+
+    /** The scenario's request through [pipeline]: cancelled at [cancelAt], through a gateway's filters, or plainly. */
+    private fun answer(
+        node: JsonNode,
+        pipeline: Pipeline,
+        cancelAt: String?,
+        reached: CompletableDeferred<Unit>
+    ): Outcome {
+        val http = node.get("http") ?: EMPTY
+        val facts = facts(http)
+        if (cancelAt != null) {
+            return cancelled(pipeline, facts, reached)
+        }
+        node.get("gateway")?.let { return throughGateway(pipeline, http, it) }
+        return answered(runBlocking { pipeline.evaluate(facts) })
     }
 
     /** The scenario's route map, loaded as a host loads it; none without one. */
@@ -260,8 +289,45 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         }
     }
 
+    /**
+     * `"gateway": { "route": { "identity": false } }`: the request goes through a Spring Cloud Gateway host's own filters,
+     * the identity strip, the pipeline's gateway filter, and the last hop, and the outcome's `identity` is what the
+     * backend would receive. The route's metadata may opt it out of identity forwarding.
+     */
+    private fun throughGateway(pipeline: Pipeline, http: JsonNode, gateway: JsonNode): Outcome {
+        gateway.only("route")
+        val request = MockServerHttpRequest.method(
+            HttpMethod.valueOf(http.get("method")?.text() ?: "GET"),
+            URI.create(http.get("path")?.text() ?: "/orders"),
+        )
+        http.get("headers")?.fields().orEmpty().forEach { (name, value) ->
+            request.header(name, *(if (value.isArray) value.strings() else listOf(value.text())).toTypedArray())
+        }
+        val exchange = MockServerWebExchange.from(request)
+        val route = Route.async().id("scenario").uri(URI.create("http://backend")).predicate { true }
+        gateway.get("route")?.let {
+            it.only("identity")
+            route.metadata(PipelineGatewayFilter.IDENTITY_METADATA, it.required("identity").booleanValue())
+        }
+        exchange.attributes[GATEWAY_ROUTE_ATTR] = route.build()
+        var sent: HttpHeaders? = null
+        IdentityStripFilter().filter(exchange) { stripped ->
+            PipelineGatewayFilter(pipeline).filter(stripped) { routed ->
+                sent = HttpHeadersFilter.filterRequest(listOf(IdentityHeadersFilter()), routed)
+                Mono.empty()
+            }
+        }.block(java.time.Duration.ofSeconds(5))
+        val headers = sent
+        if (headers == null) {
+            val body = exchange.response.bodyAsString.block(java.time.Duration.ofSeconds(5)).orEmpty()
+            val type = CoSecJsonSerializer.readTree(body).get("type")?.text()?.substringAfterLast('/')
+            return Outcome.Answered(exchange.response.statusCode?.value() ?: 0, false, type)
+        }
+        return Outcome.Answered(200, true, null, true to headers.getFirst(IdentityCodec.HEADER)?.let(::identityNode))
+    }
+
     private fun answered(outcome: PipelineOutcome): Outcome =
-        Outcome.Answered(outcome.status, outcome.proceed, outcome.problem?.type?.slug)
+        Outcome.Answered(outcome.status, outcome.proceed, outcome.problem?.type?.slug, forwarded(outcome))
 
     private fun authenticator(node: JsonNode, revocations: JsonNode?, reached: () -> Unit): Authenticator {
         node.only("result", "reason", "tenant", "id", "roles", "policies", "membership", "token", "apiKeys", "apiKeysFail")
@@ -353,7 +419,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     /** Takes whatever token the request presents as the scenario's token, as a verified JWT would read. */
     private class ScenarioTokenVerifier(private val node: JsonNode) : TokenVerifier {
         init {
-            node.only("jti", "tenant", "id", "roles", "policies", "membership", "issuedAt", "verification")
+            node.only("jti", "tenant", "id", "roles", "policies", "membership", "issuedAt", "expiresAt", "verification")
         }
 
         @Suppress("UNCHECKED_CAST")
@@ -372,7 +438,9 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             node.get("tenant")?.text()?.let { principal = SimpleTenantPrincipal(principal, SimpleTenant(it)) }
             node.get("membership")?.text()?.let { principal = MembershipMarkedPrincipal(principal, it) }
             val issuedAt = node.get("issuedAt")?.textOrNull()?.let(Instant::parse)
-            return SimpleTokenPrincipal(node.get("jti")?.text() ?: "t1", principal, issuedAt) as T
+            // A token expires: an hour after the scenario's now unless it says otherwise.
+            val expiresAt = node.get("expiresAt")?.textOrNull()?.let(Instant::parse) ?: Instant.parse(NOW).plusSeconds(3600)
+            return SimpleTokenPrincipal(node.get("jti")?.text() ?: "t1", principal, issuedAt, expiresAt) as T
         }
 
         override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = throw UnsupportedOperationException()
@@ -500,6 +568,35 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
                 }
             }
         }
+    }
+
+    /** `"identity": { "claims": ["name"] }`: the pipeline is a gateway's, forwarding the identity it verified. */
+    private fun issuer(node: JsonNode): IdentityIssuer {
+        node.only("claims")
+        val claims = node.get("claims")?.strings().orEmpty().toSet()
+        return IdentityIssuer(claims, clock = Clock.fixed(Instant.parse(NOW), ZoneOffset.UTC))
+    }
+
+    /**
+     * What a gateway forwards, when it forwards identities: `{ "tenant", "sub", "app", "space", "roles", "jti" }`, or
+     * null when it strips the header; absent when the pipeline forwards nothing.
+     */
+    private fun forwarded(outcome: PipelineOutcome): Pair<Boolean, JsonNode?> {
+        if (IdentityCodec.HEADER !in outcome.forward) {
+            return false to null
+        }
+        val header = outcome.forward[IdentityCodec.HEADER] ?: return true to null
+        return true to identityNode(header)
+    }
+
+    private fun identityNode(header: String): JsonNode {
+        val identity = IdentityCodec.decode(header)
+        val node = JsonNodeFactory.instance.objectNode()
+            .put("tenant", identity.tenant).put("sub", identity.subject)
+            .put("app", identity.app).put("space", identity.space)
+            .put("jti", identity.credential.id)
+        node.putArray("roles").apply { identity.roles.sorted().forEach(::add) }
+        return node
     }
 
     private fun options(node: JsonNode): PipelineOptions {

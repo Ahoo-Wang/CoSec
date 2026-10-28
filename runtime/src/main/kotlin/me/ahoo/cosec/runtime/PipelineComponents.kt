@@ -20,6 +20,7 @@ import me.ahoo.cosec.route.RouteMap
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosid.StringIdGenerator
@@ -54,4 +55,9 @@ data class PipelineComponents(
      * other request `http:<METHOD>` on its path. None by default: every request is in the `http` namespace.
      */
     val routes: RouteMap = RouteMap.EMPTY,
+    /**
+     * At a gateway (`cosec.gateway.identity.enabled`): forwards the verified identity to the services behind it in
+     * `CoSec-Identity`, and strips the client's. Null elsewhere.
+     */
+    val identity: IdentityIssuer? = null,
 )
