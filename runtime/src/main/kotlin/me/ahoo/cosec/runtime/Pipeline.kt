@@ -333,9 +333,11 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         security: RequestSecurity,
     ): Outcome {
         var tightest: RateLimitResult? = null
-        for (obligation in permit.obligations) {
-            if (obligation !is Obligation.RateLimit) {
-                continue
+        for (next in permit.obligations) {
+            // Exhaustive, with no else (OBL-3): a new kind of obligation does not compile until it is handled here, and
+            // a newer model beside this pipeline throws NoWhenBranchMatchedException, which `evaluate` answers 500.
+            val obligation = when (next) {
+                is Obligation.RateLimit -> next
             }
             val result = acquire(obligation)
             when {

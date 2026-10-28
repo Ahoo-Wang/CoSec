@@ -159,7 +159,13 @@ object DocumentFormats {
                     "auth",
                     ObjectType(
                         listOf(
-                            Field("method", StringType(enum = listOf("jwt", "api-key")), required = true),
+                            Field(
+                                "method",
+                                StringType(minLength = 1, examples = listOf("jwt", "api-key")),
+                                required = true,
+                                description = "How the principal authenticated: `jwt` and `api-key` are CoSec's own, " +
+                                    "and an authenticator of another credential names its own.",
+                            ),
                             Field(
                                 "jti",
                                 id("0TEC7Hw00001zR0"),

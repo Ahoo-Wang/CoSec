@@ -303,6 +303,24 @@ class CoSecPipelineAutoConfigurationTest {
             .andExpect(MockMvcResultMatchers.content().contentType("application/problem+json"))
     }
 
+    /** RFC 0010 C2: the version is fixed under `base-path`, so moving the API keeps `/v1`. */
+    @Test
+    fun `a moved control API keeps its version`() {
+        val properties = ControlProperties().apply { http.basePath = "/admin/cosec" }
+        CoSecControlRoutesAutoConfiguration.apiRootOf(properties).assert().isEqualTo("/admin/cosec/v1")
+        CoSecControlRoutesAutoConfiguration.apiRootOf(ControlProperties()).assert().isEqualTo("/cosec/control/v1")
+        val mvc = MockMvcBuilders.routerFunctions(
+            CoSecControlRoutesAutoConfiguration.WebMvc().cosecControlRoutes(
+                ControlHttp(mockk<ControlPlane>()),
+                properties
+            )
+        ).build()
+        mvc.perform(MockMvcRequestBuilders.get("/admin/cosec/v1/documents/platform"))
+            .andExpect(MockMvcResultMatchers.status().isUnauthorized)
+        mvc.perform(MockMvcRequestBuilders.get("/admin/cosec/documents/platform"))
+            .andExpect(MockMvcResultMatchers.status().isNotFound)
+    }
+
     @Test
     fun `the WebMvc control routes read no body before a permitted request, and no more than the cap`() {
         val routes = CoSecControlRoutesAutoConfiguration.WebMvc()

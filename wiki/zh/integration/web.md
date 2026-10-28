@@ -299,7 +299,7 @@ spring:
 | `tenant`、`sub` | 网关校验的租户和主体。 |
 | `scope` | `{app, space}`，即网关解析出的应用和空间。 |
 | `roles` | 主体在该空间中的角色：决策所用的角色。 |
-| `auth` | `{method, jti, exp}`：`jwt` 或 `api-key`、令牌的 `jti` 或 key 的 id，以及凭证的过期时间。绝不包含凭证本身。 |
+| `auth` | `{method, jti, exp}`：主体的认证方式（`jwt` 和 `api-key` 是 CoSec 自带的；其他任何非空名称都按原样读取，因此使用其他认证器的网关也能工作）、令牌的 `jti` 或 key 的 id，以及凭证的过期时间。绝不包含凭证本身。 |
 | `iat` | 网关生成该请求头的时间，单位为 epoch 秒。 |
 | `rid` | 网关的请求 id。 |
 | `claims` | 只包含 `cosec.gateway.identity.claims` 中列出的主体属性（令牌的 `attributes` 声明，或 API key 的属性）：字符串、数字和布尔值。 |
@@ -347,7 +347,7 @@ cosec:
 
 ## 控制面路由 {#control-plane-routes}
 
-启用 `control-support`（以及 `cache-support`）时，starter 在 WebFlux 或 WebMvc 宿主上以函数式路由在 `cosec.control.http.base-path`（默认 `/cosec/control/v1`）下提供控制面的 HTTP API。API 的功能见[策略测试](../policies/testing.md)和[解释一个决策](./checks.md#explaining-a-decision)；它的请求按以下方式处理：
+启用 `control-support`（以及 `cache-support`）时，starter 在 WebFlux 或 WebMvc 宿主上以函数式路由在 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）下提供控制面的 HTTP API。API 的功能见[策略测试](../policies/testing.md)和[解释一个决策](./checks.md#explaining-a-decision)；它的请求按以下方式处理：
 
 - **先经过管道。** 控制请求对宿主来说是普通请求：你的文档必须放行它（例如对已认证调用方放行 `http:path:/cosec/control/v1/**` 上的 `http:POST`），否则它会像其他请求一样被拒绝。在平台文档发布之前，每个请求（包括控制路由）都是 `503`，因此第一份平台文档要通过 `cosec-migrate publish` 发布（[快速开始](../guide/quick-start.md#publish-the-platform-document)）。
 - **再经过控制面自己的检查。** 每次调用都以请求的主体身份，在应用 `cosec.control.app-id`（默认 `cosec-control`）的默认空间中、基于已确认为最新的文档再次授权。匿名请求返回 `401`。租户隔离最先检查，而且不是策略：租户的主体只能操作自己租户的文档。
