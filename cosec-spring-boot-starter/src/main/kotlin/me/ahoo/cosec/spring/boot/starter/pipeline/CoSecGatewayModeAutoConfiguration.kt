@@ -49,9 +49,9 @@ class CoSecGatewayModeAutoConfiguration {
         revocation: RevocationProperties,
         idGenerator: ObjectProvider<StringIdGenerator>,
     ): IdentityGate {
-        log.info {
-            "cosec.pipeline.mode=gateway: this service trusts the CoSec-Identity header of the gateway in front of it. " +
-                "Only the gateway may reach it; it strips any identity a client sends."
+        log.warn {
+            "cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives. Only the CoSec " +
+                "gateway, which strips the clients' own, may be able to reach it: anyone else who can is whoever they claim."
         }
         return IdentityGate(
             maxBytes = pipeline.gateway.maxSize.toBytes().toInt(),

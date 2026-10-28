@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "pipeline",
-  "description": "An anonymous request with a CoSec-Identity of its own is permitted: the gateway forwards no identity, so the header is stripped.",
+  "description": "An anonymous request with a CoSec-Identity of its own is permitted: the gateway forwards no identity, so the header is stripped. Through the gateway host's filters: the strip, the pipeline's filter and the last hop.",
   "documents": {
     "platform": {
       "policies": [
@@ -44,5 +44,6 @@
     "status": 200,
     "proceed": true,
     "identity": null
-  }
+  },
+  "gateway": {}
 }

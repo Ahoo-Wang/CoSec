@@ -539,7 +539,7 @@ class WebAdapterParityTest {
             app = "",
             space = "",
             roles = setOf("clerk"),
-            credential = Identity.Credential(Identity.Method.JWT, "t1", null),
+            credential = Identity.Credential(Identity.Method.JWT, "t1", Instant.now().plusSeconds(3600)),
             issuedAt = Instant.now(),
             requestId = "r1",
         )

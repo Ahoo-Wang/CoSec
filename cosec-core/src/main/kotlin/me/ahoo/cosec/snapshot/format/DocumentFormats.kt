@@ -122,7 +122,7 @@ object DocumentFormats {
 
     private fun id(vararg examples: String) = StringType(minLength = 1, examples = examples.toList())
 
-    private val epochSeconds = IntegerType(minimum = 0, description = "Epoch seconds.")
+    private val epochSeconds = IntegerType(minimum = 0, description = "Epoch seconds, up to the end of year 9999.")
 
     /**
      * The `CoSec-Identity` header a gateway forwards to the services behind it, after base64url: format v1
@@ -166,7 +166,7 @@ object DocumentFormats {
                                 required = true,
                                 description = "The token or API key id."
                             ),
-                            Field("exp", epochSeconds, description = "When the credential expires; absent when never."),
+                            Field("exp", epochSeconds, required = true, description = "When the credential expires."),
                         ),
                     ),
                     required = true,

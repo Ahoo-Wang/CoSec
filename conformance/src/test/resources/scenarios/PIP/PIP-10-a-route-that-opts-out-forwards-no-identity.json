@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "pipeline",
-  "description": "alice is permitted on a route whose metadata says cosec-identity: false: the gateway forwards no identity to that backend.",
+  "description": "alice is permitted on a route whose metadata says cosec-identity: false, and the client sends a CoSec-Identity of its own: the backend receives no identity at all. Through the gateway host's filters.",
   "documents": {
     "platform": {
       "policies": [
@@ -34,10 +34,8 @@
     "method": "GET",
     "path": "/orders",
     "headers": {
-      "Authorization": "token"
-    },
-    "requestAttributes": {
-      "cosec.identity.forward": "false"
+      "Authorization": "token",
+      "CoSec-Identity": "eyJ2IjoxfQ"
     }
   },
   "authentication": {
@@ -55,5 +53,10 @@
     "status": 200,
     "proceed": true,
     "identity": null
+  },
+  "gateway": {
+    "route": {
+      "identity": false
+    }
   }
 }

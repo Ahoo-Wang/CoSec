@@ -42,7 +42,7 @@ class IdentityCodecTest {
     fun `what is encoded is decoded`() {
         IdentityCodec.decode(IdentityCodec.encode(identity)).assert().isEqualTo(identity)
         val apiKey = identity.copy(
-            credential = Identity.Credential(Identity.Method.API_KEY, "k1", null),
+            credential = Identity.Credential(Identity.Method.API_KEY, "k1", Instant.parse("2027-01-01T00:00:00Z")),
             claims = emptyMap()
         )
         IdentityCodec.decode(IdentityCodec.encode(apiKey)).assert().isEqualTo(apiKey)
@@ -58,7 +58,7 @@ class IdentityCodecTest {
     @Test
     fun `anything else is refused, never read as anonymous`() {
         val valid = """"tenant":"acme","sub":"alice","scope":{"app":"","space":""},"roles":[],""" +
-            """"auth":{"method":"jwt","jti":"t1"},"iat":1,"rid":"r1""""
+            """"auth":{"method":"jwt","jti":"t1","exp":2},"iat":1,"rid":"r1""""
         IdentityCodec.decode(header("""{"v":1,$valid}""")).subject.assert().isEqualTo("alice")
         reason(header("""{"v":2,$valid}""")).assert().isEqualTo(IdentityFormatException.Reason.UNSUPPORTED_VERSION)
         reason(header("""{"v":1,$valid,"admin":true}""")).assert().isEqualTo(IdentityFormatException.Reason.MALFORMED)
@@ -78,6 +78,20 @@ class IdentityCodecTest {
             IdentityCodec.encode(identity),
             maxBytes = 16
         ).assert().isEqualTo(IdentityFormatException.Reason.OVERSIZE)
+        // Review: times beyond year 9999 are refused as malformed, never a DateTimeException.
+        reason(header("""{"v":1,${valid.replace("\"iat\":1", "\"iat\":${Long.MAX_VALUE}")}}""")).assert()
+            .isEqualTo(IdentityFormatException.Reason.MALFORMED)
+        reason(header("""{"v":1,${valid.replace("\"exp\":2", "\"exp\":253402300800")}}""")).assert()
+            .isEqualTo(IdentityFormatException.Reason.MALFORMED)
+    }
+
+    @Test
+    fun `a credential that never expires is not forwarded, and its absence is refused`() {
+        val never = identity.copy(credential = identity.credential.copy(expiresAt = null))
+        assertThrows<IdentityOverflowException> { IdentityCodec.encode(never) }
+        val unbounded = """"tenant":"acme","sub":"alice","scope":{"app":"","space":""},"roles":[],""" +
+            """"auth":{"method":"jwt","jti":"t1"},"iat":1,"rid":"r1""""
+        reason(header("""{"v":1,$unbounded}""")).assert().isEqualTo(IdentityFormatException.Reason.UNBOUNDED)
     }
 
     @Test

@@ -48,6 +48,7 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosid.StringIdGenerator
 import java.time.Clock
 import java.time.Duration
+import kotlin.coroutines.cancellation.CancellationException
 import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 private val log = KotlinLogging.logger {}
@@ -80,10 +81,23 @@ class IdentityGate(
         require(!skew.isNegative) { "The skew must not be negative, not $skew." }
     }
 
+    /** Every answer is an outcome of `StatusMapping`: what nothing here models is a 500, never an exception. */
+    @Suppress("TooGenericExceptionCaught")
     override suspend fun evaluate(facts: HttpFacts): Outcome {
         val requestId = facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull(RequestIds::isAcceptable)
             ?: idGenerator?.generateAsString() ?: RandomRequestIds.next()
         val traceId = currentCoroutineContext()[TraceContext]?.traceId
+        return try {
+            decide(facts, requestId, traceId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.error(e) { "Request [$requestId]: the forwarded identity could not be read." }
+            StatusMapping.error(requestId, e, traceId)
+        }
+    }
+
+    private fun decide(facts: HttpFacts, requestId: String, traceId: String?): Outcome {
         val headers = facts.headers.values(IdentityCodec.HEADER)
         if (headers.isEmpty()) {
             return StatusMapping.asserted(requestId, anonymous(requestId, facts), null)
@@ -95,7 +109,8 @@ class IdentityGate(
             IdentityCodec.decode(headers.single(), maxBytes)
         } catch (e: IdentityFormatException) {
             val type = when (e.reason) {
-                IdentityFormatException.Reason.UNSUPPORTED_VERSION -> ProblemType.TOKEN_INVALID
+                IdentityFormatException.Reason.UNSUPPORTED_VERSION, IdentityFormatException.Reason.UNBOUNDED ->
+                    ProblemType.TOKEN_INVALID
                 IdentityFormatException.Reason.MALFORMED, IdentityFormatException.Reason.OVERSIZE ->
                     ProblemType.INVALID_REQUEST
             }

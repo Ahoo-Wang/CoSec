@@ -45,8 +45,11 @@ class PipelineGatewayFilter(
     contributors: List<BridgeContextContributor> = emptyList(),
     private val remoteIpResolver: RemoteIpResolver<ServerWebExchange> = ReactiveRemoteIpResolver,
     private val host: HostScope = HttpFactsReader.NO_HOST,
-    /** `cosec.gateway.identity.forward-authorization`: whether the client's `Authorization` header goes downstream. */
-    private val forwardAuthorization: Boolean = true,
+    /**
+     * `cosec.gateway.identity.forward-authorization`: whether the client's `Authorization` header goes downstream. Off
+     * by default: a service behind needs no token, and a compromised one then never sees one.
+     */
+    private val forwardAuthorization: Boolean = false,
 ) : ReactivePipelineBridge(pipeline, contributors, remoteIpResolver, host),
     GlobalFilter,
     Ordered {
@@ -82,6 +85,8 @@ class PipelineGatewayFilter(
                     }
                 }
                 .build()
+            // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
+            outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
             chain.filter(authorized.mutate().request(downstream).build())
         }
     }

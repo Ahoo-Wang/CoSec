@@ -120,7 +120,7 @@ class PipelineGatewayFilterTest {
                 PrincipalId("alice"),
                 TenantId("acme"),
                 Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()),
-                credential = Identity.Credential(Identity.Method.JWT, "t1", null),
+                credential = Identity.Credential(Identity.Method.JWT, "t1", java.time.Instant.now().plusSeconds(3600)),
             ),
             "token",
         )
@@ -160,15 +160,16 @@ class PipelineGatewayFilterTest {
     }
 
     @Test
-    fun `a route may opt out, and the Authorization header may stay at the gateway`() {
+    fun `a route may opt out, and the Authorization header stays at the gateway unless asked for`() {
         val thirdParty = Route.async().id("partner").uri(URI.create("http://partner")).predicate { true }
             .metadata(PipelineGatewayFilter.IDENTITY_METADATA, false).build()
         val request = { MockServerHttpRequest.get("/orders").header(HttpHeaders.AUTHORIZATION, "token") }
         val filter = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()))
         forwarded(filter, request(), thirdParty)[IdentityCodec.HEADER].assert().isNull()
-        forwarded(filter, request())[HttpHeaders.AUTHORIZATION].assert().isEqualTo(listOf("token"))
-        val keeping = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()), forwardAuthorization = false)
-        forwarded(keeping, request())[HttpHeaders.AUTHORIZATION].assert().isNull()
+        // Least privilege: a service behind needs no token, so the client's stays at the gateway unless asked for.
+        forwarded(filter, request())[HttpHeaders.AUTHORIZATION].assert().isNull()
+        val keeping = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()), forwardAuthorization = true)
+        forwarded(keeping, request())[HttpHeaders.AUTHORIZATION].assert().isEqualTo(listOf("token"))
     }
 }
 

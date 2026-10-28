@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "pipeline",
-  "description": "A client sends its own CoSec-Identity with alice's token: the gateway forwards alice as it verified her, never the client's header.",
+  "description": "A client sends its own CoSec-Identity with alice's token: the gateway forwards alice as it verified her, never the client's header. Through the gateway host's filters: the strip, the pipeline's filter and the last hop.",
   "documents": {
     "platform": {
       "policies": [
@@ -62,5 +62,6 @@
         "clerk"
       ]
     }
-  }
+  },
+  "gateway": {}
 }

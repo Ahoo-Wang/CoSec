@@ -72,8 +72,11 @@ class GatewayIdentityProperties {
     /** A larger identity fails the request closed (500) rather than being cut. */
     var maxSize: DataSize = DataSize.ofBytes(IdentityCodec.DEFAULT_MAX_BYTES.toLong())
 
-    /** Whether the client's `Authorization` header still goes downstream with the identity. */
-    var forwardAuthorization: Boolean = true
+    /**
+     * Whether the client's `Authorization` header still goes downstream with the identity. Off: a service behind needs
+     * no token. Turn it on only for services that call other APIs on the user's behalf.
+     */
+    var forwardAuthorization: Boolean = false
 
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "gateway.identity"

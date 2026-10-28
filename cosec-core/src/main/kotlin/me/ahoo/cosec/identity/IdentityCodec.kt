@@ -33,7 +33,8 @@ import java.util.Base64
  *  "claims":{"name":"Alice"}}
  * ```
  *
- * Times are epoch seconds. `auth.exp` and `claims` may be absent. Decoding is strict: an unknown member, a member of
+ * Times are epoch seconds, from 0 to the end of year 9999. `claims` may be absent; `auth.exp` may not: a gateway
+ * forwards no identity whose credential never expires, and a service refuses one without it. Decoding is strict: an unknown member, a member of
  * the wrong type, a duplicate, an empty id or a header over the size limit is refused, never read as anonymous. The
  * `cosec-identity` format descriptor (`schema/cosec-identity.schema.json`) describes the JSON.
  */
@@ -48,6 +49,9 @@ object IdentityCodec {
 
     /** The longest string claim value a gateway forwards. */
     const val MAX_CLAIM_LENGTH = 1024
+
+    /** 9999-12-31T23:59:59Z: later seconds are refused, so no time arithmetic on a decoded identity can overflow. */
+    private const val MAX_SECONDS = 253_402_300_799L
 
     private val FIELDS = arrayOf("v", "tenant", "sub", "scope", "roles", "auth", "iat", "rid", "claims")
     private val SCOPE_FIELDS = arrayOf("app", "space")
@@ -118,7 +122,9 @@ object IdentityCodec {
             credential = Identity.Credential(
                 method = Identity.Method.of(method) ?: throw malformed("$.auth.method [$method] is not jwt or api-key"),
                 id = auth.need("jti").id("$.auth.jti"),
-                expiresAt = auth.get("exp")?.seconds("$.auth.exp"),
+                expiresAt = (
+                    auth.get("exp") ?: throw IdentityFormatException(Reason.UNBOUNDED, "The identity has no auth.exp.")
+                    ).seconds("$.auth.exp"),
             ),
             issuedAt = root.need("iat").seconds("$.iat"),
             requestId = root.need("rid").id("$.rid"),
@@ -134,7 +140,10 @@ object IdentityCodec {
         root.putObject("auth").apply {
             put("method", identity.credential.method.value)
             put("jti", identity.credential.id)
-            identity.credential.expiresAt?.let { put("exp", it.epochSecond) }
+            val expiresAt = identity.credential.expiresAt ?: throw IdentityOverflowException(
+                "The credential of [${identity.subject}] never expires: a service could not bound the identity."
+            )
+            put("exp", expiresAt.epochSecond)
         }
         root.put("iat", identity.issuedAt.epochSecond).put("rid", identity.requestId)
         if (identity.claims.isNotEmpty()) {
@@ -204,8 +213,8 @@ object IdentityCodec {
     private fun JsonNode.id(path: String): String = text(path).ifEmpty { throw malformed("$path is empty") }
 
     private fun JsonNode.seconds(path: String): Instant {
-        if (!isIntegralNumber || !canConvertToLong() || longValue() < 0) {
-            throw malformed("$path is not epoch seconds")
+        if (!isIntegralNumber || !canConvertToLong() || longValue() !in 0..MAX_SECONDS) {
+            throw malformed("$path is not epoch seconds up to year 9999")
         }
         return Instant.ofEpochSecond(longValue())
     }

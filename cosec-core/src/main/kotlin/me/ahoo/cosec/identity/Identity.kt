@@ -75,6 +75,9 @@ class IdentityFormatException(
 
         /** A version this service does not read: 401. */
         UNSUPPORTED_VERSION,
+
+        /** No `auth.exp`: an identity whose credential never expires cannot be bounded downstream: 401. */
+        UNBOUNDED,
     }
 }
 

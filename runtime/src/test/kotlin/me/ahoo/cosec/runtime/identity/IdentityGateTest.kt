@@ -113,6 +113,15 @@ class IdentityGateTest {
         }
         val v2 = Base64.getUrlEncoder().withoutPadding().encodeToString("""{"v":2}""".encodeToByteArray())
         evaluate(v2).problem().assert().isEqualTo("401 token-invalid")
+        // Review: a time out of range is a 400 from StatusMapping, never an exception.
+        val far = """{"v":1,"tenant":"acme","sub":"alice","scope":{"app":"","space":""},"roles":[],""" +
+            """"auth":{"method":"jwt","jti":"t1","exp":9223372036854775807},"iat":1,"rid":"r1"}"""
+        evaluate(Base64.getUrlEncoder().withoutPadding().encodeToString(far.encodeToByteArray())).problem()
+            .assert().isEqualTo("400 invalid-request")
+        // An identity without auth.exp cannot be bounded: 401.
+        val unbounded = far.replace(""","exp":9223372036854775807""", "")
+        evaluate(Base64.getUrlEncoder().withoutPadding().encodeToString(unbounded.encodeToByteArray())).problem()
+            .assert().isEqualTo("401 token-invalid")
     }
 
     @Test
