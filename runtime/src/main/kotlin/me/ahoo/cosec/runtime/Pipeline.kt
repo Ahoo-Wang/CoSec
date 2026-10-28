@@ -421,12 +421,13 @@ class Pipeline(components: PipelineComponents) {
         } else {
             with(request) { FlatRequest(this.request, scope, memberships, time, external = fetched.toExternalValues()) }
         }
-        val decision = engine.evaluate(evaluated, view, options.traceLevel).decision
+        val evaluation = engine.evaluate(evaluated, view, options.traceLevel)
         record?.let {
             it.request = evaluated
-            it.decision = decision
+            it.decision = evaluation.decision
+            it.evaluationTrace = evaluation.trace
         }
-        return decision
+        return evaluation.decision
     }
 
     /**

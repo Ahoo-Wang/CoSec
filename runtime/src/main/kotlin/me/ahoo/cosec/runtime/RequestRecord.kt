@@ -15,6 +15,7 @@ package me.ahoo.cosec.runtime
 
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.flat.FlatRequest
+import me.ahoo.cosec.engine.flat.FlatTrace
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
@@ -47,6 +48,7 @@ internal class RequestRecord(val startNanos: Long, val time: Long, val trace: Tr
     var request: FlatRequest? = null
     var fetched: FetchedAttributes? = null
     var decision: Decision? = null
+    var evaluationTrace: FlatTrace? = null
     var breakGlass: Boolean = false
     var requiredFailures: List<String> = emptyList()
 
@@ -87,6 +89,7 @@ internal class RequestRecord(val startNanos: Long, val time: Long, val trace: Tr
             kind = kind(basis),
             outcome = if (outcome == null) OutcomeSummary.CANCELLED else summary(outcome),
             decision = decision,
+            evaluationTrace = evaluationTrace,
             breakGlass = breakGlass,
             snapshotVersion = view?.version,
             subject = subject(),
