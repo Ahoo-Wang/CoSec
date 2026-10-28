@@ -1,0 +1,66 @@
+{
+  "rules": [
+    "CTL-19"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "A change that puts `new` and removes `old` publishes exactly `new`.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [],
+        "bindings": [],
+        "rateLimits": [
+          {
+            "id": "old",
+            "action": "*",
+            "permitsPerSecond": 10
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putRateLimit": {
+              "id": "new",
+              "action": "order:read",
+              "permitsPerSecond": 5
+            }
+          },
+          {
+            "removeRateLimit": "old"
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "rateLimits": "tenant:acme"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "rateLimits [new]"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 2
+    }
+  }
+}

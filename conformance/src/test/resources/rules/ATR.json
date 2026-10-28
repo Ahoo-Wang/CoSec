@@ -3,7 +3,7 @@
     {
       "id": "ATR-1",
       "source": "RFC 0006 §5.4.3",
-      "statement": "An external attribute that cannot be fetched never turns a Deny or Indeterminate into a Permit (P9'), except a platform DENY with onMissing nomatch, which lapses by design (ATR-3).",
+      "statement": "An external attribute that cannot be fetched never turns a Deny or Indeterminate into a Permit (P9'), except a DENY whose onMissing nomatch the control plane confirmed (ATR-6), which lapses by design.",
       "level": "pipeline",
       "properties": [
         "engine:ExternalAttributesPropertyTest#unavailableAttributesNeverPermitAndThePlanIsComplete"
@@ -65,6 +65,16 @@
       "guards": [
         "engine:ExternalAttributesTest",
         "cosec-core:ExternalAttributeDocumentTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "ATR-7",
+      "source": "RFC 0006 §8.1, §5.4.3; RFC 0007 N6",
+      "statement": "A rate limit rule may say onMissing nomatch only in the platform document, where the rule does not count a request while its attribute cannot be fetched; in an app or tenant document it does not compile. Rate limit rules have no confirmation flow (ATR-6 covers policy statements).",
+      "level": "pipeline",
+      "guards": [
+        "engine:RateLimitObligationTest"
       ],
       "pending": null
     }

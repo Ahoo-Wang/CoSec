@@ -34,6 +34,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.ShadowOptions
+import me.ahoo.cosec.control.store.ControlMaintenance
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.RetentionPolicy
 import me.ahoo.cosec.control.store.Revisions
@@ -96,11 +97,14 @@ class CoSecControlAutoConfiguration {
         heads: PolicySnapshotCache,
         documents: RedisSnapshotDocumentStore,
         properties: RuntimeAuthorizationProperties,
+        control: ControlProperties,
     ): ControlStore = CoCacheControlStore.create(
         runtime,
         heads,
         properties.snapshot.keyPrefix,
-        documents::notifyChanged
+        documents::notifyChanged,
+        // A change listed but missing this long had its first write fail.
+        missingGrace = control.revisions.orphanAge,
     )
 
     @Bean
@@ -227,6 +231,7 @@ class CoSecControlAutoConfiguration {
         listeners: ChangeListeners,
         idGenerator: ObjectProvider<StringIdGenerator>,
         shadowReports: ObjectProvider<CoCacheShadowReports>,
+        attributes: AttributeProviders,
         properties: RuntimeAuthorizationProperties,
     ): Changes {
         val ids = idGenerator.ifAvailable
@@ -236,12 +241,35 @@ class CoSecControlAutoConfiguration {
             { ChangeId(ids?.generateAsString() ?: UUID.randomUUID().toString()) },
             authorizer,
             options = options,
+            // Candidates compile against the host's providers too, as enforcement compiles them.
+            attributes = attributes.catalog,
             authority = authority,
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(runtime, properties.snapshot.keyPrefix),
             listeners = listeners,
         )
     }
+
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecControlMaintenance(
+        store: ControlStore,
+        revisions: Revisions,
+        changes: Changes,
+        properties: ControlProperties,
+    ): ControlMaintenance = ControlMaintenance(store, revisions, changes, properties.shadow.checkInterval)
+
+    /** Runs [ControlMaintenance] at `cosec.control.revisions.reclaim-interval` and `cosec.control.shadow.check-interval`. */
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecControlMaintenanceScheduler(
+        maintenance: ControlMaintenance,
+        properties: ControlProperties,
+    ): ControlMaintenanceScheduler = ControlMaintenanceScheduler(
+        maintenance,
+        reclaimInterval = properties.revisions.reclaimInterval,
+        shadowInterval = properties.shadow.checkInterval,
+    )
 
     @Bean
     @ConditionalOnMissingBean

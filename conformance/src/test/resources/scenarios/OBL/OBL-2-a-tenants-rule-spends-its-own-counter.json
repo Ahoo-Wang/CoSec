@@ -1,0 +1,70 @@
+{
+  "rules": [
+    "OBL-2"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "acme's rule api, which shares its id with the platform's, is exhausted: acme's request is refused by acme's own counter.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "api",
+          "action": "*",
+          "permitsPerSecond": 10
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [],
+        "bindings": [],
+        "rateLimits": [
+          {
+            "id": "api",
+            "action": "*",
+            "permitsPerSecond": 1000
+          }
+        ]
+      }
+    }
+  },
+  "rateLimiter": {
+    "exhausted": [
+      "tenant:acme/api"
+    ]
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1"
+  },
+  "authentication": {
+    "result": "authenticated",
+    "tenant": "acme",
+    "id": "alice"
+  },
+  "expect": {
+    "status": 429,
+    "type": "too-many-requests"
+  }
+}

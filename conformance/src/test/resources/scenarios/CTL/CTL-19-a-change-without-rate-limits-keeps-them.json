@@ -1,0 +1,67 @@
+{
+  "rules": [
+    "CTL-19"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "A change that only puts a policy leaves acme's rule `old` as it is.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [],
+        "bindings": [],
+        "rateLimits": [
+          {
+            "id": "old",
+            "action": "*",
+            "permitsPerSecond": 10
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "rateLimits": "tenant:acme"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "rateLimits [old]"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 2
+    }
+  }
+}

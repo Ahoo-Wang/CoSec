@@ -62,6 +62,7 @@ import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.starter.control.CoSecControlAutoConfiguration
+import me.ahoo.cosec.spring.boot.starter.control.ControlMaintenanceScheduler
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
@@ -376,6 +377,7 @@ class StarterWiringTest {
                         "cosecKafkaChangeListener"
                     )
                 context.getBean(KafkaChangeListener::class.java).delivery.assert().isEqualTo(Delivery.REQUIRED)
+                context.getBean(ControlMaintenanceScheduler::class.java).isRunning.assert().isTrue()
             }
         kafkaControlRunner.withPropertyValues("cosec.control.audit.kafka.enabled=false").run { context ->
             context.startupFailure.assert().isNull()
