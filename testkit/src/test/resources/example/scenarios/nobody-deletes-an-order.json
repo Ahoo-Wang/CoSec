@@ -1,0 +1,29 @@
+{
+  "description": "The deny wins over the reader's role, and the scenario pins the statement that decides.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "roles": [
+      "reader"
+    ]
+  },
+  "request": {
+    "action": "order:delete",
+    "resource": {
+      "type": "order",
+      "id": "1"
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "no-delete",
+      "statement": 0,
+      "name": "orders are never deleted",
+      "via": {
+        "binding": "g:no-delete",
+        "document": "tenant"
+      }
+    }
+  }
+}

@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.conformance
+package me.ahoo.cosec.testkit
 
 import me.ahoo.cosec.CoSecException
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -45,36 +45,44 @@ fun interface SnapshotCompiler {
  * [PolicyDocumentCompiler] compiles them (RFC 0004 §7.1). A scenario writes a document's body without the header,
  * which this adds.
  *
- * One addition for the suite only: `"fault": "message"` on a statement or a policy makes evaluating that statement's
+ * One addition for the conformance suite only: `"fault": "message"` on a statement or a policy makes evaluating that statement's
  * condition, or that policy's condition, throw. It stands for any failing input (a contract violation, an external
  * attribute that cannot be fetched) so the combination rules can be checked without depending on how a failure
  * arises. It becomes a condition that reads the host attribute `request.attributes.<FAULT><message>` first, which
- * [RequestFacts.host] answers by throwing [ScenarioFault]; the codec itself has no such field.
+ * [RequestFacts.host] answers by throwing [ScenarioFault]; the codec itself has no such field. [stored] leaves it out,
+ * so a user's documents compile exactly as they do when published.
  */
 object DocumentSnapshotCompiler : SnapshotCompiler {
     private val compiler = PolicyDocumentCompiler()
     private val factory = JsonNodeFactory.instance
 
-    override fun compile(documents: ScenarioDocuments): CompiledSnapshot = compile(documents, compiler)
+    override fun compile(documents: ScenarioDocuments): CompiledSnapshot = compile(documents, compiler, faults = true)
 
     /** Compiles as this does, with the external attributes of [catalog] declared (RFC 0006 §5.4.1). */
     fun with(catalog: AttributeCatalog): SnapshotCompiler =
-        PolicyDocumentCompiler(catalog).let { compiler -> SnapshotCompiler { compile(it, compiler) } }
+        PolicyDocumentCompiler(catalog).let { compiler -> SnapshotCompiler { compile(it, compiler, faults = true) } }
 
-    private fun compile(documents: ScenarioDocuments, compiler: PolicyDocumentCompiler): CompiledSnapshot =
-        CompiledSnapshot(
-            platform = compile(compiler, DocumentKind.PLATFORM, "", documents.platform),
-            apps = documents.apps.mapValues { (app, node) -> compile(compiler, DocumentKind.APP, app, node) },
-            tenants = documents.tenants.mapValues { (tenant, node) ->
-                compile(compiler, DocumentKind.TENANT, tenant, node)
-            },
-        )
+    /** Compiles as a published document is compiled: without `"fault"`. */
+    val stored: SnapshotCompiler = SnapshotCompiler { compile(it, compiler, faults = false) }
+
+    private fun compile(
+        documents: ScenarioDocuments,
+        compiler: PolicyDocumentCompiler,
+        faults: Boolean,
+    ): CompiledSnapshot = CompiledSnapshot(
+        platform = compile(compiler, DocumentKind.PLATFORM, "", documents.platform, faults),
+        apps = documents.apps.mapValues { (app, node) -> compile(compiler, DocumentKind.APP, app, node, faults) },
+        tenants = documents.tenants.mapValues { (tenant, node) ->
+            compile(compiler, DocumentKind.TENANT, tenant, node, faults)
+        },
+    )
 
     private fun compile(
         compiler: PolicyDocumentCompiler,
         kind: DocumentKind,
         owner: String,
         node: JsonNode?,
+        faults: Boolean,
     ): CompiledDocument {
         val name = if (kind == DocumentKind.PLATFORM) "platform" else "${kind.name.lowercase()} $owner"
         val body = (node?.deepCopy() ?: factory.objectNode()) as? ObjectNode
@@ -84,7 +92,9 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
             .put("revision", 1)
             .put("publishedAt", PUBLISHED_AT)
         document.setAll(body)
-        document.get("policies")?.values()?.forEach { faulting(it as ObjectNode) }
+        if (faults) {
+            document.get("policies")?.values()?.forEach { faulting(it as ObjectNode) }
+        }
         return try {
             compiler.compile(PolicyDocumentCodec.decode(kind, owner, CoSecJsonSerializer.writeValueAsBytes(document)))
         } catch (error: CoSecException) {
@@ -119,4 +129,4 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
 class ScenarioFault(message: String) : RuntimeException(message)
 
 /** The prefix of the request attribute a `"fault"` reads. */
-const val FAULT: String = "cosec.fault:"
+internal const val FAULT: String = "cosec.fault:"

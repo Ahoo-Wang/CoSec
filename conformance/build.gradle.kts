@@ -21,6 +21,8 @@ dependencies {
     testImplementation(project(":cosec-core"))
     // PipelineRunner: the coroutine pipeline of RFC 0006.
     testImplementation(project(":cosec-runtime"))
+    // The engine level of the scenario format, and its reading, shared with users.
+    testImplementation(project(":cosec-testkit"))
 }
 
 val repositoryRoot = rootProject.layout.projectDirectory
