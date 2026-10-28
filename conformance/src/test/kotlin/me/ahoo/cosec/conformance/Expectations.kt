@@ -16,27 +16,21 @@ package me.ahoo.cosec.conformance
 import me.ahoo.cosec.control.grant.GrantFragment
 import me.ahoo.cosec.control.grant.GrantVerdict
 import me.ahoo.cosec.control.grant.ProtectedEntry
-import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.IndexKeys
-import me.ahoo.cosec.model.decision.BindingRef
-import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
-import me.ahoo.cosec.model.decision.StatementRef
+import me.ahoo.cosec.testkit.EngineExpectations
+import me.ahoo.cosec.testkit.EngineOutcome
+import me.ahoo.cosec.testkit.required
+import me.ahoo.cosec.testkit.textOrNull
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.JsonNodeFactory
-import tools.jackson.databind.node.ObjectNode
 
 /**
  * Compares an [Outcome] with the scenario's `expect`. Outcomes are rendered in the scenario syntax and compared as JSON,
- * exactly: an `expect` says everything about the decision, including the deciding statement (`by`) and the cause.
+ * exactly: an `expect` says everything about the decision, including the deciding statement (`by`) and the cause. The
+ * engine's outcomes are rendered and compared by the test kit's [EngineExpectations], the others here:
  *
  * ```jsonc
- * { "decision": "Permit", "by": { "policy": "p", "statement": 0, "via": { "binding": "b", "document": "platform" } } }
- * { "decision": "Deny", "by": null }                                   // the implicit deny
- * { "decision": "Deny", "by": { "boundary": "b", "tenant": "acme" } }   // outside the platform boundary
- * { "decision": "Indeterminate", "cause": { "type": "MissingPolicies", "policies": ["p"] } }
- * { "decision": "Rejected", "reason": "SPACE_NOT_MEMBER" }
- * { "decision": "NotCompiled", "error": "a part of the error message" }
  * { "keys": ["a"], "admits": true, "implies": "YES", "evaluations": { "c1": true } }   // analysis
  * { "status": 200, "proceed": true }                                   // pipeline
  * { "status": 200, "proceed": true, "identity": { "sub": "alice", ... } } // pipeline of a gateway: what it forwards
@@ -47,30 +41,15 @@ import tools.jackson.databind.node.ObjectNode
  * { "outcomes": ["Published"], "head": { "revision": 1, "parent": null, "parentRecord": null }, "records": 1,
  *   "writes": ["record", "head"] }                                                       // control: publishing
  * ```
- *
- * `via` is `{ "binding": id, "document": "platform" | "app" | "tenant" }`, `{ "attached": policy }` or `"builtin"`; a
- * statement's `name` appears when it has one. Errors are not compared, only where they happened.
  */
 object Expectations {
     private val json = JsonNodeFactory.instance
 
     fun check(scenario: Scenario, outcome: Outcome) {
         val expected = scenario.node.required("expect")
-        val notCompiled = expected.get("decision")?.textOrNull() == "NotCompiled"
-        if (outcome is Outcome.NotCompiled || notCompiled) {
-            if (outcome !is Outcome.NotCompiled) {
-                fail("$scenario: expected $expected, but the documents compile: ${render(outcome)}")
-            }
-            if (!notCompiled) {
-                fail(
-                    "$scenario: expected $expected, but the documents do not compile: ${outcome.error}"
-                )
-            }
-            expected.only("decision", "error")
-            if (expected.required("error").text() !in outcome.error) {
-                fail("$scenario: expected the error to mention $expected, but it is: ${outcome.error}")
-            }
-            return
+        engine(outcome)?.let { return EngineExpectations.check(scenario.name, expected, it, exact = true) }
+        if (expected.get("decision")?.textOrNull() == "NotCompiled") {
+            fail("$scenario: expected $expected, but the documents compile: ${render(outcome)}")
         }
         val actual = render(outcome)
         if (actual != expected) {
@@ -78,15 +57,23 @@ object Expectations {
         }
     }
 
+    /** The outcomes the engine level shares with the test kit. */
+    private fun engine(outcome: Outcome): EngineOutcome? = when (outcome) {
+        is Outcome.Decided -> EngineOutcome.Decided(outcome.decision)
+        is Outcome.Rejected -> EngineOutcome.Rejected(outcome.reason)
+        is Outcome.NotCompiled -> EngineOutcome.NotCompiled(outcome.error)
+        else -> null
+    }
+
     private fun fail(message: String): Nothing = throw AssertionError(message)
 
     fun render(outcome: Outcome): JsonNode = when (outcome) {
-        is Outcome.Decided -> render(outcome.decision)
-        is Outcome.Rejected -> json.objectNode().put("decision", "Rejected").put("reason", outcome.reason.name)
+        is Outcome.Decided -> EngineExpectations.render(outcome.decision)
+        is Outcome.Rejected -> EngineExpectations.render(EngineOutcome.Rejected(outcome.reason))
+        is Outcome.NotCompiled -> EngineExpectations.render(EngineOutcome.NotCompiled(outcome.error))
         is Outcome.Answered -> answered(outcome)
 
         Outcome.Cancelled -> json.objectNode().put("outcome", "none")
-        is Outcome.NotCompiled -> json.objectNode().put("decision", "NotCompiled").put("error", outcome.error)
         is Outcome.Analyzed -> analyzed(outcome)
         is Outcome.Granted, is Outcome.Stored, is Outcome.Changed -> control(outcome)
     }
@@ -196,69 +183,7 @@ object Expectations {
         is ProtectedEntry.Binding -> "binding:${entry.id.value}"
     }
 
-    fun render(decision: Decision): JsonNode = when (decision) {
-        is Decision.Permit -> json.objectNode().put("decision", "Permit").set("by", ref(decision.by))
-        is Decision.Deny -> json.objectNode().put(
-            "decision",
-            "Deny"
-        ).set("by", decision.by?.let(::ref) ?: json.nullNode())
-        is Decision.Indeterminate -> json.objectNode().put(
-            "decision",
-            "Indeterminate"
-        ).set("cause", cause(decision.cause))
-    }
-
-    private fun ref(ref: StatementRef): JsonNode = when (ref) {
-        is StatementRef.Policy -> json.objectNode().apply {
-            put("policy", ref.policy.value)
-            put("statement", ref.index)
-            if (ref.name.isNotEmpty()) put("name", ref.name)
-            set("via", via(ref.via))
-        }
-
-        is StatementRef.ScopeRejected -> json.objectNode().put("rejected", ref.reason.name)
-        is StatementRef.Boundary -> json.objectNode().put(
-            "boundary",
-            ref.boundary.value
-        ).put("tenant", ref.tenant.value)
-    }
-
-    private fun via(via: BindingRef): JsonNode = when (via) {
-        is BindingRef.Bound -> json.objectNode().put(
-            "binding",
-            via.id.value
-        ).put("document", via.document.name.lowercase())
-        is BindingRef.Attached -> json.objectNode().put("attached", via.policy.value)
-        BindingRef.Builtin -> json.stringNode("builtin")
-        is BindingRef.Boundary -> json.objectNode().put("boundaryOf", via.tenant.value)
-    }
-
-    private fun cause(cause: Cause): ObjectNode = json.objectNode().put("type", cause::class.simpleName).apply {
-        when (cause) {
-            is Cause.MatcherFailed -> set("at", ref(cause.at)).put("guard", cause.guard)
-            is Cause.MissingPolicies -> set("policies", policies(cause.policyIds))
-            is Cause.AmbiguousPolicy -> set("policies", policies(cause.policyIds))
-            is Cause.SourceUnavailable, is Cause.NotLoaded -> put("document", documentOf(cause))
-            is Cause.MembershipUnavailable -> Unit
-            is Cause.BoundaryUnavailable -> put("boundary", cause.boundary.value)
-            is Cause.RateLimiterUnavailable -> put("rule", cause.ruleId)
-            is Cause.RequiredListenerFailed ->
-                set("listeners", json.arrayNode().apply { cause.listeners.forEach(::add) })
-            is Cause.AttributeUnavailable -> {
-                set("attributes", json.arrayNode().apply { cause.attributes.sorted().forEach(::add) })
-                cause.at?.let { set("at", ref(it)) }
-            }
-        }
-    }
-
-    private fun documentOf(cause: Cause): String = when (cause) {
-        is Cause.SourceUnavailable -> cause.document.name.lowercase()
-        is Cause.NotLoaded -> cause.document.name.lowercase()
-        else -> error("No document: $cause")
-    }
-
-    private fun policies(ids: Set<PolicyId>): JsonNode =
-        json.arrayNode().apply { ids.map { it.value }.sorted().forEach(::add) }
+    fun render(decision: Decision): JsonNode = EngineExpectations.render(decision)
 
     private fun keys(keys: IndexKeys): JsonNode = when (keys) {
         IndexKeys.Unconstrained -> json.stringNode("any")

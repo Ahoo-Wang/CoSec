@@ -28,8 +28,8 @@ data class RepositoryDocument(val where: String, val file: SchemaFile, val node:
  * only `cosec-migrate` reads them, with 7.x's own decoders, so their files and examples are skipped.
  */
 object RepositoryDocuments {
-    /** Resource files whose format has no schema: policy test suites and replay settings. */
-    private val NOT_A_DOCUMENT_FORMAT = listOf(Regex(".*-policy-test\\.json"), Regex("replay\\.json"))
+    /** Resource files whose format has no schema: replay settings. */
+    private val NOT_A_DOCUMENT_FORMAT = listOf(Regex("replay\\.json"))
     private val SKIPPED_DIRECTORIES = setOf("node_modules", "build", ".git", ".gradle", ".vitepress", ".idea", "docs")
     private val JSON_BLOCK = Regex("```json\\s*\\n(.*?)```", RegexOption.DOT_MATCHES_ALL)
 
@@ -56,6 +56,16 @@ object RepositoryDocuments {
         }
         return when {
             isLegacy(where, file) -> emptyList()
+            // The test kit's examples: scenarios in the conformance format, and the documents they run against.
+            where.startsWith("testkit/") && "/scenarios/" in where -> emptyList()
+            where.startsWith("testkit/") && "/documents/" in where ->
+                listOf(
+                    RepositoryDocument(
+                        where,
+                        DocumentFormats.snapshotDocumentSchema,
+                        CoSecJsonSerializer.readTree(file)
+                    )
+                )
             else -> throw IllegalStateException(
                 "Resource [$where] has no known document format: classify it in RepositoryDocuments."
             )

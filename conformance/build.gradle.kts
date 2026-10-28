@@ -21,6 +21,8 @@ dependencies {
     testImplementation(project(":cosec-core"))
     // PipelineRunner: the coroutine pipeline of RFC 0006.
     testImplementation(project(":cosec-runtime"))
+    // The engine level of the scenario format, and its reading, shared with users.
+    testImplementation(project(":cosec-testkit"))
     // PIP-10 through a gateway host's own filters: the identity strip, the pipeline's filter and the last hop.
     testImplementation(project(":cosec-gateway"))
     testImplementation(project(":cosec-webflux"))

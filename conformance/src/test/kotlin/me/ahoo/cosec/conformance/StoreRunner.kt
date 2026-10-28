@@ -39,6 +39,12 @@ import me.ahoo.cosec.snapshot.document.Actor
 import me.ahoo.cosec.snapshot.document.PolicyDefinition
 import me.ahoo.cosec.snapshot.document.PolicyDocument
 import me.ahoo.cosec.snapshot.document.ProvenanceKind
+import me.ahoo.cosec.testkit.ScenarioFormatException
+import me.ahoo.cosec.testkit.bool
+import me.ahoo.cosec.testkit.only
+import me.ahoo.cosec.testkit.required
+import me.ahoo.cosec.testkit.strings
+import me.ahoo.cosec.testkit.text
 import tools.jackson.databind.JsonNode
 import java.time.Instant
 

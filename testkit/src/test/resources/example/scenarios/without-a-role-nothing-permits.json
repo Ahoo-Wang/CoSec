@@ -1,0 +1,14 @@
+{
+  "description": "Nothing permits a member without a role: the implicit deny.",
+  "credential": {
+    "tenant": "acme",
+    "id": "bob"
+  },
+  "request": {
+    "action": "order:read"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}
