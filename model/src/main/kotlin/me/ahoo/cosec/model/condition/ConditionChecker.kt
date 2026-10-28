@@ -361,7 +361,8 @@ class ConditionChecker(
          * audit names, tell one character at a time. `x-api-key` is the starter's default API key header; a host that
          * reads keys from another header is not covered by this list.
          */
-        val CREDENTIAL_HEADERS: Set<String> = setOf("authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key")
+        val CREDENTIAL_HEADERS: Set<String> =
+            setOf("authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key")
 
         private const val ROOT = "$"
         private const val IPV4_BITS = 32

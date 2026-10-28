@@ -44,7 +44,12 @@ class ConditionCheckerTest {
     fun `credential headers are refused`() {
         listOf("Authorization", "proxy-authorization", "Cookie", "set-cookie", "X-API-Key").forEach { header ->
             single(Condition.Prefix("http.header.$header", str("Bearer a"))).assert()
-                .isEqualTo(ConditionError("$.prefix[0]", "`http.header.$header` is a credential header, which no condition may read"))
+                .isEqualTo(
+                    ConditionError(
+                        "$.prefix[0]",
+                        "`http.header.$header` is a credential header, which no condition may read"
+                    )
+                )
         }
         errors(Condition.Exists("http.header.x-debug")).assert().isEmpty()
     }

@@ -127,7 +127,9 @@ class HostAttributesPipelineTest {
         val ambiguous = evaluate(facts(mapOf("X-Debug" to listOf("0", "1")), mapOf(ROUTE_ID to "orders")))
         ambiguous.status.assert().isEqualTo(503)
         ambiguous.decision.assert().isInstanceOf(Decision.Indeterminate::class.java)
-        evaluate(facts(mapOf("X-Debug" to listOf("0", "0")), mapOf(ROUTE_ID to "orders"))).status.assert().isEqualTo(200)
+        evaluate(
+            facts(mapOf("X-Debug" to listOf("0", "0")), mapOf(ROUTE_ID to "orders"))
+        ).status.assert().isEqualTo(200)
     }
 
     /** Hosts are case-insensitive: the origin's host is read in lower case. */

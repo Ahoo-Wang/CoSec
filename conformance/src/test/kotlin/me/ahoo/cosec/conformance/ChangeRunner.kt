@@ -273,7 +273,8 @@ object ChangeRunner : ScenarioRunner {
                 resource = Resource(resource[0], resource.getOrElse(1) { "" }, emptyMap()),
                 time = clock.now.toEpochMilli(),
                 headers = request.get("headers")?.fields().orEmpty().mapValues { (_, value) -> value.strings() },
-                requestAttributes = request.get("requestAttributes")?.fields().orEmpty().mapValues { (_, value) -> value.text() },
+                requestAttributes = request.get("requestAttributes")?.fields().orEmpty()
+                    .mapValues { (_, value) -> value.text() },
             )
             val result = plane.simulate(
                 by(argument, SnapshotKey.Tenant(tenant.value)),
