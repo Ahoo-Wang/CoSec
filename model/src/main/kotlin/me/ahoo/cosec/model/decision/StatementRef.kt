@@ -19,9 +19,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.ScopeResolution
 
 /*
- * The decision types of the binding model (RFC 0004 §5.1, §6.5). They live in their own package because
- * `me.ahoo.cosec.model.StatementRef`, `Decision` and `Cause`, the layered ones of RFC 0002, stay in use until the switch
- * to bindings (RFC 0004 PR-7) and are removed with the layers (PR-8).
+ * The decision types of the binding model (RFC 0004 §5.1, §6.5).
  */
 
 /** The rule that made a decision. */

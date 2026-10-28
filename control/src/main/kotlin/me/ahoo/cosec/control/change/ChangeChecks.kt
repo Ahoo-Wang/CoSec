@@ -96,9 +96,9 @@ class CheckResult(val findings: List<Finding>, val checkedWith: Map<SnapshotKey,
  *   (RFC 0007 §3.1 N3): a `Broken` entry is a 422, never published. An app or tenant candidate's bindings must
  *   resolve, in the candidate, the platform, or for a tenant binding of one app, that app's document (N1). A platform
  *   candidate must not remove a policy other documents refer to (§5.8).
- * - V4 has nothing to check yet: catalogs declare permission ids, not services, verbs or types (RFC 0004 §4.9). V5's
- *   break-glass rules are the compiler's; `nomatch` confirmations, boundaries and protected entries come with the PRs
- *   that add them (RFC 0007 PR-8, PR-3, PR-6).
+ * - V4 has nothing to check: catalogs declare permission ids, not services, verbs or types (RFC 0004 §4.9). V5's
+ *   break-glass rules and the `nomatch` confirmation (ATR-6) are the compiler's; a candidate's boundary must be one the
+ *   platform defines (below); protected entries and grants are [ChangeAuthority]'s.
  *
  * Changing the platform's limits or attributes does not recompile the other documents; it is a warning.
  */

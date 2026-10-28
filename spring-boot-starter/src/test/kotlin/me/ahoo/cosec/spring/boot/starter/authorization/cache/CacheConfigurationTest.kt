@@ -16,14 +16,15 @@ package me.ahoo.cosec.spring.boot.starter.authorization.cache
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.springframework.boot.context.properties.bind.Binder
+import org.springframework.boot.context.properties.source.MapConfigurationPropertySource
 import java.time.Duration
-import java.util.concurrent.TimeUnit
 
 class CacheConfigurationTest {
 
     @Test
-    fun toCachePolicyWithDefaultsKeepsCoCacheDefaults() {
-        CacheConfiguration().toCachePolicy(CachePolicy.DEFAULT).toString()
+    fun nullsKeepCoCacheDefaults() {
+        CacheConfiguration(localMaxAge = null, maximumSize = null).toCachePolicy(CachePolicy.DEFAULT).toString()
             .assert().isEqualTo(CachePolicy.DEFAULT.toString())
     }
 
@@ -32,9 +33,8 @@ class CacheConfigurationTest {
         val policy = CacheConfiguration(
             initialCapacity = 16,
             maximumSize = 100,
-            expireUnit = TimeUnit.MINUTES,
-            expireAfterWrite = 10,
-            expireAfterAccess = 5,
+            localMaxAge = Duration.ofMinutes(10),
+            expireAfterAccess = Duration.ofMinutes(5),
         ).toCachePolicy(CachePolicy.DEFAULT)
         policy.local.initialCapacity.assert().isEqualTo(16)
         policy.local.maximumSize.assert().isEqualTo(100L)
@@ -47,5 +47,30 @@ class CacheConfigurationTest {
         val policy = CacheProperties().token.toCachePolicy(CachePolicy.DEFAULT)
         policy.localMaxAge.assert().isEqualTo(Duration.ofSeconds(30))
         policy.local.maximumSize.assert().isEqualTo(100_000L)
+    }
+
+    /** A number without a unit is seconds, as `expire-after-write` and `expire-after-access` read it with `expire-unit`. */
+    @Test
+    fun bareNumbersAreSeconds() {
+        val source = MapConfigurationPropertySource(
+            mapOf(
+                "cosec.authorization.cache.token.local-max-age" to "10",
+                "cosec.authorization.cache.token.expire-after-access" to "5",
+                "cosec.authorization.cache.token.maximum-size" to "7",
+            )
+        )
+        val token = Binder(source).bind(CacheProperties.PREFIX, CacheProperties::class.java).get().token
+        token.localMaxAge.assert().isEqualTo(Duration.ofSeconds(10))
+        token.expireAfterAccess.assert().isEqualTo(Duration.ofSeconds(5))
+        token.maximumSize.assert().isEqualTo(7L)
+    }
+
+    /** Constructor binding builds the token settings from their own defaults once any key is set. */
+    @Test
+    fun oneKeyKeepsTheOtherDefaults() {
+        val source = MapConfigurationPropertySource(mapOf("cosec.authorization.cache.token.maximum-size" to "500"))
+        val token = Binder(source).bind(CacheProperties.PREFIX, CacheProperties::class.java).get().token
+        token.maximumSize.assert().isEqualTo(500L)
+        token.localMaxAge.assert().isEqualTo(Duration.ofSeconds(30))
     }
 }

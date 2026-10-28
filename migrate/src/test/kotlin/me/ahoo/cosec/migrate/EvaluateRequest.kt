@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.migrate
 
-import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.migrate.v7.api.context.request.Request
 import java.net.URI
 
 /** 7.x's request for evaluating policies offline, as `cosec-core` had it: the 7.x side of [Facts]. */

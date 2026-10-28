@@ -21,7 +21,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 
 /**
- * Turns a request's credentials into a principal (RFC 0006 §5.3.2). Replaces `SecurityContextParser` at the switch.
+ * Turns a request's credentials into a principal (RFC 0006 §5.3.2).
  *
  * Must not block the calling thread, which may be an event loop: an implementation that needs a blocking client moves
  * the call to its own bounded executor (§7.7). Report a failed dependency as [AuthnResult.Unavailable] rather than by

@@ -14,7 +14,6 @@
 package me.ahoo.cosec.snapshot
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.api.context.request.AppId
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -153,9 +152,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * needed document is not installed or this source is closed. Never does I/O, never touches an executor, and never
      * allocates when [appId] is null. Everything it does happens on the caller's thread.
      *
-     * A document that is installed but failed is returned as such: the caller fails the layers it feeds.
+     * A document that is installed but failed is returned as such: the caller fails every evaluation that reads it.
      */
-    fun peek(appId: AppId? = null): Snapshot<P, A>? {
+    fun peek(appId: String? = null): Snapshot<P, A>? {
         if (closed) {
             return null
         }
@@ -215,7 +214,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      *
      * @throws IllegalArgumentException when [appId] is not a valid app id; check [SnapshotKey.App.isValidAppId] first.
      */
-    fun load(appId: AppId? = null): CompletableFuture<Snapshot<P, A>> {
+    fun load(appId: String? = null): CompletableFuture<Snapshot<P, A>> {
         val appKey = appId?.let { SnapshotKey.App(it) }
         if (closed) {
             return CompletableFuture.failedFuture(closedError())

@@ -30,7 +30,7 @@ sealed interface Decision {
 }
 
 /**
- * Why a decision is [Decision.Indeterminate]. Unlike the layered causes, the engine finds some of them itself (missing
+ * Why a decision is [Decision.Indeterminate]. The engine finds some of them itself (missing
  * policies, documents not loaded), so not every cause carries an exception: the adapter builds the one it reports.
  */
 sealed interface Cause {

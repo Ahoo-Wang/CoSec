@@ -24,8 +24,8 @@ import java.time.Instant
  * The read side of a [TokenStore] for the coroutine pipeline (RFC 0006 §5.3.2): the same two questions, as suspend
  * functions that never block the calling thread, which may be an event loop.
  *
- * It sits next to [TokenStore] rather than replacing its methods (RFC 0006 Q11) because the 7.x path still reads
- * [TokenStore] synchronously through [RevocableTokenVerifier] until the switch removes that path (RFC 0008 §4.4).
+ * It sits next to [TokenStore] rather than replacing its methods (RFC 0006 Q11): outside the pipeline,
+ * [RevocableTokenVerifier] reads [TokenStore] synchronously, as the `TokenVerifier` that login and refresh use.
  *
  * A store that cannot be read follows the documented exception to "fail closed" (AGENTS.md): it answers "not revoked"
  * itself, as `CoSecCacheSpecs` configures the revocation caches to do. Anything an implementation throws fails the

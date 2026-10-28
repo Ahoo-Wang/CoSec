@@ -14,9 +14,12 @@
 package me.ahoo.cosec.cache
 
 import io.lettuce.core.RedisURI
+import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
+import me.ahoo.cocache.core.proxy.CacheProxies
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.serialization.CoSecJsonSerializer
 import me.ahoo.cosid.test.MockIdGenerator
@@ -59,3 +62,9 @@ internal class CoSecTestCaches(
         fun redisBackend(): RedisBackend = RedisBackend.standalone(RedisURI.create("redis://localhost:6379"))
     }
 }
+
+/**
+ * Creates the cache declared by [spec] and exposes it as [C], one of CoSec's cache interfaces.
+ */
+inline fun <reified C : Cache<K, V>, K : Any, V : Any> CacheRuntime.createCache(spec: CacheSpec<K, V>): C =
+    CacheProxies.create(C::class.java, create(spec))

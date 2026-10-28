@@ -11,20 +11,19 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.limiter
+package me.ahoo.cosec.migrate.v7.api.context.request
 
-import reactor.core.publisher.Mono
+typealias DeviceId = String
 
 /**
- * Counts permits per bucket. The backend of [RateLimitingAuthorization].
+ * Interface for entities that have a device ID.
  *
- * Implementations must not block the subscribing thread, which is a Netty event loop under WebFlux and
- * Gateway: run blocking I/O (such as a Redis round trip) on `Schedulers.boundedElastic()`.
- * A failure is signalled as an error; [RateLimitRule.strictFailure] decides what it means.
+ * @see Request
  */
-fun interface RateLimiter {
-    /**
-     * Acquires one permit of [rateLimit] from the bucket [bucket] of rule [ruleId].
-     */
-    fun tryAcquire(ruleId: String, bucket: String, rateLimit: RateLimit): Mono<RateLimitResult>
+interface DeviceIdCapable {
+    companion object {
+        const val DEVICE_ID_KEY = "${COSEC_EXTEND_KEY_PREFIX}Device-Id"
+    }
+
+    val deviceId: DeviceId
 }

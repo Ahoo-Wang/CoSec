@@ -24,9 +24,6 @@ import me.ahoo.cosec.model.scope.Scope
 
 /**
  * The authorization decision over bindings (RFC 0004 §6): a synchronous function without I/O.
- *
- * It sits next to the layered [me.ahoo.cosec.engine.Engine] until the switch (RFC 0004 PR-7), and becomes its
- * `evaluate(request, snapshot)` when the layers are removed (PR-8).
  */
 interface FlatEngine {
     /**

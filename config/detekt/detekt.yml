@@ -7,6 +7,26 @@ complexity:
   TooManyFunctions:
     active: false
 style:
+  # G2 (RFC 0008 §4.6.2): main code explains what it does now, not how it got here. A reference to an RFC section is
+  # fine; one to a PR, to "the switch" or to code that is gone is not. cosec-migrate is about 7.x by nature.
+  ForbiddenComment:
+    active: true
+    comments:
+      - value: 'TODO:'
+        reason: 'Forbidden TODO todo marker in comment, please do the changes.'
+      - value: 'FIXME:'
+        reason: 'Forbidden FIXME todo marker in comment, please fix the problem.'
+      - value: 'STOPSHIP:'
+        reason: 'Forbidden STOPSHIP todo marker in comment, please address the problem before shipping the code.'
+      - value: '(until|before) (RFC|the switch)'
+        reason: 'A transition note: say what the code does now (G2).'
+      - value: '\bPR-[0-9]'
+        reason: 'A PR reference goes stale once the PR lands; cite the RFC section instead (G2).'
+      - value: '(at|after|until) the switch'
+        reason: 'The switch to 8.0 is done; say what the code does now (G2).'
+      - value: '\b(layered|the layers)\b'
+        reason: 'The layered engine is gone (G2).'
+    excludes: ['**/test/**', '**/testFixtures/**', '**/jmh/**', '**/migrate/src/**']
   MaxLineLength:
     maxLineLength: 200
   ReturnCount:

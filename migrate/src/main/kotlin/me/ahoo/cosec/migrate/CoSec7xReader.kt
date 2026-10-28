@@ -19,10 +19,10 @@ import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.policy.CachePolicy
-import me.ahoo.cosec.api.context.request.AppId
 import me.ahoo.cosec.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.cache.CoSecCacheSpecs.storeOfRecord
+import me.ahoo.cosec.migrate.v7.api.context.request.AppId
 import me.ahoo.cosec.migrate.v7.api.policy.PolicyId
 import me.ahoo.cosec.migrate.v7.cache.AppSpacedRoleId
 import me.ahoo.cosec.migrate.v7.cache.GlobalPolicyIndexCache

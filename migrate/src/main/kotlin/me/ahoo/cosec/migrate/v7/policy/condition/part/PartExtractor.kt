@@ -14,7 +14,7 @@
 package me.ahoo.cosec.migrate.v7.policy.condition.part
 
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.request.Request
+import me.ahoo.cosec.migrate.v7.api.context.request.Request
 import me.ahoo.cosec.migrate.v7.policy.action.getPathVariables
 
 internal const val CONDITION_MATCHER_PART_KEY = "part"

@@ -14,8 +14,8 @@
 package me.ahoo.cosec.migrate.v7.limiter
 
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.request.Request
 import me.ahoo.cosec.limiter.RateLimit
+import me.ahoo.cosec.migrate.v7.api.context.request.Request
 import me.ahoo.cosec.migrate.v7.api.policy.ActionMatcher
 import me.ahoo.cosec.migrate.v7.api.policy.ConditionMatcher
 import me.ahoo.cosec.migrate.v7.policy.PathVariableScope

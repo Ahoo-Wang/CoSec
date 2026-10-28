@@ -356,6 +356,9 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--key-prefix cosec] -
 | 影子模式（`ShadowAuthorization`、`ShadowPolicyProvider`、`cosec.shadow.*` 文件） | 控制面变更的影子窗口；见[测试策略](../policies/testing.md)。 |
 | `AccessAnalyzer` | 控制面的 `analyze`。 |
 | `PolicyTestKit`（`cosec-core`） | `cosec-testkit` 模块中的 `PolicyTestKit`（[策略测试套件](#policy-test-suites)）。 |
+| `cosec-api` 中 7.x 的请求模型：`Request`、`Attributes`、`AppIdCapable`、`DeviceIdCapable`、`RequestIdCapable`（及其别名 `AppId`、`DeviceId`、`RequestId`）、`COSEC_EXTEND_KEY_PREFIX`、`SpaceIdCapable.SPACE_ID_KEY`；`cosec-core` 的 `RequestSecurityContexts` 和 `InvalidRequestPathException` | 无：适配器读取 `HttpFacts`，安全上下文携带校验后的 `scope`。`SpaceIdCapable` 和 `SpaceId` 为 `SpacedRoleId` 保留。 |
+| `InternalIds`（`cosec-api`） | 无。 |
+| `me.ahoo.cosec.limiter.RateLimiter` 及其 `LocalRateLimiter`、`RedisRateLimiter`（`cosec-cocache`） | 挂起的 SPI `me.ahoo.cosec.runtime.ratelimit.RateLimiter`；starter 注册它的 `LocalRateLimiter` 或 `ReactiveRedisRateLimiter`（[限流](../policies/rate-limiting.md)）。`RateLimit` 和 `RateLimitResult` 保留。 |
 | `Jwts.toPrincipal(String)`、`Jwts.decode`、`Jwts.verifyTimeClaims` | 无：`Jwts` 是 `cosec-jwt` 的内部类。用会校验签名的 `TokenVerifier.verify` 把令牌变成主体。 |
 | `PrincipalConverter`、`TokenVerifier.toPrincipal` | `TokenVerifier.verify`。 |
 | `AuthorizationChecker.check(...)`：`Mono<Boolean>` | `AuthorizationChecker.check(security, action, resource)`，挂起函数；`cosec-webflux` 提供 `Mono<Boolean>` 形式，`cosec-webmvc` 提供阻塞形式（[代码中的检查](../integration/checks.md)）。 |
@@ -408,6 +411,8 @@ key 代表它之下的每个 key。
 | `cosec.authorization.cache.history.` | 已删除。 |
 | `cosec.authorization.cache.migration.` | 已删除。 |
 | `cosec.authorization.cache.token.concurrency-level` | 已删除：自 CoCache 5 起被忽略。 |
+| `cosec.authorization.cache.token.expire-after-write` | `cosec.authorization.cache.token.local-max-age`，一个时长（`30s`）。 |
+| `cosec.authorization.cache.token.expire-unit` | 已删除：时长自带单位。`expire-after-access` 也是时长；不带单位的数字仍表示秒。 |
 | `cosec.authorization.gateway.enabled` | 已删除：网关过滤器随 `gatewaySupport` 提供。 |
 | `cosec.limiter.` | 已删除：限流规则在平台文档中（[限流规则变为义务](#rate-limit-rules-become-obligations)）；要使用不同的限流 key 前缀，需要自己的 `RateLimiter` bean。 |
 | `cosec.shadow.` | 已删除：影子窗口是控制面的操作；每个实例的部分是 `cosec.authorization.shadow.*`。 |

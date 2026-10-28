@@ -11,15 +11,19 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.webflux
+package me.ahoo.cosec.migrate.v7.api.context.request
 
-import org.springframework.http.HttpHeaders
+typealias RequestId = String
 
-fun HttpHeaders.trySet(key: String, value: String): Boolean {
-    try {
-        set(key, value)
-        return true
-    } catch (_: UnsupportedOperationException) {
-        return false
+/**
+ * Interface for entities that have a request ID for tracing.
+ *
+ * @see Request
+ */
+interface RequestIdCapable {
+    companion object {
+        const val REQUEST_ID_KEY = "${COSEC_EXTEND_KEY_PREFIX}Request-Id"
     }
+
+    val requestId: RequestId
 }
