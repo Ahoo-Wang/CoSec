@@ -25,6 +25,7 @@ import me.ahoo.cosec.snapshot.SnapshotEntry
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.SnapshotSet
 import me.ahoo.cosec.snapshot.SnapshotSource
+import me.ahoo.cosec.snapshot.SnapshotStaleException
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -40,6 +41,9 @@ import java.util.concurrent.CompletableFuture
  * - With [platformRequired], an absent platform document is unresolved too, not empty. Once the control plane's
  *   bootstrap has published a platform document, its absence means it was lost (for example, evicted from Redis), and
  *   reading it as empty would silently drop every global DENY (RFC 0008 §4.4, #1053).
+ * - A tenant the source is configured to fail closed for (`SnapshotOptions.failClosedTenants`, RFC 0003 §4.5) is
+ *   unresolved when the oldest document of its view was confirmed longer ago than `failClosedMaxLag`
+ *   ([SnapshotSource.checkFresh]); other tenants are never checked.
  */
 class DocumentSnapshotViews(
     private val source: SnapshotSource<CompiledDocument, CompiledDocument>,
@@ -89,6 +93,7 @@ class DocumentSnapshotViews(
         val app = key.app?.let { id ->
             document(set.entry(SnapshotKey.App(id.value))!!, DocumentKind.APP, unresolved) { empty(id) }
         }
+        key.tenant?.let { stale(set, it) }?.let(unresolved::add)
         val tenantKey = key.tenant?.takeIf { keys.invalidTenant == null }?.let { SnapshotKey.Tenant(it.value) }
         val version = ViewVersion(
             set.shared.revision,
@@ -120,6 +125,14 @@ class DocumentSnapshotViews(
                 null
             }
         }
+
+    /** Why [tenant] may not decide on [set]: it fails closed, and [set] lags more than it allows; null otherwise. */
+    private fun stale(set: SnapshotSet<*, *>, tenant: TenantId): Cause? = try {
+        source.checkFresh(set, tenant.value)
+        null
+    } catch (error: SnapshotStaleException) {
+        Cause.SourceUnavailable(DocumentKind.TENANT, error)
+    }
 
     private fun empty(tenant: TenantId) = CompiledDocument.tenant(tenant, emptyList(), emptyList())
 
