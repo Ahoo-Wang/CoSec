@@ -16,14 +16,17 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 import io.mockk.confirmVerified
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import me.ahoo.cosec.snapshot.DocumentState
 import me.ahoo.cosec.snapshot.Snapshot
 import me.ahoo.cosec.snapshot.SnapshotSource
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.springframework.boot.availability.ApplicationAvailability
 import org.springframework.boot.availability.AvailabilityChangeEvent
 import org.springframework.boot.availability.ReadinessState
 import org.springframework.boot.health.contributor.Status
+import org.springframework.context.ApplicationEvent
 import org.springframework.context.ApplicationEventPublisher
 import java.time.Duration
 
@@ -63,7 +66,7 @@ class SnapshotHealthIndicatorTest {
         SnapshotReadiness(
             source(DocumentState.Present(Any()), true),
             publisher,
-            Duration.ofMillis(10)
+            interval = Duration.ofMillis(10),
         ).use { readiness ->
             readiness.isReady.assert().isTrue()
             readiness.onApplicationEvent(AvailabilityChangeEvent(this, ReadinessState.REFUSING_TRAFFIC))
@@ -78,9 +81,26 @@ class SnapshotHealthIndicatorTest {
     @Test
     fun `nothing is announced before the application has started`() {
         val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
-        SnapshotReadiness(source(DocumentState.Present(Any()), true), publisher, Duration.ofMillis(10)).use {
+        SnapshotReadiness(source(DocumentState.Present(Any()), true), publisher, interval = Duration.ofMillis(10)).use {
             Thread.sleep(100)
             confirmVerified(publisher)
+        }
+    }
+
+    /** Spring's acceptance can land after a refusal and overwrite it: the timer refuses again while it stands. */
+    @Test
+    fun `a refusal Spring overwrote is published again until the snapshot is ready`() {
+        val publisher = mockk<ApplicationEventPublisher>(relaxed = true)
+        val availability = mockk<ApplicationAvailability> {
+            every { readinessState } returns ReadinessState.ACCEPTING_TRAFFIC
+        }
+        SnapshotReadiness(source(null, false), publisher, availability, Duration.ofMillis(10)).use { readiness ->
+            readiness.onApplicationEvent(AvailabilityChangeEvent(this, ReadinessState.ACCEPTING_TRAFFIC))
+            verify(timeout = 5_000, atLeast = 3) {
+                publisher.publishEvent(match<ApplicationEvent> {
+                    (it as AvailabilityChangeEvent<*>).state == ReadinessState.REFUSING_TRAFFIC
+                })
+            }
         }
     }
 }

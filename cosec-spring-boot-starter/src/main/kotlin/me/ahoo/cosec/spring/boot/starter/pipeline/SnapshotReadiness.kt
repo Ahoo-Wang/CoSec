@@ -15,6 +15,7 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import me.ahoo.cosec.snapshot.DocumentState
 import me.ahoo.cosec.snapshot.SnapshotSource
+import org.springframework.boot.availability.ApplicationAvailability
 import org.springframework.boot.availability.AvailabilityChangeEvent
 import org.springframework.boot.availability.ReadinessState
 import org.springframework.context.ApplicationEventPublisher
@@ -32,6 +33,12 @@ import java.util.concurrent.TimeUnit
 class SnapshotReadiness(
     private val source: SnapshotSource<*, *>,
     private val publisher: ApplicationEventPublisher,
+    /**
+     * The state Spring holds. Listeners of one event run in an order this cannot choose, so a refusal can land before
+     * the acceptance it answers and be overwritten by it: each check refuses again while Spring says accepting and the
+     * snapshot is not ready. Without it, the refusal is published once.
+     */
+    private val availability: ApplicationAvailability? = null,
     interval: Duration = Duration.ofMillis(200),
 ) : ApplicationListener<AvailabilityChangeEvent<ReadinessState>>, AutoCloseable {
     @Volatile
@@ -58,17 +65,14 @@ class SnapshotReadiness(
         if (event.source === this || event.state != ReadinessState.ACCEPTING_TRAFFIC) {
             return
         }
-        started = true
         if (isReady) {
+            // Accepting before started: the timer, seeing started, must also see that Spring's acceptance stands, or it
+            // announces it a second time.
             accepting = true
+            started = true
         } else {
-            // After this dispatch: published from here, the refusal could reach the availability bean before the
-            // acceptance it answers, and be overwritten by it.
-            timer.execute {
-                if (!accepting) {
-                    AvailabilityChangeEvent.publish(publisher, this, ReadinessState.REFUSING_TRAFFIC)
-                }
-            }
+            started = true
+            timer.execute(::refuse)
         }
     }
 
@@ -77,9 +81,20 @@ class SnapshotReadiness(
             timer.shutdown()
             return
         }
-        if (started && isReady) {
+        if (!started) {
+            return
+        }
+        if (isReady) {
             accepting = true
             AvailabilityChangeEvent.publish(publisher, this, ReadinessState.ACCEPTING_TRAFFIC)
+        } else if (availability?.readinessState == ReadinessState.ACCEPTING_TRAFFIC) {
+            refuse()
+        }
+    }
+
+    private fun refuse() {
+        if (!accepting) {
+            AvailabilityChangeEvent.publish(publisher, this, ReadinessState.REFUSING_TRAFFIC)
         }
     }
 
