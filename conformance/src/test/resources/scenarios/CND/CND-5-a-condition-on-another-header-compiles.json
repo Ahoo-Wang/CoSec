@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "CND-5"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The same condition on an ordinary header compiles and decides: absent, the DENY does not match.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "guarded",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*",
+              "condition": {
+                "prefix": [
+                  "http.header.x-debug",
+                  "Bearer a"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "request": {},
+  "expect": {
+    "decision": "Deny"
+  }
+}
