@@ -108,7 +108,7 @@ class ChangeAuditException(message: String, cause: Throwable? = null) : IllegalS
  */
 class ChangeListeners(
     listeners: List<ChangeListener>,
-    private val requiredTimeout: Duration = 5.seconds,
+    val requiredTimeout: Duration = 5.seconds,
 ) {
     private val required = listeners.filter { it.delivery == Delivery.REQUIRED }
     private val all = listeners
