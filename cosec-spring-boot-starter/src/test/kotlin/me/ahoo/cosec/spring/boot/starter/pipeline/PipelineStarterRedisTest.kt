@@ -15,7 +15,11 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
+import me.ahoo.cosec.cache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.control.api.ControlHttp
+import me.ahoo.cosec.control.change.ShadowState
+import me.ahoo.cosec.control.change.ShadowWindows
+import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.model.PrincipalId
@@ -24,6 +28,8 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.shadow.StoredCandidate
+import me.ahoo.cosec.snapshot.SnapshotDocument
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.document.Actor
 import me.ahoo.cosec.snapshot.document.PolicyDocumentCodec
@@ -201,6 +207,35 @@ class PipelineStarterRedisTest {
             eventually { client.status("/orders/1", dave).assert().isEqualTo(503) }
             publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", PLATFORM)
             eventually { client.status("/orders/1", dave).assert().isEqualTo(200) }
+        }
+    }
+
+    /** S3: the data plane takes part in shadow windows, so a candidate one instance cannot compile blocks its window. */
+    @Test
+    fun `a candidate that does not compile on an instance blocks its window`() {
+        runner.withPropertyValues(
+            "cosec.authorization.shadow.sample-rate=1",
+            "cosec.authorization.shadow.report-interval=100ms",
+        ).run { context ->
+            val client = client(context)
+            publish(context, SnapshotKey.Platform, DocumentKind.PLATFORM, "", PLATFORM)
+            val window = "w-${UUID.randomUUID()}"
+            val startedAt = Instant.now()
+            val uncompilable = """{"schema":2,"revision":2,"publishedAt":"2026-10-27T00:00:00Z","policies":"none"}"""
+            runBlocking {
+                context.getBean(ControlStore::class.java).putCandidate(
+                    SnapshotKey.Platform,
+                    StoredCandidate(window, 1, SnapshotDocument(2, 2, startedAt, uncompilable.encodeToByteArray())),
+                )
+            }
+            val windows = ShadowWindows(context.getBean(CoCacheShadowReports::class.java))
+            val alice = token(context, "acme", "alice")
+            eventually {
+                // The enforced decision never notices the candidate.
+                client.status("/orders/1", alice).assert().isEqualTo(200)
+                val summary = runBlocking { windows.close(ShadowState(window, startedAt), Instant.now()) }
+                summary?.blocked.assert().isEqualTo(true)
+            }
         }
     }
 

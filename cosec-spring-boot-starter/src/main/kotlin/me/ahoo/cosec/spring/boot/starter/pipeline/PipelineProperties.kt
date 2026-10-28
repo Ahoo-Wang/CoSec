@@ -54,6 +54,7 @@ class RuntimeAuthorizationProperties {
     val rateLimit = Timed(Duration.ofMillis(500))
     val routes = Routes()
     val snapshot = Snapshot()
+    val shadow = Shadow()
 
     class Scope {
         /** The app this host serves (RFC 0004 §4.6); unset when requests declare their app. */
@@ -110,6 +111,27 @@ class RuntimeAuthorizationProperties {
             var tenants: Set<String> = emptySet()
             var maxLag: Duration = Duration.ofMinutes(30)
         }
+    }
+
+    /**
+     * The data plane's part of the control plane's shadow windows (RFC 0007 §6.4), with `cache-support`: sampled
+     * requests are evaluated again on the staged candidates, and this instance reports what it saw.
+     */
+    class Shadow {
+        /**
+         * Off, this instance takes no part in shadow windows: it reports no samples and no `CANDIDATE_ERROR`, so its
+         * traffic counts for nothing in a window.
+         */
+        var enabled: Boolean = true
+
+        /** The share of requests evaluated again on the candidates, from 0 to 1. */
+        var sampleRate: Double = 0.1
+
+        /** How often this instance writes its reports and its status. */
+        var reportInterval: Duration = Duration.ofSeconds(10)
+
+        /** This instance's id in reports and statuses; a random one when empty. Unique per running instance. */
+        var instanceId: String = ""
     }
 
     enum class EvictionCheck {

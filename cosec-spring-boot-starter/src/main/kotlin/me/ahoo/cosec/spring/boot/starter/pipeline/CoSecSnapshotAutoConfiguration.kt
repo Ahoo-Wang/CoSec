@@ -14,6 +14,12 @@
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.memory.InMemoryBackend
@@ -22,11 +28,20 @@ import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
 import me.ahoo.cocache.spring.boot.CoCacheProperties
 import me.ahoo.cosec.cache.CoSecCacheSpecs
+import me.ahoo.cosec.cache.shadow.CoCacheCandidateStore
+import me.ahoo.cosec.cache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.event.ShadowListener
+import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
+import me.ahoo.cosec.runtime.shadow.CandidateSource
+import me.ahoo.cosec.runtime.shadow.CandidateStore
+import me.ahoo.cosec.runtime.shadow.InstalledDocument
+import me.ahoo.cosec.runtime.shadow.ShadowRecorder
+import me.ahoo.cosec.runtime.shadow.ShadowReporter
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
@@ -44,9 +59,12 @@ import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import java.time.Clock
+import java.util.UUID
 
 /**
  * The policy snapshot the pipeline decides on (RFC 0004 §7.4): the platform, app and tenant documents, compiled against
@@ -95,6 +113,77 @@ class CoSecSnapshotAutoConfiguration {
         }
     }
 
+    /**
+     * The data plane's part of shadow windows (RFC 0007 §6.4): candidates read from Redis and compiled with this
+     * instance's compiler, a [ShadowListener] among the decision listeners, and this instance's reports and status
+     * written every `report-interval`. A candidate that does not compile here is reported as `CANDIDATE_ERROR`, which
+     * blocks its window.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = ["me.ahoo.cosec.cache.shadow.CoCacheCandidateStore"])
+    @ConditionalOnBean(CacheRuntime::class)
+    @ConditionalOnProperty(
+        prefix = RuntimeAuthorizationProperties.PREFIX + ".shadow",
+        name = ["enabled"],
+        matchIfMissing = true
+    )
+    class Shadow {
+        @Bean
+        @ConditionalOnMissingBean
+        fun cosecShadowRecorder(properties: RuntimeAuthorizationProperties): ShadowRecorder =
+            ShadowRecorder(properties.shadow.instanceId.ifEmpty { UUID.randomUUID().toString() })
+
+        /**
+         * Candidates read through the control plane's store on a host that runs it (both would own the one candidate
+         * cache), otherwise through a reader of their own.
+         */
+        @Bean
+        @ConditionalOnMissingBean
+        fun cosecCandidateSource(
+            runtime: CacheRuntime,
+            stores: ObjectProvider<CandidateStore>,
+            compiler: PlatformCompiler,
+            properties: RuntimeAuthorizationProperties,
+        ): CandidateSource {
+            val store = stores.ifUnique ?: CoCacheCandidateStore.create(runtime, properties.snapshot.keyPrefix)
+            return CachingCandidateSource(store, compiler::compile)
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        fun cosecShadowListener(
+            candidates: CandidateSource,
+            recorder: ShadowRecorder,
+            properties: RuntimeAuthorizationProperties,
+        ): ShadowListener = ShadowListener(SHADOW_LISTENER, properties.shadow.sampleRate, candidates, recorder)
+
+        /** Shared with the control plane on a host that runs it, which reads the reports this writes. */
+        @Bean
+        @ConditionalOnMissingBean
+        fun cosecShadowReports(runtime: CacheRuntime, properties: RuntimeAuthorizationProperties): CoCacheShadowReports =
+            CoCacheShadowReports.create(runtime, properties.snapshot.keyPrefix)
+
+        @Bean(destroyMethod = "close")
+        @ConditionalOnMissingBean
+        fun cosecShadowReporting(
+            recorder: ShadowRecorder,
+            sink: CoCacheShadowReports,
+            source: SnapshotSource<CompiledDocument, CompiledDocument>,
+            properties: RuntimeAuthorizationProperties,
+        ): ShadowReporting {
+            val clock = Clock.systemUTC()
+            val installed = {
+                val now = clock.instant()
+                source.entries().filter { it.revision > 0 }.associate { it.key to InstalledDocument(it.revision, it.lagAt(now)) }
+            }
+            return ShadowReporting(ShadowReporter(recorder, sink, installed, clock, properties.shadow.reportInterval))
+        }
+
+        companion object {
+            const val SHADOW_LISTENER = "shadow"
+        }
+    }
+
     /** Without `cosec-cocache`: documents an application puts in memory, such as its local policy files. */
     @Bean
     @ConditionalOnMissingBean
@@ -129,6 +218,19 @@ class CoSecSnapshotAutoConfiguration {
         source: SnapshotSource<CompiledDocument, CompiledDocument>
     ): SuspendingSnapshotSource =
         SuspendingSnapshotSource(DocumentSnapshotViews(source, platformRequired = true))
+}
+
+/** Runs [reporter] every interval from the start of the context until it closes. */
+class ShadowReporting(reporter: ShadowReporter) : AutoCloseable {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("cosec-shadow-reporter"))
+
+    init {
+        scope.launch { reporter.run() }
+    }
+
+    override fun close() {
+        scope.cancel()
+    }
 }
 
 internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(): SnapshotOptions = SnapshotOptions(

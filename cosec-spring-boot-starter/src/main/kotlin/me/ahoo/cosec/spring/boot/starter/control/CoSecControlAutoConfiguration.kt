@@ -175,6 +175,7 @@ class CoSecControlAutoConfiguration {
         runtime: CacheRuntime,
         listeners: ObjectProvider<ChangeListener>,
         idGenerator: ObjectProvider<StringIdGenerator>,
+        shadowReports: ObjectProvider<CoCacheShadowReports>,
         properties: RuntimeAuthorizationProperties,
     ): Changes {
         val ids = idGenerator.ifAvailable
@@ -185,7 +186,8 @@ class CoSecControlAutoConfiguration {
             authorizer,
             options = options,
             authority = authority,
-            reports = CoCacheShadowReports.create(runtime, properties.snapshot.keyPrefix),
+            // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
+            reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(runtime, properties.snapshot.keyPrefix),
             listeners = ChangeListeners(listeners.orderedStream().toList()),
         )
     }
