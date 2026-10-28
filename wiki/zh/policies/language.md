@@ -273,7 +273,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 ### 请求头 {#headers}
 
-头名称不区分大小写：`http.header.X-Team` 就是 `http.header.x-team`。
+请求头名称是 ASCII token（RFC 9110：字母、数字和 ``!#$%&'*+-.^_`|~``），其他名称无法编译。名称不区分大小写，只折叠 ASCII 字母，文档一侧和请求一侧都是如此：`http.header.X-Team` 就是 `http.header.x-team`，任何 Unicode 大小写映射都不会让两个不同的名称相同。
 
 任何属性引用都不能读取携带凭证的请求头：`http.header.authorization`、`proxy-authorization`、`cookie`、`set-cookie`、
 `x-api-key` 和 `cosec-identity`，大小写不限，条件和限流规则的 `key` 都是如此。含有这种引用的文档无法编译，无论经由控制面还是

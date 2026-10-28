@@ -310,7 +310,9 @@ A path outside this table does not compile.
 
 ### Headers
 
-Header names are case-insensitive: `http.header.X-Team` is `http.header.x-team`.
+A header name is an ASCII token (RFC 9110: letters, digits and ``!#$%&'*+-.^_`|~``), and any other name does
+not compile. Names are case-insensitive, folding ASCII letters only, on the document and the request side alike:
+`http.header.X-Team` is `http.header.x-team`, and no Unicode case mapping makes two names meet.
 
 No attribute reference can read a header that carries a credential: `http.header.authorization`,
 `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key` and `cosec-identity`, in any case. That covers a condition

@@ -395,9 +395,11 @@ documents as JSON text.
 Only the fields `expect` names are compared: `{"decision": "Permit"}` passes whichever statement permits, and `by`
 pins one, compared whole. A misspelt field is an error, not ignored.
 
-The kit evaluates the decision only. Documents compile with the default condition limits and without external
-attributes, so a document that reads `ext.*` does not load; rate limit rules do not run; a request names its action
-and resource, and no route map is applied. Decisions on documents that read `ext.*` can still be tried with
-[`simulate`](#simulating-a-request), which compiles against the control host's providers.
+The kit evaluates the decision only. Documents compile as an instance compiles them: against the platform document's
+`limits` and the `ext.*` attributes it declares. An attribute that only a host's `AttributeProvider` declares does
+not compile in the kit, and no provider runs, so a statement that reads `ext.*` finds it unavailable and follows its
+`onMissing`. Rate limit rules do not run, and a request names its action and resource: no route map is applied.
+Decisions that depend on external values can be tried with [`simulate`](#simulating-a-request), which compiles
+against the control host's providers.
 
 **Next:** publish tested policies to the store, in [Storage](../operations/storage.md).
