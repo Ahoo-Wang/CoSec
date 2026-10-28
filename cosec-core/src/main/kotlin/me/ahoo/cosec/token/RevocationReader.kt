@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.token
 
+import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.findInDelegationChain
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import java.time.Duration
@@ -46,21 +48,29 @@ interface RevocationReader {
     }
 }
 
-/** RFC 0004 §4.5.3: the one rule for revoking all tokens of a principal, read by both token paths. */
+/**
+ * RFC 0004 §4.5.3: the one rule for revoking all tokens of a principal. Both token paths read it with the same skew
+ * (`cosec.authentication.revocation.skew`): the pipeline's `TokenAuthenticator` and [RevocableTokenVerifier], which
+ * guards refresh, so a token the pipeline refuses cannot be refreshed into one it accepts.
+ */
 object SubjectRevocation {
     /**
-     * Whether a token issued at [issuedAt] is revoked by a revocation of its principal's tokens issued before
-     * [revokedBefore]. A token that does not say when it was issued cannot prove it is newer, so it is revoked too.
-     * JWT `iat` has whole seconds, which rounds a token's age up: a token issued in the same second as the revocation,
-     * even just after it, is revoked as well.
+     * Five seconds: clocks kept by NTP agree within milliseconds, so this covers an issuer drifting well beyond that,
+     * while a principal who signs in again just after a revocation waits at most five seconds.
      */
-    fun revokes(revokedBefore: Instant?, issuedAt: Instant?): Boolean = revokes(revokedBefore, issuedAt, Duration.ZERO)
+    val DEFAULT_SKEW: Duration = Duration.ofSeconds(5)
+
+    /** Whether [token] is revoked by a revocation of its principal's tokens issued before [revokedBefore]. */
+    fun revokes(revokedBefore: Instant?, token: TokenPrincipal, skew: Duration): Boolean =
+        revokes(revokedBefore, token.findInDelegationChain<IssuedAtCapable>()?.issuedAt, skew)
 
     /**
-     * As [revokes], also revoking tokens issued up to [skew] after [revokedBefore]: an issuer whose clock runs ahead of
-     * the one that recorded the revocation stamps a token issued before the revocation with a later `iat`. Revoking a
-     * little too much is the fail-safe direction: a principal who signs in again within [skew] of the revocation must
-     * sign in once more.
+     * Whether a token issued at [issuedAt] is revoked by a revocation of its principal's tokens issued before
+     * [revokedBefore], or up to [skew] after it: an issuer whose clock runs ahead of the one that recorded the
+     * revocation stamps a token issued before the revocation with a later `iat`. Revoking a little too much is the
+     * fail-safe direction: a principal who signs in again within [skew] of the revocation must sign in once more.
+     * A token that does not say when it was issued cannot prove it is newer, so it is revoked too. JWT `iat` has whole
+     * seconds, which rounds a token's age up: a token issued in the same second as the revocation is revoked as well.
      */
     fun revokes(revokedBefore: Instant?, issuedAt: Instant?, skew: Duration): Boolean {
         require(!skew.isNegative) { "The revocation skew must not be negative, not $skew." }

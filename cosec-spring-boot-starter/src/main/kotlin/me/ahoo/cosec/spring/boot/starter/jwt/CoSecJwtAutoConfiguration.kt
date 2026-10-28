@@ -18,6 +18,7 @@ import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnAuthenticationEnabled
+import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
 import me.ahoo.cosec.token.DefaultTokenRevoker
 import me.ahoo.cosec.token.RevocableTokenVerifier
 import me.ahoo.cosec.token.TokenCompositeAuthentication
@@ -47,6 +48,7 @@ import org.springframework.context.annotation.Configuration
 @ConditionalOnClass(JwtTokenConverter::class)
 @EnableConfigurationProperties(
     JwtProperties::class,
+    RevocationProperties::class,
 )
 class CoSecJwtAutoConfiguration {
 
@@ -99,13 +101,15 @@ class CoSecJwtAutoConfiguration {
             "feature) or a TokenStore bean, or set ${JwtProperties.PREFIX}.enabled=false."
     )
 
+    /** Refresh reads subject revocations with the pipeline's skew (`cosec.authentication.revocation.skew`). */
     @Bean
     @ConditionalOnMissingBean
     fun cosecJwtTokenVerifier(
         algorithm: Algorithm,
-        tokenStore: TokenStore
+        tokenStore: TokenStore,
+        revocationProperties: RevocationProperties,
     ): TokenVerifier {
-        return RevocableTokenVerifier(JwtTokenVerifier(algorithm), tokenStore)
+        return RevocableTokenVerifier(JwtTokenVerifier(algorithm), tokenStore, revocationProperties.skew)
     }
 
     @Bean
