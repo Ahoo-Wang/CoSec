@@ -34,6 +34,9 @@ import me.ahoo.cosec.spi.token.DelegationUnsupportedException
  */
 internal object Jwts {
     const val TOKEN_PREFIX = "Bearer "
+
+    /** The RFC 8693 actor claim. `may_act` only says who may act for the subject, and does not change it. */
+    const val ACTOR_CLAIM = "act"
     private val jwtParser = JWT()
 
     fun String.removeBearerPrefix(): String =
@@ -53,7 +56,7 @@ internal object Jwts {
      * never becomes one: read as its `sub`, it would give the actor everything the subject may do (RFC 0009 §6, `IDN-4`).
      */
     fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT): T {
-        if (!decodedAccessToken.getClaim(DelegationUnsupportedException.ACTOR_CLAIM).isMissing) {
+        if (!decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
             throw DelegationUnsupportedException(
                 "The token delegates (it carries an `act` claim), which CoSec does not support."
             )

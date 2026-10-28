@@ -14,6 +14,7 @@
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.JWT
+import com.auth0.jwt.JWTCreator
 import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
@@ -56,7 +57,7 @@ class JwtTokenVerifierTest {
         assertFalse(thrown is TokenExpiredException)
     }
 
-    private fun signed(builder: com.auth0.jwt.JWTCreator.Builder.() -> Unit): String = JWT.create()
+    private fun signed(builder: JWTCreator.Builder.() -> Unit): String = JWT.create()
         .withJWTId("t1")
         .withSubject("alice")
         .withExpiresAt(Instant.now().plusSeconds(3600))
@@ -87,6 +88,17 @@ class JwtTokenVerifierTest {
         assertThrownBy<DelegationUnsupportedException> {
             jwtTokenVerifier.refresh<TokenPrincipal>(SimpleCompositeToken(access, refresh))
         }
+    }
+
+    /** A malformed access token is an invalid token, not an unmodelled error. */
+    @Test
+    fun refreshingAMalformedAccessTokenIsInvalid() {
+        val refresh = JWT.create().withSubject("t1").withExpiresAt(Instant.now().plusSeconds(3600))
+            .sign(JwtFixture.ALGORITHM)
+        val thrown = assertThrows(TokenVerificationException::class.java) {
+            jwtTokenVerifier.refresh<TokenPrincipal>(SimpleCompositeToken("not-a-jwt", refresh))
+        }
+        assertFalse(thrown is TokenExpiredException)
     }
 
     /** `may_act` only says who may act for the subject; the token is still the subject's own. */

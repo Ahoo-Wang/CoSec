@@ -63,12 +63,23 @@ class JwtTokenVerifier(
 
     override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {
         val decodedRefreshToken: DecodedJWT = verify(token.refreshToken)
-        val decodedAccessToken = Jwts.decode(token.accessToken)
+        val decodedAccessToken = decode(token.accessToken)
         verifyAccessTokenSignature(decodedAccessToken)
         if (decodedRefreshToken.subject != decodedAccessToken.id) {
             throw RefreshTokenMismatchException()
         }
         return Jwts.toPrincipal(decodedAccessToken)
+    }
+
+    /** Decodes the access token being refreshed: it may have expired, so only its signature is checked, after this. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun decode(accessToken: String): DecodedJWT {
+        try {
+            return Jwts.decode(accessToken)
+        } catch (exception: Exception) {
+            throw me.ahoo.cosec.spi.token
+                .TokenVerificationException(exception.message!!, exception)
+        }
     }
 
     @Suppress("TooGenericExceptionCaught")

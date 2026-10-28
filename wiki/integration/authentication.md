@@ -41,7 +41,9 @@ is `401` with the problem type `token-expired`, `token-revoked` or `token-invali
 
 **Delegation tokens are refused.** A token with an `act` claim (an [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693)
 delegation token: `sub` is the party acted for, `act` the one acting) is rejected as `token-invalid`, even when its
-signature and expiry are valid; audit records the reason code `DELEGATION_UNSUPPORTED` (`IDN-4`). Read as its `sub`,
+signature and expiry are valid (`IDN-4`). A deny is audited with the reason code `DELEGATION_UNSUPPORTED`; on a permit,
+such as a path anonymous callers may use, the audit records `ALLOW`, and the reason appears only in the decision
+event's `subject.rejected`. Read as its `sub`,
 such a token would give the actor everything the subject may do, and 8.0 does not evaluate delegation. CoSec never
 issues one. A `may_act` claim only says who may act for the subject, so it is ignored.
 
@@ -185,7 +187,8 @@ A client whose access token expired sends both tokens back. `TokenVerifier.refre
 
 A failed check throws a `TokenVerificationException`; a refresh token that was issued with another access token
 throws its subclass `RefreshTokenMismatchException`. It returns the principal from the old access token; issue new
-tokens for it with `TokenConverter.toToken`. The starter registers no refresh endpoint.
+tokens for it with `TokenConverter.toToken`. Refreshing a [delegation token](#tokens) (one with an `act` claim) fails
+too, with `DelegationUnsupportedException`. The starter registers no refresh endpoint.
 `SimpleRefreshTokenAuthentication` does the check above as an `Authentication`, so with it declared as a bean, a
 refresh is a login with credentials that implement `RefreshTokenCredentials`:
 
@@ -220,7 +223,8 @@ can set `cosec.jwt.enabled=false`.
 From your logout endpoint, call `TokenRevoker.revoke(accessToken)`. It verifies the token, then records its `jti`
 in Redis for the refresh token's lifetime. From then on every instance rejects the access token as `token-revoked`,
 and refreshing it fails. Revoke before the access token expires: an expired token cannot be revoked, and its refresh
-token then stays usable. `TokenRevoker` is synchronous: call it off the event loop.
+token then stays usable. Revoking a [delegation token](#tokens) fails too, since it never verifies: there is nothing to
+revoke. `TokenRevoker` is synchronous: call it off the event loop.
 
 Every authenticated request checks revocation, without blocking. Three properties of the check matter:
 

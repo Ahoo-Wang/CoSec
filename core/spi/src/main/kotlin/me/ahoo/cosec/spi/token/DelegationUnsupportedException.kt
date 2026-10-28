@@ -19,9 +19,4 @@ package me.ahoo.cosec.spi.token
  * token would give the actor every permission of the party it acts for. A verifier throws this instead of returning a
  * principal; the authenticator rejects the token as invalid.
  */
-class DelegationUnsupportedException(s: String) : TokenVerificationException(s) {
-    companion object {
-        /** The RFC 8693 actor claim. `may_act` only says who may act for the subject, and does not change it. */
-        const val ACTOR_CLAIM: String = "act"
-    }
-}
+class DelegationUnsupportedException(s: String) : TokenVerificationException(s)
