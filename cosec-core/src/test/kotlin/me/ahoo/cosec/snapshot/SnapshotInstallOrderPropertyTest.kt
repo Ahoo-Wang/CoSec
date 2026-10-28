@@ -29,6 +29,10 @@ import kotlin.random.Random
  *
  * Both sources run it: RFC 0003's (policies and one family of apps) and the 8.0 one (the platform, and families of
  * apps and tenants, each bounded to one document so that loads of one family evict while the other installs).
+ *
+ * On the 8.0 source the family compiler's inputs also change (RFC 0007 §3.1 N3), between steps and in the middle of a
+ * compilation that has already read them, as a platform change does while other documents load (review finding S4).
+ * Once everything settles, every installed document was compiled with the current inputs.
  */
 class SnapshotInstallOrderPropertyTest {
     /** Queues compilations so the test decides when each one runs. */
@@ -49,6 +53,36 @@ class SnapshotInstallOrderPropertyTest {
             while (tasks.isNotEmpty()) {
                 tasks.removeFirst().run()
             }
+        }
+    }
+
+    /**
+     * The family compiler of the 8.0 run: remembers the inputs each result compiled with, and may change them (and
+     * [SnapshotSource.recompile]) after reading them, before the compilation installs.
+     */
+    private class InputsCompiler(private val random: Random) : SnapshotCompiler<Compiled> {
+        private val delegate = FakeCompiler()
+        private val usedBy = java.util.IdentityHashMap<Compiled, Long>()
+
+        var inputs = 0L
+        var changing = true
+        lateinit var source: SnapshotSource<Compiled, Compiled>
+
+        fun change() {
+            inputs++
+            source.recompile()
+        }
+
+        fun inputsOf(compiled: Compiled): Long? = synchronized(usedBy) { usedBy[compiled] }
+
+        override fun compile(key: SnapshotKey, document: SnapshotDocument): Compiled {
+            val used = inputs
+            val compiled = delegate.compile(key, document)
+            synchronized(usedBy) { usedBy[compiled] = used }
+            if (changing && random.nextInt(8) == 0) {
+                change()
+            }
+            return compiled
         }
     }
 
@@ -77,13 +111,20 @@ class SnapshotInstallOrderPropertyTest {
         val ticks = AtomicLong()
 
         // One app and one tenant at most, so loading the other evicts it: eviction runs concurrently on the scheduler.
-        val options = SnapshotOptions(revalidateInterval = Duration.ZERO, maxApps = 1, maxTenants = 1)
+        // Retries after a failed recompile would run on the scheduler too; settling revalidates instead.
+        val options = SnapshotOptions(
+            revalidateInterval = Duration.ZERO,
+            maxApps = 1,
+            maxTenants = 1,
+            rejectedReloadRetry = Duration.ofHours(1),
+        )
+        val inputs = InputsCompiler(random)
         val source = if (documents) {
             SnapshotSource(
                 store,
                 SnapshotKey.Platform,
                 FakeCompiler(),
-                DocumentSnapshots.families(FakeCompiler(), options),
+                DocumentSnapshots.families(inputs, options),
                 options,
                 clock,
                 metrics,
@@ -93,6 +134,11 @@ class SnapshotInstallOrderPropertyTest {
             )
         } else {
             SnapshotSource(store, FakeCompiler(), FakeCompiler(), options, clock, metrics, executor, null, ticks::incrementAndGet)
+        }
+
+        init {
+            inputs.source = source
+            inputs.changing = documents
         }
 
         fun publish(key: SnapshotKey) {
@@ -110,6 +156,9 @@ class SnapshotInstallOrderPropertyTest {
         }
 
         fun step(keys: List<SnapshotKey>) {
+            if (documents && random.nextInt(12) == 0) {
+                inputs.change()
+            }
             when (random.nextInt(10)) {
                 0, 1 -> publish(keys.random(random))
                 2 -> releaseOne()
@@ -174,13 +223,21 @@ class SnapshotInstallOrderPropertyTest {
                     )
                 }
             }
+            run.inputs.changing = false
             for (key in documentKeys.drop(1)) {
                 run.settleAll(key)
                 val set = run.loadSettled(key)
                 set.shared.revision.assert().describedAs(
                     "seed $seed"
                 ).isEqualTo(run.revisions[SnapshotKey.Platform] ?: 0)
-                set.scoped.single().revision.assert().describedAs("seed $seed, $key").isEqualTo(run.revisions[key] ?: 0)
+                val entry = set.scoped.single()
+                entry.revision.assert().describedAs("seed $seed, $key").isEqualTo(run.revisions[key] ?: 0)
+                val state = entry.state
+                if (state is DocumentState.Present) {
+                    run.inputs.inputsOf(state.compiled).assert().describedAs(
+                        "seed $seed, $key compiled with old inputs"
+                    ).isEqualTo(run.inputs.inputs)
+                }
             }
             documentKeys.forEach { key ->
                 val installed = run.metrics.installs.filter { it.key == key }.map { it.revision }

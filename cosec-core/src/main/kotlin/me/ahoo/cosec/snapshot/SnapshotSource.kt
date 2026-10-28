@@ -36,6 +36,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import java.util.function.LongSupplier
 
 /**
@@ -152,6 +153,12 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         ) { "Families must differ in kind." }
         require(this.families.none { it.spec.kind == sharedKey.kind }) { "The shared key cannot be a family's." }
     }
+
+    /**
+     * Bumped by [recompile]. A family slot remembers the epoch its entry was compiled in; a load that starts in a
+     * later epoch compiles it again (see [recompile]).
+     */
+    private val compileEpoch = AtomicLong()
 
     /** The last decoded revision read or installed per key, kept across eviction (see the class comment). */
     private val seen = ConcurrentHashMap<SnapshotKey, Seen>()
@@ -322,6 +329,23 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         } else {
             withSlot(key) { it.reload(force = true) }.thenApply<SnapshotEntry<*>> { it }
         }
+
+    /**
+     * Compiles every app and tenant document again, installed or loading: for a family compiler whose inputs changed
+     * (RFC 0007 §3.1 N3, the platform's limits and attributes). Call it after the change is visible to the compiler.
+     *
+     * Every load that starts after this call reads the store in full and compiles with the new inputs. A load in flight
+     * may have compiled with the old ones, so it installs and another load follows it at once; a document installed
+     * before is loaded again, [SnapshotOptions.reloadConcurrency] at a time. Until then the previous compilation is
+     * served. A document that cannot be compiled again (the store cannot be read, the compile queue is full) fails
+     * closed rather than keep the old compilation, and is retried. The future completes when every idle document has
+     * been loaded again.
+     */
+    fun recompile(): CompletableFuture<Void> {
+        compileEpoch.incrementAndGet()
+        val idle = families.flatMap { it.slots.values }.filter { it.markRecompile() }
+        return reloadAll(idle) { it.load() }
+    }
 
     /** Revalidates every installed document with a conditional read, a few at a time. */
     fun revalidate(): CompletableFuture<Void> = reloadAll(installedSlots()) { it.load() }
@@ -610,6 +634,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         private var forceNext = false
         private var next: CompletableFuture<SnapshotEntry<T>>? = null
 
+        /** The [compileEpoch] the load that installed [installed] started in. */
+        private var installedEpoch = 0L
+
         /**
          * Set, under this slot's lock and together with dropping the slot from the map, when the slot is evicted or
          * forgotten. Volatile because readers that found the slot before that check it without the lock: a removed
@@ -628,6 +655,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             val known: SnapshotEntry<T>?,
             val force: Boolean,
             val result: CompletableFuture<SnapshotEntry<T>>,
+            /** The [compileEpoch] this load started in: it compiles with the inputs of that epoch or a later one. */
+            val epoch: Long,
+            /** Whether [known] was compiled in an earlier epoch: this load reads in full and must not keep it. */
+            val recompiles: Boolean,
         ) {
             val startedAt: Instant = clock.instant()
 
@@ -652,6 +683,33 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
         fun touch() {
             lastAccess = ticker.asLong
+        }
+
+        /** A load starting now; under this slot's lock. */
+        private fun newLoad(force: Boolean, result: CompletableFuture<SnapshotEntry<T>>): Load {
+            val epoch = compileEpoch.get()
+            val known = installed
+            // Only a compiled entry depends on the compiler's inputs; the shared document is not recompiled.
+            val compiled = known != null &&
+                (known.origin == EntryOrigin.DOCUMENT || known.origin == EntryOrigin.UNCOMPILABLE)
+            val recompiles = key != sharedKey && compiled && installedEpoch < epoch
+            return Load(known, force, result, epoch, recompiles)
+        }
+
+        /**
+         * For [recompile], after the epoch moved: a load in flight is followed by another, which starts in the new
+         * epoch. True when this slot is idle with a compiled entry, which the caller then loads again.
+         */
+        fun markRecompile(): Boolean = synchronized(this) {
+            if (removed) {
+                return false
+            }
+            if (inFlight != null) {
+                dirty = true
+                return false
+            }
+            val known = installed ?: return false
+            known.origin == EntryOrigin.DOCUMENT || known.origin == EntryOrigin.UNCOMPILABLE
         }
 
         fun isIdle(): Boolean = synchronized(this) { inFlight == null }
@@ -775,7 +833,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                     return CompletableFuture.completedFuture(failedEntry(closedError(), clock.instant()))
                 }
                 inFlight?.let { return it.result }
-                load = Load(installed, force, CompletableFuture())
+                load = newLoad(force, CompletableFuture())
                 inFlight = load
                 dirty = false
             }
@@ -835,7 +893,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 return store.read(key)
             }
             val digest = when {
-                known == null || load.force -> null
+                known == null || load.force || load.recompiles -> null
                 known.origin == EntryOrigin.UNCOMPILABLE -> null
                 else -> known.digest
             }
@@ -946,10 +1004,11 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                     guarded(load) { compileAndInstall(load, read) }
                 }
             } catch (rejected: RejectedExecutionException) {
-                onTransientFailure(load, SnapshotUnavailableException(key, "the compile queue is full", rejected))
-                if (load.known != null) {
-                    retryLater()
-                }
+                onTransientFailure(
+                    load,
+                    SnapshotUnavailableException(key, "the compile queue is full", rejected),
+                    rejected = true
+                )
             }
         }
 
@@ -989,14 +1048,45 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             DocumentState.Failed(failure)
         }
 
-        /** The store could not be read: keep what is installed (F6), or answer failed without installing (F1). */
-        private fun onTransientFailure(load: Load, cause: Throwable) {
+        /**
+         * The store could not be read: keep what is installed (F6), or answer failed without installing (F1). An entry
+         * compiled with inputs that have changed since is not kept: it fails closed until a retry compiles it again.
+         * A reload [rejected] by the compile queue retries, and so does one that keeps an entry that failed to compile
+         * (it may only be waiting for a recompile), however the inputs changed, until a load compiles it.
+         */
+        private fun onTransientFailure(load: Load, cause: Throwable, rejected: Boolean = false) {
             val known = load.known
+            if (known != null && load.recompiles) {
+                offRequestThread {
+                    log.warn(
+                        cause
+                    ) { "Compiling snapshot document [$key] again failed; failing closed until it compiles." }
+                }
+                val error = SnapshotUnavailableException(
+                    key,
+                    "compiled with inputs that changed, and not compiled again",
+                    cause
+                )
+                val failed = SnapshotEntry(
+                    key,
+                    DocumentState.Failed(error),
+                    known.revision,
+                    known.digest,
+                    known.confirmedAt,
+                    EntryOrigin.UNCOMPILABLE
+                )
+                finish(load, failed, install = true)
+                retryLater()
+                return
+            }
             if (known != null) {
                 offRequestThread {
                     log.warn(cause) { "Reloading snapshot document [$key] failed; keeping revision ${known.revision}." }
                 }
                 finish(load, known, install = false)
+                if (rejected || known.origin == EntryOrigin.UNCOMPILABLE) {
+                    retryLater()
+                }
                 return
             }
             offRequestThread { log.warn(cause) { "Loading snapshot document [$key] failed." } }
@@ -1008,37 +1098,45 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
          * did, the state changes: the in-flight load is cleared and, if a change arrived meanwhile, the next load is
          * created under the same lock, so no other load and no removal can come between them. The load's future
          * completes last. Eviction and dropping an empty slot run afterwards on the housekeeping thread.
+         *
+         * A family entry compiled in an earlier [compileEpoch] may have compiled with inputs that [recompile] replaced:
+         * another load follows at once, and a compiled document is not installed. Its waiters get what that load
+         * installs, or fail by their own timeout, never the old compilation.
          */
         private fun finish(load: Load, entry: SnapshotEntry<T>, install: Boolean) {
             if (!load.claim()) {
                 log.error { "Snapshot load of [$key] tried to finish twice; ignored." }
                 return
             }
+            val stale = install && key != sharedKey && load.epoch < compileEpoch.get() &&
+                (entry.origin == EntryOrigin.DOCUMENT || entry.origin == EntryOrigin.UNCOMPILABLE)
+            val withheld = stale && entry.origin == EntryOrigin.DOCUMENT
             try {
-                if (install) {
+                if (install && !withheld) {
                     recordInstall(entry)
                 }
             } finally {
-                advance(load, entry, install)
+                advance(load, entry, install && !withheld, stale, withheld)
             }
         }
 
-        private fun advance(load: Load, entry: SnapshotEntry<T>, install: Boolean) {
+        private fun advance(load: Load, entry: SnapshotEntry<T>, install: Boolean, stale: Boolean, withheld: Boolean) {
             val nextLoad: Load?
             val unanswered: CompletableFuture<SnapshotEntry<T>>?
             val empty: Boolean
             synchronized(this) {
                 if (install) {
                     installed = entry
+                    installedEpoch = load.epoch
                 }
                 if (inFlight === load) {
                     inFlight = null
                 }
-                val wanted = dirty || (install && load.fromLocalCopy)
+                val wanted = dirty || stale || (install && load.fromLocalCopy)
                 val pending = next
                 val open = !closed && !removed
                 nextLoad = if (wanted && inFlight == null && open) {
-                    Load(installed, forceNext, pending ?: CompletableFuture()).also { inFlight = it }
+                    newLoad(forceNext, pending ?: CompletableFuture()).also { inFlight = it }
                 } else {
                     null
                 }
@@ -1048,11 +1146,31 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 next = null
                 empty = installed == null
             }
+            val answer = answerFor(entry, withheld, nextLoad)
             try {
-                startOrAnswer(nextLoad, unanswered, entry)
+                startOrAnswer(nextLoad, unanswered, answer)
             } finally {
                 housekeep(empty, install)
-                load.result.complete(entry)
+                answerWaiters(load, answer, nextLoad.takeIf { withheld })
+            }
+        }
+
+        /** [entry], unless it is withheld and no load follows to compile it again (the source is closing): a failure. */
+        private fun answerFor(entry: SnapshotEntry<T>, withheld: Boolean, nextLoad: Load?): SnapshotEntry<T> =
+            if (withheld && nextLoad == null) {
+                failedEntry(SnapshotUnavailableException(key, "compiled with inputs that changed"), clock.instant())
+            } else {
+                entry
+            }
+
+        /** Completes [load]'s future with [answer], or with what [recompiling] installs in place of a withheld entry. */
+        private fun answerWaiters(load: Load, answer: SnapshotEntry<T>, recompiling: Load?) {
+            if (recompiling == null) {
+                load.result.complete(answer)
+                return
+            }
+            recompiling.result.whenComplete { next, error ->
+                load.result.complete(next ?: transientFailure(clock.instant(), unwrap(error)))
             }
         }
 
