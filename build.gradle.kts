@@ -100,7 +100,6 @@ configure(libraryProjects) {
             testImplementation(platform(dependenciesProject))
         } else {
             api(platform(dependenciesProject))
-            implementation("com.google.guava:guava")
             implementation("org.slf4j:slf4j-api")
         }
         jmh(platform(dependenciesProject))
@@ -338,7 +337,6 @@ fun Project.junitTests() {
         testImplementation(platform(rootProject.libs.junit.bom))
         testImplementation("ch.qos.logback:logback-classic")
         testImplementation("me.ahoo.test:fluent-assert-core")
-        testImplementation("org.hamcrest:hamcrest")
         testImplementation("io.mockk:mockk") {
             exclude(group = "org.slf4j", module = "slf4j-api")
         }

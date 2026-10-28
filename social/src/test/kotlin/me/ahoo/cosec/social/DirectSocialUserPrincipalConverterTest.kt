@@ -13,8 +13,7 @@
 
 package me.ahoo.cosec.social
 
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.`is`
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
 
@@ -26,7 +25,7 @@ internal class DirectSocialUserPrincipalConverterTest {
         DirectSocialUserPrincipalConverter.convert("clientId", authUser)
             .test()
             .consumeNextWith {
-                assertThat(it.id, `is`("id@clientId"))
+                it.id.assert().isEqualTo("id@clientId")
             }
             .verifyComplete()
     }

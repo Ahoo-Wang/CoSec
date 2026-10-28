@@ -24,8 +24,6 @@ import me.zhyd.oauth.model.AuthResponse
 import me.zhyd.oauth.model.AuthToken
 import me.zhyd.oauth.model.AuthUser
 import me.zhyd.oauth.request.AuthRequest
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.`is`
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
 
@@ -38,8 +36,8 @@ internal class JustAuthProviderTest {
         }
         val authClient = JustAuthProvider("clientId", authRequest, MockIdGenerator.INSTANCE)
         authClient.name.assert().isEqualTo("clientId")
-        assertThat(authClient.name, `is`("clientId"))
-        assertThat(authClient.authorizeUrl(), `is`("authorizeUrl"))
+        authClient.name.assert().isEqualTo("clientId")
+        authClient.authorizeUrl().assert().isEqualTo("authorizeUrl")
     }
 
     @Test
@@ -79,8 +77,8 @@ internal class JustAuthProviderTest {
         authClient.authenticate(oAuthCredentials)
             .test()
             .consumeNextWith {
-                assertThat(it.id, `is`("uuid"))
-                assertThat(it.username, `is`("username"))
+                it.id.assert().isEqualTo("uuid")
+                it.username.assert().isEqualTo("username")
             }
             .verifyComplete()
     }

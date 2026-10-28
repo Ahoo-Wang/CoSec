@@ -14,8 +14,6 @@
 package me.ahoo.cosec.token
 
 import me.ahoo.test.asserts.assert
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.instanceOf
 import org.junit.jupiter.api.Test
 
 class TokenRevokedExceptionTest {
@@ -23,7 +21,7 @@ class TokenRevokedExceptionTest {
     @Test
     fun shouldBeTokenVerificationException() {
         val exception = TokenRevokedException("Token revoked.")
-        assertThat(exception, instanceOf(TokenVerificationException::class.java))
+        exception.assert().isInstanceOf(TokenVerificationException::class.java)
         exception.message.assert().isEqualTo("Token revoked.")
     }
 }

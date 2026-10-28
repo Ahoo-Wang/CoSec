@@ -17,8 +17,7 @@ import io.mockk.mockk
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.authentication.token.RefreshTokenCredentials
 import me.ahoo.cosec.authentication.token.SimpleRefreshTokenAuthentication
-import org.hamcrest.MatcherAssert.*
-import org.hamcrest.Matchers.*
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -33,19 +32,17 @@ internal class DefaultAuthenticationProviderTest {
         }
         val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(mockk())
         DefaultAuthenticationProvider.register(refreshTokenAuthentication)
-        assertThat(
+        (
             DefaultAuthenticationProvider.getRequired<RefreshTokenCredentials, CoSecPrincipal, SimpleRefreshTokenAuthentication>(
                 RefreshTokenCredentials::class.java,
-            ),
-            `is`(refreshTokenAuthentication),
-        )
+            )
+            ).assert().isEqualTo(refreshTokenAuthentication)
 
-        assertThat(
+        (
             DefaultAuthenticationProvider.getRequired<RefreshTokenCredentials, CoSecPrincipal, SimpleRefreshTokenAuthentication>(
                 MockRefreshTokenCredentials::class.java,
-            ),
-            `is`(refreshTokenAuthentication),
-        )
+            )
+            ).assert().isEqualTo(refreshTokenAuthentication)
     }
 
     data class MockRefreshTokenCredentials(override val accessToken: String, override val refreshToken: String) :

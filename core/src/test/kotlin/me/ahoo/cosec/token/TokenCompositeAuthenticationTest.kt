@@ -22,8 +22,6 @@ import me.ahoo.cosec.authentication.CompositeAuthentication
 import me.ahoo.cosec.authentication.DefaultAuthenticationProvider
 import me.ahoo.cosec.principal.SimplePrincipal
 import me.ahoo.test.asserts.assert
-import org.hamcrest.MatcherAssert.*
-import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Test
 import reactor.kotlin.core.publisher.toMono
 import reactor.kotlin.test.test

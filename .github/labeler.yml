@@ -39,6 +39,15 @@
 'module: openapi':
   - changed-files:
       - any-glob-to-any-file: 'openapi/**'
+'module: micrometer':
+  - changed-files:
+      - any-glob-to-any-file: 'micrometer/**'
+'module: migrate':
+  - changed-files:
+      - any-glob-to-any-file: 'migrate/**'
+'module: e2e':
+  - changed-files:
+      - any-glob-to-any-file: 'e2e/**'
 'module: kafka':
   - changed-files:
       - any-glob-to-any-file: 'kafka/**'
@@ -69,7 +78,7 @@
 
 'area: docs':
   - changed-files:
-      - any-glob-to-any-file: ['wiki/**', 'document/**', '**/*.md', 'llms.txt']
+      - any-glob-to-any-file: ['wiki/**', '**/*.md', 'llms.txt']
 
 'area: ci':
   - changed-files:

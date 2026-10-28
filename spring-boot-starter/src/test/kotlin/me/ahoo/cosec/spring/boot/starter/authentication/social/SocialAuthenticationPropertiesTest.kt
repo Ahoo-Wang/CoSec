@@ -13,9 +13,8 @@
 
 package me.ahoo.cosec.spring.boot.starter.authentication.social
 
+import me.ahoo.test.asserts.assert
 import me.zhyd.oauth.config.AuthDefaultSource
-import org.hamcrest.CoreMatchers.equalTo
-import org.hamcrest.MatcherAssert.*
 import org.junit.jupiter.api.Test
 import java.util.UUID
 
@@ -30,8 +29,8 @@ class SocialAuthenticationPropertiesTest {
             redirectUri = UUID.randomUUID().toString(),
         )
         val authConfig = provider.toJustAuthConfig()
-        assertThat(authConfig.clientId, equalTo(provider.clientId))
-        assertThat(authConfig.clientSecret, equalTo(provider.clientSecret))
-        assertThat(authConfig.redirectUri, equalTo(provider.redirectUri))
+        authConfig.clientId.assert().isEqualTo(provider.clientId)
+        authConfig.clientSecret.assert().isEqualTo(provider.clientSecret)
+        authConfig.redirectUri.assert().isEqualTo(provider.redirectUri)
     }
 }

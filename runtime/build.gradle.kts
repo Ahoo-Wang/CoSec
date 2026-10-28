@@ -14,6 +14,8 @@
 // The coroutine request pipeline (RFC 0006 §5.1). cosec-core still brings Reactor onto the classpath, so
 // RuntimeBoundaryTest guards what the code references, not the classpath (RFC 0006 Q6).
 dependencies {
+    // Guava: the modules whose main code uses it declare it; the root build adds it to none.
+    implementation("com.google.guava:guava")
     api(project(":cosec-engine"))
     api(project(":cosec-core"))
     api("org.jetbrains.kotlinx:kotlinx-coroutines-core")

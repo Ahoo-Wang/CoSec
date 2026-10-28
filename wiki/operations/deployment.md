@@ -148,9 +148,9 @@ rest. Keep the pod's termination grace period long enough for Spring's own grace
 
 | File | Contents |
 |---|---|
-| `cosec-gateway-config.yaml` | A ConfigMap with `application.yaml` and `bootstrap.yaml`, mounted over `/opt/cosec-gateway-server/config/`: the routes and the `cosec.*` settings above. |
+| `cosec-gateway-config.yaml` | A ConfigMap with `application.yaml`, mounted over `/opt/cosec-gateway-server/config/`: the routes and the `cosec.*` settings above. |
 | `cosec-gateway-deployment.yml` | The Deployment: `COSEC_JWT_SECRET` from the Secret `cosec-jwt-secret`, a Redis Cluster from the Secret `redis-secret` (`SPRING_DATA_REDIS_CLUSTER_NODES`, `SPRING_DATA_REDIS_PASSWORD`, adaptive topology refresh), startup and liveness probes on `/actuator/health/liveness`, a readiness probe on `/actuator/health/readiness`, and the OpenTelemetry Java agent injection annotation. |
-| `cosec-gateway-reids.yaml` | The Secret `redis-secret`, with placeholder values. |
+| `cosec-gateway-redis.yaml` | The Secret `redis-secret`, with placeholder values. |
 | `cosec-gateway-service.yaml` | A Service, port 80 to the container's 8080. |
 | `cosec-gateway-hpa.yaml` | A HorizontalPodAutoscaler, 2 to 10 replicas on CPU. |
 
