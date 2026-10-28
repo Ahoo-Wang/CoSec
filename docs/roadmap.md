@@ -264,10 +264,13 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | **模块目录统一去掉 `cosec-` 前缀**，与 `model/`、`engine/` 一致；Gradle 项目名与 Maven 坐标保持 `cosec-*` | 2026-10-28 | #1132、AGENTS.md |
 | **死代码清理按引用判断**：8.0 路径上没有 `main` 引用、不是扩展点、文档不教的代码一律删除，G 系列守卫防回潮（RFC 0008 PR-5 扩大范围） | 2026-10-28 | [RFC 0008](rfc/0008-conformance-and-direct-build.md) PR-5 |
 | **身份与凭据分层**：主体 / 凭据 / 委托；API Key 不携带授予、只能收窄；`principal.type`、`auth.method` 为属性；拒绝带 `act` 的 token；委托放到 8.1 | 2026-10-28 | [RFC 0009](rfc/0009-identity-and-credentials.md) |
+| **GA 前只做"不做会静默放行"和"几乎零成本"的改动**，不为未来功能预先抽象公共 SPI；企业网关场景逐项检查后只剩三项（未知义务即拒绝、控制面 API 版本独立于 `base-path`、`auth.method` 开放取值） | 2026-10-28 | [RFC 0010](rfc/0010-ga-extension-points.md) |
+| **六边形分层，GA 前完成**：领域核心 `model/`、`engine/` 保持纯净；端口由应用层（`runtime/`、`control/`）定义；拆散 `core/`（领域值并入 `model/`，端口移进 `runtime/`，Jackson 编解码与 Reactor 移到外圈适配器），`api/` 只留适配器与用户需要的类型；依赖守卫：`runtime/`、`control/` 的 classpath 只允许 model、engine、协程与日志门面 | 2026-10-28 | 方案在死代码清理之后写（RFC 0008 PR-5 的统计） |
+| **模块目录按内聚分组**（随六边形分层的第一个 PR 一起移动，只移动一次）：`domain/`（model、engine）、`application/`（runtime、control、api）、`adapters/`（webflux、webmvc、gateway、cocache、jwt、social、kafka、micrometer、opentelemetry、ip2region、openapi，以及拆分出的 JSON 适配器）、`spring/`（spring-boot-starter）、`tooling/`（migrate、testkit）、`platform/`（bom、dependencies）、`apps/`（gateway-server）、`verification/`（conformance、e2e、code-coverage-report）；Gradle 项目名与 Maven 坐标不变 | 2026-10-28 | 六边形分层方案 |
 
 ## 10. 尚未派发的下一步
 
-- **2026-10-28 起的顺序**：RFC 0008 PR-5（死代码清理，扩大范围）→ [RFC 0009](rfc/0009-identity-and-credentials.md) PR-1 至 PR-3（GA 前）→ PR-6 → RC 前提。
+- **2026-10-28 起的顺序**：RFC 0008 PR-5（死代码清理，扩大范围）→ [RFC 0010](rfc/0010-ga-extension-points.md) 的 C1–C3（一个 PR） → 六边形分层（拆 `core/`，2–3 个 PR）→ [RFC 0009](rfc/0009-identity-and-credentials.md) PR-1、PR-3（GA 前；PR-2 移到 8.1）→ RFC 0008 PR-6 → RC 前提。
 
 可以立即开工（按 RFC 0008 §4.5 的依赖顺序）：
 

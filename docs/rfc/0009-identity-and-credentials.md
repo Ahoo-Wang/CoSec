@@ -6,6 +6,10 @@
 > 范围：`core/`（`apikey`、`membership`）、`runtime/`（`authn`、`MembershipResolver`）、`jwt/`、`cocache/`、`model/`（属性目录）、
 > `migrate/`、`spring-boot-starter/`、`schema/`、`conformance/`
 
+> **2026-10-28 修订（[RFC 0010](0010-ga-extension-points.md) Q1）**：维护者要求不为未来功能预先抽象。GA 前只做 PR-1（拒绝 `act`，安全）与 PR-3（API Key 新格式，
+> 存储格式的破坏与"策略即数据"）；PR-3 带上 `Memberships.active`（IDN-3 需要）。PR-2 的 `principal.type`、`auth.method` 属性与 `sub_type` 都可以以后新增，
+> 移到 8.1，IDN-5 随之移走。下文保留原样以便追溯。
+
 ## 0. 结论先行
 
 User、API Key、服务账号（Service Account）、Agent Identity 不在同一个维度上。本 RFC 把它们拆成三层，每层只回答一个问题：
