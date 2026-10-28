@@ -13,8 +13,7 @@
 
 package me.ahoo.cosec.migrate.v7.api.context
 
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 class AttributesTest {
@@ -22,12 +21,12 @@ class AttributesTest {
     @Test
     fun mergeAttributes() {
         val attributes = MockAttributes().mergeAttributes(additionalAttributes = mapOf("a" to "a"))
-        assertThat(attributes.attributes["a"], equalTo("a"))
-        assertThat(attributes, equalTo(attributes.mergeAttributes(mapOf())))
+        attributes.attributes["a"].assert().isEqualTo("a")
+        attributes.assert().isEqualTo(attributes.mergeAttributes(mapOf()))
 
         val attributes2 = attributes.mergeAttributes(additionalAttributes = mapOf("b" to "b"))
-        assertThat(attributes2.attributes["a"], equalTo("a"))
-        assertThat(attributes2.attributes["b"], equalTo("b"))
+        attributes2.attributes["a"].assert().isEqualTo("a")
+        attributes2.attributes["b"].assert().isEqualTo("b")
     }
 
     data class MockAttributes(override val attributes: Map<String, String> = mapOf()) :

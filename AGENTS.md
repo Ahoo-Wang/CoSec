@@ -67,8 +67,8 @@ the adapters, snapshots or the control plane. The parts that take several files 
   `settings.gradle.kts`; project paths and artifact ids keep the prefix (`:cosec-core:check`, `me.ahoo.cosec:cosec-core`).
   Rule guards in `conformance/src/test/resources/rules/` name the directory (`core:SnapshotRecompileTest`).
   - `cosec-model` (`model/`) and `cosec-engine` (`engine/`) depend on the Kotlin standard library only:
-    `EnginePurityTest` and `verifyPureClasspath` fail otherwise, and the root build leaves out the Guava/SLF4J
-    defaults. The model holds ids, bindings, memberships, the condition AST, `ScopeResolver` and `Decision`; the
+    `EnginePurityTest` and `verifyPureClasspath` fail otherwise, and the root build leaves out the SLF4J
+    default. The model holds ids, bindings, memberships, the condition AST, `ScopeResolver` and `Decision`; the
     engine holds the compiler, the indexes and the flat evaluator (`engine/flat/`).
   - `cosec-core` holds the policy documents and their codec and compiler (`snapshot/document/`), the format
     descriptors that generate `schema/` (`snapshot/format/`), `SnapshotSource`, route maps, membership claims,

@@ -14,8 +14,7 @@
 package me.ahoo.cosec.api.principal
 
 import me.ahoo.cosec.api.principal.CoSecPrincipal.Companion.ANONYMOUS_ID
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 class CoSecPrincipalTest {
@@ -34,10 +33,10 @@ class CoSecPrincipalTest {
             override val roles: Set<String>
                 get() = throw UnsupportedOperationException()
         }
-        assertThat(anonymous.anonymous, equalTo(true))
-        assertThat(anonymous.authenticated, equalTo(false))
-        assertThat(anonymous.id, equalTo(ANONYMOUS_ID))
-        assertThat(anonymous.name, equalTo(ANONYMOUS_ID))
+        anonymous.anonymous.assert().isEqualTo(true)
+        anonymous.authenticated.assert().isEqualTo(false)
+        anonymous.id.assert().isEqualTo(ANONYMOUS_ID)
+        anonymous.name.assert().isEqualTo(ANONYMOUS_ID)
     }
 
     @Suppress("ThrowsCount")
@@ -54,7 +53,7 @@ class CoSecPrincipalTest {
             override val roles: Set<String>
                 get() = throw UnsupportedOperationException()
         }
-        assertThat(authenticated.authenticated, equalTo(true))
-        assertThat(authenticated.anonymous, equalTo(false))
+        authenticated.authenticated.assert().isEqualTo(true)
+        authenticated.anonymous.assert().isEqualTo(false)
     }
 }

@@ -16,8 +16,7 @@ package me.ahoo.cosec.api.context
 import io.mockk.mockk
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.tenant.Tenant
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
@@ -30,12 +29,12 @@ class SecurityContextTest {
             mockk(),
             mockk(),
         )
-        assertThat(securityContext.getAttributeValue<String>("key"), equalTo("value"))
+        securityContext.getAttributeValue<String>("key").assert().isEqualTo("value")
         assertThrows<IllegalArgumentException> {
             securityContext.getRequiredAttributeValue<String>("not exist")
         }
         securityContext.setAttributeValue("key2", "value2")
-        assertThat(securityContext.getAttributeValue<String>("key2"), equalTo("value2"))
+        securityContext.getAttributeValue<String>("key2").assert().isEqualTo("value2")
     }
 
     class MockSecurityContext(

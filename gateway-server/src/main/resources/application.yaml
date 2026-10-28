@@ -4,6 +4,8 @@ server:
     enabled: true
     min-response-size: 1KB
 spring:
+  application:
+    name: ${service.name:cosec-gateway}
   web:
     error:
       whitelabel:

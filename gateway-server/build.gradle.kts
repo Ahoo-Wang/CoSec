@@ -15,14 +15,13 @@ plugins {
     application
     alias(libs.plugins.kotlin)
     alias(libs.plugins.kotlin.spring)
-    kotlin("kapt")
 }
 
 kotlin {
     jvmToolchain(17)
 }
 tasks.jar.configure {
-    exclude("application.yaml", "bootstrap.yaml")
+    exclude("application.yaml")
     manifest {
         attributes(
             "Implementation-Title" to application.applicationName,
@@ -47,8 +46,6 @@ application {
         "-Dcom.sun.management.jmxremote.authenticate=false",
         "-Dcom.sun.management.jmxremote.ssl=false",
         "-Dcom.sun.management.jmxremote.port=5555",
-        "-Dspring.cloud.bootstrap.enabled=true",
-        "-Dspring.cloud.bootstrap.location=config/bootstrap.yaml",
         "-Dspring.config.location=file:./config/",
     )
 }

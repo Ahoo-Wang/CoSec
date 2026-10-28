@@ -12,8 +12,7 @@
  */
 package me.ahoo.cosec.api
 
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 /**
@@ -24,8 +23,8 @@ import org.junit.jupiter.api.Test
 internal class CoSecTest {
     @Test
     fun test() {
-        assertThat(CoSec.COSEC, equalTo("cosec"))
-        assertThat(CoSec.COSEC_PREFIX, equalTo("cosec."))
-        assertThat(CoSec.DEFAULT, equalTo("(0)"))
+        CoSec.COSEC.assert().isEqualTo("cosec")
+        CoSec.COSEC_PREFIX.assert().isEqualTo("cosec.")
+        CoSec.DEFAULT.assert().isEqualTo("(0)")
     }
 }

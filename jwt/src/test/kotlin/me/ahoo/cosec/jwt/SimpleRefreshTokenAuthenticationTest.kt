@@ -19,9 +19,7 @@ import me.ahoo.cosec.authentication.token.SimpleRefreshTokenAuthentication
 import me.ahoo.cosec.context.tenant
 import me.ahoo.cosec.principal.SimpleTenantPrincipal
 import me.ahoo.cosid.test.MockIdGenerator
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.equalTo
-import org.hamcrest.Matchers.`is`
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.kotlin.test.test
 
@@ -32,7 +30,7 @@ class SimpleRefreshTokenAuthenticationTest {
     @Test
     fun authenticate() {
         val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(jwtTokenVerifier)
-        assertThat(refreshTokenAuthentication.supportCredentials, `is`(RefreshTokenCredentials::class.java))
+        refreshTokenAuthentication.supportCredentials.assert().isEqualTo(RefreshTokenCredentials::class.java)
         val oldToken: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
 
         refreshTokenAuthentication.authenticate(object : RefreshTokenCredentials {
@@ -42,11 +40,8 @@ class SimpleRefreshTokenAuthenticationTest {
                 get() = oldToken.refreshToken
         }).test()
             .consumeNextWith {
-                assertThat(it.id, equalTo(SimpleTenantPrincipal.ANONYMOUS.id))
-                assertThat(
-                    it.tenant.tenantId,
-                    equalTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId),
-                )
+                it.id.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS.id)
+                it.tenant.tenantId.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId)
             }.verifyComplete()
     }
 }

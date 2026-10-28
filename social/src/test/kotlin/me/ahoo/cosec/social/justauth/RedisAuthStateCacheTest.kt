@@ -14,8 +14,7 @@
 package me.ahoo.cosec.social.justauth
 
 import me.ahoo.cosid.test.MockIdGenerator
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.`is`
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -45,14 +44,14 @@ internal class RedisAuthStateCacheTest {
     @Test
     fun cache() {
         val key = MockIdGenerator.INSTANCE.generateAsString()
-        assertThat(redisAuthStateCache.containsKey(key), `is`(false))
+        redisAuthStateCache.containsKey(key).assert().isEqualTo(false)
         val value = MockIdGenerator.INSTANCE.generateAsString()
         redisAuthStateCache.cache(key, value)
         val cacheValue = redisAuthStateCache.get(key)
-        assertThat(cacheValue, `is`(value))
-        assertThat(redisAuthStateCache.containsKey(key), `is`(true))
+        cacheValue.assert().isEqualTo(value)
+        redisAuthStateCache.containsKey(key).assert().isEqualTo(true)
         redisAuthStateCache.cache(key, value, 100)
         Thread.sleep(150)
-        assertThat(redisAuthStateCache.containsKey(key), `is`(false))
+        redisAuthStateCache.containsKey(key).assert().isEqualTo(false)
     }
 }

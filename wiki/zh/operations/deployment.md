@@ -132,9 +132,9 @@ management:
 
 | 文件 | 内容 |
 |---|---|
-| `cosec-gateway-config.yaml` | 一个 ConfigMap，含 `application.yaml` 和 `bootstrap.yaml`，挂载到 `/opt/cosec-gateway-server/config/`：路由和上面的 `cosec.*` 设置。 |
+| `cosec-gateway-config.yaml` | 一个 ConfigMap，含 `application.yaml`，挂载到 `/opt/cosec-gateway-server/config/`：路由和上面的 `cosec.*` 设置。 |
 | `cosec-gateway-deployment.yml` | Deployment：`COSEC_JWT_SECRET` 来自 Secret `cosec-jwt-secret`，Redis Cluster 来自 Secret `redis-secret`（`SPRING_DATA_REDIS_CLUSTER_NODES`、`SPRING_DATA_REDIS_PASSWORD`、自适应拓扑刷新），启动探针和存活探针为 `/actuator/health/liveness`，就绪探针为 `/actuator/health/readiness`，以及注入 OpenTelemetry Java agent 的注解。 |
-| `cosec-gateway-reids.yaml` | Secret `redis-secret`，值为占位符。 |
+| `cosec-gateway-redis.yaml` | Secret `redis-secret`，值为占位符。 |
 | `cosec-gateway-service.yaml` | 一个 Service，80 端口转发到容器的 8080。 |
 | `cosec-gateway-hpa.yaml` | 一个 HorizontalPodAutoscaler，按 CPU 在 2 到 10 个副本之间伸缩。 |
 

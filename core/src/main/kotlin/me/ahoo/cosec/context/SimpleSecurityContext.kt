@@ -12,7 +12,6 @@
  */
 package me.ahoo.cosec.context
 
-import com.google.errorprone.annotations.ThreadSafe
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.tenant.Tenant
@@ -25,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap
  * Simple implementation of [SecurityContext].
  *
  * This is a thread-safe implementation that holds the principal,
- * tenant information, and custom attributes for a request.
+ * tenant information, and custom attributes for a request. Thread-safe: its attributes are a concurrent map.
  *
  * @param principal The authenticated principal
  * @param tenant The tenant context (defaults to principal's tenant)
@@ -34,7 +33,6 @@ import java.util.concurrent.ConcurrentHashMap
  * @see SecurityContext
  * @see CoSecPrincipal
  */
-@ThreadSafe
 class SimpleSecurityContext(
     override val principal: CoSecPrincipal,
     override val tenant: Tenant = principal.tenant,

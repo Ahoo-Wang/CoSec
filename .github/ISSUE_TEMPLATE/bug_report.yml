@@ -38,6 +38,9 @@ body:
         - cosec-openapi
         - cosec-ip2region
         - cosec-kafka
+        - cosec-micrometer
+        - cosec-migrate
+        - cosec-gateway-server
         - Not sure
     validations:
       required: true

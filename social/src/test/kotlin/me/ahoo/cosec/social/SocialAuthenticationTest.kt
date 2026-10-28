@@ -16,8 +16,7 @@ package me.ahoo.cosec.social
 import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.social.justauth.JustAuthCredentials
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.`is`
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.kotlin.core.publisher.toMono
 import reactor.kotlin.test.test
@@ -33,8 +32,8 @@ internal class SocialAuthenticationTest {
             }
         )
         val authentication = SocialAuthentication()
-        assertThat(authentication.supportCredentials, `is`(SocialCredentials::class.java))
-        assertThat(authentication.authorizeUrl("authorizeUrl"), `is`("authorizeUrl"))
+        authentication.supportCredentials.assert().isEqualTo(SocialCredentials::class.java)
+        authentication.authorizeUrl("authorizeUrl").assert().isEqualTo("authorizeUrl")
     }
 
     @Test
@@ -55,10 +54,7 @@ internal class SocialAuthenticationTest {
         authentication.authenticate(JustAuthCredentials("authenticate"))
             .test()
             .consumeNextWith {
-                assertThat(
-                    it.id,
-                    `is`("id@authenticate"),
-                )
+                it.id.assert().isEqualTo("id@authenticate")
             }
             .verifyComplete()
     }

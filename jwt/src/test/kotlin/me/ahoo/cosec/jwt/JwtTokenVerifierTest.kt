@@ -28,8 +28,6 @@ import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosid.test.MockIdGenerator
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.time.Duration
@@ -43,7 +41,7 @@ class JwtTokenVerifierTest {
     fun verify() {
         val token: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
         val principal: TokenTenantPrincipal = jwtTokenVerifier.verify(token)
-        assertThat(principal.name, equalTo(CoSecPrincipal.ANONYMOUS_ID))
+        principal.name.assert().isEqualTo(CoSecPrincipal.ANONYMOUS_ID)
     }
 
     @Test
@@ -60,8 +58,8 @@ class JwtTokenVerifierTest {
     fun refresh() {
         val oldToken: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
         val newTokenPrincipal = jwtTokenVerifier.refresh<TokenTenantPrincipal>(oldToken)
-        assertThat(newTokenPrincipal.id, equalTo(SimpleTenantPrincipal.ANONYMOUS.id))
-        assertThat(newTokenPrincipal.tenant.tenantId, equalTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId))
+        newTokenPrincipal.id.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS.id)
+        newTokenPrincipal.tenant.tenantId.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS.tenant.tenantId)
     }
 
     @Test

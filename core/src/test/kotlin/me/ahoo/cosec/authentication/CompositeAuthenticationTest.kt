@@ -19,8 +19,7 @@ import me.ahoo.cosec.api.authentication.Authentication
 import me.ahoo.cosec.api.authentication.Credentials
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.principal.SimplePrincipal
-import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
+import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import reactor.kotlin.core.publisher.toMono
 import reactor.kotlin.test.test
@@ -30,7 +29,7 @@ class CompositeAuthenticationTest {
 
     @Test
     fun getSupportCredentials() {
-        assertThat(compositeAuthentication.supportCredentials, `is`(Credentials::class.java))
+        compositeAuthentication.supportCredentials.assert().isEqualTo(Credentials::class.java)
     }
 
     @Test
@@ -45,7 +44,7 @@ class CompositeAuthenticationTest {
         compositeAuthentication.authenticate(credentials)
             .test()
             .consumeNextWith {
-                assertThat(it, `is`(SimplePrincipal.ANONYMOUS))
+                it.assert().isEqualTo(SimplePrincipal.ANONYMOUS)
             }
             .verifyComplete()
     }
