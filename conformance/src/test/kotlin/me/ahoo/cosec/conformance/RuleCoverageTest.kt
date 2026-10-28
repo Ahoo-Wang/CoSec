@@ -103,7 +103,12 @@ class RuleCoverageTest {
     @Test
     fun `a scenario with an unknown polarity or level fails`() {
         val scenarios = covered + scenario("p", "maybe", "ALG-1") + scenario("l", "positive", "ALG-1", level = "build")
-        RuleCoverage.check(listOf(rule("ALG-1")), scenarios, tests, emptyMap()).errors.assert().containsExactlyInAnyOrder(
+        RuleCoverage.check(
+            listOf(rule("ALG-1")),
+            scenarios,
+            tests,
+            emptyMap()
+        ).errors.assert().containsExactlyInAnyOrder(
             "Scenario p has unknown polarity maybe",
             "Scenario l has unknown level build",
         )
@@ -138,7 +143,12 @@ class RuleCoverageTest {
 
     @Test
     fun `a startup rule needs a test rather than scenarios, and no scenario runs at that level`() {
-        RuleCoverage.check(listOf(rule("SNP-3", level = "startup")), emptyList(), guardTests, emptyMap()).errors.assert()
+        RuleCoverage.check(
+            listOf(rule("SNP-3", level = "startup")),
+            emptyList(),
+            guardTests,
+            emptyMap()
+        ).errors.assert()
             .containsExactly("Startup rule SNP-3 names no test")
         RuleCoverage.check(
             listOf(rule("SNP-3", level = "startup", guards = listOf(guard))),

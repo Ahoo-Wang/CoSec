@@ -160,7 +160,10 @@ class CoSecSnapshotAutoConfiguration {
         /** Shared with the control plane on a host that runs it, which reads the reports this writes. */
         @Bean
         @ConditionalOnMissingBean
-        fun cosecShadowReports(runtime: CacheRuntime, properties: RuntimeAuthorizationProperties): CoCacheShadowReports =
+        fun cosecShadowReports(
+            runtime: CacheRuntime,
+            properties: RuntimeAuthorizationProperties
+        ): CoCacheShadowReports =
             CoCacheShadowReports.create(runtime, properties.snapshot.keyPrefix)
 
         @Bean(destroyMethod = "close")

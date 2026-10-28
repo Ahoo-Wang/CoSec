@@ -13,29 +13,19 @@
 
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import com.auth0.jwt.algorithms.Algorithm
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
-import com.auth0.jwt.algorithms.Algorithm
-import me.ahoo.cosec.token.RevocationReader
-import me.ahoo.cosec.token.TokenStore
 import io.mockk.mockk
 import io.mockk.verify
+import io.swagger.v3.core.util.Json
+import io.swagger.v3.oas.models.OpenAPI
 import jakarta.servlet.ServletInputStream
-import me.ahoo.cosec.spring.boot.starter.control.ControlRoutesWebFilter
-import org.springframework.mock.http.server.reactive.MockServerHttpRequest
-import org.springframework.mock.web.MockHttpServletRequest
-import org.springframework.mock.web.server.MockServerWebExchange
-import org.springframework.test.web.servlet.RequestBuilder
-import org.springframework.web.server.WebFilterChain
-import reactor.core.publisher.Mono
-import java.io.ByteArrayInputStream
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.redis.RedisBackend
-import io.swagger.v3.core.util.Json
-import io.swagger.v3.oas.models.OpenAPI
-import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.apikey.ApiKeyStore
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
@@ -62,8 +52,11 @@ import me.ahoo.cosec.spring.boot.starter.actuate.CoSecServiceGeneratorEndpoint
 import me.ahoo.cosec.spring.boot.starter.apikey.CoSecApiKeyAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.control.CoSecControlRoutesAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.control.ControlProperties
+import me.ahoo.cosec.spring.boot.starter.control.ControlRoutesWebFilter
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
+import me.ahoo.cosec.token.RevocationReader
+import me.ahoo.cosec.token.TokenStore
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -76,9 +69,16 @@ import org.springframework.boot.test.context.runner.ReactiveWebApplicationContex
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.kafka.core.KafkaOperations
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest
+import org.springframework.mock.web.MockHttpServletRequest
+import org.springframework.mock.web.server.MockServerWebExchange
+import org.springframework.test.web.servlet.RequestBuilder
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
+import org.springframework.web.server.WebFilterChain
+import reactor.core.publisher.Mono
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.nio.file.Files
 
@@ -266,7 +266,10 @@ class CoSecPipelineAutoConfigurationTest {
             EvictionPolicyCheck.Reading.Policies(mapOf("node" to "noeviction")),
             RuntimeAuthorizationProperties.EvictionCheck.FAIL
         )
-        EvictionPolicyCheck.check(EvictionPolicyCheck.Reading.NotRedis, RuntimeAuthorizationProperties.EvictionCheck.FAIL)
+        EvictionPolicyCheck.check(
+            EvictionPolicyCheck.Reading.NotRedis,
+            RuntimeAuthorizationProperties.EvictionCheck.FAIL
+        )
     }
 
     @Test
@@ -281,8 +284,12 @@ class CoSecPipelineAutoConfigurationTest {
         // A wrapped or custom backend is not known to keep the snapshot either.
         EvictionPolicyCheck.read(mockk<CoherenceBackend>())
             .assert().isInstanceOf(EvictionPolicyCheck.Reading.Unreadable::class.java)
-        EvictionPolicyCheck.read(InMemoryBackend { System.currentTimeMillis() }).assert().isEqualTo(EvictionPolicyCheck.Reading.NotRedis)
-        EvictionPolicyCheck.read(mockk<RedisBackend> { every { maxmemoryPolicies() } returns mapOf("n" to "noeviction") })
+        EvictionPolicyCheck.read(
+            InMemoryBackend { System.currentTimeMillis() }
+        ).assert().isEqualTo(EvictionPolicyCheck.Reading.NotRedis)
+        EvictionPolicyCheck.read(
+            mockk<RedisBackend> { every { maxmemoryPolicies() } returns mapOf("n" to "noeviction") }
+        )
             .assert().isEqualTo(EvictionPolicyCheck.Reading.Policies(mapOf("n" to "noeviction")))
     }
 
@@ -308,7 +315,10 @@ class CoSecPipelineAutoConfigurationTest {
         MockMvcBuilders.routerFunctions(routes).build()
             .perform(unread)
             .andExpect(MockMvcResultMatchers.status().isUnauthorized)
-        CoSecControlRoutesAutoConfiguration.readBody(ByteArrayInputStream(ByteArray(16)), 16)!!.size.assert().isEqualTo(16)
+        CoSecControlRoutesAutoConfiguration.readBody(
+            ByteArrayInputStream(ByteArray(16)),
+            16
+        )!!.size.assert().isEqualTo(16)
         CoSecControlRoutesAutoConfiguration.readBody(ByteArrayInputStream(ByteArray(17)), 16).assert().isNull()
         CoSecControlRoutesAutoConfiguration.tooLarge(16).statusCode().value().assert().isEqualTo(400)
         ControlProperties().http.maxBodySize.toMegabytes().assert().isEqualTo(16)

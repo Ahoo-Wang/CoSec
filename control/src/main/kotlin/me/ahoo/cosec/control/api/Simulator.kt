@@ -139,12 +139,15 @@ class Simulator(
         return SnapshotView(
             platform,
             app?.let { id ->
-                documents.app?.let {
-                    compiled(compiler, it, unresolved)
-                } ?: CompiledDocument.app(AppId(id.value), emptyList(), emptyList()).takeIf { documents.app == null }
+                documentOf(
+                    documents.app,
+                    compiler,
+                    unresolved
+                ) { CompiledDocument.app(AppId(id.value), emptyList(), emptyList()) }
             },
-            documents.tenant?.let { compiled(compiler, it, unresolved) }
-                ?: CompiledDocument.tenant(scope.tenant, emptyList(), emptyList()).takeIf { documents.tenant == null },
+            documentOf(documents.tenant, compiler, unresolved) {
+                CompiledDocument.tenant(scope.tenant, emptyList(), emptyList())
+            },
             unresolved,
             version = ViewVersion(
                 documents.platform?.revision ?: 0,
@@ -167,6 +170,14 @@ class Simulator(
             AttributeCatalog { path -> declared[path] ?: attributes.external(path) },
         )
     }
+
+    /** [document] compiled, [empty] when none is published, or null (unresolved) when it does not compile. */
+    private fun documentOf(
+        document: PolicyDocument?,
+        compiler: PolicyDocumentCompiler,
+        unresolved: MutableList<Cause>,
+        empty: () -> CompiledDocument,
+    ): CompiledDocument? = if (document == null) empty() else compiled(compiler, document, unresolved)
 
     @Suppress("TooGenericExceptionCaught")
     private fun compiled(

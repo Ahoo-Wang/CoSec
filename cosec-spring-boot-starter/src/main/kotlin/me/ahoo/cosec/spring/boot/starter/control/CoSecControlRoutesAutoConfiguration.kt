@@ -19,17 +19,17 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlHttpRequest
 import me.ahoo.cosec.control.api.ControlHttpResponse
-import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.ProblemType
+import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
+import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
+import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineWebAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.cosec.webflux.ReactiveXForwardedRemoteIpResolver
-import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
-import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -112,8 +112,12 @@ class CoSecControlRoutesAutoConfiguration {
                 val security = RequestSecurity.of(servlet.getSecurityContext())
                 // Nothing is read for a request no permitted principal stands behind (ControlHttp answers 401), and
                 // never more than max-body-size: the body is read before ControlHttp authorizes the action.
-                val body = if (security == null) EMPTY else readBody(servlet.inputStream, maxBodySize)
-                    ?: return@route tooLarge(maxBodySize)
+                val body = if (security == null) {
+                    EMPTY
+                } else {
+                    readBody(servlet.inputStream, maxBodySize)
+                        ?: return@route tooLarge(maxBodySize)
+                }
                 val query = request.params().toSingleValueMap()
                 // A servlet thread is the caller's own: waiting on it blocks no event loop.
                 val response: ControlHttpResponse = runBlocking(Dispatchers.Default) {
@@ -166,7 +170,9 @@ class CoSecControlRoutesAutoConfiguration {
             bytes.takeIf { read -> read.size <= limit }
         }
 
-        fun tooLarge(max: Long): ServletServerResponse = ServletServerResponse.status(ProblemType.INVALID_REQUEST.status)
+        fun tooLarge(max: Long): ServletServerResponse = ServletServerResponse.status(
+            ProblemType.INVALID_REQUEST.status
+        )
             .contentType(MediaType.parseMediaType(ControlHttp.PROBLEM_JSON))
             .body(
                 mapOf(
@@ -185,10 +191,20 @@ class CoSecControlRoutesAutoConfiguration {
 }
 
 /** [delegate] for the requests under [basePath] only; every other request goes on untouched. */
-class ControlRoutesWebFilter(private val delegate: PipelineWebFilter, private val basePath: String) : WebFilter, Ordered {
+class ControlRoutesWebFilter(
+    private val delegate: PipelineWebFilter,
+    private val basePath: String
+) : WebFilter, Ordered {
     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
         val path = exchange.request.path.pathWithinApplication().value()
-        return if (path == basePath || path.startsWith("$basePath/")) delegate.filter(exchange, chain) else chain.filter(exchange)
+        return if (path == basePath || path.startsWith("$basePath/")) {
+            delegate.filter(
+                exchange,
+                chain
+            )
+        } else {
+            chain.filter(exchange)
+        }
     }
 
     override fun getOrder(): Int = delegate.order
