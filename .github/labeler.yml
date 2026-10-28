@@ -51,6 +51,9 @@
 'module: control':
   - changed-files:
       - any-glob-to-any-file: 'control/**'
+'module: testkit':
+  - changed-files:
+      - any-glob-to-any-file: 'testkit/**'
 'module: conformance':
   - changed-files:
       - any-glob-to-any-file: 'conformance/**'

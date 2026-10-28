@@ -19,6 +19,14 @@ import me.ahoo.cosec.model.condition.ConditionContainment
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IndexKeys
 import me.ahoo.cosec.model.condition.IpAddress
+import me.ahoo.cosec.testkit.ScenarioFormatException
+import me.ahoo.cosec.testkit.bool
+import me.ahoo.cosec.testkit.fields
+import me.ahoo.cosec.testkit.instant
+import me.ahoo.cosec.testkit.only
+import me.ahoo.cosec.testkit.required
+import me.ahoo.cosec.testkit.strings
+import me.ahoo.cosec.testkit.text
 import tools.jackson.databind.JsonNode
 
 /**

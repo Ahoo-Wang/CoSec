@@ -1,0 +1,44 @@
+{
+  "schema": 2,
+  "revision": 3,
+  "publishedAt": "2026-10-01T00:00:00Z",
+  "policies": [
+    {
+      "id": "read-orders",
+      "statements": [
+        {
+          "effect": "allow",
+          "action": "order:read"
+        }
+      ]
+    },
+    {
+      "id": "no-delete",
+      "statements": [
+        {
+          "name": "orders are never deleted",
+          "effect": "deny",
+          "action": "order:delete"
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "r:reader",
+      "subject": {
+        "role": "reader"
+      },
+      "app": "*",
+      "space": "*",
+      "policy": "read-orders"
+    },
+    {
+      "id": "g:no-delete",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "no-delete"
+    }
+  ]
+}
