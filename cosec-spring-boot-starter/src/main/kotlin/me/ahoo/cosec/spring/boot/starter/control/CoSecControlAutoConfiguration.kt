@@ -47,6 +47,8 @@ import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.snapshot.DocumentSnapshots
+import me.ahoo.cosec.snapshot.DocumentState
+import me.ahoo.cosec.snapshot.SnapshotEntry
 import me.ahoo.cosec.snapshot.SnapshotKey
 import me.ahoo.cosec.snapshot.SnapshotSource
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
@@ -61,6 +63,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import java.time.Clock
+import java.time.Instant
 import java.util.UUID
 
 /**
@@ -108,8 +112,10 @@ class CoSecControlAutoConfiguration {
         properties: RuntimeAuthorizationProperties,
     ): ControlSnapshot {
         val compiler = PlatformCompiler(attributes.catalog)
+        val clock = Clock.systemUTC()
         return ControlSnapshot(
-            DocumentSnapshots.source(documents, compiler, properties.snapshot.toOptions()).also(compiler::bind)
+            DocumentSnapshots.source(documents, compiler, properties.snapshot.toOptions(), clock).also(compiler::bind),
+            clock,
         )
     }
 
@@ -130,7 +136,7 @@ class CoSecControlAutoConfiguration {
         )
         return PipelineControlAuthorizer(
             AuthorizationChecker(pipeline),
-            SourceConfirmation(snapshot.source),
+            SourceConfirmation(snapshot.source, snapshot.clock),
             AppId(properties.appId)
         )
     }
@@ -195,15 +201,41 @@ class CoSecControlAutoConfiguration {
 }
 
 /** The control plane's own snapshot source, held apart from the data plane's (see the bean's comment). */
-class ControlSnapshot(val source: SnapshotSource<CompiledDocument, CompiledDocument>) : AutoCloseable {
+class ControlSnapshot(
+    val source: SnapshotSource<CompiledDocument, CompiledDocument>,
+    /** The clock [source] dates its entries with; confirmation compares against it. */
+    val clock: Clock = Clock.systemUTC(),
+) : AutoCloseable {
     override fun close() = source.close()
 }
 
-/** Confirms documents with a forced read of each from the store; a failed read leaves the check indeterminate. */
+/**
+ * Confirms documents with a forced read of each from the store. A reload that fails keeps the installed revision and
+ * completes normally, so the future alone does not say the store answered: every entry must have been confirmed at or
+ * after this confirmation started, and must not be failed, or the check is indeterminate. A cold key may first be
+ * answered from a local copy, dated up to the store's local-copy age before its read; it gets one more forced read,
+ * which goes to the store of record.
+ */
 internal class SourceConfirmation(
-    private val source: SnapshotSource<CompiledDocument, CompiledDocument>,
+    private val source: SnapshotSource<*, *>,
+    private val clock: Clock,
 ) : DocumentConfirmation {
     override suspend fun confirm(keys: Set<SnapshotKey>) {
-        keys.map { source.reload(it) }.forEach { it.await() }
+        val start = clock.instant()
+        val stale = keys.map { it to source.reload(it) }
+            .mapNotNull { (key, reloading) -> key.takeUnless { reloading.await().isConfirmedSince(start) } }
+        if (stale.isEmpty()) {
+            return
+        }
+        val retryStart = clock.instant()
+        stale.map { source.reload(it) }.forEach {
+            val entry = it.await()
+            check(entry.isConfirmedSince(retryStart)) {
+                "Snapshot document [${entry.key}] could not be confirmed current: $entry."
+            }
+        }
     }
+
+    private fun SnapshotEntry<*>.isConfirmedSince(start: Instant): Boolean =
+        state !is DocumentState.Failed && !confirmedAt.isBefore(start)
 }
