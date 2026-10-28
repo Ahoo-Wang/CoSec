@@ -895,6 +895,8 @@ RFC 0002–0007 中"并入 RFC 0008 的切换 PR"的标注不逐一改写，它�
 | Q14 | **`cosec-social`**（§4.6 L39） | **已决定**：保留，8.0 不改造：它在登录时用 OAuth 换取 token，不在请求路径上，RFC 0006 的 `Authenticator` 不涉及它。PR-5 只清理注释 | RFC 0001 §4 把它列为 `cosec-authn-social`，所以它属于目标架构。但如果维护者不打算继续维护 JustAuth 集成，8.0 是删除它的唯一窗口 |
 | Q15 | **守护的实现方式**（§4.6.2） | **已决定**：不引入新依赖：G1、G7 用 ArchUnit（已有），放在 `conformance/`；G2 用 detekt 内置的 `ForbiddenComment`；G3、G6 用根项目的 Gradle 任务；G4 用 `wiki/scripts/` 下的 Node 脚本 | 都是几十行的检查，现有工具链已经够用；版本目录检查插件之类的工具是新依赖，收益不抵维护成本 |
 
+> **2026-10-28 修订（维护者授权协调者决定）**：8.0 的测试工具作为独立发布的 `cosec-testkit` 模块（依赖 `cosec-core`，`junit-jupiter-api` 为 `api` 依赖），`conformance/` 依赖它；核心模块不引入 JUnit。第一版只做引擎级场景（用户文档 + 请求 → 决策与 `by`），API 为按路由映射解析请求留出扩展；Pipeline、控制面与存储的运行器留在 `conformance/`。
+
 以下 Q16 由 2026-10-26 修订（路线图审查）提出，按推荐执行，维护者可以否决。
 
 | # | 问题 | 推荐 | 理由 |

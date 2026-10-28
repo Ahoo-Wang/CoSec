@@ -47,11 +47,26 @@ class ConditionCheckerTest {
                 .isEqualTo(
                     ConditionError(
                         "$.prefix[0]",
-                        "`http.header.$header` is a credential header, which no condition may read"
+                        "`http.header.$header` is a credential header, which no attribute reference may read"
                     )
                 )
         }
         checked(Condition.Exists("http.header.x-debug"))
+    }
+
+    /** `CND-5` for every reference, not only conditions: a rate limit key resolves through [ConditionChecker.attribute]. */
+    @Test
+    fun `no attribute reference resolves a credential header`() {
+        val checker = ConditionChecker()
+        listOf("Authorization", "cosec-identity", "X-API-Key").forEach { header ->
+            checker.attribute("http.header.$header").assert().isNull()
+            checker.unresolved("http.header.$header").assert().contains("credential header")
+        }
+        checker.attribute("http.header.x-api-\u212Aey").assert().isNull()
+        checker.unresolved("http.header.x-api-\u212Aey").assert().contains("not a header name")
+        checker.attribute("http.header.x-debug").assert().isNotNull()
+        checker.unresolved("http.header.").assert().isEqualTo("unknown attribute `http.header.`")
+        checker.unresolved("ext.geo.country").assert().contains("not declared")
     }
 
     @Test

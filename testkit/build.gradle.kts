@@ -10,23 +10,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.spring.boot.starter.authentication
 
-import me.ahoo.cosec.spring.boot.starter.ENABLED_SUFFIX_KEY
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+// The policy test kit (RFC 0008 Q11): a user's scenarios against the user's own documents, through the engine level
+// of the scenario format the conformance suite also runs. JUnit 5 is part of its API (DynamicTest).
+dependencies {
+    api(project(":cosec-core"))
+    api("org.junit.jupiter:junit-jupiter-api")
+    // MembershipResolver: memberships from claims and a provider, merged as the pipeline merges them.
+    implementation(project(":cosec-runtime"))
+}
 
-/**
- * Conditional On CoSec Enabled.
- *
- * @author ahoo wang
- */
-@ConditionalOnProperty(
-    value = [ConditionalOnAuthenticationEnabled.ENABLED_KEY],
-    matchIfMissing = true,
-    havingValue = "true",
-)
-annotation class ConditionalOnAuthenticationEnabled {
-    companion object {
-        const val ENABLED_KEY = AuthenticationProperties.PREFIX + ENABLED_SUFFIX_KEY
-    }
+// ConformanceScenariosTest reads the suite's scenarios.
+tasks.named<Test>("test") {
+    inputs.dir(rootProject.layout.projectDirectory.dir("conformance/src/test/resources/scenarios"))
 }

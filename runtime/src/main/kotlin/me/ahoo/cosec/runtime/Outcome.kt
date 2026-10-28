@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.identity.Identity
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 
@@ -35,6 +36,12 @@ class Outcome internal constructor(
     internal val basis: Basis,
     /** Who may proceed, and in what scope: non-null exactly when [proceed]. Adapters expose it as a `SecurityContext`. */
     val security: RequestSecurity?,
+    /**
+     * Headers a gateway sets on the request it forwards, when [proceed]; a null value removes the header. A gateway
+     * that forwards the verified identity always names `CoSec-Identity` here: the identity, or null to strip whatever
+     * the client sent.
+     */
+    val forward: Map<String, String?>,
 ) {
     override fun toString(): String = "Outcome(status=$status, proceed=$proceed, requestId=$requestId, basis=$basis)"
 }
@@ -45,6 +52,9 @@ internal sealed interface Basis {
     data class InvalidRequest(val reason: String) : Basis
 
     data class Decided(val decision: Decision) : Basis
+
+    /** A service behind a gateway proceeds with the identity the gateway verified; null for an anonymous request. */
+    data class Asserted(val identity: Identity?) : Basis
 
     /** [permit] stopped at rate limit rule [ruleId], whose bucket is exhausted (RFC 0006 §8.3). */
     data class RateLimited(val permit: Decision.Permit, val ruleId: String) : Basis

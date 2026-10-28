@@ -151,7 +151,7 @@ class PolicyCompiler(
     private fun key(path: String, statement: CompiledStatement?, errors: MutableList<CompileError>): Attribute? {
         val attribute = checker.attribute(path)
         if (attribute == null) {
-            errors += CompileError("$.key", "unknown attribute `$path`")
+            errors += CompileError("$.key", checker.unresolved(path))
             return null
         }
         if (attribute.type !in CompiledRateLimit.KEY_TYPES) {

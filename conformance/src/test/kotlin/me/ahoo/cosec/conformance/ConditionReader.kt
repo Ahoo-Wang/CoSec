@@ -19,10 +19,15 @@ import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.condition.Operand
+import me.ahoo.cosec.testkit.DocumentException
+import me.ahoo.cosec.testkit.ScenarioFormatException
+import me.ahoo.cosec.testkit.bool
+import me.ahoo.cosec.testkit.fields
+import me.ahoo.cosec.testkit.only
+import me.ahoo.cosec.testkit.required
+import me.ahoo.cosec.testkit.strings
+import me.ahoo.cosec.testkit.text
 import tools.jackson.databind.JsonNode
-
-/** A document that does not compile. The outcome of the scenario, not a mistake in it. */
-class DocumentException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
 /**
  * Reads the condition syntax of RFC 0005 §3.1 into a [Condition] and checks it. The document codec of RFC 0004 PR-4

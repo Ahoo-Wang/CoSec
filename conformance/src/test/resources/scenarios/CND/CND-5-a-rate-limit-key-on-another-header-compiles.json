@@ -1,0 +1,52 @@
+{
+  "rules": [
+    "CND-5"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "A rate limit rule keyed on a header that carries no credential compiles, and the request is decided.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "per-caller",
+          "action": "*",
+          "permitsPerSecond": 10,
+          "key": "http.header.X-Client"
+        }
+      ]
+    }
+  },
+  "request": {},
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "read",
+      "statement": 0,
+      "via": {
+        "binding": "read",
+        "document": "platform"
+      }
+    }
+  }
+}

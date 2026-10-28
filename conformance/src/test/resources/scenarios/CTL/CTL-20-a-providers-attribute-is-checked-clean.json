@@ -1,0 +1,54 @@
+{
+  "rules": [
+    "CTL-20"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "A condition on ext.geo.country, which only the host's provider declares, is checked clean.",
+  "options": {
+    "providers": [
+      {
+        "path": "ext.geo.country",
+        "type": "string"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "geo",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read",
+                  "condition": {
+                    "eq": [
+                      "ext.geo.country",
+                      "NZ"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

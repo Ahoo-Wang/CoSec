@@ -25,6 +25,7 @@ body:
         - cosec-engine
         - cosec-runtime
         - cosec-control
+        - cosec-testkit
         - cosec-core
         - cosec-jwt
         - cosec-cocache

@@ -1,0 +1,20 @@
+{
+  "description": "A reader of acme reads an order: the decision is all this scenario pins.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice",
+    "roles": [
+      "reader"
+    ]
+  },
+  "request": {
+    "action": "order:read",
+    "resource": {
+      "type": "order",
+      "id": "1"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

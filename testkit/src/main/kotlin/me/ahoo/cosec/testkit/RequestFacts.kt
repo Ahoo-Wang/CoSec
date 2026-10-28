@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.conformance
+package me.ahoo.cosec.testkit
 
 import me.ahoo.cosec.engine.pattern.Captures
 import me.ahoo.cosec.model.Action

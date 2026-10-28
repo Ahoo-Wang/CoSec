@@ -38,6 +38,7 @@ import me.ahoo.cosec.runtime.authn.CompositeAuthenticator
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
@@ -49,9 +50,12 @@ import me.ahoo.cosid.StringIdGenerator
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 import org.springframework.core.annotation.AnnotationAwareOrderComparator
 import org.springframework.core.env.Environment
 import org.springframework.core.io.ResourceLoader
@@ -68,11 +72,13 @@ private val log = KotlinLogging.logger {}
  */
 @AutoConfiguration(after = [CoSecSnapshotAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
+@ConditionalOnEnforceMode
 @EnableConfigurationProperties(
     PipelineProperties::class,
     RuntimeAuthorizationProperties::class,
     RevocationProperties::class,
     RequiredListenerProperties::class,
+    ListenerProperties::class,
 )
 class CoSecPipelineAutoConfiguration {
     @Bean
@@ -88,14 +94,16 @@ class CoSecPipelineAutoConfiguration {
     /**
      * Every [DecisionListener] bean, and each [AuditEventSink] bean that is not also one as a BEST_EFFORT [AuditListener]
      * named after the bean (RFC 0006 §9.5.3), so a sink written for 7.x keeps receiving events. All in `@Order`.
+     * On shutdown, delivers what is queued for up to `cosec.observability.listener.drain-timeout`, then drops the rest.
      */
-    @Bean(destroyMethod = "cancel")
+    @Bean(destroyMethod = "drain")
     @ConditionalOnMissingBean
     fun cosecDecisionListeners(
         listeners: ObjectProvider<DecisionListener>,
         sinks: ObjectProvider<AuditEventSink>,
         beans: ListableBeanFactory,
         requiredListenerProperties: RequiredListenerProperties,
+        listenerProperties: ListenerProperties,
     ): DecisionListeners {
         val names = IdentityHashMap<AuditEventSink, String>()
         beans.getBeansOfType(AuditEventSink::class.java).forEach { (name, sink) -> names[sink] = name }
@@ -104,7 +112,12 @@ class CoSecPipelineAutoConfiguration {
             sinks.orderedStream().toList().filter { it !is DecisionListener }
                 .map { it to AuditListener.of(it, names.getValue(it)) }
         val ordered = all.sortedWith { a, b -> AnnotationAwareOrderComparator.INSTANCE.compare(a.first, b.first) }
-        return DecisionListeners(ordered.map { it.second }, requiredListenerProperties.timeout.toKotlinDuration())
+        return DecisionListeners(
+            ordered.map { it.second },
+            requiredListenerProperties.timeout.toKotlinDuration(),
+            queueCapacity = listenerProperties.queueCapacity,
+            drainTimeout = listenerProperties.drainTimeout.toKotlinDuration(),
+        )
     }
 
     /**
@@ -162,6 +175,7 @@ class CoSecPipelineAutoConfiguration {
         listeners: DecisionListeners,
         rateLimiter: ObjectProvider<RateLimiter>,
         routes: RouteMap,
+        identity: ObjectProvider<IdentityIssuer>,
         pipelineProperties: PipelineProperties,
         authorizationProperties: RuntimeAuthorizationProperties,
     ): Pipeline = Pipeline(
@@ -184,8 +198,28 @@ class CoSecPipelineAutoConfiguration {
             listeners = listeners,
             rateLimiter = rateLimiter.ifAvailable,
             routes = routes,
+            identity = identity.ifAvailable,
         ),
     )
+
+    /**
+     * At a gateway: forwards the identity it verified to the services behind it (`CoSec-Identity`) and strips the
+     * client's, unless `cosec.gateway.identity.enabled=false`.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = [GATEWAY_GLOBAL_FILTER])
+    @ConditionalOnProperty(
+        value = [GatewayIdentityProperties.PREFIX + ".enabled"],
+        havingValue = "true",
+        matchIfMissing = true
+    )
+    @EnableConfigurationProperties(GatewayIdentityProperties::class)
+    class GatewayIdentity {
+        @Bean
+        @ConditionalOnMissingBean
+        fun cosecIdentityIssuer(properties: GatewayIdentityProperties): IdentityIssuer =
+            IdentityIssuer(properties.claims, properties.maxSize.toBytes().toInt())
+    }
 
     /** Checks further actions as the principal of a permitted request (RFC 0006 §7.6). */
     @Bean

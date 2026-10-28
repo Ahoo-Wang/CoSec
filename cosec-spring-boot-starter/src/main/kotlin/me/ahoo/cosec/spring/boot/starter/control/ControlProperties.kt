@@ -47,6 +47,9 @@ class ControlProperties {
         var maxCount: Int = 50
         var minAge: Duration = Duration.ofDays(7)
         var orphanAge: Duration = Duration.ofHours(1)
+
+        /** How often each instance tries to reclaim; one instance at a time does each document. */
+        var reclaimInterval: Duration = Duration.ofHours(1)
     }
 
     class Changes {
@@ -57,7 +60,10 @@ class ControlProperties {
     class Approval {
         var expireAfter: Duration = Duration.ofHours(72)
 
-        /** Whether every publish, not only an escalated one, needs a second person's approval. */
+        /**
+         * Whether the trust root's own changes are analyzed too (RFC 0007 Q10): what the analysis cannot prove needs a
+         * second administrator's approval. A change that escalates needs one either way.
+         */
         var fourEyes: Boolean = false
     }
 
@@ -70,6 +76,9 @@ class ControlProperties {
         var minDuration: Duration = Duration.ofMinutes(15)
         var minSamples: Long = 1_000
         var maxDuration: Duration = Duration.ofHours(24)
+
+        /** How often shadowing changes are looked at, by one instance at a time; a window closes up to this late. */
+        var checkInterval: Duration = Duration.ofMinutes(1)
     }
 
     class Audit {

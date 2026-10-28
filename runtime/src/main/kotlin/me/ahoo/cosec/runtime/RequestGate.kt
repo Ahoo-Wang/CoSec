@@ -10,22 +10,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.token
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.token.AccessToken
+package me.ahoo.cosec.runtime
+
+import me.ahoo.cosec.runtime.http.HttpFacts
 
 /**
- * Converter from access token to principal.
- *
- * @see TokenVerifier
+ * What the adapters call for every request (RFC 0006 §6.3): an [Outcome] they write, from the facts they read. The
+ * [Pipeline] decides with policies; `IdentityGate` reads the identity a gateway verified, for the services behind it.
+ * Either way only `StatusMapping` makes the outcome, so the adapters answer alike.
  */
-fun interface PrincipalConverter {
-    /**
-     * Converts an access token to a principal.
-     *
-     * @param accessToken The access token to convert
-     * @return The principal
-     */
-    fun toPrincipal(accessToken: AccessToken): CoSecPrincipal
+fun interface RequestGate {
+    suspend fun evaluate(facts: HttpFacts): Outcome
 }

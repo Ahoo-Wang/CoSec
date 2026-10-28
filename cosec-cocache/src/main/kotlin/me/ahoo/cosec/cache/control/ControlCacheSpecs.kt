@@ -58,6 +58,7 @@ data class ReferenceKey(val target: SnapshotKey, val policy: PolicyId)
  * | revision index | `<p>:control:revisions:<docKey>` |
  * | back-references | `<p>:control:refs:<docKey>:<policyId>` |
  * | leases | `<p>:control:lease:<name>` |
+ * | lists | `<p>:control:list:documents`, `<p>:control:list:open-changes` |
  * | change requests | `<p>:control:change:<changeId>` |
  * | staging slots | `<p>:control:stage:<docKey>` |
  *
@@ -120,6 +121,19 @@ object ControlCacheSpecs {
             .keyPrefix("")
             .keyEncoder(SnapshotKeyEncoder)
             .codec(StageSlotCodec)
+            .policy(policy.storeOfRecord())
+            .build()
+
+    /** What [CoCacheControlStore.documents] and [CoCacheControlStore.openChanges] read: each entry with when it was listed. */
+    fun list(
+        keyPrefix: String = CoSec.COSEC,
+        policy: CachePolicy = CachePolicy.DEFAULT
+    ): CacheSpec<String, Map<String, Instant>> =
+        CacheSpec.builder<String, Map<String, Instant>>(CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME)
+            .namespace(CoSecCacheSpecs.cacheNamespace(keyPrefix, CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME))
+            .keyPrefix("")
+            .keyEncoder { it }
+            .codec(ListedCodec)
             .policy(policy.storeOfRecord())
             .build()
 
@@ -272,4 +286,21 @@ object SnapshotKeySetCodec : Codec<Set<SnapshotKey>> {
             val text = item.text(WHAT)
             SnapshotKeyEncoder.decode(text) ?: malformed(WHAT, "[$text] is not a document key")
         }
+}
+
+/** Listed entries and when each was listed, as a JSON object sorted by entry, so equal lists have equal digests. */
+object ListedCodec : Codec<Map<String, Instant>> {
+    private const val WHAT = "control list"
+
+    override fun encode(value: Map<String, Instant>): ByteArray {
+        val node = factory.objectNode()
+        value.entries.sortedBy { it.key }.forEach { (entry, listedAt) -> node.put(entry, listedAt.toString()) }
+        return CoSecJsonSerializer.writeValueAsBytes(node)
+    }
+
+    override fun decode(bytes: ByteArray): Map<String, Instant> {
+        val node = read(bytes, WHAT)
+        if (!node.isObject) malformed(WHAT, "$node is not an object")
+        return node.properties().associateTo(LinkedHashMap()) { (entry, listedAt) -> entry to listedAt.instant(WHAT) }
+    }
 }

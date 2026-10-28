@@ -15,7 +15,8 @@ package me.ahoo.cosec.model.condition
 
 /**
  * The cost bounds of a condition (RFC 0005 §3.5, Q9). The defaults are the decided values, to be calibrated
- * against the converter's measurements of 7.x policies. Hosts set them per snapshot (`cosec.policy.limits.*`).
+ * against the converter's measurements of 7.x policies. The platform document's `limits` section sets them for every
+ * document (RFC 0007 §3.1 N3), so the control plane and every instance compile against the same bounds.
  */
 class ConditionLimits(
     val maxNodes: Int = 64,
@@ -61,9 +62,31 @@ class ConditionChecker(
     /** The external attributes the registered providers declare (RFC 0006 §5.4.1). */
     val catalog: AttributeCatalog = AttributeCatalog.NONE,
 ) {
-    /** The attribute [path] names, a declared external one included; null when there is none. */
-    fun attribute(path: String): Attribute? =
-        Attribute.parse(path) ?: if (Attribute.isExternalPath(path)) catalog.external(path) else null
+    /**
+     * The attribute [path] names, a declared external one included; null when there is none. Every attribute reference
+     * of a document resolves here (conditions, rate limit keys), so this is where a credential header is refused: it
+     * is null for one, whoever asks (`CND-5`, [isCredentialHeader]).
+     */
+    fun attribute(path: String): Attribute? {
+        val attribute = Attribute.parse(path)
+            ?: return if (Attribute.isExternalPath(path)) catalog.external(path) else null
+        return attribute.takeUnless { isCredentialHeader(it) }
+    }
+
+    /** Why [attribute] has no attribute for [path], as an error a caller reports. */
+    fun unresolved(path: String): String {
+        val parsed = Attribute.parse(path)
+        val header = Attribute.Kind.HTTP_HEADER.path
+        return when {
+            parsed == null && path.startsWith(header) && path.length > header.length ->
+                "`$path` is not a header name: a header name is an ASCII token (RFC 9110)"
+            parsed != null && isCredentialHeader(parsed) ->
+                "`$path` is a credential header, which no attribute reference may read"
+            parsed == null && Attribute.isExternalPath(path) ->
+                "external attribute `$path` is not declared by any registered AttributeProvider"
+            else -> "unknown attribute `$path`"
+        }
+    }
 
     fun check(condition: Condition): CheckResult {
         val run = Run()
@@ -305,22 +328,13 @@ class ConditionChecker(
 
         /**
          * Paths take names (`subject.attributes.<name>`), so they are bounded like literals. A credential header is
-         * never readable ([CREDENTIAL_HEADERS]).
+         * never readable ([CREDENTIAL_HEADERS]): [attribute] refuses it.
          */
         private fun attribute(path: String, at: String): Attribute? {
             string(path, at) ?: return null
-            Attribute.parse(path)?.let { attribute ->
-                if (attribute.kind == Attribute.Kind.HTTP_HEADER && attribute.name in CREDENTIAL_HEADERS) {
-                    error(at, "`$path` is a credential header, which no condition may read")
-                    return null
-                }
-                return attribute
-            }
-            if (Attribute.isExternalPath(path)) {
-                return catalog.external(path)
-                    ?: null.also { error(at, "external attribute `$path` is not declared by any registered AttributeProvider") }
-            }
-            return null.also { error(at, "unknown attribute `$path`") }
+            this@ConditionChecker.attribute(path)?.let { return it }
+            error(at, unresolved(path))
+            return null
         }
 
         private fun strings(values: List<Literal>, path: String, attribute: Attribute): List<String>? {
@@ -359,10 +373,15 @@ class ConditionChecker(
          * Headers that carry credentials (RFC 0005 §3.2, `CND-5`). A condition on one would let a document's author
          * learn another principal's token through decisions: a `prefix` DENY on `authorization`, and the statement the
          * audit names, tell one character at a time. `x-api-key` is the starter's default API key header; a host that
-         * reads keys from another header is not covered by this list.
+         * reads keys from another header is not covered by this list. `cosec-identity` is what a gateway forwards to
+         * the services behind it: at the gateway it is the client's claim, which a condition must never trust.
          */
         val CREDENTIAL_HEADERS: Set<String> =
-            setOf("authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key")
+            setOf("authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key", "cosec-identity")
+
+        /** Whether [attribute] is a credential header, which no attribute reference may read (`CND-5`). */
+        fun isCredentialHeader(attribute: Attribute): Boolean =
+            attribute.kind == Attribute.Kind.HTTP_HEADER && attribute.name in CREDENTIAL_HEADERS
 
         private const val ROOT = "$"
         private const val IPV4_BITS = 32

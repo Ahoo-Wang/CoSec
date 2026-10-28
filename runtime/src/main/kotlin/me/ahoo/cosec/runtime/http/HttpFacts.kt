@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime.http
 
+import me.ahoo.cosec.model.condition.HttpNames
 import me.ahoo.cosec.model.scope.HostScope
 
 /**
@@ -43,12 +44,12 @@ interface Headers {
     companion object {
         val EMPTY: Headers = of(emptyMap())
 
-        /** Headers backed by [values]; the map is copied and its keys folded to lower case. */
+        /** Headers backed by [values]; the map is copied and its keys folded as the documents fold them ([HttpNames]). */
         fun of(values: Map<String, List<String>>): Headers {
-            val folded = values.entries.groupBy({ it.key.lowercase() }, { it.value })
+            val folded = values.entries.groupBy({ HttpNames.fold(it.key) }, { it.value })
                 .mapValues { (_, lists) -> lists.flatten() }
             return object : Headers {
-                override fun values(name: String): List<String> = folded[name.lowercase()].orEmpty()
+                override fun values(name: String): List<String> = folded[HttpNames.fold(name)].orEmpty()
             }
         }
     }

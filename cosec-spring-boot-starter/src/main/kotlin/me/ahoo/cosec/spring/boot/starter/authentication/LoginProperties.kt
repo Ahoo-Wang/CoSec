@@ -18,14 +18,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
 
 /**
- * Authentication Properties .
- *
- * @author ahoo wang
+ * `cosec.authentication.login.*`: the login beans, which turn credentials into a token (`TokenCompositeAuthentication`,
+ * your `Authentication` beans, social login). Authenticating requests in the pipeline is not switched by it.
  */
-@ConfigurationProperties(prefix = AuthenticationProperties.PREFIX)
-class AuthenticationProperties(@DefaultValue("true") override var enabled: Boolean = true) : EnabledCapable {
+@ConfigurationProperties(prefix = LoginProperties.PREFIX)
+class LoginProperties(@DefaultValue("true") override var enabled: Boolean = true) : EnabledCapable {
 
     companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "authentication"
+        const val PREFIX = CoSec.COSEC_PREFIX + "authentication.login"
     }
 }

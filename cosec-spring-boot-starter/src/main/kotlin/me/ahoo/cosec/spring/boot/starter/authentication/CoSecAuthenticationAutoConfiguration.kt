@@ -33,9 +33,9 @@ import org.springframework.context.annotation.Primary
  */
 @AutoConfiguration
 @ConditionalOnCoSecEnabled
-@ConditionalOnAuthenticationEnabled
+@ConditionalOnLoginEnabled
 @EnableConfigurationProperties(
-    AuthenticationProperties::class,
+    LoginProperties::class,
 )
 class CoSecAuthenticationAutoConfiguration {
     @Bean

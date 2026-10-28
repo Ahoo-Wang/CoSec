@@ -10,6 +10,16 @@
         "runtime:RateLimitObligationTest"
       ],
       "pending": null
+    },
+    {
+      "id": "OBL-2",
+      "source": "RFC 0006 §8.1 (counters per document)",
+      "statement": "Each document's rate limit rules count in buckets of their own (the platform's by rule id, an app's and a tenant's prefixed with the document), so a tenant rule never spends, replaces or relaxes another document's: a tenant rule with a platform rule's id has its own counter, and the platform's rule still applies to the tenant's requests.",
+      "level": "pipeline",
+      "guards": [
+        "engine:RateLimitObligationTest"
+      ],
+      "pending": null
     }
   ]
 }

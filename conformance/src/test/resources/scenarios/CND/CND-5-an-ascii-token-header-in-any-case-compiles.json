@@ -1,0 +1,54 @@
+{
+  "rules": [
+    "CND-5"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "A condition on an ASCII header name in mixed case compiles; it is matched with the ASCII fold, so the request's X-Client-Version satisfies it.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "http.header.X-Client-VERSION",
+                  "2"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ]
+    }
+  },
+  "request": {
+    "headers": {
+      "x-client-version": "2"
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "read",
+      "statement": 0,
+      "via": {
+        "binding": "read",
+        "document": "platform"
+      }
+    }
+  }
+}

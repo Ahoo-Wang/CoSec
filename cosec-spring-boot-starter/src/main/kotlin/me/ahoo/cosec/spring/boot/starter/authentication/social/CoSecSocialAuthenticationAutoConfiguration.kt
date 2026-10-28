@@ -21,7 +21,7 @@ import me.ahoo.cosec.social.SocialUserPrincipalConverter
 import me.ahoo.cosec.social.justauth.JustAuthProvider
 import me.ahoo.cosec.social.justauth.RedisAuthStateCache
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnAuthenticationEnabled
+import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
 import me.ahoo.cosid.StringIdGenerator
 import me.ahoo.cosid.jvm.UuidGenerator
 import me.zhyd.oauth.cache.AuthStateCache
@@ -45,7 +45,7 @@ import java.lang.reflect.Constructor
  */
 @AutoConfiguration
 @ConditionalOnCoSecEnabled
-@ConditionalOnAuthenticationEnabled
+@ConditionalOnLoginEnabled
 @ConditionalOnSocialAuthenticationEnabled
 @ConditionalOnClass(SocialUser::class)
 @EnableConfigurationProperties(

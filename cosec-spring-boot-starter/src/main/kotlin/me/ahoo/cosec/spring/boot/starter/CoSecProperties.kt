@@ -28,4 +28,10 @@ interface EnabledCapable {
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = CoSec.COSEC)
-class CoSecProperties(@DefaultValue("true") override var enabled: Boolean = true) : EnabledCapable
+class CoSecProperties(
+    @DefaultValue("true") override var enabled: Boolean = true,
+    /** `fail` (the default) stops startup on a `cosec.*` key CoSec does not read; `warn` only logs it. */
+    @DefaultValue("fail") var unknownProperties: UnknownPropertiesMode = UnknownPropertiesMode.FAIL,
+) : EnabledCapable
+
+enum class UnknownPropertiesMode { FAIL, WARN }
