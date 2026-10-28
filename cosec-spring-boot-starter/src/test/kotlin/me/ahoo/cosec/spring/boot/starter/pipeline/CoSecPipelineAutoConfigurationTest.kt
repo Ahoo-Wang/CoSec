@@ -15,7 +15,11 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
+import io.mockk.every
 import io.mockk.mockk
+import me.ahoo.cocache.api.spi.CoherenceBackend
+import me.ahoo.cocache.core.memory.InMemoryBackend
+import me.ahoo.cocache.redis.RedisBackend
 import io.swagger.v3.core.util.Json
 import io.swagger.v3.oas.models.OpenAPI
 import kotlinx.coroutines.runBlocking
@@ -220,16 +224,39 @@ class CoSecPipelineAutoConfigurationTest {
 
     @Test
     fun `Redis that may evict snapshots fails startup unless told to warn`() {
-        val evicting = mapOf("node" to "allkeys-lru")
+        val evicting = EvictionPolicyCheck.Reading.Policies(mapOf("node" to "allkeys-lru"))
         assertThrows<IllegalStateException> {
             EvictionPolicyCheck.check(evicting, RuntimeAuthorizationProperties.EvictionCheck.FAIL)
         }
         assertThrows<IllegalStateException> {
-            EvictionPolicyCheck.check(emptyMap(), RuntimeAuthorizationProperties.EvictionCheck.FAIL)
+            EvictionPolicyCheck.check(
+                EvictionPolicyCheck.Reading.Policies(emptyMap()),
+                RuntimeAuthorizationProperties.EvictionCheck.FAIL
+            )
         }
         EvictionPolicyCheck.check(evicting, RuntimeAuthorizationProperties.EvictionCheck.WARN)
-        EvictionPolicyCheck.check(mapOf("node" to "noeviction"), RuntimeAuthorizationProperties.EvictionCheck.FAIL)
-        EvictionPolicyCheck.check(null, RuntimeAuthorizationProperties.EvictionCheck.FAIL)
+        EvictionPolicyCheck.check(
+            EvictionPolicyCheck.Reading.Policies(mapOf("node" to "noeviction")),
+            RuntimeAuthorizationProperties.EvictionCheck.FAIL
+        )
+        EvictionPolicyCheck.check(EvictionPolicyCheck.Reading.NotRedis, RuntimeAuthorizationProperties.EvictionCheck.FAIL)
+    }
+
+    @Test
+    fun `a maxmemory-policy that cannot be read fails startup unless told to warn`() {
+        val redis = mockk<RedisBackend> { every { maxmemoryPolicies() } returns null }
+        val unreadable = EvictionPolicyCheck.read(redis)
+        unreadable.assert().isInstanceOf(EvictionPolicyCheck.Reading.Unreadable::class.java)
+        assertThrows<IllegalStateException> {
+            EvictionPolicyCheck.check(unreadable, RuntimeAuthorizationProperties.EvictionCheck.FAIL)
+        }
+        EvictionPolicyCheck.check(unreadable, RuntimeAuthorizationProperties.EvictionCheck.WARN)
+        // A wrapped or custom backend is not known to keep the snapshot either.
+        EvictionPolicyCheck.read(mockk<CoherenceBackend>())
+            .assert().isInstanceOf(EvictionPolicyCheck.Reading.Unreadable::class.java)
+        EvictionPolicyCheck.read(InMemoryBackend { System.currentTimeMillis() }).assert().isEqualTo(EvictionPolicyCheck.Reading.NotRedis)
+        EvictionPolicyCheck.read(mockk<RedisBackend> { every { maxmemoryPolicies() } returns mapOf("n" to "noeviction") })
+            .assert().isEqualTo(EvictionPolicyCheck.Reading.Policies(mapOf("n" to "noeviction")))
     }
 
     @Test

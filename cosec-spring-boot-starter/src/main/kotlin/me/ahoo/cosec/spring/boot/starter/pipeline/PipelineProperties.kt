@@ -103,7 +103,7 @@ class RuntimeAuthorizationProperties {
         var prewarmTenants: List<String> = emptyList()
         var compileThreads: Int = 2
 
-        /** What a Redis whose `maxmemory-policy` is not `noeviction` does to startup (`SNP-3`). */
+        /** What a Redis whose `maxmemory-policy` is not `noeviction`, or cannot be read, does to startup (`SNP-3`). */
         var evictionCheck: EvictionCheck = EvictionCheck.FAIL
 
         class FailClosed {

@@ -32,7 +32,8 @@
       "guards": [
         "cosec-cocache:CacheTtlPolicyTest#snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort",
         "cosec-cocache:CacheTtlPolicyTest#snapshotCacheKeepsItsPinsWhateverCustomizersSet",
-        "cosec-spring-boot-starter:CoSecPipelineAutoConfigurationTest#Redis that may evict snapshots fails startup unless told to warn"
+        "cosec-spring-boot-starter:CoSecPipelineAutoConfigurationTest#Redis that may evict snapshots fails startup unless told to warn",
+        "cosec-spring-boot-starter:CoSecPipelineAutoConfigurationTest#a maxmemory-policy that cannot be read fails startup unless told to warn"
       ],
       "pending": null
     }

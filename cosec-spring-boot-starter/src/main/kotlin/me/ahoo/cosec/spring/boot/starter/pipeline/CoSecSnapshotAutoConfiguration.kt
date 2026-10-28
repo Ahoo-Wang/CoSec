@@ -16,6 +16,7 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cocache.api.spi.CoherenceBackend
 import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.core.policy.CachePolicy
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cocache.spring.boot.CacheSpecCustomizer
@@ -90,10 +91,7 @@ class CoSecSnapshotAutoConfiguration {
             backend: CoherenceBackend,
             properties: RuntimeAuthorizationProperties,
         ): SmartInitializingSingleton = SmartInitializingSingleton {
-            EvictionPolicyCheck.check(
-                (backend as? RedisBackend)?.maxmemoryPolicies(),
-                properties.snapshot.evictionCheck
-            )
+            EvictionPolicyCheck.check(EvictionPolicyCheck.read(backend), properties.snapshot.evictionCheck)
         }
     }
 
@@ -145,28 +143,51 @@ internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(): SnapshotOption
     compileThreads = compileThreads,
 )
 
-/** `SNP-3` (RFC 0003 §4.1): every Redis node's `maxmemory-policy` is `noeviction`. */
+/**
+ * `SNP-3` (RFC 0003 §4.1): every Redis node's `maxmemory-policy` is `noeviction`. A policy that could not be read is
+ * treated like an evicting one: a Redis whose `CONFIG GET` is denied or failed, or a backend this check cannot see
+ * into (a wrapper, a custom backend), is not known to keep the snapshot, so it fails startup unless told to warn.
+ */
 internal object EvictionPolicyCheck {
     private val log = KotlinLogging.logger {}
     const val NOEVICTION = "noeviction"
 
-    /** [policies] by node, as `RedisBackend.maxmemoryPolicies` reads them; null when the backend is not Redis. */
-    fun check(policies: Map<String, String>?, mode: RuntimeAuthorizationProperties.EvictionCheck) {
-        if (policies == null) {
-            return
+    /** What [check] knows about the backend's eviction. */
+    sealed interface Reading {
+        /** CoCache's in-memory backend: nothing is evicted behind its back. */
+        data object NotRedis : Reading
+
+        /** The policies by node, as `RedisBackend.maxmemoryPolicies` reads them. */
+        data class Policies(val policies: Map<String, String>) : Reading
+
+        data class Unreadable(val reason: String) : Reading
+    }
+
+    fun read(backend: CoherenceBackend): Reading = when (backend) {
+        is InMemoryBackend -> Reading.NotRedis
+        is RedisBackend -> backend.maxmemoryPolicies()?.let { Reading.Policies(it) }
+            ?: Reading.Unreadable("CONFIG GET maxmemory-policy failed or is not allowed")
+        else -> Reading.Unreadable("the CoCache backend ${backend::class.qualifiedName} is not one this check can read")
+    }
+
+    fun check(reading: Reading, mode: RuntimeAuthorizationProperties.EvictionCheck) {
+        val problem = when (reading) {
+            Reading.NotRedis -> return
+            is Reading.Unreadable -> "Cannot tell whether Redis may evict CoSec's policy snapshot (${reading.reason})"
+            is Reading.Policies -> {
+                val evicting = if (reading.policies.isEmpty()) {
+                    mapOf("redis" to "unknown")
+                } else {
+                    reading.policies.filterValues { it != NOEVICTION }
+                }
+                if (evicting.isEmpty()) {
+                    return
+                }
+                "Redis may evict CoSec's policy snapshot: maxmemory-policy is $evicting, not $NOEVICTION"
+            }
         }
-        val evicting = if (policies.isEmpty()) {
-            mapOf(
-                "redis" to "unknown"
-            )
-        } else {
-            policies.filterValues { it != NOEVICTION }
-        }
-        if (evicting.isEmpty()) {
-            return
-        }
-        val message = "Redis may evict CoSec's policy snapshot, so a global DENY could silently vanish: " +
-            "maxmemory-policy is $evicting, not $NOEVICTION (${RuntimeAuthorizationProperties.PREFIX}.snapshot.eviction-check)."
+        val message = "$problem, so a global DENY could silently vanish " +
+            "(${RuntimeAuthorizationProperties.PREFIX}.snapshot.eviction-check)."
         when (mode) {
             RuntimeAuthorizationProperties.EvictionCheck.FAIL -> throw IllegalStateException(message)
             RuntimeAuthorizationProperties.EvictionCheck.WARN -> log.warn {
