@@ -37,8 +37,9 @@ import java.util.concurrent.CompletableFuture
  *   evaluation is indeterminate unless a DENY matches (RFC 0004 §7.4, `DOC-1`). A failed platform document is an empty
  *   one plus that cause, so the blacklist rule still decides a blocked request.
  * - A tenant id that cannot name a document (RFC 0004 §7.1) is unresolved in the same way: never another key.
- * - With [platformRequired], an absent platform document is unresolved too, not empty. Once the control plane's
- *   bootstrap has published a platform document, its absence means it was lost (for example, evicted from Redis), and
+ * - With [platformRequired], an absent platform document is unresolved too, not empty: either none was published yet
+ *   (`cosec-migrate publish` writes the first one; the control plane's bootstrap writes only the platform tenant's
+ *   document), so every request fails closed until it is, or it was lost (for example, evicted from Redis), and
  *   reading it as empty would silently drop every global DENY (RFC 0008 §4.4, #1053).
  */
 class DocumentSnapshotViews(

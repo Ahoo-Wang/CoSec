@@ -69,7 +69,8 @@ import java.util.UUID
 /**
  * The policy snapshot the pipeline decides on (RFC 0004 §7.4): the platform, app and tenant documents, compiled against
  * the platform's limits and attributes (N3), from Redis through CoCache when `cosec-cocache` is present, otherwise from
- * an in-memory store. An absent platform document fails requests closed: the control plane's bootstrap publishes one.
+ * an in-memory store. An absent platform document fails requests closed until one is published (`cosec-migrate
+ * publish`; the control plane's bootstrap writes only the platform tenant's document).
  */
 @AutoConfiguration(afterName = [COCACHE_AUTO_CONFIGURATION])
 @ConditionalOnCoSecEnabled

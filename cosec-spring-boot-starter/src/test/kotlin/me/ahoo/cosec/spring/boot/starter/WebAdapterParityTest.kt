@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter
 
-import kotlinx.coroutines.awaitCancellation
+import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
@@ -29,6 +29,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -61,10 +62,13 @@ import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import org.springframework.cloud.gateway.filter.GatewayFilterChain
+import org.springframework.cloud.gateway.route.Route
+import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
 import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.http.HttpMethod
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
@@ -83,6 +87,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.awaitCancellation
 
 /**
  * One decision path (RFC 0006 §6.3, `PIP-1`): the WebFlux filter, the gateway filter and the servlet filter, over the
@@ -173,10 +178,13 @@ class WebAdapterParityTest {
         ""","policies":[
             {"id":"public","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/public/**"}]},
             {"id":"no-delete","statements":[{"effect":"deny","action":"http:DELETE","resource":"http:path:/orders/**"}]},
+            {"id":"no-debug","statements":[{"effect":"deny","action":"*","resource":"http:path:/public/**",
+              "condition":{"eq":["http.header.X-Debug","1"]}}]},
             {"id":"geo","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/geo/**",
               "condition":{"eq":["ext.geo.inFence",true]}}]}],
           "bindings":[{"id":"g:public","subject":"*","app":"*","space":"*","policy":"public"},
                       {"id":"g:no-delete","subject":"*","app":"*","space":"*","policy":"no-delete"},
+                      {"id":"g:no-debug","subject":"*","app":"*","space":"*","policy":"no-debug"},
                       {"id":"g:geo","subject":"*","app":"*","space":"*","policy":"geo"}],
           "rateLimits":[{"id":"limited","action":"*","resource":"http:path:/public/limited/**","permitsPerSecond":10}]""",
     )
@@ -239,9 +247,13 @@ class WebAdapterParityTest {
         }
     }
 
+    /** The host attributes the engine was given for each request: what conditions on `http.*` and `request.*` read. */
+    private val hostAttributes = CopyOnWriteArrayList<List<String?>>()
+
     /** The engine, except that `/boom` is a defect: the 500 path. */
     private val engine = object : FlatEngine {
         override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation {
+            hostAttributes += HOST_ATTRIBUTES.map(request.attributes::string)
             check(request.request.resource.id != "/boom") { "A defect" }
             return CoSecFlatEngine.evaluate(request, snapshot, trace)
         }
@@ -468,6 +480,13 @@ class WebAdapterParityTest {
             ),
             Scenario("a defect is 500", path = "/boom", status = 500, type = "internal-error"),
             Scenario(
+                "a DENY on a header wins over the global ALLOW",
+                path = "/public/page",
+                headers = mapOf("X-Debug" to "1"),
+                status = 401,
+                type = "unauthorized"
+            ),
+            Scenario(
                 "an exhausted rate limit is 429",
                 path = "/public/limited/page",
                 status = 429,
@@ -502,6 +521,45 @@ class WebAdapterParityTest {
             webflux.headers["retry-after"].assert().isEqualTo(listOf("3"))
             webflux.headers["ratelimit-remaining"].assert().isEqualTo(listOf("0"))
         }
+    }
+
+    /** RFC 0005 §3.2: the three adapters give the engine the same headers, origin and referer. */
+    @Test
+    fun `the three adapters give the engine the same host attributes`() {
+        val headers = mapOf(
+            "X-Debug" to "0",
+            "Origin" to "https://app.example.com:8443",
+            "Referer" to "https://www.example.com/page?q=1",
+        )
+        val scenario = Scenario("host attributes", path = "/public/page", headers = headers, status = 200, type = null)
+        hostAttributes.clear()
+        listOf(webflux(scenario), gateway(scenario), servlet(scenario)).forEach { it.status.assert().isEqualTo(200) }
+        hostAttributes.assert().containsExactly(
+            *Array(3) {
+                listOf(
+                    "0",
+                    "https://app.example.com:8443",
+                    "https://www.example.com/page?q=1",
+                    "app.example.com",
+                    "www.example.com",
+                    null
+                )
+            }
+        )
+    }
+
+    /** RFC 0006 §5.4.5: the gateway puts the route's id among the request attributes; the other adapters have none. */
+    @Test
+    fun `the gateway gives the engine the route id`() {
+        hostAttributes.clear()
+        val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/public/page"))
+        exchange.attributes[GATEWAY_ROUTE_ATTR] =
+            Route.async().id("orders-route").uri(URI.create("http://orders"))
+                .predicate { true }.build()
+        PipelineGatewayFilter(pipelines.getValue("default"), contributors)
+            .filter(exchange, GatewayFilterChain { Mono.empty() })
+            .block(Duration.ofSeconds(5))
+        hostAttributes.single().last().assert().isEqualTo("orders-route")
     }
 
     /** §6.3: the events of the three adapters agree on what the audit keys on. */
@@ -543,5 +601,17 @@ class WebAdapterParityTest {
             )
         }
         keys.distinct().size.assert().isEqualTo(1)
+    }
+
+    private companion object {
+        /** `http.header.x-debug`, the origin and referer and their hosts, and the gateway's route id. */
+        val HOST_ATTRIBUTES = listOf(
+            Attribute.of(Attribute.Kind.HTTP_HEADER, "X-Debug"),
+            Attribute.of(Attribute.Kind.HTTP_ORIGIN),
+            Attribute.of(Attribute.Kind.HTTP_REFERER),
+            Attribute.of(Attribute.Kind.HTTP_ORIGIN_HOST),
+            Attribute.of(Attribute.Kind.HTTP_REFERER_HOST),
+            Attribute.of(Attribute.Kind.REQUEST_ATTRIBUTE, AuditRequest.ROUTE_ID_ATTRIBUTE_KEY),
+        )
     }
 }

@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.model.condition.ConditionInput
+import me.ahoo.cosec.engine.flat.AbsentAttributes
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.SecurityScope
 import me.ahoo.cosec.api.principal.CoSecPrincipal
@@ -47,6 +49,8 @@ class RequestSecurity internal constructor(
     val memberships: Memberships,
     /** The request the permit was decided for: the checker reuses its subject and environment. */
     internal val request: AuthzRequest,
+    /** The host's attributes of that request (headers, request attributes): a check reads them as the request did. */
+    internal val attributes: ConditionInput = AbsentAttributes,
 ) {
     /** The application-facing view, read-only but for the 7.x attribute map, which nothing in the pipeline reads. */
     val securityContext: SecurityContext by lazy(LazyThreadSafetyMode.PUBLICATION) { PipelineSecurityContext(this) }
@@ -62,7 +66,7 @@ class RequestSecurity internal constructor(
         val scope = (resolved as? ScopeResolution.Resolved)?.scope ?: return null
         val declared = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value)
         val request = with(request) { AuthzRequest(subject, declared, action, resource, environment) }
-        return RequestSecurity(requestId, authenticated, scope, memberships, request)
+        return RequestSecurity(requestId, authenticated, scope, memberships, request, attributes)
     }
 
     /**
@@ -88,7 +92,7 @@ class RequestSecurity internal constructor(
         )
         val declared = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value)
         val request = with(request) { AuthzRequest(subject, declared, action, resource, environment) }
-        return RequestSecurity(requestId, principal, scope, memberships, request)
+        return RequestSecurity(requestId, principal, scope, memberships, request, attributes)
     }
 
     override fun toString(): String =

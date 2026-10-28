@@ -100,13 +100,14 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  * compiled as the `engine` runner compiles them and test doubles for every SPI the pipeline calls. The adapters
  * (RFC 0006 PR-7) and listeners (PR-6) are not part of it yet.
  *
- * The pipeline gives the engine an `http` action and resource (`http:<METHOD>` on the path) and no host facts, so the
- * statements of a pipeline scenario match on action and resource only, never on conditions.
+ * The pipeline gives the engine an `http` action and resource (`http:<METHOD>` on the path) and the request's host
+ * attributes (`http.*` from the headers, `request.attributes.*` from `requestAttributes`), through the pipeline's own
+ * reading of [HttpFacts], never the runner's.
  *
  * ```jsonc
  * "documents":          { "platform": {...}, "apps": {...}, "tenants": {...}, "unavailable": ["tenant", ...] },
  * "http":               { "method": "GET", "path": "/orders", "query": "a=b", "headers": { "<name>": "v" | ["v", ...] },
- *                         "hostApp": null },
+ *                         "hostApp": null, "requestAttributes": { "<name>": "v" } },
  * "authentication":     { "result": "token" | "anonymous" | "authenticated" | "rejected" | "unavailable" | "throws" | "hangs",
  *                         "reason": "TOKEN_EXPIRED", "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
  *                         "membership": "provider" },
@@ -535,7 +536,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     }
 
     private fun facts(node: JsonNode): HttpFacts {
-        node.only("method", "path", "query", "headers", "hostApp")
+        node.only("method", "path", "query", "headers", "hostApp", "requestAttributes")
         val headers = node.get("headers")?.fields().orEmpty().mapValues { (_, value) ->
             if (value.isArray) value.strings() else listOf(value.text())
         }
@@ -547,6 +548,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             cookies = Cookies.EMPTY,
             remoteAddress = REMOTE_ADDRESS,
             host = HostScope(node.get("hostApp")?.textOrNull()?.let(::AppId)),
+            requestAttributes = node.get("requestAttributes")?.fields().orEmpty().mapValues { (_, value) -> value.text() },
         )
     }
 
