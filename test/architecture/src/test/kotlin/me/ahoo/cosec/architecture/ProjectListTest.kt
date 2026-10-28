@@ -98,7 +98,7 @@ class ProjectListTest {
 
     @Test
     fun `CI checks every tested project once, in a job of its own group`() {
-        val jobs = ciPlan()["jobs"].map { it["group"].asString() to it["projects"].asString().split(' ') }
+        val jobs = ciPlan()["jobs"].items().map { it["group"].asString() to it["projects"].asString().split(' ') }
         jobs.flatMap { it.second }.assert().containsExactlyInAnyOrderElementsOf(PROJECTS.filterNot { it in UNTESTED })
         for ((group, projects) in jobs) {
             GROUPS.getValue(group).assert().containsAll(projects)
@@ -108,8 +108,8 @@ class ProjectListTest {
     @Test
     fun `CI leaves out only the untested projects, and expects a coverage report from every library project`() {
         val plan = ciPlan()
-        plan["excluded"].map { it.asString() }.assert().containsExactlyInAnyOrderElementsOf(UNTESTED)
-        plan["uncovered"].map { it.asString() }.assert()
+        plan["excluded"].strings().assert().containsExactlyInAnyOrderElementsOf(UNTESTED)
+        plan["uncovered"].strings().assert()
             .containsExactlyInAnyOrderElementsOf(PROJECTS.filterNot { it in UNTESTED || it in COVERED })
     }
 
@@ -124,4 +124,8 @@ class ProjectListTest {
         process.exitValue().assert().describedAs(output).isZero()
         return JsonMapper.builder().build().readTree(output)
     }
+
+    private fun JsonNode.items(): List<JsonNode> = (0 until size()).map { get(it) }
+
+    private fun JsonNode.strings(): List<String> = items().map { it.asString() }
 }
