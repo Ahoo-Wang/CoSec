@@ -62,6 +62,24 @@ class OperationsTest {
         Operations.diff(ACME, desired, desired, ApplyMode.REPLACE).assert().isEmpty()
     }
 
+    /** Obligations run in rule order and a 429 names the first exhausted rule: a reorder is a change, and diff keeps it. */
+    @Test
+    fun `diff round-trips the order of the rules`() {
+        fun ids(document: PolicyDocument) = document.rateLimits.map { it.id }
+        val base = document(rule("a"), rule("b"), rule("c"))
+        listOf(
+            document(rule("c"), rule("a"), rule("b")),
+            document(rule("a"), rule("c"), rule("b")),
+            document(rule("a"), rule("x"), rule("b"), rule("c")),
+            document(rule("b")),
+        ).forEach { desired ->
+            val operations = Operations.diff(ACME, base, desired, ApplyMode.REPLACE)
+            ids(Operations.apply(ACME, base, operations).candidate!!).assert().isEqualTo(ids(desired))
+        }
+        Operations.diff(ACME, base, document(rule("c"), rule("a"), rule("b")), ApplyMode.REPLACE).assert().isNotEmpty()
+        Operations.diff(ACME, base, base, ApplyMode.REPLACE).assert().isEmpty()
+    }
+
     @Test
     fun `a rate limit operation on what the author did not see is refused`() {
         val base = document(rule("old"))

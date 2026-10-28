@@ -232,11 +232,7 @@ object Operations {
             val current = bindings[binding.id.value]?.let { EntryDigest.of(it, kind, owner) }
             if (current != EntryDigest.of(binding, kind, owner)) operations += Operation.PutBinding(binding, current)
         }
-        val rateLimits = base?.rateLimits?.associateBy { it.id }.orEmpty()
-        for (rule in desired.rateLimits) {
-            val current = rateLimits[rule.id]?.let(EntryDigest::of)
-            if (current != EntryDigest.of(rule)) operations += Operation.PutRateLimit(rule, current)
-        }
+        operations += rateLimits(base, desired)
         if (mode == ApplyMode.REPLACE) {
             val keepRateLimits = desired.rateLimits.map { it.id }.toSet()
             base?.rateLimits?.filter { it.id !in keepRateLimits }
@@ -249,6 +245,29 @@ object Operations {
                 ?.forEach { operations += Operation.RemoveBinding(it.id, EntryDigest.of(it, kind, owner)) }
         }
         operations += sections(kind, base, desired, mode == ApplyMode.REPLACE)
+        return operations
+    }
+
+    /**
+     * The rate limit operations that make [base]'s rules [desired]'s, in [desired]'s order: obligations run in rule
+     * order and a 429 names the first exhausted rule, so order is content. A put replaces a rule where it stands and
+     * appends a new one; every rule after the first one out of place is removed and put again, in order.
+     */
+    private fun rateLimits(base: PolicyDocument?, desired: PolicyDocument): List<Operation> {
+        val current = base?.rateLimits.orEmpty().associateBy { it.id }
+        val wanted = desired.rateLimits.map { it.id }
+        val standing = base?.rateLimits.orEmpty().map { it.id }.filter { it in wanted }
+        val inPlace = standing.zip(wanted).takeWhile { (stands, wants) -> stands == wants }.size
+        val operations = ArrayList<Operation>()
+        desired.rateLimits.forEachIndexed { i, rule ->
+            val digest = current[rule.id]?.let(EntryDigest::of)
+            if (digest != null && i >= inPlace) {
+                operations += Operation.RemoveRateLimit(rule.id, digest)
+                operations += Operation.PutRateLimit(rule)
+            } else if (digest != EntryDigest.of(rule)) {
+                operations += Operation.PutRateLimit(rule, digest)
+            }
+        }
         return operations
     }
 
