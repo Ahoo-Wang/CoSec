@@ -18,6 +18,7 @@ import me.ahoo.cosec.api.context.SecurityScope
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.tenant.Tenant
 import me.ahoo.cosec.engine.flat.AbsentAttributes
+import me.ahoo.cosec.identity.Identity
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
@@ -51,6 +52,8 @@ class RequestSecurity internal constructor(
     internal val request: AuthzRequest,
     /** The host's attributes of that request (headers, request attributes): a check reads them as the request did. */
     internal val attributes: ConditionInput = AbsentAttributes,
+    /** In a service behind a gateway (`cosec.pipeline.mode=gateway`), the identity the gateway forwarded. */
+    val identity: Identity? = null,
 ) {
     /** The application-facing view, read-only but for the 7.x attribute map, which nothing in the pipeline reads. */
     val securityContext: SecurityContext by lazy(LazyThreadSafetyMode.PUBLICATION) { PipelineSecurityContext(this) }
@@ -99,6 +102,12 @@ class RequestSecurity internal constructor(
         "RequestSecurity(request=$requestId, principal=${principal?.id?.value}, tenant=${scope.tenant.value})"
 
     companion object {
+        /** The context attribute a service behind a gateway reads the gateway's request id from (`rid`). */
+        const val GATEWAY_REQUEST_ID = "cosec.identity.rid"
+
+        /** The context attribute a service behind a gateway reads the id of the caller's token or API key from (`jti`). */
+        const val CREDENTIAL_ID = "cosec.identity.jti"
+
         /**
          * The security of the request [context] is the [securityContext] of, as an adapter exposes it; null for a
          * context the pipeline did not build, which no route that needs a permitted request may trust.
@@ -129,7 +138,12 @@ internal class PipelineSecurityContext(val security: RequestSecurity) : Security
         override fun toString(): String = "SecurityScope(app=$appId, space=$spaceId, roles=$roles)"
     }
 
-    override val attributes: MutableMap<String, Any> = ConcurrentHashMap()
+    override val attributes: MutableMap<String, Any> = ConcurrentHashMap<String, Any>().apply {
+        security.identity?.let {
+            put(RequestSecurity.GATEWAY_REQUEST_ID, it.requestId)
+            put(RequestSecurity.CREDENTIAL_ID, it.credential.id)
+        }
+    }
 
     override fun toString(): String = "PipelineSecurityContext(${security.requestId}, ${principal.id}@${tenant.tenantId})"
 }

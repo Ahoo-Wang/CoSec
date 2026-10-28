@@ -15,8 +15,10 @@ package me.ahoo.cosec.runtime.authn
 
 import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.findInDelegationChain
+import me.ahoo.cosec.identity.Identity
 import me.ahoo.cosec.membership.MembershipClaims
 import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.token.ExpiresAtCapable
 import me.ahoo.cosec.token.IssuedAtCapable
 import me.ahoo.cosec.token.RevocableTokenVerifier
 import me.ahoo.cosec.token.RevocationReader
@@ -78,8 +80,15 @@ class TokenAuthenticator(
         if (SubjectRevocation.revokes(revocations.subjectRevokedBefore(tenant, id), issuedAt, revocationSkew)) {
             return REVOKED
         }
+        val expiresAt = principal.findInDelegationChain<ExpiresAtCapable>()?.expiresAt
         return AuthnResult.Authenticated(
-            AuthenticatedPrincipal(id, tenant, MembershipSource.of(principal), principal.attributes),
+            AuthenticatedPrincipal(
+                id,
+                tenant,
+                MembershipSource.of(principal),
+                principal.attributes,
+                Identity.Credential(Identity.Method.JWT, principal.tokenId, expiresAt),
+            ),
             method,
         )
     }

@@ -1,0 +1,59 @@
+{
+  "rules": [
+    "PIP-10"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "alice is permitted on a route whose metadata says cosec-identity: false: the gateway forwards no identity to that backend.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "identity": {},
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "headers": {
+      "Authorization": "token"
+    },
+    "requestAttributes": {
+      "cosec.identity.forward": "false"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "identity": null
+  }
+}

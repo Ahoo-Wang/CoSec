@@ -22,6 +22,7 @@ import kotlinx.coroutines.isActive
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.identity.IdentityOverflowException
 import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.membership.MembershipUnavailableException
 import me.ahoo.cosec.model.Action
@@ -58,6 +59,7 @@ import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.runtime.http.QueryParameters
+import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.ratelimit.RateLimitFailures
 import java.util.concurrent.TimeoutException
 import kotlin.coroutines.cancellation.CancellationException
@@ -80,7 +82,7 @@ private val log = KotlinLogging.logger {}
  * outcome at all (§7.4, `PIP-3`). Every SPI call goes through [resumeOffIo], so a request that never really suspends
  * finishes on its calling thread without a dispatch (§7.2).
  */
-class Pipeline(components: PipelineComponents) {
+class Pipeline(components: PipelineComponents) : RequestGate {
     private val authenticator = components.authenticator
     private val snapshots = components.snapshots
     private val engine = components.engine
@@ -91,6 +93,7 @@ class Pipeline(components: PipelineComponents) {
     private val listeners = components.listeners
     private val rateLimiter = components.rateLimiter
     private val routes = components.routes
+    private val identity = components.identity
     private val memberships = MembershipResolver(components.membershipProvider, options.membershipTimeout)
     private val rateLimitFailures = RateLimitFailures()
 
@@ -98,7 +101,7 @@ class Pipeline(components: PipelineComponents) {
      * The only entry point of the adapters. An external cancellation propagates unchanged and makes no outcome;
      * everything else, a defect included, becomes one. An [Error] propagates too: the host answers it (§7.4).
      */
-    suspend fun evaluate(facts: HttpFacts): Outcome {
+    override suspend fun evaluate(facts: HttpFacts): Outcome {
         val requestId = requestId(facts)
         // The trace the bridge captured (§7.5): its id goes into problem bodies and decision events.
         val trace = currentCoroutineContext()[TraceContext]
@@ -135,7 +138,8 @@ class Pipeline(components: PipelineComponents) {
         // suspends arms no timer.
         val decided = withLazyTimeoutOrNull(options.timeout) { decide(facts, requestId, traceId, record) }
             ?: StatusMapping.unavailable(requestId, Unavailability.DeadlineExceeded, traceId)
-        if (record == null) decided else required(facts, requestId, traceId, decided, record)
+        val forwarded = identity?.let { forward(it, decided, facts, traceId) } ?: decided
+        if (record == null) forwarded else required(facts, requestId, traceId, forwarded, record)
     } catch (e: CancellationException) {
         if (!currentCoroutineContext().isActive) {
             throw e
@@ -381,6 +385,25 @@ class Pipeline(components: PipelineComponents) {
         RequestSecurity(requestId, principal, request.scope, request.memberships, request.request, request.attributes)
     } else {
         null
+    }
+
+    /**
+     * At a gateway that forwards the verified identity: what [outcome] tells the service behind, always naming the
+     * header, so whatever the client sent is never forwarded. The identity on a permit with a principal unless the
+     * route opts out ([IdentityIssuer.FORWARD_ATTRIBUTE]); otherwise none. An identity too large to forward fails the
+     * request closed (500).
+     */
+    private fun forward(issuer: IdentityIssuer, outcome: Outcome, facts: HttpFacts, traceId: String?): Outcome {
+        val security = outcome.security
+        if (!outcome.proceed || security == null || facts.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] == "false") {
+            return StatusMapping.forwarding(outcome, null)
+        }
+        return try {
+            StatusMapping.forwarding(outcome, issuer.issue(security))
+        } catch (e: IdentityOverflowException) {
+            log.error(e) { "Request [${outcome.requestId}]: the identity cannot be forwarded." }
+            StatusMapping.error(outcome.requestId, e, traceId)
+        }
     }
 
     /** Where this request's external attributes go; null without providers. */

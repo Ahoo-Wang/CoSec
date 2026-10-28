@@ -28,6 +28,7 @@ import me.ahoo.cosec.apikey.ApiKeys
 import me.ahoo.cosec.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.identity.IdentityCodec
 import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.membership.MembershipClaims
@@ -74,6 +75,7 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
@@ -93,6 +95,7 @@ import me.ahoo.cosec.token.TokenVerificationException
 import me.ahoo.cosec.token.TokenVerifier
 import me.ahoo.cosid.StringIdGenerator
 import tools.jackson.databind.JsonNode
+import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
 import java.time.Clock
 import java.time.Instant
@@ -161,7 +164,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node.only(
             "\$comment", "rules", "polarity", "level", "description", "documents", "http", "authentication",
             "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations", "attributeProviders",
-            "blacklist", "listeners", "rateLimiter", "routes",
+            "blacklist", "listeners", "rateLimiter", "routes", "identity",
         )
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
@@ -207,6 +210,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
                 listeners = listeners,
                 rateLimiter = rateLimiter(node.get("rateLimiter")),
                 routes = routes,
+                identity = node.get("identity")?.let(::issuer),
             )
         )
         val facts = facts(node.get("http") ?: EMPTY)
@@ -261,7 +265,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     }
 
     private fun answered(outcome: PipelineOutcome): Outcome =
-        Outcome.Answered(outcome.status, outcome.proceed, outcome.problem?.type?.slug)
+        Outcome.Answered(outcome.status, outcome.proceed, outcome.problem?.type?.slug, forwarded(outcome))
 
     private fun authenticator(node: JsonNode, revocations: JsonNode?, reached: () -> Unit): Authenticator {
         node.only("result", "reason", "tenant", "id", "roles", "policies", "membership", "token", "apiKeys", "apiKeysFail")
@@ -500,6 +504,31 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
                 }
             }
         }
+    }
+
+    /** `"identity": { "claims": ["name"] }`: the pipeline is a gateway's, forwarding the identity it verified. */
+    private fun issuer(node: JsonNode): IdentityIssuer {
+        node.only("claims")
+        val claims = node.get("claims")?.strings().orEmpty().toSet()
+        return IdentityIssuer(claims, clock = Clock.fixed(Instant.parse(NOW), ZoneOffset.UTC))
+    }
+
+    /**
+     * What a gateway forwards, when it forwards identities: `{ "tenant", "sub", "app", "space", "roles", "jti" }`, or
+     * null when it strips the header; absent when the pipeline forwards nothing.
+     */
+    private fun forwarded(outcome: PipelineOutcome): Pair<Boolean, JsonNode?> {
+        if (IdentityCodec.HEADER !in outcome.forward) {
+            return false to null
+        }
+        val header = outcome.forward[IdentityCodec.HEADER] ?: return true to null
+        val identity = IdentityCodec.decode(header)
+        val node = JsonNodeFactory.instance.objectNode()
+            .put("tenant", identity.tenant).put("sub", identity.subject)
+            .put("app", identity.app).put("space", identity.space)
+            .put("jti", identity.credential.id)
+        node.putArray("roles").apply { identity.roles.sorted().forEach(::add) }
+        return true to node
     }
 
     private fun options(node: JsonNode): PipelineOptions {

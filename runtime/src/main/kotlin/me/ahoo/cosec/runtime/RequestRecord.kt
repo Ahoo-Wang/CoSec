@@ -128,7 +128,7 @@ internal class RequestRecord(val startNanos: Long, val time: Long, val trace: Tr
             } else {
                 DecisionEvent.Kind.DECIDED
             }
-        is Basis.Decided, is Basis.RateLimited -> DecisionEvent.Kind.DECIDED
+        is Basis.Decided, is Basis.RateLimited, is Basis.Asserted -> DecisionEvent.Kind.DECIDED
     }
 
     private fun reason(decision: Decision): OutcomeSummary.Reason = when (decision) {
@@ -153,6 +153,8 @@ internal class RequestRecord(val startNanos: Long, val time: Long, val trace: Tr
             }
             is Basis.Decided -> reason(basis.decision)
             is Basis.RateLimited -> OutcomeSummary.Reason.TOO_MANY_REQUESTS
+            // The gate of a service behind a gateway makes no events; its outcomes proceed.
+            is Basis.Asserted -> OutcomeSummary.Reason.PERMIT
         }
         val cause = when (val basis = outcome.basis) {
             is Basis.Unavailable -> (basis.reason as? Unavailability.Indeterminate)?.cause

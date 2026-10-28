@@ -24,6 +24,8 @@ import me.ahoo.cosec.engine.flat.FlatEvaluation
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
+import me.ahoo.cosec.identity.Identity
+import me.ahoo.cosec.identity.IdentityCodec
 import me.ahoo.cosec.limiter.RateLimitResult
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
@@ -37,6 +39,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
+import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.attribute.AttributeDeclaration
 import me.ahoo.cosec.runtime.attribute.AttributeProvider
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
@@ -50,6 +53,7 @@ import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.TraceContext
+import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.runtime.ratelimit.RateLimiter
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
@@ -283,10 +287,14 @@ class WebAdapterParityTest {
         "deadline" to pipeline(defaultListeners, timeout = 200.milliseconds),
     )
 
+    /** What WebMvc and WebFlux bridge to: a pipeline, or a service behind a gateway's [IdentityGate]. */
+    private val gates: Map<String, RequestGate> =
+        pipelines + ("identity" to IdentityGate(idGenerator = { "parity-request" }))
+
     // --- the adapters --------------------------------------------------------------------------------------------
 
     private fun webflux(scenario: Scenario): Written = reactive(scenario) { exchange, record ->
-        PipelineWebFilter(pipelines.getValue(scenario.pipeline), contributors)
+        PipelineWebFilter(gates.getValue(scenario.pipeline), contributors)
             .filter(exchange, WebFilterChain { record(it.getSecurityContext()) })
     }
 
@@ -338,7 +346,7 @@ class WebAdapterParityTest {
         val response = MockHttpServletResponse()
         val chain = MockFilterChain()
         var proceeded: SecurityContext? = null
-        val filter = PipelineServletFilter(pipelines.getValue(scenario.pipeline), contributors)
+        val filter = PipelineServletFilter(gates.getValue(scenario.pipeline), contributors)
         filter.doFilter(request, response) { req, _ ->
             proceeded = (req as MockHttpServletRequest).getSecurityContext()
             chain.doFilter(req, response)
@@ -520,6 +528,70 @@ class WebAdapterParityTest {
         if (scenario.status == 429) {
             webflux.headers["retry-after"].assert().isEqualTo(listOf("3"))
             webflux.headers["ratelimit-remaining"].assert().isEqualTo(listOf("0"))
+        }
+    }
+
+    /** A service behind a gateway (`cosec.pipeline.mode=gateway`): one scenario per answer of [IdentityGate]. */
+    fun identityScenarios(): List<Scenario> {
+        val identity = Identity(
+            tenant = "acme",
+            subject = "alice",
+            app = "",
+            space = "",
+            roles = setOf("clerk"),
+            credential = Identity.Credential(Identity.Method.JWT, "t1", null),
+            issuedAt = Instant.now(),
+            requestId = "r1",
+        )
+        fun header(value: String) = mapOf(IdentityCodec.HEADER to value)
+        return listOf(
+            Scenario(
+                "the forwarded identity proceeds",
+                path = "/orders",
+                headers = header(IdentityCodec.encode(identity)),
+                pipeline = "identity",
+                status = 200,
+                type = null
+            ),
+            Scenario(
+                "no identity proceeds as anonymous",
+                path = "/orders",
+                pipeline = "identity",
+                status = 200,
+                type = null
+            ),
+            Scenario(
+                "an unreadable identity is a 400",
+                path = "/orders",
+                headers = header("not base64!"),
+                pipeline = "identity",
+                status = 400,
+                type = "invalid-request"
+            ),
+            Scenario(
+                "an old identity is a 401",
+                path = "/orders",
+                headers = header(IdentityCodec.encode(identity.copy(issuedAt = Instant.now().minusSeconds(3600)))),
+                pipeline = "identity",
+                status = 401,
+                type = "token-expired",
+            ),
+        )
+    }
+
+    @ParameterizedTest
+    @MethodSource("identityScenarios")
+    fun `behind a gateway, WebMvc and WebFlux answer byte for byte alike`(scenario: Scenario) {
+        val webflux = webflux(scenario)
+        val servlet = servlet(scenario)
+        servlet.assert().isEqualTo(webflux)
+        webflux.status.assert().isEqualTo(scenario.status)
+        if (scenario.type == null) {
+            webflux.proceeded.assert().isTrue()
+            webflux.principal.assert().isNotNull()
+        } else {
+            webflux.proceeded.assert().isFalse()
+            webflux.body.assert().contains("\"type\":\"https://cosec.ahoo.me/problems/${scenario.type}\"")
         }
     }
 

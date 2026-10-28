@@ -7,6 +7,7 @@ me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineIntegrationAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.pipeline.CoSecSnapshotAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
+me.ahoo.cosec.spring.boot.starter.pipeline.CoSecGatewayModeAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineWebAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.control.CoSecControlAutoConfiguration
 me.ahoo.cosec.spring.boot.starter.control.CoSecControlRoutesAutoConfiguration

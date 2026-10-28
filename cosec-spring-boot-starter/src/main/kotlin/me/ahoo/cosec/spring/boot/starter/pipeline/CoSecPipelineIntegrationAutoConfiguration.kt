@@ -56,6 +56,7 @@ import org.springframework.kafka.core.KafkaOperations
     ],
 )
 @ConditionalOnCoSecEnabled
+@ConditionalOnEnforceMode
 @EnableConfigurationProperties(
     AuditProperties::class,
     KafkaAuditProperties::class,

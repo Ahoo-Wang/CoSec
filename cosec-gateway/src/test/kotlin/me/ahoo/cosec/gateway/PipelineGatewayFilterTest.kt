@@ -20,16 +20,23 @@ import me.ahoo.cosec.engine.flat.FlatEngine
 import me.ahoo.cosec.engine.flat.FlatEvaluation
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.identity.Identity
+import me.ahoo.cosec.identity.IdentityCodec
 import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
+import me.ahoo.cosec.runtime.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.runtime.authn.Authenticator
 import me.ahoo.cosec.runtime.authn.AuthnResult
+import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
@@ -37,6 +44,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.cloud.gateway.route.Route
 import org.springframework.cloud.gateway.support.ServerWebExchangeUtils.GATEWAY_ROUTE_ATTR
+import org.springframework.http.HttpHeaders
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.server.MockServerWebExchange
 import reactor.core.publisher.Mono
@@ -94,6 +102,73 @@ class PipelineGatewayFilterTest {
         }.block(Duration.ofSeconds(5))
         downstream!!.single().assert().isNotEqualTo("a b")
         PipelineGatewayFilterProbe.read(PipelineGatewayFilter(pipeline), exchange).assert().isEqualTo("orders")
+    }
+
+    private val permit = object : FlatEngine {
+        override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation =
+            FlatEvaluation(
+                Decision.Permit(
+                    StatementRef.Policy(PolicyId("p"), 0, "s", BindingRef.Bound(BindingId("g"), DocumentKind.PLATFORM))
+                ),
+                null,
+            )
+    }
+
+    private val alice = Authenticator {
+        AuthnResult.Authenticated(
+            AuthenticatedPrincipal(
+                PrincipalId("alice"),
+                TenantId("acme"),
+                Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()),
+                credential = Identity.Credential(Identity.Method.JWT, "t1", null),
+            ),
+            "token",
+        )
+    }
+
+    private fun pipeline(authenticator: Authenticator, issuer: IdentityIssuer?) = Pipeline(
+        PipelineComponents(authenticator, SuspendingSnapshotSource(Views), engine = permit, identity = issuer)
+    )
+
+    /** What the backend receives of [request] through [filter]. */
+    private fun forwarded(
+        filter: PipelineGatewayFilter,
+        request: MockServerHttpRequest.BaseBuilder<*>,
+        route: Route? = null
+    ): HttpHeaders {
+        val exchange = MockServerWebExchange.from(request)
+        route?.let { exchange.attributes[GATEWAY_ROUTE_ATTR] = it }
+        var headers: HttpHeaders? = null
+        filter.filter(exchange) { next ->
+            headers = next.request.headers
+            Mono.empty()
+        }.block(Duration.ofSeconds(5))
+        return headers!!
+    }
+
+    @Test
+    fun `a client's identity never reaches a backend, whatever the pipeline forwards`() {
+        val forged = { MockServerHttpRequest.get("/orders").header(IdentityCodec.HEADER, "forged") }
+        // Even a pipeline that forwards nothing: the filter strips the header before anything reads it.
+        forwarded(PipelineGatewayFilter(pipeline(alice, null)), forged())[IdentityCodec.HEADER].assert().isNull()
+        forwarded(
+            PipelineGatewayFilter(pipeline(Authenticator { AuthnResult.Anonymous }, IdentityIssuer())),
+            forged()
+        )[IdentityCodec.HEADER].assert().isNull()
+        val verified = forwarded(PipelineGatewayFilter(pipeline(alice, IdentityIssuer())), forged())
+        IdentityCodec.decode(verified.getFirst(IdentityCodec.HEADER)!!).subject.assert().isEqualTo("alice")
+    }
+
+    @Test
+    fun `a route may opt out, and the Authorization header may stay at the gateway`() {
+        val thirdParty = Route.async().id("partner").uri(URI.create("http://partner")).predicate { true }
+            .metadata(PipelineGatewayFilter.IDENTITY_METADATA, false).build()
+        val request = { MockServerHttpRequest.get("/orders").header(HttpHeaders.AUTHORIZATION, "token") }
+        val filter = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()))
+        forwarded(filter, request(), thirdParty)[IdentityCodec.HEADER].assert().isNull()
+        forwarded(filter, request())[HttpHeaders.AUTHORIZATION].assert().isEqualTo(listOf("token"))
+        val keeping = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()), forwardAuthorization = false)
+        forwarded(keeping, request())[HttpHeaders.AUTHORIZATION].assert().isNull()
     }
 }
 
